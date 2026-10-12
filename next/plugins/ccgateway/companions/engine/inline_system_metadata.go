@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-// Inline controls are protocol metadata. They never become prompt text or
-// an instruction to the worker; only the attributed main request gets them.
 func validateInlineSystemMetadata(m Object, index int) error {
 	if value, exists := m["clear_at"]; exists && value != nil {
 		if value != "never" && value != "next_user_message" {
@@ -57,207 +55,79 @@ func (m Message) directiveOnly() bool {
 	return json.Unmarshal(m.OutputConfig, &config) == nil && config["effort"] != nil
 }
 
-func inlineSystemObject(m Message) Object {
-	content := make([]any, len(m.Content))
-	for i, block := range m.Content {
-		content[i] = block
-	}
-	out := Object{"role": "system", "content": content}
-	for key, raw := range map[string]json.RawMessage{"clear_at": m.ClearAt, "output_config": m.OutputConfig} {
-		if len(raw) > 0 {
-			value, _ := decodePlannedValue(raw)
-			out[key] = value
-		}
-	}
-	return out
+func (m Message) turnScoped() bool {
+	var clearAt string
+	return m.Role == "system" && json.Unmarshal(m.ClearAt, &clearAt) == nil && clearAt == "next_user_message"
 }
 
-func (r *Request) hasInlineSystemMetadata() bool {
+func (r *Request) lastUserMessage() int {
+	for i := len(r.Messages) - 1; i >= 0; i-- {
+		if r.Messages[i].Role == "user" {
+			return i
+		}
+	}
+	return -1
+}
+
+func (r *Request) inlineSystemState(end int) string {
+	var state []any
+	lastUser := r.lastUserMessage()
+	for i, message := range r.Messages[:end] {
+		if message.turnScoped() {
+			state = append(state, []any{i, i < lastUser})
+		}
+	}
+	if len(state) == 0 {
+		return ""
+	}
+	return digest(state)
+}
+
+func (r *Request) inlineEffort() string {
+	effective, pending := "", ""
+	newInput := false
 	for _, message := range r.Messages {
-		if len(message.ClearAt) > 0 || len(message.OutputConfig) > 0 {
-			return true
+		switch message.Role {
+		case "user":
+			newInput = false
+			for _, block := range message.Content {
+				newInput = newInput || str(block, "type") != "tool_result"
+			}
+			if newInput && pending != "" {
+				effective = pending
+			}
+		case "assistant":
+			newInput = false
+		case "system":
+			var config struct {
+				Effort string `json:"effort"`
+			}
+			if json.Unmarshal(message.OutputConfig, &config) == nil && config.Effort != "" {
+				pending = config.Effort
+				if newInput {
+					effective = pending
+				}
+			}
 		}
 	}
-	return false
+	return effective
 }
 
-func (r *Request) validateInlineSystemBetas(allowEffort bool) error {
-	admitted := map[string]bool{}
-	for _, beta := range r.Betas {
-		admitted[beta] = true
-	}
-	for _, message := range r.Messages {
-		if len(message.ClearAt) > 0 && !admitted["mid-conversation-system-clear-at-2026-08-21"] {
-			return fmt.Errorf("messages[].clear_at requires admitted mid-conversation-system-clear-at-2026-08-21 beta")
-		}
-		if len(message.OutputConfig) > 0 {
-			if !allowEffort {
-				return fmt.Errorf("messages[].output_config is disabled by the effort policy")
-			}
-			// Public API documentation names the first beta. CC 2.1.292 uses
-			// the second for the same inline effort field; retain its wire name.
-			if !admitted["mid-conversation-output-config-2026-07-01"] && !admitted["per-turn-control-2026-07-01"] {
-				return fmt.Errorf("messages[].output_config requires admitted mid-conversation-output-config-2026-07-01 or per-turn-control-2026-07-01 beta")
-			}
-		}
-	}
-	return nil
-}
-
-// An empty directive needs no native text carrier. Identify every client turn
-// monotonically, with full role/block identity, then insert it in the original
-// gap. This runs only after main-request attribution and text-system recovery.
-func restoreInlineSystemMetadata(r *Request, body Object) error {
-	if !r.hasInlineSystemMetadata() {
-		return nil
-	}
-	wire, ok := body["messages"].([]any)
-	if !ok {
-		return fmt.Errorf("inline system metadata has no outbound messages")
-	}
-	type insertion struct {
-		at      int
-		message Object
-	}
-	var inserts []insertion
-	var pending []Message
-	matchedSystems := map[int]bool{}
-	internalResults := map[string]bool{}
-	at := 0
-	for clientIndex, want := range r.Messages {
-		if want.directiveOnly() {
-			pending = append(pending, want)
+// pendingPersistentSystems removes scoped entries by client position, not by
+// text. prompt.submit coalesces these entries into one native attachment.
+func (r *Request) pendingPersistentSystems() (texts []string, scoped bool) {
+	for i := r.pendingStart(); i < len(r.Messages); i++ {
+		m := r.Messages[i]
+		if m.Role != "system" || m.turnScoped() && i < r.lastUserMessage() {
 			continue
 		}
-		expected := r.wireMessage(want).Content
-		found := false
-		for at < len(wire) {
-			current, ok := wire[at].(map[string]any)
-			if !ok {
-				return fmt.Errorf("invalid inline system history")
-			}
-			actual, err := historyContent(current["content"])
-			if err != nil {
-				return err
-			}
-			if str(current, "role") == "assistant" && internalHistoryAssistant(r, current) {
-				for _, block := range actual {
-					if str(block, "type") == "tool_use" {
-						internalResults[str(block, "id")] = true
-					}
-				}
-				at++
-				continue
-			}
-			if str(current, "role") == "user" && onlyInternalResults(actual, internalResults) {
-				at++
-				continue
-			}
-			if str(current, "role") == "system" && (want.Role != "system" || digest(historySkeleton(actual)) != digest(historySkeleton(expected))) {
-				at++
-				continue
-			}
-			if str(current, "role") != want.Role {
-				return fmt.Errorf("inline system history role changed")
-			}
-			matched := actual
-			if want.Role == "user" {
-				if parts := splitInlineUserRun(r, clientIndex, current); len(parts) > 1 {
-					wire = append(wire[:at], append(parts, wire[at+1:]...)...)
-					current = wire[at].(map[string]any)
-					actual, _ = historyContent(current["content"])
-				}
-				matched, err = alignUserHistoryBlocks(expected, actual)
-				if err != nil {
-					return err
-				}
-			}
-			if digest(historySkeleton(matched)) != digest(historySkeleton(expected)) {
-				return fmt.Errorf("inline system history blocks changed")
-			}
-			for _, directive := range pending {
-				inserts = append(inserts, insertion{at, inlineSystemObject(directive)})
-			}
-			pending = nil
-			if want.Role == "system" {
-				matchedSystems[at] = true
-				original := inlineSystemObject(want)
-				for _, key := range []string{"clear_at", "output_config"} {
-					if value, exists := original[key]; exists {
-						current[key] = value
-					}
-				}
-				if current["clear_at"] == "next_user_message" {
-					for _, block := range actual {
-						delete(block, "cache_control")
-					}
-				}
-			}
-			at++
-			found = true
-			break
-		}
-		if !found {
-			return fmt.Errorf("inline system history turn missing")
-		}
-	}
-	for _, directive := range pending {
-		inserts = append(inserts, insertion{at, inlineSystemObject(directive)})
-	}
-	if err := validateInlineTail(r, wire[at:], internalResults); err != nil {
-		return err
-	}
-	stripGeneratedInlineEffort(r, wire, matchedSystems)
-	for i := len(inserts) - 1; i >= 0; i-- {
-		insert := inserts[i]
-		wire = append(wire[:insert.at], append([]any{insert.message}, wire[insert.at:]...)...)
-	}
-	clean := make([]any, 0, len(wire))
-	for _, value := range wire {
-		if value != nil {
-			clean = append(clean, value)
-		}
-	}
-	body["messages"] = clean
-	return nil
-}
-
-// This runs before client system restoration, so the inline effort fields in
-// the CLI request are defaults generated by the inner CLI. Removing them must
-// precede restoring client directives; doing it afterward could erase a real
-// per-turn override or allow CC's medium to override the API top-level effort.
-func stripCLIInlineEffort(body Object) {
-	wire, ok := body["messages"].([]any)
-	if !ok {
-		return
-	}
-	out := make([]any, 0, len(wire))
-	for _, value := range wire {
-		message, ok := value.(map[string]any)
-		if !ok || str(message, "role") != "system" {
-			out = append(out, value)
+		if m.turnScoped() {
+			scoped = true
 			continue
 		}
-		config, ok := message["output_config"].(map[string]any)
-		if !ok {
-			out = append(out, value)
-			continue
-		}
-		if _, exists := config["effort"]; !exists {
-			out = append(out, value)
-			continue
-		}
-		delete(config, "effort")
-		if len(config) == 0 {
-			delete(message, "output_config")
-		}
-		content, err := historyContent(message["content"])
-		if err == nil && len(content) == 0 && len(message) == 2 {
-			continue
-		}
-		out = append(out, message)
+		texts = append(texts, systemTexts(m)...)
 	}
-	body["messages"] = out
+	return texts, scoped
 }
 
 func onlyInternalResults(blocks []Object, ids map[string]bool) bool {
@@ -343,35 +213,4 @@ func validateInlineTail(r *Request, tail []any, internalResults map[string]bool)
 		return fmt.Errorf("unmatched outbound turn after inline system history")
 	}
 	return nil
-}
-
-func stripGeneratedInlineEffort(r *Request, wire []any, matchedSystems map[int]bool) {
-	// Explicit inline effort overrides CC's generated inline effort directives.
-	// Matched client systems are protected; preserve every other field/content.
-	effort := false
-	for _, message := range r.Messages {
-		var config Object
-		_ = json.Unmarshal(message.OutputConfig, &config)
-		effort = effort || config["effort"] != nil
-	}
-	if effort {
-		for i, value := range wire {
-			message, _ := value.(map[string]any)
-			if str(message, "role") != "system" || matchedSystems[i] {
-				continue
-			}
-			config, ok := message["output_config"].(map[string]any)
-			if !ok {
-				continue
-			}
-			delete(config, "effort")
-			if len(config) == 0 {
-				delete(message, "output_config")
-				content, _ := historyContent(message["content"])
-				if len(message) == 2 && len(content) == 0 {
-					wire[i] = nil
-				}
-			}
-		}
-	}
 }

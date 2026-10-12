@@ -10,54 +10,53 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestTraceUnadaptedUpstreamAndLiveDisable(t *testing.T) {
+func TestTraceNativeModAndLiveDisable(t *testing.T) {
 	root := t.TempDir()
 	store := &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
 	w := httptest.NewRecorder()
 	in := httptest.NewRequest("POST", "/v1/messages", nil)
+	in.Header.Set("Authorization", "Bearer secret-key")
+	in.Header.Set("Cookie", "secret-cookie")
 	d := newRequestDiagnostic(w, in)
 	d.store = store
 	d.capture(w, in, "")
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		if string(b) != `{"model":"test"}` {
-			t.Error("diagnostics changed upstream request")
+	control, err := startModControl(&runConfig{diagnostic: d, systems: []string{"client system"}}, "")
+	require.NoError(t, err)
+	defer control.Close()
+	for _, token := range []string{"", "wrong-token"} {
+		request, err := http.NewRequest("GET", control.URL, nil)
+		require.NoError(t, err)
+		if token != "" {
+			request.Header.Set("Authorization", "Bearer "+token)
 		}
-		w.Header().Set("Set-Cookie", "secret-cookie")
-		_, _ = io.WriteString(w, "upstream reply")
-	}))
-	defer up.Close()
-	r, err := startOutboundRelay(&Request{diagnostic: d}, []string{"ANTHROPIC_BASE_URL=" + up.URL})
-	if err != nil {
-		t.Fatal(err)
+		response, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		response.Body.Close()
+		assert.Equal(t, http.StatusNotFound, response.StatusCode)
 	}
-	defer r.Close()
-	request, _ := http.NewRequest("POST", r.URL+"/v1/messages", strings.NewReader(`{"model":"test"}`))
-	request.Header.Set("Authorization", "Bearer secret-key")
+	request, err := http.NewRequest("GET", control.URL, nil)
+	require.NoError(t, err)
+	request.Header.Set("Authorization", "Bearer "+control.token)
 	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	b, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if string(b) != "upstream reply" {
-		t.Fatal("diagnostics changed response")
-	}
-	files, _ := filepath.Glob(filepath.Join(d.directory, "upstream-*-request.body"))
-	if len(files) != 2 {
-		t.Fatalf("raw and forwarded bodies missing: %v", files)
-	}
-	files, _ = filepath.Glob(filepath.Join(d.directory, "upstream-*-response.body"))
-	if len(files) != 1 {
-		t.Fatal("raw response missing")
-	}
-	entries, _ := os.ReadDir(d.directory)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, control.config, b)
+	assert.FileExists(t, filepath.Join(d.directory, "mod-config.json"))
+	entries, err := os.ReadDir(d.directory)
+	require.NoError(t, err)
 	for _, f := range entries {
-		b, _ := os.ReadFile(filepath.Join(d.directory, f.Name()))
-		if strings.Contains(string(b), "secret-key") || strings.Contains(string(b), "secret-cookie") {
-			t.Fatal("credential in trace", f.Name())
+		b, err := os.ReadFile(filepath.Join(d.directory, f.Name()))
+		require.NoError(t, err)
+		for _, secret := range []string{"secret-key", "secret-cookie", control.token} {
+			assert.NotContains(t, string(b), secret, f.Name())
 		}
 	}
 	var wg sync.WaitGroup

@@ -2,47 +2,32 @@ package engine
 
 import (
 	"encoding/json"
-	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMainPlanDoesNotLeakCLIContextDefault(t *testing.T) {
-	r := plannedRequest(t, Object{})
-	wire := Object{"thinking": Object{"type": "adaptive"}, "context_management": Object{"edits": []any{Object{"type": "clear_thinking_20251015", "keep": "all"}}}}
-	if err := r.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := wire["context_management"]; ok {
-		t.Fatal("CLI context default leaked despite client absence")
-	}
-}
-
-func TestMainPlanContextExplicitAndNonGeneration(t *testing.T) {
-	for _, value := range []any{nil, Object{"edits": []any{Object{"type": "clear_thinking_20251015", "keep": "all"}}}} {
-		body := basic()
-		body["context_management"] = value
-		raw, _ := json.Marshal(body)
-		r, err := parsePolicyRequest(raw, http.Header{"Anthropic-Beta": []string{contextBeta}})
-		if err != nil {
-			t.Fatal(err)
+func TestNativeContextControlsAreCLIOwned(t *testing.T) {
+	for _, fields := range []string{
+		"",
+		`,"context_management":null`,
+		`,"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]}`,
+		`,"compaction":{"type":"summarize"}`,
+	} {
+		r, err := contextRequest(t, fields, contextBeta+","+signedCompactionBeta)
+		require.NoError(t, err)
+		cfg, err := r.passthroughBodies()
+		require.NoError(t, err)
+		for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+			assert.NotContains(t, round, "context_management")
+			assert.NotContains(t, round, "compaction")
+			assert.NotContains(t, round, "thinking")
 		}
-		wire := Object{"context_management": Object{"edits": []any{}}, "thinking": Object{"type": "adaptive"}}
-		if err = r.ApplyMainRequestFeatures(wire); err != nil {
-			t.Fatal(err)
+		for _, decision := range r.Plan.FeatureDecisions() {
+			if decision["field"] == "context_management" || decision["field"] == "compaction" {
+				assert.Equal(t, "cli_owned_not_forwarded", decision["action"])
+			}
 		}
-		got, exists := wire["context_management"]
-		if !exists || digest(got) != digest(value) {
-			t.Fatal("explicit context changed")
-		}
-		if _, exists := wire["thinking"]; exists {
-			t.Fatal("gateway repaired client invalid combination")
-		}
-	}
-	r := plannedRequest(t, Object{})
-	r.Plan.apiGeneration = false
-	wire := Object{"context_management": Object{"edits": []any{Object{"type": "clear_thinking_20251015", "keep": "all"}}}}
-	before := digest(wire["context_management"])
-	if err := r.ApplyMainRequestFeatures(wire); err != nil || digest(wire["context_management"]) != before {
-		t.Fatal("non-generation defaults changed", err)
 	}
 }

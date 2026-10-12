@@ -92,20 +92,9 @@ func TestRealCLINativeGateway(t *testing.T) {
 	}
 }
 
-// TestRealCLIRelayPassthrough runs the real CLI behind the passthrough relay
-// (PASSTHROUGH-DESIGN.md): what upstream receives is what the CLI built, with
-// the client's fields from CLAUDE_CODE_EXTRA_BODY, the CLI's own session U and
-// subagent A', no retries, and upstream errors returned as sent.
-func TestRealCLIRelayPassthrough(t *testing.T) {
-	testRealCLIPassthrough(t, "passthrough")
-}
-
+// The native CLI sends the client's EXTRA_BODY fields and preserves its own
+// session identity, tool permissions, history and fallback semantics.
 func TestRealCLINativePassthroughCompatibility(t *testing.T) {
-	testRealCLIPassthrough(t, "native")
-}
-
-func testRealCLIPassthrough(t *testing.T, mode string) {
-	t.Helper()
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
 		t.Skip("set CCG_REAL_CLI for the real CLI passthrough test")
@@ -123,9 +112,7 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 			fmt.Fprint(w, `{"input_tokens":20}`)
 			return
 		}
-		if mode == "native" {
-			assert.NotNil(t, r.TLS)
-		}
+		assert.NotNil(t, r.TLS)
 		raw, err := io.ReadAll(r.Body)
 		if !assert.NoError(t, err) {
 			return
@@ -143,18 +130,11 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 			handle(w, body, round)
 		}
 	}))
-	if mode == "native" {
-		fake.StartTLS()
-	} else {
-		fake.Start()
-	}
+	fake.StartTLS()
 	defer fake.Close()
-	env := nativeProbeEnv(root, fake.URL)
-	if mode == "native" {
-		ca := filepath.Join(root, "mock-ca.pem")
-		require.NoError(t, os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fake.Certificate().Raw}), 0600))
-		env = envWith(env, map[string]string{"NODE_EXTRA_CA_CERTS": ca})
-	}
+	ca := filepath.Join(root, "mock-ca.pem")
+	require.NoError(t, os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fake.Certificate().Raw}), 0600))
+	env := envWith(nativeProbeEnv(root, fake.URL), map[string]string{"NODE_EXTRA_CA_CERTS": ca})
 	// The engine refuses a hooks module its validator rejects, silently: the
 	// run then fails with "Mod did not acknowledge loading".
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -173,7 +153,7 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		raw, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
-		req.Header.Set(policyHeader, fmt.Sprintf(`{"relay_mode":%q}`, mode))
+		req.Header.Set(policyHeader, `{"relay_mode":"native"}`)
 		if len(betas) > 0 {
 			req.Header.Set("anthropic-beta", strings.Join(betas, ","))
 		}
@@ -184,8 +164,8 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 			req.Header.Set("X-Claude-Code-Agent-Id", agent)
 		}
 		res := httptest.NewRecorder()
-		require.NotPanics(t, func() { g.ServeHTTP(res, req) }, "mode=%s", mode)
-		t.Logf("mode=%s HTTP=%d history=%s response=%s", mode, res.Code, res.Header().Get("X-CCGateway-History"), res.Body.String())
+		require.NotPanics(t, func() { g.ServeHTTP(res, req) })
+		t.Logf("native HTTP=%d history=%s response=%s", res.Code, res.Header().Get("X-CCGateway-History"), res.Body.String())
 		return res
 	}
 	start := func(handle func(w http.ResponseWriter, body Object, round int)) int {
@@ -242,6 +222,27 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		assert.Empty(t, wire.header.Get("X-Claude-Code-Agent-Id"))
 	})
 
+	t.Run("CLI numeric semantics", func(t *testing.T) {
+		n := start(text)
+		properties := Object{
+			"number": Object{"type": "integer", "const": json.Number("9007199254740993")},
+			"string": Object{"type": "string", "const": "9007199254740993"},
+		}
+		body := Object{"model": "claude-sonnet-4-6", "max_tokens": 128,
+			"output_config": Object{"format": Object{"type": "json_schema", "schema": Object{"type": "object", "properties": properties}}},
+			"messages": []any{Object{"role": "user", "content": "NUMERIC_SEMANTICS"}}}
+		res := post(t, body, "", "")
+		require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+		got := since(n)
+		require.Len(t, got, 1)
+		output := got[0].body["output_config"].(Object)
+		schema := output["format"].(Object)["schema"].(Object)
+		observed := schema["properties"].(Object)
+		assert.Equal(t, "9007199254740992", fmt.Sprint(observed["number"].(Object)["const"]))
+		assert.Equal(t, "9007199254740993", observed["string"].(Object)["const"])
+		assert.Equal(t, json.Number("9007199254740993"), properties["number"].(Object)["const"])
+	})
+
 	t.Run("tool_choice first round only", func(t *testing.T) {
 		n := start(func(w http.ResponseWriter, body Object, round int) {
 			history, _ := json.Marshal(body["messages"])
@@ -272,7 +273,17 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		safeguards := []any{Object{"type": "dangerous_tool_use", "classifier_context": Object{"v": 1, "permission_mode": "auto", "fixture_only": true}}}
 		n := start(func(w http.ResponseWriter, body Object, _ int) {
 			recorder := httptest.NewRecorder()
-			writeSurfaceFixture(recorder, str(body, "model"), []Object{{"type": "tool_use", "id": "toolu_guarded", "name": "Read", "input": Object{"file_path": "D:/fixture.txt"}}})
+			toolName := ""
+			for _, raw := range body["tools"].([]any) {
+				tool := raw.(Object)
+				if name := str(tool, "name"); name == "Read" || name == "mcp__ccgateway__Read" {
+					toolName = name
+				}
+			}
+			if !assert.NotEmpty(t, toolName) {
+				return
+			}
+			writeSurfaceFixture(recorder, str(body, "model"), []Object{{"type": "tool_use", "id": "toolu_guarded", "name": toolName, "input": Object{"file_path": "D:/fixture.txt"}}})
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Anthropic-Ratelimit-Unified-5h-Utilization", "0.42")
 			w.Header().Set("Request-Id", "req_guarded")
@@ -288,7 +299,12 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 				fmt.Fprintln(w, line)
 			}
 		})
-		read := verifiedNativeToolCatalogues[version]["Read"][0]
+		variants := verifiedNativeToolCatalogues[version]["Read"]
+		if len(variants) == 0 {
+			variants = verifiedNativeToolCatalogues["2.1.292"]["Read"]
+		}
+		require.NotEmpty(t, variants)
+		read := variants[0]
 		body := Object{"model": "claude-sonnet-4-6", "max_tokens": 512, "safeguards": safeguards, "tools": []any{Object{"name": "Read", "description": read.Description, "input_schema": read.Schema}},
 			"messages": []any{Object{"role": "user", "content": "GUARDED"}}}
 		for _, stream := range []bool{true, false} {
@@ -297,7 +313,7 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 			assert.Equal(t, 200, res.Code, "stream=%t: %s", stream, res.Body.String())
 			assert.Contains(t, res.Body.String(), "synthetic_fixture", "stream=%t", stream)
 			assert.Contains(t, res.Body.String(), `"name":"Read"`, "stream=%t", stream)
-			if mode == "native" && stream {
+			if stream {
 				assert.NotEmpty(t, res.Result().Header.Get("Request-Id"))
 				assert.NotEqual(t, "req_guarded", res.Result().Header.Get("Request-Id"))
 			} else {
@@ -328,13 +344,7 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		assert.Equal(t, "0", fmt.Sprint(got[0].body["max_tokens"]))
 	})
 
-	upstreamErrorCase := "upstream error as sent without retry"
-	rejectedRequestCase := "rejected request as sent"
-	if mode == "native" {
-		upstreamErrorCase = "normalized native upstream error"
-		rejectedRequestCase = "normalized native rejection with compatibility recovery"
-	}
-	t.Run(upstreamErrorCase, func(t *testing.T) {
+	t.Run("normalized native upstream error", func(t *testing.T) {
 		const overloaded = `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded fixture"},"request_id":"req_fixture_529"}`
 		n := start(func(w http.ResponseWriter, _ Object, _ int) {
 			w.Header().Set("Content-Type", "application/json")
@@ -345,18 +355,14 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		})
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 256, "messages": []any{Object{"role": "user", "content": "ERROR"}}}, "passthrough-error", "")
 		assert.Equal(t, 529, res.Code)
-		if mode == "native" {
-			assert.JSONEq(t, `{"type":"error","error":{"type":"overloaded_error","message":"Claude Code native error: server_error"}}`, res.Body.String())
-			assert.Equal(t, "cli", res.Header().Get("X-CCGateway-Error-Source"))
-		} else {
-			assert.Equal(t, overloaded, res.Body.String())
-		}
+		assert.JSONEq(t, `{"type":"error","error":{"type":"overloaded_error","message":"Claude Code native error: server_error"}}`, res.Body.String())
+		assert.Equal(t, "cli", res.Header().Get("X-CCGateway-Error-Source"))
 		assert.Equal(t, "req_fixture_529", res.Header().Get("Request-Id"))
 		assert.Empty(t, res.Header().Get("Anthropic-Ratelimit-Unified-5h-Status"))
 		assert.Equal(t, 1, len(since(n)))
 	})
 
-	t.Run(rejectedRequestCase, func(t *testing.T) {
+	t.Run("normalized native rejection with compatibility recovery", func(t *testing.T) {
 		const invalid = `{"type":"error","error":{"type":"invalid_request_error","message":"temperature: fixture rejection"}}`
 		n := start(func(w http.ResponseWriter, _ Object, _ int) {
 			w.Header().Set("Content-Type", "application/json")
@@ -365,15 +371,9 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		})
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 256, "temperature": 0.1, "messages": []any{Object{"role": "user", "content": "INVALID"}}}, "passthrough-invalid", "")
 		assert.Equal(t, 400, res.Code)
-		expectedRequests := 1
-		if mode == "native" {
-			expectedRequests = 2
-			assert.JSONEq(t, `{"type":"error","error":{"type":"invalid_request_error","message":"Claude Code native error: unknown"}}`, res.Body.String())
-			assert.Equal(t, "cli", res.Header().Get("X-CCGateway-Error-Source"))
-		} else {
-			assert.Equal(t, invalid, res.Body.String())
-		}
-		assert.Equal(t, expectedRequests, len(since(n)))
+		assert.JSONEq(t, `{"type":"error","error":{"type":"invalid_request_error","message":"Claude Code native error: unknown"}}`, res.Body.String())
+		assert.Equal(t, "cli", res.Header().Get("X-CCGateway-Error-Source"))
+		assert.Len(t, since(n), 2)
 	})
 
 	t.Run("fallbacks", func(t *testing.T) {
@@ -561,7 +561,7 @@ func testRealCLIPassthrough(t *testing.T, mode string) {
 		raw, err := json.Marshal(Object{"model": "claude-sonnet-4-6", "messages": []any{Object{"role": "user", "content": "x"}}})
 		require.NoError(t, err)
 		req := httptest.NewRequest("POST", "/v1/messages/count_tokens", bytes.NewReader(raw))
-		req.Header.Set(policyHeader, fmt.Sprintf(`{"relay_mode":%q}`, mode))
+		req.Header.Set(policyHeader, `{"relay_mode":"native"}`)
 		res := httptest.NewRecorder()
 		g.ServeHTTP(res, req)
 		assert.Equal(t, 400, res.Code)

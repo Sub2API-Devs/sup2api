@@ -4,15 +4,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func cacheRequest(t *testing.T, body Object) *Request {
 	t.Helper()
-	raw, _ := json.Marshal(body)
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
 	r, err := parsePolicyRequest(raw, http.Header{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return r
 }
 
@@ -38,67 +41,58 @@ func TestCachePlanBreakpointLimitsAndTTLOrder(t *testing.T) {
 			if tc.automatic != "" {
 				body["cache_control"] = Object{"type": "ephemeral", "ttl": tc.automatic}
 			}
-			raw, _ := json.Marshal(body)
-			_, err := parsePolicyRequest(raw, http.Header{})
-			if (err == nil) != tc.want {
-				t.Fatal(tc.name, err)
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
+			_, err = parsePolicyRequest(raw, nil)
+			if tc.want {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
 			}
 		})
 	}
 }
 
-func TestCachePlanExactBlocksAndNoSharedMutation(t *testing.T) {
-	body := Object{"model": "fixture", "max_tokens": 32, "system": []any{Object{"type": "text", "text": "A", "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}, Object{"type": "text", "text": "B"}},
-		"messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "same", "cache_control": Object{"type": "ephemeral", "ttl": "5m"}}, Object{"type": "text", "text": "same"}}}}}
-	r := cacheRequest(t, body)
-	wire := Object{"system": []any{Object{"type": "text", "text": "CC", "cache_control": Object{"type": "ephemeral"}}, Object{"type": "text", "text": "A\n\nB", "cache_control": Object{"type": "ephemeral"}}},
-		"messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "same"}, Object{"type": "text", "text": "same", "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}}}}}
-	if err := r.applyCachePlan(wire); err != nil {
-		t.Fatal(err)
-	}
-	systems, _ := historyContent(wire["system"])
-	if len(systems) != 3 || systems[0]["cache_control"] != nil || systems[2]["cache_control"] != nil || digest(systems[1]["cache_control"]) != digest(Object{"type": "ephemeral", "ttl": "1h"}) {
-		t.Fatal("system breakpoint moved")
-	}
-	messages := wire["messages"].([]any)
-	blocks, _ := historyContent(messages[0].(Object)["content"])
-	if blocks[0]["cache_control"] == nil || blocks[1]["cache_control"] != nil {
-		t.Fatal("same-text breakpoint moved")
-	}
-	systems[1]["cache_control"].(map[string]any)["ttl"] = "mutated"
-	if str(r.Plan.cache.System[0]["cache_control"].(map[string]any), "ttl") != "1h" {
-		t.Fatal("plan marker storage leaked")
-	}
-}
-
-func TestCacheAlignmentRejectsReorderAtomically(t *testing.T) {
-	body := Object{"model": "fixture", "max_tokens": 32, "messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "A", "cache_control": Object{"type": "ephemeral"}}, Object{"type": "text", "text": "B"}}}}}
-	r := cacheRequest(t, body)
-	wire := Object{"messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "B"}, Object{"type": "text", "text": "A"}}}}}
-	before := digest(wire)
-	if err := r.applyCachePlan(wire); err == nil {
-		t.Fatal("accepted reordered blocks")
-	}
-	if digest(wire) != before {
-		t.Fatal("failed alignment mutated outbound body")
+func TestNativeCacheTTLSelectionWithoutBreakpointForwarding(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		extra  Object
+		ttl    time.Duration
+		prompt string
+	}{
+		{"absent", Object{}, 5 * time.Minute, ""},
+		{"root-default", Object{"cache_control": Object{"type": "ephemeral"}}, 5 * time.Minute, "5m"},
+		{"root-hour", Object{"cache_control": Object{"type": "ephemeral", "ttl": "1h"}}, time.Hour, "1h"},
+		{"system-hour", Object{"system": []any{Object{"type": "text", "text": "A", "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}, Object{"type": "text", "text": "B"}}}, time.Hour, "1h"},
+		{"tool-hour", Object{"tools": []any{Object{"name": "lookup", "input_schema": Object{"type": "object"}, "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}}}, time.Hour, "1h"},
+		{"message-five", Object{"messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "same", "cache_control": Object{"type": "ephemeral", "ttl": "5m"}}, Object{"type": "text", "text": "same"}}}}}, 5 * time.Minute, "5m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := basic()
+			for key, value := range tc.extra {
+				body[key] = value
+			}
+			before, err := json.Marshal(body)
+			require.NoError(t, err)
+			r := cacheRequest(t, body)
+			assert.Equal(t, tc.ttl, r.TTL)
+			assert.Equal(t, tc.prompt, r.PromptCacheTTL)
+			cfg, err := r.passthroughBodies()
+			require.NoError(t, err)
+			for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+				for _, field := range []string{"cache_control", "system", "tools", "messages"} {
+					assert.NotContains(t, round, field)
+				}
+			}
+			after, err := json.Marshal(body)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
 	}
 }
 
 func TestCacheProtocolTraversalPreservesInputLiterals(t *testing.T) {
 	blocks := []Object{{"type": "tool_use", "input": Object{"cache_control": Object{"type": "business", "ttl": "literal"}}, "cache_control": Object{"type": "ephemeral"}}}
-	if err := visitProtocolBlocks(blocks, func(b Object) error { delete(b, "cache_control"); return nil }); err != nil {
-		t.Fatal(err)
-	}
-	if blocks[0]["input"].(Object)["cache_control"] == nil {
-		t.Fatal("arbitrary client tool input was edited")
-	}
-}
-
-func TestSystemTurnAlignmentClientOwnedToolSearch(t *testing.T) {
-	r := &Request{ToolSearch: "true", Native: map[string]bool{"ToolSearch": true}, Tools: []Tool{{Name: "ToolSearch"}}}
-	wire := []any{Object{"role": "user", "content": "first"}, Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "name": "ToolSearch", "id": "client"}}}, Object{"role": "user", "content": "next"}}
-	heads, err := wireTurnHeads(wire, r)
-	if err != nil || len(heads) != 2 {
-		t.Fatal("client tool turn treated as internal", heads, err)
-	}
+	require.NoError(t, visitProtocolBlocks(blocks, func(b Object) error { delete(b, "cache_control"); return nil }))
+	assert.Equal(t, Object{"type": "business", "ttl": "literal"}, blocks[0]["input"].(Object)["cache_control"])
 }

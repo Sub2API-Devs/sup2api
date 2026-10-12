@@ -5,9 +5,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
+
+func environmentValue(env []string, key string) string {
+	for i := len(env) - 1; i >= 0; i-- {
+		name, value, ok := strings.Cut(env[i], "=")
+		if ok && (name == key || runtime.GOOS == "windows" && strings.EqualFold(name, key)) {
+			return value
+		}
+	}
+	return ""
+}
 
 func environmentEntry(env []string, key string) (string, bool) {
 	for i := len(env) - 1; i >= 0; i-- {

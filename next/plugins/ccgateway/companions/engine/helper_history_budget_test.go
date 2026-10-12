@@ -1,8 +1,8 @@
 package engine
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
@@ -14,26 +14,18 @@ func TestHelperBudgetRequiresTrustedExecutionAndFinalAdmission(t *testing.T) {
 	h.Set("anthropic-beta", taskBudgetBeta)
 	h.Set("X-CCGateway-Request-Policy", `{"tool_search":"true"}`)
 	h.Set(helperhistory.Header, "1")
-	if _, err := parsePolicyRequest(body, h); err == nil {
-		t.Fatal("public forged header bypassed budget gate")
+	// A header cannot grant custody; the native request remains ordinary.
+	r, err := parsePolicyRequest(body, h)
+	if err != nil || r.helperHistory != nil {
+		t.Fatal("ordinary native budget request acquired custody", err)
 	}
-	if _, err := parsePolicyRequestWithHelper(body, h, nil, &helperHistoryExecution{}); err == nil {
-		t.Fatal("unverified execution accepted")
+	if _, err := parsePolicyRequestWithHelper(body, h, nil, &helperHistoryExecution{}); err == nil || !strings.Contains(err.Error(), "not authenticated") {
+		t.Fatal("unverified execution accepted", err)
 	}
-	x := &helperHistoryExecution{authenticated: true, public: json.RawMessage(`[{"role":"user","content":"public"}]`), tools: json.RawMessage(`[{"name":"weather","defer_loading":true,"input_schema":{"type":"object"}}]`), imported: helperhistory.Payload{Version: 1}}
-	r, err := parsePolicyRequestWithHelper(body, h, nil, x)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.admitHelperHistory(x); err != nil {
-		t.Fatal(err)
-	}
-	x.public = json.RawMessage(`[{"role":"user","content":"different"},{"role":"assistant","content":"extra"}]`)
-	if r.admitHelperHistory(x) == nil {
-		t.Fatal("budget trust bypassed final history admission")
-	}
-	h.Del("anthropic-beta")
-	if _, err = parsePolicyRequestWithHelper(body, h, nil, x); err == nil {
-		t.Fatal("trusted transport bypassed official beta requirement")
+	for _, beta := range []string{"", taskBudgetBeta} {
+		h.Set("anthropic-beta", beta)
+		if r, err := parsePolicyRequestWithHelper(body, h, nil, &helperHistoryExecution{authenticated: true}); err == nil || r != nil || !strings.Contains(err.Error(), "helper history is not supported") {
+			t.Fatal("native transport accepted helper custody", err)
+		}
 	}
 }

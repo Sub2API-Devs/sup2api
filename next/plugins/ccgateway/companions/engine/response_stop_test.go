@@ -1,8 +1,14 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFinalStopSnapshotDoesNotMoveOrAliasExtensions(t *testing.T) {
@@ -69,13 +75,77 @@ func TestStructuredEnvelopeKeepsOriginalEventLocations(t *testing.T) {
 	}
 }
 
-func TestResultWithoutStreamCannotSkipMainAttribution(t *testing.T) {
-	scope := newMainRequestScope()
-	if err := scope.enter(); err != nil {
-		t.Fatal(err)
+func TestNativeResultRequiresModAndCompleteMessage(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		control *modControl
+		want    string
+	}{
+		{"missing control", nil, "Mod control is unavailable"},
+		{"not ready", &modControl{}, "did not acknowledge loading"},
+		{"missing systems", &modControl{ready: true, systems: 1}, "did not attach the system messages"},
+		{"missing message", &modControl{ready: true}, "without a complete model message"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := newCLISession(context.Background(), &Request{}, &Prepared{}, &runConfig{native: &nativeRunState{}, control: tc.control}, nil, nil)
+			_, err := session.onResult(Object{"subtype": "success", "structured_output": Object{}})
+			require.ErrorContains(t, err, tc.want)
+		})
 	}
-	session := &cliSession{cfg: &runConfig{scope: scope, control: &modControl{ready: true}}, acc: &Accumulator{}, relay: &outboundRelay{}}
-	if _, err := session.onResult(Object{"subtype": "success", "structured_output": Object{}}); err == nil {
-		t.Fatal("result bypassed missing scope application")
+}
+
+func TestNativeToolHandoffRequiresCompleteTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		complete, observed bool
+	}{
+		{"complete handoff", true, false},
+		{"partial handoff", false, false},
+		{"provider failure", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &Request{Tools: []Tool{{Name: "lookup", Schema: Object{"type": "object"}}}}
+			state := &nativeRunState{}
+			session := newCLISession(context.Background(), req, &Prepared{}, &runConfig{native: state, control: &modControl{ready: true}}, nil, func(Object) error { return nil })
+			session.initialized = true
+			for _, event := range []Object{
+				{"type": "message_start", "message": Object{"id": "msg_handoff", "type": "message", "role": "assistant", "content": []any{}, "usage": Object{"input_tokens": 1, "output_tokens": 0}}},
+				{"type": "content_block_start", "index": 0, "content_block": Object{"type": "tool_use", "id": "toolu_handoff", "name": "mcp__ccgateway__lookup", "input": Object{}}},
+				{"type": "content_block_stop", "index": 0},
+				{"type": "message_delta", "delta": Object{"stop_reason": "tool_use"}, "usage": Object{"output_tokens": 1}},
+			} {
+				require.NoError(t, session.onStreamEvent(Object{"event": event}))
+			}
+			if tc.complete {
+				require.NoError(t, session.onStreamEvent(Object{"event": Object{"type": "message_stop"}}))
+			}
+			frame := Object{"type": "result", "subtype": "error_max_turns", "is_error": true}
+			if tc.observed {
+				frame["api_error_status"] = 429
+			}
+			state.observe(frame)
+			if tc.complete && !tc.observed {
+				cli, err := lifecycleTestExecutable()
+				require.NoError(t, err)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				proc, err := startCLI(ctx, cli, []string{"-test.run=^$"}, t.TempDir(), os.Environ(), nil)
+				require.NoError(t, err)
+				defer proc.stdin.Close()
+				defer proc.stdout.Close()
+				session.proc = proc
+				message, err := session.onResult(frame)
+				require.NoError(t, err)
+				assert.Equal(t, "tool_use", str(message, "stop_reason"))
+				require.Len(t, session.acc.Blocks, 1)
+				assert.Equal(t, "lookup", str(session.acc.Blocks[0], "name"))
+				assert.Equal(t, "toolu_handoff", str(session.acc.Blocks[0], "id"))
+				return
+			}
+			_, err := session.onResult(frame)
+			var failure *nativeError
+			require.ErrorAs(t, err, &failure)
+			assert.Equal(t, tc.observed, failure.ObservedStatus)
+		})
 	}
 }

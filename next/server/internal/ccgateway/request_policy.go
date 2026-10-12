@@ -5,43 +5,24 @@ import (
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"regexp"
-	"slices"
 	"strings"
 )
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
-	SchemaVersion            int               `json:"schema_version"`
-	EnvironmentFields        map[string]string `json:"environment_fields,omitempty"`
-	UnknownBeta              string            `json:"unknown_beta"`
-	UnknownField             string            `json:"unknown_field"`
-	AllowFast                bool              `json:"allow_fast"`
-	ToolSearch               string            `json:"tool_search,omitempty"`
-	AllowEffort              bool              `json:"allow_effort"`
-	AttachmentSource         string            `json:"attachment_source"`
-	AttachmentSources        map[string]string `json:"attachment_sources,omitempty"`
-	UnknownClientAttachment  string            `json:"unknown_client_attachment"`
-	UnknownGatewayAttachment string            `json:"unknown_gateway_attachment"`
-	CustomToolPrefix         string            `json:"custom_tool_prefix"`
-	// PassUpstreamErrors makes the application return the first upstream error
-	// as-is instead of letting Claude Code retry, back off or refresh auth.
-	// Defaults to false; configurations saved before it existed decode as false.
-	PassUpstreamErrors bool `json:"pass_upstream_errors"`
+	SchemaVersion    int    `json:"schema_version"`
+	UnknownField     string `json:"unknown_field"`
+	AllowFast        bool   `json:"allow_fast"`
+	ToolSearch       string `json:"tool_search,omitempty"`
+	AllowEffort      bool   `json:"allow_effort"`
+	CustomToolPrefix string `json:"custom_tool_prefix"`
 	// ThinkingDisabledCompat is "pass" (default: thinking "disabled" goes
 	// upstream as sent, so a model that rejects it answers 400 as the official
 	// API does) or "omit" (the Worker drops it for the models it knows reject
 	// it, e.g. when a client proxy rewrote claude-opus-5 to claude-opus-5-5).
-	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
-	// RelayMode is "legacy" (default: the Worker's outbound relay adapts the
-	// inner CLI's requests) or "passthrough" (every upstream request is the one
-	// the inner CLI built, forwarded unchanged; PASSTHROUGH-DESIGN.md).
-	RelayMode string `json:"relay_mode,omitempty"`
-	// RelayPassthroughAccounts runs these accounts in passthrough while
-	// RelayMode is legacy (a staged rollout). Only the core reads it: the
-	// Worker receives the account's effective relay_mode.
-	RelayPassthroughAccounts []int64    `json:"relay_passthrough_accounts,omitempty"`
-	RelayNativeAccounts      []int64    `json:"relay_native_accounts,omitempty"`
-	Betas                    []BetaRule `json:"betas"`
+	ThinkingDisabledCompat string     `json:"thinking_disabled_compat,omitempty"`
+	RelayMode              string     `json:"relay_mode,omitempty"`
+	Betas                  []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
 
@@ -60,7 +41,7 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: true, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "legacy", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "native", Betas: features.BetaRules()}
 }
 
 // EffectiveRequestPolicy is the policy sent to the Worker. Features the
@@ -77,17 +58,8 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.SchemaVersion == 0 {
 		p.SchemaVersion = features.PolicySchemaVersion
 	}
-	if p.UnknownClientAttachment == "" {
-		p.UnknownClientAttachment = "pass"
-	}
-	if p.UnknownGatewayAttachment == "" {
-		p.UnknownGatewayAttachment = "pass"
-	}
 	if p.CustomToolPrefix == "" {
 		p.CustomToolPrefix = "ccgateway"
-	}
-	if p.AttachmentSource == "" {
-		p.AttachmentSource = "client"
 	}
 	if p.ToolSearch == "" {
 		p.ToolSearch = "request"
@@ -95,44 +67,23 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.ThinkingDisabledCompat == "" {
 		p.ThinkingDisabledCompat = "pass"
 	}
-	if p.RelayMode == "" {
-		p.RelayMode = "legacy"
-	}
+	p.RelayMode = "native"
 	p.Betas = defaultRequestPolicy().Betas
 	return p
 }
 
-// WorkerRequestPolicy is the policy one account's Worker receives: its
-// effective relay_mode, without the rollout list of other accounts.
-func (c Config) WorkerRequestPolicy(accountID int64) RequestPolicy {
-	p := c.EffectiveRequestPolicy()
-	if accountID > 0 {
-		switch {
-		case p.RelayMode == "native" || slices.Contains(p.RelayNativeAccounts, accountID):
-			p.RelayMode = "native"
-		case slices.Contains(p.RelayPassthroughAccounts, accountID):
-			p.RelayMode = "passthrough"
-		}
-	}
-	p.RelayPassthroughAccounts = nil
-	p.RelayNativeAccounts = nil
-	return p
+func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
+	return c.EffectiveRequestPolicy()
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
 	if p.SchemaVersion != 0 && p.SchemaVersion != features.PolicySchemaVersion {
 		return errors.New("unsupported request policy schema_version")
 	}
-	if err := validateAttachmentPolicy(p); err != nil {
-		return err
-	}
 	if p.CustomToolPrefix != "" && (!customToolPrefixPattern.MatchString(p.CustomToolPrefix) || strings.Contains(p.CustomToolPrefix, "__")) {
 		return errors.New("invalid custom tool prefix: use 1-32 letters, digits, underscores or hyphens, without double underscores")
 	}
-	if p.AttachmentSource != "client" && p.AttachmentSource != "gateway" && p.AttachmentSource != "both" {
-		return errors.New("invalid attachment source policy")
-	}
-	if (p.UnknownBeta != "reject" && p.UnknownBeta != "ignore") || (p.UnknownField != "reject" && p.UnknownField != "ignore") {
+	if p.UnknownField != "reject" && p.UnknownField != "ignore" {
 		return errors.New("invalid request policy")
 	}
 	if p.ToolSearch != "" && !validToolSearch(p.ToolSearch) {
@@ -141,31 +92,8 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.ThinkingDisabledCompat != "" && p.ThinkingDisabledCompat != "pass" && p.ThinkingDisabledCompat != "omit" {
 		return errors.New("invalid thinking_disabled_compat: must be pass or omit")
 	}
-	if p.RelayMode != "" && p.RelayMode != "legacy" && p.RelayMode != "passthrough" && p.RelayMode != "native" {
-		return errors.New("invalid relay_mode: must be legacy, passthrough or native")
-	}
-	if len(p.RelayPassthroughAccounts) > 1000 {
-		return errors.New("relay_passthrough_accounts lists at most 1000 accounts")
-	}
-	seen := map[int64]bool{}
-	for _, id := range p.RelayPassthroughAccounts {
-		if id <= 0 || seen[id] {
-			return errors.New("relay_passthrough_accounts must list distinct positive account IDs")
-		}
-		seen[id] = true
-	}
-	if len(p.RelayNativeAccounts) > 1000 {
-		return errors.New("relay_native_accounts lists at most 1000 accounts")
-	}
-	nativeSeen := map[int64]bool{}
-	for _, id := range p.RelayNativeAccounts {
-		if id <= 0 || nativeSeen[id] {
-			return errors.New("relay_native_accounts must list distinct positive account IDs")
-		}
-		if seen[id] {
-			return errors.New("relay_native_accounts and relay_passthrough_accounts must not overlap")
-		}
-		nativeSeen[id] = true
+	if p.RelayMode != "" && p.RelayMode != "native" {
+		return errors.New("invalid relay_mode: must be native")
 	}
 	return nil
 }

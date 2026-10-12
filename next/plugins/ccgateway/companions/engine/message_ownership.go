@@ -173,7 +173,7 @@ func (x *exchange) ownershipScope() string {
 
 func (x *exchange) rememberMessageID(message Object) {
 	id := str(message, "id")
-	if id == "" || x.req.CountTokens {
+	if id == "" {
 		return
 	}
 	if err := x.g.ownershipIndex().remember(id, x.ownershipScope(), time.Now()); err != nil {

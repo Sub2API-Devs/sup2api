@@ -2,9 +2,10 @@ package engine
 
 import (
 	"encoding/json"
-	"net/http"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEnvironmentFieldSelection(t *testing.T) {
@@ -13,75 +14,71 @@ func TestEnvironmentFieldSelection(t *testing.T) {
 		for _, base := range []string{"client", "gateway", "both"} {
 			for _, cwd := range []string{"client", "gateway"} {
 				for _, plat := range []string{"client", "gateway"} {
-					p := defaultRequestPolicy()
-					p.AttachmentSource = base
-					p.EnvironmentFields = map[string]string{"workingDirectory": cwd, "platform": plat}
-					encoded, _ := json.Marshal(p)
-					h := http.Header{}
-					h.Set(policyHeader, string(encoded))
-					v := basic()
-					v["system"] = "BUSINESS_BEFORE\n" + env + "\nBUSINESS_AFTER"
-					data, _ := json.Marshal(v)
-					r, err := parsePolicyRequest(data, h)
-					if err != nil {
-						t.Fatal(err)
-					}
-					text := strings.Join(r.System, "\n")
-					if strings.Contains(text, "Primary working directory:") != (cwd == "client") || strings.Contains(text, " - Platform:") != (plat == "client") {
-						t.Fatalf("base=%s fields=%v: %s", base, p.EnvironmentFields, text)
-					}
-					if !strings.Contains(text, "BUSINESS_BEFORE") || !strings.Contains(text, "BUSINESS_AFTER") {
-						t.Fatal("business system removed")
-					}
-					if !r.ClientEnvironmentFields["workingDirectory"] || !r.ClientEnvironmentFields["platform"] {
-						t.Fatal("missing recognition")
-					}
+					t.Run(platform+"/"+base+"/cwd-"+cwd+"/platform-"+plat, func(t *testing.T) {
+						p := defaultRequestPolicy()
+						p.AttachmentSource = base
+						p.EnvironmentFields = map[string]string{"workingDirectory": cwd, "platform": plat}
+						text := "BUSINESS_BEFORE\n" + env + "\nBUSINESS_AFTER"
+						v := basic()
+						v["system"] = text
+						data, err := json.Marshal(v)
+						require.NoError(t, err)
+						r, err := parsePolicyRequest(data, policyHeaders(p))
+						require.NoError(t, err)
+						assert.Equal(t, []string{text}, r.System, "native preserves the complete client environment")
+						assert.Empty(t, r.EnvironmentFields)
+						assert.Empty(t, r.ClientEnvironmentFields, "no legacy recognition/rewrite pass")
+						assert.Empty(t, r.AdditionalDirectories, "prompt text grants no CLI directory permissions")
+					})
 				}
 			}
 		}
 	}
-	r := &Request{AttachmentSource: "gateway", EnvironmentFields: map[string]string{"platform": "gateway"}}
-	for _, text := range []string{"Use cwd /client and platform linux", "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /client\n - Platform: darwin\n"} {
-		if r.filterClientEnvironment(text) != text {
-			t.Fatal("ambiguous/unverified format changed")
-		}
-	}
 }
 
-// Claude Code 2.1.292 with --add-dir lists the extra directories as nested
-// bullets; they are client directories and follow the workingDirectory field.
+// Native keeps both primary and additional client directory text. It must not
+// reinterpret that text as --add-dir permissions for the gateway process.
 func TestAdditionalDirectoriesFollowWorkingDirectory(t *testing.T) {
 	env := "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: D:\\client\n - Is a git repository: true\n - Additional working directories:\n  - D:\\client-docs\n  - D:\\client-other\n - Platform: win32\n - Shell: PowerShell\n"
 	for _, cwd := range []string{"client", "gateway"} {
-		r := &Request{AttachmentSource: "gateway", EnvironmentFields: map[string]string{"workingDirectory": cwd}}
-		text := r.filterClientEnvironment(env)
-		for _, want := range []string{"Primary working directory: D:\\client", " - Additional working directories:", "  - D:\\client-docs", "  - D:\\client-other"} {
-			if strings.Contains(text, want) != (cwd == "client") {
-				t.Fatalf("workingDirectory=%s: %q in %q", cwd, want, text)
-			}
-		}
-		if strings.Contains(text, "Platform:") || strings.Contains(text, "Shell:") || strings.Contains(text, "git repository") {
-			t.Fatalf("gateway fields kept: %q", text)
-		}
-	}
-	r := &Request{AttachmentSource: "client", EnvironmentFields: map[string]string{"workingDirectory": "gateway"}}
-	text := r.filterClientEnvironment(env)
-	if strings.Contains(text, "client-docs") || !strings.Contains(text, "Platform: win32") || !strings.Contains(text, "Shell: PowerShell") {
-		t.Fatalf("client source with gateway directories: %q", text)
+		t.Run(cwd, func(t *testing.T) {
+			p := defaultRequestPolicy()
+			p.AttachmentSource = "gateway"
+			p.EnvironmentFields = map[string]string{"workingDirectory": cwd}
+			v := basic()
+			v["system"] = env
+			v["messages"] = []any{Object{"role": "user", "content": "q"}, Object{"role": "system", "content": env}}
+			data, err := json.Marshal(v)
+			require.NoError(t, err)
+			r, err := parsePolicyRequest(data, policyHeaders(p))
+			require.NoError(t, err)
+			assert.Equal(t, []string{env}, r.System)
+			require.Len(t, r.Messages, 2)
+			assert.Equal(t, []string{env}, systemTexts(r.Messages[1]))
+			assert.Empty(t, r.AdditionalDirectories)
+			assert.NotContains(t, cliArgs(r, &Prepared{}, "plugin"), "--add-dir")
+		})
 	}
 }
 
 func TestEnvironmentEnvelopeFieldOverride(t *testing.T) {
-	r := &Request{AttachmentSource: "gateway", EnvironmentFields: map[string]string{"workingDirectory": "client", "platform": "gateway"}, System: []string{
+	p := defaultRequestPolicy()
+	p.AttachmentSource = "gateway"
+	p.EnvironmentFields = map[string]string{"workingDirectory": "client", "platform": "gateway"}
+	for _, text := range []string{
 		"<ccgateway-attachment type=\"environment\">\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /client\n - Platform: linux\n</ccgateway-attachment>",
-	}}
-	r.filterClientAttachments()
-	if len(r.System) != 1 || !strings.Contains(r.System[0], "/client") || strings.Contains(r.System[0], "Platform:") {
-		t.Fatalf("field override lost inside explicit envelope: %v", r.System)
+		"Use cwd /client and platform linux",
+		"# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /client\n - Platform: darwin\n",
+	} {
+		v := basic()
+		v["system"] = text
+		data, err := json.Marshal(v)
+		require.NoError(t, err)
+		r, err := parsePolicyRequest(data, policyHeaders(p))
+		require.NoError(t, err)
+		assert.Equal(t, []string{text}, r.System, "envelopes and ambiguous text must both remain intact")
 	}
 	for _, fields := range []map[string]string{{"shell": "client"}, {"platform": "both"}, {"workingDirectory": "invalid"}} {
-		if validateAttachmentPolicy(RequestPolicy{EnvironmentFields: fields}) == nil {
-			t.Fatal("invalid field policy accepted", fields)
-		}
+		assert.Error(t, validateAttachmentPolicy(RequestPolicy{EnvironmentFields: fields}), "invalid field policy accepted: %v", fields)
 	}
 }

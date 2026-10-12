@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func lifecycleTestExecutable() (string, error) {
@@ -63,10 +65,9 @@ func cliTailPeer() error {
 	if err := enc.Encode(Object{"type": "control_response", "response": Object{"subtype": "success", "request_id": init["request_id"]}}); err != nil {
 		return err
 	}
-	if err := dec.Decode(&user); err != nil {
-		return err
-	}
-	request, err := http.NewRequest("POST", os.Getenv("CCGATEWAY_MOD_URL"), bytes.NewBufferString(`{"event":"ready","version":"ccgateway-v2"}`))
+	// A native session waits for authenticated ready before submitting user.
+	// A peer that reads user first deadlocks against that admission gate.
+	request, err := http.NewRequest("POST", os.Getenv("CCGATEWAY_MOD_URL"), bytes.NewBufferString(`{"event":"ready","version":"ccgateway-v3"}`))
 	if err != nil {
 		return err
 	}
@@ -79,42 +80,13 @@ func cliTailPeer() error {
 	if ack.StatusCode != 200 {
 		return fmt.Errorf("Mod callback failed")
 	}
+	if err := dec.Decode(&user); err != nil {
+		return err
+	}
+	if str(user, "type") != "user" {
+		return fmt.Errorf("expected user after native ready acknowledgement")
+	}
 	if os.Getenv("CCG_TEST_CLI_TAIL") == "refusal" {
-		// The HTTP admission fixture now applies max_tokens through the relay.
-		// Exercise a real attributed request instead of bypassing that guard.
-		for i, arg := range os.Args {
-			if arg != "--append-system-prompt" || i+1 >= len(os.Args) {
-				continue
-			}
-			control := func(event string) error {
-				r, _ := http.NewRequest("POST", os.Getenv("CCGATEWAY_MOD_URL"), strings.NewReader(`{"event":"`+event+`"}`))
-				r.Header.Set("Authorization", "Bearer "+os.Getenv("CCGATEWAY_MOD_TOKEN"))
-				res, err := http.DefaultClient.Do(r)
-				if err != nil {
-					return err
-				}
-				res.Body.Close()
-				if res.StatusCode != 200 {
-					return fmt.Errorf("fixture scope %s: %d", event, res.StatusCode)
-				}
-				return nil
-			}
-			if err := control("main_request_begin"); err != nil {
-				return err
-			}
-			raw, _ := json.Marshal(Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "system": []any{Object{"type": "text", "text": os.Args[i+1]}}, "messages": []any{Object{"role": "user", "content": "fixture"}}})
-			res, err := http.Post(os.Getenv("ANTHROPIC_BASE_URL")+"/v1/messages", "application/json", bytes.NewReader(raw))
-			if err != nil {
-				return err
-			}
-			res.Body.Close()
-			if res.StatusCode != 200 {
-				return fmt.Errorf("fixture relay: %d", res.StatusCode)
-			}
-			if err := control("main_request_end"); err != nil {
-				return err
-			}
-		}
 		for _, event := range []Object{
 			{"type": "message_start", "message": Object{"id": "msg_refusal", "role": "assistant", "content": []any{}, "usage": Object{"input_tokens": 2, "output_tokens": 0}}},
 			{"type": "message_delta", "delta": Object{"stop_reason": "refusal", "stop_details": Object{"type": "refusal", "category": "cyber", "explanation": "fixture refusal"}}, "usage": Object{"output_tokens": 0}},
@@ -173,46 +145,45 @@ func cliTailPeer() error {
 
 func TestRunnerCancellationClosesInheritedOutputPipe(t *testing.T) {
 	cli, err := lifecycleTestExecutable()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	dir := t.TempDir()
-	runner := &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{
+	runner := &Runner{CLI: cli, Env: envWith(nativeProbeEnv(dir, "http://127.0.0.1:1"), map[string]string{
 		"CCG_TEST_CLI_TAIL": "descendant", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"),
 	})}
 	p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
+	raw, err := json.Marshal(basic())
+	require.NoError(t, err)
+	req, err := parsePolicyRequest(raw, nil)
+	require.NoError(t, err)
+	req.diagnostic = newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw)))
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	started := time.Now()
 	// Let the intentionally detached fixture exit before go test removes its
 	// executable on Windows; the measured request itself must return promptly.
 	t.Cleanup(func() { time.Sleep(time.Until(started.Add(2500 * time.Millisecond))) })
-	_, err = runner.run(ctx, parsed(t, basic()), p, dir, func(Object) error { return nil })
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline error, got %v", err)
-	}
-	if time.Since(started) > time.Second {
-		t.Fatal("cancellation waited for descendant to close inherited stdout")
-	}
+	_, err = runner.run(ctx, req, p, dir, func(Object) error { return nil })
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, time.Since(started), time.Second, "cancellation waited for descendant to close inherited stdout")
 }
 
 func TestRunnerDrainsOutputAfterResult(t *testing.T) {
 	cli, err := lifecycleTestExecutable()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	dir := t.TempDir()
-	runner := &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{
+	runner := &Runner{CLI: cli, Env: envWith(nativeProbeEnv(dir, "http://127.0.0.1:1"), map[string]string{
 		"CCG_TEST_CLI_TAIL": "1", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"),
 	})}
 	p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
+	raw, err := json.Marshal(basic())
+	require.NoError(t, err)
+	req, err := parsePolicyRequest(raw, nil)
+	require.NoError(t, err)
+	req.diagnostic = newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw)))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, err := runner.run(ctx, parsed(t, basic()), p, dir, func(Object) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if str(answer, "id") != "msg_tail" || len(p.NativeRows) != 1 {
-		t.Fatal("complete response and persisted transcript were not retained")
-	}
+	answer, err := runner.run(ctx, req, p, dir, func(Object) error { return nil })
+	require.NoError(t, err)
+	assert.Equal(t, "msg_tail", str(answer, "id"))
+	assert.Len(t, p.NativeRows, 1, "complete response and persisted transcript must be retained")
 }

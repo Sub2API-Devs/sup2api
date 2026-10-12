@@ -6,6 +6,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -52,7 +53,11 @@ func TestCoreRuntimeExecutionModesDecode(t *testing.T) {
 		invalid bool
 	}{
 		{"older Worker", nil, false},
-		{"current Worker", []string{"legacy", "passthrough", "native"}, false},
+		{"current Worker", []string{"native"}, false},
+		{"legacy mode", []string{"legacy"}, true},
+		{"passthrough mode", []string{"passthrough"}, true},
+		{"mixed modes", []string{"legacy", "passthrough", "native"}, true},
+		{"duplicate mode", []string{"native", "native"}, true},
 		{"unknown mode", []string{"direct"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,10 +78,31 @@ func TestCoreRuntimeExecutionModesDecode(t *testing.T) {
 			}
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 			assert.Equal(t, tc.modes, response.Data.ExecutionModes)
+			assert.Equal(t, tc.name == "current Worker", slices.Contains(response.Data.ExecutionModes, "native"))
 			assert.Equal(t, "not_run", response.Data.ModelProviderVerification)
 			assert.False(t, response.Data.Catalog.RuntimeVerified)
 			assert.Equal(t, "2.1.292", cliVersionOf(doc))
 		})
+	}
+}
+
+func TestNativeRuntimeCatalog(t *testing.T) {
+	doc := features.Catalog()
+	assert.False(t, doc.RuntimeVerified)
+	byID := map[string]features.Feature{}
+	for _, feature := range doc.Features {
+		byID[feature.ID] = feature
+		assert.NotContains(t, feature.BodyPaths, "relay_native_accounts")
+		assert.NotContains(t, feature.BodyPaths, "relay_passthrough_accounts")
+	}
+	require.Contains(t, byID, "F-RELAY-NATIVE")
+	assert.Equal(t, "partial", byID["F-RELAY-NATIVE"].Status)
+	assert.Equal(t, []string{"relay_mode"}, byID["F-RELAY-NATIVE"].BodyPaths)
+	assert.NotContains(t, byID, "F-RELAY-PASSTHROUGH")
+	for _, id := range []string{"F-FILES", "F-SKILLS"} {
+		require.Contains(t, byID, id)
+		assert.Equal(t, "partial", byID[id].Status, id)
+		assert.NotEmpty(t, byID[id].Mechanisms, id)
 	}
 }
 

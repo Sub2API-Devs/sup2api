@@ -10,6 +10,16 @@
 > - **策略及回滚材料**：最终 #22/#24/#26 均 active 且无自动停用期限，#23 disabled、#25 不可调度；管理员 401／关键词禁用规则及 native 策略与发布前一致。备份 `backups/pg-before-0.1.120.dump` 为 0600、24,794,795 字节，恢复列表检查通过；`backups/core-0.1.120-runtime-baseline.json`、各账号 `native-0.1.120*baseline.json`／`*worker-update.json` 及控制器旧程序备份保留。升级日志 `upgrade-20261012T061016.log`。这些是保留的回滚材料，不是跨版本自动回滚演练证明。
 > - **验证**：engine、worker、ccgateway 包测试及 engine vet 通过；Windows CLI 2.1.296 与断网隔离 Linux CLI 2.1.292 的 `TestNativeWebSearch|TestRealCLINativeWebSearch` 通过，覆盖实际出站 auto、并行控制、无缓存搜索／主会话仍缓存、thinking／签名、错误与计量；完整缓存事实即使非零也保留，不伪造 0。复现真实 stale TTL 事件并验证请求级错误作用域。0.1.41 镜像断网 health/features 门禁通过。未改数据库代码，不声称本轮执行全套 race 或三数据库矩阵。
 
+## native-only 清理验收（2026-10-12，尚未发布）
+
+- 当前源码准备 CCGateway 0.1.42；线上版本仍以上述 0.1.120/0.1.41 记录为准。旧实现保存在 `archive/ccgateway-relay-0.1.41@4b0e0967c`。工作树删除模型 HTTP relay、旧搜索插件、旧模式开关与已确认的专用测试，不以设置为关闭来保留旧执行模式；资源管理 HTTP、代理和 Mod 回调保留。
+- `clear_at:next_user_message` 的内部 ToolSearch/WebSearch 续轮已改为：模型调用前暂停，核验自有附件 UUID 与原生结果，清除临时指令后同模型 resume 一次。只提交真实工具结果后缀；不重放搜索、首轮 tool_choice、同名正文或累计用量。Mod `ccgateway-v3` 在输入前确认，旧协议拒绝。Windows CLI 2.1.296 与 Linux CLI 2.1.292 均通过 15 场景/81 次生命周期请求和 5 个取消/失败场景。
+- 最新 Linux 隔离门禁 56 个顶层测试通过、零跳过，覆盖 native 主路径/恢复、搜索/严格计量、clear_at 生命周期、文件引用、Files/Skills 管理 HTTP、身份/取消/字节保真、Mod 协议及 credit+搜索前置拒绝。镜像 `ccgateway-app:0.1.41`、CLI SHA-256 `a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3`；测试程序 SHA-256 `f29f076422e282d96f0d191817994142a71c0ae0f4363b592e270ad3d880bee8`。临时容器禁网、无账号挂载、uid 1000、cap-drop ALL/no-new-privileges、2 CPU/4 GiB/512 tasks，结束后确认已删除。使用真实 CLI 与本地假上游，不是生产模型验证。
+- 存储 OAuth 的 37 场景此前在上述两版 CLI 各连续两轮通过；只由 CLI 刷新并核验落盘/指纹/30 秒有效期，未知版本拒绝。独立审查未发现高严重度问题；credit 跟踪与搜索原本拒绝过晚，已加生成前门禁；无调用者的旧 credit wire 改写函数已删除。NO_PROXY 不绕过管理 HTTP 的 HTTPS_PROXY、版本为启动快照、外部并发轮换及损坏身份文件仍是明确边界，不宣称通用 ASVS 合规。
+- CCGateway/engine/Worker/contracts 全包普通回归、构建与相关 Go vet 通过；Core CCGateway 全包在真实 PostgreSQL **16.9** 上通过（最后一轮 78.160s）。Windows 原有测试库缺 `pg_control`，未删除或修复；以一次性 `LOCALAPPDATA` 创建隔离测试库，保持原 GOCACHE。工具的 `testpg stop` 未能停止该进程，最终用该临时目录自己的 `pg_ctl -D ... stop -m fast -w` 正常关闭；未触及生产库，不声称 SQLite/MySQL 或 race 矩阵通过。
+- 原生 Mod 的 Node 测试 7 项通过；前端策略/控制器/语言包 86 项通过，Vue typecheck 和独立临时目录生产构建通过。定向 ESLint 0 errors、495 个既有样式/未使用变量 warnings；Bun 不可用，使用已安装 Node 工具，未安装依赖或修改安全限制。
+- 尚须提交推送、签名发布、验证允许账号的原地更新，并使用本地 CC 做真实模型验收；上述离线结果不替代生产验收。不得使用或更新 #23/#25。
+
 以下为历史部署记录。
 
 > **2026-10-12 12:37（北京时间）线上版本：** 核心 **v0.1.118**，CCGateway **0.1.39**。核心源码 `cffea79e3a8409adf36d2aa10dc9d32b697f67f7`，manifest `fcc8558c9471c93c1ca29e25999f584e9bf93f70bcfc3f8cc3b5bf652c383be4`，四节点程序 SHA-256 均为 `2e0536eb7b075f2a7caa348d5dd33cea869bf32ae1e960f7c8c47f6437644400`。正常 primary-first 升级计划 `8f76da9f4049715a14baebfd92289b94` 已 completed，六个 builtin 包与 trust 的字节保持不变，无 schema 变更。

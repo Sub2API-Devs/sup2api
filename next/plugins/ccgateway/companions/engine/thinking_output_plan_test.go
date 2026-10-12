@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -21,70 +20,29 @@ func TestThinkingOutputPlanAdmissionAndDefaults(t *testing.T) {
 	if _, err := parsePolicyRequest(raw, h); err != nil {
 		t.Fatal("interleaved manual turn budget was incorrectly bounded by max_tokens", err)
 	}
+	req := plannedRequest(t, nil)
+	cfg, err := req.passthroughBodies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.First["thinking"] != nil || cfg.First["output_config"] != nil || digest(req.passthroughThinkingArgs()) != digest([]string{"--thinking", "disabled"}) || req.passthroughEffort() != "high" {
+		t.Fatal("native generation defaults changed")
+	}
 	for _, extra := range []Object{
-		{"thinking": Object{"type": "adaptive", "display": "updates"}},
-		{"thinking": Object{"type": "adaptive", "block_binding": Object{"prefix_mismatch_behavior": "error"}}},
-		{"thinking": Object{"type": "between_tools", "display": "omitted"}},
-		{"thinking": Object{"type": "between_tools"}, "output_config": Object{"effort": "max"}},
-		{"thinking": Object{"type": "disabled", "display": "summarized"}},
-		{"thinking": Object{"type": "adaptive", "block_binding": Object{"prefix_mismatch_behavior": "ignore"}}},
+		{"thinking": Object{"type": "disabled"}, "output_config": Object{"effort": "high"}},
+		{"thinking": Object{"type": "adaptive", "display": "omitted"}},
 		{"output_format": Object{"type": "json_schema", "schema": Object{"type": "object"}}},
 	} {
-		body := basic()
-		for k, v := range extra {
-			body[k] = v
+		req = plannedRequest(t, extra)
+		cfg, err = req.passthroughBodies()
+		if err != nil {
+			t.Fatal(err)
 		}
-		raw, _ := json.Marshal(body)
-		if _, err := parsePolicyRequest(raw, http.Header{}); err == nil {
-			t.Errorf("invalid generation request accepted: %v", extra)
-		}
-	}
-	req := plannedRequest(t, nil)
-	wire := Object{"thinking": Object{"type": "adaptive", "display": "updates"}, "output_config": Object{"effort": "medium"}, "metadata": Object{"session_id": "fixture"}}
-	if err := req.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	if wire["thinking"] != nil || wire["output_config"] != nil || wire["metadata"] == nil {
-		t.Fatal("API defaults not isolated from CLI defaults", wire)
-	}
-	req = plannedRequest(t, Object{"thinking": Object{"type": "disabled"}, "output_config": Object{"effort": "high"}})
-	if err := req.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	if str(wire["thinking"].(Object), "type") != "disabled" || str(wire["output_config"].(Object), "effort") != "high" {
-		t.Fatal("explicit generation settings lost")
-	}
-}
-
-func TestAPITerminalObserverBlocksRetryBeforeDeliveringStop(t *testing.T) {
-	for _, kind := range []string{"end_turn", "max_tokens", "refusal", "pause_turn", "client_tool", "client_search", "internal_search"} {
-		relay := &outboundRelay{}
-		req := &Request{ToolSearch: "true", APIOutputFormat: true}
-		if kind == "client_search" {
-			req.Tools = []Tool{{Name: "ToolSearch"}}
-			req.Native = map[string]bool{"ToolSearch": true}
-		}
-		observer := &apiTerminalObserver{relay: relay, req: req}
-		send := func(event Object) {
-			raw, _ := json.Marshal(event)
-			observer.observe([]byte(fmt.Sprintf("data: %s\n\n", raw)))
-		}
-		reason := kind
-		if kind == "client_tool" || kind == "client_search" || kind == "internal_search" {
-			reason = "tool_use"
-			name := "Read"
-			if kind == "internal_search" || kind == "client_search" {
-				name = "ToolSearch"
+		for name, value := range extra {
+			want, _ := json.Marshal(value)
+			if string(cfg.First[name]) != string(want) || string(cfg.Rest[name]) != string(want) {
+				t.Fatalf("native generation field %s changed", name)
 			}
-			send(Object{"type": "content_block_start", "content_block": Object{"type": "tool_use", "name": name}})
-		}
-		send(Object{"type": "message_delta", "delta": Object{"stop_reason": reason}})
-		if relay.isStopped() {
-			t.Fatal("stopped before complete response")
-		}
-		send(Object{"type": "message_stop"})
-		if relay.isStopped() != (kind != "internal_search") {
-			t.Fatalf("wrong termination for %s", kind)
 		}
 	}
 }

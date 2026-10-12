@@ -6,8 +6,10 @@ import (
 )
 
 func TestForcedEagerAnyCatalogPartition(t *testing.T) {
-	r := forcedLoadedFixture(t)
-	r.Plan.fields["tool_choice"] = json.RawMessage(`{"type":"any","disable_parallel_tool_use":true}`)
+	input := basic()
+	input["tools"] = []any{Object{"name": "chosen", "defer_loading": false, "input_schema": Object{"type": "object"}}}
+	input["tool_choice"] = json.RawMessage(`{"type":"any","disable_parallel_tool_use":true}`)
+	r := reviewParseForcedMixed(t, input)
 	if !r.forcedLoadedClientCatalog() || r.maxTurns() != "1" {
 		t.Fatal("any scope not bounded")
 	}
@@ -18,14 +20,18 @@ func TestForcedEagerAnyCatalogPartition(t *testing.T) {
 	}
 	schema := r.Tools[0].Schema
 	body := Object{"tools": []any{Object{"name": "mcp__ccgateway__chosen", "input_schema": schema}, Object{"name": "ToolSearch"}, Object{"name": "DeferredToolPlaceholder"}}}
-	if err := r.ApplyMainRequestFeatures(body); err != nil {
+	if err := r.verifyForcedLoadedCatalog(body); err != nil {
 		t.Fatal(err)
 	}
 	actual, _ := historyContent(body["tools"])
 	if len(actual) != 1 || str(actual[0], "name") != "mcp__ccgateway__chosen" || actual[0]["defer_loading"] != false {
 		t.Fatal("provider any can select helper")
 	}
-	if digest(body["tool_choice"]) != digest(Object{"type": "any", "disable_parallel_tool_use": true}) {
+	cfg, err := r.passthroughBodies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(cfg.First["tool_choice"]) != `{"type":"any","disable_parallel_tool_use":true}` || cfg.Rest["tool_choice"] != nil {
 		t.Fatal("any contract changed")
 	}
 	for _, extra := range []Object{{"name": "unexpected"}, {"name": "mcp__ccgateway__chosen", "input_schema": schema}} {

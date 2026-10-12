@@ -41,7 +41,7 @@ func TestReviewForcedMixedMainRestorationAndIsolation(t *testing.T) {
 	r := reviewParseForcedMixed(t, body)
 	rawBefore := string(r.Plan.raw)
 	wire := reviewForcedWire(r)
-	if err := r.ApplyMainRequestFeatures(wire); err != nil {
+	if err := r.verifyForcedLoadedCatalog(wire); err != nil {
 		t.Fatal(err)
 	}
 	wanted, err := jsonCopyObject(body)
@@ -55,9 +55,16 @@ func TestReviewForcedMixedMainRestorationAndIsolation(t *testing.T) {
 	if digest(wire["tools"]) != digest(list) {
 		t.Fatal("original field presence, order or numeric schema changed")
 	}
-	choice := wire["tool_choice"].(Object)
-	_, metadataApplied := wire["metadata"] // the client's metadata only selects the session (§53.12)
-	if str(choice, "name") != r.wireName("chosen") || choice["disable_parallel_tool_use"] != true || metadataApplied {
+	cfg, err := r.passthroughBodies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	choice, err := decodeObject(cfg.First["tool_choice"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, metadataApplied := cfg.First["metadata"] // the client's metadata only selects the session (§53.12)
+	if str(choice, "name") != r.wireName("chosen") || choice["disable_parallel_tool_use"] != true || metadataApplied || cfg.Rest["tool_choice"] != nil {
 		t.Fatal("main controls changed")
 	}
 	actual, _ := historyContent(wire["tools"])
@@ -66,7 +73,7 @@ func TestReviewForcedMixedMainRestorationAndIsolation(t *testing.T) {
 		t.Fatal("output mutation polluted request")
 	}
 	next := reviewForcedWire(r)
-	if err := r.ApplyMainRequestFeatures(next); err != nil || digest(next["tools"]) != digest(list) {
+	if err := r.verifyForcedLoadedCatalog(next); err != nil || digest(next["tools"]) != digest(list) {
 		t.Fatal("second response inherited mutation", err)
 	}
 }

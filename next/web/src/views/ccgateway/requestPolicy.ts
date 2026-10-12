@@ -1,50 +1,27 @@
-export const attachmentTypes = ['environment', 'model', 'total_tokens_reminder', 'session_context', 'date'] as const
-export type AttachmentType = typeof attachmentTypes[number]
-export type AttachmentSource = 'client' | 'gateway' | 'both'
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
+// Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {
-	 schema_version?: number
-  unknown_beta: 'reject' | 'ignore'
+  schema_version?: number
   unknown_field: 'reject' | 'ignore'
   allow_fast: boolean
   tool_search?: string
   allow_effort: boolean
-  pass_upstream_errors: boolean
-  attachment_source: 'client' | 'gateway' | 'both'
-  environment_fields: Partial<Record<'workingDirectory' | 'platform', 'client' | 'gateway'>>
-  attachment_sources: Partial<Record<AttachmentType, AttachmentSource>>
-  unknown_client_attachment: 'pass' | 'ignore'
-  unknown_gateway_attachment: 'pass' | 'ignore'
   custom_tool_prefix: string
   // 'pass' (default): thinking.type "disabled" goes upstream as sent; 'omit': dropped for models that reject it.
   thinking_disabled_compat?: 'pass' | 'omit'
-  // 'legacy' (default): the Worker's outbound relay adapts the inner CLI's requests;
-  // 'passthrough': every upstream request is the inner CLI's own, forwarded unchanged.
-  relay_mode?: 'legacy' | 'passthrough' | 'native'
-  // Accounts already in passthrough while relay_mode is legacy (staged rollout).
-  relay_passthrough_accounts?: number[]
-  relay_native_accounts?: number[]
+  relay_mode: 'native'
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
   return {
-    unknown_beta: 'ignore',
     unknown_field: 'reject',
     // Supported by the official API, so always on (no longer settings; the core ignores false).
     allow_fast: true,
     allow_effort: true,
-    pass_upstream_errors: false,
-    attachment_source: 'client',
-    environment_fields: {},
-    attachment_sources: {},
-    unknown_client_attachment: 'pass',
-    unknown_gateway_attachment: 'pass',
     custom_tool_prefix: 'ccgateway',
     tool_search: 'request',
     thinking_disabled_compat: 'pass',
-    relay_mode: 'legacy',
-    relay_passthrough_accounts: [],
-    relay_native_accounts: [],
+    relay_mode: 'native',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
       { name: 'fine-grained-tool-streaming-2025-05-14', mapping: 'fine_grained_tools' },
@@ -56,23 +33,28 @@ export function defaultRequestPolicy(): RequestPolicy {
     ]
   }
 }
+export function normalizeRequestPolicy(policy?: Partial<Omit<RequestPolicy, 'relay_mode'>> & { relay_mode?: unknown }): RequestPolicy {
+  const defaults = defaultRequestPolicy()
+  // Pick the editor's fields rather than spreading historical or server-defaulted policy data.
+  return {
+    ...(policy?.schema_version === undefined ? {} : { schema_version: policy.schema_version }),
+    unknown_field: policy?.unknown_field ?? defaults.unknown_field,
+    allow_fast: policy?.allow_fast ?? defaults.allow_fast,
+    allow_effort: policy?.allow_effort ?? defaults.allow_effort,
+    custom_tool_prefix: policy?.custom_tool_prefix ?? defaults.custom_tool_prefix,
+    tool_search: policy?.tool_search ?? defaults.tool_search,
+    thinking_disabled_compat: policy?.thinking_disabled_compat ?? defaults.thinking_disabled_compat,
+    relay_mode: 'native',
+    betas: policy?.betas ?? defaults.betas
+  }
+}
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
-	(p.schema_version === undefined || p.schema_version === 1) &&
+    (p.schema_version === undefined || p.schema_version === 1) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
-    ['reject', 'ignore'].includes(p.unknown_beta) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
-    ['client', 'gateway', 'both'].includes(p.attachment_source) &&
-    ['pass', 'ignore'].includes(p.unknown_client_attachment) &&
-    ['pass', 'ignore'].includes(p.unknown_gateway_attachment) &&
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
-    (!p.relay_mode || ['legacy', 'passthrough', 'native'].includes(p.relay_mode)) &&
-    [p.relay_passthrough_accounts ?? [], p.relay_native_accounts ?? []].every(ids =>
-      ids.length <= 1000 && ids.every(id => Number.isSafeInteger(id) && id > 0) && new Set(ids).size === ids.length
-    ) &&
-    !(p.relay_native_accounts ?? []).some(id => (p.relay_passthrough_accounts ?? []).includes(id)) &&
-    Object.entries(p.environment_fields).every(([k, v]) => ['workingDirectory', 'platform'].includes(k) && ['client', 'gateway'].includes(v)) &&
-    Object.entries(p.attachment_sources).every(([k, v]) => attachmentTypes.includes(k as AttachmentType) && ['client', 'gateway', 'both'].includes(v))
+    p.relay_mode === 'native'
   )
 }

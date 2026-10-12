@@ -89,7 +89,7 @@ func (r *Runner) runNativeWebSearch(ctx context.Context, req *Request, dir strin
 	if req.Effort != "" {
 		args = append(args, "--effort", req.Effort)
 	}
-	proc, err := startCLI(ctx, r.CLI, args, work, cfg.processEnv(base, nil), r.Stderr)
+	proc, err := startCLI(ctx, r.CLI, args, work, cfg.processEnv(base), r.Stderr)
 	if err != nil {
 		return nil, err
 	}

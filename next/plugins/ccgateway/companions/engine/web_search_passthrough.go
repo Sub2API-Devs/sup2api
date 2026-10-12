@@ -1,8 +1,6 @@
 package engine
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -10,20 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 )
 
-// web_search in relay passthrough (PASSTHROUGH-DESIGN.md section 8). The
-// client's server tool becomes Claude Code's own WebSearch: the main CLI
-// offers it, and when the model calls it the Mod asks the Worker, which runs
-// the search in a one-shot CLI process of the same account (a search Mod
-// calls WebSearch there and ends the turn; upstream sees one search request).
+// The client's web_search server tool becomes Claude Code's own WebSearch:
+// the main CLI offers it, and when the model calls it the Mod asks the Worker,
+// which runs the search in a one-shot native CLI process of the same account.
 // The result goes back into the main CLI's turn, which continues. The client
 // receives server_tool_use and web_search_tool_result blocks; each result's
 // encrypted_content is issued by the gateway and carries what the model read,
@@ -391,106 +382,13 @@ func checkWebSearchHistory(block Object) error {
 // and reads the output and the text the model reads from the search Mod. An
 // error of the API itself comes back as sent: the account's own state (a
 // rate limit, an expired login) is the gateway's to act on.
-func (r *Runner) runWebSearch(ctx context.Context, req *Request, dir string, input Object) (*webSearchRecord, *upstreamError, error) {
-	if req.NativeTransport {
-		record, err := r.runNativeWebSearch(ctx, req, dir, input)
-		var native *nativeError
-		if err != nil && !errors.As(err, &native) {
-			err = &requestRefusal{err}
-		}
-		return record, nil, err
+func (r *Runner) runWebSearch(ctx context.Context, req *Request, dir string, input Object) (*webSearchRecord, error) {
+	record, err := r.runNativeWebSearch(ctx, req, dir, input)
+	var native *nativeError
+	if err != nil && !errors.As(err, &native) {
+		err = &requestRefusal{err}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-	work, err := os.MkdirTemp(dir, "search-")
-	if err != nil {
-		return nil, nil, err
-	}
-	defer os.RemoveAll(work)
-	search := &Request{Passthrough: true, Model: req.Model, diagnostic: req.diagnostic, responseFacts: &providerResponseFacts{}}
-	base := r.baseEnv()
-	relay, err := startOutboundRelay(search, base, r.InternalBaseURL)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer relay.Close()
-	usage := Object{}
-	var mu sync.Mutex
-	relay.observeEvent = func(event Object) {
-		mu.Lock()
-		defer mu.Unlock()
-		addStreamUsage(usage, event)
-	}
-	relay.setAbort(cancel)
-	control, err := startModControl(&runConfig{diagnostic: req.diagnostic, attachments: Object{}, tools: Object{}}, r.InternalBaseURL)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer control.Close()
-	control.searchOnly = true
-	raw, _ := marshalPlain(input)
-	env := map[string]string{"CCGATEWAY_MOD_URL": control.URL, "CCGATEWAY_MOD_TOKEN": control.token, "CCGATEWAY_SEARCH_INPUT": string(raw),
-		"DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_MAX_RETRIES": "0", "ENABLE_TOOL_SEARCH": "false"}
-	for k, v := range relayEnv(base, relay) {
-		env[k] = v
-	}
-	args := []string{"-p", "web search", "--output-format", "stream-json", "--verbose", "--tools", "WebSearch", "--allowedTools", "WebSearch", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":false}`, "--no-chrome", "--disable-slash-commands", "--no-session-persistence", "--max-turns", "1", "--model=" + req.Model, "--plugin-dir", filepath.Join(r.Plugin, "search")}
-	cmd := exec.CommandContext(ctx, r.CLI, args...)
-	cmd.Dir = work
-	cmd.Env = envWith(base, env, inheritedCLIEnv...)
-	cmd.Stdin = bytes.NewReader(nil)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, err
-	}
-	cmd.Stderr = io.Discard
-	if r.Stderr != nil {
-		cmd.Stderr = r.Stderr
-	}
-	req.diagnostic.trace("web_search_started", Object{"query_bytes": len(str(input, "query"))})
-	if err := cmd.Start(); err != nil {
-		return nil, nil, err
-	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 64*1024), 8<<20)
-	for scanner.Scan() {
-		frame, decodeErr := decodeObject(scanner.Bytes())
-		if decodeErr != nil {
-			continue
-		}
-		req.diagnostic.trace("web_search_output", frame)
-	}
-	if scanner.Err() != nil {
-		cancel()
-	}
-	_ = cmd.Wait()
-	answer := control.searchAnswer()
-	mu.Lock()
-	defer mu.Unlock()
-	req.diagnostic.trace("web_search_finished", Object{"answered": answer != nil, "usage": usage})
-	if upstream := relay.UpstreamError(); upstream != nil {
-		code := "unavailable"
-		if upstream.Status == 429 {
-			code = "too_many_requests"
-		}
-		return &webSearchRecord{Error: code}, upstream, nil
-	}
-	if answer == nil {
-		return nil, nil, fmt.Errorf("web search process gave no answer")
-	}
-	if text := str(answer, "error"); text != "" {
-		return &webSearchRecord{Error: "unavailable"}, nil, nil
-	}
-	result, _ := answer["result"].(map[string]any)
-	if result == nil {
-		return nil, nil, fmt.Errorf("web search process gave no result")
-	}
-	if req.webSearch != nil {
-		req.webSearch.mu.Lock()
-		addUsageTotals(req.webSearch.usage, usage)
-		req.webSearch.mu.Unlock()
-	}
-	return &webSearchRecord{Result: result, Text: str(answer, "text")}, nil, nil
+	return record, err
 }
 
 // serveWebSearchFast answers a Claude Code client's WebSearch side query with
@@ -499,11 +397,7 @@ func (x *exchange) serveWebSearchFast(ctx context.Context, dir, query string) {
 	req := x.req
 	x.diagnostic.setStage("web_search")
 	input := req.webSearch.searchInput(Object{"query": query})
-	record, upstream, err := x.g.Runner.runWebSearch(ctx, req, dir, input)
-	if upstream != nil && ctx.Err() == nil {
-		x.passUpstream(upstream, Object{"type": "api_error", "message": upstream.Error()})
-		return
-	}
+	record, err := x.g.Runner.runWebSearch(ctx, req, dir, input)
 	if err == nil && ctx.Err() != nil {
 		err = ctx.Err()
 	}
@@ -529,56 +423,6 @@ func (x *exchange) serveWebSearchFast(ctx context.Context, dir, query string) {
 			return
 		}
 	}
-}
-
-// addStreamUsage adds one model stream's usage: message_start carries the
-// input side, message_delta the final output count.
-func addStreamUsage(total, event Object) {
-	switch str(event, "type") {
-	case "message_start":
-		message, _ := event["message"].(map[string]any)
-		usage, _ := message["usage"].(map[string]any)
-		for _, key := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"} {
-			addNumber(total, key, usage[key])
-		}
-		addCacheCreation(total, usage)
-	case "message_delta":
-		usage, _ := event["usage"].(map[string]any)
-		addNumber(total, "output_tokens", usage["output_tokens"])
-	}
-}
-
-func addUsageTotals(total, usage Object) {
-	for _, key := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"} {
-		addNumber(total, key, usage[key])
-	}
-	addCacheCreation(total, usage)
-}
-
-// addCacheCreation adds the split of cache writes by lifetime, which prices
-// them.
-func addCacheCreation(total, usage Object) {
-	split, _ := usage["cache_creation"].(Object)
-	if split == nil {
-		return
-	}
-	sum, _ := total["cache_creation"].(Object)
-	if sum == nil {
-		sum = Object{}
-		total["cache_creation"] = sum
-	}
-	for key, value := range split {
-		addNumber(sum, key, value)
-	}
-}
-
-func addNumber(total Object, key string, value any) {
-	n, ok := usageInt(value)
-	if !ok {
-		return
-	}
-	prior, _ := usageInt(total[key])
-	total[key] = prior + n
 }
 
 func usageInt(value any) (int64, bool) {
@@ -620,22 +464,6 @@ func (w *webSearchPlan) nativeWebSearchUsage(priorRounds, finalUsage Object) (Ob
 	return nativeWebSearchPublicUsage(total), nil
 }
 
-// webSearchUsage is the response usage: the CLI rounds' tokens, the one-shot
-// processes' tokens and the number of searches.
-func (w *webSearchPlan) webSearchUsage(rounds Object) Object {
-	out := copySearchUsage(rounds)
-	w.mu.Lock()
-	addUsageTotals(out, w.usage)
-	w.mu.Unlock()
-	server, _ := out["server_tool_use"].(Object)
-	if server == nil {
-		server = Object{}
-	}
-	server["web_search_requests"] = w.searches()
-	out["server_tool_use"] = server
-	return out
-}
-
 // webSearchAnswer is the API answer of the fast path: the one-shot process's
 // side query rebuilt as the model's search calls, results and commentary.
 func webSearchAnswer(req *Request, record *webSearchRecord, query string) Object {
@@ -645,34 +473,8 @@ func webSearchAnswer(req *Request, record *webSearchRecord, query string) Object
 	} else if record.Error != "" {
 		id := "srvtoolu_" + strings.ReplaceAll(uuid(), "-", "")
 		content = append(content, Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{"query": query}}, record.resultBlock(id))
-	} else {
-		items, _ := record.Result["results"].([]any)
-		first := true
-		for _, item := range items {
-			if text, ok := item.(string); ok {
-				content = append(content, Object{"type": "text", "text": text})
-				continue
-			}
-			entry, _ := item.(map[string]any)
-			id := str(entry, "tool_use_id")
-			if !strings.HasPrefix(id, "srvtoolu_") {
-				id = "srvtoolu_" + strings.ReplaceAll(uuid(), "-", "")
-			}
-			part := &webSearchRecord{Input: Object{"query": query}, Result: Object{"results": []any{entry}}}
-			if first {
-				// The whole output rides in the first result, as in the main path.
-				part.Text, part.Input = record.Text, record.Input
-				first = false
-			}
-			content = append(content, Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{"query": query}}, part.resultBlock(id))
-		}
 	}
-	var usage Object
-	if record.Usage != nil {
-		usage = copySearchUsage(record.Usage)
-	} else {
-		usage = req.webSearch.webSearchUsage(Object{"input_tokens": 0, "output_tokens": 0})
-	}
+	usage := copySearchUsage(record.Usage)
 	return Object{"id": "msg_" + strings.ReplaceAll(uuid(), "-", ""), "type": "message", "role": "assistant", "model": req.Model, "content": content, "stop_reason": "end_turn", "stop_sequence": nil, "usage": usage}
 }
 

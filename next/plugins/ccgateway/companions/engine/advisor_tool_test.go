@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func advisorTestBody() Object {
@@ -31,35 +33,20 @@ func advisorFixture(variant string) []Object {
 	return []Object{{"type": "server_tool_use", "id": "srv_advisor", "name": "advisor", "input": Object{}}, {"type": "advisor_tool_result", "tool_use_id": "srv_advisor", "content": content}, {"type": "text", "text": "ADVISOR_DONE"}}
 }
 
-func TestAdvisorAdmissionAndHistoricalDefinition(t *testing.T) {
-	body := advisorTestBody()
-	h := http.Header{"Anthropic-Beta": []string{"advisor-tool-2026-03-01"}}
-	r, err := parsePolicyRequest(mustServerJSON(body), h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.TTL != 5*time.Minute {
-		t.Fatal("advisor caching changed executor cache TTL")
-	}
-	wire := Object{"tools": []any{}}
-	if err := r.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	if digest(wire["tools"]) != digest(body["tools"]) {
-		t.Fatal("advisor definition changed")
-	}
-	if _, err := parsePolicyRequest(mustServerJSON(body), nil); err == nil {
-		t.Fatal("missing beta accepted")
-	}
-	for _, variant := range []string{"advisor_result", "advisor_redacted_result", "advisor_tool_result_error"} {
-		b := advisorTestBody()
-		b["messages"] = []any{Object{"role": "user", "content": "q"}, Object{"role": "assistant", "content": advisorFixture(variant)}, Object{"role": "user", "content": "next"}}
-		delete(b, "tools")
-		if _, err := parsePolicyRequest(mustServerJSON(b), h); err != nil {
-			t.Fatal("completed advisor should not require definition", variant, err)
-		}
-		if _, err := parsePolicyRequest(mustServerJSON(b), nil); err == nil {
-			t.Fatal("advisor history requires beta")
+func TestNativeAdvisorDefinitionAndHistoryRefused(t *testing.T) {
+	for _, h := range []http.Header{nil, {"Anthropic-Beta": []string{"advisor-tool-2026-03-01"}}} {
+		raw, err := json.Marshal(advisorTestBody())
+		require.NoError(t, err)
+		_, err = parsePolicyRequest(raw, h)
+		require.ErrorContains(t, err, `server tool "advisor_20260301" is not supported`)
+		for _, variant := range []string{"advisor_result", "advisor_redacted_result", "advisor_tool_result_error"} {
+			b := advisorTestBody()
+			b["messages"] = []any{Object{"role": "user", "content": "q"}, Object{"role": "assistant", "content": advisorFixture(variant)}, Object{"role": "user", "content": "next"}}
+			delete(b, "tools")
+			raw, err := json.Marshal(b)
+			require.NoError(t, err)
+			_, err = parsePolicyRequest(raw, h)
+			require.ErrorContains(t, err, "not supported", variant)
 		}
 	}
 }

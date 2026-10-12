@@ -3,6 +3,9 @@ package engine
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func completedHistoryBody(name string) Object {
@@ -14,115 +17,91 @@ func TestCompletedClientHistoryDoesNotAuthorizeExecution(t *testing.T) {
 	for _, name := range []string{"bash", "retired_fixture", "ToolSearch"} {
 		t.Run(name, func(t *testing.T) {
 			body := completedHistoryBody(name)
-			raw, _ := json.Marshal(body)
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
 			r, err := parsePolicyRequest(raw, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			old := r.Messages[1].Content[0]
 			wire := r.wireMessage(r.Messages[1]).Content[0]
-			if digest(old) != digest(wire) {
-				t.Fatal("history rewritten")
-			}
-			if len(r.Tools) != 0 || len(r.enabledTools()) != 0 || clientToolName(r, name) != "" || r.apiResponseToolName(old) != "" {
-				t.Fatal("history granted execution")
-			}
+			assert.Equal(t, old, wire, "history must not be rewritten")
+			assert.Empty(t, r.Tools)
+			assert.Empty(t, r.enabledTools())
+			assert.Empty(t, clientToolName(r, name))
+			assert.Empty(t, r.apiResponseToolName(old), "history must not grant execution")
 			r.ToolSearch = "true"
-			if internalHistoryAssistant(r, Object{"content": []Object{wire}}) {
-				t.Fatal("history consumed as helper")
-			}
-			changed, _ := jsonCopyObject(old)
+			assert.False(t, internalHistoryAssistant(r, Object{"content": []Object{wire}}), "history must not be consumed as a helper")
+			changed, err := jsonCopyObject(old)
+			require.NoError(t, err)
 			changed["input"] = Object{}
-			if r.completedClientHistoryBlock(changed) {
-				t.Fatal("identity accepted changed input")
-			}
+			assert.False(t, r.completedClientHistoryBlock(changed), "identity must not accept changed input")
 		})
 	}
 }
 func TestCompletedClientHistoryPendingAndCurrentCatalog(t *testing.T) {
 	body := completedHistoryBody("bash")
 	body["messages"] = body["messages"].([]any)[:2]
-	raw, _ := json.Marshal(body)
-	if _, err := parsePolicyRequest(raw, nil); err == nil {
-		t.Fatal("pending history admitted")
-	}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	_, err = parsePolicyRequest(raw, nil)
+	require.Error(t, err, "pending undeclared history must not be admitted")
 	body = completedHistoryBody("fixture")
 	body["tools"] = []any{Object{"name": "fixture", "input_schema": Object{"type": "object"}}}
-	raw, _ = json.Marshal(body)
+	raw, err = json.Marshal(body)
+	require.NoError(t, err)
 	r, err := parsePolicyRequest(raw, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(r.completedClientHistory) != 0 || str(r.wireMessage(r.Messages[1]).Content[0], "name") != "mcp__ccgateway__fixture" {
-		t.Fatal("current catalog bypassed")
-	}
+	require.NoError(t, err)
+	assert.Empty(t, r.completedClientHistory, "current catalog must not be bypassed")
+	assert.Equal(t, "mcp__ccgateway__fixture", str(r.wireMessage(r.Messages[1]).Content[0], "name"))
 }
 
 func TestCompletedClientHistoryPairingAndSnapshotScope(t *testing.T) {
 	for _, mode := range []string{"duplicate", "wrong-result", "reordered"} {
-		b := completedHistoryBody("bash")
-		ms := b["messages"].([]any)
-		switch mode {
-		case "duplicate":
-			ms[1].(Object)["content"] = append(ms[1].(Object)["content"].([]any), ms[1].(Object)["content"].([]any)[0])
-		case "wrong-result":
-			ms[2].(Object)["content"].([]any)[0].(Object)["tool_use_id"] = "other"
-		case "reordered":
-			ms[1], ms[2] = ms[2], ms[1]
-		}
-		raw, _ := json.Marshal(b)
-		if _, err := parsePolicyRequest(raw, nil); err == nil {
-			t.Fatalf("%s accepted", mode)
-		}
+		t.Run(mode, func(t *testing.T) {
+			b := completedHistoryBody("bash")
+			ms := b["messages"].([]any)
+			switch mode {
+			case "duplicate":
+				ms[1].(Object)["content"] = append(ms[1].(Object)["content"].([]any), ms[1].(Object)["content"].([]any)[0])
+			case "wrong-result":
+				ms[2].(Object)["content"].([]any)[0].(Object)["tool_use_id"] = "other"
+			case "reordered":
+				ms[1], ms[2] = ms[2], ms[1]
+			}
+			raw, err := json.Marshal(b)
+			require.NoError(t, err)
+			_, err = parsePolicyRequest(raw, nil)
+			require.Error(t, err, "invalid history pairing must be rejected")
+		})
 	}
-	raw, _ := json.Marshal(completedHistoryBody("bash"))
+	raw, err := json.Marshal(completedHistoryBody("bash"))
+	require.NoError(t, err)
 	r, err := parsePolicyRequest(raw, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	original := r.toolHistoryNamespace()
 	r.completedClientHistory["another"] = "fingerprint"
-	if original != r.toolHistoryNamespace() {
-		t.Fatal("growing history invalidated configuration key")
-	}
+	assert.Equal(t, original, r.toolHistoryNamespace(), "growing history must not invalidate configuration key")
 	r.completedClientHistory = nil
-	if original == r.toolHistoryNamespace() {
-		t.Fatal("legacy renamed snapshot not isolated")
-	}
+	assert.NotEqual(t, original, r.toolHistoryNamespace(), "legacy renamed snapshot must be isolated")
 	r, err = parsePolicyRequest(raw, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	r.CustomToolPrefix = "different"
 	r.NoTools = true
-	if str(r.wireMessage(r.Messages[1]).Content[0], "name") != "bash" || len(r.enabledTools()) != 0 {
-		t.Fatal("configuration changed history identity or execution authority")
-	}
+	assert.Equal(t, "bash", str(r.wireMessage(r.Messages[1]).Content[0], "name"))
+	assert.Empty(t, r.enabledTools(), "configuration must not change history execution authority")
 }
 
-func TestCompletedClientHistoryExplicitDirectAndToolset(t *testing.T) {
-	for _, toolset := range []string{"", "computer"} {
-		b := completedHistoryBody("screenshot")
-		ms := b["messages"].([]any)
-		call := ms[1].(Object)["content"].([]any)[0].(Object)
-		result := ms[2].(Object)["content"].([]any)[0].(Object)
-		call["caller"] = Object{"type": "direct"}
-		if toolset != "" {
-			call["toolset_name"] = toolset
-			result["toolset_name"] = toolset
-		}
-		raw, _ := json.Marshal(b)
-		r, err := parsePolicyRequest(raw, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if digest(r.wireMessage(r.Messages[1]).Content[0]) != digest(call) {
-			t.Fatal("explicit direct/toolset fields changed")
-		}
-		call["caller"].(Object)["tool_id"] = "server_parent"
-		raw, _ = json.Marshal(b)
-		if _, err := parsePolicyRequest(raw, nil); err == nil {
-			t.Fatal("direct caller smuggled server parent")
-		}
-	}
+func TestCompletedClientHistoryExplicitDirect(t *testing.T) {
+	b := completedHistoryBody("screenshot")
+	call := b["messages"].([]any)[1].(Object)["content"].([]any)[0].(Object)
+	call["caller"] = Object{"type": "direct"}
+	raw, err := json.Marshal(b)
+	require.NoError(t, err)
+	r, err := parsePolicyRequest(raw, nil)
+	require.NoError(t, err)
+	assert.Equal(t, digest(call), digest(r.wireMessage(r.Messages[1]).Content[0]), "explicit direct caller fields must not change")
+	call["caller"].(Object)["tool_id"] = "server_parent"
+	raw, err = json.Marshal(b)
+	require.NoError(t, err)
+	_, err = parsePolicyRequest(raw, nil)
+	require.Error(t, err, "direct caller must not smuggle a server parent")
 }

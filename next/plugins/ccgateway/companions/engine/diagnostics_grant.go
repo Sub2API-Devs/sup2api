@@ -18,7 +18,7 @@ func (x *exchange) trustedDiagnostics(id string) (bool, error) {
 	if track == "" && grant == "" {
 		return false, nil
 	}
-	if track != "1" || x.req.CountTokens {
+	if track != "1" {
 		return false, fmt.Errorf("invalid diagnostics capability")
 	}
 	if id == "" && grant != "" {

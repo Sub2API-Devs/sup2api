@@ -58,19 +58,10 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if serveModControl(w, r) {
 		return
 	}
-	if serveOutboundRelay(w, r) {
-		return
-	}
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/healthz" && r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version})
-		return
-	}
-	if g.serveHelperRequirement(w, r) {
-		return
-	}
-	if g.serveHelperHistory(w, r) {
 		return
 	}
 	diagnostic := newRequestDiagnostic(w, r)
@@ -173,21 +164,14 @@ func (x *exchange) admit() bool {
 		x.resources.applyResponseHeaders(x.w.Header())
 		x.diagnostic.trace("resource_references_verified", x.resources.diagnosticFacts())
 	}
-	parse := func(body []byte, h http.Header, access *resourceAdmission) (*Request, error) {
-		helper, _ := r.Context().Value(helperHistoryContextKey{}).(*helperHistoryExecution)
-		return parsePolicyRequestWithHelper(body, h, access, helper)
-	}
 	if r.URL.Path == "/v1/messages/count_tokens" {
 		// CCGateway offers no token counting (user decision, 2026-10-11). The
 		// plugin does not declare the endpoint and the core's transport refuses
 		// it, so this answer is only a backstop.
-		if policy, err := requestPolicy(r.Header); err == nil && (policy.RelayMode == "passthrough" || policy.RelayMode == "native") {
-			x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
-			return false
-		}
-		parse = parseTokenCountRequestWithResources
+		x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
+		return false
 	}
-	req, e := parse(body, r.Header, x.resources)
+	req, e := parsePolicyRequestWithResources(body, r.Header, x.resources)
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
@@ -313,7 +297,7 @@ func (x *exchange) execute(branch sessionBranch) {
 	}
 	primary := req
 	var fallbacks []passthroughAttempt
-	if req.NativeTransport && req.hasFallbacks() {
+	if req.hasFallbacks() {
 		config, err := req.passthroughBodies()
 		if err != nil {
 			x.fail(400, "invalid_request_error", err.Error())
@@ -349,7 +333,7 @@ func (x *exchange) execute(branch sessionBranch) {
 		if e != nil {
 			var failure *nativeError
 			var refusal *requestRefusal
-			if req.NativeTransport && !x.streaming && ctx.Err() == nil && fallbackIndex < len(fallbacks) && !errors.As(e, &refusal) && errors.As(e, &failure) && failure.ObservedStatus && !failure.OutputObserved {
+			if !x.streaming && ctx.Err() == nil && fallbackIndex < len(fallbacks) && !errors.As(e, &refusal) && errors.As(e, &failure) && failure.ObservedStatus && !failure.OutputObserved {
 				switch failure.Status {
 				case 429, 500, 502, 503, 504, 529:
 					next, err := primary.nativeFallback(fallbacks[fallbackIndex])
@@ -393,13 +377,6 @@ func (x *exchange) execute(branch sessionBranch) {
 			x.runFailed(ctx, err)
 			return
 		}
-		if req.CountTokens {
-			x.diagnostic.setStage("completed")
-			req.responseFacts.apply(x.w.Header())
-			x.w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(x.w).Encode(answer)
-			return
-		}
 		if req.credit != nil {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "credential-bearing credit response"})
 		} else if req.CacheWarmup {
@@ -415,7 +392,7 @@ func (x *exchange) execute(branch sessionBranch) {
 			// No native assistant checkpoint is guaranteed for a refusal.
 			// Preserve prior checkpoints; future turns rebuild from client history.
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "upstream_refusal"})
-		} else if req.Passthrough && len(p.NativeRows) == 0 {
+		} else if len(p.NativeRows) == 0 {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "no_native_checkpoint"})
 		} else if err := p.commit(req, answer, g.Cache, branch.Logical, dir, g.Runner.Version, started); err != nil {
 			x.diagnostic.trace("history_commit_failed", Object{"error": err.Error()})
@@ -521,11 +498,6 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 		x.fail(status, kind, message)
 		return
 	}
-	var upstream *upstreamError
-	if errors.As(e, &upstream) {
-		x.passUpstream(upstream, Object{"type": kind, "message": message})
-		return
-	}
 	var refusal *requestRefusal
 	if errors.As(e, &refusal) && !x.streaming {
 		x.w.Header().Set(errorScopeHeader, "request")
@@ -533,33 +505,6 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 	x.fail(status, kind, message)
 }
 
-// passUpstream returns the API's own error as a direct client would receive
-// it: the body as sent, or its error object as an SSE error event.
-func (x *exchange) passUpstream(upstream *upstreamError, fallback Object) {
-	official := fallback
-	if decoded, err := decodeObject(upstream.Body); err == nil {
-		if inner, ok := decoded["error"].(Object); ok {
-			official = inner
-		}
-	}
-	x.diagnostic.fail(upstream.Status, str(official, "type"), str(official, "message"))
-	if x.streaming {
-		x.writeError(official, upstream.Status)
-		return
-	}
-	for name, values := range upstream.Headers {
-		x.w.Header()[name] = append([]string(nil), values...)
-	}
-	// Only the gateway itself scopes an error to the request.
-	x.w.Header().Del(errorScopeHeader)
-	contentType := upstream.ContentType
-	if contentType == "" {
-		contentType = "application/json"
-	}
-	x.w.Header().Set("Content-Type", contentType)
-	x.w.WriteHeader(upstream.Status)
-	_, _ = x.w.Write(upstream.Body)
-}
 func envDefault(k, v string) string {
 	if s := os.Getenv(k); s != "" {
 		return s

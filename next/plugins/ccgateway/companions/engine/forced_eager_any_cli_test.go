@@ -145,7 +145,6 @@ func TestRealCLIForcedEagerAnyPreservesProviderRejection(t *testing.T) {
 	req, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(raw))
 	p := defaultRequestPolicy()
 	p.ToolSearch = "true"
-	p.PassUpstreamErrors = true
 	encoded, _ := json.Marshal(p)
 	req.Header.Set(policyHeader, string(encoded))
 	res, err := http.DefaultClient.Do(req)
@@ -154,7 +153,7 @@ func TestRealCLIForcedEagerAnyPreservesProviderRejection(t *testing.T) {
 	}
 	defer res.Body.Close()
 	out, _ := io.ReadAll(res.Body)
-	if res.StatusCode != 400 || !bytes.Contains(out, []byte("fixture model does not support forced tool choice")) || calls.Load() != 1 {
+	if res.StatusCode != 400 || res.Header.Get("X-CCGateway-Error-Source") != "cli" || res.Header.Get("X-CCGateway-CLI-Error") != "invalid_request" || !bytes.Contains(out, []byte("Claude Code native error: invalid_request")) || bytes.Contains(out, []byte("fixture model does not support forced tool choice")) || calls.Load() != 1 {
 		t.Fatalf("upstream rejection changed: status%d calls%d", res.StatusCode, calls.Load())
 	}
 }

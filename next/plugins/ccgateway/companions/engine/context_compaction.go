@@ -19,35 +19,6 @@ func (r *Request) hasContextControls() bool {
 	return r.Plan != nil && (r.Plan.hasObjectField("context_management") || r.Plan.hasObjectField("compaction"))
 }
 
-func (r *Request) mapContextToolNames(o Object) {
-	clientNames := map[string]bool{}
-	for _, tool := range r.Tools {
-		clientNames[tool.Name] = true
-	}
-	for _, message := range r.Messages {
-		for _, block := range message.Content {
-			if str(block, "type") == "tool_use" {
-				clientNames[str(block, "name")] = true
-			}
-		}
-	}
-	for _, value := range o["edits"].([]any) {
-		e := value.(map[string]any)
-		for _, key := range []string{"exclude_tools", "clear_tool_inputs"} {
-			list, ok := e[key].([]any)
-			if !ok {
-				continue
-			}
-			for i, v := range list {
-				name := v.(string)
-				if clientNames[name] {
-					list[i] = r.wireName(name)
-				}
-			}
-		}
-	}
-}
-
 func parseContextCompaction(p *RequestPlan, body Object) error {
 	for _, name := range []string{"context_management", "compaction"} {
 		value, exists := body[name]
@@ -329,34 +300,6 @@ func (r *Request) configureContextCompaction(headers []string) error {
 			if kind == "any" || kind == "tool" {
 				return fmt.Errorf("compaction does not accept forced tool_choice")
 			}
-		}
-	}
-	return nil
-}
-
-// No summary reconstruction, signature repair, or implicit block dropping. The
-// CLI must carry every opaque compaction block at its client history position.
-func (r *Request) verifyCompactionHistory(body Object) error {
-	if !r.hasCompactionHistory() {
-		return nil
-	}
-	pairs, err := alignClientHistory(r, body)
-	if err != nil {
-		return fmt.Errorf("compaction history changed: %w", err)
-	}
-	for _, pair := range pairs {
-		for i, want := range pair.expected {
-			if str(want, "type") == "compaction" && digest(withoutProtocolCache([]Object{want})) != digest(withoutProtocolCache([]Object{pair.actual[i]})) {
-				return fmt.Errorf("compaction block changed")
-			}
-		}
-	}
-	if len(r.Messages) > 0 && len(r.Messages[0].Content) > 0 && str(r.Messages[0].Content[0], "type") == "compaction" && str(r.Messages[0].Content[0], "signature") != "" {
-		messages, _ := body["messages"].([]any)
-		first, _ := messages[0].(map[string]any)
-		blocks, _ := historyContent(first["content"])
-		if len(blocks) == 0 || str(blocks[0], "type") != "compaction" {
-			return fmt.Errorf("CLI inserted content before signed compaction block")
 		}
 	}
 	return nil

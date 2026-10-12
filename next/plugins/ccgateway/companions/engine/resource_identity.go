@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
@@ -17,15 +16,11 @@ import (
 var errManagedResourceIssuerMissing = errors.New("API key resources require managed issuer ID and generation")
 
 func resourceEnv(env []string, key string) string {
-	for _, entry := range env {
-		if name, value, ok := strings.Cut(entry, "="); ok && strings.EqualFold(name, key) {
-			return value
-		}
-	}
-	return ""
+	return environmentValue(env, key)
 }
 
 func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, error) {
+	bindResourceAuthorization(ctx, nil)
 	env := b.g.Runner.baseEnv()
 	if !resourceBackendSupported(env) {
 		return resources.Identity{}, fmt.Errorf("resource authentication backend unsupported")
@@ -37,9 +32,16 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 		return resources.Identity{}, err
 	}
 	if probe.local != nil {
-		return b.persistIdentity(*probe.local, probe.epoch)
+		id, err := b.persistIdentity(*probe.local, probe.epoch)
+		if err == nil {
+			bindResourceAuthorization(ctx, probe.auth)
+		}
+		return id, err
 	}
 	defer resp.body.Close()
+	if resp.status == http.StatusUnauthorized {
+		return resources.Identity{}, fmt.Errorf("resource OAuth token rejected after CLI verification; reauthorization is required")
+	}
 	if resp.status != http.StatusOK {
 		return resources.Identity{}, fmt.Errorf("authenticated provider profile unavailable")
 	}
@@ -56,7 +58,15 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 	if err != nil {
 		return resources.Identity{}, err
 	}
-	return b.persistIdentity(id, "")
+	after, err := resourceAuthorizationCandidate(env)
+	if err != nil || probe.auth == nil || after.fingerprint != probe.auth.fingerprint {
+		return resources.Identity{}, fmt.Errorf("resource authorization changed during profile verification; retry with a stable CLI identity")
+	}
+	id, err = b.persistIdentity(id, "")
+	if err == nil {
+		bindResourceAuthorization(ctx, probe.auth)
+	}
+	return id, err
 }
 
 // Provider resource ownership survives refresh and verified reauthorization to

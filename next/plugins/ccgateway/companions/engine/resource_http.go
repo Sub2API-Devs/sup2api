@@ -84,6 +84,7 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = controller.SetWriteDeadline(deadline)
 	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
+	ctx = withResourceAuthorization(ctx)
 	var input *resourceSpool
 	if route.upload {
 		input, err = spoolResource(ctx, b.dir, r.Body, r.ContentLength, b.limit, b.budget)

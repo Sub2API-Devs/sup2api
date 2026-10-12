@@ -7,6 +7,18 @@ import (
 	"sync"
 )
 
+// requestRefusal is the gateway refusing a request whose history or features
+// could not be carried exactly. The failure belongs to this client request,
+// not to the account or the worker. The gateway marks
+// the error so the host neither cools the account down nor fails over.
+type requestRefusal struct{ err error }
+
+func (e *requestRefusal) Error() string { return e.err.Error() }
+func (e *requestRefusal) Unwrap() error { return e.err }
+
+// errorScopeHeader marks a gateway error that belongs to the request alone.
+const errorScopeHeader = "X-Ccgateway-Error-Scope"
+
 type nativeError struct {
 	Status         int
 	Category       string

@@ -1,78 +1,16 @@
 package engine
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 )
 
-type apiOutputRequestKey struct{}
-type apiTerminalObserver struct {
-	helperAccounting   *helperAccounting
-	exactToolMessageID string
-	fallbackMessageID  string
-	relay              *outboundRelay
-	req                *Request
-	reason             string
-	internal, external bool
-}
-
-func (o *apiTerminalObserver) observe(event []byte) {
-	var data [][]byte
-	for _, line := range bytes.Split(bytes.ReplaceAll(event, []byte("\r\n"), []byte("\n")), []byte("\n")) {
-		if value, ok := bytes.CutPrefix(line, []byte("data:")); ok {
-			data = append(data, bytes.TrimSpace(value))
-		}
-	}
-	e, err := decodeObject(bytes.Join(data, []byte("\n")))
-	if err != nil {
-		return
-	}
-	if o.req != nil {
-		o.req.diagnostic.prepareSecrets(bytes.Join(data, []byte("\n")))
-		if o.req.helperHistory != nil {
-			o.req.helperHistory.observeProviderAccounting(&o.helperAccounting, bytes.Join(data, []byte("\n")))
-		}
-	}
-	o.req.observeInternalCacheEvent(e)
-	o.req.observeCreditEvent(e)
-	o.observeFallback(e)
-	o.observeExactToolInput(e)
-	switch str(e, "type") {
-	case "content_block_start":
-		block, _ := e["content_block"].(map[string]any)
-		if str(block, "type") == "tool_use" {
-			if o.req != nil && internalHistoryAssistant(o.req, Object{"content": []Object{block}}) {
-				o.internal = true
-			} else {
-				o.external = true
-			}
-		}
-	case "message_delta":
-		delta, _ := e["delta"].(map[string]any)
-		if reason := str(delta, "stop_reason"); reason != "" {
-			o.reason = reason
-		}
-	case "message_stop":
-		if o.reason != "" && (o.reason == "refusal" || o.req == nil || o.req.stopsAtAPITerminal(o.reason)) && !(o.reason == "tool_use" && o.internal && !o.external) {
-			o.relay.mu.Lock()
-			o.relay.stopped = true
-			o.relay.mu.Unlock()
-		}
-	}
-}
-
 // API output formatting is an upstream constraint, not a request for CC to
 // repair/refine the answer. A completed stop (including truncation/refusal)
 // must end this API call before CC can make an implicit second model request.
 func (s *cliSession) completeAPIOutput() (Object, error) {
-	if s.relay != nil {
-		s.relay.mu.Lock()
-		s.relay.stopped = true
-		s.relay.mu.Unlock()
-	}
 	if s.req.APIOutputFormat && str(s.acc.Message, "stop_reason") == "end_turn" && !s.acc.HasClientTool {
 		if err := validateStructuredText(s.req.JSONSchema, s.acc.Blocks); err != nil {
 			s.req.diagnostic.trace("output_schema_diagnostic", Object{"message": err.Error(), "upstream_status": 200})

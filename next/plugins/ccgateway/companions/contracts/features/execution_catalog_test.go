@@ -1,33 +1,68 @@
 package features
 
-import "testing"
+import (
+	"strings"
+	"testing"
 
-func TestExecutionCatalogKeepsSourceEvidenceSeparate(t *testing.T) {
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func sourceCatalogFeatures(t *testing.T) map[string]Feature {
+	t.Helper()
 	doc := Catalog()
-	if doc.CatalogVersion != CatalogVersion || doc.RuntimeVerified {
-		t.Fatal("catalog version or source evidence boundary changed")
-	}
-	wanted := map[string]bool{"F-FILES": false, "F-SKILLS": false, "F-CODE-EXEC": false, "F-PTC": false}
+	require.Equal(t, CatalogVersion, doc.CatalogVersion)
+	require.False(t, doc.RuntimeVerified, "source declarations do not verify deployment, OAuth refresh or provider entitlement")
+	byID := make(map[string]Feature, len(doc.Features))
 	for _, feature := range doc.Features {
-		if _, ok := wanted[feature.ID]; ok {
-			wanted[feature.ID] = true
-			if feature.Status != "partial" || len(feature.Mechanisms) == 0 {
-				t.Errorf("%s must describe implemented but conditional support", feature.ID)
-			}
-		}
+		byID[feature.ID] = feature
 	}
-	for id, found := range wanted {
-		if !found {
-			t.Errorf("missing feature %s", id)
-		}
+	return byID
+}
+
+func TestExecutionCatalogReflectsNativeAdmission(t *testing.T) {
+	byID := sourceCatalogFeatures(t)
+	// Refused capabilities remain visible as unsupported. Beta mappings and
+	// archived relay adapters must not promote them to executable features.
+	for _, tc := range []struct {
+		id, status, scope string
+	}{
+		{"F-RELAY-NATIVE", "partial", "cc"},
+		{"F-ADD-DIR", "supported", "cc"},
+		{"F-STREAM", "partial", "api"},
+		{"F-WEB-TOOLS", "partial", "api"},
+		{"F-CODE-EXEC", "unsupported", "api"},
+		{"F-PTC", "unsupported", "api"},
+		{"F-ADVISOR", "unsupported", "api"},
+		{"F-CLIENT-TOOLSETS", "unsupported", "api"},
+		{"F-COUNT-TOKENS", "unsupported", "api"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			require.Contains(t, byID, tc.id)
+			feature := byID[tc.id]
+			assert.Equal(t, tc.status, feature.Status)
+			assert.Equal(t, tc.scope, feature.Scope)
+		})
 	}
-	rules := map[string]string{}
-	for _, rule := range BetaRules() {
-		rules[rule.Name] = rule.Mapping
-	}
-	for _, beta := range []string{"code-execution-2025-05-22", "code-execution-2025-08-25", "skills-2025-10-02"} {
-		if rules[beta] != "forward" {
-			t.Errorf("legacy beta %s must pass through unchanged", beta)
-		}
+}
+
+func TestExecutionCatalogKeepsResourceManagementSeparate(t *testing.T) {
+	byID := sourceCatalogFeatures(t)
+	// Independent management HTTP survives native-only model execution. Its
+	// presence does not establish container execution or verified OAuth access.
+	for _, tc := range []struct {
+		id, endpoint string
+	}{
+		{"F-FILES", "/v1/files"},
+		{"F-SKILLS", "/v1/skills"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			require.Contains(t, byID, tc.id)
+			feature := byID[tc.id]
+			assert.Equal(t, "partial", feature.Status)
+			assert.Equal(t, "api", feature.Scope)
+			assert.Contains(t, feature.BodyPaths, tc.endpoint, "keep the public management endpoint discoverable")
+			assert.Contains(t, strings.Join(feature.Mechanisms, " "), "HTTP", "describe the management transport without tying the contract to prose")
+		})
 	}
 }

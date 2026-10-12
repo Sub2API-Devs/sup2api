@@ -3,33 +3,32 @@ package ccgateway
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAttachmentOverridesRoundTrip(t *testing.T) {
-	p := defaultRequestPolicy()
-	p.AttachmentSources = map[string]string{"environment": "both", "date": "gateway"}
-	p.UnknownClientAttachment = "ignore"
-	p.EnvironmentFields = map[string]string{"workingDirectory": "client", "platform": "gateway"}
-	data, err := json.Marshal(Config{RequestPolicy: &p})
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestNativePolicyDropsRetiredControlsOnSaveReload(t *testing.T) {
 	var cfg Config
-	if err = json.Unmarshal(data, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	got := cfg.EffectiveRequestPolicy()
-	if got.EnvironmentFields["workingDirectory"] != "client" || got.EnvironmentFields["platform"] != "gateway" {
-		t.Fatal("environment fields lost")
-	}
-	if got.AttachmentSources["date"] != "gateway" || got.UnknownClientAttachment != "ignore" || got.UnknownGatewayAttachment != "pass" {
-		t.Fatal("attachment policy lost")
-	}
-	if err = validateRequestPolicy(got); err != nil {
-		t.Fatal(err)
-	}
-	got.AttachmentSources["hook_additional_context"] = "gateway"
-	if validateRequestPolicy(got) == nil {
-		t.Fatal("protected type override accepted")
+	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"ignore","unknown_beta":"reject","attachment_source":"both","attachment_sources":{"environment":"gateway"},"environment_fields":{"workingDirectory":"gateway"},"unknown_client_attachment":"ignore","unknown_gateway_attachment":"pass","tool_search":"false","custom_tool_prefix":"client-tools","thinking_disabled_compat":"omit"}}`), &cfg))
+	for range 2 {
+		saved, err := mergeConfig(cfg, Config{Mode: "disabled"})
+		require.NoError(t, err)
+		for _, value := range []any{saved, saved.Public(), saved.WorkerRequestPolicy(26)} {
+			raw, err := json.Marshal(value)
+			require.NoError(t, err)
+			for _, field := range []string{"unknown_beta", "attachment_source", "attachment_sources", "environment_fields", "unknown_client_attachment", "unknown_gateway_attachment"} {
+				assert.NotContains(t, string(raw), `"`+field+`"`)
+			}
+		}
+		raw, err := json.Marshal(saved)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &cfg))
+		policy := cfg.EffectiveRequestPolicy()
+		assert.Equal(t, "native", policy.RelayMode)
+		assert.Equal(t, "ignore", policy.UnknownField)
+		assert.Equal(t, "false", policy.ToolSearch)
+		assert.Equal(t, "client-tools", policy.CustomToolPrefix)
+		assert.Equal(t, "omit", policy.ThinkingDisabledCompat)
 	}
 }

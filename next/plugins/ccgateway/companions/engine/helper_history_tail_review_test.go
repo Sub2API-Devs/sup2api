@@ -53,30 +53,3 @@ func TestReviewHelperTailSameTextAtThreePositions(t *testing.T) {
 		}
 	}
 }
-
-func TestReviewHelperReminderAcknowledgementNeedsActiveLease(t *testing.T) {
-	for _, mode := range []string{"inactive", "failed", "malformed", "no-history"} {
-		t.Run(mode, func(t *testing.T) {
-			r := internalCacheReviewRequest()
-			r.helperHistory = &helperHistoryExecution{payloadVersion: 2}
-			c := &modControl{helperRequest: r, scope: newMainRequestScope()}
-			raw := json.RawMessage(`{"text":"observed reminder"}`)
-			if mode != "inactive" {
-				if err := c.scope.enter(); err != nil {
-					t.Fatal(err)
-				}
-			}
-			switch mode {
-			case "failed":
-				r.internalCache.failed = true
-			case "malformed":
-				raw = json.RawMessage(`{"text":1}`)
-			case "no-history":
-				r.helperHistory = nil
-			}
-			if c.acknowledgeHelperReminder(raw) {
-				t.Fatal("unproven reminder acknowledged")
-			}
-		})
-	}
-}

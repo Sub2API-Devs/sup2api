@@ -2405,7 +2405,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 核心每 5 秒按数据库时间处理最多 200 条到期记录，托管节点只有获准工作后才扫描。事务内 `FOR UPDATE SKIP LOCKED` 保证多节点只恢复一次；只处理当前仍是 `auto_disabled` 且当前解除时间已到的记录，不排队保存旧定时任务。重启或插件退出不会遗失期限。
 - 管理员 `disabled` 状态永远不被插件或到期扫描解除；`schedulable=false` 永远保留。未指定期限的自动禁用不会被随后到来的定时建议降级，需先显式解除。插件状态变更和到期恢复分别审计 `account.automatic_state` / `account.automatic_recovery`，状态事件与数据库更新同事务提交。
 - 手工“重置状态”同时清除自动解除时间；管理员显式修改 `status` 时取消旧期限。成功重新授权会恢复 `error/auto_disabled`，但不恢复管理员 `disabled`，也不改变调度开关。
-- CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用建议；2026-10-12 起核心仅在命中管理员禁用规则时执行，未配置 429 且关键词未命中时只冷却。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。Worker 透传模式仍隐藏订阅额度明细，但把已耗尽的订阅窗口 reset 转为 Retry-After，避免核心只能看到默认短冷却。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
+- CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用建议；2026-10-12 起核心仅在命中管理员禁用规则时执行，未配置 429 且关键词未命中时只冷却。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。旧 Worker relay 曾隐藏订阅额度明细并把耗尽窗口 reset 转为 Retry-After，这是归档行为；当前 native-only 从 CLI rate_limit_event 的有效重置时间生成有界提示，不再观察原始模型 HTTP 限额头（§53.14）。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
 - 到期解除表示恢复调度资格，不等于已向上游验证额度；不发送收费模型探活。上游仍限流时，插件可再次指定新期限；插件观察到额度提前恢复时可主动 `ACTION_CLEAR`。
 - 新接口要求 Host API 6；CCGateway 在初始化时拒绝旧 Host API，避免旧核心忽略新字段而造成永久禁用。发布必须同步 SDK、核心与外壳 Host API 声明。账号列表区分自动禁用并展示解除时间。
 
@@ -3745,24 +3745,28 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.11 设置页精简（2026-10-09，用户要求）
 
+以下设置页布局沿革不代表所有旧开关仍影响执行：native-only 已取消 relay 模式/灰度名单/直返错误选路，附件表达也不再使用旧 relay 来源策略，beta 固定规则不是转发白名单。现行策略见 §53.13 与 `CCGATEWAY-REQUEST-POLICY.md`。
+
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
 - "CC 特性"包含"查看处理机制与证据"（CC 范围的特性目录，2026-10-10 按用户要求恢复：`GET /system/ccgateway/features` 中 `scope: "cc"` 的条目，如 F-ADD-DIR 额外目录访问 / F-SAFEGUARDS，展开时才读取，含"查看账号 Worker 能力"只读查询；目录里不再有 fast/effort 开关）、"工具与错误处理"（直接展开）、"附件默认来源"（2026-10-10 按用户要求恢复：默认来源 client / gateway / both、按附件类型覆盖、环境字段 workingDirectory / platform 覆盖（workingDirectory 含客户端 `--add-dir` 的 "Additional working directories" 及其子项，ccgateway 0.1.22 起）、未知客户端/容器附件放行或忽略）和"不支持的请求如何处理"（unknown_beta / unknown_field）。
-- "工具与错误处理"中的兼容开关 `thinking_disabled_compat`（2026-10-10，用户要求；ccgateway 0.1.28 起；0.1.35 起出站中继透传模式下同样生效，透传时不把 thinking 放进 `CLAUDE_CODE_EXTRA_BODY`）：
+- "工具与错误处理"中的兼容开关 `thinking_disabled_compat`（旧版本演进见归档；当前用于 native 请求表达，不建立模型中继）：
   - 取值 `"pass"`（默认）或 `"omit"`。核心与 Worker 都校验取值，旧配置缺省按 `pass` 处理。字段可选、旧 Worker 忽略它，所以 `schema_version` 不升（仍为 1）。
   - `omit` 只在三个条件同时满足时生效：
     1. 客户端 `thinking.type` 为 `"disabled"`；
     2. 模型在"不支持 disabled"的已验证清单里，目前是 `claude-opus-5-5` 和 `claude-fable-5-1`；2026-10-10 真实上游实测两者都对 disabled 返回 400 "thinking.type.disabled is not supported for this model"；
     3. 开关为 `omit`。
   - 生效时的处理：
-    - Worker 去掉 thinking：内层 CLI 不传 `--thinking`，上游请求不带 `thinking` 字段（apiGeneration 删除客户端没设的字段），与官方 CLI 对这些模型的请求一致；
-    - 不改成 adaptive，其余结构不变（真实 CLI 测试断言与"客户端本来就不带 thinking"的上游请求逐字段相同）；
+    - Worker 不把该 thinking 对象放入 `CLAUDE_CODE_EXTRA_BODY`，CLI 使用 `--thinking disabled`，由 CLI 按模型行为省略字段，不再通过 apiGeneration/HTTP relay 删除；
+    - 不改成 adaptive；仍服从 CLI 原生构造及能力恢复行为，不能由旧逐字段对照测试推定当前所有组合等价；
     - 改写记录在 `feature-decisions.json`（`action: omit_unsupported_disabled`）、请求日志元数据 `thinking_compat: omit_disabled` 和诊断事件 `thinking_disabled_omitted`。
-  - 响应原样透传：模型若仍返回 thinking 块，与直连 API 不带 thinking 时一致，签名保持完整。实测 `max_tokens: 64` 时只返回文本，4 个输出 token，不会被思考耗尽。
-  - `pass` 时 disabled 原样转发，上游 400 原样返回（与官方 API 一致），这类错误不冷却账号。
+  - CLI 输出的 thinking 块与签名按原生事件承载，不承诺原始 HTTP 响应逐字节透传。旧 `max_tokens:64` 的账号实测仅属历史证据，不代表当前部署验收。
+  - `pass` 时保留客户端 disabled；失败按 CLI 可观察事实规范化返回（§53.14），不承诺原始上游 400 正文，也不阻止 CLI 自身特性恢复重发。
   - 典型场景：cc-switch 把 `claude-opus-5` 改写成 `claude-opus-5-5`，客户端 auto 模式分类器和标题等请求仍发 disabled。见 `ccgateway-feature-support/SUBAGENT-DESIGN.md` 第 7 节。
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
+
+**历史演进记录**：本节逐次记录旧方案。出站中继改写 session/metadata、restoreCacheSystem、Sonnet 续接引导及旧客户端 session 头兼容只说明当时实现，不是当前 native-only 功能。当前会话仍按最后的 v2 规则选分支，但由原生私有记录以 U 运行、CLI 自身设置 U/A′；无 HTTP relay 还原。现行执行与限制以 §53.13–§53.14 为准，旧实现见 `archive/ccgateway-relay-0.1.41@4b0e0967c`。
 
 背景（实测，CLI 2.1.292）：原生 CC 同一 sessionId 下主线、子代理、分类器、标题请求都带同一个 `X-Claude-Code-Session-Id` 与 `metadata.user_id.session_id`，子代理另带 `x-claude-code-agent-id`；主线写 `<S>.jsonl`、每个子代理写独立文件，均只追加，回退表现为同文件内分支。`--session-id S` 对已存在会话报错 `already in use`；`--resume S` 追加同一文件；两个 `--resume S` 并发都成功、同文件出现分支点、不损坏；不指定节点时下次续接沿最后写入的分支。旧实现每次 fork / rebuild 都换随机内部会话 ID，且所有请求共用 logical `auto`。
 
@@ -3799,45 +3803,42 @@ images/gateway.tar.gz      # Caddy 网关
 - 上游 `metadata.user_id` 用 CLI 自己的值，只把 `session_id` 换成 U（其余字节不变）；旧格式 `…_session_<uuid>` 只换会话段；都认不出时按 CLI 字段顺序生成 `{"device_id":"","account_uuid":"","session_id":U}`。A' 的格式为 `a` + 16 位小写十六进制（与 CLI 自己的子代理 ID 同形）。主线请求删除 agent-id 头。
 - 已知：客户端计费头是占位值（如 `cch=00000`）时 CLI 会重算，开头 system 块仍无法还原（改动前即如此）。
 
-### 53.13 出站中继完全透传 `relay_mode`（2026-10-11，用户要求；ccgateway 0.1.29 起）
+### 53.13 固定 native 请求策略与原生表达（当前工作树）
 
-设计与逐项结论见 `ccgateway-feature-support/PASSTHROUGH-DESIGN.md`，本节只写接口。
+旧 relay 仅保留在 `archive/ccgateway-relay-0.1.41@4b0e0967c`；当前工作树已物理删除旧主体与 `mod/search`。本文描述 native-only 代码合同，**测试及资源授权仍在验收中，不代表已发布、已部署或全部验证通过**。逐项设计见 `ccgateway-feature-support/PASSTHROUGH-DESIGN.md`，策略细节见 `CCGATEWAY-REQUEST-POLICY.md`。
 
-**策略字段**（请求策略，可选，`schema_version` 不升）：
-- `relay_mode`：`"legacy"`（默认，原有的中继适配）或 `"passthrough"`。
-- `relay_passthrough_accounts`：账号 ID 列表，`relay_mode` 为 legacy 时这些账号已按 passthrough 运行（逐个账号验证用）。正整数、不重复、最多 1000 个。
-- 核心按账号算出生效值后发给 Worker（`Config.WorkerRequestPolicy(accountID)`），Worker 只收到 `relay_mode`，看不到账号列表。助手历史探测（helper requirement）用同一份策略。
-- 控制台"CC 特性 → 工具与错误处理"：中继模式下拉框；适配模式下显示账号列表输入框（逗号分隔）。
+**固定策略**（`schema_version` 仍为 1）：
+- `relay_mode` 仅保留固定值 `native` 作为 wire guard，不再是选路开关。历史配置读取时核心归一为 native；保存 API 和 Worker 拒绝显式 `legacy` / `passthrough`，缺省/空值按 native。
+- `relay_passthrough_accounts`、`relay_native_accounts` 两个灰度名单与 `pass_upstream_errors` 已不再参与执行；旧 JSON 残留不能恢复旧能力。核心和设置页也不再保存/下发 `unknown_beta`、附件来源、环境来源与未知附件策略字段。`Config.WorkerRequestPolicy(accountID)` 对所有账号下发相同有效执行模式。
+- 当前 Worker 仅声明 `execution_modes: ["native"]`，不再声明 helper history transport/payload 能力，相关路由已摘除。核心/共享 contracts 保留的托管历史概念不是当前 Worker 的能力；CLI 内部 ToolSearch 不等于 helper history 托管。
 
-**passthrough 下 Worker 的行为**：
-- 每个上游请求都由内层 CLI 构造，中继原样转发（不加 `X-Forwarded-For`，不改 `Accept-Encoding`），只读：状态码、上游错误体（gzip/deflate 会解开）、流内 error 事件、请求 ID 等提供方事实。账号开启请求日志时记录 CLI 发出的原始请求（`upstream-request-NNN-*.body`）。
-- 客户端字段：`model` → `--model`；`max_tokens`、`thinking`、`temperature`、`top_p`、`top_k`、`stop_sequences`、`service_tier`、`inference_geo`、`output_config`（含 format、effort、task_budget）、`output_format`、`safeguards`、`diagnostics` 原样放进 `CLAUDE_CODE_EXTRA_BODY`；`tool_choice`（强制工具名换成内层名）只在每次请求的第 0 轮。Mod 在每轮 `turn.step` 设置该变量。thinking 未写时 `--thinking disabled`，effort 未写时 `--effort high`；`anthropic-beta` 全部原样进 `ANTHROPIC_BETAS`；`speed` → settings `fastMode`；有 cache_control 时保留其 TTL（`CLAUDE_CODE_PROMPT_CACHE_TTL`），断点由 CLI 放。`context_management`、`compaction`、`metadata`、内嵌 system/effort 不发往上游（metadata 只选会话）。
-- 内层 CLI：`CLAUDE_CODE_MAX_RETRIES=0`、`CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS=1`；会话 ID 一律为 U（分支文件按 U 运行，结束后记录移回分支文件的 ID）；子代理 `ANTHROPIC_CUSTOM_HEADERS=x-claude-code-agent-id: A'`。
-- 上游错误：状态码与错误体原样返回（流已开始则为 SSE error 事件），CLI 不重试；之后同一请求的模型请求不再转发，除非 Mod 换到下一个 fallbacks 模型（仅 429、500、502、503、504、529 之后）。
-- 订阅限额头 `anthropic-ratelimit-unified-*` 不返回给客户端；请求 ID、`retry-after` 等照常返回。核心对 ccgateway 账号的额度仍用用量查询（§44），不读这些头。
-- `fallbacks`：Mod 依次换模型，条目里的 `max_tokens`、`thinking`、`output_config` 叠加到该次尝试的 EXTRA_BODY；条目带 `speed` 返回 400。
-- 最后一条用户消息有 base64 图片且以文本结尾：前面的块写进会话文件，只把末尾文本交给 CLI，图片原样发出。
-- `web_search`（20250305/20260209/20260318）：主 CLI 提供 WebSearch，模型调用时 Worker 在同账号起一次性 CLI 进程搜索一次（`mod/search`），结果回到同一轮继续生成；客户端收到 `server_tool_use` + `web_search_tool_result`，`encrypted_content` 为网关格式 `ccgws1.<payload>.<mac>`（含模型读到的结果文字，任何账号都能还原成 WebSearch 的调用与结果）。`max_uses` 由 Worker 计数，超出给 `max_uses_exceeded`；每个请求最多 8 轮搜索；`usage.server_tool_use.web_search_requests` 为实际搜索次数，一次性进程的 token 计入 usage。Claude Code 客户端自己的搜索请求（只有 web_search、消息为 "Perform a web search for the query: …"）只起一次性进程，上游 1 个请求，账号级错误原样返回。
-- `count_tokens`：CCGateway 不提供计数（2026-10-11 决定）。0.1.36 起插件不声明这个端点，核心不调度（分组里没有其他能计数的账号时返回 404 `not_found_error`），核心的托管传输也只放行 `/v1/messages`；worker 透传入口的 400 `count_tokens is not supported by this gateway` 只作兜底。
-- 入口 400（错误文字写明原因）：assistant 预填充、`fallback_credit_token`、`container`、`mcp_servers`、code_execution / web_fetch / tool_search_tool_* / advisor 等服务端工具、typed 工具集、inline 工具定义、图片 transformations、`tool_use.caller`、`toolset_name`、非本网关签发的搜索结果与其它服务端工具历史块、web_search 的 `user_location` / `response_inclusion` / `allowed_callers` / 延迟加载、web_search 与客户端 WebSearch 工具同时出现、助手历史托管请求。
+**保留的原生请求表达**：
+- 共享 parser（文件仍名为 `engine/passthrough.go`）、主 Mod、WebSearch、CLI 参数及每轮 `CLAUDE_CODE_EXTRA_BODY` 保留；passthrough 命名不表示仍有可运行的 HTTP relay 模式。
+- `model` → `--model`；max_tokens、thinking、采样/停止参数、service_tier、inference_geo、output_config（format/effort/task_budget）、output_format、safeguards、diagnostics 通过受控 EXTRA_BODY 表达；tool_choice 只在第 0 轮，工具名映射为内层名。thinking 缺省用 `--thinking disabled`，effort 缺省 high，speed 用请求级 fastMode 与生成字段。两份 EXTRA_BODY 以 JSON 字符串穿过 Mod，避免网关额外数值转换；最终接受 CLI 的 JSON 数值语义，不保证任意大整数保真。CLI 2.1.296 隔离实测 `9007199254740993` 出站为 `9007199254740992`，同内容字符串保持不变。请求倍数上限与 usage/cache 严格计量校验不因此放宽。
+- beta 按客户端顺序去重交给 `ANTHROPIC_BETAS`，CLI 可附加自身 beta；固定 BetaRules 用于 CLI 设置，不是 native 转发白名单。缓存保留 TTL，但断点/context_management/compaction 由 CLI 决定；system 与内嵌 effort 按 CLI 构造，客户端 metadata 只选会话。
+- 私有原生历史以 U 运行，子代理 A′ 由 CLI 自身头配置表达；不在 HTTP relay 改写。图片拆分、CLI 原生预处理与工具命名差异必须保留说明，不能标成逐字节等价。
+- count_tokens 不提供：插件不声明端点，核心不调度到 CCGateway；分组没有计数账号时返回 404 not_found_error。Worker 的 400 `count_tokens is not supported by this gateway` 仅作兜底。
+- 准入拒绝：assistant prefill、非流式 max_tokens:0 预热、fallback_credit_token、container/container skills、mcp_servers、code_execution/web_fetch/API tool_search/advisor 等服务端工具、typed 工具集、inline 工具定义、图片 transformations、non-direct caller/toolset_name 与未支持的对应历史块。direct caller 不能误写为一概拒绝；WebSearch 仅接受可还原的网关结果历史，user_location 等未支持参数仍拒绝。
 
-**测试**：`TestRealCLIRelayPassthrough`、`TestRealCLIPassthroughWebSearch`（需 `CCG_REAL_CLI`，开头先用 `claude plugin validate` 校验两个 Mod：CLI 对校验不通过的 hooks 模块不报错、直接不加载）；单元测试 `TestPassthrough*`、`TestWebSearch*`、`TestNativeWebSearchTurns`；核心 `TestRelayModeSaveAndWorkerPolicy`；控制台 `RequestPolicySettings.spec.ts`。
+旧 legacy 默认、两名单灰度、首次 HTTP 错误原样直返、非流 warmup 桥接、出站还原与 helper history 的旧测试/上线记录均属于归档历史，不是当前功能或回滚选项。原生错误、搜索、fallback 及独立资源边界以 §53.14 为准。
 
-### 53.14 原生 CLI 模型出站 `relay_mode=native`（ccgateway 0.1.39 起）
+### 53.14 原生 CLI 模型出站（native-only 工作树，尚在验收）
 
-用户选择原生 Claude Code 语义，不再要求 legacy 的 HTTP 字节还原、原始错误正文/全部响应头，以及首次错误后绝不兼容重发。删除的是 native 模式的模型 HTTP 转发链路，Worker、Mod 控制面、账号隔离、sing-box 和 `127.0.0.1:8787` 本地放行保留；不使用 uTLS、生产 CA 或 hosts 重定向。原始 `legacy` / `passthrough` 仍为显式兼容和回滚选项，不会在 native 失败后自动切回或补发。
+用户选择原生 Claude Code 语义，不再要求 legacy 的 HTTP 字节还原、原始错误正文/全部响应头，以及首次错误后绝不兼容重发。模型 HTTP relay 主体已从当前工作树删除；Worker、主 Mod 控制面、账号隔离、sing-box 和 `127.0.0.1:8787` 本地放行保留，`NO_PROXY` 仍包含 `127.0.0.1,localhost`。不使用 uTLS、生产 CA 或 hosts 重定向。旧 `legacy` / `passthrough` 仅在归档，不是当前兼容回滚或失败重试路径。
 
-- 策略新增 `relay_mode: "native"` 与 `relay_native_accounts`。名单要求正整数、不重复、最多 1000 个，与 `relay_passthrough_accounts` 不得相交。全局 native 或命中 native 名单优先；默认仍为 legacy，既有保存的 passthrough 不会自行切换。下发 Worker 时剥离两个名单。上线前读取实际 Worker `execution_modes` 和 `cli_version`，旧能力文档缺字段不表示支持 native；能力声明仍不等于运行验证。
+- 固定 native 策略见 §53.13。读取实际 Worker `execution_modes` 和 `cli_version`；缺字段不能推定 native 支持，能力声明仍不等于运行验证，不能从镜像标签或旧部署记录推定当前构建已验收。
 - 主模型和一次性搜索进程都由 CLI 直接连接真实 provider。保留合法账号 Base URL，不覆盖成本地 relay；Mod 只交换配置和事件。initialize 成功且 Mod ready 后才提交用户输入，失败或取消不发送输入。Windows 环境变量查询与 CLI 环境标准化使用一致的大小写规则。
 - native 复用 §53.13 的 CLI 参数、每轮 EXTRA_BODY、U/A′、私有原生历史分支、工具交接和图片承载；system、beta、缓存断点、图片预处理遵循 CLI 原生构造，不保证逐字节恢复。客户端工具仍不得在 Worker 本地执行。§53.13 已明确拒绝的 prefill、服务端 MCP、PTC/container、图片 transformations、credit/helper 等未原生覆盖功能继续在准入层明确拒绝，不能视为已迁移；独立管理/资源接口不因此宣称已改为原生 CLI。
+- 会话内指令按语义保留，不复原 HTTP 元数据：clear_at:next_user_message 遇到后续任何 user（含纯 tool_result）失效；inline effort 在新输入 user 后生效，纯工具结果后设置则等下一条新输入。CLI 缓存附件无法在原进程直接重渲染，内部 ToolSearch/WebSearch 因此在下次模型调用前暂停，以真实原生工具结果同模型恢复一次。只清除已核验 UUID/来源/位置的自有附件中的临时文本，保留持久指令、同名正文、历史与用量；不重放已执行搜索、首轮 tool_choice 或模型 fallback。Mod 协议 ccgateway-v3 在输入前确认，旧协议、证据缺失与取消失败关闭。credit 跟踪的单次模型生成限制涵盖 ToolSearch/WebSearch，组合在生成前拒绝，不为临时指令开放敏感会话持久化。
 - 原生错误采用 assistant.error、assistant.request_id、result.api_error_status；`subtype=success` 仍须检查 `is_error`。控制协议 request_id 不是上游请求 ID。缺少真实状态时保守返回请求级 502，不猜测认证失败或禁用账号。可观察到的真实状态沿用账号分类；规范化 `billing_error` 通过 Worker 私有来源/类别头交给插件识别。订阅限额头仍不外传；rate_limit_event 的有效重置时间可生成有界 Retry-After，这是规范化提示，不是原响应头副本。
 - SSE 增量通常早于带上游 request_id 的完整 assistant 帧；已经提交的流响应头保留网关请求 ID，不承诺回填上游 ID。已观察到的上游 ID用于后续事件事实和诊断，非流式/提交前错误可返回它。原始 HTTP 请求/响应报文在 native 中不可见，配置与 CLI 事件日志不能冒充原始线上报文。
 - CLI 2.1.292 的离线探针证明：`CLAUDE_CODE_MAX_RETRIES=0` 与 `CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1` 不禁止全部能力恢复。通用 400 可按特性移除 thinking display / beta 重发，effort rejection 可删除 effort 重发；这些重发可能没有 api_retry，且在同一个 turn.step 内完成。按原生行为验收，不用 Mod 事后 abort 假装做到网络闸门。
 - `fallbacks` 由 Worker 在当前进程终止后协调，只对真实 429/500/502/503/504/529、没有观察到任何主模型输出、没有请求级失败且未取消时尝试。每次从最初请求重新准入并建立私有历史副本，不继承失败尝试的运行态；显式 null 删除对应覆盖字段（max_tokens:null 保留主限制），speed 可逐尝试重新配置。禁止在已输出、内部搜索已执行或计量失败后重放整轮。
 - native 搜索使用正常单轮 CLI 模型流，EXTRA_BODY 声明唯一 server web_search，使用 auto 而非强制 tool/any；快捷入口仅接收省略/auto 的 tool_choice，保留 auto 的并行控制选项，none/显式强制选择走普通执行路径，不改变用户原意。经确认，仅一次性 native 搜索子进程设置官方 DISABLE_PROMPT_CACHING=1，避免服务端搜索循环增加写入总数却不更新 TTL 分项的原生事件缺口；主会话缓存不变，不在事后把缓存用量清零。若上游仍报告缓存写入，仍须具备一致的真实 5m/1h 分项，否则请求级失败，不因此冷却账号或换号重放。搜索进程不强制关闭 thinking，保留已有 effort，由 CLI 处理模型原生思考语义；thinking/redacted_thinking 保留在原生响应中，不拼入搜索结果文本或引用载荷。主 Mod 限制轮次、禁本地工具，模型使用该请求明确选择的模型。保留 domain filters、max_uses、结果/引用、多组错误块和 ccgws1 历史。用实际 SSE usage 计量，包括输入/输出、缓存读取、缓存写入总数及 5m/1h 分项、实际搜索次数；不从美元或累计 modelUsage 反推。HTTP/进程失败或账务事实缺失仍终止整个请求；未执行搜索返回明确工具错误并保留已发生用量，不把普通文本或网址当搜索结果。实际搜索的空结果与工具错误分开处理，错误可以带零次搜索计数，不能凭空增加费用或丢弃已有模型用量。
-- 主流使用原始 stream_event 的 usage 与现有内部轮合并；不将重复 assistant 块及累计 result.modelUsage 再加一次。普通输出、工具交接、原生历史恢复及图片续接通过同一组 native/relay 差分场景验收。
+- 主流使用原始 stream_event 的 usage 与现有内部轮合并；不将重复 assistant 块及累计 result.modelUsage 再加一次。普通输出、工具交接、原生历史恢复及图片续接须按当前 native 路径分别验收；旧 native/relay 差分证据只作历史参考。
+- Files/Skills 使用独立的非模型管理 HTTP，只放行资源操作白名单与必要身份查询，不恢复模型 relay。授权结合唯一受支持凭据来源、provider/配置目录及前后指纹绑定，profile 返回后再次检查；后续 IO 使用同一核验身份。API key/env OAuth 使用 `auth status --json`；stored OAuth 只运行无用户输入的原生初始化，不追加可能再次触发刷新竞态的短命 status 进程。stored OAuth 私有刷新协议仅允许已验证的 CLI 2.1.292/2.1.296，未知版本在认证前拒绝。OAuth 刷新只允许 CLI 自身执行，Go 管理 HTTP 不自行刷新、不发模型探针、不清锁；必要时等待旋转落盘，并在进程退出后重读凭据。接受门限为超过 30 秒有效期，来源不明、刷新未完成或身份变化时失败关闭。37 场景在 Windows 2.1.296 和断网隔离 Linux 2.1.292 各连续两轮通过，真实账号验收和部署仍未完成；Files/Skills 资源操作不代表 container skills/code execution 模型能力已支持。
 
-离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。用 `TestRealCLINativeProbe` 检查真实协议/恢复次数；`TestRealCLINativeGateway` 检查直接 TLS；`TestRealCLINativePassthroughCompatibility` 覆盖参数、工具、身份、fallback 和图片历史；`TestRealCLINativeWebSearch*` 覆盖完整搜索计量、域名限制、失败不续跑。单元、平台 CLI 探针与真实账号测试分别记录，不能互相替代。生产更新仍按 §53.7 原地更换 Worker；真实请求须按 Core usage 的实际账号归属验收。
+离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。`TestRealCLINativeProbe`、`TestRealCLINativeGateway`、`TestRealCLINativePassthroughCompatibility`、`TestRealCLINativeWebSearch*` 分别覆盖协议恢复、TLS、参数/历史与搜索计量等检查，但列出用例不代表当前全部通过。contracts tests、engine 测试、平台 CLI 探针、资源授权与真实账号验收须分别记录，不能互相替代。本次文档修订不提交、部署或操作生产账号；历史部署证据保留在原记录中。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

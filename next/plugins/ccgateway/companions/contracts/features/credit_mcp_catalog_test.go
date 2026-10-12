@@ -1,55 +1,32 @@
 package features
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCreditMCPSourceCatalogConstraints(t *testing.T) {
-	doc := Catalog()
-	if doc.CatalogVersion != CatalogVersion || doc.RuntimeVerified {
-		t.Fatal("wrong catalog or runtime claim")
-	}
-	byID := map[string]Feature{}
-	for _, feature := range doc.Features {
-		byID[feature.ID] = feature
-	}
-	for _, id := range []string{"F-MCP", "F-INLINE-TOOLS", "F-SAFEGUARDS", "F-FALLBACK", "F-TOOL-SEARCH"} {
-		feature := byID[id]
-		if feature.Status != "partial" || len(feature.Mechanisms) == 0 {
-			t.Fatal("conditional support lost", id)
-		}
-	}
-	if byID["F-SAFEGUARDS"].Scope != "cc" || byID["F-FALLBACK"].Scope != "api" {
-		t.Fatal("API/CC scopes mixed")
-	}
-	fallback := byID["F-FALLBACK"]
-	for _, path := range []string{"fallback_credit_token.mode", "stop_details.fallback_credit_token", "usage.fallback_credit"} {
-		found := false
-		for _, actual := range fallback.BodyPaths {
-			found = found || actual == path
-		}
-		if !found {
-			t.Error("credit request/response contract missing", path)
-		}
-	}
-	for _, constraint := range []string{"strict/best_effort", "null", "issuer", "SSE", "有界缓冲", "未验证"} {
-		if !strings.Contains(fallback.Reason, constraint) {
-			t.Error("credit qualification missing", constraint)
-		}
-	}
-	rules := map[string]string{}
-	for _, rule := range BetaRules() {
-		rules[rule.Name] = rule.Mapping
-	}
-	for _, beta := range fallback.BetaHeaders {
-		if rules[beta] != "forward" {
-			t.Error("advertised beta is not admitted", beta)
-		}
-	}
-	for _, boundary := range []string{"deferred MCP", "完整 pinned", "未知引用", "命名空间碰撞", "真实提供商组合资格须另验证"} {
-		if !strings.Contains(byID["F-MCP"].Reason, boundary) {
-			t.Error("conditional MCP search boundary missing", boundary)
-		}
+func TestNativeCatalogSeparatesMCPConnectorFromClientTools(t *testing.T) {
+	byID := sourceCatalogFeatures(t)
+	// SDK MCP registration for ordinary client tools is not API MCP connector
+	// support. Internal ToolSearch and safeguards retain their native subset.
+	// Fallback remains partial for Worker-coordinated model attempts, not
+	// fallback-credit redemption or replay of fallback history.
+	for _, tc := range []struct {
+		id, status, scope string
+	}{
+		{"F-MCP", "unsupported", "api"},
+		{"F-TOOLS", "partial", "api"},
+		{"F-TOOL-SEARCH", "partial", "api"},
+		{"F-SAFEGUARDS", "partial", "cc"},
+		{"F-FALLBACK", "partial", "api"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			require.Contains(t, byID, tc.id)
+			feature := byID[tc.id]
+			assert.Equal(t, tc.status, feature.Status, "catalog must distinguish native tools from rejected server capabilities")
+			assert.Equal(t, tc.scope, feature.Scope)
+		})
 	}
 }

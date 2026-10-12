@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -52,8 +51,6 @@ func TestNativeEventTerminalError(t *testing.T) {
 			assert.Equal(t, "rate_limit", failure.Category)
 			assert.Equal(t, "req_final", failure.RequestID)
 			assert.Equal(t, "Claude Code native error: rate_limit", failure.Error())
-			var upstream *upstreamError
-			assert.False(t, errors.As(state.failure(), &upstream))
 		})
 	}
 }

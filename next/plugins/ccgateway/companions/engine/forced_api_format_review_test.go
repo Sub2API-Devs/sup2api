@@ -23,14 +23,24 @@ func TestReviewForcedAPIFormatExactPlanAndParallelFalse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wire := Object{"tools": []any{Object{"name": r.wireName("chosen"), "input_schema": Object{"type": "object"}, "defer_loading": false}}}
-		if err := r.ApplyMainRequestFeatures(wire); err != nil {
+		cfg, err := r.passthroughBodies()
+		if err != nil {
 			t.Fatal(err)
 		}
-		if digest(wire["output_config"].(Object)["format"]) != digest(format) {
+		output, err := decodeObject(cfg.First["output_config"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if digest(output["format"]) != digest(format) || string(cfg.First["output_config"]) != string(cfg.Rest["output_config"]) {
 			t.Fatal("format numeric identity changed")
 		}
-		actual := wire["tool_choice"].(Object)
+		actual, err := decodeObject(cfg.First["tool_choice"])
+		if err != nil || cfg.Rest["tool_choice"] != nil {
+			t.Fatal("forced choice escaped first round", err)
+		}
+		if kind == "tool" && str(actual, "name") != r.wireName("chosen") {
+			t.Fatal("forced client tool name was not mapped")
+		}
 		if actual["disable_parallel_tool_use"] != false || str(actual, "type") != kind {
 			t.Fatal("choice or explicit parallel=false changed")
 		}

@@ -8,13 +8,6 @@ import (
 	"unicode/utf16"
 )
 
-// Client system messages travel as Claude Code's own system-role attachment:
-// the record a mod's prompt.submit context produces. Committed history is
-// written as one such record per client message at its original position; the
-// pending turn's messages are attached by the Mod as one record (one prompt
-// submission yields one record). Claude Code merges a turn's system records,
-// its own context included, into one system message; the outbound relay
-// (system_restore.go) restores the client's messages before the model request.
 const systemContextPrefix = "prompt.submit hook additional context: "
 
 // Claude Code shortens a prompt.submit context entry beyond these lengths
@@ -123,8 +116,10 @@ func (r *Request) pendingWireMessage() Message {
 }
 func (r *Request) pendingSystems() []string {
 	var out []string
-	for _, m := range r.Messages[r.pendingStart():] {
-		if m.Role == "system" {
+	start, lastUser := r.pendingStart(), r.lastUserMessage()
+	for i := start; i < len(r.Messages); i++ {
+		m := r.Messages[i]
+		if m.Role == "system" && !(m.turnScoped() && i < lastUser) {
 			out = append(out, systemTexts(m)...)
 		}
 	}

@@ -27,54 +27,46 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
-	completedClientHistory  map[string]string
-	internalCache           *internalCacheRounds
-	helperHistory           *helperHistoryExecution
-	credit                  *creditExecution
-	creditPTCDeferred       bool
-	resource                *resourceExchange
-	resources               *resourceAdmission
-	MCP                     *MCPConnectorPlan
-	imageCarriers           map[string]*imageCarrier
-	responseFacts           *providerResponseFacts
-	continuation            string
-	upstreamSession         string // U (§53.12): upstream X-Claude-Code-Session-Id and metadata session
-	upstreamAgent           string // A' (§53.12): upstream x-claude-code-agent-id; empty for the main thread
-	Plan                    *RequestPlan
-	EnvironmentFields       map[string]string
-	ClientEnvironmentFields map[string]bool
-	diagnostic              *requestDiagnostic
-	Model                   string
-	MaxTokens               int
-	CacheWarmup             bool
-	CountTokens             bool
-	Stream                  bool
-	System                  []string
-	Messages                []Message
-	Tools                   []Tool
-	ServerTools             []Object
-	APIClientTools          []Object
-	APIToolCatalog          []Object
-	InlineTools             *inlineToolTimeline
-	NoTools                 bool
-	Thinking                Object
-	Fast                    *bool
-	Effort                  string
-	JSONSchema              Object
-	APIOutputFormat         bool
-	PromptCacheTTL          string
-	ToolSearch              string
-	Betas                   []string
-	FineGrainedTools        bool
-	TTL                     time.Duration
-	Native                  map[string]bool
-	CustomToolPrefix        string
-	// Set from the request policy; see outboundRelay.
-	PassUpstreamErrors bool
-	// Relay passthrough (passthrough.go): the outbound relay forwards the
-	// inner CLI's requests unchanged.
-	Passthrough              bool
-	NativeTransport          bool
+	completedClientHistory   map[string]string
+	internalCache            *internalCacheRounds
+	helperHistory            *helperHistoryExecution
+	credit                   *creditExecution
+	creditPTCDeferred        bool
+	resources                *resourceAdmission
+	MCP                      *MCPConnectorPlan
+	imageCarriers            map[string]*imageCarrier
+	responseFacts            *providerResponseFacts
+	continuation             string
+	upstreamSession          string // U (§53.12): upstream X-Claude-Code-Session-Id and metadata session
+	upstreamAgent            string // A' (§53.12): upstream x-claude-code-agent-id; empty for the main thread
+	Plan                     *RequestPlan
+	EnvironmentFields        map[string]string
+	ClientEnvironmentFields  map[string]bool
+	diagnostic               *requestDiagnostic
+	Model                    string
+	MaxTokens                int
+	CacheWarmup              bool
+	Stream                   bool
+	System                   []string
+	Messages                 []Message
+	Tools                    []Tool
+	ServerTools              []Object
+	APIClientTools           []Object
+	APIToolCatalog           []Object
+	InlineTools              *inlineToolTimeline
+	NoTools                  bool
+	Thinking                 Object
+	Fast                     *bool
+	Effort                   string
+	JSONSchema               Object
+	APIOutputFormat          bool
+	PromptCacheTTL           string
+	ToolSearch               string
+	Betas                    []string
+	FineGrainedTools         bool
+	TTL                      time.Duration
+	Native                   map[string]bool
+	CustomToolPrefix         string
 	nativePolicy             *RequestPolicy
 	webSearch                *webSearchPlan // passthrough web_search (web_search_passthrough.go)
 	AttachmentSources        map[string]string

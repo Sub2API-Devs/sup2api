@@ -19,7 +19,6 @@ import (
 var modFiles = mod.Files
 
 type Runner struct {
-	bootstrap                  *continuationBootstrap
 	InternalBaseURL            string
 	CLI, Version, Plugin, Work string
 	Env                        []string
@@ -126,28 +125,21 @@ func (r *Runner) baseEnv() []string {
 	return r.Proxy.Environment(env)
 }
 
-// run answers one request with one CLI process: configuration from the
-// request, the outbound relay, the process, then the stream-json session.
+// run owns one native request lifecycle. Usually it uses one CLI process;
+// an expiring inline instruction permits one same-model native continuation.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
-	if r.bootstrap == nil && req.needsContinuationBootstrap(p) {
-		if err := r.bootstrapContinuation(ctx, req, p); err != nil {
-			return nil, fmt.Errorf("cannot initialize continuation transcript: %w", err)
-		}
-	}
 	cfg := newRunConfig(req, p, r.Plugin, dir)
-	if req.Passthrough {
-		if cfg.passthrough, err = req.passthroughBodies(); err != nil {
-			return nil, err
-		}
-		names := map[string][]string{}
-		for name := range cfg.passthrough.First {
-			names["first"] = append(names["first"], name)
-		}
-		for name := range cfg.passthrough.Rest {
-			names["rest"] = append(names["rest"], name)
-		}
-		req.diagnostic.artifact("passthrough.json", Object{"fields": names, "fallbacks": len(cfg.passthrough.Fallbacks), "session": p.runSession(), "agent": req.upstreamAgent != ""})
+	if cfg.passthrough, err = req.passthroughBodies(); err != nil {
+		return nil, err
 	}
+	names := map[string][]string{}
+	for name := range cfg.passthrough.First {
+		names["first"] = append(names["first"], name)
+	}
+	for name := range cfg.passthrough.Rest {
+		names["rest"] = append(names["rest"], name)
+	}
+	req.diagnostic.artifact("passthrough.json", Object{"fields": names, "fallbacks": len(cfg.passthrough.Fallbacks), "session": p.runSession(), "agent": req.upstreamAgent != ""})
 	if !req.persistsSession() {
 		cfg.args = append(cfg.args, "--no-session-persistence")
 	}
@@ -156,90 +148,53 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		req.diagnostic.trace("thinking_disabled_omitted", Object{"model": req.Plan.thinkingCompat})
 	}
 	decisions := req.Plan.FeatureDecisions()
-	if req.NativeTransport {
-		req.diagnostic.setField("execution_mode", "native")
-		for _, decision := range decisions {
-			if str(decision, "stage") == "outbound_relay" {
-				decision["stage"], decision["action"] = "cli_mod", "configure_native_request"
-				if field := str(decision, "field"); field == "context_management" || field == "compaction" || field == "cache_control" {
-					decision["action"] = "cli_owned_not_forwarded"
-				}
-			}
-		}
-	}
+	req.diagnostic.setField("execution_mode", "native")
 	req.diagnostic.artifact("feature-decisions.json", decisions)
 	req.diagnostic.artifact("client-attachment-decisions.json", req.AttachmentDecisions)
 	// Only gateway-generated options: never dump inherited credentials or the
-	// private relay/Mod URL and token added later.
-	req.diagnostic.artifact("effective-config.json", Object{"cli_version": r.Version, "args": cfg.args, "env": cfg.env, "attachment_policy": req.attachmentConfig(), "attachment_source": req.AttachmentSource, "pass_upstream_errors": req.PassUpstreamErrors, "systems": cfg.systems, "groups": cfg.groups})
+	// private Mod URL and token added later.
+	req.diagnostic.artifact("effective-config.json", Object{"cli_version": r.Version, "args": cfg.args, "env": cfg.env, "attachment_policy": req.attachmentConfig(), "attachment_source": req.AttachmentSource, "systems": cfg.systems, "groups": cfg.groups})
 	req.diagnostic.trace("cli_starting", nil)
 	runctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	base := r.baseEnv()
-	var relay *outboundRelay
-	if req.NativeTransport {
-		if err := req.validateRoutingProvider(base); err != nil {
-			return nil, err
-		}
-		if raw := environmentValue(base, "ANTHROPIC_BASE_URL"); raw != "" {
-			target, err := url.Parse(raw)
-			if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" || target.User != nil || target.RawQuery != "" || target.Fragment != "" {
-				return nil, fmt.Errorf("invalid Anthropic base URL")
-			}
-		}
-		cfg.native = &nativeRunState{}
-		cfg.passthrough.Fallbacks = nil
-		defer func() {
-			if ctx.Err() == nil {
-				failure := cfg.native.externalFailure()
-				var refusal *requestRefusal
-				if failure == nil && err != nil && !errors.As(err, &refusal) {
-					failure = cfg.native.failure()
-				}
-				if failure != nil {
-					result, err = nil, failure
-				}
-			}
-		}()
-	} else {
-		// Every model request passes the outbound relay: it restores client system
-		// messages, adds thinking.display, and with pass_upstream_errors ends the
-		// run on any upstream error, which the gateway returns as the API sent it.
-		relay, err = startOutboundRelay(req, base, r.InternalBaseURL)
-		if err != nil {
-			return nil, err
-		}
-		// A refusal, or an upstream error passed to the client, ends the run before
-		// the CLI can back off, refresh, or reshape the request and retry.
-		relay.setAbort(cancel)
-		relay.scope = cfg.scope
-		relay.bootstrap = r.bootstrap
-		defer relay.Close()
-		// Assign the named results: runs after the process has been waited for.
-		defer func() {
-			result, err = relayOutcome(ctx, relay, result, err)
-			if req.resource != nil && ctx.Err() == nil && relay.Failure() == nil && req.resource.completed() {
-				result, err = Object{}, nil
-			}
-			if (req.CountTokens || req.resource != nil) && err == nil {
-				err = (&cliSession{cfg: cfg, relay: relay}).checkMod()
-			}
-		}()
+	if err := req.validateRoutingProvider(base); err != nil {
+		return nil, err
 	}
+	if raw := environmentValue(base, "ANTHROPIC_BASE_URL"); raw != "" {
+		target, err := url.Parse(raw)
+		if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" || target.User != nil || target.RawQuery != "" || target.Fragment != "" {
+			return nil, fmt.Errorf("invalid Anthropic base URL")
+		}
+	}
+	cfg.native = &nativeRunState{}
+	cfg.passthrough.Fallbacks = nil
+	defer func() {
+		if ctx.Err() == nil {
+			failure := cfg.native.externalFailure()
+			var refusal *requestRefusal
+			if failure == nil && err != nil && !errors.As(err, &refusal) {
+				failure = cfg.native.failure()
+			}
+			if failure != nil {
+				result, err = nil, failure
+			}
+		}
+	}()
 	control, err := startModControl(cfg, r.InternalBaseURL)
 	if err != nil {
 		return nil, err
 	}
-	defer control.Close()
+	defer func() {
+		if control != nil {
+			control.Close()
+		}
+	}()
 	cfg.control = control
-	if relay != nil {
-		relay.control = control
-		control.relay = relay
-	}
 	if req.webSearch != nil {
 		control.webSearch = func(id string, input Object) Object {
 			return req.webSearch.search(runctx, func(ctx context.Context, input Object) (*webSearchRecord, error) {
-				record, _, err := r.runWebSearch(ctx, req, dir, input)
+				record, err := r.runWebSearch(ctx, req, dir, input)
 				if err != nil && cfg.native != nil {
 					cfg.native.fail(&requestRefusal{err})
 					cancel()
@@ -250,7 +205,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	}
 	cfg.env["CCGATEWAY_MOD_URL"] = control.URL
 	cfg.env["CCGATEWAY_MOD_TOKEN"] = control.token
-	proc, err := startCLI(runctx, r.CLI, cfg.args, p.Work, cfg.processEnv(base, relay), r.Stderr)
+	proc, err := startCLI(runctx, r.CLI, cfg.args, p.Work, cfg.processEnv(base), r.Stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -286,31 +241,76 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	// A descendant may inherit stdout and outlive the CLI. Cancellation must
 	// also unblock reads, including the final drain, rather than waiting for
 	// every descendant to close its copy of the pipe.
-	stopReadOnCancel := context.AfterFunc(runctx, func() { _ = proc.stdout.Close() })
+	initialOutput := proc.stdout
+	stopReadOnCancel := context.AfterFunc(runctx, func() { _ = initialOutput.Close() })
 	defer stopReadOnCancel()
-	return newCLISession(ctx, req, p, cfg, proc, relay, emit).run()
+	session := newCLISession(ctx, req, p, cfg, proc, emit)
+	result, err = session.run()
+	if !errors.Is(err, errScopeContinuation) {
+		if err != nil && control.scopeEnabled && session.scopeMessage != nil {
+			return nil, &requestRefusal{err}
+		}
+		return result, err
+	}
+	// A single same-model continuation, not a retry or fallback. The Mod has
+	// withheld the next model request; close stdin so native persistence flushes.
+	_ = proc.stdin.Close()
+	_, _ = io.Copy(io.Discard, proc.stdout)
+	_ = proc.cmd.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := control.verify(); err != nil {
+		return nil, &requestRefusal{err}
+	}
+	retained, _ := req.pendingPersistentSystems()
+	control.mu.Lock()
+	attachment, searchCalls := control.scopeAttachment, control.scopeSearches
+	control.mu.Unlock()
+	input, inputID, err := p.resumeScopedTurn(proc.cmd.Env, attachment, cfg.systems, retained, session.scopeMessage, session.responseReq)
+	if err != nil {
+		return nil, &requestRefusal{err}
+	}
+	stopReadOnCancel()
+	webSearch := control.webSearch
+	control.Close()
+	cfg.scopeResumed, cfg.searchCalls = true, searchCalls
+	cfg.systems = retained
+	cfg.args = cliArgs(req, p, r.Plugin)
+	control, err = startModControl(cfg, r.InternalBaseURL)
+	if err != nil {
+		return nil, &requestRefusal{err}
+	}
+	control.webSearch = webSearch
+	cfg.control = control
+	cfg.env["CCGATEWAY_MOD_URL"], cfg.env["CCGATEWAY_MOD_TOKEN"] = control.URL, control.token
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	next, err := startCLI(runctx, r.CLI, cfg.args, p.Work, cfg.processEnv(base), r.Stderr)
+	if err != nil {
+		return nil, &requestRefusal{err}
+	}
+	proc = next
+	proc.diagnostic = req.diagnostic
+	if req.diagnostic.enabled() {
+		proc.stdout = &traceReader{ReadCloser: proc.stdout, diagnostic: req.diagnostic, name: "cli-stdout.jsonl"}
+	}
+	stopResumeRead := context.AfterFunc(runctx, func() { _ = proc.stdout.Close() })
+	defer stopResumeRead()
+	session.proc, session.initID, session.initialized = proc, uuid(), false
+	session.resumeInput, session.resumeUUID = &input, inputID
+	req.diagnostic.trace("cli_scope_resumed", nil)
+	result, err = session.run()
+	if err != nil {
+		// Completed work must not be replayed by an outer model/account retry.
+		return nil, &requestRefusal{err}
+	}
+	return result, nil
 }
 
 // persistsSession reports whether the CLI keeps a transcript of the run. A
-// credit-tracked run (its response can carry a credit token) and a resource
-// operation do not.
+// credit-tracked run (its response can carry a credit token) does not.
 func (r *Request) persistsSession() bool {
-	return r.resource == nil && r.credit == nil
-}
-
-// relayOutcome lets the relay's verdict replace the run's: a refused request,
-// or an upstream error the client receives as the API sent it.
-func relayOutcome(ctx context.Context, relay *outboundRelay, result Object, err error) (Object, error) {
-	if failure := relay.Failure(); failure != nil {
-		return nil, failure
-	}
-	// In passthrough a failed attempt followed by a successful fallback model
-	// leaves an error behind; only a failed run returns it.
-	if upstream := relay.UpstreamError(); upstream != nil && ctx.Err() == nil && (!relay.passthrough || err != nil) {
-		return nil, upstream
-	}
-	if result, ok := relay.completedTokenCount(); ok && ctx.Err() == nil {
-		return result, nil
-	}
-	return result, err
+	return r.credit == nil
 }

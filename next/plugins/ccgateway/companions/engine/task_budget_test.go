@@ -25,15 +25,13 @@ func TestTaskBudgetPlan(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wire := Object{}
-		if err := req.ApplyMainRequestFeatures(wire); err != nil {
+		cfg, err := req.passthroughBodies()
+		if err != nil {
 			t.Fatal(err)
 		}
-		if digest(wire["output_config"]) != digest(body["output_config"]) {
+		want, _ := json.Marshal(body["output_config"])
+		if string(cfg.First["output_config"]) != string(want) || string(cfg.Rest["output_config"]) != string(want) {
 			t.Fatal("task budget changed")
-		}
-		if _, err := parsePolicyRequest(raw, http.Header{}); err == nil {
-			t.Fatal("accepted missing task beta")
 		}
 	}
 	for _, extra := range []Object{{}, {"format": Object{"type": "json_schema", "schema": Object{"type": "object", "properties": Object{}, "additionalProperties": false}}}} {
@@ -45,28 +43,29 @@ func TestTaskBudgetPlan(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wire := Object{}
-		if err := req.ApplyMainRequestFeatures(wire); err != nil {
+		cfg, err := req.passthroughBodies()
+		if err != nil {
 			t.Fatal(err)
 		}
-		if digest(wire["output_config"]) != digest(extra) {
+		want, _ := json.Marshal(extra)
+		if string(cfg.First["output_config"]) != string(want) || string(cfg.Rest["output_config"]) != string(want) {
 			t.Fatal("task-only or format+task config overwritten")
 		}
 	}
-	for _, budget := range []any{Object{"type": "time", "total": 1}, Object{"type": "tokens"}, Object{"type": "tokens", "total": -1}, Object{"type": "tokens", "total": 1.5}, Object{"type": "tokens", "total": 1, "remaining": -1}, Object{"type": "tokens", "total": 1, "extra": true}} {
-		body := basic()
-		body["output_config"] = Object{"task_budget": budget}
-		raw, _ := json.Marshal(body)
-		if _, err := parsePolicyRequest(raw, http.Header{"Anthropic-Beta": []string{taskBudgetBeta}}); err == nil {
-			t.Fatal("invalid task budget accepted")
+	// The retained plan validator still rejects invalid advisory budgets.
+	// Native admission sends output_config unchanged; it does not invoke
+	// this legacy validator or invent a gateway-owned token countdown.
+	for _, budget := range []any{Object{"type": "time", "total": 1}, Object{"type": "tokens"}, Object{"type": "tokens", "total": -1}, Object{"type": "tokens", "total": 1.5}, Object{"type": "tokens", "total": 20000, "remaining": -1}, Object{"type": "tokens", "total": 20000, "extra": true}} {
+		raw, _ := json.Marshal(Object{"output_config": Object{"task_budget": budget}})
+		body, err := decodeObject(raw)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	body := basic()
-	body["output_config"] = Object{"task_budget": Object{"type": "tokens", "total": 64000}}
-	body["tools"] = []any{Object{"name": "deferred", "input_schema": Object{"type": "object"}, "defer_loading": true}}
-	raw, _ := json.Marshal(body)
-	if _, err := parsePolicyRequest(raw, http.Header{"Anthropic-Beta": []string{taskBudgetBeta}}); err == nil {
-		t.Fatal("internal rounds admitted without durable hidden-history restoration")
+		before := digest(body)
+		plan := &RequestPlan{}
+		if err := plan.takeTaskBudget(body); err == nil || len(plan.taskBudget) != 0 || digest(body) != before {
+			t.Fatal("invalid task budget changed plan or source", err)
+		}
 	}
 }
 
@@ -139,14 +138,6 @@ func TestRealCLITaskBudgetCompatibility(t *testing.T) {
 		t.Helper()
 		raw, _ := json.Marshal(body)
 		g.Key = "budget-fixture"
-		probe := httptest.NewRequest("POST", helperhistory.RequirementPath, bytes.NewReader(raw))
-		probe.Header.Set("x-api-key", g.Key)
-		probe.Header.Set("anthropic-beta", taskBudgetBeta)
-		planned := httptest.NewRecorder()
-		g.ServeHTTP(planned, probe)
-		if planned.Code != 200 || !strings.Contains(planned.Body.String(), `"decision":"ordinary"`) {
-			t.Fatalf("%s planner %d %s", label, planned.Code, planned.Body.String())
-		}
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 		req.Header.Set("x-api-key", g.Key)
 		req.Header.Set("anthropic-beta", taskBudgetBeta)

@@ -3,6 +3,9 @@ package engine
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReviewZeroRoundBudgetKeepsAdvancedGates(t *testing.T) {
@@ -41,7 +44,7 @@ func TestReviewZeroRoundBudgetKeepsAdvancedGates(t *testing.T) {
 	}
 }
 
-func TestReviewCompletedSafeguardIdentityStillRejectsChangedInput(t *testing.T) {
+func TestReviewCompletedNativeIdentityStillRejectsChangedInput(t *testing.T) {
 	b := completedHistoryBody("bash")
 	b["safeguards"] = []any{Object{"fixture": "opaque"}}
 	raw, _ := json.Marshal(b)
@@ -49,8 +52,9 @@ func TestReviewCompletedSafeguardIdentityStillRejectsChangedInput(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.True(t, r.completedClientHistoryBlock(r.Messages[1].Content[0]))
 	r.Messages[1].Content[0]["input"] = Object{"changed": true}
-	if err := r.ApplyMainRequestFeatures(Object{"tools": []any{}}); err == nil {
-		t.Fatal("stale completion evidence authorized changed history")
-	}
+	assert.False(t, r.completedClientHistoryBlock(r.Messages[1].Content[0]))
+	assert.NotEqual(t, "bash", str(r.cliWireMessage(r.Messages[1]).Content[0], "name"))
+	assert.Empty(t, r.enabledTools())
 }

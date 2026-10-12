@@ -15,7 +15,7 @@ import { SButton, confirm } from '@sub2api/ui'
 import type { CcgRemoteConfig, CcgRuntimeImages } from '@/api/types'
 import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
-import { defaultRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
+import { defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 import { knownReason, reasonDisplay, reasonOf } from './ccgAuthFlow'
 import { useCcgError } from './ccgError'
 import {
@@ -41,25 +41,7 @@ const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
-const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => {
-  const attachment_sources = { ...(policy?.attachment_sources || {}) }
-  const environment_fields = { ...(policy?.environment_fields || {}) }
-  const legacyEnvironment = attachment_sources.environment
-  if (legacyEnvironment === 'client' || legacyEnvironment === 'gateway') {
-    for (const field of ['workingDirectory', 'platform'] as const) {
-      environment_fields[field] ||= legacyEnvironment
-    }
-  }
-  delete attachment_sources.environment
-  for (const kind of Object.keys(attachment_sources) as Array<keyof typeof attachment_sources>) {
-    if (attachment_sources[kind] === 'both') delete attachment_sources[kind]
-  }
-  return { ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources, environment_fields, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' }
-}
-const policyChanged = computed(() => {
-  const sources = saved.value?.request_policy?.attachment_sources
-  return !!sources?.environment || Object.values(sources || {}).includes('both') || JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy))
-})
+const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizeRequestPolicy(saved.value?.request_policy)))
 const settingsTabs = ['connection', 'network', 'cc', 'deployment'] as const
 const activeTab = ref<typeof settingsTabs[number]>(location.hash === '#ccgateway-runtime' ? 'deployment' : 'connection')
 const runtimeRevision = ref(0)
@@ -159,7 +141,7 @@ function clearSecrets() { adminKey.value = ''; controllerCa.value = ''; clearIns
 
 function assign(config: RemoteConfig) {
   saved.value = config
-  requestPolicy.value = structuredClone(normalizePolicy(config.request_policy))
+  requestPolicy.value = structuredClone(normalizeRequestPolicy(config.request_policy))
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || '10.0.0.0/8'
   network.allocation = config.network?.allocation || 'random'
@@ -203,7 +185,7 @@ async function save() {
   if (bad) { imageError.value = t('ccgateway.remote.imageInvalid', { ref: bad }); return }
   imageError.value = ''
   if (!validRequestPolicy(requestPolicy.value)) { imageError.value = t('ccgateway.policy.invalid'); return }
-  payload.request_policy = requestPolicy.value
+  payload.request_policy = normalizeRequestPolicy(requestPolicy.value)
   // A PUT with images replaces all of them: keep the gateway (Caddy) override the form does not edit.
   const gateway = saved.value.images?.gateway
   payload.images = gateway ? { ...imagesPayload.value, gateway } : imagesPayload.value

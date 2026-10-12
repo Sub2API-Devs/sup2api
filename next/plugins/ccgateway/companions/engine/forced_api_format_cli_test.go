@@ -147,7 +147,6 @@ func TestRealCLIForcedAPIFormatTerminals(t *testing.T) {
 				req, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(raw))
 				p := defaultRequestPolicy()
 				p.ToolSearch = "true"
-				p.PassUpstreamErrors = true
 				cfg, _ := json.Marshal(p)
 				req.Header.Set(policyHeader, string(cfg))
 				res, err := http.DefaultClient.Do(req)
@@ -166,8 +165,8 @@ func TestRealCLIForcedAPIFormatTerminals(t *testing.T) {
 				if res.StatusCode != want || calls.Load() != 1 {
 					t.Fatalf("status%d calls%d body%s", res.StatusCode, calls.Load(), out)
 				}
-				if reason == "provider400" && !bytes.Contains(out, []byte("fixture forced combination rejected")) {
-					t.Fatal("original error lost")
+				if reason == "provider400" && (res.Header.Get("X-CCGateway-Error-Source") != "cli" || res.Header.Get("X-CCGateway-CLI-Error") != "invalid_request" || !bytes.Contains(out, []byte("Claude Code native error: invalid_request")) || bytes.Contains(out, []byte("fixture forced combination rejected"))) {
+					t.Fatal("native error normalization changed")
 				}
 				if want == 200 && !bytes.Contains(out, []byte(reason)) {
 					t.Fatalf("terminal changed: %s", out)

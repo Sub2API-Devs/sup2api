@@ -65,7 +65,7 @@ func DecodeRuntimeCapabilities(raw []byte) (RuntimeCapabilities, error) {
 	}
 	modeSeen := map[string]bool{}
 	for _, mode := range out.ExecutionModes {
-		if (mode != "legacy" && mode != "passthrough" && mode != "native") || modeSeen[mode] {
+		if mode != "native" || modeSeen[mode] {
 			return out, fmt.Errorf("invalid execution mode capability")
 		}
 		modeSeen[mode] = true

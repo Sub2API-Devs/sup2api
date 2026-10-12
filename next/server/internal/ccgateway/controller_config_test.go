@@ -404,12 +404,12 @@ func TestLegacyConfigSave(t *testing.T) {
 	oldSSH := sshConfig
 	oldSSH.AccountRuntimes, oldSSH.AdminKey, oldSSH.APIKey = false, "admin-k", "api-k"
 	policy := Config{}.EffectiveRequestPolicy()
-	policy.PassUpstreamErrors = true
+	policy.ToolSearch = "false"
 	same := Config{Mode: "ssh", Host: oldSSH.Host, User: oldSSH.User, AuthMode: oldSSH.AuthMode, HostKeyFingerprint: oldSSH.HostKeyFingerprint,
 		Network: &RuntimeNetwork{Pool: "10.80.0.0/16", Allocation: "sequential"}, RequestPolicy: &policy, Images: &RuntimeImages{App: "ccgateway:x"}}
 	got, err := mergeConfig(same, oldSSH)
 	if err != nil || got.Mode != "ssh" || got.Port != 22 || got.Password != "ssh-secret" || got.AdminKey != "admin-k" || got.APIKey != "api-k" || !got.AccountRuntimes ||
-		got.Network.Pool != "10.80.0.0/16" || !got.RequestPolicy.PassUpstreamErrors || got.Images.App != "ccgateway:x" {
+		got.Network.Pool != "10.80.0.0/16" || got.RequestPolicy.ToolSearch != "false" || got.Images.App != "ccgateway:x" {
 		t.Fatalf("same ssh target: %+v %v", got, err)
 	}
 	typed := same

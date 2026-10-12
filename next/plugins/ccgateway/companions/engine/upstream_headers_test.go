@@ -3,40 +3,83 @@ package engine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestProviderErrorHeadersRequireMainAttribution(t *testing.T) {
-	r := httptest.NewRequest("POST", "/messages", nil)
-	response := &http.Response{Request: r, Header: http.Header{"Request-Id": []string{"real"}, "Retry-After": []string{"3"}}}
-	if len(mainErrorHeaders(response)) != 0 {
-		t.Fatal("aux headers attributed to main")
-	}
-	response.Request = r.WithContext(context.WithValue(r.Context(), apiOutputRequestKey{}, &Request{}))
-	if mainErrorHeaders(response).Get("Request-Id") != "real" {
-		t.Fatal("main headers lost")
+func TestNativeErrorHeadersRequireObservedStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		observed, refusal bool
+		status            int
+		kind, scope       string
+	}{
+		{"unknown", false, false, 502, "api_error", "request"},
+		{"bad request", true, false, 400, "invalid_request_error", ""},
+		{"authentication", true, false, 401, "authentication_error", ""},
+		{"permission", true, false, 403, "permission_error", ""},
+		{"not found", true, false, 404, "not_found_error", ""},
+		{"rate limit", true, false, 429, "rate_limit_error", ""},
+		{"overload", true, false, 529, "overloaded_error", ""},
+		{"request refusal", true, true, 429, "rate_limit_error", "request"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("POST", "/v1/messages", nil)
+			x := &exchange{w: w, r: r, req: &Request{}, diagnostic: newRequestDiagnostic(w, r)}
+			var err error = &nativeError{Status: tc.status, Category: "rate_limit", Message: "Claude Code native error: rate_limit", RequestID: "req_native", ObservedStatus: tc.observed, RetryAt: time.Now().Unix() + 60}
+			if tc.refusal {
+				err = errors.Join(err, &requestRefusal{errors.New("request refused")})
+			}
+			x.runFailed(context.Background(), err)
+			assert.Equal(t, tc.status, w.Code)
+			assert.Equal(t, "cli", w.Header().Get("X-CCGateway-Error-Source"))
+			assert.Equal(t, "rate_limit", w.Header().Get("X-CCGateway-CLI-Error"))
+			assert.Equal(t, tc.scope, w.Header().Get(errorScopeHeader))
+			assert.Equal(t, "req_native", w.Header().Get("Request-Id"))
+			body, decodeErr := decodeObject(w.Body.Bytes())
+			require.NoError(t, decodeErr)
+			assert.Equal(t, tc.kind, str(body["error"].(Object), "type"))
+			if tc.status == 429 && tc.observed {
+				delay, err := strconv.Atoi(w.Header().Get("Retry-After"))
+				require.NoError(t, err)
+				assert.GreaterOrEqual(t, delay, 1)
+				assert.LessOrEqual(t, delay, 60)
+			} else {
+				assert.Empty(t, w.Header().Get("Retry-After"))
+			}
+		})
 	}
 }
 
-func TestUpstreamErrorAfterStreamCannotRewriteHTTPHeaders(t *testing.T) {
+func TestNativeErrorAfterStreamCannotRewriteHTTPHeaders(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	x := &exchange{w: w, r: r, req: &Request{Stream: true}, diagnostic: newRequestDiagnostic(w, r), streaming: true}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(200)
-	x.passUpstream(&upstreamError{Status: 429, ContentType: "application/json", Body: []byte(`{"error":{"type":"rate_limit_error","message":"stream failure"}}`), Headers: http.Header{"Retry-After": []string{"7"}}}, Object{})
-	if w.Result().StatusCode != 200 || w.Result().Header.Get("Retry-After") != "" || !strings.Contains(w.Body.String(), "event: error") || !strings.Contains(w.Body.String(), "stream failure") {
-		t.Fatal(w.Result().StatusCode, w.Header(), w.Body.String())
+	before := w.Result().Header.Clone()
+	x.runFailed(context.Background(), &nativeError{Status: 429, Category: "rate_limit", Message: "Claude Code native error: rate_limit", ObservedStatus: true, RequestID: "req_late", RetryAt: time.Now().Unix() + 60})
+	assert.Equal(t, 200, w.Result().StatusCode)
+	for _, header := range []string{"Retry-After", "Request-Id", "X-CCGateway-Error-Source", errorScopeHeader} {
+		assert.Equal(t, before.Get(header), w.Result().Header.Get(header), header)
 	}
+	assert.Contains(t, w.Body.String(), "event: error")
+	assert.Contains(t, w.Body.String(), "Claude Code native error: rate_limit")
 }
 
-func TestRealCLIUpstreamErrorHeaders(t *testing.T) {
+func TestRealCLINativeErrorHeaders(t *testing.T) {
 	for _, status := range []int{400, 429, 529} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			var calls atomic.Int32
@@ -55,22 +98,27 @@ func TestRealCLIUpstreamErrorHeaders(t *testing.T) {
 				w.WriteHeader(status)
 				fmt.Fprint(w, `{"type":"error","error":{"type":"fixture_error","message":"original fixture"}}`)
 			})
-			policy := defaultRequestPolicy()
-			policy.PassUpstreamErrors = true
-			req, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(mustServerJSON(basic())))
-			req.Header = policyHeaders(policy)
+			req, err := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(mustServerJSON(basic())))
+			require.NoError(t, err)
+			req.Header = policyHeaders(defaultRequestPolicy())
 			res, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			defer res.Body.Close()
-			raw, _ := io.ReadAll(res.Body)
-			if res.StatusCode != status || res.Header.Get("Request-Id") != "provider-error-id" || res.Header.Get("Retry-After") != "7" || !bytes.Contains(raw, []byte("original fixture")) {
-				t.Fatalf("provider error facts lost: %d %v %s", res.StatusCode, res.Header, raw)
+			raw, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+			assert.Equal(t, status, res.StatusCode, string(raw))
+			assert.Equal(t, "provider-error-id", res.Header.Get("Request-Id"))
+			assert.Equal(t, "cli", res.Header.Get("X-CCGateway-Error-Source"))
+			assert.Contains(t, string(raw), "Claude Code native error:")
+			assert.NotContains(t, string(raw), "original fixture")
+			for _, header := range []string{"Retry-After", "Set-Cookie", "Authorization", "Anthropic-Ratelimit-Requests-Remaining"} {
+				assert.Empty(t, res.Header.Get(header), header)
 			}
-			if res.Header.Get("Set-Cookie") != "" || res.Header.Get("Authorization") != "" || calls.Load() != 1 {
-				t.Fatal("secret leak or duplicate request")
+			wantCalls := int32(1)
+			if status == http.StatusBadRequest {
+				wantCalls = 2
 			}
+			assert.Equal(t, wantCalls, calls.Load(), "native 400 compatibility recovery must remain bounded")
 		})
 	}
 }

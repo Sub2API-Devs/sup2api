@@ -2,10 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 )
@@ -105,84 +101,5 @@ func TestSystemRowMatchesModRecord(t *testing.T) {
 	other, _ := systemRow([]string{"one", "two"}, id, "session", "/work", "2.1.288")
 	if !nativeSystemRecorded(before, append(before, other), []string{"one", "two"}) || nativeSystemRecorded(before, append(before, other), []string{"one"}) {
 		t.Fatal("pending record not matched exactly")
-	}
-}
-
-func TestOutboundRelayPreservesAuthAndSSE(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/messages" || r.URL.RawQuery != "beta=true" || r.Header.Get("Authorization") != "Bearer fixture" || r.Header.Get("Anthropic-Beta") != "fixture-beta" {
-			t.Errorf("request metadata changed")
-		}
-		data, _ := io.ReadAll(r.Body)
-		body, _ := decodeObject(data)
-		thinking, _ := body["thinking"].(Object)
-		if str(thinking, "display") != "omitted" || str(thinking, "type") != "adaptive" || !strings.Contains(string(data), `"role":"system"`) {
-			t.Errorf("relay body = %s", data)
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("request-id", "fixture-id")
-		_, _ = io.WriteString(w, "event: message_stop\ndata: {}\n\n")
-	}))
-	defer upstream.Close()
-	r := &Request{Thinking: Object{"type": "adaptive", "display": "omitted"}}
-	relay, err := startOutboundRelay(r, []string{"ANTHROPIC_BASE_URL=" + upstream.URL + "/api"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer relay.Close()
-	body := `{"messages":[{"role":"user","content":"q"},{"role":"system","content":"s"}],"thinking":{"type":"adaptive"}}`
-	request, _ := http.NewRequest("POST", relay.URL+"/v1/messages?beta=true", strings.NewReader(body))
-	request.Header.Set("Authorization", "Bearer fixture")
-	request.Header.Set("Anthropic-Beta", "fixture-beta")
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	data, _ := io.ReadAll(response.Body)
-	if response.StatusCode != 200 || response.Header.Get("request-id") != "fixture-id" || string(data) != "event: message_stop\ndata: {}\n\n" {
-		t.Fatal("SSE response changed")
-	}
-	unknown, err := http.Get(strings.Split(relay.URL, "/ccg-relay/")[0] + "/v1/messages")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unknown.Body.Close()
-	if unknown.StatusCode != 404 {
-		t.Fatal("unguarded relay path")
-	}
-}
-
-func TestRelayProxyUsesRequestEnvironment(t *testing.T) {
-	target, _ := url.Parse("https://api.anthropic.com")
-	fn, err := relayProxy([]string{"HTTPS_PROXY=http://proxy.invalid:8080"}, target)
-	if err != nil || fn == nil {
-		t.Fatal("proxy not selected")
-	}
-	selected, err := fn(&http.Request{URL: target})
-	if err != nil || selected.Host != "proxy.invalid:8080" {
-		t.Fatal("wrong proxy")
-	}
-	fn, err = relayProxy([]string{"HTTPS_PROXY=http://proxy.invalid:8080", "NO_PROXY=.anthropic.com"}, target)
-	if err != nil || fn != nil {
-		t.Fatal("NO_PROXY ignored")
-	}
-}
-
-func TestOutboundRelaySharedRouteRejectsRemoteAndExpires(t *testing.T) {
-	req := parsed(t, basic())
-	relay, err := startOutboundRelay(req, nil, "http://127.0.0.1:8787")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := httptest.NewRequest("POST", relay.URL+"/v1/messages", nil)
-	r.RemoteAddr = "203.0.113.1:444"
-	w := httptest.NewRecorder()
-	if !serveOutboundRelay(w, r) || w.Code != http.StatusNotFound {
-		t.Fatal("remote relay request allowed")
-	}
-	relay.Close()
-	if serveOutboundRelay(httptest.NewRecorder(), r) {
-		t.Fatal("expired relay remains reachable")
 	}
 }

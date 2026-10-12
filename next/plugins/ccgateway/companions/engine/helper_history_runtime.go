@@ -71,7 +71,7 @@ func (r *Request) admitHelperHistory(x *helperHistoryExecution) error {
 	if x == nil {
 		return nil
 	}
-	if r.CountTokens || r.resources != nil || r.credit != nil || r.MCP != nil || r.structuredOutput() || r.hasContextControls() || r.hasCompactionHistory() || r.continuation != "" {
+	if r.resources != nil || r.credit != nil || r.MCP != nil || r.structuredOutput() || r.hasContextControls() || r.hasCompactionHistory() || r.continuation != "" {
 		return fmt.Errorf("helper history requires an ordinary client-tool conversation without resource, credit, MCP or continuation controls")
 	}
 	if r.InlineTools != nil && x.payloadVersion != helperhistory.PayloadVersion2 {

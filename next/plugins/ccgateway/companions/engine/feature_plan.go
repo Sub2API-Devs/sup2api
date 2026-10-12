@@ -12,8 +12,8 @@ import (
 )
 
 // RequestPlan owns copies of the client's raw request and validated generation
-// controls. Its maps are private: applying a plan cannot mutate the next run.
-// Only the relay's identified main model request may apply these controls.
+// controls for native admission, CLI configuration and fallback attempts.
+// Its maps are private so diagnostics and later runs cannot mutate the plan.
 type RequestPlan struct {
 	creditToken     string
 	creditParameter credits.Parameter
@@ -57,10 +57,6 @@ func decodePlannedValue(raw json.RawMessage) (any, error) {
 	return value, err
 }
 
-func (r *Request) HasMainRequestFeatures() bool {
-	return r.helperHistory != nil || r.credit != nil || len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
-}
-
 // FeatureDecisions reports requested controls without including raw user data.
 func (p *RequestPlan) FeatureDecisions() []Object {
 	var out []Object
@@ -69,19 +65,19 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 			out = append(out, thinkingCompatDecision(p.thinkingCompat))
 		}
 		if p.creditToken != "" {
-			out = append(out, Object{"field": "fallback_credit_token", "action": "verified_original_wire_redemption", "stage": "outbound_relay"})
+			out = append(out, Object{"field": "fallback_credit_token", "action": "configure_native_request", "stage": "cli_mod"})
 		}
 		if len(p.taskBudget) > 0 {
-			out = append(out, Object{"field": "output_config.task_budget", "action": "apply_main_request_advisory_budget", "stage": "outbound_relay"})
+			out = append(out, Object{"field": "output_config.task_budget", "action": "configure_native_request", "stage": "cli_mod"})
 		}
 		if p.cache != nil {
-			out = append(out, Object{"field": "cache_control", "action": "restore_exact_protocol_breakpoints", "stage": "outbound_relay"})
+			out = append(out, Object{"field": "cache_control", "action": "cli_owned_not_forwarded", "stage": "cli_mod"})
 		}
 		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks", "container"} {
 			if _, exists := p.fields[field]; exists {
-				decision := Object{"field": field, "action": "apply_main_request", "stage": "outbound_relay"}
-				if field == "inference_geo" {
-					decision["action"] = "apply_all_model_requests_and_block_auxiliary_count"
+				decision := Object{"field": field, "action": "configure_native_request", "stage": "cli_mod"}
+				if field == "context_management" || field == "compaction" {
+					decision["action"] = "cli_owned_not_forwarded"
 				}
 				out = append(out, decision)
 			}
@@ -324,55 +320,4 @@ func (p *RequestPlan) validateInternalRounds(req *Request) error {
 		return fmt.Errorf("forced tool_choice with internal tool search or structured output requires continuation-phase adaptation")
 	}
 	return nil
-}
-
-// ApplyMainRequestFeatures is intentionally separate from CLI configuration:
-// CC can issue auxiliary classification and token-count requests which must not
-// receive the caller's sampling, metadata, stop or forced-tool controls.
-func (r *Request) ApplyMainRequestFeatures(message Object) error {
-	if r.Plan == nil {
-		return r.applyCompleteToolCatalog(message)
-	}
-	patch := Object{}
-	if len(r.Plan.fields["safeguards"]) != 0 {
-		if err := r.validateSafeguardTools(message); err != nil {
-			return err
-		}
-	}
-	for name, raw := range r.Plan.fields {
-		value, err := decodePlannedValue(raw)
-		if err != nil {
-			return fmt.Errorf("invalid planned field %s", name)
-		}
-		// The client's metadata is not among the planned fields: it only
-		// selects the session, and upstream requests carry the CLI's own
-		// metadata with the gateway's session (§53.12, outbound relay).
-		if name == "tool_choice" {
-			choice := value.(map[string]any)
-			if str(choice, "type") == "tool" {
-				choice["name"] = r.wireName(str(choice, "name"))
-			}
-		}
-		if name == "context_management" && value != nil {
-			r.mapContextToolNames(value.(map[string]any))
-		}
-		patch[name] = value
-	}
-	for name, value := range patch {
-		message[name] = value
-	}
-	if r.Plan.apiGeneration {
-		for _, name := range []string{"thinking", "context_management", "output_config", "speed", "diagnostics", "container"} {
-			if _, explicit := patch[name]; !explicit {
-				delete(message, name)
-			}
-		}
-	}
-	if err := r.applyCompleteToolCatalog(message); err != nil {
-		return err
-	}
-	if err := r.applyMCPConnector(message); err != nil {
-		return err
-	}
-	return r.verifyForcedLoadedCatalog(message)
 }

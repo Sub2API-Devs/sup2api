@@ -25,14 +25,15 @@ func TestReviewForcedAnyClientNamedHelperIsNotRemoved(t *testing.T) {
 
 func TestReviewForcedAnyParallelContractAndInvalidCatalog(t *testing.T) {
 	for _, raw := range []string{`{"type":"any"}`, `{"type":"any","disable_parallel_tool_use":false}`, `{"type":"any","disable_parallel_tool_use":true}`} {
-		r := forcedLoadedFixture(t)
-		r.Plan.fields["tool_choice"] = json.RawMessage(raw)
-		body := Object{"tools": []any{Object{"name": r.wireName("chosen"), "input_schema": r.Tools[0].Schema}}}
-		if err := r.ApplyMainRequestFeatures(body); err != nil {
+		body := basic()
+		body["tools"] = []any{Object{"name": "chosen", "defer_loading": false, "input_schema": Object{"type": "object"}}}
+		body["tool_choice"] = json.RawMessage(raw)
+		r := reviewParseForcedMixed(t, body)
+		cfg, err := r.passthroughBodies()
+		if err != nil {
 			t.Fatal(err)
 		}
-		want, _ := decodeObject([]byte(raw))
-		if digest(body["tool_choice"]) != digest(want) {
+		if string(cfg.First["tool_choice"]) != raw || cfg.Rest["tool_choice"] != nil {
 			t.Fatal("parallel contract modified")
 		}
 		if r.maxTurns() != "1" || newRunConfig(r, &Prepared{}, "fixture", "fixture").env["CCGATEWAY_TOOL_SEARCH"] != "0" {

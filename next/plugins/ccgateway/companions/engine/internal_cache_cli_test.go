@@ -8,121 +8,60 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestRealCLIInternalCacheRounds(t *testing.T) {
-	for _, automatic := range []bool{false, true} {
-		for _, stream := range []bool{false, true} {
-			t.Run(fmt.Sprintf("automatic=%t/stream=%t", automatic, stream), func(t *testing.T) {
-				var mu sync.Mutex
-				var wires []Object
-				handler := func(w http.ResponseWriter, r *http.Request) {
-					if !strings.HasSuffix(r.URL.Path, "/messages") {
-						fmt.Fprint(w, `{"input_tokens":1}`)
-						return
-					}
-					raw, _ := io.ReadAll(r.Body)
-					wire, _ := decodeObject(raw)
-					mu.Lock()
-					wires = append(wires, wire)
-					mu.Unlock()
-					checkInternalCacheWire(t, wire, automatic)
-					ms, _ := json.Marshal(wire["messages"])
-					id := "toolu_cache_search_1"
-					if bytes.Contains(ms, []byte(id)) {
-						id = "toolu_cache_search_2"
-					}
-					if !bytes.Contains(ms, []byte("toolu_cache_search_2")) {
-						writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "tool_use", "id": id, "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}})
-						return
-					}
-					writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "text", "text": "CACHE_ROUND_DONE"}})
+func TestRealCLINativeInternalRoundsUsage(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprint(stream), func(t *testing.T) {
+			var calls atomic.Int32
+			handler := func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/messages") {
+					fmt.Fprint(w, `{"input_tokens":1}`)
+					return
 				}
-				endpoint, _ := newThinkingOutputFixture(t, handler)
-				body := Object{"model": "claude-opus-5-5", "max_tokens": 128, "stream": stream, "system": []any{Object{"type": "text", "text": "CACHE_SYSTEM", "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}}, "tools": []any{Object{"name": "stable", "defer_loading": false, "input_schema": Object{"type": "object", "properties": Object{}}, "cache_control": Object{"type": "ephemeral", "ttl": "1h"}}, Object{"name": "weather", "defer_loading": true, "input_schema": Object{"type": "object", "properties": Object{}}}}, "messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": "lookup weather", "cache_control": Object{"type": "ephemeral"}}}}}}
-				if automatic {
-					body["cache_control"] = Object{"type": "ephemeral"}
+				round := calls.Add(1)
+				raw, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				wire, err := decodeObject(raw)
+				require.NoError(t, err)
+				if round < 3 {
+					id := fmt.Sprintf("toolu_native_discovery_%d", round)
+					writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "tool_use", "id": id, "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}})
+					return
 				}
-				send := func(url string) {
-					t.Helper()
-					raw, _ := json.Marshal(body)
-					res, err := http.Post(url+"/v1/messages", "application/json", bytes.NewReader(raw))
-					if err != nil {
-						t.Fatal(err)
-					}
-					data, _ := io.ReadAll(res.Body)
-					res.Body.Close()
-					if res.StatusCode != 200 || !bytes.Contains(data, []byte("CACHE_ROUND_DONE")) {
-						t.Fatalf("HTTP%d %s", res.StatusCode, data)
-					}
-				}
-				send(endpoint)
-				first := body["messages"].([]any)[0]
-				body["messages"] = []any{first, Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "CACHE_ROUND_DONE"}}}, Object{"role": "user", "content": "continue weather"}}
-				send(endpoint)
-				body["messages"] = []any{first, Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "CACHE_ROUND_DONE"}}}, Object{"role": "user", "content": "rollback alternate weather"}}
-				send(endpoint)
-				cold, _ := newThinkingOutputFixture(t, handler)
-				send(cold)
-				mu.Lock()
-				defer mu.Unlock()
-				if len(wires) != 12 {
-					t.Fatalf("got %d rounds, want12", len(wires))
-				}
-			})
-		}
-	}
-}
-
-func checkInternalCacheWire(t *testing.T, wire Object, automatic bool) {
-	t.Helper()
-	if (wire["cache_control"] != nil) != automatic {
-		t.Error("automatic root changed")
-	}
-	tools, _ := historyContent(wire["tools"])
-	marked := 0
-	for _, tool := range tools {
-		if tool["cache_control"] != nil {
-			marked++
-			if str(tool, "name") != "mcp__ccgateway__stable" || str(tool["cache_control"].(map[string]any), "ttl") != "1h" {
-				t.Error("tool breakpoint moved")
+				messages, err := json.Marshal(wire["messages"])
+				require.NoError(t, err)
+				assert.Contains(t, string(messages), "toolu_native_discovery_1")
+				assert.Contains(t, string(messages), "toolu_native_discovery_2")
+				assert.Contains(t, string(messages), "tool_reference")
+				writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "text", "text": "NATIVE_ROUNDS_DONE"}})
 			}
-		}
-	}
-	if marked != 1 {
-		t.Errorf("tool breakpoint count %d", marked)
-	}
-	system, _ := historyContent(wire["system"])
-	marked = 0
-	for _, b := range system {
-		if b["cache_control"] != nil {
-			marked++
-			if str(b, "text") != "CACHE_SYSTEM" || str(b["cache_control"].(map[string]any), "ttl") != "1h" {
-				t.Error("system breakpoint moved")
+			endpoint, _ := newThinkingOutputFixture(t, http.HandlerFunc(handler))
+			body := Object{"model": "claude-opus-5-5", "max_tokens": 128, "stream": stream,
+				"tools":    []any{Object{"name": "weather", "defer_loading": true, "input_schema": Object{"type": "object"}}},
+				"messages": []any{user("look up weather")}}
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
+			res, err := http.Post(endpoint+"/v1/messages", "application/json", bytes.NewReader(raw))
+			require.NoError(t, err)
+			defer res.Body.Close()
+			out, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, res.StatusCode, string(out))
+			assert.EqualValues(t, 3, calls.Load())
+			assert.Contains(t, string(out), "NATIVE_ROUNDS_DONE")
+			assert.NotContains(t, string(out), "toolu_native_discovery_")
+			assert.Contains(t, string(out), `"input_tokens":60`)
+			assert.Contains(t, string(out), `"output_tokens":24`)
+			if stream {
+				assert.Equal(t, 1, strings.Count(string(out), "event: message_stop"))
 			}
-		}
-	}
-	if marked != 1 {
-		t.Errorf("system breakpoint count %d", marked)
-	}
-	marked = 0
-	for _, v := range wire["messages"].([]any) {
-		m := v.(map[string]any)
-		blocks, _ := historyContent(m["content"])
-		_ = visitProtocolBlocks(blocks, func(b Object) error {
-			if b["cache_control"] != nil {
-				marked++
-				if str(b, "type") != "text" || str(b, "text") != "lookup weather" {
-					t.Error("message cache leaked onto internal round")
-				}
-			}
-			return nil
 		})
-	}
-	if marked != 1 {
-		t.Errorf("message breakpoint count %d", marked)
 	}
 }
 

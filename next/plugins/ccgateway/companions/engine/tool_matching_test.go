@@ -2,35 +2,8 @@ package engine
 
 import (
 	"encoding/json"
-	"errors"
-	"net/http/httptest"
-	"strings"
 	"testing"
 )
-
-func TestNativeFallbackOnlyBeforeFirstUpstreamRequest(t *testing.T) {
-	for _, alreadyForwarded := range []bool{false, true} {
-		relay := &outboundRelay{}
-		if alreadyForwarded {
-			r := httptest.NewRequest("POST", "http://localhost/v1/messages", strings.NewReader(`{"tools":[]}`))
-			if !relay.adaptRequest(httptest.NewRecorder(), r, &Request{}, nil, true, false) {
-				t.Fatal("baseline refused")
-			}
-		}
-		req := &Request{Tools: []Tool{verifiedNativeTools["Read"]}, Native: map[string]bool{"Read": true}}
-		r := httptest.NewRequest("POST", "http://localhost/v1/messages", strings.NewReader(`{"tools":[]}`))
-		if relay.adaptRequest(httptest.NewRecorder(), r, req, nil, true, false) {
-			t.Fatal("missing tool forwarded")
-		}
-		var unavailable *nativeToolAvailabilityError
-		if !errors.As(relay.Failure(), &unavailable) || unavailable.RetrySafe == alreadyForwarded {
-			t.Fatalf("unsafe retry after forwarded=%v: %v", alreadyForwarded, relay.Failure())
-		}
-		if strings.Contains(relay.Failure().Error(), "system messages") {
-			t.Fatal("tool error mislabelled as system")
-		}
-	}
-}
 
 func TestNativeToolsRequireExactVerifiedDefinition(t *testing.T) {
 	known, ok := verifiedNativeTools["Read"]

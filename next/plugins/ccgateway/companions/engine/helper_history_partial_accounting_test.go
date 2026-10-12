@@ -18,9 +18,18 @@ func TestHelperHistoryFailedNextWireKeepsConsumedUsage(t *testing.T) {
 	blocks, _ := historyContent(suffix[0].(Object)["content"])
 	recorder := httptest.NewRecorder()
 	writeInternalCacheFixture(recorder, "fixture", blocks)
-	o := &apiTerminalObserver{req: r, relay: &outboundRelay{}}
-	for _, frame := range strings.Split(recorder.Body.String(), "\n\n") {
-		o.observe([]byte(frame))
+	var accounting *helperAccounting
+	for _, line := range strings.Split(recorder.Body.String(), "\n") {
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		raw := []byte(strings.TrimPrefix(line, "data: "))
+		event, err := decodeObject(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.observeInternalCacheEvent(event)
+		r.helperHistory.observeProviderAccounting(&accounting, raw)
 	}
 	if err := r.confirmHiddenHelperMessage(Object{"id": r.internalCache.roundIDs[0], "content": blocks}); err != nil {
 		t.Fatal(err)

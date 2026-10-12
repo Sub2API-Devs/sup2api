@@ -4,7 +4,7 @@ import { test } from 'node:test';
 const source = readFileSync(new URL('../mod/hooks/register.js', import.meta.url), 'utf8');
 const { register, filterEnvironmentFields } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 async function setup(policy) {
- const hooks={};register((name,fn)=>{hooks[name]=fn});
+ const hooks={};register((name,fn)=>{hooks[name]=fn;return {catch(){}}});
  const $={env:{get:async key=>key==='CCGATEWAY_ATTACHMENT_SOURCE'?'client':'fixture'},http:{fetch:async(_url,options)=>({ok:true,text:options?.method?'{}':JSON.stringify({attachments:policy})})}};
  await hooks['session.start']($,{},async e=>e);
  return e=>hooks['prompt.attachment']($,e,async e=>e);

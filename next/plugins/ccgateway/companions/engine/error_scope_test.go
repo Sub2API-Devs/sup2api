@@ -40,9 +40,9 @@ func TestNativeFailurePreservesNormalizedAccountFacts(t *testing.T) {
 	}
 }
 
-// A relay refusal is scoped to the request, so the host keeps the account in
-// service; other failures and passed-through API errors are not, and an API
-// response cannot claim the scope.
+// A native request refusal is scoped to the request, so the host keeps the
+// account in service. Other failures and observed provider errors cannot claim
+// that scope through their error message.
 func TestRequestRefusalErrorScope(t *testing.T) {
 	run := func(e error) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
@@ -57,9 +57,8 @@ func TestRequestRefusalErrorScope(t *testing.T) {
 	if w := run(errors.New("Claude Code exited")); w.Header().Get(errorScopeHeader) != "" {
 		t.Fatal("other failure scoped to the request")
 	}
-	forged := &upstreamError{Status: 500, ContentType: "application/json", Body: []byte(`{"type":"error","error":{"type":"api_error","message":"x"}}`),
-		Headers: http.Header{errorScopeHeader: {"request"}}}
-	if w := run(forged); w.Code != 500 || w.Header().Get(errorScopeHeader) != "" {
+	provider := &nativeError{Status: 500, Category: "server_error", Message: "request", ObservedStatus: true}
+	if w := run(provider); w.Code != 500 || w.Header().Get(errorScopeHeader) != "" {
 		t.Fatalf("API error claimed the request scope: %d %q", w.Code, w.Header().Get(errorScopeHeader))
 	}
 }

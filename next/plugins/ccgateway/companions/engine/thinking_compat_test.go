@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestThinkingDisabledCompat(t *testing.T) {
@@ -17,7 +20,8 @@ func TestThinkingDisabledCompat(t *testing.T) {
 		{"omit drops disabled", "omit", "claude-opus-5-5", Object{"type": "disabled"}, true},
 		{"omit drops disabled fable", "omit", "claude-fable-5-1", Object{"type": "disabled"}, true},
 		{"unlisted model", "omit", "claude-sonnet-4-6", Object{"type": "disabled"}, false},
-		{"adaptive untouched", "omit", "claude-opus-5-5", Object{"type": "adaptive"}, false},
+		{"adaptive untouched", "omit", "claude-opus-5-5", Object{"type": "adaptive", "display": "omitted"}, false},
+		{"enabled untouched", "omit", "claude-opus-5-5", Object{"type": "enabled", "budget_tokens": 1024}, false},
 		{"absent untouched", "omit", "claude-opus-5-5", nil, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -25,40 +29,56 @@ func TestThinkingDisabledCompat(t *testing.T) {
 			p.ThinkingDisabledCompat = c.compat
 			body := basic()
 			body["model"] = c.model
+			body["max_tokens"] = 2048
 			if c.thinking != nil {
 				body["thinking"] = c.thinking
 			}
-			raw, _ := json.Marshal(body)
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
 			r, err := parsePolicyRequest(raw, policyHeaders(p))
-			if err != nil {
-				t.Fatal(err)
+			require.NoError(t, err)
+			require.NotNil(t, r.Plan)
+			assert.Equal(t, raw, r.Plan.RawRequest(), "compat must not mutate the client's original request")
+			cfg, err := r.passthroughBodies()
+			require.NoError(t, err)
+			for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+				if c.omitted || c.thinking == nil {
+					assert.NotContains(t, round, "thinking", "omit concerns EXTRA_BODY, not the CLI's accepted flags")
+				} else {
+					want, err := json.Marshal(c.thinking)
+					require.NoError(t, err)
+					assert.Equal(t, string(want), string(round["thinking"]))
+				}
 			}
-			_, planned := r.Plan.fields["thinking"]
-			args := strings.Join(cliArgs(r, &Prepared{}, "plugin"), " ")
 			decided := false
 			for _, d := range r.Plan.FeatureDecisions() {
 				decided = decided || str(d, "action") == "omit_unsupported_disabled"
 			}
+			assert.Equal(t, c.omitted, decided)
 			if c.omitted {
-				if r.Thinking != nil || planned || strings.Contains(args, "--thinking") || !decided {
-					t.Fatalf("not omitted: thinking=%v planned=%v args=%s decided=%v", r.Thinking, planned, args, decided)
-				}
-				return
+				assert.Nil(t, r.Thinking)
+				assert.Equal(t, c.model, r.Plan.thinkingCompat)
+			} else {
+				assert.Empty(t, r.Plan.thinkingCompat)
+				assert.Equal(t, str(c.thinking, "type"), str(r.Thinking, "type"))
 			}
-			if decided || str(r.Thinking, "type") != str(c.thinking, "type") || planned != (c.thinking != nil) {
-				t.Fatalf("changed: thinking=%v planned=%v decided=%v", r.Thinking, planned, decided)
-			}
-			if str(c.thinking, "type") == "disabled" && !strings.Contains(args, "--thinking disabled") {
-				t.Fatalf("disabled not forwarded: %s", args)
+			args := strings.Join(cliArgs(r, &Prepared{}, "plugin"), " ")
+			switch str(c.thinking, "type") {
+			case "enabled":
+				assert.Contains(t, args, "--max-thinking-tokens 1024")
+			case "adaptive":
+				assert.Contains(t, args, "--thinking adaptive")
+			default:
+				// Omitted and absent thinking still select the CLI's disabled
+				// mode; this is not evidence of an upstream thinking field.
+				assert.Contains(t, args, "--thinking disabled")
+				assert.NotContains(t, args, "--thinking adaptive")
 			}
 		})
 	}
 	p := defaultRequestPolicy()
 	p.ThinkingDisabledCompat = "adaptive"
-	if _, err := parsePolicyRequest([]byte(`{"model":"claude-opus-5-5","max_tokens":8,"messages":[{"role":"user","content":"x"}]}`), policyHeaders(p)); err == nil {
-		t.Fatal("invalid thinking_disabled_compat accepted")
-	}
-	if defaultRequestPolicy().ThinkingDisabledCompat != "pass" {
-		t.Fatal("default is not pass")
-	}
+	_, err := parsePolicyRequest([]byte(`{"model":"claude-opus-5-5","max_tokens":8,"messages":[{"role":"user","content":"x"}]}`), policyHeaders(p))
+	require.ErrorContains(t, err, "thinking_disabled_compat")
+	assert.Equal(t, "pass", defaultRequestPolicy().ThinkingDisabledCompat)
 }

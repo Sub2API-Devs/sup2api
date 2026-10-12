@@ -355,22 +355,6 @@ func (r *Request) validateAPIClientConfiguration() error {
 	return nil
 }
 
-func (r *Request) applyCompleteToolCatalog(body Object) error {
-	if r.InlineTools != nil {
-		return r.applyInlineToolCatalog(body)
-	}
-	if err := r.restoreHelperToolCatalog(body); err != nil {
-		return err
-	}
-	if err := r.applyServerSearchTools(body); err != nil {
-		return err
-	}
-	if err := r.applyAPIClientTools(body); err != nil {
-		return err
-	}
-	return r.restoreHelperToolCatalog(body)
-}
-
 func (r *Request) verifyAPIClientHistory(body Object) (err error) {
 	// CLI 2.1.292 strips toolset_name from assistant calls, while retaining it
 	// on user results. Restore that one field only on an exact ID/name/input

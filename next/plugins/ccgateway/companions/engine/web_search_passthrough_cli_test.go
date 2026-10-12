@@ -31,21 +31,14 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 		t.Skip("set CCG_REAL_CLI for the real CLI web search test")
 	}
 	version, err := checkVersion(cli)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	root := t.TempDir()
 	plugin, err := extractMod(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, dir := range []string{plugin, filepath.Join(plugin, "search")} {
-		cmd := exec.Command(cli, "plugin", "validate", dir)
-		cmd.Env = nativeProbeEnv(root, "http://127.0.0.1:1")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("Mod validation %s: %v: %s", dir, err, out)
-		}
-	}
+	require.NoError(t, err)
+	cmd := exec.CommandContext(t.Context(), cli, "plugin", "validate", plugin)
+	cmd.Env = nativeProbeEnv(root, "http://127.0.0.1:1")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Mod validation: %s", out)
 	var mu sync.Mutex
 	var wires []passthroughWire
 	searches := 0
@@ -54,10 +47,12 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 			fmt.Fprint(w, `{"input_tokens":20}`)
 			return
 		}
-		raw, _ := io.ReadAll(r.Body)
+		raw, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
 		body, err := decodeObject(raw)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			return
 		}
 		mu.Lock()
@@ -76,12 +71,12 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 			if m := strings.SplitN(string(history), webSearchFastPrompt, 2); len(m) == 2 {
 				query = strings.SplitN(m[1], `"`, 2)[0]
 			}
-			writeSurfaceFixture(w, str(body, "model"), []Object{
+			writeNativeWebSearchFixture(t, w, str(body, "model"), []Object{
 				{"type": "server_tool_use", "id": fmt.Sprintf("srvtoolu_side%d", n), "name": "web_search", "input": Object{"query": query}},
 				{"type": "web_search_tool_result", "tool_use_id": fmt.Sprintf("srvtoolu_side%d", n), "content": []any{
 					Object{"type": "web_search_result", "title": "Fixture <" + query + ">", "url": "https://example.com/" + query, "encrypted_content": "provider-opaque", "page_age": nil}}},
 				{"type": "text", "text": "Side commentary for " + query},
-			})
+			}, Object{"input_tokens": 20, "output_tokens": 8, "server_tool_use": Object{"web_search_requests": 1}})
 		case bytes.Contains(history, []byte("SEARCH_TWICE")) && bytes.Count(history, []byte(`"tool_result"`)) < 2:
 			id := fmt.Sprintf("toolu_main%d", bytes.Count(history, []byte(`"tool_result"`)))
 			writeSurfaceFixture(w, str(body, "model"), []Object{{"type": "text", "text": "Searching."}, {"type": "tool_use", "id": id, "name": "WebSearch", "input": Object{"query": "second"}}})
@@ -94,15 +89,14 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 	defer fake.Close()
 	env := nativeProbeEnv(root, fake.URL)
 	cache, err := newCache(filepath.Join(root, "cache"), 32<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}, Cache: cache, Timeout: 90 * time.Second, Slots: make(chan struct{}, 2)}
 	post := func(t *testing.T, body Object) *httptest.ResponseRecorder {
 		t.Helper()
-		raw, _ := json.Marshal(body)
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
-		req.Header.Set(policyHeader, `{"relay_mode":"passthrough"}`)
+		req.Header.Set(policyHeader, `{"relay_mode":"native"}`)
 		res := httptest.NewRecorder()
 		g.ServeHTTP(res, req)
 		return res
@@ -119,6 +113,7 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 	}
 	webSearch := Object{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}
 	toolResultText := func(t *testing.T, wire passthroughWire) string {
+		t.Helper()
 		messages := wire.body["messages"].([]any)
 		for _, message := range messages {
 			content, _ := message.(map[string]any)["content"].([]any)
@@ -136,7 +131,7 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 				}
 			}
 		}
-		t.Fatalf("no tool result upstream: %s", wire.raw)
+		require.FailNow(t, "no tool result upstream", "%s", wire.raw)
 		return ""
 	}
 
@@ -146,39 +141,31 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 		t.Run(fmt.Sprintf("search stream=%t", stream), func(t *testing.T) {
 			n := count()
 			res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 1024, "stream": stream, "tools": []any{webSearch}, "messages": []any{Object{"role": "user", "content": "SEARCH_ONCE"}}})
-			if res.Code != 200 {
-				t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
-			}
+			require.Equal(t, 200, res.Code, res.Body.String())
 			message := Object{}
 			if stream {
 				message = replaySSE(t, res.Body.String())
-			} else if err := json.Unmarshal(res.Body.Bytes(), &message); err != nil {
-				t.Fatal(err)
+			} else {
+				require.NoError(t, json.Unmarshal(res.Body.Bytes(), &message))
 			}
 			var kinds []string
 			for _, block := range message["content"].([]any) {
 				kinds = append(kinds, str(block.(map[string]any), "type"))
 			}
-			if strings.Join(kinds, ",") != "text,server_tool_use,web_search_tool_result,text" {
-				t.Fatalf("blocks %v: %s", kinds, res.Body.String())
-			}
+			require.Equal(t, "text,server_tool_use,web_search_tool_result,text", strings.Join(kinds, ","), res.Body.String())
 			result := message["content"].([]any)[2].(map[string]any)
 			entry := result["content"].([]any)[0].(map[string]any)
-			if str(entry, "title") != "Fixture <first>" || str(entry, "url") != "https://example.com/first" || !strings.HasPrefix(str(entry, "encrypted_content"), webSearchContentPrefix) {
-				t.Fatalf("result %v", result)
-			}
+			assert.Equal(t, "Fixture <first>", str(entry, "title"))
+			assert.Equal(t, "https://example.com/first", str(entry, "url"))
+			assert.True(t, strings.HasPrefix(str(entry, "encrypted_content"), webSearchContentPrefix))
 			usage := message["usage"].(map[string]any)
-			if server, _ := usage["server_tool_use"].(map[string]any); fmt.Sprint(server["web_search_requests"]) != "1" {
-				t.Fatalf("usage %v", usage)
-			}
+			server, _ := usage["server_tool_use"].(map[string]any)
+			assert.Equal(t, "1", fmt.Sprint(server["web_search_requests"]))
 			got := since(n)
-			if len(got) != 3 {
-				t.Fatalf("%d upstream requests, want main, search, main", len(got))
-			}
+			require.Len(t, got, 3, "want main, search, main")
 			readText = toolResultText(t, got[2])
-			if !strings.HasPrefix(readText, `Web search results for query: "first"`) || !strings.Contains(readText, "Side commentary for first") {
-				t.Fatalf("model read %q", readText)
-			}
+			assert.True(t, strings.HasPrefix(readText, `Web search results for query: "first"`))
+			assert.Contains(t, readText, "Side commentary for first")
 			answer = message
 		})
 	}
@@ -187,33 +174,26 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 		n := count()
 		history := []any{Object{"role": "user", "content": "SEARCH_ONCE"}, Object{"role": "assistant", "content": answer["content"]}, Object{"role": "user", "content": "AND_THEN"}}
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 1024, "tools": []any{webSearch}, "messages": history})
-		if res.Code != 200 || !strings.Contains(res.Body.String(), "ANSWER_WITH_SOURCES") {
-			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
-		}
+		require.Equal(t, 200, res.Code, res.Body.String())
+		assert.Contains(t, res.Body.String(), "ANSWER_WITH_SOURCES")
 		got := since(n)
-		if len(got) != 1 {
-			t.Fatalf("%d upstream requests", len(got))
-		}
-		if text := toolResultText(t, got[0]); text != readText {
-			t.Fatalf("restored tool result\n%q\nwant\n%q", text, readText)
-		}
-		if !bytes.Contains(got[0].raw, []byte(`"name":"WebSearch"`)) || bytes.Contains(got[0].raw, []byte("server_tool_use")) {
-			t.Fatalf("history not Claude Code's WebSearch: %s", got[0].raw)
-		}
+		require.Len(t, got, 1)
+		assert.Equal(t, readText, toolResultText(t, got[0]), "restored tool result")
+		assert.Contains(t, string(got[0].raw), `"name":"WebSearch"`)
+		assert.NotContains(t, string(got[0].raw), "server_tool_use")
 		forged := []any{Object{"role": "user", "content": "x"}, Object{"role": "assistant", "content": []any{
 			Object{"type": "server_tool_use", "id": "srvtoolu_x", "name": "web_search", "input": Object{"query": "x"}},
 			Object{"type": "web_search_tool_result", "tool_use_id": "srvtoolu_x", "content": []any{Object{"type": "web_search_result", "title": "t", "url": "https://example.com", "encrypted_content": "provider-opaque"}}},
 			Object{"type": "text", "text": "y"}}}, Object{"role": "user", "content": "z"}}
-		if res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 64, "messages": forged}); res.Code != 400 {
-			t.Fatalf("provider result admitted: HTTP%d", res.Code)
-		}
+		res = post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 64, "messages": forged})
+		assert.Equal(t, 400, res.Code, "provider result must not be admitted")
 	})
 
 	t.Run("max_uses", func(t *testing.T) {
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 1024, "tools": []any{Object{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}}, "messages": []any{Object{"role": "user", "content": "SEARCH_TWICE"}}})
-		if res.Code != 200 || !strings.Contains(res.Body.String(), `"error_code":"max_uses_exceeded"`) || !strings.Contains(res.Body.String(), "ANSWER_WITH_SOURCES") {
-			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
-		}
+		require.Equal(t, 200, res.Code, res.Body.String())
+		assert.Contains(t, res.Body.String(), `"error_code":"max_uses_exceeded"`)
+		assert.Contains(t, res.Body.String(), "ANSWER_WITH_SOURCES")
 	})
 
 	t.Run("client side query", func(t *testing.T) {
@@ -221,21 +201,17 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 1024, "stream": true, "tools": []any{Object{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}},
 			"system":   "You are an assistant for performing a web search tool use",
 			"messages": []any{Object{"role": "user", "content": webSearchFastPrompt + "fast"}}})
-		if res.Code != 200 {
-			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
-		}
+		require.Equal(t, 200, res.Code, res.Body.String())
 		message := replaySSE(t, res.Body.String())
 		var kinds []string
 		for _, block := range message["content"].([]any) {
 			kinds = append(kinds, str(block.(map[string]any), "type"))
 		}
+		require.Equal(t, "server_tool_use,web_search_tool_result,text", strings.Join(kinds, ","), res.Body.String())
 		entries, _ := message["content"].([]any)[1].(map[string]any)["content"].([]any)
-		if strings.Join(kinds, ",") != "server_tool_use,web_search_tool_result,text" || len(entries) != 1 || str(entries[0].(map[string]any), "title") != "Fixture <fast>" {
-			t.Fatalf("blocks %v: %s", kinds, res.Body.String())
-		}
-		if got := since(n); len(got) != 1 {
-			t.Fatalf("%d upstream requests, want the search only", len(got))
-		}
+		require.Len(t, entries, 1)
+		assert.Equal(t, "Fixture <fast>", str(entries[0].(map[string]any), "title"))
+		assert.Len(t, since(n), 1, "want the search only")
 	})
 }
 
@@ -530,7 +506,7 @@ func TestRealCLINativeWebSearchBillingModes(t *testing.T) {
 			h.Set("Anthropic-Beta", "fast-mode-2026-02-01")
 			req, err := parsePolicyRequest([]byte(`{"model":"claude-opus-4-6","max_tokens":256,"service_tier":"auto","inference_geo":"us","messages":[{"role":"user","content":"mode"}],"tools":[{"type":"web_search_20250305","name":"web_search"}]`+speedField+`}`), h)
 			require.NoError(t, err)
-			record, _, err := runner.runWebSearch(ctx, req, root, Object{"query": "mode"})
+			record, err := runner.runWebSearch(ctx, req, root, Object{"query": "mode"})
 			if mode.missingSpeed {
 				require.ErrorContains(t, err, "missing requested speed")
 				assert.Nil(t, record)
@@ -682,9 +658,8 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 	defer cancel()
 	var stderr bytes.Buffer
 	runner := &Runner{CLI: cli, Plugin: plugin, Work: root, Env: nativeProbeEnv(root, upstream.URL), Stderr: &stderr}
-	req := &Request{NativeTransport: true, Passthrough: true, Model: "claude-opus-5-5", Effort: "low", webSearch: &webSearchPlan{usage: Object{}, records: map[string]*webSearchRecord{}}}
-	record, upstreamErr, err := runner.runWebSearch(ctx, req, root, Object{"query": "native", "allowed_domains": []any{"example.com"}})
-	assert.Nil(t, upstreamErr)
+	req := &Request{Model: "claude-opus-5-5", Effort: "low", webSearch: &webSearchPlan{usage: Object{}, records: map[string]*webSearchRecord{}}}
+	record, err := runner.runWebSearch(ctx, req, root, Object{"query": "native", "allowed_domains": []any{"example.com"}})
 	require.NoError(t, err, "stderr=%s", stderr.String())
 	require.NotNil(t, record)
 	mu.Lock()
@@ -769,10 +744,8 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 		if bytes.Contains(tools, []byte("web_search_20250305")) {
 			assert.Equal(t, "dummy-native-probe", r.Header.Get("X-Api-Key"))
 			assert.Equal(t, "claude-sonnet-4-6", body["model"])
-			assert.Contains(t, []Object{{"type": "auto"}, {"type": "tool", "name": "web_search"}}, body["tool_choice"])
-			if str(body["tool_choice"].(Object), "type") == "auto" {
-				assert.False(t, hasRequestCacheControl(body))
-			}
+			assert.Equal(t, Object{"type": "auto"}, body["tool_choice"])
+			assert.False(t, hasRequestCacheControl(body), "native one-shot search must not request prompt caching")
 			query := ""
 			for _, message := range body["messages"].([]any) {
 				for _, value := range message.(Object)["content"].([]any) {
@@ -877,9 +850,20 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 			assert.EqualValues(t, 6, usage["cache_creation"].(Object)["ephemeral_1h_input_tokens"])
 			assert.EqualValues(t, tc.searchCount, usage["server_tool_use"].(Object)["web_search_requests"])
 			var errorsFound int
+			searchIDs, resultIDs := map[string]bool{}, map[string]bool{}
 			for _, rawBlock := range message["content"].([]any) {
 				block := rawBlock.(Object)
+				if str(block, "type") == "server_tool_use" {
+					id := str(block, "id")
+					require.NotEmpty(t, id)
+					assert.NotContains(t, searchIDs, id, "duplicate native search call")
+					searchIDs[id] = true
+				}
 				if str(block, "type") == "web_search_tool_result" {
+					id := str(block, "tool_use_id")
+					assert.Contains(t, searchIDs, id, "search result without its call")
+					assert.NotContains(t, resultIDs, id, "duplicate native search result")
+					resultIDs[id] = true
 					if failure, ok := block["content"].(Object); ok {
 						assert.Equal(t, "max_uses_exceeded", failure["error_code"])
 						errorsFound++
@@ -897,6 +881,7 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 					assert.Equal(t, []any{citation}, block["citations"])
 				}
 			}
+			assert.Equal(t, searchIDs, resultIDs, "each native search call must have exactly one result")
 			if tc.query == "multi" || tc.query == "error" || tc.query == "SEARCH_TWICE" {
 				assert.Equal(t, 1, errorsFound)
 			}
@@ -919,13 +904,14 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 				defer cancel()
 				input := Object{"query": tc.query}
-				legacy, upstream, err := g.Runner.runWebSearch(ctx, &Request{Model: "claude-sonnet-4-6", Passthrough: true}, root, input)
+				native, err := g.Runner.runWebSearch(ctx, &Request{Model: "claude-sonnet-4-6"}, root, input)
 				require.NoError(t, err)
-				require.Nil(t, upstream)
-				native, upstream, err := g.Runner.runWebSearch(ctx, &Request{Model: "claude-sonnet-4-6", NativeTransport: true}, root, input)
-				require.NoError(t, err)
-				require.Nil(t, upstream)
-				assert.Equal(t, legacy.Text, native.Text, "native WebSearch tool-result text compatibility")
+				assert.Equal(t, input, native.Input)
+				assert.Contains(t, native.Text, "Native commentary")
+				if tc.query != "error" {
+					assert.Contains(t, native.Text, "https://example.com/native")
+				}
+				assert.NotContains(t, native.Text, "provider-opaque")
 			}
 		})
 	}
@@ -1018,10 +1004,9 @@ func TestRealCLINativeWebSearchFailures(t *testing.T) {
 			defer upstream.Close()
 			var stderr bytes.Buffer
 			runner := &Runner{CLI: cli, Plugin: plugin, Work: root, InternalBaseURL: modServer.URL, Env: nativeProbeEnv(root, upstream.URL), Stderr: &stderr}
-			req := &Request{NativeTransport: true, Model: "claude-sonnet-4-6", webSearch: &webSearchPlan{usage: Object{}}}
-			record, rawErr, err := runner.runWebSearch(ctx, req, root, Object{"query": "native"})
+			req := &Request{Model: "claude-sonnet-4-6", webSearch: &webSearchPlan{usage: Object{}}}
+			record, err := runner.runWebSearch(ctx, req, root, Object{"query": "native"})
 			require.Error(t, err, "stderr=%s", stderr.String())
-			assert.Nil(t, rawErr)
 			assert.Nil(t, record)
 			assert.Empty(t, req.webSearch.usage)
 			mu.Lock()
@@ -1087,8 +1072,8 @@ func TestNativeWebSearchAdmission(t *testing.T) {
 				cancel()
 			}
 			runner := &Runner{CLI: "must-not-start", Env: []string{"ANTHROPIC_BASE_URL=" + tc.target, "CLAUDE_CODE_USE_BEDROCK=" + tc.provider}}
-			req := &Request{NativeTransport: true, Plan: &RequestPlan{fields: map[string]json.RawMessage{"inference_geo": json.RawMessage(`"us"`)}}}
-			record, _, err := runner.runWebSearch(ctx, req, t.TempDir(), Object{"query": "must not run"})
+			req := &Request{Plan: &RequestPlan{fields: map[string]json.RawMessage{"inference_geo": json.RawMessage(`"us"`)}}}
+			record, err := runner.runWebSearch(ctx, req, t.TempDir(), Object{"query": "must not run"})
 			require.ErrorContains(t, err, tc.want)
 			assert.Nil(t, record)
 		})
@@ -1184,9 +1169,7 @@ func replaySSE(t *testing.T, stream string) Object {
 			continue
 		}
 		var event Object
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, json.Unmarshal([]byte(data), &event))
 		switch str(event, "type") {
 		case "message_start":
 			message = event["message"].(map[string]any)
@@ -1209,26 +1192,32 @@ func replaySSE(t *testing.T, stream string) Object {
 				blocks[i]["citations"] = append(citations, delta["citation"])
 			}
 		case "message_delta":
-			message["usage"] = event["usage"]
+			require.NotNil(t, message)
+			usage, _ := message["usage"].(Object)
+			if usage == nil {
+				usage = Object{}
+			}
+			for key, value := range event["usage"].(Object) {
+				usage[key] = value
+			}
+			message["usage"] = usage
 			for key, value := range event["delta"].(map[string]any) {
 				message[key] = value
 			}
 		case "error":
-			t.Fatalf("stream error: %s", data)
+			require.FailNow(t, "stream error", "%s", data)
 		}
 	}
 	content := []any{}
 	for i, block := range blocks {
 		if raw, ok := inputs[i]; ok {
 			var input any
-			_ = json.Unmarshal([]byte(raw), &input)
+			require.NoError(t, json.Unmarshal([]byte(raw), &input))
 			block["input"] = input
 		}
 		content = append(content, block)
 	}
-	if message == nil {
-		t.Fatalf("no message: %s", stream)
-	}
+	require.NotNil(t, message, "no message: %s", stream)
 	message["content"] = content
 	return message
 }

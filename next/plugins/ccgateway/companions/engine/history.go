@@ -30,18 +30,19 @@ func uuid() string {
 // used for continuation or branching. Rows is no longer written: the branch
 // file holds the records.
 type Snapshot struct {
-	ResponseOnly   bool                 `json:"response_only,omitempty"`
-	Format         int                  `json:"format"`
-	NativePath     string               `json:"native_path"`
-	Work           string               `json:"work"`
-	Rows           []json.RawMessage    `json:"rows,omitempty"`
-	LastUUID       string               `json:"last_uuid"`
-	SessionID      string               `json:"session_id"`
-	Generation     int                  `json:"generation,omitempty"`
-	Hashes         []string             `json:"hashes"`
-	Expires        time.Time            `json:"expires"`
-	PromptEvidence *PromptEvidence      `json:"prompt_evidence,omitempty"`
-	Responses      []ResponseCheckpoint `json:"responses,omitempty"`
+	ResponseOnly      bool                 `json:"response_only,omitempty"`
+	Format            int                  `json:"format"`
+	NativePath        string               `json:"native_path"`
+	Work              string               `json:"work"`
+	Rows              []json.RawMessage    `json:"rows,omitempty"`
+	LastUUID          string               `json:"last_uuid"`
+	SessionID         string               `json:"session_id"`
+	Generation        int                  `json:"generation,omitempty"`
+	Hashes            []string             `json:"hashes"`
+	Expires           time.Time            `json:"expires"`
+	PromptEvidence    *PromptEvidence      `json:"prompt_evidence,omitempty"`
+	InlineSystemState string               `json:"inline_system_state,omitempty"`
+	Responses         []ResponseCheckpoint `json:"responses,omitempty"`
 }
 type HistoryCache struct {
 	mu      sync.Mutex
@@ -289,6 +290,146 @@ type Prepared struct {
 	cache                                   *HistoryCache
 }
 
+// resumeScopedTurn uses only this run's private native records. The Mod's
+// append UUID identifies the one coalesced context we own; both its structure
+// and its position after the submitted input are checked before changing it.
+// Completed model/tool work is retained, never reconstructed from client text.
+func (p *Prepared) resumeScopedTurn(env []string, attachment string, before, retained []string, answer Object, responseReq *Request) (Message, string, error) {
+	fail := func() (Message, string, error) {
+		return Message{}, "", fmt.Errorf("native scoped continuation evidence is incomplete")
+	}
+	source, ok := p.nativeSource(env)
+	if !ok {
+		return fail()
+	}
+	rows, err := readNativeFile(source)
+	if err != nil {
+		return Message{}, "", err
+	}
+	for _, raw := range p.Rows {
+		if id, _, _ := rowIdentity(raw); id == attachment {
+			return fail() // Never rewrite an imported or committed attachment.
+		}
+	}
+	anchor, leaf := "", ""
+	attachmentIndex := -1
+	for i, raw := range rows {
+		var row Object
+		if json.Unmarshal(raw, &row) != nil {
+			return fail()
+		}
+		if str(row, "uuid") == attachment {
+			if i < len(p.base) || attachmentIndex != -1 {
+				return fail()
+			}
+			attachmentIndex = i
+		}
+		message, _ := row["message"].(Object)
+		if str(row, "type") == "assistant" && str(message, "id") == str(answer, "id") {
+			anchor = str(row, "uuid")
+		}
+		if str(row, "type") == "user" {
+			leaf = str(row, "uuid")
+		}
+	}
+	if anchor == "" || leaf == "" || attachmentIndex == -1 {
+		return fail()
+	}
+	chain := nativeChain(rows, leaf)
+	blocks, ok := answer["content"].([]Object)
+	if !ok || !nativeResponseContentMatches(chain, str(answer, "id"), responseReq, blocks) {
+		return fail()
+	}
+	seenInput, seenScope, seenAssistant, seenAnswer := false, false, false, false
+	ids := map[string]bool{}
+	for _, b := range blocks {
+		if str(b, "type") == "tool_use" {
+			ids[str(b, "id")] = false
+		}
+	}
+	input := Message{Role: "user"}
+	for _, raw := range chain {
+		var row Object
+		_ = json.Unmarshal(raw, &row)
+		id, _, sid := rowIdentity(raw)
+		if sid != p.runSession() {
+			return fail()
+		}
+		if id == p.InputUUID {
+			seenInput = true
+		}
+		if id == attachment {
+			a, _ := row["attachment"].(Object)
+			var texts []string
+			encoded, _ := json.Marshal(a["content"])
+			if !seenInput || seenAssistant || str(row, "type") != "attachment" || str(a, "type") != "hook_additional_context" || str(a, "hookName") != "prompt.submit" || json.Unmarshal(encoded, &texts) != nil || digest(texts) != digest(before) {
+				return fail()
+			}
+			seenScope = true
+		}
+		message, _ := row["message"].(Object)
+		if str(row, "type") == "assistant" && str(message, "id") == str(answer, "id") {
+			if !seenScope {
+				return fail()
+			}
+			seenAssistant = true
+			seenAnswer = id == anchor
+			continue
+		}
+		if !seenAssistant || str(row, "type") != "user" {
+			continue
+		}
+		blocks, err := historyContent(message["content"])
+		if err != nil || len(blocks) == 0 {
+			return fail()
+		}
+		for _, block := range blocks {
+			toolID := str(block, "tool_use_id")
+			done, exists := ids[toolID]
+			if str(block, "type") != "tool_result" || !exists || done {
+				return fail()
+			}
+			ids[toolID] = true
+			if seenAnswer {
+				// Earlier interleaved results are already before the resume
+				// anchor. Only submit the actual suffix that trimming removes.
+				input.Content = append(input.Content, block)
+			}
+		}
+	}
+	if !seenAnswer || len(ids) == 0 || len(input.Content) == 0 {
+		return fail()
+	}
+	for _, done := range ids {
+		if !done {
+			return fail()
+		}
+	}
+	var row Object
+	_ = json.Unmarshal(rows[attachmentIndex], &row)
+	a := row["attachment"].(Object)
+	a["content"] = append([]string{}, retained...)
+	row["rendered"] = []Object{}
+	if len(retained) > 0 {
+		row["rendered"] = []Object{{"content": "<system-reminder>\n" + strings.Join(retained, "\n") + "\n</system-reminder>"}}
+	}
+	rows[attachmentIndex], err = json.Marshal(row)
+	if err != nil {
+		return Message{}, "", err
+	}
+	p.Path = filepath.Join(p.dir, p.runSession()+".jsonl")
+	p.Anchor = anchor
+	if err := writeNative(p.Path, rows); err != nil {
+		return Message{}, "", err
+	}
+	if filepath.Clean(source) != filepath.Clean(p.Path) {
+		// A non-indexed --session-id run wrote under the isolated CLI config.
+		// Its one-shot transcript now lives only in the request workspace.
+		_ = os.Remove(source)
+	}
+	return input, leaf, nil
+}
+
 func nativeBytes(rows []json.RawMessage) []byte {
 	var b bytes.Buffer
 	for _, row := range rows {
@@ -349,7 +490,7 @@ func prepareHistory(r *Request, c *HistoryCache, b sessionBranch, dir, version s
 		sid = uuid()
 	}
 	p := &Prepared{SessionID: sid, generation: generation, Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), branch: b, dir: dir, cache: c}
-	if r.Passthrough && b.Upstream != "" {
+	if b.Upstream != "" {
 		p.WireSession = b.Upstream
 	}
 	if e := os.MkdirAll(p.Work, 0700); e != nil {
@@ -431,7 +572,7 @@ func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []str
 			continue
 		}
 		s := c.get(cacheKey(logical, r.toolHistoryNamespace(), hashes[n]))
-		if s != nil && !s.ResponseOnly && s.Format == 2 && len(s.Hashes) == n+1 {
+		if s != nil && !s.ResponseOnly && s.Format == 2 && len(s.Hashes) == n+1 && s.InlineSystemState == r.inlineSystemState(n+1) {
 			return s
 		}
 	}
@@ -469,15 +610,16 @@ func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pend
 // registered node and the request is an ordinary one, so the CLI submits the
 // pending turn itself instead of loading it from seeded records.
 func (r *Request) directNativeResume(registered, pending int) bool {
-	return !r.CacheWarmup && !r.CountTokens && !r.needsFreshNativeSession() && registered == pending && pending < len(r.Messages)
+	return !r.CacheWarmup && registered == pending && pending < len(r.Messages)
 }
 
 // seedRows appends native records for client messages start..pending and
 // returns the last record's UUID.
 func (p *Prepared) seedRows(r *Request, start, pending int, parent, version string) string {
+	lastUser := r.lastUserMessage()
 	for i := start; i <= pending && i < len(r.Messages); i++ {
 		if r.Messages[i].Role == "system" {
-			if r.Messages[i].directiveOnly() {
+			if r.Messages[i].directiveOnly() || r.Messages[i].turnScoped() && i < lastUser {
 				continue
 			}
 			// One record per client system message, its text blocks as the
@@ -488,13 +630,10 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 			continue
 		}
 		message := r.cliWireMessage(r.Messages[i])
-		// Empty inline directives are restored at the relay. Native CLI adds a
-		// newline when it joins separate user rows, so serialize their exact
-		// block sequence in one row instead of letting that join alter text.
 		if message.Role == "user" {
 			for i+1 <= pending && i+1 < len(r.Messages) {
 				next := r.Messages[i+1]
-				if next.directiveOnly() {
+				if next.directiveOnly() || next.turnScoped() && i+1 < lastUser {
 					i++
 					continue
 				}
@@ -505,7 +644,7 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 				i++
 			}
 		}
-		if r.Passthrough && message.Role == "assistant" {
+		if message.Role == "assistant" {
 			// A search of client history is Claude Code's WebSearch call
 			// and result in the native transcript.
 			if turns, err := nativeWebSearchTurns(message); err == nil && len(turns) > 1 {
@@ -583,6 +722,7 @@ func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, d
 	}
 	// Native history lifetime is independent of provider prompt-cache TTL.
 	s := &Snapshot{Format: 2, LastUUID: p.NativeAnchor, SessionID: p.SessionID, Generation: p.generation, NativePath: path, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
+	s.InlineSystemState = r.inlineSystemState(len(r.Messages))
 	s.PromptEvidence = &PromptEvidence{SystemDigest: digest(r.System), Expires: time.Now().Add(r.TTL)}
 	response, err := json.Marshal(answer)
 	if err != nil {

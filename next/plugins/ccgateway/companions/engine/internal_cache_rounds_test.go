@@ -95,35 +95,6 @@ func TestInternalCacheHelpersAndIsolation(t *testing.T) {
 		t.Fatal("evidence escaped request")
 	}
 }
-func TestInternalCacheAutomaticAdditionalBreakpointIsNotMoved(t *testing.T) {
-	r := internalCacheReviewRequest()
-	blocks := []any{}
-	for _, text := range []string{"one", "two", "three", "four"} {
-		blocks = append(blocks, Object{"type": "text", "text": text, "cache_control": Object{"type": "ephemeral"}})
-	}
-	raw, _ := json.Marshal(Object{"cache_control": Object{"type": "ephemeral"}, "messages": []any{Object{"role": "user", "content": blocks}}})
-	body, _ := decodeObject(raw)
-	plan, err := compileCachePlan(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.Plan = &RequestPlan{cache: plan}
-	content, _ := historyContent(body["messages"].([]any)[0].(Object)["content"])
-	r.Messages = []Message{{Role: "user", Content: content}}
-	suffix := internalCacheSuffix()
-	as := suffix[0].(Object)
-	ab, _ := historyContent(as["content"])
-	observeCacheFixture(r, ab)
-	body["messages"] = append(body["messages"].([]any), suffix...)
-	before := digest(body)
-	if err = r.applyCachePlan(body); err == nil || !strings.Contains(err.Error(), "four") {
-		t.Fatalf("extra automatic breakpoint accepted %v", err)
-	}
-	if digest(body) != before {
-		t.Fatal("failed plan moved markers")
-	}
-}
-
 func TestInternalCacheGatesKeepProtocolControls(t *testing.T) {
 	for _, scenario := range []string{"cached-deferred", "forced", "credit", "budget", "legacy-format"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -159,6 +130,28 @@ func TestInternalCacheGatesKeepProtocolControls(t *testing.T) {
 				err = x.admitCredit(raw)
 				if err == nil || !strings.Contains(err.Error(), "internal tool rounds") {
 					t.Fatalf("credit gate changed: %v", err)
+				}
+				return
+			}
+			if scenario == "forced" || scenario == "budget" {
+				if err != nil {
+					t.Fatal("native generation control rejected", err)
+				}
+				cfg, err := req.passthroughBodies()
+				if err != nil {
+					t.Fatal(err)
+				}
+				field := "tool_choice"
+				if scenario == "budget" {
+					field = "output_config"
+				}
+				value := body[field]
+				if scenario == "forced" {
+					value = Object{"type": "tool", "name": req.wireName("weather")}
+				}
+				want, _ := json.Marshal(value)
+				if string(cfg.First[field]) != string(want) || req.helperHistory != nil {
+					t.Fatal("native control changed or acquired helper custody")
 				}
 				return
 			}

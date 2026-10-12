@@ -3,65 +3,27 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSafeguardsAdmissionAndMainAttribution(t *testing.T) {
+func TestSafeguardsAdmissionAndNativeRounds(t *testing.T) {
 	body := basic()
 	body["safeguards"] = []any{Object{"type": "dangerous_tool_use", "classifier_context": Object{"live_cwd": "D:/client"}}}
-	raw, _ := json.Marshal(body)
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
 	headers := policyHeaders(defaultRequestPolicy())
 	headers.Set("anthropic-beta", "dangerous-tool-use-2026-09-03")
 	r, err := parsePolicyRequest(raw, headers)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(r.Betas) != 1 || r.Betas[0] != "dangerous-tool-use-2026-09-03" {
-		t.Fatal("safeguards beta dropped")
-	}
-	s := newMainRequestScope()
-	if err := s.enter(); err != nil {
-		t.Fatal(err)
-	}
-	relay := &outboundRelay{scope: s, path: "/fixture"}
-	var forwarded []byte
-	handler := relay.handler(r, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		forwarded, _ = io.ReadAll(req.Body)
-		w.WriteHeader(200)
-	}))
-	for _, scenario := range []struct {
-		name, path     string
-		marked, client bool
-	}{{"main", "/messages", true, true}, {"auxiliary", "/messages", false, false}, {"count", "/messages/count_tokens", true, false}} {
-		t.Run(scenario.name, func(t *testing.T) {
-			message := scopedFixture(s)
-			message["safeguards"] = []any{Object{"type": "dangerous_tool_use", "classifier_context": Object{"live_cwd": "/container"}}}
-			if !scenario.marked {
-				message["system"] = []any{Object{"type": "text", "text": "classifier"}}
-			}
-			wire, _ := json.Marshal(message)
-			response := httptest.NewRecorder()
-			handler.ServeHTTP(response, httptest.NewRequest("POST", "http://local/fixture"+scenario.path, bytes.NewReader(wire)))
-			if response.Code != 200 {
-				t.Fatal(response.Code, response.Body.String())
-			}
-			if bytes.Contains(forwarded, []byte("D:/client")) != scenario.client {
-				t.Fatal("wrong request context replaced")
-			}
-			if bytes.Contains(forwarded, []byte(s.marker)) {
-				t.Fatal("marker leaked")
-			}
-			if !scenario.marked && !bytes.Equal(wire, forwarded) {
-				t.Fatal("auxiliary modified")
-			}
-		})
-	}
-	if err := s.verify(); err != nil {
-		t.Fatal(err)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"dangerous-tool-use-2026-09-03"}, r.Betas)
+	cfg, err := r.passthroughBodies()
+	require.NoError(t, err)
+	for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+		assert.JSONEq(t, `[{"type":"dangerous_tool_use","classifier_context":{"live_cwd":"D:/client"}}]`, string(round["safeguards"]))
 	}
 }
 
@@ -78,177 +40,67 @@ func TestSafeguardsEnvelope(t *testing.T) {
 }
 
 func TestSafeguardsClientExecutionContextPreserved(t *testing.T) {
-	// Different container roots would classify against the wrong executor.
-	// Preserve the client object, including unknown versioned fields and numbers.
-	o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use","classifier_context":{"live_cwd":"D:/client","v":9007199254740993,"future":null}}]}`))
-	p, err := parseRequestPlan(nil, o)
-	if err != nil {
-		t.Fatal(err)
+	const safeguards = `[{"type":"dangerous_tool_use","classifier_context":{"live_cwd":"D:/client","v":9007199254740993,"future":null}}]`
+	raw := []byte(`{"model":"claude-opus-5-5","max_tokens":64,"safeguards":` + safeguards + `,"tools":[{"name":"lookup","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"q"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_client_identity","name":"lookup","input":{"n":9007199254740993}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_client_identity","content":"result"}]}]}`)
+	r, err := parsePolicyRequest(raw, nil)
+	require.NoError(t, err)
+	before := digest(r.Messages)
+	cfg, err := r.passthroughBodies()
+	require.NoError(t, err)
+	for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+		assert.Equal(t, safeguards, string(round["safeguards"]))
 	}
-	schema := Object{"type": "object"}
-	r := &Request{Plan: p, Tools: []Tool{{Name: "Bash", Schema: schema}}, Native: map[string]bool{"Bash": true}}
-	m := Object{"safeguards": []any{Object{"classifier_context": Object{"live_cwd": "/container"}}}, "tools": []any{Object{"name": "Bash", "input_schema": schema}}}
-	m["messages"] = []any{Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_client_identity", "name": "Bash", "input": Object{}}, Object{"type": "text", "text": "context"}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_client_identity", "content": "result"}}}}
-	beforeHistory, _ := json.Marshal(m["messages"])
-	if err := r.ApplyMainRequestFeatures(m); err != nil {
-		t.Fatal(err)
-	}
-	afterHistory, _ := json.Marshal(m["messages"])
-	if !bytes.Equal(beforeHistory, afterHistory) {
-		t.Fatal("safeguards mapping changed tool-use IDs or client history")
-	}
-	raw, _ := json.Marshal(m["safeguards"])
-	if !strings.Contains(string(raw), `9007199254740993`) || !strings.Contains(string(raw), `D:/client`) || strings.Contains(string(raw), `/container`) {
-		t.Fatalf("context changed: %s", raw)
-	}
-	m["safeguards"].([]any)[0].(map[string]any)["type"] = "mutated"
-	if strings.Contains(string(p.fields["safeguards"]), "mutated") {
-		t.Fatal("plan storage leaked")
-	}
-	// No explicit client safeguards must not suppress inner CC protections.
-	r.Plan = nil
-	inner := Object{"safeguards": []any{Object{"type": "inner"}}}
-	if err := r.ApplyMainRequestFeatures(inner); err != nil {
-		t.Fatal(err)
-	}
-	if str(inner["safeguards"].([]any)[0].(map[string]any), "type") != "inner" {
-		t.Fatal("inner safeguards lost")
-	}
+	assert.Equal(t, before, digest(r.Messages))
+	assert.Equal(t, json.Number("9007199254740993"), r.Messages[1].Content[0]["input"].(Object)["n"])
+	cfg.First["safeguards"][0] = 'x'
+	again, err := r.passthroughBodies()
+	require.NoError(t, err)
+	assert.Equal(t, safeguards, string(again.First["safeguards"]))
+	plain, err := parsePolicyRequest(mustServerJSON(basic()), nil)
+	require.NoError(t, err)
+	defaults, err := plain.passthroughBodies()
+	require.NoError(t, err)
+	assert.NotContains(t, defaults.First, "safeguards")
+	assert.NotContains(t, defaults.Rest, "safeguards")
 }
 
-func TestSafeguardsRejectDifferentToolExecutionScope(t *testing.T) {
-	for _, mode := range []string{"mapped", "schema", "extra", "missing", "duplicate", "search-extra", "search-missing", "structured"} {
-		t.Run(mode, func(t *testing.T) {
-			o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
-			p, _ := parseRequestPlan(nil, o)
-			schema := Object{"type": "object"}
-			r := &Request{Plan: p, Tools: []Tool{{Name: "Bash", Schema: schema}}, Native: map[string]bool{"Bash": true}}
-			actual := []any{Object{"name": "Bash", "input_schema": schema}}
-			switch mode {
-			case "mapped":
-				r.Native = nil
-			case "schema":
-				actual[0].(Object)["input_schema"] = Object{"type": "string"}
-			case "extra":
-				actual = append(actual, Object{"name": "Extra", "input_schema": schema})
-			case "missing":
-				actual = nil
-			case "duplicate":
-				actual = append(actual, actual[0])
-			case "search-extra":
-				r.ToolSearch = "true"
-				actual = append(actual, Object{"name": "Extra", "input_schema": schema})
-			case "search-missing":
-				// Only deferred client tools may wait for ToolSearch.
-				r.ToolSearch = "true"
-				actual = []any{Object{"name": "ToolSearch", "input_schema": schema}}
-			case "structured":
-				r.JSONSchema = Object{"type": "object"}
-			}
-			m := Object{"tools": actual, "safeguards": "unchanged"}
-			if err := r.ApplyMainRequestFeatures(m); err == nil {
-				t.Fatal("accepted incompatible execution scope")
-			}
-			if m["safeguards"] != "unchanged" {
-				t.Fatal("rejection mutated inner protections")
-			}
-		})
-	}
-}
-
-// Internal ToolSearch rounds keep the client's context (CC 2.1.292 sends it
-// with DeferredToolPlaceholder): the search helpers may join the outbound
-// tools and deferred client tools may be absent until they are loaded.
 func TestSafeguardsWithInternalToolSearch(t *testing.T) {
-	o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
-	p, _ := parseRequestPlan(nil, o)
-	schema := Object{"type": "object"}
-	yes := true
-	r := &Request{Plan: p, ToolSearch: "true", Native: map[string]bool{"Bash": true}, Tools: []Tool{
-		{Name: "Bash", Schema: schema},
-		{Name: "DeferredToolPlaceholder", Schema: schema, DeferLoading: &yes},
-		{Name: "mcp__fixture__lookup", Schema: schema, DeferLoading: &yes},
-	}}
-	for _, actual := range [][]any{
-		{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}, Object{"name": "DeferredToolPlaceholder", "input_schema": schema}},
-		{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}, Object{"name": "mcp__fixture__lookup", "input_schema": schema}},
-	} {
-		m := Object{"tools": actual}
-		if err := r.ApplyMainRequestFeatures(m); err != nil {
-			t.Fatal(err)
-		}
-		if m["safeguards"] == nil {
-			t.Fatal("client safeguards not applied")
-		}
-	}
-	r.ToolSearch = "false"
-	if err := r.ApplyMainRequestFeatures(Object{"tools": []any{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}}}); err == nil {
-		t.Fatal("search helper accepted without internal search")
-	}
-}
-
-func TestSafeguardsHistoricalToolIdentityAfterNativeMatching(t *testing.T) {
-	for _, scenario := range []string{"same-native", "schema-changed", "removed-native", "same-mcp"} {
-		t.Run(scenario, func(t *testing.T) {
+	for _, search := range []string{"true", "false"} {
+		t.Run(search, func(t *testing.T) {
 			body := basic()
-			body["safeguards"] = []any{Object{"type": "dangerous_tool_use", "classifier_context": Object{"fixture": true}}}
-			read := verifiedNativeToolCatalogues["2.1.292"]["Read"][0]
-			name := "Read"
-			if scenario == "same-mcp" {
-				read.Name = "mcp__client__Read"
-				name = read.Name
-			}
-			if scenario == "schema-changed" {
-				read.Schema = Object{"type": "object", "properties": Object{"changed": Object{"type": "string"}}}
-			}
-			body["tools"] = []any{read}
-			if scenario == "removed-native" {
-				body["tools"] = []any{}
-			}
-			body["messages"] = []any{Object{"role": "user", "content": "read"}, Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_history_identity", "name": name, "input": Object{"file_path": "D:/fixture"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_history_identity", "content": "fixture result"}}}}
-			raw, _ := json.Marshal(body)
-			r, err := parsePolicyRequest(raw, http.Header{})
-			if err != nil {
-				t.Fatalf("parse must wait for native matching: %v", err)
-			}
-			matchNativeTools(r, "2.1.292")
-			actual := []any{}
-			for _, tool := range r.Tools {
-				actual = append(actual, Object{"name": r.wireName(tool.Name), "input_schema": tool.Schema})
-			}
-			wire := Object{"tools": actual, "safeguards": []any{Object{"type": "inner"}}}
-			err = r.ApplyMainRequestFeatures(wire)
-			wantReject := scenario == "schema-changed" // Removed completed history now preserves its original wire name.
-			if (err != nil) != wantReject {
-				t.Fatalf("reject=%t err=%v", wantReject, err)
-			}
-			if wantReject && !strings.Contains(err.Error(), "historical tool names") {
-				t.Fatalf("wrong rejection reason: %v", err)
-			}
+			body["safeguards"] = []any{Object{"type": "dangerous_tool_use"}}
+			body["tools"] = []any{Object{"name": "lookup", "input_schema": Object{"type": "object"}, "defer_loading": true}}
+			policy := defaultRequestPolicy()
+			policy.ToolSearch = search
+			r, err := parsePolicyRequest(mustServerJSON(body), policyHeaders(policy))
+			require.NoError(t, err)
+			cfg, err := r.passthroughBodies()
+			require.NoError(t, err)
+			assert.Equal(t, `[{"type":"dangerous_tool_use"}]`, string(cfg.First["safeguards"]))
+			assert.Equal(t, string(cfg.First["safeguards"]), string(cfg.Rest["safeguards"]))
+			assert.Equal(t, search == "true", r.toolSearchEnabled())
 		})
 	}
 }
 
-// SubagentHandback, which every CC 2.1.292 subagent request carries with
-// safeguards, may travel under the gateway's MCP name; only with the
-// verified schema, and no other renamed tool is admitted with it.
 func TestSafeguardsSubagentHandback(t *testing.T) {
-	var verified Object
-	_ = json.Unmarshal([]byte(subagentHandbackSchema), &verified)
-	for _, c := range []struct {
-		name   string
-		schema Object
-		ok     bool
-	}{{"SubagentHandback", verified, true}, {"SubagentHandback", Object{"type": "object"}, false}, {"OtherTool", verified, false}} {
-		o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
-		p, _ := parseRequestPlan(nil, o)
-		schema := Object{"type": "object"}
-		r := &Request{Plan: p, Native: map[string]bool{"Bash": true}, Tools: []Tool{{Name: "Bash", Schema: schema}, {Name: c.name, Schema: c.schema}}}
-		m := Object{"tools": []any{Object{"name": "Bash", "input_schema": schema}, Object{"name": "mcp__ccgateway__" + c.name, "input_schema": c.schema}}}
-		if err := r.ApplyMainRequestFeatures(m); (err == nil) != c.ok {
-			t.Fatalf("%s: %v", c.name, err)
-		}
-	}
+	var schema Object
+	require.NoError(t, json.Unmarshal([]byte(subagentHandbackSchema), &schema))
+	body := basic()
+	body["safeguards"] = []any{Object{"type": "dangerous_tool_use"}}
+	body["tools"] = []any{Object{"name": "SubagentHandback", "input_schema": schema}}
+	r, err := parsePolicyRequest(mustServerJSON(body), nil)
+	require.NoError(t, err)
+	matchNativeTools(r, "2.1.292")
+	assert.Equal(t, "mcp__ccgateway__SubagentHandback", r.wireName("SubagentHandback"))
+	assert.Equal(t, digest(schema), digest(r.Tools[0].Schema))
+	reply := controlReply(Object{"request_id": "control_handoff", "request": Object{"subtype": "can_use_tool", "tool_name": r.wireName("SubagentHandback"), "tool_use_id": "toolu_handoff", "input": Object{"message": "report"}}}, r)
+	payload := reply["response"].(Object)["response"].(Object)
+	assert.Equal(t, "deny", payload["behavior"])
+	assert.Equal(t, "toolu_handoff", payload["toolUseID"])
+	cfg, err := r.passthroughBodies()
+	require.NoError(t, err)
+	assert.Equal(t, `[{"type":"dangerous_tool_use"}]`, string(cfg.First["safeguards"]))
 }
 
 // Bash and PowerShell match the catalogue with their timeout numbers as

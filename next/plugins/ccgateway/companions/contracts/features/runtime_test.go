@@ -46,7 +46,7 @@ func TestRuntimeCapabilitiesProjection(t *testing.T) {
 	if got.ExecutionModes != nil {
 		t.Fatal("legacy Worker document claimed execution modes")
 	}
-	for _, modes := range [][]string{{"legacy", "passthrough", "native"}, {"native"}} {
+	for _, modes := range [][]string{{"native"}, {}, nil} {
 		object["execution_modes"] = modes
 		body, err := json.Marshal(object)
 		if err != nil {
@@ -57,7 +57,7 @@ func TestRuntimeCapabilitiesProjection(t *testing.T) {
 			t.Fatalf("execution modes lost or promoted to verification: %+v, %v", decoded, err)
 		}
 	}
-	for _, modes := range []any{[]string{"unknown"}, []string{"native", "native"}, []string{"Native"}, []string{""}, "native", []int{1}} {
+	for _, modes := range []any{[]string{"legacy"}, []string{"passthrough"}, []string{"legacy", "passthrough", "native"}, []string{"unknown"}, []string{"native", "native"}, []string{"Native"}, []string{""}, "native", []int{1}} {
 		object["execution_modes"] = modes
 		body, err := json.Marshal(object)
 		if err != nil {

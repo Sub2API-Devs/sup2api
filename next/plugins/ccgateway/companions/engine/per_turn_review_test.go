@@ -3,48 +3,51 @@ package engine
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReviewPerTurnControlIndependentAdmission(t *testing.T) {
 	for _, mode := range []string{"both", "misspelled", "clear-only", "perturn-with-clear", "both-clear"} {
-		body := basic()
-		directive := Object{"role": "system", "content": "fixture", "output_config": Object{"effort": "medium"}}
-		h := http.Header{}
-		switch mode {
-		case "both":
-			h.Add("Anthropic-Beta", ccPerTurnBeta)
-			h.Add("Anthropic-Beta", publicPerTurnBeta)
-		case "misspelled":
-			h.Set("Anthropic-Beta", "per-turn-control-2026-07-02")
-		case "clear-only":
-			h.Set("Anthropic-Beta", "mid-conversation-system-clear-at-2026-08-21")
-		case "perturn-with-clear":
-			h.Set("Anthropic-Beta", ccPerTurnBeta)
-			directive["clear_at"] = "next_user_message"
-		case "both-clear":
-			h.Set("Anthropic-Beta", ccPerTurnBeta+",mid-conversation-system-clear-at-2026-08-21")
-			directive["clear_at"] = "next_user_message"
-		}
-		body["messages"] = []any{Object{"role": "user", "content": "start"}, directive}
-		raw, _ := json.Marshal(body)
-		r, err := parsePolicyRequest(raw, h)
-		good := mode == "both"
-		if (err == nil) != good {
-			t.Fatal(mode, err)
-		}
-		if good {
-			seen := map[string]bool{}
-			for _, name := range r.Betas {
-				seen[name] = true
+		t.Run(mode, func(t *testing.T) {
+			body := basic()
+			directive := Object{"role": "system", "content": "fixture", "output_config": Object{"effort": "medium"}}
+			h := http.Header{}
+			var betas []string
+			switch mode {
+			case "both":
+				betas = []string{ccPerTurnBeta, publicPerTurnBeta}
+			case "misspelled":
+				betas = []string{"per-turn-control-2026-07-02"}
+			case "clear-only":
+				betas = []string{"mid-conversation-system-clear-at-2026-08-21"}
+			case "perturn-with-clear":
+				betas = []string{ccPerTurnBeta}
+				directive["clear_at"] = "next_user_message"
+			case "both-clear":
+				betas = []string{ccPerTurnBeta, "mid-conversation-system-clear-at-2026-08-21"}
+				directive["clear_at"] = "next_user_message"
 			}
-			if !seen[ccPerTurnBeta] {
-				t.Fatal("CC beta lost")
+			for _, beta := range betas {
+				h.Add("Anthropic-Beta", beta)
 			}
-			if mode == "both" && !seen[publicPerTurnBeta] {
-				t.Fatal("public beta lost")
+			body["messages"] = []any{Object{"role": "user", "content": "start"}, directive}
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
+			r, err := parsePolicyRequest(raw, h)
+			if mode == "perturn-with-clear" || mode == "both-clear" {
+				require.ErrorContains(t, err, "next_user_message cannot carry output_config")
+				return
 			}
-		}
+			require.NoError(t, err, "beta names are the client's, not a gateway allowlist")
+			assert.Equal(t, betas, r.Betas)
+			assert.Equal(t, strings.Join(betas, ","), cliEnv(r, true)["ANTHROPIC_BETAS"])
+			require.Len(t, r.Messages, 2)
+			assert.Equal(t, `{"effort":"medium"}`, string(r.Messages[1].OutputConfig))
+		})
 	}
 }
 
@@ -52,22 +55,21 @@ func TestReviewPerTurnLegacyPolicyDoesNotMaskNewRule(t *testing.T) {
 	p := defaultRequestPolicy()
 	p.UnknownBeta = "reject"
 	p.Betas = []BetaRule{{Name: publicPerTurnBeta, Mapping: "forward"}}
-	h := policyHeaders(p)
-	h.Set("Anthropic-Beta", ccPerTurnBeta)
 	body := basic()
 	body["messages"] = []any{Object{"role": "user", "content": "fixture"}, Object{"role": "system", "content": []any{}, "output_config": Object{"effort": "medium"}}}
-	raw, _ := json.Marshal(body)
-	if _, err := parsePolicyRequest(raw, h); err != nil {
-		t.Fatal("legacy policy hid the new code rule", err)
-	}
-	h.Set("Anthropic-Beta", "not-a-known-beta")
-	if _, err := parsePolicyRequest(raw, h); err == nil {
-		t.Fatal("unknown reject policy bypassed")
-	}
-	p.AllowEffort = false
-	h = policyHeaders(p)
-	h.Set("Anthropic-Beta", ccPerTurnBeta)
-	if _, err := parsePolicyRequest(raw, h); err == nil {
-		t.Fatal("effort disabled policy bypassed")
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	for _, allowEffort := range []bool{true, false} {
+		p.AllowEffort = allowEffort
+		for _, beta := range []string{ccPerTurnBeta, "not-a-known-beta", ""} {
+			h := policyHeaders(p)
+			h.Set("Anthropic-Beta", beta)
+			r, err := parsePolicyRequest(raw, h)
+			require.NoError(t, err)
+			require.Len(t, r.Messages, 2)
+			assert.True(t, r.Messages[1].directiveOnly(), "legacy policies must not delete directive-only turns")
+			assert.Equal(t, `{"effort":"medium"}`, string(r.Messages[1].OutputConfig))
+			assert.Equal(t, beta, cliEnv(r, true)["ANTHROPIC_BETAS"])
+		}
 	}
 }

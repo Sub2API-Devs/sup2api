@@ -1,14 +1,19 @@
 package engine
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToolMetadataNamespaceAndValues(t *testing.T) {
 	body := serverSearchTestBody()
 	body["tools"] = body["tools"].([]any)[1:]
 	tool := body["tools"].([]any)[0].(map[string]any)
+	tool["input_schema"] = Object{"type": "object", "properties": Object{"n": Object{"const": json.Number("9007199254740993")}}}
 	delete(tool, "defer_loading")
 	baseline, err := parsePolicyRequest(mustServerJSON(body), http.Header{})
 	if err != nil {
@@ -24,14 +29,16 @@ func TestToolMetadataNamespaceAndValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !req.HasMainRequestFeatures() || req.toolHistoryNamespace() == old || req.configKey() == baseline.configKey() {
+	if req.toolHistoryNamespace() == old || req.configKey() == baseline.configKey() {
 		t.Fatal("tool metadata not part of plan/history identity")
 	}
-	wire := Object{"tools": []any{Object{"name": "mcp__ccgateway__weather", "input_schema": Object{"type": "object"}}}}
-	if err := req.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	got := wire["tools"].([]any)[0].(map[string]any)
+	require.Len(t, req.Tools, 1)
+	got := req.Tools[0].Metadata
+	listed := sdkMCPReply(Object{"server_name": req.toolServer(), "message": Object{"id": "list", "method": "tools/list"}}, req)
+	tools := listed["result"].(Object)["tools"].([]Object)
+	require.Len(t, tools, 1)
+	assert.Equal(t, digest(req.Tools[0].Schema), digest(tools[0]["inputSchema"]))
+	assert.Contains(t, string(mustServerJSON(tools)), `"const":9007199254740993`)
 	for _, key := range []string{"strict", "eager_input_streaming", "input_examples", "allowed_callers", "type"} {
 		value, exists := got[key]
 		if !exists || digest(value) != digest(tool[key]) {
@@ -75,17 +82,11 @@ func TestServerSearchOnlyForcedAndDuplicateID(t *testing.T) {
 		body := serverSearchTestBody()
 		body["tools"] = body["tools"].([]any)[:1]
 		body["tool_choice"] = choice
-		req, err := parsePolicyRequest(mustServerJSON(body), http.Header{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		wire := Object{}
-		if err := req.ApplyMainRequestFeatures(wire); err != nil {
-			t.Fatal(err)
-		}
-		if digest(wire["tool_choice"]) != digest(choice) {
-			t.Fatal("server-only choice changed")
-		}
+		_, err := parsePolicyRequest(mustServerJSON(body), nil)
+		require.ErrorContains(t, err, `server tool "tool_search_tool_regex_20251119"`)
+		delete(body, "tool_choice")
+		req, err := parseRequest(mustServerJSON(body))
+		require.NoError(t, err)
 		acc := &Accumulator{}
 		if err := acc.start(Object{"message": Object{"id": "msg", "role": "assistant"}}); err != nil {
 			t.Fatal(err)

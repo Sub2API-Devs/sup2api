@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestSingleTurnTextResponse verifies a simple text response without tools.
@@ -158,30 +161,25 @@ func TestSingleTurnStructuredOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// APIOutputFormat means provider handles format validation
-	if req.structuredOutput() {
-		t.Error("expected structuredOutput=false for API format")
-	}
-
-	// With APIOutputFormat, should be single-turn (provider handles it)
-	if req.maxTurns() != "1" {
-		t.Errorf("expected maxTurns=1 for API format output, got %s", req.maxTurns())
-	}
-
-	// JSONSchema should be set
-	if req.JSONSchema == nil {
-		t.Error("expected JSONSchema to be set")
-	}
-
-	// APIOutputFormat should be true
-	if !req.APIOutputFormat {
-		t.Error("expected APIOutputFormat=true")
+	// Native sends the API format raw, without a gateway schema/validation turn.
+	assert.Nil(t, req.JSONSchema)
+	assert.False(t, req.APIOutputFormat)
+	assert.False(t, req.structuredOutput())
+	assert.Equal(t, "1", req.maxTurns())
+	assert.NotContains(t, req.enabledTools(), "StructuredOutput")
+	assert.NotContains(t, cliArgs(req, &Prepared{}, "plugin"), "--json-schema")
+	assert.Equal(t, "1", cliEnv(req, false)["CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS"])
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(body), &fields))
+	cfg, err := req.passthroughBodies()
+	require.NoError(t, err)
+	for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+		assert.Equal(t, string(compactRaw(fields["output_config"])), string(round["output_config"]))
 	}
 }
 
 // TestSingleTurnStructuredWithTools verifies API format structured output + tools.
 func TestSingleTurnStructuredWithTools(t *testing.T) {
-	deferTrue := true
 	body := `{
 		"model": "claude-sonnet-4-20250514",
 		"max_tokens": 1024,
@@ -199,16 +197,20 @@ func TestSingleTurnStructuredWithTools(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req.Tools[0].DeferLoading = &deferTrue
-
-	// APIOutputFormat is set
-	if !req.APIOutputFormat {
-		t.Error("expected APIOutputFormat=true")
-	}
-
-	// structuredOutput() returns false for API format
-	if req.structuredOutput() {
-		t.Error("expected structuredOutput=false for API format")
+	require.Len(t, req.Tools, 1)
+	require.NotNil(t, req.Tools[0].DeferLoading)
+	assert.True(t, *req.Tools[0].DeferLoading)
+	assert.Nil(t, req.JSONSchema)
+	assert.False(t, req.APIOutputFormat)
+	assert.False(t, req.structuredOutput())
+	assert.NotContains(t, req.enabledTools(), "StructuredOutput")
+	assert.NotContains(t, cliArgs(req, &Prepared{}, "plugin"), "--json-schema")
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(body), &fields))
+	cfg, err := req.passthroughBodies()
+	require.NoError(t, err)
+	for _, round := range []map[string]json.RawMessage{cfg.First, cfg.Rest} {
+		assert.Equal(t, string(compactRaw(fields["output_config"])), string(round["output_config"]))
 	}
 
 	if !req.toolSearchEnabled() {

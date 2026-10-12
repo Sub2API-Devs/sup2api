@@ -20,12 +20,6 @@ function config(policy: Partial<RequestPolicy> | undefined) {
     request_policy: policy, images: null, network: { pool: '10.0.0.0/8', allocation: 'random' }
   }
 }
-// A policy saved before pass_upstream_errors and thinking_disabled_compat existed, as an older core returns it.
-function legacyPolicy(): Partial<RequestPolicy> {
-  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, relay_mode: _relay, relay_passthrough_accounts: _accounts, relay_native_accounts: _nativeAccounts, ...rest } = defaultRequestPolicy()
-  return rest
-}
-
 describe('CCGateway settings categories and CC features', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -51,21 +45,20 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
-  it('shows CC tools and error handling, attachments and unsupported requests', async () => {
+  it('shows native CC tools and unsupported-field handling without legacy attachment or beta controls', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     expect(w.get('[data-testid="request-policy"]').isVisible()).toBe(false)
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
-    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'cc-attachments', 'unsupported-requests'])
-    for (const id of ['tool-search', 'custom-tool-prefix', 'pass-upstream-errors', 'attachment-source', 'attachment-overrides', 'unknown-beta', 'unknown-field']) {
+    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'unsupported-requests'])
+    for (const id of ['tool-search', 'custom-tool-prefix', 'unknown-field-reject']) {
       expect(cc.get(`[data-testid="${id}"]`).isVisible()).toBe(true)
     }
     expect(cc.text()).toContain('工具与错误处理')
     expect(cc.text()).toContain('不支持的请求如何处理')
-    // The attachment settings are back in CC features (user request 2026-10-10).
-    expect(cc.text()).toContain('附件默认来源')
+    expect(cc.text()).not.toContain('附件默认来源')
     // No switches for features the official API supports.
     for (const id of ['allow-fast', 'allow-effort']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
@@ -81,22 +74,18 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
-  it('saves the attachment sources with the other settings', async () => {
-    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_source: 'gateway', environment_fields: { workingDirectory: 'client' } }))
+  it.each(LOCALES)('does not render legacy attachment or unknown-beta controls or their hints in %s', async locale => {
+    i18n.global.locale.value = locale
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    expect(w.get<HTMLInputElement>('[data-testid="attachment-source"][value="gateway"]').element.checked).toBe(true)
-    expect(w.get<HTMLSelectElement>('[data-testid="environment-workingDirectory"]').element.value).toBe('client')
-    await w.get('[data-testid="attachment-source"][value="client"]').setValue(true)
-    await w.get('[data-testid="attachment-date"]').setValue('gateway')
-    const next = { ...defaultRequestPolicy(), attachment_source: 'client' as const, attachment_sources: { date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const } }
-    mocks.put.mockResolvedValue(config(next))
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    const body = mocks.put.mock.calls.at(-1)?.[1]
-    expect(body.request_policy.attachment_source).toBe('client')
-    expect(body.request_policy.attachment_sources).toEqual({ date: 'gateway' })
-    expect(body.request_policy.environment_fields).toEqual({ workingDirectory: 'client' })
+    const cc = w.get('[data-testid="request-policy"]')
+    for (const id of ['cc-attachments', 'attachment-source', 'attachment-overrides', 'attachment-model', 'attachment-date', 'attachment-total_tokens_reminder', 'attachment-session_context', 'environment-workingDirectory', 'environment-platform', 'unknown-attachment-client', 'unknown-attachment-gateway', 'unknown-beta']) {
+      expect(cc.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    }
+    const copy = locale === 'zh' ? zh : en
+    expect(cc.text()).not.toContain(copy.features.ccHint)
+    expect(cc.text()).not.toContain(copy.policy.ignoreHint)
     w.unmount()
   })
 
@@ -104,13 +93,11 @@ describe('CCGateway settings categories and CC features', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    expect(w.get<HTMLInputElement>('[data-testid="unknown-beta"][value="ignore"]').element.checked).toBe(true)
-    expect(w.get<HTMLInputElement>('[data-testid="unknown-field"][value="reject"]').element.checked).toBe(true)
-    await w.get('[data-testid="unknown-beta"][value="reject"]').setValue(true)
-    await w.get('[data-testid="unknown-field"][value="ignore"]').setValue(true)
+    expect(w.get<HTMLInputElement>('[data-testid="unknown-field-reject"] input').element.checked).toBe(true)
+    await w.get('[data-testid="unknown-field-ignore"] input').setValue(true)
     await w.get('[data-testid="settings-tab-network"]').trigger('click')
     await w.get('[data-testid="network-allocation"]').setValue('sequential')
-    const next = { ...defaultRequestPolicy(), unknown_beta: 'reject' as const, unknown_field: 'ignore' as const }
+    const next = { ...defaultRequestPolicy(), unknown_field: 'ignore' as const }
     mocks.put.mockResolvedValue({ ...config(next), network: { pool: '10.0.0.0/8', allocation: 'sequential' } })
     await w.get('form').trigger('submit')
     await flushPromises()
@@ -121,23 +108,40 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
-  it('keeps saved attachment settings it no longer edits', async () => {
-    const saved = { ...defaultRequestPolicy(), attachment_source: 'gateway' as const, attachment_sources: { date: 'client' as const }, environment_fields: { platform: 'client' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
-    mocks.get.mockResolvedValue(config(saved))
+  it('drops saved attachment settings and unknown-beta choices on repeated saves even when the core returns them', async () => {
+    const obsolete = {
+      attachment_source: 'gateway' as const,
+      attachment_sources: { environment: 'gateway' as const, date: 'both' as const },
+      environment_fields: { platform: 'client' as const },
+      unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'pass' as const,
+      unknown_beta: 'reject' as const
+    }
+    const active = { ...defaultRequestPolicy(), schema_version: 1, tool_search: 'auto:0', thinking_disabled_compat: 'omit' as const, unknown_field: 'ignore' as const }
+    mocks.get.mockResolvedValue(config({ ...active, ...obsolete }))
+    mocks.put.mockImplementation(async (_url: string, body: { request_policy: RequestPolicy }) => config({ ...body.request_policy, ...obsolete }))
     const w = await render()
+    // Ignored historical data must not make an unchanged native form dirty.
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    await w.get('[data-testid="custom-tool-prefix"]').setValue('mytools')
-    mocks.put.mockResolvedValue(config({ ...saved, custom_tool_prefix: 'mytools' }))
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    expect(mocks.put.mock.lastCall?.[1].request_policy).toEqual({ ...saved, custom_tool_prefix: 'mytools' })
+    expect(w.get<HTMLSelectElement>('[data-testid="tool-search"]').element.value).toBe('auto:0')
+    for (const tool_search of ['false', 'true']) {
+      await w.get('[data-testid="tool-search"]').setValue(tool_search)
+      expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
+      await w.get('form').trigger('submit')
+      await flushPromises()
+      const payload = mocks.put.mock.lastCall?.[1].request_policy
+      expect(payload).toEqual({ ...active, tool_search })
+      for (const key of Object.keys(obsolete)) expect(payload).not.toHaveProperty(key)
+      expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+      expect(w.get<HTMLSelectElement>('[data-testid="tool-search"]').element.value).toBe(tool_search)
+      expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
+    }
+    expect(mocks.put).toHaveBeenCalledTimes(2)
     w.unmount()
   })
 
   it('saves and reloads the custom tool prefix with a legacy default', async () => {
-    const { custom_tool_prefix: _omit, ...legacy } = defaultRequestPolicy()
-    mocks.get.mockResolvedValue(config(legacy))
+    mocks.get.mockResolvedValue(config({}))
     const w = await render()
     expect(w.get<HTMLInputElement>('[data-testid="custom-tool-prefix"]').element.value).toBe('ccgateway')
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), custom_tool_prefix: 'mytools' }))
@@ -183,7 +187,7 @@ describe('CCGateway settings categories and CC features', () => {
   })
 })
 
-describe('CCGateway pass upstream errors switch', () => {
+describe('CCGateway native request policy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     i18n.global.locale.value = 'zh'
@@ -194,57 +198,14 @@ describe('CCGateway pass upstream errors switch', () => {
     return wrapper
   }
 
-  it('defaults to off and has zh/en copy', () => {
-    expect(defaultRequestPolicy().pass_upstream_errors).toBe(false)
-    expect(zh.policy.passUpstreamErrors).toBe('上游错误直接返回给客户端')
-    expect(zh.policy.passUpstreamErrorsHint).toContain('401、429、529')
-    expect(en.policy.passUpstreamErrors).toBeTruthy()
-    expect(en.policy.passUpstreamErrorsHint).toContain('401, 429, 529')
-  })
-
-  it('shows a legacy policy as off and saves the enabled switch', async () => {
-    mocks.get.mockResolvedValue(config(legacyPolicy()))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), pass_upstream_errors: true }))
-    const w = await render()
-    const box = w.get<HTMLInputElement>('[data-testid="pass-upstream-errors"]')
-    expect(box.element.checked).toBe(false)
-    expect(w.text()).toContain('上游错误直接返回给客户端')
-    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
-
-    await box.setValue(true)
-    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
-    await w.get('form').trigger('submit')
-    await flushPromises()
-
-    expect(mocks.put).toHaveBeenCalledTimes(1)
-    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
-    expect(payload.request_policy.pass_upstream_errors).toBe(true)
-    expect(w.get<HTMLInputElement>('[data-testid="pass-upstream-errors"]').element.checked).toBe(true)
-    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
-  })
-
-  it('reads an enabled switch and saves it turned off', async () => {
-    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), pass_upstream_errors: true }))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), pass_upstream_errors: false }))
-    const w = await render()
-    const box = w.get<HTMLInputElement>('[data-testid="pass-upstream-errors"]')
-    expect(box.element.checked).toBe(true)
-
-    await box.setValue(false)
-    await w.get('form').trigger('submit')
-    await flushPromises()
-
-    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
-    expect(payload.request_policy.pass_upstream_errors).toBe(false)
-    expect(w.get<HTMLInputElement>('[data-testid="pass-upstream-errors"]').element.checked).toBe(false)
-  })
-
   it('thinking disabled compatibility defaults to off, has zh/en copy and saves omit', async () => {
     expect(defaultRequestPolicy().thinking_disabled_compat).toBe('pass')
     expect(zh.policy.thinkingDisabledCompatHint).toContain('默认关闭：与官方 API 一致返回 400')
     expect(zh.policy.thinkingDisabledCompatHint).toContain('仅在模型被改写、客户端仍发送 disabled 时使用')
     expect(en.policy.thinkingDisabledCompatHint).toContain('return 400')
-    mocks.get.mockResolvedValue(config(legacyPolicy()))
+    expect(zh.policy.thinkingDisabledCompatHint).toContain('原生 CLI 执行')
+    expect(en.policy.thinkingDisabledCompatHint).toContain('native CLI execution')
+    mocks.get.mockResolvedValue(config({}))
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'omit' }))
     const w = await render()
     const box = w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]')
@@ -255,77 +216,50 @@ describe('CCGateway pass upstream errors switch', () => {
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.thinking_disabled_compat).toBe('omit')
     expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
-  })
-
-  it('relay mode defaults to legacy and saves passthrough accounts', async () => {
-    expect(defaultRequestPolicy().relay_mode).toBe('legacy')
-    expect(zh.policy.relayModeHint).toContain('无法获得原始 HTTP')
-    expect(en.policy.relayModeHint).toContain('raw HTTP headers and bodies are unavailable')
-    mocks.get.mockResolvedValue(config(legacyPolicy()))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_passthrough_accounts: [23, 24] }))
-    const w = await render()
-    expect(w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element.value).toBe('legacy')
-    await w.get('[data-testid="relay-passthrough-accounts"]').setValue('23, 24 x 23 0')
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
-    expect(payload.request_policy.relay_mode).toBe('legacy')
-    expect(payload.request_policy.relay_passthrough_accounts).toEqual([23, 24])
-  })
-
-  it.each(LOCALES)('saves native rollout accounts without switching the global default in %s', async locale => {
-    i18n.global.locale.value = locale
-    mocks.get.mockResolvedValue(config(legacyPolicy()))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_native_accounts: [24] }))
-    const w = await render()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    const copy = locale === 'zh' ? zh : en
-    expect(w.text()).toContain(copy.policy.relayMode_native)
-    expect(w.text()).toContain(copy.policy.relayNativeAccountsHint)
-    await w.get('[data-testid="relay-native-accounts"]').setValue('24')
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_native_accounts).toEqual([24])
-    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_mode).toBe('legacy')
-    expect(w.get<HTMLInputElement>('[data-testid="relay-native-accounts"]').element.value).toBe('24')
     w.unmount()
   })
 
-  it('rejects conflicting and invalid native rollout lists before saving', async () => {
-    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_passthrough_accounts: [23] }))
+  it.each(LOCALES)('removes relay controls and their unused copy in %s', async locale => {
+    i18n.global.locale.value = locale
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    for (const value of ['23', '24, 24', '0', '-1', 'invalid']) {
-      await w.get('[data-testid="relay-native-accounts"]').setValue(value)
-      await w.get('form').trigger('submit')
-      await flushPromises()
-      expect(mocks.put).not.toHaveBeenCalled()
+    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    for (const id of ['relay-mode', 'relay-native-accounts', 'relay-passthrough-accounts', 'pass-upstream-errors']) {
+      expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    }
+    const copy = locale === 'zh' ? zh : en
+    for (const key of ['relayMode', 'relayMode_legacy', 'relayMode_passthrough', 'relayMode_native', 'relayModeHint', 'relayNativeAccounts', 'relayNativeAccountsHint', 'relayPassthroughAccounts', 'relayPassthroughAccountsHint', 'passUpstreamErrors', 'passUpstreamErrorsHint']) {
+      expect(copy.policy).not.toHaveProperty(key)
     }
     w.unmount()
   })
 
-  it('saves explicit global native and hides inactive rollout fields', async () => {
-    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'native' }))
+  it.each(['legacy', 'passthrough', 'native', undefined])('saves native only after loading historical mode %s and rollout lists', async relay_mode => {
+    const historical = {
+      relay_mode, pass_upstream_errors: true,
+      relay_native_accounts: [24], relay_passthrough_accounts: [23]
+    }
+    mocks.get.mockResolvedValue(config(historical as Partial<RequestPolicy>))
+    // An older core returning the same obsolete fields must not re-enable them either.
+    mocks.put.mockImplementation(async (_url: string, body: { request_policy: RequestPolicy }) => config({
+      ...historical, ...body.request_policy, relay_mode
+    } as Partial<RequestPolicy>))
     const w = await render()
-    await w.get('[data-testid="relay-mode"]').setValue('native')
-    expect(w.find('[data-testid="relay-native-accounts"]').exists()).toBe(false)
-    expect(w.find('[data-testid="relay-passthrough-accounts"]').exists()).toBe(false)
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_mode).toBe('native')
+    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    for (const prefix of ['mytools', 'updatedtools']) {
+      await w.get('[data-testid="custom-tool-prefix"]').setValue(prefix)
+      await w.get('form').trigger('submit')
+      await flushPromises()
+      const payload = mocks.put.mock.lastCall?.[1].request_policy
+      expect(payload).toEqual({ ...defaultRequestPolicy(), custom_tool_prefix: prefix })
+      expect(payload.relay_mode).toBe('native')
+      expect(payload).not.toHaveProperty('relay_native_accounts')
+      expect(payload).not.toHaveProperty('relay_passthrough_accounts')
+      expect(payload).not.toHaveProperty('pass_upstream_errors')
+      expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    }
+    expect(mocks.put).toHaveBeenCalledTimes(2)
     w.unmount()
-  })
-
-  it('saves full passthrough and hides the account list', async () => {
-    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'passthrough' }))
-    const w = await render()
-    await w.get('[data-testid="relay-mode"]').setValue('passthrough')
-    expect(w.find('[data-testid="relay-passthrough-accounts"]').exists()).toBe(false)
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
-    expect(payload.request_policy.relay_mode).toBe('passthrough')
   })
 
   it('saves the compatibility switch turned back off as pass', async () => {
@@ -339,5 +273,6 @@ describe('CCGateway pass upstream errors switch', () => {
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.thinking_disabled_compat).toBe('pass')
+    w.unmount()
   })
 })

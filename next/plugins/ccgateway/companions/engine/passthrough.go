@@ -9,13 +9,10 @@ import (
 	"time"
 )
 
-// Relay passthrough (relay_mode "passthrough", PASSTHROUGH-DESIGN.md): every
-// upstream request is the one the inner Claude Code CLI built, and the
-// outbound relay forwards it unchanged. The client's fields reach the CLI as
-// options (model, --thinking, --effort, ANTHROPIC_BETAS, fastMode, system,
-// tools, the native session file) or, per model request, through
-// CLAUDE_CODE_EXTRA_BODY, which the Mod sets before each round. Features the
-// CLI cannot express are refused at admission.
+// Native request expression: the client's fields reach Claude Code as options
+// (model, --thinking, --effort, ANTHROPIC_BETAS, fastMode, system, tools, the
+// native session file) or through CLAUDE_CODE_EXTRA_BODY, which the Mod sets
+// before each round. Features the CLI cannot express are refused at admission.
 
 // Top-level fields refused in passthrough, with the reason the client reads.
 var passthroughRefusedFields = []struct{ name, reason string }{
@@ -34,9 +31,8 @@ func passthroughRefusal(feature, reason string) error {
 	return fmt.Errorf("%s is not supported by this gateway: %s", feature, reason)
 }
 
-// parsePassthroughRequest admits a request for relay passthrough. It builds
-// the same Request the legacy path does (history, tools, session), but leaves
-// every judgement on the generation fields to the upstream API.
+// parsePassthroughRequest admits native history, tools and session inputs,
+// leaving generation-field semantics to the upstream API.
 func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access *resourceAdmission) (*Request, error) {
 	o, err := decodeObject(body)
 	if err != nil {
@@ -72,7 +68,7 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	if err = p.filterFields(o); err != nil {
 		return nil, err
 	}
-	if speed, present := o["speed"]; p.RelayMode == "native" && present {
+	if speed, present := o["speed"]; present {
 		plan.fields["speed"], _ = json.Marshal(speed)
 	}
 	fast, err := p.speed(o)
@@ -85,12 +81,7 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 		return nil, err
 	}
 	req.Plan = plan
-	req.Passthrough = true
-	req.NativeTransport = p.RelayMode == "native"
-	if req.NativeTransport {
-		policy := p
-		req.nativePolicy = &policy
-	}
+	req.nativePolicy = &p
 	// The one generation field the gateway may drop: disabled thinking for a
 	// model that rejects it, when the policy says omit (a client whose model
 	// alias a proxy rewrote sends it on its title and classifier requests).
@@ -105,6 +96,9 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	}
 	req.Fast = fast
 	req.Effort = effort
+	if inline := req.inlineEffort(); inline != "" {
+		req.Effort = inline
+	}
 	// The client's attachments go upstream as sent, and none of Claude Code's
 	// own are added: the next request's history would not hold them, so the
 	// prompt cache would break at every turn (attachment policies are legacy's).
@@ -177,15 +171,6 @@ func (r *Request) refusePassthroughUnsupported() error {
 	if r.CacheWarmup && !r.Stream {
 		return passthroughRefusal("max_tokens: 0", "Claude Code always streams, and the API takes max_tokens 0 only without streaming")
 	}
-	if r.hasFallbacks() {
-		var entries []Object
-		_ = json.Unmarshal(r.Plan.fallbacks, &entries)
-		for _, entry := range entries {
-			if _, exists := entry["speed"]; exists && !r.NativeTransport {
-				return passthroughRefusal("fallbacks[].speed", "fast mode is fixed for the whole run")
-			}
-		}
-	}
 	for _, message := range r.Messages {
 		if message.Role == "assistant" {
 			if _, err := nativeWebSearchTurns(message); err != nil {
@@ -226,7 +211,7 @@ func (r *Request) refusePassthroughUnsupported() error {
 // (withImageSeed), and the final text, which is the CLI's input. A turn
 // ending otherwise (only images, a tool result) is the CLI's input whole.
 func (r *Request) passthroughImageSplit() (seed, input Message, ok bool) {
-	if !r.Passthrough || r.continuation != "" {
+	if r.continuation != "" {
 		return Message{}, Message{}, false
 	}
 	pending := Message{Role: "user"}
@@ -285,10 +270,22 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 			cfg.Rest[name] = cfg.First[name]
 		}
 	}
-	if r.NativeTransport {
-		if raw, exists := fields["speed"]; exists && string(compactRaw(raw)) != "null" {
-			cfg.First["speed"], cfg.Rest["speed"] = compactRaw(raw), compactRaw(raw)
+	if effort := r.inlineEffort(); effort != "" {
+		config := map[string]json.RawMessage{}
+		if raw := fields["output_config"]; len(raw) > 0 {
+			if err := json.Unmarshal(raw, &config); err != nil {
+				return nil, fmt.Errorf("cannot read output_config")
+			}
 		}
+		config["effort"], _ = json.Marshal(effort)
+		raw, err := marshalPlain(config)
+		if err != nil {
+			return nil, err
+		}
+		cfg.First["output_config"], cfg.Rest["output_config"] = raw, raw
+	}
+	if raw, exists := fields["speed"]; exists && string(compactRaw(raw)) != "null" {
+		cfg.First["speed"], cfg.Rest["speed"] = compactRaw(raw), compactRaw(raw)
 	}
 	if raw, exists := fields["tool_choice"]; exists {
 		choice, err := decodeObject(raw)
@@ -311,7 +308,7 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 			_ = json.Unmarshal(entry["model"], &model)
 			attempt := passthroughAttempt{Model: model, Body: map[string]json.RawMessage{}}
 			for name, raw := range entry {
-				if name != "model" && (r.NativeTransport || string(raw) != "null") {
+				if name != "model" {
 					attempt.Body[name] = compactRaw(raw)
 				}
 			}

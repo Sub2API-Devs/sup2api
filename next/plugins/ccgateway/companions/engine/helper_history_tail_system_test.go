@@ -33,15 +33,10 @@ func TestHelperHistoryCapturesAttributedTrailingReminder(t *testing.T) {
 				r.internalCache.failed = true
 			}
 			text := "<total_tokens>14998238 tokens left</total_tokens>"
-			control := &modControl{helperRequest: r, scope: newMainRequestScope()}
-			if err := control.scope.enter(); err != nil {
-				t.Fatal(err)
-			}
+			// Exercise positional validation with previously authenticated evidence;
+			// native Mod control no longer accepts helper reminder acknowledgements.
 			if mode != "no-ack" && mode != "incomplete" {
-				raw, _ := json.Marshal(Object{"text": text})
-				if !control.acknowledgeHelperReminder(raw) {
-					t.Fatal("attributed attachment rejected")
-				}
+				x.reminders = map[int]string{1: text}
 			}
 			if mode == "wrong-round" {
 				x.reminders[0] = text
@@ -77,32 +72,6 @@ func TestHelperHistoryCapturesAttributedTrailingReminder(t *testing.T) {
 				t.Fatal("tail bytes/fields changed")
 			}
 		})
-	}
-}
-
-func TestHelperReminderAckRequiresActiveStrictControl(t *testing.T) {
-	r := internalCacheReviewRequest()
-	r.helperHistory = &helperHistoryExecution{}
-	for _, mode := range []string{"no-scope", "inactive", "unknown-detail", "wrong-type"} {
-		c := &modControl{helperRequest: r}
-		if mode != "no-scope" {
-			c.scope = newMainRequestScope()
-		}
-		if mode != "no-scope" && mode != "inactive" {
-			if err := c.scope.enter(); err != nil {
-				t.Fatal(err)
-			}
-		}
-		raw := json.RawMessage(`{"text":"fixture"}`)
-		if mode == "unknown-detail" {
-			raw = json.RawMessage(`{"text":"fixture","round":1}`)
-		}
-		if mode == "wrong-type" {
-			raw = json.RawMessage(`{"text":1}`)
-		}
-		if c.acknowledgeHelperReminder(raw) {
-			t.Fatalf("accepted %s", mode)
-		}
 	}
 }
 

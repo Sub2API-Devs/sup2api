@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func serverSearchTestBody() Object {
@@ -14,23 +17,18 @@ func serverSearchTestBody() Object {
 func TestServerSearchPlanAndReferenceIsolation(t *testing.T) {
 	body := serverSearchTestBody()
 	raw, _ := json.Marshal(body)
+	req, err := parseRequest(raw)
+	require.NoError(t, err)
+	require.Len(t, req.Tools, 1)
+	require.Len(t, req.ServerTools, 1)
+	assert.False(t, req.toolSearchEnabled())
+	assert.Equal(t, "exact description", req.Tools[0].Description)
+	require.NotNil(t, req.Tools[0].DeferLoading)
+	assert.True(t, *req.Tools[0].DeferLoading)
 	headers := http.Header{}
 	headers.Set("X-CCGateway-Request-Policy", `{"tool_search":"true"}`)
-	req, err := parsePolicyRequest(raw, headers)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !req.HasMainRequestFeatures() || req.toolSearchEnabled() || len(req.Tools) != 1 || len(req.ServerTools) != 1 {
-		t.Fatal("API search not isolated from CLI search")
-	}
-	wire := Object{"tools": []any{Object{"name": "mcp__ccgateway__weather", "description": "CLI augmented", "input_schema": Object{"type": "object"}}}}
-	if err := req.ApplyMainRequestFeatures(wire); err != nil {
-		t.Fatal(err)
-	}
-	tool := wire["tools"].([]any)[0].(map[string]any)
-	if tool["defer_loading"] != true || tool["description"] != "exact description" || digest(tool["input_schema"]) != digest(req.Tools[0].Schema) {
-		t.Fatal("client search catalog not restored")
-	}
+	_, err = parsePolicyRequest(raw, headers)
+	require.ErrorContains(t, err, `server tool "tool_search_tool_regex_20251119"`)
 	result := Object{"type": "tool_search_tool_result", "tool_use_id": "srv1", "content": Object{"type": "tool_search_tool_search_result", "tool_references": []any{Object{"type": "tool_reference", "tool_name": "weather"}}}}
 	before := digest(result)
 	mapped, err := mapSearchReferences(result, req.wireName)
@@ -87,22 +85,7 @@ func TestServerSearchToolChoiceAndMCPNames(t *testing.T) {
 		body["tools"].([]any)[1].(map[string]any)["name"] = "mcp__client__weather"
 		body["tools"].([]any)[1].(map[string]any)["defer_loading"] = false
 		body["tool_choice"] = choice
-		req, err := parsePolicyRequest(mustServerJSON(body), http.Header{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		wire := Object{"tools": []any{Object{"name": "mcp__client__weather", "input_schema": Object{"type": "object"}}}}
-		if req.NoTools {
-			wire["tools"] = []any{}
-		}
-		if err := req.ApplyMainRequestFeatures(wire); err != nil {
-			t.Fatal(err)
-		}
-		if digest(wire["tool_choice"]) != digest(choice) {
-			t.Fatalf("tool choice changed: %v", wire["tool_choice"])
-		}
-		if wire["tools"].([]any)[0].(map[string]any)["defer_loading"] != false {
-			t.Fatal("explicit defer false lost")
-		}
+		_, err := parsePolicyRequest(mustServerJSON(body), nil)
+		require.ErrorContains(t, err, `server tool "tool_search_tool_regex_20251119"`)
 	}
 }

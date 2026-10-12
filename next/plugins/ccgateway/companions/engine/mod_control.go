@@ -18,12 +18,7 @@ import (
 var modControls sync.Map
 
 type modControl struct {
-	helperRequest    *Request
-	relay            *outboundRelay                       // set by the Runner; answers the Mod's fallback question
-	webSearch        func(id string, input Object) Object // passthrough web search, set by the Runner
-	searchOnly       bool                                 // the one-shot web search process's control
-	searchResult     Object
-	scope            *mainRequestScope
+	webSearch        func(id string, input Object) Object // native web search, set by the Runner
 	sessionContexts  map[string]bool
 	reminderMarker   string
 	nativeReminders  map[string]int
@@ -34,6 +29,10 @@ type modControl struct {
 	systems          int
 	mu               sync.Mutex
 	ready, attached  bool
+	scopeEnabled     bool
+	scopeAttachment  string
+	scopePaused      bool
+	scopeSearches    int
 	readySignal      chan struct{}
 	server           *http.Server
 }
@@ -53,19 +52,36 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	if cfg.helperRequest != nil && cfg.helperRequest.webSearch != nil {
 		webSearch = true
 	}
-	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil, "additional_directories": additionalDirs, "passthrough": cfg.passthrough})
+	var bodies map[string]string
+	if cfg.passthrough != nil {
+		bodies = make(map[string]string, 2)
+		for name, fields := range map[string]map[string]json.RawMessage{"first": cfg.passthrough.First, "rest": cfg.passthrough.Rest} {
+			raw, err := json.Marshal(fields)
+			if err != nil {
+				return nil, err
+			}
+			bodies[name] = string(raw)
+		}
+	}
+	scoped := false
+	if cfg.helperRequest != nil && !cfg.scopeResumed {
+		_, scoped = cfg.helperRequest.pendingPersistentSystems()
+	}
+	systems := cfg.systems
+	if cfg.scopeResumed {
+		systems = nil // The resumed transcript already contains the retained entry.
+	}
+	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": systems, "scope_boundary": scoped, "scope_resumed": cfg.scopeResumed, "search_calls": cfg.searchCalls, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "continuation_attachment_ack": cfg.reminderMarker != "", "additional_directories": additionalDirs, "passthrough": bodies})
 	if err != nil {
 		return nil, err
 	}
 	if len(data) > 4<<20 {
 		return nil, fmt.Errorf("Mod configuration exceeds the CLI HTTP limit")
 	}
-	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(cfg.systems), readySignal: make(chan struct{})}
+	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(systems), scopeEnabled: scoped, readySignal: make(chan struct{})}
 	c.reminderMarker = cfg.reminderMarker
 	c.nativeReminders = cfg.nativeReminders
 	c.diagnostic = cfg.diagnostic
-	c.scope = cfg.scope
-	c.helperRequest = cfg.helperRequest
 	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "additional_directories": additionalDirs})
 	if internalBase != "" {
 		modControls.Store(c.path, c)
@@ -132,33 +148,31 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch {
-	case ack.Event == "main_request_begin" && c.ready && c.scope != nil:
-		if err := c.scope.enter(); err != nil {
-			w.WriteHeader(409)
-			return
-		}
-	case ack.Event == "main_request_end" && c.ready && c.scope != nil:
-		if err := c.scope.leave(); err != nil {
-			w.WriteHeader(409)
-			return
-		}
-	case ack.Event == "fallback" && c.ready && c.relay != nil:
-		if !c.relay.allowFallback() {
-			w.WriteHeader(409)
-			return
-		}
-	case ack.Event == "ready" && ack.Version == "ccgateway-v2":
+	case ack.Event == "ready" && ack.Version == "ccgateway-v3":
 		if !c.ready && c.readySignal != nil {
 			close(c.readySignal)
 		}
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:
 		c.attached = true
-	case ack.Event == "helper_reminder" && c.ready && c.scope != nil:
-		if !c.acknowledgeHelperReminder(ack.Detail) {
+	case ack.Event == "scope_attachment" && c.ready && c.attached && c.scopeEnabled && c.scopeAttachment == "":
+		var detail struct {
+			UUID string `json:"uuid"`
+		}
+		if json.Unmarshal(ack.Detail, &detail) != nil || !nativeSessionName.MatchString(detail.UUID) {
 			w.WriteHeader(400)
 			return
 		}
+		c.scopeAttachment = detail.UUID
+	case ack.Event == "scope_pause" && c.ready && c.attached && c.scopeEnabled && c.scopeAttachment != "" && !c.scopePaused:
+		var detail struct {
+			Searches int `json:"searches"`
+		}
+		if json.Unmarshal(ack.Detail, &detail) != nil || detail.Searches < 0 || detail.Searches > 3 {
+			w.WriteHeader(400)
+			return
+		}
+		c.scopePaused, c.scopeSearches = true, detail.Searches
 	case ack.Event == "continuation_reminder" && c.ready && c.reminderMarker != "":
 		if !c.acknowledgeContinuationReminder(ack.Detail) {
 			w.WriteHeader(400)
@@ -194,11 +208,11 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
-// serveWebSearch answers the passthrough web search events, outside the
+// serveWebSearch answers the native web search events, outside the
 // lock: a search runs for seconds while other hooks keep reporting.
 func (c *modControl) serveWebSearch(w http.ResponseWriter, event string, detail json.RawMessage) bool {
 	switch {
-	case event == "web_search" && c.webSearch != nil && !c.searchOnly:
+	case event == "web_search" && c.webSearch != nil:
 		var call struct {
 			ID    string `json:"tool_use_id"`
 			Input Object `json:"input"`
@@ -209,29 +223,10 @@ func (c *modControl) serveWebSearch(w http.ResponseWriter, event string, detail 
 		}
 		answer, _ := marshalPlain(c.webSearch(call.ID, call.Input))
 		_, _ = w.Write(answer)
-	case event == "search_result" && c.searchOnly:
-		var answer Object
-		if json.Unmarshal(detail, &answer) != nil || answer == nil {
-			w.WriteHeader(400)
-			return true
-		}
-		c.mu.Lock()
-		if c.searchResult == nil {
-			c.searchResult = answer
-		}
-		c.mu.Unlock()
-		_, _ = w.Write([]byte(`{"ok":true}`))
 	default:
 		return false
 	}
 	return true
-}
-
-// searchAnswer is what the search Mod reported, if anything.
-func (c *modControl) searchAnswer() Object {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.searchResult
 }
 
 func (c *modControl) waitReady(ctx context.Context) error {

@@ -27,7 +27,7 @@ func TestReviewHelperBudgetHeaderIsNotRestorationAuthority(t *testing.T) {
 	raw := reviewHelperBudgetBody(t)
 	h := http.Header{"Anthropic-Beta": []string{taskBudgetBeta}}
 	h.Set(helperhistory.Header, "1")
-	if _, err := parsePolicyRequest(raw, h); err == nil || !strings.Contains(err.Error(), "durable restoration") {
+	if r, err := parsePolicyRequest(raw, h); err != nil || r.helperHistory != nil {
 		t.Fatal("untrusted header granted parser restoration authority", err)
 	}
 	for _, validKey := range []bool{false, true} {
@@ -38,24 +38,30 @@ func TestReviewHelperBudgetHeaderIsNotRestorationAuthority(t *testing.T) {
 			r.Header.Set("x-api-key", "fixture-key")
 		}
 		w := httptest.NewRecorder()
-		g.ServeHTTP(w, r)
-		want := 401
-		if validKey {
-			want = 400
+		x := &exchange{g: g, w: w, r: r, diagnostic: &requestDiagnostic{fields: Object{}}}
+		admitted := x.admit()
+		if admitted != validKey {
+			t.Fatalf("ordinary native admission: admitted=%v status=%d", admitted, w.Code)
 		}
-		if w.Code != want {
-			t.Fatalf("plain body plus forged carrier header: status=%d want=%d", w.Code, want)
+		if validKey {
+			if x.req.helperHistory != nil {
+				t.Fatal("forged header granted helper custody")
+			}
+		} else if w.Code != http.StatusUnauthorized {
+			t.Fatal("invalid credential was not rejected", w.Code)
 		}
 	}
 }
 
-func TestReviewHelperBudgetPrivateStateStillRequiresAuthenticationAndBeta(t *testing.T) {
+func TestReviewHelperBudgetPrivateStateCannotBypassNativeAdmission(t *testing.T) {
 	raw := reviewHelperBudgetBody(t)
 	h := http.Header{"Anthropic-Beta": []string{taskBudgetBeta}}
 	if _, err := parsePolicyRequestWithHelper(raw, h, nil, &helperHistoryExecution{}); err == nil || !strings.Contains(err.Error(), "not authenticated") {
 		t.Fatal("constructed but unverified execution authorized budget", err)
 	}
-	if _, err := parsePolicyRequestWithHelper(raw, http.Header{}, nil, &helperHistoryExecution{authenticated: true}); err == nil || !strings.Contains(err.Error(), taskBudgetBeta) {
-		t.Fatal("private state bypassed required beta", err)
+	for _, headers := range []http.Header{{}, h} {
+		if _, err := parsePolicyRequestWithHelper(raw, headers, nil, &helperHistoryExecution{authenticated: true}); err == nil || !strings.Contains(err.Error(), "helper history is not supported") {
+			t.Fatal("private state bypassed native custody refusal", err)
+		}
 	}
 }

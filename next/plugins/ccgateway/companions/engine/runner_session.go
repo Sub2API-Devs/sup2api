@@ -10,6 +10,8 @@ import (
 	"os/exec"
 )
 
+var errScopeContinuation = errors.New("native scoped continuation")
+
 // cliProcess is a started Claude Code process and its stream-json pipes.
 type cliProcess struct {
 	diagnostic *requestDiagnostic
@@ -60,7 +62,6 @@ type cliSession struct {
 	p            *Prepared
 	cfg          *runConfig
 	proc         *cliProcess
-	relay        *outboundRelay
 	emit         func(Object) error
 	initID       string
 	initialized  bool
@@ -71,11 +72,14 @@ type cliSession struct {
 	webAssembled bool
 	searchUsage  Object
 	searchRounds int
+	scopeMessage Object // Last completed internal round, not a synthetic response.
+	resumeInput  *Message
+	resumeUUID   string
 }
 
-func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfig, proc *cliProcess, relay *outboundRelay, emit func(Object) error) *cliSession {
+func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfig, proc *cliProcess, emit func(Object) error) *cliSession {
 	p.FinalResponseStop = nil
-	return &cliSession{ctx: ctx, req: req, responseReq: req.responseView(), p: p, cfg: cfg, proc: proc, relay: relay, emit: emit, initID: uuid(), acc: &Accumulator{}, searchUsage: Object{}}
+	return &cliSession{ctx: ctx, req: req, responseReq: req.responseView(), p: p, cfg: cfg, proc: proc, emit: emit, initID: uuid(), acc: &Accumulator{}, searchUsage: Object{}}
 }
 
 // run initializes the CLI and reads frames until the result frame or the end
@@ -83,7 +87,7 @@ func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfi
 func (s *cliSession) run() (Object, error) {
 	systemPrompt := s.req.System
 
-	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": systemPrompt, "systemPromptSnapshot": s.p.SnapshotEnabled && s.cfg.scope == nil, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
+	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": systemPrompt, "systemPromptSnapshot": s.p.SnapshotEnabled, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
 		return nil, fmt.Errorf("cannot initialize CLI")
 	}
 	scan := bufio.NewScanner(s.proc.stdout)
@@ -98,6 +102,23 @@ func (s *cliSession) run() (Object, error) {
 			return nil, fmt.Errorf("invalid CLI protocol frame")
 		}
 		s.req.diagnostic.trace("cli_output", f)
+		if str(f, "type") == "result" && s.cfg.control != nil {
+			s.cfg.control.mu.Lock()
+			paused := s.cfg.control.scopePaused
+			s.cfg.control.mu.Unlock()
+			if paused {
+				if err := s.ctx.Err(); err != nil {
+					return nil, err
+				}
+				if s.scopeMessage == nil || s.acc.Done {
+					return nil, &requestRefusal{fmt.Errorf("invalid scoped continuation boundary")}
+				}
+				if sid := str(f, "session_id"); sid != "" && s.p.Mode == "rebuild" && s.p.WireSession == "" {
+					s.p.SessionID = sid
+				}
+				return nil, errScopeContinuation
+			}
+		}
 		if s.cfg.native != nil {
 			s.cfg.native.observe(f)
 			if s.req.responseFacts != nil {
@@ -119,18 +140,7 @@ func (s *cliSession) run() (Object, error) {
 		if e != nil {
 			return nil, e
 		}
-		if s.acc.Done && s.req.fallbackJSON() {
-			answer, err := s.relay.completedJSONGeneration()
-			if err != nil {
-				return nil, err
-			}
-			if err = s.checkMod(); err != nil {
-				return nil, err
-			}
-			s.p.APIResponseComplete = true
-			return answer, s.flush()
-		}
-		if s.acc.Done && s.req.stopsAtAPITerminal(str(s.acc.Message, "stop_reason")) {
+		if s.acc.Done && (s.req.stopsAtAPITerminal(str(s.acc.Message, "stop_reason")) || str(s.acc.Message, "stop_reason") == "max_tokens" && len(s.acc.Blocks) == 0) {
 			return s.completeAPIOutput()
 		}
 		// A complete upstream refusal is terminal even when the CLI would
@@ -139,17 +149,10 @@ func (s *cliSession) run() (Object, error) {
 		if s.acc.Done && str(s.acc.Message, "stop_reason") == "refusal" {
 			return s.acc.Message, s.flush()
 		}
-		if s.acc.Done && s.req.CacheWarmup && s.req.Passthrough {
+		if s.acc.Done && s.req.CacheWarmup {
 			// max_tokens 0: the API's answer as the CLI streamed it; nothing
 			// to keep in the native history.
 			return s.acc.Message, s.flush()
-		}
-		if s.acc.Done && s.req.CacheWarmup {
-			answer, err := s.relay.completedWarmup()
-			if err != nil {
-				return nil, err
-			}
-			return answer, s.flush()
 		}
 	}
 	if s.ctx.Err() != nil {
@@ -183,7 +186,11 @@ func (s *cliSession) onControlResponse(f Object) error {
 		}
 	}
 	s.initialized = true
-	if e := s.proc.write(Object{"type": "user", "session_id": s.p.runSession(), "uuid": s.p.InputUUID, "parent_tool_use_id": nil, "message": s.req.pendingWireMessage()}); e != nil {
+	input, id := s.req.pendingWireMessage(), s.p.InputUUID
+	if s.resumeInput != nil {
+		input, id = *s.resumeInput, s.resumeUUID
+	}
+	if e := s.proc.write(Object{"type": "user", "session_id": s.p.runSession(), "uuid": id, "parent_tool_use_id": nil, "message": input}); e != nil {
 		return fmt.Errorf("cannot submit input")
 	}
 	return nil
@@ -217,12 +224,6 @@ func (s *cliSession) onStreamEvent(f Object) error {
 		}
 	}
 	searchMessage := internalHistoryAssistant(s.req, Object{"content": s.acc.Blocks})
-	if err := s.restoreExactToolStart(event); err != nil {
-		return err
-	}
-	if err := s.restoreFallbackEvents(event); err != nil {
-		return err
-	}
 	if str(event, "type") == "message_delta" && s.searchRounds > 0 && !searchMessage {
 		if err := mergeSearchUsage(event, s.searchUsage, s.acc.Message); err != nil {
 			return err
@@ -254,25 +255,13 @@ func (s *cliSession) onStreamEvent(f Object) error {
 }
 
 // checkMod fails closed unless the explicitly injected Mod ran and attached
-// the pending system messages, and the relay restored the client's system
-// messages. Permission callbacks independently deny execution, even if mod
-// loading fails.
+// the pending system messages. Permission callbacks independently deny
+// execution, even if mod loading fails.
 func (s *cliSession) checkMod() error {
 	if s.cfg.control == nil {
 		return fmt.Errorf("ccgateway Mod control is unavailable")
 	}
-	if err := s.cfg.control.verify(); err != nil {
-		return err
-	}
-	if err := s.cfg.scope.verify(); err != nil {
-		return err
-	}
-	// Any model response must come from a request that went through the
-	// relay with the client's system messages restored.
-	if len(s.cfg.groups) > 0 && !s.req.Passthrough && (s.relay == nil || s.relay.Restored() == 0) {
-		return fmt.Errorf("model request bypassed the system message relay")
-	}
-	return nil
+	return s.cfg.control.verify()
 }
 
 // endWebSearchRound ends a round of a passthrough web search request: its
@@ -298,14 +287,11 @@ func (s *cliSession) endWebSearchRound(event Object) error {
 			return fmt.Errorf("web search response exceeds the block limit")
 		}
 		usage, _ := s.acc.Message["usage"].(Object)
-		if s.req.NativeTransport {
-			if err := addNativeWebSearchUsage(s.webUsage, usage); err != nil {
-				return err
-			}
-		} else {
-			addUsageTotals(s.webUsage, usage)
+		if err := addNativeWebSearchUsage(s.webUsage, usage); err != nil {
+			return err
 		}
 		s.webBlocks = append(s.webBlocks, s.acc.Blocks...)
+		s.scopeMessage = s.acc.Message
 		s.acc = &Accumulator{}
 		s.buffered = nil
 		return nil
@@ -321,17 +307,9 @@ func (s *cliSession) assembleWebSearch() error {
 		return nil
 	}
 	usage, _ := s.acc.Message["usage"].(Object)
-	var total Object
-	if s.req.NativeTransport {
-		var err error
-		total, err = s.req.webSearch.nativeWebSearchUsage(s.webUsage, usage)
-		if err != nil {
-			return err
-		}
-	} else {
-		total = copySearchUsage(usage)
-		addUsageTotals(total, s.webUsage)
-		total = s.req.webSearch.webSearchUsage(total)
+	total, err := s.req.webSearch.nativeWebSearchUsage(s.webUsage, usage)
+	if err != nil {
+		return err
 	}
 	blocks, _ := s.req.webSearch.convertBlocks(append(append([]Object(nil), s.webBlocks...), s.acc.Blocks...), "")
 	s.webAssembled = true
@@ -364,6 +342,7 @@ func (s *cliSession) endSearchRound() error {
 			return err
 		}
 	}
+	s.scopeMessage = s.acc.Message
 	s.acc = &Accumulator{}
 	s.buffered = nil
 	return nil
@@ -467,16 +446,13 @@ func (s *cliSession) finish(f Object) (Object, error) {
 	if err == nil && len(s.cfg.systems) > 0 && !nativeSystemRecorded(s.p.Rows, s.p.NativeRows, s.cfg.systems) {
 		err = fmt.Errorf("native transcript is missing the system messages")
 	}
-	if err != nil && s.req.Passthrough {
+	if err != nil {
 		// The response is the upstream's own and complete; without a
 		// checkpoint the next turn rebuilds from the client's history. The CLI
 		// does not record a response without content (max_tokens 1).
 		s.p.NativeRows, s.p.NativeAnchor = nil, ""
 		s.req.diagnostic.trace("native_checkpoint_unavailable", Object{"reason": "passthrough", "error": err.Error()})
 		return s.acc.Message, nil
-	}
-	if err != nil {
-		return nil, err
 	}
 	return s.acc.Message, nil
 }

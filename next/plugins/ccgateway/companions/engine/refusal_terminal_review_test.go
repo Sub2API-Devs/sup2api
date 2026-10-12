@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,22 +11,33 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// The main upstream response can finish before CLI stdio delivers its events.
-// Close the retry window at the network boundary, without waiting for onResult
-// or an optional format/context mode; refusal is still a normal API response.
-func TestOrdinaryRefusalStopsRelayBeforeCLIDelivery(t *testing.T) {
-	relay := &outboundRelay{}
-	observer := apiTerminalObserver{relay: relay, req: &Request{Plan: &RequestPlan{apiGeneration: true}}}
-	observer.observe([]byte("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"}}\n\n"))
-	if relay.stopped {
-		t.Fatal("stopped before a complete terminal response")
+func TestOrdinaryRefusalRequiresCompleteNativeMessage(t *testing.T) {
+	req, err := parsePolicyRequest(mustServerJSON(basic()), nil)
+	require.NoError(t, err)
+	p := &Prepared{}
+	session := newCLISession(context.Background(), req, p, &runConfig{native: &nativeRunState{}, control: &modControl{ready: true}}, nil, func(Object) error { return nil })
+	session.initialized = true
+	for _, event := range []Object{
+		{"type": "message_start", "message": Object{"id": "msg_refusal", "type": "message", "role": "assistant", "content": []any{}, "usage": Object{"input_tokens": 1, "output_tokens": 0}}},
+		{"type": "message_delta", "delta": Object{"stop_reason": "refusal"}, "usage": Object{"output_tokens": 0}},
+	} {
+		require.NoError(t, session.onStreamEvent(Object{"event": event}))
 	}
-	observer.observe([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
-	if !relay.stopped || relay.failure != nil {
-		t.Fatal("normal refusal can still be implicitly retried or was marked as an error")
-	}
+	assert.False(t, session.acc.Done)
+	_, err = session.onResult(Object{"subtype": "success"})
+	require.ErrorContains(t, err, "without a complete model message")
+	require.NoError(t, session.onStreamEvent(Object{"event": Object{"type": "message_stop"}}))
+	assert.True(t, session.acc.Done)
+	message, err := session.onResult(Object{"subtype": "success"})
+	require.NoError(t, err)
+	assert.Equal(t, "refusal", str(message, "stop_reason"))
+	assert.Equal(t, "message_stop", str(p.finalResponseStop(), "type"))
+	assert.False(t, session.cfg.native.canFallback())
 }
 
 func TestRealCLIOrdinaryRefusalIsSingleNormalResponse(t *testing.T) {

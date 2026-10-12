@@ -64,28 +64,16 @@ func TestMCPConnectorAdmissionValidation(t *testing.T) {
 	}
 }
 
-func TestMCPConnectorParsedPlanNeverStoresTokens(t *testing.T) {
+func TestMCPConnectorNativeAdmissionNeverStoresTokens(t *testing.T) {
 	body := mcpPlanFixture()
 	body["model"] = "claude-opus-5-5"
 	body["max_tokens"] = 64
 	body["messages"] = []any{Object{"role": "user", "content": "hello"}}
 	req, err := parsePolicyRequest(mustMCPJSON(body), map[string][]string{"Anthropic-Beta": {mcpConnectorBeta}})
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || req != nil || !strings.Contains(err.Error(), "mcp_servers") {
+		t.Fatalf("native transport admitted remote MCP credentials: %v", err)
 	}
-	for label, value := range map[string]any{"raw": string(req.Plan.RawRequest()), "plan": req.Plan.MainRequestFields(), "request": req, "key": req.configKey()} {
-		if strings.Contains(string(mustMCPJSON(value)), "fixture-secret-") {
-			t.Fatalf("credential escaped private storage via %s", label)
-		}
-	}
-	if len(req.Tools) != 0 || len(req.APIClientTools) != 0 || len(req.ServerTools) != 0 {
-		t.Fatal("connector registered local tools")
-	}
-	input := Object{"tools": []any{}}
-	if err := req.ApplyMainRequestFeatures(input); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(mustMCPJSON(input)), "fixture-secret-one") {
-		t.Fatal("final attributed adapter omitted credentials")
+	if strings.Contains(err.Error(), "fixture-secret-") || strings.Contains(err.Error(), "one.example.test") {
+		t.Fatal("rejection leaked private connector configuration")
 	}
 }

@@ -1,9 +1,11 @@
 package engine
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func webTestBody(kind string) Object {
@@ -51,13 +53,9 @@ func TestWebToolVersionAndRouting(t *testing.T) {
 			if len(r.Tools) != 0 || len(r.ServerTools) != 1 {
 				t.Fatal("server tool registered as client")
 			}
-			wire := Object{"tools": []any{}}
-			if err := r.applyServerSearchTools(wire); err != nil {
-				t.Fatal(err)
-			}
-			if digest(wire["tools"]) != digest(body["tools"]) {
-				t.Fatal("version or parameters changed")
-			}
+			assert.Equal(t, digest(body["tools"]), digest(r.ServerTools))
+			_, err = parsePolicyRequest(mustServerJSON(body), nil)
+			require.ErrorContains(t, err, "not supported by this gateway")
 			blocks := webFixture(str(tool, "name"))
 			body["messages"] = []any{Object{"role": "user", "content": "search"}, Object{"role": "assistant", "content": blocks}, Object{"role": "user", "content": "continue"}}
 			if _, err := parseRequest(mustServerJSON(body)); err != nil {
@@ -76,14 +74,9 @@ func TestWebToolValidationAndSourceMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wire := Object{"tools": []any{Object{"name": "mcp__ccgateway__links"}}}
-	if err := r.applyServerSearchTools(wire); err != nil {
-		t.Fatal(err)
-	}
-	encoded, _ := json.Marshal(wire)
-	if !strings.Contains(string(encoded), `"name":"mcp__ccgateway__links","type":"tool_reference"`) {
-		t.Fatal("URL source route not translated", string(encoded))
-	}
+	_, err = parsePolicyRequest(mustServerJSON(body), nil)
+	require.ErrorContains(t, err, `server tool "web_fetch_20260318"`)
+	assert.Equal(t, "mcp__ccgateway__links", r.wireName("links"))
 	if digest(r.ServerTools[0]) != digest(tool) {
 		t.Fatal("source tool mutated")
 	}

@@ -71,32 +71,3 @@ func TestReviewEmptyInputReducersAgree(t *testing.T) {
 		})
 	}
 }
-
-func TestReviewMCPEmptyDeltasDoNotWeakenCredentialInspection(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		parts []any
-		valid bool
-	}{
-		{"multiple-empty", []any{"", ""}, true},
-		{"complete-then-empty", []any{`{"ok":1}`, "", ""}, true},
-		{"split-complete", []any{"", `{"ok":`, "", "1}", ""}, true},
-		{"whitespace", []any{"", " ", ""}, false},
-		{"truncated", []any{"", "{", ""}, false},
-		{"non-string", []any{nil}, false},
-		{"split-secret", []any{"", `{"x":"fixture-`, "", `secret-one"}`, ""}, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			guard := newMCPResponseGuard(&MCPConnectorPlan{credentials: map[string]mcpCredential{"one": {url: "https://one.example.test/mcp", token: "fixture-secret-one"}}})
-			var err error
-			for _, event := range reviewInputEvents(Object{}, tc.parts, "lookup") {
-				if err = guard.checkJSON(mustMCPJSON(event)); err != nil {
-					break
-				}
-			}
-			if (err == nil) != tc.valid {
-				t.Fatalf("valid=%v err=%v", tc.valid, err)
-			}
-		})
-	}
-}

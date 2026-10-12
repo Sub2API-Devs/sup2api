@@ -5,14 +5,44 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
+	"math"
 	"slices"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/credits"
 )
+
+// jsNumberView models JSON.parse/stringify only inside tool JSON values. It is
+// never used to rewrite client fingerprints, text, IDs, names, or signatures.
+func jsNumberView(value any) any {
+	switch v := value.(type) {
+	case json.Number:
+		f, _ := strconv.ParseFloat(string(v), 64)
+		if math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil
+		}
+		if f == 0 {
+			return float64(0)
+		}
+		return f
+	case map[string]any:
+		out := Object{}
+		for k, x := range v {
+			out[k] = jsNumberView(x)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, x := range v {
+			out[i] = jsNumberView(x)
+		}
+		return out
+	default:
+		return value
+	}
+}
 
 type creditExecution struct {
 	mu               sync.Mutex
@@ -78,7 +108,7 @@ func (x *exchange) admitCredit(body []byte) error {
 	if tracked != "1" || !credits.Enabled(h.Values("Anthropic-Beta")) {
 		return fmt.Errorf("fallback credit requires trusted tracking and its registered beta")
 	}
-	if x.req.CountTokens || x.req.CacheWarmup || x.req.toolSearchEnabled() || x.req.structuredOutput() {
+	if x.req.CacheWarmup || x.req.toolSearchEnabled() || x.req.structuredOutput() || x.req.webSearch != nil {
 		return fmt.Errorf("fallback credit requires one Messages generation without internal tool rounds")
 	}
 	clientDigest, err := credits.Digest(body, h.Values("Anthropic-Beta"))
@@ -156,90 +186,6 @@ func (x *exchange) admitCredit(body []byte) error {
 	}
 	x.req.credit = state
 	return nil
-}
-
-func (r *Request) bindCreditWire(raw []byte, h http.Header) ([]byte, error) {
-	state := r.credit
-	if state == nil {
-		return raw, nil
-	}
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	object, err := decodeObject(raw)
-	if err != nil {
-		return nil, err
-	}
-	if state.previous != nil {
-		original, err := decodeObject(state.previous.WirePrompt)
-		if err != nil {
-			return nil, err
-		}
-		current, err := credits.Prompt(raw)
-		if err != nil {
-			return nil, err
-		}
-		prompt, err := decodeObject(current)
-		if err != nil {
-			return nil, err
-		}
-		for key := range prompt {
-			delete(object, key)
-		}
-		for key, value := range original {
-			object[key] = value
-		}
-		incomingDigest, err := credits.Digest(state.raw, state.headers)
-		if err != nil {
-			return nil, err
-		}
-		if incomingDigest != state.previous.BaseDigest {
-			echo, exists := state.previous.Echoes[incomingDigest]
-			if !exists {
-				return nil, fmt.Errorf("credit continuation wire shape unavailable")
-			}
-			decoded, err := decodePlannedValue(echo)
-			if err != nil {
-				return nil, err
-			}
-			content, ok := decoded.([]any)
-			if !ok {
-				return nil, fmt.Errorf("invalid credit wire content")
-			}
-			messages, _ := original["messages"].([]any)
-			object["messages"] = append(append([]any{}, messages...), Object{"role": "assistant", "content": content})
-		}
-		betas := credits.MatchingBetas(state.previous.Betas)
-		for _, header := range state.headers {
-			for _, beta := range strings.Split(header, ",") {
-				beta = strings.TrimSpace(beta)
-				if strings.HasPrefix(beta, "fallback-credit-") || strings.HasPrefix(beta, "server-side-fallback-") {
-					betas = append(betas, beta)
-				}
-			}
-		}
-		h.Set("Anthropic-Beta", strings.Join(betas, ","))
-	}
-	if r.Plan != nil && r.Plan.creditToken != "" {
-		value, err := decodePlannedValue(r.Plan.creditParameter.Raw)
-		if err != nil {
-			return nil, fmt.Errorf("invalid credit parameter encoding")
-		}
-		object["fallback_credit_token"] = value
-	}
-	adapted, err := json.Marshal(object)
-	if err != nil {
-		return nil, err
-	}
-	prompt, err := credits.Prompt(adapted)
-	if err != nil {
-		return nil, err
-	}
-	if state.wire != nil && digest(state.wire) != digest(prompt) {
-		return nil, fmt.Errorf("multiple different main requests cannot share a credit operation")
-	}
-	state.wire = prompt
-	state.wireBetas = append([]string(nil), h.Values("Anthropic-Beta")...)
-	return adapted, nil
 }
 
 func (x *exchange) completeCredit(answer Object) error {

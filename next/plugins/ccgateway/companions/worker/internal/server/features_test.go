@@ -29,10 +29,9 @@ func TestCapabilitiesUseObservedCLIVersionNotConfiguredImage(t *testing.T) {
 	if doc.Probes[0].Value != "2.1.292" || doc.Probes[0].Status != "observed" || doc.Catalog.RuntimeVerified || doc.ModelProviderVerification != "not_run" {
 		t.Fatal("version observation turned into a readiness claim")
 	}
-	assert.Equal(t, []string{"legacy", "passthrough", "native"}, doc.ExecutionModes)
-	if len(doc.HelperHistorySchemaVersions) != 1 || doc.HelperHistorySchemaVersions[0] != 1 {
-		t.Fatal("running Worker omitted its implemented helper protocol")
-	}
+	assert.Equal(t, []string{"native"}, doc.ExecutionModes)
+	assert.Empty(t, doc.HelperHistorySchemaVersions)
+	assert.Empty(t, doc.HelperHistoryPayloadVersions)
 }
 
 func TestCapabilitiesRequireAdminAndReportOnlyObservedEvidence(t *testing.T) {

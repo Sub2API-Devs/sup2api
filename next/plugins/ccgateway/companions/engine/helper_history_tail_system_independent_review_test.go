@@ -9,7 +9,7 @@ import (
 
 func TestIndependentHelperReminderACKAuthority(t *testing.T) {
 	r := &Request{helperHistory: &helperHistoryExecution{payloadVersion: 2}, internalCache: &internalCacheRounds{rounds: []Object{{}}}}
-	c, err := startModControl(&runConfig{helperRequest: r, scope: newMainRequestScope()}, "http://127.0.0.1:8787")
+	c, err := startModControl(&runConfig{helperRequest: r}, "http://127.0.0.1:8787")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,9 +30,9 @@ func TestIndependentHelperReminderACKAuthority(t *testing.T) {
 		want int
 	}{
 		{ack, 400},
-		{`{"event":"ready","version":"ccgateway-v2"}`, 200},
+		{`{"event":"ready","version":"ccgateway-v3"}`, 200},
 		{ack, 400},
-		{`{"event":"main_request_begin"}`, 200},
+		{`{"event":"main_request_begin"}`, 400},
 	} {
 		if got := call(setup.body, c.token, "127.0.0.1:1234"); got != setup.want {
 			t.Fatalf("setup got %d want %d", got, setup.want)
@@ -54,18 +54,8 @@ func TestIndependentHelperReminderACKAuthority(t *testing.T) {
 	if len(r.helperHistory.reminders) != 0 {
 		t.Fatal("rejected ACK mutated evidence")
 	}
-	if call(ack, c.token, "127.0.0.1:1234") != 200 || r.helperHistory.reminders[1] != "same text" {
-		t.Fatal("ACK not bound to observed round")
-	}
-	if call(`{"event":"helper_reminder","detail":{"text":"changed"}}`, c.token, "127.0.0.1:1234") != 400 {
-		t.Fatal("round evidence overwritten")
-	}
-	c.scope.recordApplied()
-	if err := c.scope.leave(); err != nil {
-		t.Fatal(err)
-	}
-	if call(ack, c.token, "127.0.0.1:1234") != 400 {
-		t.Fatal("ended lease accepted ACK")
+	if call(ack, c.token, "127.0.0.1:1234") != 400 || len(r.helperHistory.reminders) != 0 {
+		t.Fatal("native control accepted removed helper acknowledgement")
 	}
 }
 

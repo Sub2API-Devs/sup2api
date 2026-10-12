@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigSafety(t *testing.T) {
@@ -132,15 +134,13 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		}
 
 		var policy RequestPolicy
-		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownBeta != "ignore" {
+		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownField != "reject" {
 			t.Error("trusted request policy not injected")
 		}
-		if !strings.Contains(r.Header.Get("X-CCGateway-Request-Policy"), `"pass_upstream_errors":false`) || policy.PassUpstreamErrors {
-			t.Error("request policy header lacks pass_upstream_errors=false")
-		}
-		if policy.AttachmentSource != "client" {
-			t.Error("request policy header lacks attachment_source=client")
-		}
+		assert.Equal(t, "native", policy.RelayMode)
+		assert.Equal(t, "request", policy.ToolSearch)
+		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"attachment_source"`)
+		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"unknown_beta"`)
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
 		w.(http.Flusher).Flush()

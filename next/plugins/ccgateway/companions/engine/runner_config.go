@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,8 +101,9 @@ var inheritedCLIEnv = []string{"_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL", "CLAU
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
+	scopeResumed    bool // One same-model boundary, never a fallback attempt.
+	searchCalls     int
 	helperRequest   *Request
-	scope           *mainRequestScope
 	diagnostic      *requestDiagnostic
 	args            []string
 	env             map[string]string
@@ -116,7 +116,7 @@ type runConfig struct {
 	reminderMarker  string
 	nativeReminders map[string]int
 	tools           Object
-	passthrough     *passthroughConfig // relay passthrough: the Mod's per-round request fields
+	passthrough     *passthroughConfig // the Mod's per-round native request fields
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
@@ -124,10 +124,6 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	}
 	c := &runConfig{helperRequest: req, reminderMarker: req.continuation, nativeReminders: nativeContinuationReminders(req, p), args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
-	if req.HasMainRequestFeatures() && !req.Passthrough {
-		c.scope = newMainRequestScope()
-		c.args = append(c.args, "--append-system-prompt", c.scope.marker)
-	}
 	c.diagnostic = req.diagnostic
 	c.attachments = req.attachmentConfig()
 	c.tools = Object{}
@@ -153,7 +149,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	settings := `{"disableAllHooks":false}`
 	values := Object{"disableAllHooks": false}
 	if req.Fast != nil {
-		values["fastMode"] = *req.Fast && (req.Plan == nil || !req.Plan.apiGeneration || req.Passthrough)
+		values["fastMode"] = *req.Fast
 	}
 	if req.offersSkill() {
 		// With slash commands the CLI lists its skills to the model; the
@@ -166,7 +162,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 		settings = string(b)
 	}
 	snapshotMode := "off"
-	if p.SnapshotEnabled && (!req.HasMainRequestFeatures() || req.Passthrough) {
+	if p.SnapshotEnabled {
 		snapshotMode = "on"
 	}
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
@@ -183,34 +179,10 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	} else {
 		args = append(args, "--session-id", p.runSession())
 	}
-	if req.Passthrough {
-		// The client's thinking, output_config and sampling fields travel in
-		// CLAUDE_CODE_EXTRA_BODY (passthrough.go); these only set the CLI's mode.
-		args = append(args, req.passthroughThinkingArgs()...)
-		args = append(args, "--effort", req.passthroughEffort())
-		for _, dir := range req.AdditionalDirectories {
-			args = append(args, "--add-dir", dir)
-		}
-		return args
-	}
-	switch str(req.Thinking, "type") {
-	case "enabled":
-		args = append(args, "--max-thinking-tokens", fmt.Sprint(req.Thinking["budget_tokens"]))
-	case "adaptive":
-		args = append(args, "--thinking", "adaptive")
-	case "disabled":
-		args = append(args, "--thinking", "disabled")
-	}
-	if display := str(req.Thinking, "display"); display == "omitted" || display == "summarized" {
-		args = append(args, "--thinking-display", display)
-	}
-	if req.structuredOutput() {
-		schema, _ := json.Marshal(req.JSONSchema)
-		args = append(args, "--json-schema", string(schema))
-	}
-	if req.Effort != "" {
-		args = append(args, "--effort", req.Effort)
-	}
+	// The client's thinking, output_config and sampling fields travel in
+	// CLAUDE_CODE_EXTRA_BODY (passthrough.go); these only set the CLI's mode.
+	args = append(args, req.passthroughThinkingArgs()...)
+	args = append(args, "--effort", req.passthroughEffort())
 	for _, dir := range req.AdditionalDirectories {
 		args = append(args, "--add-dir", dir)
 	}
@@ -218,7 +190,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 }
 
 // cliEnv is the request's CLI environment, before adding the private Mod
-// callback and relay addresses.
+// callback address.
 func cliEnv(req *Request, systemTurns bool) map[string]string {
 	env := map[string]string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0",
 		"ANTHROPIC_BETAS": strings.Join(req.Betas, ","), "MAX_STRUCTURED_OUTPUT_RETRIES": "1", "CCGATEWAY_STRUCTURED_OUTPUT": "0", "CCGATEWAY_TOOL_SEARCH": "0", "CCGATEWAY_ATTACHMENT_SOURCE": req.AttachmentSource}
@@ -234,32 +206,15 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 	if req.PromptCacheTTL != "" {
 		env["CLAUDE_CODE_PROMPT_CACHE_TTL"] = req.PromptCacheTTL
 	}
-	switch str(req.Thinking, "type") {
-	case "enabled":
-		if !req.Passthrough {
-			env["MAX_THINKING_TOKENS"] = fmt.Sprint(req.Thinking["budget_tokens"])
-			env["CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING"] = "1"
-		}
-	case "adaptive":
-		// Absence of a fixed budget leaves the model in adaptive mode.
-	case "disabled":
-		if !req.Passthrough {
-			env["MAX_THINKING_TOKENS"] = "0"
-		}
-	}
-	if req.Passthrough {
-		// No retries: the client decides (PASSTHROUGH-DESIGN.md section 2).
-		// The client's output format goes upstream as sent, never the CLI's.
-		env["CLAUDE_CODE_MAX_RETRIES"] = "0"
-		if req.NativeTransport {
-			env["CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK"] = "1"
-			env["CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL"] = "1"
-		}
-		env["CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS"] = "1"
-		if req.upstreamAgent != "" {
-			// A client subagent: upstream sees A' from the CLI itself.
-			env["ANTHROPIC_CUSTOM_HEADERS"] = "x-claude-code-agent-id: " + req.upstreamAgent
-		}
+	// No retries: the client decides (PASSTHROUGH-DESIGN.md section 2).
+	// The client's output format goes upstream as sent, never the CLI's.
+	env["CLAUDE_CODE_MAX_RETRIES"] = "0"
+	env["CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK"] = "1"
+	env["CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL"] = "1"
+	env["CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS"] = "1"
+	if req.upstreamAgent != "" {
+		// A client subagent: upstream sees A' from the CLI itself.
+		env["ANTHROPIC_CUSTOM_HEADERS"] = "x-claude-code-agent-id: " + req.upstreamAgent
 	}
 	for _, beta := range req.Betas {
 		if beta == "context-1m-2025-08-07" {
@@ -321,38 +276,15 @@ func (r *Request) agentTeamsVariant() bool {
 	return false
 }
 
-// relayEnv points the CLI at the outbound relay.
-func relayEnv(base []string, relay *outboundRelay) map[string]string {
+// processEnv is the CLI's complete environment: the inherited one without
+// request-shaping variables, then loopback proxy exclusions and the request's own settings.
+func (c *runConfig) processEnv(base []string) []string {
 	noProxy := environmentValue(base, "NO_PROXY")
 	if noProxy == "" {
 		noProxy = environmentValue(base, "no_proxy")
 	}
 	noProxy += ",127.0.0.1,localhost"
-	env := map[string]string{"ANTHROPIC_BASE_URL": relay.URL, "NO_PROXY": noProxy, "no_proxy": noProxy}
-	// The loopback carrier still terminates at the original first-party API.
-	// The CLI keys some first-party behaviour to the base URL's hostname;
-	// this keeps that behaviour. It does not decide system turns, which
-	// follow the model, provider and CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM.
-	if relay.FirstParty {
-		env["_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"] = "1"
-	}
-	return env
-}
-
-// processEnv is the CLI's complete environment: the inherited one without
-// request-shaping variables, then the relay and the request's own settings.
-func (c *runConfig) processEnv(base []string, relay *outboundRelay) []string {
-	values := map[string]string{}
-	if relay != nil {
-		values = relayEnv(base, relay)
-	} else {
-		noProxy := environmentValue(base, "NO_PROXY")
-		if noProxy == "" {
-			noProxy = environmentValue(base, "no_proxy")
-		}
-		values["NO_PROXY"] = noProxy + ",127.0.0.1,localhost"
-		values["no_proxy"] = values["NO_PROXY"]
-	}
+	values := map[string]string{"NO_PROXY": noProxy, "no_proxy": noProxy}
 	for k, v := range c.env {
 		values[k] = v
 	}

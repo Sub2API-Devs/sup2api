@@ -1,6 +1,14 @@
 package engine
 
-import "testing"
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestFallbackLedgerOnlyAbandonsCurrentSegment(t *testing.T) {
 	req := &Request{ServerTools: []Object{{"name": "web_search"}}}
@@ -8,92 +16,91 @@ func TestFallbackLedgerOnlyAbandonsCurrentSegment(t *testing.T) {
 		return Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{}}
 	}
 	ledger := newServerToolLedger()
-	if err := ledger.accept(call("prior"), req, true); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ledger.accept(call("prior"), req, true))
 	ledger.beginTurn()
-	if err := ledger.accept(call("abandoned"), req); err != nil {
-		t.Fatal(err)
+	require.NoError(t, ledger.accept(call("abandoned"), req))
+	require.NoError(t, ledger.accept(fallbackFixture(), req))
+	assert.NotEmpty(t, ledger.pending["prior"])
+	assert.Empty(t, ledger.pending["abandoned"])
+	require.NoError(t, ledger.accept(call("later"), req))
+	require.Error(t, ledger.complete("end_turn", false))
+	require.Error(t, ledger.accept(call("abandoned"), req))
+}
+
+func TestNativeFallbackHistoryRefused(t *testing.T) {
+	body := basic()
+	body["messages"] = []any{Object{"role": "user", "content": "anchor"}, Object{"role": "assistant", "content": []Object{{"type": "text", "text": "before"}, fallbackFixture(), {"type": "text", "text": "after"}}}, Object{"role": "user", "content": "next"}}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	_, err = parsePolicyRequest(raw, nil)
+	require.ErrorContains(t, err, `history block "fallback" is not supported`)
+}
+
+func TestNativeFallbackRequiresTerminalObservedFailureWithoutOutput(t *testing.T) {
+	for _, status := range []int{429, 500, 502, 503, 504, 529} {
+		for _, guard := range []string{"valid", "not-terminal", "output", "fatal", "success", "subagent"} {
+			t.Run(http.StatusText(status)+"/"+guard, func(t *testing.T) {
+				state := &nativeRunState{}
+				state.observe(Object{"type": "assistant", "error": "overloaded", "request_id": "req_native"})
+				assert.False(t, state.canFallback())
+				if guard == "output" {
+					state.observe(Object{"type": "stream_event", "event": Object{"type": "message_start"}})
+				}
+				if guard == "fatal" {
+					state.fail(errors.New("unproven native response"))
+				}
+				result := Object{"type": "result", "subtype": "error_during_execution", "is_error": true, "api_error_status": status}
+				if guard == "success" {
+					result["subtype"], result["is_error"] = "success", false
+				}
+				if guard == "subagent" {
+					result["parent_tool_use_id"] = "other"
+				}
+				if guard != "not-terminal" {
+					state.observe(result)
+				}
+				assert.Equal(t, guard == "valid", state.canFallback())
+				state.reset()
+				assert.False(t, state.canFallback())
+				assert.NoError(t, state.failure())
+				assert.Empty(t, state.headers())
+			})
+		}
 	}
-	if err := ledger.accept(fallbackFixture(), req); err != nil {
-		t.Fatal(err)
-	}
-	if ledger.pending["prior"] == "" || ledger.pending["abandoned"] != "" {
-		t.Fatal("fallback discarded prior-turn work or retained interrupted segment")
-	}
-	if err := ledger.accept(call("later"), req); err != nil {
-		t.Fatal(err)
-	}
-	if err := ledger.complete("end_turn", false); err == nil {
-		t.Fatal("fallback allowed missing result after boundary")
-	}
-	if err := ledger.accept(call("abandoned"), req); err == nil {
-		t.Fatal("fallback allowed reused call ID")
+	for _, status := range []any{nil, "429", json.Number("429.1"), json.Number("1e999"), json.Number("9007199254740993"), -429, 399, 400, 401, 403, 413, 600} {
+		state := &nativeRunState{}
+		state.observe(Object{"type": "result", "subtype": "error_during_execution", "is_error": true, "api_error_status": status})
+		assert.False(t, state.canFallback(), "status=%v", status)
 	}
 }
 
-func TestFallbackHistoryExactPositionAndPartialMetadata(t *testing.T) {
-	b := fallbackFixture()
-	req := &Request{Messages: []Message{{Role: "user", Content: []Object{{"type": "text", "text": "anchor"}}}, {Role: "assistant", Content: []Object{{"type": "text", "text": "before"}, b, {"type": "text", "text": "after"}}}, {Role: "user", Content: []Object{{"type": "text", "text": "next"}}}}}
-	body := func(blocks []any) Object {
-		return Object{"messages": []any{Object{"role": "user", "content": "anchor"}, Object{"role": "assistant", "content": blocks}, Object{"role": "user", "content": "next"}}}
+func TestNativeFallbackOverridesPreserveNullAndPrimaryRequest(t *testing.T) {
+	body := []byte(`{"model":"primary","max_tokens":128,"thinking":{"type":"adaptive"},"output_config":{"effort":"high"},"speed":"standard","temperature":0.30,"fallbacks":[{"model":"secondary","max_tokens":null,"thinking":null,"output_config":null,"speed":null}],"messages":[{"role":"user","content":"q"}]}`)
+	h := http.Header{"Anthropic-Beta": []string{"server-side-fallback-2026-07-01"}}
+	r, err := parsePolicyRequest(body, h)
+	require.NoError(t, err)
+	cfg, err := r.passthroughBodies()
+	require.NoError(t, err)
+	require.Len(t, cfg.Fallbacks, 1)
+	for _, key := range []string{"max_tokens", "thinking", "output_config", "speed"} {
+		assert.Equal(t, "null", string(cfg.Fallbacks[0].Body[key]))
 	}
-	for _, actual := range [][]any{{Object{"type": "text", "text": "before"}, Object{"type": "text", "text": "after"}}, {Object{"type": "text", "text": "before"}, fallbackIdentity(b), Object{"type": "text", "text": "after"}}} {
-		wire := body(actual)
-		if err := restoreProtocolHistory(req, wire); err != nil {
-			t.Fatal(err)
-		}
-		if got := wireFallbackBlocks(wire); len(got) != 1 || digest(got[0]) != digest(b) {
-			t.Fatal("trigger was not restored")
-		}
-	}
-	wire := body([]any{fallbackIdentity(b), Object{"type": "text", "text": "before"}, Object{"type": "text", "text": "after"}})
-	if err := restoreProtocolHistory(req, wire); err == nil {
-		t.Fatal("moved fallback boundary accepted")
-	}
-	corrupted, _ := jsonCopyObject(b)
-	corrupted["to"] = Object{"model": "different-model"}
-	if err := restoreProtocolHistory(req, body([]any{Object{"type": "text", "text": "before"}, corrupted, Object{"type": "text", "text": "after"}})); err == nil {
-		t.Fatal("changed transition accepted")
-	}
-}
-
-func TestFallbackStreamRequiresClosedMatchingEvidence(t *testing.T) {
-	relay := &outboundRelay{}
-	observer := &apiTerminalObserver{relay: relay}
-	observer.observeFallback(Object{"type": "message_start", "message": Object{"id": "observed"}})
-	observer.observeFallback(Object{"type": "content_block_start", "index": 0, "content_block": fallbackFixture()})
-	if relay.takeFallback("observed", 0) != nil {
-		t.Fatal("recovered unclosed block")
-	}
-	observer.observeFallback(Object{"type": "content_block_stop", "index": 0})
-	if relay.takeFallback("other-message", 0) != nil || relay.takeFallback("observed", 1) != nil {
-		t.Fatal("cross-message/index recovery")
-	}
-	if digest(relay.takeFallback("observed", 0)) != digest(fallbackFixture()) {
-		t.Fatal("closed original block missing")
-	}
-	if relay.takeFallback("observed", 0) != nil {
-		t.Fatal("fallback evidence reused")
-	}
-}
-
-func TestFallbackAdvisorHistoryRepairsCompose(t *testing.T) {
-	expected := append(advisorFixture("advisor_redacted_result"), fallbackFixture(), Object{"type": "text", "text": "after"})
-	req := &Request{Messages: []Message{{Role: "user", Content: []Object{{"type": "text", "text": "anchor"}}}, {Role: "assistant", Content: expected}, {Role: "user", Content: []Object{{"type": "text", "text": "next"}}}}}
-	for _, partial := range []bool{false, true} {
-		actual := []any{Object{"type": "text", "text": "ADVISOR_DONE"}}
-		if partial {
-			actual = append(actual, fallbackIdentity(fallbackFixture()))
-		}
-		actual = append(actual, Object{"type": "text", "text": "after"})
-		wire := Object{"messages": []any{Object{"role": "user", "content": "anchor"}, Object{"role": "assistant", "content": actual}, Object{"role": "user", "content": "next"}}}
-		if err := restoreProtocolHistory(req, wire); err != nil {
-			t.Fatal(err)
-		}
-		content := wire["messages"].([]any)[1].(Object)["content"]
-		if digest(content) != digest(expected) {
-			t.Fatal("composed advisor/fallback restore changed block identity")
+	next, err := r.nativeFallback(cfg.Fallbacks[0])
+	require.NoError(t, err)
+	assert.Equal(t, "secondary", next.Model)
+	assert.Equal(t, 128, next.MaxTokens)
+	assert.False(t, next.hasFallbacks())
+	nextCfg, err := next.passthroughBodies()
+	require.NoError(t, err)
+	for _, round := range []map[string]json.RawMessage{nextCfg.First, nextCfg.Rest} {
+		assert.Equal(t, "0.30", string(round["temperature"]))
+		assert.Equal(t, "128", string(round["max_tokens"]))
+		for _, key := range []string{"thinking", "output_config", "speed", "fallbacks"} {
+			assert.NotContains(t, round, key)
 		}
 	}
+	assert.Equal(t, body, r.Plan.RawRequest())
+	assert.Equal(t, "primary", r.Model)
+	_, err = parsePolicyRequest(body, nil)
+	require.ErrorContains(t, err, "explicit fallbacks require")
 }

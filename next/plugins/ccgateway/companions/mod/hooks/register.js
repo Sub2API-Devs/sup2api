@@ -20,21 +20,14 @@ export function filterEnvironmentFields(text, policy, keepDefault) {
   return !keepDefault && retained === 0 ? null : result.join('\n');
 }
 
-// Relay passthrough: the client's fields reach every model request through
+// The client's fields reach every native model request through
 // CLAUDE_CODE_EXTRA_BODY, which the CLI reads per request; tool_choice is in
-// the first round's fields only. A failed attempt moves to the next fallback
-// model when the gateway confirms the upstream error allows it.
-async function* passthroughStep($, e, next, passthrough, firstRound, controlURL, controlToken) {
-  const fields = firstRound ? passthrough.first : passthrough.rest;
-  const attempts = [null, ...(passthrough.fallbacks || [])];
-  for (let i = 0; ; i++) {
-    const attempt = attempts[i];
-    await $.env.set('CLAUDE_CODE_EXTRA_BODY', JSON.stringify({ ...fields, ...(attempt?.body || {}) }));
-    const result = yield* next(attempt ? { ...e, model: attempt.model } : e);
-    if (result?.stopReason !== null || i + 1 >= attempts.length) return result;
-    const allowed = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'fallback' }) });
-    if (!allowed.ok) return result;
-  }
+// the first round's fields only.
+async function* passthroughStep($, e, next, passthrough, firstRound) {
+  const body = firstRound ? passthrough.first : passthrough.rest;
+  if (typeof body !== 'string') throw new Error('ccgateway: native request body unavailable');
+  await $.env.set('CLAUDE_CODE_EXTRA_BODY', body);
+  return yield* next(e);
 }
 
 export function register(on) {
@@ -60,30 +53,24 @@ export function register(on) {
       await $.turn.abort({ turnId: e.turnId });
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
     }
+    if (requested && searchPending && !handedOff && configuration?.scope_boundary) {
+      // Stop before the next model call. The Worker resumes the actual native
+      // tool results after expiring only the attachment identified at append.
+      const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'scope_pause', detail: { searches } }) });
+      await $.turn.abort({ turnId: e.turnId });
+      if (!ack.ok) throw new Error('ccgateway: scoped continuation rejected');
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
+    }
     if (formatContinuation && !searchPending) formatSteps++;
     requested = true;
     searchPending = false;
-    if (configuration?.passthrough) return yield* passthroughStep($, e, next, configuration.passthrough, passthroughRounds++ === 0, controlURL, controlToken);
-    if (!configuration?.main_request_scope) return yield* next(e);
-    const lease = async event => {
-      const response = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event }) });
-      if (!response.ok) throw new Error('ccgateway: main request scope rejected');
-    };
-    await lease('main_request_begin');
-    let turnFailed = false;
-    try {
-      return yield* next(e);
-    } catch (error) {
-      turnFailed = true;
-      throw error;
-    } finally {
-      try { await lease('main_request_end'); }
-      catch (error) {
-        // Go retains the failed lease independently. Preserve the original
-        // turn exception instead of replacing it with this cleanup failure.
-        if (!turnFailed) throw error;
-      }
-    }
+    if (configuration?.passthrough) return yield* passthroughStep($, e, next, configuration.passthrough, passthroughRounds++ === 0);
+    return yield* next(e);
+  }).catch(async function* ($, e, next) {
+    if (next.called) return yield* next(e);
+    // A failed boundary hook must never fall open into a duplicate model call.
+    await $.turn.abort({ turnId: e.turnId });
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
   });
   on('session.start', async ($, e, next) => {
     controlURL = await $.env.get('CCGATEWAY_MOD_URL');
@@ -91,12 +78,14 @@ export function register(on) {
     const response = await $.http.fetch(controlURL, { headers: { Authorization: 'Bearer ' + controlToken } });
     if (!response.ok) throw new Error('ccgateway: Mod configuration unavailable');
     configuration = JSON.parse(response.text);
-    const ready = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'ready', version: 'ccgateway-v2' }) });
+    if (configuration.scope_resumed) passthroughRounds = 1;
+    searches = configuration.search_calls || 0;
+    const ready = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'ready', version: 'ccgateway-v3' }) });
     if (!ready.ok) throw new Error('ccgateway: Mod acknowledgement rejected');
     return next(e);
   });
-  // Pending system text is fetched in memory. The native transcript and outbound
-  // relay still independently verify what the model actually received.
+  // Pending system text is fetched in memory. The native transcript
+  // independently verifies the attached system messages.
   on('prompt.submit', async ($, e, next) => {
     if (systemsAttached) return next(e);
     systemsAttached = true;
@@ -105,6 +94,14 @@ export function register(on) {
     if (!ack.ok) throw new Error('ccgateway: system acknowledgement rejected');
     if (systems.length === 0) return next(e);
     return next({ ...e, context: [...(e.context ?? []), ...systems] });
+  });
+  on('session.append', async ($, e, next) => {
+    const result = await next(e);
+    if (configuration?.scope_boundary && systemsAttached && e.message.type === 'attachment' && e.message.name === 'hook_additional_context' && e.origin?.kind === 'plugin' && e.origin?.event === 'prompt.submit') {
+      const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'scope_attachment', detail: { uuid: e.uuid } }) });
+      if (!ack.ok) throw new Error('ccgateway: scoped attachment acknowledgement rejected');
+    }
+    return result;
   });
   // Filter structured attachments by type and origin. Functional context is
   // protected; unknown types have independent per-origin policies.
@@ -143,10 +140,6 @@ export function register(on) {
     }
     const result = await next(e);
     await trace('keep', result);
-    if (configuration?.helper_attachment_ack && e.type === 'total_tokens_reminder' && origin === 'engine' && typeof result?.text === 'string' && result.text.length > 0) {
-      const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'helper_reminder', detail: { text: result.text } }) });
-      if (!ack.ok) throw new Error('ccgateway: helper reminder acknowledgement rejected');
-    }
     if (configuration?.continuation_attachment_ack && e.type === 'total_tokens_reminder' && origin === 'engine' && typeof result?.text === 'string' && result.text.length > 0) {
       const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'continuation_reminder', detail: { text: result.text } }) });
       if (!ack.ok) throw new Error('ccgateway: continuation reminder acknowledgement rejected');

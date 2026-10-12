@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultRequestPolicy, validRequestPolicy } from './requestPolicy'
+import { defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
   it('accepts every canonical tool search threshold including zero and rejects malformed ranges', () => {
@@ -22,19 +22,72 @@ describe('CCGateway request policy', () => {
     p.betas = [{ name: 'custom-beta', mapping: 'tool_search' }]
     expect(validRequestPolicy(p)).toBe(true)
   })
-  it('validates native rollout IDs, limits and conflicts without changing the legacy default', () => {
+  it('defaults to native without account rollout lists', () => {
     const p = defaultRequestPolicy()
-    expect(p.relay_mode).toBe('legacy')
-    expect(p.relay_native_accounts).toEqual([])
-    expect(validRequestPolicy({ ...p, relay_mode: 'native' })).toBe(true)
-    expect(validRequestPolicy({ ...p, relay_native_accounts: [24], relay_passthrough_accounts: [23] })).toBe(true)
-    expect(validRequestPolicy({ ...p, relay_native_accounts: [24], relay_passthrough_accounts: [24] })).toBe(false)
-    for (const field of ['relay_native_accounts', 'relay_passthrough_accounts'] as const) {
-      for (const ids of [[0], [-1], [1.5], [24, 24], [NaN], [Number.MAX_SAFE_INTEGER + 1], Array.from({ length: 1001 }, (_, i) => i + 1)]) {
-        expect(validRequestPolicy({ ...p, [field]: ids })).toBe(false)
-      }
-      expect(validRequestPolicy({ ...p, [field]: Array.from({ length: 1000 }, (_, i) => i + 1) })).toBe(true)
+    expect(p.relay_mode).toBe('native')
+    expect(p).not.toHaveProperty('relay_native_accounts')
+    expect(p).not.toHaveProperty('relay_passthrough_accounts')
+    expect(p).not.toHaveProperty('pass_upstream_errors')
+    expect(validRequestPolicy(p)).toBe(true)
+  })
+  it.each(['legacy', 'passthrough', '', undefined])('rejects an unnormalized relay mode %s', relay_mode => {
+    const policy = { ...defaultRequestPolicy(), relay_mode } as unknown as RequestPolicy
+    expect(validRequestPolicy(policy)).toBe(false)
+  })
+  it.each(['legacy', 'passthrough', 'native', '', undefined])('normalizes historical mode %s to native and drops obsolete lists without mutating input', relay_mode => {
+    const historical = {
+      relay_mode, relay_native_accounts: [24], relay_passthrough_accounts: [23],
+      custom_tool_prefix: 'mytools', pass_upstream_errors: true
     }
+    const policy = normalizeRequestPolicy(historical)
+    expect(policy).toEqual({ ...defaultRequestPolicy(), custom_tool_prefix: 'mytools' })
+    expect(policy).not.toHaveProperty('pass_upstream_errors')
+    expect(policy.relay_mode).toBe('native')
+    expect(policy).not.toHaveProperty('relay_native_accounts')
+    expect(policy).not.toHaveProperty('relay_passthrough_accounts')
+    expect(validRequestPolicy(policy)).toBe(true)
+    expect(normalizeRequestPolicy(policy)).toEqual(policy)
+    expect(historical).toEqual({
+      relay_mode, relay_native_accounts: [24], relay_passthrough_accounts: [23],
+      custom_tool_prefix: 'mytools', pass_upstream_errors: true
+    })
+  })
+  it('drops legacy attachment and beta settings from defaults and normalized editor state', () => {
+    const obsolete = {
+      attachment_source: 'gateway' as const,
+      attachment_sources: { environment: 'both' as const, date: 'gateway' as const },
+      environment_fields: { platform: 'gateway' as const, workingDirectory: 'client' as const },
+      unknown_client_attachment: 'ignore' as const,
+      unknown_gateway_attachment: 'pass' as const,
+      unknown_beta: 'reject' as const
+    }
+    const historical = { ...defaultRequestPolicy(), ...obsolete, tool_search: 'auto:0', unknown_field: 'ignore' as const }
+    const before = structuredClone(historical)
+    const policy = normalizeRequestPolicy(historical)
+    for (const key of Object.keys(obsolete)) {
+      expect(defaultRequestPolicy()).not.toHaveProperty(key)
+      expect(policy).not.toHaveProperty(key)
+    }
+    expect(policy).toEqual({ ...defaultRequestPolicy(), tool_search: 'auto:0', unknown_field: 'ignore' })
+    expect(normalizeRequestPolicy(JSON.parse(JSON.stringify(policy)))).toEqual(policy)
+    expect(historical).toEqual(before)
+    expect(validRequestPolicy(policy)).toBe(true)
+  })
+  it('validates the active unknown-field and tool-namespace policies', () => {
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), unknown_field: 'reject', custom_tool_prefix: 'my-tools_1' })).toBe(true)
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), custom_tool_prefix: 'my__tools' })).toBe(false)
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), unknown_field: 'pass' } as unknown as RequestPolicy)).toBe(false)
+  })
+  it('normalizes missing policy to native defaults', () => {
+    expect(normalizeRequestPolicy()).toEqual(defaultRequestPolicy())
+    expect(normalizeRequestPolicy({})).toEqual(defaultRequestPolicy())
+  })
+  it('preserves supported policy overrides when normalizing', () => {
+    const saved: RequestPolicy = {
+      ...defaultRequestPolicy(), schema_version: 1, allow_fast: false, allow_effort: false,
+      tool_search: 'auto:0', thinking_disabled_compat: 'omit', betas: []
+    }
+    expect(normalizeRequestPolicy(saved)).toEqual(saved)
   })
   it('allows an explicitly empty beta whitelist', () => {
     const p = defaultRequestPolicy()

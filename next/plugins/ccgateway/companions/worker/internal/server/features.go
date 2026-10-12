@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 )
 
 // Version is optionally set by the release build. It is never an image tag.
@@ -50,9 +49,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		probe.Value = status.CLIVersion
 	}
 	out := features.RuntimeCapabilities{ProtocolVersion: features.CapabilityProtocolVersion, Build: binaryBuildInfo(), Catalog: features.Catalog(), PolicySchemaVersions: []int{features.PolicySchemaVersion}, Probes: []features.RuntimeProbe{probe}, ModelProviderVerification: "not_run"}
-	out.ExecutionModes = []string{"legacy", "passthrough", "native"}
-	out.HelperHistorySchemaVersions = []int{helperhistory.Version}
-	out.HelperHistoryPayloadVersions = []int{helperhistory.PayloadVersion1, helperhistory.PayloadVersion2}
+	out.ExecutionModes = []string{"native"}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

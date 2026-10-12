@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // Only the authenticated host/controller can provide this internal header.
@@ -23,9 +22,6 @@ type RequestPolicy struct {
 	ToolSearch        string            `json:"tool_search,omitempty"`
 	AllowEffort       bool              `json:"allow_effort"`
 	Betas             []BetaRule        `json:"betas"`
-	// Upstream errors end the run and reach the client as the API sent them,
-	// instead of being handled (retried, backed off) by Claude Code.
-	PassUpstreamErrors bool `json:"pass_upstream_errors"`
 	// Which side's system attachments (environment, date, tokens, session_context)
 	// to keep: "client" (default), "gateway", or "both".
 	AttachmentSource         string            `json:"attachment_source"`
@@ -35,13 +31,11 @@ type RequestPolicy struct {
 	CustomToolPrefix         string            `json:"custom_tool_prefix"`
 	// "pass" (default) or "omit": see applyThinkingDisabledCompat.
 	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
-	// "legacy" (default) or "passthrough": every upstream request is the one
-	// the inner CLI built, forwarded unchanged (passthrough.go).
-	RelayMode string `json:"relay_mode,omitempty"`
+	RelayMode              string `json:"relay_mode,omitempty"`
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", ThinkingDisabledCompat: "pass", RelayMode: "legacy", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", ThinkingDisabledCompat: "pass", RelayMode: "native", Betas: features.BetaRules()}
 }
 
 var betaName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
@@ -97,10 +91,10 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 		return p, fmt.Errorf("invalid thinking_disabled_compat: must be pass or omit")
 	}
 	if p.RelayMode == "" {
-		p.RelayMode = "legacy"
+		p.RelayMode = "native"
 	}
-	if p.RelayMode != "legacy" && p.RelayMode != "passthrough" && p.RelayMode != "native" {
-		return p, fmt.Errorf("invalid relay_mode: must be legacy, passthrough or native")
+	if p.RelayMode != "native" {
+		return p, fmt.Errorf("invalid relay_mode: must be native")
 	}
 	// Ignore legacy editable rules; Beta handling is fixed in code.
 	p.Betas = defaultRequestPolicy().Betas
@@ -121,128 +115,10 @@ func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAd
 	if err != nil {
 		return nil, err
 	}
-	if p.RelayMode == "passthrough" || p.RelayMode == "native" {
-		if helper != nil {
-			return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
-		}
-		return parsePassthroughRequest(body, h, p, access)
+	if helper != nil {
+		return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
 	}
-	o, err := decodeObject(body)
-	if err != nil {
-		return nil, err
-	}
-	mcp, err := parseMCPConnector(o, h.Values("anthropic-beta"))
-	if err != nil {
-		return nil, err
-	}
-	if mcp != nil {
-		body = mcp.safeRaw(o)
-	}
-	plan, err := parseRequestPlan(body, o)
-	if err != nil {
-		return nil, err
-	}
-	if err := plan.creditParameter.ValidateBetas(h.Values("anthropic-beta")); err != nil {
-		return nil, err
-	}
-	if err := plan.takeTaskBudget(o); err != nil {
-		return nil, err
-	}
-	if mcp != nil {
-		mcp.stripLocalRequest(o)
-	}
-	if err = p.filterFields(o); err != nil {
-		return nil, err
-	}
-	fast, err := p.speed(o)
-	if err != nil {
-		return nil, err
-	}
-	effort, format, err := p.outputConfig(o)
-	if err != nil {
-		return nil, err
-	}
-	schema, err := outputSchema(format)
-	if err != nil {
-		return nil, err
-	}
-	cacheRequested := hasRequestCacheControl(o)
-	data, _ := json.Marshal(o)
-	req, err := parseRequestCreditCandidate(data, mcp, access, plan.creditToken != "", hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
-	if err != nil {
-		return nil, err
-	}
-	req.MCP = mcp
-	if err := plan.validateTools(req); err != nil {
-		return nil, err
-	}
-	req.Plan = plan
-	if err := req.configureProviderExecution(); err != nil {
-		return nil, err
-	}
-	req.Fast = fast
-	req.Effort = effort
-	req.JSONSchema = schema
-	req.APIOutputFormat = schema != nil
-	p.applyThinkingDisabledCompat(req)
-	if err := plan.configureThinkingOutput(req, format, h.Values("anthropic-beta")); err != nil {
-		return nil, err
-	}
-	req.PassUpstreamErrors = p.PassUpstreamErrors
-	req.AttachmentSource = p.AttachmentSource
-	req.AttachmentSources = p.AttachmentSources
-	req.EnvironmentFields = p.EnvironmentFields
-	req.UnknownClientAttachment = p.UnknownClientAttachment
-	req.UnknownGatewayAttachment = p.UnknownGatewayAttachment
-	req.filterClientAttachments()
-	req.CustomToolPrefix = p.CustomToolPrefix
-	req.ToolSearch = p.toolSearch(req)
-	if cacheRequested {
-		req.PromptCacheTTL = "5m"
-		if req.TTL == time.Hour {
-			req.PromptCacheTTL = "1h"
-		}
-	}
-	if err = p.applyBetas(req, h.Values("anthropic-beta")); err != nil {
-		return nil, err
-	}
-	if err := plan.configureAPISpeed(req); err != nil {
-		return nil, err
-	}
-	if err = req.validateAdvisorBeta(); err != nil {
-		return nil, err
-	}
-	if err := req.validateInlineSystemBetas(p.AllowEffort); err != nil {
-		return nil, err
-	}
-	// API server search owns deferred discovery. Do not add CC's separate
-	// client ToolSearch loop, even when the global policy enables it.
-	if len(req.ServerTools) > 0 || req.MCP != nil {
-		req.ToolSearch = "false"
-	}
-	if err := req.configureContextCompaction(h.Values("anthropic-beta")); err != nil {
-		return nil, err
-	}
-	if err := req.validateInlineToolConfiguration(); err != nil {
-		return nil, err
-	}
-	if err := req.validateAPIClientConfiguration(); err != nil {
-		return nil, err
-	}
-	if err := plan.validateInternalRounds(req); err != nil {
-		return nil, err
-	}
-	if err := req.validateMCPConfiguration(); err != nil {
-		return nil, err
-	}
-	if err := req.configureFallbacks(h); err != nil {
-		return nil, err
-	}
-	req.helperHistory = helper
-	if err := plan.validateTaskBudget(req); err != nil {
-		return nil, err
-	}
-	return req, nil
+	return parsePassthroughRequest(body, h, p, access)
 }
 
 // filterFields rejects or drops body fields outside the supported set.

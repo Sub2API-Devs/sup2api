@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCompletedHistorySafeguardsUseActualWireIdentity(t *testing.T) {
@@ -14,13 +17,17 @@ func TestCompletedHistorySafeguardsUseActualWireIdentity(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = r.ApplyMainRequestFeatures(Object{"tools": []any{}}); e != nil {
-		t.Fatal(e)
-	}
+	wire := r.cliWireMessage(r.Messages[1])
+	require.Len(t, wire.Content, 1)
+	assert.Equal(t, "bash", str(wire.Content[0], "name"))
+	assert.Equal(t, json.Number("9007199254740993"), wire.Content[0]["input"].(Object)["n"])
+	assert.Empty(t, r.enabledTools())
+	cfg, e := r.passthroughBodies()
+	require.NoError(t, e)
+	assert.Equal(t, `[{"fixture":"opaque"}]`, string(cfg.First["safeguards"]))
 	r.completedClientHistory = nil
-	if e = r.ApplyMainRequestFeatures(Object{"tools": []any{}}); e == nil {
-		t.Fatal("unproven historical rename accepted")
-	}
+	assert.False(t, r.completedClientHistoryBlock(r.Messages[1].Content[0]))
+	assert.NotEqual(t, "bash", str(r.cliWireMessage(r.Messages[1]).Content[0], "name"))
 }
 func TestTaskBudgetForcedEagerZeroRoundAdmission(t *testing.T) {
 	for _, kind := range []string{"tool", "any"} {

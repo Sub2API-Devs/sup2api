@@ -3,7 +3,6 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
@@ -18,18 +17,18 @@ func helperInlineFixture(t *testing.T, extra []any) (*Request, json.RawMessage, 
 	body := basic()
 	body["tools"] = base
 	body["messages"] = ms
-	body["output_config"] = Object{"task_budget": Object{"type": "tokens", "total": 64000, "remaining": 32000}}
 	raw, _ := json.Marshal(body)
 	public, _ := json.Marshal(ms)
 	tools, _ := json.Marshal(base)
 	x := &helperHistoryExecution{payloadVersion: 2, authenticated: true, public: public, tools: tools, imported: helperhistory.Payload{Version: 1}, delta: helperhistory.Payload{Version: 1}}
-	h := http.Header{}
-	h.Set("anthropic-beta", taskBudgetBeta+",inline-tools-2026-09-15")
-	h.Set("X-CCGateway-Request-Policy", `{"tool_search":"true"}`)
-	r, err := parsePolicyRequestWithHelper(raw, h, nil, x)
+	// This fixture exercises the retained history validators directly, not
+	// native admission, which refuses all helper-history envelopes.
+	r, err := parseRequest(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r.ToolSearch = "true"
+	r.helperHistory = x
 	return r, public, tools
 }
 

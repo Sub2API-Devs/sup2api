@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCitationsHistoryAndStreaming(t *testing.T) {
@@ -70,10 +73,21 @@ func TestCompleteRefusalIsNormalWithoutNativeHistory(t *testing.T) {
 	for _, structured := range []bool{false, true} {
 		dir := t.TempDir()
 		runner := &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_CLI_TAIL": "refusal", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config")})}
-		req := parsed(t, basic())
+		body := basic()
 		if structured {
-			req.JSONSchema = Object{"type": "object"}
+			body["output_config"] = Object{"format": Object{"type": "json_schema", "schema": Object{"type": "object"}}}
 		}
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
+		req, err := parsePolicyRequest(raw, http.Header{})
+		require.NoError(t, err)
+		req.diagnostic = newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw)))
+		assert.Nil(t, req.JSONSchema, "native output_config does not synthesize StructuredOutput")
+		cfg, err := req.passthroughBodies()
+		require.NoError(t, err)
+		_, hasFormat := cfg.First["output_config"]
+		assert.Equal(t, structured, hasFormat)
+		assert.Equal(t, cfg.First["output_config"], cfg.Rest["output_config"])
 		p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		var events []Object

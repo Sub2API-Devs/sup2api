@@ -45,7 +45,7 @@ func independentHelperCatalogFixture(t *testing.T, overrides ...Object) (*Reques
 func TestIndependentHelperCatalogMetadataPrecisionAndNoMutation(t *testing.T) {
 	r, body, want := independentHelperCatalogFixture(t, Object{"description": "", "strict": false, "eager_input_streaming": false, "input_examples": []any{Object{"n": json.Number("9007199254740993")}}, "input_schema": Object{"type": "object", "properties": Object{"n": Object{"const": json.Number("9007199254740993")}}}})
 	source := string(r.helperHistory.tools)
-	if err := r.ApplyMainRequestFeatures(body); err != nil {
+	if err := r.restoreHelperToolCatalog(body); err != nil {
 		t.Fatal(err)
 	}
 	for _, raw := range body["tools"].([]any) {
@@ -62,7 +62,7 @@ func TestIndependentHelperCatalogMetadataPrecisionAndNoMutation(t *testing.T) {
 		t.Fatal("persisted source catalog mutated")
 	}
 	before := digest(body)
-	if err := r.ApplyMainRequestFeatures(body); err != nil {
+	if err := r.restoreHelperToolCatalog(body); err != nil {
 		t.Fatal(err)
 	}
 	if digest(body) != before {
@@ -84,7 +84,7 @@ func TestIndependentHelperCatalogRejectsAmbiguityAtomically(t *testing.T) {
 				body["tools"] = append(body["tools"].([]any), offered)
 			}
 			before := digest(body)
-			if err := r.ApplyMainRequestFeatures(body); err == nil {
+			if err := r.restoreHelperToolCatalog(body); err == nil {
 				t.Fatal("invalid existing definition accepted")
 			}
 			if digest(body) != before {
@@ -126,7 +126,7 @@ func TestIndependentHelperCatalogInlineWithdrawalAndReadd(t *testing.T) {
 			messages = append(messages, Object{"role": message.Role, "content": current.wireMessage(message).Content})
 		}
 		body := Object{"messages": messages, "tools": []any{Object{"name": "ToolSearch", "input_schema": Object{"type": "object"}}}}
-		if err = current.ApplyMainRequestFeatures(body); err != nil {
+		if err = current.restoreHelperToolCatalog(body); err != nil {
 			t.Fatal(err)
 		}
 		if err = current.applyHelperHistory(body); err != nil {
@@ -159,7 +159,7 @@ func TestIndependentHelperCatalogInlineWithdrawalAndReadd(t *testing.T) {
 func TestIndependentHelperCatalogPublicToolNamesRemainClientOwned(t *testing.T) {
 	r, body, _ := independentHelperCatalogFixture(t)
 	before := digest(r.Tools)
-	if err := r.ApplyMainRequestFeatures(body); err != nil {
+	if err := r.restoreHelperToolCatalog(body); err != nil {
 		t.Fatal(err)
 	}
 	original := Message{Role: "assistant", Content: []Object{{"type": "tool_use", "id": "public-call", "name": "weather", "input": Object{"n": json.Number("9007199254740993")}}}}
@@ -182,7 +182,7 @@ func TestIndependentHelperCatalogPublicToolNamesRemainClientOwned(t *testing.T) 
 
 func TestIndependentHelperCatalogRestoresProvenReference(t *testing.T) {
 	r, body, want := independentHelperCatalogFixture(t)
-	if err := r.ApplyMainRequestFeatures(body); err != nil {
+	if err := r.restoreHelperToolCatalog(body); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.applyHelperHistory(body); err != nil {
