@@ -3250,7 +3250,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 
 - **核心**：账号或草稿没有绑定代理（含代理被删除）时不再阻断，期望配置为 `{"proxy": null, "direct": true, ...}`；不再产生 `no_proxy`（错误码保留，兼容旧前端）。绑定的代理被停用仍阻断（`proxy_disabled`），**不回退直连**；账号停用仍为 `account_disabled`。修订号含 `proxy_id`，切换代理或改直连都会重新同步。
 - **草稿与重新授权**：`POST/PUT /system/ccgateway/drafts` 的 `proxy_id` 可省略或为 null，`proxy_id <= 0` 为 `proxy_not_found`。重新授权沿用账号当前的代理，账号没有代理时草稿也直连。账号准备按 `proxy_id IS NOT DISTINCT FROM` 比对；插件 `prepare` 阶段不再要求代理。
-- **控制器**：只有 `direct` 为 `true` 且没有 `proxy` 时才直连；不带 `direct` 的旧核心发来空代理仍阻断。直连时 sing-box 出站为 `direct`（DNS 仍走 DoH 1.1.1.1），egress 的 output 链丢弃私有、回环、链路本地、组播与保留地址，只放行公网 IPv4 TCP；业务容器规则不变。连通性检查照常要求能访问探测地址。
+- **控制器**：只有 `direct` 为 `true` 且没有 `proxy` 时才直连；不带 `direct` 的旧核心发来空代理仍阻断。直连时 sing-box 出站为 `direct`（DNS 仍走 DoH 1.1.1.1，但不写 `detour`：sing-box 拒绝 detour 到空的 direct 出站而启动失败，`sing-box check` 却不报错；0.1.46 因此直连失败，0.1.47 修复），egress 的 output 链丢弃私有、回环、链路本地、组播与保留地址，只放行公网 IPv4 TCP；业务容器规则不变。连通性检查照常要求能访问探测地址。
 - **兼容顺序**：新核心 + 旧控制器时，无代理账号保持阻断（与以前一致）；先升控制器再依赖直连。
 - **控制台**：代理不再必填，提示直连使用服务器自身 IP；授权步骤中未选代理显示「直连（不使用代理）」。
 

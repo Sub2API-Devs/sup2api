@@ -110,6 +110,10 @@ def configuration(proxy, app_ip, gateway_ip):
         'outbounds': [out],
         'route': {'rules': [{'inbound': 'dns', 'action': 'hijack-dns'}], 'final': 'account-proxy'}
     }
+    if proxy is None:
+        # sing-box refuses to start with a DNS detour to an empty direct
+        # outbound (sing-box check accepts it); without one it dials directly.
+        del config['dns']['servers'][0]['detour']
     firewall = f'''table inet ccg {{
  chain intercept {{ type filter hook prerouting priority mangle; policy accept;
   ip saddr {app_ip} ip daddr {gateway_ip} udp dport 53 accept
