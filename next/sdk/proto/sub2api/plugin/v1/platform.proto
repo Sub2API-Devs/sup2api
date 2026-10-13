@@ -149,6 +149,7 @@ service PlatformService {
   // Reads the upstream's answer to the request above into quota windows. It
   // states upstream facts only; the host stores, merges and serves them.
   rpc ParseQuotaResponse(ParseQuotaResponseRequest) returns (QuotaResult);
+  rpc CheckModelAvailability(CheckModelAvailabilityRequest) returns (CheckModelAvailabilityResponse);
   // Builds the request that renews the credentials of one account (an OAuth
   // access token from its refresh token, CONTRACTS §48), for account types
   // declaring manifest accountTypes[].refresh. Same division of labour as
@@ -309,6 +310,7 @@ message ClassifyErrorResponse {
   string client_error_code = 8;
   AccountAutomaticState automatic_state = 9;
   bool local_failure = 10;
+  QuotaResult quota = 12;
 }
 
 message BuildTestRequestRequest {
@@ -642,6 +644,7 @@ message BuildQuotaRequestResponse {
   string url = 2;
   map<string, string> headers = 3;
   string body_json = 4;            // optional
+  string runtime_operation = 5;
 }
 
 message ParseQuotaResponseRequest {
@@ -677,6 +680,7 @@ message QuotaWindow {
   // Optional absolute figures, for upstreams that report them.
   int64 used = 5;
   int64 limit = 6;
+  bool utilization_unknown = 7;
 }
 
 // QuotaResult is what the plugin read out of the quota answer.
@@ -696,6 +700,45 @@ message QuotaResult {
   ErrorType error_type = 2;
   // Why, shown with the snapshot. At most 512 bytes are kept.
   string error_message = 3;
+  int64 next_check_at_unix = 4;
+}
+
+message CheckModelAvailabilityRequest {
+  repeated ModelAvailabilityCandidate candidates = 1;
+  int64 now_unix = 2;
+}
+
+message ModelAvailabilityCandidate {
+  int64 account_id = 1;
+  string account_type = 2;
+  string model = 3;
+  AccountQuotaSnapshot quota = 4;
+  string client_model = 5;
+}
+
+message AccountQuotaSnapshot {
+  repeated QuotaWindow windows = 1;
+  int64 updated_at_unix = 2;
+  string error = 3;
+  int64 revision = 4;
+  int64 generation = 5;
+}
+
+message CheckModelAvailabilityResponse {
+  repeated ModelAvailability results = 1;
+}
+
+message ModelAvailability {
+  int64 account_id = 1;
+  string model = 2;
+  enum State {
+    UNKNOWN = 0;
+    AVAILABLE = 1;
+    UNAVAILABLE = 2;
+  }
+  State state = 3;
+  string reason = 4;
+  int64 retry_at_unix = 5;
 }
 
 message BuildRefreshRequestRequest {

@@ -219,12 +219,13 @@ func Capabilities(p any) []string {
 type runtime struct {
 	pluginv1.UnimplementedPluginServiceServer
 
-	p             any
-	opts          options
-	dial          HostDialer
-	key, version  string
-	capabilities  []string
-	taskProtocols map[string]bool
+	p                 any
+	opts              options
+	dial              HostDialer
+	key, version      string
+	capabilities      []string
+	taskProtocols     map[string]bool
+	quotaCapabilities bool
 
 	mu     sync.Mutex
 	host   *host
@@ -244,6 +245,11 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 			return nil, fmt.Errorf("parse embedded manifest: %w", err)
 		}
 		rt.key, rt.version = m.Key, m.Version
+		for _, accountType := range m.AccountTypes {
+			if accountType.ModelAvailability || accountType.Quota != nil && accountType.Quota.AutoRefresh {
+				rt.quotaCapabilities = true
+			}
+		}
 		rt.taskProtocols = map[string]bool{}
 		for _, platform := range m.Platforms {
 			for _, endpoint := range platform.Endpoints {
@@ -323,6 +329,9 @@ func (rt *runtime) strictWanted() bool {
 func (rt *runtime) InitHost(ctx context.Context, in *pluginv1.InitHostRequest) (*pluginv1.InitHostResponse, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	if rt.quotaCapabilities && in.GetHostApiVersion() < protocol.ModelAvailabilityHostAPIVersion {
+		return nil, status.Errorf(codes.FailedPrecondition, "quota capabilities require host API version %d or newer", protocol.ModelAvailabilityHostAPIVersion)
+	}
 	for _, capability := range rt.capabilities {
 		if capability == manifest.CapGatewayObserve && in.GetHostApiVersion() < protocol.ObservationHostAPIVersion {
 			return nil, status.Errorf(codes.FailedPrecondition, "observations require host API version %d or newer", protocol.ObservationHostAPIVersion)
@@ -489,6 +498,13 @@ func (s platformServer) BuildQuotaRequest(ctx context.Context, in *pluginv1.Buil
 		return q.BuildQuotaRequest(ctx, in)
 	}
 	return nil, status.Error(codes.Unimplemented, "this account type cannot query its quota")
+}
+
+func (s platformServer) CheckModelAvailability(ctx context.Context, in *pluginv1.CheckModelAvailabilityRequest) (*pluginv1.CheckModelAvailabilityResponse, error) {
+	if checker, ok := s.impl.(ModelAvailabilityChecker); ok {
+		return checker.CheckModelAvailability(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type does not check model availability")
 }
 
 func (s platformServer) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {

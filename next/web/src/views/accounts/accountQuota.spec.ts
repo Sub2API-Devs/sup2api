@@ -12,10 +12,15 @@ describe('quota helpers', () => {
     expect(hasQuota(snap())).toBe(true)
   })
 
-  it('sorts known windows first, unknown keys after in server order', () => {
+  it('retains plugin window order without prioritizing legacy keys or mutating the snapshot', () => {
     const w = (key: string) => ({ key, utilization: 0, resets_at: null, status: '' as const })
-    expect(sortWindows([w('x'), w('7d_fable'), w('7d'), w('y'), w('5h'), w('7d_sonnet')]).map((x) => x.key)).toEqual(['5h', '7d', '7d_sonnet', '7d_fable', 'x', 'y'])
+    const windows = [w('custom'), w('7d_fable'), w('7d'), w('daily'), w('5h'), w('7d_sonnet')]
+    const ordered = sortWindows(windows)
+    expect(ordered.map((x) => x.key)).toEqual(['custom', '7d_fable', '7d', 'daily', '5h', '7d_sonnet'])
+    expect(ordered).not.toBe(windows)
+    expect(windows.map((x) => x.key)).toEqual(ordered.map((x) => x.key))
     expect(sortWindows(null)).toEqual([])
+    expect(sortWindows(undefined)).toEqual([])
   })
 
   it('colours by usage (75 / 90) and by upstream status', () => {
@@ -37,14 +42,21 @@ describe('quota helpers', () => {
   it('counts down to the reset', () => {
     const now = Date.parse('2026-10-05T00:00:00Z')
     const at = (sec: number) => new Date(now + sec * 1000).toISOString()
-    expect(quotaCountdown(null, 10, now)).toEqual({ kind: 'none' })
-    expect(quotaCountdown('garbage', 10, now)).toEqual({ kind: 'none' })
-    expect(quotaCountdown(at(30), 10, now)).toEqual({ kind: 'in', text: '<1m' })
-    expect(quotaCountdown(at(35 * 60 + 5), 10, now)).toEqual({ kind: 'in', text: '35m' })
-    expect(quotaCountdown(at(4 * 3600 + 12 * 60), 10, now)).toEqual({ kind: 'in', text: '4h 12m' })
-    expect(quotaCountdown(at(2 * 86400 + 3 * 3600 + 59), 10, now)).toEqual({ kind: 'in', text: '2d 3h' })
-    expect(quotaCountdown(at(-5), 10, now)).toEqual({ kind: 'pending' })
-    expect(quotaCountdown(at(-5), 0, now)).toEqual({ kind: 'now' })
+    expect(quotaCountdown(null, now)).toEqual({ kind: 'none' })
+    expect(quotaCountdown('garbage', now)).toEqual({ kind: 'none' })
+    expect(quotaCountdown(at(30), now)).toEqual({ kind: 'in', text: '<1m' })
+    expect(quotaCountdown(at(35 * 60 + 5), now)).toEqual({ kind: 'in', text: '35m' })
+    expect(quotaCountdown(at(4 * 3600 + 12 * 60), now)).toEqual({ kind: 'in', text: '4h 12m' })
+    expect(quotaCountdown(at(2 * 86400 + 3 * 3600 + 59), now)).toEqual({ kind: 'in', text: '2d 3h' })
+    expect(quotaCountdown(at(-5), now)).toEqual({ kind: 'pending' })
+    expect(quotaCountdown(at(0), now, false)).toEqual({ kind: 'pending' })
+  })
+
+  it('marks server-expired windows pending even without a reset time or with clock skew', () => {
+    const now = Date.parse('2026-10-05T00:00:00Z')
+    expect(quotaCountdown(null, now, true)).toEqual({ kind: 'pending' })
+    expect(quotaCountdown('garbage', now, true)).toEqual({ kind: 'pending' })
+    expect(quotaCountdown('2026-10-06T00:00:00Z', now, true)).toEqual({ kind: 'pending' })
   })
 })
 

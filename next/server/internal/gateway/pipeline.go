@@ -75,7 +75,8 @@ type call struct {
 	upstreamRefs         map[string]core.PricedUsage
 	upstreamPrimaryModel string
 
-	sticky *stickySession
+	sticky       *stickySession
+	availability map[int64]availabilityAdmission
 	// ranked holds the per-request priority/weight the scheduler.rank
 	// plugins asked for (CONTRACTS §24); rankDone marks the single call, so
 	// failover attempts reuse the same result. nil = the accounts' own values.

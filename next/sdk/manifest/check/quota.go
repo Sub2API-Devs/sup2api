@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
@@ -22,6 +23,31 @@ func (v *validator) quota(f string, q *manifest.AccountQuota) {
 		return
 	}
 	f += ".quota"
+	if q.AutoRefresh && !q.Query {
+		v.add(f+".autoRefresh", "required", "autoRefresh requires query")
+	}
+	if len(q.Windows) > manifest.MaxQuotaHeaders {
+		v.add(f+".windows", "too_many", "at most %d quota windows", manifest.MaxQuotaHeaders)
+	}
+	definitions := map[string]bool{}
+	for i, w := range q.Windows {
+		wf := fmt.Sprintf("%s.windows[%d]", f, i)
+		switch {
+		case w.Key == "":
+			v.add(wf+".key", "required", "key is required")
+		case !quotaKeyRe.MatchString(w.Key):
+			v.add(wf+".key", "invalid_format", "key %q must match %s", w.Key, quotaKeyRe.String())
+		case definitions[w.Key]:
+			v.add(wf+".key", "duplicate", "window %q declared twice", w.Key)
+		}
+		definitions[w.Key] = true
+		if strings.TrimSpace(w.Label["en"]) == "" {
+			v.add(wf+".label", "required", "label.en is required")
+		}
+		if len(w.ShortLabel) > 0 && strings.TrimSpace(w.ShortLabel["en"]) == "" {
+			v.add(wf+".shortLabel", "required", "shortLabel.en is required")
+		}
+	}
 	if !q.Supported() {
 		v.add(f, "required", "quota must declare headers or query")
 		return

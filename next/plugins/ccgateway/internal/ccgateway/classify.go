@@ -10,6 +10,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
@@ -116,9 +118,20 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 			resp.Reason += ": " + truncate(msg, 200)
 		}
 	case code == http.StatusTooManyRequests:
+		resp.LocalFailure = msg == "Gateway concurrency limit reached"
+		if !resp.LocalFailure {
+			resp.Quota = nativeQuotaObservation(in, now)
+			if len(resp.GetQuota().GetWindows()) == 1 {
+				key := resp.Quota.Windows[0].GetKey()
+				if key == "7d_fable" || key == "7d_sonnet" {
+					resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
+					resp.Reason = "native scoped quota rejected: " + key
+					return resp, nil
+				}
+			}
+		}
 		until, src := rateLimitReset(in.GetHeaders(), now)
 		cooldown(until.Sub(now), "rate limited until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
-		resp.LocalFailure = msg == "Gateway concurrency limit reached"
 		if in.GetAccount().GetType() == AccountTypeManaged && !resp.LocalFailure {
 			resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
 			resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
@@ -133,6 +146,27 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
 	}
 	return resp, nil
+}
+
+func nativeQuotaObservation(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.QuotaResult {
+	h := in.GetHeaders()
+	if in.GetAccount().GetType() != AccountTypeManaged || in.GetStatus() != http.StatusTooManyRequests || h[errorScopeHeader] != "" || h["x-ccgateway-error-source"] != "cli" || h["x-ccgateway-cli-error"] != "rate_limit" || h[httpfacts.NativeObservedStatusHeader] != "429" {
+		return nil
+	}
+	key := httpfacts.NativeQuotaKey(h[httpfacts.NativeQuotaTypeHeader])
+	if key == "" {
+		return nil
+	}
+	window := &pluginv1.QuotaWindow{Key: key, Status: "rejected", UtilizationUnknown: true}
+	if raw := h[httpfacts.NativeQuotaResetHeader]; raw != "" {
+		reset, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || reset <= 0 || reset > 253402300799 || strconv.FormatInt(reset, 10) != raw {
+			return nil
+		}
+		window.ResetsAtUnix = reset
+	}
+	windows := []*pluginv1.QuotaWindow{window}
+	return &pluginv1.QuotaResult{Windows: windows, NextCheckAtUnix: nextQuotaCheck(now, windows)}
 }
 
 func truncate(s string, n int) string {

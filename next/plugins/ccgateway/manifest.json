@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费；不支持 token 计数和模型发现。"
   },
-  "version": "0.1.44",
+  "version": "0.1.45",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.115 <0.2.0",
+  "hostCompat": ">=0.1.124 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -30,6 +30,17 @@
   "accountTypes": [
     {
       "id": "managed",
+      "modelAvailability": true,
+      "quota": {
+        "query": true,
+        "autoRefresh": true,
+        "windows": [
+          {"key": "5h", "label": {"en": "5-hour usage", "zh": "5 小时用量"}, "shortLabel": {"en": "5h", "zh": "5 小时"}},
+          {"key": "7d", "label": {"en": "Shared weekly usage", "zh": "共享周用量"}, "shortLabel": {"en": "7d", "zh": "7 天"}},
+          {"key": "7d_fable", "label": {"en": "Fable weekly usage", "zh": "Fable 周用量"}, "shortLabel": {"en": "Fable 7d", "zh": "Fable 7 天"}},
+          {"key": "7d_sonnet", "label": {"en": "Sonnet weekly usage", "zh": "Sonnet 周用量"}, "shortLabel": {"en": "Sonnet 7d", "zh": "Sonnet 7 天"}}
+        ]
+      },
       "lifecycle": {"preparation": true, "required": true, "actions": [{"id": "refresh_auth", "label": {"en": "Refresh authorization", "zh": "重新授权"}, "icon": "refresh"}]},
       "label": {
         "en": "Claude Code",

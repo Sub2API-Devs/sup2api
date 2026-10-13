@@ -160,6 +160,7 @@ type PlatformServiceClient interface {
 	// Reads the upstream's answer to the request above into quota windows. It
 	// states upstream facts only; the host stores, merges and serves them.
 	ParseQuotaResponse(ctx context.Context, in *ParseQuotaResponseRequest, opts ...grpc.CallOption) (*QuotaResult, error)
+	CheckModelAvailability(ctx context.Context, in *CheckModelAvailabilityRequest, opts ...grpc.CallOption) (*CheckModelAvailabilityResponse, error)
 	// Builds the request that renews the credentials of one account (an OAuth
 	// access token from its refresh token, CONTRACTS §48), for account types
 	// declaring manifest accountTypes[].refresh. Same division of labour as
@@ -358,6 +359,15 @@ func (c *platformServiceClient) ParseQuotaResponse(ctx context.Context, in *Pars
 	return out, nil
 }
 
+func (c *platformServiceClient) CheckModelAvailability(ctx context.Context, in *CheckModelAvailabilityRequest, opts ...grpc.CallOption) (*CheckModelAvailabilityResponse, error) {
+	out := new(CheckModelAvailabilityResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.PlatformService/CheckModelAvailability", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformServiceClient) BuildRefreshRequest(ctx context.Context, in *BuildRefreshRequestRequest, opts ...grpc.CallOption) (*BuildRefreshRequestResponse, error) {
 	out := new(BuildRefreshRequestResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.PlatformService/BuildRefreshRequest", in, out, opts...)
@@ -536,6 +546,7 @@ type PlatformServiceServer interface {
 	// Reads the upstream's answer to the request above into quota windows. It
 	// states upstream facts only; the host stores, merges and serves them.
 	ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error)
+	CheckModelAvailability(context.Context, *CheckModelAvailabilityRequest) (*CheckModelAvailabilityResponse, error)
 	// Builds the request that renews the credentials of one account (an OAuth
 	// access token from its refresh token, CONTRACTS §48), for account types
 	// declaring manifest accountTypes[].refresh. Same division of labour as
@@ -628,6 +639,9 @@ func (UnimplementedPlatformServiceServer) BuildQuotaRequest(context.Context, *Bu
 }
 func (UnimplementedPlatformServiceServer) ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ParseQuotaResponse not implemented")
+}
+func (UnimplementedPlatformServiceServer) CheckModelAvailability(context.Context, *CheckModelAvailabilityRequest) (*CheckModelAvailabilityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckModelAvailability not implemented")
 }
 func (UnimplementedPlatformServiceServer) BuildRefreshRequest(context.Context, *BuildRefreshRequestRequest) (*BuildRefreshRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BuildRefreshRequest not implemented")
@@ -960,6 +974,24 @@ func _PlatformService_ParseQuotaResponse_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_CheckModelAvailability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckModelAvailabilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).CheckModelAvailability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.PlatformService/CheckModelAvailability",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).CheckModelAvailability(ctx, req.(*CheckModelAvailabilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformService_BuildRefreshRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BuildRefreshRequestRequest)
 	if err := dec(in); err != nil {
@@ -1106,6 +1138,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ParseQuotaResponse",
 			Handler:    _PlatformService_ParseQuotaResponse_Handler,
+		},
+		{
+			MethodName: "CheckModelAvailability",
+			Handler:    _PlatformService_CheckModelAvailability_Handler,
 		},
 		{
 			MethodName: "BuildRefreshRequest",

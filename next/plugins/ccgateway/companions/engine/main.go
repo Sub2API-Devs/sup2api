@@ -487,6 +487,8 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 			var refusal *requestRefusal
 			if !native.ObservedStatus || errors.As(e, &refusal) {
 				x.w.Header().Set(errorScopeHeader, "request")
+			} else {
+				native.quotaHeaders(x.w.Header())
 			}
 			if id := nativeRequestID(native.RequestID); id != "" {
 				x.w.Header().Set("Request-Id", id)

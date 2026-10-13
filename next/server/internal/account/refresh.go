@@ -279,6 +279,8 @@ func (s *Service) refreshAccount(ctx context.Context, id int64, force bool) (*Re
 		slog.WarnContext(ctx, "account: credentials changed while refreshing; renewal discarded", "account", id)
 		return s.refreshOutcome(ctx, id, &RefreshOutcome{Skipped: refreshChanged})
 	}
+	s.quota.forget(id)
+	s.evictQuotaCache(ctx, id)
 	s.changed(ctx, id)
 	slog.InfoContext(ctx, "account: credentials refreshed", "account", id, "type", a.Type, "expires_at", state.ExpiresAt)
 	return s.refreshOutcome(ctx, id, &RefreshOutcome{Refreshed: true})

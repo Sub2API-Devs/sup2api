@@ -29,7 +29,7 @@ import (
 )
 
 // DefaultProbeURL is requested through a proxy by POST /proxies/:id/test.
-const DefaultProbeURL = "https://www.google.com/generate_204"
+const DefaultProbeURL = "https://api.ipify.org?format=json"
 
 var passwordAAD = []byte("proxy")
 
@@ -792,7 +792,7 @@ func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {
 	defer cancel()
 
 	// Use a service that returns JSON with the client's IP address
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.ipify.org?format=json", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.opts.ProbeURL, nil)
 	if err != nil {
 		return TestResult{Message: err.Error()}
 	}

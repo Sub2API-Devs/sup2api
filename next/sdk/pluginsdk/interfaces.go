@@ -31,6 +31,10 @@ type Platform interface {
 	BuildTestRequest(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error)
 }
 
+type ModelAvailabilityChecker interface {
+	CheckModelAvailability(context.Context, *pluginv1.CheckModelAvailabilityRequest) (*pluginv1.CheckModelAvailabilityResponse, error)
+}
+
 type AccountLifecycle interface {
 	OnAccountLifecycle(context.Context, *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error)
 }

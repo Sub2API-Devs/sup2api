@@ -22,7 +22,7 @@ func tp(t time.Time) *time.Time { return &t }
 
 func TestQuotaView(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	decl := &manifest.AccountQuota{Headers: []manifest.QuotaHeader{{Key: "zz", Status: "x"}, {Key: "5h", Status: "y"}}}
+	decl := &manifest.AccountQuota{Windows: []manifest.QuotaWindowDefinition{{Key: "zz", Label: manifest.LocalizedText{"en": "Custom"}, ShortLabel: manifest.LocalizedText{"en": "C"}}, {Key: "7d"}, {Key: "5h"}}, Headers: []manifest.QuotaHeader{{Key: "zz", Status: "x"}, {Key: "5h", Status: "y"}}}
 	if v := quotaView(decl, nil, now); !v.Supported || v.Source != "" || v.UpdatedAt != nil || v.Windows == nil || len(v.Windows) != 0 {
 		t.Fatalf("no snapshot: %+v", v)
 	}
@@ -43,13 +43,13 @@ func TestQuotaView(t *testing.T) {
 		keys = append(keys, w.Key)
 	}
 	// Known keys first, then the declaration order, then the alphabet.
-	if fmt.Sprint(keys) != "[5h 7d 7d_fable zz aa]" {
+	if fmt.Sprint(keys) != "[zz 7d 5h 7d_fable aa]" {
 		t.Fatalf("order: %v", keys)
 	}
-	if w := v.Windows[1]; w.Utilization != 0 || w.ResetsAt != nil || w.Status != "" || w.Used != 0 || w.Limit != 10 {
+	if w := v.Windows[1]; w.Utilization != 99 || w.ResetsAt == nil || w.Status != "rejected" || w.Used != 5 || w.Limit != 10 || !w.Expired {
 		t.Fatalf("expired window is not shown as reset: %+v", w)
 	}
-	if w := v.Windows[0]; w.Utilization != 42 || w.Status != "allowed_warning" || !w.ResetsAt.Equal(now.Add(time.Hour)) {
+	if w := v.Windows[2]; w.Utilization != 42 || w.Status != "allowed_warning" || !w.ResetsAt.Equal(now.Add(time.Hour)) {
 		t.Fatalf("5h: %+v", w)
 	}
 	raw, _ := json.Marshal(v)
@@ -61,8 +61,22 @@ func TestQuotaView(t *testing.T) {
 		}
 	}
 	w0 := back["windows"].([]any)[1].(map[string]any)
-	if _, ok := w0["resets_at"]; !ok || w0["resets_at"] != nil || w0["status"] != "" {
+	if v.Windows[0].Label["en"] != "Custom" || v.Windows[0].ShortLabel["en"] != "C" {
+		t.Fatalf("labels: %+v", v.Windows[0])
+	}
+	if _, ok := w0["resets_at"]; !ok || w0["resets_at"] == nil || w0["status"] != "rejected" || w0["expired"] != true {
 		t.Fatalf("window json: %s", raw)
+	}
+}
+
+func TestQuotaExpiredObservationIsNotRecovery(t *testing.T) {
+	now := time.Now()
+	past := now.Add(-time.Minute)
+	v := quotaView(&manifest.AccountQuota{Query: true}, &store.QuotaSnapshot{UpdatedAt: &past, Windows: map[string]store.QuotaWindow{
+		"daily": {Utilization: 100, Status: "rejected", ResetsAt: &past, Used: 10, Limit: 10},
+	}}, now)
+	if len(v.Windows) != 1 || v.Windows[0].Utilization != 100 || v.Windows[0].Status != "rejected" || v.Windows[0].ResetsAt == nil || v.Windows[0].Used != 10 {
+		t.Fatalf("expiry fabricated recovery: %+v", v.Windows)
 	}
 }
 
@@ -291,7 +305,7 @@ func TestAccountQuotaAPI(t *testing.T) {
 	// A failure is recorded and negatively cached for a minute.
 	up.failStatus.Store(503)
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '5 minutes',
-		updated_at = now() - interval '5 minutes'`); err != nil {
+		updated_at = now() - interval '5 minutes', next_check_at = now() - interval '1 second'`); err != nil {
 		t.Fatal(err)
 	}
 	_, out = e.do("GET", path, nil)

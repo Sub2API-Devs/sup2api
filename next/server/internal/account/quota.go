@@ -5,9 +5,9 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,13 +15,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -54,9 +52,23 @@ const (
 	quotaIdle            = 10 * time.Minute
 )
 
+var errQuotaQueryUnimplemented = errors.New("quota query is not implemented")
+
 // quotaKeyOrder orders the windows the console knows; other keys follow the
 // account type's declaration, then the alphabet.
-var quotaKeyOrder = []string{"5h", "7d", "7d_sonnet", "7d_fable"}
+func quotaWindowRank(decl *manifest.AccountQuota, key string) int {
+	for i, w := range decl.Windows {
+		if w.Key == key {
+			return i
+		}
+	}
+	for i, h := range decl.Headers {
+		if h.Key == key {
+			return len(decl.Windows) + i
+		}
+	}
+	return len(decl.Windows) + len(decl.Headers)
+}
 
 // QuotaSnapshot is the API view of an account's subscription quota. Account
 // types without quota have no snapshot (View.quota is null).
@@ -66,50 +78,57 @@ type QuotaSnapshot struct {
 	Source    string     `json:"source"`
 	UpdatedAt *time.Time `json:"updated_at"`
 	// Error of the last active query, cleared by the next successful sample.
-	Error   string        `json:"error"`
-	Windows []QuotaWindow `json:"windows"`
+	Error         string        `json:"error"`
+	Windows       []QuotaWindow `json:"windows"`
+	NextCheckAt   *time.Time    `json:"next_check_at,omitempty"`
+	RefreshStatus string        `json:"refresh_status"`
 }
 
 // QuotaWindow is one window of a QuotaSnapshot. A window whose reset time
 // has passed is shown as reset: utilization 0, no reset time, no status.
 type QuotaWindow struct {
-	Key         string     `json:"key"`
-	Utilization float64    `json:"utilization"`
-	ResetsAt    *time.Time `json:"resets_at"`
-	Status      string     `json:"status"`
-	Used        int64      `json:"used,omitempty"`
-	Limit       int64      `json:"limit,omitempty"`
+	Key                string            `json:"key"`
+	Utilization        float64           `json:"utilization"`
+	UtilizationUnknown bool              `json:"utilization_unknown,omitempty"`
+	ResetsAt           *time.Time        `json:"resets_at"`
+	Status             string            `json:"status"`
+	Used               int64             `json:"used,omitempty"`
+	Limit              int64             `json:"limit,omitempty"`
+	Expired            bool              `json:"expired"`
+	Label              map[string]string `json:"label,omitempty"`
+	ShortLabel         map[string]string `json:"short_label,omitempty"`
 }
 
 // quotaView renders a stored snapshot (nil = none yet) for an account type
 // declaring decl.
 func quotaView(decl *manifest.AccountQuota, snap *store.QuotaSnapshot, now time.Time) *QuotaSnapshot {
-	v := &QuotaSnapshot{Supported: true, Windows: []QuotaWindow{}}
+	v := &QuotaSnapshot{Supported: true, Windows: []QuotaWindow{}, RefreshStatus: "pending"}
 	if snap == nil {
 		return v
 	}
 	v.Source, v.UpdatedAt, v.Error = snap.Source, snap.UpdatedAt, snap.Error
+	v.NextCheckAt = snap.NextCheckAt
+	if snap.UpdatedAt != nil {
+		v.RefreshStatus = "ready"
+	}
+	if snap.Error != "" {
+		v.RefreshStatus = "error"
+	}
 	if snap.UpdatedAt == nil {
 		v.Source = ""
 	}
 	for key, w := range snap.Windows {
-		qw := QuotaWindow{Key: key, Utilization: w.Utilization, ResetsAt: w.ResetsAt, Status: w.Status, Used: w.Used, Limit: w.Limit}
-		if qw.ResetsAt != nil && !now.Before(*qw.ResetsAt) {
-			qw.Utilization, qw.ResetsAt, qw.Status, qw.Used = 0, nil, "", 0
+		qw := QuotaWindow{Key: key, Utilization: w.Utilization, UtilizationUnknown: w.UtilizationUnknown, ResetsAt: w.ResetsAt, Status: w.Status, Used: w.Used, Limit: w.Limit}
+		qw.Expired = qw.ResetsAt != nil && !now.Before(*qw.ResetsAt)
+		for _, definition := range decl.Windows {
+			if definition.Key == key {
+				qw.Label, qw.ShortLabel = definition.Label, definition.ShortLabel
+				break
+			}
 		}
 		v.Windows = append(v.Windows, qw)
 	}
-	rank := func(key string) int {
-		if i := slices.Index(quotaKeyOrder, key); i >= 0 {
-			return i
-		}
-		for i, h := range decl.Headers {
-			if h.Key == key {
-				return len(quotaKeyOrder) + i
-			}
-		}
-		return len(quotaKeyOrder) + len(decl.Headers)
-	}
+	rank := func(key string) int { return quotaWindowRank(decl, key) }
 	sort.Slice(v.Windows, func(i, j int) bool {
 		ri, rj := rank(v.Windows[i].Key), rank(v.Windows[j].Key)
 		if ri != rj {
@@ -124,9 +143,6 @@ func quotaView(decl *manifest.AccountQuota, snap *store.QuotaSnapshot, now time.
 // type has none or is not registered (plugin disabled).
 func (s *Service) quotaDecl(pluginKey, typ string) (*manifest.AccountQuota, core.AccountTypeBinding) {
 	bt, ok := s.accountType(pluginKey, typ)
-	if ok && pluginKey == "ccgateway" && typ == "managed" && s.d.CCGateway != nil {
-		return &manifest.AccountQuota{Query: true}, bt
-	}
 	if !ok || !bt.Type.Quota.Supported() {
 		return nil, bt
 	}
@@ -192,17 +208,19 @@ func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaS
 	if err != nil {
 		return nil, err
 	}
-	if decl.Query && (bt.Client != nil || (a.PluginKey == "ccgateway" && s.d.CCGateway != nil)) && shouldQueryQuota(snap, force, time.Now()) {
+	if decl.Query && bt.Client != nil && shouldQueryQuota(snap, force, time.Now()) {
 		v, err, _ := s.quotaFlight.Do(itoa(a.ID), func() (any, error) {
 			// Not tied to the first caller: the others wait for the same result.
-			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), quotaQueryTimeout)
+			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), quotaQueryTimeout+5*time.Second)
 			defer cancel()
 			return s.queryQuota(qctx, bt, a)
 		})
 		if err != nil {
 			return nil, err
 		}
-		snap = v.(*store.QuotaSnapshot)
+		if v != nil {
+			snap = v.(*store.QuotaSnapshot)
+		}
 	}
 	return quotaView(decl, snap, time.Now()), nil
 }
@@ -220,6 +238,9 @@ func shouldQueryQuota(snap *store.QuotaSnapshot, force bool, now time.Time) bool
 	if force {
 		return true
 	}
+	if snap.NextCheckAt != nil {
+		return !now.Before(*snap.NextCheckAt)
+	}
 	if snap.UpdatedAt != nil && now.Sub(*snap.UpdatedAt) < quotaFresh {
 		return false
 	}
@@ -234,95 +255,92 @@ func shouldQueryQuota(snap *store.QuotaSnapshot, force bool, now time.Time) bool
 // read out of the answer. It returns the snapshot as stored afterwards; only
 // database errors are returned as errors.
 func (s *Service) queryQuota(ctx context.Context, bt core.AccountTypeBinding, a *row) (*store.QuotaSnapshot, error) {
-	claimed, err := s.d.DB.ClaimAccountQuotaQuery(ctx, a.ID, quotaQueryFloor)
-	if err != nil {
-		return nil, err
-	}
-	if claimed {
-		if msg := s.runQuotaQuery(ctx, bt, a); msg != "" {
-			if err := s.d.DB.SetAccountQuotaError(ctx, a.ID, truncate(msg, maxQuotaError)); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return s.d.DB.AccountQuota(ctx, a.ID)
+	return s.executeQuotaQuery(ctx, bt, a, true)
 }
 
 // runQuotaQuery performs one active query and saves its windows. It returns
 // the error to record on the snapshot, "" on success or when the plugin does
 // not implement the query after all.
-func (s *Service) runQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row) string {
-	if a.PluginKey == "ccgateway" && a.Type == "managed" && s.d.CCGateway != nil {
-		usage, err := s.d.CCGateway.QueryUsage(ctx, a.ID)
-		if err != nil {
-			return err.Error()
-		}
-		windows := map[string]store.QuotaWindow{}
-		for _, w := range usage {
-			windows[w.Key] = store.QuotaWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
-		}
-		if err := s.d.DB.SaveAccountQuota(ctx, a.ID, store.QuotaActive, windows); err != nil {
-			return "store: " + err.Error()
-		}
-		return ""
-	}
+func (s *Service) runQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row) (*pluginv1.QuotaResult, error) {
 	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
-		return "credentials: " + err.Error()
+		return nil, errors.New("quota credentials unavailable")
 	}
 	acct := a.pluginAccount(plain)
 	built, err := bt.Client.BuildQuotaRequest(ctx, &pluginv1.BuildQuotaRequestRequest{Account: acct})
 	if status.Code(err) == codes.Unimplemented {
 		slog.DebugContext(ctx, "account: plugin declares quota.query but does not implement it", "plugin", bt.Plugin.Key, "type", a.Type)
-		return ""
+		return nil, errQuotaQueryUnimplemented
 	}
-	if err == nil && built == nil {
-		err = errors.New("empty response")
+	if err != nil || built == nil {
+		return nil, errors.New("quota request builder unavailable")
 	}
-	if err != nil {
-		return "plugin: " + err.Error()
+	var in *pluginv1.ParseQuotaResponseRequest
+	if operation := built.GetRuntimeOperation(); operation != "" {
+		runtime, ok := s.d.LifecycleResources[a.PluginKey].(core.AccountQuotaRuntime)
+		if !ok || !validQuotaKey(operation) || built.GetUrl() != "" || built.GetBodyJson() != "" || len(built.GetHeaders()) != 0 || built.GetMethod() != "" {
+			return nil, errors.New("invalid quota runtime operation")
+		}
+		in, err = runtime.QueryAccountQuota(ctx, a.ID, operation)
+		if err != nil {
+			in = &pluginv1.ParseQuotaResponseRequest{TransportError: "quota runtime unavailable"}
+		}
+		if in == nil {
+			return nil, errors.New("empty quota runtime response")
+		}
+	} else {
+		in = s.sendQuotaRequest(ctx, built, a.ProxyID)
 	}
-	in := s.sendQuotaRequest(ctx, built, a.ProxyID)
 	in.Account = acct
 	res, err := bt.Client.ParseQuotaResponse(ctx, in)
-	if err == nil && res == nil {
-		err = errors.New("empty response")
+	if status.Code(err) == codes.Unimplemented {
+		return nil, errQuotaQueryUnimplemented
 	}
-	if err != nil {
-		return "plugin: " + err.Error()
+	if err != nil || res == nil {
+		return nil, errors.New("quota response parser unavailable")
 	}
-	switch res.GetErrorType() {
-	case pluginv1.QuotaResult_ERROR_TYPE_UNSPECIFIED:
-	case pluginv1.QuotaResult_ERROR_TYPE_AUTH_REJECTED:
-		return "auth_rejected: " + res.GetErrorMessage()
-	default:
-		return "transient: " + res.GetErrorMessage()
+	return res, nil
+}
+
+func normalizedQuota(res *pluginv1.QuotaResult) (map[string]store.QuotaWindow, error) {
+	if res == nil {
+		return nil, errors.New("empty quota observation")
 	}
-	windows := map[string]store.QuotaWindow{}
-	for _, w := range res.GetWindows() {
-		key := strings.TrimSpace(w.GetKey())
-		if !validQuotaKey(key) {
-			slog.WarnContext(ctx, "account: plugin returned an invalid quota window key", "plugin", bt.Plugin.Key, "key", key)
-			continue
+	if res.GetErrorType() != pluginv1.QuotaResult_ERROR_TYPE_UNSPECIFIED {
+		if res.GetErrorType() == pluginv1.QuotaResult_ERROR_TYPE_AUTH_REJECTED {
+			return nil, errors.New("auth_rejected: quota query failed")
 		}
-		sw := store.QuotaWindow{Utilization: w.GetUtilization(), Status: manifest.NormalizeQuotaStatus(w.GetStatus()),
-			Used: w.GetUsed(), Limit: w.GetLimit()}
-		if sw.Utilization <= 0 && sw.Limit > 0 && sw.Used > 0 {
+		return nil, errors.New("transient: quota query failed")
+	}
+	if len(res.Windows) > 64 {
+		return nil, errors.New("too many quota windows")
+	}
+	windows := make(map[string]store.QuotaWindow, len(res.Windows))
+	for _, w := range res.Windows {
+		if w == nil || !validQuotaKey(w.Key) || math.IsNaN(w.Utilization) || math.IsInf(w.Utilization, 0) || w.Utilization < 0 || w.Used < 0 || w.Limit < 0 || w.ResetsAtUnix < 0 || w.ResetsAtUnix > 253402300799 {
+			return nil, errors.New("invalid quota window")
+		}
+		if w.UtilizationUnknown && (w.Utilization != 0 || w.Used != 0 || w.Limit != 0) {
+			return nil, errors.New("unknown quota utilization must not contain amounts")
+		}
+		if _, exists := windows[w.Key]; exists {
+			return nil, errors.New("duplicate quota window")
+		}
+		status := manifest.NormalizeQuotaStatus(w.Status)
+		if w.Status != "" && status == "" {
+			return nil, errors.New("invalid quota status")
+		}
+		sw := store.QuotaWindow{Utilization: w.Utilization, UtilizationUnknown: w.UtilizationUnknown, Status: status, Used: w.Used, Limit: w.Limit}
+		if !sw.UtilizationUnknown && sw.Utilization == 0 && sw.Limit > 0 && sw.Used > 0 {
 			sw.Utilization = float64(sw.Used) / float64(sw.Limit) * 100
 		}
-		if sw.Utilization < 0 {
-			sw.Utilization = 0
-		}
-		if r := w.GetResetsAtUnix(); r > 0 {
-			t := time.Unix(r, 0).UTC()
+		if w.ResetsAtUnix > 0 {
+			t := time.Unix(w.ResetsAtUnix, 0).UTC()
 			sw.ResetsAt = &t
 		}
-		windows[key] = sw
+		windows[w.Key] = sw
 	}
-	if err := s.d.DB.SaveAccountQuota(ctx, a.ID, store.QuotaActive, windows); err != nil {
-		return "store: " + err.Error()
-	}
-	return ""
+	return windows, nil
 }
 
 // validQuotaKey mirrors the manifest rule for window keys.
@@ -461,6 +479,7 @@ type quotaRecorder struct {
 	save func(ctx context.Context, accountID int64, windows map[string]store.QuotaWindow) error
 
 	mu      sync.Mutex
+	writeMu sync.Mutex
 	entries map[int64]*quotaEntry
 	kick    chan struct{}
 }
@@ -531,6 +550,8 @@ func (r *quotaRecorder) take(now time.Time, all bool) map[int64]map[string]store
 // flush writes the due samples. A failed write is logged and dropped: the
 // next sample supersedes it.
 func (r *quotaRecorder) flush(ctx context.Context, all bool) {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
 	for id, w := range r.take(time.Now(), all) {
 		if err := r.save(ctx, id, w); err != nil {
 			slog.WarnContext(ctx, "account: save passive quota", "account", id, "err", err)
@@ -556,82 +577,6 @@ func (r *quotaRecorder) run(ctx context.Context) {
 			r.flush(ctx, false)
 		}
 	}
-}
-
-// ---------------------------------------------------------------- reset status
-
-// resetStatus is POST /accounts/:id/reset-status: an explicit recovery of
-// the account status, its reason and the Redis cooldown the gateway sets
-// on rate limits, overloads and failures. Disabled and error accounts become
-// active again, while the administrator's schedulable switch is preserved.
-// The quota snapshot remains an upstream observation, and credentials,
-// configured limits and live concurrency leases are never reset here.
-// CCGateway runtimes reconcile immediately after the committed change.
-func (s *Service) resetStatus(c *gin.Context) {
-	ctx := audit.Context(c)
-	id, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	scope := core.OwnerScope(ctx, "account:update")
-	uid, _ := core.UserID(ctx)
-	var a *row
-	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		loaded, err := s.loadRow(ctx, tx, id, scope, true)
-		if err != nil {
-			return err
-		}
-		a = loaded
-		cleared, err := s.clearCooldown(ctx, id)
-		if err != nil {
-			return err
-		}
-		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
-		if statusReset {
-			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL, updated_at = clock_timestamp()
-				WHERE id = $1`, id); err != nil {
-				return err
-			}
-		}
-		if err := audit.Audit(ctx, tx, uid, "account.reset_status", "account", itoa(id),
-			map[string]any{"cooldown_cleared": cleared, "status_reset": statusReset, "previous_status": a.Status}); err != nil {
-			return err
-		}
-		if !cleared && !statusReset {
-			return nil
-		}
-		// The account leaves a disabled, error or cooldown state; report
-		// the transition using the same account.status_changed event.
-		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged,
-			Payload: statusPayload(id, a.PluginKey, a.Type, a.Name, "active", "status reset by administrator", nil)})
-	})
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	s.evictQuotaCache(ctx, id)
-	s.evictBalanceCache(ctx, id)
-	s.changed(ctx, id)
-	s.kickCCGateway(id, a.PluginKey, a.Type)
-	v, err := s.fullView(ctx, id, scope)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.OK(c, v)
-}
-
-// clearCooldown deletes the account's runtime scheduling block (the Redis
-// cooldown key) and reports whether there was one.
-func (s *Service) clearCooldown(ctx context.Context, id int64) (bool, error) {
-	if s.d.Redis == nil {
-		return false, nil
-	}
-	n, err := s.d.Redis.Del(ctx, cooldownKey(id)).Result()
-	if err != nil {
-		return false, core.ErrUnavailable.WithCause(err)
-	}
-	return n > 0, nil
 }
 
 // forget drops the samples of one account not written yet (its quota

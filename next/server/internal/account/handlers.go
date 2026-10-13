@@ -995,6 +995,9 @@ func (s *Service) create(c *gin.Context) {
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
 		}
+		if err := s.initializeQuota(ctx, tx, id, bt); err != nil {
+			return err
+		}
 		if preparation != nil {
 			if err := s.adoptPreparation(ctx, tx, *preparation, id); err != nil {
 				return err
@@ -1236,6 +1239,10 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	if p != nil || extensionSettings != nil || setProxy {
+		s.quota.forget(id)
+		s.evictQuotaCache(ctx, id)
+	}
 	s.changed(ctx, id)
 	s.kickCCGateway(id, cur.PluginKey, cur.Type)
 	v, err := s.fullView(ctx, id, scope)
@@ -1245,6 +1252,82 @@ func (s *Service) update(c *gin.Context) {
 	}
 	v.ProxyCreated = &proxyCreated
 	httpapi.OK(c, v)
+}
+
+// ---------------------------------------------------------------- reset status
+
+// resetStatus is POST /accounts/:id/reset-status: an explicit recovery of
+// the account status, its reason and the Redis cooldown the gateway sets
+// on rate limits, overloads and failures. Disabled and error accounts become
+// active again, while the administrator's schedulable switch is preserved.
+// The quota snapshot remains an upstream observation, and credentials,
+// configured limits and live concurrency leases are never reset here.
+// CCGateway runtimes reconcile immediately after the committed change.
+func (s *Service) resetStatus(c *gin.Context) {
+	ctx := audit.Context(c)
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	scope := core.OwnerScope(ctx, "account:update")
+	uid, _ := core.UserID(ctx)
+	var a *row
+	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		loaded, err := s.loadRow(ctx, tx, id, scope, true)
+		if err != nil {
+			return err
+		}
+		a = loaded
+		cleared, err := s.clearCooldown(ctx, id)
+		if err != nil {
+			return err
+		}
+		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
+		if statusReset {
+			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL, updated_at = clock_timestamp()
+				WHERE id = $1`, id); err != nil {
+				return err
+			}
+		}
+		if err := audit.Audit(ctx, tx, uid, "account.reset_status", "account", itoa(id),
+			map[string]any{"cooldown_cleared": cleared, "status_reset": statusReset, "previous_status": a.Status}); err != nil {
+			return err
+		}
+		if !cleared && !statusReset {
+			return nil
+		}
+		// The account leaves a disabled, error or cooldown state; report
+		// the transition using the same account.status_changed event.
+		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged,
+			Payload: statusPayload(id, a.PluginKey, a.Type, a.Name, "active", "status reset by administrator", nil)})
+	})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.evictQuotaCache(ctx, id)
+	s.evictBalanceCache(ctx, id)
+	s.changed(ctx, id)
+	s.kickCCGateway(id, a.PluginKey, a.Type)
+	v, err := s.fullView(ctx, id, scope)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, v)
+}
+
+// clearCooldown deletes the account's runtime scheduling block (the Redis
+// cooldown key) and reports whether there was one.
+func (s *Service) clearCooldown(ctx context.Context, id int64) (bool, error) {
+	if s.d.Redis == nil {
+		return false, nil
+	}
+	n, err := s.d.Redis.Del(ctx, cooldownKey(id)).Result()
+	if err != nil {
+		return false, core.ErrUnavailable.WithCause(err)
+	}
+	return n > 0, nil
 }
 
 func (s *Service) delete(c *gin.Context) {

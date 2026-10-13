@@ -539,9 +539,13 @@ export type QuotaWindowStatus = 'allowed' | 'allowed_warning' | 'rejected' | ''
 export interface QuotaWindow {
   /** "5h", "7d", "7d_sonnet", "7d_fable"; unknown keys are shown as they are. */
   key: string
+  label?: Record<string, string>
+  short_label?: Record<string, string>
   /** Used share in percent (0–100, may exceed 100). */
   utilization: number
+  utilization_unknown?: boolean
   resets_at: string | null
+  expired?: boolean
   status: QuotaWindowStatus
 }
 
@@ -557,6 +561,8 @@ export interface QuotaSnapshot {
   /** Last query error; the windows then hold the previous values. */
   error: string
   windows: QuotaWindow[]
+  next_check_at?: string | null
+  refresh_status?: 'pending' | 'ready' | 'error'
 }
 
 /** Token counters the plugin reported for the probe request (all optional). */

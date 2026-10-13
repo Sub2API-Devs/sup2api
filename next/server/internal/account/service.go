@@ -83,8 +83,10 @@ type Service struct {
 
 	// quota throttles passive quota writes; quotaFlight merges concurrent
 	// active quota queries of one account (CONTRACTS §44).
-	quota       *quotaRecorder
-	quotaFlight singleflight.Group
+	quota           *quotaRecorder
+	quotaFlight     singleflight.Group
+	quotaSweepMu    sync.Mutex
+	quotaSweepAfter int64
 
 	// refreshLocal serialises credential refreshes of one account on this
 	// node when there is no cluster Locker (CONTRACTS §48).
@@ -113,7 +115,12 @@ func New(d Deps) *Service {
 		touched:  map[int64]time.Time{},
 	}
 	s.quota = newQuotaRecorder(func(ctx context.Context, id int64, w map[string]store.QuotaWindow) error {
-		return s.d.DB.SaveAccountQuota(ctx, id, store.QuotaPassive, w)
+		if err := s.d.DB.SaveAccountQuota(ctx, id, store.QuotaPassive, w); err != nil {
+			return err
+		}
+		s.evictQuotaCache(ctx, id)
+		s.changed(ctx, id)
+		return nil
 	})
 	return s
 }
@@ -163,6 +170,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 // writes passive quota samples until ctx is done.
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
+	go s.runQuotaSweep(ctx)
 	go s.runRefreshSweep(ctx)
 	go s.runAutomaticStateSweep(ctx)
 	go s.runPreparationSweep(ctx)

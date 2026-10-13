@@ -281,7 +281,7 @@ func TestCCGatewayReauthorize(t *testing.T) {
 		t.Fatalf("account after commit: %v", v)
 	}
 	var n int
-	if err := e.db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM account_quota_snapshots WHERE account_id=$1)
+	if err := e.db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM account_quota_snapshots WHERE account_id=$1 AND (windows<>'{}'::jsonb OR updated_at IS NOT NULL OR refresh_status<>'pending' OR lease_until IS NOT NULL))
 		+ (SELECT count(*) FROM account_credential_refresh WHERE account_id=$1)`, id).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("quota / refresh state kept: %d %v", n, err)
 	}

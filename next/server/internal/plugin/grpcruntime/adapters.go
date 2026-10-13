@@ -259,6 +259,12 @@ func (a platformAdapter) BuildQuotaRequest(ctx context.Context, in *pluginv1.Bui
 	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildQuotaRequest, in)
 }
 
+func (a platformAdapter) CheckModelAvailability(ctx context.Context, in *pluginv1.CheckModelAvailabilityRequest) (*pluginv1.CheckModelAvailabilityResponse, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.CheckModelAvailability, in)
+}
+
+var _ core.AccountModelAvailabilityPlugin = platformAdapter{}
+
 func (a platformAdapter) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseQuotaResponse, in)
 }

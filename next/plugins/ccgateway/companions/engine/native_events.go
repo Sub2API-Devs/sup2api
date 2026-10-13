@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strconv"
 	"sync"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 )
 
 // requestRefusal is the gateway refusing a request whose history or features
@@ -27,19 +30,33 @@ type nativeError struct {
 	ObservedStatus bool
 	OutputObserved bool
 	RetryAt        int64
+	QuotaType      string
 }
 
 func (e *nativeError) Error() string { return e.Message }
 
+func (e *nativeError) quotaHeaders(headers http.Header) {
+	if !e.ObservedStatus || e.OutputObserved || e.Status != http.StatusTooManyRequests || e.Category != "rate_limit" || httpfacts.NativeQuotaKey(e.QuotaType) == "" {
+		return
+	}
+	headers.Set(httpfacts.NativeObservedStatusHeader, "429")
+	headers.Set(httpfacts.NativeQuotaTypeHeader, e.QuotaType)
+	if e.RetryAt > 0 && e.RetryAt <= 253402300799 {
+		headers.Set(httpfacts.NativeQuotaResetHeader, strconv.FormatInt(e.RetryAt, 10))
+	}
+}
+
 type nativeRunState struct {
-	mu        sync.Mutex
-	err       *nativeError
-	requestID string
-	retryAt   int64
-	terminal  bool
-	success   bool
-	output    bool
-	fatal     error
+	mu           sync.Mutex
+	err          *nativeError
+	requestID    string
+	retryAt      int64
+	quotaType    string
+	quotaUnknown bool
+	terminal     bool
+	success      bool
+	output       bool
+	fatal        error
 }
 
 func (n *nativeRunState) observe(frame Object) {
@@ -58,6 +75,8 @@ func (n *nativeRunState) observe(frame Object) {
 			n.output = true
 			n.err = nil
 			n.requestID = ""
+			n.quotaType, n.quotaUnknown = "", false
+			n.retryAt = 0
 		}
 	case "assistant":
 		n.requestID = nativeRequestID(str(frame, "request_id"))
@@ -74,6 +93,7 @@ func (n *nativeRunState) observe(frame Object) {
 			n.success = true
 			n.err = nil
 			n.retryAt = 0
+			n.quotaType, n.quotaUnknown = "", false
 			return
 		}
 		if n.err == nil {
@@ -87,16 +107,48 @@ func (n *nativeRunState) observe(frame Object) {
 		if n.err.Category == "rate_limit" || n.err.Status == http.StatusTooManyRequests {
 			n.err.RetryAt = n.retryAt
 		}
+		if n.err.Category == "rate_limit" && n.err.Status == http.StatusTooManyRequests && n.err.ObservedStatus && !n.output && !n.quotaUnknown {
+			n.err.QuotaType = n.quotaType
+		}
 	case "rate_limit_event":
 		info, _ := frame["rate_limit_info"].(Object)
-		n.retryAt = 0
-		if str(info, "status") == "rejected" {
-			n.retryAt = nativeRetryAt(info["resetsAt"])
+		if str(info, "status") != "rejected" {
+			n.retryAt, n.quotaType, n.quotaUnknown = 0, "", false
+		} else {
+			n.retryAt = max(n.retryAt, nativeRetryAt(info["resetsAt"]))
+			kind := nativeQuotaType(info)
+			if kind == "" {
+				n.quotaUnknown = true
+			} else if n.quotaType == "" || httpfacts.SharedQuotaType(kind) {
+				n.quotaType = kind
+			} else if !httpfacts.SharedQuotaType(n.quotaType) && kind != n.quotaType {
+				n.quotaUnknown = true
+			}
 		}
 		if str(info, "overageStatus") == "rejected" {
 			n.retryAt = max(n.retryAt, nativeRetryAt(info["overageResetsAt"]))
 		}
 	}
+}
+
+func nativeQuotaType(info Object) string {
+	kind := str(info, "rateLimitType")
+	if httpfacts.NativeQuotaKey(kind) == "" {
+		return ""
+	}
+	if value, exists := info["isUsingOverage"]; exists {
+		using, ok := value.(bool)
+		if !ok || using {
+			return ""
+		}
+	}
+	if value, exists := info["overageStatus"]; exists && value != "rejected" {
+		return ""
+	}
+	if value, exists := info["resetsAt"]; exists && nativeRetryAt(value) <= 0 {
+		return ""
+	}
+	return kind
 }
 
 func (n *nativeRunState) failure() error {
@@ -157,6 +209,7 @@ func (n *nativeRunState) reset() {
 	n.err = nil
 	n.requestID = ""
 	n.retryAt = 0
+	n.quotaType, n.quotaUnknown = "", false
 	n.terminal = false
 	n.success = false
 	n.output = false

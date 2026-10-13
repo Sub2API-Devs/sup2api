@@ -26,7 +26,7 @@ const (
 )
 
 // quotaRedisKey is the key for account id's cached snapshot.
-func quotaRedisKey(id int64) string { return quotaCachePrefix + itoa(id) }
+func quotaRedisKey(id int64) string { return quotaCachePrefix + "{" + itoa(id) + "}" }
 
 // cachedAccountQuotas reads the snapshots for ids from Redis, falling back to
 // PG for the missing ones and writing those back to Redis. Redis failures
@@ -57,9 +57,12 @@ func (s *Service) cachedAccountQuotas(ctx context.Context, ids []int64) map[int6
 			if !ok {
 				continue
 			}
-			var snap store.QuotaSnapshot
-			if json.Unmarshal([]byte(raw), &snap) == nil && snap.AccountID == ids[i] {
-				out[ids[i]] = &snap
+			var envelope struct {
+				Mtime int64                `json:"mtime"`
+				Snap  *store.QuotaSnapshot `json:"snap"`
+			}
+			if json.Unmarshal([]byte(raw), &envelope) == nil && envelope.Snap != nil && envelope.Snap.AccountID == ids[i] && envelope.Mtime > time.Now().Add(-quotaCacheTTL).UnixMicro() {
+				out[ids[i]] = envelope.Snap
 			} else {
 				pgIDs = append(pgIDs, ids[i])
 			}
@@ -80,13 +83,13 @@ func (s *Service) cachedAccountQuotas(ctx context.Context, ids []int64) map[int6
 	for id, snap := range pgSnaps {
 		out[id] = snap
 	}
-	mtime := at.UnixMilli()
+	mtime := at.UnixMicro()
 	for id, snap := range pgSnaps {
 		raw, _ := json.Marshal(snap)
 		// The cache uses a JSON wrapper: {mtime, snap}.
 		envelope := map[string]any{"mtime": mtime, "snap": json.RawMessage(raw)}
 		cached, _ := json.Marshal(envelope)
-		if err := s.d.Redis.Set(ctx, quotaRedisKey(id), cached, quotaCacheTTL).Err(); err != nil {
+		if err := s.cacheQuotaAt(ctx, id, cached, mtime); err != nil {
 			slog.WarnContext(ctx, "account: redis SET quota", "id", id, "err", err)
 		}
 	}
@@ -99,11 +102,19 @@ func (s *Service) evictQuotaCache(ctx context.Context, ids ...int64) {
 	if len(ids) == 0 || s.d.Redis == nil {
 		return
 	}
-	keys := make([]string, len(ids))
-	for i, id := range ids {
-		keys[i] = quotaRedisKey(id)
+	var at time.Time
+	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&at); err != nil {
+		at = time.Now()
 	}
-	if err := s.d.Redis.Del(ctx, keys...).Err(); err != nil && err != redis.Nil {
-		slog.WarnContext(ctx, "account: redis DEL quota", "err", err)
+	for _, id := range ids {
+		key := quotaRedisKey(id)
+		if err := s.d.Redis.Eval(ctx, `local old=tonumber(redis.call('GET',KEYS[2]) or '0'); if tonumber(ARGV[1])>=old then redis.call('SET',KEYS[2],ARGV[1],'PX',ARGV[2]); redis.call('DEL',KEYS[1]); end; return 1`, []string{key, key + ":fence"}, at.UnixMicro(), quotaCacheTTL.Milliseconds()).Err(); err != nil && err != redis.Nil {
+			slog.WarnContext(ctx, "account: redis DEL quota", "err", err)
+		}
 	}
+}
+
+func (s *Service) cacheQuotaAt(ctx context.Context, id int64, raw []byte, at int64) error {
+	key := quotaRedisKey(id)
+	return s.d.Redis.Eval(ctx, `local fence=tonumber(redis.call('GET',KEYS[2]) or '0'); if tonumber(ARGV[1])<=fence then return 0 end; local old=redis.call('GET',KEYS[1]); if old then local ok,v=pcall(cjson.decode,old); if ok and type(v)=='table' and v.mtime and tonumber(v.mtime)>tonumber(ARGV[1]) then return 0 end end; redis.call('SET',KEYS[1],ARGV[2],'PX',ARGV[3]); return 1`, []string{key, key + ":fence"}, at, raw, quotaCacheTTL.Milliseconds()).Err()
 }

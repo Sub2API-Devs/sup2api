@@ -15,8 +15,9 @@ const ProtocolVersion = 1
 
 // HostAPIVersion is sent in InitHostRequest.host_api_version. Version 6 adds
 // automatic account state changes and timed recovery; the wire protocol stays at 1.
-const HostAPIVersion = 6
+const HostAPIVersion = 7
 
+const ModelAvailabilityHostAPIVersion = 7
 const AccountAutomaticStateHostAPIVersion = 6
 const ObservationHostAPIVersion = 5
 

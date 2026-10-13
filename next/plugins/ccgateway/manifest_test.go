@@ -12,6 +12,19 @@ import (
 	"testing"
 )
 
+func TestQuotaReleaseHostCompatibility(t *testing.T) {
+	var m manifest.Manifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		t.Fatal(err)
+	}
+	for version, want := range map[string]bool{"0.1.115": false, "0.1.123": false, "0.1.124": true, "0.1.124-dev": true, "0.2.0": false} {
+		got, err := check.HostCompatible(m.HostCompat, version)
+		if err != nil || got != want {
+			t.Fatalf("host %s: compatible=%v want=%v err=%v", version, got, want, err)
+		}
+	}
+}
+
 func TestManifestAndUsageContract(t *testing.T) {
 	var m manifest.Manifest
 	if err := json.Unmarshal(manifestJSON, &m); err != nil {
@@ -55,6 +68,18 @@ func TestManifestAndUsageContract(t *testing.T) {
 		if at.AuthMethodLabel["en"] == "" || at.AuthMethodLabel["zh"] == "" {
 			t.Fatalf("account type %s needs localized authentication labels", at.ID)
 		}
+	}
+	managed := m.AccountTypes[0]
+	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || !managed.Quota.AutoRefresh || len(managed.Quota.Windows) != 4 {
+		t.Fatal("managed accounts require quota refresh and model availability")
+	}
+	for _, window := range managed.Quota.Windows {
+		if window.Label["en"] == "" || window.Label["zh"] == "" || window.ShortLabel["en"] == "" || window.ShortLabel["zh"] == "" {
+			t.Fatalf("quota window %s requires localized labels", window.Key)
+		}
+	}
+	if m.AccountTypes[1].Quota != nil || m.AccountTypes[1].ModelAvailability {
+		t.Fatal("API key accounts must not depend on subscription snapshots")
 	}
 	if m.AccountTypes[0].AuthMethodLabel["en"] == m.AccountTypes[1].AuthMethodLabel["en"] {
 		t.Fatal("authentication choices must remain distinguishable")

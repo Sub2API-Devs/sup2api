@@ -117,13 +117,14 @@ type wsSession struct {
 
 	// The upstream connection and the account the first turn chose; every
 	// later turn of the session uses them.
-	up      *websocket.Conn
-	ref     *core.AccountRef
-	rt      *typeRoute
-	pacct   *pluginv1.Account
-	routes  map[core.AccountTypeKey]*typeRoute
-	session string
-	upIn    chan wsMessage
+	up              *websocket.Conn
+	ref             *core.AccountRef
+	rt              *typeRoute
+	pacct           *pluginv1.Account
+	routes          map[core.AccountTypeKey]*typeRoute
+	session         string
+	upIn            chan wsMessage
+	quotaGeneration int64
 }
 
 type wsMessage struct {
@@ -392,6 +393,13 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		}
 		cl.rec.UpstreamModel = up
 	}
+	payload, err = cl.mapReferencedModels(payload, s.ref, s.rt)
+	if err != nil {
+		return reject(cl, invalidModelReference(err.Error()))
+	}
+	if failure := cl.guardAvailability(ctx, s.ref); failure != nil {
+		return reject(cl, failure)
+	}
 	wctx, cancel := context.WithTimeout(ctx, s.g.ws.writeTimeout)
 	err = s.up.Write(wctx, websocket.MessageText, payload)
 	cancel()
@@ -418,9 +426,13 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	}
 	cands := make([]core.AccountRef, 0, len(all))
 	for i := range all {
-		if cl.route(&all[i]) != nil && all[i].ServesModel(cl.model) {
+		if cl.route(&all[i]) != nil && cl.servesAllModels(&all[i]) {
 			cands = append(cands, all[i])
 		}
+	}
+	cands, availabilityErr := cl.filterAvailability(ctx, cands)
+	if availabilityErr != nil {
+		return nil, availabilityErr
 	}
 	cl.sticky = cl.resolveSticky(ctx)
 	cl.session = "ws:" + s.id
@@ -463,6 +475,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			s.ref = ref
 			s.routes = cl.routes
 			s.session = cl.session
+			s.quotaGeneration = cl.availability[ref.ID].quota.GetGeneration()
 			cl.finishSticky(ctx, ref.ID, true)
 			pendingRelease = nil
 			return release, nil
@@ -482,7 +495,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			return nil, res.err
 		}
 	}
-	if last == nil || (last.RecordType != errTypeUpstream && last.Status != http.StatusTooManyRequests) {
+	if last == nil || (last.RecordType != errTypeUpstream && last.RecordType != errTypeModelAvailability && last.Status != http.StatusTooManyRequests) {
 		last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
 	}
 	cl.finishSticky(ctx, 0, false)
@@ -558,6 +571,12 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	}
 	// The handshake gets its own deadline; the connection itself lives as
 	// long as the session.
+	if failure := cl.guardAvailability(ctx, ref); failure != nil {
+		return attemptResult{kind: attemptFailover, err: failure}
+	}
+	if rt.binding.Type.ModelAvailability && built.GetUpstreamModel() != "" && built.GetUpstreamModel() != upModel {
+		return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+	}
 	dctx, dcancel := context.WithTimeout(context.WithoutCancel(ctx), s.g.ws.handshake)
 	stop := context.AfterFunc(ctx, dcancel)
 	up, resp, err := websocket.Dial(dctx, target, &websocket.DialOptions{HTTPClient: &hc, HTTPHeader: header,
@@ -618,9 +637,32 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 	cl.session = s.session
 	cl.rec.Attempts = 1
 	s.recordAccount(cl, s.ref.ID, s.rt)
-	if !s.ref.ServesModel(cl.model) {
+	if s.rt.binding.Type.ModelAvailability {
+		refs, err := s.g.d.Accounts.Candidates(ctx, cl.principal.Group.ID, []core.AccountTypeKey{{PluginKey: s.ref.PluginKey, Type: s.ref.Type}})
+		if err != nil {
+			return nil, fromCore(core.ErrUnavailable.WithCause(err), errTypeNoAccount)
+		}
+		var current *core.AccountRef
+		for i := range refs {
+			if refs[i].ID == s.ref.ID {
+				current = &refs[i]
+				break
+			}
+		}
+		if current == nil {
+			return nil, fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
+		}
+		s.ref = current
+	}
+	if !cl.servesAllModels(s.ref) {
 		return nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, RecordType: errTypeInvalidRequest,
 			Message: "the account of this connection does not serve model " + strconvQuote(cl.model) + "; open a new connection for it"}
+	}
+	if _, failure := cl.filterAvailability(ctx, []core.AccountRef{*s.ref}); failure != nil {
+		return nil, failure
+	}
+	if cl.availability[s.ref.ID].quota.GetGeneration() != s.quotaGeneration {
+		return nil, availabilityFailure(false)
 	}
 	deadline := time.Now().Add(s.g.ws.slotWait)
 	var pendingRelease func()

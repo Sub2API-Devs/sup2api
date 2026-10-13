@@ -9,7 +9,8 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, SIcon, SLink } from '@sub2api/ui'
 import type { QuotaSnapshot } from '@/api/types'
 import { formatDateTime, formatRelative } from '@/utils/format'
-import { formatPercent, isKnownWindow, quotaCountdown, quotaLevel, sortWindows, useQuotaClock, type QuotaLevel } from './accountQuota'
+import { lt } from '@/i18n'
+import { formatPercent, quotaCountdown, quotaLevel, sortWindows, useQuotaClock, type QuotaLevel } from './accountQuota'
 
 const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean; compact?: boolean }>(), {
   refreshing: false,
@@ -33,40 +34,50 @@ const CHIP: Record<QuotaLevel, string> = {
 
 const rows = computed(() =>
   sortWindows(props.quota.windows).map(w => {
-    const level = quotaLevel(w)
-    const known = isKnownWindow(w.key)
-    const name = known ? t(`accounts.quota.windows.${w.key}`) : w.key
-    const cd = quotaCountdown(w.resets_at, w.utilization, clock.value)
-    const reset =
-      cd.kind === 'in'
-        ? cd.text
-        : cd.kind === 'pending'
-          ? t('accounts.quota.resetPending')
-          : cd.kind === 'now'
-            ? t('accounts.quota.resetNow')
-            : ''
-    const percent = formatPercent(w.utilization)
+    const utilization = w.utilization_unknown ? Number.NaN : w.utilization
+    const known = Number.isFinite(utilization)
+    const level = quotaLevel({ utilization, status: w.status })
+    const name = lt(w.label) || w.key
+    const cd = quotaCountdown(w.resets_at, clock.value, w.expired)
+    const reset = cd.kind === 'in' ? cd.text : cd.kind === 'pending' ? t('accounts.quota.resetPending') : ''
+    const percent = formatPercent(utilization)
     const title = [
       `${name} ${percent}`,
       w.resets_at ? t('accounts.quota.resetsAt', { time: formatDateTime(w.resets_at) }) : '',
+      cd.kind === 'pending' ? reset : '',
       w.status === 'rejected' ? t('accounts.quota.rejectedHint') : w.status === 'allowed_warning' ? t('accounts.quota.warningHint') : ''
     ]
       .filter(Boolean)
       .join(' · ')
     return {
       key: w.key,
-      short: known ? t(`accounts.quota.windowsShort.${w.key}`) : w.key,
+      short: lt(w.short_label) || w.key,
       name,
       title,
       percent,
-      width: `${Math.min(100, Math.max(0, Number.isFinite(w.utilization) ? w.utilization : 0))}%`,
-      now: Math.round(Math.max(0, w.utilization || 0)),
+      unknown: !known,
+      width: known ? `${Math.min(100, Math.max(0, utilization))}%` : undefined,
+      now: known ? Math.round(Math.max(0, utilization)) : undefined,
       rejected: w.status === 'rejected',
       reset,
       level
     }
   })
 )
+
+const queryError = computed(() =>
+  props.quota.error
+    ? t('accounts.quota.queryFailedDetail', { error: props.quota.error })
+    : props.quota.refresh_status === 'error'
+      ? t('accounts.quota.queryFailed')
+      : ''
+)
+const pending = computed(() => {
+  if (!rows.value.length && !props.quota.updated_at && props.quota.refresh_status !== 'ready' && !queryError.value) {
+    return t('accounts.quota.initialPending')
+  }
+  return props.quota.refresh_status === 'pending' ? t('accounts.quota.queryPending') : ''
+})
 
 const updated = computed(() => {
   void clock.value // re-evaluate the relative time with the shared clock
@@ -77,12 +88,19 @@ const updated = computed(() => {
 <template>
   <div class="min-w-44 space-y-1 text-xxs" data-testid="quota-cell">
     <p
-      v-if="quota.error"
+      v-if="queryError"
       class="max-w-[14rem] truncate text-warning-600 dark:text-warning-400"
-      :title="quota.error"
+      :title="queryError"
       data-testid="quota-error"
     >
-      <SIcon name="warning" class="mr-0.5 inline h-3 w-3 align-[-2px]" />{{ quota.error }}
+      <SIcon name="warning" class="mr-0.5 inline h-3 w-3 align-[-2px]" />{{ queryError }}
+    </p>
+    <p
+      v-if="pending"
+      class="text-fg-subtle"
+      data-testid="quota-pending"
+    >
+      {{ pending }}
     </p>
     <div :class="compact ? 'flex items-center gap-4' : 'space-y-1'">
       <div
@@ -100,9 +118,15 @@ const updated = computed(() => {
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-valuenow="r.now"
+          :aria-valuetext="r.unknown ? t('common.unknown') : undefined"
           :aria-label="r.name"
         >
-          <div class="h-full rounded-full transition-all duration-300" :class="BAR[r.level]" :style="{ width: r.width }" />
+          <div
+            v-if="!r.unknown"
+            class="h-full rounded-full transition-all duration-300"
+            :class="BAR[r.level]"
+            :style="{ width: r.width }"
+          />
         </div>
         <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
         <SBadge v-if="r.rejected" tone="danger" class="!px-1.5 !py-0 !text-xxs" data-testid="quota-rejected">{{
@@ -111,12 +135,30 @@ const updated = computed(() => {
         <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>
       </div>
     </div>
-    <p v-if="!rows.length && !quota.error" class="text-fg-subtle" data-testid="quota-empty">{{ t('accounts.quota.noData') }}</p>
+    <p
+      v-if="!rows.length && !queryError && !pending"
+      class="text-fg-subtle"
+      data-testid="quota-empty"
+    >
+      {{ t('accounts.quota.noData') }}
+    </p>
+    <p
+      v-if="quota.next_check_at"
+      class="text-fg-subtle"
+      data-testid="quota-next-check"
+    >
+      {{ t('accounts.quota.nextCheck', { time: formatDateTime(quota.next_check_at) }) }}
+    </p>
     <div class="flex items-center gap-1.5 text-fg-subtle">
       <span v-if="quota.source === 'passive'" class="italic" :title="t('accounts.quota.passiveHint')">{{
         t('accounts.quota.passive')
       }}</span>
-      <span v-if="updated" class="whitespace-nowrap" :title="formatDateTime(quota.updated_at)">{{ updated }}</span>
+      <span
+        v-if="updated"
+        class="whitespace-nowrap"
+        :title="formatDateTime(quota.updated_at)"
+        data-testid="quota-observed"
+      >{{ t('accounts.quota.lastObserved', { time: updated }) }}</span>
       <SLink
         v-if="refreshable"
         as="button"

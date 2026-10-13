@@ -2569,7 +2569,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - 类型不支持额度：`{supported: false, source: "", updated_at: null, error: "", windows: []}`，不访问上游。
 - 是否主动查询（仅 `quota.query` 类型）：快照 `updated_at` 在 3 分钟内（被动或主动都算）→ 直接返回；上次主动查询失败且距 `last_active_at` 不足 1 分钟 → 直接返回（负缓存）；距 `last_active_at` 不足 30 秒 → 直接返回；否则查一次。`force=true` 跳过 3 分钟新鲜度与 1 分钟负缓存，但仍受 30 秒下限约束。同一节点同一账号的并发请求经 singleflight 合并为一次查询；跨节点由 `ClaimAccountQuotaQuery`（`UPDATE … WHERE last_active_at <= now() - 30s`）保证 30 秒内只有一个节点真正发请求，抢不到的直接返回当前快照。
 - 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。
-- 窗口顺序：`5h`、`7d`、`7d_sonnet`、`7d_fable`，然后按类型 `headers` 声明顺序，最后按字母序。`resets_at` 已过的窗口显示为已重置：`utilization = 0`、`resets_at = null`、`status = ""`（同 sub2api `estimateSetupTokenUsage`）。
+- 窗口顺序、名称与短标签由插件的 `quota.windows` 声明；未声明的窗口按通用回退规则展示 key。`resets_at` 已过仅表示等待核验，返回 `expired: true`，保留上次实际观测的使用率、重置时间和状态；不得把时间经过伪装成上游已确认恢复。窗口可附 `label`、`short_label` 本地化文本，快照附 `next_check_at` 与 `refresh_status`（`pending` / `ready` / `error`）。
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
@@ -2591,6 +2591,20 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - `claude_oauth` 声明 `query: true`：`GET https://api.anthropic.com/api/oauth/usage`，头部 `Accept: application/json, text/plain, */*`、`Content-Type: application/json`、`Authorization: Bearer <access_token>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/2.1.7`（同 sub2api `claude_usage_service.go`）。响应 `five_hour` → `5h`（总是返回），`seven_day` → `7d`、`seven_day_sonnet` → `7d_sonnet`、`seven_day_overage_included`（缺失时取 `limits[]` 中 Fable 的 `weekly_scoped`）→ `7d_fable`（仅当带 `resets_at` 时返回，同 sub2api `buildUsageInfo`）；`utilization` 已是百分比。401/403 → `auth_rejected`，其他失败 → `transient`。
 - `claude_setup_token` 没有 profile 权限，`BuildQuotaRequest` 回 `Unimplemented`，只靠响应头（同 sub2api `estimateSetupTokenUsage`）。
 - manifest 同时补齐安装校验要求的 `platform.register` 权限与 `accounts.credentials` 的 `{"types": "own"}` scope。
+
+### 44.7 插件模型可用性与自动配额查询
+
+- `accountTypes[].modelAvailability` 是可选准入声明。核心在粘性命中及排序前调用账号类型所属插件的 `CheckModelAvailability`；HTTP 换号、映射后的模型以及 WebSocket 已有连接的新轮次同样受约束。不声明能力的旧插件不增加额外限制；已经声明而超时、返回空结果、缺少结果、重复或越界结果时不能放行。
+- 请求按插件批量携带 `ModelAvailabilityCandidate{account_id, account_type, model, client_model, quota}` 与 `now_unix`。`model` 为上游模型，`quota` 为持久化快照，不携带凭据或任意账号配置。结果逐账号、逐模型返回 `AVAILABLE`、`UNAVAILABLE` 或 `UNKNOWN`，可附原因及可信重试时间。核心不认识供应商模型前缀、套餐窗口和耗尽阈值。
+- SDK 提供可选 `ModelAvailabilityChecker`；启用模型准入或自动配额查询的插件需要 Host API 7。wire protocol 仍为 1，旧插件不需要实现新接口。新插件必须在不支持能力的旧核心上拒绝初始化，不能静默忽略准入限制。
+- 权重、优先级及粘性规则保持原有行为。有效粘性绑定不参加权重抽选，也不累计分配补偿；模型不可用是硬准入，不可用 `scheduler.rank` 的权重 0 代替，不可被排序插件 fail-open 恢复。
+- `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。后台到期复查、人工刷新共用查询下限与租约。失败保留账号及调度开关，记录错误并退避；不得为额度查询启用停用账号、启动停止的运行时、注销或刷新 OAuth 授权。
+- `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。
+- `BuildQuotaRequestResponse.runtime_operation` 与普通 HTTP URL 目标区分。运行时请求通过已注册的 `AccountQuotaRuntime`、当前账号与受限只读操作执行；不接受插件指定任意运行时 URL，也不向插件暴露 Worker 管理密钥或容器 OAuth token。配额解析仍统一由插件的 `ParseQuotaResponse` 完成。
+- CCGateway 的托管账号声明运行时 `usage` 查询。插件解析共享窗口与模型专属窗口，用映射后模型的 `claude-fable-` 前缀识别 Fable；共享耗尽优先限制全部模型，Fable 专属耗尽只影响 Fable。缺失窗口、失败查询和仅仅到达 reset 时间都不能清除已知耗尽事实。
+- `ClassifyErrorResponse.quota` 承载插件确认的配额观测，核心只校验及存储。观测保存使用准入时由核心捕获的 `AccountQuotaSnapshot.generation`，不得信任插件指定的身份代次；重新授权前的迟到拒绝或恢复不能覆盖新身份。revision 已变化的旧查询不能延后更新的复查计划或覆盖失败计数。
+- `QuotaWindow.utilization_unknown` 默认为 false，兼容旧插件的数值语义。只有状态、没有数值的 CLI 观测设为 true，且 utilization、used、limit 必须都为 0；这三个默认值不表示真实使用量。API 保留未知标记，界面显示未知而非 0%，后续明确的真实 0 才作为已知数值展示。
+- 可信 CLI 事件明确指出模型专属限额时，CC 插件不附整账号冷却；未知范围仍采用保守分类，不能只凭请求模型猜测范围。管理员自动禁用规则与人工状态始终独立有效。配额查询与模型准入不发送收费模型探针，不重新引入模型 HTTP/TLS 中继。
 
 ## 45. 增长插件 growth：邀请返利与每日签到（0.1.0，2026-10-04 合并，2026-10-05 按代码补记）
 

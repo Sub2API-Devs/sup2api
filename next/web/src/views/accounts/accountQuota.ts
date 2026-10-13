@@ -9,9 +9,6 @@ import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, 
 /** The server answers force refreshes at most this often per account; the console does not ask sooner. */
 export const QUOTA_REFRESH_MIN_MS = 30_000
 
-/** Known window keys, in display order. Unknown keys follow in server order. */
-export const KNOWN_QUOTA_WINDOWS = ['5h', '7d', '7d_sonnet', '7d_fable'] as const
-
 /** GET /accounts/:id/quota — `force` makes the server query the upstream now. */
 export function fetchAccountQuota(id: number, force = true): Promise<QuotaSnapshot> {
   return api.get<QuotaSnapshot>(`/accounts/${id}/quota`, force ? { force: true } : undefined)
@@ -27,17 +24,8 @@ export function hasQuota(q: QuotaSnapshot | null | undefined): q is QuotaSnapsho
   return !!q && q.supported
 }
 
-/** Windows sorted as KNOWN_QUOTA_WINDOWS, unknown keys last (stable). */
 export function sortWindows(windows: QuotaWindow[] | null | undefined): QuotaWindow[] {
-  const rank = (k: string) => {
-    const i = (KNOWN_QUOTA_WINDOWS as readonly string[]).indexOf(k)
-    return i < 0 ? KNOWN_QUOTA_WINDOWS.length : i
-  }
-  return [...(windows || [])].sort((a, b) => rank(a.key) - rank(b.key))
-}
-
-export function isKnownWindow(key: string): key is (typeof KNOWN_QUOTA_WINDOWS)[number] {
-  return (KNOWN_QUOTA_WINDOWS as readonly string[]).includes(key)
+  return [...(windows || [])]
 }
 
 export type QuotaLevel = 'ok' | 'warning' | 'danger'
@@ -59,19 +47,15 @@ export function formatPercent(utilization: number): string {
   return p > 999 ? '>999%' : `${p}%`
 }
 
-export type Countdown = { kind: 'none' } | { kind: 'now' } | { kind: 'pending' } | { kind: 'in'; text: string }
+export type Countdown = { kind: 'none' } | { kind: 'pending' } | { kind: 'in'; text: string }
 
-/**
- * Time until the window resets: "2d 3h", "4h 12m", "35m", "<1m". A reset time
- * in the past is "now" when nothing is used, else "pending" (the snapshot has
- * not seen the new window yet).
- */
-export function quotaCountdown(resetsAt: string | null | undefined, utilization: number, nowMs: number): Countdown {
+export function quotaCountdown(resetsAt: string | null | undefined, nowMs: number, expired = false): Countdown {
+  if (expired) return { kind: 'pending' }
   if (!resetsAt) return { kind: 'none' }
   const at = Date.parse(resetsAt)
   if (Number.isNaN(at)) return { kind: 'none' }
   const diff = at - nowMs
-  if (diff <= 0) return utilization > 0 ? { kind: 'pending' } : { kind: 'now' }
+  if (diff <= 0) return { kind: 'pending' }
   const mins = Math.floor(diff / 60_000)
   const hours = Math.floor(mins / 60)
   if (hours >= 24) return { kind: 'in', text: `${Math.floor(hours / 24)}d ${hours % 24}h` }

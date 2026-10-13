@@ -302,6 +302,7 @@ type AccountType struct {
 	CommonControls      map[string]AccountCommonControl `json:"commonControls,omitempty"`
 	ExtensionsSchema    json.RawMessage                 `json:"extensionsSchema,omitempty"`
 	Lifecycle           *AccountLifecycle               `json:"lifecycle,omitempty"`
+	ModelAvailability   bool                            `json:"modelAvailability,omitempty"`
 	// Quota declares that accounts of this type have subscription quota
 	// windows (5-hour / weekly limits and the like) the host can track
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
@@ -361,8 +362,16 @@ type AccountRefresh struct {
 // plugin also implements BuildQuotaRequest / ParseQuotaResponse, which the
 // host calls when its snapshot is stale. At least one of the two is required.
 type AccountQuota struct {
-	Headers []QuotaHeader `json:"headers,omitempty"`
-	Query   bool          `json:"query,omitempty"`
+	Headers     []QuotaHeader           `json:"headers,omitempty"`
+	Query       bool                    `json:"query,omitempty"`
+	AutoRefresh bool                    `json:"autoRefresh,omitempty"`
+	Windows     []QuotaWindowDefinition `json:"windows,omitempty"`
+}
+
+type QuotaWindowDefinition struct {
+	Key        string        `json:"key"`
+	Label      LocalizedText `json:"label"`
+	ShortLabel LocalizedText `json:"shortLabel,omitempty"`
 }
 
 // AccountBalance declares that an account type has a prepaid balance and that

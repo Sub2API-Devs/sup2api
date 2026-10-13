@@ -160,6 +160,26 @@ func TestQuotaCacheEvictOnResetAndReauth(t *testing.T) {
 	}
 }
 
+func TestQuotaCacheFencesDelayedReads(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	id := e.mkRawAccount("anthropic", "apikey", "fence", "sk-good-key-123", true)
+	require.NoError(t, e.db.SaveAccountQuota(ctx, id, store.QuotaPassive, map[string]store.QuotaWindow{"daily": {Utilization: 0}}))
+	old, at, err := e.db.AccountQuotasAt(ctx, []int64{id})
+	require.NoError(t, err)
+	raw, err := json.Marshal(map[string]any{"mtime": at.UnixMicro(), "snap": old[id]})
+	require.NoError(t, err)
+	e.svc.evictQuotaCache(ctx, id)
+	require.NoError(t, e.svc.cacheQuotaAt(ctx, id, raw, at.UnixMicro()))
+	require.False(t, e.mr.Exists(quotaRedisKey(id)))
+	require.NoError(t, e.db.SaveAccountQuota(ctx, id, store.QuotaPassive, map[string]store.QuotaWindow{"daily": {Utilization: 100}}))
+	snaps := e.svc.cachedAccountQuotas(ctx, []int64{id})
+	require.Equal(t, float64(100), snaps[id].Windows["daily"].Utilization)
+	require.NoError(t, e.svc.cacheQuotaAt(ctx, id, raw, at.UnixMicro()))
+	snaps = e.svc.cachedAccountQuotas(ctx, []int64{id})
+	require.Equal(t, float64(100), snaps[id].Windows["daily"].Utilization)
+}
+
 func TestQuotaCacheCorruptEntry(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.DB(t)

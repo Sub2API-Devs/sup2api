@@ -178,15 +178,28 @@ export default {
   selectNone: 'Select none',
   quota: {
     column: 'Usage',
+    /** Known window keys, in display order. Unknown keys follow in server order. */
+    /** Windows sorted as KNOWN_QUOTA_WINDOWS, unknown keys last (stable). */
     windows: { '5h': '5 hours', '7d': '7 days', '7d_sonnet': '7 days Sonnet', '7d_fable': '7 days Fable' },
     windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
     rejected: 'Limited',
     rejectedHint: 'The upstream rejects requests in this window until it resets',
     warningHint: 'The upstream warns that this window is almost used up',
     resetsAt: 'resets {time}',
+    /**
+     * Time until the window resets: "2d 3h", "4h 12m", "35m", "<1m". A reset time
+     * in the past is "now" when nothing is used, else "pending" (the snapshot has
+     * not seen the new window yet).
+     */
     resetNow: 'reset',
-    resetPending: 'stale',
+    resetPending: 'Pending verification',
     noData: 'No usage data yet',
+    initialPending: 'Initial quota query pending',
+    queryPending: 'Quota query pending',
+    queryFailed: 'Quota query failed',
+    queryFailedDetail: 'Quota query failed: {error}',
+    lastObserved: 'Last observed {time}',
+    nextCheck: 'Next check: {time}',
     passive: 'Passive',
     passiveHint: 'Read from the headers of recent responses; the upstream is not queried',
     refresh: 'Refresh',

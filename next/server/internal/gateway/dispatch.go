@@ -78,6 +78,11 @@ func (c *call) dispatch(ctx context.Context) {
 		c.fail(c.creditRequest.lookupError)
 		return
 	}
+	cands, availabilityErr := c.filterAvailability(ctx, cands)
+	if availabilityErr != nil {
+		c.fail(availabilityErr)
+		return
+	}
 	c.sticky = c.resolveSticky(ctx)
 	c.session = c.sessionIdentity()
 	excluded := map[int64]bool{}
@@ -160,7 +165,7 @@ func (c *call) dispatch(ctx context.Context) {
 			}
 		}
 	}
-	if last == nil || (last.RecordType != errTypeUpstream && last.RecordType != errTypeInvalidRequest &&
+	if last == nil || (last.RecordType != errTypeUpstream && last.RecordType != errTypeInvalidRequest && last.RecordType != errTypeModelAvailability &&
 		last.Status != http.StatusTooManyRequests) {
 		// Only upstream answers (and requests no upstream protocol can
 		// express) are worth relaying; plugin or account problems surface
@@ -395,6 +400,9 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	meta.Model = upModel
 	buildRequest := &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct, Fields: fields, InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n)}
 	if c.canExecute(rt) {
+		if failure := c.guardAvailability(ctx, ref); failure != nil {
+			return attemptResult{kind: attemptFailover, err: failure}
+		}
 		return c.executeAttempt(ctx, rt, acc, pacct, upBody, buildRequest)
 	}
 	bctx, cancel := context.WithTimeout(ctx, c.gw.platformTimeout())
@@ -512,6 +520,21 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return attemptResult{kind: attemptReturn, err: invalidModelReference(err.Error())}
 	}
 
+	if failure := c.guardAvailability(prepareCtx, &acc.AccountRef); failure != nil {
+		return attemptResult{kind: attemptFailover, err: failure}
+	}
+	if rt.binding.Type.ModelAvailability {
+		expected := acc.MapModel(c.model)
+		if built.GetUpstreamModel() != "" && built.GetUpstreamModel() != expected {
+			return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+		}
+		if rt.modelPath != "" {
+			actual := gjson.GetBytes(body, rt.modelPath)
+			if (actual.Exists() || gjson.GetBytes(upBody, rt.modelPath).Exists()) && (actual.Type != gjson.String || actual.Str != expected) {
+				return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+			}
+		}
+	}
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	hc.Timeout = 0
@@ -646,6 +669,7 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 }
 
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
+	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
 	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
 
 	clientStatus := int(cls.GetClientStatus())

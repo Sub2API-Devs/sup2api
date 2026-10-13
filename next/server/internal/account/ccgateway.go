@@ -15,6 +15,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
@@ -333,8 +334,13 @@ func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, 
 		WHERE id = $1`, a.ID); err != nil {
 		return false, err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM account_quota_snapshots WHERE account_id = $1`, a.ID); err != nil {
+	if err := store.ResetAccountQuota(ctx, tx, a.ID); err != nil {
 		return false, err
+	}
+	if binding, ok := s.accountType(a.PluginKey, a.Type); ok {
+		if err := s.initializeQuota(ctx, tx, a.ID, binding); err != nil {
+			return false, err
+		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM account_balances WHERE account_id = $1`, a.ID); err != nil {
 		return false, err
