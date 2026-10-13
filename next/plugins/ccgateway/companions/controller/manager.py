@@ -592,7 +592,10 @@ class Manager:
                 policy = network_policy(desired.get('network'))
             except (ValueError, TypeError) as e:
                 raise BadRequest('invalid network policy') from e
-            if not desired.get('proxy') or not desired.get('enabled', True):
+            # No proxy egresses directly only when the core says so (direct):
+            # an older core without the flag still gets the runtime blocked.
+            direct = desired.get('direct') is True and not desired.get('proxy')
+            if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
                 return self.block(aid)
             old = None
             with contextlib.suppress(docker.errors.NotFound):
@@ -610,7 +613,7 @@ class Manager:
             self.save(aid, state)
             # Config validation happens before the old egress is stopped.
             try:
-                config, rules = configuration(desired['proxy'], state['app_ip'], state['gateway_ip'])
+                config, rules = configuration(None if direct else desired['proxy'], state['app_ip'], state['gateway_ip'])
             except (ValueError, KeyError, TypeError) as e:
                 raise BadRequest('invalid proxy') from e
             d = self.dir(aid)

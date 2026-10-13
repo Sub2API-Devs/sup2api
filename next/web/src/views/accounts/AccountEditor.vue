@@ -668,11 +668,6 @@ async function save(event: Event) {
     errors.value = { name: t('ui.schema.v.required') }
     return
   }
-  if (needsProxy.value && !proxyUrlToSend.value && basic.proxy_id == null) {
-    activeSection.value = 'connection'
-    errors.value = { [proxyMode.value === 'url' ? 'proxy_url' : 'proxy_id']: t('ccgateway.accountAuth.proxyRequired') }
-    return
-  }
   if (ccgSaveBlocked.value) {
     void showCcgAuth()
     return
@@ -830,7 +825,7 @@ async function save(event: Event) {
               </SField>
               <div ref="proxyFieldEl" class="md:col-span-2" data-testid="proxy-field">
                 <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <label class="input-label !mb-0">{{ t('accounts.proxy') }}<span v-if="needsProxy" class="ml-0.5 text-red-500">*</span></label>
+                  <label class="input-label !mb-0">{{ t('accounts.proxy') }}</label>
                   <div class="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-dark-700" role="tablist" data-testid="proxy-mode">
                     <button
                       v-for="tab in proxyModeTabs"

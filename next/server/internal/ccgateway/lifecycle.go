@@ -28,7 +28,7 @@ func (s *Service) PrepareAccount(ctx context.Context, p core.AccountPreparation)
 	}
 	if tag.RowsAffected() == 0 {
 		var matches bool
-		err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1 AND created_by=$2 AND proxy_id=$3 AND initial_settings=$4::jsonb AND account_id IS NULL AND for_account IS NULL AND retired_at IS NULL)`, p.Key, p.CreatedBy, p.ProxyID, p.Settings).Scan(&matches)
+		err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1 AND created_by=$2 AND proxy_id IS NOT DISTINCT FROM $3 AND initial_settings=$4::jsonb AND account_id IS NULL AND for_account IS NULL AND retired_at IS NULL)`, p.Key, p.CreatedBy, p.ProxyID, p.Settings).Scan(&matches)
 		if err != nil {
 			return err
 		}
@@ -116,7 +116,7 @@ func (s *Service) UpdateAccountPreparation(ctx context.Context, tx pgx.Tx, p cor
 
 func (s *Service) CheckAccountPreparation(ctx context.Context, p core.AccountPreparation) error {
 	var matches bool
-	if err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1 AND created_by=$2 AND proxy_id=$3 AND initial_settings=$4::jsonb AND account_id IS NULL AND for_account IS NULL AND retired_at IS NULL)`, p.Key, p.CreatedBy, p.ProxyID, p.Settings).Scan(&matches); err != nil {
+	if err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1 AND created_by=$2 AND proxy_id IS NOT DISTINCT FROM $3 AND initial_settings=$4::jsonb AND account_id IS NULL AND for_account IS NULL AND retired_at IS NULL)`, p.Key, p.CreatedBy, p.ProxyID, p.Settings).Scan(&matches); err != nil {
 		return err
 	}
 	if !matches {

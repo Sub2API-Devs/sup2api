@@ -114,11 +114,14 @@ func (s *Service) canProxies(ctx context.Context) (scope *int64, none bool) {
 	return nil, true
 }
 
-// checkProxy validates a draft's proxy_id: required, visible to the caller
-// and not disabled.
+// checkProxy validates a draft's proxy_id: none (direct egress), or visible
+// to the caller and not disabled.
 func (s *Service) checkProxy(ctx context.Context, id *int64) error {
-	if id == nil || *id <= 0 {
-		return reasonError(core.ErrInvalidArgument, "no_proxy")
+	if id == nil {
+		return nil
+	}
+	if *id <= 0 {
+		return reasonError(core.ErrInvalidArgument, "proxy_not_found")
 	}
 	scope, none := s.canProxies(ctx)
 	var status string
@@ -165,7 +168,7 @@ func (s *Service) draftCreate(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	key := newDraftKey()
 	if _, e := s.DB.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by)
-		VALUES($1, $2, NULLIF($3::bigint, 0))`, key, *in.ProxyID, uid); e != nil {
+		VALUES($1, $2, NULLIF($3::bigint, 0))`, key, in.ProxyID, uid); e != nil {
 		httpapi.Fail(c, e)
 		return
 	}
@@ -196,7 +199,7 @@ func (s *Service) draftUpdate(c *gin.Context) {
 	}
 	tag, e := s.DB.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET proxy_id=$2, last_seen_at=now()
 		WHERE key=$1 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL
-		AND ($3::bigint IS NULL OR created_by=$3)`, key, *in.ProxyID, scope)
+		AND ($3::bigint IS NULL OR created_by=$3)`, key, in.ProxyID, scope)
 	if e != nil || tag.RowsAffected() != 1 {
 		httpapi.Fail(c, errOr(e, draftNotFound(core.ErrNotFound)))
 		return

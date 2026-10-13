@@ -187,8 +187,14 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	if code, _ := e.doAs(reader, "POST", path, nil); code != 403 {
 		t.Fatalf("reader: %d", code)
 	}
-	if code, out := e.doAs(owner, "POST", "/system/ccgateway/accounts/"+itoa(noProxy)+"/reauthorize", nil); code != 400 || ccgReason(out) != "no_proxy" {
-		t.Fatalf("account without a proxy: %d %v", code, out)
+	if code, out := e.doAs(owner, "POST", "/system/ccgateway/accounts/"+itoa(noProxy)+"/reauthorize", nil); code != 201 {
+		t.Fatalf("account without a proxy (direct egress): %d %v", code, out)
+	} else {
+		var direct bool
+		k, _ := out["data"].(map[string]any)["key"].(string)
+		if err := e.db.Pool.QueryRow(ctx, `SELECT proxy_id IS NULL FROM ccgateway_runtimes WHERE key=$1`, k).Scan(&direct); err != nil || !direct {
+			t.Fatalf("direct draft %q: %v %v", k, direct, err)
+		}
 	}
 
 	// One open re-authorization draft per account.

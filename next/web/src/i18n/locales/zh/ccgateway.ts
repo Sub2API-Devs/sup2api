@@ -101,7 +101,7 @@ export default {
       },
       pickProxy: '去选择代理', openProxies: '打开代理页'
     },
-    proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: 'Claude Code 账号的容器只能经代理出网，没有直连兜底；未绑定代理的账号容器会被停止。'
+    proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: '不选代理时容器直连出网，使用服务器自身的 IP；选了代理但代理被停用时容器会停止，不会改为直连。', proxyDirect: '直连（不使用代理）'
   },
   reauth: {
     replaceTitle: '手动替换容器', prepare: '准备新容器', migrate: '迁移授权文件', switchNow: '确认切换到新容器',

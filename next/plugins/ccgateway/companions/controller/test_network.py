@@ -47,6 +47,16 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(config['route']['final'], 'account-proxy')
         self.assertEqual(config['dns']['servers'][0]['detour'], 'account-proxy')
 
+    def test_direct_egress_without_proxy(self):
+        config, rules = configuration(None, '172.20.0.3', '172.20.0.2')
+        self.assertEqual(config['outbounds'], [{'type': 'direct', 'tag': 'account-proxy'}])
+        self.assertEqual(config['route']['final'], 'account-proxy')
+        self.assertEqual(config['dns']['servers'][0]['detour'], 'account-proxy')
+        output = rules.split('chain output')[1]
+        self.assertIn('policy drop', output)
+        self.assertLess(output.index('10.0.0.0/8'), output.index('meta l4proto tcp accept'))
+        self.assertNotIn('udp', output)
+
     def test_rejects_untrusted_network_operands(self):
         with self.assertRaises(ValueError):
             business_rules('172.20.0.2; reboot')

@@ -252,6 +252,16 @@ class KeyTests(unittest.TestCase):
 
 
 class ManagerTests(Base):
+    def test_direct_runtime_without_proxy(self):
+        with patch('manager.configuration', return_value=({'outbounds': []}, 'table inet x {}\n')) as conf:
+            out = self.m.apply('5', {'revision': REV, 'proxy': None, 'direct': True})
+        self.assertEqual(out['status'], 'ready')
+        self.assertIsNone(conf.call_args.args[0])
+        # Without the core's direct flag a missing proxy still blocks.
+        self.assertEqual(self.m.apply('5', {'revision': REV, 'proxy': None})['status'], 'blocked')
+        self.assertEqual(self.m.apply('5', {'revision': REV, 'direct': 'yes'})['status'], 'blocked')
+        self.assertEqual(self.m.apply('5', {'revision': REV, 'direct': True, 'enabled': False})['status'], 'blocked')
+
     def test_oneshot_removes_a_container_that_could_not_start(self):
         # docker-py's run(remove=True) leaves a container that fails to start
         # behind in "Created"; every failed reconcile used to add one.

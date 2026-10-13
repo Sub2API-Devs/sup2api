@@ -2955,7 +2955,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 ## 49. CCGateway 账号：录入时启动容器、授权后再保存（2026-10-05，用户要求）
 
-前提：CCGateway 设置里开启了 `account_runtimes`（每个运行环境一组容器，由远端 `tools/ccgateway/runtime/manager.py` 控制器管理）。控制器约定**没有直连兜底**：未绑定代理、代理被禁用或账号被禁用时，控制器停掉该运行环境的容器（blocked）。
+前提：CCGateway 设置里开启了 `account_runtimes`（每个运行环境一组容器，由远端 `tools/ccgateway/runtime/manager.py` 控制器管理）。~~控制器约定**没有直连兜底**~~（2026-10-14 用户要求改为允许不绑代理，见 §49.20）：代理被禁用或账号被禁用时，控制器停掉该运行环境的容器（blocked）；没有绑定代理时直连出网。
 
 用户决定（同日第二版，取代下面 §49.1–§49.6 的"先保存、再授权"）：Claude Code（`ccgateway/managed`）账号在**录入时**就启动容器、完成授权，授权成功才能保存；失败、取消或放弃的容器由定时清理删除。所有机器可读的状态和错误一律是英文代码，控制台做中英文转换。三条线（容器/控制器、核心、控制台）的共同约定原在 `docs/CCGATEWAY-DRAFT-RUNTIMES.md`，已并入本节 §49.7–§49.15。旧的"先保存再授权"流程仍然可用（编辑已保存账号的重新授权也走它）。
 
@@ -3243,6 +3243,16 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **请求策略**（`X-CCGateway-Request-Policy`）仍随每个请求发送，Worker 保持无状态。
 - **定时扫描**：`Run` 改为每 60 秒一轮，只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
 - **停用账号不再反复写配置**：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
+
+### 49.20 不绑代理即直连（2026-10-14，用户要求）
+
+起因：#21（API Key 账号）绑定的代理凭据失效（上游代理 407），控制器连通性检查失败，运行环境一直 pending，模型请求回 409 `not_synchronized`。用户决定代理可以为空，为空时直连。
+
+- **核心**：账号或草稿没有绑定代理（含代理被删除）时不再阻断，期望配置为 `{"proxy": null, "direct": true, ...}`；不再产生 `no_proxy`（错误码保留，兼容旧前端）。绑定的代理被停用仍阻断（`proxy_disabled`），**不回退直连**；账号停用仍为 `account_disabled`。修订号含 `proxy_id`，切换代理或改直连都会重新同步。
+- **草稿与重新授权**：`POST/PUT /system/ccgateway/drafts` 的 `proxy_id` 可省略或为 null，`proxy_id <= 0` 为 `proxy_not_found`。重新授权沿用账号当前的代理，账号没有代理时草稿也直连。账号准备按 `proxy_id IS NOT DISTINCT FROM` 比对；插件 `prepare` 阶段不再要求代理。
+- **控制器**：只有 `direct` 为 `true` 且没有 `proxy` 时才直连；不带 `direct` 的旧核心发来空代理仍阻断。直连时 sing-box 出站为 `direct`（DNS 仍走 DoH 1.1.1.1），egress 的 output 链丢弃私有、回环、链路本地、组播与保留地址，只放行公网 IPv4 TCP；业务容器规则不变。连通性检查照常要求能访问探测地址。
+- **兼容顺序**：新核心 + 旧控制器时，无代理账号保持阻断（与以前一致）；先升控制器再依赖直连。
+- **控制台**：代理不再必填，提示直连使用服务器自身 IP；授权步骤中未选代理显示「直连（不使用代理）」。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 

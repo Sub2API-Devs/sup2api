@@ -159,7 +159,8 @@ func TestDraftCreateValidatesTheProxy(t *testing.T) {
 		code   int
 		reason any
 	}{
-		{all, `{}`, 400, "no_proxy"},
+		{all, `{}`, 201, nil}, // no proxy: direct egress
+		{all, body(0), 400, "proxy_not_found"},
 		{all, body(999999), 400, "proxy_not_found"},
 		{all, body(disabled), 400, "proxy_disabled"},
 		{all, body(otherProxy), 201, nil}, // account:create: any existing proxy

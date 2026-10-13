@@ -40,16 +40,20 @@ var (
 )
 
 type accountDesired struct {
-	Network  RuntimeNetwork    `json:"network"`
-	Revision string            `json:"revision"`
-	Enabled  bool              `json:"enabled"`
-	Proxy    map[string]any    `json:"proxy"`
+	Network  RuntimeNetwork `json:"network"`
+	Revision string         `json:"revision"`
+	Enabled  bool           `json:"enabled"`
+	Proxy    map[string]any `json:"proxy"`
+	// Direct: no proxy is bound, the runtime egresses directly. A controller
+	// without direct support blocks such a runtime (proxy null).
+	Direct   bool              `json:"direct,omitempty"`
 	Auth     map[string]string `json:"auth,omitempty"`
 	Locale   string            `json:"locale,omitempty"`
 	Timezone string            `json:"timezone,omitempty"`
 	Kind     string            `json:"-"`
-	// Blocked says why a disabled runtime is blocked: account_disabled,
-	// no_proxy or proxy_disabled (the controller has no direct fallback).
+	// Blocked says why a disabled runtime is blocked: account_disabled or
+	// proxy_disabled (a bound proxy that is disabled never falls back to
+	// direct egress).
 	Blocked string `json:"-"`
 	// Key is the runtime key: the adopted draft key or the account id.
 	Key string `json:"-"`
@@ -72,16 +76,21 @@ func (d *accountDesired) applyEnvironment() error {
 }
 
 // proxyDesired decrypts the proxy password and builds the controller's
-// proxy object.
-func (s *Service) proxyDesired(spec core.ProxySpec, password []byte) (map[string]any, error) {
+// proxy object. No proxy (empty protocol) is direct egress.
+func (s *Service) proxyDesired(d *accountDesired, spec core.ProxySpec, password []byte) error {
+	if spec.Protocol == "" {
+		d.Proxy, d.Direct = nil, true
+		return nil
+	}
 	if len(password) > 0 {
 		plain, e := s.Cipher.Decrypt(password, []byte("proxy"))
 		if e != nil {
-			return nil, e
+			return e
 		}
 		spec.Password = string(plain)
 	}
-	return map[string]any{"protocol": spec.Protocol, "host": spec.Host, "port": spec.Port, "username": spec.Username, "password": spec.Password}, nil
+	d.Proxy = map[string]any{"protocol": spec.Protocol, "host": spec.Host, "port": spec.Port, "username": spec.Username, "password": spec.Password}
+	return nil
 }
 
 func revisionOf(version string) string {
@@ -103,9 +112,9 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	var password, accountCredentials []byte
 	var settings []byte
 	err := q.QueryRow(ctx, `SELECT
-  a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',false),
+  a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',true),
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
-       WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
+       WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
   COALESCE(r.key, a.id::text), a.settings
@@ -147,7 +156,7 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 		if err := d.applyEnvironment(); err != nil {
 			return d, err
 		}
-		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
+		if err := s.proxyDesired(&d, spec, password); err != nil {
 			return d, err
 		}
 	}
@@ -156,17 +165,17 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 
 // draftDesired is the desired state of a draft that is not adopted (nor
 // retired) yet: a managed (OAuth) runtime egressing through the draft's
-// proxy. The revision only depends on the draft key and the proxy, so every
-// node computes the same one. A retired runtime has no desired state: it is
-// never reconfigured, only deleted by the sweep.
+// proxy, or directly without one. The revision only depends on the draft key
+// and the proxy, so every node computes the same one. A retired runtime has
+// no desired state: it is never reconfigured, only deleted by the sweep.
 func (s *Service) draftDesired(ctx context.Context, key string, credentials bool) (accountDesired, error) {
 	d := accountDesired{Kind: "managed", Key: key}
 	var version string
 	var spec core.ProxySpec
 	var password, settings []byte
 	err := s.DB.Pool.QueryRow(ctx, `SELECT
-  COALESCE(p.status <> 'disabled',false),
-  CASE WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
+  COALESCE(p.status <> 'disabled',true),
+  CASE WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,r.initial_settings
   FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
@@ -186,7 +195,7 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 		if err := d.applyEnvironment(); err != nil {
 			return d, err
 		}
-		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
+		if err := s.proxyDesired(&d, spec, password); err != nil {
 			return d, err
 		}
 	}

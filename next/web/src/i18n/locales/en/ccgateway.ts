@@ -101,7 +101,7 @@ export default {
       },
       pickProxy: 'Pick a proxy', openProxies: 'Open Proxies'
     },
-    proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Claude Code account containers only reach the internet through a proxy, there is no direct fallback; containers of accounts without one are stopped.'
+    proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Without a proxy the container connects directly from the server’s own IP; if the chosen proxy is disabled the container stops instead of falling back to direct.', proxyDirect: 'direct (no proxy)'
   },
   reauth: {
     replaceTitle: 'Replace container manually', prepare: 'Prepare container', migrate: 'Migrate authorization files', switchNow: 'Confirm switch to new container',

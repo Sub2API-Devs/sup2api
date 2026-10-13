@@ -26,8 +26,9 @@ func (p *Plugin) OnAccountLifecycle(_ context.Context, in *pluginv1.AccountLifec
 	case "validate", "before_create", "before_update":
 		return out, nil
 	case "prepare":
-		if account.GetType() != AccountTypeManaged || account.GetProperties().GetProxyId() <= 0 {
-			return &pluginv1.AccountLifecycleResponse{Errors: pluginsdk.FieldErrors{}.Add("proxy_id", "required", "Authorization preparation requires an account proxy / 授权准备需要账号代理")}, nil
+		// No proxy is direct egress from the runtime host.
+		if account.GetType() != AccountTypeManaged {
+			return &pluginv1.AccountLifecycleResponse{Errors: pluginsdk.FieldErrors{}.Add("type", "unsupported", "Only Claude subscription accounts are prepared / 只有 Claude 订阅账号需要授权准备")}, nil
 		}
 	case "created", "updated", "deleted", "check", "cancel", "action":
 	default:

@@ -396,17 +396,17 @@ func TestStartRetriesUntilTheRuntimeAnswers(t *testing.T) {
 	}
 }
 
-func TestAccountWithoutProxyIsReportedBlocked(t *testing.T) {
+func TestAccountWithoutProxyEgressesDirectly(t *testing.T) {
 	var puts atomic.Int32
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/config") {
-			var d accountDesired
-			_ = json.NewDecoder(r.Body).Decode(&d)
-			if d.Enabled {
-				t.Error("account without a proxy enabled")
+			var raw map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&raw)
+			if raw["enabled"] != true || raw["direct"] != true || raw["proxy"] != nil {
+				t.Errorf("account without a proxy: %v", raw)
 			}
 			puts.Add(1)
-			_, _ = w.Write([]byte(`{"status":"blocked"}`))
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready", "revision": raw["revision"].(string)})
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/status") {
@@ -417,17 +417,12 @@ func TestAccountWithoutProxyIsReportedBlocked(t *testing.T) {
 	})
 	id := f.account(false)
 	code, out := f.call("POST", id, "sync", `{}`)
-	if code != 200 || data(out)["status"] != "blocked" || data(out)["reason"] != "no_proxy" || puts.Load() != 1 {
+	if code != 200 || data(out)["synced"] != true || data(out)["status"] != nil || puts.Load() != 1 {
 		t.Fatalf("sync: %d %v", code, out)
 	}
 	code, out = f.call("GET", id, "status", "")
-	if code != 200 || data(out)["status"] != "blocked" || data(out)["reason"] != "no_proxy" {
+	if code != 200 || data(out)["status"] == "blocked" {
 		t.Fatalf("status: %d %v", code, out)
-	}
-	// Runtime actions of a blocked runtime say why instead of a 409.
-	code, out = f.call("POST", id, "start", `{}`)
-	if code != 400 || reason(out) != "no_proxy" {
-		t.Fatalf("start on a blocked runtime: %d %v", code, out)
 	}
 }
 

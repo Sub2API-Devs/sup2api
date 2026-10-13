@@ -82,10 +82,22 @@ def proxy_outbound(proxy):
     return out
 
 
+PRIVATE_DESTINATIONS = ('0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, '
+                        '172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4')
+
+
 def configuration(proxy, app_ip, gateway_ip):
+    """proxy None is direct egress: the runtime reaches public IPv4 TCP from
+    the host's address, private and local destinations stay closed."""
     app_ip = str(ipaddress.IPv4Address(app_ip))
     gateway_ip = str(ipaddress.IPv4Address(gateway_ip))
-    out = proxy_outbound(proxy)
+    if proxy is None:
+        out = {'type': 'direct', 'tag': 'account-proxy'}
+        egress = (f'ip daddr {{ {PRIVATE_DESTINATIONS} }} drop\n'
+                  '  meta nfproto ipv4 meta l4proto tcp accept')
+    else:
+        out = proxy_outbound(proxy)
+        egress = f"ip daddr {out['server']} tcp dport {out['server_port']} accept"
     config = {
         'log': {'level': 'warn'},
         'dns': {'servers': [{'type': 'https', 'tag': 'remote-dns', 'server': '1.1.1.1',
@@ -115,7 +127,7 @@ def configuration(proxy, app_ip, gateway_ip):
  chain output {{ type filter hook output priority filter; policy drop;
   oifname "lo" accept
   ct state established,related accept
-  ip daddr {out['server']} tcp dport {out['server_port']} accept
+  {egress}
  }}
 }}
 '''
@@ -130,7 +142,7 @@ def business_rules(gateway_ip):
   ip daddr {gateway_ip} udp dport 53 accept
   ip daddr {gateway_ip} tcp dport 53 accept
   ip daddr 127.0.0.1 tcp dport 8787 accept
-  ip daddr {{ 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 }} drop
+  ip daddr {{ {PRIVATE_DESTINATIONS} }} drop
   meta nfproto ipv4 meta l4proto tcp accept
  }}
 }}

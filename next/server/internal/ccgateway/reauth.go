@@ -31,7 +31,7 @@ const reauthLockSQL = `SELECT pg_advisory_xact_lock(hashtextextended('ccg-reauth
 // account can always drive the flow. uid is the caller.
 //
 // Errors: 503 not_configured (runtimes off), 404 (not a ccgateway account),
-// 400 api_key_account, no_proxy or proxy_disabled.
+// 400 api_key_account or proxy_disabled.
 func (s *Service) ReauthDraft(ctx context.Context, accountID, uid int64, scope *int64) (key string, created bool, err error) {
 	if !s.runtimesOn(ctx) {
 		return "", false, reasonError(core.ErrUnavailable, "not_configured")
@@ -52,10 +52,11 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, uid int64, scope *
 	switch {
 	case kind != "managed":
 		return "", false, reasonError(core.ErrInvalidArgument, "api_key_account")
-	case proxyID == nil || proxyStatus == nil:
-		return "", false, reasonError(core.ErrInvalidArgument, "no_proxy")
-	case *proxyStatus == "disabled":
+	case proxyStatus != nil && *proxyStatus == "disabled":
 		return "", false, reasonError(core.ErrInvalidArgument, "proxy_disabled")
+	}
+	if proxyStatus == nil {
+		proxyID = nil // none, or a deleted proxy: direct egress
 	}
 	e = s.DB.Tx(ctx, func(tx pgx.Tx) error {
 		if _, e := tx.Exec(ctx, reauthLockSQL, accountID); e != nil {
@@ -67,13 +68,13 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, uid int64, scope *
 			WHERE key = (SELECT key FROM ccgateway_runtimes WHERE for_account=$1 AND account_id IS NULL AND retired_at IS NULL
 				AND last_seen_at >= now() - $4::bigint * interval '1 second' AND created_at >= now() - $5::bigint * interval '1 second'
 				ORDER BY created_at DESC LIMIT 1)
-			RETURNING key`, accountID, *proxyID, scope, int64(draftIdle.Seconds()), int64(draftMaxAge.Seconds())).Scan(&key)
+			RETURNING key`, accountID, proxyID, scope, int64(draftIdle.Seconds()), int64(draftMaxAge.Seconds())).Scan(&key)
 		if e == nil || !store.IsNoRows(e) {
 			return e
 		}
 		key, created = newDraftKey(), true
 		_, e = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by, for_account, initial_settings)
-			VALUES($1, $2, NULLIF($3::bigint, 0), $4, $5::jsonb)`, key, *proxyID, uid, accountID, settings)
+			VALUES($1, $2, NULLIF($3::bigint, 0), $4, $5::jsonb)`, key, proxyID, uid, accountID, settings)
 		return e
 	})
 	if e != nil {

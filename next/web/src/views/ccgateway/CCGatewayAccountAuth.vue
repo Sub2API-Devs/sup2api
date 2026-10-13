@@ -84,7 +84,7 @@ const canRead = canManage
 
 /** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)
-const draftProxy = ref<number | null>(null)
+const draftProxy = ref<number | null | undefined>(undefined)
 /** The draft shown: the new account's, or the re-authorization's. */
 const key = computed(() => (reauth.value ? props.reauthKey! : draftKey.value))
 /** Base path of the draft runtime, '' while there is none. */
@@ -126,7 +126,7 @@ const phase = computed(() => containerPhase(status.value?.status))
 const blocked = computed(() => (phase.value === 'blocked' ? blockReason(status.value?.reason) : null))
 const flow = computed(() => ({
   mode: mode.value,
-  proxy: reauth.value || props.proxyId != null,
+  proxy: true, // no proxy is direct egress
   created: !!target.value,
   container: failure.value?.step === 'container' ? ('error' as const) : phase.value,
   loggedIn: health.value ? health.value.logged_in : null,
@@ -141,7 +141,7 @@ const authorizedDraft = computed(() => readyToSave(flow.value))
 const containerName = computed(() => status.value?.container || (key.value ? `ccg-${key.value}` : ''))
 const proxyName = computed(() => {
   const id = props.proxyId
-  if (id == null) return ''
+  if (id == null) return t('ccgateway.accountAuth.proxyDirect')
   return proxies.value.find((p) => p.id === id)?.name || `#${id}`
 })
 const left = computed(() => (session.value ? secondsLeft(session.value.expires_at, now.value) : 0))
@@ -280,8 +280,8 @@ function discard(key: string) {
 
 /** ② of a new account: creates the draft runtime with the picked proxy. */
 async function createDraft() {
-  if (!props.draft || draftKey.value || props.proxyId == null || !canManage.value || acting.value || props.configurationReady === false) return
-  const proxy = props.proxyId
+  if (!props.draft || draftKey.value || !canManage.value || acting.value || props.configurationReady === false) return
+  const proxy = props.proxyId ?? null
   resetTarget()
   busy.value = 'create'
   const stamp = serial
@@ -311,8 +311,8 @@ async function createDraft() {
 /** The editor's proxy changed after the draft exists: PUT drafts/:key (re-reconciles the container). */
 async function updateProxy() {
   const key = draftKey.value
-  const p = props.proxyId
-  if (!props.draft || !key || p == null || p === draftProxy.value || acting.value || !canManage.value) return
+  const p = props.proxyId ?? null
+  if (!props.draft || !key || p === draftProxy.value || acting.value || !canManage.value) return
   busy.value = 'proxy'
   failure.value = null
   health.value = null
@@ -342,7 +342,7 @@ async function restartDraft() {
   const key = draftKey.value
   resetTarget()
   draftKey.value = null
-  draftProxy.value = null
+  draftProxy.value = undefined
   preparationAttempt = ''
   if (key) discard(key)
   await createDraft()
@@ -478,7 +478,7 @@ function retry() {
   if (!f) return
   if (f.step === 'container') {
     if ((props.draft && !draftKey.value) || f.reason === 'draft_not_found') void restartDraft()
-    else if (props.draft && props.proxyId != null && props.proxyId !== draftProxy.value) void updateProxy()
+    else if (props.draft && (props.proxyId ?? null) !== draftProxy.value) void updateProxy()
     else void (canManage.value ? sync() : refresh())
   } else if (f.step === 'login') void start()
   else if (f.step === 'code') void (expired.value || !session.value ? start() : complete())
@@ -487,7 +487,7 @@ function retry() {
 function tick() {
   if (!alive || document.hidden) return
   // A proxy picked while another action ran is applied once it is done.
-  if (props.draft && draftKey.value && !acting.value && !failure.value && props.proxyId != null && props.proxyId !== draftProxy.value) {
+  if (props.draft && draftKey.value && !acting.value && !failure.value && (props.proxyId ?? null) !== draftProxy.value) {
     void updateProxy()
     return
   }
@@ -545,7 +545,7 @@ defineExpose({
     if (reason === 'draft_not_found' && props.draft) {
       resetTarget()
       draftKey.value = null
-      draftProxy.value = null
+      draftProxy.value = undefined
       failure.value = { step: 'container', title: t('ccgateway.accountAuth.createFailed'), detail: t('ccgateway.reason.draft_not_found'), reason }
     } else if (reason !== 'draft_not_found') {
       health.value = null
