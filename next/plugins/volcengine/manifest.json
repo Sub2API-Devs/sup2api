@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.3",
+  "version": "0.12.4",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.125 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -438,41 +438,7 @@
             "anthropic-version",
             "anthropic-beta",
             "user-agent"
-          ],
-          "usage": {
-            "anthropic.messages": {
-              "semantics": "exclusive",
-              "sse": [
-                {
-                  "event": "message_start",
-                  "map": {
-                    "model": "message.model",
-                    "input_tokens": "message.usage.input_tokens",
-                    "cache_read_tokens": "message.usage.cache_read_input_tokens",
-                    "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
-                    "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens"
-                  }
-                },
-                {
-                  "event": "message_delta",
-                  "map": {
-                    "output_tokens": "usage.output_tokens",
-                    "input_tokens": "usage.input_tokens"
-                  }
-                }
-              ],
-              "json": {
-                "map": {
-                  "model": "model",
-                  "input_tokens": "usage.input_tokens",
-                  "output_tokens": "usage.output_tokens",
-                  "cache_read_tokens": "usage.cache_read_input_tokens",
-                  "cache_creation_tokens": "usage.cache_creation_input_tokens",
-                  "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens"
-                }
-              }
-            }
-          }
+          ]
         },
         {
           "platform": "volcengine"
@@ -559,41 +525,7 @@
             "anthropic-version",
             "anthropic-beta",
             "user-agent"
-          ],
-          "usage": {
-            "anthropic.messages": {
-              "semantics": "exclusive",
-              "sse": [
-                {
-                  "event": "message_start",
-                  "map": {
-                    "model": "message.model",
-                    "input_tokens": "message.usage.input_tokens",
-                    "cache_read_tokens": "message.usage.cache_read_input_tokens",
-                    "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
-                    "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens"
-                  }
-                },
-                {
-                  "event": "message_delta",
-                  "map": {
-                    "output_tokens": "usage.output_tokens",
-                    "input_tokens": "usage.input_tokens"
-                  }
-                }
-              ],
-              "json": {
-                "map": {
-                  "model": "model",
-                  "input_tokens": "usage.input_tokens",
-                  "output_tokens": "usage.output_tokens",
-                  "cache_read_tokens": "usage.cache_read_input_tokens",
-                  "cache_creation_tokens": "usage.cache_creation_input_tokens",
-                  "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens"
-                }
-              }
-            }
-          }
+          ]
         },
         {
           "platform": "volcengine"

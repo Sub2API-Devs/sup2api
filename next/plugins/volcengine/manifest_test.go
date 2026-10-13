@@ -46,7 +46,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.3" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.4" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -54,6 +54,11 @@ func TestManifest(t *testing.T) {
 	}
 	if m.Runtime != "grpc" || m.Entry.GRPC == nil || m.Entry.GRPC.Binaries == "" || m.HostCompat == "" {
 		t.Fatalf("runtime/entry/hostCompat = %s %+v %s", m.Runtime, m.Entry, m.HostCompat)
+	}
+	for version, want := range map[string]bool{"0.1.123": false, "0.1.124": false, "0.1.125": true} {
+		if got, err := check.HostCompatible(m.HostCompat, version); err != nil || got != want {
+			t.Fatalf("host %s compatibility: %v %v", version, got, err)
+		}
 	}
 	// Stages one to three: one account type, the plugin's own volcengine
 	// platform, and the asset library (schema + admin routes + host-rendered
@@ -323,8 +328,8 @@ func TestManifest(t *testing.T) {
 	if !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) || len(anth.RequestFields) != 0 {
 		t.Fatalf("anthropic platform entry = %+v, want passHeaders %v", anth, volcengine.AnthropicForwardHeaders())
 	}
-	// The usage override exists for ONE measured reason, and the test below
-	// proves it adds nothing else.
+	// The old override existed for ONE measured reason; the platform now
+	// handles it, so the account type must inherit the complete rules.
 	//
 	// Measured 2026-09-30 against an Ark-compatible relay: on a streaming
 	// Anthropic request the same fixed prompt reports input_tokens 34 in
@@ -337,21 +342,23 @@ func TestManifest(t *testing.T) {
 	// later 54 replaces 34, and on Anthropic itself, whose message_delta
 	// carries no usage.input_tokens at all, nothing is overwritten and
 	// message_start's own value stands.
-	over, ok := anth.Usage[volcengine.ProtocolMessages]
-	if !ok || len(anth.Usage) != 1 {
-		t.Fatalf("anthropic usage override = %+v, want exactly %s", anth.Usage, volcengine.ProtocolMessages)
+	if len(anth.Usage) != 0 {
+		t.Fatalf("anthropic usage must stay inherited: %+v", anth.Usage)
 	}
 	if b := builtinNamed(t, volcengine.PlatformAnthropic); b != nil {
 		// An AccountPlatform usage override REPLACES the platform's whole
 		// block, so a field left out of it is a field nobody reads - and a
 		// forgotten SSE list bills every streaming request at zero, silently.
-		// Rather than trust a hand copy, diff it: the override must equal the
-		// platform's rules EXCEPT for the one key it exists to add.
-		diffs := usageDiff(b.Usage, over)
-		want := []string{`sse[message_delta].map[input_tokens]: "" -> "usage.input_tokens"`}
-		if !slices.Equal(diffs, want) {
-			t.Errorf("the anthropic usage override differs from the platform's by:\n  %s\nwant exactly:\n  %s",
-				strings.Join(diffs, "\n  "), strings.Join(want, "\n  "))
+		// Rather than maintain a hand copy, inherit the platform's rules and
+		// verify the delta input key that originally required an override.
+		var inputPath string
+		for _, rule := range b.Usage.SSE {
+			if rule.Event == "message_delta" {
+				inputPath = rule.Map[manifest.UsageInputTokens]
+			}
+		}
+		if inputPath != "usage.input_tokens" || gjson.Get(`{"usage":{"input_tokens":54}}`, inputPath).Int() != 54 || gjson.Get(`{"usage":{"output_tokens":7}}`, inputPath).Exists() {
+			t.Fatal("inherited delta input must overwrite reported input and skip missing input")
 		}
 	}
 	// Ark ignores OpenAI's org/project and x-stainless-* headers, so both
@@ -587,7 +594,7 @@ func TestValidate(t *testing.T) {
 	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
 		files[icon] = mustFile(t, icon)
 	}
-	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.0"}); err != nil {
+	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.125"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)
 	}
 }
