@@ -48,31 +48,62 @@ var verifiedNativeTools = func() map[string]Tool {
 // Mod and permission callbacks intercept both native and MCP client tools.
 // Match automatically, without requiring the legacy native opt-in header.
 func matchNativeTools(r *Request, version string) {
-	matched := map[string]bool{}
-	r.catalogueEnv = map[string]string{}
-	for _, tool := range r.Tools {
-		for _, known := range r.nativeCatalogue(version)[tool.Name] {
-			if !catalogueMatch(known, tool) {
-				continue
-			}
-			env, _ := known.Metadata["catalog_env"].(map[string]string)
-			compatible := true
-			for key, value := range env {
-				if previous, set := r.catalogueEnv[key]; set && previous != value {
-					compatible = false
-				}
-			}
-			if !compatible {
-				continue
-			}
-			for key, value := range env {
-				r.catalogueEnv[key] = value
-			}
-			matched[tool.Name] = true
-			break
+	r.Native, r.catalogueEnv, r.nativeProfile = map[string]bool{}, map[string]string{}, nil
+	catalogue := r.nativeCatalogue(version)
+	if r.cliSnapshot == nil {
+		r.Native = matchCatalogueSchemas(r.Tools, catalogue)
+		return
+	}
+	for _, profile := range catalogue.profiles() {
+		matched := matchCatalogueSchemas(r.Tools, profile.tools)
+		if r.nativeProfile != nil && len(matched) <= len(r.Native) {
+			continue
+		}
+		view := *r
+		view.Native = matched
+		if validateToolNames(&view) != nil {
+			continue
+		}
+		config := profile.config
+		r.Native, r.nativeProfile = matched, &config
+	}
+	if r.nativeProfile != nil {
+		for key, value := range r.nativeProfile.environment() {
+			r.catalogueEnv[key] = value
 		}
 	}
-	r.Native = matched
+}
+
+func matchCatalogueSchemas(tools []Tool, catalogue nativeCatalogue) map[string]bool {
+	matched := map[string]bool{}
+	for _, tool := range tools {
+		for _, known := range catalogue[tool.Name] {
+			if catalogueMatch(known, tool) {
+				matched[tool.Name] = true
+				break
+			}
+		}
+	}
+	return matched
+}
+
+func sameToolSchema(a, b Tool) bool {
+	return a.Name == b.Name && digest(a.Schema) == digest(b.Schema)
+}
+
+func (r *Request) selectedNativeCatalogue(version string) nativeCatalogue {
+	catalogue := r.nativeCatalogue(version)
+	if r.cliSnapshot == nil {
+		return catalogue
+	}
+	if r.nativeProfile != nil {
+		for _, profile := range catalogue.profiles() {
+			if digest(profile.config) == digest(r.nativeProfile) {
+				return profile.tools
+			}
+		}
+	}
+	return nil
 }
 
 // Identity requires the exact name, description and full input schema.

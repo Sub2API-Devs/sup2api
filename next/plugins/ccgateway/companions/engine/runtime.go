@@ -138,6 +138,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 	r := &Runtime{Handler: mux, Version: version, gateway: g, admin: admin, resources: resources, work: work, stop: stop, life: ctx, done: make(chan struct{})}
 	r.cliManagement = cliManagement
 	mux.HandleFunc("/admin/cli", r.serveCLI)
+	mux.HandleFunc("/admin/cli/catalog", r.serveCLI)
 	r.catalog = newCLICatalog(func(ctx context.Context) (string, error) { return checkCLIVersion(ctx, cli) }, func(ctx context.Context, version string) (nativeCatalogue, error) {
 		tools, err := g.Runner.captureToolCatalog(ctx, version)
 		if err == nil && r.catalog.current.Load() != nil {

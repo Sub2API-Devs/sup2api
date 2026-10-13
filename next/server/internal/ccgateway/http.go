@@ -14,6 +14,7 @@ import (
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/system/ccgateway/cli/:id", "settings:read", s.cliManagement)
+	r.Perm("GET", "/system/ccgateway/cli/:id/catalog", "settings:read", s.cliCatalogGet)
 	r.Perm("POST", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
 	r.Perm("PUT", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
 	r.Perm("GET", "/system/ccgateway/features", "settings:read", s.featuresGet)

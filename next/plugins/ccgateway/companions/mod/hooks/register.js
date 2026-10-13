@@ -158,7 +158,7 @@ export function register(on) {
   on('tool.describe', async ($, e, next) => {
     let result = await next(e);
     const route = configuration?.tools?.[e.tool];
-    if (route && !route.native) result = { ...result, description: route.description };
+    if (route) result = { ...result, description: route.description };
     const deferred = configuration.deferred || {};
     return Object.hasOwn(deferred, e.tool) ? { ...result, isDeferred: deferred[e.tool] } : result;
   });

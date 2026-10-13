@@ -28,6 +28,7 @@ type Tool struct {
 }
 type Request struct {
 	cliSnapshot              *cliSnapshot
+	nativeProfile            *cliToolProfile
 	catalogueEnv             map[string]string
 	completedClientHistory   map[string]string
 	internalCache            *internalCacheRounds
@@ -743,6 +744,9 @@ func fingerprints(ms []Message) []string {
 }
 func (r *Request) configKey() string {
 	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.toolServer()}
+	if r.nativeProfile != nil {
+		parts = append(parts, r.nativeProfile)
+	}
 	if r.MCP != nil {
 		parts = append(parts, r.MCP.servers, r.MCP.toolsets)
 	}

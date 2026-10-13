@@ -43,7 +43,7 @@ func timeoutNeutral(schema Object) string {
 
 // catalogueMatch reports whether a client definition is a verified variant.
 func catalogueMatch(known, tool Tool) bool {
-	return sameToolDefinition(known, tool)
+	return sameToolSchema(known, tool)
 }
 
 // shellToolEnv makes the inner CLI offer the client's native PowerShell.

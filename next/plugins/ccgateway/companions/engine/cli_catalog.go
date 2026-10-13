@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,9 +13,82 @@ import (
 
 type nativeCatalogue map[string][]Tool
 
+type cliToolProfile struct {
+	Name           string            `json:"name"`
+	PermissionMode string            `json:"permission_mode"`
+	Env            map[string]string `json:"env"`
+	Whitelist      []string          `json:"whitelist"`
+}
+
+type nativeProfile struct {
+	config cliToolProfile
+	tools  nativeCatalogue
+}
+
+func newCLIToolProfile(name, mode string) cliToolProfile {
+	return cliToolProfile{Name: name, PermissionMode: mode, Env: map[string]string{
+		"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "", "CLAUDE_CODE_USE_POWERSHELL_TOOL": "",
+		"CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "", "CLAUDE_CODE_SUBAGENT_MODEL": "",
+	}}
+}
+
+func (p cliToolProfile) environment() map[string]string {
+	env := map[string]string{}
+	for key, value := range p.Env {
+		if value != "" {
+			env[key] = value
+		}
+	}
+	return env
+}
+
+func (p cliToolProfile) cost() int {
+	cost := 0
+	if p.PermissionMode == "plan" {
+		cost++
+	}
+	for _, value := range p.Env {
+		if value != "0" && value != "" {
+			cost++
+		}
+	}
+	return cost
+}
+
+func (c nativeCatalogue) profiles() []nativeProfile {
+	byID := map[string]*nativeProfile{}
+	for name, variants := range c {
+		for _, tool := range variants {
+			profiles, _ := tool.Metadata["catalog_profiles"].([]cliToolProfile)
+			for _, config := range profiles {
+				if config.Name == "" {
+					continue
+				}
+				id := digest(config)
+				if byID[id] == nil {
+					byID[id] = &nativeProfile{config: config, tools: nativeCatalogue{}}
+				}
+				byID[id].tools[name] = append(byID[id].tools[name], tool)
+			}
+		}
+	}
+	out := make([]nativeProfile, 0, len(byID))
+	for _, profile := range byID {
+		out = append(out, *profile)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if a, b := out[i].config.cost(), out[j].config.cost(); a != b {
+			return a < b
+		}
+		return out[i].config.Name < out[j].config.Name
+	})
+	return out
+}
+
 type cliSnapshot struct {
-	version string
-	tools   nativeCatalogue
+	version    string
+	tools      nativeCatalogue
+	validation cliValidationCache
 }
 
 type cliSnapshotKey struct{}
@@ -48,13 +124,75 @@ func (c *cliCatalog) status() cliCatalogStatus {
 }
 
 func (c *cliCatalog) snapshot() (*cliSnapshot, error) {
+	value, _, err := c.snapshotState()
+	return value, err
+}
+
+func (c *cliCatalog) snapshotState() (*cliSnapshot, cliCatalogStatus, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	value := c.current.Load()
 	if value == nil || c.state.State != "ready" || value.version != c.state.Version {
-		return nil, fmt.Errorf("Claude Code tool catalog is not ready")
+		return nil, c.state, fmt.Errorf("Claude Code tool catalog is not ready")
 	}
-	return value, nil
+	return value, c.state, nil
+}
+
+type cliToolDefinition struct {
+	Description string `json:"description"`
+	Schema      Object `json:"input_schema"`
+}
+
+type cliToolVariants struct {
+	Name     string              `json:"name"`
+	Variants []cliToolDefinition `json:"variants"`
+}
+
+type cliCatalogView struct {
+	Catalog cliCatalogStatus  `json:"catalog"`
+	Tools   []cliToolVariants `json:"tools"`
+}
+
+func (c *cliCatalog) definitions() (cliCatalogView, error) {
+	snapshot, status, err := c.snapshotState()
+	if err != nil {
+		return cliCatalogView{}, err
+	}
+	out := cliCatalogView{Catalog: status, Tools: make([]cliToolVariants, 0, len(snapshot.tools))}
+	for name, variants := range snapshot.tools {
+		group := cliToolVariants{Name: name, Variants: make([]cliToolDefinition, 0, len(variants))}
+		for _, tool := range variants {
+			group.Variants = append(group.Variants, cliToolDefinition{Description: tool.Description, Schema: tool.Schema})
+		}
+		sort.Slice(group.Variants, func(i, j int) bool { return digest(group.Variants[i]) < digest(group.Variants[j]) })
+		out.Tools = append(out.Tools, group)
+	}
+	sort.Slice(out.Tools, func(i, j int) bool { return out.Tools[i].Name < out.Tools[j].Name })
+	return out, nil
+}
+
+func (r *Runtime) serveCLICatalog(w http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !r.cliGate.TryRLock() {
+		apiError(w, 503, "api_error", "Claude Code maintenance is in progress")
+		return
+	}
+	view, err := r.catalog.definitions()
+	r.cliGate.RUnlock()
+	if err != nil {
+		apiError(w, 503, "api_error", err.Error())
+		return
+	}
+	raw, err := json.Marshal(view)
+	if err != nil || len(raw) > 8<<20 {
+		apiError(w, 503, "api_error", "Claude Code tool catalog exceeds response limits")
+		return
+	}
+	_, _ = w.Write(raw)
 }
 
 func (c *cliCatalog) sync(ctx context.Context) error {

@@ -687,6 +687,34 @@ class HandlerTests(Base):
             self.assertEqual(self.call(method, path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
         self.assertEqual(len(FakeSession.calls), calls)
 
+    def test_cli_catalog_read_only_pass_through(self):
+        self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
+        state = self.m.state('7')
+        path = '/accounts/7/admin/cli/catalog'
+        self.assertEqual(self.call('GET', path, key='wrong' * 8)[0], 401)
+        self.assertEqual(self.call('GET', path)[0], 409)
+        payload = {'tools': [{'name': 'Read', 'variants': [{'description': 'definition ' * 4096, 'input_schema': {'type': 'object'}}]}]}
+        with patch.object(FakeResponse, 'iter_content', return_value=iter([json.dumps(payload).encode()])):
+            self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV}), (200, payload))
+        method, url, headers = FakeSession.calls[-1]
+        self.assertEqual((method, url), ('GET', f'http://{state["app_ip"]}:8787/admin/cli/catalog'))
+        self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        calls = len(FakeSession.calls)
+        for method in ('POST', 'PUT', 'DELETE'):
+            self.assertEqual(self.call(method, path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
+        self.assertEqual(self.call('GET', path + '/other', headers={'X-CCG-Revision': REV})[0], 404)
+        self.assertEqual(len(FakeSession.calls), calls)
+
+    def test_cli_catalog_never_waits_for_installation_lock(self):
+        self.apply('7')
+        path = '/accounts/7/admin/cli/catalog'
+        with self.m.guard('7'):
+            self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 503)
+        with self.m.cli_updates.mu:
+            self.m.cli_updates.running.add('7')
+        self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 503)
+        self.assertFalse(FakeSession.calls)
+
     def test_usage_pass_through(self):
         self.apply('7')
         state = self.m.state('7')

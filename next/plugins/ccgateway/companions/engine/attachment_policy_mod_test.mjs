@@ -9,14 +9,16 @@ async function setup(policy) {
  await hooks['session.start']($,{},async e=>e);
  return e=>hooks['prompt.attachment']($,e,async e=>e);
 }
-test('native tool descriptions are not overwritten to hide mismatches', async () => {
+test('native and MCP descriptions preserve the exact client text', async () => {
  const hooks = {};
  register((name, fn) => { hooks[name] = fn; return { catch() {} }; });
- const config = { tools: { Read: { native: true, description: 'catalog description' }, mcp__ccgateway__Read: { native: false, description: 'client description' } } };
+ const config = { tools: { Read: { native: true, description: ' client\n描述 ' }, Bash: { native: true, description: '' }, mcp__ccgateway__Read: { native: false, description: 'client description' } } };
  const $ = { env: { get: async () => 'fixture' }, http: { fetch: async (_url, options) => ({ ok: true, text: options?.method ? '{}' : JSON.stringify(config) }) } };
  await hooks['session.start']($, {}, async e => e);
  const next = async () => ({ description: 'actual CLI description', isDeferred: false });
- assert.equal((await hooks['tool.describe']($, { tool: 'Read' }, next)).description, 'actual CLI description');
+ assert.equal((await hooks['tool.describe']($, { tool: 'Read' }, next)).description, ' client\n描述 ');
+ assert.equal((await hooks['tool.describe']($, { tool: 'Bash' }, next)).description, '');
+ assert.equal((await hooks['tool.describe']($, { tool: 'ToolSearch' }, next)).description, 'actual CLI description');
  assert.equal((await hooks['tool.describe']($, { tool: 'mcp__ccgateway__Read' }, next)).description, 'client description');
 });
 

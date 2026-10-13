@@ -73,10 +73,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !x.admit() {
 		return
 	}
-	branch, ok := x.session()
-	if !ok {
-		return
-	}
 	// Requests of one session never wait for each other (§53.12): each runs on
 	// a private copy of its branch.
 	select {
@@ -88,6 +84,14 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// instead of its default minute of cooldown.
 		x.w.Header().Set("Retry-After", "1")
 		x.fail(429, "rate_limit_error", "Gateway concurrency limit reached")
+		return
+	}
+	if err := g.runner(r.Context()).prepareNativeTools(r.Context(), x.req); err != nil {
+		x.fail(503, "api_error", "CLI tool configuration could not be verified: "+err.Error())
+		return
+	}
+	branch, ok := x.session()
+	if !ok {
 		return
 	}
 	x.execute(branch)
@@ -345,6 +349,10 @@ func (x *exchange) execute(branch sessionBranch) {
 					}
 					next.cliSnapshot = req.cliSnapshot
 					matchNativeTools(next, runner.Version)
+					if err := runner.prepareNativeTools(ctx, next); err != nil {
+						x.runFailed(ctx, err)
+						return
+					}
 					if err := validateToolNames(next); err != nil {
 						x.runFailed(ctx, &requestRefusal{err})
 						return

@@ -75,7 +75,7 @@ WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSigna
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli|auth/(?:session|start|complete|cancel|logout))))?)?')
+                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
@@ -1306,17 +1306,24 @@ class Handler(BaseHTTPRequestHandler):
             methods = {'admin/request-logs': ('GET', 'PUT'), 'admin/cli': ('GET', 'POST', 'PUT')}.get(path, ('GET', 'POST'))
             if path in ('config', 'status') or self.command not in methods:
                 return self.fail(405, 'method_not_allowed')
-            if path in ('admin/usage', 'admin/features') and self.command != 'GET':
+            if path in ('admin/usage', 'admin/features', 'admin/cli/catalog') and self.command != 'GET':
                 return self.fail(405, 'method_not_allowed')
-            with manager.guard(aid):
+            guard = manager.guard(aid)
+            if not guard.acquire(blocking=path != 'admin/cli/catalog'):
+                return self.fail(503, 'cli_maintenance_busy')
+            try:
                 state = manager.state(aid)
                 revision = self.headers.get('X-CCG-Revision', '')
                 if not state or not revision or manager.public(aid)['revision'] != revision:
                     return self.fail(409, 'not_synchronized')
+                if path == 'admin/cli/catalog' and manager.cli_updates.active(aid):
+                    return self.fail(503, 'cli_maintenance_busy')
                 if (path.startswith('admin/auth/') or path == 'admin/usage') and state.get('auth_mode') == 'api_key':
                     return self.fail(409, 'api_key_account')
                 address = state['app_ip']
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
+            finally:
+                guard.release()
             # No configuration writes on the request path. Concurrent streams
             # do not hold the account reconciliation lock. (Legacy relay: the
             # core now talks to the account directly or through the tunnel.)

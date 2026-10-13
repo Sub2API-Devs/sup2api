@@ -99,6 +99,10 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}
+	if request.URL.Path == "/admin/cli/catalog" {
+		r.serveCLICatalog(w, request)
+		return
+	}
 	if request.Method == "GET" {
 		_ = json.NewEncoder(w).Encode(r.cliView())
 		return

@@ -28,8 +28,10 @@ type cliCatalogProbe struct {
 	tools       map[string]Tool
 	requests    int
 	env         map[string]string
+	profile     cliToolProfile
 	err         error
 	verify      *Request
+	whitelist   bool
 	fixturePath string
 }
 
@@ -83,34 +85,17 @@ func (p *cliCatalogProbe) capture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, p.err.Error(), http.StatusBadRequest)
 		return
 	}
-	items, ok := body["tools"].([]any)
-	if !ok || len(items) == 0 || len(items) > 256 {
-		p.err = fmt.Errorf("invalid catalog tool count")
-		http.Error(w, p.err.Error(), http.StatusBadRequest)
-		return
-	}
-	seen := map[string]bool{}
-	for _, item := range items {
-		obj, _ := item.(map[string]any)
-		name := str(obj, "name")
-		schema, valid := obj["input_schema"].(map[string]any)
-		_, descriptionValid := obj["description"].(string)
-		if !toolName.MatchString(name) || seen[name] || strings.HasPrefix(name, "mcp__") || !valid || (obj["description"] != nil && !descriptionValid) || (schema["type"] != nil && schema["type"] != "object") {
-			p.err = fmt.Errorf("invalid native tool definition")
-			http.Error(w, p.err.Error(), http.StatusBadRequest)
-			return
+	if p.verify != nil {
+		err = verifyNativeWireTools(p.verify, body)
+		if err == nil && p.whitelist {
+			err = verifyToolWhitelist(p.verify, body)
 		}
-		seen[name] = true
-		key := name + ":" + digest([]any{str(obj, "description"), schema})
-		old, exists := p.tools[key]
-		oldEnv, _ := old.Metadata["catalog_env"].(map[string]string)
-		if !exists || len(p.env) < len(oldEnv) {
-			p.tools[key] = Tool{Name: name, Description: str(obj, "description"), Schema: schema, Metadata: Object{"catalog_env": p.env}}
-		}
+	} else {
+		err = p.recordTools(body)
 	}
-	if len(p.tools) > 1024 {
-		p.err = fmt.Errorf("catalog variant budget exceeded")
-		http.Error(w, p.err.Error(), http.StatusBadRequest)
+	if err != nil {
+		p.err = err
+		http.Error(w, "CLI tool definition verification failed", http.StatusBadRequest)
 		return
 	}
 	p.requests++
@@ -123,12 +108,7 @@ func (p *cliCatalogProbe) capture(w http.ResponseWriter, r *http.Request) {
 		{"type": "message_delta", "delta": Object{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": Object{"output_tokens": 1}},
 		{"type": "message_stop"},
 	}
-	if p.verify != nil {
-		if err := verifyNativeWireTools(p.verify, body); err != nil {
-			p.err = err
-			http.Error(w, "CLI tool definition verification failed", http.StatusBadRequest)
-			return
-		}
+	if p.verify != nil && p.fixturePath != "" {
 		input, _ := json.Marshal(Object{"file_path": p.fixturePath})
 		events[1]["content_block"] = Object{"type": "tool_use", "id": "toolu_ccg_compat", "name": "Read", "input": Object{}}
 		events[2]["delta"] = Object{"type": "input_json_delta", "partial_json": string(input)}
@@ -138,6 +118,45 @@ func (p *cliCatalogProbe) capture(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(event)
 		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", str(event, "type"), data)
 	}
+}
+
+func (p *cliCatalogProbe) recordTools(body Object) error {
+	items, ok := body["tools"].([]any)
+	if !ok || len(items) == 0 || len(items) > 256 {
+		return fmt.Errorf("invalid catalog tool count")
+	}
+	seen := map[string]bool{}
+	for _, item := range items {
+		obj, _ := item.(map[string]any)
+		name := str(obj, "name")
+		schema, valid := obj["input_schema"].(map[string]any)
+		_, descriptionValid := obj["description"].(string)
+		if !toolName.MatchString(name) || seen[name] || strings.HasPrefix(name, "mcp__") || !valid || (obj["description"] != nil && !descriptionValid) || (schema["type"] != nil && schema["type"] != "object") {
+			return fmt.Errorf("invalid native tool definition")
+		}
+		seen[name] = true
+		key := name + ":" + digest([]any{str(obj, "description"), schema})
+		old, exists := p.tools[key]
+		if !exists {
+			old = Tool{Name: name, Description: str(obj, "description"), Schema: schema, Metadata: Object{}}
+		}
+		profiles, _ := old.Metadata["catalog_profiles"].([]cliToolProfile)
+		if p.profile.Name != "" {
+			found := false
+			for _, profile := range profiles {
+				found = found || digest(profile) == digest(p.profile)
+			}
+			if !found {
+				profiles = append(profiles, p.profile)
+			}
+		}
+		old.Metadata["catalog_profiles"] = profiles
+		p.tools[key] = old
+	}
+	if len(p.tools) > 1024 {
+		return fmt.Errorf("catalog variant budget exceeded")
+	}
+	return nil
 }
 
 func (runner *Runner) captureToolCatalog(ctx context.Context, version string) (nativeCatalogue, error) {
@@ -197,17 +216,19 @@ func (runner *Runner) captureToolCatalog(ctx context.Context, version string) (n
 		}
 	}
 	for _, scenario := range []string{"sdk", "named", "teams", "powershell", "fixed-model", "plan"} {
-		mode := "dontAsk"
+		mode := "default"
 		if scenario == "plan" {
 			mode = "plan"
 		}
+		profile := newCLIToolProfile(scenario, mode)
 		args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-prompt-tool", "stdio", "--max-turns", "1", "--model", "claude-opus-5-5", "--permission-mode", mode, "--setting-sources", "", "--settings", `{"disableAllHooks":true}`, "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--no-session-persistence"}
-		if scenario == "named" {
+		if scenario != "sdk" {
 			ordered := make([]string, 0, len(names))
 			for name := range names {
 				ordered = append(ordered, name)
 			}
 			sort.Strings(ordered)
+			profile.Whitelist = ordered
 			args = append(args, "--tools", strings.Join(ordered, ","))
 		}
 		input := &bytes.Buffer{}
@@ -219,23 +240,19 @@ func (runner *Runner) captureToolCatalog(ctx context.Context, version string) (n
 		config := filepath.Join(root, scenario)
 		cmd.Env = envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config, "ANTHROPIC_API_KEY": probe.key, "ANTHROPIC_BASE_URL": strings.TrimRight(baseURL, "/") + cliCatalogPrefix + id, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_MAX_RETRIES": "0", "NO_PROXY": "127.0.0.1,localhost"})
 		if scenario == "teams" {
-			cmd.Env = append(cmd.Env, "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")
+			profile.Env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
 		}
 		if scenario == "powershell" {
-			cmd.Env = append(cmd.Env, "CLAUDE_CODE_USE_POWERSHELL_TOOL=1")
+			profile.Env["CLAUDE_CODE_USE_POWERSHELL_TOOL"] = "1"
 		}
 		if scenario == "fixed-model" {
-			cmd.Env = append(cmd.Env, "CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1", "CLAUDE_CODE_SUBAGENT_MODEL=claude-opus-5-5")
+			profile.Env["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"], profile.Env["CLAUDE_CODE_SUBAGENT_MODEL"] = "1", "claude-opus-5-5"
 		}
+		cmd.Env = envWith(cmd.Env, profile.environment())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Dir, cmd.WaitDelay = input, io.Discard, io.Discard, root, time.Second
 		probe.mu.Lock()
 		before := probe.requests
-		probe.env = map[string]string{}
-		for _, key := range []string{"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CLAUDE_CODE_USE_POWERSHELL_TOOL", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE", "CLAUDE_CODE_SUBAGENT_MODEL"} {
-			if value := environmentValue(cmd.Env, key); value != "" {
-				probe.env[key] = value
-			}
-		}
+		probe.profile = profile
 		probe.mu.Unlock()
 		err := cmd.Run()
 		cancel()
