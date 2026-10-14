@@ -3888,11 +3888,11 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 ### 53.16 客户端附件换成网关渲染（`replace_client_attachments`，2026-10-14，用户要求）
 
 "保留服务端"在透传下的含义：客户端附件留在原位置，文字换成该 Worker 上 Claude Code 自己渲染的同类附件。旧的 `attachment_source: gateway/both` 在透传下不起作用（Worker 强制 client），不恢复。
-- 策略字段 `replace_client_attachments`：字符串数组，可选 `environment`、`model`、`total_tokens_reminder`（`features.ReplaceableClientAttachments`；`date`、`session_context` 只能保留或擦除）。每类一次、不得与 `erase_client_attachments` 重叠，核心保存与 Worker 解析都用 `features.ValidateReplaceClientAttachments` 校验。缺省／空＝不替换；`omitempty`，旧 Worker 忽略，`schema_version` 仍为 1。优先级：擦除 > 替换 > 保留。
-- 网关文字来自 Mod：Worker 用与实际执行相同的 CLI、工作目录（`cache/workspace`）、基础环境与 Mod，按 `--model`、`--add-dir`（`additional_directories`）、1M 上下文（`context-1m-2025-08-07`）跑一次"渲染运行"；`ANTHROPIC_BASE_URL` 指向 Worker 自己的回环端点 `/ccg-attachment-render/<id>/`（仅回环、仅登记过的 id），不访问上游、不计用量。Mod 配置 `report_attachments: true` 时在 `prompt.attachment` 里把 origin `engine` 的上述三类渲染结果以 `gateway_attachment` 事件上报（类型须在词表内、非空、≤64 KiB）。
-- 渲染结果按（CLI 版本、模型、额外目录、1M 上下文）缓存，Worker 进程内首次结果一直使用，每轮相同文字，提示缓存前缀稳定；渲染失败不缓存，本次请求该类型保留客户端原文（诊断 `gateway_attachments_unavailable`），下次请求重试。没有请求替换时不运行、不取 CLI 版本。
-- 替换与擦除在同一次遍历（§53.15 的识别规则）中原位进行：只替换匹配的整段，保留其后的换行与前后文字；`environment` 只替换"# Environment"段，客户端的"# Environment update"（切换目录）没有对应的网关文字，一并擦除。决策记录 `decision: replace_gateway`。
-- 设置页每类一个选择：保留客户端／使用网关（仅上述三类）／擦除。特性目录 `F-CLIENT-ATTACHMENT-REPLACE`。需 ccgateway 插件 0.1.49 起。
+- 策略字段 `replace_client_attachments`：字符串数组，可选 `environment`、`model`、`total_tokens_reminder`，ccgateway 0.1.54 起另加 `date`、`session_context`（`features.ReplaceableClientAttachments`，即全部可擦除类型；旧 Worker 收到新类型会拒绝整个策略，须先更新 Worker 再保存）。每类一次、不得与 `erase_client_attachments` 重叠，核心保存与 Worker 解析都用 `features.ValidateReplaceClientAttachments` 校验。缺省／空＝不替换；`omitempty`，旧 Worker 忽略，`schema_version` 仍为 1。优先级：擦除 > 替换 > 保留。
+- 网关文字来自 Mod：Worker 用与实际执行相同的 CLI、工作目录（`cache/workspace`）、基础环境与 Mod，按 `--model`、`--add-dir`（`additional_directories`）、1M 上下文（`context-1m-2025-08-07`）跑一次"渲染运行"；`ANTHROPIC_BASE_URL` 指向 Worker 自己的回环端点 `/ccg-attachment-render/<id>/`（仅回环、仅登记过的 id），不访问上游、不计用量。Mod 配置 `report_attachments: true` 时在 `prompt.attachment` 里把 origin `engine` 的上述类型渲染结果以 `gateway_attachment` 事件上报（类型须在词表内、非空、≤64 KiB）。日期不经 `prompt.attachment`：Worker 从渲染运行发往回环端点的第一个模型请求里按日期识别规则取出 Claude Code 写入的那一行（如 `Today's date is 2026-10-15.`）。
+- 渲染结果按（CLI 版本、模型、额外目录、1M 上下文；选了 `date` 或 `session_context` 时再加 Worker 当天日期）缓存，Worker 进程内首次结果一直使用，每轮相同文字，提示缓存前缀稳定，日期类次日重新渲染；渲染失败不缓存，本次请求该类型保留客户端原文（诊断 `gateway_attachments_unavailable`），下次请求重试。渲染成功但 Worker 的 Claude Code 没有产生某个选中类型（如没有 CLAUDE.md、git、账号邮箱时的会话上下文）时，客户端的该类附件被去掉（服务端没有这段）。没有请求替换时不运行、不取 CLI 版本。
+- 替换与擦除在同一次遍历（§53.15 的识别规则）中原位进行：只替换匹配的整段，保留其后的换行与前后文字；`environment` 只替换"# Environment"段，客户端的"# Environment update"（切换目录）没有对应的网关文字，一并擦除；`date` 同理只替换"Today's date is …"一行，"The date has changed…"一并擦除。决策记录 `decision: replace_gateway`。
+- 设置页每类一个选择：客户端／服务端／擦除（2026-10-15 用户要求五类都三选一，原"保留客户端／使用网关"改称"客户端／服务端"）。特性目录 `F-CLIENT-ATTACHMENT-REPLACE`。需 ccgateway 插件 0.1.49 起。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

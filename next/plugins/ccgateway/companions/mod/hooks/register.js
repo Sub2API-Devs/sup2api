@@ -136,7 +136,7 @@ export function register(on) {
     }
     // Rendering run (gateway_attachments.go): report Claude Code's own text
     // of the replaceable types; what reaches the model is decided as usual.
-    if (configuration?.report_attachments && origin === 'engine' && ['environment', 'model', 'total_tokens_reminder'].includes(e.type)) {
+    if (configuration?.report_attachments && origin === 'engine' && known.includes(e.type)) {
       const rendered = await next(e);
       if (typeof rendered?.text === 'string' && rendered.text.length > 0) {
         const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'gateway_attachment', detail: { type: e.type, text: rendered.text } }) });

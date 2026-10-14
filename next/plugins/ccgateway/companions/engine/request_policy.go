@@ -141,9 +141,14 @@ func parsePolicyRequestWithGateway(body []byte, h http.Header, access *resourceA
 		return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
 	}
 	p.gatewayAttachments = map[string]string{}
+	// A type without a rendering keeps the client's text; "" (rendered, but
+	// the Worker has none) removes it.
 	for _, typ := range p.ReplaceClientAttachments {
-		if text, ok := gateway[typ]; ok && strings.TrimSpace(text) != "" {
-			p.gatewayAttachments[typ] = text
+		if text, ok := gateway[typ]; ok {
+			p.gatewayAttachments[typ] = strings.TrimSpace(text)
+			if p.gatewayAttachments[typ] != "" {
+				p.gatewayAttachments[typ] = text
+			}
 		}
 	}
 	return parsePassthroughRequest(body, h, p, access)

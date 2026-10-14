@@ -60,9 +60,9 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 	body, _ := json.Marshal(Object{"model": "claude-sonnet-4-6", "max_tokens": 64,
 		"system": []any{Object{"type": "text", "text": "You are terse.\n\n" + clientEnv}},
 		"messages": []any{
-			Object{"role": "user", "content": []any{Object{"type": "text", "text": "You are powered by the model named Client. The exact model ID is client-model-x. Assistant knowledge cutoff is May 2026.\n\n<total_tokens>4242 tokens left</total_tokens>"}, Object{"type": "text", "text": "question"}}},
+			Object{"role": "user", "content": []any{Object{"type": "text", "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# userEmail\nclient@example.com\n</system-reminder>\n"}, Object{"type": "text", "text": "<system-reminder>\nToday's date is 2020-01-01.\n</system-reminder>\n"}, Object{"type": "text", "text": "You are powered by the model named Client. The exact model ID is client-model-x. Assistant knowledge cutoff is May 2026.\n\n<total_tokens>4242 tokens left</total_tokens>"}, Object{"type": "text", "text": "question"}}},
 		}})
-	policy := `{"relay_mode":"native","replace_client_attachments":["environment","model","total_tokens_reminder"]}`
+	policy := `{"relay_mode":"native","replace_client_attachments":["environment","model","date","total_tokens_reminder","session_context"]}`
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(string(body)))
 		req.Header.Set(policyHeader, policy)
@@ -78,7 +78,9 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 	system, _ := json.Marshal(wires[0]["system"])
 	messages, _ := json.Marshal(wires[0]["messages"])
 	all := string(system) + string(messages)
-	for _, gone := range []string{"CLIENT-DIR", "client-model-x", "4242 tokens left"} {
+	// The Worker's Claude Code renders no session context here (no CLAUDE.md,
+	// git or account email), so the client's is removed.
+	for _, gone := range []string{"CLIENT-DIR", "client-model-x", "4242 tokens left", "2020-01-01", "client@example.com"} {
 		assert.NotContains(t, all, gone)
 	}
 	workspace, _ := json.Marshal(filepath.Join(root, "cache", "workspace"))
@@ -86,6 +88,7 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 	assert.Contains(t, string(system), "You are terse.")
 	assert.Contains(t, string(messages), "The exact model ID is claude-sonnet-4-6.")
 	assert.Contains(t, string(messages), "15000000 tokens left")
+	assert.Contains(t, string(messages), "Today's date is "+time.Now().Format("2006-01-02")+".")
 	assert.Contains(t, string(messages), "question")
 	// Same bytes on the next turn: the cached rendering keeps the prompt cache prefix.
 	system2, _ := json.Marshal(wires[1]["system"])

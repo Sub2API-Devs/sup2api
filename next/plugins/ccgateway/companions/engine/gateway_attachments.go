@@ -24,14 +24,15 @@ import (
 // but never the client's history: a rendering run, against a loopback
 // endpoint and never upstream, reports it before the request is parsed. The
 // text depends on the CLI version, the model and the CLI options that change
-// it (additional directories, the 1M context); the first rendering of a key is
-// kept for the Worker's life, so every turn gets the same text and the prompt
-// cache prefix stays stable.
+// it (additional directories, the 1M context, and the day for a date); the
+// first rendering of a key is kept for the Worker's life, so every turn gets
+// the same text and the prompt cache prefix stays stable. A selected type the
+// Worker's Claude Code does not render is removed from the client's request.
 
 const gatewayRenderPrefix = "/ccg-attachment-render/"
 
 var (
-	gatewayRenderEndpoints sync.Map // id -> struct{}
+	gatewayRenderEndpoints sync.Map // id -> *gatewayRenderCapture
 	gatewayAttachmentCache sync.Map // key -> map[string]string
 	gatewayRenderLocks     sync.Map // key -> *sync.Mutex
 )
@@ -41,6 +42,16 @@ type gatewayAttachmentKey struct {
 	Model       string   `json:"model"`
 	Directories []string `json:"directories"`
 	Context1M   bool     `json:"context_1m"`
+	// Date is the Worker's day when a date or a session context (which may
+	// carry one) is replaced: the next day renders again.
+	Date string `json:"date,omitempty"`
+}
+
+// gatewayRenderCapture keeps the rendering run's first model request: Claude
+// Code puts the date there itself, not through an attachment the Mod sees.
+type gatewayRenderCapture struct {
+	mu   sync.Mutex
+	body []byte
 }
 
 func (k gatewayAttachmentKey) String() string {
@@ -69,13 +80,31 @@ func gatewayAttachmentRequest(body []byte, h http.Header) (gatewayAttachmentKey,
 			key.Context1M = key.Context1M || strings.TrimSpace(beta) == "context-1m-2025-08-07"
 		}
 	}
+	for _, typ := range p.ReplaceClientAttachments {
+		if typ == "date" || typ == "session_context" {
+			key.Date = time.Now().Format("2006-01-02")
+		}
+	}
 	return key, p.ReplaceClientAttachments, nil
 }
 
-// gatewayAttachments returns Claude Code's rendering for the key, rendering
-// it once when unknown. A failed rendering is not kept: the request keeps the
-// client's text and a later request tries again.
-func (g *Gateway) gatewayAttachments(ctx context.Context, key gatewayAttachmentKey, diagnostic *requestDiagnostic) map[string]string {
+// gatewayAttachments returns Claude Code's rendering of each type for the
+// key ("" for a type it does not render), rendering once when unknown. A
+// failed rendering is not kept: the request keeps the client's text and a
+// later request tries again.
+func (g *Gateway) gatewayAttachments(ctx context.Context, key gatewayAttachmentKey, types []string, diagnostic *requestDiagnostic) map[string]string {
+	texts := g.renderedAttachments(ctx, key, diagnostic)
+	if texts == nil {
+		return nil
+	}
+	out := make(map[string]string, len(types))
+	for _, typ := range types {
+		out[typ] = texts[typ]
+	}
+	return out
+}
+
+func (g *Gateway) renderedAttachments(ctx context.Context, key gatewayAttachmentKey, diagnostic *requestDiagnostic) map[string]string {
 	id := key.String()
 	if cached, ok := gatewayAttachmentCache.Load(id); ok {
 		return cached.(map[string]string)
@@ -105,11 +134,19 @@ func serveGatewayRender(w http.ResponseWriter, r *http.Request) bool {
 	}
 	id, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, gatewayRenderPrefix), "/")
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if _, ok := gatewayRenderEndpoints.Load(id); !ok || !net.ParseIP(host).IsLoopback() {
+	value, ok := gatewayRenderEndpoints.Load(id)
+	if !ok || !net.ParseIP(host).IsLoopback() {
 		http.NotFound(w, r)
 		return true
 	}
-	_, _ = io.Copy(io.Discard, http.MaxBytesReader(w, r.Body, 32<<20))
+	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
+	if capture := value.(*gatewayRenderCapture); r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/messages") {
+		capture.mu.Lock()
+		if capture.body == nil {
+			capture.body = body
+		}
+		capture.mu.Unlock()
+	}
 	if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/messages") {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{}`))
@@ -141,7 +178,8 @@ func (r *Runner) renderGatewayAttachments(ctx context.Context, key gatewayAttach
 		return nil, err
 	}
 	id := uuid()
-	gatewayRenderEndpoints.Store(id, struct{}{})
+	capture := &gatewayRenderCapture{}
+	gatewayRenderEndpoints.Store(id, capture)
 	defer gatewayRenderEndpoints.Delete(id)
 	base := r.InternalBaseURL
 	if base == "" {
@@ -229,6 +267,11 @@ func (r *Runner) renderGatewayAttachments(ctx context.Context, key gatewayAttach
 					texts[typ] = text
 				}
 			}
+			capture.mu.Lock()
+			if date := renderedDate(capture.body); date != "" && texts["date"] == "" {
+				texts["date"] = date
+			}
+			capture.mu.Unlock()
 			if len(texts) == 0 {
 				return nil, fmt.Errorf("Claude Code rendered no replaceable attachment")
 			}
@@ -239,4 +282,39 @@ func (r *Runner) renderGatewayAttachments(ctx context.Context, key gatewayAttach
 		return nil, err
 	}
 	return nil, fmt.Errorf("attachment rendering CLI exited before its result")
+}
+
+// renderedDate is the date line Claude Code put into its model request, ""
+// without one.
+func renderedDate(body []byte) string {
+	o, err := decodeObject(body)
+	if err != nil {
+		return ""
+	}
+	var texts []string
+	collect := func(v any) {
+		switch v := v.(type) {
+		case string:
+			texts = append(texts, v)
+		case []any:
+			for _, b := range v {
+				if block, ok := b.(map[string]any); ok && str(block, "type") == "text" {
+					texts = append(texts, str(block, "text"))
+				}
+			}
+		}
+	}
+	collect(o["system"])
+	messages, _ := o["messages"].([]any)
+	for _, m := range messages {
+		if message, ok := m.(map[string]any); ok {
+			collect(message["content"])
+		}
+	}
+	for _, text := range texts {
+		if date := clientAttachmentPatterns["date"][0].FindString(text); date != "" {
+			return date
+		}
+	}
+	return ""
 }

@@ -204,6 +204,7 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.parse_env('A=1\n  B=x=y \n#C=3\n\nD\nE F=1\n'), {'A': '1', 'B': 'x=y '})
         self.assertEqual(upgrade.with_image('A=1\nCCG_CONTROLLER_IMAGE=old\n', NEW), 'A=1\nCCG_CONTROLLER_IMAGE=' + NEW + '\n')
         self.assertEqual(upgrade.with_image('A=1', NEW), 'A=1\nCCG_CONTROLLER_IMAGE=' + NEW + '\n')
+        self.assertEqual(upgrade.with_image('CCG_CONTROLLER_VERSION=0.1.38\nA=1\n', NEW), 'A=1\nCCG_CONTROLLER_IMAGE=' + NEW + '\n')
 
 
 class HealthHandler(BaseHTTPRequestHandler):

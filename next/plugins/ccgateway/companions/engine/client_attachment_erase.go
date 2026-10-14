@@ -18,7 +18,10 @@ var clientAttachmentPatterns = map[string][]*regexp.Regexp{
 	},
 	"model": {regexp.MustCompile(`(?m)^You are powered by the model [^\r\n]*$`)},
 	// Older CLIs render the date inside the session context under "# currentDate".
-	"date":                  {regexp.MustCompile(`(?m)^(?:# currentDate\r?\n)?(?:Today's date is [^\r\n]+\.|The date has changed\. Today's date is now [^\r\n]+\.[^\r\n]*)$`)},
+	"date": {
+		regexp.MustCompile(`(?m)^(?:# currentDate\r?\n)?Today's date is [^\r\n]+\.$`),
+		regexp.MustCompile(`(?m)^The date has changed\. Today's date is now [^\r\n]+\.[^\r\n]*$`),
+	},
 	"total_tokens_reminder": {regexp.MustCompile(`(?m)^<total_tokens>(?:\d+|Infinite) tokens left</total_tokens>$`)},
 	// CLAUDE.md, git status and the account email: the whole context reminder.
 	"session_context": {regexp.MustCompile(`(?s)<system-reminder>\r?\nAs you answer the user's questions, you can use the following context:\r?\n.*?</system-reminder>`)},
@@ -83,9 +86,10 @@ func (x *clientAttachmentEraser) erase(text, where string) string {
 		for i, re := range clientAttachmentPatterns[typ] {
 			before := text
 			var n int
-			// The environment section is replaced; an environment update (the
-			// client's directory change) has no Worker counterpart and goes.
-			if typ == "environment" && i > 0 {
+			// The first pattern is the attachment itself. The others are the
+			// client's updates (directory or date change) without a Worker
+			// counterpart and go, as does a type the Worker does not render ("").
+			if i > 0 || gateway == "" {
 				text, n = eraseSegments(text, re)
 			} else {
 				text, n = replaceSegments(text, re, gateway)

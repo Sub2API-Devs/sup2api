@@ -32,9 +32,9 @@ export default {
       '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后在原生 CLI 执行时对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive）。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
     attachments: '客户端附件',
     attachmentsHint:
-      '每类附件可保留客户端原文、擦除，或（环境、模型说明、剩余 token 提醒）换成该 Worker 上 Claude Code 自己渲染的文字，默认全部保留客户端。替换在原位置进行，前后文字不动；环境使用网关时，客户端的“环境更新”（切换目录）一并擦除。网关文字在 Worker 首次用到时渲染一次（不访问上游），Worker 运行期间不变，每轮相同，提示缓存不受影响。按 Claude Code 渲染的整段文字识别，正文中的提及不受影响；不会把用户消息擦空。仅识别 Claude Code 2.1.288–2.1.296 的格式；擦除需 ccgateway 插件 0.1.48 起，使用网关需 0.1.49 起。',
-    attachmentAction_keep: '保留客户端',
-    attachmentAction_gateway: '使用网关',
+      '每类附件可选：客户端（保留客户端原文，默认）、服务端（换成该 Worker 上 Claude Code 自己渲染的文字）或擦除。服务端在原位置替换，前后文字不动；客户端的“环境更新”（切换目录）和“日期变更”在服务端没有对应文字，一并擦除；Worker 不产生的附件（如没有 CLAUDE.md、git、邮箱时的会话上下文）直接去掉。服务端文字在 Worker 首次用到时渲染一次（不访问上游），Worker 运行期间不变（日期按 Worker 当天，次日重新渲染）。按 Claude Code 渲染的整段文字识别，正文中的提及不受影响；不会把用户消息擦空。仅识别 Claude Code 2.1.288–2.1.296 的格式；擦除需 ccgateway 插件 0.1.48 起，服务端需 0.1.49 起，日期与会话上下文的服务端需 0.1.54 起。',
+    attachmentAction_keep: '客户端',
+    attachmentAction_gateway: '服务端',
     attachmentAction_erase: '擦除',
     attachment_environment: '环境（工作目录、平台、环境更新）',
     attachment_model: '模型说明',

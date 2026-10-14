@@ -228,11 +228,12 @@ describe('CCGateway native request policy', () => {
     for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
       expect(w.get<HTMLSelectElement>(`[data-testid="client-attachment-${type}"]`).element.value).toBe('keep')
     }
-    // Only the types Claude Code on the Worker also renders offer the gateway.
-    const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('option').map(o => o.element.value)
-    expect(options('environment')).toEqual(['keep', 'gateway', 'erase'])
-    expect(options('date')).toEqual(['keep', 'erase'])
-    expect(options('session_context')).toEqual(['keep', 'erase'])
+    // Every type offers client, server and erase.
+    const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('option').map(o => o.element.text)
+    for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
+      expect(options(type)).toEqual(['客户端', '服务端', '擦除'])
+    }
+    await w.get('[data-testid="client-attachment-session_context"]').setValue('gateway')
     await w.get('[data-testid="client-attachment-session_context"]').setValue('erase')
     await w.get('[data-testid="client-attachment-total_tokens_reminder"]').setValue('gateway')
     await w.get('[data-testid="client-attachment-model"]').setValue('erase')
@@ -251,6 +252,12 @@ describe('CCGateway native request policy', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect((mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy.replace_client_attachments).toEqual(['environment', 'total_tokens_reminder'])
+    await w.get('[data-testid="client-attachment-date"]').setValue('gateway')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const last = (mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy
+    expect(last.replace_client_attachments).toEqual(['environment', 'date', 'total_tokens_reminder'])
+    expect(last.erase_client_attachments).toEqual(['session_context'])
     w.unmount()
   })
 

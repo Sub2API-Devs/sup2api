@@ -27,9 +27,10 @@ func ValidateEraseClientAttachments(types []string) error {
 // ReplaceableClientAttachments is the vocabulary of policy
 // replace_client_attachments, in display order: client attachment types the
 // Worker replaces in place with Claude Code's own rendering of the Worker
-// (engine gateway_attachments.go). A date or session context has no stable
-// Worker counterpart, so those can only be kept or erased.
-var ReplaceableClientAttachments = []string{"environment", "model", "total_tokens_reminder"}
+// (engine gateway_attachments.go). Every erasable type: one the Worker's
+// Claude Code does not render (a session context without CLAUDE.md, git or
+// account email) is then removed, as it is absent on the Worker.
+var ReplaceableClientAttachments = []string{"environment", "model", "date", "total_tokens_reminder", "session_context"}
 
 // ValidateReplaceClientAttachments accepts each listed type once and none
 // that is also erased; empty keeps every client attachment as sent.

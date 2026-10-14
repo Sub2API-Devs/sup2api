@@ -270,7 +270,8 @@ func TestEraseClientAttachmentsAbsentKeepsWorkerPolicy(t *testing.T) {
 }
 
 // replace_client_attachments saves, reloads and reaches the Worker policy;
-// unknown, repeated, non-replaceable or erased types are rejected.
+// unknown, repeated or erased types are rejected; every erasable type can be
+// replaced (date and session_context since ccgateway 0.1.54).
 func TestReplaceClientAttachmentsSave(t *testing.T) {
 	var in Config
 	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"reject","erase_client_attachments":["date"],"replace_client_attachments":["environment","model"],"betas":[]}}`), &in))
@@ -280,7 +281,11 @@ func TestReplaceClientAttachmentsSave(t *testing.T) {
 	var reloaded Config
 	require.NoError(t, json.Unmarshal(plain, &reloaded))
 	require.Equal(t, []string{"environment", "model"}, reloaded.WorkerRequestPolicy(26).ReplaceClientAttachments)
-	for _, c := range []struct{ erase, replace []string }{{nil, []string{"date"}}, {nil, []string{"session_context"}}, {nil, []string{"model", "model"}}, {[]string{"model"}, []string{"model"}}} {
+	all := *saved.RequestPolicy
+	all.EraseClientAttachments, all.ReplaceClientAttachments = nil, []string{"environment", "model", "date", "total_tokens_reminder", "session_context"}
+	_, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &all}, reloaded)
+	require.NoError(t, err)
+	for _, c := range []struct{ erase, replace []string }{{nil, []string{"weather"}}, {[]string{"date"}, []string{"date"}}, {nil, []string{"model", "model"}}, {[]string{"model"}, []string{"model"}}} {
 		bad := *saved.RequestPolicy
 		bad.EraseClientAttachments, bad.ReplaceClientAttachments = c.erase, c.replace
 		_, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &bad}, reloaded)

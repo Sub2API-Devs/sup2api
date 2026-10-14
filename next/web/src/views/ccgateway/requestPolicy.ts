@@ -2,8 +2,8 @@ export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_sear
 // Same vocabulary and order as the core's features.ErasableClientAttachments.
 export const erasableAttachments = ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
 export type ErasableAttachment = (typeof erasableAttachments)[number]
-// Same vocabulary as features.ReplaceableClientAttachments: types Claude Code on the Worker also renders.
-export const replaceableAttachments = ['environment', 'model', 'total_tokens_reminder'] as const
+// Same vocabulary as features.ReplaceableClientAttachments: every erasable type (since ccgateway 0.1.54).
+export const replaceableAttachments = erasableAttachments
 export type ReplaceableAttachment = (typeof replaceableAttachments)[number]
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {

@@ -49,7 +49,9 @@ def parse_env(text):
 
 
 def with_image(text, image):
-    lines = [l for l in text.splitlines() if not l.lstrip().startswith('CCG_CONTROLLER_IMAGE=')]
+    # The image carries its own CCG_CONTROLLER_VERSION; one pinned in the file
+    # would keep reporting the replaced controller's version.
+    lines = [l for l in text.splitlines() if not l.lstrip().startswith(('CCG_CONTROLLER_IMAGE=', 'CCG_CONTROLLER_VERSION='))]
     lines.append('CCG_CONTROLLER_IMAGE=' + image)
     return '\n'.join(lines) + '\n'
 

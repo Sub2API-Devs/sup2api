@@ -3,16 +3,15 @@
 // Client betas pass through; the legacy relay's rewrite policies are not editable here.
 import { useI18n } from 'vue-i18n'
 import { SRadio } from '@sub2api/ui'
-import { erasableAttachments, replaceableAttachments, type ErasableAttachment, type ReplaceableAttachment, type RequestPolicy } from './requestPolicy'
+import { erasableAttachments, replaceableAttachments, type ErasableAttachment, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
-type AttachmentAction = 'keep' | 'gateway' | 'erase'
-function replaceable(type: ErasableAttachment): type is ReplaceableAttachment {
-  return (replaceableAttachments as readonly string[]).includes(type)
-}
+// Client (as sent), server (the Worker's own rendering) or erase, for every type.
+const attachmentActions = ['keep', 'gateway', 'erase'] as const
+type AttachmentAction = (typeof attachmentActions)[number]
 function attachmentAction(type: ErasableAttachment): AttachmentAction {
   if (policy.value.erase_client_attachments?.includes(type)) return 'erase'
-  return replaceable(type) && policy.value.replace_client_attachments?.includes(type) ? 'gateway' : 'keep'
+  return policy.value.replace_client_attachments?.includes(type) ? 'gateway' : 'keep'
 }
 // Kept in vocabulary order so the saved policy does not depend on click order.
 function setAttachmentAction(type: ErasableAttachment, action: AttachmentAction) {
@@ -38,7 +37,7 @@ function setAttachmentAction(type: ErasableAttachment, action: AttachmentAction)
         <fieldset class="text-sm md:col-span-2" data-testid="client-attachments">
           <legend class="font-medium">{{ t('ccgateway.policy.attachments') }}</legend>
           <div class="mt-2 grid gap-2 md:grid-cols-2">
-            <label v-for="type in erasableAttachments" :key="type" class="flex items-center justify-between gap-3"><span>{{ t('ccgateway.policy.attachment_' + type) }}</span><select :value="attachmentAction(type)" class="input w-44" :data-testid="'client-attachment-' + type" @change="setAttachmentAction(type, ($event.target as HTMLSelectElement).value as AttachmentAction)"><option v-for="action in (replaceable(type) ? ['keep', 'gateway', 'erase'] : ['keep', 'erase'])" :key="action" :value="action">{{ t('ccgateway.policy.attachmentAction_' + action) }}</option></select></label>
+            <label v-for="type in erasableAttachments" :key="type" class="flex items-center justify-between gap-3"><span>{{ t('ccgateway.policy.attachment_' + type) }}</span><select :value="attachmentAction(type)" class="input w-44" :data-testid="'client-attachment-' + type" @change="setAttachmentAction(type, ($event.target as HTMLSelectElement).value as AttachmentAction)"><option v-for="action in attachmentActions" :key="action" :value="action">{{ t('ccgateway.policy.attachmentAction_' + action) }}</option></select></label>
           </div>
           <small class="mt-2 block text-gray-500">{{ t('ccgateway.policy.attachmentsHint') }}</small>
         </fieldset>

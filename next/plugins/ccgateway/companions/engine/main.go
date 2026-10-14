@@ -183,7 +183,7 @@ func (x *exchange) admit() bool {
 	var gateway map[string]string
 	if key, types, err := gatewayAttachmentRequest(body, r.Header); err == nil && len(types) > 0 {
 		key.Version = x.g.runner(r.Context()).Version
-		gateway = x.g.gatewayAttachments(r.Context(), key, x.diagnostic)
+		gateway = x.g.gatewayAttachments(r.Context(), key, types, x.diagnostic)
 	}
 	req, e := parsePolicyRequestWithGateway(body, r.Header, x.resources, nil, gateway)
 	if e != nil {

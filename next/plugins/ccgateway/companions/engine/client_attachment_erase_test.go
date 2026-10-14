@@ -255,7 +255,35 @@ func TestReplaceAndEraseClientAttachments(t *testing.T) {
 	p.EraseClientAttachments, p.ReplaceClientAttachments = []string{"model"}, []string{"model"}
 	_, err := requestPolicy(policyHeaders(p))
 	assert.ErrorContains(t, err, "replace_client_attachments")
-	p.EraseClientAttachments, p.ReplaceClientAttachments = nil, []string{"date"}
+	p.EraseClientAttachments, p.ReplaceClientAttachments = nil, []string{"weather"}
 	_, err = requestPolicy(policyHeaders(p))
 	assert.ErrorContains(t, err, "replace_client_attachments")
+}
+
+// The date becomes the Worker's (a date change has no Worker counterpart);
+// a type the Worker's Claude Code does not render ("") is removed.
+func TestReplaceDateAndAbsentSessionContext(t *testing.T) {
+	gwDate := "Today's date is 2026-10-16."
+	r := parseReplaced(t, eraseRequest(), nil, []string{"date", "session_context"}, map[string]string{"date": gwDate, "session_context": ""})
+	texts := requestTexts(r)
+	assert.NotContains(t, texts, ccDate)
+	assert.NotContains(t, texts, "The date has changed")
+	assert.NotContains(t, texts, "user@example.com")
+	assert.Contains(t, texts, ccModel+"\n\n"+gwDate)
+	assert.Contains(t, texts, "Keep answers short.")
+	assert.Contains(t, texts, "Earlier question")
+
+	gwSession := "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# userEmail\nworker@example.com\n</system-reminder>"
+	r = parseReplaced(t, eraseRequest(), nil, []string{"session_context"}, map[string]string{"session_context": gwSession})
+	texts = requestTexts(r)
+	assert.NotContains(t, texts, "user@example.com")
+	assert.Contains(t, texts, "worker@example.com")
+	assert.Contains(t, texts, ccDate)
+}
+
+func TestRenderedDateFromModelRequest(t *testing.T) {
+	body := []byte(`{"system":[{"type":"text","text":"You are a Claude agent."}],"messages":[{"role":"user","content":[{"type":"text","text":"<system-reminder>\nToday's date is 2026-10-15.\n</system-reminder>\n"},{"type":"text","text":"Render."}]}]}`)
+	assert.Equal(t, "Today's date is 2026-10-15.", renderedDate(body))
+	assert.Equal(t, "", renderedDate([]byte(`{"messages":[{"role":"user","content":"Render."}]}`)))
+	assert.Equal(t, "", renderedDate(nil))
 }
