@@ -1,11 +1,14 @@
 package engine
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // usageEnv points Claude Code's credential storage at a temp dir and returns
@@ -90,4 +93,94 @@ func TestEnvProxy(t *testing.T) {
 	if u == nil || u.Host != "proxy.example:8080" {
 		t.Fatalf("proxy %v", u)
 	}
+}
+
+// An expired access token with a refresh token is renewed by the CLI on its
+// next request; a revoked one, one refused before expiry, one without a
+// refresh token or one a model request was already refused with is not.
+func TestUsageTellsExpiredFromRevoked(t *testing.T) {
+	path := usageEnv(t)
+	status, body := 401, ""
+	calls := 0
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer up.Close()
+	a := &authManager{key: "admin-key", usageURL: up.URL}
+	write := func(creds string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(creds), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const expiredBody = `{"type":"error","error":{"type":"authentication_error","message":"OAuth access token has expired. Re-authenticate to continue."}}`
+	const revokedBody = `{"type":"error","error":{"type":"authentication_error","message":"OAuth access token has been revoked."}}`
+	const plainBody = `{"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"}}`
+	future := time.Now().Add(time.Hour).UnixMilli()
+	for _, c := range []struct {
+		creds, body, want string
+	}{
+		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`, expiredBody, codeTokenExpired},
+		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`, plainBody, codeTokenExpired},
+		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r"}}`, expiredBody, codeTokenExpired},
+		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`, revokedBody, codeTokenRevoked},
+		{fmt.Sprintf(`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":%d}}`, future), plainBody, codeTokenRevoked},
+		{`{"claudeAiOauth":{"accessToken":"a1","expiresAt":1}}`, expiredBody, codeTokenRevoked},
+		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":" ","expiresAt":1}}`, expiredBody, codeTokenRevoked},
+	} {
+		write(c.creds)
+		body = c.body
+		expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, c.want)
+	}
+
+	// A model request refused with the stored token: the CLI could not renew
+	// it, so it is reported without asking Anthropic again.
+	write(`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`)
+	body = expiredBody
+	noteAuthenticationRefused(os.Environ())
+	calls = 0
+	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenRevoked)
+	if calls != 0 {
+		t.Fatalf("usage asked Anthropic %d times for a refused token", calls)
+	}
+	// A renewed (or newly authorized) token is judged afresh.
+	write(`{"claudeAiOauth":{"accessToken":"a2","refreshToken":"r2","expiresAt":1}}`)
+	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenExpired)
+	status, body = 200, `{"five_hour":{"utilization":1}}`
+	if w := authRequest(a, "GET", "/admin/usage", "", "admin-key"); w.Code != 200 {
+		t.Fatalf("renewed token: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// A model request that ends refused by Anthropic marks the stored token.
+func TestRefusedModelRequestMarksStoredToken(t *testing.T) {
+	path := usageEnv(t)
+	if err := os.WriteFile(path, []byte(`{"claudeAiOauth":{"accessToken":"a-refused","refreshToken":"r","expiresAt":1}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g := &Gateway{Runner: &Runner{}}
+	for _, e := range []error{
+		&nativeError{Status: 502, Category: "server_error", Message: "other"},
+		&nativeError{Status: 403, Category: "permission_error", Message: "forbidden", ObservedStatus: true},
+	} {
+		x := &exchange{g: g, w: httptest.NewRecorder(), r: httptest.NewRequest(http.MethodPost, "/v1/messages", nil), diagnostic: &requestDiagnostic{fields: Object{}}}
+		x.runFailed(context.Background(), e)
+		if refusedWith(os.Environ(), "a-refused") {
+			t.Fatalf("%v marked the token", e)
+		}
+	}
+	for _, e := range []error{
+		&nativeError{Status: 502, Category: "authentication_failed", Message: "Claude Code native error: authentication_failed"},
+		&nativeError{Status: 401, Category: "unknown", Message: "unauthorized", ObservedStatus: true},
+	} {
+		refusedTokens.Delete(path)
+		x := &exchange{g: g, w: httptest.NewRecorder(), r: httptest.NewRequest(http.MethodPost, "/v1/messages", nil), diagnostic: &requestDiagnostic{fields: Object{}}}
+		x.runFailed(context.Background(), e)
+		if !refusedWith(os.Environ(), "a-refused") {
+			t.Fatalf("%v did not mark the token", e)
+		}
+	}
+	refusedTokens.Delete(path)
 }

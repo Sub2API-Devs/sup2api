@@ -135,7 +135,8 @@ func TestQuotaRuntimeFailures(t *testing.T) {
 	}{
 		{0, "", false, false, "failed"},
 		{400, `{"error":{"type":"not_logged_in","message":"do not echo secret"}}`, false, true, "not_logged_in"},
-		{400, `{"error":{"code":"token_expired"}}`, false, true, "token_expired"},
+		{400, `{"error":{"code":"token_expired"}}`, false, false, "token_expired:"},
+		{400, `{"error":{"type":"token_revoked","message":"do not echo secret"}}`, false, true, "token_revoked:"},
 		{401, `{"error":{"type":"authentication_error"}}`, false, false, "401"},
 		{409, `{"error":{"type":"api_key_account"}}`, false, false, "API key"},
 		{409, `{"error":"api_key_account"}`, false, false, "API key"},

@@ -111,8 +111,14 @@ func usageFailure(now time.Time, code int32, raw []byte) *pluginv1.QuotaResult {
 		}
 	}
 	switch reason {
-	case "not_logged_in", "token_expired":
-		return quotaFailure(now, true, reason+": refresh the account authorization")
+	case "not_logged_in":
+		return quotaFailure(now, true, "not_logged_in: Claude Code is not signed in; authorize the account again")
+	case "token_revoked":
+		return quotaFailure(now, true, "token_revoked: the authorization was refused and cannot be renewed; authorize the account again")
+	case "token_expired":
+		// Not a rejection: the container's Claude Code renews the token on its
+		// next model request (model availability admits it, availability.go).
+		return quotaFailure(now, false, tokenExpiredQuotaError+": the access token expired; Claude Code renews it on its next request")
 	case "api_key_account":
 		return quotaFailure(now, false, "API key accounts have no subscription usage")
 	}

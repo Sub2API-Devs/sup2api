@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/codes"
@@ -48,6 +50,7 @@ const (
 	quotaQueryTimeout    = 20 * time.Second
 	maxQuotaBody         = 64 << 10
 	maxQuotaError        = 512
+	maxQuotaErrorDetail  = 256
 	quotaFlushTick       = 5 * time.Second
 	quotaIdle            = 10 * time.Minute
 )
@@ -302,15 +305,38 @@ func (s *Service) runQuotaQuery(ctx context.Context, bt core.AccountTypeBinding,
 	return res, nil
 }
 
+// quotaErrorDetail is the plugin's reason for a failed quota query, kept
+// after the error kind so the console shows it and the plugin's model
+// availability can read it back: one line, at most maxQuotaErrorDetail bytes.
+func quotaErrorDetail(message string) string {
+	message = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, strings.ToValidUTF8(message, ""))
+	message = strings.Join(strings.Fields(message), " ")
+	for len(message) > maxQuotaErrorDetail {
+		_, size := utf8.DecodeLastRuneInString(message)
+		message = message[:len(message)-size]
+	}
+	return message
+}
+
 func normalizedQuota(res *pluginv1.QuotaResult) (map[string]store.QuotaWindow, error) {
 	if res == nil {
 		return nil, errors.New("empty quota observation")
 	}
 	if res.GetErrorType() != pluginv1.QuotaResult_ERROR_TYPE_UNSPECIFIED {
+		kind := "transient"
 		if res.GetErrorType() == pluginv1.QuotaResult_ERROR_TYPE_AUTH_REJECTED {
-			return nil, errors.New("auth_rejected: quota query failed")
+			kind = "auth_rejected"
 		}
-		return nil, errors.New("transient: quota query failed")
+		detail := quotaErrorDetail(res.GetErrorMessage())
+		if detail == "" {
+			detail = "quota query failed"
+		}
+		return nil, errors.New(kind + ": " + detail)
 	}
 	if len(res.Windows) > 64 {
 		return nil, errors.New("too many quota windows")

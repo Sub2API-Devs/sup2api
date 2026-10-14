@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,14 +26,20 @@ import (
 // 200: Anthropic's JSON object, verbatim (five_hour, seven_day,
 // seven_day_sonnet, seven_day_overage_included, ...). The core parses it.
 // 400 not_logged_in: no OAuth token stored (signed out, or an API key runtime).
-// 400 token_expired: Anthropic rejected the token (401). The CLI refreshes
-// its token on its next model request; the container does not refresh it
-// itself (a second refresher would race the CLI's refresh-token rotation).
+// 400 token_expired: Anthropic refused the token because its access token
+// expired and a refresh token is stored. The CLI refreshes it on its next
+// model request; the container does not refresh it itself (a second refresher
+// would race the CLI's refresh-token rotation).
+// 400 token_revoked: the authorization cannot be used without signing in
+// again: Anthropic refused a token that had not expired (or said it was
+// revoked), no refresh token is stored, or a model request was already
+// refused with this very token (the CLI could not renew it).
 // 502 upstream_error: anything else (transport, non-200, not a JSON object).
 
 const (
 	codeNotLoggedIn   = "not_logged_in"
 	codeTokenExpired  = "token_expired"
+	codeTokenRevoked  = "token_revoked"
 	codeUpstreamError = "upstream_error"
 
 	// defaultUsageURL is Anthropic's OAuth usage endpoint (as queried by the
@@ -45,9 +53,39 @@ const (
 // oauthCredentials is the part of Claude Code's .credentials.json we read.
 type oauthCredentials struct {
 	ClaudeAiOauth *struct {
-		AccessToken string `json:"accessToken"`
-		ExpiresAt   int64  `json:"expiresAt"` // Unix milliseconds
+		AccessToken  string `json:"accessToken"`
+		RefreshToken string `json:"refreshToken"`
+		ExpiresAt    int64  `json:"expiresAt"` // Unix milliseconds
 	} `json:"claudeAiOauth"`
+}
+
+// storedOAuth is the stored authorization: access token ("" when not signed
+// in with a Claude account), its expiry (Unix ms, 0 unknown) and whether a
+// refresh token can renew it.
+type storedOAuth struct {
+	access      string
+	expiresAt   int64
+	refreshable bool
+}
+
+// refusedTokens remembers, per credentials file, the digest of the access
+// token a model request was refused with. While the file still holds that
+// token the CLI could not renew it: the refresh token is no good either.
+var refusedTokens sync.Map
+
+func tokenDigest(token string) [32]byte { return sha256.Sum256([]byte(token)) }
+
+// noteAuthenticationRefused records that a model request of this process
+// environment ended with Anthropic refusing its credentials.
+func noteAuthenticationRefused(env []string) {
+	if c := storedOAuthIn(env); c.access != "" {
+		refusedTokens.Store(credentialsPathIn(env), tokenDigest(c.access))
+	}
+}
+
+func refusedWith(env []string, token string) bool {
+	digest, ok := refusedTokens.Load(credentialsPathIn(env))
+	return ok && digest.([32]byte) == tokenDigest(token)
 }
 
 // credentialsPath is where Claude Code keeps its OAuth tokens on Linux: the
@@ -74,20 +112,25 @@ func storedAccessToken() string {
 }
 
 func storedAccessTokenIn(env []string) string {
+	return storedOAuthIn(env).access
+}
+
+func storedOAuthIn(env []string) storedOAuth {
 	f, err := os.Open(credentialsPathIn(env))
 	if err != nil {
-		return ""
+		return storedOAuth{}
 	}
 	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, maxCredentialsBytes))
 	if err != nil {
-		return ""
+		return storedOAuth{}
 	}
 	var c oauthCredentials
 	if json.Unmarshal(raw, &c) != nil || c.ClaudeAiOauth == nil {
-		return ""
+		return storedOAuth{}
 	}
-	return strings.TrimSpace(c.ClaudeAiOauth.AccessToken)
+	o := c.ClaudeAiOauth
+	return storedOAuth{access: strings.TrimSpace(o.AccessToken), expiresAt: o.ExpiresAt, refreshable: strings.TrimSpace(o.RefreshToken) != ""}
 }
 
 // envProxy returns the HTTPS proxy of a process environment (what the CLI
@@ -167,9 +210,15 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 405, "invalid_request_error", "Method not allowed")
 		return
 	}
-	token := storedAccessTokenIn(a.environment())
+	env := a.environment()
+	stored := storedOAuthIn(env)
+	token := stored.access
 	if token == "" {
 		apiError(w, 400, codeNotLoggedIn, "Claude Code is not signed in with a Claude account.")
+		return
+	}
+	if refusedWith(env, token) {
+		apiError(w, 400, codeTokenRevoked, "A model request was refused with the stored OAuth token and Claude Code could not renew it.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), usageTimeout)
@@ -192,7 +241,7 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	req.Header.Set("User-Agent", ua)
-	client, tr := managementHTTPClient(a.environment())
+	client, tr := managementHTTPClient(env)
 	defer tr.CloseIdleConnections()
 	res, err := client.Do(req)
 	if err != nil {
@@ -211,7 +260,13 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case res.StatusCode == http.StatusUnauthorized:
-		apiError(w, 400, codeTokenExpired, "Anthropic rejected the stored OAuth token: "+asciiSnippet(raw))
+		answer := strings.ToLower(string(raw))
+		expired := (stored.expiresAt > 0 && stored.expiresAt <= time.Now().UnixMilli()) || strings.Contains(answer, "expired")
+		if expired && stored.refreshable && !strings.Contains(answer, "revoked") {
+			apiError(w, 400, codeTokenExpired, "The stored OAuth access token expired; Claude Code renews it on its next model request: "+asciiSnippet(raw))
+			return
+		}
+		apiError(w, 400, codeTokenRevoked, "Anthropic refused the stored OAuth token and it cannot be renewed: "+asciiSnippet(raw))
 		return
 	case res.StatusCode != http.StatusOK:
 		apiError(w, 502, codeUpstreamError, fmt.Sprintf("The Anthropic usage API returned %d: %s", res.StatusCode, asciiSnippet(raw)))

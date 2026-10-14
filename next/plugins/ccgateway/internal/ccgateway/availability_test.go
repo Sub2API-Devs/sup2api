@@ -48,6 +48,9 @@ func TestModelAvailabilityMappedScopeAndSharedOverride(t *testing.T) {
 	}
 }
 
+// What the core stores for the plugin's expired-token usage error.
+const expiredTokenError = "transient: token_expired: the access token expired; Claude Code renews it on its next request"
+
 func TestModelAvailabilitySnapshots(t *testing.T) {
 	p, now := quotaTestPlugin()
 	healthy := func() *pluginv1.AccountQuotaSnapshot {
@@ -88,23 +91,35 @@ func TestModelAvailabilitySnapshots(t *testing.T) {
 		{"empty windows", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows = nil }, pluginv1.ModelAvailability_UNKNOWN},
 		{"failed refresh", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient" }, pluginv1.ModelAvailability_UNKNOWN},
 		// The container refreshes an expired OAuth token only on a model request.
-		{"token refused lets the request refresh it", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "auth_rejected: quota query failed"
+		{"expired token lets the request refresh it", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = expiredTokenError
 			q.UpdatedAtUnix -= 86400
 		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"token refused before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "auth_rejected: quota query failed"
+		{"expired token before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = expiredTokenError
 			q.UpdatedAtUnix = 0
 			q.Windows = nil
 		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"token refused keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "auth_rejected: quota query failed"
+		{"expired token keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = expiredTokenError
 			q.Windows[0].Status = "rejected"
 		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		{"token refused keeps an invalid snapshot unknown", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "auth_rejected: quota query failed"
+		{"expired token keeps an invalid snapshot unknown", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = expiredTokenError
 			q.Windows[0].Utilization = math.NaN()
 		}, pluginv1.ModelAvailability_UNKNOWN},
+		// Signed out or refused for good: held back until authorized again.
+		{"signed out", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: not_logged_in: Claude Code is not signed in"
+		}, pluginv1.ModelAvailability_UNKNOWN},
+		{"revoked", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: token_revoked: refused" }, pluginv1.ModelAvailability_UNKNOWN},
+		{"revoked before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: token_revoked: refused"
+			q.UpdatedAtUnix = 0
+			q.Windows = nil
+		}, pluginv1.ModelAvailability_UNKNOWN},
+		{"core without the reason", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: quota query failed" }, pluginv1.ModelAvailability_UNKNOWN},
+		{"other transient failure", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient: usage runtime returned 502" }, pluginv1.ModelAvailability_UNKNOWN},
 		{"stale", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64(quotaRefresh.Seconds()) }, pluginv1.ModelAvailability_UNKNOWN},
 		{"allowed reset elapsed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = now.Unix() }, pluginv1.ModelAvailability_UNKNOWN},
 		{"unknown status", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = "" }, pluginv1.ModelAvailability_UNKNOWN},

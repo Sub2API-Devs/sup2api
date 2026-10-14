@@ -484,6 +484,11 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 	var native *nativeError
 	if ctx.Err() == nil && errors.As(e, &native) {
 		status, message = native.Status, native.Message
+		if x.g != nil && x.g.Runner != nil && (native.Category == "authentication_failed" || (native.ObservedStatus && status == http.StatusUnauthorized)) {
+			// The usage query reports this authorization as unusable until the
+			// stored token changes (usage.go).
+			noteAuthenticationRefused(x.g.runner(ctx).baseEnv())
+		}
 		if !x.streaming {
 			x.w.Header().Set("X-CCGateway-Error-Source", "cli")
 			x.w.Header().Set("X-CCGateway-CLI-Error", nativeErrorCategory(native.Category))

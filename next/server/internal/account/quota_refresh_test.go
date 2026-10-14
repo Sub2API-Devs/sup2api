@@ -114,7 +114,12 @@ func TestQuotaSuccessfulEmptyWindowsPreservesMissing(t *testing.T) {
 	require.Empty(t, after.Error)
 	require.True(t, after.UpdatedAt.After(*before.UpdatedAt))
 	_, err = normalizedQuota(&pluginv1.QuotaResult{ErrorType: pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT})
-	require.Error(t, err)
+	require.EqualError(t, err, "transient: quota query failed")
+	// The plugin's reason follows the kind: one line, bounded.
+	_, err = normalizedQuota(&pluginv1.QuotaResult{ErrorType: pluginv1.QuotaResult_ERROR_TYPE_AUTH_REJECTED, ErrorMessage: " token_revoked:\n refused\x00 here "})
+	require.EqualError(t, err, "auth_rejected: token_revoked: refused here")
+	_, err = normalizedQuota(&pluginv1.QuotaResult{ErrorType: pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT, ErrorMessage: strings.Repeat("é", 200)})
+	require.Equal(t, "transient: "+strings.Repeat("é", 128), err.Error())
 }
 
 func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {

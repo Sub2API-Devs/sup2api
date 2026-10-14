@@ -45,16 +45,25 @@ func validAvailabilityModel(model string) bool {
 	return model != "" && len(model) <= 256 && utf8.ValidString(model) && strings.IndexFunc(model, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }
 
+// tokenExpiredQuotaError starts the usage error of an expired access token
+// that a stored refresh token renews (quota.go); the core keeps it after the
+// error kind ("transient: token_expired: ...").
+const tokenExpiredQuotaError = "token_expired"
+
 func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int64, out *pluginv1.ModelAvailability) {
-	// The usage query was refused for the container's stored OAuth token
-	// (expired or signed out). The container's Claude Code refreshes that token
-	// only on a model request, so holding requests back here would keep the
-	// account unusable for good: let the request through. A token that cannot
-	// be refreshed fails that request with 401, which the account status rules
-	// handle; a known exhausted window still blocks (CONTRACTS §44.7).
+	// The container's stored OAuth access token expired and a refresh token can
+	// renew it. The container's Claude Code renews it only on a model request,
+	// so holding requests back here would keep the account unusable for good:
+	// let the request through. Signed out or refused authorizations
+	// (auth_rejected) stay held back; a known exhausted window still blocks
+	// (CONTRACTS §44.7).
 	authRefused := strings.HasPrefix(snapshot.GetError(), "auth_rejected:")
+	refreshOnRequest := strings.HasPrefix(snapshot.GetError(), "transient: "+tokenExpiredQuotaError+":")
 	out.Reason = "quota_unobserved"
-	if snapshot.GetUpdatedAtUnix() <= 0 && authRefused && len(snapshot.GetWindows()) == 0 {
+	if authRefused {
+		out.Reason = "authorization_required"
+	}
+	if snapshot.GetUpdatedAtUnix() <= 0 && refreshOnRequest && len(snapshot.GetWindows()) == 0 {
 		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
 		return
 	}
@@ -103,8 +112,12 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 		out.Reason = "invalid_quota_snapshot"
 		return
 	}
-	if authRefused {
+	if refreshOnRequest {
 		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
+		return
+	}
+	if authRefused {
+		out.Reason = "authorization_required"
 		return
 	}
 	if snapshot.GetError() != "" {

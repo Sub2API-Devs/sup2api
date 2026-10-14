@@ -2514,7 +2514,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 |---|---|
 | `windows` | jsonb 对象，key 为窗口 key：`{"5h": {"utilization": 42.0, "resets_at": "…", "status": "allowed", "used": 0, "limit": 0}}` |
 | `source` | 最新数据来源 `passive` / `active`；只有查询占位、尚无数据时为 `''` |
-| `error` | 最近一次主动查询的错误（`auth_rejected: …` / `transient: …` / `plugin: …`）；任何一次成功写入（被动或主动）清空 |
+| `error` | 最近一次主动查询的错误（`auth_rejected: …` / `transient: …` / `plugin: …`），冒号后为插件 `QuotaResult.error_message`（去控制字符、合并空白、最多 256 字节；为空时为 `quota query failed`），控制台据此显示原因、插件可用性据此判断；任何一次成功写入（被动或主动）清空 |
 | `updated_at` | 窗口最近一次写入时间（数据库时钟）；NULL = 尚无数据 |
 | `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），30 秒下限按后者在 PG 中原子判断，多节点有效 |
 
@@ -2599,7 +2599,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - SDK 提供可选 `ModelAvailabilityChecker`；启用模型准入或自动配额查询的插件需要 Host API 7。wire protocol 仍为 1，旧插件不需要实现新接口。新插件必须在不支持能力的旧核心上拒绝初始化，不能静默忽略准入限制。
 - 权重、优先级及粘性规则保持原有行为。有效粘性绑定不参加权重抽选，也不累计分配补偿；模型不可用是硬准入，不可用 `scheduler.rank` 的权重 0 代替，不可被排序插件 fail-open 恢复。
 - `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。后台到期复查、人工刷新共用查询下限与租约。失败保留账号及调度开关，记录错误并退避；不得为额度查询启用停用账号、启动停止的运行时、注销或刷新 OAuth 授权。
-- `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。例外（2026-10-14）：快照错误为 `auth_rejected: …`（CCGateway 容器报存储的 OAuth 令牌过期或未登录）时 CCGateway 插件返回 `AVAILABLE`（原因 `quota_auth_refresh_on_request`）——容器内 Claude Code 只在模型请求时刷新令牌，按 UNKNOWN 拦截会让空闲超过令牌有效期的账号永远不可调度；已知耗尽窗口仍拦截、无效快照仍为 `UNKNOWN`，无法刷新的令牌由该请求的 401 交给账号状态规则（§42）处理。
+- `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。例外（2026-10-14）：快照错误为 `transient: token_expired: …`（CCGateway 容器报访问令牌过期且存有刷新令牌）时 CCGateway 插件返回 `AVAILABLE`（原因 `quota_auth_refresh_on_request`）——容器内 Claude Code 只在模型请求时刷新令牌，按 UNKNOWN 拦截会让空闲超过令牌有效期的账号永远不可调度；已知耗尽窗口仍拦截、无效快照仍为 `UNKNOWN`。真的未登录（`auth_rejected: not_logged_in: …`）与令牌被拒且无法续期（`auth_rejected: token_revoked: …`）返回 `UNKNOWN`（原因 `authorization_required`），重新授权后恢复。
 - `BuildQuotaRequestResponse.runtime_operation` 与普通 HTTP URL 目标区分。运行时请求通过已注册的 `AccountQuotaRuntime`、当前账号与受限只读操作执行；不接受插件指定任意运行时 URL，也不向插件暴露 Worker 管理密钥或容器 OAuth token。配额解析仍统一由插件的 `ParseQuotaResponse` 完成。
 - CCGateway 的托管账号声明运行时 `usage` 查询。插件解析共享窗口与模型专属窗口，用映射后模型的 `claude-fable-` 前缀识别 Fable；共享耗尽优先限制全部模型，Fable 专属耗尽只影响 Fable。缺失窗口、失败查询和仅仅到达 reset 时间都不能清除已知耗尽事实。
 - `ClassifyErrorResponse.quota` 承载插件确认的配额观测，核心只校验及存储。观测保存使用准入时由核心捕获的 `AccountQuotaSnapshot.generation`，不得信任插件指定的身份代次；重新授权前的迟到拒绝或恢复不能覆盖新身份。revision 已变化的旧查询不能延后更新的复查计划或覆盖失败计数。
@@ -3120,7 +3120,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 - `POST /admin/auth/cancel {session_id?}` → `{success:true}`，幂等；带错 `session_id` 也返回成功且不取消当前会话。
 - `POST /admin/auth/logout` → `{success:true}`。
 - `GET /admin/usage` → `{"windows":[{window,utilization,resets_at?,status?,used?,limit?}]}`。读容器凭证文件的 OAuth access token，调 Anthropic 用量接口（OAuth 模式的订阅限额，与 `claude-oauth` 插件查询同一端点），经容器的账号出口（Proxy SwitchyOmega 代理）。响应体格式：`window` 为窗口 key（如 `5h`、`7d`、`7d_fable`）；`utilization` 为百分比 0–100（供应商返回 0–1，转百分比）；`resets_at` 为 RFC3339 timestamp 或 null（未知）；`status` 为 `allowed`/`allowed_warning`/`rejected` 或空；`used`/`limit` 可选（与控制台"已用 / 总量"显示对应）。未登录 → 400 `not_logged_in`；令牌过期 → 400 `token_expired`（可先尝试用 CLI 刷新令牌再重试一次，不确定就别做）；上游失败 → 502 `upstream_error`。
-- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`、`not_logged_in`、`token_expired`、`upstream_error`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
+- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`、`not_logged_in`、`token_expired`、`token_revoked`、`upstream_error`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
 
 控制器（`127.0.0.1:8787`）：
 
@@ -3296,8 +3296,9 @@ CC 账号的 OAuth 令牌在容器凭证文件里（`$CLAUDE_CONFIG_DIR/.credent
 - `used` / `limit` 可选（与控制台"已用 / 总量"显示对应）。
 
 错误格式 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`（§49.14）：
-- 未登录 → 400 `not_logged_in`；
-- 令牌过期 / 401 → 400 `token_expired`；
+- 未登录（没有存储的 OAuth 访问令牌）→ 400 `not_logged_in`；
+- Anthropic 401 且访问令牌已过期（本地 `expiresAt` 已到或上游说 expired）、存有刷新令牌、上游未说 revoked → 400 `token_expired`（CLI 下一次模型请求时续期）；
+- 其他无法续期的情况 → 400 `token_revoked`：上游说 revoked、未过期却被 401、没有刷新令牌，或本进程中已有模型请求用当前存储的这个访问令牌认证失败（CLI 类别 `authentication_failed` 或观测到上游 401，说明 CLI 续期也失败；令牌一变即失效，此时不再请求上游）；
 - 上游失败 → 502 `upstream_error`。
 
 **控制器**（`tools/ccgateway/runtime/manager.py`）：透传路由正则增加 `admin/usage`（GET），代理到业务容器 `GET /admin/usage`。
@@ -3313,7 +3314,7 @@ ccgateway 的实现（`server/internal/ccgateway/usage.go`）：
 - account_runtimes 模式：`runtimeRequest(ctx, key, "GET", "admin/usage", nil, revision)` → 控制器 `/accounts/<key>/admin/usage`；
 - 共享容器模式：`s.open(ctx, cfg)` → `GET <base>/admin/usage`，`Authorization: Bearer <adminKey>`；
 - 响应体上限 64 KiB，解析成 `[]UsageWindow{Key, Utilization, ResetsAt, Status, Used, Limit}`；
-- 错误映射：容器的 `not_logged_in` / `token_expired` → `auth_rejected`（§44.4，可触发自动禁用 §42）；`upstream_error` / 其他 → `transient`；transport 失败（连不上容器）→ `transient`；旧容器 404 → `unsupported`（提示升级）；账号 409 `not_synchronized` → `transient`；账号 409 `api_key_account` → `api_key_account`。
+- 错误映射：容器的 `not_logged_in` / `token_revoked` → `auth_rejected`，`token_expired` → `transient`（§44.4、§44.7；额度错误本身不改账号状态）；`upstream_error` / 其他 → `transient`；transport 失败（连不上容器）→ `transient`；旧容器 404 → `unsupported`（提示升级）；账号 409 `not_synchronized` → `transient`；账号 409 `api_key_account` → `api_key_account`。
 
 **manifest 变更**（可选）：`next/plugins/ccgateway/manifest.json` 若需声明 `quota`（让核心识别该类型支持配额），可以只声明空的 `quota: {}`（不声明 headers，不声明 query）——核心通过 provider 扩展点查询，不走 manifest 声明的 RPC。若不改 manifest（保持版本 0.1.6），核心按"插件未实现 quota RPC"处理，provider 注册后同样生效。实际采用第二种：manifest 不变，核心按 provider 优先。
 
