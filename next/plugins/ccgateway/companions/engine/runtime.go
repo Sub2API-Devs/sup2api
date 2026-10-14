@@ -183,7 +183,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 }
 
 func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	if serveCLICatalogProbe(w, request) {
+	if serveCLICatalogProbe(w, request) || serveGatewayRender(w, request) {
 		return
 	}
 	r.mu.Lock()

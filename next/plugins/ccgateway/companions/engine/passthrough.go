@@ -44,7 +44,7 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 		}
 	}
 	cacheRequested := hasRequestCacheControl(o)
-	erased, decisions := eraseClientAttachments(o, p.EraseClientAttachments)
+	erased, decisions := eraseClientAttachments(o, p.EraseClientAttachments, p.gatewayAttachments)
 	if erased {
 		if body, err = json.Marshal(o); err != nil {
 			return nil, err

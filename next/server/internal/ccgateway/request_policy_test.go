@@ -268,3 +268,22 @@ func TestEraseClientAttachmentsAbsentKeepsWorkerPolicy(t *testing.T) {
 		}
 	}
 }
+
+// replace_client_attachments saves, reloads and reaches the Worker policy;
+// unknown, repeated, non-replaceable or erased types are rejected.
+func TestReplaceClientAttachmentsSave(t *testing.T) {
+	var in Config
+	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"reject","erase_client_attachments":["date"],"replace_client_attachments":["environment","model"],"betas":[]}}`), &in))
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	require.NoError(t, err)
+	plain, _ := json.Marshal(saved)
+	var reloaded Config
+	require.NoError(t, json.Unmarshal(plain, &reloaded))
+	require.Equal(t, []string{"environment", "model"}, reloaded.WorkerRequestPolicy(26).ReplaceClientAttachments)
+	for _, c := range []struct{ erase, replace []string }{{nil, []string{"date"}}, {nil, []string{"session_context"}}, {nil, []string{"model", "model"}}, {[]string{"model"}, []string{"model"}}} {
+		bad := *saved.RequestPolicy
+		bad.EraseClientAttachments, bad.ReplaceClientAttachments = c.erase, c.replace
+		_, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &bad}, reloaded)
+		require.ErrorContains(t, err, "replace_client_attachments", "%v", c)
+	}
+}

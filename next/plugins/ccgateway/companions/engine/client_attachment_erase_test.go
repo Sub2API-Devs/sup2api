@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -183,4 +184,78 @@ func TestEraseClientAttachmentsOffLeavesRequestUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, body, r.Plan.RawRequest())
 	assert.Empty(t, r.AttachmentDecisions)
+}
+
+// Claude Code's rendering on a Worker, as the Mod reports it.
+const (
+	gwEnvironment = "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /work/data/cache/workspace\n - Is a git repository: false\n - Platform: linux\n - Shell: unknown\n - OS Version: Linux 6.12.95+deb13-amd64"
+	gwModel       = "You are powered by the model named Sonnet 4.6. The exact model ID is claude-sonnet-4-6. Assistant knowledge cutoff is August 2025."
+	gwTokens      = "<total_tokens>1000000 tokens left</total_tokens>"
+)
+
+func parseReplaced(t *testing.T, body Object, erase []string, replace []string, gateway map[string]string) *Request {
+	t.Helper()
+	p := defaultRequestPolicy()
+	p.EraseClientAttachments, p.ReplaceClientAttachments = erase, replace
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	r, err := parsePolicyRequestWithGateway(raw, policyHeaders(p), nil, nil, gateway)
+	require.NoError(t, err)
+	return r
+}
+
+func TestReplaceClientAttachmentsInPlace(t *testing.T) {
+	gateway := map[string]string{"environment": gwEnvironment, "model": gwModel, "total_tokens_reminder": gwTokens}
+	r := parseReplaced(t, eraseRequest(), nil, features.ReplaceableClientAttachments, gateway)
+	texts := requestTexts(r)
+	for _, gone := range []string{"/home/u/project", "# Environment update", "claude-opus-5", "Opus 5", ccTokens} {
+		assert.NotContains(t, texts, gone)
+	}
+	// In place: the system keeps its own text with the Worker's environment where the client's was.
+	assert.Equal(t, []string{"You are Claude Code.\n\n" + gwEnvironment + "\n"}, r.System)
+	// The client's own layout around it is kept (its section ended with a line break).
+	assert.Contains(t, texts, "system: "+gwEnvironment+"\n\n\n"+gwModel+"\n\n"+ccDate)
+	assert.Contains(t, texts, "user: "+gwTokens)
+	// The directory change has no Worker counterpart; the rest of that message stays.
+	assert.Contains(t, texts, "system: "+ccDateChanged+"\n\nKeep answers short.")
+	// Kept as sent: the date and the session context.
+	assert.Contains(t, texts, ccDate)
+	assert.Contains(t, texts, "user@example.com")
+	decided := map[string]string{}
+	for _, d := range r.AttachmentDecisions {
+		decided[str(d, "type")+"@"+str(d, "where")] = str(d, "decision")
+	}
+	assert.Equal(t, "replace_gateway", decided["environment@system"])
+	assert.Equal(t, "replace_gateway", decided["model@messages[1]"])
+	assert.Equal(t, "replace_gateway", decided["environment@messages[4]"])
+
+	// The same client text always becomes the same Worker text.
+	again := parseReplaced(t, eraseRequest(), nil, features.ReplaceableClientAttachments, gateway)
+	assert.Equal(t, texts, requestTexts(again))
+}
+
+func TestReplaceClientAttachmentsWithoutRenderingKeepsClient(t *testing.T) {
+	r := parseReplaced(t, eraseRequest(), nil, []string{"environment", "model"}, map[string]string{"model": gwModel})
+	texts := requestTexts(r)
+	assert.Contains(t, texts, "Primary working directory: /home/u/project")
+	assert.Contains(t, texts, gwModel)
+	assert.NotContains(t, texts, ccModel)
+}
+
+func TestReplaceAndEraseClientAttachments(t *testing.T) {
+	gateway := map[string]string{"environment": gwEnvironment}
+	r := parseReplaced(t, eraseRequest(), []string{"date", "session_context"}, []string{"environment"}, gateway)
+	texts := requestTexts(r)
+	assert.Contains(t, texts, gwEnvironment)
+	assert.NotContains(t, texts, "Today's date")
+	assert.NotContains(t, texts, "user@example.com")
+	assert.Contains(t, texts, ccModel)
+
+	p := defaultRequestPolicy()
+	p.EraseClientAttachments, p.ReplaceClientAttachments = []string{"model"}, []string{"model"}
+	_, err := requestPolicy(policyHeaders(p))
+	assert.ErrorContains(t, err, "replace_client_attachments")
+	p.EraseClientAttachments, p.ReplaceClientAttachments = nil, []string{"date"}
+	_, err = requestPolicy(policyHeaders(p))
+	assert.ErrorContains(t, err, "replace_client_attachments")
 }

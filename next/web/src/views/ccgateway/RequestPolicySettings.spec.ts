@@ -219,24 +219,38 @@ describe('CCGateway native request policy', () => {
     w.unmount()
   })
 
-  it('client attachment erasure defaults to none and saves the checked types in vocabulary order', async () => {
+  it('client attachments default to keep and save each type as kept, gateway or erased in vocabulary order', async () => {
     expect(defaultRequestPolicy().erase_client_attachments).toEqual([])
+    expect(defaultRequestPolicy().replace_client_attachments).toEqual([])
     mocks.get.mockResolvedValue(config({}))
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), erase_client_attachments: ['date', 'session_context'] }))
+    mocks.put.mockImplementation(async (_url: string, body: { request_policy: RequestPolicy }) => config(body.request_policy))
     const w = await render()
     for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
-      expect(w.get<HTMLInputElement>(`[data-testid="erase-${type}"]`).element.checked).toBe(false)
+      expect(w.get<HTMLSelectElement>(`[data-testid="client-attachment-${type}"]`).element.value).toBe('keep')
     }
-    await w.get('[data-testid="erase-session_context"]').setValue(true)
-    await w.get('[data-testid="erase-model"]').setValue(true)
-    await w.get('[data-testid="erase-date"]').setValue(true)
-    await w.get('[data-testid="erase-model"]').setValue(false)
+    // Only the types Claude Code on the Worker also renders offer the gateway.
+    const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('option').map(o => o.element.value)
+    expect(options('environment')).toEqual(['keep', 'gateway', 'erase'])
+    expect(options('date')).toEqual(['keep', 'erase'])
+    expect(options('session_context')).toEqual(['keep', 'erase'])
+    await w.get('[data-testid="client-attachment-session_context"]').setValue('erase')
+    await w.get('[data-testid="client-attachment-total_tokens_reminder"]').setValue('gateway')
+    await w.get('[data-testid="client-attachment-model"]').setValue('erase')
+    await w.get('[data-testid="client-attachment-environment"]').setValue('gateway')
+    await w.get('[data-testid="client-attachment-date"]').setValue('erase')
+    // A type moves between the lists rather than appearing in both.
+    await w.get('[data-testid="client-attachment-model"]').setValue('gateway')
     await w.get('form').trigger('submit')
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.erase_client_attachments).toEqual(['date', 'session_context'])
-    expect(w.get<HTMLInputElement>('[data-testid="erase-date"]').element.checked).toBe(true)
-    expect(w.get<HTMLInputElement>('[data-testid="erase-model"]').element.checked).toBe(false)
+    expect(payload.request_policy.replace_client_attachments).toEqual(['environment', 'model', 'total_tokens_reminder'])
+    expect(w.get<HTMLSelectElement>('[data-testid="client-attachment-model"]').element.value).toBe('gateway')
+    expect(w.get<HTMLSelectElement>('[data-testid="client-attachment-date"]').element.value).toBe('erase')
+    await w.get('[data-testid="client-attachment-model"]').setValue('keep')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy.replace_client_attachments).toEqual(['environment', 'total_tokens_reminder'])
     w.unmount()
   })
 

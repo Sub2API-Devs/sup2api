@@ -117,6 +117,9 @@ type runConfig struct {
 	nativeReminders map[string]int
 	tools           Object
 	passthrough     *passthroughConfig // the Mod's per-round native request fields
+	// reportAttachments asks the Mod for Claude Code's own rendering of the
+	// replaceable attachments (gateway_attachments.go).
+	reportAttachments bool
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {

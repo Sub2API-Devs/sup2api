@@ -48,10 +48,8 @@ describe('locales', () => {
     // Known dynamic key patterns that are concatenated at runtime
     const dynamicPatterns = [
       /^ccgateway\.policy\.search_$/,
-      /^ccgateway\.policy\.attachmentType_$/,
-      /^ccgateway\.policy\.attachmentSource_$/,
-      /^ccgateway\.policy\.unknownAttachment_$/,
-      /^ccgateway\.policy\.erase_$/
+      /^ccgateway\.policy\.attachment_$/,
+      /^ccgateway\.policy\.attachmentAction_$/
     ]
     for (const [file, text] of Object.entries(sources)) {
       for (const m of text.matchAll(re)) {

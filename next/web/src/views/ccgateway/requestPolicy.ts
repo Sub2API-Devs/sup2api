@@ -2,6 +2,9 @@ export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_sear
 // Same vocabulary and order as the core's features.ErasableClientAttachments.
 export const erasableAttachments = ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
 export type ErasableAttachment = (typeof erasableAttachments)[number]
+// Same vocabulary as features.ReplaceableClientAttachments: types Claude Code on the Worker also renders.
+export const replaceableAttachments = ['environment', 'model', 'total_tokens_reminder'] as const
+export type ReplaceableAttachment = (typeof replaceableAttachments)[number]
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {
   schema_version?: number
@@ -14,6 +17,8 @@ export interface RequestPolicy {
   thinking_disabled_compat?: 'pass' | 'omit'
   // Client attachment types the Worker erases before admission; empty keeps every attachment as sent.
   erase_client_attachments?: ErasableAttachment[]
+  // Client attachment types replaced in place with the Worker's Claude Code rendering; never an erased type.
+  replace_client_attachments?: ReplaceableAttachment[]
   relay_mode: 'native'
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
@@ -27,6 +32,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     tool_search: 'request',
     thinking_disabled_compat: 'pass',
     erase_client_attachments: [],
+    replace_client_attachments: [],
     relay_mode: 'native',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -51,6 +57,7 @@ export function normalizeRequestPolicy(policy?: Partial<Omit<RequestPolicy, 'rel
     tool_search: policy?.tool_search ?? defaults.tool_search,
     thinking_disabled_compat: policy?.thinking_disabled_compat ?? defaults.thinking_disabled_compat,
     erase_client_attachments: policy?.erase_client_attachments ?? defaults.erase_client_attachments,
+    replace_client_attachments: policy?.replace_client_attachments ?? defaults.replace_client_attachments,
     relay_mode: 'native',
     betas: policy?.betas ?? defaults.betas
   }
@@ -63,6 +70,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['reject', 'ignore'].includes(p.unknown_field) &&
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
     (p.erase_client_attachments ?? []).every((type, i, all) => erasableAttachments.includes(type) && all.indexOf(type) === i) &&
+    (p.replace_client_attachments ?? []).every((type, i, all) => replaceableAttachments.includes(type) && all.indexOf(type) === i && !p.erase_client_attachments?.includes(type)) &&
     p.relay_mode === 'native'
   )
 }

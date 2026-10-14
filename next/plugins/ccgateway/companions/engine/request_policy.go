@@ -31,7 +31,13 @@ type RequestPolicy struct {
 	// Client attachment types erased before admission (client_attachment_erase.go);
 	// empty keeps every client attachment as sent.
 	EraseClientAttachments []string `json:"erase_client_attachments,omitempty"`
-	CustomToolPrefix       string   `json:"custom_tool_prefix"`
+	// Client attachment types replaced in place with Claude Code's own
+	// rendering on this Worker (gateway_attachments.go); never erased ones.
+	ReplaceClientAttachments []string `json:"replace_client_attachments,omitempty"`
+	// gatewayAttachments is the rendering used for ReplaceClientAttachments,
+	// set by the Worker (never by the host's header).
+	gatewayAttachments map[string]string
+	CustomToolPrefix   string `json:"custom_tool_prefix"`
 	// "pass" (default) or "omit": see applyThinkingDisabledCompat.
 	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
 	RelayMode              string `json:"relay_mode,omitempty"`
@@ -75,6 +81,9 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	if err := validateEraseClientAttachments(p.EraseClientAttachments); err != nil {
 		return p, err
 	}
+	if err := features.ValidateReplaceClientAttachments(p.ReplaceClientAttachments, p.EraseClientAttachments); err != nil {
+		return p, err
+	}
 	if p.CustomToolPrefix == "" {
 		p.CustomToolPrefix = "ccgateway"
 	}
@@ -114,6 +123,13 @@ func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourc
 }
 
 func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAdmission, helper *helperHistoryExecution) (*Request, error) {
+	return parsePolicyRequestWithGateway(body, h, access, helper, nil)
+}
+
+// parsePolicyRequestWithGateway also takes Claude Code's own rendering of the
+// replaced attachment types (gateway_attachments.go); without one a type is
+// kept as sent.
+func parsePolicyRequestWithGateway(body []byte, h http.Header, access *resourceAdmission, helper *helperHistoryExecution, gateway map[string]string) (*Request, error) {
 	if helper != nil && !helper.authenticated {
 		return nil, fmt.Errorf("helper execution is not authenticated")
 	}
@@ -123,6 +139,12 @@ func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAd
 	}
 	if helper != nil {
 		return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
+	}
+	p.gatewayAttachments = map[string]string{}
+	for _, typ := range p.ReplaceClientAttachments {
+		if text, ok := gateway[typ]; ok && strings.TrimSpace(text) != "" {
+			p.gatewayAttachments[typ] = text
+		}
 	}
 	return parsePassthroughRequest(body, h, p, access)
 }

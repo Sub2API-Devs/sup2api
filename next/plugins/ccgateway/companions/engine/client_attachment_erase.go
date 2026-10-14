@@ -56,12 +56,15 @@ func eraseSegments(text string, re *regexp.Regexp) (string, int) {
 }
 
 type clientAttachmentEraser struct {
-	types     []string
+	types []string
+	// replace maps a replaced type to Claude Code's own rendering on this
+	// Worker (gateway_attachments.go).
+	replace   map[string]string
 	decisions []Object
 }
 
-// erase returns the text without the selected attachments; "" when nothing
-// else was in it.
+// erase returns the text without the selected attachments and with the
+// replaced ones in Claude Code's own rendering; "" when nothing else was in it.
 func (x *clientAttachmentEraser) erase(text, where string) string {
 	for _, typ := range x.types {
 		for _, re := range clientAttachmentPatterns[typ] {
@@ -72,10 +75,49 @@ func (x *clientAttachmentEraser) erase(text, where string) string {
 			}
 		}
 	}
+	for _, typ := range features.ReplaceableClientAttachments {
+		gateway, ok := x.replace[typ]
+		if !ok {
+			continue
+		}
+		for i, re := range clientAttachmentPatterns[typ] {
+			before := text
+			var n int
+			// The environment section is replaced; an environment update (the
+			// client's directory change) has no Worker counterpart and goes.
+			if typ == "environment" && i > 0 {
+				text, n = eraseSegments(text, re)
+			} else {
+				text, n = replaceSegments(text, re, gateway)
+			}
+			if n > 0 && text != before {
+				x.decisions = append(x.decisions, Object{"source": "client", "type": typ, "where": where, "recognition": "claude_code_render", "decision": "replace_gateway", "count": n, "text_digest": digest(before)})
+			}
+		}
+	}
 	if strings.TrimSpace(text) == "" {
 		return ""
 	}
 	return text
+}
+
+// replaceSegments puts the replacement in place of each match, keeping the
+// line break that ended the match so the surrounding layout is unchanged.
+func replaceSegments(text string, re *regexp.Regexp, replacement string) (string, int) {
+	locs := re.FindAllStringIndex(text, -1)
+	replacement = strings.TrimRight(replacement, "\r\n")
+	for i := len(locs) - 1; i >= 0; i-- {
+		s, e := locs[i][0], locs[i][1]
+		end := ""
+		switch match := text[s:e]; {
+		case strings.HasSuffix(match, "\r\n"):
+			end = "\r\n"
+		case strings.HasSuffix(match, "\n"):
+			end = "\n"
+		}
+		text = text[:s] + replacement + end + text[e:]
+	}
+	return text, len(locs)
 }
 
 // blocks erases inside text blocks and drops the ones left empty. Other block
@@ -114,11 +156,13 @@ func (x *clientAttachmentEraser) blocks(content []any, where string) ([]any, boo
 // attempts) sees the same erased request. The rules are fixed per policy, so
 // each turn erases the same text and the prompt cache prefix stays stable.
 // A user or directive message is never left empty: then it is kept as sent.
-func eraseClientAttachments(o Object, types []string) (bool, []Object) {
-	if len(types) == 0 {
+// replace (type to Claude Code's rendering on this Worker) is applied the same
+// way: the same client text always becomes the same Worker text.
+func eraseClientAttachments(o Object, types []string, replace map[string]string) (bool, []Object) {
+	if len(types) == 0 && len(replace) == 0 {
 		return false, nil
 	}
-	x := &clientAttachmentEraser{types: types}
+	x := &clientAttachmentEraser{types: types, replace: replace}
 	changed := false
 	switch system := o["system"].(type) {
 	case string:

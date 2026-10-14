@@ -134,6 +134,17 @@ export function register(on) {
       await trace(filtered.text === null ? 'drop' : 'filter_fields', filtered);
       return filtered;
     }
+    // Rendering run (gateway_attachments.go): report Claude Code's own text
+    // of the replaceable types; what reaches the model is decided as usual.
+    if (configuration?.report_attachments && origin === 'engine' && ['environment', 'model', 'total_tokens_reminder'].includes(e.type)) {
+      const rendered = await next(e);
+      if (typeof rendered?.text === 'string' && rendered.text.length > 0) {
+        const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'gateway_attachment', detail: { type: e.type, text: rendered.text } }) });
+        if (!ack.ok) throw new Error('ccgateway: gateway attachment acknowledgement rejected');
+      }
+      if (!keep) return { ...e, text: null };
+      return rendered;
+    }
     if (!keep) {
       await trace('drop', { text: null });
       return { ...e, text: null };

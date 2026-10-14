@@ -8,9 +8,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // Mod control shares the account HTTP port: isolated accounts only allow that
@@ -18,23 +21,26 @@ import (
 var modControls sync.Map
 
 type modControl struct {
-	webSearch        func(id string, input Object) Object // native web search, set by the Runner
-	sessionContexts  map[string]bool
-	reminderMarker   string
-	nativeReminders  map[string]int
-	reminderAcks     map[string]int
-	diagnostic       *requestDiagnostic
-	path, URL, token string
-	config           []byte
-	systems          int
-	mu               sync.Mutex
-	ready, attached  bool
-	scopeEnabled     bool
-	scopeAttachment  string
-	scopePaused      bool
-	scopeSearches    int
-	readySignal      chan struct{}
-	server           *http.Server
+	webSearch       func(id string, input Object) Object // native web search, set by the Runner
+	sessionContexts map[string]bool
+	// gatewayAttachments is Claude Code's rendering of the replaceable
+	// attachment types reported in a rendering run.
+	gatewayAttachments map[string]string
+	reminderMarker     string
+	nativeReminders    map[string]int
+	reminderAcks       map[string]int
+	diagnostic         *requestDiagnostic
+	path, URL, token   string
+	config             []byte
+	systems            int
+	mu                 sync.Mutex
+	ready, attached    bool
+	scopeEnabled       bool
+	scopeAttachment    string
+	scopePaused        bool
+	scopeSearches      int
+	readySignal        chan struct{}
+	server             *http.Server
 }
 
 func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
@@ -71,7 +77,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	if cfg.scopeResumed {
 		systems = nil // The resumed transcript already contains the retained entry.
 	}
-	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": systems, "scope_boundary": scoped, "scope_resumed": cfg.scopeResumed, "search_calls": cfg.searchCalls, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "continuation_attachment_ack": cfg.reminderMarker != "", "additional_directories": additionalDirs, "passthrough": bodies})
+	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": systems, "scope_boundary": scoped, "scope_resumed": cfg.scopeResumed, "search_calls": cfg.searchCalls, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "continuation_attachment_ack": cfg.reminderMarker != "", "additional_directories": additionalDirs, "passthrough": bodies, "report_attachments": cfg.reportAttachments})
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +200,19 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		c.sessionContexts[detail.Text] = true
+	case ack.Event == "gateway_attachment" && c.ready:
+		var detail struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(ack.Detail, &detail) != nil || !slices.Contains(features.ReplaceableClientAttachments, detail.Type) || strings.TrimSpace(detail.Text) == "" || len(detail.Text) > 64<<10 {
+			w.WriteHeader(400)
+			return
+		}
+		if c.gatewayAttachments == nil {
+			c.gatewayAttachments = map[string]string{}
+		}
+		c.gatewayAttachments[detail.Type] = detail.Text
 	case ack.Event == "trace" && c.ready:
 		c.diagnostic.trace("mod_attachment", ack.Detail)
 	case ack.Event == "tool" && c.ready:

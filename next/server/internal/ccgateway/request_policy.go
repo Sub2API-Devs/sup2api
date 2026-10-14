@@ -24,9 +24,13 @@ type RequestPolicy struct {
 	// EraseClientAttachments lists the client attachment types (environment,
 	// model, date, total_tokens_reminder, session_context) the Worker erases
 	// before admission; empty keeps every client attachment as sent.
-	EraseClientAttachments []string   `json:"erase_client_attachments,omitempty"`
-	RelayMode              string     `json:"relay_mode,omitempty"`
-	Betas                  []BetaRule `json:"betas"`
+	EraseClientAttachments []string `json:"erase_client_attachments,omitempty"`
+	// ReplaceClientAttachments lists the client attachment types (environment,
+	// model, total_tokens_reminder) the Worker replaces in place with Claude
+	// Code's own rendering on that Worker; never an erased type.
+	ReplaceClientAttachments []string   `json:"replace_client_attachments,omitempty"`
+	RelayMode                string     `json:"relay_mode,omitempty"`
+	Betas                    []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
 
@@ -100,6 +104,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 		return errors.New("invalid relay_mode: must be native")
 	}
 	if err := features.ValidateEraseClientAttachments(p.EraseClientAttachments); err != nil {
+		return err
+	}
+	if err := features.ValidateReplaceClientAttachments(p.ReplaceClientAttachments, p.EraseClientAttachments); err != nil {
 		return err
 	}
 	return nil

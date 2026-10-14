@@ -55,7 +55,7 @@ func (g *Gateway) authorized(r *http.Request) bool {
 var sessionName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if serveModControl(w, r) {
+	if serveModControl(w, r) || serveGatewayRender(w, r) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -175,7 +175,14 @@ func (x *exchange) admit() bool {
 		x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
 		return false
 	}
-	req, e := parsePolicyRequestWithResources(body, r.Header, x.resources)
+	// Claude Code's own rendering for policy replace_client_attachments,
+	// rendered once per key before the request is parsed.
+	var gateway map[string]string
+	if key, types, err := gatewayAttachmentRequest(body, r.Header); err == nil && len(types) > 0 {
+		key.Version = x.g.runner(r.Context()).Version
+		gateway = x.g.gatewayAttachments(r.Context(), key, x.diagnostic)
+	}
+	req, e := parsePolicyRequestWithGateway(body, r.Header, x.resources, nil, gateway)
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false

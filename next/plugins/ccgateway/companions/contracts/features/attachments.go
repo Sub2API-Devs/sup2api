@@ -23,3 +23,30 @@ func ValidateEraseClientAttachments(types []string) error {
 	}
 	return nil
 }
+
+// ReplaceableClientAttachments is the vocabulary of policy
+// replace_client_attachments, in display order: client attachment types the
+// Worker replaces in place with Claude Code's own rendering of the Worker
+// (engine gateway_attachments.go). A date or session context has no stable
+// Worker counterpart, so those can only be kept or erased.
+var ReplaceableClientAttachments = []string{"environment", "model", "total_tokens_reminder"}
+
+// ValidateReplaceClientAttachments accepts each listed type once and none
+// that is also erased; empty keeps every client attachment as sent.
+func ValidateReplaceClientAttachments(types, erased []string) error {
+	seen := map[string]bool{}
+	for _, typ := range types {
+		known := false
+		for _, name := range ReplaceableClientAttachments {
+			known = known || name == typ
+		}
+		for _, name := range erased {
+			known = known && name != typ
+		}
+		if !known || seen[typ] {
+			return fmt.Errorf("invalid replace_client_attachments: %q", typ)
+		}
+		seen[typ] = true
+	}
+	return nil
+}
