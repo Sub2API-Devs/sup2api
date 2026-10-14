@@ -1,6 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+// Dialog teleported to <body>. Open modals and drawers form a stack: only
+// the topmost one closes on Escape, Tab stays inside it, the page behind does
+// not scroll, focus moves in on open ([data-autofocus] / [autofocus], else
+// the first focusable control of the body, else the dialog) and returns to
+// the opener on close. `persistent`: Escape and the backdrop do not close it
+// (the × still does). `closable` = false hides the × and also implies
+// persistent (the parent closes it). `top` stacks it above everything else
+// (confirmations asked from inside a modal; later modals stack above earlier
+// ones anyway).
+import { computed, ref, useId } from 'vue'
+import { useUiT } from './i18n'
+import SIcon from './SIcon.vue'
+import { useOverlayLayer } from './overlay'
 
 const props = withDefaults(
   defineProps<{
@@ -11,11 +22,15 @@ const props = withDefaults(
     persistent?: boolean
     /** Stacks above other open modals (confirmations asked from inside a modal). */
     top?: boolean
+    /** Accessible description: id of an element inside the body. */
+    describedby?: string
   }>(),
   { width: 'md', closable: true }
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'close'): void }>()
-const { t } = useI18n()
+const t = useUiT()
+const titleId = useId()
+const panel = ref<HTMLElement>()
 
 const widths: Record<string, string> = {
   sm: 'max-w-sm',
@@ -25,39 +40,52 @@ const widths: Record<string, string> = {
   '2xl': 'max-w-6xl'
 }
 
+const dismissible = computed(() => props.closable && !props.persistent)
+
 function close() {
   emit('update:open', false)
   emit('close')
 }
 
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.open && props.closable && !props.persistent) close()
-}
-
-watch(
+const { depth } = useOverlayLayer(
   () => props.open,
-  (v) => {
-    if (v) window.addEventListener('keydown', onKey)
-    else window.removeEventListener('keydown', onKey)
-  },
-  { immediate: true }
+  panel,
+  () => {
+    if (dismissible.value) close()
+  }
 )
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+const z = computed(() => (props.top ? 60 : 50) + depth.value * 2)
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="s-modal">
-      <div v-if="open" class="modal-overlay" :style="top ? { zIndex: 60 } : undefined" @mousedown.self="!persistent && closable && close()">
-        <div class="modal-content flex flex-col" :class="widths[width]" role="dialog" aria-modal="true">
+      <div v-if="open" class="modal-overlay" :style="{ zIndex: z }" @mousedown.self="dismissible && close()">
+        <div
+          ref="panel"
+          class="modal-content flex flex-col"
+          :class="widths[width]"
+          role="dialog"
+          aria-modal="true"
+          tabindex="-1"
+          :aria-labelledby="title || $slots.header ? titleId : undefined"
+          :aria-describedby="describedby"
+        >
           <div v-if="title || $slots.header || closable" class="modal-header">
-            <slot name="header">
-              <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h3>
-            </slot>
-            <button v-if="closable" class="btn-ghost rounded-lg p-1.5" :aria-label="t('ui.close')" @click="close">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
-              </svg>
+            <div :id="titleId" class="min-w-0 flex-1">
+              <slot name="header">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h3>
+              </slot>
+            </div>
+            <button
+              v-if="closable"
+              type="button"
+              class="btn btn-ghost btn-sm w-8 shrink-0 px-0"
+              data-overlay-close
+              :aria-label="t('ui.close')"
+              @click="close"
+            >
+              <SIcon name="x" class="h-5 w-5" />
             </button>
           </div>
           <div class="modal-body flex-1 overflow-y-auto">

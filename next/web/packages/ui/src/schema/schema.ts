@@ -2,12 +2,24 @@
 //
 // uiSchema (per field; "ui:" prefix optional):
 //   ui:order        ["a", "b", "*"]       field order of an object ("*" = rest)
-//   ui:widget       secret | textarea | select | switch | number | url-presets |
-//                   key-value | model-mapping | tags | multi-select | object-list |
-//                   json | hidden | <any key of the `widgets` prop (host-provided
-//                   components, e.g. the console's proxy-select / group-select)>
+//   ui:widget       text | secret | textarea | select | segmented | radio | switch |
+//                   number | url-presets | key-value | model-mapping | tags |
+//                   multi-select | object-list | json | hidden | date-time | date |
+//                   time | <any key of the `widgets` prop or of the injected host
+//                   widgets (e.g. the console's proxy-select / group-select)>; an
+//                   unknown name falls back to the widget the schema type implies
+//                   (with a dev warning)
 //   ui:title        LocalizedText label           ui:help   LocalizedText hint
-//   ui:placeholder  LocalizedText                 ui:options {presets: [...], rows: n, ...}
+//   ui:details      LocalizedText longer explanation, collapsed behind "Details"
+//   ui:placeholder  LocalizedText
+//   ui:options      rows (textarea), mono (textarea / text: monospace), unit
+//                   (text after a number / text field), presets (url-presets),
+//                   keyPlaceholder / valuePlaceholder / keyLabel / valueLabel
+//                   (key-value, model-mapping), itemTitle (object-list:
+//                   LocalizedText, "{n}" = 1-based index), searchable (select:
+//                   true / false; default true from 10 options)
+//   ui:errorMessages {required|minLength|maxLength|pattern|format|minimum|maximum|
+//                   minItems|maxItems: LocalizedText} replaces the default messages
 //   ui:enumNames    [LocalizedText...] labels for enum values
 //   ui:visibleWhen  {field: "a.b", equals|notEquals|in|notIn|truthy|falsy}
 //                   or a plain map {"mode": "oauth"} (all must match)
@@ -111,9 +123,37 @@ export function enumOptions(s: JSONSchema, ui?: UISchema, locale = 'en'): EnumOp
   return null
 }
 
-export function resolveWidget(s: JSONSchema, ui?: UISchema): string {
+/** Widget names SchemaField renders itself. */
+export const BUILTIN_WIDGETS: readonly string[] = Object.freeze([
+  'text',
+  'secret',
+  'textarea',
+  'select',
+  'segmented',
+  'radio',
+  'switch',
+  'number',
+  'url-presets',
+  'key-value',
+  'model-mapping',
+  'tags',
+  'multi-select',
+  'object-list',
+  'object',
+  'json',
+  'hidden',
+  'date-time',
+  'date',
+  'time'
+])
+
+/**
+ * Widget for a field: ui:widget when set (and, when `known` is given, one of
+ * those names), else the one the schema implies.
+ */
+export function resolveWidget(s: JSONSchema, ui?: UISchema, known?: readonly string[]): string {
   const w = uiGet<string>(ui, 'widget')
-  if (w) return w
+  if (w && (!known || known.includes(w))) return w
   if (isSecret(s, ui)) return 'secret'
   const t = schemaType(s)
   if (enumOptions(s, ui) && t !== 'array') return 'select'
@@ -136,6 +176,7 @@ export function resolveWidget(s: JSONSchema, ui?: UISchema): string {
       return 'json'
     default:
       if (s.format === 'textarea' || (s.maxLength && s.maxLength > 500)) return 'textarea'
+      if (s.format === 'date-time' || s.format === 'date' || s.format === 'time') return s.format
       return 'text'
   }
 }
@@ -223,7 +264,17 @@ export interface ValidateMessages {
   maximum: (n: number) => string
   integer: string
   url: string
+  /** format: email (falls back to `pattern`). */
+  email?: string
+  /** Array minItems / maxItems (minItems falls back to `required`, maxItems to `pattern`). */
+  minItems?: (n: number) => string
+  maxItems?: (n: number) => string
+  /** Resolves ui:errorMessages entries (LocalizedText); default localizedText(v, 'en'). */
+  text?: (v: unknown) => string
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const URL_RE = /^https?:\/\/[^\s]+$/i
 
 /** Client-side validation of visible fields. Returns path -> message. */
 export function validate(s: JSONSchema, ui: UISchema | undefined, value: any, msgs: ValidateMessages, root = value, path = ''): Record<string, string> {
@@ -238,7 +289,7 @@ export function validate(s: JSONSchema, ui: UISchema | undefined, value: any, ms
       const p = path ? `${path}.${k}` : k
       const v = value?.[k]
       if (req.includes(k) && (isEmpty(v) || (schemaType(cs) === 'boolean' && v === undefined))) {
-        errs[p] = msgs.required
+        errs[p] = custom(cu, 'required', msgs) ?? msgs.required
         continue
       }
       Object.assign(errs, validate(cs, cu, v, msgs, root, p))
@@ -247,27 +298,39 @@ export function validate(s: JSONSchema, ui: UISchema | undefined, value: any, ms
   }
   if (isEmpty(value)) return errs
   if (t === 'string' && typeof value === 'string' && value !== SECRET_MASK) {
-    if (s.minLength && value.length < s.minLength) errs[path] = msgs.minLength(s.minLength)
-    else if (s.maxLength && value.length > s.maxLength) errs[path] = msgs.maxLength(s.maxLength)
-    else if (s.pattern) {
+    let patternOK = true
+    if (s.pattern) {
       try {
-        if (!new RegExp(s.pattern).test(value)) errs[path] = msgs.pattern
+        patternOK = new RegExp(s.pattern).test(value)
       } catch {
         /* invalid pattern in schema: skip */
       }
-    } else if ((s.format === 'uri' || s.format === 'url') && !/^https?:\/\/[^\s]+$/i.test(value)) errs[path] = msgs.url
+    }
+    if (s.minLength && value.length < s.minLength) errs[path] = custom(ui, 'minLength', msgs) ?? msgs.minLength(s.minLength)
+    else if (s.maxLength && value.length > s.maxLength) errs[path] = custom(ui, 'maxLength', msgs) ?? msgs.maxLength(s.maxLength)
+    else if (!patternOK) errs[path] = custom(ui, 'pattern', msgs) ?? msgs.pattern
+    else if ((s.format === 'uri' || s.format === 'url') && !URL_RE.test(value)) errs[path] = custom(ui, 'format', msgs) ?? msgs.url
+    else if (s.format === 'email' && !EMAIL_RE.test(value)) errs[path] = custom(ui, 'format', msgs) ?? msgs.email ?? msgs.pattern
   }
   if (t === 'number' || t === 'integer') {
     const n = Number(value)
     if (t === 'integer' && !Number.isInteger(n)) errs[path] = msgs.integer
-    else if (s.minimum !== undefined && n < s.minimum) errs[path] = msgs.minimum(s.minimum)
-    else if (s.maximum !== undefined && n > s.maximum) errs[path] = msgs.maximum(s.maximum)
+    else if (s.minimum !== undefined && n < s.minimum) errs[path] = custom(ui, 'minimum', msgs) ?? msgs.minimum(s.minimum)
+    else if (s.maximum !== undefined && n > s.maximum) errs[path] = custom(ui, 'maximum', msgs) ?? msgs.maximum(s.maximum)
   }
   if (t === 'array' && Array.isArray(value)) {
-    if (s.minItems && value.length < s.minItems) errs[path] = msgs.required
+    if (s.minItems && value.length < s.minItems) errs[path] = custom(ui, 'minItems', msgs) ?? (msgs.minItems ? msgs.minItems(s.minItems) : msgs.required)
+    else if (s.maxItems !== undefined && value.length > s.maxItems) errs[path] = custom(ui, 'maxItems', msgs) ?? (msgs.maxItems ? msgs.maxItems(s.maxItems) : msgs.pattern)
     if (s.items && schemaType(s.items) === 'object') {
       value.forEach((item, i) => Object.assign(errs, validate(s.items, childUI(ui, 'items'), item, msgs, root, `${path}.${i}`)))
     }
   }
   return errs
+}
+
+/** ui:errorMessages[kind] of a field, resolved, or undefined. */
+function custom(ui: UISchema | undefined, kind: string, msgs: ValidateMessages): string | undefined {
+  const m = uiGet<Record<string, unknown>>(ui, 'errorMessages')
+  if (!m || typeof m !== 'object' || m[kind] === undefined) return undefined
+  return msgs.text ? msgs.text(m[kind]) : localizedText(m[kind])
 }

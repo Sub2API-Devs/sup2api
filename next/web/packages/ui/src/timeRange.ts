@@ -1,4 +1,4 @@
-export type RangeKey = 'all' | 'today' | '7d' | '30d' | 'month' | 'custom'
+export type RangeKey = 'all' | '1h' | '24h' | 'today' | '7d' | '30d' | 'month' | 'custom'
 
 function startOfToday(): Date {
   const d = new Date()
@@ -12,10 +12,16 @@ function daysAgo(n: number): Date {
   return d
 }
 
-/** RFC 3339 bounds for a preset range ('' = open). */
+/** RFC 3339 bounds for a preset range ('' = open). 1h / 24h count back from now, the others from local midnight. */
 export function rangeBounds(key: RangeKey): { from: string; to: string } {
   let from: Date | null = null
   switch (key) {
+    case '1h':
+      from = new Date(Date.now() - 3600_000)
+      break
+    case '24h':
+      from = new Date(Date.now() - 24 * 3600_000)
+      break
     case 'today':
       from = startOfToday()
       break

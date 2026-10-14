@@ -1,9 +1,13 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ title?: string; subtitle?: string; padded?: boolean }>(), { padded: true })
+// Card (.card surface, the same one SSettingsGroup and STable card use).
+// Header shows `title` / #title, `subtitle` and #actions; #footer is a
+// bordered bar at the bottom. `padded` = false removes the body padding
+// (tables, lists). `variant` flat drops the shadow (cards inside cards).
+withDefaults(defineProps<{ title?: string; subtitle?: string; padded?: boolean; variant?: 'default' | 'flat' }>(), { padded: true, variant: 'default' })
 </script>
 
 <template>
-  <section class="card">
+  <section class="card" :class="variant === 'flat' ? '!shadow-none' : ''">
     <header v-if="title || $slots.title || $slots.actions" class="card-header flex items-center justify-between gap-3">
       <div class="min-w-0">
         <slot name="title">
@@ -16,5 +20,6 @@ withDefaults(defineProps<{ title?: string; subtitle?: string; padded?: boolean }
     <div :class="padded ? 'card-body' : ''">
       <slot />
     </div>
+    <footer v-if="$slots.footer" class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-5 py-3 dark:border-dark-700"><slot name="footer" /></footer>
   </section>
 </template>

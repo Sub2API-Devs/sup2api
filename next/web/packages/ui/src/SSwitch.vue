@@ -1,26 +1,74 @@
 <script setup lang="ts">
-// `describedby` names the element describing the switch (aria-describedby of its button).
-defineProps<{ modelValue: boolean; disabled?: boolean; label?: string; describedby?: string }>()
+// Toggle switch: a native <input type="checkbox" role="switch" class="switch">
+// (aria-checked mirrors `modelValue`), optionally followed by a text label.
+// inheritAttrs: false — class / style go to the outer element; id,
+// data-testid, aria-*, title, name and every other attr go to the <input>.
+// Click and Space toggle. `describedby` is aria-describedby of the input.
+// Inside SField / SSettingRow it takes the frame's id (so the row label is
+// its <label for>) and aria-describedby. The checked state is written back
+// to the DOM when the parent keeps the old value (controlled).
+import { computed, nextTick, ref, useAttrs } from 'vue'
+import { splitAttrs, useFieldControl, type ControlSize } from './field'
+
+defineOptions({ inheritAttrs: false })
+const props = withDefaults(
+  defineProps<{ modelValue: boolean; disabled?: boolean; label?: string; describedby?: string; ariaLabel?: string; size?: ControlSize; error?: boolean }>(),
+  { size: undefined }
+)
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
+const attrs = useAttrs()
+const { id, a11y, size } = useFieldControl(props)
+const input = ref<HTMLInputElement>()
+const parts = computed(() => splitAttrs(attrs, () => false))
+const describedBy = computed(() => [props.describedby, a11y.value['aria-describedby']].filter(Boolean).join(' ') || undefined)
+
+// Click (pointer, label, Space) emits the toggled value; the change event
+// that follows in a browser is then ignored. A change without a click
+// (setChecked in tests, form scripts) emits the new checked state.
+let clicked = false
+function writeBack() {
+  nextTick(() => {
+    if (input.value && input.value.checked !== !!props.modelValue) input.value.checked = !!props.modelValue
+  })
+}
+function onClick() {
+  if (props.disabled) return
+  clicked = true
+  Promise.resolve().then(() => (clicked = false))
+  emit('update:modelValue', !props.modelValue)
+  writeBack()
+}
+function onChange(e: Event) {
+  if (clicked) {
+    clicked = false
+    return
+  }
+  emit('update:modelValue', (e.target as HTMLInputElement).checked)
+  writeBack()
+}
 </script>
 
 <template>
-  <label class="inline-flex cursor-pointer items-center gap-2" :class="disabled ? 'cursor-not-allowed opacity-50' : ''">
-    <button
-      type="button"
+  <label
+    class="inline-flex items-center gap-2 align-middle"
+    :class="[disabled ? 'cursor-not-allowed' : 'cursor-pointer', parts.wrap.class]"
+    :style="parts.wrap.style as any"
+  >
+    <input
+      :id="id"
+      ref="input"
+      type="checkbox"
       role="switch"
-      :aria-checked="modelValue"
-      :aria-describedby="describedby"
+      class="switch"
+      :class="size === 'sm' ? 'switch-sm' : ''"
+      :checked="modelValue"
+      :aria-checked="modelValue ? 'true' : 'false'"
       :disabled="disabled"
-      class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-      :class="modelValue ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'"
-      @click="emit('update:modelValue', !modelValue)"
-    >
-      <span
-        class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-        :class="modelValue ? 'translate-x-4' : 'translate-x-0.5'"
-      />
-    </button>
-    <span v-if="label || $slots.default" class="text-sm text-gray-700 dark:text-gray-300"><slot>{{ label }}</slot></span>
+      v-bind="{ ...a11y, ...parts.control }"
+      :aria-describedby="describedBy"
+      @click="onClick"
+      @change="onChange"
+    />
+    <span v-if="label || $slots.default" class="text-sm text-gray-700 dark:text-gray-300" :class="disabled ? 'opacity-50' : ''"><slot>{{ label }}</slot></span>
   </label>
 </template>

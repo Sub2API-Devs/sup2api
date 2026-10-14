@@ -2,7 +2,9 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 // ECharts wrapper. echarts is loaded lazily so pages without charts don't
-// pay for it. The option is applied as-is; colors/text adapt to dark mode.
+// pay for it. The option is applied as-is; colors, text, axis lines and the
+// tooltip adapt to dark mode. The option is watched by reference: pass a new
+// object (a computed) to redraw, do not mutate it in place.
 const props = withDefaults(defineProps<{ option: Record<string, any>; height?: string; loading?: boolean }>(), {
   height: '280px'
 })
@@ -45,8 +47,14 @@ function themed(opt: Record<string, any>) {
     backgroundColor: 'transparent',
     textStyle: { color: text },
     grid: { left: 48, right: 16, top: 32, bottom: 32, containLabel: false },
-    tooltip: { trigger: 'axis' },
     ...opt,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: dark.value ? '#1e293b' : '#ffffff',
+      borderColor: line,
+      textStyle: { color: dark.value ? '#e2e8f0' : '#1f2937' },
+      ...(opt.tooltip || {})
+    },
     legend: opt.legend ? { textStyle: { color: text }, ...opt.legend } : undefined,
     xAxis: axis(opt.xAxis, text, line),
     yAxis: axis(opt.yAxis, text, line)
@@ -85,7 +93,7 @@ onMounted(() => {
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 })
 
-watch(() => [props.option, props.loading, dark.value], render, { deep: true })
+watch(() => [props.option, props.loading, dark.value], render)
 
 onBeforeUnmount(() => {
   ro?.disconnect()

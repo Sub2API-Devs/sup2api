@@ -62,8 +62,8 @@
 @layer components {
   /* Buttons and inputs use fixed height for alignment (UI-P1-1) */
   .btn {
-    @apply inline-flex h-control items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-medium;
-    @apply transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2;
+    @apply inline-flex h-control items-center justify-center gap-2 whitespace-nowrap rounded-control px-4 text-sm font-medium;
+    @apply transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-900;
     @apply disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
   }
   .btn-primary {
@@ -90,7 +90,7 @@
     @apply h-control-sm rounded-lg px-2.5 text-xs;
   }
   .btn-md {
-    @apply h-control rounded-xl px-4 text-sm;
+    @apply h-control rounded-control px-4 text-sm;
   }
   .btn-lg {
     @apply h-control-lg rounded-2xl px-6 text-base;
@@ -100,13 +100,14 @@
   }
 
   .input {
-    @apply h-control w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-fg;
+    @apply h-control w-full rounded-control border border-line bg-surface px-3.5 text-sm text-fg;
     @apply transition-colors duration-150 placeholder:text-fg-subtle;
     @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30;
     @apply disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-dark-900;
   }
-  /* Hover darkens the border of an enabled, unfocused control. */
-  .input:hover:not(:disabled):not(:focus) {
+  /* Hover darkens the border of an enabled, unfocused control (not one
+     showing an error: its red border stays). */
+  .input:hover:not(:disabled):not(:focus):not(:focus-within):not(.input-error) {
     border-color: rgb(var(--line-strong));
   }
   /* Same chevron in every browser instead of the native arrow. */
@@ -119,14 +120,33 @@
   select.input[multiple] {
     @apply bg-none pr-3.5;
   }
+  /* A textarea grows with its rows attribute (min 80px) instead of the
+     fixed control height. */
   textarea.input {
-    @apply min-h-[80px];
+    @apply h-auto min-h-[80px] py-2 leading-6;
+  }
+  textarea.input.input-sm {
+    @apply min-h-[64px] py-1.5 leading-5;
   }
   .input-sm {
     @apply h-control-sm rounded-lg px-2.5 text-xs;
   }
   .input-error {
-    @apply border-red-500 focus:border-red-500 focus:ring-red-500/30;
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500/30 focus-within:border-red-500 focus-within:ring-red-500/30;
+  }
+  /* A div framing an input with prefix / suffix content (SInput adornments,
+     STagInput): looks like .input, focus ring on focus-within. */
+  .input-group {
+    @apply flex h-control items-center gap-2 overflow-hidden focus-within:border-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-primary-500/30;
+  }
+  .input-group.input-sm {
+    @apply h-control-sm gap-1.5;
+  }
+  .input-group-disabled {
+    @apply cursor-not-allowed bg-gray-100 dark:bg-dark-900;
+  }
+  .input-group > input {
+    @apply h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-inherit placeholder:text-fg-subtle focus:outline-none focus:ring-0 disabled:cursor-not-allowed;
   }
   .input-label {
     @apply mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300;
@@ -147,6 +167,18 @@
   }
   .checkbox {
     @apply rounded-[0.3rem];
+  }
+  .checkbox-xs,
+  .radio-xs {
+    @apply h-3.5 w-3.5;
+  }
+  .checkbox-md,
+  .radio-md {
+    @apply h-5 w-5;
+  }
+  .checkbox.input-error,
+  .radio.input-error {
+    @apply border-red-500;
   }
   .radio {
     @apply rounded-full;
@@ -169,7 +201,8 @@
   .radio:checked {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
   }
-  /* A native checkbox drawn as a toggle switch (add role="switch"). */
+  /* A native checkbox drawn as a toggle switch (add role="switch"); also
+     works on a <button role="switch" aria-checked>. */
   .switch {
     @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-gray-300 bg-no-repeat transition-all duration-150 dark:bg-dark-600;
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-900;
@@ -178,9 +211,17 @@
     background-size: 1rem;
     background-position: left 0.125rem center;
   }
-  .switch:checked {
+  .switch:checked,
+  .switch[aria-checked='true'] {
     @apply bg-primary-500;
     background-position: right 0.125rem center;
+  }
+  .switch:hover:not(:disabled):not(:checked) {
+    @apply bg-gray-400/80 dark:bg-dark-500;
+  }
+  .switch-sm {
+    @apply h-4 w-7;
+    background-size: 0.75rem;
   }
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {
@@ -192,7 +233,7 @@
   }
 
   .card {
-    @apply rounded-2xl border border-gray-100 bg-white shadow-card dark:border-dark-700/50 dark:bg-dark-800/50;
+    @apply rounded-card border border-gray-100 bg-white shadow-card dark:border-dark-700/50 dark:bg-dark-800/50;
   }
   .card-header {
     @apply border-b border-gray-100 px-5 py-3.5 dark:border-dark-700;
@@ -294,22 +335,28 @@
   .badge-gray {
     @apply bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-300;
   }
-  .badge-accent {
+  /* purple is the older name of accent (SBadge tone="purple"). */
+  .badge-accent,
+  .badge-purple {
     @apply bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400;
+  }
+  .badge-xs {
+    @apply px-1.5 py-0 text-xxs;
   }
 
   .dropdown {
-    @apply z-[60] animate-scale-in rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-700 dark:bg-dark-800;
+    @apply z-popover animate-scale-in rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-700 dark:bg-dark-800;
   }
   .dropdown-item {
-    @apply flex cursor-pointer items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700;
+    @apply flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700;
+    @apply focus:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:focus:bg-dark-700;
   }
 
   .modal-overlay {
-    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 backdrop-blur-sm sm:p-4;
+    @apply fixed inset-0 z-overlay flex items-center justify-center bg-black/50 p-2 backdrop-blur-sm sm:p-4;
   }
   .modal-content {
-    @apply max-h-[95vh] w-full rounded-2xl border border-gray-200 bg-white shadow-2xl sm:max-h-[90vh] dark:border-dark-700 dark:bg-dark-800;
+    @apply max-h-[95vh] w-full rounded-card border border-gray-200 bg-white shadow-modal outline-none sm:max-h-[90vh] dark:border-dark-700 dark:bg-dark-800;
   }
   .modal-header {
     @apply flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-5 py-3.5 dark:border-dark-700;
