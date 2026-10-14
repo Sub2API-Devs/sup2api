@@ -3119,12 +3119,13 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 - `POST /admin/auth/complete {code, session_id?}` → `{success:true}`。带错 `session_id` 时返回 `session_not_found`，但保留当前会话。
 - `POST /admin/auth/cancel {session_id?}` → `{success:true}`，幂等；带错 `session_id` 也返回成功且不取消当前会话。
 - `POST /admin/auth/logout` → `{success:true}`。
+- `POST /admin/auth/refresh` → `{refreshed, expires_at}`：让容器里的 Claude Code 自己续期 OAuth 令牌（§49.21）。
 - `GET /admin/usage` → `{"windows":[{window,utilization,resets_at?,status?,used?,limit?}]}`。读容器凭证文件的 OAuth access token，调 Anthropic 用量接口（OAuth 模式的订阅限额，与 `claude-oauth` 插件查询同一端点），经容器的账号出口（Proxy SwitchyOmega 代理）。响应体格式：`window` 为窗口 key（如 `5h`、`7d`、`7d_fable`）；`utilization` 为百分比 0–100（供应商返回 0–1，转百分比）；`resets_at` 为 RFC3339 timestamp 或 null（未知）；`status` 为 `allowed`/`allowed_warning`/`rejected` 或空；`used`/`limit` 可选（与控制台"已用 / 总量"显示对应）。未登录 → 400 `not_logged_in`；令牌过期 → 400 `token_expired`（可先尝试用 CLI 刷新令牌再重试一次，不确定就别做）；上游失败 → 502 `upstream_error`。
-- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`、`not_logged_in`、`token_expired`、`token_revoked`、`upstream_error`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
+- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`、`not_logged_in`、`token_expired`、`token_revoked`、`auth_in_progress`、`refresh_failed`、`upstream_error`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
 
 控制器（`127.0.0.1:8787`）：
 
-- 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session` 和 `GET /accounts/<key>/admin/usage`。
+- 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`、`GET /accounts/<key>/admin/usage` 和 `POST /accounts/<key>/admin/auth/refresh`（控制器 ccgateway 0.1.53 起）。
 - `DELETE /accounts/<key>`：删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`。草稿 key 直接删；数字 key 只在请求头 `X-CCG-Delete-Account: <同一 key>` 时删除（§49.17 退役运行环境），否则 405 `method_not_allowed`。
 - `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
 - app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
@@ -3253,6 +3254,16 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **控制器**：只有 `direct` 为 `true` 且没有 `proxy` 时才直连；不带 `direct` 的旧核心发来空代理仍阻断。直连时 sing-box 出站为 `direct`（DNS 仍走 DoH 1.1.1.1，但不写 `detour`：sing-box 拒绝 detour 到空的 direct 出站而启动失败，`sing-box check` 却不报错；0.1.46 因此直连失败，0.1.47 修复），egress 的 output 链丢弃私有、回环、链路本地、组播与保留地址，只放行公网 IPv4 TCP；业务容器规则不变。连通性检查照常要求能访问探测地址。
 - **兼容顺序**：新核心 + 旧控制器时，无代理账号保持阻断（与以前一致）；先升控制器再依赖直连。
 - **控制台**：代理不再必填，提示直连使用服务器自身 IP；授权步骤中未选代理显示「直连（不使用代理）」。
+
+### 49.21 刷新令牌（2026-10-15，用户要求）
+
+起因：#29 额度查询失败（`token_expired`），容器里的 CLI 只在模型请求时续期令牌，账号闲置时令牌一直是过期状态。用户要求界面上由插件提供"刷新令牌"。
+
+- **只由 CLI 自己续期**：Worker `POST /admin/auth/refresh` 不调用令牌端点，也不动刷新锁；它启动 CLI（`-p --input-format stream-json`，与资源管理相同的 initialize 握手，没有模型请求），等 CLI 续期并写回凭证后关闭。CLI 只续期已过期或 5 分钟内到期的令牌；离到期还远的令牌原样保留，此时 `refreshed` 为 `false`。仅已验证的 CLI 2.1.292 / 2.1.296（运行时读 `claude --version`，CLI 可能已被更新）。
+- 应答：200 `{"refreshed": bool, "expires_at": RFC3339}`；400 `not_logged_in`（没有令牌）、`token_revoked`（没有刷新令牌）、`auth_in_progress`（有未结束的授权会话）、`refresh_failed`（CLI 没能续期，含 30 秒超时；反复失败需重新授权）。在登录锁内执行，与授权流程互斥。
+- **控制器**：放行 `POST /accounts/<key>/admin/auth/refresh`；API Key 账号 409 `api_key_account`。
+- **核心**：manifest `lifecycle.actions` 增加 `refresh_token`（"刷新令牌"，排在 `refresh_auth` "重新授权"之前），经 `POST /accounts/:id/actions/ccgateway/refresh_token` 调用（权限 `account:update`，审计 `account.action`），只支持一账号一容器模式；结果原样为 `{refreshed, expires_at}`，容器错误码放在 `details.reason`。
+- **控制台**：账号列表的行菜单列出插件声明的全部动作（读取账号 JSON 的 `actions`）；返回 `key` 的动作（重新授权草稿）打开编辑器继续，返回 `refreshed` 的动作提示新的到期时间并刷新额度，已知错误码显示中文说明。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 

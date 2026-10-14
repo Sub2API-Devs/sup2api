@@ -665,6 +665,8 @@ class HandlerTests(Base):
         self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
         self.assertEqual(self.call('POST', f'/accounts/{DRAFT_KEY}/admin/auth/cancel', '{}', headers={'X-CCG-Revision': REV})[0], 200)
         self.assertEqual(FakeSession.calls[-1][1], f'http://{state["app_ip"]}:8787/admin/auth/cancel')
+        self.assertEqual(self.call('POST', f'/accounts/{DRAFT_KEY}/admin/auth/refresh', '', headers={'X-CCG-Revision': REV})[0], 200)
+        self.assertEqual(FakeSession.calls[-1][:2], ('POST', f'http://{state["app_ip"]}:8787/admin/auth/refresh'))
         self.assertEqual(self.call('DELETE', path, headers={'X-CCG-Revision': REV}), (405, {'error': 'method_not_allowed'}))
 
     def test_request_logs_pass_through(self):

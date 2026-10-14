@@ -303,3 +303,37 @@ func asciiSnippet(b []byte) string {
 	}
 	return s
 }
+
+// refreshToken serves POST /admin/auth/refresh (CONTRACTS §49.21): Claude Code
+// renews its own stored OAuth token. The CLI is started without a model
+// request (the stream-json initialization of resource management) and renews
+// a token that expired or expires within five minutes; a token further from
+// its expiry is left alone. The gateway never calls the token endpoint itself
+// (a second refresher would race the CLI's refresh-token rotation).
+//
+// 200 {"refreshed": bool, "expires_at": time}; 400 not_logged_in,
+// token_revoked (no refresh token), auth_in_progress, refresh_failed.
+func (a *authManager) refreshToken(ctx context.Context) (Object, error) {
+	if a.pending() != nil {
+		return nil, authFail(codeAuthInProgress, "An authorization is in progress.")
+	}
+	env := a.environment()
+	stored := storedOAuthIn(env)
+	if stored.access == "" {
+		return nil, authFail(codeNotLoggedIn, "Claude Code is not signed in with a Claude account.")
+	}
+	if !stored.refreshable {
+		return nil, authFail(codeTokenRevoked, "No refresh token is stored; authorize the account again.")
+	}
+	before, err := resourceAuthorizationSource(env)
+	if err != nil || before.source != "stored_oauth" {
+		return nil, authFail(codeRefreshFailed, "The stored Claude Code authorization could not be verified.")
+	}
+	// Version is left empty: the CLI may have been updated since start-up.
+	runner := &Runner{CLI: a.cli, Work: a.work}
+	after, err := runner.initializeResourceAuthorization(ctx, env, before)
+	if err != nil {
+		return nil, authFail(codeRefreshFailed, "Claude Code could not renew the stored OAuth token: "+err.Error())
+	}
+	return Object{"refreshed": after.fingerprint != before.fingerprint, "expires_at": time.UnixMilli(int64(after.expiresAt)).UTC()}, nil
+}

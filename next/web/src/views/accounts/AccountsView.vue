@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SCode, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
-import type { Account, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
+import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -27,8 +27,9 @@ import LastTestCell from './AccountLastTest.vue'
 import { TEST_CONCURRENCY, lastTestOf } from './accountTest'
 import { runPool } from './pool'
 import { hasBalance, hasQuota, refreshAccountCredentials, resetAccountStatus, useBalanceRefresh, useQuotaRefresh } from './accountQuota'
+import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const auth = useAuthStore()
 const plugins = usePluginStore()
 const own = useOwnership()
@@ -459,12 +460,42 @@ async function remove(a: Account) {
   }
 }
 
+// Plugin-registered actions (CONTRACTS §52). An action that starts a
+// re-authorization answers the draft key: it continues in the editor. A token
+// refresh answers refreshed / expires_at.
+const runningActions = ref(new Set<number>())
+async function runPluginAction(a: Account, action: AccountAction) {
+  if (runningActions.value.has(a.id)) return
+  runningActions.value.add(a.id)
+  const name = lt(action.label) || action.id
+  toast(t('accounts.pluginActions.running', { name }), 'info')
+  try {
+    const out = await api.post<Record<string, unknown> | null>(`/accounts/${a.id}/actions/${encodeURIComponent(action.plugin_key)}/${encodeURIComponent(action.id)}`, {}, { signal: AbortSignal.timeout(95000) })
+    if (typeof out?.key === 'string') {
+      void openEdit(a)
+    } else if (typeof out?.refreshed === 'boolean') {
+      const time = typeof out.expires_at === 'string' ? formatDateTime(out.expires_at) : ''
+      toast(t(out.refreshed ? 'accounts.pluginActions.tokenRefreshed' : 'accounts.pluginActions.tokenValid', { time }), 'success')
+      if (hasQuota(a.quota)) void quotaRefresh.refresh(a.id, a.quota)
+    } else {
+      toast(t('accounts.pluginActions.done', { name }), 'success')
+    }
+  } catch (e) {
+    const key = `accounts.pluginActions.reason.${reasonOf(e)}`
+    if (reasonOf(e) && te(key)) toast(t(key), 'error')
+    else notifyError(e)
+  } finally {
+    runningActions.value.delete(a.id)
+  }
+}
+
 function actionsFor(a: Account) {
   return [
     { key: 'detail', label: t('common.detail') },
     { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !canReveal(a) || a.orphaned },
     { key: 'reset-status', label: t('accounts.resetStatus'), hidden: !canResetStatus(a) },
     { key: 'refresh-credentials', label: t('accounts.credRefresh.action'), hidden: !canRefreshCreds(a) },
+    ...(a.actions || []).map((x) => ({ key: `plugin:${x.plugin_key}:${x.id}`, label: lt(x.label) || x.id, hidden: !canUpdate(a) || a.orphaned || runningActions.value.has(a.id) })),
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !canDelete(a) }
   ]
 }
@@ -474,6 +505,10 @@ function onAction(a: Account, key: string) {
   else if (key === 'reveal') reveal(a)
   else if (key === 'reset-status') resetStatus(a)
   else if (key === 'refresh-credentials') refreshCreds(a)
+  else if (key.startsWith('plugin:')) {
+    const action = a.actions?.find((x) => `plugin:${x.plugin_key}:${x.id}` === key)
+    if (action) void runPluginAction(a, action)
+  }
   else if (key === 'delete') remove(a)
 }
 

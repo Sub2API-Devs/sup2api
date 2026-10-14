@@ -211,6 +211,22 @@ export default {
   resetStatusTitle: '重置账号状态',
   resetStatusConfirm: '确定清除账号「{name}」的禁用、错误原因与冷却并恢复正常状态？允许调度开关保持不变；若上游凭证仍失效或限流，账号可能再次自动禁用或冷却。',
   resetStatusDone: '账号状态已重置',
+  pluginActions: {
+    running: '正在执行「{name}」…',
+    done: '「{name}」已完成',
+    tokenRefreshed: '令牌已刷新，有效期至 {time}',
+    tokenValid: '令牌仍然有效（{time} 过期），Claude Code 只在临近过期时续期',
+    reason: {
+      not_logged_in: '容器里的 Claude Code 没有登录，请重新授权账号',
+      token_revoked: '令牌已失效且无法续期，请重新授权账号',
+      refresh_failed: 'Claude Code 没能续期令牌；如果反复失败，请重新授权账号',
+      auth_in_progress: '账号正在重新授权，请完成或取消后再刷新',
+      api_key_account: 'API Key 账号没有 OAuth 令牌',
+      not_synchronized: '容器尚未就绪，请稍候再试',
+      runtime_unavailable: '账号容器不可用',
+      not_configured: '账号容器运行环境未就绪'
+    }
+  },
   credRefresh: {
     label: '令牌',
     expiresAt: '{time} 过期',

@@ -135,6 +135,9 @@ func (s *Service) CancelAccountPreparation(ctx context.Context, p core.AccountPr
 }
 
 func (s *Service) AccountAction(ctx context.Context, id int64, action string) (any, error) {
+	if action == "refresh_token" {
+		return s.RefreshToken(ctx, id)
+	}
 	if action != "refresh_auth" {
 		return nil, core.ErrUnsupported
 	}

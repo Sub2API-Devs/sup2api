@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import { ref } from 'vue'
 import type { Account, AccountType } from '@/api/types'
 import { i18n } from '@/i18n'
+import { SDropdown } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
@@ -259,5 +260,40 @@ describe('account status recovery', () => {
     expect(list.items.value[0].status).toBe('disabled')
     expect(list.items.value[0].schedulable).toBe(false)
     expect(mocks.post).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugin account actions', () => {
+  const refreshToken = { id: 'refresh_token', label: { en: 'Refresh token', zh: '刷新令牌' }, plugin_key: 'ccgateway', account_type: 'managed' }
+  const reauthorize = { id: 'refresh_auth', label: { en: 'Refresh authorization', zh: '重新授权' }, plugin_key: 'ccgateway', account_type: 'managed' }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.canUpdate = true
+    i18n.global.locale.value = 'zh'
+    list.items.value = [{ id: 29, name: 'cc', status: 'active', schedulable: true, plugin_key: 'ccgateway', type: 'managed', orphaned: false, actions: [refreshToken, reauthorize] } as unknown as Account]
+  })
+  const dropdown = (w: ReturnType<typeof render>) => w.findComponent(SDropdown)
+
+  it('lists the plugin actions and reports a refreshed token', async () => {
+    mocks.post.mockResolvedValue({ refreshed: true, expires_at: '2026-10-15T20:04:00Z' })
+    const w = render()
+    const items = dropdown(w).props('actions') as Array<{ key: string; label: string; hidden?: boolean }>
+    expect(items.filter((x) => x.key.startsWith('plugin:') && !x.hidden).map((x) => x.label)).toEqual(['刷新令牌', '重新授权'])
+    dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/accounts/29/actions/ccgateway/refresh_token', {}, expect.anything())
+    expect(mocks.toast).toHaveBeenLastCalledWith(expect.stringContaining('令牌已刷新'), 'success')
+  })
+
+  it('translates a known refusal and hides actions from readers', async () => {
+    mocks.post.mockRejectedValue(Object.assign(new Error('refused'), { details: { reason: 'token_revoked' } }))
+    const w = render()
+    dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
+    await flushPromises()
+    expect(mocks.toast).toHaveBeenLastCalledWith('令牌已失效且无法续期，请重新授权账号', 'error')
+    expect(mocks.notifyError).not.toHaveBeenCalled()
+    mocks.canUpdate = false
+    const reader = render()
+    expect((dropdown(reader).props('actions') as Array<{ key: string; hidden?: boolean }>).filter((x) => x.key.startsWith('plugin:') && !x.hidden)).toEqual([])
   })
 })

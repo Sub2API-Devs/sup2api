@@ -118,7 +118,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 	}
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
-	admin := &authManager{cli: cli, key: o.AdminKey, proxy: proxy, version: version, requestLogs: g.RequestLogs, env: o.Env}
+	admin := &authManager{cli: cli, key: o.AdminKey, work: work, proxy: proxy, version: version, requestLogs: g.RequestLogs, env: o.Env}
 	admin.authorizationChanged = func() error { return g.ownershipIndex().rotateAuthorization() }
 	resources, err := newResourceBroker(g, admin, root)
 	if err != nil {

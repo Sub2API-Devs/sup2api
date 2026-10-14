@@ -27,6 +27,8 @@ const (
 	codeInvalidAuthURL     = "invalid_auth_url"
 	codeStatusUnavailable  = "status_unavailable"
 	codeLogoutFailed       = "logout_failed"
+	codeAuthInProgress     = "auth_in_progress"
+	codeRefreshFailed      = "refresh_failed"
 	authSessionLifetime    = 10 * time.Minute
 	authRequestBodyMaxSize = 8192
 )
@@ -57,6 +59,8 @@ type authManager struct {
 	// version is the CLI version (usage request user agent); usageURL
 	// overrides the Anthropic usage endpoint in tests.
 	version, usageURL string
+	// work is the directory the token refresh process runs in.
+	work string
 }
 
 // alive reports whether the login can still be completed.
@@ -297,6 +301,8 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = a.complete(ctx, w, r)
 	case "POST /admin/auth/cancel":
 		result, err = a.cancelSession(w, r)
+	case "POST /admin/auth/refresh":
+		result, err = a.refreshToken(ctx)
 	case "POST /admin/auth/logout":
 		a.end()
 		if a.authorizationChanged != nil {

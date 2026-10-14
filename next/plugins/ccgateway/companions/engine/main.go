@@ -604,7 +604,7 @@ func Serve() error {
 		relayHost = ip.String()
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
-	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs, authorizationChanged: func() error { return g.ownershipIndex().rotateAuthorization() }}
+	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), work: work, proxy: proxy, version: version, requestLogs: g.RequestLogs, authorizationChanged: func() error { return g.ownershipIndex().rotateAuthorization() }}
 	return g.listen(bind, admin, logDir)
 }
 

@@ -75,7 +75,7 @@ WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSigna
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout))))?)?')
+                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
 DECIMAL = re.compile(r'[0-9]{1,12}')

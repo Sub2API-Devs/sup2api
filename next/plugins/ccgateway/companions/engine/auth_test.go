@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -46,8 +47,13 @@ const peerState = "peer-state"
 
 // authPeer stands in for the Claude Code CLI (TestMain runs it when
 // CCG_TEST_AUTH_PEER is set). Modes: ok, badurl, init-reject, exit-after-link,
-// fail (auth status/logout exit 1).
+// fail (auth status/logout exit 1), refresh (initialization renews the stored
+// OAuth token, as the CLI does near its expiry), refresh-keep (it does not).
 func authPeer(mode string) {
+	if args := os.Args[1:]; len(args) == 1 && args[0] == "--version" {
+		_, _ = os.Stdout.WriteString("2.1.292 (Claude Code)\n")
+		return
+	}
 	if args := os.Args[1:]; len(args) >= 2 && args[0] == "auth" {
 		if mode == "fail" {
 			os.Exit(1)
@@ -71,6 +77,14 @@ func authPeer(mode string) {
 		case "initialize":
 			if mode == "init-reject" {
 				reply("error", nil)
+				continue
+			}
+			if strings.HasPrefix(mode, "refresh") {
+				config := os.Getenv("CLAUDE_CONFIG_DIR")
+				if mode == "refresh" {
+					_ = writePeerCredentials(config, "renewed-access", time.Now().Add(8*time.Hour))
+				}
+				reply("success", Object{"account": Object{"apiProvider": "firstParty", "tokenSource": "claude.ai"}, "user_output_styles_dir": filepath.Join(config, "output-styles")})
 				continue
 			}
 			reply("success", Object{})
@@ -351,4 +365,83 @@ func TestStatusAndLogout(t *testing.T) {
 	}
 	expectCode(t, authRequest(a, "GET", "/admin/status", "", "admin-key"), 400, codeStatusUnavailable)
 	expectCode(t, authRequest(a, "POST", "/admin/auth/logout", "", "admin-key"), 400, codeLogoutFailed)
+}
+
+func writePeerCredentials(config, access string, expires time.Time) error {
+	raw, _ := json.Marshal(Object{"claudeAiOauth": Object{"accessToken": access, "refreshToken": "fixture-refresh", "expiresAt": expires.UnixMilli(), "scopes": []string{"user:inference", "user:profile"}}})
+	return os.WriteFile(filepath.Join(config, ".credentials.json"), raw, 0600)
+}
+
+// POST /admin/auth/refresh lets the CLI renew the stored token: an expired
+// token is renewed, a valid one is left alone, a CLI that does not renew it
+// fails, and nothing runs without a refreshable sign-in.
+func TestAuthRefreshThroughCLI(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("file-backed stored OAuth is not supported on macOS")
+	}
+	exe, err := lifecycleTestExecutable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := func(mode string) (*authManager, string) {
+		config := t.TempDir()
+		env := []string{"HOME=" + config, "USERPROFILE=" + config, "CLAUDE_CONFIG_DIR=" + config, "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + config, "CCG_TEST_AUTH_PEER=" + mode}
+		for _, key := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT"} {
+			if value := os.Getenv(key); value != "" {
+				env = append(env, key+"="+value)
+			}
+		}
+		return &authManager{cli: exe, key: "admin-key", env: env, work: config}, config
+	}
+	decode := func(w *httptest.ResponseRecorder) Object {
+		t.Helper()
+		if w.Code != 200 {
+			t.Fatalf("refresh: %d %s", w.Code, w.Body.String())
+		}
+		out, err := decodeObject(w.Body.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	a, config := manager("refresh")
+	if err := writePeerCredentials(config, "expired-access", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	out := decode(authRequest(a, "POST", "/admin/auth/refresh", "", "admin-key"))
+	if out["refreshed"] != true || storedOAuthIn(a.environment()).access != "renewed-access" {
+		t.Fatalf("expired token not renewed: %v", out)
+	}
+	if expires, err := time.Parse(time.RFC3339, str(out, "expires_at")); err != nil || time.Until(expires) < 7*time.Hour {
+		t.Fatalf("expiry not reported: %v", out)
+	}
+
+	a, config = manager("refresh-keep")
+	if err := writePeerCredentials(config, "valid-access", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if out := decode(authRequest(a, "POST", "/admin/auth/refresh", "", "admin-key")); out["refreshed"] != false {
+		t.Fatalf("valid token reported as renewed: %v", out)
+	}
+
+	if err := writePeerCredentials(config, "expired-access", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := a.refreshToken(ctx); err == nil || err.(*authError).code != codeRefreshFailed {
+		t.Fatalf("unrenewed token: %v", err)
+	}
+
+	a, config = manager("refresh")
+	expectCode(t, authRequest(a, "POST", "/admin/auth/refresh", "", "admin-key"), 400, codeNotLoggedIn)
+	if err := os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"access","expiresAt":1}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	expectCode(t, authRequest(a, "POST", "/admin/auth/refresh", "", "admin-key"), 400, codeTokenRevoked)
+	a.session = &authSession{expires: time.Now().Add(time.Minute), cancel: func() {}}
+	expectCode(t, authRequest(a, "POST", "/admin/auth/refresh", "", "admin-key"), 400, codeAuthInProgress)
+	a.session = nil
+	expectCode(t, authRequest(a, "GET", "/admin/auth/refresh", "", "admin-key"), 404, "not_found_error")
 }

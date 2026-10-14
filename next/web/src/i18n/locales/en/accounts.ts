@@ -218,6 +218,22 @@ export default {
   resetStatusTitle: 'Reset account status',
   resetStatusConfirm: 'Restore "{name}" to active and clear its error reason and cooldown? The scheduling switch stays unchanged. If credentials are still invalid or upstream limits remain, the account may be automatically disabled or cooled down again.',
   resetStatusDone: 'Account status reset',
+  pluginActions: {
+    running: 'Running "{name}"…',
+    done: '"{name}" completed',
+    tokenRefreshed: 'Token refreshed, valid until {time}',
+    tokenValid: 'The token is still valid (expires {time}); Claude Code renews it only close to expiry',
+    reason: {
+      not_logged_in: 'Claude Code in the container is not signed in; authorize the account again',
+      token_revoked: 'The token is no longer valid and cannot be renewed; authorize the account again',
+      refresh_failed: 'Claude Code could not renew the token; if this keeps failing, authorize the account again',
+      auth_in_progress: 'The account is being re-authorized; finish or cancel that first',
+      api_key_account: 'API key accounts have no OAuth token',
+      not_synchronized: 'The container is not ready yet; try again shortly',
+      runtime_unavailable: 'The account container is unavailable',
+      not_configured: 'The account container environment is not ready'
+    }
+  },
   credRefresh: {
     label: 'Token',
     expiresAt: 'expires {time}',
