@@ -23,7 +23,7 @@ import {
   toast,
   type TableColumn
 } from '@sub2api/ui'
-import type { Proxy, ProxyTestResult } from '@/api/types'
+import type { Proxy, ProxyProbeResult, ProxyTestResult } from '@/api/types'
 import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
@@ -150,7 +150,7 @@ const hasStoredPassword = computed(() => !!editing.value?.has_password)
 const pasteUrl = ref('')
 const pasteError = ref('')
 const probing = ref(false)
-const probeResult = ref<{ ok: boolean; protocol?: string; ip?: string; location?: { country_code: string; timezone: string } } | null>(null)
+const probeResult = ref<ProxyProbeResult | null>(null)
 
 function applyPastedUrl() {
   pasteError.value = ''
@@ -174,45 +174,33 @@ function applyPastedUrl() {
   probeResult.value = null
 }
 
+/** POST /proxies/probe: tries the pasted proxy (socks5, http, then https without a scheme) and fills the form with the protocol that works. */
 async function probeProxy() {
   pasteError.value = ''
   probeResult.value = null
   const raw = pasteUrl.value.trim()
-  if (!raw) {
-    pasteError.value = t('proxies.pasteError.invalid')
-    return
-  }
+  if (!raw) return
   probing.value = true
   try {
-    const result = await api.post<any>('/proxies/probe', { proxy_url: raw })
-    probeResult.value = result
-    if (result.ok) {
-      // Auto-fill from probe result
-      const s = parseProxyURL(result.proxy_url || raw)
-      if (s.ok) {
-        form.protocol = s.spec.protocol
-        form.host = s.spec.host
-        form.port = s.spec.port
-        form.username = s.spec.username
-        form.password = s.spec.password
-        form.clearPassword = false
-        if (!form.name.trim()) form.name = `${s.spec.protocol}://${s.spec.host}:${s.spec.port}`.slice(0, 100)
-      }
-      // Auto-fill location if available (to be used for timezone and language)
-      if (result.location) {
-        // Store location for account editor to use
-        probeResult.value = result
-      }
-      errors.value = {}
-      pasteUrl.value = ''
-      const country = result.location?.country_code || 'unknown'
-      toast(t('proxies.probeSuccess', { country }), 'success')
-    } else {
-      pasteError.value = result.message || t('proxies.probeFailed', { error: 'unknown' })
+    const r = await api.post<ProxyProbeResult>('/proxies/probe', { proxy_url: raw })
+    if (!r.ok) {
+      const tried = r.attempts.map(a => `${a.protocol}: ${a.message || a.status || t('proxies.failed')}`).join('; ')
+      pasteError.value = t('proxies.probeFailed', { error: tried })
+      return
     }
+    const parsed = parseProxyURL(r.proxy_url || '')
+    if (parsed.ok) {
+      const s = parsed.spec
+      Object.assign(form, { protocol: s.protocol, host: s.host, port: s.port, username: s.username, password: s.password, clearPassword: false })
+      if (!form.name.trim()) form.name = `${s.protocol}://${s.host}:${s.port}`.slice(0, 100)
+    }
+    probeResult.value = r
+    errors.value = {}
+    pasteUrl.value = ''
+    toast(t('proxies.probeSuccess', { protocol: (r.protocol || '').toUpperCase(), country: r.location?.country_code || '—' }), 'success')
   } catch (e) {
-    notifyError(e)
-    pasteError.value = e instanceof Error ? e.message : String(e)
+    if (fieldErrors(e).proxy_url) pasteError.value = t('proxies.pasteError.invalid')
+    else notifyError(e)
   } finally {
     probing.value = false
   }
@@ -385,9 +373,10 @@ async function onAction(p: Proxy, key: string) {
             <SButton :disabled="!pasteUrl.trim() || probing" :loading="probing" data-testid="proxy-paste-probe" @click="probeProxy">{{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}</SButton>
             <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
           </div>
-          <div v-if="probeResult?.ok && probeResult.location" class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          <div v-if="probeResult?.ok" class="mt-2 text-xs text-gray-600 dark:text-gray-400">
             <SIcon name="check" class="inline h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            {{ probeResult.location.country_code }} · {{ probeResult.location.timezone }}
+            {{ String(probeResult.protocol).toUpperCase() }}<span v-if="probeResult.latency_ms"> · {{ probeResult.latency_ms }} ms</span>
+            <span v-if="probeResult.location"> · {{ [probeResult.location.country_code, probeResult.location.timezone].filter(Boolean).join(' · ') }}</span>
             <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <code class="font-mono">{{ probeResult.ip }}</code></span>
           </div>
         </SField>

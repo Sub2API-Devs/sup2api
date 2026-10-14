@@ -11,16 +11,10 @@ import (
 // can accept proxy_url without importing the proxy module: the scheme must be
 // http, https, socks5 or socks5h (recorded as socks5); host (lower-case, IPv6
 // brackets removed) and port (1-65535) are required; user info is
-// URL-decoded; a path other than "/", a query or a fragment is rejected.
-//
-// Also accepts triple-underscore-delimited credentials:
-//   https://user___extra___info:password@host:port
-// expands the username from "user___extra___info" to "user:extra:info" (turning
-// ___ back into :), useful when the username itself contains colons and URL
-// escaping is unwieldy. The result also passes the field rules of POST /proxies
-// (§15.4). Errors are invalid_argument with
-// details.fields[{field:"proxy_url", code:"invalid"}]; their messages never
-// echo the input, which may contain a password.
+// URL-decoded; a path other than "/", a query or a fragment is rejected. The
+// result also passes the field rules of POST /proxies (§15.4). Errors are
+// invalid_argument with details.fields[{field:"proxy_url", code:"invalid"}];
+// their messages never echo the input, which may contain a password.
 func ParseProxyURL(raw string) (ProxySpec, error) {
 	fail := func(reason string) (ProxySpec, error) {
 		return ProxySpec{}, InvalidFields(FieldError{
@@ -76,12 +70,6 @@ func ParseProxyURL(raw string) (ProxySpec, error) {
 	if u.User != nil {
 		spec.Username = u.User.Username()
 		spec.Password, _ = u.User.Password()
-		// Expand triple-underscore delimiters in username: user___extra___info
-		// becomes user:extra:info, useful when the username itself contains
-		// colons and URL escaping is unwieldy.
-		if strings.Contains(spec.Username, "___") {
-			spec.Username = strings.ReplaceAll(spec.Username, "___", ":")
-		}
 	}
 	if len(spec.Username) > 255 {
 		return fail("username is too long")

@@ -26,14 +26,15 @@ func TestProbeCandidates(t *testing.T) {
 	if err != nil || protocols(specs) != "https" {
 		t.Fatalf("url: %v %v", specs, err)
 	}
-	if s := specs[0]; s.Host != "host.clicodeplus.com" || s.Port != 8443 || s.Username != "erio:accel.ipflygates.com:5001:gXJTnq2rsQhI2i" || s.Password != "FgIkcAOi" {
+	if s := specs[0]; s.Host != "host.clicodeplus.com" || s.Port != 8443 || s.Username != "erio___accel.ipflygates.com___5001___gXJTnq2rsQhI2i" || s.Password != "FgIkcAOi" {
 		t.Fatalf("url spec: %+v", s)
 	}
 	// Without a scheme: socks5, then http, then https.
 	for raw, want := range map[string][3]string{
-		"1.2.3.4:5001:user:p:ss":            {"1.2.3.4", "user", "p:ss"},
-		"user:pa@ss@proxy.example.com:5001": {"proxy.example.com", "user", "pa@ss"},
-		" proxy.example.com:5001 ":          {"proxy.example.com", "", ""},
+		"1.2.3.4:5001:user:p:ss":                                {"1.2.3.4", "user", "p:ss"},
+		"user:pa@ss@proxy.example.com:5001":                     {"proxy.example.com", "user", "pa@ss"},
+		" proxy.example.com:5001 ":                              {"proxy.example.com", "", ""},
+		"proxy.example.com:5001:erio___a.example___5001___x:pw": {"proxy.example.com", "erio___a.example___5001___x", "pw"},
 	} {
 		specs, err := probeCandidates(raw)
 		if err != nil || protocols(specs) != "socks5,http,https" {

@@ -23,11 +23,11 @@ export default {
   exitIp: 'Exit IP',
   createdBy: 'Created by',
   pasteUrl: 'Paste a proxy URL to fill the form',
-  pasteUrlHint: "Supports http/https/socks5(h) or user:pass@host:port. Auto-tries http/https/socks5(h) when no protocol specified. Forbids addresses that resolve to private IPs, and the proxy server must deny connections to them. Service-provided country or timezone can auto-fill language and timezone below.",
+  pasteUrlHint: "scheme://user:pass{'@'}host:port, host:port:user:pass or user:pass{'@'}host:port. Without a scheme, socks5, http and https are tried in that order and the first that works is used. Test also detects the exit IP and its location; Fill only parses.",
   pasteFill: 'Fill',
   probeProxy: 'Test',
   probing: 'Testing...',
-  probeSuccess: 'Tested OK, country: {country}',
+  probeSuccess: 'Works over {protocol}, country {country}',
   probeFailed: 'Test failed: {error}',
   pasteError: {
     scheme: 'The scheme must be http, https, socks5 or socks5h',

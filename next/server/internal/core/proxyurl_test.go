@@ -11,9 +11,11 @@ func TestParseProxyURL(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "triple underscore expansion",
+			// Some providers put routing options in the username with "___":
+			// it is the literal username, sent as is.
+			name:     "triple underscore kept",
 			raw:      "https://erio___accel.ipflygates.com___5001___gXJTnq2rsQhI2i:FgIkcAOi@host.clicodeplus.com:8443",
-			wantUser: "erio:accel.ipflygates.com:5001:gXJTnq2rsQhI2i",
+			wantUser: "erio___accel.ipflygates.com___5001___gXJTnq2rsQhI2i",
 			wantPass: "FgIkcAOi",
 		},
 		{
