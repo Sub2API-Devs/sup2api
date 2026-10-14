@@ -1192,7 +1192,7 @@ type ProxyResolver interface {
 
 ### 23.3 `@sub2api/ui`
 
-组件都用控制台的全局样式类渲染，自动适配暗色（`<html class="dark">`）；`v-model` = `modelValue` + `update:modelValue`。`SConfirmHost`、`SToastHost` 由控制台挂载一次，插件不要再挂。
+组件都用控制台的全局样式类渲染，自动适配暗色（`<html class="dark">`）。2026-10-15 起 `SCheckbox`/`SRadio` 的方框与圆点、`SSelect` 的下拉箭头由控制台自绘（不再是浏览器原生样式），用法不变；`v-model` = `modelValue` + `update:modelValue`。`SConfirmHost`、`SToastHost` 由控制台挂载一次，插件不要再挂。
 
 | 组件 | 用途 | props（默认值） | emits / slots |
 |---|---|---|---|
@@ -1227,6 +1227,10 @@ type ProxyResolver interface {
 | `SCode` | 代码：块级 `<pre>`（`.code-block`）或行内 `<code>` | `inline`、`text`、`wrap`（true；false 时不折行、横向滚动） | slot 默认替代 `text` |
 | `SSectionTitle` | 小节标题（`.section-title`） | `title`、`tag`（`h3`/`h4`/`p`，h3） | slot 默认替代 `title`；slot `actions` 右对齐 |
 | `SHint` | 小号辅助文字 | `tone`（`muted`/`danger`/`success`/`warning`，muted）、`inline`（`<span>` 而非 `<p>`）、`size`（`xs`/`sm`，sm；`xs` = `text-xs`，原 `muted text-xs` / `text-[11px]` 都用它） | slot 默认 |
+| `SSettingsGroup` | 设置分组：带标题栏的圆角块，子项（`SSettingRow`）之间分隔线（2026-10-15） | `title`、`description` | slots 默认、`title`、`actions`、`details`（整组的长说明，收在「查看说明」后）；其他 attrs 落到根 `<section>` |
+| `SSettingRow` | 一项设置：左侧标题与一句说明，右侧控件（窄屏换到下方）（2026-10-15） | `label`、`description`、`stacked`（控件始终在下方，宽控件用）、`dense`（只有标题和小控件的行）、`for`（标题渲染成 `<label for>`） | slots 默认（控件）、`label`、`description`、`details`（长说明，默认收起）；其他 attrs 落到根 |
+| `SSegmented` | 分段选择：两三个选项并排，选中项浮起（底层是同名单选组，方向键切换）（2026-10-15） | `modelValue: SelectOption['value']`、`options: SelectOption[]`（必填）、`name`、`disabled`、`size`（`sm`/`md`，md；md 与输入框同高）、`block`（撑满宽度）、`ariaLabel` | emits `update:modelValue`（值保持原类型；每个 radio 的 `value` 属性为 `String(value)`）；其他 attrs 落到根 |
+| `SDisclosure` | 折叠说明：小号「查看说明 / 收起说明」按钮 + 默认收起的说明块（2026-10-15） | `label`（替代「查看说明」） | slot 默认为说明内容 |
 
 `STimeRange` 的辅助导出：`type RangeKey = 'all' \| 'today' \| '7d' \| '30d' \| 'month' \| 'custom'`、`rangeBounds(key) → {from, to}`（本地零点起算的 RFC 3339，`''` = 不限）、`toLocalInput(rfc3339)` / `fromLocalInput(local)`（与 `<input type="datetime-local">` 互转）、`dayKey(v) → 'YYYY-MM-DD'`（本地日）。
 
@@ -1246,7 +1250,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 | `toast(message, kind = 'info', timeoutMs?)` | 右上角提示；`error` 默认 6000ms，其余 3500ms。与 `host.toast` 同一实现 |
 | `confirm(opts: ConfirmOptions) → Promise<boolean>` | 确认弹窗；新的 `confirm` 会把上一个未决的按 `false` 结束。与 `host.confirm` 同一实现 |
 | `toastState`、`confirmState`、`dismissToast`、`settleConfirm` | 宿主组件用，插件不要碰 |
-| `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间（`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.prev` `ui.next` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` 及 `STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`）；插件可用 `host.i18n.t('ui.cancel')` 复用 |
+| `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间（`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.prev` `ui.next` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` 及 `STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`、`SDisclosure` 用的 `ui.moreDetails` `ui.lessDetails`）；插件可用 `host.i18n.t('ui.cancel')` 复用 |
 
 类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?}`、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?}`、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'info'`。
 
