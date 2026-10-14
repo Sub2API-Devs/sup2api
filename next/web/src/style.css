@@ -105,8 +105,19 @@
     @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30;
     @apply disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-dark-900;
   }
+  /* Hover darkens the border of an enabled, unfocused control. */
+  .input:hover:not(:disabled):not(:focus) {
+    border-color: rgb(var(--line-strong));
+  }
+  /* Same chevron in every browser instead of the native arrow. */
   select.input {
-    @apply pr-8;
+    @apply cursor-pointer appearance-none bg-no-repeat pr-9 disabled:cursor-not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-position: right 0.625rem center;
+    background-size: 1.125rem;
+  }
+  select.input[multiple] {
+    @apply bg-none pr-3.5;
   }
   textarea.input {
     @apply min-h-[80px];
@@ -121,16 +132,55 @@
     @apply mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300;
   }
   .input-hint {
-    @apply mt-1 text-xs text-gray-500 dark:text-dark-400;
+    @apply mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400;
   }
   .input-error-text {
     @apply mt-1 text-xs text-red-500;
   }
+  /* Drawn checkbox and radio (no forms plugin): the same look in every
+     browser and theme, primary when checked. */
+  .checkbox,
+  .radio {
+    @apply h-4 w-4 shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface bg-center bg-no-repeat align-middle transition-colors duration-150;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-900;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
   .checkbox {
-    @apply h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-800;
+    @apply rounded-[0.3rem];
   }
   .radio {
-    @apply h-4 w-4 rounded-full border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-800;
+    @apply rounded-full;
+  }
+  .checkbox:hover:not(:disabled):not(:checked),
+  .radio:hover:not(:disabled):not(:checked) {
+    @apply border-primary-400;
+  }
+  .checkbox:checked,
+  .checkbox:indeterminate,
+  .radio:checked {
+    @apply border-primary-500 bg-primary-500;
+  }
+  .checkbox:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 8.5 2.5 2.5L12 5.5'/%3E%3C/svg%3E");
+  }
+  .checkbox:indeterminate {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.25' stroke-linecap='round'%3E%3Cpath d='M4.5 8h7'/%3E%3C/svg%3E");
+  }
+  .radio:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
+  }
+  /* A native checkbox drawn as a toggle switch (add role="switch"). */
+  .switch {
+    @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-gray-300 bg-no-repeat transition-all duration-150 dark:bg-dark-600;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-900;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='white'/%3E%3C/svg%3E");
+    background-size: 1rem;
+    background-position: left 0.125rem center;
+  }
+  .switch:checked {
+    @apply bg-primary-500;
+    background-position: right 0.125rem center;
   }
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {

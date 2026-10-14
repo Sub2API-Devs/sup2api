@@ -19,6 +19,8 @@ export default {
   policy: {
     toolSearch: 'Tool search and deferred loading',
     customToolPrefix: 'MCP server prefix for custom tools',
+    customToolPrefixShort: "The MCP server name the client's custom tools get inside the Worker; native tools are not affected. Leave blank for the default.",
+    customToolPrefixExample: 'Tool name example',
     customToolPrefixHint: 'Defaults to ccgateway; leave blank to reset. Saved settings are sent to the Worker on every request. Only ordinary custom tools are affected; native tools and existing MCP names stay unchanged. Use 1–32 letters, digits, underscores or hyphens, without double underscores. Changing the prefix reloads history using the new names.',
     toolSearchHint:
       'Recognizes tools[].defer_loading and the tool-search beta. Claude Code discovers definitions internally; clients execute their tools. Up to 3 discovery calls are included in usage.',
@@ -28,9 +30,11 @@ export default {
     search_auto: 'Enable automatically based on context usage',
     fallbackTitle: 'Handling unsupported requests',
     thinkingDisabledCompat: 'Compatibility for models that reject thinking disabled',
+    thinkingDisabledCompatShort: 'When a rewritten model still receives thinking disabled from the client, omit thinking for models that reject it. Off by default: like the official API, such requests return 400.',
     thinkingDisabledCompatHint:
       'Use only when the model is rewritten and the client still sends disabled: for example cc-switch rewrites claude-opus-5 to claude-opus-5-5, and requests such as the Claude Code auto-mode classifier still carry thinking.type: disabled, which the verified models claude-opus-5-5 and claude-fable-5-1 reject. When enabled, thinking is omitted for these models during native CLI execution (as the official CLI sends them; it is not changed to adaptive). Off by default: like the official API, such requests return 400. The more thorough fix is to set the local model alias to the actual model.',
     attachments: 'Client attachments',
+    attachmentsShort: "Client keeps the client's text; Server uses the text Claude Code renders on the Worker; Erase removes it.",
     attachmentsHint:
       "For each attachment type choose Client (the client's text, default), Server (the text Claude Code itself renders on that Worker) or Erase. Server replaces in place and leaves the surrounding text untouched; the client's environment updates (directory changes) and date changes have no server counterpart and are erased; an attachment the Worker does not produce (such as a session context without CLAUDE.md, git or email) is removed. The server text is rendered once when the Worker first needs it (without reaching upstream) and stays the same while the Worker runs (the date follows the Worker's day and renders again the next day). Attachments are recognized by the whole paragraph Claude Code renders, so mentions in other text are untouched, and a user message is never emptied. Only the Claude Code 2.1.288–2.1.296 format is recognized; erasing needs ccgateway plugin 0.1.48 or later, Server 0.1.49 or later, and Server for the date and session context 0.1.54 or later.",
     attachmentAction_keep: 'Client',

@@ -19,6 +19,8 @@ export default {
   policy: {
     toolSearch: '工具搜索与延迟加载',
     customToolPrefix: '普通工具 MCP 服务名前缀',
+    customToolPrefixShort: '客户端自定义工具在 Worker 里注册成的 MCP 服务名，原生工具不受影响。留空恢复默认。',
+    customToolPrefixExample: '工具名示例',
     customToolPrefixHint: '默认 ccgateway，留空恢复默认。保存后随每次请求发送给 Worker，仅影响普通自定义工具；原生工具和已有 MCP 名称不变。允许 1–32 位字母、数字、下划线或短横线，不支持连续两个下划线。更改后历史会按新前缀重新加载。',
     toolSearchHint:
       '识别 tools[].defer_loading 或工具搜索 Beta。Claude Code 仅内部检索工具定义，实际工具仍由 API 客户端执行。最多检索 3 次，响应包含这些额外调用的用量。',
@@ -28,9 +30,11 @@ export default {
     search_auto: '根据工具占用上下文自动启用',
     fallbackTitle: '不支持的请求如何处理',
     thinkingDisabledCompat: '兼容不支持 thinking disabled 的模型',
+    thinkingDisabledCompatShort: '模型被改写后客户端仍发送 thinking disabled 时，对不接受它的模型不传 thinking。默认关闭，与官方 API 一样返回 400。',
     thinkingDisabledCompatHint:
       '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后在原生 CLI 执行时对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive）。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
     attachments: '客户端附件',
+    attachmentsShort: '客户端：保留客户端原文；服务端：换成 Worker 上 Claude Code 自己的文字；擦除：直接去掉。',
     attachmentsHint:
       '每类附件可选：客户端（保留客户端原文，默认）、服务端（换成该 Worker 上 Claude Code 自己渲染的文字）或擦除。服务端在原位置替换，前后文字不动；客户端的“环境更新”（切换目录）和“日期变更”在服务端没有对应文字，一并擦除；Worker 不产生的附件（如没有 CLAUDE.md、git、邮箱时的会话上下文）直接去掉。服务端文字在 Worker 首次用到时渲染一次（不访问上游），Worker 运行期间不变（日期按 Worker 当天，次日重新渲染）。按 Claude Code 渲染的整段文字识别，正文中的提及不受影响；不会把用户消息擦空。仅识别 Claude Code 2.1.288–2.1.296 的格式；擦除需 ccgateway 插件 0.1.48 起，服务端需 0.1.49 起，日期与会话上下文的服务端需 0.1.54 起。',
     attachmentAction_keep: '客户端',

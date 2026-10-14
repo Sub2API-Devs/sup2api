@@ -52,8 +52,8 @@ describe('CCGateway settings categories and CC features', () => {
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
-    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'unsupported-requests'])
-    for (const id of ['tool-search', 'custom-tool-prefix', 'unknown-field-reject']) {
+    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'client-attachments', 'unsupported-requests'])
+    for (const id of ['tool-search', 'custom-tool-prefix', 'unknown-field']) {
       expect(cc.get(`[data-testid="${id}"]`).isVisible()).toBe(true)
     }
     expect(cc.text()).toContain('工具与错误处理')
@@ -93,8 +93,8 @@ describe('CCGateway settings categories and CC features', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    expect(w.get<HTMLInputElement>('[data-testid="unknown-field-reject"] input').element.checked).toBe(true)
-    await w.get('[data-testid="unknown-field-ignore"] input').setValue(true)
+    expect(w.get<HTMLInputElement>('[data-testid="unknown-field"] input[value="reject"]').element.checked).toBe(true)
+    await w.get('[data-testid="unknown-field"] input[value="ignore"]').setValue(true)
     await w.get('[data-testid="settings-tab-network"]').trigger('click')
     await w.get('[data-testid="network-allocation"]').setValue('sequential')
     const next = { ...defaultRequestPolicy(), unknown_field: 'ignore' as const }
@@ -225,34 +225,36 @@ describe('CCGateway native request policy', () => {
     mocks.get.mockResolvedValue(config({}))
     mocks.put.mockImplementation(async (_url: string, body: { request_policy: RequestPolicy }) => config(body.request_policy))
     const w = await render()
+    const choose = (type: string, action: string) => w.get(`[data-testid="client-attachment-${type}"] input[value="${action}"]`).setValue(true)
+    const chosen = (type: string) => w.get<HTMLInputElement>(`[data-testid="client-attachment-${type}"] input:checked`).element.value
     for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
-      expect(w.get<HTMLSelectElement>(`[data-testid="client-attachment-${type}"]`).element.value).toBe('keep')
+      expect(chosen(type)).toBe('keep')
     }
     // Every type offers client, server and erase.
-    const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('option').map(o => o.element.text)
+    const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('label').map(o => o.text())
     for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
       expect(options(type)).toEqual(['客户端', '服务端', '擦除'])
     }
-    await w.get('[data-testid="client-attachment-session_context"]').setValue('gateway')
-    await w.get('[data-testid="client-attachment-session_context"]').setValue('erase')
-    await w.get('[data-testid="client-attachment-total_tokens_reminder"]').setValue('gateway')
-    await w.get('[data-testid="client-attachment-model"]').setValue('erase')
-    await w.get('[data-testid="client-attachment-environment"]').setValue('gateway')
-    await w.get('[data-testid="client-attachment-date"]').setValue('erase')
+    await choose('session_context', 'gateway')
+    await choose('session_context', 'erase')
+    await choose('total_tokens_reminder', 'gateway')
+    await choose('model', 'erase')
+    await choose('environment', 'gateway')
+    await choose('date', 'erase')
     // A type moves between the lists rather than appearing in both.
-    await w.get('[data-testid="client-attachment-model"]').setValue('gateway')
+    await choose('model', 'gateway')
     await w.get('form').trigger('submit')
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.erase_client_attachments).toEqual(['date', 'session_context'])
     expect(payload.request_policy.replace_client_attachments).toEqual(['environment', 'model', 'total_tokens_reminder'])
-    expect(w.get<HTMLSelectElement>('[data-testid="client-attachment-model"]').element.value).toBe('gateway')
-    expect(w.get<HTMLSelectElement>('[data-testid="client-attachment-date"]').element.value).toBe('erase')
-    await w.get('[data-testid="client-attachment-model"]').setValue('keep')
+    expect(chosen('model')).toBe('gateway')
+    expect(chosen('date')).toBe('erase')
+    await choose('model', 'keep')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect((mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy.replace_client_attachments).toEqual(['environment', 'total_tokens_reminder'])
-    await w.get('[data-testid="client-attachment-date"]').setValue('gateway')
+    await choose('date', 'gateway')
     await w.get('form').trigger('submit')
     await flushPromises()
     const last = (mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy

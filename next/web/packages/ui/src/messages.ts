@@ -25,6 +25,8 @@ export default {
     custom: 'Custom',
     from: 'From',
     to: 'To',
+    moreDetails: 'Details',
+    lessDetails: 'Hide details',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: 'A value is stored. Leave empty to keep it.',
@@ -71,6 +73,8 @@ export default {
     custom: '自定义',
     from: '开始',
     to: '结束',
+    moreDetails: '查看说明',
+    lessDetails: '收起说明',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: '已保存值，留空表示不修改。',
