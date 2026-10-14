@@ -74,7 +74,7 @@ export default {
     title: 'Claude authorization',
     steps: { proxy: 'Choose a proxy', container: 'Start the account container', login: 'Copy the link and sign in to Claude', code: 'Paste the authorization code', done: 'Credentials saved' },
     proxyHint: 'Pick an existing proxy under "Proxy" above first: the account container reaches the internet only through it.',
-    proxyChosen: 'Proxy: {name}', proxyUpdating: 'Switching the container to the new proxy…', draftProxyHint: 'Starting the container before saving needs an existing proxy; to use a new proxy address, add it on the Proxies page first.',
+    proxyChosen: 'Proxy: {name}', proxyUpdating: 'Switching the container to the new proxy…', draftProxyHint: 'Starting the container before saving needs a saved proxy: pick one, or paste a proxy and click Test; a working proxy is saved and selected.',
     startContainer: 'Start the container', startHint: 'Creates this new account’s own container on the Docker host (the account is not saved yet). It can be saved once authorized; abandoning the entry deletes the container.',
     creating: 'Creating the account container…', createFailed: 'The account container could not be created', proxyFailed: 'The container could not be switched to the new proxy', restart: 'Delete the container and start over', badDraft: 'The service returned an invalid container key',
     containerStarting: 'Starting the account container…', containerPreparing: 'Container {name}: {status}; checking every 2 seconds…', containerReady: 'Container {name} is ready', containerError: 'The container reports an error ({status}); synchronize again and retry.',
@@ -402,5 +402,5 @@ export default {
   environmentLoading: 'Looking up the proxy exit IP location. Manual changes will be available when this finishes…',
   environmentFilled: 'Prefilled from proxy exit IP ({ip}). You can change these values; selecting another proxy fills them again.',
   environmentFailed: 'Could not fully resolve the proxy location. Select the locale and timezone manually or keep container defaults.',
-  environmentProxyURL: 'This pasted proxy has not been saved. Select values manually, or save it in proxy management and select it to look up its location.',
+  environmentProxyURL: 'Click Test to fill the locale and timezone from the proxy exit, or select them manually.',
 }

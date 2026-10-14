@@ -191,10 +191,11 @@ export interface ProxyTestResult {
   message?: string
 }
 
+/** The exit IP's location (GET /proxies/:id/location, POST /proxies/probe). */
 export interface ProxyLocation {
+  ip: string
+  country_code: string
   timezone: string
-  locale: string
-  country_code?: string
 }
 
 export interface ProxyProbeAttempt {

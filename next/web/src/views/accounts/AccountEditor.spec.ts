@@ -136,6 +136,36 @@ describe('account container environment', () => {
     expect(mocks.get.mock.calls.filter(([path]) => path.endsWith('/location'))).toHaveLength(2)
   })
 
+  it('tests a pasted proxy for a new Claude Code account, then selects it and fills its location', async () => {
+    const w = render()
+    await w.setProps({ accountType: { ...accountType, type: 'managed' } })
+    await flushPromises()
+    const tokyo = { ip: '1.2.3.4', country_code: 'JP', timezone: 'Asia/Tokyo' }
+    mocks.post.mockResolvedValueOnce({ ok: true, protocol: 'http', ip: '1.2.3.4', proxy_url: 'http://u___x:p@h:8443', proxy_id: 42, proxy_created: true, location: tokyo, attempts: [] })
+    await w.get('[data-testid="proxy-mode-url"]').trigger('click')
+    await w.get('[data-testid="proxy-url"]').setValue('h:8443:u___x:p')
+    await w.get('[data-testid="proxy-url"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/proxies/probe', { proxy_url: 'h:8443:u___x:p', save: true })
+    expect(w.getComponent(ProxyPicker).props('modelValue')).toBe(42)
+    expect(w.getComponent(CCGatewayAccountAuth).props('proxyId')).toBe(42)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    expect(value(w, 'timezone')).toBe('Asia/Tokyo')
+    expect(w.get('[data-testid="proxy-probe-result"]').text()).toContain('#42')
+    expect(mocks.get.mock.calls.some(([path]) => path.endsWith('/location'))).toBe(false)
+  })
+
+  it('keeps a pasted proxy that does not work and lists every protocol tried', async () => {
+    const w = render()
+    mocks.post.mockResolvedValueOnce({ ok: false, attempts: [{ protocol: 'socks5', ok: false, latency_ms: 1, message: 'refused' }, { protocol: 'http', ok: false, latency_ms: 1, status: 407 }], proxy_created: false })
+    await w.get('[data-testid="proxy-mode-url"]').trigger('click')
+    await w.get('[data-testid="proxy-url"]').setValue('h:1:u:p')
+    await w.get('[data-testid="proxy-url"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(w.find('[data-testid="proxy-url"]').exists()).toBe(true)
+    expect(w.text()).toContain('socks5: refused; http: 407')
+  })
+
   it('restores saved values without probing when a refresh discards an unsaved proxy change', async () => {
     const w = render(savedAccount())
     await chooseProxy(w, 20)

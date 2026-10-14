@@ -74,7 +74,7 @@ export default {
     title: 'Claude 授权',
     steps: { proxy: '选择代理', container: '启动账号容器', login: '复制链接登录 Claude', code: '粘贴授权码', done: '凭据已保存' },
     proxyHint: '先在上方「代理」中选择一个已有代理：账号容器只能经这个代理出网。',
-    proxyChosen: '代理：{name}', proxyUpdating: '正在为容器切换代理…', draftProxyHint: '授权前启动容器只能使用已有代理；要用新的代理地址，请先到代理页添加。',
+    proxyChosen: '代理：{name}', proxyUpdating: '正在为容器切换代理…', draftProxyHint: '授权前启动容器需要一个已保存的代理：可直接选择，或粘贴代理串点「测试」，测试通过会自动保存并选中。',
     startContainer: '启动容器', startHint: '会在 Docker 主机上为这个新账号创建独立容器（账号此时尚未保存）。授权完成后才能保存；放弃录入时容器会被删除。',
     creating: '正在创建账号容器…', createFailed: '无法创建账号容器', proxyFailed: '无法为容器切换代理', restart: '删除容器并重新开始', badDraft: '服务返回的容器标识无效',
     containerStarting: '正在启动账号容器…', containerPreparing: '容器 {name}：{status}，每 2 秒检查一次…', containerReady: '容器 {name} 已就绪', containerError: '容器状态异常（{status}），可重新同步后重试。',
@@ -402,5 +402,5 @@ export default {
   environmentLoading: '正在查询代理出口 IP 地区，完成后可手动修改语言和时区…',
   environmentFilled: '已根据代理出口 IP（{ip}）预填，可手动修改；更换代理将重新预填。',
   environmentFailed: '未能完整获取代理地区信息，请手动选择语言和时区，或保留容器默认值。',
-  environmentProxyURL: '粘贴的代理尚未保存，暂不自动查询地区。请手动选择，或先在代理管理中保存后选择该代理。',
+  environmentProxyURL: '点「测试」后按代理出口自动填写语言和时区；也可手动选择。',
 }

@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SchemaForm, SField, SHint, SIcon, SInput, SLink, SModal, SSelect, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
-import type { Account, AccountType, Price } from '@/api/types'
+import type { Account, AccountType, Price, ProxyProbeResult } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
@@ -137,7 +137,7 @@ const basic = reactive({
 })
 
 // CCGateway-specific settings (locale and timezone)
-const { settings: ccgSettings, locationLoading, locationStatus, locationIP, resetEnvironment, prefillEnvironment } = useContainerEnvironment()
+const { settings: ccgSettings, locationLoading, locationStatus, locationIP, resetEnvironment, prefillEnvironment, fillFromLocation } = useContainerEnvironment()
 const localeOptions = computed(() => environmentOptions(containerLocales, ccgSettings.locale, displayLocale.value))
 const timezoneOptions = computed(() => environmentOptions(containerTimezones, ccgSettings.timezone))
 
@@ -147,10 +147,11 @@ const timezoneOptions = computed(() => environmentOptions(containerTimezones, cc
 type ProxyMode = 'existing' | 'url'
 const proxyMode = ref<ProxyMode>('existing')
 const proxyUrl = ref('')
+// A new Claude Code account starts its draft container with an existing proxy
+// (POST drafts {proxy_id}): a pasted one is tested and saved first (probeProxyUrl).
 const proxyModeTabs = computed(() => [
   { key: 'existing', label: t('accounts.proxyPickExisting') },
-  // A new Claude Code account starts its draft container with an existing proxy (POST drafts {proxy_id}).
-  ...(ccgDraft.value ? [] : [{ key: 'url', label: t('accounts.proxyPasteUrl') }])
+  { key: 'url', label: t('accounts.proxyPasteUrl') }
 ])
 /** The proxy_url that will be sent, or '' (existing mode / empty input). */
 const proxyUrlToSend = computed(() => (proxyMode.value === 'url' ? proxyUrl.value.trim() : ''))
@@ -160,7 +161,8 @@ const proxyUrlHint = computed(() => {
   if (!raw) return ''
   const r = parseProxyURL(raw)
   if (r.ok) return ''
-  if (r.error === 'scheme') return looksLikeProxyURL(raw) ? t('accounts.proxyUrlSchemeHint') : t('accounts.proxyUrlShapeHint')
+  // host:port:user:pass and user:pass@host:port have no scheme: the test detects it.
+  if (r.error === 'scheme') return looksLikeProxyURL(raw) ? t('accounts.proxyUrlSchemeHint') : t('accounts.proxyUrlProbeHint')
   if (r.error === 'port') return t('accounts.proxyUrlPortHint')
   if (r.error === 'extra') return t('accounts.proxyUrlExtraHint')
   return t('accounts.proxyUrlShapeHint')
@@ -177,9 +179,49 @@ function setProxyMode(m: string) {
     errors.value = rest
   }
 }
+// Entering a Claude Code draft goes back to the saved proxy the draft starts with.
 watch(ccgDraft, (v) => {
   if (v) setProxyMode('existing')
 })
+/** Last successful test of a pasted proxy, shown under the proxy field. */
+const probed = ref<{ protocol: string; ip: string; id: number; created: boolean } | null>(null)
+const probing = ref(false)
+/**
+ * POST /proxies/probe {save}: tries the pasted proxy (socks5, http, then https
+ * without a scheme), finds or creates the proxy that works and selects it, so a
+ * Claude Code draft can start with it; its location fills locale and timezone.
+ */
+async function probeProxyUrl() {
+  const raw = proxyUrl.value.trim()
+  if (!raw || probing.value) return
+  const { proxy_url: _u, ...rest } = errors.value
+  errors.value = rest
+  probed.value = null
+  probing.value = true
+  try {
+    const r = await api.post<ProxyProbeResult>('/proxies/probe', { proxy_url: raw, save: true })
+    if (!r.ok || !r.proxy_id) {
+      const tried = r.attempts.map(a => `${a.protocol}: ${a.message || a.status || t('proxies.failed')}`).join('; ')
+      errors.value = { ...errors.value, proxy_url: t('proxies.probeFailed', { error: tried }) }
+      return
+    }
+    await useProxiesLookup(true).ready
+    probed.value = { protocol: (r.protocol || '').toUpperCase(), ip: r.ip || '', id: r.proxy_id, created: r.proxy_created }
+    proxyUrl.value = ''
+    proxyMode.value = 'existing'
+    basic.proxy_id = r.proxy_id
+    if (needsProxy.value && !(preparationUrl.value && ccgState.value.key)) {
+      if (r.location) fillFromLocation(r.location)
+      else void prefillEnvironment(r.proxy_id)
+    }
+  } catch (e) {
+    const fe = fieldErrors(e)
+    if (fe.proxy_url) errors.value = { ...errors.value, proxy_url: fe.proxy_url }
+    else notifyError(e)
+  } finally {
+    probing.value = false
+  }
+}
 const models = ref<string[]>([])
 const mapping = ref<Record<string, string>>({})
 const credentials = ref<Record<string, any>>({})
@@ -843,19 +885,28 @@ async function save(event: Event) {
                   </div>
                 </div>
                 <ProxyPicker v-if="proxyMode === 'existing'" :model-value="basic.proxy_id" @update:model-value="setProxy" />
-                <SInput
-                  v-else
-                  v-model="proxyUrl"
-                  mono
-                  :error="!!errors.proxy_url"
-                  autocomplete="off"
-                  spellcheck="false"
-                  data-testid="proxy-url"
-                  placeholder="socks5://user:pass@host:port"
-                />
+                <div v-else class="flex gap-2">
+                  <SInput
+                    v-model="proxyUrl"
+                    class="flex-1"
+                    mono
+                    :error="!!errors.proxy_url"
+                    autocomplete="off"
+                    spellcheck="false"
+                    data-testid="proxy-url"
+                    placeholder="socks5://user:pass@host:port"
+                    @keydown.enter.prevent="probeProxyUrl"
+                  />
+                  <SButton :disabled="!proxyUrl.trim()" :loading="probing" data-testid="proxy-url-probe" @click="probeProxyUrl">
+                    {{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}
+                  </SButton>
+                </div>
                 <p v-if="(proxyMode === 'url' ? errors.proxy_url : errors.proxy_id)" class="input-error-text">{{ proxyMode === 'url' ? errors.proxy_url : errors.proxy_id }}</p>
                 <p v-else-if="proxyMode === 'url' && proxyUrlHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
                 <p v-else-if="proxyMode === 'url'" class="input-hint">{{ t('accounts.proxyUrlHint') }}</p>
+                <p v-if="probed && proxyMode === 'existing' && basic.proxy_id === probed.id" class="mt-1 text-xs text-emerald-600 dark:text-emerald-400" role="status" data-testid="proxy-probe-result">
+                  {{ t(probed.created ? 'accounts.proxyProbeCreated' : 'accounts.proxyProbeReused', { protocol: probed.protocol, ip: probed.ip, id: probed.id }) }}
+                </p>
                 <p v-if="needsProxy" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-required-hint">{{ t('ccgateway.accountAuth.proxyRequiredHint') }}</p>
                 <p v-if="ccgDraft" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-draft-hint">{{ t('ccgateway.accountAuth.draftProxyHint') }}</p>
               </div>

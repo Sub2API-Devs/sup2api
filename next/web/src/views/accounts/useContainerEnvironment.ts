@@ -39,6 +39,14 @@ export function useContainerEnvironment() {
     }
   }
 
+  /** Fills from a location already known (POST /proxies/probe answers it), without asking again. */
+  function fillFromLocation(location: ProxyLocation) {
+    resetEnvironment()
+    Object.assign(settings, { locale: localeForCountry(location.country_code), timezone: location.timezone })
+    locationIP.value = location.ip
+    locationStatus.value = settings.locale && settings.timezone ? 'filled' : 'failed'
+  }
+
   onScopeDispose(() => active?.abort())
-  return { settings, locationLoading, locationStatus, locationIP, resetEnvironment, prefillEnvironment }
+  return { settings, locationLoading, locationStatus, locationIP, resetEnvironment, prefillEnvironment, fillFromLocation }
 }
