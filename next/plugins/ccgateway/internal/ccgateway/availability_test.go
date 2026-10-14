@@ -87,6 +87,24 @@ func TestModelAvailabilitySnapshots(t *testing.T) {
 		{"future observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix++ }, pluginv1.ModelAvailability_UNKNOWN},
 		{"empty windows", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows = nil }, pluginv1.ModelAvailability_UNKNOWN},
 		{"failed refresh", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient" }, pluginv1.ModelAvailability_UNKNOWN},
+		// The container refreshes an expired OAuth token only on a model request.
+		{"token refused lets the request refresh it", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: quota query failed"
+			q.UpdatedAtUnix -= 86400
+		}, pluginv1.ModelAvailability_AVAILABLE},
+		{"token refused before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: quota query failed"
+			q.UpdatedAtUnix = 0
+			q.Windows = nil
+		}, pluginv1.ModelAvailability_AVAILABLE},
+		{"token refused keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: quota query failed"
+			q.Windows[0].Status = "rejected"
+		}, pluginv1.ModelAvailability_UNAVAILABLE},
+		{"token refused keeps an invalid snapshot unknown", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "auth_rejected: quota query failed"
+			q.Windows[0].Utilization = math.NaN()
+		}, pluginv1.ModelAvailability_UNKNOWN},
 		{"stale", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64(quotaRefresh.Seconds()) }, pluginv1.ModelAvailability_UNKNOWN},
 		{"allowed reset elapsed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = now.Unix() }, pluginv1.ModelAvailability_UNKNOWN},
 		{"unknown status", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = "" }, pluginv1.ModelAvailability_UNKNOWN},

@@ -46,7 +46,18 @@ func validAvailabilityModel(model string) bool {
 }
 
 func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int64, out *pluginv1.ModelAvailability) {
+	// The usage query was refused for the container's stored OAuth token
+	// (expired or signed out). The container's Claude Code refreshes that token
+	// only on a model request, so holding requests back here would keep the
+	// account unusable for good: let the request through. A token that cannot
+	// be refreshed fails that request with 401, which the account status rules
+	// handle; a known exhausted window still blocks (CONTRACTS §44.7).
+	authRefused := strings.HasPrefix(snapshot.GetError(), "auth_rejected:")
 	out.Reason = "quota_unobserved"
+	if snapshot.GetUpdatedAtUnix() <= 0 && authRefused && len(snapshot.GetWindows()) == 0 {
+		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
+		return
+	}
 	if snapshot.GetUpdatedAtUnix() <= 0 || snapshot.GetUpdatedAtUnix() > now {
 		return
 	}
@@ -90,6 +101,10 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 	}
 	if invalid {
 		out.Reason = "invalid_quota_snapshot"
+		return
+	}
+	if authRefused {
+		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
 		return
 	}
 	if snapshot.GetError() != "" {
