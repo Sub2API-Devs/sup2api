@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SInput, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SButton, SField, SInput, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STextarea } from '@sub2api/ui'
 import type { AutoDisableSettings } from '@/api/types'
+import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
+import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
-import { fieldErrors, notifyError } from '@/utils/errors'
 
 // Automatic account disabling (GET/PUT /settings/auto-disable, CONTRACTS §42).
 const { t } = useI18n()
@@ -22,53 +22,17 @@ const DEFAULT_KEYWORDS = [
   'your account is not authorized'
 ]
 
-const loading = ref(false)
-const saving = ref(false)
-const loaded = ref<AutoDisableSettings | null>(null)
-const form = reactive({ enabled: true, status_codes: '401', keywords: DEFAULT_KEYWORDS.join('\n') })
-const errors = ref<Record<string, string>>({})
-
+interface Form { enabled: boolean; status_codes: string; keywords: string }
 const toKeywords = (text: string) => text.split('\n').map((k) => k.trim()).filter(Boolean)
-const body = (): AutoDisableSettings => ({ enabled: form.enabled, status_codes: form.status_codes.trim(), keywords: toKeywords(form.keywords) })
-const dirty = computed(() => !!loaded.value && JSON.stringify(body()) !== JSON.stringify(loaded.value))
+const body = (f: Form): AutoDisableSettings => ({ enabled: f.enabled, status_codes: f.status_codes.trim(), keywords: toKeywords(f.keywords) })
 
-function assign(r: AutoDisableSettings) {
-  form.enabled = r.enabled
-  form.status_codes = r.status_codes
-  form.keywords = r.keywords.join('\n')
-  loaded.value = body()
-}
-
-async function load() {
-  loading.value = true
-  try {
-    assign(await api.get<AutoDisableSettings>('/settings/auto-disable'))
-  } catch (e) {
-    notifyError(e)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function save() {
-  saving.value = true
-  try {
-    assign(await api.put<AutoDisableSettings>('/settings/auto-disable', body()))
-    errors.value = {}
-    toast(t('common.saved'), 'success')
-  } catch (e) {
-    const fe = fieldErrors(e)
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(e)
-  } finally {
-    saving.value = false
-  }
-}
-
-function reset() {
-  if (loaded.value) assign(loaded.value)
-  errors.value = {}
-}
+const { form, loading, saving, dirty, errors, isLoaded, load, save, reset } = useSettingsForm<Form, AutoDisableSettings>({
+  path: '/settings/auto-disable',
+  defaults: { enabled: true, status_codes: '401', keywords: DEFAULT_KEYWORDS.join('\n') },
+  fromServer: (r: AutoDisableSettings) => ({ enabled: !!r?.enabled, status_codes: r?.status_codes ?? '', keywords: (r?.keywords || []).join('\n') }),
+  toBody: (f) => body(f),
+  snapshot: body
+})
 
 /** First keyword error (keywords or keywords[i]). */
 const keywordError = computed(() => Object.entries(errors.value).find(([k]) => k.startsWith('keywords'))?.[1])
@@ -77,27 +41,26 @@ onMounted(load)
 </script>
 
 <template>
-  <SCard :title="t('settings.autoDisable.title')" :subtitle="t('settings.autoDisable.subtitle')" data-testid="auto-disable-settings">
-    <div v-if="loading && !loaded" class="py-6 text-center"><SSpinner /></div>
-    <div v-else class="space-y-4">
-      <div class="flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30">
-        <div class="min-w-0">
-          <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('settings.autoDisable.enabled') }}</div>
-          <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('settings.autoDisable.enabledHint') }}</div>
+  <SSettingsGroup :title="t('settings.autoDisable.title')" :description="t('settings.autoDisable.subtitle')" data-testid="auto-disable-settings">
+    <template #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
+    <div v-if="loading && !isLoaded" class="py-6 text-center"><SSpinner /></div>
+    <template v-else>
+      <SSettingRow :label="t('settings.autoDisable.enabled')" :description="t('settings.autoDisable.enabledHint')" for="auto-disable-enabled">
+        <SSwitch id="auto-disable-enabled" v-model="form.enabled" :disabled="!canManage" :aria-label="t('settings.autoDisable.enabled')" />
+      </SSettingRow>
+      <SSettingRow :label="t('settings.autoDisable.statusCodes')" :description="t('settings.autoDisable.statusCodesHint')" for="auto-disable-codes">
+        <SField :error="errors.status_codes" class="w-full sm:w-64">
+          <SInput id="auto-disable-codes" v-model="form.status_codes" name="status_codes" placeholder="401,403" :error="!!errors.status_codes" :disabled="!canManage" />
+        </SField>
+      </SSettingRow>
+      <SSettingRow :label="t('settings.autoDisable.keywords')" :description="t('settings.autoDisable.keywordsHint')" for="auto-disable-keywords" stacked>
+        <div class="w-full space-y-2">
+          <SField :error="keywordError">
+            <STextarea id="auto-disable-keywords" v-model="form.keywords" name="keywords" :rows="7" class="font-mono text-xs" :error="!!keywordError" :disabled="!canManage" />
+          </SField>
+          <SButton v-if="canManage" size="sm" data-testid="restore-keywords" @click="form.keywords = DEFAULT_KEYWORDS.join('\n')">{{ t('settings.autoDisable.restoreKeywords') }}</SButton>
         </div>
-        <SSwitch v-model="form.enabled" :disabled="!canManage" :aria-label="t('settings.autoDisable.enabled')" />
-      </div>
-      <SField :label="t('settings.autoDisable.statusCodes')" :hint="t('settings.autoDisable.statusCodesHint')" :error="errors.status_codes">
-        <SInput v-model="form.status_codes" name="status_codes" placeholder="401,403" :disabled="!canManage" />
-      </SField>
-      <SField :label="t('settings.autoDisable.keywords')" :hint="t('settings.autoDisable.keywordsHint')" :error="keywordError">
-        <STextarea v-model="form.keywords" name="keywords" :rows="7" class="font-mono text-xs" :disabled="!canManage" />
-      </SField>
-      <div v-if="canManage" class="flex flex-wrap justify-end gap-2">
-        <SButton size="sm" @click="form.keywords = DEFAULT_KEYWORDS.join('\n')">{{ t('settings.autoDisable.restoreKeywords') }}</SButton>
-        <SButton v-if="dirty" size="sm" @click="reset">{{ t('common.reset') }}</SButton>
-        <SButton size="sm" variant="primary" :loading="saving" :disabled="!dirty" @click="save">{{ t('common.save') }}</SButton>
-      </div>
-    </div>
-  </SCard>
+      </SSettingRow>
+    </template>
+  </SSettingsGroup>
 </template>

@@ -18,6 +18,7 @@ export default {
     builtin: 'Built-in'
   },
   cols: {
+    ua: 'UA',
     priority: 'Priority',
     match: 'Match',
     binding: 'Binding',

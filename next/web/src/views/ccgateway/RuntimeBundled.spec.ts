@@ -67,9 +67,9 @@ describe('CCGateway images bundled in the plugin package', () => {
     expect(w.get('[data-testid="ccgateway-bundled-push"]').text()).toBe('推送并启用内置镜像')
     // The manual upload stays, folded away as an advanced option.
     const upload = w.get('[data-testid="ccgateway-image-upload"]')
-    expect(upload.element.tagName).toBe('DETAILS')
-    expect((upload.element as HTMLDetailsElement).open).toBe(false)
-    expect(upload.get('summary').text()).toBe('高级：手动上传镜像')
+    expect(upload.get('button').attributes('aria-expanded')).toBe('false')
+    expect(upload.find('[data-testid="image-upload-file"]').exists()).toBe(false)
+    expect(upload.get('button').text()).toBe('高级：手动上传镜像')
     w.unmount()
   })
 
@@ -189,7 +189,7 @@ describe('CCGateway images bundled in the plugin package', () => {
     mocks.get.mockResolvedValue(runtime({ bundled: null }))
     let w = await render()
     expect(w.get('[data-testid="ccgateway-bundled-none"]').text()).toContain('The plugin package carries no images')
-    expect(w.get('[data-testid="ccgateway-image-upload"] summary').text()).toBe('Advanced: upload an image by hand')
+    expect(w.get('[data-testid="ccgateway-image-upload"] button').text()).toBe('Advanced: upload an image by hand')
     w.unmount()
     mocks.get.mockResolvedValue(runtime())
     w = await render()

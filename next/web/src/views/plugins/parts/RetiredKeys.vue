@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCheckbox, SField, SHint, SIcon, SInput, SModal, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SChoiceCards, SField, SHint, SIcon, SInput, SModal, STable, toast, type ChoiceOption, type TableColumn } from '@sub2api/ui'
 import type { ReleaseRetiredKeyResult, RetiredKey } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -21,6 +21,22 @@ const purgeAccounts = ref(false)
 const typed = ref('')
 const busy = ref(false)
 const matches = computed(() => !!releasing.value && typed.value.trim() === releasing.value.key)
+
+// What to delete before releasing the key: 'accounts' and / or 'purge' (plugin schema).
+const purgeOptions = computed<ChoiceOption[]>(() => {
+  const k = releasing.value
+  if (!k) return []
+  return [
+    { value: 'accounts', label: t('plugins.retired.purgeAccounts', { n: k.accounts }), icon: 'account', tone: 'danger' },
+    { value: 'purge', label: t('plugins.retired.purge', { schema: 'plg_' + k.key }), icon: 'trash', tone: 'danger' }
+  ]
+})
+const purgeChoice = computed(() => [...(purgeAccounts.value ? ['accounts'] : []), ...(purge.value ? ['purge'] : [])])
+function setPurgeChoice(v: unknown) {
+  const list = Array.isArray(v) ? v : []
+  purge.value = list.includes('purge')
+  purgeAccounts.value = list.includes('accounts')
+}
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'key', label: t('plugins.retired.key') },
@@ -100,23 +116,17 @@ defineExpose({ load })
     <SModal :open="!!releasing" :title="releasing ? t('plugins.retired.releaseTitle', { key: releasing.key }) : ''" width="md" @update:open="(v) => !v && (releasing = null)">
       <div v-if="releasing" class="space-y-4 text-sm">
         <p>{{ t('plugins.retired.releaseBody') }}</p>
-        <SCheckbox
-          v-model="purgeAccounts"
-          class="!items-start rounded-lg border p-3"
-          :class="purgeAccounts ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
-        >
-          <span class="font-medium">{{ t('plugins.retired.purgeAccounts', { n: releasing.accounts }) }}</span>
-        </SCheckbox>
-        <SCheckbox
-          v-model="purge"
-          class="!items-start rounded-lg border p-3"
-          :class="purge ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
-        >
-          <span class="font-medium">{{ t('plugins.retired.purge', { schema: 'plg_' + releasing.key }) }}</span>
-        </SCheckbox>
-        <p v-if="!purge || !purgeAccounts" class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <SChoiceCards
+          :model-value="purgeChoice"
+          :options="purgeOptions"
+          :cols="1"
+          multiple
+          :aria-label="t('plugins.retired.releaseTitle', { key: releasing.key })"
+          @update:model-value="setPurgeChoice"
+        />
+        <SHint v-if="!purge || !purgeAccounts" size="xs" tone="warning" class="flex items-center gap-1.5">
           <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.retired.inheritWarn') }}
-        </p>
+        </SHint>
         <SField :label="t('plugins.uninstall.typeKey', { key: releasing.key })">
           <SInput v-model="typed" mono :placeholder="releasing.key" autocomplete="off" @keyup.enter="release" />
         </SField>

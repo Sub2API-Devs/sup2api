@@ -56,10 +56,10 @@ export function latencyLevel(ms: number): LatencyLevel {
   return 'bad'
 }
 export const LATENCY_CLASS: Record<LatencyLevel, string> = {
-  fast: 'text-emerald-600 dark:text-emerald-400',
+  fast: 'text-success-600 dark:text-success-400',
   ok: 'text-lime-600 dark:text-lime-400',
-  slow: 'text-amber-600 dark:text-amber-400',
-  bad: 'text-red-600 dark:text-red-400'
+  slow: 'text-warning-600 dark:text-warning-400',
+  bad: 'text-danger-600 dark:text-danger-400'
 }
 
 /** "480 ms" / "1.24 s". */

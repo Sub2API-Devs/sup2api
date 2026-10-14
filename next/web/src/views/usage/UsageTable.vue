@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SSpinner, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SEmpty, SSpinner, STable, type TableColumn } from '@sub2api/ui'
+import TimeText from '@/components/TimeText.vue'
 import { formatMoney, formatNumber, formatTime } from '@/utils/format'
 import UsageDetail from './UsageDetail.vue'
 import UsageStatus from './UsageStatus.vue'
@@ -49,14 +50,15 @@ function toggleMobile(id: number) {
 
 <template>
   <div class="usage-records">
-    <STable class="hidden md:block" :columns="columns" :rows="rows" :loading="loading" expandable fit-expanded-to-container>
+    <STable card class="hidden md:block" :columns="columns" :rows="rows" :loading="loading" expandable fit-expanded-to-container>
+      <template v-if="$slots.footer" #footer><slot name="footer" /></template>
       <template #cell-created_at="{ row }">
         <div class="space-y-1.5">
-          <span class="whitespace-nowrap text-xs tabular-nums" :title="row.created_at">{{ formatTime(row.created_at) }}</span>
+          <TimeText :value="row.created_at" mode="time" :muted="false" class="block text-xs tabular-nums" />
           <button
             v-if="showClientRequestId && row.client_request_id"
             type="button"
-            class="block max-w-[8rem] truncate text-left font-mono text-xs text-gray-400 hover:text-primary-600"
+            class="block max-w-[8rem] truncate text-left font-mono text-xs text-fg-subtle hover:text-primary-600"
             :title="t('usage.filterByClientRequestId', { id: row.client_request_id })"
             data-testid="client-request-id"
             @click.stop="emit('filter-client-request-id', row.client_request_id)"
@@ -73,13 +75,13 @@ function toggleMobile(id: number) {
       <template #cell-client="{ row }">
         <div class="space-y-1.5" data-testid="usage-client">
           <span class="block truncate text-sm" :title="row.api_key_name">{{ row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—') }}</span>
-          <span class="block break-all font-mono text-xs text-gray-400">{{ row.client_ip || '—' }}</span>
+          <span class="block break-all font-mono text-xs text-fg-subtle">{{ row.client_ip || '—' }}</span>
         </div>
       </template>
       <template #cell-model="{ row }">
         <div class="space-y-1.5">
           <span class="block max-w-[15rem] truncate font-mono text-xs font-medium" :title="row.model">{{ row.model || '—' }}</span>
-          <div class="flex items-center gap-1.5 text-xs text-gray-400">
+          <div class="flex items-center gap-1.5 text-xs text-fg-subtle">
             <span>{{ row.upstream_protocol || row.protocol || '—' }}</span
             ><SBadge v-if="isConverted(row)" tone="warning" :title="t('usage.convertedFrom', { protocol: row.protocol })">{{
               t('usage.converted')
@@ -90,24 +92,24 @@ function toggleMobile(id: number) {
       <template #cell-group="{ row }">
         <div class="space-y-1.5">
           <span class="block max-w-[13rem] truncate text-sm" :title="groupLabel(row)">{{ groupLabel(row) }}</span>
-          <span v-if="showAccount" class="block max-w-[13rem] truncate text-xs text-gray-400" :title="row.account_name">{{
+          <span v-if="showAccount" class="block max-w-[13rem] truncate text-xs text-fg-subtle" :title="row.account_name">{{
             row.account_name || (row.account_id ? '#' + row.account_id : '—')
           }}</span>
-          <span v-else-if="row.api_key_name" class="block max-w-[13rem] truncate text-xs text-gray-400">{{ row.api_key_name }}</span>
+          <span v-else-if="row.api_key_name" class="block max-w-[13rem] truncate text-xs text-fg-subtle">{{ row.api_key_name }}</span>
         </div>
       </template>
       <template #cell-tokens="{ row }"><UsageTokens :row="row" /></template>
       <template #cell-latency="{ row }"
         ><div class="space-y-1 text-xs tabular-nums">
           <span>{{ row.latency_ms ? formatNumber(row.latency_ms / 1000, 2) + ' s' : '—' }}</span>
-          <p v-if="row.first_token_ms" class="whitespace-nowrap text-gray-400" :title="t('usage.request.firstToken')">
+          <p v-if="row.first_token_ms" class="whitespace-nowrap text-fg-subtle" :title="t('usage.request.firstToken')">
             {{ t('usage.request.firstToken') }} {{ formatNumber(row.first_token_ms / 1000, 2) }} s
           </p>
         </div></template
       >
       <template #cell-total_cost="{ row }"
         ><div class="space-y-1.5">
-          <span class="whitespace-nowrap font-mono text-xs" :class="row.billing_status === 'free' ? 'text-gray-400' : ''">{{
+          <span class="whitespace-nowrap font-mono text-xs" :class="row.billing_status === 'free' ? 'text-fg-subtle' : ''">{{
             row.billing_status === 'free' ? t('usage.free') : formatMoney(row.total_cost)
           }}</span>
           <div v-if="row.billing_status !== 'billed' && row.billing_status !== 'free'">
@@ -119,22 +121,22 @@ function toggleMobile(id: number) {
       <template #expand="{ row }"><UsageDetail :row="row" :path="detailPath?.(row.id)" /></template>
     </STable>
 
-    <div class="divide-y divide-gray-100 dark:divide-dark-700 md:hidden">
+    <div class="divide-y divide-line rounded-xl border border-line bg-surface md:hidden">
       <div v-if="loading && !rows.length" class="p-8 text-center"><SSpinner /></div>
-      <p v-else-if="!rows.length" class="p-8 text-center text-sm text-gray-400">{{ t('common.noData') }}</p>
+      <SEmpty v-else-if="!rows.length" :text="t('common.noData')" />
       <article v-for="row in rows" :key="row.id" class="p-4" :class="loading ? 'opacity-60' : ''" data-testid="mobile-usage-record">
         <div class="mb-3 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="break-all font-mono text-xs font-medium">{{ row.model || '—' }}</p>
-            <p class="mt-1 text-xs text-gray-400">{{ formatTime(row.created_at) }} · {{ row.upstream_protocol || row.protocol || '—' }}</p>
+            <p class="mt-1 text-xs text-fg-subtle">{{ formatTime(row.created_at) }} · {{ row.upstream_protocol || row.protocol || '—' }}</p>
           </div>
           <UsageStatus :row="row" />
         </div>
         <p v-if="showUser" class="mb-1 truncate text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</p>
         <p class="mb-1 truncate text-xs">{{ t('usage.request.apiKey') }}: {{ row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—') }}</p>
-        <p class="mb-2 break-all font-mono text-xs text-gray-400">{{ t('usage.request.clientIP') }}: {{ row.client_ip || '—' }}</p>
+        <p class="mb-2 break-all font-mono text-xs text-fg-subtle">{{ t('usage.request.clientIP') }}: {{ row.client_ip || '—' }}</p>
         <p class="truncate text-sm" :title="groupLabel(row)">{{ groupLabel(row) }}</p>
-        <p v-if="showAccount" class="mt-1 truncate text-xs text-gray-400">
+        <p v-if="showAccount" class="mt-1 truncate text-xs text-fg-subtle">
           {{ row.account_name || (row.account_id ? '#' + row.account_id : '—') }}
         </p>
         <div class="mt-3 grid grid-cols-2 gap-6">
@@ -144,16 +146,17 @@ function toggleMobile(id: number) {
             <p v-if="row.billing_status !== 'billed' && row.billing_status !== 'free'">
               <SBadge :tone="billingTone(row.billing_status)">{{ t(`usage.billing.status.${row.billing_status}`) }}</SBadge>
             </p>
-            <p class="text-gray-400">
+            <p class="text-fg-subtle">
               {{ t('usage.request.latency') }} {{ row.latency_ms ? formatNumber(row.latency_ms / 1000, 2) + ' s' : '—' }}
             </p>
-            <p v-if="row.first_token_ms" class="text-gray-400">
+            <p v-if="row.first_token_ms" class="text-fg-subtle">
               {{ t('usage.request.firstToken') }} {{ formatNumber(row.first_token_ms / 1000, 2) }} s
             </p>
           </div>
         </div>
         <button
           v-if="showClientRequestId && row.client_request_id"
+          type="button"
           class="mt-3 block max-w-full truncate font-mono text-xs text-primary-600"
           :title="t('usage.filterByClientRequestId', { id: row.client_request_id })"
           @click="emit('filter-client-request-id', row.client_request_id)"
@@ -165,6 +168,7 @@ function toggleMobile(id: number) {
         </button>
         <UsageDetail v-if="expanded.has(row.id)" :row="row" :path="detailPath?.(row.id)" />
       </article>
+      <div v-if="$slots.footer" class="px-4"><slot name="footer" /></div>
     </div>
   </div>
 </template>

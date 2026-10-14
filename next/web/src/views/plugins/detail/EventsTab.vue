@@ -57,10 +57,12 @@ onMounted(load)
 
     <SCard :title="t('plugins.events.subscribed')">
       <template #actions>
-        <SButton size="sm" variant="ghost" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+        <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" @click="load">
+          <SIcon v-if="!loading" name="refresh" class="h-4 w-4" />
+        </SButton>
       </template>
       <div v-if="data.subscribe?.length" class="flex flex-wrap gap-2">
-        <code v-for="s in data.subscribe" :key="s" class="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs dark:bg-dark-700">{{ s }}</code>
+        <SCode v-for="s in data.subscribe" :key="s" inline :text="s" />
       </div>
       <SHint v-else>{{ t('plugins.events.noSubscriptions') }}</SHint>
     </SCard>
@@ -73,7 +75,7 @@ onMounted(load)
         </template>
         <template #cell-attempts="{ row }">{{ display(pick(row, 'attempts', 'retries')) }}</template>
         <template #cell-error="{ row }">
-          <span class="line-clamp-2 max-w-lg text-xs text-red-600 dark:text-red-400">{{ display(pick(row, 'error', 'last_error', 'message')) }}</span>
+          <SHint inline size="xs" tone="danger" class="line-clamp-2 max-w-lg">{{ display(pick(row, 'error', 'last_error', 'message')) }}</SHint>
         </template>
         <template #cell-at="{ row }">
           <span class="whitespace-nowrap text-xs">{{ formatDateTime(pick(row, 'failed_at', 'created_at', 'at')) }}</span>

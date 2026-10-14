@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import AccountRuntimes from './AccountRuntimes.vue'
+
+/** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
+const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn(), manage: true }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
@@ -23,9 +26,9 @@ describe('account runtime debug log switches', () => {
   }
   it('loads runtime state and disables logging using PUT without optimistic success', async () => {
     const w = await render()
-    const toggle = w.get('[data-testid="request-logs-25"] button')
+    const toggle = w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]')
     expect(toggle.attributes('aria-checked')).toBe('true')
-    await toggle.trigger('click')
+    await flip(toggle)
     await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { enabled: false })
     expect(toggle.attributes('aria-checked')).toBe('false')
@@ -35,8 +38,8 @@ describe('account runtime debug log switches', () => {
   it('keeps the original state and shows an error when disabling fails', async () => {
     mocks.put.mockRejectedValue(new Error('unreachable'))
     const w = await render()
-    const toggle = w.get('[data-testid="request-logs-25"] button')
-    await toggle.trigger('click')
+    const toggle = w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]')
+    await flip(toggle)
     await flushPromises()
     expect(toggle.attributes('aria-checked')).toBe('true')
     expect(w.text()).toContain('读取或更新日志开关失败')
@@ -45,7 +48,7 @@ describe('account runtime debug log switches', () => {
   it('allows readers to inspect the switch but not change it', async () => {
     mocks.manage = false
     const w = await render()
-    expect(w.get('[data-testid="request-logs-25"] button').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').attributes('disabled')).toBeDefined()
     expect(mocks.put).not.toHaveBeenCalled()
     w.unmount()
   })
@@ -135,7 +138,7 @@ describe('account runtime list layout', () => {
     expect(description.text()).toContain('保留 24 小时；单请求内容 64 MiB；总存储软预算 512 MiB')
     expect(description.text()).toContain('超限保留已有内容并标记截断，不中断请求')
     const id = description.attributes('id')
-    expect(w.get('[data-testid="request-logs-25"] button').attributes('aria-describedby')).toBe(id)
+    expect(w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').attributes('aria-describedby')).toBe(id)
     expect(w.get('[data-testid="request-log-info-25"]').attributes('aria-describedby')).toBe(id)
     expect(w.get('[data-testid="request-log-info-25"]').attributes('aria-label')).toBe('日志保留与限额说明')
 
@@ -149,9 +152,9 @@ describe('account runtime list layout', () => {
     expect(tooltip()?.textContent).toContain('512 MiB')
     await cell.trigger('keydown', { key: 'Escape' })
     expect(tooltip()).toBeNull()
-    await w.get('[data-testid="request-logs-25"] button').trigger('focusin')
+    await w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').trigger('focusin')
     expect(tooltip()).not.toBeNull()
-    await w.get('[data-testid="request-logs-25"] button').trigger('focusout')
+    await w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').trigger('focusout')
     expect(tooltip()).toBeNull()
     w.unmount()
   })

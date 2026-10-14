@@ -41,7 +41,7 @@ function iconContext(i: NavItem): string {
         S
       </div>
       <div class="min-w-0" :class="app.sidebarCollapsed ? 'max-w-full' : ''">
-        <span v-if="!app.sidebarCollapsed" class="block text-base font-semibold leading-tight tracking-tight text-gray-900 dark:text-white">sub2api</span>
+        <span v-if="!app.sidebarCollapsed" class="block text-base font-semibold leading-tight tracking-tight text-fg">sub2api</span>
         <VersionBadge :compact="app.sidebarCollapsed" />
       </div>
     </div>
@@ -52,7 +52,7 @@ function iconContext(i: NavItem): string {
       <div v-for="s in app.menus" :key="s.key" class="mb-3">
         <div
           v-if="!app.sidebarCollapsed && !(s.key === 'overview')"
-          class="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500"
+          class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle"
         >
           {{ sectionLabel(s) }}
         </div>
@@ -75,8 +75,11 @@ function iconContext(i: NavItem): string {
       </div>
     </nav>
     <button
-      class="hidden h-10 shrink-0 items-center justify-center border-t border-gray-100 text-gray-400 hover:text-gray-700 dark:border-dark-800 dark:hover:text-gray-200 lg:flex"
-      :title="t('nav.collapse')"
+      type="button"
+      class="hidden h-10 shrink-0 items-center justify-center border-t border-gray-100 text-fg-subtle hover:text-fg dark:border-dark-800 lg:flex"
+      :title="app.sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
+      :aria-label="app.sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
+      :aria-expanded="!app.sidebarCollapsed"
       @click="app.sidebarCollapsed = !app.sidebarCollapsed"
     >
       <SIcon name="chevron-right" class="h-4 w-4 transition-transform" :class="app.sidebarCollapsed ? '' : 'rotate-180'" />

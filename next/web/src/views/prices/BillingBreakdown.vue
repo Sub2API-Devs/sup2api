@@ -49,7 +49,7 @@ const matchedMultipliers = computed(() => (props.rules || []).filter((r) => r.ma
 <template>
   <div class="space-y-1 text-sm">
     <div v-for="(it, i) in items" :key="i" class="flex flex-wrap items-baseline gap-x-2">
-      <span class="text-gray-700 dark:text-gray-300">{{ labelOf(it.label) }}</span>
+      <span class="text-fg">{{ labelOf(it.label) }}</span>
       <span v-if="isNum(it.quantity) && isNum(it.rate)" class="font-mono text-xs">
         {{ formatNumber(it.quantity, 8) }} × ${{ it.rate }}/M = {{ formatMoney(it.cost, 8) }}
       </span>
@@ -59,7 +59,7 @@ const matchedMultipliers = computed(() => (props.rules || []).filter((r) => r.ma
     <p v-if="matchedMultipliers.length && rulesMult !== null" class="font-mono text-xs" data-testid="stacked-multipliers">
       {{ t('prices.items.rules') }}: {{ matchedMultipliers.join(' × ') }} = {{ rulesMult }}
     </p>
-    <p v-if="isNum(bd.base) || isNum(total)" class="border-t border-gray-100 pt-1 font-mono text-xs dark:border-dark-700">
+    <p v-if="isNum(bd.base) || isNum(total)" class="border-t border-line pt-1 font-mono text-xs">
       <template v-if="isNum(bd.base)">
         {{ t('prices.items.base') }} {{ formatMoney(bd.base, 8) }}
         <template v-if="rulesMult !== null"> × {{ t('prices.items.rules') }} {{ rulesMult }}</template>

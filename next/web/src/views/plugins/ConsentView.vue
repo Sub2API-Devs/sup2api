@@ -3,14 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCheckbox, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCheckbox, SDisclosure, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, accountTypesOf, asArray, display, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, accountTypesOf, asArray, display, formatDuration, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import PluginGatewayDecl from './parts/PluginGatewayDecl.vue'
 import RiskDot from './parts/RiskDot.vue'
@@ -310,7 +310,7 @@ onMounted(load)
 
     <SCard v-else-if="!review">
       <SEmpty icon="warning" :text="t('plugins.consent.notFound')">
-        <p v-if="loadError" class="text-xs text-red-500">{{ loadError }}</p>
+        <SHint v-if="loadError" size="xs" tone="danger">{{ loadError }}</SHint>
         <SButton size="sm" @click="load">{{ t('common.refresh') }}</SButton>
       </SEmpty>
     </SCard>
@@ -349,26 +349,12 @@ onMounted(load)
       </SCard>
 
       <!-- warnings -->
-      <div
-        v-if="!review.host_compat_ok"
-        class="mt-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-      >
-        <SIcon name="x" class="mt-0.5 h-5 w-5 shrink-0" />
-        <div>
-          <div class="font-semibold">{{ t('plugins.consent.incompatibleTitle') }}</div>
-          <div>{{ t('plugins.consent.incompatibleBody', { range: review.host_compat || '—' }) }}</div>
-        </div>
-      </div>
-      <div
-        v-if="!signatureOk"
-        class="mt-4 flex items-start gap-3 rounded-xl border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200"
-      >
-        <SIcon name="warning" class="mt-0.5 h-5 w-5 shrink-0" />
-        <div>
-          <div class="font-semibold">{{ t('plugins.consent.signatureWarnTitle', { status: sigLabel(review.signature_status) }) }}</div>
-          <div>{{ t('plugins.consent.signatureWarnBody') }}</div>
-        </div>
-      </div>
+      <SAlert v-if="!review.host_compat_ok" tone="danger" icon="x" :title="t('plugins.consent.incompatibleTitle')" class="mt-4">
+        {{ t('plugins.consent.incompatibleBody', { range: review.host_compat || '—' }) }}
+      </SAlert>
+      <SAlert v-if="!signatureOk" tone="warning" :title="t('plugins.consent.signatureWarnTitle', { status: sigLabel(review.signature_status) })" class="mt-4">
+        {{ t('plugins.consent.signatureWarnBody') }}
+      </SAlert>
 
       <!-- upgrade diff -->
       <SCard v-if="review.diff" :title="t('plugins.consent.diffTitle')" class="mt-4">
@@ -431,7 +417,7 @@ onMounted(load)
                     <SHint inline size="xs">{{ t('plugins.consent.maxPrompt') }}{{ colon }}</SHint>{{ formatBytes(Number(pick(h, 'maxPromptBytes', 'max_prompt_bytes'))) }}
                   </span>
                   <span v-if="pick(h, 'timeoutMs', 'timeout_ms')">
-                    <SHint inline size="xs">{{ t('plugins.consent.timeout') }}{{ colon }}</SHint>{{ pick(h, 'timeoutMs', 'timeout_ms') }}ms
+                    <SHint inline size="xs">{{ t('plugins.consent.timeout') }}{{ colon }}</SHint>{{ formatDuration(Number(pick(h, 'timeoutMs', 'timeout_ms'))) }}
                   </span>
                   <span v-if="hookFailure(h)">
                     <SHint inline size="xs">{{ t('plugins.consent.onFailure') }}{{ colon }}</SHint>
@@ -497,12 +483,11 @@ onMounted(load)
             <span class="text-xs">
               schema <code class="font-mono">{{ review.database.schema }}</code>{{ listSep }}{{ t('plugins.consent.migrations', { n: review.database.migrations?.length || 0 }) }}
             </span>
-            <details v-if="review.database.migrations?.length" class="mt-1 pl-4 text-xs">
-              <summary class="cursor-pointer"><SHint inline size="xs">{{ t('plugins.consent.showMigrations') }}</SHint></summary>
-              <ul class="mt-1 font-mono">
+            <SDisclosure v-if="review.database.migrations?.length" class="mt-1 pl-4" :label="t('plugins.consent.showMigrations')">
+              <ul class="font-mono">
                 <li v-for="m in review.database.migrations" :key="m">{{ m }}</li>
               </ul>
-            </details>
+            </SDisclosure>
           </li>
 
           <li v-if="resourceItems.length">

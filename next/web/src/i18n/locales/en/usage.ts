@@ -107,6 +107,8 @@ export default {
   blocked: 'blocked',
   blockedBy: 'blocked by {plugin}',
   billing: {
+    hash: 'hash {hash}…',
+    len: 'len = {n}',
     title: 'Billing',
     price: 'Price rule',
     tier: 'Tier',

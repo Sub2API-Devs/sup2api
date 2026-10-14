@@ -237,7 +237,8 @@ export default {
     invalid: 'Enter a non-negative number',
     saved: 'Resource limits saved. All nodes have been notified to restart the plugin instances with the new limits.',
     restartHint: 'Saving restarts the plugin instances on every node one by one (a new instance starts before the old one drains).',
-    hint: 'Leave empty to use the manifest request. Limits cannot exceed the global maximum.'
+    hint: 'Leave empty to use the manifest request. Limits cannot exceed the global maximum.',
+    requestedValue: 'Requested by manifest: {value}'
   },
 
   detail: {
@@ -337,6 +338,14 @@ export default {
       allowlist: 'Only domains approved through the "net" permission are reachable; other connections are denied.'
     },
     approvedDomains: 'Approved domains:',
+    approvedDomainsTitle: 'Approved domains',
+    approvedDomainsHint: 'Granted through the "net" permission; they only restrict connections under the allowlist policy.',
+    policyMode: 'Outbound connections',
+    policiesShort: {
+      allow_all: 'Allow all',
+      allowlist: 'Allowlist only'
+    },
+    range: 'Time range',
     byDomain: 'By destination',
     details: 'Connections',
     destination: 'Destination',
@@ -361,6 +370,10 @@ export default {
       denied: 'denied',
       error: 'error'
     }
+  },
+
+  settings: {
+    unsaved: 'You have unsaved changes'
   },
 
   retired: {

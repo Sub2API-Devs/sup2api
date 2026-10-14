@@ -8,6 +8,7 @@ export default {
     offload: 'CPU protection'
   },
   offload: {
+    nodesTitle: 'Node load',
     title: 'CPU protection',
     subtitle: 'A node whose CPU is too busy hands new requests to idle nodes. Available on gateway-managed clusters only.',
     enabled: 'Enabled',

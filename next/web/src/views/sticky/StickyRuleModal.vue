@@ -2,26 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import {
-  SBadge,
-  SButton,
-  SCheckbox,
-  SField,
-  SGrid,
-  SHint,
-  SInput,
-  SModal,
-  SRadio,
-  SSectionTitle,
-  SSelect,
-  SSwitch,
-  STagInput,
-  toast,
-  type SelectOption
-} from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCheckbox, SChip, SChoiceCards, SField, SGrid, SHint, SInput, SModal, SSectionTitle, SSelect, SSettingRow, SSwitch, STagInput, toast, type SelectOption, type ChoiceOption } from '@sub2api/ui'
 import type { PlatformEndpoint, StickyRule } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
 
 // Create / edit a sticky rule. Built-in rules only allow enabled and
 // priority; "copy" pre-fills a new admin rule from any rule.
@@ -34,6 +18,9 @@ type KeySource = { type: string; path?: string; name?: string }
 // The session value always comes from the request; no plugin computes it.
 const KEY_TYPES = ['body', 'header', 'api_key', 'user'] as const
 const INCLUDES = ['group', 'model', 'rule'] as const
+const onFailureOptions = computed<ChoiceOption[]>(() =>
+  (['failover', 'stick'] as const).map((f) => ({ value: f, label: t(`sticky.onFailure.${f}`), description: t(`sticky.onFailureHint.${f}`) }))
+)
 const keyTypeOptions = computed(() => KEY_TYPES.map((k) => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
 
 const platformsCx = usePlatforms()
@@ -258,9 +245,7 @@ async function submit() {
     emit('saved')
     emit('update:open', false)
   } catch (e) {
-    const fe = fieldErrors(e)
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(e)
+    applyFormError(e, errors)
   } finally {
     busy.value = false
   }
@@ -270,21 +255,19 @@ async function submit() {
 <template>
   <SModal :open="open" :title="title" width="xl" @update:open="emit('update:open', $event)">
     <div class="space-y-5">
-      <p v-if="limited" class="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
-        {{ t('sticky.modal.limitedHint') }}
-      </p>
+      <SAlert v-if="limited" tone="accent" dense>{{ t('sticky.modal.limitedHint') }}</SAlert>
 
-      <SGrid :cols="1" md-template="2fr 1fr 1fr">
+      <SGrid :cols="1" md-template="2fr 1fr">
         <SField :label="t('common.name')" :error="errors.name" required>
           <SInput v-model.trim="form.name" mono :disabled="limited" placeholder="claude-code-session" />
         </SField>
         <SField :label="t('sticky.cols.priority')" :hint="t('sticky.modal.priorityHint')" :error="errors.priority">
           <SInput v-model.number="form.priority" type="number" />
         </SField>
-        <SField :label="t('common.enabled')">
-          <div class="pt-2"><SSwitch v-model="form.enabled" /></div>
-        </SField>
       </SGrid>
+      <SSettingRow :label="t('common.enabled')" dense for="sticky-rule-enabled" class="!py-0">
+        <SSwitch id="sticky-rule-enabled" v-model="form.enabled" :aria-label="t('common.enabled')" />
+      </SSettingRow>
 
       <fieldset :disabled="limited" class="space-y-5" :class="limited ? 'opacity-60' : ''">
         <div>
@@ -292,28 +275,29 @@ async function submit() {
           <SGrid :cols="1" :md-cols="3">
             <SField :label="t('sticky.modal.protocols')" :hint="t('sticky.modal.emptyAny')" :error="errors['match.protocols']">
               <div class="flex flex-wrap items-center gap-1.5">
-                <span
+                <SChip
                   v-for="p in form.protocols"
                   :key="p"
-                  class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
-                  :class="
-                    unknownProtocol(p)
-                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                      : 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                  "
+                  :tone="unknownProtocol(p) ? 'warning' : 'primary'"
+                  :closable="!limited"
+                  :close-label="t('common.remove')"
                   :title="protocolTitle(p)"
+                  @close="removeProtocol(p)"
                 >
-                  <span class="font-mono">{{ p }}</span>
-                  <SBadge v-if="unknownProtocol(p)" tone="warning">{{ t('sticky.modal.protocolUnknown') }}</SBadge>
-                  <SBadge v-else-if="patternProtocol(p)" tone="gray">{{ t('sticky.modal.protocolPattern') }}</SBadge>
-                  <button v-if="!limited" type="button" class="opacity-60 hover:opacity-100" @click="removeProtocol(p)">×</button>
-                </span>
+                  <span class="inline-flex items-center gap-1">
+                    <span class="font-mono">{{ p }}</span>
+                    <SBadge v-if="unknownProtocol(p)" tone="warning">{{ t('sticky.modal.protocolUnknown') }}</SBadge>
+                    <SBadge v-else-if="patternProtocol(p)" tone="gray">{{ t('sticky.modal.protocolPattern') }}</SBadge>
+                  </span>
+                </SChip>
                 <SSelect
                   v-if="!limited && protocolOptions.length"
                   :model-value="null"
                   :options="protocolOptions"
                   :placeholder="t('sticky.modal.protocolPick')"
-                  class="!w-auto !py-1 text-xs"
+                  class="!w-auto"
+                  size="sm"
+                  :aria-label="t('sticky.modal.protocolPick')"
                   @update:model-value="addProtocol"
                 />
                 <SHint v-if="limited && !form.protocols.length" inline size="xs">{{ t('sticky.any') }}</SHint>
@@ -325,11 +309,11 @@ async function submit() {
                   <SInput
                     v-model="protocolDraft"
                     mono
-                    class="!py-1 text-xs"
+                    size="sm"
                     :placeholder="t('sticky.modal.protocolManual')"
                     @keydown.enter.prevent="addProtocolDraft"
                   />
-                  <SButton size="sm" :disabled="!protocolDraft.trim()" @click="addProtocolDraft">+ {{ t('common.add') }}</SButton>
+                  <SButton size="sm" :disabled="!protocolDraft.trim()" icon="plus" @click="addProtocolDraft">{{ t('common.add') }}</SButton>
                 </div>
               </template>
             </SField>
@@ -348,21 +332,21 @@ async function submit() {
               <SSectionTitle tag="h4" class="!mb-0">{{ t('sticky.modal.keySources') }}</SSectionTitle>
               <SHint size="xs">{{ t('sticky.modal.keySourcesHint') }}</SHint>
             </div>
-            <SButton size="sm" :disabled="limited" @click="addSource">+ {{ t('common.add') }}</SButton>
+            <SButton size="sm" :disabled="limited" icon="plus" @click="addSource">{{ t('common.add') }}</SButton>
           </div>
           <SHint v-if="errors.key_sources" tone="danger" size="xs" class="mt-1">{{ errors.key_sources }}</SHint>
           <div class="space-y-2">
             <div v-for="(ks, i) in form.key_sources" :key="i">
               <div class="flex flex-wrap items-center gap-2">
                 <SHint inline size="xs" class="w-5 text-right">{{ i + 1 }}.</SHint>
-                <SSelect class="!w-32 !py-1.5" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
-                <SInput v-if="ks.type === 'body'" v-model="ks.path" class="!w-64 !py-1.5" mono placeholder="metadata.user_id" />
-                <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="!w-64 !py-1.5" mono placeholder="x-session-id" />
+                <SSelect class="!w-32" size="sm" :aria-label="t('sticky.modal.keySources')" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
+                <SInput v-if="ks.type === 'body'" v-model="ks.path" class="!w-64" size="sm" mono placeholder="metadata.user_id" />
+                <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="!w-64" size="sm" mono placeholder="x-session-id" />
                 <SHint v-else inline size="xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</SHint>
                 <div class="ml-auto flex gap-1">
-                  <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === 0" @click="move(i, -1)">↑</SButton>
-                  <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">↓</SButton>
-                  <SButton variant="ghost" size="sm" class="!px-1.5" @click="form.key_sources.splice(i, 1)">×</SButton>
+                  <SButton variant="ghost" size="sm" square :disabled="i === 0" :title="t('common.moveUp')" :aria-label="t('common.moveUp')" @click="move(i, -1)">↑</SButton>
+                  <SButton variant="ghost" size="sm" square :disabled="i === form.key_sources.length - 1" :title="t('common.moveDown')" :aria-label="t('common.moveDown')" @click="move(i, 1)">↓</SButton>
+                  <SButton variant="ghost" size="sm" :title="t('common.remove')" :aria-label="t('common.remove')" icon-only icon="x" @click="form.key_sources.splice(i, 1)" />
                 </div>
               </div>
               <SHint v-if="errors[`key_sources.${i}`]" tone="danger" size="xs" class="ml-7 mt-1">{{ errors[`key_sources.${i}`] }}</SHint>
@@ -397,24 +381,13 @@ async function submit() {
       </SGrid>
 
       <SField :label="t('sticky.cols.onFailure')">
-        <SGrid :cols="1" :md-cols="2" :gap="2">
-          <SRadio
-            v-for="f in ['failover', 'stick'] as const"
-            :key="f"
-            :model-value="form.on_failure"
-            :value="f"
-            :disabled="limited"
-            class="!items-start rounded-xl border p-3"
-            :class="[
-              form.on_failure === f ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/10' : 'border-gray-200 dark:border-dark-700',
-              limited ? 'pointer-events-none' : ''
-            ]"
-            @update:model-value="form.on_failure = f"
-          >
-            <span class="font-medium">{{ t(`sticky.onFailure.${f}`) }}</span>
-            <SHint inline size="xs" class="block">{{ t(`sticky.onFailureHint.${f}`) }}</SHint>
-          </SRadio>
-        </SGrid>
+        <SChoiceCards
+          :model-value="form.on_failure"
+          :options="onFailureOptions"
+          :disabled="limited"
+          data-testid="sticky-on-failure"
+          @update:model-value="form.on_failure = $event as typeof form.on_failure"
+        />
       </SField>
     </div>
     <template #footer>

@@ -2,7 +2,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SGrid, SHint, SPageHeader, SStatCard, STable, STimeRange, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SChart, SEmpty, SPageHeader, SSectionTitle, STable, STimeRange, type TableColumn } from '@sub2api/ui'
+import UsageSummaryCards from '@/components/UsageSummaryCards.vue'
 import type { UsageSummaryRow } from '@/api/types'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { rangeBounds, type RangeKey } from './timeRange'
@@ -44,24 +45,6 @@ async function load() {
 
 watch(() => [filters.from, filters.to], load, { immediate: true })
 
-const totals = computed(() => {
-  let requests = 0
-  let success = 0
-  let input = 0
-  let output = 0
-  let cost = 0
-  for (const r of days.value) {
-    requests += Number(r.requests) || 0
-    success += Number(r.success) || 0
-    input += Number(r.input_tokens) || 0
-    output += Number(r.output_tokens) || 0
-    cost += Number(r.total_cost) || 0
-  }
-  return { requests, success, input, output, cost }
-})
-
-const successRate = computed(() => (totals.value.requests ? ((totals.value.success / totals.value.requests) * 100).toFixed(1) + '%' : '—'))
-
 const chartOption = computed(() =>
   dailyChartOption(
     [...days.value]
@@ -91,41 +74,28 @@ function rate(r: UsageSummaryRow) {
   <div>
     <SPageHeader :title="t('usage.statsTitle')" :description="t('usage.statsDescription')">
       <template #actions>
-        <SButton @click="load">{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
       </template>
     </SPageHeader>
 
-    <SGrid class="mb-4" :xl-cols="4">
-      <SStatCard :label="t('usage.summary.requests')" :value="formatNumber(totals.requests)" icon="chart" :loading="loading" />
-      <SStatCard :label="t('usage.summary.successRate')" :value="successRate" icon="check" tone="success" :loading="loading" />
-      <SStatCard
-        :label="t('usage.summary.tokens')"
-        :value="formatNumber(totals.input + totals.output)"
-        :sub="t('usage.summary.tokensSub', { input: formatNumber(totals.input), output: formatNumber(totals.output) })"
-        icon="bolt"
-        tone="warning"
-        :loading="loading"
-      />
-      <SStatCard :label="t('usage.summary.cost')" :value="formatMoney(totals.cost)" icon="balance" :loading="loading" />
-    </SGrid>
+    <UsageSummaryCards :rows="days" :loading="loading" />
 
     <SCard :title="t('usage.summary.daily')" class="mb-4">
       <SChart v-if="days.length" :option="chartOption" height="220px" :loading="loading" />
-      <SHint v-else class="py-12 text-center">{{ t('common.noData') }}</SHint>
+      <SEmpty v-else :text="t('common.noData')" />
     </SCard>
 
-    <SCard :title="t('usage.stats.byModel')" :padded="false">
-      <STable :columns="modelColumns" :rows="modelRows" :loading="loading" row-key="key">
-        <template #cell-key="{ row }"><span class="font-mono">{{ row.key || '—' }}</span></template>
-        <template #cell-requests="{ row }">{{ formatNumber(row.requests) }}</template>
-        <template #cell-success="{ row }">{{ rate(row) }}</template>
-        <template #cell-input_tokens="{ row }">{{ formatNumber(row.input_tokens || 0) }}</template>
-        <template #cell-output_tokens="{ row }">{{ formatNumber(row.output_tokens || 0) }}</template>
-        <template #cell-total_cost="{ row }"><span class="font-mono">{{ formatMoney(row.total_cost) }}</span></template>
-      </STable>
-    </SCard>
+    <STable card :columns="modelColumns" :rows="modelRows" :loading="loading" row-key="key" data-testid="stats-by-model">
+      <template #toolbar><SSectionTitle tag="h3" class="!mb-0" :title="t('usage.stats.byModel')" /></template>
+      <template #cell-key="{ row }"><span class="font-mono">{{ row.key || '—' }}</span></template>
+      <template #cell-requests="{ row }">{{ formatNumber(row.requests) }}</template>
+      <template #cell-success="{ row }">{{ rate(row) }}</template>
+      <template #cell-input_tokens="{ row }">{{ formatNumber(row.input_tokens || 0) }}</template>
+      <template #cell-output_tokens="{ row }">{{ formatNumber(row.output_tokens || 0) }}</template>
+      <template #cell-total_cost="{ row }"><span class="font-mono">{{ formatMoney(row.total_cost) }}</span></template>
+    </STable>
   </div>
 </template>

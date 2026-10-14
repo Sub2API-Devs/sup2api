@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SHint, SInput, toast } from '@sub2api/ui'
+import { SBadge, SButton, SField, SHint, SInput, SSettingRow, SSettingsGroup, toast } from '@sub2api/ui'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
@@ -95,35 +95,35 @@ async function save() {
 </script>
 
 <template>
-  <SCard :title="t('plugins.detail.tabs.resources')" :subtitle="t('plugins.resources.hint')">
-    <table class="w-full max-w-2xl text-sm">
-      <thead>
-        <tr class="text-left">
-          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.item') }}</SHint></th>
-          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.requested') }}</SHint></th>
-          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.effective') }}</SHint></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="f in fields" :key="f.key" class="align-top">
-          <td class="py-2 pr-4">{{ t(f.label) }}</td>
-          <td class="py-2 pr-4 font-mono">{{ requestedOf(f) }}</td>
-          <td class="py-2">
-            <SField :error="errors[f.key]">
-              <div class="flex items-center gap-2">
-                <SInput v-model="form[f.key]" type="number" min="0" :step="f.step" class="w-40" :disabled="!canManage" />
-                <SHint v-if="f.unit" inline size="xs">{{ f.unit }}</SHint>
-                <span v-if="differs(f)" class="text-xs text-primary-600 dark:text-primary-400">{{ t('plugins.resources.overridden') }}</span>
-              </div>
-            </SField>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <div v-if="canManage" class="mt-4 flex flex-wrap items-center gap-2">
-      <SButton variant="primary" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
-      <SButton :disabled="saving" @click="reset">{{ t('common.reset') }}</SButton>
-      <SHint inline size="xs">{{ t('plugins.resources.restartHint') }}</SHint>
-    </div>
-  </SCard>
+  <SSettingsGroup :title="t('plugins.detail.tabs.resources')" :description="t('plugins.resources.hint')" data-testid="plugin-resources">
+    <template v-if="canManage" #actions>
+      <SButton size="sm" :disabled="saving" @click="reset">{{ t('common.reset') }}</SButton>
+      <SButton size="sm" variant="primary" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
+    </template>
+    <template v-if="canManage" #details>{{ t('plugins.resources.restartHint') }}</template>
+    <SSettingRow
+      v-for="f in fields"
+      :key="f.key"
+      :label="t(f.label)"
+      :description="t('plugins.resources.requestedValue', { value: requestedOf(f) })"
+      :for="`plugin-resource-${f.key}`"
+    >
+      <SField :error="errors[f.key]">
+        <div class="flex items-center gap-2">
+          <SBadge v-if="differs(f)" tone="primary">{{ t('plugins.resources.overridden') }}</SBadge>
+          <SInput
+            :id="`plugin-resource-${f.key}`"
+            v-model="form[f.key]"
+            type="number"
+            min="0"
+            :step="f.step"
+            class="w-32"
+            :error="!!errors[f.key]"
+            :disabled="!canManage"
+          />
+          <SHint v-if="f.unit" inline size="xs">{{ f.unit }}</SHint>
+        </div>
+      </SField>
+    </SSettingRow>
+  </SSettingsGroup>
 </template>

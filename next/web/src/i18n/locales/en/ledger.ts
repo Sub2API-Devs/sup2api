@@ -19,6 +19,7 @@ export default {
     refund: 'Refund'
   },
   adjust: {
+    currentBalance: 'Current balance',
     button: 'Adjust balance',
     title: 'Adjust balance',
     userHintSearch: 'Type an email to search, or enter a user ID',

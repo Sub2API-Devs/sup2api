@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SHint, SIcon, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SCode, SHint, SIcon, STable, toast, type TableColumn } from '@sub2api/ui'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -60,14 +60,16 @@ onMounted(load)
       <span class="text-sm font-semibold">{{ t('plugins.detail.tabs.jobs') }}</span>
     </template>
     <template #actions>
-      <SButton size="sm" variant="ghost" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+      <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" @click="load">
+        <SIcon v-if="!loading" name="refresh" class="h-4 w-4" />
+      </SButton>
     </template>
     <STable :columns="columns" :rows="jobs" :loading="loading">
       <template #cell-id="{ row }">
         <span class="font-mono font-medium">{{ row.id }}</span>
       </template>
       <template #cell-schedule="{ row }">
-        <code class="font-mono text-xs">{{ row.schedule }}</code>
+        <SCode inline :text="row.schedule" />
         <SHint v-if="row.next_run_at" size="xs">{{ t('plugins.jobs.next') }} {{ formatDateTime(row.next_run_at) }}</SHint>
       </template>
       <template #cell-last="{ row }">

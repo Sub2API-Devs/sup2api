@@ -70,12 +70,12 @@ function restartReason(n: PluginNode): string {
       </template>
       <template #cell-status="{ row }">
         <StatusBadge :status="status(row)" />
-        <div v-if="restartReason(row)" class="mt-0.5 max-w-[14rem] truncate text-xs text-red-500" :title="restartReason(row)">{{ restartReason(row) }}</div>
+        <SHint v-if="restartReason(row)" size="xs" tone="danger" class="mt-0.5 max-w-[14rem] truncate" :title="restartReason(row)">{{ restartReason(row) }}</SHint>
       </template>
       <template #cell-version="{ row }">
         <span class="font-mono text-sm">{{ display(st(row).serving) }}</span>
         <SHint v-if="st(row).standby" size="xs">{{ t('observe.standby') }}: {{ st(row).standby }}</SHint>
-        <div v-if="st(row).fallback" class="text-xs text-amber-600">{{ t('observe.fallback') }}: {{ st(row).fallback }}</div>
+        <SHint v-if="st(row).fallback" size="xs" tone="warning">{{ t('observe.fallback') }}: {{ st(row).fallback }}</SHint>
         <SHint size="xs">{{ t('observe.instances') }}: {{ st(row).instances?.length || 0 }}</SHint>
       </template>
       <template #cell-memory="{ row }">{{ memory(row) }}</template>

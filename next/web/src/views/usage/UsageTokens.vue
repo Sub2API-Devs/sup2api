@@ -12,7 +12,7 @@ const cacheWrite = computed(() => (props.row.cache_creation_tokens || 0) + (prop
 <template>
   <div
     v-if="!row.success && !row.input_tokens && !row.output_tokens && !row.cache_read_tokens && !cacheWrite"
-    class="text-gray-400"
+    class="text-fg-subtle"
   >
     —
   </div>
@@ -22,11 +22,11 @@ const cacheWrite = computed(() => (props.row.cache_creation_tokens || 0) + (prop
     :title="t('usage.cacheTitle', { r: formatNumber(row.cache_read_tokens), w: formatNumber(cacheWrite) })"
   >
     <div class="flex items-center justify-between gap-4">
-      <span class="text-gray-500">{{ t('usage.cols.input') }}</span
+      <span class="text-fg-muted">{{ t('usage.cols.input') }}</span
       ><span>{{ formatNumber(row.input_tokens) }}</span>
     </div>
     <div class="flex items-center justify-between gap-4">
-      <span class="text-gray-500">{{ t('usage.cols.output') }}</span
+      <span class="text-fg-muted">{{ t('usage.cols.output') }}</span
       ><span>{{ formatNumber(row.output_tokens) }}</span>
     </div>
     <div

@@ -30,12 +30,12 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
   <div>
     <SPageHeader :title="t('ledger.title')" :description="t('ledger.description')">
       <template #actions>
-        <SButton @click="reload">{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="reload">{{ t('common.refresh') }}</SButton>
         <SButton v-permission="'balance:adjust'" variant="primary" @click="adjustOpen = true">{{ t('ledger.adjust.button') }}</SButton>
       </template>
       <template #filters>
         <SField class="w-28" :label="t('usage.filters.userId')">
-          <SInput v-model.trim="filters.user_id" inputmode="numeric" placeholder="ID" />
+          <SInput v-model.trim="filters.user_id" inputmode="numeric" :placeholder="t('common.id')" />
         </SField>
         <SField class="w-40" :label="t('ledger.cols.kind')">
           <SSelect v-model="filters.kind" :options="kindOptions" />
@@ -49,10 +49,9 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
       </template>
     </SPageHeader>
 
-    <div class="card overflow-hidden">
-      <LedgerTable :rows="items" :loading="loading" />
-    </div>
-    <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <LedgerTable :rows="items" :loading="loading">
+      <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
+    </LedgerTable>
 
     <AdjustBalanceModal v-model:open="adjustOpen" :user-id="adjustUser" @done="reload" />
   </div>

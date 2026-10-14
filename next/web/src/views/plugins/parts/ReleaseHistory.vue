@@ -2,13 +2,16 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SDisclosure, SHint, SPagination } from '@sub2api/ui'
 import type { PluginHistory, PluginRelease } from '@/api/observability'
 import { formatDateTime } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { statusTone } from '@/api/admin'
+import StatusBadge from './StatusBadge.vue'
 const props = defineProps<{ pluginKey?: string; since?: string }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
+/** Localized rollout / node state; unknown values are shown raw. */
+const stateLabel = (v: string | null | undefined) => (v && te(`plugins.status.${v}`) ? t(`plugins.status.${v}`) : v || '—')
 const items = ref<PluginRelease[]>([]), events = ref<PluginHistory[]>([])
 const selected = ref<PluginRelease | null>(null), page = ref(1), total = ref(0), eventPage = ref(1), eventTotal = ref(0), error = ref('')
 const allEvents = ref(false)
@@ -52,27 +55,43 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
     <SHint v-if="!items.length && !error">{{ t('observe.noHistory') }}</SHint>
     <div class="space-y-3">
       <div v-for="item in items" :key="item.id" class="rounded-xl border border-gray-200 p-3 dark:border-dark-700">
-        <button type="button" class="flex w-full flex-wrap items-center gap-2 text-left text-sm" @click="select(item)">
-          <strong>{{ item.plugin_key }}</strong><code>#{{ item.id }} · {{ item.from_version || '—' }} → {{ item.target_version || '—' }}</code>
-          <SBadge :tone="statusTone(item.phase)">{{ item.phase }}</SBadge><time class="text-xs text-gray-500">{{ formatDateTime(item.created_at) }}</time>
+        <button
+          type="button"
+          class="flex w-full flex-wrap items-center gap-2 rounded text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          :aria-pressed="selected?.id === item.id"
+          @click="select(item)"
+        >
+          <strong>{{ item.plugin_key }}</strong>
+          <SCode inline :text="`#${item.id} · ${item.from_version || '—'} → ${item.target_version || '—'}`" />
+          <StatusBadge :status="item.phase" />
+          <SHint inline size="xs">{{ formatDateTime(item.created_at) }}</SHint>
         </button>
-        <div class="mt-2 flex flex-wrap gap-2"><SBadge v-for="node in item.nodes" :key="node.boot_id" :tone="statusTone(node.state)" :title="node.error">{{ node.node_id }} · {{ node.state }}</SBadge></div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <SBadge v-for="node in item.nodes" :key="node.boot_id" :tone="statusTone(node.state)" :title="node.error">{{ node.node_id }} · {{ stateLabel(node.state) }}</SBadge>
+        </div>
         <SHint v-if="item.error" tone="warning">{{ item.error }}</SHint>
       </div>
     </div>
-    <div class="my-3 flex items-center gap-3 text-xs"><SButton size="sm" :disabled="page <= 1" @click="page--">{{ t('observe.previous') }}</SButton><span>{{ t('observe.page', { page, total }) }}</span><SButton size="sm" :disabled="page * size >= total" @click="page++">{{ t('observe.next') }}</SButton></div>
-    <div v-if="selected || allEvents" class="space-y-3 border-t pt-4 dark:border-dark-700">
+    <SPagination v-if="total > size" v-model:page="page" :page-size="size" :page-sizes="[size]" :total="total" />
+    <div v-if="selected || allEvents" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
       <h3 class="font-semibold">{{ t('observe.timeline') }} · {{ selected?.plugin_key || pluginKey }} <template v-if="selected">#{{ selected.id }}</template></h3>
       <SHint v-if="!events.length">{{ t('observe.noHistory') }}</SHint>
       <div v-for="group in groups" :key="group.node" class="rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
         <strong class="text-sm">{{ group.node || t('observe.cluster') }}</strong>
-        <ol class="mt-2 space-y-3 border-l border-primary-300 pl-4 text-xs"><li v-for="event in group.events" :key="event.id">
-          <time class="text-gray-500">{{ formatDateTime(event.created_at) }} · {{ event.boot_id.slice(0,8) }}</time>
-          <div class="my-1"><SBadge :tone="statusTone(event.state)">{{ event.state }}</SBadge> <code>{{ event.version }}</code></div>
-          <details v-if="event.message"><summary class="cursor-pointer text-gray-500">{{ t('observe.detail') }}</summary><pre class="mt-1 whitespace-pre-wrap break-all">{{ event.message }}</pre></details>
-        </li></ol>
+        <ol class="mt-2 space-y-3 border-l border-primary-300 pl-4 text-xs">
+          <li v-for="event in group.events" :key="event.id">
+            <SHint inline size="xs">{{ formatDateTime(event.created_at) }} · {{ event.boot_id.slice(0, 8) }}</SHint>
+            <div class="my-1 flex flex-wrap items-center gap-2">
+              <StatusBadge :status="event.state" />
+              <SCode v-if="event.version" inline :text="event.version" />
+            </div>
+            <SDisclosure v-if="event.message" :label="t('observe.detail')">
+              <pre class="whitespace-pre-wrap break-all">{{ event.message }}</pre>
+            </SDisclosure>
+          </li>
+        </ol>
       </div>
-      <div class="flex items-center gap-3 text-xs"><SButton size="sm" :disabled="eventPage <= 1" @click="eventPage--">{{ t('observe.previous') }}</SButton><span>{{ t('observe.page', { page: eventPage, total: eventTotal }) }}</span><SButton size="sm" :disabled="eventPage * 50 >= eventTotal" @click="eventPage++">{{ t('observe.next') }}</SButton></div>
+      <SPagination v-if="eventTotal > 50" v-model:page="eventPage" :page-size="50" :page-sizes="[50]" :total="eventTotal" />
     </div>
   </SCard>
 </template>

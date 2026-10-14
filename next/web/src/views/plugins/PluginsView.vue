@@ -132,9 +132,9 @@ onMounted(load)
         <input ref="fileInput" type="file" accept=".s2plugin" class="hidden" @change="onFile" />
       </template>
       <template #filters>
-        <SInput v-model="q" class="w-64" :placeholder="t('plugins.list.searchPlaceholder')" />
+        <SInput v-model="q" class="w-64" :placeholder="t('plugins.list.searchPlaceholder')" :aria-label="t('common.search')" />
         <div class="w-48">
-          <SSelect v-model="status" :options="statusOptions" :placeholder="t('plugins.list.allStatuses')" />
+          <SSelect v-model="status" :options="statusOptions" :placeholder="t('plugins.list.allStatuses')" :aria-label="t('common.status')" />
         </div>
       </template>
     </SPageHeader>
@@ -155,10 +155,18 @@ onMounted(load)
       <template #cell-status="{ row }">
         <div class="flex flex-col items-start gap-0.5">
           <StatusBadge :status="shownStatus(row)" />
-          <span v-if="row.resource_conflicts?.length" class="max-w-[16rem] truncate text-xs text-red-500" :title="conflictLines(row).join('\n')" data-testid="plugin-conflicts">
+          <SHint
+            v-if="row.resource_conflicts?.length"
+            inline
+            size="xs"
+            tone="danger"
+            class="max-w-[16rem] truncate"
+            :title="conflictLines(row).join('\n')"
+            data-testid="plugin-conflicts"
+          >
             {{ t('plugins.conflicts.short', { n: row.resource_conflicts.length }) }}
-          </span>
-          <span v-if="row.status_reason" class="max-w-[16rem] truncate text-xs text-red-500" :title="row.status_reason">{{ row.status_reason }}</span>
+          </SHint>
+          <SHint v-if="row.status_reason" inline size="xs" tone="danger" class="max-w-[16rem] truncate" :title="row.status_reason">{{ row.status_reason }}</SHint>
         </div>
       </template>
       <template #cell-version="{ row }">

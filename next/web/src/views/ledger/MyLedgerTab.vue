@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SField, SGrid, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -76,14 +76,11 @@ defineExpose({ reload: reloadAll })
         :tone="negative ? 'danger' : 'primary'"
         :loading="balanceLoading"
       />
-      <div v-if="negative" class="card card-body text-sm text-red-600 dark:text-red-400 md:col-span-2">
-        {{ t('ledger.negativeHint') }}
-      </div>
+      <SAlert v-if="negative" tone="danger" class="self-center md:col-span-2" data-testid="ledger-negative">{{ t('ledger.negativeHint') }}</SAlert>
     </SGrid>
 
-    <div class="card overflow-hidden">
-      <LedgerTable :rows="items" :loading="loading" :show-user="false" />
-    </div>
-    <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <LedgerTable :rows="items" :loading="loading" :show-user="false">
+      <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
+    </LedgerTable>
   </div>
 </template>

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SDropdown, SHint, SPageHeader, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SDropdown, SHint, SSectionTitle, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { StickyRule, StickyStats } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -143,15 +143,16 @@ async function toggle(r: Row, v: boolean) {
   <div class="space-y-5">
     <StickySettingsCard />
 
-    <SPageHeader :title="t('sticky.rulesTitle')" :description="t('sticky.description')">
-      <template #actions>
-        <SButton @click="load">{{ t('common.refresh') }}</SButton>
-        <SButton v-if="canManage" variant="primary" @click="openCreate">+ {{ t('sticky.newRule') }}</SButton>
-      </template>
-    </SPageHeader>
-
-    <div class="card overflow-hidden">
-      <STable :columns="columns" :rows="rows" :loading="loading">
+    <!-- Rendered inside the settings tab: a section title, not a second page header. -->
+    <section data-testid="sticky-rules">
+      <SSectionTitle :title="t('sticky.rulesTitle')">
+        <template #actions>
+          <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
+          <SButton v-if="canManage" variant="primary" icon="plus" @click="openCreate">{{ t('sticky.newRule') }}</SButton>
+        </template>
+      </SSectionTitle>
+      <SHint class="mb-3">{{ t('sticky.description') }}</SHint>
+      <STable card :columns="columns" :rows="rows" :loading="loading">
         <template #cell-name="{ row }">
           <div class="font-mono text-sm">{{ row.name }}</div>
           <div class="mt-0.5 flex items-center gap-1">
@@ -161,7 +162,7 @@ async function toggle(r: Row, v: boolean) {
           </div>
         </template>
         <template #cell-enabled="{ row }">
-          <SSwitch :model-value="row.enabled" :disabled="!canManage" @update:model-value="toggle(row, $event)" />
+          <SSwitch :model-value="row.enabled" :disabled="!canManage" :aria-label="t('common.enabled') + ' · ' + row.name" @update:model-value="toggle(row, $event)" />
         </template>
         <template #cell-match="{ row }">
           <dl class="grid grid-cols-[max-content_1fr] gap-x-2 text-xs">
@@ -170,7 +171,7 @@ async function toggle(r: Row, v: boolean) {
             <dt class="muted">{{ t('sticky.modal.models') }}</dt>
             <dd class="font-mono">{{ list(row.match?.models) }}</dd>
             <template v-if="row.match?.userAgentContains?.length">
-              <dt class="muted">UA</dt>
+              <dt class="muted">{{ t('sticky.cols.ua') }}</dt>
               <dd class="font-mono">{{ list(row.match.userAgentContains) }}</dd>
             </template>
             <dt class="muted">{{ t('sticky.cols.keySources') }}</dt>
@@ -197,7 +198,7 @@ async function toggle(r: Row, v: boolean) {
           <SDropdown v-if="canManage" :actions="actions(row)" @select="onAction(row, $event)" />
         </template>
       </STable>
-    </div>
+    </section>
 
     <StickyRuleModal v-model:open="modalOpen" :rule="editing" :copy="copying" @saved="load" />
   </div>

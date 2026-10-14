@@ -11,7 +11,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, confirm } from '@sub2api/ui'
+import { SAlert, SButton, SCheckbox, SCode, SCopyButton, SDisclosure, SField, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea, confirm } from '@sub2api/ui'
 import type { CcgRemoteConfig, CcgRuntimeImages } from '@/api/types'
 import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
@@ -44,6 +44,8 @@ const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizeRequestPolicy(saved.value?.request_policy)))
 const settingsTabs = ['connection', 'network', 'cc', 'deployment'] as const
 const activeTab = ref<typeof settingsTabs[number]>(location.hash === '#ccgateway-runtime' ? 'deployment' : 'connection')
+const tabItems = computed(() => settingsTabs.map(key => ({ key, label: t('ccgateway.settingsTabs.' + key) })))
+const allocationOptions = computed(() => [{ value: 'random', label: t('ccgateway.remote.networkRandom') }, { value: 'sequential', label: t('ccgateway.remote.networkSequential') }])
 const runtimeRevision = ref(0)
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
@@ -83,8 +85,8 @@ const connectionDirty = computed(() => (savedController.value ? controllerTarget
 const dirty = computed(() => !saved.value || connectionDirty.value || imagesChanged.value || networkChanged.value || policyChanged.value)
 const canTest = computed(() => !disabled.value && savedController.value && !dirty.value)
 const savedEndpoint = computed(() => (saved.value ? formatControllerEndpoint(schemeOf(saved.value), saved.value.host, saved.value.port, basePathOf(saved.value)) : ''))
-/** The optional self-signed root certificate is tucked away: public certificates (domain names) need none. */
-const caOpen = ref(false)
+/** The optional self-signed root certificate is tucked away (folded again on every load): public certificates (domain names) need none. */
+const caKey = ref(0)
 watch(dirty, () => { output.value = '' })
 
 /** Version of the connected controller (GET runtime → installed.version, §53.6). */
@@ -103,6 +105,7 @@ async function loadHealth() {
     if (seq === healthSeq) health.loading = false
   }
 }
+const healthText = computed(() => health.loading ? t('ccgateway.remote.status.checking') : health.version ? t('ccgateway.remote.status.version', { version: health.version }) : health.failed ? (healthReason.value ? t('ccgateway.remote.status.unreachable', { reason: healthReason.value }) : t('ccgateway.remote.status.unreachableUnknown')) : '')
 const healthReason = computed(() => {
   const known = knownReason(health.reason)
   return known ? t(`ccgateway.reason.${known}`) : health.reason
@@ -124,6 +127,9 @@ const installEmailShown = computed(() => installEmailApplies(install.scheme, ins
 /** How the gateway gets its certificate (§53.9): ACME for a domain name, Caddy's internal CA (pinned) otherwise; none over HTTP. */
 const installCert = computed<'acme' | 'internal' | null>(() => (install.scheme === 'http' || !installTargetHost.value ? null : isDomainHost(installTargetHost.value) ? 'acme' : 'internal'))
 const installOpen = ref(false), installing = ref(false), installError = ref('')
+const methodOptions = computed(() => [{ value: 'local', label: t('ccgateway.controllerInstall.methodLocal') }, { value: 'ssh', label: t('ccgateway.controllerInstall.methodSsh') }])
+const schemeOptions = computed(() => [{ value: 'https', label: t('ccgateway.remote.schemeHttps') }, { value: 'http', label: t('ccgateway.remote.schemeHttp') }])
+const authModeOptions = computed(() => [{ value: 'password', label: t('ccgateway.remote.password') }, { value: 'private_key', label: t('ccgateway.remote.privateKey') }])
 /** Non-blocking findings of a successful install (warnings of the response, e.g. dns_mismatch). */
 const installWarnings = ref<string[]>([])
 const installProbe = ref<{ fingerprint: string; host: string; port: number } | null>(null)
@@ -147,7 +153,7 @@ function assign(config: RemoteConfig) {
   network.allocation = config.network?.allocation || 'random'
   const controller = config.mode === 'controller'
   conn.endpoint = controller && config.host ? formatControllerEndpoint(schemeOf(config), config.host, config.port, basePathOf(config)) : ''
-  adminKey.value = ''; controllerCa.value = ''; output.value = ''; caOpen.value = false
+  adminKey.value = ''; controllerCa.value = ''; output.value = ''; caKey.value++
   installOpen.value = !controller
   useSavedSsh.value = config.mode === 'ssh' && !!config.account_runtimes
   if (controller) void loadHealth()
@@ -272,150 +278,183 @@ onBeforeUnmount(() => { healthSeq++; clearSecrets() })
 
 <template>
   <section class="space-y-4" :aria-label="t('ccgateway.settingsTabs.label')">
-      <nav v-if="saved" class="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2 dark:border-dark-700" :aria-label="t('ccgateway.settingsTabs.label')">
-        <button v-for="tab in settingsTabs" :key="tab" type="button" :data-testid="'settings-tab-' + tab" :aria-current="activeTab === tab ? 'page' : undefined" class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium" :class="activeTab === tab ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-800'" @click="activeTab = tab">{{ t('ccgateway.settingsTabs.' + tab) }}</button>
-      </nav>
-    <div class="card space-y-4 border border-gray-200 p-5 dark:border-dark-700" data-testid="settings-card">
-    <div v-show="activeTab === 'connection'"><h3 class="font-semibold">{{ t('ccgateway.remote.title') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('ccgateway.remote.description') }}</p></div>
-    <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p><p v-if="notice" role="status" class="text-sm text-emerald-600">{{ notice }}</p>
-    <p v-for="w in installWarnings" :key="w" role="status" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300" data-testid="controller-install-warning">{{ installWarning(w) }}</p>
-    <button v-if="!saved" type="button" class="btn btn-secondary btn-sm" :disabled="disabled" @click="run(load)">{{ t('ccgateway.remote.reload') }}</button>
-    <form v-else novalidate class="space-y-4" @submit.prevent="run(save)">
-
-      <fieldset :disabled="disabled" class="min-w-0 space-y-4">
-      <section v-show="activeTab === 'connection'" class="space-y-3" data-testid="settings-connection">
-        <div><h4 class="text-sm font-semibold">{{ t('ccgateway.remote.connectionTitle') }}</h4><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.remote.controllerHint') }}</p></div>
-        <div class="space-y-1 rounded-lg p-3 text-sm" :class="connectionState === 'connected' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'" data-testid="controller-status" :data-state="connectionState">
-          <template v-if="connectionState === 'connected'">
-            <p class="break-all font-medium">{{ t('ccgateway.remote.status.connected', { url: savedEndpoint }) }}</p>
-            <p class="text-xs" data-testid="controller-version">{{ health.loading ? t('ccgateway.remote.status.checking') : health.version ? t('ccgateway.remote.status.version', { version: health.version }) : health.failed ? (healthReason ? t('ccgateway.remote.status.unreachable', { reason: healthReason }) : t('ccgateway.remote.status.unreachableUnknown')) : '' }}</p>
-          </template>
-          <template v-else-if="connectionState === 'legacy'">
-            <p class="break-all font-medium">{{ t('ccgateway.remote.status.legacy', { mode: t(`ccgateway.remote.${saved.mode}`) }) }}</p>
-            <p class="text-xs">{{ t('ccgateway.remote.status.legacyHint') }}</p>
-          </template>
-          <template v-else>
-            <p class="font-medium">{{ t('ccgateway.remote.status.unconfigured') }}</p>
-            <p class="text-xs">{{ t('ccgateway.remote.status.unconfiguredHint') }}</p>
-          </template>
-        </div>
-        <label class="block text-sm">{{ t('ccgateway.remote.controllerEndpoint') }}<input v-model="conn.endpoint" type="url" inputmode="url" class="input mt-1 w-full font-mono" autocomplete="off" spellcheck="false" placeholder="https://controller.example.com:18443/controller" data-testid="controller-endpoint" /></label>
-        <p class="text-xs text-gray-500">{{ t('ccgateway.remote.controllerEndpointHint') }}</p>
-        <p v-if="!https" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300" data-testid="controller-http-warning">{{ t('ccgateway.remote.httpWarning') }}</p>
-        <label class="block text-sm">{{ t('ccgateway.remote.controllerKey') }}<input v-model="adminKey" type="password" autocomplete="new-password" class="input mt-1 w-full" :placeholder="controllerKeyKept ? t('ccgateway.remote.keepSecret') : ''" :required="!controllerKeyKept" data-testid="controller-admin-key" /></label>
-        <p class="text-xs text-gray-500">{{ t('ccgateway.remote.controllerKeyHint') }}</p>
-        <template v-if="https">
-          <p v-if="savedController && saved.has_controller_ca && controllerTargetChanged && !controllerCa.trim()" class="text-sm text-amber-700 dark:text-amber-300" data-testid="controller-ca-reset">{{ t('ccgateway.remote.controllerCaReset') }}</p>
-          <div class="rounded-lg border border-gray-200 dark:border-dark-700">
-            <button type="button" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm" :aria-expanded="caOpen" data-testid="controller-ca-toggle" @click="caOpen = !caOpen">
-              <span>{{ t('ccgateway.remote.controllerCaAdvanced') }}</span><span class="text-xs text-gray-500" aria-hidden="true">{{ caOpen ? '▾' : '▸' }}</span>
-            </button>
-            <div v-if="caOpen" class="space-y-2 border-t border-gray-200 p-3 dark:border-dark-700" data-testid="controller-ca-panel">
-              <label class="block text-sm">{{ t('ccgateway.remote.controllerCa') }}<textarea v-model="controllerCa" autocomplete="off" spellcheck="false" rows="5" class="input mt-1 w-full font-mono text-xs" placeholder="-----BEGIN CERTIFICATE-----" data-testid="controller-ca" /></label>
-              <p v-if="savedController && saved.has_controller_ca && saved.controller_ca_fingerprint" class="break-all font-mono text-xs text-gray-500" data-testid="controller-ca-fingerprint">{{ t('ccgateway.remote.controllerCaSaved', { fingerprint: saved.controller_ca_fingerprint }) }}</p>
-              <p class="text-xs text-gray-500">{{ t('ccgateway.remote.controllerCaHint') }}</p>
+    <STabs v-if="saved" v-model="activeTab" :tabs="tabItems" data-testid="settings-tabs" />
+    <div class="space-y-4" data-testid="settings-card">
+      <div v-show="activeTab === 'connection'">
+        <h4 class="text-base font-semibold text-fg">{{ t('ccgateway.remote.title') }}</h4>
+        <p class="mt-1 text-sm text-fg-muted">{{ t('ccgateway.remote.description') }}</p>
+      </div>
+      <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+      <SAlert v-if="notice" tone="success" dense>{{ notice }}</SAlert>
+      <SAlert v-for="w in installWarnings" :key="w" tone="warning" data-testid="controller-install-warning">{{ installWarning(w) }}</SAlert>
+      <SButton v-if="!saved" size="sm" :disabled="disabled" @click="run(load)">{{ t('ccgateway.remote.reload') }}</SButton>
+      <form v-else novalidate class="space-y-4" @submit.prevent="run(save)">
+        <fieldset :disabled="disabled" class="min-w-0 space-y-4">
+          <SSettingsGroup v-show="activeTab === 'connection'" :title="t('ccgateway.remote.connectionTitle')" :description="t('ccgateway.remote.controllerHint')" data-testid="settings-connection">
+            <div class="py-4">
+              <SAlert :tone="connectionState === 'connected' ? 'success' : 'warning'" data-testid="controller-status" :data-state="connectionState">
+                <template v-if="connectionState === 'connected'">
+                  <p class="break-all font-medium">{{ t('ccgateway.remote.status.connected', { url: savedEndpoint }) }}</p>
+                  <p class="text-xs" data-testid="controller-version">{{ healthText }}</p>
+                </template>
+                <template v-else-if="connectionState === 'legacy'">
+                  <p class="break-all font-medium">{{ t('ccgateway.remote.status.legacy', { mode: t(`ccgateway.remote.${saved.mode}`) }) }}</p>
+                  <p class="text-xs">{{ t('ccgateway.remote.status.legacyHint') }}</p>
+                </template>
+                <template v-else>
+                  <p class="font-medium">{{ t('ccgateway.remote.status.unconfigured') }}</p>
+                  <p class="text-xs">{{ t('ccgateway.remote.status.unconfiguredHint') }}</p>
+                </template>
+              </SAlert>
             </div>
-          </div>
-        </template>
-        <div class="flex flex-wrap items-center gap-3">
-          <button type="button" class="btn btn-secondary btn-sm" :disabled="!canTest" data-testid="remote-test" @click="run(test)">{{ t('ccgateway.remote.test') }}</button>
-          <span class="text-xs text-gray-500">{{ !savedController ? t('ccgateway.remote.testUnavailable') : dirty ? t('ccgateway.remote.saveFirst') : t('ccgateway.remote.testHint') }}</span>
-        </div>
-        <pre v-if="output" class="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-950 p-3 text-xs text-gray-100" data-testid="remote-output">{{ output }}</pre>
-      </section>
-        <RequestPolicySettings v-show="activeTab === 'cc'" v-model="requestPolicy" />
-        <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
-        <div class="space-y-2" data-testid="remote-images">
-          <div v-show="activeTab === 'network'" class="space-y-3">
-          <label class="block text-sm">{{ t('ccgateway.remote.networkPool') }}<input v-model="network.pool" class="input mt-1 w-full font-mono text-xs" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" /></label>
-          <label class="block text-sm">{{ t('ccgateway.remote.networkAllocation') }}<select v-model="network.allocation" class="input mt-1 w-full" data-testid="network-allocation"><option value="random">{{ t('ccgateway.remote.networkRandom') }}</option><option value="sequential">{{ t('ccgateway.remote.networkSequential') }}</option></select></label>
-          <p class="text-xs text-gray-500">{{ t('ccgateway.remote.networkHint') }}</p>
-          </div>
-          <RuntimeInstall v-show="activeTab === 'deployment'" :key="runtimeRevision" :mode="saved.mode" :account-runtimes="saved.account_runtimes" :has-admin-key="saved.has_admin_key" :disabled="disabled || dirty" @changed="reloadQuietly">
-          <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <label v-for="key in IMAGE_KEYS" :key="key" class="block min-w-0 text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /><span v-if="saved.effective_images?.[key]" class="mt-1 block break-all text-xs text-gray-500">{{ t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) }}</span></label>
-          </div>
-          <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
-          </RuntimeInstall>
-        </div>
-        <div class="flex justify-end border-t border-gray-100 bg-white py-3 dark:border-dark-700 dark:bg-dark-900"><button class="btn btn-primary" :disabled="!dirty" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</button></div>
-      </fieldset>
-    </form>
-    <section v-if="saved" v-show="activeTab === 'connection'" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700" data-testid="controller-install">
-      <button type="button" class="flex w-full items-center justify-between gap-2 text-left" :aria-expanded="installOpen" data-testid="controller-install-toggle" @click="installOpen = !installOpen">
-        <span class="text-sm font-semibold">{{ connectionState === 'connected' ? t('ccgateway.controllerInstall.reinstall') : t('ccgateway.controllerInstall.title') }}</span>
-        <span class="text-xs text-gray-500" aria-hidden="true">{{ installOpen ? '▾' : '▸' }}</span>
-      </button>
-      <div v-if="installOpen" class="space-y-3" data-testid="controller-install-form">
-        <p class="text-sm text-gray-500">{{ t('ccgateway.controllerInstall.hint') }}</p>
-        <p v-if="legacy" class="text-sm text-amber-700 dark:text-amber-300" data-testid="controller-install-legacy">{{ t('ccgateway.controllerInstall.legacyHint') }}</p>
-        <fieldset :disabled="disabled" class="min-w-0 space-y-3">
-          <div class="text-sm" role="radiogroup" :aria-label="t('ccgateway.controllerInstall.method')">
-            <span class="block">{{ t('ccgateway.controllerInstall.method') }}</span>
-            <div class="mt-1 flex flex-wrap gap-4">
-              <label class="flex items-center gap-2"><input v-model="install.method" type="radio" value="local" data-testid="install-method" />{{ t('ccgateway.controllerInstall.methodLocal') }}</label>
-              <label class="flex items-center gap-2"><input v-model="install.method" type="radio" value="ssh" data-testid="install-method" />{{ t('ccgateway.controllerInstall.methodSsh') }}</label>
-            </div>
-          </div>
-          <p v-if="install.method === 'local'" class="text-xs text-gray-500" data-testid="install-local-hint">{{ t('ccgateway.controllerInstall.localHint') }}</p>
-          <template v-else>
-            <template v-if="canUseSavedSsh">
-              <label class="flex items-start gap-2 text-sm"><input v-model="useSavedSsh" type="checkbox" class="mt-1" data-testid="install-use-saved" /><span class="min-w-0 break-all">{{ t('ccgateway.controllerInstall.useSaved', { target: savedSshTarget }) }}</span></label>
-              <p v-if="useSavedSsh" class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.useSavedHint') }}</p>
-            </template>
-            <div v-if="installMethod === 'ssh'" class="space-y-3" data-testid="install-ssh">
-              <div class="grid gap-3 sm:grid-cols-3">
-                <label class="block text-sm sm:col-span-2">{{ t('ccgateway.remote.host') }}<input v-model="sshForm.host" class="input mt-1 w-full" autocomplete="off" spellcheck="false" data-testid="install-ssh-host" /></label>
-                <label class="block text-sm">{{ t('ccgateway.remote.port') }}<input v-model="sshForm.port" type="number" min="1" max="65535" class="input mt-1 w-full" data-testid="install-ssh-port" /></label>
+            <SSettingRow :label="t('ccgateway.remote.controllerEndpoint')" :description="t('ccgateway.remote.controllerEndpointHint')" stacked>
+              <div class="w-full space-y-2">
+                <SInput v-model="conn.endpoint" type="url" inputmode="url" mono autocomplete="off" spellcheck="false" placeholder="https://controller.example.com:18443/controller" data-testid="controller-endpoint" />
+                <SAlert v-if="!https" tone="warning" dense data-testid="controller-http-warning">{{ t('ccgateway.remote.httpWarning') }}</SAlert>
               </div>
-              <label class="block text-sm">{{ t('ccgateway.remote.user') }}<input v-model="sshForm.user" autocomplete="off" spellcheck="false" class="input mt-1 w-full" data-testid="install-ssh-user" /></label>
-              <label class="block text-sm">{{ t('ccgateway.remote.authMode') }}<select v-model="sshForm.auth_mode" class="input mt-1 w-full" data-testid="install-ssh-auth"><option value="password">{{ t('ccgateway.remote.password') }}</option><option value="private_key">{{ t('ccgateway.remote.privateKey') }}</option></select></label>
-              <label v-if="sshForm.auth_mode === 'password'" class="block text-sm">{{ t('ccgateway.remote.password') }}<input v-model="sshSecrets.password" type="password" autocomplete="new-password" class="input mt-1 w-full" data-testid="install-ssh-password" /></label>
-              <template v-else>
-                <label class="block text-sm">{{ t('ccgateway.remote.privateKey') }}<textarea v-model="sshSecrets.private_key" autocomplete="off" spellcheck="false" rows="5" class="input mt-1 w-full font-mono text-xs" data-testid="install-ssh-private-key" /></label>
-                <label class="block text-sm">{{ t('ccgateway.remote.passphrase') }}<input v-model="sshSecrets.passphrase" type="password" autocomplete="new-password" class="input mt-1 w-full" data-testid="install-ssh-passphrase" /></label>
-              </template>
-              <label class="block text-sm">{{ t('ccgateway.remote.fingerprint') }}<input v-model="sshForm.host_key_fingerprint" class="input mt-1 w-full font-mono text-xs" autocomplete="off" spellcheck="false" placeholder="SHA256:…" data-testid="install-ssh-fingerprint" /></label>
-              <button type="button" class="btn btn-secondary btn-sm" data-testid="install-ssh-probe" @click="probeFingerprint">{{ t('ccgateway.remote.probe') }}</button>
-              <div v-if="installProbe" class="space-y-2 rounded-lg border border-amber-200 p-3 text-sm"><p>{{ t('ccgateway.remote.verifyFingerprint') }}</p><code class="block break-all">{{ installProbe.fingerprint }}</code><button type="button" class="btn btn-secondary btn-sm" data-testid="install-use-fingerprint" @click="useFingerprint">{{ t('ccgateway.remote.useFingerprint') }}</button></div>
-              <p class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.sshHint') }}</p>
+            </SSettingRow>
+            <SSettingRow :label="t('ccgateway.remote.controllerKey')" :description="t('ccgateway.remote.controllerKeyHint')" stacked>
+              <SInput v-model="adminKey" type="password" autocomplete="new-password" :placeholder="controllerKeyKept ? t('ccgateway.remote.keepSecret') : ''" :required="!controllerKeyKept" data-testid="controller-admin-key" />
+            </SSettingRow>
+            <div v-if="https" class="space-y-2 py-4">
+              <SHint v-if="savedController && saved.has_controller_ca && controllerTargetChanged && !controllerCa.trim()" tone="warning" data-testid="controller-ca-reset">{{ t('ccgateway.remote.controllerCaReset') }}</SHint>
+              <SDisclosure :key="caKey" :label="t('ccgateway.remote.controllerCaAdvanced')" data-testid="controller-ca-toggle">
+                <div class="space-y-2" data-testid="controller-ca-panel">
+                  <SField :label="t('ccgateway.remote.controllerCa')">
+                    <STextarea v-model="controllerCa" mono :rows="5" autocomplete="off" spellcheck="false" class="text-xs" placeholder="-----BEGIN CERTIFICATE-----" data-testid="controller-ca" />
+                  </SField>
+                  <p v-if="savedController && saved.has_controller_ca && saved.controller_ca_fingerprint" class="break-all font-mono" data-testid="controller-ca-fingerprint">{{ t('ccgateway.remote.controllerCaSaved', { fingerprint: saved.controller_ca_fingerprint }) }}</p>
+                  <p>{{ t('ccgateway.remote.controllerCaHint') }}</p>
+                </div>
+              </SDisclosure>
             </div>
-          </template>
-          <div class="space-y-3 border-t border-gray-100 pt-3 dark:border-dark-700">
-            <p class="text-sm font-medium">{{ t('ccgateway.controllerInstall.gateway') }}</p>
-            <div class="text-sm" role="radiogroup" :aria-label="t('ccgateway.remote.scheme')">
-              <span class="block">{{ t('ccgateway.remote.scheme') }}</span>
-              <div class="mt-1 flex flex-wrap gap-4">
-                <label class="flex items-center gap-2"><input v-model="install.scheme" type="radio" value="https" data-testid="install-scheme" />{{ t('ccgateway.remote.schemeHttps') }}</label>
-                <label class="flex items-center gap-2"><input v-model="install.scheme" type="radio" value="http" data-testid="install-scheme" />{{ t('ccgateway.remote.schemeHttp') }}</label>
-              </div>
+            <SSettingRow :label="t('ccgateway.remote.test')" :description="!savedController ? t('ccgateway.remote.testUnavailable') : dirty ? t('ccgateway.remote.saveFirst') : t('ccgateway.remote.testHint')">
+              <SButton size="sm" :disabled="!canTest" data-testid="remote-test" @click="run(test)">{{ t('ccgateway.remote.test') }}</SButton>
+            </SSettingRow>
+            <div v-if="output" class="py-4">
+              <SCode class="max-h-72 overflow-auto" data-testid="remote-output">{{ output }}</SCode>
             </div>
-            <p v-if="install.scheme === 'http'" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300" data-testid="install-http-warning">{{ t('ccgateway.remote.httpWarning') }}</p>
-            <div class="grid gap-3 sm:grid-cols-3">
-              <label class="block text-sm sm:col-span-2">{{ t('ccgateway.controllerInstall.host') }}<input v-model="install.host" class="input mt-1 w-full" autocomplete="off" spellcheck="false" :placeholder="installDefaultHost" data-testid="install-host" /></label>
-              <label class="block text-sm">{{ t('ccgateway.controllerInstall.port') }}<input v-model="install.port" type="number" min="1" max="65535" class="input mt-1 w-full" :placeholder="t('ccgateway.controllerInstall.portPlaceholder')" data-testid="install-port" /></label>
-            </div>
-            <p class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.portHint', AUTO_PORT_START) }}</p>
-            <p class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.hostHint') }}</p>
-            <p v-if="installCert" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-dark-800 dark:text-gray-300" data-testid="install-cert" :data-cert="installCert">{{ t(`ccgateway.controllerInstall.cert.${installCert}`) }}</p>
-            <template v-if="installEmailShown">
-              <label class="block text-sm">{{ t('ccgateway.controllerInstall.email') }}<input v-model="install.email" type="email" class="input mt-1 w-full" autocomplete="off" spellcheck="false" data-testid="install-email" /></label>
-              <p class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.emailHint') }}</p>
-            </template>
+          </SSettingsGroup>
+          <RequestPolicySettings v-show="activeTab === 'cc'" v-model="requestPolicy" />
+          <SAlert v-if="imageError" tone="danger" dense>{{ imageError }}</SAlert>
+          <div class="space-y-4" data-testid="remote-images">
+            <SSettingsGroup v-show="activeTab === 'network'" :title="t('ccgateway.settingsTabs.network')" :description="t('ccgateway.remote.networkShort')" data-testid="settings-network">
+              <template #details>{{ t('ccgateway.remote.networkHint') }}</template>
+              <SSettingRow :label="t('ccgateway.remote.networkPool')">
+                <SInput v-model="network.pool" mono class="w-full sm:w-64" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" />
+              </SSettingRow>
+              <SSettingRow :label="t('ccgateway.remote.networkAllocation')">
+                <SSegmented :model-value="network.allocation" @update:model-value="network.allocation = $event as typeof network.allocation" :options="allocationOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.remote.networkAllocation')" data-testid="network-allocation" />
+              </SSettingRow>
+            </SSettingsGroup>
+            <RuntimeInstall v-show="activeTab === 'deployment'" :key="runtimeRevision" :mode="saved.mode" :account-runtimes="saved.account_runtimes" :has-admin-key="saved.has_admin_key" :disabled="disabled || dirty" @changed="reloadQuietly">
+              <SSettingsGroup :title="t('ccgateway.remote.images')" :description="t('ccgateway.remote.imagesHint')" data-testid="settings-images">
+                <SSettingRow v-for="key in IMAGE_KEYS" :key="key" :label="t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`)" :description="saved.effective_images?.[key] ? t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) : ''">
+                  <SInput v-model="images[key]" mono autocomplete="off" spellcheck="false" class="w-full sm:w-80" :data-testid="`image-${key}`" />
+                </SSettingRow>
+              </SSettingsGroup>
+            </RuntimeInstall>
+          </div>
+          <div class="flex justify-end border-t border-line bg-surface py-3">
+            <SButton type="submit" variant="primary" :disabled="!dirty" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</SButton>
           </div>
         </fieldset>
-        <p v-if="otherDirty" class="text-xs text-amber-700 dark:text-amber-300" data-testid="controller-install-blocked">{{ t('ccgateway.controllerInstall.saveOthersFirst') }}</p>
-        <p v-if="installError" role="alert" class="break-all text-sm text-red-600" data-testid="controller-install-error">{{ installError }}</p>
-        <div class="flex flex-wrap items-center gap-3">
-          <SButton type="button" variant="primary" size="sm" :loading="installing" :disabled="disabled || otherDirty" data-testid="controller-install-submit" @click="installController">{{ t('ccgateway.controllerInstall.submit') }}</SButton>
-          <span v-if="installing" class="text-xs text-gray-500">{{ t('ccgateway.controllerInstall.installing') }}</span>
+      </form>
+      <SSettingsGroup v-if="saved" v-show="activeTab === 'connection'" collapsible :open="installOpen" :description="installOpen ? t('ccgateway.controllerInstall.hint') : ''" data-testid="controller-install" @update:open="installOpen = $event">
+        <template #title>
+          <h5 class="text-sm font-semibold text-fg" data-testid="controller-install-toggle">{{ connectionState === 'connected' ? t('ccgateway.controllerInstall.reinstall') : t('ccgateway.controllerInstall.title') }}</h5>
+        </template>
+        <div class="divide-y divide-line" data-testid="controller-install-form">
+          <SHint v-if="legacy" tone="warning" class="py-3" data-testid="controller-install-legacy">{{ t('ccgateway.controllerInstall.legacyHint') }}</SHint>
+          <fieldset :disabled="disabled" class="min-w-0 divide-y divide-line">
+            <SSettingRow :label="t('ccgateway.controllerInstall.method')">
+              <template #description>
+                <span v-if="install.method === 'local'" data-testid="install-local-hint">{{ t('ccgateway.controllerInstall.localHint') }}</span>
+                <span v-else>{{ t('ccgateway.controllerInstall.sshHint') }}</span>
+              </template>
+              <SSegmented :model-value="install.method" @update:model-value="install.method = $event as typeof install.method" :options="methodOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.controllerInstall.method')" data-testid="install-method" />
+            </SSettingRow>
+            <template v-if="install.method === 'ssh'">
+              <div v-if="canUseSavedSsh" class="space-y-1 py-4">
+                <SCheckbox v-model="useSavedSsh" data-testid="install-use-saved"><span class="break-all">{{ t('ccgateway.controllerInstall.useSaved', { target: savedSshTarget }) }}</span></SCheckbox>
+                <SHint v-if="useSavedSsh" size="xs" class="pl-6">{{ t('ccgateway.controllerInstall.useSavedHint') }}</SHint>
+              </div>
+              <div v-if="installMethod === 'ssh'" class="divide-y divide-line" data-testid="install-ssh">
+                <div class="grid gap-3 py-4 sm:grid-cols-3">
+                  <SField :label="t('ccgateway.remote.host')" class="sm:col-span-2">
+                    <SInput v-model="sshForm.host" autocomplete="off" spellcheck="false" data-testid="install-ssh-host" />
+                  </SField>
+                  <SField :label="t('ccgateway.remote.port')">
+                    <SInput v-model="sshForm.port" type="number" min="1" max="65535" data-testid="install-ssh-port" />
+                  </SField>
+                  <SField :label="t('ccgateway.remote.user')" class="sm:col-span-3">
+                    <SInput v-model="sshForm.user" autocomplete="off" spellcheck="false" data-testid="install-ssh-user" />
+                  </SField>
+                </div>
+                <SSettingRow :label="t('ccgateway.remote.authMode')">
+                  <SSegmented :model-value="sshForm.auth_mode" @update:model-value="sshForm.auth_mode = $event as typeof sshForm.auth_mode" :options="authModeOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.remote.authMode')" data-testid="install-ssh-auth" />
+                </SSettingRow>
+                <div class="space-y-3 py-4">
+                  <SField v-if="sshForm.auth_mode === 'password'" :label="t('ccgateway.remote.password')">
+                    <SInput v-model="sshSecrets.password" type="password" autocomplete="new-password" data-testid="install-ssh-password" />
+                  </SField>
+                  <template v-else>
+                    <SField :label="t('ccgateway.remote.privateKey')">
+                      <STextarea v-model="sshSecrets.private_key" mono :rows="5" autocomplete="off" spellcheck="false" class="text-xs" data-testid="install-ssh-private-key" />
+                    </SField>
+                    <SField :label="t('ccgateway.remote.passphrase')">
+                      <SInput v-model="sshSecrets.passphrase" type="password" autocomplete="new-password" data-testid="install-ssh-passphrase" />
+                    </SField>
+                  </template>
+                  <SField :label="t('ccgateway.remote.fingerprint')">
+                    <div class="flex flex-wrap gap-2">
+                      <SInput v-model="sshForm.host_key_fingerprint" mono autocomplete="off" spellcheck="false" placeholder="SHA256:…" class="min-w-0 flex-1 text-xs" data-testid="install-ssh-fingerprint" />
+                      <SButton size="sm" data-testid="install-ssh-probe" @click="probeFingerprint">{{ t('ccgateway.remote.probe') }}</SButton>
+                    </div>
+                  </SField>
+                  <SAlert v-if="installProbe" tone="warning" :title="t('ccgateway.remote.verifyFingerprint')">
+                    <SCode inline class="mt-1 block break-all">{{ installProbe.fingerprint }}</SCode>
+                    <template #actions>
+                      <SCopyButton :text="installProbe.fingerprint" icon-only />
+                      <SButton size="sm" data-testid="install-use-fingerprint" @click="useFingerprint">{{ t('ccgateway.remote.useFingerprint') }}</SButton>
+                    </template>
+                  </SAlert>
+                </div>
+              </div>
+            </template>
+            <SSettingRow :label="t('ccgateway.controllerInstall.gateway')" :description="t('ccgateway.controllerInstall.hostHint')" stacked>
+              <div class="w-full space-y-3">
+                <SField :label="t('ccgateway.remote.scheme')">
+                  <SSegmented :model-value="install.scheme" @update:model-value="install.scheme = $event as typeof install.scheme" :options="schemeOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.remote.scheme')" data-testid="install-scheme" />
+                </SField>
+                <SAlert v-if="install.scheme === 'http'" tone="warning" dense data-testid="install-http-warning">{{ t('ccgateway.remote.httpWarning') }}</SAlert>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <SField :label="t('ccgateway.controllerInstall.host')" class="sm:col-span-2">
+                    <SInput v-model="install.host" autocomplete="off" spellcheck="false" :placeholder="installDefaultHost" data-testid="install-host" />
+                  </SField>
+                  <SField :label="t('ccgateway.controllerInstall.port')" :hint="t('ccgateway.controllerInstall.portHint', AUTO_PORT_START)">
+                    <SInput v-model="install.port" type="number" min="1" max="65535" :placeholder="t('ccgateway.controllerInstall.portPlaceholder')" data-testid="install-port" />
+                  </SField>
+                </div>
+                <SAlert v-if="installCert" tone="info" dense data-testid="install-cert" :data-cert="installCert">{{ t(`ccgateway.controllerInstall.cert.${installCert}`) }}</SAlert>
+                <SField v-if="installEmailShown" :label="t('ccgateway.controllerInstall.email')" :hint="t('ccgateway.controllerInstall.emailHint')">
+                  <SInput v-model="install.email" type="email" autocomplete="off" spellcheck="false" data-testid="install-email" />
+                </SField>
+              </div>
+            </SSettingRow>
+          </fieldset>
+          <div class="space-y-2 py-4">
+            <SHint v-if="otherDirty" tone="warning" size="xs" data-testid="controller-install-blocked">{{ t('ccgateway.controllerInstall.saveOthersFirst') }}</SHint>
+            <SAlert v-if="installError" tone="danger" dense data-testid="controller-install-error"><span class="break-all">{{ installError }}</span></SAlert>
+            <div class="flex flex-wrap items-center gap-3">
+              <SButton variant="primary" size="sm" :loading="installing" :disabled="disabled || otherDirty" data-testid="controller-install-submit" @click="installController">{{ t('ccgateway.controllerInstall.submit') }}</SButton>
+              <SHint v-if="installing" inline size="xs">{{ t('ccgateway.controllerInstall.installing') }}</SHint>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </SSettingsGroup>
     </div>
     <!-- Deployment: the runtime and its images (saved with the form above), then the account containers they run. -->
     <div v-if="saved" v-show="activeTab === 'deployment'" data-testid="settings-accounts"><slot name="accounts" /></div>
   </section>
-
 </template>

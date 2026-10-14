@@ -2,11 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SHint, SIcon, SPageHeader, SStatCard, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
-import { formatDateTime, formatRelative } from '@/utils/format'
+import TimeText from '@/components/TimeText.vue'
 import TopologyGraph from './TopologyGraph.vue'
 
 const { t } = useI18n()
@@ -66,12 +66,6 @@ function isStale(n: NodeInfo) {
   return ageSeconds(n.last_heartbeat) > STALE_SECONDS
 }
 
-function relative(v: string | null | undefined) {
-  // Depend on tick so the text refreshes every second.
-  void tick.value
-  return formatRelative(v, t)
-}
-
 function parsePlugin(v: string | Record<string, any> | null | undefined): NodePluginState {
   if (v === null || v === undefined) return {}
   if (typeof v === 'object') return v as NodePluginState
@@ -123,17 +117,8 @@ function pluginTone(state: string): Tone {
   return statusTone(s)
 }
 
-function dotClass(tone: Tone) {
-  switch (tone) {
-    case 'success':
-      return 'text-emerald-500'
-    case 'warning':
-      return 'text-amber-500'
-    case 'danger':
-      return 'text-red-500'
-    default:
-      return 'text-gray-400'
-  }
+function dotTone(tone: Tone): StatusTone {
+  return tone === 'success' || tone === 'warning' || tone === 'danger' ? tone : 'neutral'
 }
 
 // ------------------------------------------------------------------ table
@@ -158,62 +143,53 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
   <div>
     <SPageHeader :title="t('nodes.title')" :description="t('nodes.description')">
       <template #actions>
-        <SHint inline size="xs" class="flex items-center gap-1.5">
-          <span class="relative flex h-2 w-2">
-            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
+        <SStatusDot tone="success" pulse class="!text-xs !text-fg-muted">
           {{ t('nodes.autoRefresh') }}
-          <template v-if="lastLoaded">· {{ relative(lastLoaded.toISOString()) }}</template>
-        </SHint>
-        <SButton size="sm" @click="load(true)"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
+          <template v-if="lastLoaded">· <TimeText :value="lastLoaded" mode="relative" live /></template>
+        </SStatusDot>
+        <SButton size="sm" icon="refresh" :loading="loading" @click="load(true)">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
 
-    <div class="mb-4 grid gap-4 sm:grid-cols-3">
+    <SGrid :cols="1" :md-cols="3" class="mb-4">
       <SStatCard :label="t('nodes.online')" :value="`${healthy}/${nodes.length}`" icon="node" :tone="healthy < nodes.length ? 'warning' : 'success'" :loading="loading" />
       <SStatCard :label="t('nodes.pluginIssues')" :value="pluginIssues" icon="plugin" :tone="pluginIssues ? 'danger' : 'primary'" :loading="loading" />
       <SStatCard :label="t('nodes.hostVersions')" :value="versions" icon="cpu" :tone="versions > 1 ? 'warning' : 'primary'" :sub="versions > 1 ? t('nodes.mixedVersions') : undefined" :loading="loading" />
-    </div>
+    </SGrid>
 
     <TopologyGraph />
-    <STable :columns="columns" :rows="nodes" :loading="loading" row-key="boot_id">
+    <STable card :columns="columns" :rows="nodes" :loading="loading" row-key="boot_id">
       <template #cell-node_id="{ row }">
         <div class="flex items-center gap-2">
-          <span class="h-2 w-2 shrink-0 rounded-full" :class="isStale(row) ? 'bg-red-500' : 'bg-emerald-500'" />
-          <span class="font-medium text-gray-900 dark:text-white">{{ row.node_id }}</span>
+          <SStatusDot :tone="isStale(row) ? 'danger' : 'success'" :label="isStale(row) ? t('nodes.stale') : t('nodes.alive')" sr-only />
+          <span class="font-medium text-fg">{{ row.node_id }}</span>
         </div>
-        <SHint size="xs" class="pl-4 font-mono" :title="row.boot_id">boot {{ String(row.boot_id || '').slice(0, 8) }}</SHint>
+        <SHint size="xs" class="pl-4 font-mono" :title="row.boot_id">{{ t('observe.boot') }} {{ String(row.boot_id || '').slice(0, 8) }}</SHint>
       </template>
       <template #cell-addr="{ row }">
-        <code class="font-mono text-xs">{{ row.addr }}</code>
+        <SCode inline :text="row.addr" />
       </template>
       <template #cell-host_version="{ row }">
         <SBadge tone="gray">{{ row.host_version }}</SBadge>
       </template>
       <template #cell-started_at="{ row }">
-        <SHint inline :title="formatDateTime(row.started_at)">{{ relative(row.started_at) }}</SHint>
+        <TimeText :value="row.started_at" mode="relative" live />
       </template>
       <template #cell-last_heartbeat="{ row }">
-        <span :class="isStale(row) ? 'font-medium text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'" :title="formatDateTime(row.last_heartbeat)">
-          {{ relative(row.last_heartbeat) }}
-        </span>
+        <TimeText :value="row.last_heartbeat" mode="relative" live :muted="false" :class="isStale(row) ? 'font-medium text-red-600 dark:text-red-400' : 'text-fg'" />
         <SBadge v-if="isStale(row)" tone="danger" class="ml-2">{{ t('nodes.stale') }}</SBadge>
       </template>
       <template #cell-plugins="{ row }">
         <div class="flex flex-wrap gap-1.5">
-          <span
-            v-for="p in pluginBadges(row)"
-            :key="p.key"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2 py-0.5 text-xs dark:border-dark-700"
-            :title="p.detail"
-          >
-            <span class="font-medium">{{ p.key }}</span>
-            <SHint v-if="p.version" inline size="xs" class="font-mono">{{ p.version }}</SHint>
-            <span v-if="p.standby" class="text-xs">→ {{ p.standby }}</span>
-            <SBadge v-if="p.fallback" tone="warning">{{ t('observe.fallback') }}</SBadge>
-            <span :class="dotClass(p.tone)">●</span>
-          </span>
+          <SChip v-for="p in pluginBadges(row)" :key="p.key" :title="p.detail" data-testid="node-plugin">
+            <span class="inline-flex items-center gap-1.5">
+              <SStatusDot :tone="dotTone(p.tone)" :label="p.state" sr-only />
+              <span>{{ p.key }}</span>
+              <span v-if="p.version" class="font-mono text-fg-muted">{{ p.version }}</span>
+              <span v-if="p.standby">→ {{ p.standby }}</span>
+              <SBadge v-if="p.fallback" tone="warning">{{ t('observe.fallback') }}</SBadge>
+            </span>
+          </SChip>
           <SHint v-if="!pluginBadges(row).length" inline>—</SHint>
         </div>
       </template>

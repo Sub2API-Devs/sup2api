@@ -237,7 +237,8 @@ export default {
     invalid: '请输入非负数',
     saved: '资源限制已保存，已通知各节点按新限制重启插件实例。',
     restartHint: '保存后各节点会用新限制逐个重启该插件实例（先启动新实例再排空旧实例）。',
-    hint: '留空表示使用 manifest 中的申请值；不能超过全局上限。'
+    hint: '留空表示使用 manifest 中的申请值；不能超过全局上限。',
+    requestedValue: 'manifest 申请值：{value}'
   },
 
   detail: {
@@ -337,6 +338,14 @@ export default {
       allowlist: '只能访问通过 "net" 权限批准的域名，其他连接会被拒绝。'
     },
     approvedDomains: '已批准的域名：',
+    approvedDomainsTitle: '已批准的域名',
+    approvedDomainsHint: '通过 net 权限批准的域名；只在白名单策略下限制连接。',
+    policyMode: '对外连接',
+    policiesShort: {
+      allow_all: '全部放行',
+      allowlist: '仅白名单'
+    },
+    range: '时间范围',
     byDomain: '按目标汇总',
     details: '连接明细',
     destination: '目标',
@@ -361,6 +370,10 @@ export default {
       denied: '已拒绝',
       error: '错误'
     }
+  },
+
+  settings: {
+    unsaved: '有未保存的修改'
   },
 
   retired: {

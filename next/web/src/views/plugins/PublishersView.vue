@@ -5,6 +5,8 @@ import { api } from '@sub2api/host'
 import {
   SBadge,
   SButton,
+  SCode,
+  SCopyButton,
   SDropdown,
   SField,
   SGrid,
@@ -28,7 +30,7 @@ import { fromLocalInput, statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
-import { copyText, formatDateTime } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 
 type PublisherKey = NonNullable<Publisher['keys']>[number]
 
@@ -62,6 +64,19 @@ function keyState(k: PublisherKey): string {
   if (k.not_before && new Date(k.not_before).getTime() > now) return 'pending'
   return k.status || 'active'
 }
+
+const keyColumns = computed<TableColumn[]>(() => {
+  const cols: TableColumn[] = [
+    { key: 'key_id', label: t('publishers.keyId') },
+    { key: 'public_key', label: t('publishers.publicKey') },
+    { key: 'status', label: t('common.status') },
+    { key: 'not_before', label: t('publishers.notBefore') },
+    { key: 'not_after', label: t('publishers.notAfter') },
+    { key: 'created_at', label: t('common.createdAt') }
+  ]
+  if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
+  return cols
+})
 
 function keyStateLabel(s: string) {
   if (s === 'expired') return t('publishers.expired')
@@ -215,10 +230,6 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
     notifyError(e)
   }
 }
-
-async function copyKey(k: PublisherKey) {
-  if (await copyText(k.public_key)) toast(t('common.copied'), 'success')
-}
 </script>
 
 <template>
@@ -261,45 +272,28 @@ async function copyKey(k: PublisherKey) {
           </div>
           <SHint v-if="!row.keys">{{ t('publishers.keysUnavailable') }}</SHint>
           <SHint v-else-if="!row.keys.length">{{ t('publishers.noKeys') }}</SHint>
-          <table v-else class="table table-dense">
-            <thead>
-              <tr>
-                <th>{{ t('publishers.keyId') }}</th>
-                <th>{{ t('publishers.publicKey') }}</th>
-                <th>{{ t('common.status') }}</th>
-                <th>{{ t('publishers.notBefore') }}</th>
-                <th>{{ t('publishers.notAfter') }}</th>
-                <th>{{ t('common.createdAt') }}</th>
-                <th v-if="canManage" class="text-right">{{ t('common.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="k in row.keys" :key="k.key_id">
-                <td><code class="font-mono text-xs">{{ k.key_id }}</code></td>
-                <td>
-                  <span class="inline-flex items-center gap-1">
-                    <code class="max-w-[16rem] truncate font-mono text-xs" :title="k.public_key">{{ k.public_key }}</code>
-                    <button type="button" class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" :title="t('common.copy')" @click="copyKey(k)">
-                      <SIcon name="copy" class="h-3.5 w-3.5" />
-                    </button>
-                  </span>
-                </td>
-                <td>
-                  <SBadge :tone="keyState(k) === 'expired' || keyState(k) === 'pending' ? 'warning' : statusTone(keyState(k))" dot>
-                    {{ keyStateLabel(keyState(k)) }}
-                  </SBadge>
-                </td>
-                <td><SHint inline>{{ k.not_before ? formatDateTime(k.not_before) : '—' }}</SHint></td>
-                <td><SHint inline>{{ k.not_after ? formatDateTime(k.not_after) : '—' }}</SHint></td>
-                <td><SHint inline>{{ formatDateTime(k.created_at) }}</SHint></td>
-                <td v-if="canManage" class="text-right">
-                  <SButton v-if="k.status !== 'revoked'" variant="ghost" size="sm" class="!text-red-600" @click="revokeKey(row, k)">
-                    {{ t('publishers.revoke') }}
-                  </SButton>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <STable v-else :columns="keyColumns" :rows="row.keys" row-key="key_id" dense data-testid="publisher-keys">
+            <template #cell-key_id="{ row: k }"><SCode inline :text="k.key_id" /></template>
+            <template #cell-public_key="{ row: k }">
+              <span class="inline-flex items-center gap-1">
+                <code class="max-w-[16rem] truncate font-mono text-xs" :title="k.public_key">{{ k.public_key }}</code>
+                <SCopyButton :text="k.public_key" icon-only :label="t('publishers.copyPublicKey', { key: k.key_id })" />
+              </span>
+            </template>
+            <template #cell-status="{ row: k }">
+              <SBadge :tone="keyState(k) === 'expired' || keyState(k) === 'pending' ? 'warning' : statusTone(keyState(k))" dot>
+                {{ keyStateLabel(keyState(k)) }}
+              </SBadge>
+            </template>
+            <template #cell-not_before="{ row: k }"><SHint inline>{{ k.not_before ? formatDateTime(k.not_before) : '—' }}</SHint></template>
+            <template #cell-not_after="{ row: k }"><SHint inline>{{ k.not_after ? formatDateTime(k.not_after) : '—' }}</SHint></template>
+            <template #cell-created_at="{ row: k }"><SHint inline>{{ formatDateTime(k.created_at) }}</SHint></template>
+            <template #cell-actions="{ row: k }">
+              <SButton v-if="k.status !== 'revoked'" variant="ghost" tone="danger" size="sm" @click="revokeKey(row, k)">
+                {{ t('publishers.revoke') }}
+              </SButton>
+            </template>
+          </STable>
         </div>
       </template>
     </STable>

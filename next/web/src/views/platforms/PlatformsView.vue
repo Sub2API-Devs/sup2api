@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SButton, SCard, SEmpty, SGrid, SHint, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChip, SEmpty, SGrid, SHint, SPageHeader, SSectionTitle, SSpinner, STable, type TableColumn } from '@sub2api/ui'
 import type { Platform } from '@/api/types'
 import { lt } from '@/i18n'
 import { usePlatforms } from '@/composables/platforms'
@@ -18,6 +18,13 @@ platforms.load(true)
 accountTypes.load()
 
 const list = computed(() => platforms.platforms.value)
+const endpointColumns = computed<TableColumn[]>(() => [
+  { key: 'method', label: t('platforms.method'), width: '80px' },
+  { key: 'path', label: t('platforms.path') },
+  { key: 'protocol', label: t('platforms.protocol') },
+  { key: 'billing', label: t('platforms.billing') }
+])
+const endpointKey = (e: { method: string; path: string }) => `${e.method} ${e.path}`
 
 function reload() {
   platforms.load(true)
@@ -38,21 +45,19 @@ function methodTone(m: string) {
   <div>
     <SPageHeader :title="t('platforms.title')" :description="t('platforms.description')">
       <template #actions>
-        <SButton @click="reload"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
+        <SButton :loading="!platforms.loaded.value" icon="refresh" @click="reload">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
 
     <div v-if="!platforms.loaded.value" class="flex justify-center py-10"><SSpinner /></div>
     <template v-else>
-      <p v-if="!platforms.complete.value" class="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-        {{ t('platforms.fallbackNotice') }}
-      </p>
+      <SAlert v-if="!platforms.complete.value" tone="warning" class="mb-4">{{ t('platforms.fallbackNotice') }}</SAlert>
       <SEmpty v-if="!list.length" :text="t('platforms.none')" />
       <SGrid :cols="1" :xl-cols="2">
         <SCard v-for="p in list" :key="p.id" :data-platform="p.id" data-testid="platform-card">
           <template #title>
             <span class="flex flex-wrap items-center gap-2">
-              <span class="font-semibold text-gray-900 dark:text-white">{{ lt(p.label) || p.id }}</span>
+              <span class="font-semibold text-fg">{{ lt(p.label) || p.id }}</span>
               <SHint inline size="xs" class="font-mono">{{ p.id }}</SHint>
               <SBadge v-if="p.builtin" tone="primary">{{ t('platforms.builtin') }}</SBadge>
               <SBadge v-else tone="purple" :title="p.plugin_key || ''">
@@ -64,46 +69,36 @@ function methodTone(m: string) {
             </span>
           </template>
 
-          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">{{ t('platforms.endpoints') }}</h4>
-          <div v-if="p.endpoints.length" class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="text-gray-500 dark:text-dark-400">
-                <tr>
-                  <th class="py-1 pr-3 font-medium">{{ t('platforms.method') }}</th>
-                  <th class="py-1 pr-3 font-medium">{{ t('platforms.path') }}</th>
-                  <th class="py-1 pr-3 font-medium">{{ t('platforms.protocol') }}</th>
-                  <th class="py-1 font-medium">{{ t('platforms.billing') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="e in p.endpoints" :key="`${e.method} ${e.path}`" class="border-t border-gray-100 dark:border-dark-700" data-testid="platform-endpoint">
-                  <td class="py-1 pr-3"><SBadge :tone="methodTone(e.method)">{{ e.method }}</SBadge></td>
-                  <td class="py-1 pr-3 font-mono text-gray-800 dark:text-gray-200">{{ e.path }}</td>
-                  <td class="py-1 pr-3 font-mono text-gray-500 dark:text-dark-400">{{ e.protocol }}</td>
-                  <td class="py-1">
-                    <SBadge :tone="e.billing === 'free' ? 'gray' : 'success'">{{ e.billing === 'free' ? t('platforms.free') : t('platforms.billed') }}</SBadge>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <SSectionTitle tag="h4" :title="t('platforms.endpoints')" />
+          <STable
+            v-if="p.endpoints.length"
+            :columns="endpointColumns"
+            :rows="p.endpoints.map((e) => ({ ...e, key: endpointKey(e) }))"
+            row-key="key"
+            dense
+          >
+            <template #cell-method="{ row }"><SBadge :tone="methodTone(row.method)">{{ row.method }}</SBadge></template>
+            <template #cell-path="{ row }"><span class="font-mono text-xs text-fg" data-testid="platform-endpoint">{{ row.path }}</span></template>
+            <template #cell-protocol="{ row }"><span class="font-mono text-xs text-fg-muted">{{ row.protocol }}</span></template>
+            <template #cell-billing="{ row }">
+              <SBadge :tone="row.billing === 'free' ? 'gray' : 'success'">{{ row.billing === 'free' ? t('platforms.free') : t('platforms.billed') }}</SBadge>
+            </template>
+          </STable>
           <SHint v-else size="xs">{{ t('platforms.noEndpoints') }}</SHint>
 
-          <h4 class="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">{{ t('platforms.accountTypes') }}</h4>
+          <SSectionTitle tag="h4" class="mt-4" :title="t('platforms.accountTypes')" />
           <div v-if="p.account_types.length" class="flex flex-wrap gap-1.5">
-            <span
+            <SChip
               v-for="at in p.account_types"
               :key="`${at.plugin_key}/${at.type}`"
-              class="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2 py-1 text-xs dark:bg-dark-700"
               :title="`${at.plugin_key}/${at.type}`"
               data-testid="platform-account-type"
             >
-              <SHint inline size="xs">{{ accountTypes.pluginName(at.plugin_key) }}</SHint>
-              <SHint inline size="xs">·</SHint>
-              <span class="font-medium text-gray-800 dark:text-gray-100">{{ lt(at.label) || at.type }}</span>
-            </span>
+              <span class="text-fg-muted">{{ accountTypes.pluginName(at.plugin_key) }} ·</span>
+              <span class="ml-1 text-fg">{{ lt(at.label) || at.type }}</span>
+            </SChip>
           </div>
-          <p v-else class="text-xs text-amber-600 dark:text-amber-400">{{ t('platforms.noAccountTypes') }}</p>
+          <SHint v-else tone="warning" size="xs">{{ t('platforms.noAccountTypes') }}</SHint>
         </SCard>
       </SGrid>
     </template>

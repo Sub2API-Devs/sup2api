@@ -3,11 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SDropdown, SHint, SIcon, SLink, SPageHeader, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { PriceSource } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import { formatDateTime, formatRelative } from '@/utils/format'
+import TimeText from '@/components/TimeText.vue'
 import PriceSourceModal from './PriceSourceModal.vue'
 
 const { t } = useI18n()
@@ -123,64 +123,59 @@ function viewPrices(s: PriceSource) {
   <div>
     <SPageHeader :title="t('prices.sources.title')" :description="t('prices.sources.description')">
       <template #before>
-        <SButton variant="ghost" size="sm" class="!px-1.5" :title="t('prices.sources.back')" @click="router.push('/prices')">
-          <SIcon name="arrow-left" class="h-4 w-4" />
-        </SButton>
+        <SButton variant="ghost" size="sm" :title="t('prices.sources.back')" :aria-label="t('prices.sources.back')" icon-only icon="arrow-left" @click="router.push('/prices')" />
       </template>
       <template #actions>
-        <SButton variant="ghost" :loading="loading" @click="load">{{ t('common.refresh') }}</SButton>
-        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" @click="openCreate">+ {{ t('prices.sources.create') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
+        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" icon="plus" @click="openCreate">{{ t('prices.sources.create') }}</SButton>
       </template>
     </SPageHeader>
 
-    <div class="card overflow-hidden">
-      <STable :columns="columns" :rows="sources" :loading="loading" :empty-text="t('prices.sources.empty')">
-        <template #cell-name="{ row }">
-          <span class="whitespace-nowrap font-medium text-gray-900 dark:text-white" data-testid="price-source-name">{{ row.name }}</span>
-          <SHint v-if="optionText(row)" size="xs" class="max-w-[11rem] truncate" :title="optionText(row)">{{ optionText(row) }}</SHint>
-        </template>
-        <template #cell-kind="{ row }">
-          <SBadge :tone="kindTone(row.kind)">{{ t(`prices.sources.kind.${row.kind}`) }}</SBadge>
-        </template>
-        <template #cell-url="{ row }">
-          <code class="block max-w-[13rem] truncate font-mono text-xs" :title="row.url">{{ row.url }}</code>
-          <SHint v-if="row.kind === 'sup2api'" inline size="xs">
-            <template v-if="row.has_api_key">{{ t('prices.sources.hasKey') }} ••••</template>
-            <span v-else class="text-red-600 dark:text-red-400">{{ t('prices.sources.apiKeyRequired') }}</span>
-          </SHint>
-        </template>
-        <template #cell-enabled="{ row }">
-          <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" @update:model-value="toggle(row, $event)" />
-        </template>
-        <template #cell-last_synced_at="{ row }">
-          <span v-if="row.last_synced_at" class="text-xs" :title="formatDateTime(row.last_synced_at)">{{ formatRelative(row.last_synced_at, t) }}</span>
-          <SHint v-else inline size="xs">{{ t('prices.sources.never') }}</SHint>
-        </template>
-        <template #cell-last_error="{ row }">
-          <span v-if="row.last_error" class="block max-w-[11rem] truncate text-xs text-red-600 dark:text-red-400" :title="row.last_error" data-testid="price-source-error">
-            {{ row.last_error }}
-          </span>
-          <SHint v-else inline>—</SHint>
-        </template>
-        <template #cell-price_count="{ row }">
-          <SLink v-if="row.price_count" as="button" class="text-sm" :title="t('prices.sources.viewPrices')" @click="viewPrices(row)">{{ row.price_count }}</SLink>
-          <SHint v-else inline>0</SHint>
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="flex items-center justify-end gap-1">
-            <SButton size="sm" variant="ghost" data-testid="price-source-preview" @click="preview(row)">{{ t('prices.sources.preview') }}</SButton>
-            <SDropdown
-              :actions="[
-                { key: 'edit', label: t('common.edit') },
-                { key: 'prices', label: t('prices.sources.viewPrices'), hidden: !row.price_count },
-                { key: 'delete', label: t('common.delete'), danger: true }
-              ]"
-              @select="onAction(row, $event)"
-            />
-          </div>
-        </template>
-      </STable>
-    </div>
+    <STable card :columns="columns" :rows="sources" :loading="loading" :empty-text="t('prices.sources.empty')">
+      <template #cell-name="{ row }">
+        <span class="whitespace-nowrap font-medium text-fg" data-testid="price-source-name">{{ row.name }}</span>
+        <SHint v-if="optionText(row)" size="xs" class="max-w-[11rem] truncate" :title="optionText(row)">{{ optionText(row) }}</SHint>
+      </template>
+      <template #cell-kind="{ row }">
+        <SBadge :tone="kindTone(row.kind)">{{ t(`prices.sources.kind.${row.kind}`) }}</SBadge>
+      </template>
+      <template #cell-url="{ row }">
+        <SCode inline class="block max-w-[13rem] truncate" :title="row.url" :text="row.url" />
+        <SHint v-if="row.kind === 'sup2api'" inline size="xs">
+          <template v-if="row.has_api_key">{{ t('prices.sources.hasKey') }} ••••</template>
+          <span v-else class="text-red-600 dark:text-red-400">{{ t('prices.sources.apiKeyRequired') }}</span>
+        </SHint>
+      </template>
+      <template #cell-enabled="{ row }">
+        <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" :aria-label="t('common.enabled') + ' · ' + row.name" @update:model-value="toggle(row, $event)" />
+      </template>
+      <template #cell-last_synced_at="{ row }">
+        <TimeText :value="row.last_synced_at" mode="relative" :empty="t('prices.sources.never')" class="text-xs" />
+      </template>
+      <template #cell-last_error="{ row }">
+        <span v-if="row.last_error" class="block max-w-[11rem] truncate text-xs text-red-600 dark:text-red-400" :title="row.last_error" data-testid="price-source-error">
+          {{ row.last_error }}
+        </span>
+        <SHint v-else inline>—</SHint>
+      </template>
+      <template #cell-price_count="{ row }">
+        <SLink v-if="row.price_count" as="button" class="text-sm" :title="t('prices.sources.viewPrices')" @click="viewPrices(row)">{{ row.price_count }}</SLink>
+        <SHint v-else inline>0</SHint>
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex items-center justify-end gap-1">
+          <SButton size="sm" variant="ghost" data-testid="price-source-preview" @click="preview(row)">{{ t('prices.sources.preview') }}</SButton>
+          <SDropdown
+            :actions="[
+              { key: 'edit', label: t('common.edit') },
+              { key: 'prices', label: t('prices.sources.viewPrices'), hidden: !row.price_count },
+              { key: 'delete', label: t('common.delete'), danger: true }
+            ]"
+            @select="onAction(row, $event)"
+          />
+        </div>
+      </template>
+    </STable>
 
     <PriceSourceModal v-model:open="modalOpen" :source="editing" @saved="load" />
   </div>

@@ -2,7 +2,7 @@
 import { computed, onErrorCaptured, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SPageHeader, SSpinner, SEmpty } from '@sub2api/ui'
+import { SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
 import { usePluginStore, assetURL } from '@/stores/plugins'
 import { lt } from '@/i18n'
 import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
@@ -17,6 +17,13 @@ const pluginKey = computed(() => String(route.params.plugin))
 const pageId = computed(() => String(route.params.page))
 const found = computed(() => plugins.page(pluginKey.value, pageId.value))
 const crashed = ref('')
+// Bumped by "Retry": remounts the page so a crashed plugin component starts over.
+const attempt = ref(0)
+
+function retry() {
+  crashed.value = ''
+  attempt.value++
+}
 
 const title = computed(() => {
   const f = found.value
@@ -47,8 +54,13 @@ onErrorCaptured((err) => {
     />
     <div v-if="!plugins.ready" class="flex justify-center py-16"><SSpinner /></div>
     <SEmpty v-else-if="!found" :text="t('pluginHost.notFound', { plugin: pluginKey, page: pageId })" icon="puzzle" />
-    <div v-else-if="crashed" class="card p-6 text-sm text-red-600 dark:text-red-400">{{ t('pluginHost.crashed') }}: {{ crashed }}</div>
-    <template v-else>
+    <SCard v-else-if="crashed" data-testid="plugin-page-crashed">
+      <SEmpty icon="warning" :text="t('pluginHost.crashed')">
+        <SHint size="xs" tone="danger" class="max-w-xl break-words">{{ crashed }}</SHint>
+        <SButton size="sm" data-testid="plugin-page-retry" @click="retry"><SIcon name="refresh" class="h-4 w-4" />{{ t('pluginHost.retry') }}</SButton>
+      </SEmpty>
+    </SCard>
+    <div v-else :key="attempt">
       <DeclarativeTable v-if="found.page.type === 'table'" :plugin="found.plugin" :page="found.page" />
       <DeclarativeForm v-else-if="found.page.type === 'form'" :plugin="found.plugin" :page="found.page" />
       <PluginIframe
@@ -60,11 +72,13 @@ onErrorCaptured((err) => {
       />
       <template v-else-if="found.page.type === 'native'">
         <component :is="nativeComponent" v-if="nativeComponent" />
-        <div v-else class="card p-6 text-sm text-gray-500 dark:text-dark-400">
-          {{ plugins.errors[pluginKey] ? t('pluginHost.nativeFailed', { reason: plugins.errors[pluginKey] }) : t('pluginHost.nativeMissing', { component: found.page.component || '?' }) }}
-        </div>
+        <SCard v-else>
+          <SHint>
+            {{ plugins.errors[pluginKey] ? t('pluginHost.nativeFailed', { reason: plugins.errors[pluginKey] }) : t('pluginHost.nativeMissing', { component: found.page.component || '?' }) }}
+          </SHint>
+        </SCard>
       </template>
       <SEmpty v-else :text="t('pluginHost.unsupported', { type: found.page.type })" />
-    </template>
+    </div>
   </div>
 </template>

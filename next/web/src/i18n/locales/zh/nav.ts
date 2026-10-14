@@ -34,6 +34,9 @@ export default {
   changePassword: '修改密码',
   logout: '退出登录',
   collapse: '收起侧边栏',
+  expand: '展开侧边栏',
+  openMenu: '打开导航菜单',
+  userMenu: '账号菜单',
   forbidden: {
     title: '没有权限',
     desc: '你没有查看此页面的权限（{perm}）。',

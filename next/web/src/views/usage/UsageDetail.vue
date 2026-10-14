@@ -2,10 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SGrid, SHint, SLink, SSectionTitle, SSpinner, toast } from '@sub2api/ui'
+import { SBadge, SCode, SCopyButton, SDescItem, SDescriptions, SGrid, SHint, SIcon, SLink, SSectionTitle, SSpinner } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
-import { copyText, formatNumber } from '@/utils/format'
+import { formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
 import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
@@ -68,23 +68,18 @@ const hooks = computed(() => u.value.hook_decisions || [])
 function statusLabel(s: string) {
   return te(`usage.billing.status.${s}`) ? t(`usage.billing.status.${s}`) : s
 }
-
-async function copy(v: string) {
-  if (await copyText(v)) toast(t('common.copied'), 'success')
-}
 </script>
 
 <template>
-  <div class="usage-detail bg-gray-50/60 p-4 dark:bg-dark-900/40 md:p-6">
+  <div class="usage-detail bg-surface-2/60 p-4 md:p-6">
     <div v-if="loading" class="py-4 text-center"><SSpinner /></div>
     <SHint v-if="error" tone="danger" class="mb-2">{{ error }}</SHint>
     <SGrid :cols="1" :gap="6" lg-template="3fr 2fr">
       <!-- billing -->
-      <section class="min-w-0 rounded-xl border border-gray-100 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <section class="min-w-0 rounded-xl border border-line bg-surface p-4">
         <SSectionTitle :title="t('usage.billing.title')" />
-        <dl class="kv">
-          <dt>{{ t('usage.billing.price') }}</dt>
-          <dd class="flex flex-wrap items-center gap-2">
+        <SDescriptions dense>
+          <SDescItem :label="t('usage.billing.price')"><div class="flex flex-wrap items-center gap-2">
             <template v-if="u.price">
               <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="font-mono text-xs">
                 {{ u.price.model }}
@@ -99,58 +94,52 @@ async function copy(v: string) {
               <span v-else>#{{ u.price_id }}</span>
             </template>
             <SHint v-else inline>—</SHint>
-          </dd>
+          </div></SDescItem>
 
           <template v-if="u.expr_hash">
-            <dt>{{ t('prices.expression') }}</dt>
-            <dd class="flex flex-wrap items-center gap-2">
+            <SDescItem :label="t('prices.expression')"><div class="flex flex-wrap items-center gap-2">
               <span v-if="exprVersion !== undefined">v{{ exprVersion }}</span>
-              <code class="font-mono text-xs" :title="u.expr_hash">hash {{ u.expr_hash.slice(0, 8) }}…</code>
+              <SCode inline :title="u.expr_hash" :text="t('usage.billing.hash', { hash: u.expr_hash.slice(0, 8) })" />
               <SLink v-if="auth.has('price:read')" as="button" class="text-xs" @click="historyOpen = true">{{
                 t('prices.viewHistory')
               }}</SLink>
-            </dd>
+            </div></SDescItem>
           </template>
 
           <template v-if="u.billing_mode">
-            <dt>{{ t('prices.modeCol') }}</dt>
-            <dd>{{ te(`prices.mode.${u.billing_mode}`) ? t(`prices.mode.${u.billing_mode}`) : u.billing_mode }}</dd>
+            <SDescItem :label="t('prices.modeCol')">{{ te(`prices.mode.${u.billing_mode}`) ? t(`prices.mode.${u.billing_mode}`) : u.billing_mode }}</SDescItem>
           </template>
 
           <template v-if="tierName">
-            <dt>{{ t('usage.billing.tier') }}</dt>
-            <dd>
+            <SDescItem :label="t('usage.billing.tier')">
               <span class="font-mono">{{ tierName }}</span>
-              <SHint v-if="vars.len !== undefined" inline size="xs" class="ml-1"> (len = {{ formatNumber(vars.len) }}) </SHint>
-            </dd>
+              <SHint v-if="vars.len !== undefined" inline size="xs" class="ml-1"> ({{ t('usage.billing.len', { n: formatNumber(vars.len) }) }}) </SHint>
+            </SDescItem>
           </template>
 
           <template v-if="rules.length">
-            <dt>{{ t('usage.billing.rules') }}</dt>
-            <dd>
+            <SDescItem :label="t('usage.billing.rules')">
               <ul class="space-y-1">
                 <li v-for="(r, i) in rules" :key="i" class="flex flex-wrap items-center gap-2">
-                  <code class="font-mono text-xs">{{ r.cond }}</code>
+                  <SCode inline :text="r.cond" />
                   <span>×{{ r.multiplier }}</span>
-                  <SBadge :tone="r.matched ? 'success' : 'gray'">{{
-                    r.matched ? '✓ ' + t('usage.billing.matched') : '✗ ' + t('usage.billing.notMatched')
-                  }}</SBadge>
+                  <SBadge :tone="r.matched ? 'success' : 'gray'">
+                    <SIcon :name="r.matched ? 'check' : 'x'" class="h-3 w-3" />{{ r.matched ? t('usage.billing.matched') : t('usage.billing.notMatched') }}
+                  </SBadge>
                 </li>
               </ul>
-            </dd>
+            </SDescItem>
           </template>
 
           <template v-if="billingInputs.length">
-            <dt>{{ t('usage.billing.inputs') }}</dt>
-            <dd class="space-y-1">
+            <SDescItem :label="t('usage.billing.inputs')"><div class="space-y-1">
               <div v-for="input in billingInputs" :key="input.name" class="break-all font-mono text-xs">
                 {{ input.name }} = {{ factValue(input.value) }}
               </div>
-            </dd>
+            </div></SDescItem>
           </template>
 
-          <dt>{{ t('usage.billing.breakdown') }}</dt>
-          <dd>
+          <SDescItem :label="t('usage.billing.breakdown')">
             <BillingBreakdown
               v-if="Object.keys(breakdown).length || u.total_cost"
               :breakdown="breakdown"
@@ -160,53 +149,43 @@ async function copy(v: string) {
               :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"
             />
             <SHint v-else inline>—</SHint>
-          </dd>
+          </SDescItem>
 
-          <dt>{{ t('usage.billing.statusLabel') }}</dt>
-          <dd class="flex flex-wrap items-center gap-2">
+          <SDescItem :label="t('usage.billing.statusLabel')"><div class="flex flex-wrap items-center gap-2">
             <SBadge :tone="billingTone(u.billing_status)">{{ statusLabel(u.billing_status) }}</SBadge>
             <SHint v-if="ledgerId" inline size="xs">{{ t('usage.billing.ledger', { id: ledgerId }) }}</SHint>
-          </dd>
-        </dl>
+          </div></SDescItem>
+        </SDescriptions>
       </section>
 
       <!-- request -->
-      <section class="min-w-0 space-y-5 rounded-xl border border-gray-100 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <section class="min-w-0 space-y-5 rounded-xl border border-line bg-surface p-4">
         <div>
           <SSectionTitle :title="t('usage.request.title')" />
-          <dl class="kv">
-            <dt>{{ t('common.model') }}</dt>
-            <dd class="font-mono text-xs">{{ u.model || '—' }}</dd>
-            <dt>{{ t('common.group') }}</dt>
-            <dd>{{ u.group_name || (u.group_id ? '#' + u.group_id : '—') }}</dd>
+          <SDescriptions dense>
+            <SDescItem :label="t('common.model')"><span class="font-mono text-xs">{{ u.model || '—' }}</span></SDescItem>
+            <SDescItem :label="t('common.group')">{{ u.group_name || (u.group_id ? '#' + u.group_id : '—') }}</SDescItem>
             <template v-if="u.account_id || u.account_name">
-              <dt>{{ t('common.account') }}</dt>
-              <dd>{{ u.account_name || '#' + u.account_id }}</dd>
+              <SDescItem :label="t('common.account')">{{ u.account_name || '#' + u.account_id }}</SDescItem>
             </template>
-            <dt>{{ t('usage.request.id') }}</dt>
-            <dd class="flex items-center gap-1">
-              <code class="min-w-0 break-all font-mono text-xs">{{ u.request_id }}</code>
-              <SButton variant="ghost" size="sm" class="!px-1 !py-0 text-xs" @click="copy(u.request_id)">{{ t('common.copy') }}</SButton>
-            </dd>
-            <dt>{{ t('usage.request.clientId') }}</dt>
-            <dd class="flex min-w-0 items-center gap-1" data-testid="detail-client-request-id">
+            <SDescItem :label="t('usage.request.id')"><div class="flex items-center gap-1">
+              <SCode inline class="min-w-0 break-all" :text="u.request_id" />
+              <SCopyButton :text="u.request_id" icon-only class="shrink-0" />
+            </div></SDescItem>
+            <SDescItem :label="t('usage.request.clientId')"><div class="flex min-w-0 items-center gap-1" data-testid="detail-client-request-id">
               <template v-if="u.client_request_id">
-                <code class="break-all font-mono text-xs">{{ u.client_request_id }}</code>
-                <SButton variant="ghost" size="sm" class="shrink-0 !px-1 !py-0 text-xs" @click="copy(u.client_request_id)">{{
-                  t('common.copy')
-                }}</SButton>
+                <SCode inline class="break-all" :text="u.client_request_id" />
+                <SCopyButton :text="u.client_request_id" icon-only class="shrink-0" />
               </template>
               <SHint v-else inline :title="t('usage.request.clientIdNone')">—</SHint>
-            </dd>
+            </div></SDescItem>
             <template v-if="u.endpoint || u.protocol">
-              <dt>{{ t('usage.request.endpoint') }}</dt>
-              <dd class="font-mono text-xs">
+              <SDescItem :label="t('usage.request.endpoint')"><span class="font-mono text-xs">
                 {{ u.endpoint || '—' }} <SHint inline size="xs">{{ u.protocol }}</SHint>
                 <SHint v-if="u.platform" inline size="xs" class="font-sans"> · {{ t('common.platform') }} {{ u.platform }}</SHint>
-              </dd>
+              </span></SDescItem>
             </template>
-            <dt>{{ t('usage.cols.accountType') }}</dt>
-            <dd>
+            <SDescItem :label="t('usage.cols.accountType')">
               <template v-if="u.account_type">
                 {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
                 <SHint inline size="xs"
@@ -215,48 +194,38 @@ async function copy(v: string) {
                 >
               </template>
               <SHint v-else inline>—</SHint>
-            </dd>
-            <dt>{{ t('usage.cols.upstreamProtocol') }}</dt>
-            <dd class="flex flex-wrap items-center gap-2">
+            </SDescItem>
+            <SDescItem :label="t('usage.cols.upstreamProtocol')"><div class="flex flex-wrap items-center gap-2">
               <span class="font-mono text-xs">{{ u.upstream_protocol || u.protocol || '—' }}</span>
               <SBadge v-if="isConverted(u)" tone="warning">{{ t('usage.converted') }}</SBadge>
               <SHint v-if="isConverted(u)" inline size="xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</SHint>
-            </dd>
+            </div></SDescItem>
             <template v-if="u.upstream_model && u.upstream_model !== u.model">
-              <dt>{{ t('usage.request.upstreamModel') }}</dt>
-              <dd class="font-mono text-xs">{{ u.upstream_model }}</dd>
+              <SDescItem :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
             </template>
             <template v-if="u.api_key_name || u.api_key_id">
-              <dt>{{ t('usage.request.apiKey') }}</dt>
-              <dd>{{ u.api_key_name || '#' + u.api_key_id }}</dd>
+              <SDescItem :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
             </template>
-            <dt>{{ t('usage.request.clientIP') }}</dt>
-            <dd class="break-all font-mono text-xs" data-testid="detail-client-ip">{{ u.client_ip || '—' }}</dd>
-            <dt>{{ t('usage.request.userAgent') }}</dt>
-            <dd class="break-all text-xs">{{ u.user_agent || '—' }}</dd>
+            <SDescItem :label="t('usage.request.clientIP')"><span class="break-all font-mono text-xs" data-testid="detail-client-ip">{{ u.client_ip || '—' }}</span></SDescItem>
+            <SDescItem :label="t('usage.request.userAgent')"><span class="break-all text-xs">{{ u.user_agent || '—' }}</span></SDescItem>
             <template v-if="u.node_id">
-              <dt>{{ t('usage.request.node') }}</dt>
-              <dd class="font-mono text-xs">{{ u.node_id }}</dd>
+              <SDescItem :label="t('usage.request.node')"><span class="font-mono text-xs">{{ u.node_id }}</span></SDescItem>
             </template>
             <template v-if="u.attempts !== undefined">
-              <dt>{{ t('usage.request.attempts') }}</dt>
-              <dd>{{ u.attempts }}</dd>
+              <SDescItem :label="t('usage.request.attempts')">{{ u.attempts }}</SDescItem>
             </template>
-            <dt>{{ t('usage.request.statusCode') }}</dt>
-            <dd>{{ u.status_code || '—' }}</dd>
-            <dt>{{ t('usage.request.latency') }}</dt>
-            <dd>
+            <SDescItem :label="t('usage.request.statusCode')">{{ u.status_code || '—' }}</SDescItem>
+            <SDescItem :label="t('usage.request.latency')">
               {{ formatNumber(u.latency_ms) }} ms
               <SHint v-if="u.first_token_ms" inline>· {{ t('usage.request.firstToken') }} {{ formatNumber(u.first_token_ms) }} ms</SHint>
-            </dd>
+            </SDescItem>
             <template v-if="!u.success && (u.error_type || u.error_message)">
-              <dt>{{ t('usage.request.error') }}</dt>
-              <dd class="break-words text-red-600 dark:text-red-400">
+              <SDescItem :label="t('usage.request.error')"><span class="break-words text-red-600 dark:text-red-400">
                 <span class="font-mono text-xs">{{ u.error_type }}</span>
                 <span v-if="u.error_message" class="block text-xs">{{ u.error_message }}</span>
-              </dd>
+              </span></SDescItem>
             </template>
-          </dl>
+          </SDescriptions>
         </div>
 
         <div>
@@ -299,15 +268,11 @@ async function copy(v: string) {
             <h4 class="text-sm font-medium">{{ t(`usage.cacheEvidence.component.${item.kind}`, { index: item.index }) }}</h4>
             <CacheWriteFacts :metrics="item.metrics" />
           </div>
-          <dl
-            v-if="Object.keys(otherMetrics).length"
-            class="kv"
-          >
+          <SDescriptions v-if="Object.keys(otherMetrics).length" dense>
             <template v-for="(v, k) in otherMetrics" :key="k">
-              <dt class="font-mono text-xs">u("{{ k }}")</dt>
-              <dd>{{ factValue(v) }}</dd>
+              <SDescItem><template #label><span class="font-mono text-xs">u("{{ k }}")</span></template>{{ factValue(v) }}</SDescItem>
             </template>
-          </dl>
+          </SDescriptions>
         </div>
 
         <div v-if="hooks.length">
@@ -328,16 +293,14 @@ async function copy(v: string) {
 
         <div v-if="u.sticky_rule">
           <SSectionTitle :title="t('usage.sticky.title')" />
-          <dl class="kv">
-            <dt>{{ t('usage.sticky.rule') }}</dt>
-            <dd class="font-mono text-xs">{{ u.sticky_rule }}</dd>
-            <dt>{{ t('usage.sticky.hit') }}</dt>
-            <dd>
-              <SBadge :tone="u.sticky_hit ? 'success' : 'gray'">{{
-                u.sticky_hit ? '✓ ' + t('usage.sticky.hitYes') : '✗ ' + t('usage.sticky.hitNo')
-              }}</SBadge>
-            </dd>
-          </dl>
+          <SDescriptions dense>
+            <SDescItem :label="t('usage.sticky.rule')"><span class="font-mono text-xs">{{ u.sticky_rule }}</span></SDescItem>
+            <SDescItem :label="t('usage.sticky.hit')">
+              <SBadge :tone="u.sticky_hit ? 'success' : 'gray'">
+                <SIcon :name="u.sticky_hit ? 'check' : 'x'" class="h-3 w-3" />{{ u.sticky_hit ? t('usage.sticky.hitYes') : t('usage.sticky.hitNo') }}
+              </SBadge>
+            </SDescItem>
+          </SDescriptions>
         </div>
       </section>
     </SGrid>
@@ -346,9 +309,3 @@ async function copy(v: string) {
   </div>
 </template>
 
-<style scoped>
-.usage-detail :deep(.kv dd) {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-</style>

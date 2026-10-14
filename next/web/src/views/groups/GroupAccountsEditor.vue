@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SCheckbox, SHint, SInput, SLink, SSelect, SSpinner } from '@sub2api/ui'
+import { SBadge, SCheckbox, SEmpty, SHint, SInput, SLink, SSelect, SSpinner } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -154,23 +154,23 @@ defineExpose({ save, dirty })
 <template>
   <div>
     <div class="mb-2 flex flex-wrap items-center gap-2">
-      <SSelect v-model="typeFilter" class="!w-52" :options="typeFilterOptions" data-testid="group-accounts-type" />
-      <SInput v-model="q" class="!w-48" :placeholder="t('common.searchPlaceholder')" />
+      <SSelect v-model="typeFilter" class="!w-52" :options="typeFilterOptions" :aria-label="t('common.type')" data-testid="group-accounts-type" />
+      <SInput v-model="q" class="!w-48" :aria-label="t('common.search')" :placeholder="t('common.searchPlaceholder')" />
       <SCheckbox v-model="onlySelected" :label="t('groups.accounts.onlySelected')" />
       <span class="ml-auto flex gap-2 text-xs">
         <SLink as="button" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</SLink>
         <SLink as="button" @click="setVisible(false)">{{ t('groups.accounts.clearVisible') }}</SLink>
       </span>
     </div>
-    <div class="max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
+    <div class="max-h-64 overflow-y-auto rounded-lg border border-line">
       <div v-if="loading" class="flex justify-center py-6"><SSpinner /></div>
-      <SHint v-else-if="!rows.length" class="py-6 text-center">{{ t('groups.accounts.none') }}</SHint>
+      <SEmpty v-else-if="!rows.length" class="!py-6" :text="t('groups.accounts.none')" />
       <label
         v-for="a in rows"
         v-else
         :key="a.id"
-        class="flex items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-dark-700"
-        :class="editable(a) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-800' : 'cursor-not-allowed opacity-60'"
+        class="flex items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0"
+        :class="editable(a) ? 'cursor-pointer hover:bg-surface-2' : 'cursor-not-allowed opacity-60'"
         :title="editable(a) ? '' : t('groups.accounts.notEditable')"
       >
         <SCheckbox bare :model-value="selected.has(a.id)" :disabled="!editable(a)" @update:model-value="toggle(a.id, $event)" />

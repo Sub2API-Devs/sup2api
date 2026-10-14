@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SCard, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SRadio, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -56,6 +56,7 @@ const approvedUpgrades = computed(() =>
     .filter((v) => !detail.value?.active_version || compareVersions(v.version, detail.value.active_version) > 0)
     .sort((a, b) => compareVersions(b.version, a.version))
 )
+const upgradeChoices = computed<ChoiceOption[]>(() => approvedUpgrades.value.map((v) => ({ value: v.version, label: 'v' + v.version })))
 const pendingVersions = computed(() => (detail.value?.versions || []).filter((v) => isPendingConsent(v.consent_status)))
 
 const consented = computed(() => (typeof route.query.consented === 'string' ? route.query.consented : ''))
@@ -237,59 +238,43 @@ onMounted(load)
         </template>
       </SPageHeader>
 
-      <p v-if="detail.status_reason" class="-mt-3 mb-4 text-sm text-red-600 dark:text-red-400">{{ detail.status_reason }}</p>
+      <SHint v-if="detail.status_reason" tone="danger" class="-mt-3 mb-4">{{ detail.status_reason }}</SHint>
 
       <!-- exclusive resources this node's generation could not give the plugin (audit 2026-10-09 P2-2) -->
-      <div
-        v-if="detail.resource_conflicts?.length"
-        class="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-        data-testid="plugin-conflicts"
-      >
-        <div class="font-medium">{{ t('plugins.conflicts.title') }}</div>
-        <p class="mt-1 text-xs">{{ t('plugins.conflicts.hint') }}</p>
+      <SAlert v-if="detail.resource_conflicts?.length" tone="danger" :title="t('plugins.conflicts.title')" class="mb-4" data-testid="plugin-conflicts">
+        <p class="text-xs">{{ t('plugins.conflicts.hint') }}</p>
         <ul class="mt-2 list-disc space-y-1 pl-5 font-mono text-xs">
           <li v-for="(line, i) in conflictLines(detail)" :key="i">{{ line }}</li>
         </ul>
-      </div>
+      </SAlert>
 
       <!-- consent just recorded -->
-      <div
-        v-if="consented"
-        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-      >
-        <span class="inline-flex items-center gap-2">
-          <SIcon name="check" class="h-5 w-5" />{{ t('plugins.detail.consentedBanner', { version: consented }) }}
-        </span>
-        <span class="flex gap-2">
-          <SButton v-if="consentedAction === 'enable'" size="sm" variant="primary" :loading="acting === 'enable'" @click="startRollout('enable')">
-            <SIcon name="play" class="h-4 w-4" />{{ t('plugins.detail.enableNow') }}
+      <SAlert v-if="consented" tone="success" dismissible class="mb-4" @dismiss="dismissConsented">
+        {{ t('plugins.detail.consentedBanner', { version: consented }) }}
+        <template v-if="consentedAction" #actions>
+          <SButton v-if="consentedAction === 'enable'" size="sm" variant="primary" icon="play" :loading="acting === 'enable'" @click="startRollout('enable')">
+            {{ t('plugins.detail.enableNow') }}
           </SButton>
           <SButton
             v-if="consentedAction === 'upgrade'"
             size="sm"
             variant="primary"
+            icon="upload"
             :loading="acting === 'upgrade'"
             @click="startRollout('upgrade', consented)"
           >
-            <SIcon name="upload" class="h-4 w-4" />{{ t('plugins.detail.upgradeNow', { version: consented }) }}
+            {{ t('plugins.detail.upgradeNow', { version: consented }) }}
           </SButton>
-          <SButton size="sm" variant="ghost" @click="dismissConsented">{{ t('common.close') }}</SButton>
-        </span>
-      </div>
+        </template>
+      </SAlert>
 
       <!-- versions waiting for consent -->
-      <div
-        v-for="v in pendingVersions"
-        :key="v.version"
-        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
-      >
-        <span class="inline-flex items-center gap-2">
-          <SIcon name="shield" class="h-5 w-5" />{{ t('plugins.detail.pendingConsent', { version: v.version }) }}
-        </span>
-        <SButton v-if="auth.has('plugin:install')" :to="consentPath(detail.key, v.version)" variant="primary" size="sm">
-          {{ t('plugins.list.review') }}
-        </SButton>
-      </div>
+      <SAlert v-for="v in pendingVersions" :key="v.version" tone="warning" icon="shield" class="mb-4">
+        {{ t('plugins.detail.pendingConsent', { version: v.version }) }}
+        <template v-if="auth.has('plugin:install')" #actions>
+          <SButton :to="consentPath(detail.key, v.version)" variant="primary" size="sm">{{ t('plugins.list.review') }}</SButton>
+        </template>
+      </SAlert>
 
       <STabs v-model="tab" :tabs="tabs" class="mb-4" />
 
@@ -308,19 +293,13 @@ onMounted(load)
 
       <SModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm">
         <SHint class="mb-3">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</SHint>
-        <div class="space-y-2">
-          <SRadio
-            v-for="v in approvedUpgrades"
-            :key="v.version"
-            :model-value="upgradeVersion"
-            :value="v.version"
-            class="!gap-3 rounded-lg border p-3"
-            :class="upgradeVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700'"
-            @update:model-value="upgradeVersion = v.version"
-          >
-            <span class="font-mono">v{{ v.version }}</span>
-          </SRadio>
-        </div>
+        <SChoiceCards
+          :model-value="upgradeVersion"
+          :options="upgradeChoices"
+          :cols="1"
+          :aria-label="t('plugins.detail.upgradeTitle', { name })"
+          @update:model-value="(v) => (upgradeVersion = String(v))"
+        />
         <template #footer>
           <SButton @click="upgradeOpen = false">{{ t('common.cancel') }}</SButton>
           <SButton variant="primary" :disabled="!upgradeVersion" :loading="acting === 'upgrade'" @click="startRollout('upgrade', upgradeVersion)">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 
@@ -13,7 +13,9 @@ describe('group model policy editor', () => {
   })
   it('switches policy mode without overwriting the patterns', async () => {
     const w = render()
-    await w.get('[data-testid="policy-blacklist"]').trigger('click')
+    // The option is a choice card: pick the radio of the card holding the test hook.
+    const radio = w.get('[data-testid="policy-blacklist"]').element.closest('label')!.querySelector('input')!
+    await new DOMWrapper(radio).setValue(true)
     expect(w.emitted('update:mode')).toEqual([['blacklist']])
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })

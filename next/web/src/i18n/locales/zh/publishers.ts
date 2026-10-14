@@ -31,6 +31,7 @@ export default {
   expired: '已过期',
   notYetValid: '未生效',
   revoke: '吊销',
+  copyPublicKey: '复制公钥 {key}',
   revokeKey: '吊销公钥',
   revoked: '已吊销',
   confirmRevoke: '确定吊销发布者"{name}"？其所有公钥将失效，由其签名的插件会被标记为"签名已吊销"（默认自动禁用）。',

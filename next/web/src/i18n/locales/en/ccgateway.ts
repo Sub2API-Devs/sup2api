@@ -66,7 +66,7 @@ export default {
     syncFailed: 'The account container could not be started', statusFailed: 'The account container status could not be read', healthFailed: 'The container runs, but its Claude login state could not be read',
     setup: { docker: 'CCGateway is not connected to a controller', adminKey: 'The controller admin key is missing' },
     openSettings: 'Open CCGateway settings', retry: 'Retry', resync: 'Synchronize again', reason: 'Reason: {message}', timeout: 'The request timed out; retry',
-    getLink: 'Get authorization link', gettingLink: 'Requesting the authorization link…', openLink: 'Open in this browser (fallback)', copyLink: 'Copy authorization link', linkLabel: 'Claude authorization link', linkCopied: 'Authorization link copied', copyFailed: 'Copying failed; select the link and copy it by hand', startFailed: 'The authorization link could not be requested', badSession: 'The service returned an untrusted or expired authorization link',
+    getLink: 'Get authorization link', gettingLink: 'Requesting the authorization link…', openLink: 'Open in this browser (fallback)', copyLink: 'Copy authorization link', linkLabel: 'Claude authorization link', startFailed: 'The authorization link could not be requested', badSession: 'The service returned an untrusted or expired authorization link',
     linkHint: 'Copy the link, open it in the browser where you sign in to Claude and approve; it then shows an authorization code. Copy all of it into the next step.', expiresIn: 'link expires in {time}', expired: 'The authorization link has expired; request a new one.',
     codeLabel: 'Full authorization code (code#state)', codePlaceholder: 'Paste the code, like xxxx#yyyy', codeShape: 'The code normally contains # (code#state); make sure you copied all of it.', submit: 'Complete authorization',
     completeFailed: 'The authorization code was not accepted', notConfirmed: 'The code was accepted, but the container has not confirmed the login yet; retry shortly or request a new link.', regetLink: 'Request a new link', cancel: 'Cancel this authorization',
@@ -120,6 +120,7 @@ export default {
   },
   status: { creating: 'creating', ready: 'ready', blocked: 'stopped', pending: 'synchronizing', unknown: 'unknown' },
   runtimeInstall: {
+    componentsTitle: 'Runtime components',
     unavailable: 'Unavailable',
     title: 'Runtime', subtitle: 'The images and the container controller of the account containers are published on GHCR; the core installs or upgrades them on the Docker host over SSH.',
     state: { notInstalled: 'Not installed', upToDate: 'Up to date', outdated: 'Update available', unknown: 'State unknown' },
@@ -134,6 +135,7 @@ export default {
     confirmMessageController: 'The controller’s target images are set to the saved images through the control panel (the controller tries to pull what it lacks); a different controller image upgrades the controller itself and waits for it to recover. Existing account containers are not recreated; new images apply to new or re-authorized containers.'
   },
   bundled: {
+    groupTitle: 'Images bundled with the plugin',
     title: 'Images bundled with the plugin (version {version})',
     hint: 'The runtime images ship in the ccgateway plugin package; no image registry is needed. Pushing uploads only the images the controller does not have yet, in chunks through the core, then loads and applies them.',
     none: 'The plugin package carries no images: the enabled ccgateway package was built without the runtime images. Upgrade to a package with images, or open “Advanced: upload an image by hand” below.',
@@ -182,6 +184,7 @@ export default {
     appHint: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place (containers are not recreated).'
   },
   workers: {
+    groupTitle: 'Worker update',
     update: 'Update the worker of existing accounts',
     updating: 'Updating the workers one account at a time; with many accounts this can take a while…',
     hint: 'Updates the worker program of every existing account in place with the effective app image; use it to retry accounts that were busy or not running.',
@@ -343,7 +346,7 @@ export default {
     remote: {
       unconfigured: 'Not configured',
       admin_key: 'Container admin key (CCG_ADMIN_KEY)', api_key: 'Container API key (CCG_API_KEY)', keysHint: 'Use target container keys. Saved values are never returned; leave blank to retain.',
-      networkPool: 'Container IP pool (IPv4 CIDR)', networkAllocation: 'IP allocation', networkRandom: 'Random (default)', networkSequential: 'Sequential', networkHint: 'Defaults to 10.0.0.0/8. Choose a private IPv4 range within 10/8, 172.16/12, or 192.168/16, with prefix at most /24. Random allocation randomizes account subnets and container addresses and avoids occupied networks. Changes rebuild account networks and containers while retaining Claude authorization and data; active requests may be interrupted. These are internal IPs; upstream egress is determined by each account proxy.', networkSaved: 'Saved. Account networks are being rebuilt in the background with the new IP pool and allocation mode.',
+      networkPool: 'Container IP pool (IPv4 CIDR)', networkAllocation: 'IP allocation', networkShort: 'Private address pool and allocation for account containers; upstream egress still follows the account proxy.', networkRandom: 'Random (default)', networkSequential: 'Sequential', networkHint: 'Defaults to 10.0.0.0/8. Choose a private IPv4 range within 10/8, 172.16/12, or 192.168/16, with prefix at most /24. Random allocation randomizes account subnets and container addresses and avoids occupied networks. Changes rebuild account networks and containers while retaining Claude authorization and data; active requests may be interrupted. These are internal IPs; upstream egress is determined by each account proxy.', networkSaved: 'Saved. Account networks are being rebuilt in the background with the new IP pool and allocation mode.',
       images: 'Container deployment images (optional overrides)', imagesHint: 'These references are used to create or recreate containers; they do not identify the program currently running inside existing containers. Leave blank for the core defaults. Local images are not pulled again. Changing the default image affects new containers only; existing containers require manual replacement. Replacing the Worker binary in place does not update the image reference.', imageApp: 'Account Worker image', imageEgress: 'Egress image', imageController: 'Controller image', imageInvalid: 'Invalid image reference: {ref}',
       imageEffective: 'Image resolved from saved configuration: {image}',
       title: 'CCGateway connection',

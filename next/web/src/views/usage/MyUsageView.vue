@@ -50,7 +50,7 @@ function refresh() {
   <div>
     <SPageHeader :title="t('usage.myTitle')" :description="t('usage.myDescription')">
       <template #actions>
-        <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
+        <SButton :loading="tab === 'requests' && loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
       <template v-if="tab === 'requests'" #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
@@ -61,10 +61,9 @@ function refresh() {
     <STabs v-if="tabs.length > 1" v-model="tab" :tabs="tabs" class="mb-4" />
 
     <template v-if="tab === 'requests'">
-      <div class="card overflow-hidden">
-        <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" show-client-request-id :detail-path="(id: number) => `/me/usage/${id}`" @filter-client-request-id="(id: string) => (filters.client_request_id = id)" />
-      </div>
-      <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" show-client-request-id :detail-path="(id: number) => `/me/usage/${id}`" @filter-client-request-id="(id: string) => (filters.client_request_id = id)">
+        <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
+      </UsageTable>
     </template>
 
     <MyLedgerTab v-else ref="ledgerRef" />

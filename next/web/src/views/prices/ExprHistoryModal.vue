@@ -2,8 +2,8 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCode, SHint, SModal, SSpinner, toast } from '@sub2api/ui'
-import { copyText, formatDateTime } from '@/utils/format'
+import { SButton, SCode, SCopyButton, SDescItem, SDescriptions, SEmpty, SModal, SSpinner } from '@sub2api/ui'
+import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 
 // Shows the expression stored under an expr_hash (GET /prices/history/:hash).
@@ -40,30 +40,24 @@ watch(
   { immediate: true }
 )
 
-async function copy() {
-  if (entry.value && (await copyText(entry.value.expression))) toast(t('common.copied'), 'success')
-}
 </script>
 
 <template>
   <SModal :open="open" :title="t('prices.history.title')" width="lg" @update:open="emit('update:open', $event)">
     <div v-if="loading" class="py-8 text-center"><SSpinner /></div>
     <div v-else-if="entry" class="space-y-3">
-      <dl class="kv">
-        <dt>{{ t('prices.exprHash') }}</dt>
-        <dd class="font-mono text-xs">{{ entry.expr_hash }}</dd>
-        <dt>{{ t('common.version') }}</dt>
-        <dd>v{{ entry.expr_version ?? 1 }}</dd>
+      <SDescriptions dense>
+        <SDescItem :label="t('prices.exprHash')"><span class="font-mono text-xs">{{ entry.expr_hash }}</span></SDescItem>
+        <SDescItem :label="t('common.version')">v{{ entry.expr_version ?? 1 }}</SDescItem>
         <template v-if="entry.created_at">
-          <dt>{{ t('common.createdAt') }}</dt>
-          <dd>{{ formatDateTime(entry.created_at) }}</dd>
+          <SDescItem :label="t('common.createdAt')">{{ formatDateTime(entry.created_at) }}</SDescItem>
         </template>
-      </dl>
+      </SDescriptions>
       <SCode :text="entry.expression" />
     </div>
-    <SHint v-else class="py-6 text-center">{{ t('prices.history.notFound') }}</SHint>
+    <SEmpty v-else :text="t('prices.history.notFound')" />
     <template #footer>
-      <SButton v-if="entry" size="sm" @click="copy">{{ t('common.copy') }}</SButton>
+      <SCopyButton v-if="entry" :text="entry.expression" variant="secondary" :label="t('common.copy')" />
       <SButton size="sm" variant="primary" @click="emit('update:open', false)">{{ t('common.close') }}</SButton>
     </template>
   </SModal>

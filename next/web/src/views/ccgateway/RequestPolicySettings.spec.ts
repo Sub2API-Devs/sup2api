@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { i18n, LOCALES } from '@/i18n'
 import zh from '@/i18n/locales/zh/ccgateway'
@@ -20,6 +20,17 @@ function config(policy: Partial<RequestPolicy> | undefined) {
     request_policy: policy, images: null, network: { pool: '10.0.0.0/8', allocation: 'random' }
   }
 }
+const TABS = ['connection', 'network', 'cc', 'deployment'] as const
+const tab = (w: VueWrapper, key: (typeof TABS)[number]) => w.findAll('[data-testid="settings-tabs"] [role="tab"]')[TABS.indexOf(key)]
+// SSelect option values are indexes into its options: request, false, true, auto, then a saved auto:N.
+const SEARCH_MODES = ['request', 'false', 'true', 'auto']
+const toolSearch = (w: VueWrapper) => {
+  const el = w.get<HTMLSelectElement>('[data-testid="tool-search"]').element
+  return Number(el.value) < SEARCH_MODES.length ? SEARCH_MODES[Number(el.value)] : el.options[el.selectedIndex].text
+}
+const SWITCH = '[data-testid="thinking-disabled-compat"] [role="switch"], [role="switch"][data-testid="thinking-disabled-compat"]'
+const compatOn = (w: VueWrapper) => w.get(SWITCH).attributes('aria-checked') === 'true'
+
 describe('CCGateway settings categories and CC features', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -34,8 +45,8 @@ describe('CCGateway settings categories and CC features', () => {
   it('offers connection, network, CC features and deployment only', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    const tabs = w.findAll('[data-testid^="settings-tab-"]')
-    expect(tabs.map(tab => tab.attributes('data-testid'))).toEqual(['settings-tab-connection', 'settings-tab-network', 'settings-tab-cc', 'settings-tab-deployment'])
+    const tabs = w.findAll('[data-testid="settings-tabs"] [role="tab"]')
+    expect(tabs).toHaveLength(TABS.length)
     expect(tabs.map(tab => tab.text())).toEqual(['连接与授权', '网络配置', 'CC 特性', '部署与运行'])
     // The account containers and API features categories are gone.
     expect(w.find('[data-testid="settings-tab-accounts"]').exists()).toBe(false)
@@ -49,7 +60,7 @@ describe('CCGateway settings categories and CC features', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     expect(w.get('[data-testid="request-policy"]').isVisible()).toBe(false)
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    await tab(w, 'cc').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
     expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'client-attachments', 'unsupported-requests'])
@@ -78,7 +89,7 @@ describe('CCGateway settings categories and CC features', () => {
     i18n.global.locale.value = locale
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    await tab(w, 'cc').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     for (const id of ['cc-attachments', 'attachment-source', 'attachment-overrides', 'attachment-model', 'attachment-date', 'attachment-total_tokens_reminder', 'attachment-session_context', 'environment-workingDirectory', 'environment-platform', 'unknown-attachment-client', 'unknown-attachment-gateway', 'unknown-beta']) {
       expect(cc.find(`[data-testid="${id}"]`).exists()).toBe(false)
@@ -92,11 +103,11 @@ describe('CCGateway settings categories and CC features', () => {
   it('saves the unsupported-request choices with the other settings', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    await tab(w, 'cc').trigger('click')
     expect(w.get<HTMLInputElement>('[data-testid="unknown-field"] input[value="reject"]').element.checked).toBe(true)
     await w.get('[data-testid="unknown-field"] input[value="ignore"]').setValue(true)
-    await w.get('[data-testid="settings-tab-network"]').trigger('click')
-    await w.get('[data-testid="network-allocation"]').setValue('sequential')
+    await tab(w, 'network').trigger('click')
+    await w.get('[data-testid="network-allocation"] input[value="sequential"]').setValue(true)
     const next = { ...defaultRequestPolicy(), unknown_field: 'ignore' as const }
     mocks.put.mockResolvedValue({ ...config(next), network: { pool: '10.0.0.0/8', allocation: 'sequential' } })
     await w.get('form').trigger('submit')
@@ -122,10 +133,10 @@ describe('CCGateway settings categories and CC features', () => {
     const w = await render()
     // Ignored historical data must not make an unchanged native form dirty.
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
-    expect(w.get<HTMLSelectElement>('[data-testid="tool-search"]').element.value).toBe('auto:0')
+    await tab(w, 'cc').trigger('click')
+    expect(toolSearch(w)).toBe('auto:0')
     for (const tool_search of ['false', 'true']) {
-      await w.get('[data-testid="tool-search"]').setValue(tool_search)
+      await w.get('[data-testid="tool-search"]').setValue(String(SEARCH_MODES.indexOf(tool_search)))
       expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
       await w.get('form').trigger('submit')
       await flushPromises()
@@ -133,8 +144,8 @@ describe('CCGateway settings categories and CC features', () => {
       expect(payload).toEqual({ ...active, tool_search })
       for (const key of Object.keys(obsolete)) expect(payload).not.toHaveProperty(key)
       expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
-      expect(w.get<HTMLSelectElement>('[data-testid="tool-search"]').element.value).toBe(tool_search)
-      expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
+      expect(toolSearch(w)).toBe(tool_search)
+      expect(compatOn(w)).toBe(true)
     }
     expect(mocks.put).toHaveBeenCalledTimes(2)
     w.unmount()
@@ -158,7 +169,7 @@ describe('CCGateway settings categories and CC features', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render({ accounts: '<div data-testid="account-content">Accounts</div>' })
     expect(w.get('[data-testid="account-content"]').isVisible()).toBe(false)
-    await w.get('[data-testid="settings-tab-deployment"]').trigger('click')
+    await tab(w, 'deployment').trigger('click')
     const accounts = w.get('[data-testid="account-content"]')
     expect(accounts.isVisible()).toBe(true)
     expect(w.get('[data-testid="settings-card"]').isVisible()).toBe(true)
@@ -167,8 +178,8 @@ describe('CCGateway settings categories and CC features', () => {
     // Runtime and images (saved by the form) first, then the containers they run.
     const card = w.get('[data-testid="settings-card"]').element
     expect(card.compareDocumentPosition(accounts.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    for (const tab of ['connection', 'network', 'cc'] as const) {
-      await w.get(`[data-testid="settings-tab-${tab}"]`).trigger('click')
+    for (const key of ['connection', 'network', 'cc'] as const) {
+      await tab(w, key).trigger('click')
       expect(w.get('[data-testid="account-content"]').isVisible()).toBe(false)
     }
     w.unmount()
@@ -208,14 +219,14 @@ describe('CCGateway native request policy', () => {
     mocks.get.mockResolvedValue(config({}))
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'omit' }))
     const w = await render()
-    const box = w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]')
-    expect(box.element.checked).toBe(false)
-    await box.setValue(true)
+    expect(compatOn(w)).toBe(false)
+    await w.get(SWITCH).trigger('click')
+    expect(compatOn(w)).toBe(true)
     await w.get('form').trigger('submit')
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.thinking_disabled_compat).toBe('omit')
-    expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
+    expect(compatOn(w)).toBe(true)
     w.unmount()
   })
 
@@ -267,7 +278,7 @@ describe('CCGateway native request policy', () => {
     i18n.global.locale.value = locale
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    await tab(w, 'cc').trigger('click')
     for (const id of ['relay-mode', 'relay-native-accounts', 'relay-passthrough-accounts', 'pass-upstream-errors']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
@@ -289,7 +300,7 @@ describe('CCGateway native request policy', () => {
       ...historical, ...body.request_policy, relay_mode
     } as Partial<RequestPolicy>))
     const w = await render()
-    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    await tab(w, 'cc').trigger('click')
     for (const prefix of ['mytools', 'updatedtools']) {
       await w.get('[data-testid="custom-tool-prefix"]').setValue(prefix)
       await w.get('form').trigger('submit')
@@ -310,9 +321,9 @@ describe('CCGateway native request policy', () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'omit' }))
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'pass' }))
     const w = await render()
-    const box = w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]')
-    expect(box.element.checked).toBe(true)
-    await box.setValue(false)
+    expect(compatOn(w)).toBe(true)
+    await w.get(SWITCH).trigger('click')
+    expect(compatOn(w)).toBe(false)
     await w.get('form').trigger('submit')
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }

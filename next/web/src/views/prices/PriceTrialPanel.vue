@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SField, SGrid, SHint, SInput, SKeyValue, SSpinner } from '@sub2api/ui'
+import { SBadge, SButton, SField, SGrid, SHint, SIcon, SInput, SKeyValue, SSpinner } from '@sub2api/ui'
 import type { PricePreviewResult } from '@/api/types'
 import GroupPicker from '@/components/GroupPicker.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -104,11 +104,11 @@ const resultLen = computed(() => {
     <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="3">
       <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
         <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
-        <SInput v-model.number="usage[k]" type="number" min="0" class="mt-1 !py-1.5" />
+        <SInput size="sm" v-model.number="usage[k]" type="number" min="0" class="mt-1" />
       </label>
       <label class="text-xs">
         <SHint inline size="xs">{{ t('prices.trial.len') }}</SHint>
-        <SInput v-model.number="len" type="number" min="0" class="mt-1 !py-1.5" :placeholder="String(defaultLen)" />
+        <SInput size="sm" v-model.number="len" type="number" min="0" class="mt-1" :placeholder="String(defaultLen)" />
       </label>
     </SGrid>
     <SGrid :cols="1" :lg-cols="2">
@@ -136,14 +136,14 @@ const resultLen = computed(() => {
       <SButton size="sm" variant="primary" :loading="loading" :disabled="!source" @click="run">{{ t('prices.trial.calculate') }}</SButton>
     </div>
 
-    <div class="rounded-xl border border-gray-200 p-4 dark:border-dark-700">
+    <div class="rounded-xl border border-line p-4">
       <SHint v-if="!source">{{ t('prices.trial.fixFirst') }}</SHint>
       <SHint v-else-if="error" tone="danger">{{ error }}</SHint>
       <div v-else-if="result" class="space-y-3 text-sm">
         <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <span>
             <SHint inline>{{ t('prices.trial.cost') }}</SHint>
-            <span class="ml-2 text-lg font-semibold text-gray-900 dark:text-white">{{ formatMoney(result.cost, 6) }}</span>
+            <span class="ml-2 text-lg font-semibold text-fg">{{ formatMoney(result.cost, 6) }}</span>
           </span>
           <span>
             <SHint inline>{{ t('prices.trial.tier') }}</SHint>
@@ -156,7 +156,7 @@ const resultLen = computed(() => {
           <SHint class="mb-1">{{ t('prices.trial.rules') }}</SHint>
           <ul class="space-y-1">
             <li v-for="(r, i) in result.rules" :key="i" class="flex items-center gap-2">
-              <SBadge :tone="r.matched ? 'success' : 'gray'">{{ r.matched ? '✓' : '✗' }}</SBadge>
+              <SBadge :tone="r.matched ? 'success' : 'gray'" :aria-label="r.matched ? t('usage.billing.matched') : t('usage.billing.notMatched')"><SIcon :name="r.matched ? 'check' : 'x'" class="h-3 w-3" /></SBadge>
               <code class="font-mono text-xs">{{ r.cond }}</code>
               <SHint inline>×{{ r.multiplier }}</SHint>
             </li>

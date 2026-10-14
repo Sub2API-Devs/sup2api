@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SHint } from '@sub2api/ui'
+import { SDescItem, SDescriptions, SHint } from '@sub2api/ui'
 import { formatNumber } from '@/utils/format'
 import { cacheWriteEvidence, type CacheWriteCounter } from './cacheWriteEvidence'
 
@@ -21,7 +21,7 @@ function display(counter: CacheWriteCounter): string {
 <template>
   <div
     v-if="evidence"
-    class="mt-3 space-y-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+    class="mt-3 space-y-2 rounded-lg border border-line p-3"
     data-testid="cache-write-facts"
   >
     <h4 class="text-sm font-medium">
@@ -30,17 +30,15 @@ function display(counter: CacheWriteCounter): string {
     <SHint :tone="evidence.completeness === 'complete' ? 'muted' : 'warning'">
       {{ t(`usage.cacheEvidence.status.${evidence.completeness}`) }}
     </SHint>
-    <dl class="kv">
+    <SDescriptions dense>
       <template
         v-for="item in counters"
         :key="item.label"
       >
-        <dt>{{ t(`usage.cacheEvidence.${item.label}`) }}</dt>
-        <dd>{{ display(item.value) }}</dd>
+        <SDescItem :label="t(`usage.cacheEvidence.${item.label}`)">{{ display(item.value) }}</SDescItem>
       </template>
-      <dt>{{ t('usage.cacheEvidence.unclassified') }}</dt>
-      <dd>{{ evidence.unclassified_tokens === undefined ? '—' : formatNumber(evidence.unclassified_tokens) }}</dd>
-    </dl>
+      <SDescItem :label="t('usage.cacheEvidence.unclassified')">{{ evidence.unclassified_tokens === undefined ? '—' : formatNumber(evidence.unclassified_tokens) }}</SDescItem>
+    </SDescriptions>
     <SHint>{{ t('usage.cacheEvidence.pricing') }}</SHint>
   </div>
   <SHint

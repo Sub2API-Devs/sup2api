@@ -14,24 +14,25 @@ import {
   SModal,
   SPageHeader,
   SPagination,
-  SRadioGroup,
   SSelect,
   STable,
-  STextarea,
   confirm,
   toast,
   type MenuAction,
-  type SelectOption,
   type TableColumn
 } from '@sub2api/ui'
 import type { Role, User } from '@/api/types'
-import { isPositiveDecimal, statusTone } from '@/api/admin'
+
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
-import { fieldErrors, notifyError } from '@/utils/errors'
-import { formatDateTime, formatMoney } from '@/utils/format'
+import { notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
+import { formatMoney } from '@/utils/format'
 import GroupPicker from '@/components/GroupPicker.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import TimeText from '@/components/TimeText.vue'
+import AdjustBalanceModal from '@/views/ledger/AdjustBalanceModal.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -95,12 +96,6 @@ function roleSelectable(key: string) {
   return auth.has('role:manage') || key === 'user'
 }
 
-function statusLabel(s: string) {
-  const k = `common.status_.${s}`
-  const v = t(k)
-  return v === k ? s : v
-}
-
 function rowActions(u: User): MenuAction[] {
   return [
     { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
@@ -157,8 +152,7 @@ async function submitCreate() {
     createOpen.value = false
     list.reload()
   } catch (e) {
-    createErrors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, createErrors)
   } finally {
     creating.value = false
   }
@@ -199,8 +193,7 @@ async function submitEdit() {
     editOpen.value = false
     list.reload()
   } catch (e) {
-    editErrors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, editErrors)
   } finally {
     saving.value = false
   }
@@ -269,45 +262,10 @@ async function submitGroups() {
 
 const balanceOpen = ref(false)
 const balanceUser = ref<User | null>(null)
-const balanceErrors = ref<Record<string, string>>({})
-const balanceForm = reactive({ credit: true, amount: '', note: '' })
-const directionOptions = computed<SelectOption[]>(() => [
-  { value: true, label: t('users.credit') },
-  { value: false, label: t('users.debit') }
-])
 
 function openBalance(u: User) {
   balanceUser.value = u
-  Object.assign(balanceForm, { credit: true, amount: '', note: '' })
-  balanceErrors.value = {}
   balanceOpen.value = true
-}
-
-async function submitBalance() {
-  if (!balanceUser.value) return
-  balanceErrors.value = {}
-  const amount = balanceForm.amount.trim()
-  if (!isPositiveDecimal(amount)) {
-    balanceErrors.value.amount = t('users.amountInvalid')
-    return
-  }
-  saving.value = true
-  try {
-    await api.post(`/users/${balanceUser.value.id}/balance/adjust`, {
-      amount,
-      credit: balanceForm.credit,
-      note: balanceForm.note.trim()
-    })
-    toast(t('users.balanceAdjusted'), 'success')
-    balanceOpen.value = false
-    list.reload()
-    if (balanceUser.value.id === auth.me?.id) auth.refreshBalance()
-  } catch (e) {
-    balanceErrors.value = fieldErrors(e)
-    notifyError(e)
-  } finally {
-    saving.value = false
-  }
 }
 
 // ------------------------------------------------------------------ delete
@@ -329,22 +287,18 @@ async function remove(u: User) {
   <div>
     <SPageHeader :title="t('users.title')" :description="t('users.description')">
       <template #actions>
-        <SButton v-permission="'user:create'" variant="primary" @click="openCreate">+ {{ t('users.create') }}</SButton>
-      </template>
-      <template #filters>
-        <SInput v-model="list.filters.q" class="!w-64" :placeholder="t('users.searchPlaceholder')" />
-        <div class="w-40">
-          <SSelect v-model="list.filters.status" :options="statusOptions" />
-        </div>
-        <div v-if="roles.length" class="w-44">
-          <SSelect v-model="list.filters.role" :options="roleOptions" />
-        </div>
+        <SButton v-permission="'user:create'" variant="primary" icon="plus" @click="openCreate">{{ t('users.create') }}</SButton>
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+      <template #toolbar>
+        <SInput v-model="list.filters.q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
+        <SSelect v-model="list.filters.status" class="!w-40" :options="statusOptions" :aria-label="t('common.status')" />
+        <SSelect v-if="roles.length" v-model="list.filters.role" class="!w-44" :options="roleOptions" :aria-label="t('users.roles')" />
+      </template>
       <template #cell-email="{ row }">
-        <span class="font-medium text-gray-900 dark:text-white">{{ row.email }}</span>
+        <span class="font-medium text-fg">{{ row.email }}</span>
       </template>
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
@@ -356,19 +310,21 @@ async function remove(u: User) {
         <span class="font-mono">{{ formatMoney(row.balance) }}</span>
       </template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
+        <StatusBadge :status="row.status" />
       </template>
       <template #cell-last_login_at="{ row }">
-        <SHint inline>{{ row.last_login_at ? formatDateTime(row.last_login_at) : t('common.never') }}</SHint>
+        <TimeText :value="row.last_login_at" :empty="t('common.never')" />
       </template>
       <template #cell-created_at="{ row }">
-        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
+        <TimeText :value="row.created_at" />
       </template>
       <template #cell-actions="{ row }">
         <SDropdown v-if="hasAnyAction(row)" :actions="rowActions(row)" @select="onAction(row, $event)" />
       </template>
+      <template #footer>
+        <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
+      </template>
     </STable>
-    <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <!-- create -->
     <SModal v-model:open="createOpen" :title="t('users.create')">
@@ -468,31 +424,6 @@ async function remove(u: User) {
     </SModal>
 
     <!-- balance -->
-    <SModal v-model:open="balanceOpen" :title="t('users.adjustBalanceTitle', { name: balanceUser?.email || '' })">
-      <form class="space-y-4" @submit.prevent="submitBalance">
-        <div v-if="balanceUser?.balance !== undefined && balanceUser?.balance !== null" class="text-sm">
-          <SHint inline>{{ t('users.currentBalance') }}:</SHint>
-          <span class="ml-2 font-mono font-semibold">{{ formatMoney(balanceUser?.balance) }}</span>
-        </div>
-        <SField :label="t('users.direction')">
-          <SRadioGroup v-model="balanceForm.credit" inline :options="directionOptions" />
-        </SField>
-        <SField :label="t('users.amount')" required :hint="t('users.amountHint')" :error="balanceErrors.amount">
-          <div class="relative">
-            <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-            <SInput v-model="balanceForm.amount" class="!pl-7" mono inputmode="decimal" placeholder="10.00" />
-          </div>
-        </SField>
-        <SField :label="t('common.note')" :error="balanceErrors.note">
-          <STextarea v-model="balanceForm.note" :rows="2" />
-        </SField>
-      </form>
-      <template #footer>
-        <SButton @click="balanceOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton :variant="balanceForm.credit ? 'primary' : 'danger'" :loading="saving" @click="submitBalance">
-          {{ balanceForm.credit ? t('users.credit') : t('users.debit') }}
-        </SButton>
-      </template>
-    </SModal>
+    <AdjustBalanceModal v-model:open="balanceOpen" :user-id="balanceUser?.id ?? null" :current-balance="balanceUser?.balance" @done="list.reload()" />
   </div>
 </template>

@@ -45,7 +45,7 @@ async function clickInstall(w: VueWrapper) {
 }
 /** Unfolds "advanced: self-signed root certificate". */
 async function openCa(w: VueWrapper) {
-  await w.get('[data-testid="controller-ca-toggle"]').trigger('click')
+  await w.get('[data-testid="controller-ca-toggle"] button').trigger('click')
 }
 
 beforeEach(() => {
@@ -153,7 +153,7 @@ describe('controller connection', () => {
   it('keeps the saved key only for the same endpoint and certificate', async () => {
     const w = await render(controller())
     // Other settings alone: the endpoint is sent unchanged, without a key.
-    await w.get('[data-testid="network-allocation"]').setValue('sequential')
+    await w.get('[data-testid="network-allocation"] input[value="sequential"]').setValue(true)
     mocks.put.mockResolvedValue(controller())
     await submit(w)
     expect(mocks.put.mock.calls[0]![1]).toMatchObject({ account_runtimes: true, mode: 'controller', scheme: 'https', host: 'ccg.example.com', port: 443 })
@@ -258,7 +258,7 @@ describe('controller connection', () => {
     expect(w.get('[data-testid="controller-status"]').text()).not.toContain('控制器版本')
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     // Other settings cannot be saved without a connection.
-    await w.get('[data-testid="network-allocation"]').setValue('sequential')
+    await w.get('[data-testid="network-allocation"] input[value="sequential"]').setValue(true)
     await submit(w)
     expect(mocks.put).not.toHaveBeenCalled()
     expect(w.get('[role="alert"]').text()).toContain('尚未连接控制器')
@@ -290,7 +290,7 @@ describe('controller connection', () => {
     expect(w.get('[data-testid="controller-install-legacy"]').text()).toContain('SSH 凭据随之清除')
     expect(input(w, 'controller-endpoint').value).toBe('')
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
-    await w.get('[data-testid="network-allocation"]').setValue('sequential')
+    await w.get('[data-testid="network-allocation"] input[value="sequential"]').setValue(true)
     mocks.put.mockResolvedValue(legacySsh())
     await submit(w)
     const payload = mocks.put.mock.calls[0]![1] as Record<string, unknown>
@@ -312,7 +312,7 @@ describe('controller connection', () => {
 describe('installing the controller', () => {
   it('installs over SSH on an automatic port, then connects and forgets the SSH details', async () => {
     const w = await render(unconfigured())
-    expect(w.get<HTMLInputElement>('[data-testid="install-method"][value="ssh"]').element.checked).toBe(true)
+    expect(w.get<HTMLInputElement>('[data-testid="install-method"] input[value="ssh"]').element.checked).toBe(true)
     await fillSsh(w)
     expect(input(w, 'install-host').placeholder).toBe('198.51.100.4')
     expect(input(w, 'install-port').value).toBe('')
@@ -360,11 +360,11 @@ describe('installing the controller', () => {
 
   it('installs on local Docker with a chosen port over HTTP', async () => {
     const w = await render(unconfigured())
-    await w.get('[data-testid="install-method"][value="local"]').setValue(true)
+    await w.get('[data-testid="install-method"] input[value="local"]').setValue(true)
     expect(w.find('[data-testid="install-ssh"]').exists()).toBe(false)
     expect(w.get('[data-testid="install-local-hint"]').text()).toContain('docker')
     expect(input(w, 'install-host').placeholder).toBe('127.0.0.1')
-    await w.get('[data-testid="install-scheme"][value="http"]').setValue(true)
+    await w.get('[data-testid="install-scheme"] input[value="http"]').setValue(true)
     expect(w.get('[data-testid="install-http-warning"]').text()).toContain('明文传输')
     await w.get('[data-testid="install-port"]').setValue(18080)
     mocks.post.mockResolvedValue(controller({ scheme: 'http', host: '127.0.0.1', port: 18080, has_controller_ca: false }))
@@ -380,7 +380,7 @@ describe('installing the controller', () => {
 
   it('asks for the ACME email with HTTPS on a domain name only', async () => {
     const w = await render(unconfigured())
-    await w.get('[data-testid="install-method"][value="local"]').setValue(true)
+    await w.get('[data-testid="install-method"] input[value="local"]').setValue(true)
     await w.get('[data-testid="install-host"]').setValue('ccg.example.com')
     await w.get('[data-testid="install-email"]').setValue('ops@example.com')
     await w.get('[data-testid="install-port"]').setValue(443)
@@ -404,7 +404,7 @@ describe('installing the controller', () => {
     expect(acme.text()).toContain('自动申请并续期 Let’s Encrypt 证书，不需要也不保存证书')
     expect(acme.text()).toContain('80 或 443 端口未被占用并可从公网访问（控制面板本身可用任意端口）')
     expect(w.find('[data-testid="install-email"]').exists()).toBe(true)
-    await w.get('[data-testid="install-scheme"][value="http"]').setValue(true)
+    await w.get('[data-testid="install-scheme"] input[value="http"]').setValue(true)
     expect(w.find('[data-testid="install-cert"]').exists()).toBe(false)
     expect(w.find('[data-testid="install-email"]').exists()).toBe(false)
     w.unmount()

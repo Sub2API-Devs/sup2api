@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SEmpty, SGrid, SHint, SInput, SLink, SSpinner } from '@sub2api/ui'
+import { SEmpty, SGrid, SHint, SInput, SLink, SIcon, SSpinner } from '@sub2api/ui'
 import type { AccountType } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -42,7 +42,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
     <div v-if="!loaded" class="flex justify-center py-10"><SSpinner /></div>
     <SEmpty v-else-if="!items.length" :text="t('accounts.noTypes')" />
     <template v-else>
-    <SInput v-model="search" class="mb-4" :placeholder="t('accounts.editorUi.searchTypes')" :aria-label="t('accounts.editorUi.searchTypes')" />
+    <SInput v-model="search" class="mb-4" icon="search" clearable :placeholder="t('accounts.editorUi.searchTypes')" :aria-label="t('accounts.editorUi.searchTypes')" />
     <SEmpty v-if="!filteredItems.length" :text="t('common.noData')" />
     <SGrid v-else :gap="3" :lg-cols="3">
       <div
@@ -59,7 +59,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         <div class="flex items-start gap-2">
           <PluginAvatar :name="lt(at.plugin_name) || at.plugin_key" :plugin-key="at.plugin_key" :icon="at.icon" :asset-base="at.asset_base" size="md" />
           <div class="min-w-0 flex-1">
-            <div class="truncate font-medium text-gray-900 dark:text-white">{{ lt(at.label) || at.type }}</div>
+            <div class="truncate font-medium text-fg">{{ lt(at.label) || at.type }}</div>
             <SHint size="xs" class="truncate">
               {{ lt(at.plugin_name) || at.plugin_key }}
               <span class="font-mono">{{ at.plugin_version ? `v${at.plugin_version}` : '' }}</span>
@@ -74,7 +74,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
 
         <SHint v-if="at.description" size="xs" class="line-clamp-2">{{ lt(at.description) }}</SHint>
 
-        <div class="mt-auto border-t border-gray-100 pt-2 dark:border-dark-700">
+        <div class="mt-auto border-t border-line pt-2">
           <SLink
             as="button"
             class="text-xs"
@@ -83,7 +83,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
             @click.stop="toggle(at)"
           >
             {{ t('accounts.endpointCount', { n: at.endpoints.length }) }}
-            <span aria-hidden="true">{{ isOpen(at) ? '▴' : '▾' }}</span>
+            <SIcon name="chevron-down" class="inline h-3.5 w-3.5 transition-transform" :class="isOpen(at) ? 'rotate-180' : ''" />
           </SLink>
           <div v-if="isOpen(at)" class="mt-1.5" @click.stop>
             <AccountTypeEndpoints :endpoints="at.endpoints" compact />

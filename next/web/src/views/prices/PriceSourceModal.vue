@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ApiError, api } from '@sub2api/host'
-import { SButton, SCheckbox, SField, SGrid, SInput, SModal, SSwitch, STagInput, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SField, SHint, SInput, SModal, SSegmented, SSettingRow, SSwitch, STagInput, toast, type SelectOption } from '@sub2api/ui'
 import type { PriceSource, PriceSourceKind } from '@/api/types'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { DEFAULT_PROVIDERS, DEFAULT_URLS, SOURCE_KINDS, isHttpUrl } from './priceSources'
@@ -61,6 +61,11 @@ watch(
   () => props.open,
   (v) => v && reset(),
   { immediate: true }
+)
+
+// When editing, the type is fixed: the other types are shown disabled.
+const kindOptions = computed<SelectOption[]>(() =>
+  SOURCE_KINDS.map((k) => ({ value: k, label: t(`prices.sources.kind.${k}`), disabled: !!editing.value && form.kind !== k }))
 )
 
 /** Picking a type fills in its default URL and vendor list (unless edited by hand). */
@@ -138,24 +143,14 @@ async function submit() {
   >
     <form class="space-y-4" data-testid="price-source-form" @submit.prevent="submit">
       <SField :label="t('prices.sources.kindCol')" required>
-        <SGrid :cols="3" :gap="2">
-          <button
-            v-for="k in SOURCE_KINDS"
-            :key="k"
-            type="button"
-            class="rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed"
-            :class="
-              form.kind === k
-                ? 'border-primary-500 bg-primary-50/60 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                : 'border-gray-200 hover:border-gray-300 dark:border-dark-600'
-            "
-            :disabled="!!editing && form.kind !== k"
-            :data-kind="k"
-            @click="pickKind(k)"
-          >
-            <span class="font-medium">{{ t(`prices.sources.kind.${k}`) }}</span>
-          </button>
-        </SGrid>
+        <SSegmented
+          :model-value="form.kind"
+          :options="kindOptions"
+          block
+          :aria-label="t('prices.sources.kindCol')"
+          data-testid="price-source-kind"
+          @update:model-value="pickKind($event as PriceSourceKind)"
+        />
         <template #hint><span data-testid="price-source-kind-hint">{{ t(`prices.sources.kindHint.${form.kind}`) }}</span></template>
       </SField>
 
@@ -195,19 +190,19 @@ async function submit() {
         <STagInput v-model="form.providers" :placeholder="t('prices.sources.providersPlaceholder')" />
       </SField>
 
-      <SField v-else :label="t('prices.sources.applyMultiplier')" :hint="t('prices.sources.applyMultiplierHint')" :error="errors.options">
-        <div class="pt-1">
-          <SSwitch
-            v-model="form.applyMultiplier"
-            :label="form.applyMultiplier ? t('prices.sources.multiplierOn') : t('prices.sources.multiplierOff')"
-            data-testid="price-source-multiplier"
-          />
-        </div>
-      </SField>
+      <SSettingRow v-else :label="t('prices.sources.applyMultiplier')" :description="t('prices.sources.applyMultiplierHint')" dense class="!py-0" for="price-source-multiplier">
+        <SSwitch
+          id="price-source-multiplier"
+          v-model="form.applyMultiplier"
+          :label="form.applyMultiplier ? t('prices.sources.multiplierOn') : t('prices.sources.multiplierOff')"
+          data-testid="price-source-multiplier"
+        />
+      </SSettingRow>
+      <SHint v-if="!usesProviders && errors.options" tone="danger" size="xs">{{ errors.options }}</SHint>
 
-      <SField :label="t('common.status')">
-        <div class="pt-1"><SSwitch v-model="form.enabled" :label="form.enabled ? t('common.enabled') : t('common.disabled')" /></div>
-      </SField>
+      <SSettingRow :label="t('common.status')" dense class="!py-0" for="price-source-enabled">
+        <SSwitch id="price-source-enabled" v-model="form.enabled" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
+      </SSettingRow>
     </form>
     <template #footer>
       <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CcgAuthHeader from './CcgAuthHeader.vue'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import { canAutoStartAuthorization } from './credentialStatus'
 // Claude authorization of a Claude Code (CCGateway) managed account on a draft
@@ -26,14 +27,13 @@ import { canAutoStartAuthorization } from './credentialStatus'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SButton, SHint, SIcon, SInput, SSpinner, toast } from '@sub2api/ui'
+import { SAlert, SButton, SCopyButton, SHint, SIcon, SInput, SLink, SSpinner, SSteps, toast } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { CcgAuthSession, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 import { useCcgError } from './ccgError'
-import { copyText } from '@/utils/format'
 import {
   blockReason,
   containerPhase,
@@ -94,13 +94,6 @@ const status = ref<Status | null>(null)
 const health = ref<Health | null>(null)
 const session = ref<Session | null>(null)
 const opened = ref(false)
-async function copyLink() {
-  if (!session.value) return
-  if (await copyText(session.value.url)) {
-    opened.value = true
-    toast(t('ccgateway.accountAuth.linkCopied'), 'success')
-  } else toast(t('ccgateway.accountAuth.copyFailed'), 'error')
-}
 const code = ref('')
 /** Which action runs: drives the spinners and disables the buttons. */
 const busy = ref<'' | 'create' | 'proxy' | 'sync' | 'status' | 'start' | 'complete' | 'cancel'>('')
@@ -555,198 +548,173 @@ defineExpose({
 })
 
 const stepTitle = (s: CcgStep) => t(`ccgateway.accountAuth.steps.${s}`)
-const stepNo = (s: CcgStep) => steps.value.indexOf(s) + 1
+/** The flow's steps for SSteps (its "pending" is the flow's "todo"). */
+const stepItems = computed(() => steps.value.map(key => ({ key, title: stepTitle(key), state: states.value[key] === 'todo' ? ('pending' as const) : states.value[key] })))
 /** CCGateway settings, scrolled to the runtime card (install / upgrade the containers). */
 const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 </script>
 
 <template>
   <div class="space-y-3 text-sm" data-testid="ccgateway-account-auth" :data-mode="mode">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
-        <SIcon name="key" class="h-4 w-4 text-primary-500" />{{ reauth ? t('ccgateway.reauth.flowTitle') : t('ccgateway.accountAuth.title') }}
-      </div>
-      <span v-if="step === 'done'" class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" data-testid="ccgateway-auth-authorized">
-        <SIcon name="check" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.authorized') }}
-      </span>
-      <span v-else-if="target && health && !health.logged_in" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-        {{ t('ccgateway.accountAuth.loggedOut') }}
-      </span>
-    </div>
+    <CcgAuthHeader :title="reauth ? t('ccgateway.reauth.flowTitle') : t('ccgateway.accountAuth.title')" :state="step === 'done' ? 'authorized' : target && health && !health.logged_in ? 'loggedOut' : null" :badge-testid="step === 'done' ? 'ccgateway-auth-authorized' : undefined" />
 
     <CredentialStatusNotice :status="health" />
     <SHint v-if="!canManage" tone="warning">{{ reauth ? t('ccgateway.accountAuth.readOnly') : t('ccgateway.accountAuth.noCreate') }}</SHint>
 
-    <ol class="space-y-0" data-testid="ccgateway-auth-steps">
-      <li v-for="(s, i) in steps" :key="s" class="relative flex gap-3 pb-4 last:pb-0" :data-step="s" :data-state="states[s]">
-        <!-- rail -->
-        <span v-if="i < steps.length - 1" class="absolute left-[13px] top-7 h-[calc(100%-1.75rem)] w-px" :class="states[s] === 'done' ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-gray-200 dark:bg-dark-600'" aria-hidden="true" />
-        <span
-          class="relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-          :class="{
-            'bg-emerald-500 text-white': states[s] === 'done',
-            'bg-primary-500 text-white ring-4 ring-primary-100 dark:ring-primary-900/40': states[s] === 'current',
-            'bg-red-500 text-white ring-4 ring-red-100 dark:ring-red-900/40': states[s] === 'error',
-            'bg-gray-100 text-gray-400 dark:bg-dark-700 dark:text-dark-400': states[s] === 'todo'
-          }"
-        >
-          <SIcon v-if="states[s] === 'done'" name="check" class="h-3.5 w-3.5" />
-          <SIcon v-else-if="states[s] === 'error'" name="warning" class="h-3.5 w-3.5" />
-          <template v-else>{{ stepNo(s) }}</template>
-        </span>
-        <div class="min-w-0 flex-1 pt-0.5">
-          <div class="font-medium" :class="states[s] === 'todo' ? 'text-gray-400 dark:text-dark-400' : 'text-gray-900 dark:text-white'">{{ stepTitle(s) }}</div>
+    <SSteps :steps="stepItems" direction="vertical" data-testid="ccgateway-auth-steps">
 
-          <!-- ① proxy (new account) -->
-          <template v-if="s === 'proxy'">
-            <div v-if="states.proxy === 'current'" class="mt-1 space-y-2">
-              <p class="text-xs text-gray-600 dark:text-dark-300" data-testid="ccgateway-proxy-hint">{{ t('ccgateway.accountAuth.proxyHint') }}</p>
-              <SButton size="sm" variant="primary" data-testid="ccgateway-auth-pick-proxy" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
-            </div>
-            <p v-else class="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
-              <span>{{ t('ccgateway.accountAuth.proxyChosen', { name: proxyName }) }}</span>
-              <span v-if="busy === 'proxy'" class="inline-flex items-center gap-1"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.proxyUpdating') }}</span>
-            </p>
-          </template>
-
-          <!-- ② container -->
-          <template v-else-if="s === 'container' && (target || draft)">
-            <div v-if="failure?.step === 'container'" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-container-error" :data-reason="failure.reason">
-              <div class="font-medium">{{ failure.title }}</div>
-              <ul v-if="failure.setup?.length" class="list-inside list-disc space-y-0.5">
-                <li v-for="p in failure.setup" :key="p">{{ t(`ccgateway.accountAuth.setup.${p}`) }}</li>
-              </ul>
-              <div v-else-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-              <div class="flex flex-wrap gap-2">
-                <SButton size="sm" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
-                <SButton v-if="failure.reason === 'no_proxy' || failure.reason === 'proxy_disabled' || failure.reason === 'proxy_not_found'" size="sm" variant="ghost" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
-                <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-                <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" :to="settingsLink" data-testid="ccgateway-auth-open-settings"><SIcon name="settings" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
-              </div>
-            </div>
-            <!-- new account, no draft yet -->
-            <template v-else-if="draft && !draftKey">
-              <div v-if="busy === 'create'" class="mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-dark-300"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.creating') }}</div>
-              <div v-else-if="states.container === 'current'" class="mt-1 space-y-2">
-                <p class="text-xs text-gray-600 dark:text-dark-300">{{ t('ccgateway.accountAuth.startHint') }}</p>
-                <SButton variant="primary" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft"><SIcon name="play" class="h-4 w-4" />{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
-              </div>
-            </template>
-            <div v-else-if="blocked" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-blocked" :data-reason="blocked">
-              <div class="font-medium">{{ t('ccgateway.accountAuth.blockedTitle', { reason: blockedText }) }}</div>
-              <div class="opacity-90">{{ reauth ? t(`ccgateway.accountAuth.blocked.fixReauth.${blocked}`) : blocked !== 'account_disabled' ? t(`ccgateway.accountAuth.blocked.fixDraft.${blocked}`) : t(`ccgateway.accountAuth.blocked.fix.${blocked}`) }}</div>
-              <div class="flex flex-wrap gap-2">
-                <SButton v-if="blocked === 'no_proxy' || blocked === 'proxy_disabled'" size="sm" variant="primary" data-testid="ccgateway-auth-fix-proxy" @click="emit('fix-proxy')">
-                  <SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}
-                </SButton>
-                <SButton v-if="blocked === 'proxy_disabled'" size="sm" variant="ghost" to="/proxies">{{ t('ccgateway.accountAuth.blocked.openProxies') }}</SButton>
-                <SButton v-if="canManage" size="sm" variant="ghost" :loading="busy === 'sync'" :disabled="acting" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
-              </div>
-            </div>
-            <div v-else-if="states.container === 'error'" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert">
-              <div>{{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}</div>
-              <div class="flex flex-wrap gap-2">
-                <SButton v-if="canManage" size="sm" :loading="busy === 'sync'" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
-                <SButton size="sm" variant="ghost" :disabled="acting" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-              </div>
-            </div>
-            <div v-else-if="states.container === 'current'" class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-dark-300" data-testid="ccgateway-auth-preparing">
-              <SSpinner size="sm" />
-              <span>{{ busy === 'sync' ? t('ccgateway.accountAuth.containerStarting') : t('ccgateway.accountAuth.containerPreparing', { name: containerName, status: statusLabel(status?.status) }) }}</span>
-              <SButton v-if="canManage && busy !== 'sync' && busy !== 'proxy'" size="sm" variant="ghost" @click="sync">{{ t('ccgateway.accountAuth.resync') }}</SButton>
-            </div>
-            <p v-else-if="states.container === 'done'" class="mt-0.5 font-mono text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.accountAuth.containerReady', { name: containerName }) }}</p>
-          </template>
-
-          <!-- ③ open the link -->
-          <template v-else-if="s === 'login' && target && (states.login === 'current' || states.login === 'error' || failure?.step === 'login' || (states.login === 'done' && session))">
-            <div v-if="failure?.step === 'login'" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-login-error" :data-reason="failure.reason">
-              <div class="font-medium">{{ failure.title }}</div>
-              <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-              <SButton size="sm" :loading="busy === 'start'" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-            </div>
-            <div v-else-if="session" class="mt-2 space-y-2">
-              <!-- Copy is the main way: the user signs in to Claude in their own
-                   browser (often another machine or profile); opening here is
-                   a fallback. -->
-              <div class="flex items-stretch gap-2" :class="expired ? 'pointer-events-none opacity-50' : ''">
-                <input
-                  :value="session.url"
-                  readonly
-                  class="input min-w-0 flex-1 font-mono text-xs"
-                  :aria-label="t('ccgateway.accountAuth.linkLabel')"
-                  data-testid="ccgateway-auth-link"
-                  @focus="($event.target as HTMLInputElement).select()"
-                />
-                <SButton variant="primary" data-testid="ccgateway-auth-copy" @click="copyLink"><SIcon name="copy" class="h-4 w-4" />{{ t('ccgateway.accountAuth.copyLink') }}</SButton>
-              </div>
-              <p class="text-xs text-gray-500 dark:text-dark-400">
-                {{ t('ccgateway.accountAuth.linkHint') }}
-                <span v-if="!expired" class="ml-1 tabular-nums">{{ t('ccgateway.accountAuth.expiresIn', { time: leftText }) }}</span>
-              </p>
-              <a
-                :href="session.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 text-xs text-gray-500 underline-offset-2 hover:text-primary-600 hover:underline dark:text-dark-400"
-                :class="expired ? 'pointer-events-none opacity-50' : ''"
-                data-testid="ccgateway-auth-open"
-                @click="opened = true"
-              >
-                <SIcon name="external" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openLink') }}
-              </a>
-            </div>
-            <div v-else-if="busy === 'start'" class="mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-dark-300"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.gettingLink') }}</div>
-            <div v-else-if="canManage" class="mt-2">
-              <SButton variant="primary" :disabled="acting" data-testid="ccgateway-auth-start" @click="start"><SIcon name="link" class="h-4 w-4" />{{ t('ccgateway.accountAuth.getLink') }}</SButton>
-            </div>
-          </template>
-
-          <!-- ④ paste the code -->
-          <template v-else-if="s === 'code' && target && session">
-            <!-- not a <form>: the panel sits inside the account editor's form -->
-            <div class="mt-2 space-y-2">
-              <label class="input-label !mb-1 text-xs" for="ccg-auth-code">{{ t('ccgateway.accountAuth.codeLabel') }}</label>
-              <div class="flex flex-wrap gap-2">
-                <SInput
-                  id="ccg-auth-code"
-                  v-model="code"
-                  type="password"
-                  class="min-w-[14rem] flex-1"
-                  mono
-                  autocomplete="off"
-                  spellcheck="false"
-                  :disabled="busy === 'complete' || expired"
-                  :placeholder="t('ccgateway.accountAuth.codePlaceholder')"
-                  data-testid="ccgateway-auth-code"
-                  @focus="opened = true"
-                  @keydown.enter.prevent="complete"
-                />
-                <SButton variant="primary" :loading="busy === 'complete'" :disabled="!code.trim() || expired || (acting && busy !== 'complete')" data-testid="ccgateway-auth-complete" @click="complete">{{ t('ccgateway.accountAuth.submit') }}</SButton>
-              </div>
-              <p v-if="codeShapeWarn" class="text-xs text-amber-600 dark:text-amber-400">{{ t('ccgateway.accountAuth.codeShape') }}</p>
-              <div v-if="failure?.step === 'code'" class="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-code-error" :data-reason="failure.reason">
-                <div class="font-medium">{{ failure.title }}</div>
-                <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-                <div class="flex flex-wrap gap-2">
-                  <SButton v-if="code.trim() && !expired" size="sm" :loading="busy === 'complete'" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
-                  <SButton size="sm" variant="ghost" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-                </div>
-              </div>
-              <div v-else-if="expired" class="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
-                {{ t('ccgateway.accountAuth.expired') }}
-                <SButton size="sm" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-              </div>
-              <SButton size="sm" variant="ghost" :disabled="busy === 'complete'" @click="cancel">{{ t('ccgateway.accountAuth.cancel') }}</SButton>
-            </div>
-          </template>
-
-          <!-- done -->
-          <template v-else-if="s === 'done' && states.done === 'done'">
-            <p class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300" data-testid="ccgateway-auth-done-hint">{{ reauth ? t('ccgateway.reauth.signedIn') : t('ccgateway.accountAuth.authorizedDraftHint') }}</p>
-          </template>
+      <!-- ① proxy (new account) -->
+      <template #step-proxy>
+        <div v-if="states.proxy === 'current'" class="mt-1 space-y-2">
+          <p class="text-xs text-fg-muted" data-testid="ccgateway-proxy-hint">{{ t('ccgateway.accountAuth.proxyHint') }}</p>
+          <SButton size="sm" variant="primary" data-testid="ccgateway-auth-pick-proxy" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
         </div>
-      </li>
-    </ol>
+        <p v-else class="mt-0.5 flex items-center gap-2 text-xs text-fg-muted">
+          <span>{{ t('ccgateway.accountAuth.proxyChosen', { name: proxyName }) }}</span>
+          <span v-if="busy === 'proxy'" class="inline-flex items-center gap-1"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.proxyUpdating') }}</span>
+        </p>
+      </template>
+
+      <!-- ② container -->
+      <template #step-container>
+        <template v-if="target || draft">
+          <SAlert v-if="failure?.step === 'container'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-container-error" :data-reason="failure.reason">
+            <ul v-if="failure.setup?.length" class="list-inside list-disc space-y-0.5">
+              <li v-for="p in failure.setup" :key="p">{{ t(`ccgateway.accountAuth.setup.${p}`) }}</li>
+            </ul>
+            <div v-else-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
+            <div class="flex flex-wrap gap-2">
+              <SButton size="sm" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
+              <SButton v-if="failure.reason === 'no_proxy' || failure.reason === 'proxy_disabled' || failure.reason === 'proxy_not_found'" size="sm" variant="ghost" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
+              <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
+              <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" :to="settingsLink" data-testid="ccgateway-auth-open-settings"><SIcon name="settings" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
+            </div>
+          </SAlert>
+          <!-- new account, no draft yet -->
+          <template v-else-if="draft && !draftKey">
+            <div v-if="busy === 'create'" class="mt-1 flex items-center gap-2 text-xs text-fg-muted"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.creating') }}</div>
+            <div v-else-if="states.container === 'current'" class="mt-1 space-y-2">
+              <p class="text-xs text-fg-muted">{{ t('ccgateway.accountAuth.startHint') }}</p>
+              <SButton variant="primary" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft"><SIcon name="play" class="h-4 w-4" />{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
+            </div>
+          </template>
+          <SAlert v-else-if="blocked" tone="danger" dense class="mt-1.5" :title="t('ccgateway.accountAuth.blockedTitle', { reason: blockedText })" data-testid="ccgateway-auth-blocked" :data-reason="blocked">
+            <div class="opacity-90">{{ reauth ? t(`ccgateway.accountAuth.blocked.fixReauth.${blocked}`) : blocked !== 'account_disabled' ? t(`ccgateway.accountAuth.blocked.fixDraft.${blocked}`) : t(`ccgateway.accountAuth.blocked.fix.${blocked}`) }}</div>
+            <div class="flex flex-wrap gap-2">
+              <SButton v-if="blocked === 'no_proxy' || blocked === 'proxy_disabled'" size="sm" variant="primary" data-testid="ccgateway-auth-fix-proxy" @click="emit('fix-proxy')">
+                <SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}
+              </SButton>
+              <SButton v-if="blocked === 'proxy_disabled'" size="sm" variant="ghost" to="/proxies">{{ t('ccgateway.accountAuth.blocked.openProxies') }}</SButton>
+              <SButton v-if="canManage" size="sm" variant="ghost" :loading="busy === 'sync'" :disabled="acting" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
+            </div>
+          </SAlert>
+          <SAlert v-else-if="states.container === 'error'" tone="danger" dense class="mt-1.5">
+            <div>{{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}</div>
+            <div class="flex flex-wrap gap-2">
+              <SButton v-if="canManage" size="sm" :loading="busy === 'sync'" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
+              <SButton size="sm" variant="ghost" :disabled="acting" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
+            </div>
+          </SAlert>
+          <div v-else-if="states.container === 'current'" class="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted" data-testid="ccgateway-auth-preparing">
+            <SSpinner size="sm" />
+            <span>{{ busy === 'sync' ? t('ccgateway.accountAuth.containerStarting') : t('ccgateway.accountAuth.containerPreparing', { name: containerName, status: statusLabel(status?.status) }) }}</span>
+            <SButton v-if="canManage && busy !== 'sync' && busy !== 'proxy'" size="sm" variant="ghost" @click="sync">{{ t('ccgateway.accountAuth.resync') }}</SButton>
+          </div>
+          <p v-else-if="states.container === 'done'" class="mt-0.5 font-mono text-xs text-fg-muted">{{ t('ccgateway.accountAuth.containerReady', { name: containerName }) }}</p>
+        </template>
+      </template>
+
+      <!-- ③ open the link -->
+      <template #step-login>
+        <template v-if="target && (states.login === 'current' || states.login === 'error' || failure?.step === 'login' || (states.login === 'done' && session))">
+          <SAlert v-if="failure?.step === 'login'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-login-error" :data-reason="failure.reason">
+            <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
+            <SButton size="sm" :loading="busy === 'start'" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
+          </SAlert>
+          <div v-else-if="session" class="mt-2 space-y-2">
+            <!-- Copy is the main way: the user signs in to Claude in their own
+                 browser (often another machine or profile); opening here is
+                 a fallback. -->
+            <div class="flex items-stretch gap-2" :class="expired ? 'pointer-events-none opacity-50' : ''">
+              <SInput
+                :model-value="session.url"
+                readonly
+                mono
+                class="min-w-0 flex-1 text-xs"
+                :aria-label="t('ccgateway.accountAuth.linkLabel')"
+                data-testid="ccgateway-auth-link"
+                @focus="($event.target as HTMLInputElement).select()"
+              />
+              <SCopyButton :text="session.url" :label="t('ccgateway.accountAuth.copyLink')" variant="secondary" size="md" data-testid="ccgateway-auth-copy" @copied="opened = true" />
+            </div>
+            <p class="text-xs text-fg-muted">
+              {{ t('ccgateway.accountAuth.linkHint') }}
+              <span v-if="!expired" class="ml-1 tabular-nums">{{ t('ccgateway.accountAuth.expiresIn', { time: leftText }) }}</span>
+            </p>
+            <SLink
+              :href="session.url"
+              external
+              class="inline-flex items-center gap-1 text-xs"
+              :class="expired ? 'pointer-events-none opacity-50' : ''"
+              data-testid="ccgateway-auth-open"
+              @click="opened = true"
+            >
+              <SIcon name="external" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openLink') }}
+            </SLink>
+          </div>
+          <div v-else-if="busy === 'start'" class="mt-1 flex items-center gap-2 text-xs text-fg-muted"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.gettingLink') }}</div>
+          <div v-else-if="canManage" class="mt-2">
+            <SButton variant="primary" :disabled="acting" data-testid="ccgateway-auth-start" @click="start"><SIcon name="link" class="h-4 w-4" />{{ t('ccgateway.accountAuth.getLink') }}</SButton>
+          </div>
+        </template>
+      </template>
+
+      <!-- ④ paste the code -->
+      <template #step-code>
+        <template v-if="target && session">
+          <!-- not a <form>: the panel sits inside the account editor's form -->
+          <div class="mt-2 space-y-2">
+            <label class="input-label !mb-1 text-xs" for="ccg-auth-code">{{ t('ccgateway.accountAuth.codeLabel') }}</label>
+            <div class="flex flex-wrap gap-2">
+              <SInput
+                id="ccg-auth-code"
+                v-model="code"
+                type="password"
+                class="min-w-[14rem] flex-1"
+                mono
+                autocomplete="off"
+                spellcheck="false"
+                :disabled="busy === 'complete' || expired"
+                :placeholder="t('ccgateway.accountAuth.codePlaceholder')"
+                data-testid="ccgateway-auth-code"
+                @focus="opened = true"
+                @keydown.enter.prevent="complete"
+              />
+              <SButton variant="primary" :loading="busy === 'complete'" :disabled="!code.trim() || expired || (acting && busy !== 'complete')" data-testid="ccgateway-auth-complete" @click="complete">{{ t('ccgateway.accountAuth.submit') }}</SButton>
+            </div>
+            <p v-if="codeShapeWarn" class="text-xs text-warning-600 dark:text-warning-400">{{ t('ccgateway.accountAuth.codeShape') }}</p>
+            <SAlert v-if="failure?.step === 'code'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-code-error" :data-reason="failure.reason">
+              <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
+              <div class="flex flex-wrap gap-2">
+                <SButton v-if="code.trim() && !expired" size="sm" :loading="busy === 'complete'" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
+                <SButton size="sm" variant="ghost" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
+              </div>
+            </SAlert>
+            <div v-else-if="expired" class="flex flex-wrap items-center gap-2 text-xs text-warning-700 dark:text-warning-300">
+              {{ t('ccgateway.accountAuth.expired') }}
+              <SButton size="sm" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
+            </div>
+            <SButton size="sm" variant="ghost" :disabled="busy === 'complete'" @click="cancel">{{ t('ccgateway.accountAuth.cancel') }}</SButton>
+          </div>
+        </template>
+      </template>
+
+      <!-- done -->
+      <template #step-done>
+        <template v-if="states.done === 'done'">
+          <p class="mt-0.5 text-xs text-success-700 dark:text-success-300" data-testid="ccgateway-auth-done-hint">{{ reauth ? t('ccgateway.reauth.signedIn') : t('ccgateway.accountAuth.authorizedDraftHint') }}</p>
+        </template>
+      </template>
+    </SSteps>
   </div>
 </template>

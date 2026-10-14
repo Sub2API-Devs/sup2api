@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SHint, SModal } from '@sub2api/ui'
+import { SAlert, SButton, SDescItem, SDescriptions, SHint, SLink, SModal, SStatusDot } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useUpdatesStore } from '@/stores/updates'
 import { notifyError } from '@/utils/errors'
@@ -43,29 +43,29 @@ async function importRelease() {
 <template>
   <template v-if="allowed">
     <button
-type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-gray-100 dark:hover:bg-dark-700"
-      :class="newVersion ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-dark-400'"
+type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xxs font-medium hover:bg-surface-2"
+      :class="newVersion ? 'text-warning-600 dark:text-warning-400' : 'text-fg-muted'"
       :title="`${t('coreUpdates.current')}: ${version || '—'} · ${status}`" :aria-label="`${t('coreUpdates.title')} · ${status}`" @click="open = true">
       <span class="truncate">{{ version ? `v${version}` : compact ? '—' : t('coreUpdates.title') }}</span>
-      <span v-if="newVersion" class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+      <SStatusDot v-if="newVersion" tone="warning" />
     </button>
     <SModal v-model:open="open" :title="t('coreUpdates.title')">
       <div class="space-y-4">
         <div class="flex items-start justify-between gap-3">
-          <div><p class="text-xs text-gray-500">{{ t('coreUpdates.current') }}</p><p class="text-2xl font-semibold">{{ version ? `v${version}` : '—' }}</p></div>
+          <div><p class="text-xs text-fg-muted">{{ t('coreUpdates.current') }}</p><p class="text-2xl font-semibold">{{ version ? `v${version}` : '—' }}</p></div>
           <SButton size="sm" :loading="updates.busy" :disabled="importing" @click="updates.check(true)">{{ t('coreUpdates.check') }}</SButton>
         </div>
         <SHint :tone="uncertain ? 'danger' : newVersion ? 'warning' : 'muted'">{{ status }}</SHint>
-        <p v-if="updates.error" role="alert" class="break-words text-sm text-red-600 dark:text-red-400">{{ updates.error }}</p>
+        <SAlert v-if="updates.error" tone="danger" dense><span class="break-words">{{ updates.error }}</span></SAlert>
         <template v-if="updates.result">
-          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt class="text-gray-500">{{ t('coreUpdates.repository') }}</dt><dd class="break-all">{{ updates.result.repository || '—' }}</dd>
-            <dt class="text-gray-500">{{ t('coreUpdates.latest') }}</dt><dd>{{ updates.result.latest_version || '—' }}</dd>
-            <dt class="text-gray-500">{{ t('coreUpdates.checked') }}</dt><dd>{{ updates.result.checked_at ? formatDateTime(updates.result.checked_at) : '—' }}</dd>
-          </dl>
+          <SDescriptions dense label-width="7rem">
+            <SDescItem :label="t('coreUpdates.repository')" :value="updates.result.repository || '—'" mono />
+            <SDescItem :label="t('coreUpdates.latest')" :value="updates.result.latest_version || '—'" mono />
+            <SDescItem :label="t('coreUpdates.checked')" :value="updates.result.checked_at ? formatDateTime(updates.result.checked_at) : '—'" />
+          </SDescriptions>
           <SHint v-if="updates.result.repository && (updates.result.reason || !updates.result.compatible)" :tone="uncertain ? 'danger' : 'warning'">{{ updates.result.reason || t('coreUpdates.incompatible') }}</SHint>
-          <div v-if="updates.result.notes" class="max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-800">{{ updates.result.notes }}</div>
-          <a v-if="releaseURL" :href="releaseURL" target="_blank" rel="noopener noreferrer" class="inline-block text-sm text-primary-600 dark:text-primary-400">{{ t('coreUpdates.releaseNotes') }} ↗</a>
+          <div v-if="updates.result.notes" class="max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-surface-2 p-3 text-sm">{{ updates.result.notes }}</div>
+          <SLink v-if="releaseURL" :href="releaseURL" external class="inline-block text-sm">{{ t('coreUpdates.releaseNotes') }} ↗</SLink>
         </template>
         <SHint>{{ t('coreUpdates.importHint') }}</SHint>
         <div class="flex flex-wrap justify-end gap-2">
@@ -76,5 +76,5 @@ type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5
       </div>
     </SModal>
   </template>
-  <span v-else class="inline-block max-w-full truncate px-1.5 text-[11px] text-gray-500 dark:text-dark-400" :title="t('coreUpdates.current')">{{ version ? `v${version}` : '—' }}</span>
+  <span v-else class="inline-block max-w-full truncate px-1.5 text-xxs text-fg-muted" :title="t('coreUpdates.current')">{{ version ? `v${version}` : '—' }}</span>
 </template>

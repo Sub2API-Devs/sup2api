@@ -34,6 +34,9 @@ export default {
   changePassword: 'Change password',
   logout: 'Sign out',
   collapse: 'Collapse sidebar',
+  expand: 'Expand sidebar',
+  openMenu: 'Open navigation menu',
+  userMenu: 'Account menu',
   forbidden: {
     title: 'No permission',
     desc: 'You do not have permission to view this page ({perm}).',

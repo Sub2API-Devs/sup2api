@@ -68,7 +68,7 @@ function shownVars(l: Line): TokenVar[] {
 </script>
 
 <template>
-  <div class="text-xs leading-5" :class="muted ? 'text-gray-500 dark:text-dark-400' : 'text-gray-800 dark:text-gray-200'">
+  <div class="text-xs leading-5" :class="muted ? 'text-fg-muted' : 'text-fg'">
     <span v-if="view.kind === 'per_request'" :class="differs(0, 'price') ? 'font-semibold text-amber-600 dark:text-amber-400' : ''">
       {{ t('prices.def.perRequest', { price: usd(view.price) }) }}
     </span>

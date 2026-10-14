@@ -107,6 +107,8 @@ export default {
   blocked: '拦截',
   blockedBy: '被 {plugin} 拦截',
   billing: {
+    hash: 'hash {hash}…',
+    len: 'len = {n}',
     title: '计费详情',
     price: '价格规则',
     tier: '档位',

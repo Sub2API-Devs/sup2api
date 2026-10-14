@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -549,9 +549,8 @@ function groupTags(a: Account) {
 
     <section class="mb-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900" :aria-label="t('accounts.listUi.filters')">
       <div class="flex flex-wrap items-center gap-2">
-        <div class="relative min-w-48 flex-1">
-          <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <SInput v-model="list.filters.q" class="!pl-9" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+        <div class="min-w-48 flex-1">
+          <SInput v-model="list.filters.q" icon="search" clearable :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
         </div>
         <SSelect v-model="typeFilter" :options="typeOptions" class="!w-52" :aria-label="t('accounts.type')" />
         <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" :aria-label="t('accounts.groups')" />
@@ -567,8 +566,8 @@ function groupTags(a: Account) {
       </div>
       <p v-else-if="hasAdvancedFilters" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
     </section>
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-dark-400">
-      <span v-if="list.error.value" role="alert" class="text-red-600 dark:text-red-400">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</span>
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+      <span v-if="list.error.value" role="alert" class="text-danger-600 dark:text-danger-400">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</span>
       <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
       <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
       <span v-if="pageTestable.length" class="flex flex-wrap items-center gap-2" data-testid="account-batch-bar">
@@ -593,8 +592,8 @@ function groupTags(a: Account) {
       </template>
       <template #cell-name="{ row }">
         <div class="min-w-64 max-w-sm space-y-0.5">
-          <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-[11px] text-gray-400">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
-          <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-500 dark:text-dark-400"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><span v-if="row.last_used_at" class="shrink-0 text-[11px] text-gray-400">· {{ formatRelative(row.last_used_at, t) }}</span></div>
+          <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-xxs text-fg-subtle">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
+          <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><span v-if="row.last_used_at" class="shrink-0 text-xxs text-fg-subtle">· {{ formatRelative(row.last_used_at, t) }}</span></div>
         </div>
       </template>
       <template #cell-groups="{ row }"><div class="flex max-w-48 flex-wrap gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
@@ -618,10 +617,10 @@ function groupTags(a: Account) {
         <AccountSchedulingCell :account="row" :editable="canUpdate(row) && !row.orphaned" @saved="Object.assign(row, $event)" />
       </template>
       <template #cell-concurrency="{ row }">
-        <span class="whitespace-nowrap text-xs tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span>
+        <span class="whitespace-nowrap text-xs tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-warning-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span>
       </template>
       <template v-for="key in ['tpm', 'rpm']" :key="key" #[`cell-${key}`]="{ row }">
-        <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-amber-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
+        <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-warning-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
       </template>
       <template #cell-quota="{ row }">
         <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :compact="denseRows" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />
@@ -654,7 +653,7 @@ function groupTags(a: Account) {
 
     <!-- create / edit -->
     <SModal v-model:open="editorOpen" :title="editorTitle" width="2xl" persistent>
-      <div v-if="editorLoading" class="py-10 text-center text-gray-400">{{ t('common.loading') }}</div>
+      <div v-if="editorLoading" class="flex justify-center py-10" role="status" :aria-label="t('common.loading')"><SSpinner /></div>
       <AccountTypePicker v-else-if="!editing && step === 1" @pick="pick" />
       <AccountEditor
         v-else
@@ -688,90 +687,70 @@ function groupTags(a: Account) {
       <template v-if="detail">
         <STabs v-model="detailTab" :tabs="detailTabs" class="mb-4" />
         <div v-if="detailTab === 'overview'" class="space-y-4">
-          <dl class="kv">
-            <dt>ID</dt>
-            <dd>{{ detail.id }}</dd>
-            <dt>{{ t('accounts.type') }}</dt>
-            <dd>
+          <SDescriptions label-width="9rem">
+            <SDescItem label="ID">{{ detail.id }}</SDescItem>
+            <SDescItem :label="t('accounts.type')">
               {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
               <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
-            </dd>
+            </SDescItem>
             <template v-if="detailType">
-              <dt>{{ t('platforms.supported') }}</dt>
-              <dd><PlatformBadges :items="detailType.platforms" empty="—" /></dd>
+              <SDescItem :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
             </template>
-            <dt>{{ t('accounts.servesEndpoints') }}</dt>
-            <dd>
+            <SDescItem :label="t('accounts.servesEndpoints')">
               <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
               <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>
-            </dd>
-            <dt>{{ t('common.status') }}</dt>
-            <dd>
+            </SDescItem>
+            <SDescItem :label="t('common.status')">
               <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
               <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
               <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
-            </dd>
-            <dt>{{ t('accounts.groups') }}</dt>
-            <dd>{{ groupNames(detail.group_ids, detail.groups) }}</dd>
-            <dt>{{ t('accounts.priority') }}</dt>
-            <dd>{{ detail.priority }}</dd>
-            <dt>{{ t('accounts.weight') }}</dt>
-            <dd>{{ detail.weight ?? 1 }}</dd>
-            <dt>{{ t('accounts.concurrency') }}</dt>
-            <dd>{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</dd>
-            <dt>{{ t('accounts.limits') }}</dt>
-            <dd>
+            </SDescItem>
+            <SDescItem :label="t('accounts.groups')">{{ groupNames(detail.group_ids, detail.groups) }}</SDescItem>
+            <SDescItem :label="t('accounts.priority')">{{ detail.priority }}</SDescItem>
+            <SDescItem :label="t('accounts.weight')">{{ detail.weight ?? 1 }}</SDescItem>
+            <SDescItem :label="t('accounts.concurrency')">{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</SDescItem>
+            <SDescItem :label="t('accounts.limits')">
               <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-                <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
+                <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-warning-600' : ''">
                   <SHint inline>{{ l.label }}</SHint> {{ l.text }}
                 </span>
               </span>
               <SHint v-else inline>—</SHint>
-            </dd>
+            </SDescItem>
             <template v-if="detail.refresh">
-              <dt>{{ t('accounts.credRefresh.label') }}</dt>
-              <dd data-testid="account-cred-refresh">
-                <span :class="credRefreshText(detail).warn ? 'text-amber-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
+              <SDescItem :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
+                <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
                 <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
-              </dd>
+              </SDescItem>
             </template>
             <template v-if="hasQuota(detail.quota)">
-              <dt>{{ t('accounts.quota.column') }}</dt>
-              <dd><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></dd>
+              <SDescItem :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
             </template>
             <template v-if="hasBalance(detail.balance)">
-              <dt>{{ t('accounts.balance.label') }}</dt>
-              <dd><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></dd>
+              <SDescItem :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
             </template>
-            <dt>{{ t('accounts.models') }}</dt>
-            <dd>
+            <SDescItem :label="t('accounts.models')">
               <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
                 <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
               </span>
               <SHint v-else inline>{{ t('accounts.allModels') }}</SHint>
-            </dd>
-            <dt>{{ t('accounts.modelMapping') }}</dt>
-            <dd>
+            </SDescItem>
+            <SDescItem :label="t('accounts.modelMapping')">
               <ul v-if="detail.model_mapping && Object.keys(detail.model_mapping).length" class="space-y-0.5">
                 <li v-for="(to, from) in detail.model_mapping" :key="from" class="font-mono text-xs">
                   {{ from }} <SHint inline size="xs">→</SHint> {{ to }}
                 </li>
               </ul>
               <SHint v-else inline>—</SHint>
-            </dd>
-            <dt>{{ t('accounts.schedulable') }}</dt>
-            <dd>{{ detail.schedulable ? t('common.yes') : t('common.no') }}</dd>
-            <dt>{{ t('accounts.lastUsed') }}</dt>
-            <dd>{{ formatDateTime(detail.last_used_at) }}</dd>
-            <dt>{{ t('accounts.lastTest.column') }}</dt>
-            <dd><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></dd>
+            </SDescItem>
+            <SDescItem :label="t('accounts.schedulable')">{{ detail.schedulable ? t('common.yes') : t('common.no') }}</SDescItem>
+            <SDescItem :label="t('accounts.lastUsed')">{{ formatDateTime(detail.last_used_at) }}</SDescItem>
+            <SDescItem :label="t('accounts.lastTest.column')"><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></SDescItem>
             <template v-if="showOwner">
-              <dt>{{ t('accounts.createdBy') }}</dt>
-              <dd>{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</dd>
+              <SDescItem :label="t('accounts.createdBy')">{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</SDescItem>
             </template>
-            <dt>{{ t('common.createdAt') }}</dt>
-            <dd>{{ formatDateTime(detail.created_at) }}</dd>
-          </dl>
+            <SDescItem :label="t('common.createdAt')">{{ formatDateTime(detail.created_at) }}</SDescItem>
+          </SDescriptions>
           <div v-if="detail.credentials">
             <SSectionTitle :title="t('accounts.credentials')" />
             <SCode>{{ JSON.stringify(detail.credentials, null, 2) }}</SCode>

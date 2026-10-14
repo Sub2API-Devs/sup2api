@@ -66,7 +66,7 @@ export default {
     syncFailed: '启动账号容器失败', statusFailed: '无法读取账号容器状态', healthFailed: '容器已启动，但无法读取 Claude 登录状态',
     setup: { docker: 'CCGateway 尚未连接控制器', adminKey: '未填写控制器管理密钥' },
     openSettings: '前往 CCGateway 设置', retry: '重试', resync: '重新同步', reason: '原因：{message}', timeout: '请求超时，请重试',
-    getLink: '获取授权链接', gettingLink: '正在获取授权链接…', openLink: '在当前浏览器打开（备用）', copyLink: '复制授权链接', linkLabel: 'Claude 授权链接', linkCopied: '授权链接已复制', copyFailed: '复制失败，请手动选中链接复制', startFailed: '获取授权链接失败', badSession: '服务返回的授权链接不可信或已过期',
+    getLink: '获取授权链接', gettingLink: '正在获取授权链接…', openLink: '在当前浏览器打开（备用）', copyLink: '复制授权链接', linkLabel: 'Claude 授权链接', startFailed: '获取授权链接失败', badSession: '服务返回的授权链接不可信或已过期',
     linkHint: '复制链接，在你登录 Claude 的浏览器里打开并点击同意，页面会显示一串授权码，完整复制后粘贴到下一步。', expiresIn: '链接 {time} 后过期', expired: '授权链接已过期，请重新获取。',
     codeLabel: '完整授权码（code#state）', codePlaceholder: '粘贴形如 xxxx#yyyy 的授权码', codeShape: '授权码通常包含 #（code#state），请确认已完整复制。', submit: '完成授权',
     completeFailed: '授权码未被接受', notConfirmed: '授权码已提交，但容器尚未确认登录；请稍后重试或重新获取链接。', regetLink: '重新获取链接', cancel: '取消本次授权',
@@ -120,6 +120,7 @@ export default {
   },
   status: { creating: '创建中', ready: '已就绪', blocked: '已停止', pending: '同步中', unknown: '未知' },
   runtimeInstall: {
+    componentsTitle: '运行时组件',
     title: '容器部署与运行配置', subtitle: '保存默认镜像不会替换现有账号容器。下表核对控制器已加载的镜像配置；各账号实际镜像请查看账号容器状态。',
     state: { notInstalled: '未安装', upToDate: '部署配置一致', outdated: '部署配置有差异', unknown: '状态未知' },
     component: '组件', expected: '已保存的目标镜像', installed: '控制器已加载镜像',
@@ -134,6 +135,7 @@ export default {
     confirmMessageController: '将经控制面板把控制器的目标镜像设为已保存的镜像（控制器本地没有会尝试拉取）；控制器镜像不同时会自升级并等待其恢复。现有账号容器不会因此重建，新镜像用于新建或重新授权的容器。'
   },
   bundled: {
+    groupTitle: '插件内置镜像',
     title: '插件内置镜像（版本 {version}）',
     hint: '运行环境镜像随 ccgateway 插件包分发，不需要访问镜像仓库。推送时只上传控制器上还没有的镜像，经核心分块转发给控制器、加载后启用。',
     none: '插件包未包含镜像：当前启用的 ccgateway 插件包构建时没有打入运行环境镜像。请升级到带镜像的版本，或展开下方“高级：手动上传镜像”。',
@@ -182,6 +184,7 @@ export default {
     appHint: '上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）。'
   },
   workers: {
+    groupTitle: 'Worker 更新',
     update: '更新现有账号的 worker',
     updating: '正在逐个更新账号的 worker，账号较多时可能需要较长时间…',
     hint: '用当前生效的业务容器镜像原地更新所有现有账号的 worker 程序，可用于重试“正在处理请求”或“容器未运行”的账号。',
@@ -343,7 +346,7 @@ export default {
     remote: {
       unconfigured: '未配置',
       admin_key: '容器管理密钥（CCG_ADMIN_KEY）', api_key: '容器模型密钥（CCG_API_KEY）', keysHint: '填写与目标容器一致的密钥，只写不回显；留空保留已有值。',
-      networkPool: '容器 IP 地址池（IPv4 CIDR）', networkAllocation: 'IP 分配方式', networkRandom: '随机分配（默认）', networkSequential: '顺序分配', networkHint: '默认 10.0.0.0/8，可指定 10、172.16–31 或 192.168 内的私有网段（最大前缀 /24）。随机模式会随机选择各账号子网及容器 IP，避开已占用网络。修改后自动重建账号网络和容器，保留 Claude 授权与数据；重建期间请求可能中断。这里配置的是容器内网 IP，上游出口仍由账号代理决定。', networkSaved: '配置已保存，账号网络正在后台按新地址池和分配方式重建。',
+      networkPool: '容器 IP 地址池（IPv4 CIDR）', networkAllocation: 'IP 分配方式', networkShort: '账号容器使用的内网地址池与分配方式；上游出口仍由账号代理决定。', networkRandom: '随机分配（默认）', networkSequential: '顺序分配', networkHint: '默认 10.0.0.0/8，可指定 10、172.16–31 或 192.168 内的私有网段（最大前缀 /24）。随机模式会随机选择各账号子网及容器 IP，避开已占用网络。修改后自动重建账号网络和容器，保留 Claude 授权与数据；重建期间请求可能中断。这里配置的是容器内网 IP，上游出口仍由账号代理决定。', networkSaved: '配置已保存，账号网络正在后台按新地址池和分配方式重建。',
       images: '容器部署镜像（可选覆盖）', imagesHint: '这些是创建或重建容器时使用的镜像引用，不代表现有容器内程序的版本。留空使用核心内置镜像；Docker 主机已有的本地镜像不会重新拉取。修改默认镜像只用于新建容器；现有容器的镜像差异仅提示，需手动替换。原地替换 Worker 程序不会更新镜像引用。', imageApp: '账号 Worker 镜像', imageEgress: '出口代理镜像', imageController: '控制器镜像', imageInvalid: '镜像引用格式不正确：{ref}',
       imageEffective: '当前保存配置解析出的镜像：{image}',
       title: 'CCGateway 连接',

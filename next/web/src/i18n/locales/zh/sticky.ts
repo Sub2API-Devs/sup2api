@@ -18,6 +18,7 @@ export default {
     builtin: '内置'
   },
   cols: {
+    ua: 'UA',
     priority: '优先级',
     match: '匹配',
     binding: '绑定',

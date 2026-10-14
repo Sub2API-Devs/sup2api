@@ -3,7 +3,7 @@
 // Client betas pass through; the legacy relay's rewrite policies are not editable here.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SSegmented, SSettingRow, SSettingsGroup } from '@sub2api/ui'
+import { SInput, SCode, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
 import { erasableAttachments, replaceableAttachments, type ErasableAttachment, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
@@ -11,6 +11,11 @@ const { t } = useI18n()
 const attachmentActions = ['keep', 'gateway', 'erase'] as const
 type AttachmentAction = (typeof attachmentActions)[number]
 const attachmentOptions = computed(() => attachmentActions.map(value => ({ value, label: t('ccgateway.policy.attachmentAction_' + value) })))
+// The saved value may be a numeric auto threshold (auto:N): kept selectable as is.
+const toolSearchOptions = computed(() => [
+  ...(['request', 'false', 'true', 'auto'] as const).map(value => ({ value, label: t('ccgateway.policy.search_' + value) })),
+  ...(policy.value.tool_search?.startsWith('auto:') ? [{ value: policy.value.tool_search, label: policy.value.tool_search }] : [])
+])
 const unknownFieldOptions = computed(() => (['ignore', 'reject'] as const).map(value => ({ value, label: t('ccgateway.policy.' + value) })))
 function attachmentAction(type: ErasableAttachment): AttachmentAction {
   if (policy.value.erase_client_attachments?.includes(type)) return 'erase'
@@ -32,19 +37,19 @@ function setAttachmentAction(type: ErasableAttachment, action: AttachmentAction)
   <section class="space-y-4" data-testid="request-policy">
     <h4 class="text-base font-semibold text-fg">{{ t('ccgateway.features.ccTitle') }}</h4>
     <SSettingsGroup :title="t('ccgateway.features.ccRuntime')" data-testid="cc-runtime-settings">
-      <SSettingRow :label="t('ccgateway.policy.toolSearch')" :description="t('ccgateway.policy.toolSearchHint')" for="cc-tool-search">
-        <select id="cc-tool-search" v-model="policy.tool_search" class="input w-full sm:w-64" data-testid="tool-search"><option v-for="mode in ['request', 'false', 'true', 'auto']" :key="mode" :value="mode">{{ t('ccgateway.policy.search_' + mode) }}</option><option v-if="policy.tool_search?.startsWith('auto:')" :value="policy.tool_search">{{ policy.tool_search }}</option></select>
+      <SSettingRow :label="t('ccgateway.policy.toolSearch')" :description="t('ccgateway.policy.toolSearchHint')">
+        <SSelect :model-value="policy.tool_search" :options="toolSearchOptions" class="w-full sm:w-64" data-testid="tool-search" @update:model-value="policy.tool_search = String($event)" />
       </SSettingRow>
-      <SSettingRow :label="t('ccgateway.policy.customToolPrefix')" :description="t('ccgateway.policy.customToolPrefixShort')" for="cc-tool-prefix">
+      <SSettingRow :label="t('ccgateway.policy.customToolPrefix')" :description="t('ccgateway.policy.customToolPrefixShort')">
         <template #details>{{ t('ccgateway.policy.customToolPrefixHint') }}</template>
         <div class="w-full sm:w-64">
-          <input id="cc-tool-prefix" v-model="policy.custom_tool_prefix" class="input font-mono" type="text" maxlength="32" placeholder="ccgateway" spellcheck="false" data-testid="custom-tool-prefix" />
-          <p class="mt-1.5 truncate text-xs text-fg-muted">{{ t('ccgateway.policy.customToolPrefixExample') }} <code class="rounded bg-surface-2 px-1 py-0.5 text-fg">mcp__{{ policy.custom_tool_prefix || 'ccgateway' }}__lookup</code></p>
+          <SInput v-model="policy.custom_tool_prefix" mono :maxlength="32" placeholder="ccgateway" spellcheck="false" data-testid="custom-tool-prefix" />
+          <p class="mt-1.5 truncate text-xs text-fg-muted">{{ t('ccgateway.policy.customToolPrefixExample') }} <SCode inline>mcp__{{ policy.custom_tool_prefix || 'ccgateway' }}__lookup</SCode></p>
         </div>
       </SSettingRow>
-      <SSettingRow :label="t('ccgateway.policy.thinkingDisabledCompat')" :description="t('ccgateway.policy.thinkingDisabledCompatShort')" for="cc-thinking-compat">
+      <SSettingRow :label="t('ccgateway.policy.thinkingDisabledCompat')" :description="t('ccgateway.policy.thinkingDisabledCompatShort')">
         <template #details>{{ t('ccgateway.policy.thinkingDisabledCompatHint') }}</template>
-        <input id="cc-thinking-compat" :checked="policy.thinking_disabled_compat === 'omit'" type="checkbox" role="switch" class="switch" data-testid="thinking-disabled-compat" @change="policy.thinking_disabled_compat = ($event.target as HTMLInputElement).checked ? 'omit' : 'pass'" />
+        <SSwitch :model-value="policy.thinking_disabled_compat === 'omit'" data-testid="thinking-disabled-compat" @update:model-value="policy.thinking_disabled_compat = $event ? 'omit' : 'pass'" />
       </SSettingRow>
     </SSettingsGroup>
     <SSettingsGroup :title="t('ccgateway.policy.attachments')" :description="t('ccgateway.policy.attachmentsShort')" data-testid="client-attachments">

@@ -1,47 +1,45 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SHint, SInput, SSpinner, toast } from '@sub2api/ui'
+import { SAlert, SButton, SInput, SSettingRow, SSettingsGroup, SSpinner } from '@sub2api/ui'
+import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
+import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
 import { useUpdatesStore } from '@/stores/updates'
-import { errorMessage, notifyError } from '@/utils/errors'
 
+// Core update source (GET/PUT /system/update-source).
 const { t } = useI18n(), auth = useAuthStore(), updates = useUpdatesStore()
-const repository = ref(''), original = ref(''), loaded = ref(false), loading = ref(false), saving = ref(false), error = ref('')
-const dirty = computed(() => loaded.value && repository.value.trim() !== original.value)
-async function load() {
-  loading.value = true; error.value = ''
-  try { const r = await api.get<{ repository: string }>('/system/update-source'); repository.value = original.value = r.repository; loaded.value = true }
-  catch (e) { error.value = errorMessage(e) } finally { loading.value = false }
-}
-async function save() {
-  saving.value = true
-  try {
-    const r = await api.put<{ repository: string }>('/system/update-source', { repository: repository.value.trim() })
-    repository.value = original.value = r.repository
+const canManage = computed(() => auth.has('settings:manage'))
+const { form, loading, saving, dirty, loadError, isLoaded, load, save, reset } = useSettingsForm<{ repository: string }>({
+  path: '/system/update-source',
+  defaults: { repository: '' },
+  inlineLoadError: true,
+  fromServer: (r) => ({ repository: String(r?.repository ?? '') }),
+  toBody: (f) => ({ repository: f.repository.trim() }),
+  snapshot: (f) => f.repository.trim(),
+  onSaved: () => {
     updates.invalidate()
     if (auth.has('system:update:read')) void updates.check()
-    toast(t('common.saved'), 'success')
-  } catch (e) { notifyError(e) } finally { saving.value = false }
-}
+  }
+})
 onMounted(load)
 </script>
 
 <template>
-  <SCard :title="t('coreUpdates.sourceTitle')" :subtitle="t('coreUpdates.sourceDescription')">
-    <div v-if="loading && !loaded" class="py-6 text-center"><SSpinner /></div>
-    <div v-else class="space-y-4">
-      <SHint v-if="error" tone="danger">{{ error }}</SHint>
-      <SField :label="t('coreUpdates.repository')" :hint="t('coreUpdates.repositoryHint')">
-        <SInput v-model="repository" placeholder="owner/repository" :disabled="!loaded || !auth.has('settings:manage') || saving" />
-      </SField>
-      <SHint>{{ t('coreUpdates.sourceTrust') }}</SHint>
-      <div class="flex justify-end gap-2">
-        <SButton v-if="!loaded" size="sm" @click="load">{{ t('coreUpdates.retry') }}</SButton>
-        <SButton v-if="dirty" size="sm" :disabled="saving" @click="repository = original">{{ t('common.reset') }}</SButton>
-        <SButton v-if="auth.has('settings:manage')" size="sm" variant="primary" :loading="saving" :disabled="!dirty" @click="save">{{ t('common.save') }}</SButton>
-      </div>
-    </div>
-  </SCard>
+  <SSettingsGroup :title="t('coreUpdates.sourceTitle')" :description="t('coreUpdates.sourceDescription')" data-testid="update-source-settings">
+    <template #actions>
+      <SButton v-if="!isLoaded && !loading" size="sm" icon="refresh" @click="load">{{ t('coreUpdates.retry') }}</SButton>
+      <SettingsSaveBar v-else :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" />
+    </template>
+    <div v-if="loading && !isLoaded" class="py-6 text-center"><SSpinner /></div>
+    <template v-else>
+      <SAlert v-if="loadError" tone="danger" class="mt-4">{{ loadError }}</SAlert>
+      <SSettingRow :label="t('coreUpdates.repository')" :description="t('coreUpdates.repositoryHint')" for="update-source-repository">
+        <template #details>{{ t('coreUpdates.sourceTrust') }}</template>
+        <div class="w-full sm:w-72">
+          <SInput id="update-source-repository" v-model="form.repository" mono placeholder="owner/repository" :disabled="!isLoaded || !canManage || saving" />
+        </div>
+      </SSettingRow>
+    </template>
+  </SSettingsGroup>
 </template>

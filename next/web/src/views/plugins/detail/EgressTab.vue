@@ -2,12 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SIcon, SSelect, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SHint, SIcon, SSegmented, SSettingRow, SSettingsGroup, STable, toast, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatNumber } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import type { EgressDomain } from '@/api/types'
-import { asArray, pick, type PluginDetail } from '../pluginUtil'
+import { asArray, formatDuration, pick, type PluginDetail } from '../pluginUtil'
 
 interface EgressSummary {
   host: string
@@ -49,8 +49,8 @@ watch(
 )
 
 const policyOptions = computed(() => [
-  { value: 'allow_all', label: t('plugins.egress.policies.allow_all') },
-  { value: 'allowlist', label: t('plugins.egress.policies.allowlist') }
+  { value: 'allow_all', label: t('plugins.egress.policiesShort.allow_all') },
+  { value: 'allowlist', label: t('plugins.egress.policiesShort.allowlist') }
 ])
 
 /** Domains approved through the "net" grant (effective in allowlist mode). */
@@ -225,32 +225,51 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <SCard :title="t('plugins.egress.policy')">
-      <div class="flex flex-wrap items-end gap-3">
-        <div class="w-64">
-          <SSelect :model-value="policy" :options="policyOptions" :disabled="!canManage" @update:model-value="(v) => (policy = String(v))" />
-        </div>
-        <SButton v-if="canManage" variant="primary" :loading="savingPolicy" :disabled="policy === (detail.egress_policy || 'allow_all')" @click="savePolicy">
+    <SSettingsGroup :title="t('plugins.egress.policy')" data-testid="egress-policy">
+      <template v-if="canManage" #actions>
+        <SButton
+          variant="primary"
+          size="sm"
+          :loading="savingPolicy"
+          :disabled="policy === (detail.egress_policy || 'allow_all')"
+          data-testid="egress-policy-save"
+          @click="savePolicy"
+        >
           {{ t('common.save') }}
         </SButton>
-      </div>
-      <SHint size="xs" class="mt-2">{{ t(`plugins.egress.policyHint.${policy}`) }}</SHint>
-      <div class="mt-3 text-sm">
-        <SHint inline>{{ t('plugins.egress.approvedDomains') }}</SHint>
-        <span v-if="allowedDomains.length" class="ml-2 inline-flex flex-wrap gap-1">
-          <code v-for="d in allowedDomains" :key="d" class="rounded bg-gray-100 px-1.5 font-mono text-xs dark:bg-dark-700">{{ d }}</code>
-        </span>
-        <SHint v-else inline class="ml-2">{{ t('common.none') }}</SHint>
-      </div>
-    </SCard>
+      </template>
+      <SSettingRow :label="t('plugins.egress.policyMode')" :description="t(`plugins.egress.policyHint.${policy}`)">
+        <SSegmented
+          :model-value="policy"
+          :options="policyOptions"
+          :disabled="!canManage"
+          size="sm"
+          :aria-label="t('plugins.egress.policyMode')"
+          data-testid="egress-policy-mode"
+          @update:model-value="(v) => (policy = String(v))"
+        />
+      </SSettingRow>
+      <SSettingRow :label="t('plugins.egress.approvedDomainsTitle')" :description="t('plugins.egress.approvedDomainsHint')" stacked dense>
+        <template v-if="allowedDomains.length">
+          <SCode v-for="d in allowedDomains" :key="d" inline :text="d" />
+        </template>
+        <SHint v-else inline>{{ t('common.none') }}</SHint>
+      </SSettingRow>
+    </SSettingsGroup>
 
     <template v-if="canRead">
       <SCard :title="t('plugins.egress.byDomain')" :padded="false">
         <template #actions>
-          <div class="w-36">
-            <SSelect :model-value="range" :options="rangeOptions" @update:model-value="(v) => (range = v as '1h' | '24h' | '7d')" />
-          </div>
-          <SButton size="sm" variant="ghost" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+          <SSegmented
+            :model-value="range"
+            :options="rangeOptions"
+            size="sm"
+            :aria-label="t('plugins.egress.range')"
+            @update:model-value="(v) => (range = v as '1h' | '24h' | '7d')"
+          />
+          <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" @click="load">
+            <SIcon v-if="!loading" name="refresh" class="h-4 w-4" />
+          </SButton>
         </template>
         <STable :columns="summaryColumns" :rows="summaryRows" :loading="loading" row-key="_k">
           <template #cell-host="{ row }">
@@ -298,7 +317,7 @@ onMounted(load)
           <template #cell-host="{ row }">
             <span class="font-mono text-xs">{{ row.host }}<SHint v-if="row.port" inline size="xs">:{{ row.port }}</SHint></span>
           </template>
-          <template #cell-duration_ms="{ row }">{{ row.result === 'open' ? '—' : row.duration_ms != null ? row.duration_ms + 'ms' : '—' }}</template>
+          <template #cell-duration_ms="{ row }">{{ row.result === 'open' ? '—' : formatDuration(row.duration_ms) }}</template>
           <template #cell-bytes="{ row }">
             <SHint v-if="row.result === 'open' && !row.bytes_in && !row.bytes_out" inline>—</SHint>
             <span v-else class="whitespace-nowrap text-xs">↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span>

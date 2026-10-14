@@ -2,30 +2,14 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import {
-  SBadge,
-  SButton,
-  SDropdown,
-  SField,
-  SGrid,
-  SHint,
-  SInput,
-  SModal,
-  SPageHeader,
-  SPagination,
-  SSelect,
-  STable,
-  STextarea,
-  confirm,
-  toast,
-  type TableColumn
-} from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Group } from '@/api/types'
-import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
@@ -82,12 +66,6 @@ const columns = computed<TableColumn[]>(() => {
   if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
-
-function statusLabel(s: string) {
-  const k = `common.status_.${s}`
-  const v = t(k)
-  return v === k ? s : v
-}
 
 function multiplier(v: string | number) {
   const n = Number(v)
@@ -205,8 +183,7 @@ async function submit() {
     open.value = false
     changed()
   } catch (e) {
-    errors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, errors)
   } finally {
     saving.value = false
   }
@@ -243,15 +220,13 @@ async function onAction(g: Group, key: string) {
   <div>
     <SPageHeader :title="t('groups.title')" :description="t('groups.description')">
       <template #actions>
-        <SButton v-if="canManage" variant="primary" @click="openCreate">+ {{ t('groups.create') }}</SButton>
+        <SButton v-if="canManage" variant="primary" icon="plus" @click="openCreate">{{ t('groups.create') }}</SButton>
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
-        <button type="button" class="text-left font-medium text-gray-900 hover:text-primary-600 hover:underline dark:text-white" data-testid="group-name" @click="openDetail(row)">
-          {{ row.name }}
-        </button>
+        <SLink as="button" class="text-left font-medium" data-testid="group-name" @click="openDetail(row)">{{ row.name }}</SLink>
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
       </template>
       <template #cell-platforms="{ row }">
@@ -268,11 +243,7 @@ async function onAction(g: Group, key: string) {
       <template #cell-model_allowlist="{ row }">
         <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap items-center gap-1">
           <SBadge :tone="row.model_filter_mode === 'blacklist' ? 'danger' : 'primary'">{{ t(row.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</SBadge>
-          <code
-            v-for="m in row.model_allowlist.slice(0, 4)"
-            :key="m"
-            class="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-dark-700"
-          >{{ m }}</code>
+          <SCode v-for="m in row.model_allowlist.slice(0, 4)" :key="m" inline :text="m" />
           <SHint v-if="row.model_allowlist.length > 4" inline size="xs" :title="row.model_allowlist.join(', ')">
             +{{ row.model_allowlist.length - 4 }}
           </SHint>
@@ -282,7 +253,7 @@ async function onAction(g: Group, key: string) {
       <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
       <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
+        <StatusBadge :status="row.status" />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -296,8 +267,10 @@ async function onAction(g: Group, key: string) {
           />
         </div>
       </template>
+      <template #footer>
+        <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
+      </template>
     </STable>
-    <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl">
       <form class="space-y-4" @submit.prevent="submit">
@@ -326,7 +299,7 @@ async function onAction(g: Group, key: string) {
         </SGrid>
         <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
           <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
-          <p v-if="modelLoadError" class="text-xs text-danger-600">{{ modelLoadError }}</p>
+          <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
         </SField>
         <SField v-if="editing" :label="t('platforms.served')">
           <GroupPlatforms :group="editing" hint />
@@ -344,32 +317,22 @@ async function onAction(g: Group, key: string) {
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">
       <template v-if="detail">
-        <dl class="kv" data-testid="group-detail">
-          <dt>ID</dt>
-          <dd>{{ detail.id }}</dd>
+        <SDescriptions data-testid="group-detail" dense>
+          <SDescItem :label="t('common.id')">{{ detail.id }}</SDescItem>
           <template v-if="detail.description">
-            <dt>{{ t('common.description') }}</dt>
-            <dd>{{ detail.description }}</dd>
+            <SDescItem :label="t('common.description')">{{ detail.description }}</SDescItem>
           </template>
-          <dt>{{ t('common.status') }}</dt>
-          <dd><SBadge :tone="statusTone(detail.status)" dot>{{ statusLabel(detail.status) }}</SBadge></dd>
-          <dt>{{ t('groups.visibility') }}</dt>
-          <dd>{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</dd>
-          <dt>{{ t('groups.rateMultiplier') }}</dt>
-          <dd class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</dd>
-          <dt>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</dt>
-          <dd>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</dd>
-          <dt>{{ t('groups.accountCount') }}</dt>
-          <dd>{{ formatNumber(detail.account_count) }}</dd>
-          <dt>{{ t('groups.keyCount') }}</dt>
-          <dd>{{ formatNumber(keyCount(detail)) }}</dd>
-          <dt>{{ t('platforms.served') }}</dt>
-          <dd><GroupPlatforms :group="detail" hint /></dd>
+          <SDescItem :label="t('common.status')"><StatusBadge :status="detail.status" /></SDescItem>
+          <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
+          <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
+          <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>
+          <SDescItem :label="t('groups.accountCount')">{{ formatNumber(detail.account_count) }}</SDescItem>
+          <SDescItem :label="t('groups.keyCount')">{{ formatNumber(keyCount(detail)) }}</SDescItem>
+          <SDescItem :label="t('platforms.served')"><GroupPlatforms :group="detail" hint /></SDescItem>
           <template v-if="detail.platforms?.length && detail.account_count !== 0">
-            <dt>{{ t('platforms.endpoints') }}</dt>
-            <dd><PlatformEndpointsPreview :ids="detail.platforms" /></dd>
+            <SDescItem :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" /></SDescItem>
           </template>
-        </dl>
+        </SDescriptions>
       </template>
       <template #footer>
         <SButton v-if="canManage && detail" @click="editFromDetail">{{ t('common.edit') }}</SButton>

@@ -5,11 +5,12 @@ import { api } from '@sub2api/host'
 import { SButton, SField, SHint, SInput, SModal, SRadioGroup, STextarea, toast, type SelectOption } from '@sub2api/ui'
 import type { User } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
 import { formatMoney } from '@/utils/format'
 
 // Adjust a user's balance (POST /users/:id/balance/adjust, balance:adjust).
-const props = defineProps<{ open: boolean; userId?: number | null }>()
+// currentBalance: the known balance of `userId` (e.g. from the users list), shown while that user is the target.
+const props = defineProps<{ open: boolean; userId?: number | null; currentBalance?: string | number | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'done'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -107,9 +108,7 @@ async function submit() {
     emit('done')
     emit('update:open', false)
   } catch (e) {
-    const fe = fieldErrors(e)
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(e)
+    applyFormError(e, errors)
   } finally {
     busy.value = false
   }
@@ -119,9 +118,13 @@ async function submit() {
 <template>
   <SModal :open="open" :title="t('ledger.adjust.title')" width="md" @update:open="emit('update:open', $event)">
     <div class="space-y-4">
+      <div v-if="currentBalance !== undefined && currentBalance !== null && targetUserId === userId" class="text-sm" data-testid="adjust-current-balance">
+        <SHint inline>{{ t('ledger.adjust.currentBalance') }}:</SHint>
+        <span class="ml-2 font-mono font-semibold">{{ formatMoney(currentBalance) }}</span>
+      </div>
       <SField :label="t('common.user')" :hint="canSearch ? t('ledger.adjust.userHintSearch') : t('ledger.adjust.userHintId')" :error="errors.user" required>
         <div class="relative">
-          <SInput v-model="query" :placeholder="canSearch ? t('ledger.adjust.userPlaceholder') : 'ID'" autocomplete="off" />
+          <SInput v-model="query" :placeholder="canSearch ? t('ledger.adjust.userPlaceholder') : t('common.id')" autocomplete="off" />
           <div v-if="results.length" class="dropdown absolute left-0 right-0 z-10 mt-1">
             <div v-for="u in results" :key="u.id" class="dropdown-item" @mousedown.prevent="pick(u)">
               <span>{{ u.email }}</span>
@@ -136,9 +139,9 @@ async function submit() {
       </SField>
       <SField :label="t('ledger.adjust.amount')" :error="errors.amount" required>
         <div class="flex items-center gap-2">
-          <span class="font-mono text-lg" :class="credit ? 'text-emerald-600' : 'text-red-600'">{{ credit ? '+' : '-' }}</span>
+          <span class="font-mono text-lg" :class="credit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">{{ credit ? '+' : '-' }}</span>
           <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" />
-          <SHint inline>USD</SHint>
+          <SHint inline>{{ t('common.usd') }}</SHint>
         </div>
       </SField>
       <SField :label="t('common.note')" :error="errors.note">

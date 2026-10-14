@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SField, SHint, SInput, SModal, SIcon, toast } from '@sub2api/ui'
+import { SButton, SChoiceCards, SField, SHint, SInput, SModal, SIcon, toast, type ChoiceOption } from '@sub2api/ui'
 import type { UninstallResult } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 
@@ -20,6 +20,30 @@ const busy = ref(false)
 /** Set after a successful uninstall with purge_accounts: the modal shows the result. */
 const result = ref<{ accountsDeleted: number | null } | null>(null)
 const matches = computed(() => typed.value.trim() === props.pluginKey)
+
+// The two optional deletions as one multi-select: 'purge' (plugin schema) and 'accounts'.
+const purgeOptions = computed<ChoiceOption[]>(() => [
+  {
+    value: 'purge',
+    label: t('plugins.uninstall.purge', { schema: 'plg_' + props.pluginKey }),
+    description: t('plugins.uninstall.purgeHint'),
+    icon: 'trash',
+    tone: 'danger'
+  },
+  {
+    value: 'accounts',
+    label: t('plugins.uninstall.purgeAccounts'),
+    description: t('plugins.uninstall.purgeAccountsHint'),
+    icon: 'account',
+    tone: 'danger'
+  }
+])
+const purgeChoice = computed(() => [...(purge.value ? ['purge'] : []), ...(purgeAccounts.value ? ['accounts'] : [])])
+function setPurgeChoice(v: unknown) {
+  const list = Array.isArray(v) ? v : []
+  purge.value = list.includes('purge')
+  purgeAccounts.value = list.includes('accounts')
+}
 
 watch(
   () => props.open,
@@ -73,30 +97,21 @@ function close() {
     </div>
     <div v-else class="space-y-4 text-sm">
       <p>{{ t('plugins.uninstall.body') }}</p>
-      <SCheckbox
-        v-model="purge"
-        class="!items-start rounded-lg border p-3"
-        :class="purge ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
+      <SChoiceCards
+        :model-value="purgeChoice"
+        :options="purgeOptions"
+        :cols="1"
+        multiple
+        :aria-label="t('plugins.uninstall.title', { name })"
         data-testid="uninstall-purge"
-      >
-        <span class="font-medium">{{ t('plugins.uninstall.purge', { schema: 'plg_' + pluginKey }) }}</span>
-        <SHint inline size="xs" class="mt-0.5 block">{{ t('plugins.uninstall.purgeHint') }}</SHint>
-      </SCheckbox>
-      <SCheckbox
-        v-model="purgeAccounts"
-        class="!items-start rounded-lg border p-3"
-        :class="purgeAccounts ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
-        data-testid="uninstall-purge-accounts"
-      >
-        <span class="font-medium">{{ t('plugins.uninstall.purgeAccounts') }}</span>
-        <SHint inline size="xs" class="mt-0.5 block">{{ t('plugins.uninstall.purgeAccountsHint') }}</SHint>
-      </SCheckbox>
-      <p v-if="purge" class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+        @update:model-value="setPurgeChoice"
+      />
+      <SHint v-if="purge" size="xs" tone="danger" class="flex items-center gap-1.5">
         <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.uninstall.purgeWarn') }}
-      </p>
-      <p v-if="purgeAccounts" class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+      </SHint>
+      <SHint v-if="purgeAccounts" size="xs" tone="danger" class="flex items-center gap-1.5">
         <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.uninstall.purgeAccountsWarn') }}
-      </p>
+      </SHint>
       <SField :label="t('plugins.uninstall.typeKey', { key: pluginKey })">
         <SInput v-model="typed" mono :placeholder="pluginKey" autocomplete="off" @keyup.enter="submit" />
       </SField>
@@ -105,9 +120,7 @@ function close() {
       <SButton v-if="result" variant="primary" @click="close">{{ t('common.close') }}</SButton>
       <template v-else>
         <SButton :disabled="busy" @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-        <SButton variant="danger" :loading="busy" :disabled="!matches" @click="submit">
-          <SIcon name="trash" class="h-4 w-4" />{{ t('plugins.uninstall.confirm') }}
-        </SButton>
+        <SButton variant="danger" icon="trash" :loading="busy" :disabled="!matches" @click="submit">{{ t('plugins.uninstall.confirm') }}</SButton>
       </template>
     </template>
   </SModal>

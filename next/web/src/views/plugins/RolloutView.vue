@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { Rollout, RolloutNode } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -208,31 +208,23 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- result banners -->
-      <div
-        v-if="phase === 'active'"
-        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-      >
-        <span class="inline-flex items-center gap-2 font-medium">
-          <SIcon name="check" class="h-5 w-5" />{{ t(`plugins.rollout.success.${rollout.action}`, { version: rollout.target_version }) }}
-        </span>
-        <SButton :to="`/plugins/${encodeURIComponent(key)}`" variant="primary" size="sm">{{ t('plugins.rollout.backToDetail') }}</SButton>
-      </div>
-      <div
+      <SAlert v-if="phase === 'active'" tone="success" :title="t(`plugins.rollout.success.${rollout.action}`, { version: rollout.target_version })" class="mb-4">
+        <template #actions>
+          <SButton :to="`/plugins/${encodeURIComponent(key)}`" variant="primary" size="sm">{{ t('plugins.rollout.backToDetail') }}</SButton>
+        </template>
+      </SAlert>
+      <SAlert
         v-else-if="!running"
-        class="mb-4 rounded-xl border p-4 text-sm"
-        :class="
-          phase === 'cancelled'
-            ? 'border-gray-300 bg-gray-50 text-gray-800 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'
-            : 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200'
-        "
+        :tone="phase === 'cancelled' ? 'neutral' : 'danger'"
+        :icon="phase === 'cancelled' ? 'stop' : 'warning'"
+        :title="t(`plugins.rollout.ended.${phase}`, { version: detail?.active_version || rollout.from_version || '—' })"
+        class="mb-4"
       >
-        <div class="flex items-center gap-2 font-medium">
-          <SIcon :name="phase === 'cancelled' ? 'stop' : 'warning'" class="h-5 w-5" />
-          {{ t(`plugins.rollout.ended.${phase}`, { version: detail?.active_version || rollout.from_version || '—' }) }}
-        </div>
-        <pre v-if="rollout.error" class="mt-2 whitespace-pre-wrap break-all font-mono text-xs">{{ rollout.error }}</pre>
-        <SButton :to="`/plugins/${encodeURIComponent(key)}`" size="sm" class="mt-3">{{ t('plugins.rollout.backToDetail') }}</SButton>
-      </div>
+        <pre v-if="rollout.error" class="whitespace-pre-wrap break-all font-mono text-xs">{{ rollout.error }}</pre>
+        <template #actions>
+          <SButton :to="`/plugins/${encodeURIComponent(key)}`" size="sm">{{ t('plugins.rollout.backToDetail') }}</SButton>
+        </template>
+      </SAlert>
 
       <SCard>
         <ol class="space-y-6">

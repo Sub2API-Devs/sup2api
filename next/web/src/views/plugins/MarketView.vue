@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, requestRaw } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SField, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SRadio, SSelect, SSpinner, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SChoiceCards, SEmpty, SField, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSelect, SSpinner, toast, type ChoiceOption } from '@sub2api/ui'
 import type { MarketPlugin, MarketSource, MarketVersion, PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -93,6 +93,18 @@ const rows = computed(() => {
 })
 
 const pickerVersions = computed(() => [...(picker.value?.versions || [])].sort((a, b) => compareVersions(b.version, a.version)))
+/** Version cards of the picker: installed and incompatible versions cannot be chosen. */
+const pickerChoices = computed<ChoiceOption[]>(() =>
+  pickerVersions.value.map((v) => {
+    const meta = [v.host_compat ? `${t('plugins.consent.hostCompat')} ${v.host_compat}` : '', v.size ? formatBytes(v.size) : ''].filter(Boolean).join(' · ')
+    return {
+      value: v.version,
+      label: 'v' + v.version,
+      description: incompatible(v) ? incompatibleReason(v) : meta || undefined,
+      disabled: v.version === installedOf(picker.value!) || incompatible(v)
+    }
+  })
+)
 
 async function loadSources() {
   loadingSources.value = true
@@ -177,7 +189,7 @@ onMounted(async () => {
   <div>
     <SPageHeader :title="t('plugins.market.title')" :description="t('plugins.market.description')">
       <template #actions>
-        <SButton :loading="loading" @click="loadPlugins(), loadInstalled()"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" @click="loadPlugins(), loadInstalled()"><SIcon v-if="!loading" name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
         <SField :label="t('plugins.market.source')" class="w-56">
@@ -207,8 +219,8 @@ onMounted(async () => {
       <SEmpty icon="market" :text="q ? t('plugins.market.noMatch') : t('plugins.market.empty')" />
     </SCard>
 
-    <div v-else class="card divide-y divide-gray-100 dark:divide-dark-700" :class="loading ? 'opacity-60' : ''">
-      <div v-for="m in rows" :key="m.key" class="flex flex-wrap items-center gap-4 px-5 py-4">
+    <SCard v-else :padded="false" :class="loading ? 'opacity-60' : ''">
+      <div v-for="m in rows" :key="m.key" class="flex flex-wrap items-center gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0 dark:border-dark-700">
         <PluginAvatar :name="lt(m.name)" :plugin-key="m.key" :icon="(m as any).icon" size="lg" />
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
@@ -234,9 +246,9 @@ onMounted(async () => {
               <SLink v-if="installed[m.key]" :to="`/plugins/${encodeURIComponent(m.key)}`" class="ml-1">{{ t('common.detail') }}</SLink>
             </template>
           </SHint>
-          <p v-if="noCompatible(m)" class="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+          <SHint v-if="noCompatible(m)" size="xs" tone="danger" class="mt-1 flex items-center gap-1">
             <SIcon name="warning" class="h-3.5 w-3.5" />{{ t('plugins.market.noCompatible', { version: hostVersion || '?' }) }}
-          </p>
+          </SHint>
           <SHint v-else-if="stateOf(m) !== 'install' && latestCompatibleOf(m) && latestCompatibleOf(m) !== latestOf(m)" size="xs" class="mt-1">
             {{ t('plugins.market.newerIncompatible', { version: latestOf(m) }) }}
           </SHint>
@@ -261,39 +273,28 @@ onMounted(async () => {
           </SButton>
         </div>
       </div>
-    </div>
+    </SCard>
 
     <SModal :open="!!picker" :title="picker ? t('plugins.market.pickTitle', { name: lt(picker.name) || picker.key }) : ''" width="md" @update:open="(v) => !v && (picker = null)">
       <template v-if="picker">
         <SHint class="mb-3">{{ t('plugins.market.pickHint') }}</SHint>
-        <div class="max-h-80 space-y-2 overflow-y-auto">
-          <!-- [&>span]:… turns SRadio's label slot into the flex row so the meta column can sit at the right edge. -->
-          <SRadio
-            v-for="v in pickerVersions"
-            :key="v.version"
+        <div class="max-h-80 overflow-y-auto">
+          <SChoiceCards
             :model-value="pickVersion"
-            :value="v.version"
-            :disabled="v.version === installedOf(picker) || incompatible(v)"
-            class="!gap-3 rounded-lg border p-3 [&>span]:flex [&>span]:min-w-0 [&>span]:flex-1 [&>span]:items-center [&>span]:gap-3"
-            :class="pickVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700'"
-            :data-version="v.version"
-            @update:model-value="pickVersion = v.version"
+            :options="pickerChoices"
+            :cols="1"
+            :aria-label="t('plugins.market.pickTitle', { name: lt(picker.name) || picker.key })"
+            @update:model-value="(v) => (pickVersion = String(v))"
           >
-            <span class="min-w-0">
-              <span class="flex flex-wrap items-center gap-1.5">
-                <span class="font-mono font-medium">v{{ v.version }}</span>
+            <template v-for="v in pickerVersions" :key="v.version" #[`option-${v.version}`]>
+              <span class="mt-1.5 flex flex-wrap items-center gap-1.5" :data-version="v.version">
                 <SBadge v-if="v.version === latestOf(picker)" tone="primary">{{ t('plugins.market.latest') }}</SBadge>
                 <SBadge v-if="v.version === installedOf(picker)" tone="success">{{ t('plugins.market.installed') }}</SBadge>
                 <SBadge v-if="v.compatible === true" tone="success" data-testid="version-compatible">{{ t('plugins.market.compatible') }}</SBadge>
                 <SBadge v-else-if="incompatible(v)" tone="danger" data-testid="version-incompatible">{{ t('plugins.market.incompatible') }}</SBadge>
               </span>
-              <span v-if="incompatible(v)" class="mt-0.5 block text-xs text-red-600 dark:text-red-400">{{ incompatibleReason(v) }}</span>
-            </span>
-            <SHint inline size="xs" class="ml-auto shrink-0 text-right">
-              <span v-if="v.host_compat">{{ t('plugins.consent.hostCompat') }} <code class="font-mono">{{ v.host_compat }}</code></span>
-              <span v-if="v.size" class="ml-2">{{ formatBytes(v.size) }}</span>
-            </SHint>
-          </SRadio>
+            </template>
+          </SChoiceCards>
         </div>
         <SHint v-if="hostVersion" size="xs" class="mt-3">{{ t('plugins.market.hostVersion', { version: hostVersion }) }}</SHint>
       </template>

@@ -8,6 +8,7 @@ export default {
     offload: 'CPU 保护'
   },
   offload: {
+    nodesTitle: '节点负载',
     title: 'CPU 保护',
     subtitle: '节点 CPU 过高时，把新请求转给其他空闲节点。只在网关托管的多节点集群中可用。',
     enabled: '启用',

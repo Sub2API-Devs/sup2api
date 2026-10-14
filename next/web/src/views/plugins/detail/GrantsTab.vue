@@ -100,7 +100,7 @@ onMounted(load)
           v-if="auth.has('plugin:manage') && row.status !== 'revoked'"
           size="sm"
           variant="ghost"
-          class="!text-red-600"
+          tone="danger"
           :loading="revoking === row.permission"
           @click="revoke(row)"
           >{{ t('plugins.grants.revoke') }}</SButton

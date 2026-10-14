@@ -45,6 +45,10 @@ async function render(props: Record<string, unknown>) {
   return w
 }
 const configured = (mode: string) => ({ mode, accountRuntimes: true, hasAdminKey: true })
+/** Unfolds "advanced: upload an image by hand". */
+async function openUpload(w: { find: (s: string) => { exists: () => boolean }; get: (s: string) => { trigger: (e: string) => Promise<void> } }) {
+  if (!w.find('[data-testid="image-upload-file"]').exists()) await w.get('[data-testid="ccgateway-image-upload"] button').trigger('click')
+}
 const rows = (w: Awaited<ReturnType<typeof render>>) => w.findAll('[data-testid="ccgateway-workers-result"] tbody tr')
 const row = (w: Awaited<ReturnType<typeof render>>, key: string) => w.get(`[data-testid="ccgateway-workers-result"] tr[data-key="${key}"]`)
 
@@ -60,6 +64,7 @@ describe('CCGateway worker update in place', () => {
 
   it('shows the per-account results of an applied app upload', async () => {
     const w = await render(configured('controller'))
+    await openUpload(w)
     expect(w.get('[data-testid="image-upload-app-hint"]').text()).toBe('上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）。')
     const input = w.get<HTMLInputElement>('[data-testid="image-upload-file"]')
     Object.defineProperty(input.element, 'files', { value: [new File([new Uint8Array(10)], 'worker.tar')], configurable: true })
@@ -92,6 +97,7 @@ describe('CCGateway worker update in place', () => {
   it('says why no worker was updated when the runtimes could not be listed', async () => {
     mocks.transport = transport({ image: 'ccgateway-worker:0.2.0', results: [], reason: 'controller_unhealthy' })
     const w = await render(configured('controller'))
+    await openUpload(w)
     const input = w.get<HTMLInputElement>('[data-testid="image-upload-file"]')
     Object.defineProperty(input.element, 'files', { value: [new File([new Uint8Array(10)], 'worker.tar')], configurable: true })
     await input.trigger('change')

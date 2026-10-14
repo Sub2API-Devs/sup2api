@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SField, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -149,73 +149,69 @@ async function remove(p: Price) {
       <template #actions>
         <SButton v-if="canManage" data-testid="price-sync" @click="router.push('/prices/sources')">{{ t('prices.syncPrices') }}</SButton>
         <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
-        <SButton v-if="canManage" variant="primary" @click="router.push('/prices/new')">+ {{ t('prices.new') }}</SButton>
-      </template>
-      <template #filters>
-        <SField class="w-40" :label="t('prices.modeCol')">
-          <SSelect v-model="filters.mode" :options="modeOptions" />
-        </SField>
-        <SField class="w-36" :label="t('common.source')" data-testid="price-source-filter">
-          <SSelect v-model="filters.source" :options="sourceOptions" />
-        </SField>
-        <SField class="w-64" :label="t('common.search')">
-          <SInput v-model="filters.q" :placeholder="t('prices.searchPlaceholder')" />
-        </SField>
-        <div v-if="filters.sync_source_id" class="pb-1.5" data-testid="price-source-chip">
-          <span class="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">
-            {{ t('prices.fromSource', { name: filteredSourceName }) }}
-            <button class="ml-0.5 font-semibold" :title="t('prices.clearSourceFilter')" :aria-label="t('prices.clearSourceFilter')" @click="clearSourceFilter">×</button>
-          </span>
-        </div>
+        <SButton v-if="canManage" variant="primary" icon="plus" @click="router.push('/prices/new')">{{ t('prices.new') }}</SButton>
       </template>
     </SPageHeader>
 
-    <p class="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200" data-testid="price-scope-note">
-      {{ t('prices.scopeNote') }}
-    </p>
-    <div class="card overflow-hidden">
-      <STable :columns="columns" :rows="rows" :loading="loading">
-        <template #cell-model="{ row }">
-          <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
-          <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
-        </template>
-        <template #cell-mode="{ row }">
-          <SBadge :tone="modeTone(row.mode)">{{ row.config?.video ? t('prices.video.title') : t(`prices.mode.${row.mode}`) }}</SBadge>
-        </template>
-        <template #cell-summary="{ row }">
-          <template v-for="s in [summaryOf(row)]" :key="s.kind">
-            <span v-if="s.kind === 'per_request'" class="text-sm">{{ t('prices.summary.perRequest', { price: price(s.price) }) }}</span>
-            <span v-else-if="s.kind === 'per_token'" class="text-sm">
-              {{ t('prices.summary.perToken', { p: price(s.prices.p), c: price(s.prices.c), cr: price(s.prices.cr) }) }}
-            </span>
-            <span v-else-if="s.kind === 'visual'" class="text-sm">
-              {{ t('prices.summary.visual', { tiers: s.tiers, rules: s.rules }) }}
-              <SHint v-if="s.tierNames.length > 1" inline size="xs">({{ s.tierNames.join(' / ') }})</SHint>
-            </span>
-            <span v-else class="block max-w-md truncate font-mono text-xs text-gray-500" :title="row.expression">
-              {{ t('prices.summary.custom') }} · {{ row.expression }}
-            </span>
-          </template>
-        </template>
-        <template #cell-source="{ row }">
-          <span :title="row.source === 'sync' && row.synced_at ? formatDateTime(row.synced_at) : undefined" data-testid="price-source">
-            <SBadge :tone="row.source === 'sync' ? 'info' : 'primary'">{{ sourceLabel(row) }}</SBadge>
+    <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
+    <STable card :columns="columns" :rows="rows" :loading="loading">
+      <template #toolbar>
+        <SInput v-model="filters.q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.searchPlaceholder')" />
+        <SSelect v-model="filters.mode" class="!w-40" :options="modeOptions" :aria-label="t('prices.modeCol')" />
+        <SSelect v-model="filters.source" class="!w-36" :options="sourceOptions" :aria-label="t('common.source')" data-testid="price-source-filter" />
+        <SChip
+          v-if="filters.sync_source_id"
+          tone="info"
+          closable
+          :close-label="t('prices.clearSourceFilter')"
+          data-testid="price-source-chip"
+          @close="clearSourceFilter"
+        >
+          {{ t('prices.fromSource', { name: filteredSourceName }) }}
+        </SChip>
+      </template>
+      <template #cell-model="{ row }">
+        <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
+        <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
+      </template>
+      <template #cell-mode="{ row }">
+        <SBadge :tone="modeTone(row.mode)">{{ row.config?.video ? t('prices.video.title') : t(`prices.mode.${row.mode}`) }}</SBadge>
+      </template>
+      <template #cell-summary="{ row }">
+        <template v-for="s in [summaryOf(row)]" :key="s.kind">
+          <span v-if="s.kind === 'per_request'" class="text-sm">{{ t('prices.summary.perRequest', { price: price(s.price) }) }}</span>
+          <span v-else-if="s.kind === 'per_token'" class="text-sm">
+            {{ t('prices.summary.perToken', { p: price(s.prices.p), c: price(s.prices.c), cr: price(s.prices.cr) }) }}
+          </span>
+          <span v-else-if="s.kind === 'visual'" class="text-sm">
+            {{ t('prices.summary.visual', { tiers: s.tiers, rules: s.rules }) }}
+            <SHint v-if="s.tierNames.length > 1" inline size="xs">({{ s.tierNames.join(' / ') }})</SHint>
+          </span>
+          <span v-else class="block max-w-md truncate font-mono text-xs text-fg-muted" :title="row.expression">
+            {{ t('prices.summary.custom') }} · {{ row.expression }}
           </span>
         </template>
-        <template #cell-enabled="{ row }">
-          <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" @update:model-value="toggle(row, $event)" />
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="flex justify-end gap-1">
-            <template v-if="canManage">
-              <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.edit') }}</SButton>
-              <SButton size="sm" variant="ghost" class="!text-red-600" @click="remove(row)">{{ t('common.delete') }}</SButton>
-            </template>
-            <SButton v-else size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.view') }}</SButton>
-          </div>
-        </template>
-      </STable>
-    </div>
-    <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
+      <template #cell-source="{ row }">
+        <span :title="row.source === 'sync' && row.synced_at ? formatDateTime(row.synced_at) : undefined" data-testid="price-source">
+          <SBadge :tone="row.source === 'sync' ? 'info' : 'primary'">{{ sourceLabel(row) }}</SBadge>
+        </span>
+      </template>
+      <template #cell-enabled="{ row }">
+        <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" :aria-label="t('common.enabled') + ' · ' + row.model" @update:model-value="toggle(row, $event)" />
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex justify-end gap-1">
+          <template v-if="canManage">
+            <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.edit') }}</SButton>
+            <SDropdown :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" @select="$event === 'delete' && remove(row)" />
+          </template>
+          <SButton v-else size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.view') }}</SButton>
+        </div>
+      </template>
+      <template #footer>
+        <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
+    </STable>
   </div>
 </template>

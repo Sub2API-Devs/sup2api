@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { SDescItem, SDescriptions } from '@sub2api/ui'
 import { formatNumber } from '@/utils/format'
 import type { UsageTokenFacts } from './usage'
 
@@ -9,13 +10,12 @@ const fields = { input_tokens: 'p', output_tokens: 'c', cache_read_tokens: 'cr',
 </script>
 
 <template>
-  <dl class="kv">
+  <SDescriptions dense>
     <template
       v-for="(label, field) in fields"
       :key="field"
     >
-      <dt>{{ label === 'cc' ? t('usage.tokens.cacheDefaultBucket') : label === 'cc1h' ? t('usage.tokens.cache1hBucket') : t(`prices.vars.${label}`) }}</dt>
-      <dd>{{ tokens[field] == null ? '—' : formatNumber(tokens[field]!) }}</dd>
+      <SDescItem :label="label === 'cc' ? t('usage.tokens.cacheDefaultBucket') : label === 'cc1h' ? t('usage.tokens.cache1hBucket') : t(`prices.vars.${label}`)">{{ tokens[field] == null ? '—' : formatNumber(tokens[field]!) }}</SDescItem>
     </template>
-  </dl>
+  </SDescriptions>
 </template>

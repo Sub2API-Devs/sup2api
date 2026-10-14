@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCard, SCode, SHint } from '@sub2api/ui'
+import { SBadge, SCard, SCode, SDisclosure, SHint } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
 import { accountTypesOf, asArray, display, pick, platformsOf, type PluginDetail } from '../pluginUtil'
@@ -58,7 +58,7 @@ function endpointText(e: Record<string, any>): string {
         <dt>{{ t('common.status') }}</dt>
         <dd class="flex flex-wrap items-center gap-2">
           <StatusBadge :status="detail.status" />
-          <span v-if="detail.status_reason" class="text-xs text-red-500">{{ detail.status_reason }}</span>
+          <SHint v-if="detail.status_reason" inline size="xs" tone="danger">{{ detail.status_reason }}</SHint>
         </dd>
         <dt>{{ t('plugins.activeVersion') }}</dt>
         <dd class="font-mono">{{ detail.active_version ? 'v' + detail.active_version : '—' }}</dd>
@@ -117,10 +117,9 @@ function endpointText(e: Record<string, any>): string {
           </dd>
         </template>
       </dl>
-      <details v-if="detail.manifest" class="mt-4">
-        <summary class="cursor-pointer"><SHint inline size="xs">{{ t('plugins.detail.rawManifest') }}</SHint></summary>
-        <SCode class="mt-2 max-h-96" :text="JSON.stringify(detail.manifest, null, 2)" />
-      </details>
+      <SDisclosure v-if="detail.manifest" class="mt-4" :label="t('plugins.detail.rawManifest')">
+        <SCode class="max-h-96" :text="JSON.stringify(detail.manifest, null, 2)" />
+      </SDisclosure>
     </SCard>
 
     <SCard :title="t('plugins.detail.runtime')">

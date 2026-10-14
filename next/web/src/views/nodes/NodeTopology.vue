@@ -6,7 +6,7 @@ import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
-import { SButton, SHint } from '@sub2api/ui'
+import { SAlert, SButton, SHint } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import type { ShellNode } from '@/api/observability'
 import type { NodePluginState } from '@/api/admin'
@@ -58,7 +58,7 @@ function refresh() {
     const gateway = c.shell ? add(c, 'gateway', c.id, t('observe.gateway'), main ? 132 : 106, main ? '#8b5cf6' : '#10b981', unknown || !c.shell.enabled, [
       { label: t('observe.upgradeRole'), value: knownPrimary.value ? t(main ? 'observe.primaryRole' : 'observe.followerRole') : t('observe.unknown') },
       { label: t('observe.gateway'), value: unknown ? t('observe.unknown') : `${c.shell.mode} · ${t(c.shell.ready ? 'upgrades.serving' : 'upgrades.waiting')}` },
-      { label: 'CPU', value: unknown || c.shell.cpu_percent == null ? '—' : c.shell.cpu_percent.toFixed(1)+'%' },
+      { label: t('common.cpu'), value: unknown || c.shell.cpu_percent == null ? '—' : c.shell.cpu_percent.toFixed(1)+'%' },
       { label: t('observe.offloadState'), value: unknown ? t('observe.unknown') : t(c.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') },
       { label: t('observe.boot'), value: c.shell.shell_boot_id || '—' }
     ]) : ''
@@ -159,17 +159,17 @@ watch(()=>[props.cards,props.edges,props.primary,props.uncertain,props.visit,t('
 
 <template>
   <div class="space-y-3">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-violet-50 px-3 py-2 text-sm dark:bg-violet-950/30">
-      <template v-if="knownPrimary"><span class="font-semibold text-violet-700 dark:text-violet-300">★ {{ t('observe.primarySummary', { node: knownPrimary }) }}</span><span class="text-gray-600 dark:text-gray-300">{{ t('observe.followerSummary', { count: followerCount }) }}</span></template>
-      <span v-else class="text-gray-500 dark:text-gray-400">{{ t('observe.primaryUnknown') }}</span>
-    </div>
+    <SAlert :tone="knownPrimary ? 'accent' : 'neutral'" dense :icon="knownPrimary ? 'node' : 'info'">
+      <span v-if="knownPrimary" class="flex flex-wrap gap-x-4 gap-y-1"><strong>{{ t('observe.primarySummary', { node: knownPrimary }) }}</strong><span>{{ t('observe.followerSummary', { count: followerCount }) }}</span></span>
+      <template v-else>{{ t('observe.primaryUnknown') }}</template>
+    </SAlert>
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-dark-300">
+      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-fg-muted">
         <span v-if="knownPrimary"><i class="legend-dot bg-violet-500" />{{ t('observe.primaryRole') }}</span><span><i class="legend-dot bg-emerald-500" />{{ knownPrimary ? t('observe.followerRole') : t('observe.gateway') }}</span><span><i class="legend-dot bg-indigo-500" />{{ t('observe.core') }}</span><span><i class="legend-dot bg-sky-400" />{{ t('observe.plugins') }}</span>
       </div>
       <div class="flex flex-wrap gap-2"><SButton size="sm" :aria-pressed="overview" @click="overview = !overview">{{ t(overview ? 'observe.hideOverview' : 'observe.showOverview') }}</SButton><SButton size="sm" @click="layout(true)">{{ t('observe.relayout') }}</SButton><SButton size="sm" @click="fitView({padding:0.15,duration:250})">{{ t('observe.fitView') }}</SButton></div>
     </div>
-    <div class="topology-canvas relative overflow-hidden rounded-xl border border-gray-200 dark:border-dark-600" :aria-label="t('observe.topologyView')">
+    <div class="topology-canvas relative overflow-hidden rounded-xl border border-line" :aria-label="t('observe.topologyView')">
       <VueFlow :id="flowID" :nodes="visibleNodes" :edges="visibleEdges" :min-zoom="0.15" :max-zoom="3" :nodes-connectable="false" :edges-updatable="false" :delete-key-code="null" :zoom-on-scroll="true" :pan-on-drag="true" :select-nodes-on-drag="false" @node-click="select" @node-drag="dragged" @node-drag-stop="dragged" @pane-click="selectedID = ''" @nodes-initialized="firstFit">
         <template #node-circle="node"><TopologyCircle :data="node.data" :selected="node.selected" /></template>
         <Background pattern-color="#94a3b8" :gap="24" :size="1" />
@@ -180,9 +180,9 @@ watch(()=>[props.cards,props.edges,props.primary,props.uncertain,props.visit,t('
         </Controls>
         <MiniMap v-if="overview" :node-color="n => n.data.color" :node-stroke-color="n => n.data.color" :node-border-radius="100" pannable zoomable position="bottom-right" />
       </VueFlow>
-      <aside v-if="chosen" class="absolute right-3 top-3 z-10 max-h-[340px] w-64 max-w-[calc(100%-24px)] overflow-auto rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-dark-600 dark:bg-dark-900/95">
-        <div class="mb-3 flex items-start justify-between gap-2"><div><div class="break-all text-sm font-semibold">{{ chosen.data.label }}</div><div class="mt-1 break-all text-xs text-gray-500">{{ chosen.data.cluster }} · {{ t(`observe.${chosen.data.kind === 'plugin' ? 'plugins' : chosen.data.kind}`) }}</div></div><button type="button" :aria-label="t('observe.closeDetails')" @click="selectedID=''">×</button></div>
-        <dl class="space-y-2"><div v-for="(detail,i) in chosen.data.details" :key="i"><dt class="text-[11px] text-gray-500">{{ detail.label }}</dt><dd class="break-all text-xs">{{ detail.value }}</dd></div></dl>
+      <aside v-if="chosen" class="absolute right-3 top-3 z-10 max-h-[340px] w-64 max-w-[calc(100%-24px)] overflow-auto rounded-xl border border-line bg-surface/95 p-4 shadow-lg backdrop-blur">
+        <div class="mb-3 flex items-start justify-between gap-2"><div><div class="break-all text-sm font-semibold">{{ chosen.data.label }}</div><div class="mt-1 break-all text-xs text-fg-muted">{{ chosen.data.cluster }} · {{ t(`observe.${chosen.data.kind === 'plugin' ? 'plugins' : chosen.data.kind}`) }}</div></div><SButton variant="ghost" size="sm" class="shrink-0" :title="t('observe.closeDetails')" :aria-label="t('observe.closeDetails')" icon-only icon="x" @click="selectedID = ''" /></div>
+        <dl class="space-y-2"><div v-for="(detail,i) in chosen.data.details" :key="i"><dt class="text-[11px] text-fg-muted">{{ detail.label }}</dt><dd class="break-all text-xs">{{ detail.value }}</dd></div></dl>
       </aside>
     </div>
     <SHint size="xs">{{ t('observe.visitHint') }} {{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ knownPrimary ? t('observe.coordinationHint') : t('observe.primaryUnknown') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>

@@ -31,6 +31,7 @@ export default {
   expired: 'Expired',
   notYetValid: 'Not yet valid',
   revoke: 'Revoke',
+  copyPublicKey: 'Copy public key {key}',
   revokeKey: 'Revoke key',
   revoked: 'Revoked',
   confirmRevoke: 'Revoke publisher "{name}"? All of its keys become invalid and plugins signed by it are marked as revoked (disabled by default).',

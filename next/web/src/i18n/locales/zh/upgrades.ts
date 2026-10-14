@@ -1,4 +1,7 @@
 export default {
+  confirmRollback: '恢复到上一个版本？主节点和从节点会按顺序重新切换，期间集群可能短暂不可用。',
+  confirmCancel: '取消这次尚未开始的更新？',
+  confirmDisableNode: '停用节点 {node}？它会停止接收请求，直到重新允许加入。',
   title: '核心升级', description: '先停止从节点，更新主节点，再逐个恢复从节点。',
   maintenanceWindow: '主节点更新期间整个集群将暂时不可用。主节点就绪后恢复服务，从节点完成更新和插件同步后再恢复本地服务。',
   sequence: '先将所有从节点转发到主节点并停止其核心，再停止并更新主节点；主节点就绪后异步更新从节点。',

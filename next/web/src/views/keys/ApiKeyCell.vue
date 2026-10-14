@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SIcon, confirm, toast } from '@sub2api/ui'
+import { SButton, SCode, confirm, toast } from '@sub2api/ui'
 import type { ApiKey } from '@/api/types'
 import { copyText } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
@@ -40,12 +40,8 @@ async function copy() {
 
 <template>
   <div class="inline-flex items-center gap-1.5 whitespace-nowrap">
-    <code class="font-mono text-xs">{{ apiKey.key_prefix }}…</code>
-    <button v-if="allowed" type="button" class="rounded p-1 text-fg-muted hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" data-testid="copy-api-key" @click.stop="copy">
-      <SIcon name="copy" class="h-3.5 w-3.5" />
-    </button>
-    <button v-if="allowed" type="button" class="rounded p-1 text-fg-muted hover:text-primary-600 disabled:opacity-40" :disabled="rotating || copying" :title="t('apikeys.rotate')" :aria-label="t('apikeys.rotate')" data-testid="rotate-api-key" @click.stop="rotate">
-      <SIcon name="refresh" class="h-3.5 w-3.5" />
-    </button>
+    <SCode inline :text="`${apiKey.key_prefix}…`" />
+    <SButton v-if="allowed" variant="ghost" size="sm" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" icon-only icon="copy" data-testid="copy-api-key" @click.stop="copy" />
+    <SButton v-if="allowed" variant="ghost" size="sm" :disabled="rotating || copying" :title="t('apikeys.rotate')" :aria-label="t('apikeys.rotate')" icon-only icon="refresh" data-testid="rotate-api-key" @click.stop="rotate" />
   </div>
 </template>

@@ -129,7 +129,7 @@ const updated = computed(() => {
           />
         </div>
         <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
-        <SBadge v-if="r.rejected" tone="danger" class="!px-1.5 !py-0 !text-xxs" data-testid="quota-rejected">{{
+        <SBadge v-if="r.rejected" tone="danger" size="xs" data-testid="quota-rejected">{{
           t('accounts.quota.rejected')
         }}</SBadge>
         <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>

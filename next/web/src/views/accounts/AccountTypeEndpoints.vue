@@ -30,7 +30,7 @@ const byPlatform = computed(() => {
 <template>
   <div v-if="endpoints.length" class="space-y-1.5" data-testid="type-endpoints">
     <div v-for="g in byPlatform" :key="g.id" :data-platform="g.id">
-      <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">{{ g.label }}</div>
+      <div class="text-xxs font-semibold uppercase tracking-wide text-fg-muted">{{ g.label }}</div>
       <ul class="space-y-0.5">
         <li v-for="e in g.items" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5 text-xs">
           <code class="font-mono text-gray-700 dark:text-gray-200">{{ e.method }} {{ e.path }}</code>
@@ -40,5 +40,5 @@ const byPlatform = computed(() => {
       </ul>
     </div>
   </div>
-  <p v-else class="text-xs text-amber-600 dark:text-amber-400">{{ t('accounts.noEndpoints') }}</p>
+  <p v-else class="text-xs text-warning-600 dark:text-warning-400">{{ t('accounts.noEndpoints') }}</p>
 </template>

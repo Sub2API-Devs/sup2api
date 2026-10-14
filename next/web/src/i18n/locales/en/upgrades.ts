@@ -1,4 +1,7 @@
 export default {
+  confirmRollback: 'Restore the previous release? Primary and followers switch back in sequence and the cluster may be briefly unavailable.',
+  confirmCancel: 'Cancel this update that has not started yet?',
+  confirmDisableNode: 'Disable node {node}? It stops serving requests until it is allowed to rejoin.',
   title: 'Core updates', description: 'Stop followers, update the primary, then restore followers in sequence.',
   maintenanceWindow: 'The whole cluster will be temporarily unavailable while the primary updates. Service resumes when the primary is ready. Followers resume local service after updating and syncing plugins.',
   sequence: 'Forward all followers to the primary and stop their cores. Update the primary, then update followers asynchronously after the primary is ready.',

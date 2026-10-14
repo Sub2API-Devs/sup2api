@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
-import { formatDelta, formatNumber, formatTime } from '@/utils/format'
+import TimeText from '@/components/TimeText.vue'
+import { formatDelta, formatNumber } from '@/utils/format'
 
 type Row = LedgerEntry & { user_name?: string; idempotency_key?: string }
 
@@ -45,9 +46,11 @@ function balance(v: string) {
 </script>
 
 <template>
-  <STable :columns="columns" :rows="rows" :loading="loading" dense>
+  <STable card :columns="columns" :rows="rows" :loading="loading" dense>
+    <template v-if="$slots.toolbar" #toolbar><slot name="toolbar" /></template>
+    <template v-if="$slots.footer" #footer><slot name="footer" /></template>
     <template #cell-created_at="{ row }">
-      <span class="whitespace-nowrap text-xs" :title="row.created_at">{{ formatTime(row.created_at) }}</span>
+      <TimeText :value="row.created_at" mode="time" :muted="false" class="text-xs" />
     </template>
     <template #cell-user="{ row }">
       <span class="text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</span>

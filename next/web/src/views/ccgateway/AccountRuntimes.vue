@@ -3,10 +3,10 @@
 // account). Authorizing happens on the Accounts page: each row links to the
 // account editor (/accounts?edit=<id>), where the container is started and
 // the Claude login is completed.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
@@ -145,22 +145,6 @@ function logDetails(r: Row): string {
   return `${logLimits(r)} ${overflow}`
 }
 
-// One floating tip for the hovered / focused log switch. It is fixed to the
-// viewport (the table scrolls and would clip it) and only mirrors the text of the
-// row's hidden description, which assistive technology reads instead.
-const tip = ref<{ id: number; text: string; left: number; top?: number; bottom?: number } | null>(null)
-const TIP_WIDTH = 320
-function showTip(r: Row, event: Event) {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const left = Math.max(8, Math.min(box.left, window.innerWidth - TIP_WIDTH - 8))
-  tip.value = box.bottom + 96 > window.innerHeight
-    ? { id: r.id, text: logDetails(r), left, bottom: window.innerHeight - box.top + 6 }
-    : { id: r.id, text: logDetails(r), left, top: box.bottom + 6 }
-}
-function hideTip() { tip.value = null }
-onMounted(() => window.addEventListener('scroll', hideTip, true))
-onBeforeUnmount(() => window.removeEventListener('scroll', hideTip, true))
-
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
   if (r.phase === 'ready') return { tone: 'success', label: t('ccgateway.runtimes.state.ready') }
@@ -191,7 +175,7 @@ async function refreshAuth(r: Row) {
 <template>
   <SCard :title="t('ccgateway.runtimes.title')" :subtitle="t('ccgateway.runtimes.hint')">
     <template #actions>
-      <SButton size="sm" :loading="loading" :title="t('common.refresh')" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+      <SButton size="sm" :loading="loading" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>
     <div class="space-y-3">
@@ -200,12 +184,12 @@ async function refreshAuth(r: Row) {
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
       <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
-          <div class="whitespace-nowrap font-medium">{{ row.name }} <span class="font-mono text-xs text-gray-400">#{{ row.id }}</span></div>
-          <div class="whitespace-nowrap text-xs text-gray-500 dark:text-dark-400">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
+          <div class="whitespace-nowrap font-medium">{{ row.name }} <span class="font-mono text-xs text-fg-subtle">#{{ row.id }}</span></div>
+          <div class="whitespace-nowrap text-xs text-fg-muted">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
         </template>
         <template #cell-container="{ row }">
           <SBadge :tone="containerBadge(row).tone" dot>{{ row.checking ? t('ccgateway.runtimes.checking') : containerBadge(row).label }}</SBadge>
-          <div v-if="row.container" class="mt-0.5 font-mono text-[11px] text-gray-400">{{ row.container }}</div>
+          <div v-if="row.container" class="mt-0.5 font-mono text-xxs text-fg-subtle">{{ row.container }}</div>
         </template>
         <template #cell-cli_version="{ row }">
           <span v-if="row.cliVersion" class="whitespace-nowrap font-mono text-xs" :data-testid="`cli-version-${row.id}`">{{ row.cliVersion }}</span>
@@ -219,18 +203,20 @@ async function refreshAuth(r: Row) {
           <CredentialStatusNotice :status="row.health" />
         </template>
         <template #cell-request_logs="{ row }">
-          <div v-if="row.logsEnabled !== null" class="inline-flex items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`" @mouseenter="showTip(row, $event)" @mouseleave="hideTip" @focusin="showTip(row, $event)" @focusout="hideTip" @keydown.esc="hideTip">
+          <!-- The tooltip only mirrors the row's hidden description, which assistive technology reads instead. -->
+          <STooltip v-if="row.logsEnabled !== null" :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
             <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
-            <button type="button" class="rounded-full text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 dark:hover:text-gray-200" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`"><SIcon name="info" class="h-4 w-4" /></button>
+            <SButton variant="ghost" size="sm" class="!px-1.5 text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`"><SIcon name="info" class="h-4 w-4" /></SButton>
             <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
-          </div>
+            <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
+          </STooltip>
           <SHint v-else inline size="xs">—</SHint>
           <SHint v-if="row.logsError" tone="danger" size="xs">{{ t('ccgateway.requestLogs.failed') }}</SHint>
         </template>
         <template #cell-actions="{ row }">
           <div class="flex items-center justify-end gap-2">
             <CLISettings v-if="auth.has('settings:read')" :account-id="row.id" :disabled="row.phase !== 'ready'" @changed="inspect(row)" />
-            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" :title="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)">
+            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" :title="t('ccgateway.runtimes.refreshAuth')" :aria-label="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)">
               <SIcon name="refresh" class="h-3.5 w-3.5" />
             </SButton>
             <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="{ path: '/accounts', query: { edit: String(row.id) } }" data-testid="ccgateway-runtime-edit">
@@ -240,8 +226,5 @@ async function refreshAuth(r: Row) {
         </template>
       </STable>
     </div>
-    <Teleport to="body">
-      <div v-if="tip" aria-hidden="true" class="pointer-events-none fixed z-50 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-5 text-white shadow-lg dark:bg-dark-700" :style="{ left: `${tip.left}px`, top: tip.top === undefined ? undefined : `${tip.top}px`, bottom: tip.bottom === undefined ? undefined : `${tip.bottom}px`, maxWidth: `${TIP_WIDTH}px` }" data-testid="request-log-tooltip">{{ tip.text }}</div>
-    </Teleport>
   </SCard>
 </template>

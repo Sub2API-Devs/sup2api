@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCode, SField, SGrid, SHint, SIcon, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSpinner, SSwitch, STextarea, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SField, SGrid, SHint, SIcon, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSegmented, SSettingRow, SSpinner, SSwitch, STextarea, confirm, toast, type SelectOption } from '@sub2api/ui'
 import type { Price, PriceValidateResult } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
@@ -160,6 +160,20 @@ const localIssues = computed<string[]>(() => {
 const previewSource = computed(() => (localIssues.value.length ? null : { ...payload.value }))
 
 // ------------------------------------------------------------------ expression view toggle
+
+const exprViewOptions = computed<SelectOption[]>(() => [
+  { value: 'video', label: t('prices.video.title') },
+  { value: 'visual', label: t('prices.view.visual') },
+  { value: 'source', label: t('prices.view.source') }
+])
+
+function onExprView(v: unknown) {
+  if (v === 'video') {
+    exprView.value = 'video'
+    notVisual.value = false
+  } else if (v === 'visual') toVisual()
+  else if (v === 'source') toSource()
+}
 
 function toSource() {
   if (exprView.value === 'source') return
@@ -329,9 +343,7 @@ const title = computed(() => {
   <div class="space-y-5">
     <SPageHeader :title="title">
       <template #before>
-        <SButton variant="ghost" size="sm" class="!px-1.5" :title="t('common.back')" @click="router.push('/prices')">
-          <SIcon name="arrow-left" class="h-4 w-4" />
-        </SButton>
+        <SButton variant="ghost" size="sm" :title="t('common.back')" :aria-label="t('common.back')" icon-only icon="arrow-left" @click="router.push('/prices')" />
       </template>
       <template #title-extra>
         <SBadge v-if="price" :tone="isSynced ? 'info' : 'primary'" data-testid="price-edit-source">
@@ -346,19 +358,13 @@ const title = computed(() => {
       </template>
     </SPageHeader>
 
-    <p
-      v-if="syncedNotice && !loading"
-      class="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:bg-sky-900/20 dark:text-sky-200"
-      data-testid="price-synced-notice"
-    >
-      {{ syncedNotice }}
-    </p>
+    <SAlert v-if="syncedNotice && !loading" tone="info" dense data-testid="price-synced-notice">{{ syncedNotice }}</SAlert>
 
     <div v-if="loading" class="py-16 text-center"><SSpinner size="lg" /></div>
     <template v-else>
       <!-- basic -->
       <SCard :title="t('prices.basic')">
-        <p class="mb-4 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('prices.scopeNote') }}</p>
+        <SAlert tone="primary" dense class="mb-4">{{ t('prices.scopeNote') }}</SAlert>
         <SGrid :cols="1" :md-cols="2">
           <SField :label="t('prices.model')" :hint="t('prices.modelHint')" :error="errors.model" required>
             <SInput v-model.trim="form.model" mono placeholder="claude-sonnet-4-5" :disabled="readonly" />
@@ -366,46 +372,34 @@ const title = computed(() => {
           <SField :label="t('common.note')" :error="errors.note">
             <SInput v-model="form.note" :disabled="readonly" />
           </SField>
-          <SField :label="t('common.status')">
-            <div class="pt-2"><SSwitch v-model="form.enabled" :disabled="readonly" :label="form.enabled ? t('common.enabled') : t('common.disabled')" /></div>
-          </SField>
         </SGrid>
-        <dl v-if="price" class="kv mt-4 border-t border-gray-100 pt-4 dark:border-dark-700">
-          <dt>{{ t('prices.exprHash') }}</dt>
-          <dd class="flex flex-wrap items-center gap-2">
-            <code class="font-mono text-xs">{{ price.expr_hash || '—' }}</code>
+        <SSettingRow :label="t('common.status')" dense class="mt-2 !py-0" for="price-enabled">
+          <SSwitch id="price-enabled" v-model="form.enabled" :disabled="readonly" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
+        </SSettingRow>
+        <SDescriptions v-if="price" class="mt-4 border-t border-line pt-4" dense>
+          <SDescItem :label="t('prices.exprHash')"><div class="flex flex-wrap items-center gap-2">
+            <SCode inline :text="price.expr_hash || '—'" />
             <SHint inline size="xs">v{{ price.expr_version || 1 }}</SHint>
             <SLink v-if="price.expr_hash" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
-          </dd>
+          </div></SDescItem>
           <template v-if="price.updated_at">
-            <dt>{{ t('common.updatedAt') }}</dt>
-            <dd>{{ formatDateTime(price.updated_at) }}</dd>
+            <SDescItem :label="t('common.updatedAt')">{{ formatDateTime(price.updated_at) }}</SDescItem>
           </template>
-        </dl>
+        </SDescriptions>
       </SCard>
 
       <!-- mode + editor -->
       <SCard :title="t('prices.billingMode')">
         <template #actions>
-          <div v-if="mode === 'expression'" class="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
-            <button type="button" class="px-3 py-1 text-xs" :class="exprView === 'video' ? 'bg-primary-500 text-white' : 'text-gray-600 dark:text-gray-300'" @click="exprView = 'video'; notVisual = false">{{ t('prices.video.title') }}</button>
-            <button
-              type="button"
-              class="px-3 py-1 text-xs"
-              :class="exprView === 'visual' ? 'bg-primary-500 text-white' : 'text-gray-600 dark:text-gray-300'"
-              @click="toVisual"
-            >
-              {{ t('prices.view.visual') }}
-            </button>
-            <button
-              type="button"
-              class="px-3 py-1 text-xs"
-              :class="exprView === 'source' ? 'bg-primary-500 text-white' : 'text-gray-600 dark:text-gray-300'"
-              @click="toSource"
-            >
-              {{ t('prices.view.source') }}
-            </button>
-          </div>
+          <SSegmented
+            v-if="mode === 'expression'"
+            :model-value="exprView"
+            :options="exprViewOptions"
+            size="sm"
+            :aria-label="t('prices.billingMode')"
+            data-testid="price-expr-view"
+            @update:model-value="onExprView"
+          />
         </template>
         <SRadioGroup :model-value="mode" :options="modeOptions" inline :disabled="readonly" class="mb-4" @update:model-value="mode = $event as PriceMode" />
         <SHint size="xs" class="mb-4">{{ t(`prices.modeHint.${mode}`) }}</SHint>
@@ -436,9 +430,7 @@ const title = computed(() => {
         </div>
 
         <template v-else>
-          <div v-if="notVisual" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-            {{ t('prices.notVisual') }}
-          </div>
+          <SAlert v-if="notVisual" tone="warning" dense class="mb-3">{{ t('prices.notVisual') }}</SAlert>
           <VideoPriceEditor v-if="exprView === 'video'" v-model="video" :disabled="readonly" />
           <VisualExprEditor v-else-if="exprView === 'visual'" v-model="visual" :disabled="readonly" />
           <SField v-else :label="t('prices.expression')" :error="errors.expression" :hint="t('prices.sourceHint')">
@@ -468,16 +460,16 @@ const title = computed(() => {
       <SCard :title="t('prices.validate.title')">
         <template #actions><SSpinner v-if="validating" size="sm" /></template>
         <ul v-if="localIssues.length" class="space-y-1 text-sm text-red-600 dark:text-red-400">
-          <li v-for="(x, i) in localIssues" :key="i">✕ {{ x }}</li>
+          <li v-for="(x, i) in localIssues" :key="i" class="flex items-start gap-1"><SIcon name="x" class="mt-0.5 h-4 w-4 shrink-0" />{{ x }}</li>
         </ul>
         <SHint v-else-if="validationError" tone="danger">{{ validationError }}</SHint>
         <div v-else-if="validation" class="space-y-1 text-sm">
-          <SHint v-if="validation.ok && !validation.errors.length" tone="success">✓ {{ t('prices.validate.ok') }}</SHint>
-          <SHint v-for="(x, i) in validation.errors" :key="'e' + i" tone="danger">✕ {{ issueText(x) }}</SHint>
+          <SHint v-if="validation.ok && !validation.errors.length" tone="success" class="flex items-start gap-1"><SIcon name="check" class="mt-0.5 h-4 w-4 shrink-0" />{{ t('prices.validate.ok') }}</SHint>
+          <SHint v-for="(x, i) in validation.errors" :key="'e' + i" tone="danger" class="flex items-start gap-1"><SIcon name="x" class="mt-0.5 h-4 w-4 shrink-0" />{{ issueText(x) }}</SHint>
           <SHint v-if="validation.cost_per_million_input !== undefined && validation.cost_per_million_input !== null">
             {{ t('prices.validate.costPerMillion', { cost: formatMoney(validation.cost_per_million_input) }) }}
           </SHint>
-          <SHint v-for="(x, i) in validation.warnings" :key="'w' + i" tone="warning">⚠ {{ issueText(x) }}</SHint>
+          <SHint v-for="(x, i) in validation.warnings" :key="'w' + i" tone="warning" class="flex items-start gap-1"><SIcon name="warning" class="mt-0.5 h-4 w-4 shrink-0" />{{ issueText(x) }}</SHint>
         </div>
         <SHint v-else>{{ t('prices.validate.pending') }}</SHint>
       </SCard>

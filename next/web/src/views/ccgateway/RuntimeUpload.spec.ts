@@ -32,7 +32,12 @@ async function render(mode: string) {
   await flushPromises()
   return w
 }
+/** Unfolds "advanced: upload an image by hand". */
+async function openUpload(w: { find: (s: string) => { exists: () => boolean }; get: (s: string) => { trigger: (e: string) => Promise<void> } }) {
+  if (!w.find('[data-testid="image-upload-file"]').exists()) await w.get('[data-testid="ccgateway-image-upload"] button').trigger('click')
+}
 async function choose(w: Awaited<ReturnType<typeof render>>, name: string, size = 10) {
+  await openUpload(w)
   const input = w.get<HTMLInputElement>('[data-testid="image-upload-file"]')
   const file = new File([new Uint8Array(size)], name)
   Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
@@ -65,9 +70,11 @@ describe('CCGateway runtime card in control panel mode', () => {
   it('uploads, loads with the chosen role, shows the reference and checksum and refreshes the state', async () => {
     const w = await render('controller')
     expect(w.text()).toContain('控制面板模式下，镜像随 ccgateway 插件包分发')
-    expect(w.get('[data-testid="ccgateway-image-upload"] summary').text()).toBe('高级：手动上传镜像')
-    expect(w.findAll('[data-testid="image-upload-role"] option').map(o => o.attributes('value'))).toEqual(['app', 'egress', 'controller'])
-    await w.get('[data-testid="image-upload-role"]').setValue('controller')
+    expect(w.get('[data-testid="ccgateway-image-upload"] button').text()).toBe('高级：手动上传镜像')
+    await openUpload(w)
+    // SSelect option values are indexes into IMAGE_ROLES (app, egress, controller).
+    expect(w.findAll('[data-testid="image-upload-role"] option').map(o => o.text())).toEqual(['业务容器（ccgateway-worker）', '出口代理', '控制器'])
+    await w.get('[data-testid="image-upload-role"]').setValue('2')
     await choose(w, 'controller.tar.gz')
     await w.get('[data-testid="image-upload-submit"]').trigger('click')
     await flushPromises()

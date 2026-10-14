@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, shallowMount, type DOMWrapper } from '@vue/test-utils'
 import { ref } from 'vue'
 import type { Account, AccountType } from '@/api/types'
 import { i18n } from '@/i18n'
@@ -7,6 +7,9 @@ import { SDropdown } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
+
+/** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
+const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true }))
 vi.mock('@sub2api/host', () => ({ api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
@@ -37,7 +40,9 @@ describe('account automatic disabling policy', () => {
   const account = { id: 23, name: 'test', auto_disable: true, models: [], model_mapping: {}, credentials: {} } as unknown as Account
   const accountType = { plugin_key: 'test', type: 'key', form: { mode: 'native' }, platforms: [], endpoints: [], default_models: [] } as unknown as AccountType
   const renderEditor = (saved: Account | null = account) => shallowMount(AccountEditor, { props: { account: saved, accountType }, global: { plugins: [i18n], stubs: {
-    EditorCard: { template: '<section><slot /></section>' },
+    SCard: { template: '<section><slot /></section>' },
+    SSettingsGroup: false,
+    SSettingRow: false,
     SSwitch: false,
   } } })
 
@@ -52,11 +57,11 @@ describe('account automatic disabling policy', () => {
     mocks.get.mockResolvedValue({ enabled: false })
     const wrapper = renderEditor({ ...account, auto_disable: preference })
     await flushPromises()
-    const toggle = wrapper.get('[data-testid="account-auto-disable"] button')
+    const toggle = wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]')
     expect(toggle.attributes('disabled')).toBeDefined()
     expect(toggle.attributes('aria-checked')).toBe(String(preference))
     expect(wrapper.text()).toContain('全局自动禁用已关闭')
-    await toggle.trigger('click')
+    await flip(toggle)
     expect(toggle.attributes('aria-checked')).toBe(String(preference))
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -68,12 +73,12 @@ describe('account automatic disabling policy', () => {
     mocks.get.mockResolvedValueOnce({ enabled: false })
     const wrapper = renderEditor(null)
     await flushPromises()
-    const toggle = wrapper.get('[data-testid="account-auto-disable"] button')
+    const toggle = wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]')
     expect(toggle.attributes('disabled')).toBeDefined()
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
     expect(toggle.attributes('disabled')).toBeUndefined()
-    await toggle.trigger('click')
+    await flip(toggle)
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(mocks.get).toHaveBeenCalledWith('/accounts/auto-disable')
   })
@@ -82,7 +87,7 @@ describe('account automatic disabling policy', () => {
     let reject!: (error: Error) => void
     mocks.get.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
     const wrapper = renderEditor()
-    const toggle = wrapper.get('[data-testid="account-auto-disable"] button')
+    const toggle = wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]')
     expect(toggle.attributes('disabled')).toBeDefined()
     reject(new Error('network unavailable'))
     await flushPromises()
@@ -91,7 +96,7 @@ describe('account automatic disabling policy', () => {
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
     expect(toggle.attributes('disabled')).toBeUndefined()
-    await toggle.trigger('click')
+    await flip(toggle)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch.mock.calls[0][1]).toMatchObject({ auto_disable: false })
@@ -106,7 +111,7 @@ describe('account automatic disabling policy', () => {
     await flushPromises()
     resolve({ enabled: true })
     await flushPromises()
-    expect(wrapper.get('[data-testid="account-auto-disable"] button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]').attributes('disabled')).toBeDefined()
   })
 
   it('applies plugin defaults to new accounts and keeps existing read-only preferences', async () => {
@@ -117,14 +122,14 @@ describe('account automatic disabling policy', () => {
     await wrapper.setProps({ accountType: controlledType })
     await flushPromises()
     for (const key of ['account-auto-disable', 'account-scheduling-control']) {
-      const button = wrapper.get(`[data-testid="${key}"] button`)
+      const button = wrapper.get(`[data-testid="${key}"] [role="switch"], [role="switch"][data-testid="${key}"]`)
       expect(button.attributes('disabled')).toBeDefined()
       expect(button.attributes('aria-checked')).toBe('false')
     }
     await wrapper.setProps({ account: { ...account, schedulable: true } })
     await flushPromises()
-    expect(wrapper.get('[data-testid="account-auto-disable"] button').attributes('aria-checked')).toBe('true')
-    expect(wrapper.get('[data-testid="account-scheduling-control"] button').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get('[data-testid="account-scheduling-control"] [role="switch"], [role="switch"][data-testid="account-scheduling-control"]').attributes('aria-checked')).toBe('true')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('auto_disable')
@@ -135,21 +140,21 @@ describe('account automatic disabling policy', () => {
     const wrapper = renderEditor(null)
     await wrapper.setProps({ accountType: { ...accountType, creation_group: 'test', common_controls: { auto_disable: { default: false } } } })
     await flushPromises()
-    expect(wrapper.get('[data-testid="account-auto-disable"] button').attributes('aria-checked')).toBe('false')
+    expect(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]').attributes('aria-checked')).toBe('false')
     await wrapper.setProps({ accountType: { ...accountType, type: 'other', creation_group: 'test', common_controls: { auto_disable: { default: true } } } })
     await flushPromises()
-    expect(wrapper.get('[data-testid="account-auto-disable"] button').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]').attributes('aria-checked')).toBe('true')
   })
 
   it('rechecks the global gate before saving an edited preference', async () => {
     const wrapper = renderEditor()
     await flushPromises()
-    await wrapper.get('[data-testid="account-auto-disable"] button').trigger('click')
+    await flip(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]'))
     mocks.get.mockResolvedValue({ enabled: false })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('auto_disable')
-    expect(wrapper.get('[data-testid="account-auto-disable"] button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="account-auto-disable"] [role="switch"], [role="switch"][data-testid="account-auto-disable"]').attributes('disabled')).toBeDefined()
   })
 })
 
@@ -168,7 +173,7 @@ describe('account status recovery', () => {
     const wrapper = render()
     const toggle = wrapper.get('[data-testid="account-schedulable-switch"]')
     expect(toggle.attributes('disabled')).toBeDefined()
-    await toggle.trigger('click')
+    await flip(toggle)
     expect(mocks.patch).not.toHaveBeenCalled()
   })
 
@@ -254,7 +259,7 @@ describe('account status recovery', () => {
     const w = render()
     const toggle = w.get('[data-testid="account-schedulable-switch"]')
     expect(toggle.attributes('aria-checked')).toBe('true')
-    await toggle.trigger('click')
+    await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/23', { schedulable: false })
     expect(list.items.value[0].status).toBe('disabled')

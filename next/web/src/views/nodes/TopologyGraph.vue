@@ -2,7 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, requestWithHeaders } from '@sub2api/host'
-import { SBadge, SCard, SHint } from '@sub2api/ui'
+import { SBadge, SCard, SEmpty, SHint, SSegmented, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { parseNodePlugin, statusTone } from '@/api/admin'
 import type { NodeInfo } from '@/api/types'
@@ -10,6 +10,7 @@ import type { Release, ShellNode } from '@/api/observability'
 import NodeTopology from './NodeTopology.vue'
 const { t } = useI18n(), auth = useAuthStore()
 const view = ref<'chart' | 'topology'>('topology')
+const viewOptions = computed<SelectOption[]>(() => (['chart', 'topology'] as const).map((mode) => ({ value: mode, label: t(`observe.${mode}View`) })))
 const marker = useId().replace(/:/g, '')
 const registered = ref<NodeInfo[]>([]), shells = ref<ShellNode[]>([]), releases = ref<Release[]>([])
 const primary = ref(''), shellOK = ref(false), failed = ref(false), tick = ref(Date.now())
@@ -81,14 +82,12 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
 <template>
   <SCard :title="t('observe.nodeView')" class="mb-5">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div class="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" :aria-label="t('observe.nodeView')">
-        <button v-for="mode in (['chart', 'topology'] as const)" :key="mode" type="button" :aria-pressed="view === mode" class="rounded-md px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :class="view === mode ? 'bg-white text-primary-600 shadow-sm dark:bg-dark-700 dark:text-primary-300' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'" @click="view = mode">{{ t(`observe.${mode}View`) }}</button>
-      </div>
+      <SSegmented :model-value="view" :options="viewOptions" :aria-label="t('observe.nodeView')" data-testid="topology-view" @update:model-value="view = $event as 'chart' | 'topology'" />
       <SHint size="xs">{{ t(view === 'topology' ? 'observe.topologyHint' : 'observe.chartHint') }}</SHint>
     </div>
     <SHint v-if="failed" tone="warning">{{ t('observe.unavailable') }}</SHint>
     <SHint v-if="!shellOK && !shells.length">{{ t('observe.partial') }}</SHint>
-    <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" :title="t('observe.visitHint')"><span class="font-medium text-cyan-700 dark:text-cyan-300">{{ t('observe.entrySummary', { node: visit?.entry || t('observe.unknown') }) }}</span><span class="text-gray-600 dark:text-gray-300">{{ t('observe.responseSummary', { node: visit?.core || t('observe.unknown') }) }}</span></div>
+    <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" :title="t('observe.visitHint')"><span class="font-medium text-cyan-700 dark:text-cyan-300">{{ t('observe.entrySummary', { node: visit?.entry || t('observe.unknown') }) }}</span><span class="text-fg-muted">{{ t('observe.responseSummary', { node: visit?.core || t('observe.unknown') }) }}</span></div>
     <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="graphEdges" :primary="primary" :uncertain="failed" :visit="visit" />
     <div v-else-if="cards.length" class="overflow-x-auto">
       <SHint>{{ t('observe.legend') }}</SHint>
@@ -98,24 +97,24 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
           <path :d="path(edge.from,edge.to)" fill="none" stroke="currentColor" stroke-width="2" :stroke-dasharray="edge.kind === 'offload' ? '7 5' : undefined" :marker-end="`url(#${marker})`"><title>{{ cards[edge.from]?.id }} → {{ cards[edge.to]?.id }} · {{ t(`observe.${edge.kind}`) }}</title></path>
         </g>
         <foreignObject v-for="card in cards" :key="card.id" :x="card.index * 340 + 8" y="100" width="324" :height="height - 100">
-          <div class="rounded-2xl border-2 p-3 text-sm dark:bg-dark-900" :class="card.stale ? 'border-red-300 bg-red-50' : 'border-primary-200 bg-primary-50/40'">
+          <div class="rounded-2xl border-2 p-3 text-sm" :class="card.stale ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-primary-200 bg-primary-50/40 dark:border-primary-800 dark:bg-dark-900'">
             <div class="flex flex-wrap items-center gap-2"><strong>{{ card.id }}</strong><SBadge v-if="card.id === primary" tone="purple">{{ t('upgrades.primary') }}</SBadge><SBadge v-if="card.stale" tone="danger">{{ t('nodes.stale') }}</SBadge></div>
             <div v-if="card.shell" class="my-2 space-y-1">
               <div>{{ t('observe.gateway') }} · {{ card.shell.mode }} · {{ t(!card.shell.enabled ? 'upgrades.disabled' : card.shell.ready ? 'upgrades.serving' : 'upgrades.waiting') }}</div>
-              <div>CPU {{ card.shell.cpu_percent == null ? '—' : card.shell.cpu_percent.toFixed(1) + '%' }} <SBadge :tone="card.shell.offloading ? 'warning' : 'gray'">{{ t(card.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></div>
+              <div>{{ t('common.cpu') }} {{ card.shell.cpu_percent == null ? '—' : card.shell.cpu_percent.toFixed(1) + '%' }} <SBadge :tone="card.shell.offloading ? 'warning' : 'gray'">{{ t(card.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></div>
               <SHint size="xs">{{ t('observe.boot') }}: {{ card.shell.shell_boot_id?.slice(0,8) || '—' }}</SHint>
             </div>
-            <div class="mt-3 rounded-xl border border-sky-300 bg-white/80 p-3 dark:bg-dark-800">
+            <div class="mt-3 rounded-xl border border-sky-300 bg-white/80 p-3 dark:border-sky-800 dark:bg-dark-800">
               <strong>{{ t('observe.core') }} · {{ card.version }}</strong>
               <SBadge v-if="card.core && !fresh(card.core.last_heartbeat)" tone="warning">{{ t('nodes.stale') }}</SBadge>
               <div class="my-1 text-xs">{{ t(card.shell?.stopped ? 'observe.stopped' : card.core ? 'observe.running' : 'observe.unknown') }} · {{ (card.shell?.core_boot_id || card.core?.boot_id)?.slice(0,8) || '—' }}</div>
-              <div class="mt-3 text-xs font-semibold text-gray-500">{{ t('observe.plugins') }}</div>
-              <div v-for="plugin in card.plugins" :key="plugin.key" class="mt-2 rounded-lg border p-2" :class="plugin.fallback ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-gray-200 dark:border-dark-600'">
+              <div class="mt-3 text-xs font-semibold text-fg-muted">{{ t('observe.plugins') }}</div>
+              <div v-for="plugin in card.plugins" :key="plugin.key" class="mt-2 rounded-lg border p-2" :class="plugin.fallback ? 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30' : 'border-line'">
                 <div class="flex items-center justify-between gap-1"><strong>{{ plugin.key }}</strong><SBadge :tone="statusTone(plugin.state)">{{ plugin.state || '—' }}</SBadge></div>
                 <div class="font-mono text-xs">{{ plugin.serving || '—' }}<span v-if="plugin.standby"> → {{ plugin.standby }}</span></div>
                 <div v-if="plugin.fallback" class="text-xs text-amber-700 dark:text-amber-300">{{ t('observe.fallback') }}: {{ plugin.fallback }}</div>
-                <div class="text-xs text-gray-500">{{ t('observe.instances') }} {{ plugin.instances?.length || 0 }} · {{ t('observe.restarts') }} {{ plugin.instances?.reduce((sum, i) => sum + i.restarts, 0) || 0 }}</div>
-                <div v-if="plugin.error" class="truncate text-xs text-red-500" :title="plugin.error">{{ plugin.error }}</div>
+                <div class="text-xs text-fg-muted">{{ t('observe.instances') }} {{ plugin.instances?.length || 0 }} · {{ t('observe.restarts') }} {{ plugin.instances?.reduce((sum, i) => sum + i.restarts, 0) || 0 }}</div>
+                <div v-if="plugin.error" class="truncate text-xs text-red-500 dark:text-red-400" :title="plugin.error">{{ plugin.error }}</div>
               </div>
               <SHint v-if="!card.plugins.length">{{ t('observe.noReport') }}</SHint>
             </div>
@@ -123,6 +122,6 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         </foreignObject>
       </svg>
     </div>
-    <SHint v-else>{{ t('observe.empty') }}</SHint>
+    <SEmpty v-else :text="t('observe.empty')" />
   </SCard>
 </template>

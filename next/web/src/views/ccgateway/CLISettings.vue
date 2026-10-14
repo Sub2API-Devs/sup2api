@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SHint, SModal, SSelect, SSwitch, confirm } from '@sub2api/ui'
+import { SAlert, SButton, SDescItem, SDescriptions, SHint, SModal, SSegmented, SSettingRow, SSettingsGroup, SSwitch, confirm } from '@sub2api/ui'
+import { formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useCcgError } from './ccgError'
 
@@ -34,6 +35,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let controller: AbortController | undefined
 
 function stopPolling() { clearTimeout(timer); timer = undefined }
+/** The controller reports Go's zero time for "never". */
+function when(value?: string) { return !value || value.startsWith('0001-') ? '—' : formatDateTime(value) }
 function label(value: string) { return te(`ccgateway.cli.states.${value}`) ? t(`ccgateway.cli.states.${value}`) : value }
 
 async function request(operation: (signal: AbortSignal) => Promise<CLIState>) {
@@ -76,22 +79,27 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
   <SModal v-model:open="open" :title="`${t('ccgateway.cli.title')} #${accountId}`" width="lg">
     <div class="space-y-4">
       <SHint>{{ t('ccgateway.cli.hint') }}</SHint>
-      <SHint v-if="error" tone="danger">{{ error }}</SHint>
+      <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
       <template v-if="state">
-        <div class="grid grid-cols-2 gap-3 text-sm">
-          <SField :label="t('ccgateway.cli.installed')"><span class="font-mono">{{ state.catalog.installed_version || '—' }}</span></SField>
-          <SField :label="t('ccgateway.cli.catalog')"><span class="font-mono">{{ state.catalog.catalog_version || '—' }}</span></SField>
-          <SField :label="t('ccgateway.cli.available')"><span class="font-mono">{{ state.latest_version || '—' }}</span></SField>
-          <SField :label="t('ccgateway.cli.status')">{{ label(state.catalog.state) }} · {{ state.catalog.tool_count }} / {{ state.catalog.variant_count }}</SField>
-          <SField :label="t('ccgateway.cli.checkedAt')">{{ state.catalog.checked_at?.startsWith('0001-') ? '—' : state.catalog.checked_at || '—' }}</SField>
-          <SField :label="t('ccgateway.cli.syncedAt')">{{ state.catalog.synced_at?.startsWith('0001-') ? '—' : state.catalog.synced_at || '—' }}</SField>
-        </div>
-        <SHint v-if="state.catalog.error" tone="danger">{{ state.catalog.error }}</SHint>
-        <SHint v-if="state.update_error" tone="danger">{{ state.update_error }}</SHint>
+        <SDescriptions :columns="2" dense>
+          <SDescItem :label="t('ccgateway.cli.installed')" :value="state.catalog.installed_version || '—'" mono />
+          <SDescItem :label="t('ccgateway.cli.catalog')" :value="state.catalog.catalog_version || '—'" mono />
+          <SDescItem :label="t('ccgateway.cli.available')" :value="state.latest_version || '—'" mono />
+          <SDescItem :label="t('ccgateway.cli.status')">{{ label(state.catalog.state) }} · {{ state.catalog.tool_count }} / {{ state.catalog.variant_count }}</SDescItem>
+          <SDescItem :label="t('ccgateway.cli.checkedAt')"><span class="tabular-nums">{{ when(state.catalog.checked_at) }}</span></SDescItem>
+          <SDescItem :label="t('ccgateway.cli.syncedAt')"><span class="tabular-nums">{{ when(state.catalog.synced_at) }}</span></SDescItem>
+        </SDescriptions>
+        <SAlert v-if="state.catalog.error" tone="danger" dense><span class="break-all">{{ state.catalog.error }}</span></SAlert>
+        <SAlert v-if="state.update_error" tone="danger" dense><span class="break-all">{{ state.update_error }}</span></SAlert>
         <SHint v-if="state.updating || state.update_state !== 'idle'">{{ t('ccgateway.cli.operation') }}: {{ label(state.update_state) }}</SHint>
-        <SField :label="t('ccgateway.cli.channel')"><SSelect :model-value="state.channel" :options="channels" :disabled="blocked" @update:model-value="policy(state!.auto_update, String($event))" /></SField>
-        <SSwitch :model-value="state.auto_update" :disabled="blocked" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)">{{ t('ccgateway.cli.auto') }}</SSwitch>
-        <SHint>{{ t('ccgateway.cli.autoHint') }}</SHint>
+        <SSettingsGroup>
+          <SSettingRow :label="t('ccgateway.cli.channel')" dense>
+            <SSegmented :model-value="state.channel" :options="channels" size="sm" :disabled="!!blocked" :aria-label="t('ccgateway.cli.channel')" data-testid="cli-channel" @update:model-value="policy(state!.auto_update, String($event))" />
+          </SSettingRow>
+          <SSettingRow :label="t('ccgateway.cli.auto')" :description="t('ccgateway.cli.autoHint')">
+            <SSwitch :model-value="state.auto_update" :disabled="!!blocked" :aria-label="t('ccgateway.cli.auto')" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)" />
+          </SSettingRow>
+        </SSettingsGroup>
       </template>
     </div>
     <template #footer>

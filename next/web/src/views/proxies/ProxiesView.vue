@@ -5,6 +5,7 @@ import { api } from '@sub2api/host'
 import {
   SBadge,
   SButton,
+  SCode,
   SCheckbox,
   SDropdown,
   SField,
@@ -24,13 +25,14 @@ import {
   type TableColumn
 } from '@sub2api/ui'
 import type { Proxy, ProxyProbeResult, ProxyTestResult } from '@/api/types'
-import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
 import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
-import { formatDateTime, formatRelative } from '@/utils/format'
+import { applyFormError } from '@/utils/formErrors'
+import StatusBadge from '@/components/StatusBadge.vue'
+import TimeText from '@/components/TimeText.vue'
 import { parseProxyURL } from '@/utils/proxyUrl'
 
 const { t } = useI18n()
@@ -64,12 +66,6 @@ const columns = computed<TableColumn[]>(() => {
   if (canCreate.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
-
-function statusLabel(s: string) {
-  const k = `common.status_.${s}`
-  const v = t(k)
-  return v === k ? s : v
-}
 
 function changed() {
   list.reload()
@@ -239,8 +235,7 @@ async function submit() {
     open.value = false
     changed()
   } catch (e) {
-    errors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, errors)
   } finally {
     saving.value = false
   }
@@ -249,7 +244,9 @@ async function submit() {
 // ------------------------------------------------------------------ row menu
 
 async function onAction(p: Proxy, key: string) {
-  if (key === 'toggle') {
+  if (key === 'test') {
+    test(p)
+  } else if (key === 'toggle') {
     try {
       await api.patch(`/proxies/${p.id}`, { status: p.status === 'active' ? 'disabled' : 'active' })
       toast(t('common.updated'), 'success')
@@ -275,30 +272,31 @@ async function onAction(p: Proxy, key: string) {
   <div>
     <SPageHeader :title="t('proxies.title')" :description="t('proxies.description')">
       <template #actions>
-        <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" @click="openCreate">+ {{ t('proxies.create') }}</SButton>
+        <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" icon="plus" @click="openCreate">{{ t('proxies.create') }}</SButton>
       </template>
-      <template #filters>
+    </SPageHeader>
+
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+      <template #toolbar>
         <SInput
           v-if="showOwner"
           v-model="list.filters.created_by"
           class="!w-32"
           inputmode="numeric"
           data-testid="created-by-filter"
+          :aria-label="t('common.createdById')"
           :placeholder="t('common.createdById')"
         />
         <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       </template>
-    </SPageHeader>
-
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
-        <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
+        <span class="font-medium text-fg">{{ row.name }}</span>
       </template>
       <template #cell-protocol="{ row }">
         <SBadge tone="gray">{{ String(row.protocol).toUpperCase() }}</SBadge>
       </template>
       <template #cell-address="{ row }">
-        <code class="font-mono text-xs">{{ row.host }}:{{ row.port }}</code>
+        <SCode inline :text="`${row.host}:${row.port}`" />
       </template>
       <template #cell-auth="{ row }">
         <span v-if="row.username" class="text-xs">{{ row.username }}<SHint v-if="row.has_password" inline size="xs"> / ••••</SHint></span>
@@ -307,13 +305,13 @@ async function onAction(p: Proxy, key: string) {
       </template>
       <template #cell-real_ip="{ row }">
         <div v-if="row.real_ip" class="text-xs">
-          <code class="font-mono">{{ row.real_ip }}</code>
-          <SHint v-if="row.real_ip_updated_at" size="xs" :title="formatDateTime(row.real_ip_updated_at)">{{ formatRelative(row.real_ip_updated_at, t) }}</SHint>
+          <SCode inline :text="row.real_ip" />
+          <TimeText v-if="row.real_ip_updated_at" :value="row.real_ip_updated_at" mode="relative" class="block" />
         </div>
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
+        <StatusBadge :status="row.status" />
       </template>
       <template #cell-test="{ row }">
         <SSpinner v-if="testing[row.id]" size="sm" />
@@ -326,7 +324,7 @@ async function onAction(p: Proxy, key: string) {
           <span v-else class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
             <SIcon name="x" class="h-3.5 w-3.5" />{{ t('proxies.failed') }}
           </span>
-          <SHint v-if="results[row.id].ip" size="xs">{{ t('proxies.exitIp') }}: <code>{{ results[row.id].ip }}</code></SHint>
+          <SHint v-if="results[row.id].ip" size="xs">{{ t('proxies.exitIp') }}: <SCode inline :text="results[row.id].ip" /></SHint>
           <SHint v-if="results[row.id].message" size="xs" class="max-w-xs truncate" :title="results[row.id].message">{{ results[row.id].message }}</SHint>
         </div>
         <SHint v-else inline>—</SHint>
@@ -334,17 +332,17 @@ async function onAction(p: Proxy, key: string) {
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
         <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>
-        <SHint v-else inline>-</SHint>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
+        <TimeText :value="row.created_at" />
       </template>
       <template #cell-actions="{ row }">
         <div v-if="canEditRow(row)" class="flex items-center justify-end gap-1">
-          <SButton variant="ghost" size="sm" :disabled="testing[row.id]" @click="test(row)">{{ t('common.test') }}</SButton>
           <SButton variant="ghost" size="sm" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown
             :actions="[
+              { key: 'test', label: t('common.test'), disabled: !!testing[row.id] },
               { key: 'toggle', label: row.status === 'active' ? t('common.disable') : t('common.enable') },
               { key: 'delete', label: t('common.delete'), danger: true }
             ]"
@@ -352,8 +350,10 @@ async function onAction(p: Proxy, key: string) {
           />
         </div>
       </template>
+      <template #footer>
+        <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
+      </template>
     </STable>
-    <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <SModal v-model:open="open" :title="editing ? t('proxies.editTitle', { name: editing.name }) : t('proxies.create')" width="lg">
       <form class="space-y-4" @submit.prevent="submit">
@@ -373,11 +373,11 @@ async function onAction(p: Proxy, key: string) {
             <SButton :disabled="!pasteUrl.trim() || probing" :loading="probing" data-testid="proxy-paste-probe" @click="probeProxy">{{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}</SButton>
             <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
           </div>
-          <div v-if="probeResult?.ok" class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          <div v-if="probeResult?.ok" class="mt-2 text-xs text-fg-muted">
             <SIcon name="check" class="inline h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             {{ String(probeResult.protocol).toUpperCase() }}<span v-if="probeResult.latency_ms"> · {{ probeResult.latency_ms }} ms</span>
             <span v-if="probeResult.location"> · {{ [probeResult.location.country_code, probeResult.location.timezone].filter(Boolean).join(' · ') }}</span>
-            <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <code class="font-mono">{{ probeResult.ip }}</code></span>
+            <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <SCode inline :text="probeResult.ip" /></span>
           </div>
         </SField>
         <SGrid>

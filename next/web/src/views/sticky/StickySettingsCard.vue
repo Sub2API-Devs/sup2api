@@ -1,87 +1,55 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SGrid, SHint, SInput, SSpinner, SSwitch, toast } from '@sub2api/ui'
+import { SField, SHint, SInput, SSettingRow, SSettingsGroup, SSpinner, SSwitch } from '@sub2api/ui'
 import type { StickySettings } from '@/api/types'
+import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
+import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
-import { fieldErrors, notifyError } from '@/utils/errors'
 
 // Global sticky-session settings (GET/PUT /settings/sticky).
-withDefaults(defineProps<{ bare?: boolean }>(), { bare: false })
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('sticky:manage'))
 
-const loading = ref(false)
-const saving = ref(false)
-const loaded = ref<StickySettings | null>(null)
-const form = reactive<StickySettings>({ enabled: true, default_ttl_seconds: 3600, keep_on_account_disabled: false })
-const errors = ref<Record<string, string>>({})
-
-const dirty = computed(() => !!loaded.value && JSON.stringify(loaded.value) !== JSON.stringify({ ...form }))
-
-async function load() {
-  loading.value = true
-  try {
-    const r = await api.get<StickySettings>('/settings/sticky')
-    Object.assign(form, { enabled: !!r?.enabled, default_ttl_seconds: Number(r?.default_ttl_seconds ?? 3600), keep_on_account_disabled: !!r?.keep_on_account_disabled })
-    loaded.value = { ...form }
-  } catch (e) {
-    notifyError(e)
-  } finally {
-    loading.value = false
+const { form, loading, saving, dirty, errors, isLoaded, load, save, reset } = useSettingsForm<StickySettings>({
+  path: '/settings/sticky',
+  defaults: { enabled: true, default_ttl_seconds: 3600, keep_on_account_disabled: false },
+  responseKey: 'enabled',
+  fromServer: (r) => ({
+    enabled: !!r?.enabled,
+    default_ttl_seconds: Number(r?.default_ttl_seconds ?? 3600),
+    keep_on_account_disabled: !!r?.keep_on_account_disabled
+  }),
+  toBody: (f, errs) => {
+    const ttl = Number(f.default_ttl_seconds)
+    if (!Number.isInteger(ttl) || ttl <= 0) errs.default_ttl_seconds = t('sticky.settings.ttlInvalid')
+    return { ...f, default_ttl_seconds: ttl }
   }
-}
-
-async function save() {
-  errors.value = {}
-  const ttl = Number(form.default_ttl_seconds)
-  if (!Number.isInteger(ttl) || ttl <= 0) {
-    errors.value = { default_ttl_seconds: t('sticky.settings.ttlInvalid') }
-    return
-  }
-  saving.value = true
-  try {
-    const body = { ...form, default_ttl_seconds: ttl }
-    const r = await api.put<StickySettings>('/settings/sticky', body)
-    if (r && typeof r === 'object' && 'enabled' in r) Object.assign(form, r)
-    loaded.value = { ...form }
-    toast(t('common.saved'), 'success')
-  } catch (e) {
-    const fe = fieldErrors(e)
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(e)
-  } finally {
-    saving.value = false
-  }
-}
+})
 
 onMounted(load)
 </script>
 
 <template>
-  <component :is="bare ? 'div' : SCard" v-bind="bare ? {} : { title: t('sticky.settings.title') }">
-    <div v-if="loading && !loaded" class="py-6 text-center"><SSpinner /></div>
-    <div v-else class="space-y-4">
-      <SGrid :cols="1" :md-cols="3">
-        <SField :label="t('sticky.settings.enabled')" :hint="t('sticky.settings.enabledHint')">
-          <div class="pt-2"><SSwitch v-model="form.enabled" :disabled="!canManage" /></div>
-        </SField>
-        <SField :label="t('sticky.settings.defaultTtl')" :hint="t('sticky.settings.defaultTtlHint')" :error="errors.default_ttl_seconds">
+  <SSettingsGroup :title="t('sticky.settings.title')" data-testid="sticky-settings">
+    <template #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
+    <div v-if="loading && !isLoaded" class="py-6 text-center"><SSpinner /></div>
+    <template v-else>
+      <SSettingRow :label="t('sticky.settings.enabled')" :description="t('sticky.settings.enabledHint')" for="sticky-enabled">
+        <SSwitch id="sticky-enabled" v-model="form.enabled" :disabled="!canManage" :aria-label="t('sticky.settings.enabled')" />
+      </SSettingRow>
+      <SSettingRow :label="t('sticky.settings.defaultTtl')" :description="t('sticky.settings.defaultTtlHint')" for="sticky-default-ttl">
+        <SField :error="errors.default_ttl_seconds" class="w-full sm:w-48">
           <div class="flex items-center gap-2">
-            <SInput v-model.number="form.default_ttl_seconds" type="number" min="1" :disabled="!canManage" />
+            <SInput id="sticky-default-ttl" v-model.number="form.default_ttl_seconds" type="number" min="1" :error="!!errors.default_ttl_seconds" :disabled="!canManage" />
             <SHint inline>{{ t('sticky.seconds') }}</SHint>
           </div>
         </SField>
-        <SField :label="t('sticky.settings.keepOnDisabled')" :hint="t('sticky.settings.keepOnDisabledHint')">
-          <div class="pt-2"><SSwitch v-model="form.keep_on_account_disabled" :disabled="!canManage" /></div>
-        </SField>
-      </SGrid>
-      <div v-if="canManage" class="flex justify-end gap-2">
-        <SButton v-if="dirty" size="sm" @click="loaded && Object.assign(form, loaded)">{{ t('common.reset') }}</SButton>
-        <SButton size="sm" variant="primary" :loading="saving" :disabled="!dirty" @click="save">{{ t('common.save') }}</SButton>
-      </div>
-    </div>
-  </component>
+      </SSettingRow>
+      <SSettingRow :label="t('sticky.settings.keepOnDisabled')" :description="t('sticky.settings.keepOnDisabledHint')" for="sticky-keep-on-disabled">
+        <SSwitch id="sticky-keep-on-disabled" v-model="form.keep_on_account_disabled" :disabled="!canManage" :aria-label="t('sticky.settings.keepOnDisabled')" />
+      </SSettingRow>
+    </template>
+  </SSettingsGroup>
 </template>

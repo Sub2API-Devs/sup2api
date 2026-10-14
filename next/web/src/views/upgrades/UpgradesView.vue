@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SField, SHint, SPageHeader, SSelect, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCode, SEmpty, SField, SHint, SPageHeader, SSectionTitle, SSelect, STable, confirm, type TableColumn, type Tone } from '@sub2api/ui'
+import TimeText from '@/components/TimeText.vue'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import { formatDateTime } from '@/utils/format'
 import TopologyGraph from '../nodes/TopologyGraph.vue'
 import StepLanes from './StepLanes.vue'
 import ReleaseHistory from '../plugins/parts/ReleaseHistory.vue'
@@ -29,7 +29,7 @@ const canExecute = computed(() => auth.has('system:update:execute'))
 const canRecover = computed(() => auth.has('system:update:recover'))
 const options = computed(() => releases.value.map(r => ({ value: r.digest, label: r.manifest.release_id + ' · ' + r.digest.slice(0, 12) })))
 const active = computed(() => plans.value.some(p => !['completed', 'cancelled', 'failed', 'superseded'].includes(p.status)))
-const columns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'release_digest', label: t('upgrades.version') }, { key: 'mode', label: t('upgrades.mode') }, { key: 'ready', label: t('upgrades.ready') }, { key: 'cpu_percent', label: 'CPU' }, { key: 'offloading', label: t('observe.offloadState') }, { key: 'last_seen', label: t('upgrades.lastSeen') }, { key: 'error', label: t('upgrades.reason') }, ...(canRecover.value ? [{ key: 'manage', label: t('upgrades.manageNode') }] : [])])
+const columns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'release_digest', label: t('upgrades.version') }, { key: 'mode', label: t('upgrades.mode') }, { key: 'ready', label: t('upgrades.ready') }, { key: 'cpu_percent', label: t('common.cpu') }, { key: 'offloading', label: t('observe.offloadState') }, { key: 'last_seen', label: t('upgrades.lastSeen') }, { key: 'error', label: t('upgrades.reason') }, ...(canRecover.value ? [{ key: 'manage', label: t('upgrades.manageNode') }] : [])])
 const stepColumns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'action', label: t('upgrades.step') }, { key: 'status', label: t('upgrades.status') }, { key: 'error', label: t('upgrades.reason') }])
 const readyToCreate = computed(() => canExecute.value && available.value && !stale.value && !active.value && !!preflight.value && preflight.value.blockers.length === 0 && preflight.value.expected_revision === revision.value && preflight.value.release_digest === target.value)
 function label(group: string, value: string) { const key = `upgrades.${group}.${value}`; return te(key) ? t(key) : value }
@@ -70,6 +70,8 @@ async function create() {
 }
 async function action(kind: 'pause' | 'resume' | 'cancel' | 'rollback') {
   if (!selected.value) return
+  // Rolling back or cancelling cannot be undone from this page; ask first.
+  if ((kind === 'rollback' || kind === 'cancel') && !(await confirm({ title: t(`upgrades.${kind}`), message: t(kind === 'rollback' ? 'upgrades.confirmRollback' : 'upgrades.confirmCancel'), danger: true }))) return
   busy.value = true
   try {
     const plan = await api.post<Plan>(`/system/upgrades/${encodeURIComponent(selected.value.id)}/${kind}`, {})
@@ -78,6 +80,7 @@ async function action(kind: 'pause' | 'resume' | 'cancel' | 'rollback') {
   } catch (e) { notifyError(e) } finally { busy.value = false }
 }
 async function setNodeEnabled(node: Node, enabled: boolean) {
+  if (!enabled && !(await confirm({ title: t('upgrades.disableNode'), message: t('upgrades.confirmDisableNode', { node: node.node_id }), danger: true }))) return
   busy.value = true
   try {
     await api.post(`/system/nodes/${encodeURIComponent(node.node_id)}/${enabled ? 'enable' : 'disable'}`, {})
@@ -90,25 +93,26 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
 
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="t('upgrades.title')" :description="t('upgrades.description')"><template #actions><SButton :loading="loading" @click="load(true)">{{ t('common.refresh') }}</SButton></template></SPageHeader>
-    <SHint v-if="stale" tone="warning">{{ t(active ? 'observe.reconnect' : available ? 'upgrades.stale' : 'upgrades.unavailable') }}</SHint>
+    <SPageHeader :title="t('upgrades.title')" :description="t('upgrades.description')"><template #actions><SButton :loading="loading" icon="refresh" @click="load(true)">{{ t('common.refresh') }}</SButton></template></SPageHeader>
+    <SAlert v-if="stale" tone="warning" dense data-testid="upgrades-stale">{{ t(active ? 'observe.reconnect' : available ? 'upgrades.stale' : 'upgrades.unavailable') }}</SAlert>
     <TopologyGraph />
     <template v-if="available">
-      <SCard :title="t('upgrades.nodes')">
-        <p class="mb-4 text-sm text-gray-500">{{ t('upgrades.primary') }}: {{ primary || '—' }}</p>
-        <STable :columns="columns" :rows="nodes" row-key="node_id">
-          <template #cell-release_digest="{ row }"><span :title="row.release_digest">{{ version(row.release_digest) }}</span></template>
-          <template #cell-mode="{ row }">{{ label('modes', row.mode) }}</template>
-          <template #cell-cpu_percent="{ row }">{{ row.cpu_percent == null ? '—' : row.cpu_percent.toFixed(1) + '%' }}</template>
-          <template #cell-offloading="{ row }"><SBadge :tone="row.offloading ? 'warning' : 'gray'">{{ t(row.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></template>
-          <template #cell-ready="{ row }"><SBadge :tone="row.ready ? 'success' : 'warning'">{{ t(!row.enabled ? 'upgrades.disabled' : row.ready ? 'upgrades.serving' : row.stopped ? 'upgrades.stopped' : 'upgrades.waiting') }}</SBadge></template>
-          <template #cell-last_seen="{ row }">{{ formatDateTime(row.last_seen) }}</template>
-          <template #cell-manage="{ row }"><SButton size="sm" :disabled="busy || stale" @click="setNodeEnabled(row, !row.enabled)">{{ t(row.enabled ? 'upgrades.disableNode' : 'upgrades.enableNode') }}</SButton></template>
-        </STable>
-      </SCard>
+      <STable card :columns="columns" :rows="nodes" row-key="node_id" data-testid="upgrade-nodes">
+        <template #toolbar>
+          <SSectionTitle tag="h3" class="!mb-0" :title="t('upgrades.nodes')" />
+          <SHint inline class="ml-auto">{{ t('upgrades.primary') }}: <span class="font-mono">{{ primary || '—' }}</span></SHint>
+        </template>
+        <template #cell-release_digest="{ row }"><span :title="row.release_digest">{{ version(row.release_digest) }}</span></template>
+        <template #cell-mode="{ row }">{{ label('modes', row.mode) }}</template>
+        <template #cell-cpu_percent="{ row }">{{ row.cpu_percent == null ? '—' : row.cpu_percent.toFixed(1) + '%' }}</template>
+        <template #cell-offloading="{ row }"><SBadge :tone="row.offloading ? 'warning' : 'gray'">{{ t(row.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></template>
+        <template #cell-ready="{ row }"><SBadge :tone="row.ready ? 'success' : 'warning'">{{ t(!row.enabled ? 'upgrades.disabled' : row.ready ? 'upgrades.serving' : row.stopped ? 'upgrades.stopped' : 'upgrades.waiting') }}</SBadge></template>
+        <template #cell-last_seen="{ row }"><TimeText :value="row.last_seen" :muted="false" /></template>
+        <template #cell-manage="{ row }"><SButton size="sm" :disabled="busy || stale" @click="setNodeEnabled(row, !row.enabled)">{{ t(row.enabled ? 'upgrades.disableNode' : 'upgrades.enableNode') }}</SButton></template>
+      </STable>
       <SCard v-if="canExecute" :title="t('upgrades.newPlan')">
         <div class="space-y-4">
-          <SHint tone="warning">{{ t('upgrades.maintenanceWindow') }}</SHint>
+          <SAlert tone="warning" dense>{{ t('upgrades.maintenanceWindow') }}</SAlert>
           <SHint>{{ t('upgrades.independentPlugins') }}</SHint>
           <SField :label="t('upgrades.target')"><SSelect v-model="target" :options="options" :placeholder="t('upgrades.choose')" :disabled="busy || active" /></SField>
           <SHint v-if="!releases.length">{{ t('upgrades.noReleases') }}</SHint>
@@ -116,17 +120,19 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
           <div class="flex gap-2"><SButton :disabled="!target || active || stale" :loading="busy" @click="check">{{ t('upgrades.preflight') }}</SButton><SButton variant="primary" :disabled="!readyToCreate" :loading="busy" @click="create">{{ t('upgrades.start') }}</SButton></div>
           <div v-if="preflight" class="space-y-2">
             <p class="text-sm">{{ t('upgrades.order') }}: {{ preflight.nodes.join(' → ') }}</p>
-            <p class="text-sm text-gray-500">{{ t('upgrades.sequence') }}</p>
-            <SHint v-if="!preflight.blockers.length" tone="success">{{ t('upgrades.preflightOK') }}</SHint>
-            <ul v-else class="list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-400"><li v-for="reason in preflight.blockers" :key="reason">{{ reason }}</li></ul>
+            <p class="text-sm text-fg-muted">{{ t('upgrades.sequence') }}</p>
+            <SAlert v-if="!preflight.blockers.length" tone="success" dense>{{ t('upgrades.preflightOK') }}</SAlert>
+            <SAlert v-else tone="danger" dense data-testid="upgrade-blockers">
+              <ul class="list-disc space-y-1 pl-5"><li v-for="reason in preflight.blockers" :key="reason">{{ reason }}</li></ul>
+            </SAlert>
           </div>
         </div>
       </SCard>
       <SCard :title="t('upgrades.history')">
         <div v-if="plans.length" class="mb-4 flex flex-wrap gap-2"><SButton v-for="plan in plans" :key="plan.id" size="sm" :variant="selectedID === plan.id ? 'primary' : 'secondary'" @click="selectPlan(plan.id)">{{ version(plan.release_digest) }} · {{ label('states', plan.status) }}</SButton></div>
-        <SHint v-else>{{ t('upgrades.noPlans') }}</SHint>
+        <SEmpty v-else :text="t('upgrades.noPlans')" />
         <div v-if="selected" class="space-y-4">
-          <div class="flex flex-wrap items-center gap-3"><SBadge :tone="tone(selected.status)">{{ label('states', selected.status) }}</SBadge><span class="text-sm">{{ formatDateTime(selected.created_at) }}</span><code class="text-xs text-gray-500">{{ selected.id }}</code></div>
+          <div class="flex flex-wrap items-center gap-3"><SBadge :tone="tone(selected.status)">{{ label('states', selected.status) }}</SBadge><TimeText :value="selected.created_at" :muted="false" class="text-sm" /><SCode inline :text="selected.id" /></div>
           <SHint v-if="selected.error" tone="warning">{{ selected.error }}</SHint>
           <StepLanes :steps="selected.steps || []" :events="events" :cursor="selected.cursor" />
           <SHint v-if="selected.status === 'paused'">{{ t('upgrades.recovery') }}</SHint>
@@ -137,7 +143,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
             <SButton v-if="['running', 'paused'].includes(selected.status)" :loading="busy" :disabled="stale" @click="action('cancel')">{{ t('upgrades.cancel') }}</SButton>
           </div>
           <STable :columns="stepColumns" :rows="selected.steps || []" row-key="step_id"><template #cell-action="{ row }">{{ label('actions', row.action) }}</template><template #cell-status="{ row }"><SBadge :tone="tone(row.status)">{{ label('states', row.status) }}</SBadge></template></STable>
-          <ol class="space-y-2 text-sm"><li v-for="event in events" :key="event.id" class="flex flex-wrap gap-2"><time class="text-gray-500">{{ formatDateTime(event.created_at) }}</time><span>{{ event.message }}</span></li></ol>
+          <ol class="space-y-2 text-sm"><li v-for="event in events" :key="event.id" class="flex flex-wrap gap-2"><TimeText :value="event.created_at" /><span>{{ event.message }}</span></li></ol>
           <ReleaseHistory v-if="auth.has('plugin:read')" :since="selected.created_at" />
         </div>
       </SCard>

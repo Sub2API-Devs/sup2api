@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, STabs, confirm, type TabItem, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -12,6 +12,10 @@ import PriceDefSummary from './PriceDefSummary.vue'
 type Tab = 'pending' | PriceSyncAction
 
 const { t } = useI18n()
+const skippedColumns = computed<TableColumn[]>(() => [
+  { key: 'model', label: t('prices.model') },
+  { key: 'reason', label: t('prices.sync.reason') }
+])
 const route = useRoute()
 const router = useRouter()
 
@@ -120,11 +124,6 @@ const selectable = (x: PriceSyncItem) => x.action !== 'unchanged'
 
 const filteredSelectable = computed(() => filtered.value.filter(selectable))
 
-const filteredAllSelected = computed(() => {
-  const s = selected.value
-  const list = filteredSelectable.value
-  return list.length > 0 && list.every((x) => s.has(x.model))
-})
 const filteredSomeSelected = computed(() => {
   const s = selected.value
   return filteredSelectable.value.some((x) => s.has(x.model))
@@ -161,22 +160,32 @@ function selectNone() {
   triggerRef(selected)
 }
 
-function toggleAllFiltered() {
-  if (filteredAllSelected.value) selectNone()
-  else selectAll()
-}
-
 // ------------------------------------------------------------------ view helpers
 
 const ACTION_TONE: Record<PriceSyncAction, Tone> = { create: 'success', update: 'primary', manual: 'warning', unchanged: 'gray' }
 
 const stats = computed(() => [
-  { key: 'create' as const, value: counts.value.create, tone: 'text-emerald-600 dark:text-emerald-400' },
-  { key: 'update' as const, value: counts.value.update, tone: 'text-primary-600 dark:text-primary-400' },
-  { key: 'manual' as const, value: counts.value.manual, tone: 'text-amber-600 dark:text-amber-400' },
-  { key: 'unchanged' as const, value: counts.value.unchanged, tone: 'text-gray-600 dark:text-gray-300' },
-  { key: 'skipped' as const, value: preview.value?.skipped ?? 0, tone: 'text-gray-500 dark:text-dark-400' }
+  { key: 'create' as const, value: counts.value.create, tone: 'success' as const, icon: 'plus' },
+  { key: 'update' as const, value: counts.value.update, tone: 'primary' as const, icon: 'refresh' },
+  { key: 'manual' as const, value: counts.value.manual, tone: 'warning' as const, icon: 'warning' },
+  { key: 'unchanged' as const, value: counts.value.unchanged, tone: 'primary' as const, icon: 'check' },
+  { key: 'skipped' as const, value: preview.value?.skipped ?? 0, tone: 'danger' as const, icon: 'x' }
 ])
+
+// The preview table's selection: STable's checkboxes (current page, select-all
+// in the header) and the toolbar buttons (every filtered row) share this set.
+const previewColumns = computed<TableColumn[]>(() => [
+  { key: 'model', label: t('prices.model') },
+  { key: 'action', label: t('common.status'), width: '10rem' },
+  { key: 'incoming', label: t('prices.sync.incoming') },
+  { key: 'current', label: t('prices.sync.current') }
+])
+const selectedKeys = computed<unknown[]>({
+  get: () => [...selected.value],
+  set: (keys) => {
+    selected.value = new Set(keys as string[])
+  }
+})
 
 function pickStat(k: string) {
   if (k !== 'skipped') tab.value = k as Tab
@@ -221,20 +230,18 @@ async function apply() {
   <div>
     <SPageHeader :title="t('prices.sync.title', { name: sourceName })">
       <template #before>
-        <SButton variant="ghost" size="sm" class="!px-1.5" :title="t('common.back')" @click="router.push('/prices/sources')">
-          <SIcon name="arrow-left" class="h-4 w-4" />
-        </SButton>
+        <SButton variant="ghost" size="sm" :title="t('common.back')" :aria-label="t('common.back')" icon-only icon="arrow-left" @click="router.push('/prices/sources')" />
       </template>
       <template #title-extra>
         <SBadge v-if="source" tone="gray">{{ t(`prices.sources.kind.${source.kind}`) }}</SBadge>
       </template>
       <template #actions>
-        <SButton :loading="fetching" data-testid="price-sync-refetch" @click="fetchPreview">{{ t('prices.sync.refetch') }}</SButton>
+        <SButton :loading="fetching" data-testid="price-sync-refetch" icon="refresh" @click="fetchPreview">{{ t('prices.sync.refetch') }}</SButton>
       </template>
     </SPageHeader>
 
     <!-- fetching -->
-    <div v-if="fetching && !preview" class="card flex flex-col items-center gap-3 py-16 text-sm text-gray-500" data-testid="price-sync-fetching">
+    <div v-if="fetching && !preview" class="card flex flex-col items-center gap-3 py-16 text-sm text-fg-muted" data-testid="price-sync-fetching">
       <SSpinner size="lg" />
       {{ t('prices.sync.fetching', { name: sourceName }) }}
     </div>
@@ -245,8 +252,8 @@ async function apply() {
       class="card flex flex-col items-center gap-3 py-12 text-center"
       data-testid="price-sync-error"
     >
-      <SIcon name="x" class="h-8 w-8 text-red-500" />
-      <p class="font-medium text-gray-900 dark:text-white">{{ t('prices.sync.fetchFailed') }}</p>
+      <SIcon name="x" class="h-8 w-8 text-red-500 dark:text-red-400" />
+      <p class="font-medium text-fg">{{ t('prices.sync.fetchFailed') }}</p>
       <SHint tone="danger" class="max-w-xl break-words">{{ fetchError }}</SHint>
       <SButton variant="primary" :loading="fetching" @click="fetchPreview">{{ t('prices.sync.retry') }}</SButton>
     </div>
@@ -258,29 +265,43 @@ async function apply() {
 
       <!-- stats -->
       <SGrid :cols-base="2" :cols="3" :lg-cols="5" :gap="3" class="mb-4" data-testid="price-sync-stats">
-        <button
+        <SStatCard
           v-for="s in stats"
           :key="s.key"
-          type="button"
-          class="card px-4 py-3 text-left transition-shadow"
-          :class="[s.key !== 'skipped' ? 'hover:shadow-md' : 'cursor-default', tab === s.key ? 'ring-2 ring-primary-500/50' : '']"
+          compact
+          :label="t(`prices.sync.stats.${s.key}`)"
+          :value="formatNumber(s.value)"
+          :icon="s.icon"
+          :tone="s.tone"
+          :selectable="s.key !== 'skipped'"
+          :selected="s.key !== 'skipped' ? tab === s.key : undefined"
           :title="s.key === 'skipped' ? t('prices.sync.skippedHint') : undefined"
           :data-stat="s.key"
           @click="pickStat(s.key)"
-        >
-          <SHint size="xs">{{ t(`prices.sync.stats.${s.key}`) }}</SHint>
-          <p class="mt-1 text-2xl font-semibold tabular-nums" :class="s.tone">{{ formatNumber(s.value) }}</p>
-        </button>
+        />
       </SGrid>
 
-      <div class="card overflow-hidden">
-        <div class="px-4 pt-2">
-          <STabs v-model="tab" :tabs="tabs" data-testid="price-sync-tabs" />
-        </div>
-
-        <!-- toolbar -->
-        <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-          <SInput v-model="q" class="!w-64" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
+      <STable
+        v-model:selected="selectedKeys"
+        card
+        dense
+        selectable
+        clickable
+        :columns="previewColumns"
+        :rows="pageRows"
+        row-key="model"
+        :row-selectable="selectable"
+        :row-class="(x: PriceSyncItem) => (selectable(x) ? '' : 'opacity-70')"
+        :row-attrs="(x: PriceSyncItem) => ({ 'data-model': x.model, 'data-action': x.action })"
+        :empty-text="t('prices.sync.empty')"
+        data-testid="price-sync-table"
+        @row-click="toggle"
+      >
+        <template #toolbar>
+          <div class="-mt-1 w-full">
+            <STabs v-model="tab" :tabs="tabs" data-testid="price-sync-tabs" />
+          </div>
+          <SInput v-model="q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
           <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
             {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
           </SButton>
@@ -295,104 +316,52 @@ async function apply() {
               {{ t('prices.sync.apply', { n: formatNumber(selectedCount) }) }}
             </SButton>
           </div>
-        </div>
-
-        <div class="table-container !rounded-none !border-0">
-          <table class="table table-dense">
-            <thead>
-              <tr>
-                <th class="w-10">
-                  <SCheckbox
-                    bare
-                    :model-value="filteredAllSelected"
-                    :indeterminate="!filteredAllSelected && filteredSomeSelected"
-                    :disabled="!filteredSelectable.length"
-                    :aria-label="t('prices.sync.selectAll', { n: filteredSelectable.length })"
-                    @update:model-value="toggleAllFiltered()"
-                  />
-                </th>
-                <th>{{ t('prices.model') }}</th>
-                <th class="w-40">{{ t('common.status') }}</th>
-                <th>{{ t('prices.sync.incoming') }}</th>
-                <th>{{ t('prices.sync.current') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!pageRows.length">
-                <td colspan="5" class="py-10 text-center text-sm text-gray-400">{{ t('prices.sync.empty') }}</td>
-              </tr>
-              <tr
-                v-for="x in pageRows"
-                :key="x.model"
-                :class="selectable(x) ? 'cursor-pointer' : 'opacity-70'"
-                :data-model="x.model"
-                :data-action="x.action"
-                @click="toggle(x)"
-              >
-                <td @click.stop>
-                  <SCheckbox
-                    bare
-                    :model-value="selected.has(x.model)"
-                    :disabled="!selectable(x)"
-                    :title="selectable(x) ? undefined : t('prices.sync.unchangedHint')"
-                    @update:model-value="toggle(x)"
-                  />
-                </td>
-                <td class="font-mono text-xs">{{ x.model }}</td>
-                <td>
-                  <SBadge :tone="ACTION_TONE[x.action]">{{ t(`prices.sync.action.${x.action}`) }}</SBadge>
-                  <p v-if="x.action === 'manual'" class="mt-0.5 text-xs text-amber-600 dark:text-amber-400">⚠ {{ t('prices.sync.manualWarn') }}</p>
-                </td>
-                <td>
-                  <PriceDefSummary :def="x.incoming" :compare="x.action === 'unchanged' ? null : x.current" />
-                </td>
-                <td>
-                  <SHint v-if="!x.current" inline size="xs">{{ t('prices.sync.noCurrent') }}</SHint>
-                  <template v-else>
-                    <PriceDefSummary :def="x.current" muted />
-                    <div class="mt-0.5 flex gap-1">
-                      <SHint inline size="xs">{{ x.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
-                      <SHint v-if="!x.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
-                    </div>
-                  </template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <SPagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-sizes="[50, 100, 200]" />
+        </template>
+        <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
+        <template #cell-action="{ row }">
+          <SBadge :tone="ACTION_TONE[row.action as PriceSyncAction]" :title="row.action === 'unchanged' ? t('prices.sync.unchangedHint') : undefined">{{ t(`prices.sync.action.${row.action}`) }}</SBadge>
+          <SHint v-if="row.action === 'manual'" tone="warning" size="xs" class="mt-0.5 flex items-center gap-1">
+            <SIcon name="warning" class="h-3.5 w-3.5 shrink-0" />{{ t('prices.sync.manualWarn') }}
+          </SHint>
+        </template>
+        <template #cell-incoming="{ row }">
+          <PriceDefSummary :def="row.incoming" :compare="row.action === 'unchanged' ? null : row.current" />
+        </template>
+        <template #cell-current="{ row }">
+          <SHint v-if="!row.current" inline size="xs">{{ t('prices.sync.noCurrent') }}</SHint>
+          <template v-else>
+            <PriceDefSummary :def="row.current" muted />
+            <div class="mt-0.5 flex gap-1">
+              <SHint inline size="xs">{{ row.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
+              <SHint v-if="!row.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
+            </div>
+          </template>
+        </template>
+        <template #footer>
+          <SPagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-sizes="[50, 100, 200]" />
+        </template>
+      </STable>
     </template>
 
     <SModal v-model:open="resultOpen" :title="t('prices.sync.resultTitle')" width="lg">
       <div v-if="result" class="space-y-4" data-testid="price-sync-result">
         <SGrid :cols-base="2" :cols="4" :gap="3">
-          <div v-for="k in ['created', 'updated', 'unchanged'] as const" :key="k" class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800">
+          <div v-for="k in ['created', 'updated', 'unchanged'] as const" :key="k" class="rounded-lg bg-surface-2 px-3 py-2">
             <SHint size="xs">{{ t(`prices.sync.result.${k}`) }}</SHint>
             <p class="text-xl font-semibold tabular-nums" :data-result="k">{{ result[k] }}</p>
           </div>
-          <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800">
+          <div class="rounded-lg bg-surface-2 px-3 py-2">
             <SHint size="xs">{{ t('prices.sync.result.skipped') }}</SHint>
-            <p class="text-xl font-semibold tabular-nums" :class="result.skipped.length ? 'text-amber-600' : ''" data-result="skipped">{{ result.skipped.length }}</p>
+            <p class="text-xl font-semibold tabular-nums" :class="result.skipped.length ? 'text-amber-600 dark:text-amber-400' : ''" data-result="skipped">{{ result.skipped.length }}</p>
           </div>
         </SGrid>
         <div v-if="result.skipped.length">
           <SSectionTitle tag="p">{{ t('prices.sync.skippedList') }}</SSectionTitle>
-          <div class="max-h-60 overflow-y-auto rounded-lg border border-gray-100 dark:border-dark-700">
-            <table class="table table-dense">
-              <thead>
-                <tr>
-                  <th>{{ t('prices.model') }}</th>
-                  <th>{{ t('prices.sync.reason') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="s in result.skipped" :key="s.model">
-                  <td class="font-mono text-xs">{{ s.model }}</td>
-                  <td class="text-xs">{{ s.reason }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="max-h-60 overflow-y-auto">
+            <STable :columns="skippedColumns" :rows="result.skipped" row-key="model" dense data-testid="price-sync-skipped">
+              <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
+              <template #cell-reason="{ row }"><span class="text-xs">{{ row.reason }}</span></template>
+            </STable>
           </div>
         </div>
       </div>

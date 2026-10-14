@@ -8,7 +8,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SHint, SIcon, SInput, SLink, SModal, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SHint, SIcon, SInput, SLink, SModal, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -242,10 +242,6 @@ function actualModel(r: TestRow): string {
   const m = r.result?.model
   return m && m !== r.model ? m : ''
 }
-async function copyBody(r: TestRow) {
-  const b = prettyBody(r.result?.body)
-  if (b && (await copyText(b))) toast(t('common.copied'), 'success')
-}
 </script>
 
 <template>
@@ -269,9 +265,8 @@ async function copyBody(r: TestRow) {
 
       <!-- toolbar -->
       <div class="flex flex-wrap items-start gap-2">
-        <div class="relative min-w-[12rem] flex-1">
-          <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <SInput v-model="search" class="!pl-9" :placeholder="t('accounts.modelTest.search')" :aria-label="t('accounts.modelTest.search')" />
+        <div class="min-w-[12rem] flex-1">
+          <SInput v-model="search" icon="search" clearable :placeholder="t('accounts.modelTest.search')" :aria-label="t('accounts.modelTest.search')" />
         </div>
         <form class="flex min-w-[14rem] flex-1 flex-col gap-1" @submit.prevent="addCustom">
           <div class="flex gap-2">
@@ -288,7 +283,7 @@ async function copyBody(r: TestRow) {
         </SButton>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-dark-400">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
         <SCheckbox size="xs" :model-value="allVisibleSelected" :indeterminate="someVisibleSelected" :disabled="!visible.length" data-testid="model-test-select-all" @update:model-value="selectVisible">
           {{ t('accounts.modelTest.selectVisible', { n: visible.length }) }}
         </SCheckbox>
@@ -307,9 +302,9 @@ async function copyBody(r: TestRow) {
           <div class="flex min-w-0 max-w-[18rem] flex-wrap items-center gap-1.5">
             <span v-if="row.model" class="truncate font-mono text-xs" :title="row.model">{{ row.model }}</span>
             <span v-else class="text-xs font-medium">{{ t('accounts.modelTest.probeRow') }}</span>
-            <span v-if="row.model && row.source !== 'account'" class="rounded bg-gray-100 px-1 text-[10px] text-gray-500 dark:bg-dark-700 dark:text-dark-300">{{ sourceLabel(row.source) }}</span>
+            <SBadge v-if="row.model && row.source !== 'account'" tone="gray" size="xs">{{ sourceLabel(row.source) }}</SBadge>
           </div>
-          <div v-if="actualModel(row) || (!row.model && row.result?.model)" class="mt-0.5 flex items-center gap-1 font-mono text-[11px] text-violet-600 dark:text-violet-300" :title="t('accounts.testActualModel')">
+          <div v-if="actualModel(row) || (!row.model && row.result?.model)" class="mt-0.5 flex items-center gap-1 font-mono text-xxs text-accent-600 dark:text-accent-300" :title="t('accounts.testActualModel')">
             <SIcon name="chevron-right" class="h-3 w-3" />{{ actualModel(row) || row.result?.model }}
           </div>
         </template>
@@ -318,25 +313,25 @@ async function copyBody(r: TestRow) {
         </template>
         <template #cell-latency="{ row }">
           <span v-if="row.result" class="font-mono text-xs tabular-nums" :class="LATENCY_CLASS[latencyLevel(row.result.latency_ms)]">{{ formatLatency(row.result.latency_ms) }}</span>
-          <span v-else class="text-xs text-gray-300">—</span>
+          <span v-else class="text-xs text-fg-subtle">—</span>
         </template>
         <template #cell-http="{ row }">
-          <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-dark-300'">{{ row.result.status }}</span>
-          <span v-else class="text-xs text-gray-300" :title="row.result ? t('accounts.testNoHTTPResponse') : undefined">—</span>
+          <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-danger-600 dark:text-danger-400' : 'text-gray-600 dark:text-dark-300'">{{ row.result.status }}</span>
+          <span v-else class="text-xs text-fg-subtle" :title="row.result ? t('accounts.testNoHTTPResponse') : undefined">—</span>
         </template>
         <template #cell-detail="{ row }">
           <div class="max-w-[22rem] space-y-0.5 text-xs">
-            <div v-if="row.error" class="line-clamp-2 break-all text-red-600 dark:text-red-400" :title="row.error">{{ row.error }}</div>
+            <div v-if="row.error" class="line-clamp-2 break-all text-danger-600 dark:text-danger-400" :title="row.error">{{ row.error }}</div>
             <template v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)">
-              <div v-if="row.result.error_code" class="break-all font-mono text-red-600 dark:text-red-400" data-testid="model-test-error-code">{{ t('accounts.testErrorCode') }}: {{ row.result.error_code }}</div>
+              <div v-if="row.result.error_code" class="break-all font-mono text-danger-600 dark:text-danger-400" data-testid="model-test-error-code">{{ t('accounts.testErrorCode') }}: {{ row.result.error_code }}</div>
               <SHint v-if="row.result.error_source" size="xs">{{ t('accounts.testErrorSource') }}: {{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SHint>
-              <div v-if="row.result.reason" class="line-clamp-2 break-all font-medium text-red-600 dark:text-red-400" :title="row.result.reason">{{ row.result.reason }}</div>
+              <div v-if="row.result.reason" class="line-clamp-2 break-all font-medium text-danger-600 dark:text-danger-400" :title="row.result.reason">{{ row.result.reason }}</div>
               <!-- What the upstream answered: the plugin's reason alone hides it. -->
-              <div v-if="row.result.message && !row.result.reason?.includes(row.result.message)" class="line-clamp-3 break-all font-mono text-[11px] text-red-500/90 dark:text-red-300/90" :title="row.result.message" data-testid="model-test-error-body">
+              <div v-if="row.result.message && !row.result.reason?.includes(row.result.message)" class="line-clamp-3 break-all font-mono text-xxs text-danger-500/90 dark:text-danger-300/90" :title="row.result.message" data-testid="model-test-error-body">
                 {{ row.result.message }}
               </div>
             </template>
-            <div v-else-if="row.result?.message" class="line-clamp-1 break-all text-gray-500 dark:text-dark-400" :title="row.result.message">{{ row.result.message }}</div>
+            <div v-else-if="row.result?.message" class="line-clamp-1 break-all text-fg-muted" :title="row.result.message">{{ row.result.message }}</div>
             <SBadge v-if="effectBadge(row.result?.effect)" :tone="effectBadge(row.result?.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result?.effect)!.label }}</SBadge>
           </div>
         </template>
@@ -346,51 +341,24 @@ async function copyBody(r: TestRow) {
         <template #expand="{ row }">
           <div class="space-y-3 px-2 py-2 text-xs">
             <SHint v-if="!row.result && !row.error" size="xs">{{ t('accounts.modelTest.notRun') }}</SHint>
-            <dl v-if="row.result" class="kv">
-              <template v-if="row.result.requested_model">
-                <dt>{{ t('accounts.modelTest.requested') }}</dt>
-                <dd class="font-mono">{{ row.result.requested_model }}</dd>
-              </template>
-              <template v-if="row.result.model">
-                <dt>{{ t('accounts.testActualModel') }}</dt>
-                <dd class="font-mono">{{ row.result.model }}</dd>
-              </template>
-              <template v-if="row.result.upstream">
-                <dt>{{ t('accounts.testUpstream') }}</dt>
-                <dd class="break-all font-mono">{{ row.result.upstream }}</dd>
-              </template>
-              <template v-if="usageText(row.result)">
-                <dt>{{ t('accounts.testUsage') }}</dt>
-                <dd class="tabular-nums">{{ usageText(row.result) }}</dd>
-              </template>
-              <template v-if="row.result.error_code">
-                <dt>{{ t('accounts.testErrorCode') }}</dt>
-                <dd class="font-mono">{{ row.result.error_code }}</dd>
-              </template>
-              <template v-if="row.result.error_source">
-                <dt>{{ t('accounts.testErrorSource') }}</dt>
-                <dd>{{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</dd>
-              </template>
-              <template v-if="row.result.message">
-                <dt>{{ t('accounts.message') }}</dt>
-                <dd class="break-all">{{ row.result.message }}</dd>
-              </template>
-              <template v-if="row.result.reason">
-                <dt>{{ t('accounts.testReason') }}</dt>
-                <dd class="break-all">{{ row.result.reason }}</dd>
-              </template>
-              <template v-if="effectBadge(row.result.effect)">
-                <dt>{{ t('accounts.testEffectTitle') }}</dt>
-                <dd>
+            <SDescriptions v-if="row.result" dense label-width="7rem">
+              <SDescItem v-if="row.result.requested_model" :label="t('accounts.modelTest.requested')" mono>{{ row.result.requested_model }}</SDescItem>
+              <SDescItem v-if="row.result.model" :label="t('accounts.testActualModel')" mono>{{ row.result.model }}</SDescItem>
+              <SDescItem v-if="row.result.upstream" :label="t('accounts.testUpstream')" mono class="break-all">{{ row.result.upstream }}</SDescItem>
+              <SDescItem v-if="usageText(row.result)" :label="t('accounts.testUsage')" class="tabular-nums">{{ usageText(row.result) }}</SDescItem>
+              <SDescItem v-if="row.result.error_code" :label="t('accounts.testErrorCode')" mono>{{ row.result.error_code }}</SDescItem>
+              <SDescItem v-if="row.result.error_source" :label="t('accounts.testErrorSource')">{{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SDescItem>
+              <SDescItem v-if="row.result.message" :label="t('accounts.message')" class="break-all">{{ row.result.message }}</SDescItem>
+              <SDescItem v-if="row.result.reason" :label="t('accounts.testReason')" class="break-all">{{ row.result.reason }}</SDescItem>
+              <SDescItem v-if="effectBadge(row.result.effect)" :label="t('accounts.testEffectTitle')">
                   <SBadge :tone="effectBadge(row.result.effect)!.tone">{{ effectBadge(row.result.effect)!.label }}</SBadge>
                   <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
-                </dd>
-              </template>
-            </dl>
+                </SDescItem>
+            </SDescriptions>
             <div v-if="row.result?.body">
               <div class="mb-1 flex items-center justify-between">
                 <span class="font-medium text-gray-700 dark:text-gray-200">{{ t('accounts.testBody') }}</span>
-                <SButton size="sm" variant="ghost" @click="copyBody(row)"><SIcon name="copy" class="h-3.5 w-3.5" />{{ t('common.copy') }}</SButton>
+                <SCopyButton :text="prettyBody(row.result.body)" />
               </div>
               <SCode class="max-h-64 overflow-y-auto">{{ prettyBody(row.result.body) }}</SCode>
             </div>

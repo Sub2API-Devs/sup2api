@@ -19,6 +19,7 @@ export default {
     refund: '退款'
   },
   adjust: {
+    currentBalance: '当前余额',
     button: '调整余额',
     title: '调整余额',
     userHintSearch: '输入邮箱搜索，或直接输入用户 ID',

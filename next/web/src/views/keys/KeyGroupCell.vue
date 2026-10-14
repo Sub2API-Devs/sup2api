@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { SHint } from '@sub2api/ui'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 
 // Group of an API key plus the platforms the key can access (CONTRACTS §13).
@@ -13,7 +14,7 @@ const { t } = useI18n()
     <div class="max-w-64 truncate" :title="name">{{ name }}</div>
     <div v-if="platforms" class="shrink-0">
       <PlatformBadges v-if="platforms.length" :ids="platforms" />
-      <span v-else class="text-[11px] text-amber-600 dark:text-amber-400">{{ t('platforms.keyNoPlatforms') }}</span>
+      <SHint v-else inline tone="warning" size="xs">{{ t('platforms.keyNoPlatforms') }}</SHint>
     </div>
   </div>
 </template>

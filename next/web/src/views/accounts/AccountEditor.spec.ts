@@ -19,8 +19,9 @@ const location = { ip: '8.8.8.8', country_code: 'US', timezone: 'America/Los_Ang
 
 function render(account?: Account, realSelect = false) {
   return shallowMount(AccountEditor, { props: { accountType, account }, global: { plugins: [i18n], stubs: {
-    EditorCard: { template: '<div><slot /></div>' },
+    SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
     SField: { template: '<div><slot /></div>' },
+    SSegmented: false,
     SSelect: realSelect ? false : { props: ['modelValue', 'options', 'disabled', 'searchable'], emits: ['update:modelValue'], template: '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
     SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
     SchemaForm: { template: '<div />', methods: { validate: () => true } },
@@ -125,7 +126,7 @@ describe('account container environment', () => {
   it('refills the existing proxy when switching from pasted URL mode to OAuth', async () => {
     const w = render()
     await chooseProxy(w, 10)
-    await w.get('[data-testid="proxy-mode-url"]').trigger('click')
+    await w.get('[data-testid="proxy-mode"] input[value="url"]').setValue(true)
     await w.get('[data-testid="container-locale"]').setValue('ja-JP')
     await w.get('[data-testid="container-timezone"]').setValue('Asia/Tokyo')
     await w.setProps({ accountType: { ...accountType, type: 'managed' } })
@@ -142,7 +143,7 @@ describe('account container environment', () => {
     await flushPromises()
     const tokyo = { ip: '1.2.3.4', country_code: 'JP', timezone: 'Asia/Tokyo' }
     mocks.post.mockResolvedValueOnce({ ok: true, protocol: 'http', ip: '1.2.3.4', proxy_url: 'http://u___x:p@h:8443', proxy_id: 42, proxy_created: true, location: tokyo, attempts: [] })
-    await w.get('[data-testid="proxy-mode-url"]').trigger('click')
+    await w.get('[data-testid="proxy-mode"] input[value="url"]').setValue(true)
     await w.get('[data-testid="proxy-url"]').setValue('h:8443:u___x:p')
     await w.get('[data-testid="proxy-url"]').trigger('keydown', { key: 'Enter' })
     await flushPromises()
@@ -158,7 +159,7 @@ describe('account container environment', () => {
   it('keeps a pasted proxy that does not work and lists every protocol tried', async () => {
     const w = render()
     mocks.post.mockResolvedValueOnce({ ok: false, attempts: [{ protocol: 'socks5', ok: false, latency_ms: 1, message: 'refused' }, { protocol: 'http', ok: false, latency_ms: 1, status: 407 }], proxy_created: false })
-    await w.get('[data-testid="proxy-mode-url"]').trigger('click')
+    await w.get('[data-testid="proxy-mode"] input[value="url"]').setValue(true)
     await w.get('[data-testid="proxy-url"]').setValue('h:1:u:p')
     await w.get('[data-testid="proxy-url"]').trigger('keydown', { key: 'Enter' })
     await flushPromises()
@@ -236,7 +237,8 @@ describe('account container environment', () => {
     const input = select.get('input')
     await input.trigger('focus')
     await input.setValue('ZH-cn')
-    expect(select.findAll('[role="option"]')).toHaveLength(1)
+    // The list may be teleported to <body> (SSelect floats it when the field is in the document).
+    expect(new Set([...select.element.querySelectorAll('[role="option"]'), ...document.querySelectorAll('[role="option"]')]).size).toBe(1)
     await input.trigger('keydown', { key: 'Enter' })
     await w.get('form').trigger('submit')
     await flushPromises()

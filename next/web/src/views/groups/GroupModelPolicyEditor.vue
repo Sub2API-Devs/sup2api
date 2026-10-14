@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton } from '@sub2api/ui'
-import ModelListEditor from '@/views/accounts/ModelListEditor.vue'
+import { SButton, SChoiceCards, SHint, SInput, type ChoiceOption } from '@sub2api/ui'
+import ModelListEditor from '@/components/models/ModelListEditor.vue'
 
 const props = defineProps<{ modelValue: string[]; mode: 'whitelist' | 'blacklist'; options: string[]; loading?: boolean; unrestrictedAccounts?: number }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string[]): void; (e: 'update:mode', value: 'whitelist' | 'blacklist'): void }>()
 const { t } = useI18n()
 const draft = ref('')
 const error = ref('')
+const modeOptions = computed<ChoiceOption[]>(() =>
+  (['whitelist', 'blacklist'] as const).map((value) => ({ value, label: t(`groups.${value}`), description: t(`groups.${value}Hint`) }))
+)
 const suggestions = computed(() => [...new Set(props.options)])
 function fillGroupModels() {
   const pending = draft.value.trim().split(/[\s,]+/).filter(Boolean)
@@ -34,22 +37,21 @@ defineExpose({ commit })
 
 <template>
   <div class="space-y-3" data-testid="group-model-policy">
-    <div class="grid grid-cols-2 gap-2">
-      <button v-for="value in (['whitelist', 'blacklist'] as const)" :key="value" type="button" class="rounded-lg border px-3 py-2.5 text-left" :class="mode === value ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' : 'border-line hover:bg-surface-2'" :aria-pressed="mode === value" :data-testid="`policy-${value}`" @click="emit('update:mode', value)">
-        <span class="block text-sm font-medium">{{ t(`groups.${value}`) }}</span>
-        <span class="mt-1 block text-xs text-fg-muted">{{ t(`groups.${value}Hint`) }}</span>
-      </button>
-    </div>
+    <SChoiceCards :model-value="mode" :options="modeOptions" :aria-label="t('groups.modelRules')" @update:model-value="emit('update:mode', $event as 'whitelist' | 'blacklist')">
+      <!-- Test hooks of the two options (kept from the button version). -->
+      <template #option-whitelist><span data-testid="policy-whitelist" /></template>
+      <template #option-blacklist><span data-testid="policy-blacklist" /></template>
+    </SChoiceCards>
     <div class="flex flex-wrap items-center gap-2">
       <SButton size="sm" :loading="loading" :disabled="loading || !suggestions.length" data-testid="policy-fill-group" @click="fillGroupModels">{{ t(mode === 'whitelist' ? 'groups.fillWhitelist' : 'groups.fillBlacklist', { n: suggestions.length }) }}</SButton>
       <span class="text-xs text-fg-subtle">{{ t('groups.groupModelSource') }}</span>
     </div>
-    <p v-if="unrestrictedAccounts" class="text-xs text-amber-600">{{ t('groups.unrestrictedModelsHint', { n: unrestrictedAccounts }) }}</p>
+    <SHint v-if="unrestrictedAccounts" tone="warning" size="xs">{{ t('groups.unrestrictedModelsHint', { n: unrestrictedAccounts }) }}</SHint>
     <ModelListEditor show-options :model-value="modelValue" :options="suggestions" :mapping="{}" :empty-text="t('groups.emptyPolicy')" @update:model-value="emit('update:modelValue', $event)" />
     <div class="flex gap-2">
-      <input v-model="draft" class="input input-sm min-w-0 flex-1" :aria-label="t('groups.allowlistPlaceholder')" :placeholder="t('groups.allowlistPlaceholder')" data-testid="policy-draft" @keydown.enter.prevent="commit" @paste="paste" @blur="commit" />
+      <SInput v-model="draft" size="sm" class="min-w-0 flex-1" :aria-label="t('groups.allowlistPlaceholder')" :placeholder="t('groups.allowlistPlaceholder')" data-testid="policy-draft" @keydown.enter.prevent="commit" @paste="paste" @blur="commit" />
       <SButton size="sm" :disabled="!draft.trim()" @click="commit">{{ t('accounts.editorUi.addModels') }}</SButton>
     </div>
-    <p v-if="error" class="text-xs text-danger-600">{{ error }}</p>
+    <SHint v-if="error" tone="danger" size="xs">{{ error }}</SHint>
   </div>
 </template>
