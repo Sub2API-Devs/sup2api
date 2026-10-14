@@ -326,12 +326,12 @@ func build(number uint64, exts []Extension) *generation {
 		// accounts.credentials grant: without it the plugin never receives
 		// credentials, so its account types are not offered or scheduled.
 		if pf != nil && grants.Has("accounts.credentials") {
-			for _, at := range m.AccountTypes {
+			for i, at := range m.AccountTypes {
 				key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
 				if _, dup := g.atByKey[key]; dup {
 					continue
 				}
-				atb := core.AccountTypeBinding{Plugin: info, Type: at, Client: pf}
+				atb := core.AccountTypeBinding{Plugin: info, Type: at, DeclIndex: i, Client: pf}
 				if at.Form.Mode == "schema" {
 					atb.FormSchema = readJSON(pkg, at.Form.Schema)
 					atb.FormUI = readJSON(pkg, at.Form.UISchema)
@@ -443,7 +443,7 @@ func build(number uint64, exts []Extension) *generation {
 		if a.Plugin.Key != b.Plugin.Key {
 			return a.Plugin.Key < b.Plugin.Key
 		}
-		return a.Type.ID < b.Type.ID
+		return a.DeclIndex < b.DeclIndex
 	})
 	for _, atb := range g.accTypes {
 		seen := map[string]bool{}

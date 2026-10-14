@@ -162,6 +162,7 @@ type AccountTypeKey struct {
 type AccountTypeBinding struct {
 	Plugin     PluginInfo
 	Type       manifest.AccountType
+	DeclIndex  int             // index in the plugin's manifest.AccountTypes (preserves declaration order)
 	FormSchema json.RawMessage // resolved from the package when form.mode=schema
 	FormUI     json.RawMessage
 	Client     PlatformPlugin

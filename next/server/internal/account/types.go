@@ -271,12 +271,19 @@ func platformViews(g core.Generation) []PlatformView {
 			v.AccountTypes = append(v.AccountTypes, PlatformTypeView{PluginKey: b.Plugin.Key, Type: b.Type.ID,
 				Label: b.Type.Label})
 		}
+		// Sort: plugin key alphabetically, within same plugin preserve manifest declaration order
+		typeOrder := make(map[string]int)
+		for _, b := range g.AccountTypesForPlatform(pb.Platform.ID) {
+			typeOrder[b.Plugin.Key+"/"+b.Type.ID] = b.DeclIndex
+		}
 		sort.Slice(v.AccountTypes, func(i, j int) bool {
 			a, b := v.AccountTypes[i], v.AccountTypes[j]
 			if a.PluginKey != b.PluginKey {
 				return a.PluginKey < b.PluginKey
 			}
-			return a.Type < b.Type
+			aIdx := typeOrder[a.PluginKey+"/"+a.Type]
+			bIdx := typeOrder[b.PluginKey+"/"+b.Type]
+			return aIdx < bIdx
 		})
 		out = append(out, v)
 	}

@@ -149,6 +149,8 @@ const hasStoredPassword = computed(() => !!editing.value?.has_password)
 
 const pasteUrl = ref('')
 const pasteError = ref('')
+const probing = ref(false)
+const probeResult = ref<{ ok: boolean; protocol?: string; ip?: string; location?: { country_code: string; timezone: string } } | null>(null)
 
 function applyPastedUrl() {
   pasteError.value = ''
@@ -169,6 +171,51 @@ function applyPastedUrl() {
   if (!form.name.trim()) form.name = `${s.protocol}://${s.host}:${s.port}`.slice(0, 100)
   errors.value = {}
   pasteUrl.value = ''
+  probeResult.value = null
+}
+
+async function probeProxy() {
+  pasteError.value = ''
+  probeResult.value = null
+  const raw = pasteUrl.value.trim()
+  if (!raw) {
+    pasteError.value = t('proxies.pasteError.invalid')
+    return
+  }
+  probing.value = true
+  try {
+    const result = await api.post<any>('/proxies/probe', { proxy_url: raw })
+    probeResult.value = result
+    if (result.ok) {
+      // Auto-fill from probe result
+      const s = parseProxyURL(result.proxy_url || raw)
+      if (s.ok) {
+        form.protocol = s.spec.protocol
+        form.host = s.spec.host
+        form.port = s.spec.port
+        form.username = s.spec.username
+        form.password = s.spec.password
+        form.clearPassword = false
+        if (!form.name.trim()) form.name = `${s.spec.protocol}://${s.spec.host}:${s.spec.port}`.slice(0, 100)
+      }
+      // Auto-fill location if available (to be used for timezone and language)
+      if (result.location) {
+        // Store location for account editor to use
+        probeResult.value = result
+      }
+      errors.value = {}
+      pasteUrl.value = ''
+      const country = result.location?.country_code || 'unknown'
+      toast(t('proxies.probeSuccess', { country }), 'success')
+    } else {
+      pasteError.value = result.message || t('proxies.probeFailed', { error: 'unknown' })
+    }
+  } catch (e) {
+    notifyError(e)
+    pasteError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    probing.value = false
+  }
 }
 
 async function submit() {
@@ -333,9 +380,15 @@ async function onAction(p: Proxy, key: string) {
               spellcheck="false"
               data-testid="proxy-paste-url"
               placeholder="socks5://user:pass@host:port"
-              @keydown.enter.prevent="applyPastedUrl"
+              @keydown.enter.prevent="probeProxy"
             />
-            <SButton :disabled="!pasteUrl.trim()" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
+            <SButton :disabled="!pasteUrl.trim() || probing" :loading="probing" data-testid="proxy-paste-probe" @click="probeProxy">{{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}</SButton>
+            <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
+          </div>
+          <div v-if="probeResult?.ok && probeResult.location" class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            <SIcon name="check" class="inline h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            {{ probeResult.location.country_code }} · {{ probeResult.location.timezone }}
+            <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <code class="font-mono">{{ probeResult.ip }}</code></span>
           </div>
         </SField>
         <SGrid>

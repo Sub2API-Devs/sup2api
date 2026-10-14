@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"unicode/utf8"
 
@@ -128,9 +127,5 @@ func (s *Service) HTTPClientFor(_ context.Context, spec Spec) (*http.Client, err
 	if !s.opts.AllowPrivate && netguard.LiteralPrivate(spec.Host) {
 		return nil, core.ErrPermissionDenied.WithMessage("proxy address is private and not allowed")
 	}
-	u := &url.URL{Scheme: spec.Protocol, Host: net.JoinHostPort(spec.Host, strconv.Itoa(spec.Port))}
-	if spec.Username != "" || spec.Password != "" {
-		u.User = url.UserPassword(spec.Username, spec.Password)
-	}
-	return &http.Client{Transport: newTransport(u)}, nil
+	return &http.Client{Transport: newTransport(specURL(spec))}, nil
 }

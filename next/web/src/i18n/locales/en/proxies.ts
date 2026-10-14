@@ -23,8 +23,12 @@ export default {
   exitIp: 'Exit IP',
   createdBy: 'Created by',
   pasteUrl: 'Paste a proxy URL to fill the form',
-  pasteUrlHint: "e.g. socks5://user:pass{'@'}host:port; parsed into the fields below (socks5h becomes socks5)",
+  pasteUrlHint: "Supports http/https/socks5(h) or user:pass@host:port. Auto-tries http/https/socks5(h) when no protocol specified. Forbids addresses that resolve to private IPs, and the proxy server must deny connections to them. Service-provided country or timezone can auto-fill language and timezone below.",
   pasteFill: 'Fill',
+  probeProxy: 'Test',
+  probing: 'Testing...',
+  probeSuccess: 'Tested OK, country: {country}',
+  probeFailed: 'Test failed: {error}',
   pasteError: {
     scheme: 'The scheme must be http, https, socks5 or socks5h',
     host: 'Missing host',

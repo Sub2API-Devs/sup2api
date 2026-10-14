@@ -191,6 +191,32 @@ export interface ProxyTestResult {
   message?: string
 }
 
+export interface ProxyLocation {
+  timezone: string
+  locale: string
+  country_code?: string
+}
+
+export interface ProxyProbeAttempt {
+  protocol: 'http' | 'https' | 'socks5'
+  ok: boolean
+  status?: number
+  latency_ms: number
+  message?: string
+}
+
+export interface ProxyProbeResult {
+  ok: boolean
+  protocol?: 'http' | 'https' | 'socks5'
+  proxy_url?: string
+  ip?: string
+  latency_ms?: number
+  location?: ProxyLocation
+  attempts: ProxyProbeAttempt[]
+  proxy_id?: number
+  proxy_created: boolean
+}
+
 // ------------------------------------------------------------------ accounts
 
 export interface AccountAction {
