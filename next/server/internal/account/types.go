@@ -204,13 +204,9 @@ func (s *Service) listTypes(c *gin.Context) {
 			out = append(out, typeView(g, b, s.d.Converters))
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.PluginKey != b.PluginKey {
-			return a.PluginKey < b.PluginKey
-		}
-		return a.Type < b.Type
-	})
+	// The generation lists a plugin's types in manifest order (OAuth before
+	// API key for ccgateway); keep it within each plugin.
+	sort.SliceStable(out, func(i, j int) bool { return out[i].PluginKey < out[j].PluginKey })
 	httpapi.OK(c, out)
 }
 
@@ -271,20 +267,8 @@ func platformViews(g core.Generation) []PlatformView {
 			v.AccountTypes = append(v.AccountTypes, PlatformTypeView{PluginKey: b.Plugin.Key, Type: b.Type.ID,
 				Label: b.Type.Label})
 		}
-		// Sort: plugin key alphabetically, within same plugin preserve manifest declaration order
-		typeOrder := make(map[string]int)
-		for _, b := range g.AccountTypesForPlatform(pb.Platform.ID) {
-			typeOrder[b.Plugin.Key+"/"+b.Type.ID] = b.DeclIndex
-		}
-		sort.Slice(v.AccountTypes, func(i, j int) bool {
-			a, b := v.AccountTypes[i], v.AccountTypes[j]
-			if a.PluginKey != b.PluginKey {
-				return a.PluginKey < b.PluginKey
-			}
-			aIdx := typeOrder[a.PluginKey+"/"+a.Type]
-			bIdx := typeOrder[b.PluginKey+"/"+b.Type]
-			return aIdx < bIdx
-		})
+		// Manifest order within each plugin, as in GET /account-types.
+		sort.SliceStable(v.AccountTypes, func(i, j int) bool { return v.AccountTypes[i].PluginKey < v.AccountTypes[j].PluginKey })
 		out = append(out, v)
 	}
 	sort.SliceStable(out, func(i, j int) bool {

@@ -339,7 +339,7 @@ func TestAccountTypesManyToMany(t *testing.T) {
 			t.Fatalf("%v: client is nil", b.Key())
 		}
 	}
-	if want := "anth/apikey anth/oauth relay/akey relay/zkey"; strings.Join(keys, " ") != want {
+	if want := "anth/apikey anth/oauth relay/zkey relay/akey"; strings.Join(keys, " ") != want {
 		t.Fatalf("account types = %v, want %s", keys, want)
 	}
 	if _, ok := g.AccountType("noadapter", "apikey"); ok {

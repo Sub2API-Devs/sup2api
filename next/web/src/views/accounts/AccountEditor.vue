@@ -74,15 +74,6 @@ onMounted(() => window.addEventListener('focus', loadAutoDisablePolicy))
 onBeforeUnmount(() => {
   autoDisablePolicyRequest++
   window.removeEventListener('focus', loadAutoDisablePolicy)
-  // Delete draft container when user cancels account creation (CONTRACTS §21):
-  // drafts are temporary runtimes that must be cleaned up if not saved.
-  if (ccgDraft.value && ccgState.value.key && !ccgState.value.authorized) {
-    const draftKey = ccgState.value.key
-    const endpoint = preparationUrl.value ? `/account-preparations/${draftKey}` : `/system/ccgateway/drafts/${draftKey}`
-    void api.del(endpoint).catch(() => {
-      // Draft may have expired or been deleted already; ignore errors
-    })
-  }
 })
 
 const editing = computed(() => !!props.account?.id)
