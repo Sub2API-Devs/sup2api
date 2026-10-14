@@ -1,4 +1,4 @@
-import type { PluginHost } from '@sub2api/host'
+import { isApiError, type PluginHost } from '@sub2api/host'
 
 let host: PluginHost | null = null
 
@@ -16,4 +16,11 @@ export const PERM_MANAGE = 'growth:manage'
 
 export function canManage(): boolean {
   return useGrowthHost().can(PERM_MANAGE)
+}
+
+/** Human-readable message of a failed call: the API error text, else `fallback`. */
+export function errorMessage(e: unknown, fallback: string): string {
+  if (isApiError(e) && e.message) return e.message
+  if (e instanceof Error && e.message) return e.message
+  return fallback
 }

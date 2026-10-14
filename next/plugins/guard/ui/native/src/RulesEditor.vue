@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SButton, SEmpty, SField, SInput, SModal, SSelect, SSpinner, SSwitch, STable } from '@sub2api/ui'
+import { SButton, SEmpty, SField, SHint, SInput, SModal, SSelect, SSpinner, SSwitch, STable } from '@sub2api/ui'
 import type { TableColumn } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import { fetchRules, saveRules, useGuardHost, type Rule } from './host'
@@ -99,17 +99,24 @@ async function save() {
   <SModal :open="open" :title="t('rules.title')" width="xl" @update:open="emit('update:open', $event)">
     <div v-if="loading" class="guard-center"><SSpinner /></div>
     <template v-else>
-      <p v-if="!canManage" class="guard-note">{{ t('rules.readOnly') }}</p>
+      <SHint v-if="!canManage" tone="warning" class="guard-note">{{ t('rules.readOnly') }}</SHint>
       <SEmpty v-if="!rules.length" :text="t('rules.empty')" icon="shield" />
       <!-- row-key names no field so every row keys by index; saved rules (id) and new rows would otherwise collide -->
       <STable v-else :columns="columns" :rows="rules" row-key="__index" dense>
         <template #cell-name="{ row, index }">
           <SField :error="err(index, 'name')">
-            <SInput v-model="row.name" size="sm" :error="!!err(index, 'name')" :disabled="!canManage" :maxlength="100" />
+            <SInput
+              v-model="row.name"
+              size="sm"
+              :error="!!err(index, 'name')"
+              :disabled="!canManage"
+              :maxlength="100"
+              :aria-label="t('rules.name')"
+            />
           </SField>
         </template>
         <template #cell-kind="{ row }">
-          <SSelect v-model="row.kind" :options="kindOptions" class="input-sm" :disabled="!canManage" />
+          <SSelect v-model="row.kind" :options="kindOptions" size="sm" :disabled="!canManage" :aria-label="t('rules.kind')" />
         </template>
         <template #cell-pattern="{ row, index }">
           <SField :error="err(index, 'pattern')">
@@ -119,20 +126,21 @@ async function save() {
               mono
               :error="!!err(index, 'pattern')"
               :disabled="!canManage"
-              :placeholder="row.kind === 'regex' ? '\\d{18}' : 'keyword'"
+              :placeholder="row.kind === 'regex' ? '\\d{18}' : t('rules.keywordPlaceholder')"
+              :aria-label="t('rules.pattern')"
             />
           </SField>
         </template>
-        <template #cell-enabled="{ row }"><SSwitch v-model="row.enabled" :disabled="!canManage" /></template>
+        <template #cell-enabled="{ row }"><SSwitch v-model="row.enabled" size="sm" :disabled="!canManage" :aria-label="t('rules.enabled')" /></template>
         <template #cell-actions="{ index }">
-          <SButton variant="ghost" size="sm" @click="remove(index)">×</SButton>
+          <SButton variant="ghost" tone="danger" size="sm" icon="trash" icon-only :aria-label="t('rules.remove')" :title="t('rules.remove')" @click="remove(index)" />
         </template>
       </STable>
-      <p class="input-hint">{{ t('rules.regexHint') }}</p>
+      <SHint size="xs" class="guard-hint">{{ t('rules.regexHint') }}</SHint>
     </template>
     <template #footer>
-      <SButton v-if="canManage" class="guard-left" @click="add">+ {{ t('rules.add') }}</SButton>
-      <SButton @click="emit('update:open', false)">{{ host.i18n.t('common.close') }}</SButton>
+      <SButton v-if="canManage" class="guard-left" icon="plus" @click="add">{{ t('rules.add') }}</SButton>
+      <SButton @click="emit('update:open', false)">{{ host.i18n.t('ui.close') }}</SButton>
       <SButton v-if="canManage" variant="primary" :loading="saving" @click="save">{{ t('rules.save') }}</SButton>
     </template>
   </SModal>
@@ -146,8 +154,9 @@ async function save() {
 }
 .guard-note {
   margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  color: #d97706;
+}
+.guard-hint {
+  margin-top: 0.5rem;
 }
 .guard-left {
   margin-right: auto;

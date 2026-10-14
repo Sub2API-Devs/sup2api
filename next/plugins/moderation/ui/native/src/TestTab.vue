@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SBadge, SButton, SCard, SEmpty, SIcon, STextarea } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SEmpty, SHint, SIcon, STextarea } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
@@ -98,47 +98,40 @@ const transcript = computed(() => result.value?.transcript || [])
 
     <div class="mod-test-grid">
       <SCard :title="t('test.title')">
-        <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" @keydown="onKey" />
+        <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
         <div class="mod-test-actions">
-          <span class="muted mod-small">{{ t('test.samples') }}：</span>
+          <SHint inline size="xs">{{ t('labelColon', { label: t('test.samples') }) }}</SHint>
           <SButton v-for="s in samples" :key="s" variant="ghost" size="sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</SButton>
-          <SButton variant="primary" class="mod-ml-auto" :loading="running" :disabled="!text.trim()" @click="run">
-            <SIcon v-if="!running" name="play" class="mod-icon" />{{ running ? t('test.running') : t('test.run') }}
+          <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim()" @click="run">
+            {{ running ? t('test.running') : t('test.run') }}
           </SButton>
         </div>
       </SCard>
 
       <SCard :title="t('test.result')">
-        <div v-if="notConfigured" class="mod-callout mod-callout-flat">
-          <SIcon name="warning" class="mod-callout-icon" />
-          <p class="mod-callout-text">{{ t('test.notConfigured') }}</p>
-          <SButton v-if="canManageSettings()" variant="primary" size="sm" @click="emit('go-settings')">
-            <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
-          </SButton>
-        </div>
-        <p v-else-if="failure" class="mod-alert mod-alert-danger mod-mb-0">{{ failure }}</p>
+        <SAlert v-if="notConfigured" tone="warning">
+          {{ t('test.notConfigured') }}
+          <template v-if="canManageSettings()" #actions>
+            <SButton variant="primary" size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
+          </template>
+        </SAlert>
+        <SAlert v-else-if="failure" tone="danger">{{ failure }}</SAlert>
         <SEmpty v-else-if="!result" :text="running ? t('test.running') : t('test.empty')" icon="eyeglass" />
         <div v-else class="mod-verdict">
           <div class="mod-verdict-head">
             <VerdictBadge :verdict="result.verdict" />
             <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('test.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
           </div>
-          <dl class="kv">
-            <dt>{{ t('test.categories') }}</dt>
-            <dd><CategoryChips :categories="result.categories" wrap /></dd>
-            <dt>{{ t('test.reason') }}</dt>
-            <dd>{{ result.reason || '—' }}</dd>
-            <template v-if="result.error">
-              <dt>{{ t('test.error') }}</dt>
-              <dd class="mod-text-danger mod-prewrap">{{ result.error }}</dd>
-            </template>
-            <dt>{{ t('test.latency') }}</dt>
-            <dd class="mod-num">{{ t('ms', { n: num(result.latency_ms) }) }}</dd>
-            <dt>{{ t('test.turns') }}</dt>
-            <dd class="mod-num">{{ num(result.turns) }}</dd>
-            <dt>{{ t('test.tokens') }}</dt>
-            <dd class="mod-num">{{ t('test.tokensValue', { p: num(result.usage?.prompt_tokens), c: num(result.usage?.completion_tokens) }) }}</dd>
-          </dl>
+          <SDescriptions dense>
+            <SDescItem :label="t('test.categories')"><CategoryChips :categories="result.categories" wrap /></SDescItem>
+            <SDescItem :label="t('test.reason')" :value="result.reason" />
+            <SDescItem v-if="result.error" :label="t('test.error')">
+              <span class="mod-text-danger mod-prewrap">{{ result.error }}</span>
+            </SDescItem>
+            <SDescItem :label="t('test.latency')" :value="t('ms', { n: num(result.latency_ms) })" />
+            <SDescItem :label="t('test.turns')" :value="num(result.turns)" />
+            <SDescItem :label="t('test.tokens')" :value="t('test.tokensValue', { p: num(result.usage?.prompt_tokens), c: num(result.usage?.completion_tokens) })" />
+          </SDescriptions>
         </div>
       </SCard>
     </div>
@@ -149,16 +142,15 @@ const transcript = computed(() => result.value?.transcript || [])
         <li v-for="(m, i) in transcript" :key="i" class="mod-msg" :class="`mod-msg-${m.role}`">
           <div class="mod-msg-head">
             <span class="mod-msg-role">{{ roleLabel(m.role) }}</span>
-            <span class="muted mod-small">#{{ i + 1 }}</span>
+            <SHint inline size="xs">#{{ i + 1 }}</SHint>
             <code v-if="m.tool_call_id" class="mod-code">{{ t('test.toolCallId') }}: {{ m.tool_call_id }}</code>
           </div>
-          <details v-if="m.role === 'system'" class="mod-msg-details">
-            <summary class="link mod-small">{{ t('test.showSystem') }}</summary>
+          <SDisclosure v-if="m.role === 'system'" :label="t('test.showSystem')">
             <pre class="mod-msg-body">{{ contentText(m) }}</pre>
-          </details>
+          </SDisclosure>
           <template v-else>
             <pre v-if="contentText(m)" class="mod-msg-body">{{ contentText(m) }}</pre>
-            <p v-else-if="!m.tool_calls?.length" class="muted mod-small">{{ t('test.emptyContent') }}</p>
+            <SHint v-else-if="!m.tool_calls?.length" size="xs">{{ t('test.emptyContent') }}</SHint>
           </template>
           <div v-for="(tc, j) in m.tool_calls || []" :key="tc.id || j" class="mod-tool">
             <div class="mod-tool-head">
@@ -167,7 +159,7 @@ const transcript = computed(() => result.value?.transcript || [])
               <code class="mod-code mod-code-plain">{{ tc.function?.name || '?' }}</code>
               <code v-if="tc.id" class="mod-code">{{ tc.id }}</code>
             </div>
-            <pre class="code-block mod-tool-args">{{ prettyArgs(tc) }}</pre>
+            <SCode :text="prettyArgs(tc)" class="mod-tool-args" />
           </div>
         </li>
       </ol>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SBadge, SButton, SIcon, SPageHeader, STabs } from '@sub2api/ui'
+import { SBadge, SButton, SPageHeader, STabs } from '@sub2api/ui'
 import OverviewTab from './OverviewTab.vue'
 import EventsTab from './EventsTab.vue'
 import BlocksTab from './BlocksTab.vue'
@@ -95,7 +95,7 @@ function showUser(userId: number) {
         <SBadge v-if="runtime && !runtime.configured" tone="warning">{{ t('notConfiguredBadge') }}</SBadge>
       </template>
       <template #actions>
-        <SButton :loading="refreshing" :title="t('refresh')" @click="refresh"><SIcon name="refresh" class="mod-icon" /></SButton>
+        <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="refreshing" @click="refresh" />
       </template>
     </SPageHeader>
 

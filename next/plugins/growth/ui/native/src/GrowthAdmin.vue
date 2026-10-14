@@ -1,52 +1,67 @@
 <template>
   <div>
     <SPageHeader :title="host.t('adminTitle')" />
-    <div style="display: flex; flex-direction: column; gap: 1.5rem">
-      <div v-if="stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem">
-        <SStatCard :label="host.t('totalReferrals')" :value="stats.total_referrals" tone="primary" />
-        <SStatCard :label="host.t('totalCommission')" :value="host.i18n.formatMoney(stats.total_commission)" tone="success" />
-        <SStatCard :label="host.t('totalCheckins')" :value="stats.total_checkins" tone="info" />
-        <SStatCard :label="host.t('todayCheckins')" :value="stats.today_checkins" tone="warning" />
-      </div>
+    <SStack :gap="6">
+      <SGrid template="repeat(auto-fit, minmax(200px, 1fr))">
+        <SStatCard :label="host.t('totalReferrals')" :value="host.i18n.formatNumber(stats?.total_referrals ?? 0)" icon="user" tone="primary" :loading="!stats" />
+        <SStatCard :label="host.t('totalCommission')" :value="host.i18n.formatMoney(stats?.total_commission ?? 0)" icon="balance" tone="success" :loading="!stats" />
+        <SStatCard :label="host.t('totalCheckins')" :value="host.i18n.formatNumber(stats?.total_checkins ?? 0)" icon="check" tone="primary" :loading="!stats" />
+        <SStatCard :label="host.t('todayCheckins')" :value="host.i18n.formatNumber(stats?.today_checkins ?? 0)" icon="clock" tone="warning" :loading="!stats" />
+      </SGrid>
 
-      <STabs :tabs="tabs" v-model="activeTab" />
+      <STabs v-model="activeTab" :tabs="tabs" />
 
-      <SCard v-if="activeTab === 'referrals'">
-        <div v-if="referralList.loading.value">{{ host.i18n.t('ui.loading') }}</div>
-        <STable v-else :columns="referralColumns" :rows="referralList.items.value">
-          <template #cell-commission="{ value }">{{ host.i18n.formatMoney(value) }}</template>
-          <template #cell-bound_at="{ value }">{{ host.i18n.formatDateTime(value) }}</template>
+      <SCard v-if="activeTab === 'referrals'" :padded="false">
+        <STable :columns="referralColumns" :rows="referralList.items.value" :loading="referralList.loading.value" :empty-text="host.t('noData')">
+          <template #cell-commission="{ row }">{{ host.i18n.formatMoney(row.commission) }}</template>
+          <template #cell-bound_at="{ row }">{{ host.i18n.formatDateTime(row.bound_at) }}</template>
         </STable>
-        <SPagination v-model:page="referralList.page.value" :page-size="referralList.pageSize.value" :total="referralList.total.value" />
+        <SPagination
+          v-model:page="referralList.page.value"
+          v-model:page-size="referralList.pageSize.value"
+          :total="referralList.total.value"
+          class="growth-pager"
+        />
       </SCard>
 
-      <SCard v-if="activeTab === 'commissions'">
-        <div v-if="commissionList.loading.value">{{ host.i18n.t('ui.loading') }}</div>
-        <STable v-else :columns="commissionColumns" :rows="commissionList.items.value">
-          <template #cell-base_amount="{ value }">{{ host.i18n.formatMoney(value) }}</template>
-          <template #cell-commission="{ value }">{{ host.i18n.formatMoney(value) }}</template>
-          <template #cell-event_type="{ value }">{{ host.t('event.' + value) }}</template>
-          <template #cell-created_at="{ value }">{{ host.i18n.formatDateTime(value) }}</template>
+      <SCard v-if="activeTab === 'commissions'" :padded="false">
+        <STable :columns="commissionColumns" :rows="commissionList.items.value" :loading="commissionList.loading.value" :empty-text="host.t('noData')">
+          <template #cell-base_amount="{ row }">{{ host.i18n.formatMoney(row.base_amount) }}</template>
+          <template #cell-commission="{ row }">{{ host.i18n.formatMoney(row.commission) }}</template>
+          <template #cell-event_type="{ row }">{{ host.t('event.' + row.event_type) }}</template>
+          <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
         </STable>
-        <SPagination v-model:page="commissionList.page.value" :page-size="commissionList.pageSize.value" :total="commissionList.total.value" />
+        <SPagination
+          v-model:page="commissionList.page.value"
+          v-model:page-size="commissionList.pageSize.value"
+          :total="commissionList.total.value"
+          class="growth-pager"
+        />
       </SCard>
 
-      <SCard v-if="activeTab === 'checkins'">
-        <div v-if="checkinList.loading.value">{{ host.i18n.t('ui.loading') }}</div>
-        <STable v-else :columns="checkinColumns" :rows="checkinList.items.value">
-          <template #cell-quota_awarded="{ value }">{{ host.i18n.formatMoney(value) }}</template>
-          <template #cell-created_at="{ value }">{{ host.i18n.formatDateTime(value) }}</template>
+      <SCard v-if="activeTab === 'checkins'" :padded="false">
+        <STable :columns="checkinColumns" :rows="checkinList.items.value" :loading="checkinList.loading.value" :empty-text="host.t('noData')">
+          <template #cell-quota_awarded="{ row }">{{ host.i18n.formatMoney(row.quota_awarded) }}</template>
+          <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
         </STable>
-        <SPagination v-model:page="checkinList.page.value" :page-size="checkinList.pageSize.value" :total="checkinList.total.value" />
+        <SPagination
+          v-model:page="checkinList.page.value"
+          v-model:page-size="checkinList.pageSize.value"
+          :total="checkinList.total.value"
+          class="growth-pager"
+        />
       </SCard>
-    </div>
+    </SStack>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { SPageHeader, SStatCard, STabs, SCard, STable, SPagination, useList } from '@sub2api/ui'
-import { useGrowthHost } from './host'
+import { useList } from '@sub2api/host'
+import { SPageHeader, SGrid, SStack, SStatCard, STabs, SCard, STable, SPagination, type TableColumn } from '@sub2api/ui'
+import { errorMessage, useGrowthHost } from './host'
+
+type Row = Record<string, any>
 
 const host = useGrowthHost()
 const stats = ref<any>(null)
@@ -58,7 +73,7 @@ const tabs = [
   { key: 'checkins', label: host.t('checkins') }
 ]
 
-const referralColumns = [
+const referralColumns: TableColumn[] = [
   { key: 'user_id', label: host.t('userId') },
   { key: 'code', label: host.t('code') },
   { key: 'inviter_user_id', label: host.t('inviterUserId') },
@@ -67,7 +82,7 @@ const referralColumns = [
   { key: 'bound_at', label: host.t('boundAt') }
 ]
 
-const commissionColumns = [
+const commissionColumns: TableColumn[] = [
   { key: 'inviter_user_id', label: host.t('inviterUserId') },
   { key: 'invitee_user_id', label: host.t('inviteeUserId') },
   { key: 'event_type', label: host.t('eventType') },
@@ -76,22 +91,24 @@ const commissionColumns = [
   { key: 'created_at', label: host.t('createdAt') }
 ]
 
-const checkinColumns = [
+const checkinColumns: TableColumn[] = [
   { key: 'user_id', label: host.t('userId') },
   { key: 'checkin_date', label: host.t('checkinDate') },
   { key: 'quota_awarded', label: host.t('quotaAwarded'), align: 'right' },
   { key: 'created_at', label: host.t('createdAt') }
 ]
 
-const referralList = useList(host.pluginApi, '/admin/referrals', {})
-const commissionList = useList(host.pluginApi, '/admin/commissions', {})
-const checkinList = useList(host.pluginApi, '/admin/checkins', {})
+const onError = (e: unknown) => host.toast(errorMessage(e, host.t('loadFailed')), 'error')
+const referralList = useList<Row>(host.pluginApi, '/admin/referrals', {}, { onError })
+const commissionList = useList<Row>(host.pluginApi, '/admin/commissions', {}, { onError })
+const checkinList = useList<Row>(host.pluginApi, '/admin/checkins', {}, { onError })
 
 onMounted(async () => {
   try {
     stats.value = await host.pluginApi.get('/admin/stats')
   } catch (e) {
-    host.toast(String(e), 'error')
+    stats.value = {}
+    onError(e)
   }
 })
 </script>

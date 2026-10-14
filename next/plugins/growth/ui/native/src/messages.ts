@@ -6,7 +6,6 @@ export default {
     admin: '增长管理',
     referralCode: '我的邀请码',
     copyCode: '复制',
-    copied: '已复制',
     shareLink: '分享链接',
     bindInviter: '绑定邀请人',
     inviterCode: '邀请码',
@@ -53,7 +52,11 @@ export default {
     'event.usage.recorded': '消费',
     'event.balance.changed': '充值',
     settings: '设置',
-    notConfigured: '未配置'
+    notConfigured: '未配置',
+    daysValue: '{n} 天',
+    checkinSuccessAmount: '签到成功：{amount}',
+    loadFailed: '加载失败',
+    retry: '重试'
   },
   en: {
     title: 'Growth & Engagement',
@@ -62,7 +65,6 @@ export default {
     admin: 'Growth Dashboard',
     referralCode: 'My Referral Code',
     copyCode: 'Copy',
-    copied: 'Copied',
     shareLink: 'Share Link',
     bindInviter: 'Bind Inviter',
     inviterCode: 'Inviter Code',
@@ -109,6 +111,10 @@ export default {
     'event.usage.recorded': 'Usage',
     'event.balance.changed': 'Recharge',
     settings: 'Settings',
-    notConfigured: 'Not configured'
+    notConfigured: 'Not configured',
+    daysValue: '{n} days',
+    checkinSuccessAmount: 'Checked in: {amount}',
+    loadFailed: 'Failed to load',
+    retry: 'Retry'
   }
 }

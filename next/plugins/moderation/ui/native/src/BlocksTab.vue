@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { SBadge, SButton, SCard, SField, SIcon, SInput, STable } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SField, SInput, STable } from '@sub2api/ui'
 import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
@@ -108,12 +108,12 @@ async function submit() {
           <SInput v-model="form.duration_hours" type="number" min="0" step="1" :error="!!formErr.duration_hours" />
         </SField>
         <div class="mod-filter-actions">
-          <SButton type="submit" variant="danger" :loading="saving"><SIcon name="lock" class="mod-icon" />{{ t('blocks.submit') }}</SButton>
+          <SButton type="submit" variant="danger" icon="lock" :loading="saving">{{ t('blocks.submit') }}</SButton>
         </div>
       </form>
     </SCard>
 
-    <p v-if="error" class="mod-alert mod-alert-danger">{{ error }}</p>
+    <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
     <SCard :padded="false">
       <STable :columns="columns" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')">

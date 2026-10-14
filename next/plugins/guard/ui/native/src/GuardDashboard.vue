@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SButton, SCard, SChart, SEmpty, SIcon, SPageHeader, SSelect, SStatCard, STable } from '@sub2api/ui'
+import { SAlert, SButton, SCard, SChart, SEmpty, SPageHeader, SProgress, SSegmented, SStatCard, STable } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import RulesEditor from './RulesEditor.vue'
 import { fetchStats, useGuardHost, type Range, type Stats } from './host'
@@ -81,15 +81,13 @@ const recentColumns = computed(() => [
   <div class="guard-dashboard">
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #actions>
-        <SSelect v-model="range" :options="rangeOptions" class="!w-40" />
-        <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
-        <SButton v-if="host.can('rules:read')" variant="primary" @click="rulesOpen = true">
-          <SIcon name="shield" class="h-4 w-4" />{{ t('manageRules') }}
-        </SButton>
+        <SSegmented v-model="range" :options="rangeOptions" size="sm" :aria-label="t('rangeLabel')" />
+        <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="loading" @click="load" />
+        <SButton v-if="host.can('rules:read')" variant="primary" icon="shield" @click="rulesOpen = true">{{ t('manageRules') }}</SButton>
       </template>
     </SPageHeader>
 
-    <p v-if="error" class="guard-error">{{ error }}</p>
+    <SAlert v-if="error" tone="danger" class="guard-block">{{ error }}</SAlert>
 
     <div class="guard-grid-3">
       <SStatCard :label="t('blocked')" :value="host.i18n.formatNumber(stats?.blocked_total ?? 0)" icon="shield" tone="danger" :loading="loading && !stats" />
@@ -114,16 +112,18 @@ const recentColumns = computed(() => [
               </span>
               <span class="guard-hits">{{ t('hits', { n: r.hits }) }}</span>
             </div>
-            <div class="guard-bar"><div class="guard-bar-fill" :style="{ width: (r.hits / maxHits) * 100 + '%' }" /></div>
+            <SProgress :value="r.hits" :max="maxHits" tone="danger" class="guard-bar" aria-hidden="true" />
           </li>
         </ol>
       </SCard>
 
       <SCard :title="t('recent')" :padded="false">
         <STable :columns="recentColumns" :rows="stats?.recent || []" row-key="request_id" dense>
-          <template #cell-occurred_at="{ value }">{{ host.i18n.formatDateTime(value) }}</template>
-          <template #cell-snippet="{ value }"><span class="guard-snippet" :title="value">{{ value || '—' }}</span></template>
-          <template #cell-request_id="{ value }"><code class="guard-code">{{ String(value || '').slice(0, 10) }}</code></template>
+          <template #cell-occurred_at="{ row }">{{ host.i18n.formatDateTime(row.occurred_at) }}</template>
+          <template #cell-snippet="{ row }"><span class="guard-snippet" :title="row.snippet">{{ row.snippet || '—' }}</span></template>
+          <template #cell-request_id="{ row }">
+            <code class="guard-code" :title="row.request_id || undefined">{{ (row.request_id || '').slice(0, 10) || '—' }}</code>
+          </template>
         </STable>
       </SCard>
     </div>
@@ -146,13 +146,8 @@ const recentColumns = computed(() => [
 .guard-section {
   margin-top: 1.25rem;
 }
-.guard-error {
+.guard-block {
   margin-bottom: 1rem;
-  border-radius: 0.75rem;
-  background: rgba(239, 68, 68, 0.08);
-  color: #dc2626;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
 }
 .guard-top {
   display: flex;
@@ -170,7 +165,7 @@ const recentColumns = computed(() => [
 }
 .guard-rank {
   width: 1.25rem;
-  color: #94a3b8;
+  color: rgb(var(--fg-subtle));
   font-variant-numeric: tabular-nums;
 }
 .guard-rule-name {
@@ -193,16 +188,7 @@ const recentColumns = computed(() => [
 }
 .guard-bar {
   margin-top: 0.25rem;
-  margin-left: 1.75rem;
-  height: 0.375rem;
-  border-radius: 9999px;
-  background: rgba(148, 163, 184, 0.2);
-  overflow: hidden;
-}
-.guard-bar-fill {
-  height: 100%;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, #f87171, #ef4444);
+  padding-left: 1.75rem;
 }
 .guard-snippet {
   display: inline-block;

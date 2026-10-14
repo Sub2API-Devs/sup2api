@@ -1,50 +1,56 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { SButton, SCard, SField, SIcon, SInput, SPagination, SSelect, STable } from '@sub2api/ui'
+import { computed, reactive, ref, watch } from 'vue'
+import { useList } from '@sub2api/host'
+import { SAlert, SButton, SCard, SField, SHint, SInput, SLink, SPagination, SSelect, STable, STimeRange, type RangeKey } from '@sub2api/ui'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
-import { enumLabel, errorMessage, fetchEvents, useModHost, type EventFilters, type ModEvent } from './host'
+import { enumLabel, errorMessage, useModHost, type ModEvent } from './host'
 
-// Records: filters + paginated table; a row opens the detail modal.
+// Records: filters + paginated table (useList); a row opens the detail modal.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
 
-const empty = (): EventFilters => ({ verdict: '', action: '', mode: '', category: '', user_id: '', q: '', from: '', to: '' })
-const filters = reactive<EventFilters>(empty())
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const rows = ref<ModEvent[]>([])
-const loading = ref(false)
-const error = ref('')
-let seq = 0
+const emptyForm = () => ({ verdict: '', action: '', mode: '', category: '', user_id: '', q: '' })
+const form = reactive(emptyForm())
+if (props.preset) form.user_id = String(props.preset.user_id)
+// Time filter: preset range or custom from/to (RFC 3339, '' = open).
+const range = ref<RangeKey>('all')
+const from = ref('')
+const to = ref('')
+const rangeKeys: RangeKey[] = ['all', 'today', '7d', '30d', 'custom']
 
-async function reload() {
-  const my = ++seq
-  loading.value = true
-  error.value = ''
-  try {
-    const r = await fetchEvents(filters, page.value, pageSize.value)
-    if (my !== seq) return
-    rows.value = r.items
-    total.value = r.page?.total ?? r.items.length
-  } catch (e) {
-    if (my !== seq) return
-    error.value = errorMessage(e, t('events.loadFailed'))
-  } finally {
-    if (my === seq) loading.value = false
+/** The query the list is loaded with (the form as applied). */
+function query() {
+  return {
+    verdict: form.verdict,
+    action: form.action,
+    mode: form.mode,
+    category: form.category.trim(),
+    user_id: form.user_id.trim(),
+    q: form.q.trim(),
+    from: from.value,
+    to: to.value
   }
 }
 
+const list = useList<ModEvent>(host.pluginApi, '/events', query())
+const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
+
+/** Applies the form; reloads even when nothing changed (Search pressed again). */
 function search() {
-  if (page.value !== 1) page.value = 1
-  else reload()
+  const next = query()
+  const same = Object.entries(next).every(([k, v]) => list.filters[k] === v)
+  if (same) list.reload()
+  else Object.assign(list.filters, next)
 }
 
 function reset() {
-  Object.assign(filters, empty())
+  Object.assign(form, emptyForm())
+  range.value = 'all'
+  from.value = ''
+  to.value = ''
   search()
 }
 
@@ -54,24 +60,22 @@ const verdictOptions = computed(() => withAll(['pass', 'flag', 'block', 'error']
 const actionOptions = computed(() => withAll(['allow', 'deny'].map((v) => ({ value: v, label: t(`action.${v}`) }))))
 const modeOptions = computed(() => withAll(['observe', 'enforce'].map((v) => ({ value: v, label: t(`mode.${v}`) }))))
 
-// Selects apply immediately; text inputs on Enter / Search.
-watch(() => [filters.verdict, filters.action, filters.mode, filters.from, filters.to], search)
-watch([page, pageSize], reload)
+// Selects and the time range apply immediately; text inputs on Enter / Search.
+watch(() => [form.verdict, form.action, form.mode, from.value, to.value], search)
 
 watch(
   () => props.preset,
   (p) => {
     if (!p) return
-    Object.assign(filters, empty(), { user_id: String(p.user_id) })
+    Object.assign(form, emptyForm(), { user_id: String(p.user_id) })
+    range.value = 'all'
+    from.value = ''
+    to.value = ''
     search()
   }
 )
 
-onMounted(() => {
-  if (props.preset) Object.assign(filters, { user_id: String(props.preset.user_id) })
-  reload()
-})
-defineExpose({ reload })
+defineExpose({ reload: list.reload })
 
 const columns = computed(() => [
   { key: 'created_at', label: t('events.col.time'), width: '10.5rem' },
@@ -93,58 +97,60 @@ function open(row: ModEvent) {
 }
 
 function onDeleted(id: number) {
-  rows.value = rows.value.filter((r) => r.id !== id)
-  total.value = Math.max(0, total.value - 1)
-  if (!rows.value.length && page.value > 1) page.value--
+  list.items.value = list.items.value.filter((r) => r.id !== id)
+  list.total.value = Math.max(0, list.total.value - 1)
+  if (!list.items.value.length && list.page.value > 1) list.page.value--
 }
 
 function filterUser(id: number | null | undefined) {
   if (!id) return
-  filters.user_id = String(id)
+  form.user_id = String(id)
   search()
 }
 </script>
 
 <template>
   <div>
-    <SCard class="mod-filters-card">
+    <SCard>
       <form class="mod-filters" @submit.prevent="search">
         <SField class="mod-filter" :label="t('events.verdict')">
-          <SSelect v-model="filters.verdict" :options="verdictOptions" />
+          <SSelect v-model="form.verdict" :options="verdictOptions" :aria-label="t('events.verdict')" />
         </SField>
         <SField class="mod-filter" :label="t('events.action')">
-          <SSelect v-model="filters.action" :options="actionOptions" />
+          <SSelect v-model="form.action" :options="actionOptions" :aria-label="t('events.action')" />
         </SField>
         <SField class="mod-filter" :label="t('events.mode')">
-          <SSelect v-model="filters.mode" :options="modeOptions" />
+          <SSelect v-model="form.mode" :options="modeOptions" :aria-label="t('events.mode')" />
         </SField>
         <SField class="mod-filter" :label="t('events.category')">
-          <SInput v-model="filters.category" placeholder="jailbreak" />
+          <SInput v-model="form.category" placeholder="jailbreak" :aria-label="t('events.category')" />
         </SField>
         <SField class="mod-filter" :label="t('events.userId')">
-          <SInput v-model="filters.user_id" inputmode="numeric" />
+          <SInput v-model="form.user_id" inputmode="numeric" :aria-label="t('events.userId')" />
         </SField>
         <SField class="mod-filter mod-filter-wide" :label="t('events.q')">
-          <SInput v-model="filters.q" type="search" />
+          <SInput v-model="form.q" type="search" :aria-label="t('events.q')" />
         </SField>
-        <!-- datetime-local is not an SInput type; plain console class until the library grows one -->
-        <SField class="mod-filter mod-filter-date" :label="t('events.from')">
-          <input v-model="filters.from" class="input" type="datetime-local" />
-        </SField>
-        <SField class="mod-filter mod-filter-date" :label="t('events.to')">
-          <input v-model="filters.to" class="input" type="datetime-local" />
-        </SField>
+        <STimeRange v-model:range="range" v-model:from="from" v-model:to="to" :keys="rangeKeys" />
         <div class="mod-filter-actions">
-          <SButton type="submit" variant="primary" :loading="loading"><SIcon name="search" class="mod-icon" />{{ t('events.search') }}</SButton>
+          <SButton type="submit" variant="primary" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
           <SButton @click="reset">{{ t('events.reset') }}</SButton>
         </div>
       </form>
     </SCard>
 
-    <p v-if="error" class="mod-alert mod-alert-danger">{{ error }}</p>
+    <SAlert v-if="error" tone="danger" class="mod-section">{{ error }}</SAlert>
 
     <SCard :padded="false" class="mod-section">
-      <STable :columns="columns" :rows="rows" :loading="loading" :empty-text="t('events.empty')" dense class="mod-clickable" @row-click="open">
+      <STable
+        :columns="columns"
+        :rows="list.items.value"
+        :loading="list.loading.value"
+        :empty-text="t('events.empty')"
+        dense
+        clickable
+        @row-click="open"
+      >
         <template #cell-created_at="{ row }"><span class="mod-nowrap">{{ host.i18n.formatDateTime(row.created_at) }}</span></template>
         <template #cell-verdict="{ row }">
           <span class="mod-nowrap">
@@ -153,7 +159,7 @@ function filterUser(id: number | null | undefined) {
           </span>
         </template>
         <template #cell-action="{ row }">
-          <span class="mod-nowrap" :class="row.action === 'deny' ? 'mod-text-danger' : 'muted'">{{ enumLabel('action', row.action) }}</span>
+          <SHint inline :tone="row.action === 'deny' ? 'danger' : 'muted'" class="mod-nowrap">{{ enumLabel('action', row.action) }}</SHint>
           <div v-if="row.mode" class="mod-sub">{{ enumLabel('mode', row.mode) }}</div>
         </template>
         <template #cell-categories="{ row }"><CategoryChips :categories="row.categories" /></template>
@@ -167,8 +173,8 @@ function filterUser(id: number | null | undefined) {
           <span class="mod-ellipsis mod-w-text" :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
         </template>
         <template #cell-user_id="{ row }">
-          <a v-if="row.user_id" class="link mod-num" @click.stop="filterUser(row.user_id)">#{{ row.user_id }}</a>
-          <span v-else class="muted">—</span>
+          <SLink v-if="row.user_id" as="button" class="mod-num" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)">#{{ row.user_id }}</SLink>
+          <SHint v-else inline>—</SHint>
         </template>
         <template #cell-model="{ row }"><span class="mod-ellipsis mod-w-model" :title="row.model">{{ row.model || '—' }}</span></template>
         <template #cell-latency_ms="{ row }">
@@ -176,7 +182,7 @@ function filterUser(id: number | null | undefined) {
         </template>
       </STable>
       <div class="mod-pager">
-        <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+        <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
       </div>
     </SCard>
 

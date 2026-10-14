@@ -10,9 +10,94 @@
     "checkin_timezone"
   ],
   "referral_enabled": {
-    "ui:widget": "checkbox"
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Enable referral commission",
+      "zh": "启用邀请返利"
+    }
+  },
+  "referral_rate_percent": {
+    "ui:title": {
+      "en": "Commission rate (%)",
+      "zh": "返利比例 (%)"
+    },
+    "ui:help": {
+      "en": "Share of an invitee's spending or top-up credited to the inviter",
+      "zh": "被邀请人消费或充值时，邀请人获得的返利百分比"
+    },
+    "ui:visibleWhen": {
+      "field": "referral_enabled",
+      "truthy": true
+    }
+  },
+  "referral_max_per_invitee": {
+    "ui:title": {
+      "en": "Commission cap per invitee ($)",
+      "zh": "单个被邀请人返利上限 ($)"
+    },
+    "ui:help": {
+      "en": "Total commission earned from one invitee; 0 means unlimited",
+      "zh": "从单个被邀请人获得的累计返利上限，0 表示无限制"
+    },
+    "ui:visibleWhen": {
+      "field": "referral_enabled",
+      "truthy": true
+    }
+  },
+  "referral_duration_days": {
+    "ui:title": {
+      "en": "Commission period (days)",
+      "zh": "返利有效期 (天)"
+    },
+    "ui:help": {
+      "en": "Only spending within this many days after the invitee signs up counts; 0 means forever",
+      "zh": "被邀请人注册后多少天内产生的消费才计入返利，0 表示永久有效"
+    },
+    "ui:visibleWhen": {
+      "field": "referral_enabled",
+      "truthy": true
+    }
   },
   "checkin_enabled": {
-    "ui:widget": "checkbox"
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Enable daily check-in",
+      "zh": "启用每日签到"
+    }
+  },
+  "checkin_min_quota": {
+    "ui:title": {
+      "en": "Minimum check-in reward ($)",
+      "zh": "签到最小奖励额度 ($)"
+    },
+    "ui:visibleWhen": {
+      "field": "checkin_enabled",
+      "truthy": true
+    }
+  },
+  "checkin_max_quota": {
+    "ui:title": {
+      "en": "Maximum check-in reward ($)",
+      "zh": "签到最大奖励额度 ($)"
+    },
+    "ui:visibleWhen": {
+      "field": "checkin_enabled",
+      "truthy": true
+    }
+  },
+  "checkin_timezone": {
+    "ui:title": {
+      "en": "Check-in time zone",
+      "zh": "签到时区"
+    },
+    "ui:help": {
+      "en": "Time zone that decides the check-in date, e.g. UTC or Asia/Shanghai",
+      "zh": "用于判断签到日期的时区，如 UTC、Asia/Shanghai"
+    },
+    "ui:placeholder": "UTC",
+    "ui:visibleWhen": {
+      "field": "checkin_enabled",
+      "truthy": true
+    }
   }
 }

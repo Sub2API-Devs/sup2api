@@ -4,7 +4,8 @@ import { SStatCard } from '@sub2api/ui'
 import { fetchStats, useGuardHost } from './host'
 
 // Dashboard widget "Blocked today" (slot dashboard.widgets): today's blocks
-// and the change vs. the same period yesterday. Click opens the dashboard.
+// and the change vs. the same period yesterday. The whole card is a link to
+// the dashboard (a real <a>, so it is focusable and opens in a new tab too).
 const host = useGuardHost()
 const t = host.t
 
@@ -33,14 +34,19 @@ async function load() {
   }
 }
 
+// A real <a> (focusable, opens in a new tab too); plain clicks navigate in-app.
+const target = '/p/guard/dashboard'
+const href = computed(() => host.router.resolve(target).href)
+function open(e: MouseEvent) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+  e.preventDefault()
+  host.router.push(target)
+}
+
 const trend = computed(() => {
   if (today.value === null || !yesterday.value) return null
   return ((today.value - yesterday.value) / yesterday.value) * 100
 })
-
-function open() {
-  host.router.push('/p/guard/dashboard')
-}
 
 onMounted(() => {
   load()
@@ -50,8 +56,9 @@ onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
-  <div class="guard-card" role="link" tabindex="0" @click="open" @keydown.enter="open">
+  <a :href="href" class="guard-card" :title="t('openDashboard')" @click="open">
     <SStatCard
+      class="guard-card-body"
       :label="t('blockedToday')"
       :value="today === null ? '—' : host.i18n.formatNumber(today)"
       :trend="trend"
@@ -60,15 +67,23 @@ onBeforeUnmount(() => clearInterval(timer))
       tone="danger"
       :loading="loading"
     />
-  </div>
+  </a>
 </template>
 
 <style scoped>
 .guard-card {
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 1rem;
 }
-.guard-card > :deep(*) {
-  height: 100%;
+.guard-card:focus-visible {
+  outline: 2px solid rgb(20 184 166 / 0.6);
+  outline-offset: 2px;
+}
+.guard-card-body {
+  flex: 1;
 }
 </style>

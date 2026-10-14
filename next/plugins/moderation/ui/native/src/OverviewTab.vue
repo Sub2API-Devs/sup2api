@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SButton, SCard, SChart, SEmpty, SIcon, SSelect, SStatCard } from '@sub2api/ui'
+import { SAlert, SButton, SCard, SChart, SDescriptions, SEmpty, SLink, SProgress, SSegmented, SStatCard, type DescItem } from '@sub2api/ui'
 import {
   canManageSettings,
   categoryLabel,
@@ -94,52 +94,44 @@ const chart = computed(() => {
 const maxCat = computed(() => Math.max(1, ...(data.value?.top_categories || []).map((c) => c.count)))
 const maxUser = computed(() => Math.max(1, ...(data.value?.top_users || []).map((u) => u.count)))
 
-const runtimeRows = computed(() => {
+const runtimeRows = computed<DescItem[]>(() => {
   const r = runtime.value
   if (!r) return []
   return [
-    { k: t('runtime.mode'), v: t(`mode.${r.mode || 'off'}`) },
-    { k: t('runtime.configured'), v: r.configured ? t('runtime.yes') : t('runtime.no') },
-    { k: t('runtime.queue'), v: `${n(r.queue_len)} / ${n(r.queue_cap)}` },
-    { k: t('runtime.dropped'), v: n(r.dropped) },
-    { k: t('runtime.inflight'), v: n(r.inflight) },
-    { k: t('runtime.calls'), v: n(r.calls) },
-    { k: t('runtime.errors'), v: n(r.errors) },
-    { k: t('runtime.cacheHits'), v: n(r.cache_hits) },
-    { k: t('runtime.avgLatency'), v: t('ms', { n: host.i18n.formatNumber(Math.round(r.avg_latency_ms || 0)) }) },
-    { k: t('runtime.blockedUsers'), v: n(r.blocked_users) }
+    { key: 'mode', label: t('runtime.mode'), value: t(`mode.${r.mode || 'off'}`) },
+    { key: 'configured', label: t('runtime.configured'), value: r.configured ? t('runtime.yes') : t('runtime.no') },
+    { key: 'queue', label: t('runtime.queue'), value: `${n(r.queue_len)} / ${n(r.queue_cap)}` },
+    { key: 'dropped', label: t('runtime.dropped'), value: n(r.dropped) },
+    { key: 'inflight', label: t('runtime.inflight'), value: n(r.inflight) },
+    { key: 'calls', label: t('runtime.calls'), value: n(r.calls) },
+    { key: 'errors', label: t('runtime.errors'), value: n(r.errors) },
+    { key: 'cacheHits', label: t('runtime.cacheHits'), value: n(r.cache_hits) },
+    { key: 'avgLatency', label: t('runtime.avgLatency'), value: t('ms', { n: host.i18n.formatNumber(Math.round(r.avg_latency_ms || 0)) }) },
+    { key: 'blockedUsers', label: t('runtime.blockedUsers'), value: n(r.blocked_users) }
   ]
-})
-
-const queuePct = computed(() => {
-  const r = runtime.value
-  if (!r || !r.queue_cap) return 0
-  return Math.min(100, (r.queue_len / r.queue_cap) * 100)
 })
 </script>
 
 <template>
   <div>
     <div class="mod-toolbar">
-      <SSelect v-model="range" :options="rangeOptions" class="mod-w-40" />
+      <SSegmented v-model="range" :options="rangeOptions" size="sm" :aria-label="t('rangeLabel')" />
     </div>
 
-    <p v-if="error" class="mod-alert mod-alert-danger">{{ error }}</p>
+    <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
-    <div v-if="runtime && !runtime.configured" class="mod-callout">
-      <SIcon name="warning" class="mod-callout-icon" />
-      <p class="mod-callout-text">{{ t('overview.notConfigured') }}</p>
-      <SButton v-if="canManageSettings()" variant="primary" size="sm" @click="emit('go-settings')">
-        <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
-      </SButton>
-    </div>
-    <div v-else-if="runtime && runtime.mode === 'off'" class="mod-callout mod-callout-info">
-      <SIcon name="info" class="mod-callout-icon" />
-      <p class="mod-callout-text">{{ t('overview.offHint') }}</p>
-      <SButton v-if="canManageSettings()" size="sm" @click="emit('go-settings')">
-        <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
-      </SButton>
-    </div>
+    <SAlert v-if="runtime && !runtime.configured" tone="warning" class="mod-block">
+      {{ t('overview.notConfigured') }}
+      <template v-if="canManageSettings()" #actions>
+        <SButton variant="primary" size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
+      </template>
+    </SAlert>
+    <SAlert v-else-if="runtime && runtime.mode === 'off'" tone="info" class="mod-block">
+      {{ t('overview.offHint') }}
+      <template v-if="canManageSettings()" #actions>
+        <SButton size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
+      </template>
+    </SAlert>
 
     <div class="mod-grid-stats">
       <SStatCard v-for="c in cards" :key="c.key" :label="t(`overview.${c.key}`)" :value="n(c.value)" :icon="c.icon" :tone="c.tone" :loading="first" />
@@ -161,7 +153,7 @@ const queuePct = computed(() => {
               </span>
               <span class="mod-rank-count">{{ n(c.count) }}</span>
             </div>
-            <div class="mod-bar"><div class="mod-bar-fill mod-bar-amber" :style="{ width: (c.count / maxCat) * 100 + '%' }" /></div>
+            <SProgress :value="c.count" :max="maxCat" tone="warning" class="mod-rank-bar" aria-hidden="true" />
           </li>
         </ol>
       </SCard>
@@ -172,10 +164,10 @@ const queuePct = computed(() => {
           <li v-for="(u, i) in data.top_users" :key="u.user_id">
             <div class="mod-rank-row">
               <span class="mod-rank-no">{{ i + 1 }}</span>
-              <a class="link mod-rank-name" @click="emit('show-user', u.user_id)">{{ t('overview.user', { id: u.user_id }) }}</a>
+              <SLink as="button" class="mod-rank-name mod-rank-link" @click="emit('show-user', u.user_id)">{{ t('overview.user', { id: u.user_id }) }}</SLink>
               <span class="mod-rank-count">{{ t('overview.times', { n: n(u.count) }) }}</span>
             </div>
-            <div class="mod-bar"><div class="mod-bar-fill" :style="{ width: (u.count / maxUser) * 100 + '%' }" /></div>
+            <SProgress :value="u.count" :max="maxUser" tone="danger" class="mod-rank-bar" aria-hidden="true" />
           </li>
         </ol>
       </SCard>
@@ -183,15 +175,8 @@ const queuePct = computed(() => {
       <SCard :title="t('overview.runtime')">
         <SEmpty v-if="!runtime" icon="cpu" />
         <template v-else>
-          <dl class="kv">
-            <template v-for="r in runtimeRows" :key="r.k">
-              <dt>{{ r.k }}</dt>
-              <dd class="mod-num">{{ r.v }}</dd>
-            </template>
-          </dl>
-          <div class="mod-bar mod-bar-queue" :title="t('runtime.queue')">
-            <div class="mod-bar-fill mod-bar-teal" :style="{ width: queuePct + '%' }" />
-          </div>
+          <SDescriptions :items="runtimeRows" label-width="9rem" dense class="mod-num" />
+          <SProgress :value="runtime.queue_len" :max="runtime.queue_cap || 1" :label="t('runtime.queue')" tone="info" show-value class="mod-queue" />
         </template>
       </SCard>
     </div>

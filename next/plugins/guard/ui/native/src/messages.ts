@@ -30,9 +30,14 @@ export default {
       invalidRegex: 'Invalid regular expression',
       required: 'Required',
       readOnly: 'You can view rules but not change them.',
-      regexHint: 'Regex uses Go RE2 syntax (no look-around).'
+      regexHint: 'Regex uses Go RE2 syntax (no look-around).',
+      remove: 'Remove rule',
+      keywordPlaceholder: 'keyword'
     },
-    loadFailed: 'Failed to load guard statistics'
+    loadFailed: 'Failed to load guard statistics',
+    refresh: 'Refresh',
+    rangeLabel: 'Time range',
+    openDashboard: 'Open the request guard dashboard'
   },
   zh: {
     title: '请求守卫',
@@ -64,8 +69,13 @@ export default {
       invalidRegex: '正则表达式无效',
       required: '必填',
       readOnly: '你可以查看规则，但不能修改。',
-      regexHint: '正则使用 Go RE2 语法（不支持环视）。'
+      regexHint: '正则使用 Go RE2 语法（不支持环视）。',
+      remove: '删除规则',
+      keywordPlaceholder: '关键词'
     },
-    loadFailed: '加载拦截统计失败'
+    loadFailed: '加载拦截统计失败',
+    refresh: '刷新',
+    rangeLabel: '时间范围',
+    openDashboard: '打开请求守卫面板'
   }
 }
