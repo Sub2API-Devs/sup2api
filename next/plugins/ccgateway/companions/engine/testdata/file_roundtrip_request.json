@@ -1,0 +1,45 @@
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 256,
+  "stream": false,
+  "temperature": 0.25,
+  "top_p": 0.9,
+  "top_k": 13,
+  "stop_sequences": ["ROUNDTRIP_STOP"],
+  "thinking": {"type": "disabled"},
+  "output_config": {"effort": "medium"},
+  "system": [
+    {"type": "text", "text": "TOP_SYSTEM_A：请使用中文。"},
+    {"type": "text", "text": "TOP_SYSTEM_B：准确保留用户的数据。"}
+  ],
+  "metadata": {"user_id": "{\"session_id\":\"28c91b6c-5b64-4e99-947c-cb540101bcaf\"}"},
+  "tools": [{
+    "name": "lookup_fixture",
+    "description": "Look up a fixture by key.",
+    "input_schema": {
+      "type": "object",
+      "properties": {"key": {"type": "string"}, "n": {"type": "integer"}},
+      "required": ["key", "n"]
+    }
+  }],
+  "tool_choice": {"type": "auto"},
+  "messages": [
+    {"role": "user", "content": [
+      {"type": "text", "text": "HISTORY_USER_A：查询两个记录。"},
+      {"type": "text", "text": "HISTORY_USER_B：保留换行\n和中文。"}
+    ]},
+    {"role": "system", "content": "HISTORY_SYSTEM：历史轮次的指令。"},
+    {"role": "assistant", "content": [
+      {"type": "text", "text": "HISTORY_ASSISTANT：开始查询。"},
+      {"type": "tool_use", "id": "toolu_roundtrip_a", "name": "lookup_fixture", "input": {"key": "记录甲", "n": 7}},
+      {"type": "tool_use", "id": "toolu_roundtrip_b", "name": "lookup_fixture", "input": {"key": "记录乙", "n": 11}}
+    ]},
+    {"role": "user", "content": [
+      {"type": "tool_result", "tool_use_id": "toolu_roundtrip_a", "content": "TOOL_RESULT_A：甲的结果\n第二行", "is_error": false},
+      {"type": "tool_result", "tool_use_id": "toolu_roundtrip_b", "content": "TOOL_RESULT_B：乙的结果", "is_error": false}
+    ]},
+    {"role": "assistant", "content": "AFTER_RESULTS：两个结果已经收到。"},
+    {"role": "user", "content": "CURRENT_USER：请继续总结。"},
+    {"role": "system", "content": "CURRENT_SYSTEM：本轮补充指令。"}
+  ]
+}

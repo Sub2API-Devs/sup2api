@@ -17,10 +17,10 @@ import (
 
 // thinking_disabled_compat omit: the upstream request carries no thinking,
 // exactly as for a client that sent none, and nothing else changes; pass
-// forwards disabled as sent. The same in relay passthrough (2026-10-11: Claude
-// Code's title requests got the API's 400 there).
+// forwards disabled as sent. Exercise the current native execution path;
+// retired relay modes are rejected before any model request.
 func TestRealCLIThinkingDisabledCompat(t *testing.T) {
-	for _, mode := range []string{"legacy", "passthrough"} {
+	for _, mode := range []string{"native"} {
 		t.Run(mode, func(t *testing.T) { testRealCLIThinkingDisabledCompat(t, mode) })
 	}
 }

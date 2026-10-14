@@ -18,7 +18,7 @@ func TestRealCLIMultipleToolResultsTrailingContext(t *testing.T) {
 	for _, tail := range []string{"\t", "\r\n", "  ", "", "\u00a0\ufeff\u2028"} {
 		for _, stream := range []bool{false, true} {
 			t.Run(fmt.Sprintf("tail=%q/stream=%t", tail, stream), func(t *testing.T) {
-				var embedded atomic.Int32
+				var resultRounds atomic.Int32
 				var assistant, results []any
 				for i := 0; i < 5; i++ {
 					assistant = append(assistant, Object{"type": "tool_use", "id": fmt.Sprintf("tool_multi_%d", i), "name": "lookup_fixture", "input": Object{}})
@@ -35,6 +35,10 @@ func TestRealCLIMultipleToolResultsTrailingContext(t *testing.T) {
 					}
 					raw, _ := io.ReadAll(r.Body)
 					wire, _ := decodeObject(raw)
+					messages, _ := json.Marshal(wire["messages"])
+					if bytes.Contains(messages, []byte("fixture@example.invalid")) {
+						t.Error("inner CLI account context leaked upstream")
+					}
 					var found []Object
 					for _, v := range wire["messages"].([]any) {
 						m := v.(Object)
@@ -65,17 +69,11 @@ func TestRealCLIMultipleToolResultsTrailingContext(t *testing.T) {
 							}
 							original := str(want, "content")
 							actual := str(b, "content")
-							if actual == original {
-								continue
+							if actual != original {
+								t.Errorf("client result %d or trailing bytes changed: got %q, want %q", i, actual, original)
 							}
-							if i != 4 || !strings.HasPrefix(actual, original+"\n\n<system-reminder>\n") || !strings.HasSuffix(actual, "\n</system-reminder>") {
-								t.Error("client trailing bytes or suffix changed")
-							}
-							if strings.Count(actual, "fixture@example.invalid") != 1 {
-								t.Error("context duplicated")
-							}
-							embedded.Add(1)
 						}
+						resultRounds.Add(1)
 						blocks = []Object{{"type": "text", "text": "MULTI_DONE"}}
 					}
 					rec := httptest.NewRecorder()
@@ -123,8 +121,8 @@ func TestRealCLIMultipleToolResultsTrailingContext(t *testing.T) {
 				post(cold, "MULTI_DONE")
 				body["messages"] = []any{user}
 				post(endpoint, "tool_multi_4")
-				if embedded.Load() == 0 {
-					t.Fatal("fixture did not exercise appended context")
+				if got := resultRounds.Load(); got != 2 {
+					t.Fatalf("warm and cold tool result rounds=%d, want 2", got)
 				}
 			})
 		}

@@ -593,7 +593,7 @@ func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pend
 	if chain == nil {
 		return false
 	}
-	p.base = moveSession(branchView(base, prior.LastUUID), prior.SessionID, p.SessionID)
+	p.base = moveSession(branchViewFromChain(base, chain), prior.SessionID, p.SessionID)
 	p.Rows = moveSession(chain, prior.SessionID, p.SessionID)
 	p.Responses = cloneResponseCheckpoints(prior.Responses)
 	p.SnapshotEnabled = choosePromptSnapshot(chain, prior.PromptEvidence, r.System, time.Now())

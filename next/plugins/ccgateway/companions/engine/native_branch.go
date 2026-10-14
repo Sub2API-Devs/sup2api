@@ -100,35 +100,314 @@ func rowIdentity(row json.RawMessage) (id, parent, session string) {
 	return r.UUID, parent, r.SessionID
 }
 
-// nativeChain is the conversation that ends at leaf, root first, as the CLI
-// loads it: records by uuid (a later record replaces an earlier one), linked
-// by parentUuid. It is nil when leaf is not in rows.
+// nativeContextRow keeps only routing fields. In particular, inspecting the
+// transcript must not decode and re-encode arbitrary tool inputs or results.
+type nativeContextRow struct {
+	raw                                      json.RawMessage
+	id, parent, session, kind, agent, prompt string
+	message, source, group                   string
+	sidechain, resultsOnly                   bool
+	tools, results                           []string
+	epoch                                    int
+}
+
+func contextRow(raw json.RawMessage) *nativeContextRow {
+	var wire struct {
+		nativeIdentity
+		Type      string `json:"type"`
+		Agent     string `json:"agentId"`
+		Prompt    string `json:"promptId"`
+		Source    string `json:"sourceToolAssistantUUID"`
+		Sidechain bool   `json:"isSidechain"`
+		Message   struct {
+			ID      string          `json:"id"`
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(raw, &wire) != nil || wire.UUID == "" {
+		return nil
+	}
+	n := &nativeContextRow{raw: raw, id: wire.UUID, session: wire.SessionID, kind: wire.Type, agent: wire.Agent, prompt: wire.Prompt, source: wire.Source, sidechain: wire.Sidechain, message: wire.Message.ID}
+	_ = json.Unmarshal(wire.Parent, &n.parent)
+	var blocks []struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+		Use  string `json:"tool_use_id"`
+	}
+	if json.Unmarshal(wire.Message.Content, &blocks) == nil && len(blocks) > 0 {
+		n.resultsOnly = n.kind == "user"
+		for _, b := range blocks {
+			if b.Type == "tool_use" && b.ID != "" {
+				n.tools = append(n.tools, b.ID)
+			}
+			if b.Type == "tool_result" && b.Use != "" {
+				n.results = append(n.results, b.Use)
+			} else {
+				n.resultsOnly = false
+			}
+		}
+	}
+	return n
+}
+
+func sameNativeScope(a, b *nativeContextRow) bool {
+	return a.session == b.session && a.agent == b.agent && a.sidechain == b.sidechain
+}
+
+// nativeChain returns the context ending at leaf. A native response may be
+// split into several assistant records, and parallel tool results can be
+// siblings rather than ancestors of the next response. Complete those local
+// response groups without walking arbitrary children into another chat branch.
+// Duplicate UUIDs use their last payload, at their original sequence position.
 func nativeChain(rows []json.RawMessage, leaf string) []json.RawMessage {
 	if leaf == "" {
 		return nil
 	}
-	byID := map[string]json.RawMessage{}
-	parents := map[string]string{}
+	byID := map[string]*nativeContextRow{}
+	var order []string
 	for _, row := range rows {
-		id, parent, _ := rowIdentity(row)
-		if id != "" {
-			byID[id] = row
-			parents[id] = parent
+		if n := contextRow(row); n != nil {
+			if byID[n.id] == nil {
+				order = append(order, n.id)
+			}
+			byID[n.id] = n
 		}
 	}
 	if byID[leaf] == nil {
 		return nil
 	}
-	var reversed []json.RawMessage
-	seen := map[string]bool{}
-	for id := leaf; id != "" && byID[id] != nil && !seen[id]; id = parents[id] {
-		seen[id] = true
-		reversed = append(reversed, byID[id])
+	selected := map[string]bool{}
+	addParents := func(id string) {
+		for n := byID[id]; n != nil && !selected[n.id]; n = byID[n.parent] {
+			selected[n.id] = true
+		}
 	}
-	chain := make([]json.RawMessage, len(reversed))
-	for i, row := range reversed {
-		chain[len(reversed)-1-i] = row
+	addParents(leaf)
+	// The nearest assistant through only tool results/attachments identifies
+	// the model response. A new user prompt or a different response is a boundary.
+	// Cache intermediate nodes too: a long sequence of tool results otherwise
+	// walks the same ancestors once per result and becomes quadratic.
+	priorKnown := map[string]bool{}
+	priorCache := map[string]*nativeContextRow{}
+	priorAssistant := func(n *nativeContextRow) *nativeContextRow {
+		if priorKnown[n.id] {
+			return priorCache[n.id]
+		}
+		var result *nativeContextRow
+		var path []*nativeContextRow
+		seen := map[string]bool{}
+		for at := n; at != nil && !seen[at.id]; {
+			seen[at.id] = true
+			path = append(path, at)
+			p := byID[at.parent]
+			if p == nil || !sameNativeScope(at, p) || p.kind == "user" && !p.resultsOnly {
+				break
+			}
+			if p.kind == "assistant" {
+				result = p
+				break
+			}
+			if priorKnown[p.id] {
+				result = priorCache[p.id]
+				break
+			}
+			at = p
+		}
+		for _, at := range path {
+			priorKnown[at.id] = true
+			priorCache[at.id] = result
+		}
+		return result
 	}
+	var responseGroup func(*nativeContextRow) string
+	grouping := map[string]bool{}
+	responseGroup = func(n *nativeContextRow) string {
+		if n.group != "" {
+			return n.group
+		}
+		if grouping[n.id] {
+			return n.id
+		}
+		grouping[n.id] = true
+		n.group = n.id
+		if n.message != "" {
+			if p := priorAssistant(n); p != nil && p.message == n.message {
+				n.group = responseGroup(p)
+			}
+		}
+		delete(grouping, n.id)
+		return n.group
+	}
+	groupTools := map[string]map[string]bool{}
+	for _, id := range order {
+		n := byID[id]
+		if n.kind == "assistant" {
+			group := responseGroup(n)
+			if groupTools[group] == nil {
+				groupTools[group] = map[string]bool{}
+			}
+			for _, tool := range n.tools {
+				groupTools[group][tool] = true
+			}
+		}
+	}
+	for _, id := range order {
+		n := byID[id]
+		if n.kind != "user" || len(n.results) == 0 {
+			continue
+		}
+		p := priorAssistant(n)
+		if p == nil {
+			continue
+		}
+		group := p.group
+		if n.source != "" {
+			source := byID[n.source]
+			if source == nil || source.kind != "assistant" || source.group != group {
+				continue
+			}
+		}
+		valid := true
+		for _, result := range n.results {
+			valid = valid && groupTools[group][result]
+		}
+		if valid {
+			n.group = group
+		}
+	}
+	// Runs are appended as units. A new prompt or another model response ends
+	// a result batch, even when a later branch answers the same tool_use IDs.
+	active, epoch := "", 0
+	for _, id := range order {
+		n := byID[id]
+		if n.kind == "user" && n.group == "" {
+			active = ""
+			epoch++
+		} else if n.group != "" {
+			if active != n.group {
+				active = n.group
+				epoch++
+			}
+			n.epoch = epoch
+		}
+	}
+	assistantEpochs := map[int]bool{}
+	for id := range selected {
+		n := byID[id]
+		if n.kind == "assistant" {
+			assistantEpochs[n.epoch] = true
+		}
+	}
+	for _, id := range order {
+		n := byID[id]
+		if n.kind == "assistant" && assistantEpochs[n.epoch] {
+			addParents(id)
+		}
+		if id == leaf {
+			break
+		}
+	}
+	resultAnchors := map[int][]*nativeContextRow{}
+	usedResults := map[string]map[string]bool{}
+	for id := range selected {
+		n := byID[id]
+		if n.kind == "user" && len(n.results) > 0 && n.group != "" {
+			resultAnchors[n.epoch] = append(resultAnchors[n.epoch], n)
+			if usedResults[n.group] == nil {
+				usedResults[n.group] = map[string]bool{}
+			}
+			for _, result := range n.results {
+				usedResults[n.group][result] = true
+			}
+		}
+	}
+	var candidates []*nativeContextRow
+	counts := map[int]map[string]int{}
+	for _, id := range order {
+		n := byID[id]
+		if !selected[id] && n.resultsOnly && n.group != "" {
+			for _, anchor := range resultAnchors[n.epoch] {
+				if n.prompt != "" && anchor.prompt != "" && n.prompt != anchor.prompt {
+					continue
+				}
+				if counts[n.epoch] == nil {
+					counts[n.epoch] = map[string]int{}
+				}
+				candidates = append(candidates, n)
+				for _, result := range n.results {
+					counts[n.epoch][result]++
+				}
+				break
+			}
+		}
+		// Resuming at an assistant must never pick up its later tool results
+		// (or later fragments when explicitly resuming at an earlier block).
+		if id == leaf {
+			break
+		}
+	}
+	for _, n := range candidates {
+		unique := true
+		for _, result := range n.results {
+			if !usedResults[n.group][result] && counts[n.epoch][result] > 1 {
+				// There is no safe basis for choosing a branch's result. The
+				// resume caller rebuilds from client history on a nil context.
+				return nil
+			}
+			unique = unique && !usedResults[n.group][result] && counts[n.epoch][result] == 1
+		}
+		if unique {
+			addParents(n.id)
+		}
+	}
+	// A previous completed model response cannot lose a result simply because
+	// its only candidate had foreign metadata or unselected free-form text.
+	// Leave the current assistant response's calls pending for the API client.
+	completedTools := map[string]map[string]bool{}
+	completedResults := map[string]map[string]bool{}
+	for id := range selected {
+		n := byID[id]
+		if n.group == "" || byID[leaf].kind == "assistant" && n.group == byID[leaf].group {
+			continue
+		}
+		if completedTools[n.group] == nil {
+			completedTools[n.group] = map[string]bool{}
+			completedResults[n.group] = map[string]bool{}
+		}
+		for _, tool := range n.tools {
+			completedTools[n.group][tool] = true
+		}
+		for _, result := range n.results {
+			completedResults[n.group][result] = true
+		}
+	}
+	for group, tools := range completedTools {
+		for tool := range tools {
+			if !completedResults[group][tool] {
+				return nil
+			}
+		}
+	}
+	// Emit each latest record once, preserving native block order and ensuring
+	// parents precede children even when a later UUID rewrite changes an edge.
+	var chain []json.RawMessage
+	visiting, emitted := map[string]bool{}, map[string]bool{}
+	var emit func(string)
+	emit = func(id string) {
+		if !selected[id] || visiting[id] || emitted[id] {
+			return
+		}
+		visiting[id] = true
+		emit(byID[id].parent)
+		emitted[id] = true
+		chain = append(chain, byID[id].raw)
+	}
+	for _, id := range order {
+		if id != leaf {
+			emit(id)
+		}
+	}
+	emit(leaf)
 	return chain
 }
 
@@ -144,33 +423,59 @@ func nativeHasChildren(rows []json.RawMessage, node string) bool {
 }
 
 // branchView is what a request's private copy holds of the canonical file:
-// the conversation ending at node, and the records without a uuid (session
-// bookkeeping), in file order, without the last-prompt leaf pointers. The CLI
+// the context ending at node, and records without a uuid (session bookkeeping),
+// without the last-prompt leaf pointers. The CLI
 // (2.1.292) loads one conversation per file, the last written one, and
 // applies --resume-session-at within it: at a node of another branch it fails
 // ("No message found") or mixes the branches. A view with one conversation
 // resumes exactly the requested branch.
 func branchView(rows []json.RawMessage, node string) []json.RawMessage {
-	chain := map[string]bool{}
-	for _, row := range nativeChain(rows, node) {
-		id, _, _ := rowIdentity(row)
-		chain[id] = true
+	return branchViewFromChain(rows, nativeChain(rows, node))
+}
+
+// branchViewFromChain reuses context already selected from these same rows.
+// History preparation needs both the context and its private file view; it
+// should not parse and traverse the whole native transcript twice.
+func branchViewFromChain(rows, chain []json.RawMessage) []json.RawMessage {
+	if chain == nil {
+		return nil
 	}
-	view := make([]json.RawMessage, 0, len(rows))
-	for _, row := range rows {
+	// Re-emitting a duplicate at its last physical position can make that
+	// historical node the CLI's selected leaf, hiding the requested anchor.
+	// Use the latest payload once, in nativeChain's parent-before-child order.
+	first := map[string]int{}
+	type bookkeeping struct {
+		at  int
+		raw json.RawMessage
+	}
+	var records []bookkeeping
+	for i, row := range rows {
 		id, _, _ := rowIdentity(row)
-		if id != "" && !chain[id] {
+		if id != "" {
+			if _, exists := first[id]; !exists {
+				first[id] = i
+			}
 			continue
 		}
-		if id == "" {
-			var kind struct {
-				Type string `json:"type"`
-			}
-			if json.Unmarshal(row, &kind) != nil || kind.Type == "last-prompt" {
-				continue
-			}
+		var kind struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(row, &kind) == nil && kind.Type != "last-prompt" {
+			records = append(records, bookkeeping{i, row})
+		}
+	}
+	view := make([]json.RawMessage, 0, len(chain)+len(records))
+	meta := 0
+	for _, row := range chain {
+		id, _, _ := rowIdentity(row)
+		for meta < len(records) && records[meta].at < first[id] {
+			view = append(view, records[meta].raw)
+			meta++
 		}
 		view = append(view, row)
+	}
+	for ; meta < len(records); meta++ {
+		view = append(view, records[meta].raw)
 	}
 	return view
 }

@@ -17,7 +17,10 @@ import (
 func TestRealCLIToolResultSessionContextRoundtrip(t *testing.T) {
 	for _, stream := range []bool{false, true} {
 		t.Run(fmt.Sprint(stream), func(t *testing.T) {
-			var embedded atomic.Int32
+			var resultRounds atomic.Int32
+			// Client context must survive warm and cold replay. The inner CLI's
+			// account context must not, even with the legacy gateway policy below.
+			const clientResult = "done\n\n<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# clientFixture\nclient@example.invalid\n</system-reminder>"
 			handler := func(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasSuffix(r.URL.Path, "/messages") {
 					fmt.Fprint(w, `{"input_tokens":1}`)
@@ -26,6 +29,9 @@ func TestRealCLIToolResultSessionContextRoundtrip(t *testing.T) {
 				raw, _ := io.ReadAll(r.Body)
 				wire, _ := decodeObject(raw)
 				messages, _ := json.Marshal(wire["messages"])
+				if bytes.Contains(messages, []byte("fixture@example.invalid")) {
+					t.Error("inner CLI account context leaked upstream")
+				}
 				blocks := []Object{{"type": "tool_use", "id": "tool_empty_args", "name": "mcp__ccgateway__lookup_fixture", "input": Object{}, "caller": Object{"type": "direct"}}}
 				if bytes.Contains(messages, []byte("tool_result")) {
 					found := 0
@@ -37,21 +43,19 @@ func TestRealCLIToolResultSessionContextRoundtrip(t *testing.T) {
 								continue
 							}
 							text := str(block, "content")
-							if text != "done" && (!strings.HasPrefix(text, "done\n\n<system-reminder>\n") || !strings.HasSuffix(text, "\n</system-reminder>") || strings.Count(text, "fixture@example.invalid") != 1) {
-								t.Errorf("tool result context boundary mismatch length=%d", len(text))
-							}
-							if text != "done" {
-								embedded.Add(1)
+							if str(block, "tool_use_id") != "tool_empty_args" || text != clientResult {
+								t.Errorf("client tool result identity or context changed: %q", text)
 							}
 							found++
 						}
 					}
-					if bytes.Count(messages, []byte("fixture@example.invalid")) != 1 {
-						t.Error("context lost or duplicated")
+					if bytes.Count(messages, []byte("client@example.invalid")) != 1 {
+						t.Error("client context lost or duplicated")
 					}
 					if found != 1 {
 						t.Errorf("result count=%d", found)
 					}
+					resultRounds.Add(1)
 					blocks = []Object{{"type": "text", "text": "EMPTY_ARGS_DONE"}}
 				}
 				rec := httptest.NewRecorder()
@@ -97,7 +101,7 @@ func TestRealCLIToolResultSessionContextRoundtrip(t *testing.T) {
 				}
 			}
 			post(endpoint, "tool_empty_args")
-			body["messages"] = []any{user, Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "tool_empty_args", "name": "lookup_fixture", "input": Object{}, "caller": Object{"type": "direct"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "tool_empty_args", "content": "done"}}}}
+			body["messages"] = []any{user, Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "tool_empty_args", "name": "lookup_fixture", "input": Object{}, "caller": Object{"type": "direct"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "tool_empty_args", "content": clientResult}}}}
 			post(endpoint, "EMPTY_ARGS_DONE")
 			cold, _ := newThinkingOutputFixture(t, handler, func(env []string) []string {
 				for _, entry := range env {
@@ -116,8 +120,8 @@ func TestRealCLIToolResultSessionContextRoundtrip(t *testing.T) {
 			post(cold, "EMPTY_ARGS_DONE")
 			body["messages"] = []any{user}
 			post(endpoint, "tool_empty_args")
-			if embedded.Load() == 0 {
-				t.Fatal("CLI never embedded session context inside tool result")
+			if got := resultRounds.Load(); got != 2 {
+				t.Fatalf("warm and cold tool result rounds=%d, want 2", got)
 			}
 		})
 	}

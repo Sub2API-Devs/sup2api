@@ -164,7 +164,14 @@ func TestRealCLINativePassthroughCompatibility(t *testing.T) {
 			req.Header.Set("X-Claude-Code-Agent-Id", agent)
 		}
 		res := httptest.NewRecorder()
+		mu.Lock()
+		firstWire := len(wires)
+		mu.Unlock()
 		require.NotPanics(t, func() { g.ServeHTTP(res, req) })
+		mu.Lock()
+		observed := append([]passthroughWire(nil), wires[firstWire:]...)
+		mu.Unlock()
+		saveNativeComparison(t, version, raw, observed, res)
 		t.Logf("native HTTP=%d history=%s response=%s", res.Code, res.Header().Get("X-CCGateway-History"), res.Body.String())
 		return res
 	}
@@ -230,7 +237,7 @@ func TestRealCLINativePassthroughCompatibility(t *testing.T) {
 		}
 		body := Object{"model": "claude-sonnet-4-6", "max_tokens": 128,
 			"output_config": Object{"format": Object{"type": "json_schema", "schema": Object{"type": "object", "properties": properties}}},
-			"messages": []any{Object{"role": "user", "content": "NUMERIC_SEMANTICS"}}}
+			"messages":      []any{Object{"role": "user", "content": "NUMERIC_SEMANTICS"}}}
 		res := post(t, body, "", "")
 		require.Equal(t, http.StatusOK, res.Code, res.Body.String())
 		got := since(n)
