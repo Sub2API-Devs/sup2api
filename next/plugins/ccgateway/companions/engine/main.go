@@ -87,6 +87,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := g.runner(r.Context()).prepareNativeTools(r.Context(), x.req); err != nil {
+		// The verification belongs to this request's tool set: the account
+		// serves other requests (a broken CLI fails its catalog instead).
+		x.w.Header().Set(errorScopeHeader, "request")
 		x.fail(503, "api_error", "CLI tool configuration could not be verified: "+err.Error())
 		return
 	}

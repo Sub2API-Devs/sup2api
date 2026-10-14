@@ -53,6 +53,11 @@ func verifyToolWhitelist(req *Request, body Object) error {
 	if req.structuredOutput() {
 		allowed["StructuredOutput"] = true
 	}
+	if allowed["ToolSearch"] {
+		// With deferred tools the CLI sends its own placeholder next to
+		// ToolSearch to keep deferred loading on (searchHelper).
+		allowed["DeferredToolPlaceholder"] = true
+	}
 	tools, err := historyContent(body["tools"])
 	if err != nil {
 		return fmt.Errorf("CLI did not return a tool list")

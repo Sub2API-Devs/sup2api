@@ -244,6 +244,38 @@ func TestNativeWhitelistRejectsExtrasMissingToolsAndDrift(t *testing.T) {
 	}
 }
 
+// With tool search the CLI sends its own DeferredToolPlaceholder next to
+// ToolSearch (Claude desktop 2026-10-14 sent a deferred placeholder of its own,
+// which turns tool search on); without tool search it stays an extra tool.
+func TestNativeWhitelistAcceptsDeferredPlaceholderWithToolSearch(t *testing.T) {
+	deferred := true
+	client := Tool{Name: "lookup", Description: "client", Schema: Object{"type": "object"}, DeferLoading: &deferred}
+	for _, tc := range []struct {
+		search string
+		names  []string
+		fail   bool
+	}{
+		{"true", []string{"ToolSearch", "DeferredToolPlaceholder"}, false},
+		{"true", []string{"ToolSearch"}, false},
+		{"true", []string{"ToolSearch", "DeferredToolPlaceholder", "DeferredToolPlaceholder"}, true},
+		{"false", []string{"DeferredToolPlaceholder"}, true},
+	} {
+		r := &Request{Tools: []Tool{client}, Native: map[string]bool{}, ToolSearch: tc.search}
+		var tools []Tool
+		for _, name := range tc.names {
+			tools = append(tools, Tool{Name: name, Schema: Object{"type": "object"}})
+		}
+		if tc.search == "false" {
+			tools = append(tools, Tool{Name: r.wireName(client.Name), Description: client.Description, Schema: client.Schema})
+		}
+		raw, _ := json.Marshal(Object{"tools": tools})
+		body, _ := decodeObject(raw)
+		if err := verifyToolWhitelist(r, body); (err != nil) != tc.fail {
+			t.Fatalf("%s %v: %v", tc.search, tc.names, err)
+		}
+	}
+}
+
 func TestCLIValidationCacheSerializesAndCanCancel(t *testing.T) {
 	var cache cliValidationCache
 	var calls atomic.Int32
