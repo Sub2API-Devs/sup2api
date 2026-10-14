@@ -52,6 +52,14 @@ export default {
     thinkingDisabledCompat: 'Compatibility for models that reject thinking disabled',
     thinkingDisabledCompatHint:
       'Use only when the model is rewritten and the client still sends disabled: for example cc-switch rewrites claude-opus-5 to claude-opus-5-5, and requests such as the Claude Code auto-mode classifier still carry thinking.type: disabled, which the verified models claude-opus-5-5 and claude-fable-5-1 reject. When enabled, thinking is omitted for these models during native CLI execution (as the official CLI sends them; it is not changed to adaptive). Off by default: like the official API, such requests return 400. The more thorough fix is to set the local model alias to the actual model.',
+    eraseAttachments: 'Erase client attachments',
+    eraseAttachmentsHint:
+      'Checked attachments are removed from system and messages before the request reaches the native CLI; all are kept by default. They are recognized by the whole paragraph Claude Code renders, so mentions in other text are untouched, and a user message is never emptied. The rules are fixed, so each turn erases the same text and the prompt cache is unaffected. Only the Claude Code 2.1.288–2.1.296 format is recognized, and the ccgateway plugin must be a version that supports it.',
+    erase_environment: 'Environment (working directory, platform, environment updates)',
+    erase_model: 'Model statement',
+    erase_date: 'Date and date changes',
+    erase_total_tokens_reminder: 'Remaining token reminder',
+    erase_session_context: 'Session context (CLAUDE.md, git status, email)',
     unknownBeta: 'Handling unsupported Beta headers',
     unknownField: 'Unsupported parameters',
     reject: 'Return error (400)',

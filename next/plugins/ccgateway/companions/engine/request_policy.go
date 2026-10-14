@@ -28,7 +28,10 @@ type RequestPolicy struct {
 	AttachmentSources        map[string]string `json:"attachment_sources,omitempty"`
 	UnknownClientAttachment  string            `json:"unknown_client_attachment"`
 	UnknownGatewayAttachment string            `json:"unknown_gateway_attachment"`
-	CustomToolPrefix         string            `json:"custom_tool_prefix"`
+	// Client attachment types erased before admission (client_attachment_erase.go);
+	// empty keeps every client attachment as sent.
+	EraseClientAttachments []string `json:"erase_client_attachments,omitempty"`
+	CustomToolPrefix       string   `json:"custom_tool_prefix"`
 	// "pass" (default) or "omit": see applyThinkingDisabledCompat.
 	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
 	RelayMode              string `json:"relay_mode,omitempty"`
@@ -67,6 +70,9 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 		p.UnknownGatewayAttachment = "pass"
 	}
 	if err := validateAttachmentPolicy(p); err != nil {
+		return p, err
+	}
+	if err := validateEraseClientAttachments(p.EraseClientAttachments); err != nil {
 		return p, err
 	}
 	if p.CustomToolPrefix == "" {

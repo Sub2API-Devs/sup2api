@@ -44,6 +44,12 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 		}
 	}
 	cacheRequested := hasRequestCacheControl(o)
+	erased, decisions := eraseClientAttachments(o, p.EraseClientAttachments)
+	if erased {
+		if body, err = json.Marshal(o); err != nil {
+			return nil, err
+		}
+	}
 	plan, err := parseRequestPlan(body, o)
 	if err != nil {
 		return nil, err
@@ -82,6 +88,7 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	}
 	req.Plan = plan
 	req.nativePolicy = &p
+	req.AttachmentDecisions = decisions
 	// The one generation field the gateway may drop: disabled thinking for a
 	// model that rejects it, when the policy says omit (a client whose model
 	// alias a proxy rewrote sends it on its title and classifier requests).
@@ -99,9 +106,10 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	if inline := req.inlineEffort(); inline != "" {
 		req.Effort = inline
 	}
-	// The client's attachments go upstream as sent, and none of Claude Code's
-	// own are added: the next request's history would not hold them, so the
-	// prompt cache would break at every turn (attachment policies are legacy's).
+	// The client's attachments go upstream as sent (less the types the policy
+	// erases above), and none of Claude Code's own are added: the next
+	// request's history would not hold them, so the prompt cache would break at
+	// every turn.
 	req.AttachmentSource = "client"
 	req.UnknownClientAttachment = "pass"
 	req.UnknownGatewayAttachment = "ignore"

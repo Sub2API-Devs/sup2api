@@ -219,6 +219,27 @@ describe('CCGateway native request policy', () => {
     w.unmount()
   })
 
+  it('client attachment erasure defaults to none and saves the checked types in vocabulary order', async () => {
+    expect(defaultRequestPolicy().erase_client_attachments).toEqual([])
+    mocks.get.mockResolvedValue(config({}))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), erase_client_attachments: ['date', 'session_context'] }))
+    const w = await render()
+    for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
+      expect(w.get<HTMLInputElement>(`[data-testid="erase-${type}"]`).element.checked).toBe(false)
+    }
+    await w.get('[data-testid="erase-session_context"]').setValue(true)
+    await w.get('[data-testid="erase-model"]').setValue(true)
+    await w.get('[data-testid="erase-date"]').setValue(true)
+    await w.get('[data-testid="erase-model"]').setValue(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
+    expect(payload.request_policy.erase_client_attachments).toEqual(['date', 'session_context'])
+    expect(w.get<HTMLInputElement>('[data-testid="erase-date"]').element.checked).toBe(true)
+    expect(w.get<HTMLInputElement>('[data-testid="erase-model"]').element.checked).toBe(false)
+    w.unmount()
+  })
+
   it.each(LOCALES)('removes relay controls and their unused copy in %s', async locale => {
     i18n.global.locale.value = locale
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))

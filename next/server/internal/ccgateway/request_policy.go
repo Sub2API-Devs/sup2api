@@ -20,7 +20,11 @@ type RequestPolicy struct {
 	// upstream as sent, so a model that rejects it answers 400 as the official
 	// API does) or "omit" (the Worker drops it for the models it knows reject
 	// it, e.g. when a client proxy rewrote claude-opus-5 to claude-opus-5-5).
-	ThinkingDisabledCompat string     `json:"thinking_disabled_compat,omitempty"`
+	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
+	// EraseClientAttachments lists the client attachment types (environment,
+	// model, date, total_tokens_reminder, session_context) the Worker erases
+	// before admission; empty keeps every client attachment as sent.
+	EraseClientAttachments []string   `json:"erase_client_attachments,omitempty"`
 	RelayMode              string     `json:"relay_mode,omitempty"`
 	Betas                  []BetaRule `json:"betas"`
 }
@@ -94,6 +98,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 	}
 	if p.RelayMode != "" && p.RelayMode != "native" {
 		return errors.New("invalid relay_mode: must be native")
+	}
+	if err := features.ValidateEraseClientAttachments(p.EraseClientAttachments); err != nil {
+		return err
 	}
 	return nil
 }

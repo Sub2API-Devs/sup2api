@@ -52,6 +52,14 @@ export default {
     thinkingDisabledCompat: '兼容不支持 thinking disabled 的模型',
     thinkingDisabledCompatHint:
       '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后在原生 CLI 执行时对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive）。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
+    eraseAttachments: '擦除客户端附件',
+    eraseAttachmentsHint:
+      '勾选的附件在请求进入原生 CLI 前从 system 与消息中删除，默认全部保留。按 Claude Code 渲染的整段文字识别，正文中的提及不受影响；不会把用户消息擦空。规则固定，每轮擦除相同文字，提示缓存不受影响。仅识别 Claude Code 2.1.288–2.1.296 的格式，需 ccgateway 插件为支持此项的版本。',
+    erase_environment: '环境（工作目录、平台、环境更新）',
+    erase_model: '模型说明',
+    erase_date: '日期与日期变更',
+    erase_total_tokens_reminder: '剩余 token 提醒',
+    erase_session_context: '会话上下文（CLAUDE.md、git 状态、邮箱）',
     unknownBeta: '不支持的 Beta 请求头如何处理',
     unknownField: '遇到不支持的参数',
     reject: '返回错误（400）',

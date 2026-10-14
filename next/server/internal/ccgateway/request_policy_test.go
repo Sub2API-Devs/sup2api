@@ -218,3 +218,53 @@ func TestRelayModeRejectsExplicitNonNativePolicy(t *testing.T) {
 		})
 	}
 }
+
+// erase_client_attachments is empty by default, saves, reloads and reaches the
+// Worker policy, and rejects unknown or repeated types.
+func TestEraseClientAttachmentsSave(t *testing.T) {
+	if p := defaultRequestPolicy(); len(p.EraseClientAttachments) != 0 {
+		t.Fatalf("default: %v", p.EraseClientAttachments)
+	}
+	var in Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"reject","erase_client_attachments":["session_context","date"],"betas":[]}}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := json.Marshal(saved)
+	var reloaded Config
+	if err := json.Unmarshal(plain, &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.WorkerRequestPolicy(26).EraseClientAttachments; len(got) != 2 || got[0] != "session_context" || got[1] != "date" {
+		t.Fatalf("reloaded: %v", got)
+	}
+	for _, types := range [][]string{{"claudeMd"}, {"date", "date"}} {
+		bad := *saved.RequestPolicy
+		bad.EraseClientAttachments = types
+		if _, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &bad}, reloaded); err == nil {
+			t.Fatal("invalid value accepted", types)
+		}
+	}
+}
+
+// A configuration saved before erase_client_attachments existed, with its
+// legacy attachment source, sends the Worker the same policy as before.
+func TestEraseClientAttachmentsAbsentKeepsWorkerPolicy(t *testing.T) {
+	var legacy Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"reject","attachment_source":"gateway","attachment_sources":{"environment":"client"},"betas":[]}}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := mergeConfig(legacy, Config{Mode: "disabled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []Config{legacy, saved} {
+		raw, _ := json.Marshal(c.WorkerRequestPolicy(26))
+		if strings.Contains(string(raw), "erase_client_attachments") {
+			t.Fatalf("worker policy gained erase: %s", raw)
+		}
+	}
+}

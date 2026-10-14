@@ -3864,6 +3864,15 @@ images/gateway.tar.gz      # Caddy 网关
 
 离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。`TestRealCLINativeProbe`、`TestRealCLINativeGateway`、`TestRealCLINativePassthroughCompatibility`、`TestRealCLINativeWebSearch*` 分别覆盖协议恢复、TLS、参数/历史与搜索计量等检查，但列出用例不代表当前全部通过。contracts tests、engine 测试、平台 CLI 探针、资源授权与真实账号验收须分别记录，不能互相替代。当前构建的独立验证、Core 0.1.121 / Worker 0.1.42 原地发布和本地 CC 实测见 `ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md`：#22 的文本、Read、图片和 WebSearch 通过，#24 仅通过运行版本/哈希门禁，#26 因 OAuth 过期且刷新失败未通过模型验收，按用户选择保持停调。原生错误缺少真实 HTTP 状态时仍返回 502，不借此猜测 401 或由插件自动停用；旧历史证据不改写。
 
+### 53.15 擦除客户端附件（`erase_client_attachments`，2026-10-14，用户要求）
+
+native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.13）；本节只增加"按类型擦除客户端附件"，不恢复旧附件来源策略。
+- 策略字段 `erase_client_attachments`：字符串数组，可选值 `environment`（环境与环境更新）、`model`（模型说明）、`date`（日期与日期变更）、`total_tokens_reminder`、`session_context`（CLAUDE.md、git 状态、邮箱等会话上下文提醒）。词表在 `contracts/features/attachments.go`，核心保存与 Worker 解析都用它校验，未知或重复类型拒绝。缺省／空数组＝不擦除；字段可选、`omitempty`，旧配置下发给 Worker 的策略与升级前相同，旧 Worker 忽略它，`schema_version` 不升（仍为 1）。
+- Worker 在准入前（`parsePassthroughRequest`）处理顶层 `system` 与 `user`／`system` 消息的文本块，之后的历史、计划原始请求与 fallback 看到同一份擦除结果；没有匹配时不重新序列化，原始请求逐字节不变。
+- 只按 Claude Code 2.1.288–2.1.296 渲染的整段／整行识别，正文中的提及不动；图片、工具结果等非文本块不处理；擦除后为空的文本块删除、只剩附件的 system 消息删除，但 user 消息不会被擦空（整条保留，决策记为 `keep_whole_message`）。规则只取决于策略，每轮擦除相同文本，提示缓存前缀稳定。
+- 决策记录 `AttachmentDecisions`（`decision: erase`，含类型、位置、次数与原文摘要）。其他 CLI 版本或被代理改写格式的客户端可能不匹配，结果是不擦除而非报错。
+- 设置页"CC 特性 → 运行设置"按类型勾选；特性目录 `F-CLIENT-ATTACHMENT-ERASE`。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：
