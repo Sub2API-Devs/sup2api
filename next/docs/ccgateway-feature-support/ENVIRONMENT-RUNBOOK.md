@@ -1,5 +1,11 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-16 Core 0.1.157：账号手动启停与调度恢复。** 用户授权部署账号状态修复；源码 `0e5f5891cba22f08311363a978843f7e616d90f7`。列表开关控制手动启用／禁用，启用恢复参与调度；`active + schedulable=false` 展示为自动禁用，列表状态筛选同步包含该情况。手动禁用仍优先于调度与自动恢复。上线前账号模块全包、前端 25 项测试及类型检查通过，ESLint 无 error（已有样式 warning）。
+>
+> 正常签名导入及 primary-first 升级计划 `1bf61094e4b5314bfc92e4d2b46c770f` 已 completed / 27 步。四节点均 0.1.157，readyz 200，程序 SHA-256 `0608c184915148593a79139f67159da10db735b54c3f219b67831509c8796048`；四入口实际提供的新前端资源 `AccountsView-C2zgsCyF.js` 与构建产物一致，启用／自动禁用／禁用筛选逐入口只读核验通过。manifest `54ef364172bc34b1d7a003b6f556f98a4d2f54a7d8322c21532fb6a68c24ade0`，bundle `b792d6d4c02f0decc00b52c3c2c250edb9f8398d7d6a54bf8857d6c30d3066da`。既有插件字节、容器身份、启动时间、挂载和配置均保留；未操作生产账号开关或更新 Worker。
+>
+> 常规全量准备在插件签名缓存缺失处停止，未生成替代密钥。本轮为核心／前端改动，使用精确 Git 工作树及现有 Dockerfile 的 UI 阶段构建，复用 0.1.156 构建镜像的编译器与已签名 builtin，只重新编译核心，逐文件核对 builtin 与四节点原产物完全一致，再以既有 release key 打包并通过正常导入验签。后续需要重新签发插件时仍须恢复原插件签名私钥。构建记录在 `~/sup2api-managed/stage/0.1.157/core-only-build.log`、`core-only-preparation.json`；备份与部署前后验证在 `~/sup2api-managed/backups/account-enable-0.1.157/`（数据库 dump 23,281,484 字节、593 项恢复目录已验证），升级日志 `upgrade-20261015T214911.log`。
+
 > **2026-10-16：仅账号 #21 更新单轮流式 Worker。** 用户授权“更新上去，然后启动 CC 客户端测试 21 账号”。单轮实现 `494af0bed19109276f67540eb8c8d2913de08903` 与真实客户端补测后的目录修复 `6f0253b01472dabcdbd0c8b1e3a498aef12c8904` 已推送；服务器从后者精确干净工作树、Go 1.27.1 构建 `ccgateway-app:0.1.58-singleturn.2`，通过 Controller `POST /accounts/21/worker` 原地更新。实际程序版本 `0.1.58-singleturn.2`、modified=false，SHA-256 `0ac219472663c24746addd7465835e13461379f23a4aef1e27a6a52c82a7a9bb`；健康且 online=true，更新后保持运行。容器 ID/配置/挂载保留，其他 7 个账号运行容器未变化；Core、插件默认镜像版本未作全局升级。
 >
 > 本机 CC 2.1.296 经 SSH 私有桥接固定到 #21，最终在 Opus 5.5 下验证文本流、客户端 Read、ToolSearch 发现并调用本地 MCP 工具：分别 1、2、3 次请求，六次 Messages 均 200，Worker 日志各一个主模型消息、max-turns=1、内部工具搜索关闭。初版漏采 ToolSearch 的动态目录问题已通过真实搜索配置探测修复，合成占位工具不再误判为可执行原生工具。客户端全局配置未修改。特定 400 参数兼容恢复仍可能在 CLI 同一轮内重发 HTTP，不能声称严格 HTTP 次数恒为 1。详细结果见 [单轮实现与验证](../CCGATEWAY-SINGLE-TURN.md)；最终发布与客户端证据在 `~/sup2api/checks/single-turn-release-20261016-v2/`。
