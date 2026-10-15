@@ -1,10 +1,10 @@
 # CCGateway 共享 Xray 出口改造方案
 
-实施状态（2026-10-15）：控制器与共享出口首版已实现；实际部署进度见环境运行记录。首版以 CONTRACTS 第 57 节为准：DNS 不缓存，网络池修改先回迁，旧 egress 停止保留；严格每请求版本屏障仍不在本轮范围。
+实施状态（2026-10-15）：控制器与共享出口首版已部署，8 个运行环境已迁移并就绪；见[迁移验收记录](ccgateway-migration/evidence/xray-migration-20261015.json)。首版以 CONTRACTS 第 57 节为准：DNS 不缓存，网络池修改先回迁，旧 egress 停止保留；严格每请求版本屏障仍不在本轮范围。
 
 日期：2026-10-15。
 
-状态：设计提案，基础可行性已完成隔离验证，尚未实现到生产代码。线上仍使用每账号独立的 sing-box egress。本文中的新接口、状态字段和能力标记都是拟议合同，不代表当前已经支持；现行行为仍以 [CONTRACTS](CONTRACTS.md) 为准。
+状态：首版已部署。本文保留总体目标设计，实际首版接口与限制以 [CONTRACTS 第 57 节](CONTRACTS.md#57-ccgateway-共享-xray-出口)为准。
 
 第一阶段以控制器及出口组件为主，复用现有核心、前端和 Worker 协议。具体执行见[控制器迁移方案](CCGATEWAY-XRAY-MIGRATION.md)，日常代理修改见[端到端同步设计](CCGATEWAY-XRAY-PROXY-SYNC.md)。
 
@@ -294,6 +294,4 @@ Worker 不通过 `/admin/features` 声明它无法观察的出口就绪。发布
 - [固定验证版本的出站管理](https://github.com/XTLS/Xray-core/blob/v26.3.27/app/proxyman/outbound/outbound.go)。
 - [现有环境及部署流程](ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md)。
 
-可行性结论：共享 Xray 能完成源 IP 分流和 API 动态更新，适合进入后端原型阶段。生产迁移以 DNS 专项、持久化恢复、兼容检查和单账号回滚通过为前提。当前只编写方案，未改变线上出口架构。
-
-
+可行性结论：共享 Xray 能完成源 IP 分流和 API 动态更新，适合进入后端原型阶段。生产迁移以 DNS 专项、持久化恢复、兼容检查和单账号回滚通过为前提。2026-10-15 首版已改变线上运行账号的出口架构；完整容量压测和所有故障排列仍不属于本轮已验证范围。

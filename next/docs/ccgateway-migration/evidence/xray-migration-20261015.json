@@ -1,0 +1,253 @@
+{
+  "date": "2026-10-15",
+  "source": "bf6a18fdb",
+  "controller_image": "ccgateway-controller:shared-xray.bf6a18fdb",
+  "xray_version": "26.3.27",
+  "xray_archive_sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae",
+  "core_version": "0.1.141",
+  "unit_tests": 114,
+  "integration": [
+    {
+      "test": "migration",
+      "result": {
+        "backend": "shared_xray",
+        "migration": null,
+        "ready": true
+      }
+    },
+    {
+      "test": "update_no_restart",
+      "passed": true
+    },
+    {
+      "test": "xray_restart_recovery",
+      "passed": true
+    },
+    {
+      "test": "proxy_tls_hostname_validation",
+      "passed": true
+    },
+    {
+      "test": "authenticated_proxy_and_dns",
+      "protocol": "http",
+      "passed": true
+    },
+    {
+      "test": "authenticated_proxy_and_dns",
+      "protocol": "https",
+      "passed": true
+    },
+    {
+      "test": "authenticated_proxy_and_dns",
+      "protocol": "socks5",
+      "passed": true
+    },
+    {
+      "test": "existing_sse_during_proxy_switch",
+      "count": 100,
+      "passed": true
+    },
+    {
+      "test": "bad_credentials_fail_closed",
+      "passed": true
+    },
+    {
+      "test": "controller_restart_recovery",
+      "passed": true
+    },
+    {
+      "test": "tcp_dns",
+      "passed": true
+    },
+    {
+      "test": "unknown_source_blocked",
+      "passed": true
+    },
+    {
+      "test": "rollback",
+      "result": {
+        "backend": "per_account_singbox",
+        "migration": null,
+        "ready": true
+      }
+    },
+    {
+      "test": "failed_migration_automatic_rollback",
+      "passed": true
+    },
+    {
+      "test": "interrupted_migration_recovery",
+      "passed": true
+    },
+    {
+      "test": "disabled_offline_rollback",
+      "passed": true
+    },
+    {
+      "test": "unused_outbound_collection",
+      "passed": true
+    },
+    {
+      "test": "cleanup",
+      "passed": true
+    }
+  ],
+  "postflight": [
+    {
+      "account": 20,
+      "unchanged": "disabled; not migrated"
+    },
+    {
+      "account": 21,
+      "runtime": "21",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.52.74.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 22,
+      "runtime": "d1d2964e14bf728d9",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.106.186.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 23,
+      "unchanged": "disabled; not migrated"
+    },
+    {
+      "account": 24,
+      "runtime": "d4863b4ae1bc6aa8c",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.133.173.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 25,
+      "runtime": "d367149b7e7b26bcc",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.76.64.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 26,
+      "runtime": "de509b30280535378",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.247.17.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 27,
+      "runtime": "d61ad737f7dcd6912",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.165.34.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 28,
+      "runtime": "d4d9ec52e2bb74205",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.67.85.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "account": 29,
+      "runtime": "d3037c7dc8376b940",
+      "backend": "shared_xray",
+      "ready": true,
+      "app_preserved": true,
+      "gateway": "10.149.39.2",
+      "legacy": "stopped, retained"
+    },
+    {
+      "test": "haiku_followup",
+      "account": 21,
+      "status": 503,
+      "error": "Claude Code native error: server_error",
+      "classification": "upstream response; no network conclusion"
+    },
+    {
+      "account": 21,
+      "model": "claude-opus-5-5",
+      "ok": true,
+      "status": 200,
+      "latency_ms": 2090,
+      "message": ""
+    },
+    {
+      "account": 27,
+      "model": "claude-opus-5-5",
+      "ok": true,
+      "status": 200,
+      "latency_ms": 2343,
+      "message": ""
+    }
+  ],
+  "account_proxy_sync": [
+    {
+      "test": "existing_account_update_to_proxy10",
+      "applied": {
+        "revision": "4a8a34d5d85368fea409aba77737852d27236b425ac7b99144bac67341f98b03",
+        "protocol": "socks",
+        "gateway": "10.52.74.2"
+      }
+    },
+    {
+      "test": "rapid_updates_restore_direct",
+      "applied": {
+        "revision": "09006898230952b57c2308ba699bcb23e0475d3fbf79f7af351fb02dc6a759f9",
+        "protocol": "freedom",
+        "gateway": "10.52.74.2"
+      }
+    },
+    {
+      "test": "xray_process_not_restarted",
+      "passed": true
+    }
+  ],
+  "worker21_tool_reference": [
+    {
+      "test": "plain_text",
+      "status": 200,
+      "passed": null
+    },
+    {
+      "test": "tool_reference",
+      "status": 200,
+      "passed": null
+    },
+    {
+      "test": "tool_result_continuation",
+      "status": 200,
+      "passed": null
+    },
+    {
+      "test": null,
+      "status": null,
+      "passed": true
+    }
+  ],
+  "real_sse": {
+    "account": 21,
+    "status": 200,
+    "complete_message_stop": true,
+    "assembled_text_marker_verified": true
+  },
+  "backup_directory": "/home/debian/sup2api-managed/backups/shared-xray-20261015",
+  "database_sha256": "e6c7369295524e266e015a44475ad658c8caba2ea2d11898abbd5cd1626f46ac",
+  "retention": "old per-account egress containers stopped and retained; account data volumes preserved"
+}

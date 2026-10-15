@@ -2,9 +2,9 @@
 
 ## 后续改造提案
 
-- [共享 Xray 出口改造方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)（2026-10-15）：按容器源 IP 分流、动态代理配置、持久化恢复及逐账号迁移。已完成基础隔离验证，尚未实施到生产。
+- [共享 Xray 出口改造方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)（2026-10-15）：按容器源 IP 分流、动态代理配置、持久化恢复及逐账号迁移。首版已部署，8 个运行环境已迁移；见[验收记录](evidence/xray-migration-20261015.json)。
 - [控制器迁移方案](../CCGATEWAY-XRAY-MIGRATION.md)（2026-10-15）：以控制器和出口组件为主，新旧后端共存、逐账号切换、原 app 重启、回滚与资源回收。
-- [代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)（2026-10-15）：复用前端保存与核心生命周期，控制器更新 Xray/DNS 后按现有 ready/revision 返回结果；尚待实现。
+- [代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)（2026-10-15）：复用前端保存与核心生命周期，控制器更新 Xray/DNS 后按现有 ready/revision 返回结果；首版已实施。
 
 ## 项目概述
 
