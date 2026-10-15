@@ -1,8 +1,8 @@
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
-// Same vocabulary and order as the core's features.ErasableClientAttachments.
-export const erasableAttachments = ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
+// Independently editable types; the core also accepts the former whole environment type.
+export const erasableAttachments = ['working_directory', 'platform', 'environment_update', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
 export type ErasableAttachment = (typeof erasableAttachments)[number]
-// Same vocabulary as features.ReplaceableClientAttachments: every erasable type (since ccgateway 0.1.54).
+// Every independently erasable type also supports server rendering.
 export const replaceableAttachments = erasableAttachments
 export type ReplaceableAttachment = (typeof replaceableAttachments)[number]
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
@@ -45,7 +45,17 @@ export function defaultRequestPolicy(): RequestPolicy {
     ]
   }
 }
-export function normalizeRequestPolicy(policy?: Partial<Omit<RequestPolicy, 'relay_mode'>> & { relay_mode?: unknown }): RequestPolicy {
+type SavedRequestPolicy = Partial<Omit<RequestPolicy, 'relay_mode' | 'erase_client_attachments' | 'replace_client_attachments'>> & {
+  relay_mode?: unknown
+  erase_client_attachments?: Array<ErasableAttachment | 'environment'>
+  replace_client_attachments?: Array<ReplaceableAttachment | 'environment'>
+}
+function expandEnvironment(types: Array<ErasableAttachment | 'environment'> = []): ErasableAttachment[] {
+  return [...new Set(types.flatMap(type => type === 'environment'
+    ? ['working_directory', 'platform', 'environment_update'] as const
+    : [type]))]
+}
+export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPolicy {
   const defaults = defaultRequestPolicy()
   // Pick the editor's fields rather than spreading historical or server-defaulted policy data.
   return {
@@ -56,8 +66,8 @@ export function normalizeRequestPolicy(policy?: Partial<Omit<RequestPolicy, 'rel
     custom_tool_prefix: policy?.custom_tool_prefix ?? defaults.custom_tool_prefix,
     tool_search: policy?.tool_search ?? defaults.tool_search,
     thinking_disabled_compat: policy?.thinking_disabled_compat ?? defaults.thinking_disabled_compat,
-    erase_client_attachments: policy?.erase_client_attachments ?? defaults.erase_client_attachments,
-    replace_client_attachments: policy?.replace_client_attachments ?? defaults.replace_client_attachments,
+    erase_client_attachments: expandEnvironment(policy?.erase_client_attachments),
+    replace_client_attachments: expandEnvironment(policy?.replace_client_attachments),
     relay_mode: 'native',
     betas: policy?.betas ?? defaults.betas
   }

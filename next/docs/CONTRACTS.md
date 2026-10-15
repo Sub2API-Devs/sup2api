@@ -3937,6 +3937,9 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 替换与擦除在同一次遍历（§53.15 的识别规则）中原位进行：只替换匹配的整段，保留其后的换行与前后文字；`environment` 只替换"# Environment"段，客户端的"# Environment update"（切换目录）没有对应的网关文字，一并擦除；`date` 同理只替换"Today's date is …"一行，"The date has changed…"一并擦除。决策记录 `decision: replace_gateway`。
 - 设置页每类一个选择：客户端／服务端／擦除（2026-10-15 用户要求五类都三选一，原"保留客户端／使用网关"改称"客户端／服务端"）。特性目录 `F-CLIENT-ATTACHMENT-REPLACE`。需 ccgateway 插件 0.1.49 起。
 
+- ccgateway **0.1.56** 起，环境在设置页分为 `working_directory`（主目录、额外目录及 git 仓库标记）、`platform`（Platform、Shell、OS Version）、`environment_update`（Environment update 消息），分别选择客户端／服务端／擦除。前两项只匹配标准 Environment 区块中的对应字段，未知字段保留；服务端值从同一次 CLI 环境渲染拆出，保留客户端字段位置与换行，不改真实容器目录或操作系统。环境更新独立处理；服务端初始渲染没有更新消息时移除客户端更新。
+- 已保存的 `environment` 仍保持整组行为；编辑器加载时展开成三个相同选项，保存时只写细分类型。整组与细分跨擦除／替换列表视为冲突并拒绝。新词表仍为策略 schema 1，**必须先更新 Worker 至 0.1.56 再保存细分策略**；旧 Worker 不支持新类型会返回策略错误。没有配置的字段继续保留客户端原文。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

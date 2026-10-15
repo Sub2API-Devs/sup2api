@@ -56,9 +56,9 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 	cache, err := newCache(filepath.Join(root, "cache"), 32<<20)
 	require.NoError(t, err)
 	g := &Gateway{Runner: runner, Cache: cache, Timeout: 60 * time.Second, Slots: make(chan struct{}, 1)}
-	clientEnv := "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /home/u/CLIENT-DIR\n - Is a git repository: true\n - Platform: linux\n - Shell: bash\n"
+	clientEnv := "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /home/u/CLIENT-DIR\n - Is a git repository: true\n - Platform: linux\n - Shell: CLIENT-SHELL\n"
 	body, _ := json.Marshal(Object{"model": "claude-sonnet-4-6", "max_tokens": 64,
-		"system": []any{Object{"type": "text", "text": "You are terse.\n\n" + clientEnv}},
+		"system": []any{Object{"type": "text", "text": "You are terse.\n\n" + clientEnv + "\n" + ccEnvUpdate}},
 		"messages": []any{
 			Object{"role": "user", "content": []any{Object{"type": "text", "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# userEmail\nclient@example.com\n</system-reminder>\n"}, Object{"type": "text", "text": "<system-reminder>\nToday's date is 2020-01-01.\n</system-reminder>\n"}, Object{"type": "text", "text": "You are powered by the model named Client. The exact model ID is client-model-x. Assistant knowledge cutoff is May 2026.\n\n<total_tokens>4242 tokens left</total_tokens>"}, Object{"type": "text", "text": "question"}}},
 		}})
@@ -71,10 +71,15 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 		require.Equal(t, 200, res.Code, res.Body.String())
 		assert.Contains(t, res.Body.String(), "REPLACED_OK")
 	}
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(string(body)))
+	req.Header.Set(policyHeader, `{"relay_mode":"native","replace_client_attachments":["working_directory"],"erase_client_attachments":["environment_update"]}`)
+	res := httptest.NewRecorder()
+	g.ServeHTTP(res, req)
+	require.Equal(t, 200, res.Code, res.Body.String())
 	mu.Lock()
 	defer mu.Unlock()
-	// The rendering run answered locally: upstream saw the two requests only.
-	require.Len(t, wires, 2)
+	// The rendering run answered locally: upstream saw the three requests only.
+	require.Len(t, wires, 3)
 	system, _ := json.Marshal(wires[0]["system"])
 	messages, _ := json.Marshal(wires[0]["messages"])
 	all := string(system) + string(messages)
@@ -86,6 +91,11 @@ func TestRealCLIGatewayAttachmentReplace(t *testing.T) {
 	workspace, _ := json.Marshal(filepath.Join(root, "cache", "workspace"))
 	assert.Contains(t, string(system), strings.Trim(string(workspace), `"`), "the Worker's own working directory, where the client's was")
 	assert.Contains(t, string(system), "You are terse.")
+	granular, _ := json.Marshal(wires[2]["system"])
+	assert.Contains(t, string(granular), strings.Trim(string(workspace), `"`))
+	assert.Contains(t, string(granular), "Shell: CLIENT-SHELL")
+	assert.NotContains(t, string(granular), "CLIENT-DIR")
+	assert.NotContains(t, string(granular), "# Environment update")
 	assert.Contains(t, string(messages), "The exact model ID is claude-sonnet-4-6.")
 	assert.Contains(t, string(messages), "15000000 tokens left")
 	assert.Contains(t, string(messages), "Today's date is "+time.Now().Format("2006-01-02")+".")

@@ -99,7 +99,7 @@ func (g *Gateway) gatewayAttachments(ctx context.Context, key gatewayAttachmentK
 	}
 	out := make(map[string]string, len(types))
 	for _, typ := range types {
-		out[typ] = texts[typ]
+		out[typ], _ = attachmentRendering(texts, typ)
 	}
 	return out
 }

@@ -238,39 +238,43 @@ describe('CCGateway native request policy', () => {
     const w = await render()
     const choose = (type: string, action: string) => w.get(`[data-testid="client-attachment-${type}"] input[value="${action}"]`).setValue(true)
     const chosen = (type: string) => w.get<HTMLInputElement>(`[data-testid="client-attachment-${type}"] input:checked`).element.value
-    for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
+    for (const type of ['working_directory', 'platform', 'environment_update', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
       expect(chosen(type)).toBe('keep')
     }
     // Every type offers client, server and erase.
     const options = (type: string) => w.get(`[data-testid="client-attachment-${type}"]`).findAll('label').map(o => o.text())
-    for (const type of ['environment', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
+    for (const type of ['working_directory', 'platform', 'environment_update', 'model', 'date', 'total_tokens_reminder', 'session_context']) {
       expect(options(type)).toEqual(['客户端', '服务端', '擦除'])
     }
     await choose('session_context', 'gateway')
     await choose('session_context', 'erase')
     await choose('total_tokens_reminder', 'gateway')
     await choose('model', 'erase')
-    await choose('environment', 'gateway')
+    await choose('working_directory', 'gateway')
+    await choose('platform', 'erase')
     await choose('date', 'erase')
     // A type moves between the lists rather than appearing in both.
     await choose('model', 'gateway')
     await w.get('form').trigger('submit')
     await flushPromises()
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
-    expect(payload.request_policy.erase_client_attachments).toEqual(['date', 'session_context'])
-    expect(payload.request_policy.replace_client_attachments).toEqual(['environment', 'model', 'total_tokens_reminder'])
+    expect(payload.request_policy.erase_client_attachments).toEqual(['platform', 'date', 'session_context'])
+    expect(payload.request_policy.replace_client_attachments).toEqual(['working_directory', 'model', 'total_tokens_reminder'])
     expect(chosen('model')).toBe('gateway')
     expect(chosen('date')).toBe('erase')
     await choose('model', 'keep')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect((mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy.replace_client_attachments).toEqual(['environment', 'total_tokens_reminder'])
+    expect((mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy.replace_client_attachments).toEqual(['working_directory', 'total_tokens_reminder'])
     await choose('date', 'gateway')
     await w.get('form').trigger('submit')
     await flushPromises()
     const last = (mocks.put.mock.lastCall![1] as { request_policy: RequestPolicy }).request_policy
-    expect(last.replace_client_attachments).toEqual(['environment', 'date', 'total_tokens_reminder'])
-    expect(last.erase_client_attachments).toEqual(['session_context'])
+    expect(last.replace_client_attachments).toEqual(['working_directory', 'date', 'total_tokens_reminder'])
+    expect(last.erase_client_attachments).toEqual(['platform', 'session_context'])
+    expect(chosen('working_directory')).toBe('gateway')
+    expect(chosen('platform')).toBe('erase')
+    expect(chosen('environment_update')).toBe('keep')
     w.unmount()
   })
 

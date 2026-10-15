@@ -16,6 +16,7 @@ var clientAttachmentPatterns = map[string][]*regexp.Regexp{
 		environmentSection,
 		regexp.MustCompile(`(?m)^# Environment update\r?\n(?:[ \t]+-[^\r\n]*(?:\r?\n|$))+`),
 	},
+	"environment_update": {regexp.MustCompile(`(?m)^# Environment update\r?\n(?:[ \t]+-[^\r\n]*(?:\r?\n|$))+`)},
 	"model": {regexp.MustCompile(`(?m)^You are powered by the model [^\r\n]*$`)},
 	// Older CLIs render the date inside the session context under "# currentDate".
 	"date": {
@@ -28,7 +29,8 @@ var clientAttachmentPatterns = map[string][]*regexp.Regexp{
 }
 
 // erasableClientAttachments is the policy's vocabulary, shared with the core
-// so both validate the same types; each has patterns above.
+// so both validate the same types. Environment fields use environmentParts;
+// whole attachments use the patterns above.
 var erasableClientAttachments = features.ErasableClientAttachments
 
 func validateEraseClientAttachments(types []string) error {
@@ -69,6 +71,7 @@ type clientAttachmentEraser struct {
 // erase returns the text without the selected attachments and with the
 // replaced ones in Claude Code's own rendering; "" when nothing else was in it.
 func (x *clientAttachmentEraser) erase(text, where string) string {
+	text = x.environmentParts(text, where)
 	for _, typ := range x.types {
 		for _, re := range clientAttachmentPatterns[typ] {
 			before := text

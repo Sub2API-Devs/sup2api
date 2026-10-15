@@ -144,7 +144,7 @@ func parsePolicyRequestWithGateway(body []byte, h http.Header, access *resourceA
 	// A type without a rendering keeps the client's text; "" (rendered, but
 	// the Worker has none) removes it.
 	for _, typ := range p.ReplaceClientAttachments {
-		if text, ok := gateway[typ]; ok {
+		if text, ok := attachmentRendering(gateway, typ); ok {
 			p.gatewayAttachments[typ] = strings.TrimSpace(text)
 			if p.gatewayAttachments[typ] != "" {
 				p.gatewayAttachments[typ] = text

@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
+  it.each(['erase_client_attachments', 'replace_client_attachments'] as const)('expands saved environment in %s without changing the other choices', field => {
+    const saved = { [field]: ['environment', 'model'] as Array<'environment' | 'model'> }
+    const policy = normalizeRequestPolicy(saved)
+    expect(policy[field]).toEqual(['working_directory', 'platform', 'environment_update', 'model'])
+    expect(validRequestPolicy(policy)).toBe(true)
+    expect(normalizeRequestPolicy(policy)).toEqual(policy)
+    expect(saved[field]).toEqual(['environment', 'model'])
+  })
   it('accepts every canonical tool search threshold including zero and rejects malformed ranges', () => {
     for (let threshold = 0; threshold <= 100; threshold++) {
       expect(validRequestPolicy({ ...defaultRequestPolicy(), tool_search: `auto:${threshold}` })).toBe(true)

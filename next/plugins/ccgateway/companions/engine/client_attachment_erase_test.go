@@ -143,11 +143,13 @@ func TestEraseClientAttachmentsPolicyValidation(t *testing.T) {
 	}
 }
 
-func TestEraseClientAttachmentsVocabularyHasPatterns(t *testing.T) {
+func TestEraseClientAttachmentsVocabularyIsHandled(t *testing.T) {
 	for _, typ := range erasableClientAttachments {
-		assert.NotEmpty(t, clientAttachmentPatterns[typ], typ)
+		body := eraseRequest()
+		changed, decisions := eraseClientAttachments(body, []string{typ}, nil)
+		assert.True(t, changed, typ)
+		assert.NotEmpty(t, decisions, typ)
 	}
-	assert.Len(t, clientAttachmentPatterns, len(erasableClientAttachments))
 }
 
 // With nothing to erase the request is admitted exactly as before the policy
