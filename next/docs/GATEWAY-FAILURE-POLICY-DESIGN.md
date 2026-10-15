@@ -1,6 +1,6 @@
 # 核心失败处理设计与实现
 
-日期：2026-10-15。状态：核心 0.1.148 已部署到生产四节点，包含 Schema 3 简化设置、公共手柄排序及表格行内编辑。线上已由管理员保存 Schema 3 策略（revision=1），本次升级完整保留该配置。
+日期：2026-10-15。状态：核心 0.1.149 已部署到生产四节点，支持 Schema 4 固定 OR 与逐行 Go 正则，界面不再显示条件关系。线上已由管理员保存的 Schema 3 策略（revision=1）保持原值，新设置在页面保存后生效。
 
 ## Schema 4：固定条件关系与 Go 正则
 
@@ -236,6 +236,16 @@ Schema 2 新增全局计划，仍兼容执行已保存的 Schema 1。升级程�
 - Manifest `37798fdb916a37415ec1fd1680c400b82c958cbdf0f20340982600510caea6d9`；bundle `5b01edec00d5c5426b8f0ee43beade3a2f407f1d176425acdc9b548c90ae9fa7`。升级计划 `ce7703c66609e93eab8620a23b440e64` 完成 27 步。
 - 六个内置插件包及 10 个 Worker/控制器/Xray 容器未变。gateway、auto-disable、sticky、failure-policy 配置与备份逐项一致；四节点均 `configured=true`、Schema 3、revision=1，保留管理员已保存的规则。
 - 新资源 `SettingsView-hHkyf8KN.js` 已发布。私有备份、预检和验收记录：`/home/debian/sup2api-managed/backups/failure-policy-0.1.148/`。数据库备份 21,505,823 字节，SHA-256 `ea7294699b8e7237f0c5891afe806c85b5207827f4b0c6f9bb2e200cdce2e9bf`，恢复目录 593 行可读取，未执行恢复。
+
+### 0.1.149 逐行 Go 正则发布验收
+
+- 源码提交 `ec8a4f5b9b7d1998cd774398d92d6977f8be6462`。移除条件关系控件，新版固定 OR；逐条规则可选择 Go 正则，每行独立表达式，支持原始行号错误提示。
+- 前端 117 项相关测试、类型检查、生产构建和 ESLint 通过；gateway/account/usage/core 回归通过，新增测试覆盖 Go 语法与大小写、跨行选择、前 4 KiB 限制、加载后重编译、非法表达式拒绝、旧策略兼容及正则驱动真实模拟上游重试和禁用。
+- 四节点版本 `0.1.149`、readyz 200，核心 SHA-256 均为 `0da458cb32e1efe2cffc16fae13e3da11f80906779e9346039a7c5a39987c3d1`。
+- Manifest `e82d265b7e19d446d30483a822688e886446dc9692bf29d386d2b1701591d282`；bundle `3c923247f495fc0af2e17f7109241fc2e2660380e96ae250f5bcb5e1e491d4c7`。升级计划 `c31f40f5b6d1ac5113291d1c5d794d8e` 完成 27 步。
+- 四节点只读预览确认第二条正则可独立命中重试及禁用，状态码也可独立命中；非法正则被 400 校验错误拒绝。新资源 `SettingsView-5L7YxEA8.js` 包含正则选项、不含条件关系控件。
+- 六个内置插件包和 10 个运行容器保持不变；gateway、auto-disable、sticky、failure-policy 与备份一致。四节点仍为管理员既存策略 revision=1，本次未发布业务规则。
+- 私有记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.149/`。数据库备份 21,946,258 字节，SHA-256 `2685cc5c4d9646df700e26a4f1e4066b3a27438c1ac25ac533d71d967d447061`，恢复目录 593 行可读取，未执行恢复。
 
 ## 外部参考
 
