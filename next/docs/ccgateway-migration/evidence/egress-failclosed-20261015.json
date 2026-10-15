@@ -1,0 +1,147 @@
+{
+  "source": "d0a25545cc214ac08c0e9482d62218e6e8976939",
+  "cores": [
+    {
+      "port": 3130,
+      "version": "0.1.142"
+    },
+    {
+      "port": 3131,
+      "version": "0.1.142"
+    },
+    {
+      "port": 3132,
+      "version": "0.1.142"
+    },
+    {
+      "port": 3133,
+      "version": "0.1.142"
+    }
+  ],
+  "controller": "ccgateway-controller:shared-xray.d0a25545c",
+  "xray_not_restarted": true,
+  "workers": [
+    {
+      "runtime": "21",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d1d2964e14bf728d9",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d4863b4ae1bc6aa8c",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d367149b7e7b26bcc",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "de509b30280535378",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d4d9ec52e2bb74205",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d3037c7dc8376b940",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    },
+    {
+      "runtime": "d61ad737f7dcd6912",
+      "ready": true,
+      "container_and_start_time_preserved": true
+    }
+  ],
+  "model_test": {
+    "account": 21,
+    "model": "claude-haiku-4-5-20251001",
+    "status": 200
+  },
+  "max_attempts": 3,
+  "fault_tests": [
+    {
+      "test": "explicit_direct_baseline",
+      "passed": true
+    },
+    {
+      "test": "gateway_container_stopped_direct_account",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "gateway_restarted_before_controller_replay",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "authenticated_proxy_baseline",
+      "passed": true
+    },
+    {
+      "test": "upstream_proxy_stopped_with_direct_outbound_also_loaded",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "selected_outbound_missing",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "source_route_missing",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "dns_supervisor_frozen",
+      "ip_reached": true,
+      "dns_resolved": false
+    },
+    {
+      "test": "controller_absent_current_policy",
+      "ip_reached": true,
+      "dns_resolved": true
+    },
+    {
+      "test": "gateway_container_stopped_proxy_account",
+      "ip_reached": false,
+      "dns_resolved": false
+    },
+    {
+      "test": "gateway_firewall_missing_forwarding_disabled",
+      "ip_reached": false
+    },
+    {
+      "test": "docker_embedded_dns_bypass",
+      "resolved": false
+    },
+    {
+      "test": "worker_restarted_before_route_activation",
+      "ip_reached": false
+    },
+    {
+      "test": "recovery_complete",
+      "passed": true
+    },
+    {
+      "test": "cleanup",
+      "remaining_containers": []
+    }
+  ],
+  "unit_tests": {
+    "controller": 114,
+    "core_linux": 117
+  },
+  "backup": "/home/debian/sup2api-managed/backups/failclosed-0.1.142",
+  "manifest": "5caa004642aac465daa3b51ff95d2a567ea049ca3f4b3498ff9b768435f42469"
+}

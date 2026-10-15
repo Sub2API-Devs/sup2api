@@ -4001,6 +4001,7 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 控制器能力 `shared-egress-v1`，与现有核心配置下发、账号生命周期、Worker 协议兼容。既有账号默认 `per_account_singbox`，只有显式迁移才采用 `shared_xray`；普通 `PUT /accounts/<key>/config` 不得覆盖本地 backend。
 - 控制器私有 `GET /accounts/<key>/egress` 返回 backend、migration、ready；`POST` 接收且仅接收 `{"backend":"shared_xray"}` 或 `{"backend":"per_account_singbox"}`。沿用控制器 Bearer 鉴权，不向业务网络开放。繁忙返回 `status: busy`，调用者限时重试；新后端必须通过探测后才能 ready。
 - 每宿主机共享服务接入各账号独立内部网及一张共享 uplink，源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
+- 核心 0.1.142 起，已绑定代理的记录缺失或协议异常必须返回 `proxy_unavailable` 并阻断，不得把 LEFT JOIN 的空字段视为显式直连。共享网关防火墙表缺失时仍关闭普通转发，控制器须能重新创建该表。
 - 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
 - DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。无缓存替代了设计中的按代理版本隔离缓存。
 - 控制器在私有目录保存共享状态及迁移日志；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
