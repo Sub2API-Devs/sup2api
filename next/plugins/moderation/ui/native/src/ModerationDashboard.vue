@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SBadge, SButton, SPageHeader, STabs } from '@sub2api/ui'
+import { SBadge, SButton, SPageHeader, STabLayout } from '@sub2api/ui'
 import OverviewTab from './OverviewTab.vue'
 import EventsTab from './EventsTab.vue'
 import BlocksTab from './BlocksTab.vue'
@@ -99,19 +99,20 @@ function showUser(userId: number) {
       </template>
     </SPageHeader>
 
-    <STabs v-model="tab" :tabs="tabs" class="mod-tabs" />
+    <STabLayout v-model="tab" :tabs="tabs">
 
-    <OverviewTab
-      v-if="visited.has('overview')"
-      v-show="tab === 'overview'"
-      ref="overviewRef"
-      @runtime="runtime = $event"
-      @show-user="showUser"
-      @go-settings="tab = 'settings'"
-    />
-    <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" ref="eventsRef" :preset="userPreset" />
-    <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" ref="blocksRef" />
-    <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-settings="tab = 'settings'" />
-    <SettingsTab v-if="showSettings && visited.has('settings')" v-show="tab === 'settings'" />
+      <OverviewTab
+        v-if="visited.has('overview')"
+        v-show="tab === 'overview'"
+        ref="overviewRef"
+        @runtime="runtime = $event"
+        @show-user="showUser"
+        @go-settings="tab = 'settings'"
+      />
+      <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" ref="eventsRef" :preset="userPreset" />
+      <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" ref="blocksRef" />
+      <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-settings="tab = 'settings'" />
+      <SettingsTab v-if="showSettings && visited.has('settings')" v-show="tab === 'settings'" />
+    </STabLayout>
   </div>
 </template>

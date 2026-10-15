@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabLayout, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { deleteWithConfirm } from '@/composables/crud'
@@ -664,68 +664,69 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="xl">
       <template v-if="detail">
-        <STabs v-model="detailTab" :tabs="detailTabs" class="mb-4" />
-        <div v-if="detailTab === 'overview'" class="space-y-4">
-          <SDescriptions label-width="9rem">
-            <SDescItem label="ID">{{ detail.id }}</SDescItem>
-            <SDescItem :label="t('accounts.type')">
-              {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
-              <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
-            </SDescItem>
-            <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
-            <SDescItem :label="t('accounts.servesEndpoints')">
-              <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
-              <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>
-            </SDescItem>
-            <SDescItem :label="t('common.status')">
-              <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
-              <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
-              <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
-            </SDescItem>
-            <SDescItem :label="t('accounts.groups')">{{ groupNames(detail.group_ids, detail.groups) }}</SDescItem>
-            <SDescItem :label="t('accounts.priority')">{{ detail.priority }}</SDescItem>
-            <SDescItem :label="t('accounts.weight')">{{ detail.weight ?? 1 }}</SDescItem>
-            <SDescItem :label="t('accounts.concurrency')">{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</SDescItem>
-            <SDescItem :label="t('accounts.limits')">
-              <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-                <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-warning-600' : ''">
-                  <SHint inline>{{ l.label }}</SHint> {{ l.text }}
+        <STabLayout v-model="detailTab" :tabs="detailTabs">
+          <div v-if="detailTab === 'overview'" class="space-y-4">
+            <SDescriptions label-width="9rem">
+              <SDescItem label="ID">{{ detail.id }}</SDescItem>
+              <SDescItem :label="t('accounts.type')">
+                {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
+                <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
+              </SDescItem>
+              <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
+              <SDescItem :label="t('accounts.servesEndpoints')">
+                <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
+                <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>
+              </SDescItem>
+              <SDescItem :label="t('common.status')">
+                <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
+                <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
+                <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
+              </SDescItem>
+              <SDescItem :label="t('accounts.groups')">{{ groupNames(detail.group_ids, detail.groups) }}</SDescItem>
+              <SDescItem :label="t('accounts.priority')">{{ detail.priority }}</SDescItem>
+              <SDescItem :label="t('accounts.weight')">{{ detail.weight ?? 1 }}</SDescItem>
+              <SDescItem :label="t('accounts.concurrency')">{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</SDescItem>
+              <SDescItem :label="t('accounts.limits')">
+                <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+                  <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-warning-600' : ''">
+                    <SHint inline>{{ l.label }}</SHint> {{ l.text }}
+                  </span>
                 </span>
-              </span>
-              <SHint v-else inline>—</SHint>
-            </SDescItem>
-            <SDescItem v-if="detail.refresh" :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
-                <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
-                <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
-            </SDescItem>
-            <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
-            <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
-            <SDescItem :label="t('accounts.models')">
-              <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
-                <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
-              </span>
-              <SHint v-else inline>{{ t('accounts.allModels') }}</SHint>
-            </SDescItem>
-            <SDescItem :label="t('accounts.modelMapping')">
-              <ul v-if="detail.model_mapping && Object.keys(detail.model_mapping).length" class="space-y-0.5">
-                <li v-for="(to, from) in detail.model_mapping" :key="from" class="font-mono text-xs">
-                  {{ from }} <SHint inline size="xs">→</SHint> {{ to }}
-                </li>
-              </ul>
-              <SHint v-else inline>—</SHint>
-            </SDescItem>
-            <SDescItem :label="t('accounts.schedulable')">{{ detail.schedulable ? t('common.yes') : t('common.no') }}</SDescItem>
-            <SDescItem :label="t('accounts.lastUsed')">{{ formatDateTime(detail.last_used_at) }}</SDescItem>
-            <SDescItem :label="t('accounts.lastTest.column')"><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></SDescItem>
-            <SDescItem v-if="showOwner" :label="t('accounts.createdBy')">{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</SDescItem>
-            <SDescItem :label="t('common.createdAt')">{{ formatDateTime(detail.created_at) }}</SDescItem>
-          </SDescriptions>
-          <div v-if="detail.credentials">
-            <SSectionTitle :title="t('accounts.credentials')" />
-            <SCode>{{ JSON.stringify(detail.credentials, null, 2) }}</SCode>
+                <SHint v-else inline>—</SHint>
+              </SDescItem>
+              <SDescItem v-if="detail.refresh" :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
+                  <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
+                  <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
+              </SDescItem>
+              <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
+              <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
+              <SDescItem :label="t('accounts.models')">
+                <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
+                  <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
+                </span>
+                <SHint v-else inline>{{ t('accounts.allModels') }}</SHint>
+              </SDescItem>
+              <SDescItem :label="t('accounts.modelMapping')">
+                <ul v-if="detail.model_mapping && Object.keys(detail.model_mapping).length" class="space-y-0.5">
+                  <li v-for="(to, from) in detail.model_mapping" :key="from" class="font-mono text-xs">
+                    {{ from }} <SHint inline size="xs">→</SHint> {{ to }}
+                  </li>
+                </ul>
+                <SHint v-else inline>—</SHint>
+              </SDescItem>
+              <SDescItem :label="t('accounts.schedulable')">{{ detail.schedulable ? t('common.yes') : t('common.no') }}</SDescItem>
+              <SDescItem :label="t('accounts.lastUsed')">{{ formatDateTime(detail.last_used_at) }}</SDescItem>
+              <SDescItem :label="t('accounts.lastTest.column')"><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></SDescItem>
+              <SDescItem v-if="showOwner" :label="t('accounts.createdBy')">{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</SDescItem>
+              <SDescItem :label="t('common.createdAt')">{{ formatDateTime(detail.created_at) }}</SDescItem>
+            </SDescriptions>
+            <div v-if="detail.credentials">
+              <SSectionTitle :title="t('accounts.credentials')" />
+              <SCode>{{ JSON.stringify(detail.credentials, null, 2) }}</SCode>
+            </div>
           </div>
-        </div>
-        <component :is="detailSlot.component" v-else-if="detailSlot" :account="detail" />
+          <component :is="detailSlot.component" v-else-if="detailSlot" :account="detail" />
+        </STabLayout>
       </template>
     </SModal>
   </div>

@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabLayout, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -283,66 +283,65 @@ async function apply() {
         />
       </SGrid>
 
-      <STable
-        v-model:selected="selectedKeys"
-        card
-        dense
-        selectable
-        clickable
-        :columns="previewColumns"
-        :rows="pageRows"
-        row-key="model"
-        :row-selectable="selectable"
-        :row-class="(x: PriceSyncItem) => (selectable(x) ? '' : 'opacity-70')"
-        :row-attrs="(x: PriceSyncItem) => ({ 'data-model': x.model, 'data-action': x.action })"
-        :empty-text="t('prices.sync.empty')"
-        data-testid="price-sync-table"
-        @row-click="toggle"
-      >
-        <template #toolbar>
-          <div class="-mt-1 w-full">
-            <STabs v-model="tab" :tabs="tabs" data-testid="price-sync-tabs" />
-          </div>
-          <SInput v-model="q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
-          <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
-            {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
-          </SButton>
-          <SButton size="sm" :disabled="!filteredSomeSelected" data-testid="price-sync-select-none" @click="selectNone">{{ t('prices.sync.selectNone') }}</SButton>
-          <SHint inline size="xs">{{ t('prices.sync.selectScope') }}</SHint>
-          <div class="ml-auto flex flex-wrap items-center gap-3">
-            <span class="text-sm" data-testid="price-sync-selected">
-              {{ t('prices.sync.selected', { n: formatNumber(selectedCount) }) }}
-              <SHint v-if="selectedManual" inline tone="warning">· {{ t('prices.sync.selectedManual', { n: selectedManual }) }}</SHint>
-            </span>
-            <SButton variant="primary" :disabled="!selectedCount" :loading="applying" data-testid="price-sync-apply" @click="apply">
-              {{ t('prices.sync.apply', { n: formatNumber(selectedCount) }) }}
+      <STabLayout v-model="tab" :tabs="tabs" data-testid="price-sync-tabs">
+        <STable
+          v-model:selected="selectedKeys"
+          card
+          dense
+          selectable
+          clickable
+          :columns="previewColumns"
+          :rows="pageRows"
+          row-key="model"
+          :row-selectable="selectable"
+          :row-class="(x: PriceSyncItem) => (selectable(x) ? '' : 'opacity-70')"
+          :row-attrs="(x: PriceSyncItem) => ({ 'data-model': x.model, 'data-action': x.action })"
+          :empty-text="t('prices.sync.empty')"
+          data-testid="price-sync-table"
+          @row-click="toggle"
+        >
+          <template #toolbar>
+            <SInput v-model="q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
+            <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
+              {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
             </SButton>
-          </div>
-        </template>
-        <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
-        <template #cell-action="{ row }">
-          <SBadge :tone="ACTION_TONE[row.action as PriceSyncAction]" :title="row.action === 'unchanged' ? t('prices.sync.unchangedHint') : undefined">{{ t(`prices.sync.action.${row.action}`) }}</SBadge>
-          <SHint v-if="row.action === 'manual'" tone="warning" size="xs" class="mt-0.5 flex items-center gap-1">
-            <SIcon name="warning" class="h-3.5 w-3.5 shrink-0" />{{ t('prices.sync.manualWarn') }}
-          </SHint>
-        </template>
-        <template #cell-incoming="{ row }">
-          <PriceDefSummary :def="row.incoming" :compare="row.action === 'unchanged' ? null : row.current" />
-        </template>
-        <template #cell-current="{ row }">
-          <SHint v-if="!row.current" inline size="xs">{{ t('prices.sync.noCurrent') }}</SHint>
-          <template v-else>
-            <PriceDefSummary :def="row.current" muted />
-            <div class="mt-0.5 flex gap-1">
-              <SHint inline size="xs">{{ row.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
-              <SHint v-if="!row.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
+            <SButton size="sm" :disabled="!filteredSomeSelected" data-testid="price-sync-select-none" @click="selectNone">{{ t('prices.sync.selectNone') }}</SButton>
+            <SHint inline size="xs">{{ t('prices.sync.selectScope') }}</SHint>
+            <div class="ml-auto flex flex-wrap items-center gap-3">
+              <span class="text-sm" data-testid="price-sync-selected">
+                {{ t('prices.sync.selected', { n: formatNumber(selectedCount) }) }}
+                <SHint v-if="selectedManual" inline tone="warning">· {{ t('prices.sync.selectedManual', { n: selectedManual }) }}</SHint>
+              </span>
+              <SButton variant="primary" :disabled="!selectedCount" :loading="applying" data-testid="price-sync-apply" @click="apply">
+                {{ t('prices.sync.apply', { n: formatNumber(selectedCount) }) }}
+              </SButton>
             </div>
           </template>
-        </template>
-        <template #footer>
-          <SPagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-sizes="[50, 100, 200]" />
-        </template>
-      </STable>
+          <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
+          <template #cell-action="{ row }">
+            <SBadge :tone="ACTION_TONE[row.action as PriceSyncAction]" :title="row.action === 'unchanged' ? t('prices.sync.unchangedHint') : undefined">{{ t(`prices.sync.action.${row.action}`) }}</SBadge>
+            <SHint v-if="row.action === 'manual'" tone="warning" size="xs" class="mt-0.5 flex items-center gap-1">
+              <SIcon name="warning" class="h-3.5 w-3.5 shrink-0" />{{ t('prices.sync.manualWarn') }}
+            </SHint>
+          </template>
+          <template #cell-incoming="{ row }">
+            <PriceDefSummary :def="row.incoming" :compare="row.action === 'unchanged' ? null : row.current" />
+          </template>
+          <template #cell-current="{ row }">
+            <SHint v-if="!row.current" inline size="xs">{{ t('prices.sync.noCurrent') }}</SHint>
+            <template v-else>
+              <PriceDefSummary :def="row.current" muted />
+              <div class="mt-0.5 flex gap-1">
+                <SHint inline size="xs">{{ row.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
+                <SHint v-if="!row.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
+              </div>
+            </template>
+          </template>
+          <template #footer>
+            <SPagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-sizes="[50, 100, 200]" />
+          </template>
+        </STable>
+      </STabLayout>
     </template>
 
     <SModal v-model:open="resultOpen" :title="t('prices.sync.resultTitle')" width="lg">

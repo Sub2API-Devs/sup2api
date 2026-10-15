@@ -1,4 +1,4 @@
-// Arrow-key navigation shared by STabs and SDropdown.
+// Arrow-key navigation shared by the internal tab bar and SDropdown.
 
 const KEYS = {
   horizontal: { ArrowRight: 1, ArrowLeft: -1 },

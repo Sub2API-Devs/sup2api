@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
-import STabs from './STabs.vue'
+import TabBar from './internal/TabBar.vue'
 import STitleScope from './STitleScope.vue'
 import type { TabItem } from './types'
 
@@ -21,7 +21,7 @@ const visible = computed(() => props.showTabs && props.tabs.length > (props.show
 </script>
 <template>
   <div class="space-y-5">
-    <STabs
+    <TabBar
       v-if="visible"
       :tabs="tabs"
       :model-value="current?.key || ''"

@@ -3,11 +3,10 @@
 // enabled tabs and select them (roving tabindex: only the selected tab is in
 // the Tab order). Each tab's id is `${idPrefix}-tab-${key}` and it controls
 // `${idPrefix}-panel-${key}`: give your panel that id, role="tabpanel" and
-// aria-labelledby the tab id (`panelAttrs(key)` from the #panel slot does
-// it). `idPrefix` defaults to a generated id. `size` sm is a compact bar.
+// aria-labelledby the tab id. Internal to STabLayout; not a public component.
 import { computed, nextTick, ref, useId } from 'vue'
-import type { TabItem } from './types'
-import { navIndex } from './keyboard'
+import type { TabItem } from '../types'
+import { navIndex } from '../keyboard'
 
 const props = withDefaults(defineProps<{ tabs: TabItem[]; modelValue: string; idPrefix?: string; size?: 'sm' | 'md'; ariaLabel?: string }>(), { size: 'md' })
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
@@ -31,9 +30,7 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault()
   select(enabled[next].key)
 }
-function panelAttrs(key: string) {
-  return { id: panelId(key), role: 'tabpanel', 'aria-labelledby': tabId(key), tabindex: 0 }
-}
+
 </script>
 
 <template>
@@ -65,6 +62,5 @@ function panelAttrs(key: string) {
         </button>
       </nav>
     </div>
-    <slot name="panel" :active="modelValue" :attrs="panelAttrs(modelValue)" :panel-attrs="panelAttrs" />
   </div>
 </template>
