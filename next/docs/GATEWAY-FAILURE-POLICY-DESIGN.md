@@ -1,6 +1,6 @@
 # 核心失败处理设计与实现
 
-日期：2026-10-15。状态：核心 0.1.143 已部署到生产四节点；Schema 2 统一重试计划已实现，待更新。新策略尚未发布，保留既有行为，管理员首次在失败处理页发布后接管。
+日期：2026-10-15。状态：核心 0.1.144 与 Schema 2 统一重试计划已部署到生产四节点。新策略尚未发布，保留既有行为，管理员首次在失败处理页发布后接管。
 
 本功能由核心提供，适用于核心管理的通用网关请求，与具体插件无关。管理员配置失败条件和处理动作；核心读取自己收到的状态码、错误文本并执行。新策略不调用插件错误分类，不添加插件接口，不修改任何插件、CLI 或代理组件。
 
@@ -173,6 +173,17 @@ Schema 2 新增全局计划，仍兼容执行已保存的 Schema 1。升级程�
 - 私有备份与验收记录：`/home/debian/sup2api-managed/backups/failure-policy-0.1.143/`。数据库备份 19,572,749 字节，SHA-256 `c7a840ee50aefe1f7d5ef0d78103aef66ff17194cfa33c9868da2730721de921`，恢复目录可读取。本次未执行数据库恢复。
 
 ## 参考
+
+### 0.1.144 统一重试计划发布验收
+
+- 源码提交 `8b801e20ed708b766cebbcd322f61886312db005`；四节点核心版本均为 `0.1.144`，readyz 均为 200。
+- Manifest `380ea3e403c8a1042f4bdf6afe7e214357551b8d1a2fb5c6a979133834dfb1eb`；bundle `446e581ca155e31362f52db099f6af8ef4e09d67a142772200d5a7b0a02b4f42`。
+- 升级计划 `0ae0732f3f97538e2f7bbb2fd63e9edc` 完成 27 步；四节点二进制 SHA-256 一致：`60278fd83991d991131034d01a25601a3137a9ac51f4a66539d657acbe3d664f`。
+- 六个内置插件包不变；10 个 Worker/控制器/Xray 容器的 ID、镜像、启动时间不变；原 gateway、auto-disable、sticky 设置不变。
+- 线上只读预览确认重试和账号规则都能只按 429 或只按关键词命中；返回统一阈值 2 和换号重置动作。四节点 `configured=false`，返回 Schema 2 草稿，没有自动发布业务配置。
+- 新前端资源为 `SettingsView-Bntxuk6M.js`。私有备份、预检和验收记录位于 `/home/debian/sup2api-managed/backups/failure-policy-0.1.144/`。数据库备份 20,086,076 字节，SHA-256 `71802b9825f4d0de781a2a503cce3be6eb30c0fd6caa1e4c2288c03a243dc3bf`；恢复目录可读取，未执行恢复。
+
+## 外部参考
 
 - [New API 自动禁用](https://github.com/QuantumNous/new-api/blob/main/service/channel.go)
 - [New API 请求决策记录](https://github.com/QuantumNous/new-api/blob/main/service/request_policy.go)
