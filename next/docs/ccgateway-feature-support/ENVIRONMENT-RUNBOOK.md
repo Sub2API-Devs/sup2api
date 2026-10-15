@@ -1,5 +1,9 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-16：全部现有 Worker 内 Claude Code 更新至 2.1.301。** 用户在确认 #21 的 CLI 为 2.1.292 后授权更新所有 Worker 到最新版本；本轮更新对象是容器内 Claude Code，不是 Worker 服务程序。官方 `latest` 当时为 2.1.301，`stable` 仍为 2.1.292。通过核心 `/system/ccgateway/cli/:id` 托管安装流程逐个完成 #21、#22、#24、#25、#26、#27、#28、#29；#20/#23 无现存容器，不创建或启动。八个容器实际 `claude --version` 均为 2.1.301，CLI SHA-256 均与官方 linux-x64 manifest 一致：`bc1aad9982c7b59c7d889ff92595d61cf46e0a6eae074cb551d932a989bcd222`；工具目录版本同步且 ready，health 均 healthy。#21 目录 31 个工具，其余 30 个；未执行付费模型回归。
+>
+> 安装采用 Controller 的空闲维护租约、旧程序备份、摘要校验、原子替换及目录同步。原容器 ID、启动时间、配置、挂载与 Worker 程序哈希保持一致；没有重启或重建容器。各账号原 `auto_update=false / channel=stable` 策略在一次性 latest 更新后已恢复。部署证据在 `~/sup2api-managed/backups/cli-update-2.1.301-20261015T215555Z/`，旧 CLI 由 Controller 保存在各 runtime 的 `cli-backups/`。镜像内默认 CLI 未变，此记录仅代表现存八个容器。
+
 > **2026-10-16 Core 0.1.157：账号手动启停与调度恢复。** 用户授权部署账号状态修复；源码 `0e5f5891cba22f08311363a978843f7e616d90f7`。列表开关控制手动启用／禁用，启用恢复参与调度；`active + schedulable=false` 展示为自动禁用，列表状态筛选同步包含该情况。手动禁用仍优先于调度与自动恢复。上线前账号模块全包、前端 25 项测试及类型检查通过，ESLint 无 error（已有样式 warning）。
 >
 > 正常签名导入及 primary-first 升级计划 `1bf61094e4b5314bfc92e4d2b46c770f` 已 completed / 27 步。四节点均 0.1.157，readyz 200，程序 SHA-256 `0608c184915148593a79139f67159da10db735b54c3f219b67831509c8796048`；四入口实际提供的新前端资源 `AccountsView-C2zgsCyF.js` 与构建产物一致，启用／自动禁用／禁用筛选逐入口只读核验通过。manifest `54ef364172bc34b1d7a003b6f556f98a4d2f54a7d8322c21532fb6a68c24ade0`，bundle `b792d6d4c02f0decc00b52c3c2c250edb9f8398d7d6a54bf8857d6c30d3066da`。既有插件字节、容器身份、启动时间、挂载和配置均保留；未操作生产账号开关或更新 Worker。
