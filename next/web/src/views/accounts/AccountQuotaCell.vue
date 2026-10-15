@@ -65,14 +65,20 @@ const rows = computed(() =>
   })
 )
 
+// Refreshable token expiry does not block account use. Keep it silent in
+// the list and retain the last observed usage until the next successful query.
+const recoverableTokenExpiry = computed(() => props.quota.error?.startsWith('transient: token_expired:') === true)
 const queryError = computed(() =>
-  props.quota.error
-    ? t('accounts.quota.queryFailedDetail', { error: props.quota.error })
-    : props.quota.refresh_status === 'error'
-      ? t('accounts.quota.queryFailed')
-      : ''
+  recoverableTokenExpiry.value
+    ? ''
+    : props.quota.error
+      ? t('accounts.quota.queryFailedDetail', { error: props.quota.error })
+      : props.quota.refresh_status === 'error'
+        ? t('accounts.quota.queryFailed')
+        : ''
 )
 const pending = computed(() => {
+  if (recoverableTokenExpiry.value) return ''
   if (!rows.value.length && !props.quota.updated_at && props.quota.refresh_status !== 'ready' && !queryError.value) {
     return t('accounts.quota.initialPending')
   }

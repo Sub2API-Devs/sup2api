@@ -301,4 +301,16 @@ describe('plugin account actions', () => {
     const reader = render()
     expect((dropdown(reader).props('actions') as Array<{ key: string; hidden?: boolean }>).filter((x) => x.key.startsWith('plugin:') && !x.hidden)).toEqual([])
   })
+
+  it.each([true, false])('requeries quota after a successful token action and replaces the stale error: refreshed=%s', async (refreshed) => {
+    list.items.value[0].quota = { supported: true, source: 'active', updated_at: '2026-10-01T00:00:00Z', error: 'transient: token_expired: expired', refresh_status: 'error', windows: [] }
+    const recovered = { supported: true, source: 'active', updated_at: new Date().toISOString(), error: '', refresh_status: 'ready', windows: [{ key: '5h', utilization: 7, status: 'allowed', resets_at: null }] }
+    mocks.post.mockResolvedValue({ refreshed, expires_at: '2026-10-15T20:04:00Z' })
+    mocks.get.mockResolvedValue(recovered)
+    const w = render()
+    dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
+    await flushPromises()
+    expect(mocks.get).toHaveBeenCalledWith('/accounts/29/quota', { force: true })
+    expect(list.items.value[0].quota).toEqual(recovered)
+  })
 })

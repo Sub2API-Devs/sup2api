@@ -219,6 +219,44 @@ describe('AccountQuotaCell', () => {
     expect(w.get('[data-testid="quota-next-check"]').text()).toContain(formatDateTime(inSec(60)))
   })
 
+  it.each([true, false])('silences refreshable token expiry while preserving existing usage: %s', async (observed) => {
+    const quota = snap({
+      refresh_status: 'error',
+      error: 'transient: token_expired: the access token expired',
+      updated_at: observed ? inSec(-120) : null,
+      next_check_at: inSec(60),
+      windows: observed ? [win('5h', 7, { expired: true }), win('7d', 100, { status: 'rejected' })] : []
+    })
+    const w = render(quota)
+    expect(w.find('[data-testid="quota-error"]').exists()).toBe(false)
+    expect(w.find('[data-testid="quota-pending"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('等待令牌续期')
+    expect(w.text()).not.toContain('token_expired')
+    expect(w.get('[data-testid="quota-next-check"]').text()).toContain(formatDateTime(inSec(60)))
+    expect(w.find('[data-testid="quota-empty"]').exists()).toBe(!observed)
+    expect(w.find('[data-testid="quota-observed"]').exists()).toBe(observed)
+    if (observed) {
+      expect(w.get('[data-testid="quota-window-5h"]').text()).toContain('7%')
+      expect(w.get('[data-testid="quota-rejected"]').text()).toBe('已限流')
+    } else {
+      expect(w.find('[role="progressbar"]').exists()).toBe(false)
+    }
+    i18n.global.locale.value = 'en'
+    await nextTick()
+    expect(w.find('[data-testid="quota-pending"]').exists()).toBe(false)
+    expect(w.find('[data-testid="quota-error"]').exists()).toBe(false)
+    await w.setProps({ quota: snap({ refresh_status: 'ready', windows: [win('5h', 8)] }) })
+    expect(w.find('[data-testid="quota-pending"]').exists()).toBe(false)
+    expect(w.find('[data-testid="quota-error"]').exists()).toBe(false)
+    expect(w.get('[data-testid="quota-window-5h"]').text()).toContain('8%')
+  })
+
+  it.each(['auth_rejected: token_revoked: refused', 'auth_rejected: not_logged_in: signed out', 'transient: upstream_error', 'transient: token_expired_other: failed'])('keeps real quota failures visible: %s', (error) => {
+    const w = render(snap({ refresh_status: 'error', error }))
+    expect(w.get('[data-testid="quota-error"]').text()).toContain(error)
+    expect(w.find('[data-testid="quota-pending"]').exists()).toBe(false)
+  })
+
   it('does not show an invented next check when the optional timestamp is absent', () => {
     const w = render(snap({ next_check_at: null }))
     expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
