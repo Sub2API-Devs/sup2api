@@ -1,10 +1,59 @@
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
 // Independently editable types; the core also accepts the former whole environment type.
-export const erasableAttachments = ['working_directory', 'platform', 'environment_update', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
+export const attachmentGroups = {
+  working_directory: ['primary_directory', 'additional_directories', 'git_repository'],
+  platform: ['platform_name', 'shell', 'os_version'],
+  model: ['model_name', 'model_id', 'knowledge_cutoff', 'model_other'],
+  date: ['current_date', 'date_change'],
+  session_context: ['claude_md', 'git_status', 'user_email', 'session_other']
+} as const
+export const attachmentRows = ['working_directory', 'platform', 'environment_update', 'model', 'date', 'total_tokens_reminder', 'session_context'] as const
+export const erasableAttachments = [...attachmentRows, ...Object.values(attachmentGroups).flat()] as const
 export type ErasableAttachment = (typeof erasableAttachments)[number]
 // Every independently erasable type also supports server rendering.
 export const replaceableAttachments = erasableAttachments
 export type ReplaceableAttachment = (typeof replaceableAttachments)[number]
+export type AttachmentAction = 'keep' | 'gateway' | 'erase'
+export function attachmentChildren(type: ErasableAttachment): readonly ErasableAttachment[] {
+  return type in attachmentGroups ? attachmentGroups[type as keyof typeof attachmentGroups] : []
+}
+function containsAttachment(parent: ErasableAttachment, type: ErasableAttachment): boolean {
+  return parent === type || attachmentChildren(parent).includes(type)
+}
+function savedAttachmentAction(policy: RequestPolicy, type: ErasableAttachment): AttachmentAction {
+  if (policy.erase_client_attachments?.some(parent => containsAttachment(parent, type))) return 'erase'
+  if (policy.replace_client_attachments?.some(parent => containsAttachment(parent, type))) return 'gateway'
+  return 'keep'
+}
+export function attachmentAction(policy: RequestPolicy, type: ErasableAttachment): AttachmentAction | '' {
+  const children = attachmentChildren(type)
+  if (!children.length) return savedAttachmentAction(policy, type)
+  const actions = children.map(child => savedAttachmentAction(policy, child))
+  return actions.every(action => action === actions[0]) ? actions[0]! : ''
+}
+export function setAttachmentAction(policy: RequestPolicy, type: ErasableAttachment, action: AttachmentAction) {
+  const erased = new Set(policy.erase_client_attachments ?? [])
+  const replaced = new Set(policy.replace_client_attachments ?? [])
+  // Editing one child materializes its siblings' inherited choices first.
+  for (const parent of attachmentRows) {
+    if (parent === type || !containsAttachment(parent, type)) continue
+    const inherited = savedAttachmentAction(policy, parent)
+    erased.delete(parent)
+    replaced.delete(parent)
+    for (const child of attachmentChildren(parent)) {
+      if (inherited === 'erase') erased.add(child)
+      if (inherited === 'gateway') replaced.add(child)
+    }
+  }
+  for (const name of [type, ...attachmentChildren(type)]) {
+    erased.delete(name)
+    replaced.delete(name)
+  }
+  if (action === 'erase') erased.add(type)
+  if (action === 'gateway') replaced.add(type)
+  policy.erase_client_attachments = erasableAttachments.filter(name => erased.has(name))
+  policy.replace_client_attachments = replaceableAttachments.filter(name => replaced.has(name))
+}
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {
   schema_version?: number
@@ -80,7 +129,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['reject', 'ignore'].includes(p.unknown_field) &&
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
     (p.erase_client_attachments ?? []).every((type, i, all) => erasableAttachments.includes(type) && all.indexOf(type) === i) &&
-    (p.replace_client_attachments ?? []).every((type, i, all) => replaceableAttachments.includes(type) && all.indexOf(type) === i && !p.erase_client_attachments?.includes(type)) &&
+    (p.replace_client_attachments ?? []).every((type, i, all) => replaceableAttachments.includes(type) && all.indexOf(type) === i && !p.erase_client_attachments?.some(erased => containsAttachment(erased, type) || containsAttachment(type, erased))) &&
     p.relay_mode === 'native'
   )
 }

@@ -18,3 +18,19 @@ func TestIndependentEnvironmentAttachmentValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestAttachmentHierarchyConflicts(t *testing.T) {
+	for parent, children := range AttachmentChildren {
+		for _, child := range children {
+			if ValidateReplaceClientAttachments([]string{parent}, []string{child}) == nil || ValidateReplaceClientAttachments([]string{child}, []string{parent}) == nil {
+				t.Fatalf("parent/child conflict accepted: %s/%s", parent, child)
+			}
+		}
+		if ValidateReplaceClientAttachments(children[:1], children[1:]) != nil {
+			t.Fatal(parent)
+		}
+	}
+	if !AttachmentContains("environment", "shell") {
+		t.Fatal("nested environment field missing")
+	}
+}

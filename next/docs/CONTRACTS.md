@@ -3940,6 +3940,10 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - ccgateway **0.1.56** 起，环境在设置页分为 `working_directory`（主目录、额外目录及 git 仓库标记）、`platform`（Platform、Shell、OS Version）、`environment_update`（Environment update 消息），分别选择客户端／服务端／擦除。前两项只匹配标准 Environment 区块中的对应字段，未知字段保留；服务端值从同一次 CLI 环境渲染拆出，保留客户端字段位置与换行，不改真实容器目录或操作系统。环境更新独立处理；服务端初始渲染没有更新消息时移除客户端更新。
 - 已保存的 `environment` 仍保持整组行为；编辑器加载时展开成三个相同选项，保存时只写细分类型。整组与细分跨擦除／替换列表视为冲突并拒绝。新词表仍为策略 schema 1，**必须先更新 Worker 至 0.1.56 再保存细分策略**；旧 Worker 不支持新类型会返回策略错误。没有配置的字段继续保留客户端原文。
 
+- ccgateway **0.1.57** 起，CC 附件聚合项统一为可展开子列表：工作目录（`primary_directory`、`additional_directories`、`git_repository`）、平台（`platform_name`、`shell`、`os_version`）、模型说明（`model_name`、`model_id`、`knowledge_cutoff`、`model_other`）、日期（`current_date`、`date_change`）、会话上下文（`claude_md`、`git_status`、`user_email`、`session_other`）。环境更新、剩余 token 为单项。父项统一配置整组；展开后子项各自三选一，混合状态显示“分别配置”。父项操作与展开按钮分离，收起不丢配置；公共 `SDisclosure` section 增加独立 `actions` 插槽。
+- 保存仍使用 erase/replace 两个数组。父项选择保留原组键；第一次改子项时，编辑器把该父项物化为各子项，保留兄弟项原选择。核心/Worker 共享 `AttachmentChildren` 校验祖先与后代的跨列表冲突，旧整组配置继续有效。子项需要先更新 Worker 到 0.1.57，schema 仍为 1。配置仅影响附件文字，不更改 API model、实际系统、目录或仓库。
+- Worker 共用分段替换器：环境只识别标准 Environment 区块的字段；模型说明按 CC 标准句式拆分，未知形式留在其他模型说明；会话上下文只识别 `# claudeMd`、`# gitStatus`、`# userEmail`、`# currentDate` 标记，其他普通 Markdown 标题及代码围栏中的标记仍属于原段。其他上下文含旧版 currentDate。服务端子项从同一次 CC 渲染提取，不重新拼造内容。日期子项仍每天更新缓存；整组选择保留原处理顺序与行为。已识别客户端格式边界与“不会擦空用户消息”的限制仍适用。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

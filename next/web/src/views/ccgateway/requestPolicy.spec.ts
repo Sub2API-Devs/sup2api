@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
+import { attachmentAction, attachmentGroups, setAttachmentAction, defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
+  it.each(Object.keys(attachmentGroups) as Array<keyof typeof attachmentGroups>)('customizes %s children without changing siblings or other groups', group => {
+    const policy = defaultRequestPolicy()
+    setAttachmentAction(policy, group, 'gateway')
+    const children = attachmentGroups[group]
+    for (const child of children) expect(attachmentAction(policy, child)).toBe('gateway')
+    setAttachmentAction(policy, children[0], 'keep')
+    expect(attachmentAction(policy, group)).toBe('')
+    expect(attachmentAction(policy, children[0])).toBe('keep')
+    for (const child of children.slice(1)) expect(attachmentAction(policy, child)).toBe('gateway')
+    expect(policy.replace_client_attachments).not.toContain(group)
+    expect(validRequestPolicy(policy)).toBe(true)
+    expect(normalizeRequestPolicy(JSON.parse(JSON.stringify(policy)))).toEqual(policy)
+    setAttachmentAction(policy, group, 'erase')
+    expect(policy.erase_client_attachments).toEqual([group])
+    expect(policy.replace_client_attachments).toEqual([])
+    setAttachmentAction(policy, children[0], 'gateway')
+    expect(attachmentAction(policy, children[0])).toBe('gateway')
+    for (const child of children.slice(1)) expect(attachmentAction(policy, child)).toBe('erase')
+    expect(validRequestPolicy(policy)).toBe(true)
+  })
+  it('rejects contradictory parent and child choices', () => {
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), erase_client_attachments: ['platform'], replace_client_attachments: ['shell'] })).toBe(false)
+  })
   it.each(['erase_client_attachments', 'replace_client_attachments'] as const)('expands saved environment in %s without changing the other choices', field => {
     const saved = { [field]: ['environment', 'model'] as Array<'environment' | 'model'> }
     const policy = normalizeRequestPolicy(saved)

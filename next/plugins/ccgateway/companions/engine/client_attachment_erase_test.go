@@ -146,6 +146,7 @@ func TestEraseClientAttachmentsPolicyValidation(t *testing.T) {
 func TestEraseClientAttachmentsVocabularyIsHandled(t *testing.T) {
 	for _, typ := range erasableClientAttachments {
 		body := eraseRequest()
+		body["system"] = ccEnvironment + " - Additional working directories:\n   - /extra\n - OS Version: example\n" + ccModel + " Extra model details.\n" + sessionIntro + "# gitStatus\nM file.go\n# currentDate\n" + ccDate + "\n</system-reminder>"
 		changed, decisions := eraseClientAttachments(body, []string{typ}, nil)
 		assert.True(t, changed, typ)
 		assert.NotEmpty(t, decisions, typ)

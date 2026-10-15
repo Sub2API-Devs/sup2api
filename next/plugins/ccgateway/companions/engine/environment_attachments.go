@@ -1,116 +1,59 @@
 package engine
 
-import (
-	"slices"
-	"strings"
-)
+import "strings"
 
-// Split only the recognized Claude Code Environment block. Unknown bullets
-// remain client text; directory lists travel with their heading, not platform.
+// Fields are recognized only inside Claude Code's Environment block.
 func environmentLineKinds(lines []string) []string {
 	kinds := make([]string, len(lines))
 	additionalIndent := -1
 	for i, line := range lines {
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 		if additionalIndent >= 0 && indent > additionalIndent {
-			kinds[i] = "working_directory"
+			kinds[i] = "additional_directories"
 			continue
 		}
 		additionalIndent = -1
-		value := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(value, "- Primary working directory:"), strings.HasPrefix(value, "- Is a git repository:"):
-			kinds[i] = "working_directory"
+		switch value := strings.TrimSpace(line); {
+		case strings.HasPrefix(value, "- Primary working directory:"):
+			kinds[i] = "primary_directory"
+		case strings.HasPrefix(value, "- Is a git repository:"):
+			kinds[i] = "git_repository"
 		case strings.HasPrefix(value, "- Additional working directories:"):
-			kinds[i], additionalIndent = "working_directory", indent
-		case strings.HasPrefix(value, "- Platform:"), strings.HasPrefix(value, "- Shell:"), strings.HasPrefix(value, "- OS Version:"):
-			kinds[i] = "platform"
+			kinds[i], additionalIndent = "additional_directories", indent
+		case strings.HasPrefix(value, "- Platform:"):
+			kinds[i] = "platform_name"
+		case strings.HasPrefix(value, "- Shell:"):
+			kinds[i] = "shell"
+		case strings.HasPrefix(value, "- OS Version:"):
+			kinds[i] = "os_version"
 		}
 	}
 	return kinds
 }
 
-func attachmentRendering(texts map[string]string, typ string) (string, bool) {
-	if value, ok := texts[typ]; ok {
-		return value, true
-	}
-	if typ != "working_directory" && typ != "platform" {
-		return "", false
-	}
-	environment, ok := texts["environment"]
-	if !ok {
-		return "", false
-	}
-	lines := strings.Split(strings.TrimRight(strings.ReplaceAll(environmentSection.FindString(environment), "\r\n", "\n"), "\n"), "\n")
+func environmentParts(section string) []attachmentPart {
+	lines := strings.SplitAfter(section, "\n")
 	kinds := environmentLineKinds(lines)
-	selected := []string{}
+	var parts []attachmentPart
 	for i, line := range lines {
-		if kinds[i] == typ {
-			selected = append(selected, line)
-		}
+		parts = appendAttachmentPart(parts, kinds[i], line)
 	}
-	return strings.Join(selected, "\n"), true
+	return parts
 }
 
 func (x *clientAttachmentEraser) environmentParts(text, where string) string {
-	// Old whole-environment policies retain their exact behavior.
-	_, whole := x.replace["environment"]
-	if whole || slices.Contains(x.types, "environment") {
-		return text
-	}
-	_, directory := x.replace["working_directory"]
-	_, platform := x.replace["platform"]
-	if !directory && !platform && !slices.Contains(x.types, "working_directory") && !slices.Contains(x.types, "platform") {
+	if x.selectedType("environment") != "" || !x.hasDescendants("environment") {
 		return text
 	}
 	return environmentSection.ReplaceAllStringFunc(text, func(section string) string {
-		eol := "\n"
-		if strings.Contains(section, "\r\n") {
-			eol = "\r\n"
-		}
-		lines := strings.Split(strings.TrimSuffix(section, eol), eol)
-		kinds := environmentLineKinds(lines)
-		out := []string{}
-		handled := map[string]bool{}
-		changed := map[string]string{}
-		for i, line := range lines {
-			typ := kinds[i]
-			if typ == "" {
-				out = append(out, line)
-				continue
-			}
-			if slices.Contains(x.types, typ) {
-				changed[typ] = "erase"
-				continue
-			}
-			replacement, replace := x.replace[typ]
-			if !replace {
-				out = append(out, line)
-				continue
-			}
-			changed[typ] = "replace_gateway"
-			if !handled[typ] && replacement != "" {
-				out = append(out, strings.Split(strings.TrimRight(strings.ReplaceAll(replacement, "\r\n", "\n"), "\n"), "\n")...)
-			}
-			handled[typ] = true
-		}
-		if len(changed) == 0 {
+		lines := strings.SplitAfter(section, "\n")
+		if len(lines) < 3 {
 			return section
 		}
-		result := ""
-		if len(out) > 2 {
-			result = strings.Join(out, eol)
-			if strings.HasSuffix(section, eol) {
-				result += eol
-			}
+		body := x.rewriteParts(section, environmentParts(strings.Join(lines[2:], "")), where)
+		if strings.TrimSpace(body) == "" {
+			return ""
 		}
-		if result != section {
-			for _, typ := range []string{"working_directory", "platform"} {
-				if action := changed[typ]; action != "" {
-					x.decisions = append(x.decisions, Object{"source": "client", "type": typ, "where": where, "recognition": "claude_code_render", "decision": action, "count": 1, "text_digest": digest(section)})
-				}
-			}
-		}
-		return result
+		return lines[0] + lines[1] + body
 	})
 }

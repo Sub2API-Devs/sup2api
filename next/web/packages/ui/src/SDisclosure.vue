@@ -3,7 +3,7 @@
 // "Details" / "Hide details" link (`label` / `openLabel` replace the texts)
 // above a tinted explanation block. variant "section": a full-width header
 // (`label` or #title, optional `description`) with a chevron, for collapsible
-// blocks of a page or form. `open` supports v-model:open; uncontrolled
+// blocks of a page or form. Its `actions` slot sits outside the toggle. `open` supports v-model:open; uncontrolled
 // (closed, or `defaultOpen`) without it.
 import { useId } from 'vue'
 import { useUiT } from './i18n'
@@ -29,19 +29,22 @@ const panelId = useId()
 
 <template>
   <div v-if="variant === 'section'">
-    <button
-      type="button"
-      class="flex w-full items-start justify-between gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
-      :aria-expanded="isOpen"
-      :aria-controls="panelId"
-      @click="toggle"
-    >
-      <span class="min-w-0">
-        <span class="block text-sm font-semibold text-fg"><slot name="title">{{ label }}</slot></span>
-        <span v-if="description" class="mt-0.5 block text-xs leading-5 text-fg-muted">{{ description }}</span>
-      </span>
-      <SIcon name="chevron-down" class="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-150" :class="isOpen ? 'rotate-180' : ''" />
-    </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <button
+        type="button"
+        class="flex min-w-0 flex-1 items-start justify-between gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+        :aria-expanded="isOpen"
+        :aria-controls="panelId"
+        @click="toggle"
+      >
+        <span class="min-w-0">
+          <span class="block text-sm font-semibold text-fg"><slot name="title">{{ label }}</slot></span>
+          <span v-if="description" class="mt-0.5 block text-xs leading-5 text-fg-muted">{{ description }}</span>
+        </span>
+        <SIcon name="chevron-down" class="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-150" :class="isOpen ? 'rotate-180' : ''" />
+      </button>
+      <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2"><slot name="actions" /></div>
+    </div>
     <div v-if="isOpen" :id="panelId" class="mt-3">
       <slot />
     </div>

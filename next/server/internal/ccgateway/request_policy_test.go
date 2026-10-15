@@ -306,3 +306,17 @@ func TestIndependentEnvironmentPolicySave(t *testing.T) {
 	assert.Equal(t, []string{"platform", "environment_update"}, policy.EraseClientAttachments)
 	assert.Equal(t, []string{"working_directory"}, policy.ReplaceClientAttachments)
 }
+
+func TestAttachmentChildrenPolicySave(t *testing.T) {
+	var in Config
+	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"ignore","erase_client_attachments":["git_status","model_id","date_change"],"replace_client_attachments":["shell","user_email","current_date"]}}`), &in))
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	require.NoError(t, err)
+	raw, err := json.Marshal(saved)
+	require.NoError(t, err)
+	var reloaded Config
+	require.NoError(t, json.Unmarshal(raw, &reloaded))
+	policy := reloaded.WorkerRequestPolicy(21)
+	assert.Equal(t, []string{"git_status", "model_id", "date_change"}, policy.EraseClientAttachments)
+	assert.Equal(t, []string{"shell", "user_email", "current_date"}, policy.ReplaceClientAttachments)
+}

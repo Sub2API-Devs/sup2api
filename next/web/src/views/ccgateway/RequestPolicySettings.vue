@@ -3,13 +3,12 @@
 // Client betas pass through; the legacy relay's rewrite policies are not editable here.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SInput, SCode, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
-import { erasableAttachments, replaceableAttachments, type ErasableAttachment, type RequestPolicy } from './requestPolicy'
+import { SInput, SCode, SDisclosure, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
+import { attachmentRows, attachmentChildren, attachmentAction, setAttachmentAction, type AttachmentAction, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
 // Client (as sent), server (the Worker's own rendering) or erase, for every type.
 const attachmentActions = ['keep', 'gateway', 'erase'] as const
-type AttachmentAction = (typeof attachmentActions)[number]
 const attachmentOptions = computed(() => attachmentActions.map(value => ({ value, label: t('ccgateway.policy.attachmentAction_' + value) })))
 // The saved value may be a numeric auto threshold (auto:N): kept selectable as is.
 const toolSearchOptions = computed(() => [
@@ -17,21 +16,6 @@ const toolSearchOptions = computed(() => [
   ...(policy.value.tool_search?.startsWith('auto:') ? [{ value: policy.value.tool_search, label: policy.value.tool_search }] : [])
 ])
 const unknownFieldOptions = computed(() => (['ignore', 'reject'] as const).map(value => ({ value, label: t('ccgateway.policy.' + value) })))
-function attachmentAction(type: ErasableAttachment): AttachmentAction {
-  if (policy.value.erase_client_attachments?.includes(type)) return 'erase'
-  return policy.value.replace_client_attachments?.includes(type) ? 'gateway' : 'keep'
-}
-// Kept in vocabulary order so the saved policy does not depend on click order.
-function setAttachmentAction(type: ErasableAttachment, action: AttachmentAction) {
-  const erased = new Set(policy.value.erase_client_attachments ?? [])
-  const replaced = new Set<string>(policy.value.replace_client_attachments ?? [])
-  erased.delete(type)
-  replaced.delete(type)
-  if (action === 'erase') erased.add(type)
-  if (action === 'gateway') replaced.add(type)
-  policy.value.erase_client_attachments = erasableAttachments.filter(name => erased.has(name))
-  policy.value.replace_client_attachments = replaceableAttachments.filter(name => replaced.has(name))
-}
 </script>
 <template>
   <section class="space-y-4" data-testid="request-policy">
@@ -54,9 +38,22 @@ function setAttachmentAction(type: ErasableAttachment, action: AttachmentAction)
     </SSettingsGroup>
     <SSettingsGroup :title="t('ccgateway.policy.attachments')" :description="t('ccgateway.policy.attachmentsShort')" data-testid="client-attachments">
       <template #details>{{ t('ccgateway.policy.attachmentsHint') }}</template>
-      <SSettingRow v-for="type in erasableAttachments" :key="type" :label="t('ccgateway.policy.attachment_' + type)" dense>
-        <SSegmented :model-value="attachmentAction(type)" :options="attachmentOptions" size="sm" :aria-label="t('ccgateway.policy.attachment_' + type)" :data-testid="'client-attachment-' + type" @update:model-value="setAttachmentAction(type, $event as AttachmentAction)" />
-      </SSettingRow>
+      <template v-for="type in attachmentRows" :key="type">
+        <SDisclosure v-if="attachmentChildren(type).length" variant="section" :label="t('ccgateway.policy.attachment_' + type)" class="py-2.5" :data-testid="'attachment-group-' + type">
+          <template #actions>
+            <span v-if="!attachmentAction(policy, type)" class="text-xs text-fg-muted">{{ t('ccgateway.policy.attachmentMixed') }}</span>
+            <SSegmented :model-value="attachmentAction(policy, type)" :options="attachmentOptions" size="sm" :aria-label="t('ccgateway.policy.attachment_' + type)" :data-testid="'client-attachment-' + type" @update:model-value="setAttachmentAction(policy, type, $event as AttachmentAction)" />
+          </template>
+          <div class="ml-2 divide-y divide-line border-l border-line pl-4">
+            <SSettingRow v-for="child in attachmentChildren(type)" :key="child" :label="t('ccgateway.policy.attachment_' + child)" dense>
+              <SSegmented :model-value="attachmentAction(policy, child)" :options="attachmentOptions" size="sm" :aria-label="t('ccgateway.policy.attachment_' + child)" :data-testid="'client-attachment-' + child" @update:model-value="setAttachmentAction(policy, child, $event as AttachmentAction)" />
+            </SSettingRow>
+          </div>
+        </SDisclosure>
+        <SSettingRow v-else :label="t('ccgateway.policy.attachment_' + type)" dense>
+          <SSegmented :model-value="attachmentAction(policy, type)" :options="attachmentOptions" size="sm" :aria-label="t('ccgateway.policy.attachment_' + type)" :data-testid="'client-attachment-' + type" @update:model-value="setAttachmentAction(policy, type, $event as AttachmentAction)" />
+        </SSettingRow>
+      </template>
     </SSettingsGroup>
     <SSettingsGroup :title="t('ccgateway.policy.fallbackTitle')" data-testid="unsupported-requests">
       <SSettingRow :label="t('ccgateway.policy.unknownField')" dense>

@@ -81,7 +81,7 @@ func gatewayAttachmentRequest(body []byte, h http.Header) (gatewayAttachmentKey,
 		}
 	}
 	for _, typ := range p.ReplaceClientAttachments {
-		if typ == "date" || typ == "session_context" {
+		if features.AttachmentContains("date", typ) || features.AttachmentContains("session_context", typ) {
 			key.Date = time.Now().Format("2006-01-02")
 		}
 	}

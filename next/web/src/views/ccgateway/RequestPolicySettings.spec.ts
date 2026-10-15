@@ -209,6 +209,36 @@ describe('CCGateway native request policy', () => {
     return wrapper
   }
 
+  it('expands every aggregate attachment, saves independent children and keeps actions outside the toggle', async () => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    mocks.put.mockImplementation(async (_url: string, body: { request_policy: RequestPolicy }) => config(body.request_policy))
+    const w = await render()
+    await tab(w, 'cc').trigger('click')
+    for (const group of ['working_directory', 'platform', 'model', 'date', 'session_context']) {
+      const section = w.get(`[data-testid="attachment-group-${group}"]`)
+      const toggle = section.get('button')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(toggle.find('input').exists()).toBe(false)
+      await toggle.trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+    }
+    const platform = w.get('[data-testid="attachment-group-platform"]')
+    await w.get('[data-testid="client-attachment-platform"] input[value="gateway"]').setValue(true)
+    expect(platform.get('button').attributes('aria-expanded')).toBe('true')
+    await w.get('[data-testid="client-attachment-shell"] input[value="keep"]').setValue(true)
+    expect(platform.text()).toContain('分别配置')
+    await platform.get('button').trigger('click')
+    expect(w.find('[data-testid="client-attachment-shell"]').exists()).toBe(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy.replace_client_attachments).toEqual(['platform_name', 'os_version'])
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    await platform.get('button').trigger('click')
+    expect(w.get<HTMLInputElement>('[data-testid="client-attachment-shell"] input:checked').element.value).toBe('keep')
+    expect(w.get<HTMLInputElement>('[data-testid="client-attachment-os_version"] input:checked').element.value).toBe('gateway')
+    w.unmount()
+  })
+
   it('thinking disabled compatibility defaults to off, has zh/en copy and saves omit', async () => {
     expect(defaultRequestPolicy().thinking_disabled_compat).toBe('pass')
     expect(zh.policy.thinkingDisabledCompatHint).toContain('默认关闭：与官方 API 一致返回 400')

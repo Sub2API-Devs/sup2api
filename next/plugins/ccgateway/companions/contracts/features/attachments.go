@@ -1,11 +1,38 @@
 package features
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // ErasableClientAttachments is the vocabulary of policy erase_client_attachments,
 // including the historical whole environment: types the Worker may erase from a
 // request before admission (engine client_attachment_erase.go).
-var ErasableClientAttachments = []string{"environment", "model", "date", "total_tokens_reminder", "session_context", "working_directory", "platform", "environment_update"}
+var ErasableClientAttachments = []string{"environment", "model", "date", "total_tokens_reminder", "session_context", "working_directory", "platform", "environment_update",
+	"primary_directory", "additional_directories", "git_repository", "platform_name", "shell", "os_version",
+	"model_name", "model_id", "knowledge_cutoff", "model_other", "current_date", "date_change",
+	"claude_md", "git_status", "user_email", "session_other"}
+
+// AttachmentChildren defines the policy hierarchy. Whole attachments remain
+// valid for saved policies and for applying one choice to a complete group.
+var AttachmentChildren = map[string][]string{
+	"environment":       {"working_directory", "platform", "environment_update"},
+	"working_directory": {"primary_directory", "additional_directories", "git_repository"},
+	"platform":          {"platform_name", "shell", "os_version"},
+	"model":             {"model_name", "model_id", "knowledge_cutoff", "model_other"},
+	"date":              {"current_date", "date_change"},
+	"session_context":   {"claude_md", "git_status", "user_email", "session_other"},
+}
+
+// AttachmentContains includes equality and all descendant fields.
+func AttachmentContains(parent, child string) bool {
+	if parent == child {
+		return true
+	}
+	return slices.ContainsFunc(AttachmentChildren[parent], func(name string) bool {
+		return AttachmentContains(name, child)
+	})
+}
 
 // ValidateEraseClientAttachments accepts each listed type once; empty keeps
 // every client attachment as sent.
@@ -32,12 +59,8 @@ func ValidateEraseClientAttachments(types []string) error {
 // account email) is then removed, as it is absent on the Worker.
 var ReplaceableClientAttachments = ErasableClientAttachments
 
-func environmentPart(typ string) bool {
-	return typ == "working_directory" || typ == "platform" || typ == "environment_update"
-}
-
 func attachmentsOverlap(a, b string) bool {
-	return a == b || a == "environment" && environmentPart(b) || b == "environment" && environmentPart(a)
+	return AttachmentContains(a, b) || AttachmentContains(b, a)
 }
 
 // ValidateReplaceClientAttachments accepts each listed type once and none

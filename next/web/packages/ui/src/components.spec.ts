@@ -371,6 +371,17 @@ describe('SPagination', () => {
 })
 
 describe('SDisclosure', () => {
+  it('keeps section actions interactive without toggling the panel', async () => {
+    const w = mount(SDisclosure, { props: { variant: 'section', label: 'Group' }, slots: { actions: '<button class="action">Set all</button>', default: '<p class="body">Children</p>' } })
+    const toggle = w.get('button[aria-expanded]')
+    expect(w.get('.action').element.closest('button[aria-expanded]')).toBeNull()
+    await w.get('.action').trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(w.find('.body').exists()).toBe(true)
+    await w.get('.action').trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+  })
   it('supports v-model:open and the section variant', async () => {
     const w = mount(SDisclosure, { props: { open: false, variant: 'section', label: 'Advanced' }, slots: { default: '<p class="body">x</p>' } })
     const b = w.get('button')

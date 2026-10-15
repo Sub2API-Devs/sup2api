@@ -17,7 +17,7 @@ var clientAttachmentPatterns = map[string][]*regexp.Regexp{
 		regexp.MustCompile(`(?m)^# Environment update\r?\n(?:[ \t]+-[^\r\n]*(?:\r?\n|$))+`),
 	},
 	"environment_update": {regexp.MustCompile(`(?m)^# Environment update\r?\n(?:[ \t]+-[^\r\n]*(?:\r?\n|$))+`)},
-	"model": {regexp.MustCompile(`(?m)^You are powered by the model [^\r\n]*$`)},
+	"model":              {regexp.MustCompile(`(?m)^You are powered by the model [^\r\n]*$`)},
 	// Older CLIs render the date inside the session context under "# currentDate".
 	"date": {
 		regexp.MustCompile(`(?m)^(?:# currentDate\r?\n)?Today's date is [^\r\n]+\.$`),
@@ -26,6 +26,11 @@ var clientAttachmentPatterns = map[string][]*regexp.Regexp{
 	"total_tokens_reminder": {regexp.MustCompile(`(?m)^<total_tokens>(?:\d+|Infinite) tokens left</total_tokens>$`)},
 	// CLAUDE.md, git status and the account email: the whole context reminder.
 	"session_context": {regexp.MustCompile(`(?s)<system-reminder>\r?\nAs you answer the user's questions, you can use the following context:\r?\n.*?</system-reminder>`)},
+}
+
+func init() {
+	clientAttachmentPatterns["current_date"] = clientAttachmentPatterns["date"][:1]
+	clientAttachmentPatterns["date_change"] = clientAttachmentPatterns["date"][1:]
 }
 
 // erasableClientAttachments is the policy's vocabulary, shared with the core
@@ -71,8 +76,11 @@ type clientAttachmentEraser struct {
 // erase returns the text without the selected attachments and with the
 // replaced ones in Claude Code's own rendering; "" when nothing else was in it.
 func (x *clientAttachmentEraser) erase(text, where string) string {
-	text = x.environmentParts(text, where)
+	text = x.structuredParts(text, where)
 	for _, typ := range x.types {
+		if x.selectedType(typ) != typ {
+			continue
+		}
 		for _, re := range clientAttachmentPatterns[typ] {
 			before := text
 			var n int
@@ -82,6 +90,9 @@ func (x *clientAttachmentEraser) erase(text, where string) string {
 		}
 	}
 	for _, typ := range features.ReplaceableClientAttachments {
+		if x.selectedType(typ) != typ {
+			continue
+		}
 		gateway, ok := x.replace[typ]
 		if !ok {
 			continue
