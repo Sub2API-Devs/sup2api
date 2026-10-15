@@ -247,6 +247,20 @@
     "complete_message_stop": true,
     "assembled_text_marker_verified": true
   },
+  "haiku_diagnosis": {
+    "account": 21,
+    "date": "2026-10-15",
+    "cause": "The acceptance test used an unconfigured short model name; this upstream group has no route for that name.",
+    "short_name": "claude-haiku-4-5",
+    "direct_upstream_short_name_status": 503,
+    "direct_upstream_short_name_error_code": "model_not_found",
+    "configured_name": "claude-haiku-4-5-20251001",
+    "direct_upstream_configured_name_status": 200,
+    "core_cli_configured_name_status": 200,
+    "core_cli_configured_name_latency_ms": 1525,
+    "same_xray_egress": true,
+    "network_or_account_configuration_changed": false
+  },
   "backup_directory": "/home/debian/sup2api-managed/backups/shared-xray-20261015",
   "database_sha256": "e6c7369295524e266e015a44475ad658c8caba2ea2d11898abbd5cd1626f46ac",
   "retention": "old per-account egress containers stopped and retained; account data volumes preserved"
