@@ -1,6 +1,6 @@
 # 核心失败处理设计与实现
 
-日期：2026-10-15。状态：核心 0.1.151 已部署到生产四节点，平台共享标签页容器统一处理重复标题，系统设置、插件详情及 CCGateway 已接入。调度策略继续支持分区保存与逐行 Go 正则；管理员既存策略（revision=1）保持原值。
+日期：2026-10-15。状态：核心 0.1.153 已部署到生产四节点，UI 合约升为 2.0.0，旧 STabs 公共入口已移除，全部仓库调用迁入 STabLayout。线上 moderation 0.1.10 已提前完成兼容迁移，管理员既存策略（revision=1）保持原值。
 
 ## UI 2.0 标签接口收敛
 
@@ -295,6 +295,18 @@ Schema 2 新增全局计划，仍兼容执行已保存的 Schema 1。升级程�
 - Manifest `3b537a70ada38d7d5c73bd45794db30f248d6b9c9806b21324606333b994405e`；bundle `fc411b89157a96d5169866772f51846712e5e3ebe4092115fc92d73b1ac4bb67`。升级计划 `6829490092b3738dc95126db08defb64` 完成 27 步。
 - 新资源 `SettingsView-CXZeTkTA.js` 已引用 `STabLayout.vue_vue_type_script_setup_true_lang-YJBnDF7B.js`。六个内置插件包、10 个运行容器及既有配置保持不变；四节点调度策略 revision=1。
 - 私有备份及验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.151/`。数据库备份 22,436,156 字节，SHA-256 `a12d798312834d4791b553ce0f1a4e8adf010a08f1921ea1389ee9353e7b0062`，恢复目录 593 行可读取，未执行恢复。
+
+### 0.1.153 移除旧标签接口发布验收
+
+- 主改动提交 `c1a5870f1dbde218d26e053a1f2bd4b5ad252065`，最终构建源码 `18878f057ab271d34ccd3a70370bb7cd30096efb`。移除 STabs 公共导出，底层改为内部 TabBar；账号详情、我的用量、价格同步、growth 和 moderation 的全部实际调用迁入 STabLayout。
+- UI/host/Vite preset 合约版本 2.0.0。moderation 0.1.10、growth 0.1.3、guard 0.2.5 的兼容声明更新；其中后两者线上未安装，不额外启用插件。
+- 全部前端 513 项测试、类型检查、生产构建、目标代码 ESLint 通过；三个原生插件前端构建及 Go 测试通过。源码扫描不再有旧组件调用，负向合约测试明确保证旧公共导出不存在。
+- 初次 0.1.152 构建被 growth 新生成的错误 npm 锁文件阻止，未导入或上线。移除该新锁文件、恢复本地 file 依赖安装后，以新版本 0.1.153 重新构建；失败目录留作证据。
+- 先上传并升级 moderation（插件发布 138，四节点 serving=0.1.10），再升级核心。插件权限 diff 的 added/widened/removed 均为空，配置与既有授权保持原值。
+- 四节点核心 0.1.153、readyz 200，二进制 SHA-256 均 `b520728b489cc4f663f3781cfcd590080661797a1fa6eeb81526f3990ece4e39`。核心升级计划 `6f54171673c6da85162eb0216de1ec81` 完成 27 步。
+- Manifest `6cf4af38249a9acc72e32aba535ab241bb564bcb666a3af6f67a18596b14aead`，bundle `c22760abf65ce9416a1af4cc26718a3f13766582c0d24758c9a846c9acc8a3a2`。其他五个内置插件包不变；10 个 CCGateway Worker/控制器/Xray 容器不变。
+- 线上资源 `index-F6FkxA5Y.js`，公共 UI `shared/sub2api-ui-DzQbaxuj.js` 已无 STabs 导出；公共 host 及依赖确认为 UI 2.0.0；当前原生插件资源无旧接口引用。既有 gateway/auto-disable/sticky/failure-policy 设置不变，策略 revision=1。
+- 私有升级与验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.153/`；沿用未切换服务前的 `/home/debian/sup2api-managed/backups/failure-policy-0.1.152/database.dump`，22,944,414 字节，SHA-256 `c32c1b88ab74c778db8250915ac6087e80a1fe3fd6f04bb6f1571df8a6c278e6`，恢复目录 593 行可读取，未执行恢复。
 
 ## 外部参考
 
