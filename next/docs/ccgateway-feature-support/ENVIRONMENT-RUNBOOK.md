@@ -2,6 +2,16 @@
 
 出口文档：[共享 Xray 出口方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)、[控制器迁移方案](../CCGATEWAY-XRAY-MIGRATION.md)、[代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)。首版已实施，下面按时间记录实际部署。
 
+> **2026-10-15 21:00（UTC+8）Core 0.1.155 / CCGateway 0.1.56：环境细分与镜像同步。** 源码 `8bb2ef15828e9b19a773b46e80a1e50e5be5d8b5`。工作目录（含额外目录、git 标记）、平台（含 Shell/OS Version）、环境更新分别支持客户端／服务端／擦除，使用现有公共设置组件；旧整组环境策略加载编辑器时展开，Worker 仍接受旧配置。现存策略未改。契约见 CONTRACTS §53.16。
+>
+> 通过签名发布与正常 primary-first 升级，计划 `300b1f38c5c9fb873424c7f97118e83e` 完成 27 步；四节点版本/hash 相同、`/readyz` 200、ccgateway 0.1.56 enabled，其余五个内置插件包哈希不变。manifest `c73dea9639c75382a39f98612206b1990b9f9f9a8f1dcc8e7aeb519fb044650c`，bundle `fdb96c8d55bb65ea65cecbe4eb9238e749b4548f0ddaecc72c159fef35a49c5c`，核心程序 SHA-256 `ee3683e9720e1db14e2ff6836132fe144071b4e281b8a66264de7857664a13aa`。
+>
+> 用正常 bundled-images API 先更新 controller，再更新 egress/app。目标与控制器加载镜像均为 `ccgateway-{controller,app,egress}:0.1.56`，`up_to_date=true`；controller build `8bb2ef15828e`，保留 shared-egress-v1。8 个运行中 Worker 原地替换程序并重启，SHA-256 均 `110ffb0b0af5ce265befb1c42c016ad011297633ce625a268fc2abf064d76fdd`，容器 ID、数据挂载、环境、代理绑定不变。容器创建镜像标签仍是历史标签，以 `/admin/features` 的实际程序版本为准。#20 原本无运行容器，更新报告 not_found；#23 原本停止，报告 not_running，均保持原状态，未擅自启动或重建。
+>
+> 共享 Xray 容器 ID/启动时间不变；逐个核对 8 个 Worker 只连接 internal 网络、唯一默认网关与 DNS 为共享网关，代理出站节点不变；共享出口 `ip_forward=0`、forward 默认 drop。账号 #21 `claude-haiku-4-5-20251001` 测试 200（1821 ms）。网关、自动禁用、粘性、失败策略及 CC 请求策略与备份一致。
+>
+> 验证：87 项前端定向测试、typecheck、改动文件 ESLint、生产构建通过；engine、contracts/features、Worker 测试与核心策略保存测试通过；真实 CLI 回环集成验证目录替换、平台保留及更新擦除，未访问真实上游。Windows 完整 ccgateway 测试唯一失败是 Linux shell `TestPortScript`，同源编译后在 Linux 隔离容器补验通过；控制器 Worker 原地更新、自升级、共享出口及运行时共 52 项通过。浏览器 mock 截图检查三行组件布局。服务端证据 `~/sup2api/checks/environment-155/`；私有 DB、控制器状态/环境、前后 inspect 和接口证据在 `~/sup2api-managed/backups/ccgateway-environment-0.1.155/`（0600），未导出凭证。
+
 > **2026-10-15 0.1.143 / 核心通用失败处理。** 源码 `54afc35df` 完成可配置重试、换号、粘性重置和独立自动禁用，并修复审核确认的 5 项问题。四节点升级计划 `99fe4001fbe981791c087abcebbf1ba7` 完成 27 步，版本均 0.1.143、readyz 均 200。六个内置插件包哈希不变，8 个 Worker、控制器、共享 Xray 的 ID/镜像/启动时间不变。新接口、空关键词状态码预览及前端资源验证通过，账号 21 完整 Haiku 模型名请求 200。既有设置保留，`policy_configured=false`，管理员在“系统设置 → 失败处理”首次发布后接管。备份在 `~/sup2api-managed/backups/failure-policy-0.1.143/`；详情及制品哈希见[设计与发布记录](../GATEWAY-FAILURE-POLICY-DESIGN.md)。
 
 > **2026-10-15 0.1.142 / 出口故障检查与加固。** 用户要求故障不能兜底直连。生产核对 8 个 Worker 的唯一默认网关/DNS、internal 网络、权限与环境；隔离测试覆盖停网关/上游代理、删除出站/路由/防火墙表、Docker DNS 旁路和重启窗口。源码 `d0a25545c` 修复绑定代理缺失/协议异常被误判为 direct，以及防火墙表缺失后不能重建。117 项 Linux 核心测试、114 项控制器测试通过。核心四节点升级到 `0.1.142`，控制器 `ccgateway-controller:shared-xray.d0a25545c`；计划 `463ab15ea0e25d321f7b8f85af5184e6` 完成，manifest `5caa004642aac465daa3b51ff95d2a567ea049ca3f4b3498ff9b768435f42469`。8 个 Worker 和 Xray 容器 ID/启动时间未变，全部 ready，账号 21 完整 Haiku 模型名测试 200。备份在 `/home/debian/sup2api-managed/backups/failclosed-0.1.142/`，dump SHA-256 `0b76ad9dba331c0a051b2ace1c1be743fa25aaf6529c0542ebf834cb887cc391`。未修改显式直连账号或全局 `max_attempts=3`，账号切换重试与 DNS 故障时已知 IP 仍可经原代理连接的边界见[完整检查记录](../CCGATEWAY-EGRESS-FAIL-CLOSED-AUDIT.md)。
