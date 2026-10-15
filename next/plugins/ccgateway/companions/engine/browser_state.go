@@ -131,6 +131,13 @@ func parseToolResultBlocks(values []any, parent Object, ttl *time.Duration, acce
 			out = append(out, block)
 			continue
 		}
+		if str(block, "type") == "tool_reference" {
+			if err := checkToolReference(block); err != nil {
+				return nil, err
+			}
+			out = append(out, block)
+			continue
+		}
 		parsed, err := blocks([]any{value}, "user", ttl, access...)
 		if err != nil {
 			return nil, err

@@ -430,6 +430,9 @@ func parseRequestCreditCandidate(data []byte, mcp *MCPConnectorPlan, access *res
 	if e = r.validateServerSearchHistory(); e != nil {
 		return nil, e
 	}
+	if e = r.validateToolReferences(); e != nil {
+		return nil, e
+	}
 	if err := validatePendingSystems(r); err != nil {
 		return nil, err
 	}
@@ -797,6 +800,9 @@ func (r *Request) wireMessage(m Message) Message {
 		}
 		if str(c, "type") == "tool_search_tool_result" {
 			c, _ = mapSearchReferences(c, r.wireSearchReferenceName)
+		}
+		if str(c, "type") == "tool_result" {
+			c["content"] = r.wireToolReferences(c["content"])
 		}
 		out.Content = append(out.Content, c)
 	}
