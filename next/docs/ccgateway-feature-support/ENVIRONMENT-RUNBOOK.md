@@ -1,8 +1,8 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-16：仅账号 #21 更新单轮流式 Worker。** 用户授权“更新上去，然后启动 CC 客户端测试 21 账号”。实现 `494af0bed19109276f67540eb8c8d2913de08903` 已推送；服务器从精确干净工作树、Go 1.27.1 构建 `ccgateway-app:0.1.58-singleturn.1`，通过 Controller `POST /accounts/21/worker` 原地更新。实际程序版本 `0.1.58-singleturn.1`、modified=false，SHA-256 `15c40b02968fcd21743284cf770630981833de6d9a29d7061ec2d803ff785488`；健康且 online=true，更新后保持运行。容器 ID/配置/挂载保留，其他 7 个账号运行容器未变化；Core、插件默认镜像版本未作全局升级。
+> **2026-10-16：仅账号 #21 更新单轮流式 Worker。** 用户授权“更新上去，然后启动 CC 客户端测试 21 账号”。单轮实现 `494af0bed19109276f67540eb8c8d2913de08903` 与真实客户端补测后的目录修复 `6f0253b01472dabcdbd0c8b1e3a498aef12c8904` 已推送；服务器从后者精确干净工作树、Go 1.27.1 构建 `ccgateway-app:0.1.58-singleturn.2`，通过 Controller `POST /accounts/21/worker` 原地更新。实际程序版本 `0.1.58-singleturn.2`、modified=false，SHA-256 `0ac219472663c24746addd7465835e13461379f23a4aef1e27a6a52c82a7a9bb`；健康且 online=true，更新后保持运行。容器 ID/配置/挂载保留，其他 7 个账号运行容器未变化；Core、插件默认镜像版本未作全局升级。
 >
-> 本机 CC 2.1.296 经 SSH 私有桥接固定到 #21，Haiku 文本流与客户端 Read 工具往返均通过：文本 1 次请求、Read 及提交结果 2 次请求，三次 Messages 均 200，Worker 日志各一个主模型消息、max-turns=1、内部工具搜索关闭。客户端全局配置未修改。特定 400 参数兼容恢复仍可能在 CLI 同一轮内重发 HTTP，不能声称严格 HTTP 次数恒为 1。详细结果见 [单轮实现与验证](../CCGATEWAY-SINGLE-TURN.md)；发布与客户端证据在 `~/sup2api/checks/single-turn-release-20261016/`。
+> 本机 CC 2.1.296 经 SSH 私有桥接固定到 #21，最终在 Opus 5.5 下验证文本流、客户端 Read、ToolSearch 发现并调用本地 MCP 工具：分别 1、2、3 次请求，六次 Messages 均 200，Worker 日志各一个主模型消息、max-turns=1、内部工具搜索关闭。初版漏采 ToolSearch 的动态目录问题已通过真实搜索配置探测修复，合成占位工具不再误判为可执行原生工具。客户端全局配置未修改。特定 400 参数兼容恢复仍可能在 CLI 同一轮内重发 HTTP，不能声称严格 HTTP 次数恒为 1。详细结果见 [单轮实现与验证](../CCGATEWAY-SINGLE-TURN.md)；最终发布与客户端证据在 `~/sup2api/checks/single-turn-release-20261016-v2/`。
 
 出口文档：[共享 Xray 出口方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)、[控制器迁移方案](../CCGATEWAY-XRAY-MIGRATION.md)、[代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)。首版已实施，下面按时间记录实际部署。
 

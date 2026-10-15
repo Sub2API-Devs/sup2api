@@ -4,26 +4,29 @@
 
 此前测试后恢复旧程序的阶段已经结束。按用户“更新上去，然后启动 CC 客户端测试 21 账号”的要求，已提交并推送实现，在服务器从精确提交构建，并通过 Controller `POST /accounts/21/worker` 正式原地更新 #21。新程序保持运行，没有在验收后回滚。
 
-- Worker 版本：`0.1.58-singleturn.1`。
-- 实现提交：`494af0bed19109276f67540eb8c8d2913de08903`。
+- Worker 版本：`0.1.58-singleturn.2`。
+- 实现提交：单轮与流式 `494af0bed19109276f67540eb8c8d2913de08903`，实际客户端补测后的目录修复 `6f0253b01472dabcdbd0c8b1e3a498aef12c8904`；运行程序对应后者。
 - 构建：Go 1.27.1，干净 detached worktree；服务报告 `modified=false`。
-- 制品镜像：`ccgateway-app:0.1.58-singleturn.1`。更新的是既有容器内程序，容器原镜像标签不是实际程序版本。
-- 当前程序 SHA-256：`15c40b02968fcd21743284cf770630981833de6d9a29d7061ec2d803ff785488`。
+- 制品镜像：`ccgateway-app:0.1.58-singleturn.2`。更新的是既有容器内程序，容器原镜像标签不是实际程序版本。
+- 当前程序 SHA-256：`0ac219472663c24746addd7465835e13461379f23a4aef1e27a6a52c82a7a9bb`。
 - Controller 更新结果：`updated`、`online=true`；Worker health 为 healthy，内部 CLI 保持 2.1.292。
 - 容器 ID、Config/HostConfig/Mounts 摘要保留，另外 7 个账号运行容器的身份、状态和启动时间未变化。
 
-启动了本机真实 Claude Code **2.1.296** 客户端，以隔离配置和只读测试目录执行两项测试，模型为 `claude-haiku-4-5-20251001`：
+初版先通过了 Haiku 的文本和 Read 测试；补测发现默认动态目录没有开启搜索探测，因而漏掉原生 ToolSearch。修正版增加真实 `ENABLE_TOOL_SEARCH=true` 目录探测场景，仍严格核对实际 schema；`DeferredToolPlaceholder` 不是可执行原生工具，保留其延迟 MCP 占位项身份。目录/配置探测使用本机假上游，不增加真实上游推理请求。该修复的动态目录与配置验证在 CLI 2.1.292 和 2.1.296 均通过。
+
+修正版发布后，启动本机真实 Claude Code **2.1.296** 客户端，以隔离配置和只读测试目录，在 **`claude-opus-5-5`** 下完成三项测试：
 
 | 用例 | 客户端模型轮次 | 发给 #21 的 Messages 请求 | 结果 |
 |---|---:|---:|---|
-| 输出 1–60 的文本流 | 1 | 1 | 21 个文本增量，持续约 482 ms，CLI 正常成功结束 |
+| 输出 1–60 的文本流 | 1 | 1 | 16 个文本增量，客户端首段到末段约 934 ms，CLI 正常成功结束 |
 | Read 本地随机标记文件，再提交工具结果 | 2 | 2 | 客户端执行一次 Read，工具结果成对，最终准确返回文件中的随机标记 |
+| ToolSearch 发现本地 MCP 工具，再执行工具 | 3 | 3 | 客户端执行 ToolSearch 和 `mcp__single_turn_fixture__lookup_probe`，两个工具结果成对，最终准确返回随机标记 |
 
-三次 Messages 请求均为 HTTP 200。#21 的独立请求日志均记录 `--max-turns 1`、`CCGATEWAY_TOOL_SEARCH=0`、一个主模型 `message_start`。两次客户端进程均退出 0，终态为 success。
+六次 Messages 请求均为 HTTP 200。#21 的独立请求日志均记录 `--max-turns 1`、`CCGATEWAY_TOOL_SEARCH=0`、一个主模型 `message_start`；ToolSearch 链路的三个请求均确认客户端 ToolSearch 保持原生身份。三个客户端进程均退出 0，终态为 success。
 
 测试通过 SSH 私有桥接固定转发到 Controller `/accounts/21/v1/messages`，不会随机选择其他账号。验证覆盖真实客户端、Controller 转发和 #21 Worker，不将其描述为平台用户 API Key 的分组调度或计费验收。临时桥接和客户端配置已清理，没有改动用户全局 CC 配置。
 
-部署记录、构建来源和真实客户端结果位于服务器 `/home/debian/sup2api/checks/single-turn-release-20261016/` 与本地 `artifacts/ccg-single-turn-release-20261016/`。下文中的旧程序恢复和测试版哈希是此前验证阶段的历史记录。
+最终部署记录、构建来源和真实客户端结果位于服务器 `/home/debian/sup2api/checks/single-turn-release-20261016-v2/` 与本地 `artifacts/ccg-single-turn-release-20261016-v2/`。不带 `-v2` 的目录保留初版记录和测试脚本。下文中的旧程序恢复和测试版哈希是此前验证阶段的历史记录。
 
 ## 目标与边界
 
