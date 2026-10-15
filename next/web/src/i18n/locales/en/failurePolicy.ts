@@ -48,16 +48,32 @@ export default {
   backoff: 'Initial backoff (ms)',
   maxWait: 'Total wait budget (ms)',
   retryAfter: 'Respect upstream Retry-After',
-  accountEnabled: 'Automatic account actions',
+  accountEnabled: 'Automatic account cooldown / disabling',
   accountHint:
-    "Cooldown and disabling use separate rules. Disabling also requires the account's permission. Turning this off does not silently cool down or switch accounts.",
+    "Controls only cooldown and disabling rules below. Disabling also requires the account's permission. Turning this off leaves retries and switching unchanged.",
+  retriesPerAccount: 'Retries allocated to each account',
+  retriesPerAccountHint:
+    'Switch on the next retry after this count. The initial request is excluded; requests after switching count. 0 switches on every retry. Applies only when switching is enabled.',
+  switchAccount: 'Switch accounts at the retry limit',
+  switchAccountHint:
+    'When enabled, rotate at the per-account limit. When disabled, all retries stay on the original account. Cooldown or disabling causes an early switch when enabled, otherwise stops retries.',
+  resetSticky: 'Reset sticky binding when switching',
+  resetStickyHint:
+    'Release the original binding and bind the new account on success. When disabled, preserve the original binding. Chat history is not deleted.',
+  sequence: 'Request order: {sequence}.',
+  sequenceHint:
+    'The first item is the initial request; the rest are retries. Letters represent accounts. Continues only while retry rules match and accounts remain eligible; stops on success.',
+  sharedRetry: 'Retry / switch using the shared plan',
+  unifiedMigration:
+    'This is a draft unified retry plan. The saved policy stays active until publication. Global settings come from the first enabled legacy retry rule; separate rule limits, switching and egress settings will be merged. Review before publishing.',
   retry_rules: 'Retry and switching rules',
   account_rules: 'Account action rules',
   orderHint: 'The first matching rule in each list wins independently. No match returns the error and leaves the account unchanged.',
   name: 'Rule name',
   source: 'Error source',
-  codes: 'HTTP status codes',
-  codesHint: 'Accepts 400–599 and ranges. Matches the original error response; transport failures have no HTTP status.',
+  codes: 'HTTP status codes (optional)',
+  codesHint:
+    'Accepts 400–599 and ranges, e.g. 429,500-599. Enter only codes, only keywords, or both with the selected relationship. Transport failures have no HTTP status.',
   keywords: 'Keywords (optional)',
   keywordsHint:
     'One per line, case-insensitive. Empty means status codes only. A transport rule with no conditions matches all transport failures.',

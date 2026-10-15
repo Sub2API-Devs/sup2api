@@ -115,7 +115,14 @@ watch(
       <SField :label="t('failurePolicy.action')">
         <SSelect
           v-model="rule.action"
-          :options="options(account ? ['none', 'cooldown', 'disable'] : ['return', 'retry', 'switch', 'switch_reset'], 'actions')"
+          :options="
+            account
+              ? options(['none', 'cooldown', 'disable'], 'actions')
+              : [
+                { value: 'return', label: t('failurePolicy.actions.return') },
+                { value: 'retry', label: t('failurePolicy.sharedRetry') }
+              ]
+          "
           data-testid="rule-action"
         />
       </SField>
@@ -128,36 +135,6 @@ watch(
           type="number"
           :min="1"
           :max="86400"
-        />
-      </SField>
-      <SField
-        v-if="!account && rule.action !== 'return'"
-        :label="t('failurePolicy.egress')"
-        :hint="t('failurePolicy.egressHint')"
-      >
-        <SSelect
-          v-model="rule.egress"
-          :options="options(['same_proxy', 'proxy_only', 'account_configured'], 'egresses')"
-        />
-      </SField>
-      <SField
-        v-if="!account && rule.action === 'retry'"
-        :label="t('failurePolicy.sameRetries')"
-      >
-        <SInput
-          v-model="rule.same_account_retries"
-          type="number"
-          :min="1"
-          :max="9"
-        />
-      </SField>
-      <SField
-        v-if="!account && rule.action === 'retry'"
-        :label="t('failurePolicy.exhausted')"
-      >
-        <SSelect
-          v-model="rule.exhausted_action"
-          :options="options(['return', 'switch', 'switch_reset'], 'actions')"
         />
       </SField>
     </SGrid>

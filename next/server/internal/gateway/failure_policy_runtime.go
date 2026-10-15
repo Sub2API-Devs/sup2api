@@ -21,6 +21,7 @@ type failureState struct {
 	unsafeTransport bool
 	sameID          int64
 	sameRetries     map[int64]int
+	retrySlots      map[int64]int
 	accountProxies  map[int64]int64
 	baseSet         bool
 	baseProxy       int64
@@ -65,6 +66,13 @@ func (c *call) beginFailureAttempt(ref *core.AccountRef) {
 		return
 	}
 	s := &c.failureState
+	if s.baseSet && c.failurePolicy.SchemaVersion >= 2 {
+		if s.retrySlots == nil {
+			s.retrySlots = map[int64]int{}
+		}
+		// Every retry consumes a slot, including the first attempt on a new account.
+		s.retrySlots[ref.ID]++
+	}
 	if s.accountProxies == nil {
 		s.accountProxies = map[int64]int64{}
 	}
@@ -104,7 +112,7 @@ func (c *call) decideFailure(ctx context.Context, accountID int64, f FailureFact
 		s.blocked = disabled
 		if disabled {
 			s.accountResult = "disabled"
-			if c.sticky != nil && !c.sticky.keep && c.sticky.bound == accountID && s.nextAction(accountID) != failureSwitch {
+			if c.sticky != nil && !c.sticky.keep && c.sticky.bound == accountID && c.nextFailureAction(accountID) != failureSwitch {
 				s.stickyErr = c.writePolicyBinding(ctx, c.sticky, 0)
 			}
 		} else {
@@ -226,7 +234,7 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 		}
 		c.decideFailure(ctx, ref.ID, c.failureFacts("core", res.err.Status, res.err.Message))
 	}
-	action := s.nextAction(ref.ID)
+	action := c.nextFailureAction(ref.ID)
 	reason := c.retryBlocked(ctx, res, attempts, action)
 	if reason == "" {
 		reason = c.waitForRetry(ctx, attempts)
@@ -245,12 +253,17 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 	return res
 }
 
-func (s *failureState) nextAction(accountID int64) string {
+func (c *call) nextFailureAction(accountID int64) string {
+	s := &c.failureState
 	d := s.decision
 	if d.Action != failureRetry {
 		return d.Action
 	}
-	if s.blocked || s.sameRetries[accountID] >= d.SameAccountRetries {
+	retries := s.sameRetries[accountID]
+	if c.failurePolicy.SchemaVersion >= 2 {
+		retries = s.retrySlots[accountID]
+	}
+	if s.blocked || retries >= d.SameAccountRetries {
 		return d.ExhaustedAction
 	}
 	return failureRetry

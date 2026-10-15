@@ -136,13 +136,7 @@ function condition(rule: FailureRule) {
         </SHint>
       </template>
       <template #cell-action="{ row }">
-        <div>{{ t(`failurePolicy.actions.${row.action}`) }}</div>
-        <SHint
-          v-if="!account && row.action !== 'return'"
-          size="xs"
-        >
-          {{ t(`failurePolicy.egresses.${row.egress}`) }}
-        </SHint>
+        <div>{{ t(!account && row.action === 'retry' ? 'failurePolicy.sharedRetry' : `failurePolicy.actions.${row.action}`) }}</div>
       </template>
       <template #cell-actions="{ row }">
         <SDropdown

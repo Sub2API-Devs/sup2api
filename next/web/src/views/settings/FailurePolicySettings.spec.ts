@@ -8,7 +8,7 @@ import FailureRuleEditor from './FailureRuleEditor.vue'
 import FailureRulesTable from './FailureRulesTable.vue'
 import FailurePolicyPreview from './FailurePolicyPreview.vue'
 import FailurePolicyControls from './FailurePolicyControls.vue'
-import { emptyFailurePolicy, newFailureRule, normalizedPolicy } from './failurePolicy'
+import { editablePolicy, emptyFailurePolicy, newFailureRule, normalizedPolicy, retryAccountSequence } from './failurePolicy'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn() }))
 const permissions = vi.hoisted(() => ({ manage: true }))
@@ -23,7 +23,7 @@ function fixture() {
   policy.retry_enabled = true
   policy.retry_rules = [newFailureRule('429 换号', false)]
   policy.retry_rules[0]!.match.status_codes = '429'
-  policy.retry_rules[0]!.action = 'switch_reset'
+  policy.retry_rules[0]!.action = 'retry'
   return policy
 }
 beforeEach(() => {
@@ -34,6 +34,46 @@ beforeEach(() => {
 })
 
 describe('core failure policy settings', () => {
+  it('shows five extra retries allocated in pairs across accounts', () => {
+    const policy = { ...fixture(), max_retries: 5, retries_per_account: 2 }
+    expect(retryAccountSequence(policy)).toEqual(['A', 'A', 'A', 'B', 'B', 'C'])
+    expect(retryAccountSequence({ ...policy, switch_account: false })).toEqual(['A', 'A', 'A', 'A', 'A', 'A'])
+    expect(retryAccountSequence({ ...policy, retries_per_account: 0 })).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
+    const wrapper = mount(FailurePolicyControls, { props: { modelValue: policy, disabled: false, errors: {} }, global })
+    expect(wrapper.get('[data-testid="retry-sequence"]').text()).toContain('A → A → A → B → B → C')
+  })
+
+  it('keeps legacy migration in a visible draft until explicitly published', async () => {
+    const legacy = fixture()
+    legacy.schema_version = 1
+    legacy.retry_rules[0]!.same_account_retries = 2
+    legacy.retry_rules[0]!.exhausted_action = 'switch_reset'
+    const draft = editablePolicy(legacy)
+    expect(draft).toMatchObject({ schema_version: 2, retries_per_account: 2, switch_account: true, reset_sticky: true })
+    expect(legacy.schema_version).toBe(1)
+    api.get.mockResolvedValue({ configured: true, policy: legacy })
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    expect(wrapper.text()).toContain('统一重试计划的迁移草稿')
+    expect(api.put).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="settings-save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('publishes keyword-only rules without adding a status condition', async () => {
+    const p = fixture()
+    p.retry_rules[0]!.match.status_codes = ''
+    p.retry_rules[0]!.match.keywords = [' quota ']
+    api.get.mockResolvedValue({ configured: true, policy: p })
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    wrapper.findComponent(FailurePolicyControls).findAllComponents(SInput)[0]!.vm.$emit('update:modelValue', 5)
+    await flushPromises()
+    api.put.mockImplementation((_path, body) => Promise.resolve({ configured: true, policy: { ...body.policy, revision: 8 } }))
+    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toMatchObject({ status_codes: '', keywords: ['quota'] })
+  })
+
   it.each([null, 1.5])('rejects empty or fractional budgets before publishing: %s', async value => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
@@ -53,8 +93,7 @@ describe('core failure policy settings', () => {
     rule.match.models = ['limited-model']
     rule.match.protocols = ['anthropic']
     rule.action = 'retry'
-    rule.same_account_retries = 3
-    rule.exhausted_action = 'switch_reset'
+    p.retries_per_account = 3
     api.get.mockResolvedValue({ configured: true, policy: p })
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
@@ -63,8 +102,8 @@ describe('core failure policy settings', () => {
     expect(details.text()).toContain('17')
     expect(details.text()).toContain('limited-model')
     expect(details.text()).toContain('anthropic')
-    expect(details.text()).toContain('3')
-    expect(details.text()).toContain('换号，重置绑定')
+    expect(details.text()).toContain('按统一计划重试')
+    expect(wrapper.findComponent(FailurePolicyControls).findAllComponents(SInput)[1]!.props('modelValue')).toBe(3)
     expect(details.findAll('input, textarea, select')).toHaveLength(0)
     expect(wrapper.find('[data-testid="settings-save"]').exists()).toBe(false)
   })
@@ -152,6 +191,14 @@ describe('shared rule editor and table', () => {
     await flushPromises()
     expect(rule.match.status_codes).toBe('')
     expect(normalizedPolicy(fixture()).retry_rules[0]!.match.keywords).toEqual([])
+  })
+
+  it('offers only return and shared retry actions in request rules', () => {
+    const rule = fixture().retry_rules[0]!
+    const wrapper = mount(FailureRuleEditor, { props: { modelValue: rule, account: false }, global })
+    const actions = wrapper.findAllComponents(SSelect).at(-1)!.props('options')
+    expect(actions.map(option => option.value)).toEqual(['return', 'retry'])
+    expect(wrapper.text()).not.toContain('原账号最多额外重试次数')
   })
 })
 

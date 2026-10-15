@@ -23,6 +23,10 @@ type FailurePolicy struct {
 	SchemaVersion     int           `json:"schema_version"`
 	RetryEnabled      bool          `json:"retry_enabled"`
 	MaxRetries        int           `json:"max_retries"`
+	RetriesPerAccount int           `json:"retries_per_account"`
+	SwitchAccount     bool          `json:"switch_account"`
+	ResetSticky       bool          `json:"reset_sticky"`
+	Egress            string        `json:"egress"`
 	BackoffMS         int           `json:"backoff_ms"`
 	MaxWaitMS         int           `json:"max_wait_ms"`
 	RespectRetryAfter bool          `json:"respect_retry_after"`
@@ -42,7 +46,7 @@ func (p *FailurePolicy) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		return err
 	}
-	for _, key := range []string{"max_retries", "backoff_ms", "max_wait_ms"} {
+	for _, key := range []string{"max_retries", "retries_per_account", "backoff_ms", "max_wait_ms"} {
 		if bytes.Equal(bytes.TrimSpace(fields[key]), []byte("null")) {
 			return fmt.Errorf("%s must be an integer, not null", key)
 		}
@@ -95,7 +99,7 @@ type FailureDecision struct {
 }
 
 func defaultFailurePolicy() FailurePolicy {
-	return FailurePolicy{SchemaVersion: 1, MaxRetries: 2, BackoffMS: 200, MaxWaitMS: 5000,
+	return FailurePolicy{SchemaVersion: 2, MaxRetries: 2, SwitchAccount: true, ResetSticky: true, Egress: "same_proxy", BackoffMS: 200, MaxWaitMS: 5000,
 		RespectRetryAfter: true, RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
 }
 
@@ -108,7 +112,7 @@ func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p.AccountEnabled = ad.Enabled
 	p.RetryRules = []FailureRule{{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
 		Match:  FailureMatch{Source: "upstream", StatusCodes: "408,429,500-599", Mode: "all"},
-		Action: failureReset, Egress: "same_proxy"}}
+		Action: failureRetry}}
 	if ad.StatusCodes != "" || len(ad.Keywords) > 0 {
 		p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
 			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "any"}, Action: "disable"}}
@@ -154,7 +158,7 @@ func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 	if p.RetryEnabled && p.MaxRetries > 0 {
 		for _, r := range p.RetryRules {
 			if r.Enabled && r.Match.matches(f) {
-				d.RetryRule, d.Action, d.SameAccountRetries, d.ExhaustedAction, d.Egress = r.ID, r.Action, r.SameAccountRetries, r.ExhaustedAction, r.Egress
+				d = p.retryDecision(r)
 				break
 			}
 		}
@@ -166,6 +170,23 @@ func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 				break
 			}
 		}
+	}
+	return d
+}
+
+func (p *FailurePolicy) retryDecision(r FailureRule) FailureDecision {
+	d := FailureDecision{RetryRule: r.ID, Action: r.Action, AccountAction: "none",
+		SameAccountRetries: r.SameAccountRetries, ExhaustedAction: r.ExhaustedAction, Egress: r.Egress}
+	if p.SchemaVersion == 1 {
+		return d
+	}
+	d.SameAccountRetries, d.ExhaustedAction, d.Egress = p.RetriesPerAccount, failureReturn, p.Egress
+	if !p.SwitchAccount {
+		d.SameAccountRetries = p.MaxRetries
+	} else if p.ResetSticky {
+		d.ExhaustedAction = failureReset
+	} else {
+		d.ExhaustedAction = failureSwitch
 	}
 	return d
 }

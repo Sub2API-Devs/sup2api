@@ -15,6 +15,7 @@ const canManage = computed(() => auth.has('settings:manage'))
 const {
   policy,
   configured,
+  migrationNeeded,
   loading,
   saving,
   error,
@@ -73,13 +74,19 @@ onMounted(load)
       >
         {{ t('failurePolicy.migration') }}
       </SAlert>
+      <SAlert
+        v-if="migrationNeeded"
+        tone="warning"
+      >
+        {{ t('failurePolicy.unifiedMigration') }}
+      </SAlert>
       <SSettingsGroup
         :title="t('failurePolicy.title')"
         :description="t('failurePolicy.description')"
       >
         <template #actions>
           <SettingsSaveBar
-            :dirty="dirty || !configured"
+            :dirty="dirty || !configured || migrationNeeded"
             :saving="saving"
             :can-manage="canManage"
             :save-label="t('failurePolicy.publish')"

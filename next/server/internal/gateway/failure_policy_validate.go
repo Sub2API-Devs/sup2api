@@ -11,8 +11,9 @@ import (
 )
 
 type policyValidation struct {
-	ctx    context.Context
-	errors []core.FieldError
+	ctx     context.Context
+	errors  []core.FieldError
+	unified bool
 }
 
 func (v *policyValidation) add(field, en, zh string) {
@@ -27,11 +28,15 @@ func (v *policyValidation) number(field string, n, lo, hi int) {
 	}
 }
 func (p *FailurePolicy) validate(ctx context.Context) []core.FieldError {
-	v := &policyValidation{ctx: ctx}
-	if p.SchemaVersion != 1 {
+	v := &policyValidation{ctx: ctx, unified: p.SchemaVersion >= 2}
+	if p.SchemaVersion != 1 && p.SchemaVersion != 2 {
 		v.add("schema_version", "unsupported policy version", "不支持的策略版本")
 	}
 	v.number("max_retries", p.MaxRetries, 0, 9)
+	if v.unified {
+		v.number("retries_per_account", p.RetriesPerAccount, 0, 9)
+		v.egress("egress", &p.Egress)
+	}
 	v.number("backoff_ms", p.BackoffMS, 0, 30000)
 	v.number("max_wait_ms", p.MaxWaitMS, 0, 120000)
 	v.rules("retry_rules", &p.RetryRules, false)
@@ -130,6 +135,12 @@ func (v *policyValidation) accountAction(base string, r *FailureRule) {
 	}
 }
 func (v *policyValidation) requestAction(base string, r *FailureRule) {
+	if v.unified {
+		if r.Action != failureReturn && r.Action != failureRetry {
+			v.add(base+"action", "select return or retry with the shared plan", "请选择直接返回或按统一计划重试")
+		}
+		return
+	}
 	if !slices.Contains([]string{failureReturn, failureRetry, failureSwitch, failureReset}, r.Action) {
 		v.add(base+"action", "invalid request action", "无效的请求动作")
 	}
@@ -139,10 +150,14 @@ func (v *policyValidation) requestAction(base string, r *FailureRule) {
 			v.add(base+"exhausted_action", "select action after retry limit", "请选择原账号重试耗尽后的动作")
 		}
 	}
-	if r.Egress == "" {
-		r.Egress = "same_proxy"
+	v.egress(base+"egress", &r.Egress)
+}
+
+func (v *policyValidation) egress(field string, value *string) {
+	if *value == "" {
+		*value = "same_proxy"
 	}
-	if !slices.Contains([]string{"same_proxy", "proxy_only", "account_configured"}, r.Egress) {
-		v.add(base+"egress", "invalid egress constraint", "无效的出口约束")
+	if !slices.Contains([]string{"same_proxy", "proxy_only", "account_configured"}, *value) {
+		v.add(field, "invalid egress constraint", "无效的出口约束")
 	}
 }

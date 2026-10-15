@@ -37,7 +37,7 @@ function ruleName(id?: string) {
       {{ ruleName(decision.retry_rule) }}
     </SDescItem>
     <SDescItem :label="t('failurePolicy.action')">
-      {{ label('actions', decision.action) }}
+      {{ policy && policy.schema_version >= 2 && decision.action === 'retry' ? t('failurePolicy.sharedRetry') : label('actions', decision.action) }}
     </SDescItem>
     <SDescItem :label="t('failurePolicy.account_rules')">
       {{ ruleName(decision.account_rule) }}

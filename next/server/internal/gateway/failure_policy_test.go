@@ -20,6 +20,7 @@ import (
 
 func testFailurePolicy() FailurePolicy {
 	p := defaultFailurePolicy()
+	p.SchemaVersion = 1 // Legacy per-rule plans remain supported until explicitly migrated.
 	p.Revision, p.RetryEnabled, p.BackoffMS, p.RespectRetryAfter = 1, true, 0, false
 	p.RetryRules = []FailureRule{{ID: "retry", Name: "Retry HTTP", Enabled: true,
 		Match: FailureMatch{Source: "upstream", StatusCodes: "429,500-599"}, Action: failureReset, Egress: "same_proxy"}}
@@ -339,7 +340,7 @@ func TestFailurePolicyRechecksChangedCandidateModels(t *testing.T) {
 }
 
 func TestFailurePolicyRejectsNullBudgets(t *testing.T) {
-	for _, field := range []string{"max_retries", "backoff_ms", "max_wait_ms"} {
+	for _, field := range []string{"max_retries", "retries_per_account", "backoff_ms", "max_wait_ms"} {
 		raw, err := json.Marshal(testFailurePolicy())
 		require.NoError(t, err)
 		var fields map[string]any

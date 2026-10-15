@@ -5,6 +5,7 @@ import { i18n } from '@/i18n'
 import { errorMessage, fieldErrors } from '@/utils/errors'
 import {
   emptyFailurePolicy,
+  editablePolicy,
   normalizedPolicy,
   policyFormErrors,
   type FailurePolicy,
@@ -17,6 +18,8 @@ const path = '/settings/failure-policy'
 export function useFailurePolicy() {
   const policy = ref<FailurePolicyForm>(emptyFailurePolicy())
   const configured = ref(false)
+  const migrationNeeded = ref(false)
+  let savedMigrationNeeded = false
   const loading = ref(false)
   const saving = ref(false)
   const error = ref('')
@@ -29,7 +32,9 @@ export function useFailurePolicy() {
   const isLoaded = computed(() => !!saved.value)
 
   function apply(response: FailurePolicyResponse) {
-    policy.value = normalizedPolicy(response.policy)
+    policy.value = editablePolicy(response.policy)
+    migrationNeeded.value = response.policy.schema_version < 2
+    savedMigrationNeeded = migrationNeeded.value
     configured.value = response.configured
     revision.value = response.policy.revision
     saved.value = JSON.stringify(policy.value)
@@ -69,6 +74,7 @@ export function useFailurePolicy() {
   function reset() {
     if (!saved.value) return
     policy.value = JSON.parse(saved.value)
+    migrationNeeded.value = savedMigrationNeeded
     errors.value = {}
     error.value = ''
   }
@@ -86,12 +92,15 @@ export function useFailurePolicy() {
 
   function restore(version: number | null) {
     const previous = history.value.find(p => p.revision === version)
-    if (previous) policy.value = normalizedPolicy({ ...previous, revision: revision.value })
+    if (!previous) return
+    policy.value = editablePolicy({ ...previous, revision: revision.value })
+    migrationNeeded.value = previous.schema_version < 2
   }
 
   return {
     policy,
     configured,
+    migrationNeeded,
     loading,
     saving,
     error,

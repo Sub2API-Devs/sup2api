@@ -34,29 +34,7 @@ const list = (values: unknown[] | undefined) => (values?.length ? values.join(',
       {{ list(rule.match.protocols) }}
     </SDescItem>
     <SDescItem :label="t('failurePolicy.action')">
-      {{ t(`failurePolicy.actions.${rule.action}`) }}
-    </SDescItem>
-    <SDescItem
-      v-if="!account && rule.action !== 'return'"
-      :label="t('failurePolicy.egress')"
-    >
-      {{
-        t(`failurePolicy.egresses.${rule.egress}`)
-      }}
-    </SDescItem>
-    <SDescItem
-      v-if="rule.action === 'retry'"
-      :label="t('failurePolicy.sameRetries')"
-    >
-      {{ rule.same_account_retries }}
-    </SDescItem>
-    <SDescItem
-      v-if="rule.action === 'retry'"
-      :label="t('failurePolicy.exhausted')"
-    >
-      {{
-        t(`failurePolicy.actions.${rule.exhausted_action}`)
-      }}
+      {{ t(!account && rule.action === 'retry' ? 'failurePolicy.sharedRetry' : `failurePolicy.actions.${rule.action}`) }}
     </SDescItem>
     <SDescItem
       v-if="rule.action === 'cooldown'"
