@@ -66,7 +66,7 @@ export default {
   sharedRetry: 'Retry / switch using the shared plan',
   unifiedMigration:
     'The saved policy remains active until you save. The new plan removes separate egress and wait limits. Disabled, return-error and no-action rules are omitted; cooldown conditions become disable rules. Review before saving.',
-  retry_rules: 'Retry and switching rules',
+  retry_rules: 'Automatic retry',
   account_rules: 'Automatic disable rules',
   orderHint: 'Drag the leading handle to reorder. The first matching rule wins.',
   codesShort: 'Status codes',

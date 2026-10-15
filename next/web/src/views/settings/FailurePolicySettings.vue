@@ -101,6 +101,7 @@ onMounted(load)
         <div class="py-4">
           <FailureRulesTable
             v-model="policy.retry_rules"
+            :show-errors="Object.keys(errors).length > 0"
             :account="false"
             :disabled="disabled"
           />
@@ -121,6 +122,7 @@ onMounted(load)
         <div class="py-4">
           <FailureRulesTable
             v-model="policy.account_rules"
+            :show-errors="Object.keys(errors).length > 0"
             :account="true"
             :disabled="disabled"
           />

@@ -60,7 +60,7 @@ export default {
   sharedRetry: '按统一计划重试 / 换号',
   unifiedMigration:
     '保存前仍执行原策略。新版移除独立出口限制与等待预算；已关闭、返回错误和不处理规则不迁入，账号冷却条件改为自动禁用。请核对规则后保存。',
-  retry_rules: '重试与换号规则',
+  retry_rules: '自动重试',
   account_rules: '自动禁用规则',
   orderHint: '拖动左侧手柄排序，从上到下首条匹配生效。',
   codesShort: '错误码',

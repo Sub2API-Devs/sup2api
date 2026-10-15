@@ -26,9 +26,9 @@ watch(
   { deep: true }
 )
 async function test() {
-  const errors = policyFormErrors(props.policy, t('failurePolicy.numberRequired'))
+  const errors = policyFormErrors(props.policy, t('failurePolicy.numberRequired'), t('failurePolicy.invalidRule'))
   if (Object.keys(errors).length) {
-    error.value = t('failurePolicy.numberRequired')
+    error.value = Object.values(errors)[0]!
     result.value = null
     return
   }

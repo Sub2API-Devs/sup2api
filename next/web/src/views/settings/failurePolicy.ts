@@ -47,13 +47,18 @@ export type FailurePolicyForm = Omit<FailurePolicy, 'max_retries' | 'retries_per
   max_wait_ms: number | null
 }
 
-export function policyFormErrors(form: FailurePolicyForm, message: string): Record<string, string> {
+export function policyFormErrors(form: FailurePolicyForm, message: string, ruleMessage = message): Record<string, string> {
   const errors: Record<string, string> = {}
   const check = (key: string, value: unknown) => {
     if (typeof value !== 'number' || !Number.isInteger(value)) errors[key] = message
   }
   for (const key of ['max_retries', 'backoff_ms'] as const) check(key, form[key])
   if (form.schema_version >= 2 && form.switch_account) check('retries_per_account', form.retries_per_account)
+  for (const key of ['retry_rules', 'account_rules'] as const) {
+    form[key].forEach((rule, index) => {
+      for (const [field, error] of Object.entries(ruleFormErrors(rule, ruleMessage))) errors[`${key}.${index}.${field}`] = error
+    })
+  }
   return errors
 }
 export interface FailureDecision {
@@ -116,6 +121,7 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
     p.account_rules.forEach(r => fixedRule(r, true))
   }
   for (const r of [...p.retry_rules, ...p.account_rules]) {
+    r.name = r.name.trim()
     r.match.keywords = [...new Set((r.match.keywords || []).map(k => k.trim()).filter(Boolean))]
     r.match.status_codes = normalizeStatusCodes(r.match.status_codes)
     r.match.groups ||= []

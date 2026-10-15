@@ -46,7 +46,7 @@ export function useFailurePolicy() {
     }
   }
   async function save() {
-    errors.value = policyFormErrors(policy.value, i18n.global.t('failurePolicy.numberRequired'))
+    errors.value = policyFormErrors(policy.value, i18n.global.t('failurePolicy.numberRequired'), i18n.global.t('failurePolicy.invalidRule'))
     if (Object.keys(errors.value).length) return
     saving.value = true
     error.value = ''
