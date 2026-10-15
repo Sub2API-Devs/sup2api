@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SAlert, SButton, SCard, SChart, SDescriptions, SEmpty, SLink, SProgress, SSegmented, SStatCard, type DescItem } from '@sub2api/ui'
-import {
-  canManageSettings,
-  categoryLabel,
-  errorMessage,
-  fetchOverview,
-  useModHost,
-  type Overview,
-  type Range,
-  type Runtime
-} from './host'
+import { SAlert, SButton, SCard, SChart, SDescriptions, SEmpty, SGrid, SLink, SProgress, SStatCard, STimeRange, type DescItem, type RangeKey } from '@sub2api/ui'
+import RankList from './RankList.vue'
+import { canManageSettings, categoryLabel, errorMessage, fetchOverview, useModHost, type Overview, type Runtime } from './host'
 
 const emit = defineEmits<{
   (e: 'runtime', r: Runtime): void
@@ -20,10 +12,10 @@ const emit = defineEmits<{
 const host = useModHost()
 const t = host.t
 const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
+const canSettings = canManageSettings()
 
-const ranges: Range[] = ['24h', '7d', '30d']
-const range = ref<Range>('24h')
-const rangeOptions = computed(() => ranges.map((r) => ({ value: r, label: t(`range.${r}`) })))
+const rangeKeys: RangeKey[] = ['24h', '7d', '30d']
+const range = ref<RangeKey>('24h')
 const data = ref<Overview | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -49,6 +41,14 @@ const totals = computed(() => data.value?.totals)
 const runtime = computed(() => data.value?.runtime)
 const first = computed(() => loading.value && !data.value)
 
+/** Setup hint above the cards: upstream not configured, or moderation off. */
+const notice = computed(() => {
+  const r = runtime.value
+  if (r && !r.configured) return { tone: 'warning' as const, text: t('overview.notConfigured'), primary: true }
+  if (r?.mode === 'off') return { tone: 'info' as const, text: t('overview.offHint'), primary: false }
+  return null
+})
+
 const cards = computed(() => [
   { key: 'total', icon: 'eyeglass', tone: 'primary' as const, value: totals.value?.total },
   { key: 'pass', icon: 'check', tone: 'success' as const, value: totals.value?.pass },
@@ -68,6 +68,7 @@ function bucketLabel(ts: string) {
   return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
 }
 
+// Series colours (ECharts takes colours, not tones): green / amber / red / slate.
 const colors = { pass: '#22c55e', flag: '#f59e0b', block: '#ef4444', error: '#94a3b8' }
 
 const chart = computed(() => {
@@ -91,9 +92,6 @@ const chart = computed(() => {
   }
 })
 
-const maxCat = computed(() => Math.max(1, ...(data.value?.top_categories || []).map((c) => c.count)))
-const maxUser = computed(() => Math.max(1, ...(data.value?.top_users || []).map((u) => u.count)))
-
 const runtimeRows = computed<DescItem[]>(() => {
   const r = runtime.value
   if (!r) return []
@@ -115,61 +113,45 @@ const runtimeRows = computed<DescItem[]>(() => {
 <template>
   <div>
     <div class="mod-toolbar">
-      <SSegmented v-model="range" :options="rangeOptions" size="sm" :aria-label="t('rangeLabel')" />
+      <STimeRange v-model:range="range" from="" to="" :keys="rangeKeys" variant="segmented" size="sm" :label="false" />
     </div>
 
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
-    <SAlert v-if="runtime && !runtime.configured" tone="warning" class="mod-block">
-      {{ t('overview.notConfigured') }}
-      <template v-if="canManageSettings()" #actions>
-        <SButton variant="primary" size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
-      </template>
-    </SAlert>
-    <SAlert v-else-if="runtime && runtime.mode === 'off'" tone="info" class="mod-block">
-      {{ t('overview.offHint') }}
-      <template v-if="canManageSettings()" #actions>
-        <SButton size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
+    <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
+      {{ notice.text }}
+      <template v-if="canSettings" #actions>
+        <SButton :variant="notice.primary ? 'primary' : 'secondary'" size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
       </template>
     </SAlert>
 
-    <div class="mod-grid-stats">
+    <SGrid template="repeat(auto-fit, minmax(190px, 1fr))">
       <SStatCard v-for="c in cards" :key="c.key" :label="t(`overview.${c.key}`)" :value="n(c.value)" :icon="c.icon" :tone="c.tone" :loading="first" />
-    </div>
+    </SGrid>
 
     <SCard :title="t('overview.trend')" :subtitle="range === '24h' ? undefined : t('overview.trendHint')" class="mod-section">
       <SChart :option="chart" :loading="loading" height="280px" />
     </SCard>
 
-    <div class="mod-grid-3 mod-section">
+    <SGrid template="repeat(auto-fit, minmax(300px, 1fr))" class="mod-section">
       <SCard :title="t('overview.topCategories')">
-        <SEmpty v-if="!data?.top_categories?.length" :text="t('overview.noCategories')" icon="chart" />
-        <ol v-else class="mod-rank">
-          <li v-for="(c, i) in data.top_categories" :key="c.category">
-            <div class="mod-rank-row">
-              <span class="mod-rank-no">{{ i + 1 }}</span>
-              <span class="mod-rank-name" :title="c.category">
-                {{ categoryLabel(c.category) }}<code v-if="categoryLabel(c.category) !== c.category" class="mod-code">{{ c.category }}</code>
-              </span>
-              <span class="mod-rank-count">{{ n(c.count) }}</span>
-            </div>
-            <SProgress :value="c.count" :max="maxCat" tone="warning" class="mod-rank-bar" aria-hidden="true" />
-          </li>
-        </ol>
+        <RankList :items="data?.top_categories" :item-key="(c) => c.category" tone="warning" :empty-text="t('overview.noCategories')" empty-icon="chart">
+          <template #name="{ item: c }">
+            <span class="mod-rank-name" :title="c.category">
+              {{ categoryLabel(c.category) }}<code v-if="categoryLabel(c.category) !== c.category" class="mod-code">{{ c.category }}</code>
+            </span>
+          </template>
+          <template #count="{ item: c }">{{ n(c.count) }}</template>
+        </RankList>
       </SCard>
 
       <SCard :title="t('overview.topUsers')" :subtitle="t('overview.topUsersHint')">
-        <SEmpty v-if="!data?.top_users?.length" :text="t('overview.noUsers')" icon="user" />
-        <ol v-else class="mod-rank">
-          <li v-for="(u, i) in data.top_users" :key="u.user_id">
-            <div class="mod-rank-row">
-              <span class="mod-rank-no">{{ i + 1 }}</span>
-              <SLink as="button" class="mod-rank-name mod-rank-link" @click="emit('show-user', u.user_id)">{{ t('overview.user', { id: u.user_id }) }}</SLink>
-              <span class="mod-rank-count">{{ t('overview.times', { n: n(u.count) }) }}</span>
-            </div>
-            <SProgress :value="u.count" :max="maxUser" tone="danger" class="mod-rank-bar" aria-hidden="true" />
-          </li>
-        </ol>
+        <RankList :items="data?.top_users" :item-key="(u) => u.user_id" tone="danger" :empty-text="t('overview.noUsers')" empty-icon="user">
+          <template #name="{ item: u }">
+            <SLink as="button" class="mod-rank-name mod-rank-link" @click="emit('show-user', u.user_id)">{{ t('overview.user', { id: u.user_id }) }}</SLink>
+          </template>
+          <template #count="{ item: u }">{{ t('overview.times', { n: n(u.count) }) }}</template>
+        </RankList>
       </SCard>
 
       <SCard :title="t('overview.runtime')">
@@ -179,6 +161,6 @@ const runtimeRows = computed<DescItem[]>(() => {
           <SProgress :value="runtime.queue_len" :max="runtime.queue_cap || 1" :label="t('runtime.queue')" tone="info" show-value class="mod-queue" />
         </template>
       </SCard>
-    </div>
+    </SGrid>
   </div>
 </template>

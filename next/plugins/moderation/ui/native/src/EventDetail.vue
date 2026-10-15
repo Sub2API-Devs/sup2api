@@ -65,7 +65,7 @@ async function remove() {
     ev.value = null
     close()
   } catch (err) {
-    host.toast(errorMessage(err, t('loadFailed')), 'error')
+    host.toast(errorMessage(err, t('actionFailed')), 'error')
   } finally {
     deleting.value = false
   }
@@ -97,7 +97,7 @@ const fields = computed<DescItem[]>(() => {
 
 <template>
   <SModal :open="open" :title="t('detail.title')" width="xl" @update:open="emit('update:open', $event)">
-    <div v-if="loading" class="mod-center"><SSpinner /></div>
+    <SSpinner v-if="loading" block />
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
     <div v-else-if="ev" class="mod-detail">
       <div class="mod-detail-head">
@@ -112,12 +112,12 @@ const fields = computed<DescItem[]>(() => {
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <div class="mod-detail-section">
+      <div>
         <SSectionTitle tag="p">
           {{ t('detail.text') }}
           <SHint v-if="ev.text_chars" inline size="xs" class="mod-chars">{{ t('detail.chars', { n: host.i18n.formatNumber(ev.text_chars) }) }}</SHint>
           <template #actions>
-            <SCopyButton v-if="ev.text" :text="ev.text" :label="t('detail.copy')" />
+            <SCopyButton v-if="ev.text" :text="ev.text" />
           </template>
         </SSectionTitle>
         <SCode v-if="ev.text" :text="ev.text" class="mod-text-block" />

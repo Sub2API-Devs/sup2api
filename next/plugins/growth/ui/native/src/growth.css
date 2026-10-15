@@ -39,17 +39,6 @@
   color: rgb(var(--fg));
 }
 
-.growth-muted {
-  font-size: 0.875rem;
-  color: rgb(var(--fg-muted));
-}
-
-.growth-center {
-  display: flex;
-  justify-content: center;
-  padding: 2.5rem 0;
-}
-
 .growth-code-row {
   display: flex;
   flex-wrap: wrap;

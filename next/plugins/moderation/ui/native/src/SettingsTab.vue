@@ -30,14 +30,18 @@ const values = ref<Record<string, any>>({})
 const errors = ref<Record<string, string>>({})
 const schemaForm = ref<InstanceType<typeof SchemaForm>>()
 
+/** Shows a settings form from the server (secrets masked). */
+function apply(f: SettingsForm) {
+  form.value = f
+  values.value = JSON.parse(JSON.stringify(f.values || {}))
+  errors.value = {}
+}
+
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const f = await fetchSettingsForm()
-    form.value = f
-    values.value = JSON.parse(JSON.stringify(f?.values || {}))
-    errors.value = {}
+    apply(await fetchSettingsForm())
   } catch (e) {
     loadError.value = errorMessage(e, t('llm.loadFailed'))
   } finally {
@@ -47,25 +51,28 @@ async function load() {
 
 onMounted(load)
 
+/** Sets the field errors of a failed save; returns the message of the save bar. */
+function saveFailure(e: unknown): string {
+  if (!isApiError(e) || !Object.keys(e.fields).length) return errorMessage(e, t('llm.saveFailed'))
+  const { fields, root } = settingsFieldErrors(e.fields)
+  errors.value = fields
+  // Errors of the whole object or of fields that are not on this tab cannot be shown at a field.
+  const elsewhere = Object.entries(fields).filter(([k]) => !LLM_FIELDS.includes(k.split('.')[0]))
+  const lines = [...root, ...elsewhere.map(([k, v]) => `${k}: ${v}`)]
+  return lines.length ? lines.join('; ') : t('llm.fixErrors')
+}
+
 async function save() {
   if (schemaForm.value && !schemaForm.value.validate()) return
   saving.value = true
   saveError.value = ''
   errors.value = {}
   try {
-    await saveSettings(values.value)
+    // The response is the stored form (server-side normalisation, secrets masked).
+    apply(await saveSettings(values.value))
     host.toast(t('llm.saved'), 'success')
-    // Re-load to pick up server-side normalisation (masked secrets).
-    await load()
   } catch (e) {
-    if (isApiError(e) && Object.keys(e.fields).length) {
-      errors.value = settingsFieldErrors(e.fields)
-      // Errors of fields that are not on this tab (or of the whole object) go to the save bar.
-      const other = Object.entries(errors.value).filter(([k]) => !LLM_FIELDS.includes(k.split('.')[0]))
-      saveError.value = other.length ? other.map(([k, v]) => `${k}: ${v}`).join('; ') : t('llm.fixErrors')
-    } else {
-      saveError.value = errorMessage(e, t('llm.saveFailed'))
-    }
+    saveError.value = saveFailure(e)
   } finally {
     saving.value = false
   }
@@ -73,7 +80,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="mod-settings">
+  <div>
     <SSpinner v-if="loading && !form" block />
     <SAlert v-else-if="loadError" tone="danger">
       {{ loadError }}

@@ -1,23 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SAlert, SButton, SCard, SChart, SEmpty, SPageHeader, SProgress, SSegmented, SStatCard, STable } from '@sub2api/ui'
-import { isApiError } from '@sub2api/host'
+import { SAlert, SButton, SCard, SChart, SEmpty, SGrid, SPageHeader, SProgress, SStatCard, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
 import RulesEditor from './RulesEditor.vue'
-import { fetchStats, useGuardHost, type Range, type Stats } from './host'
+import { errorMessage, fetchStats, useGuardHost, type Stats } from './host'
 
 // "Request guard" dashboard (wireframe A.13): blocking trend, top rules,
 // recent blocks; rule management in a modal.
 const host = useGuardHost()
 const t = host.t
 
-const range = ref<Range>('today')
+const range = ref<RangeKey>('today')
 const stats = ref<Stats | null>(null)
 const loading = ref(false)
 const error = ref('')
 const rulesOpen = ref(false)
 
-const ranges: Range[] = ['today', '24h', '7d', '30d']
-const rangeOptions = computed(() => ranges.map((r) => ({ value: r, label: t(`range.${r}`) })))
+const rangeKeys: RangeKey[] = ['today', '24h', '7d', '30d']
 
 async function load() {
   loading.value = true
@@ -25,7 +23,7 @@ async function load() {
   try {
     stats.value = await fetchStats({ range: range.value })
   } catch (e) {
-    error.value = isApiError(e) ? e.message : t('loadFailed')
+    error.value = errorMessage(e, t('loadFailed'))
   } finally {
     loading.value = false
   }
@@ -67,21 +65,21 @@ const rate = computed(() => {
 
 const maxHits = computed(() => Math.max(1, ...(stats.value?.top_rules || []).map((r) => r.hits)))
 
-const recentColumns = computed(() => [
+const recentColumns = computed<TableColumn[]>(() => [
   { key: 'occurred_at', label: t('col.time') },
   { key: 'rule_name', label: t('col.rule') },
   { key: 'model', label: t('col.model') },
   { key: 'user_id', label: t('col.user') },
-  { key: 'snippet', label: t('col.snippet') },
+  { key: 'snippet', label: t('col.snippet'), ellipsis: true },
   { key: 'request_id', label: t('col.request') }
 ])
 </script>
 
 <template>
-  <div class="guard-dashboard">
+  <div>
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #actions>
-        <SSegmented v-model="range" :options="rangeOptions" size="sm" :aria-label="t('rangeLabel')" />
+        <STimeRange v-model:range="range" from="" to="" :keys="rangeKeys" variant="segmented" size="sm" :label="false" />
         <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="loading" @click="load" />
         <SButton v-if="host.can('rules:read')" variant="primary" icon="shield" @click="rulesOpen = true">{{ t('manageRules') }}</SButton>
       </template>
@@ -89,17 +87,17 @@ const recentColumns = computed(() => [
 
     <SAlert v-if="error" tone="danger" class="guard-block">{{ error }}</SAlert>
 
-    <div class="guard-grid-3">
+    <SGrid template="repeat(auto-fit, minmax(220px, 1fr))">
       <SStatCard :label="t('blocked')" :value="host.i18n.formatNumber(stats?.blocked_total ?? 0)" icon="shield" tone="danger" :loading="loading && !stats" />
       <SStatCard :label="t('requests')" :value="host.i18n.formatNumber(stats?.requests_total ?? 0)" icon="usage" :loading="loading && !stats" />
       <SStatCard :label="t('blockRate')" :value="rate" icon="chart" tone="warning" :loading="loading && !stats" />
-    </div>
+    </SGrid>
 
     <SCard :title="t('trend')" class="guard-section">
       <SChart :option="chart" :loading="loading" height="280px" />
     </SCard>
 
-    <div class="guard-grid-2 guard-section">
+    <SGrid template="repeat(auto-fit, minmax(360px, 1fr))" class="guard-section">
       <SCard :title="t('topRules')">
         <SEmpty v-if="!stats?.top_rules?.length" :text="t('noBlocks')" icon="shield" />
         <ol v-else class="guard-top">
@@ -110,7 +108,7 @@ const recentColumns = computed(() => [
                 {{ r.name }}
                 <code>{{ r.kind === 'regex' ? `/${r.pattern}/` : `"${r.pattern}"` }}</code>
               </span>
-              <span class="guard-hits">{{ t('hits', { n: r.hits }) }}</span>
+              <span class="guard-hits">{{ t('hits', { n: host.i18n.formatNumber(r.hits) }) }}</span>
             </div>
             <SProgress :value="r.hits" :max="maxHits" tone="danger" class="guard-bar" aria-hidden="true" />
           </li>
@@ -120,29 +118,18 @@ const recentColumns = computed(() => [
       <SCard :title="t('recent')" :padded="false">
         <STable :columns="recentColumns" :rows="stats?.recent || []" row-key="request_id" dense>
           <template #cell-occurred_at="{ row }">{{ host.i18n.formatDateTime(row.occurred_at) }}</template>
-          <template #cell-snippet="{ row }"><span class="guard-snippet" :title="row.snippet">{{ row.snippet || '—' }}</span></template>
           <template #cell-request_id="{ row }">
             <code class="guard-code" :title="row.request_id || undefined">{{ (row.request_id || '').slice(0, 10) || '—' }}</code>
           </template>
         </STable>
       </SCard>
-    </div>
+    </SGrid>
 
     <RulesEditor v-model:open="rulesOpen" @saved="load" />
   </div>
 </template>
 
 <style scoped>
-.guard-grid-3 {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-.guard-grid-2 {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-}
 .guard-section {
   margin-top: 1.25rem;
 }
@@ -189,13 +176,5 @@ const recentColumns = computed(() => [
 .guard-bar {
   margin-top: 0.25rem;
   padding-left: 1.75rem;
-}
-.guard-snippet {
-  display: inline-block;
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
 }
 </style>

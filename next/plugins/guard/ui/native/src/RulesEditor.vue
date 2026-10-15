@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SButton, SEmpty, SField, SHint, SInput, SModal, SSelect, SSpinner, SSwitch, STable } from '@sub2api/ui'
-import type { TableColumn } from '@sub2api/ui'
+import { SButton, SEmpty, SField, SHint, SInput, SModal, SSelect, SSpinner, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
-import { fetchRules, saveRules, useGuardHost, type Rule } from './host'
+import { errorMessage, fetchRules, saveRules, useGuardHost, type Rule } from './host'
 
 // Rule management: GET /rules, PUT /rules (replaces the whole set).
 const props = defineProps<{ open: boolean }>()
@@ -42,7 +41,7 @@ watch(
     try {
       rules.value = (await fetchRules()).map((r) => ({ ...r }))
     } catch (e) {
-      host.toast(isApiError(e) ? e.message : String(e), 'error')
+      host.toast(errorMessage(e, t('rules.loadFailed')), 'error')
     } finally {
       loading.value = false
     }
@@ -74,8 +73,11 @@ function validate(): boolean {
   return Object.keys(errs).length === 0
 }
 
+/** Field errors shown on a row (server keys: rules[i].name / rules[i].pattern). */
+const ROW_FIELD = /^rules\[\d+\]\.(name|pattern)$/
+
 function err(i: number, field: string) {
-  return errors.value[`rules[${i}].${field}`] || errors.value[`rules.${i}.${field}`]
+  return errors.value[`rules[${i}].${field}`]
 }
 
 async function save() {
@@ -87,8 +89,10 @@ async function save() {
     emit('saved')
     emit('update:open', false)
   } catch (e) {
-    if (isApiError(e) && Object.keys(e.fields).length) errors.value = { ...e.fields }
-    else host.toast(isApiError(e) ? e.message : String(e), 'error')
+    errors.value = isApiError(e) ? { ...e.fields } : {}
+    // Errors with no row field (too many rules, kind, id) go to a toast.
+    const other = Object.entries(errors.value).filter(([k]) => !ROW_FIELD.test(k))
+    if (other.length || !Object.keys(errors.value).length) host.toast(other.map(([, v]) => v).join('; ') || errorMessage(e, t('rules.saveFailed')), 'error')
   } finally {
     saving.value = false
   }
@@ -97,7 +101,7 @@ async function save() {
 
 <template>
   <SModal :open="open" :title="t('rules.title')" width="xl" @update:open="emit('update:open', $event)">
-    <div v-if="loading" class="guard-center"><SSpinner /></div>
+    <SSpinner v-if="loading" block />
     <template v-else>
       <SHint v-if="!canManage" tone="warning" class="guard-note">{{ t('rules.readOnly') }}</SHint>
       <SEmpty v-if="!rules.length" :text="t('rules.empty')" icon="shield" />
@@ -105,14 +109,7 @@ async function save() {
       <STable v-else :columns="columns" :rows="rules" row-key="__index" dense>
         <template #cell-name="{ row, index }">
           <SField :error="err(index, 'name')">
-            <SInput
-              v-model="row.name"
-              size="sm"
-              :error="!!err(index, 'name')"
-              :disabled="!canManage"
-              :maxlength="100"
-              :aria-label="t('rules.name')"
-            />
+            <SInput v-model="row.name" size="sm" :disabled="!canManage" :maxlength="100" :aria-label="t('rules.name')" />
           </SField>
         </template>
         <template #cell-kind="{ row }">
@@ -124,7 +121,6 @@ async function save() {
               v-model="row.pattern"
               size="sm"
               mono
-              :error="!!err(index, 'pattern')"
               :disabled="!canManage"
               :placeholder="row.kind === 'regex' ? '\\d{18}' : t('rules.keywordPlaceholder')"
               :aria-label="t('rules.pattern')"
@@ -147,11 +143,6 @@ async function save() {
 </template>
 
 <style scoped>
-.guard-center {
-  display: flex;
-  justify-content: center;
-  padding: 2.5rem 0;
-}
 .guard-note {
   margin-bottom: 0.75rem;
 }

@@ -1,4 +1,5 @@
 import type { PluginHost } from '@sub2api/host'
+import type { Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all moderation components.
 // All API shapes (CONTRACTS §20.7) live in this file so they are easy to adjust.
@@ -13,12 +14,9 @@ export function useModHost(): PluginHost {
   return host
 }
 
-// Manifest userPermissions (host.can prefixes them with plugin.moderation:).
-export const PERM_READ = 'moderation:read'
-export const PERM_MANAGE = 'moderation:manage'
-
+/** Manifest userPermission (host.can prefixes it with plugin.moderation:). */
 export function canManage(): boolean {
-  return useModHost().can(PERM_MANAGE)
+  return useModHost().can('moderation:manage')
 }
 
 // ------------------------------------------------------------------ types
@@ -27,7 +25,6 @@ export type Mode = 'off' | 'observe' | 'enforce'
 export type Verdict = 'pass' | 'flag' | 'block' | 'error'
 export type Action = 'allow' | 'deny'
 export type Severity = 'none' | 'low' | 'medium' | 'high' | 'critical'
-export type Range = '24h' | '7d' | '30d'
 
 export interface Totals {
   total: number
@@ -104,18 +101,6 @@ export interface ModEventDetail extends ModEvent {
   text?: string | null
 }
 
-export interface EventFilters {
-  verdict: string
-  action: string
-  mode: string
-  category: string
-  user_id: string
-  q: string
-  /** datetime-local input values (local time) */
-  from: string
-  to: string
-}
-
 export interface Block {
   user_id: number
   reason?: string
@@ -156,30 +141,9 @@ export interface TestResult {
 
 const api = () => useModHost().pluginApi
 
-export function fetchOverview(range: Range): Promise<Overview> {
+/** `range` is a preset key of the overview endpoint (24h, 7d, 30d). */
+export function fetchOverview(range: string): Promise<Overview> {
   return api().get<Overview>('/overview', { range })
-}
-
-/** Converts a datetime-local value to RFC3339 (UTC). */
-function rfc3339(local: string): string {
-  if (!local) return ''
-  const d = new Date(local)
-  return isNaN(d.getTime()) ? '' : d.toISOString()
-}
-
-export function fetchEvents(f: EventFilters, page: number, pageSize: number) {
-  return api().list<ModEvent>('/events', {
-    verdict: f.verdict,
-    action: f.action,
-    mode: f.mode,
-    category: f.category.trim(),
-    user_id: f.user_id.trim(),
-    q: f.q.trim(),
-    from: rfc3339(f.from),
-    to: rfc3339(f.to),
-    page,
-    page_size: pageSize
-  })
 }
 
 export function fetchEvent(id: number): Promise<ModEventDetail> {
@@ -231,8 +195,6 @@ export function categoryLabel(id: string): string {
   return BUILTIN_CATEGORIES.includes(id) ? h.t(`cat.${id}`) : id
 }
 
-export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'gray' | 'purple' | 'info'
-
 export function verdictTone(v: string | undefined): Tone {
   switch (v) {
     case 'pass':
@@ -273,22 +235,9 @@ export function enumLabel(group: string, v: string | undefined | null): string {
   return s === `plugin.${h.plugin.key}.${key}` || s === key ? v : s
 }
 
+/** Human-readable message of a failed call (ApiError is an Error), else `fallback`. */
 export function errorMessage(e: unknown, fallback: string): string {
-  if (e && typeof e === 'object' && 'message' in e && typeof (e as Error).message === 'string' && (e as Error).message) {
-    return (e as Error).message
-  }
-  return fallback
-}
-
-/** Opens the plugin detail page on its settings tab. */
-export function openSettings() {
-  const h = useModHost()
-  h.router.push({ path: `/plugins/${h.plugin.key}`, query: { tab: 'settings' } })
-}
-
-export function canOpenSettings(): boolean {
-  const h = useModHost()
-  return h.permissions.superuser() || h.permissions.has('plugin:read')
+  return e instanceof Error && e.message ? e.message : fallback
 }
 
 export function canManageSettings(): boolean {
@@ -314,18 +263,27 @@ export function fetchSettingsForm(): Promise<SettingsForm> {
   return h.api.get<SettingsForm>(`/plugins/${h.plugin.key}/settings`)
 }
 
-/** Saves the full settings object (masked secrets are sent back unchanged to keep them). */
-export async function saveSettings(values: Record<string, any>): Promise<void> {
+/**
+ * Saves the full settings object (masked secrets are sent back unchanged to
+ * keep them); the server answers with the stored form, secrets masked again.
+ */
+export function saveSettings(values: Record<string, any>): Promise<SettingsForm> {
   const h = useModHost()
-  await h.api.put(`/plugins/${h.plugin.key}/settings`, { values })
+  return h.api.put<SettingsForm>(`/plugins/${h.plugin.key}/settings`, { values })
 }
 
-/** Server field errors (values/a/0/b, values.a.0.b) -> SchemaForm paths (a.0.b). */
-export function settingsFieldErrors(fields: Record<string, string>): Record<string, string> {
+/**
+ * Server field errors -> SchemaForm paths. Schema errors are JSON pointers
+ * under "values" (values/a/0/b), plugin errors may be dotted (values.a.0.b);
+ * errors of the whole object ("values") come back in `root`.
+ */
+export function settingsFieldErrors(fields: Record<string, string>): { fields: Record<string, string>; root: string[] } {
   const out: Record<string, string> = {}
+  const root: string[] = []
   for (const [k, v] of Object.entries(fields)) {
     const p = k.replace(/^values(?=[./]|$)/, '').replace(/^[./]/, '').replace(/\//g, '.')
     if (p) out[p] = v
+    else root.push(v)
   }
-  return out
+  return { fields: out, root }
 }

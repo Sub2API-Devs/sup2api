@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SEmpty, SHint, SIcon, STextarea } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SEmpty, SGrid, SHint, SIcon, STextarea, type Tone } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
@@ -60,6 +60,8 @@ function onKey(e: KeyboardEvent) {
 
 // ---- transcript rendering
 
+const ROLE_TONE: Record<string, Tone> = { system: 'gray', user: 'accent', assistant: 'primary', tool: 'warning' }
+
 function contentText(m: ChatMessage): string {
   const c = m.content
   if (c === null || c === undefined) return ''
@@ -85,18 +87,14 @@ function prettyArgs(tc: ChatToolCall): string {
   }
 }
 
-function roleLabel(role: string): string {
-  return enumLabel('role', role)
-}
-
 const transcript = computed(() => result.value?.transcript || [])
 </script>
 
 <template>
-  <div class="mod-test">
-    <p class="mod-hint">{{ t('test.hint') }}</p>
+  <div>
+    <SHint class="mod-hint">{{ t('test.hint') }}</SHint>
 
-    <div class="mod-test-grid">
+    <SGrid template="repeat(auto-fit, minmax(340px, 1fr))" class="mod-test-grid">
       <SCard :title="t('test.title')">
         <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
         <div class="mod-test-actions">
@@ -126,7 +124,7 @@ const transcript = computed(() => result.value?.transcript || [])
             <SDescItem :label="t('test.categories')"><CategoryChips :categories="result.categories" wrap /></SDescItem>
             <SDescItem :label="t('test.reason')" :value="result.reason" />
             <SDescItem v-if="result.error" :label="t('test.error')">
-              <span class="mod-text-danger mod-prewrap">{{ result.error }}</span>
+              <SHint inline tone="danger" class="mod-prewrap">{{ result.error }}</SHint>
             </SDescItem>
             <SDescItem :label="t('test.latency')" :value="t('ms', { n: num(result.latency_ms) })" />
             <SDescItem :label="t('test.turns')" :value="num(result.turns)" />
@@ -134,14 +132,14 @@ const transcript = computed(() => result.value?.transcript || [])
           </SDescriptions>
         </div>
       </SCard>
-    </div>
+    </SGrid>
 
     <SCard v-if="result" :title="t('test.transcript')" :subtitle="t('test.transcriptHint')" class="mod-section">
       <SEmpty v-if="!transcript.length" :text="t('test.noTranscript')" />
       <ol v-else class="mod-chat">
-        <li v-for="(m, i) in transcript" :key="i" class="mod-msg" :class="`mod-msg-${m.role}`">
+        <li v-for="(m, i) in transcript" :key="i" class="mod-msg">
           <div class="mod-msg-head">
-            <span class="mod-msg-role">{{ roleLabel(m.role) }}</span>
+            <SBadge :tone="ROLE_TONE[m.role] || 'gray'">{{ enumLabel('role', m.role) }}</SBadge>
             <SHint inline size="xs">#{{ i + 1 }}</SHint>
             <code v-if="m.tool_call_id" class="mod-code">{{ t('test.toolCallId') }}: {{ m.tool_call_id }}</code>
           </div>

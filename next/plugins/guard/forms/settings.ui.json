@@ -10,7 +10,8 @@
     }
   },
   "alert_cooldown_sec": {
-    "ui:title": { "en": "Alert cooldown (seconds)", "zh": "告警冷却时间（秒）" },
+    "ui:title": { "en": "Alert cooldown", "zh": "告警冷却时间" },
+    "ui:options": { "unit": { "en": "s", "zh": "秒" } },
     "ui:help": {
       "en": "Send at most one alert per rule within this many seconds, across all nodes (0–300). Requests are still blocked and logged during the cooldown, just not alerted. 0 sends an alert for every blocked request. Cluster-wide throttling needs the optional \"lock\" permission; without it each node throttles on its own, up to one alert per node.",
       "zh": "同一条规则在这段时间内全集群最多发送一次告警（0–300 秒）。冷却期内请求照常拦截和记录，只是不再告警。0 表示每次拦截都发送。全集群节流需要可选的 lock 权限；未授权时各节点各自节流，每个节点最多各发一次。"

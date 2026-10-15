@@ -4,7 +4,6 @@ export default {
     title: 'Request guard',
     subtitle: 'Blocks gateway requests whose prompt matches keyword or regex rules.',
     manageRules: 'Manage rules',
-    range: { today: 'Today', '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days' },
     blocked: 'Blocked',
     requests: 'Requests',
     blockRate: 'Block rate',
@@ -32,18 +31,18 @@ export default {
       readOnly: 'You can view rules but not change them.',
       regexHint: 'Regex uses Go RE2 syntax (no look-around).',
       remove: 'Remove rule',
-      keywordPlaceholder: 'keyword'
+      keywordPlaceholder: 'keyword',
+      loadFailed: 'Failed to load rules',
+      saveFailed: 'Failed to save rules'
     },
     loadFailed: 'Failed to load guard statistics',
     refresh: 'Refresh',
-    rangeLabel: 'Time range',
     openDashboard: 'Open the request guard dashboard'
   },
   zh: {
     title: '请求守卫',
     subtitle: '拦截提示词命中关键词或正则规则的网关请求。',
     manageRules: '管理规则',
-    range: { today: '今日', '24h': '最近 24 小时', '7d': '最近 7 天', '30d': '最近 30 天' },
     blocked: '拦截',
     requests: '请求',
     blockRate: '拦截率',
@@ -71,11 +70,12 @@ export default {
       readOnly: '你可以查看规则，但不能修改。',
       regexHint: '正则使用 Go RE2 语法（不支持环视）。',
       remove: '删除规则',
-      keywordPlaceholder: '关键词'
+      keywordPlaceholder: '关键词',
+      loadFailed: '加载规则失败',
+      saveFailed: '保存规则失败'
     },
     loadFailed: '加载拦截统计失败',
     refresh: '刷新',
-    rangeLabel: '时间范围',
     openDashboard: '打开请求守卫面板'
   }
 }

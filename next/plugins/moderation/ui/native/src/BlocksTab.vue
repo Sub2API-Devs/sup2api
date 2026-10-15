@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SField, SInput, STable } from '@sub2api/ui'
+import { isApiError } from '@sub2api/host'
+import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
 import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
@@ -30,15 +31,15 @@ onMounted(reload)
 defineExpose({ reload })
 
 const columns = computed(() => {
-  const c = [
+  const c: TableColumn[] = [
     { key: 'user_id', label: t('blocks.col.user') },
-    { key: 'reason', label: t('blocks.col.reason') },
-    { key: 'violations', label: t('blocks.col.violations'), align: 'right' as const },
+    { key: 'reason', label: t('blocks.col.reason'), ellipsis: '16rem' },
+    { key: 'violations', label: t('blocks.col.violations'), align: 'right', class: 'mod-num' },
     { key: 'source', label: t('blocks.col.source') },
-    { key: 'created_at', label: t('blocks.col.created') },
-    { key: 'expires_at', label: t('blocks.col.expires') }
+    { key: 'created_at', label: t('blocks.col.created'), nowrap: true },
+    { key: 'expires_at', label: t('blocks.col.expires'), nowrap: true }
   ]
-  if (manage.value) c.push({ key: 'actions', label: t('blocks.col.actions'), align: 'right' as const })
+  if (manage.value) c.push({ key: 'actions', label: t('blocks.col.actions'), align: 'right' })
   return c
 })
 
@@ -51,7 +52,7 @@ async function unblock(b: Block) {
     host.toast(t('blocks.unblocked', { id: b.user_id }), 'success')
     rows.value = rows.value.filter((r) => r.user_id !== b.user_id)
   } catch (e) {
-    host.toast(errorMessage(e, t('loadFailed')), 'error')
+    host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     busy.value = null
   }
@@ -82,10 +83,10 @@ async function submit() {
     form.reason = ''
     await reload()
   } catch (e) {
-    const fields = (e as { fields?: Record<string, string> })?.fields || {}
+    const fields = isApiError(e) ? e.fields : {}
     if (fields.user_id) formErr.user_id = fields.user_id
     if (fields.duration_hours) formErr.duration_hours = fields.duration_hours
-    if (!fields.user_id && !fields.duration_hours) host.toast(errorMessage(e, t('loadFailed')), 'error')
+    if (!fields.user_id && !fields.duration_hours) host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     saving.value = false
   }
@@ -94,18 +95,18 @@ async function submit() {
 
 <template>
   <div>
-    <p class="mod-hint">{{ t('blocks.hint') }}</p>
+    <SHint class="mod-hint">{{ t('blocks.hint') }}</SHint>
 
     <SCard v-if="manage" :title="t('blocks.manual')" class="mod-section-b">
       <form class="mod-block-form" @submit.prevent="submit">
         <SField class="mod-filter" :label="t('blocks.userId')" required :error="formErr.user_id">
-          <SInput v-model="form.user_id" :error="!!formErr.user_id" inputmode="numeric" />
+          <SInput v-model="form.user_id" inputmode="numeric" />
         </SField>
         <SField class="mod-filter mod-filter-wide" :label="t('blocks.reason')">
           <SInput v-model="form.reason" :maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />
         </SField>
         <SField class="mod-filter" :label="t('blocks.duration')" :error="formErr.duration_hours" :hint="t('blocks.durationHint')">
-          <SInput v-model="form.duration_hours" type="number" min="0" step="1" :error="!!formErr.duration_hours" />
+          <SInput v-model="form.duration_hours" type="number" min="0" step="1" />
         </SField>
         <div class="mod-filter-actions">
           <SButton type="submit" variant="danger" icon="lock" :loading="saving">{{ t('blocks.submit') }}</SButton>
@@ -118,14 +119,12 @@ async function submit() {
     <SCard :padded="false">
       <STable :columns="columns" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')">
         <template #cell-user_id="{ row }"><span class="mod-num">#{{ row.user_id }}</span></template>
-        <template #cell-reason="{ row }"><span class="mod-ellipsis mod-w-reason" :title="row.reason">{{ row.reason || '—' }}</span></template>
-        <template #cell-violations="{ row }"><span class="mod-num">{{ row.violations ?? '—' }}</span></template>
         <template #cell-source="{ row }">
-          <SBadge :tone="row.source === 'manual' ? 'purple' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
+          <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>
-        <template #cell-created_at="{ row }"><span class="mod-nowrap">{{ host.i18n.formatDateTime(row.created_at) }}</span></template>
+        <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
         <template #cell-expires_at="{ row }">
-          <span v-if="row.expires_at" class="mod-nowrap">{{ host.i18n.formatDateTime(row.expires_at) }}</span>
+          <template v-if="row.expires_at">{{ host.i18n.formatDateTime(row.expires_at) }}</template>
           <SBadge v-else tone="danger">{{ t('blocks.forever') }}</SBadge>
         </template>
         <template #cell-actions="{ row }">

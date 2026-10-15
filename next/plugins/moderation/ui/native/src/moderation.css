@@ -2,12 +2,12 @@
  * Moderation plugin styles (CONTRACTS §23.4). Controls come from @sub2api/ui;
  * the console's global component classes and Tailwind utilities are internal
  * to the console and are not used here. Layout and the few plugin-specific
- * visuals live in these mod- prefixed classes. Neutral colours use the
- * console's semantic variables (rgb(var(--fg-muted)) ...), which follow the
- * light/dark theme; the remaining dark overrides key on <html class="dark">.
+ * visuals live in these mod- prefixed classes. Colours are the console's
+ * semantic variables (rgb(var(--fg-muted)) ...), which follow the light/dark
+ * theme; status colours come from component tones.
  *
- * Alerts, key-value lists and progress bars are SAlert / SDescriptions /
- * SProgress; only their placement lives here.
+ * Alerts, chips, key-value lists, progress bars and grids are SAlert / SChip /
+ * SDescriptions / SProgress / SGrid; only their placement lives here.
  */
 
 .mod-icon {
@@ -24,6 +24,9 @@
 .mod-section-b {
   margin-bottom: 1.25rem;
 }
+.mod-block {
+  margin-bottom: 1rem;
+}
 .mod-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -37,31 +40,18 @@
 .mod-mr-auto {
   margin-right: auto;
 }
+.mod-grow {
+  flex: 1 1 16rem;
+}
 .mod-num {
   font-variant-numeric: tabular-nums;
-}
-.mod-nowrap {
-  white-space: nowrap;
 }
 .mod-prewrap {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.mod-center {
-  display: flex;
-  justify-content: center;
-  padding: 2.5rem 0;
-}
 .mod-hint {
   margin: 0 0 1rem;
-  font-size: 0.875rem;
-  color: rgb(var(--fg-muted));
-}
-.mod-text-danger {
-  color: #dc2626;
-}
-.dark .mod-text-danger {
-  color: #f87171;
 }
 .mod-sub {
   margin-top: 0.125rem;
@@ -79,35 +69,8 @@
   margin-left: 0;
   word-break: break-all;
 }
-.mod-ellipsis {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
-.mod-w-reason {
-  max-width: 16rem;
-}
-.mod-w-text {
-  max-width: 20rem;
-}
-.mod-w-model {
-  max-width: 10rem;
-}
 
 /* overview */
-.mod-grid-stats {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
-.mod-grid-3 {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-}
 .mod-rank {
   display: flex;
   flex-direction: column;
@@ -141,6 +104,13 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+.mod-rank-bar {
+  margin-top: 0.25rem;
+  padding-left: 1.75rem;
+}
+.mod-queue {
+  margin-top: 0.75rem;
+}
 
 /* chips */
 .mod-chips {
@@ -153,27 +123,8 @@
   flex-wrap: wrap;
   max-width: none;
 }
-.mod-chip {
-  display: inline-block;
-  white-space: nowrap;
-  border-radius: 0.375rem;
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-  padding: 0.0625rem 0.4rem;
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-}
-.dark .mod-chip {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fcd34d;
-}
 .mod-cached {
   margin-left: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid rgb(var(--line-strong));
-  color: rgb(var(--fg-muted));
-  padding: 0 0.3rem;
-  font-size: 0.6875rem;
 }
 
 /* records */
@@ -226,7 +177,6 @@
   margin-left: auto;
   font-size: 0.8125rem;
 }
-
 .mod-chars {
   margin-left: 0.5rem;
   font-weight: 400;
@@ -254,9 +204,6 @@
 
 /* playground */
 .mod-test-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   align-items: start;
 }
 .mod-textarea {
@@ -292,27 +239,10 @@
   list-style: none;
 }
 .mod-msg {
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-left-width: 3px;
+  border: 1px solid rgb(var(--line));
   border-radius: 0.75rem;
   padding: 0.625rem 0.875rem;
-  background: rgba(248, 250, 252, 0.6);
-}
-.dark .mod-msg {
-  background: rgba(15, 23, 42, 0.4);
-  border-color: rgba(71, 85, 105, 0.5);
-}
-.mod-msg-system {
-  border-left-color: #94a3b8 !important;
-}
-.mod-msg-user {
-  border-left-color: #6366f1 !important;
-}
-.mod-msg-assistant {
-  border-left-color: #14b8a6 !important;
-}
-.mod-msg-tool {
-  border-left-color: #f59e0b !important;
+  background: rgb(var(--surface-2));
 }
 .mod-msg-head {
   display: flex;
@@ -320,28 +250,6 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.375rem;
-}
-.mod-msg-role {
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.mod-msg-user .mod-msg-role {
-  color: #4f46e5;
-}
-.mod-msg-assistant .mod-msg-role {
-  color: #0d9488;
-}
-.mod-msg-tool .mod-msg-role {
-  color: #d97706;
-}
-.dark .mod-msg-user .mod-msg-role {
-  color: #a5b4fc;
-}
-.dark .mod-msg-assistant .mod-msg-role {
-  color: #5eead4;
-}
-.dark .mod-msg-tool .mod-msg-role {
-  color: #fcd34d;
 }
 .mod-msg-body {
   margin: 0;
@@ -378,19 +286,4 @@
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.25rem;
-}
-
-/* placement of platform components */
-.mod-block {
-  margin-bottom: 1rem;
-}
-.mod-rank-bar {
-  margin-top: 0.25rem;
-  padding-left: 1.75rem;
-}
-.mod-queue {
-  margin-top: 0.75rem;
-}
-.mod-grow {
-  flex: 1 1 16rem;
 }

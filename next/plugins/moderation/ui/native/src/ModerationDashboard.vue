@@ -16,7 +16,7 @@ const t = host.t
 type TabKey = 'overview' | 'events' | 'blocks' | 'test' | 'settings'
 
 const manage = computed(() => canManage())
-const showSettingsTab = computed(() => canManageSettings())
+const showSettings = computed(() => canManageSettings())
 const tabs = computed(() => {
   const list: Array<{ key: TabKey; label: string }> = [
     { key: 'overview', label: t('tabs.overview') },
@@ -24,7 +24,7 @@ const tabs = computed(() => {
     { key: 'blocks', label: t('tabs.blocks') }
   ]
   if (manage.value) list.push({ key: 'test', label: t('tabs.test') })
-  if (showSettingsTab.value) list.push({ key: 'settings', label: t('tabs.settings') })
+  if (showSettings.value) list.push({ key: 'settings', label: t('tabs.settings') })
   return list
 })
 
@@ -47,7 +47,6 @@ watch(tab, (v) => {
 // Runtime (mode badge) — refreshed by the overview tab, or fetched once here
 // when the page opens on another tab.
 const runtime = ref<Runtime | null>(null)
-const showSettings = computed(() => canManageSettings())
 
 onMounted(async () => {
   if (tab.value === 'overview') return
@@ -58,7 +57,8 @@ onMounted(async () => {
   }
 })
 
-// Refresh: each tab exposes reload().
+// Refresh: the overview, records and blocked-users tabs expose reload(); the
+// overview reports the runtime itself, the others refresh the mode badge here.
 const overviewRef = ref<InstanceType<typeof OverviewTab> | null>(null)
 const eventsRef = ref<InstanceType<typeof EventsTab> | null>(null)
 const blocksRef = ref<InstanceType<typeof BlocksTab> | null>(null)
@@ -88,7 +88,7 @@ function showUser(userId: number) {
 </script>
 
 <template>
-  <div class="mod-page">
+  <div>
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #title-extra>
         <SBadge v-if="runtime" :tone="modeTone(runtime.mode)" dot>{{ t(`mode.${runtime.mode || 'off'}`) }}</SBadge>

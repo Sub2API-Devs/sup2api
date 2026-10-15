@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SHint } from '@sub2api/ui'
+import { SChip, SHint } from '@sub2api/ui'
 import { categoryLabel } from './host'
 
 defineProps<{ categories?: string[] | null; wrap?: boolean }>()
@@ -7,7 +7,7 @@ defineProps<{ categories?: string[] | null; wrap?: boolean }>()
 
 <template>
   <span v-if="categories && categories.length" class="mod-chips" :class="wrap ? 'mod-chips-wrap' : ''">
-    <span v-for="c in categories" :key="c" class="mod-chip" :title="c">{{ categoryLabel(c) }}</span>
+    <SChip v-for="c in categories" :key="c" tone="warning" size="xs" :title="c">{{ categoryLabel(c) }}</SChip>
   </span>
   <SHint v-else inline>—</SHint>
 </template>
