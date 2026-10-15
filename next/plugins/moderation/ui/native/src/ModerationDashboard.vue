@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SBadge, SButton, SPageHeader, STabLayout } from '@sub2api/ui'
+import { SBadge, SButton, SPageHeader, STabs } from '@sub2api/ui'
 import OverviewTab from './OverviewTab.vue'
 import EventsTab from './EventsTab.vue'
 import BlocksTab from './BlocksTab.vue'
@@ -99,7 +99,7 @@ function showUser(userId: number) {
       </template>
     </SPageHeader>
 
-    <STabLayout v-model="tab" :tabs="tabs">
+    <STabs v-model="tab" :tabs="tabs">
 
       <OverviewTab
         v-if="visited.has('overview')"
@@ -113,6 +113,6 @@ function showUser(userId: number) {
       <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" ref="blocksRef" />
       <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-settings="tab = 'settings'" />
       <SettingsTab v-if="showSettings && visited.has('settings')" v-show="tab === 'settings'" />
-    </STabLayout>
+    </STabs>
   </div>
 </template>

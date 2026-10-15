@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabLayout, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { deleteWithConfirm } from '@/composables/crud'
@@ -664,7 +664,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="xl">
       <template v-if="detail">
-        <STabLayout v-model="detailTab" :tabs="detailTabs">
+        <STabs v-model="detailTab" :tabs="detailTabs">
           <div v-if="detailTab === 'overview'" class="space-y-4">
             <SDescriptions label-width="9rem">
               <SDescItem label="ID">{{ detail.id }}</SDescItem>
@@ -726,7 +726,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
             </div>
           </div>
           <component :is="detailSlot.component" v-else-if="detailSlot" :account="detail" />
-        </STabLayout>
+        </STabs>
       </template>
     </SModal>
   </div>

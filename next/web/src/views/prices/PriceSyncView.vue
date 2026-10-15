@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabLayout, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -283,7 +283,7 @@ async function apply() {
         />
       </SGrid>
 
-      <STabLayout v-model="tab" :tabs="tabs" data-testid="price-sync-tabs">
+      <STabs v-model="tab" :tabs="tabs" data-testid="price-sync-tabs">
         <STable
           v-model:selected="selectedKeys"
           card
@@ -341,7 +341,7 @@ async function apply() {
             <SPagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-sizes="[50, 100, 200]" />
           </template>
         </STable>
-      </STabLayout>
+      </STabs>
     </template>
 
     <SModal v-model:open="resultOpen" :title="t('prices.sync.resultTitle')" width="lg">

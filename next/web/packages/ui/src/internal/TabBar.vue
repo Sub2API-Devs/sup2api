@@ -3,7 +3,7 @@
 // enabled tabs and select them (roving tabindex: only the selected tab is in
 // the Tab order). Each tab's id is `${idPrefix}-tab-${key}` and it controls
 // `${idPrefix}-panel-${key}`: give your panel that id, role="tabpanel" and
-// aria-labelledby the tab id. Internal to STabLayout; not a public component.
+// aria-labelledby the tab id. Internal to STabs; not a public component.
 import { computed, nextTick, ref, useId } from 'vue'
 import type { TabItem } from '../types'
 import { navIndex } from '../keyboard'

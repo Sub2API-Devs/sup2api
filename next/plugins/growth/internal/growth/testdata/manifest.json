@@ -12,7 +12,7 @@
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
   "hostCompat": ">=0.1.0 <0.2.0",
-  "hostUICompat": ">=1.0.0 <3.0.0",
+  "hostUICompat": "^3.0",
 
   "capabilities": [
     { "id": "app.events.v1" },

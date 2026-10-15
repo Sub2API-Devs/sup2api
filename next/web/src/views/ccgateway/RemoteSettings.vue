@@ -10,7 +10,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup, STabLayout, STextarea } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea } from '@sub2api/ui'
 import type { CcgRemoteConfig, CcgRuntimeImages } from '@/api/types'
 import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <STabLayout v-model="activeTab" :tabs="tabItems" :show-tabs="!!saved" :aria-label="t('ccgateway.settingsTabs.label')" data-testid="settings-tabs">
+  <STabs v-model="activeTab" :tabs="tabItems" :show-tabs="!!saved" :aria-label="t('ccgateway.settingsTabs.label')" data-testid="settings-tabs">
     <div class="space-y-4" data-testid="settings-card">
       <div v-show="activeTab === 'connection'">
         <h4 class="text-base font-semibold text-fg">{{ t('ccgateway.remote.title') }}</h4>
@@ -337,5 +337,5 @@ onBeforeUnmount(() => {
     </div>
     <!-- Deployment: the runtime and its images (saved with the form above), then the account containers they run. -->
     <div v-if="saved" v-show="activeTab === 'deployment'" data-testid="settings-accounts"><slot name="accounts" /></div>
-  </STabLayout>
+  </STabs>
 </template>

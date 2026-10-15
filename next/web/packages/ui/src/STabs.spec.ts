@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { h } from 'vue'
-import STabLayout from './STabLayout.vue'
+import STabs from './STabs.vue'
 import SSettingsGroup from './SSettingsGroup.vue'
 import SPageHeader from './SPageHeader.vue'
 import SSectionTitle from './SSectionTitle.vue'
@@ -14,7 +14,7 @@ const tabs = [{ key: 'billing', label: '计费' }, { key: 'other', label: '其�
 
 describe('platform tab title ownership', () => {
   it('hides matching titles but keeps controls, description, distinct sections and panel labels', () => {
-    const wrapper = mount(STabLayout, { props: { tabs, modelValue: 'billing', idPrefix: 'settings' }, slots: { default: () => [
+    const wrapper = mount(STabs, { props: { tabs, modelValue: 'billing', idPrefix: 'settings' }, slots: { default: () => [
       h(SPageHeader, { title: '计费' }),
       h(SSectionTitle, { title: '计费' }),
       h(SSettingsGroup, { title: '计费', description: '计费说明' }, { default: () => '内容', actions: () => h('button', '保存') }),
@@ -30,7 +30,7 @@ describe('platform tab title ownership', () => {
   })
 
   it('removes empty title bars and follows locale and tab changes reactively', async () => {
-    const wrapper = mount(STabLayout, { props: { tabs, modelValue: 'billing' }, slots: { default: () => h(SSettingsGroup, { title: '计费' }, () => '内容') } })
+    const wrapper = mount(STabs, { props: { tabs, modelValue: 'billing' }, slots: { default: () => h(SSettingsGroup, { title: '计费' }, () => '内容') } })
     expect(wrapper.find('header').exists()).toBe(false)
     await wrapper.setProps({ modelValue: 'other' })
     expect(wrapper.get('h5').text()).toBe('计费')
@@ -41,14 +41,14 @@ describe('platform tab title ownership', () => {
   })
 
   it('retains titles when a single tab is not displayed and when standalone', () => {
-    const wrapper = mount(STabLayout, { props: { tabs: [tabs[0]!], modelValue: 'billing' }, slots: { default: () => h(SSettingsGroup, { title: '计费' }) } })
+    const wrapper = mount(STabs, { props: { tabs: [tabs[0]!], modelValue: 'billing' }, slots: { default: () => h(SSettingsGroup, { title: '计费' }) } })
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
     expect(wrapper.get('h5').text()).toBe('计费')
     expect(mount(SPageHeader, { props: { title: '计费' } }).get('h1').text()).toBe('计费')
   })
 
   it('keeps collapse actions and custom title slots intact', async () => {
-    const wrapper = mount(STabLayout, { props: { tabs, modelValue: 'billing' }, slots: { default: () => [
+    const wrapper = mount(STabs, { props: { tabs, modelValue: 'billing' }, slots: { default: () => [
       h(SSettingsGroup, { title: '计费', collapsible: true }, () => '可折叠内容'),
       h(SSettingsGroup, { title: '计费' }, { title: () => h('strong', '自定义标题和状态') })
     ] } })
@@ -60,8 +60,8 @@ describe('platform tab title ownership', () => {
   })
 
   it('isolates nested tabs and dialogs from outer titles', () => {
-    const wrapper = mount(STabLayout, { props: { tabs, modelValue: 'billing' }, global: { stubs: { teleport: true } }, slots: { default: () => [
-      h(STabLayout, { tabs, modelValue: 'other' }, () => h(SSettingsGroup, { title: '计费' })),
+    const wrapper = mount(STabs, { props: { tabs, modelValue: 'billing' }, global: { stubs: { teleport: true } }, slots: { default: () => [
+      h(STabs, { tabs, modelValue: 'other' }, () => h(SSettingsGroup, { title: '计费' })),
       h(SModal, { open: true, title: '计费' }, () => h(SSectionTitle, { title: '计费' })),
       h(SDrawer, { open: true, title: '计费' }, () => h(SPageHeader, { title: '计费' }))
     ] } })
@@ -72,7 +72,7 @@ describe('platform tab title ownership', () => {
 
   it('applies the same default to plugin schema settings without altering data', () => {
     const values = { enabled: true }
-    const wrapper = mount(STabLayout, { props: { tabs, modelValue: 'billing' }, slots: { default: () => h(SchemaForm, {
+    const wrapper = mount(STabs, { props: { tabs, modelValue: 'billing' }, slots: { default: () => h(SchemaForm, {
       layout: 'settings', modelValue: values,
       schema: { type: 'object', properties: { enabled: { type: 'boolean', title: '启用' } } },
       uiSchema: { enabled: { 'ui:section': { title: '计费' } } }

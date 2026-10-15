@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, SPagination, STabLayout, STimeRange, rangeBounds, type RangeKey, type TabItem } from '@sub2api/ui'
+import { SButton, SPageHeader, SPagination, STabs, STimeRange, rangeBounds, type RangeKey, type TabItem } from '@sub2api/ui'
 import UsageFilters from './UsageFilters.vue'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -57,7 +57,7 @@ function refresh() {
       </template>
     </SPageHeader>
 
-    <STabLayout v-model="tab" :tabs="tabs">
+    <STabs v-model="tab" :tabs="tabs">
 
       <template v-if="tab === 'requests'">
         <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" show-client-request-id :detail-path="(id: number) => `/me/usage/${id}`" @filter-client-request-id="(id: string) => (filters.client_request_id = id)">
@@ -66,6 +66,6 @@ function refresh() {
       </template>
 
       <MyLedgerTab v-else ref="ledgerRef" />
-    </STabLayout>
+    </STabs>
   </div>
 </template>

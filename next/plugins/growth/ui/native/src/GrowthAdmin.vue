@@ -6,13 +6,13 @@
         <SStatCard v-for="c in statCards" :key="c.key" :label="host.t(c.key)" :value="c.value" :icon="c.icon" :tone="c.tone" :loading="!stats" />
       </SGrid>
 
-      <STabLayout v-model="activeTab" :tabs="tabs">
+      <STabs v-model="activeTab" :tabs="tabs">
 
         <SCard :padded="false">
           <GrowthTable :key="current.key" :columns="current.columns" :rows="current.list.items.value" :loading="current.list.loading.value" />
           <SPagination v-model:page="current.list.page.value" v-model:page-size="current.list.pageSize.value" :total="current.list.total.value" class="growth-pager" />
         </SCard>
-      </STabLayout>
+      </STabs>
     </SStack>
   </div>
 </template>
@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useList } from '@sub2api/host'
-import { SPageHeader, SGrid, SStack, SStatCard, STabLayout, SCard, SPagination } from '@sub2api/ui'
+import { SPageHeader, SGrid, SStack, SStatCard, STabs, SCard, SPagination } from '@sub2api/ui'
 import { errorMessage, useGrowthHost } from './host'
 import { checkinColumns, commissionColumns, referralColumns } from './columns'
 import GrowthTable from './GrowthTable.vue'

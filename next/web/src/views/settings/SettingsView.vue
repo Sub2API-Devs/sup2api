@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { SPageHeader, STabLayout } from '@sub2api/ui'
+import { SPageHeader, STabs } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import StickyView from '@/views/sticky/StickyView.vue'
 import BillingSettingsCard from './BillingSettingsCard.vue'
@@ -36,7 +36,7 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
       :title="t('settings.title')"
       :description="t('settings.description')"
     />
-    <STabLayout
+    <STabs
       :model-value="active ?? ''"
       :tabs="tabs"
       @update:model-value="tab = $event"
@@ -49,6 +49,6 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
       <StickyView v-else-if="active === 'sticky'" />
       <OffloadSettingsCard v-else-if="active === 'offload'" />
       <UpdateSourceCard v-else-if="active === 'updates'" />
-    </STabLayout>
+    </STabs>
   </div>
 </template>

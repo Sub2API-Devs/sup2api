@@ -2,26 +2,26 @@
 
 控制台和原生插件通过 `@sub2api/ui` 复用同一套组件与样式。
 
-## 标签页与标题归属（核心 0.1.151 起）
+## 标签页与标题归属（增强 STabs：核心 0.1.154 起）
 
-系统设置、插件设置和原生插件内部的标签页使用 `STabLayout`。它组合标签栏与内容面板，默认处理同名标题，并建立正确的 tab/tabpanel 关联。UI 2.0 已移除旧 `STabs` 公共接口；内部 `TabBar` 仅由 `STabLayout` 使用，不对插件导出。所有新旧调用必须将内容一起迁入容器。
+系统设置、插件设置和原生插件内部的标签页统一使用增强的 `STabs`。它组合标签栏与内容面板，默认处理同名标题，并建立正确的 tab/tabpanel 关联。不保留 `STabLayout` 导出、包装或兼容别名；内部 `TabBar` 不对外导出。内容必须放入容器，不能把标签栏与内容作为兄弟节点拼装。
 
 ```vue
-<STabLayout v-model="tab" :tabs="tabs">
+<STabs v-model="tab" :tabs="tabs">
   <template #default="{ active }">
     <BillingSettings v-if="active === 'billing'" />
     <OtherSettings v-else-if="active === 'other'" />
   </template>
-</STabLayout>
+</STabs>
 ```
 
 - 当前标签可见时，面板内 `SPageHeader`、`SSettingsGroup`、`SSectionTitle` 的同名 `title` 默认不再显示；不同名称的分组保持可见。判断来自组件上下文，不扫描 DOM，也不使用模糊文字匹配。
 - 说明、保存按钮、开关、筛选器等独立内容保留。只有标题且标题重复时不留下空标题栏；只读时调用方应使用 `v-if` 省略没有操作的 `#actions` 插槽。
 - 只有一个标签时默认隐藏标签栏，恢复内容自身标题；需要显示单标签可用 `show-single`。`show-tabs=false` 同样恢复自身标题。
 - 嵌套容器使用最近层的标题，弹窗和抽屉重置上下文。折叠分组必须保留折叠按钮及名称；自定义标题插槽保持原样，避免误删其中的状态或交互。
-- `STabLayout` 不自动重建内容组件。需要保留草稿可继续用 `v-show` 或 `KeepAlive`，需要切换时重新创建则由调用方设置 `key`。
+- `STabs` 不自动重建内容组件。需要保留草稿可继续用 `v-show` 或 `KeepAlive`，需要切换时重新创建则由调用方设置 `key`。
 - 控制台插件设置宿主已提供该上下文，声明式 `SchemaForm` 自动继承；原生插件自建标签页应使用上述容器。普通 HTML 标题、iframe 内部内容不自动处理。
-- 新插件引用 `STabLayout` 时，`hostCompat` 最低核心版本应为 `>=0.1.151`（并保留项目要求的上界）。引用旧 `STabs` 的插件必须升级；UI 2.0 会按 `hostUICompat` 拦截仍仅声明 UI 1 的插件。
+- 新插件使用增强 `STabs` 时，`hostCompat` 最低核心版本应为 `>=0.1.154`（并保留项目要求的上界）。`hostUICompat` 声明 UI 3.0；使用旧入口的插件必须迁移，不提供兼容别名。
 
 验证至少覆盖：同名/不同名标题、单标签、语言切换、只读操作区、折叠分组、弹窗/抽屉、嵌套标签、声明式插件表单，以及保存功能。
 

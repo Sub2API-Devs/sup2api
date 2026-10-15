@@ -13,7 +13,7 @@ import SSegmented from './SSegmented.vue'
 import SModal from './SModal.vue'
 import SDrawer from './SDrawer.vue'
 import SDropdown from './SDropdown.vue'
-import STabLayout from './STabLayout.vue'
+import STabs from './STabs.vue'
 import STagInput from './STagInput.vue'
 import STable from './STable.vue'
 import SRadioGroup from './SRadioGroup.vue'
@@ -270,10 +270,10 @@ describe('SDropdown', () => {
   })
 })
 
-describe('STabLayout keyboard navigation', () => {
+describe('STabs keyboard navigation', () => {
   it('moves with arrow keys and uses a roving tabindex', async () => {
     const tabs = [{ key: 'a', label: 'A' }, { key: 'b', label: 'B', disabled: true }, { key: 'c', label: 'C' }]
-    const w = mount(STabLayout, { props: { tabs, modelValue: 'a', idPrefix: 't' }, attachTo: document.body })
+    const w = mount(STabs, { props: { tabs, modelValue: 'a', idPrefix: 't' }, attachTo: document.body })
     const buttons = w.findAll('[role="tab"]')
     expect(buttons.map((b) => b.attributes('tabindex'))).toEqual(['0', '-1', '-1'])
     expect(buttons.every((b) => b.attributes('type') === 'button')).toBe(true)
