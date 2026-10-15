@@ -48,7 +48,7 @@ function single(v: unknown) {
 <template>
   <div
     v-if="multiple"
-    class="input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 !py-1.5"
+    class="input flex h-auto min-h-control flex-wrap items-center gap-1.5 py-1.5 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30"
     :class="disabled ? 'cursor-not-allowed bg-gray-100 dark:bg-dark-900' : ''"
   >
     <SChip v-for="id in selected" :key="id" tone="primary" :closable="!disabled" @close="remove(id)">{{ nameOf(id) }}</SChip>
@@ -56,6 +56,7 @@ function single(v: unknown) {
       v-if="!disabled && available.length"
       :model-value="null"
       :options="availableOptions"
+      size="sm"
       :placeholder="`+ ${t('common.group')}`"
       class="!w-auto !border-0 !bg-transparent !py-0.5 !pl-1 text-xs text-fg-muted !shadow-none !ring-0"
       @update:model-value="add"
