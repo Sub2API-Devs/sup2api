@@ -14,6 +14,7 @@ import type { MenuAction } from './types'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
 import { useFloating } from './floating'
+import { navIndex } from './keyboard'
 
 const props = withDefaults(
   defineProps<{ actions: MenuAction[]; label?: string; ariaLabel?: string; align?: 'start' | 'end'; width?: string; disabled?: boolean }>(),
@@ -36,11 +37,6 @@ function onDoc(e: MouseEvent) {
 function items(): HTMLButtonElement[] {
   return Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [])
 }
-function focusItem(i: number) {
-  const list = items()
-  if (!list.length) return
-  list[(i + list.length) % list.length].focus({ preventScroll: true })
-}
 function show(focus: 'first' | 'last' = 'first') {
   if (props.disabled || open.value) return
   open.value = true
@@ -48,7 +44,7 @@ function show(focus: 'first' | 'last' = 'first') {
   document.addEventListener('mousedown', onDoc)
   nextTick(() => {
     floating.start()
-    focusItem(focus === 'first' ? 0 : -1)
+    items().at(focus === 'first' ? 0 : -1)?.focus({ preventScroll: true })
   })
 }
 function close(restore = true) {
@@ -76,19 +72,10 @@ function onTriggerKey(e: KeyboardEvent) {
 }
 function onMenuKey(e: KeyboardEvent) {
   const list = items()
-  const i = list.indexOf(document.activeElement as HTMLButtonElement)
-  if (e.key === 'ArrowDown') {
+  const next = navIndex(e.key, list.indexOf(document.activeElement as HTMLButtonElement), list.length, 'vertical')
+  if (next >= 0) {
     e.preventDefault()
-    focusItem(i + 1)
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    focusItem(i < 0 ? -1 : i - 1)
-  } else if (e.key === 'Home') {
-    e.preventDefault()
-    focusItem(0)
-  } else if (e.key === 'End') {
-    e.preventDefault()
-    focusItem(-1)
+    list[next].focus({ preventScroll: true })
   } else if (e.key === 'Escape') {
     e.preventDefault()
     e.stopPropagation()

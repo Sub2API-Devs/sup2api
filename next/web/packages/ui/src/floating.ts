@@ -17,52 +17,53 @@ export interface FloatingOptions {
 }
 
 const MARGIN = 8
+const OPPOSITE: Record<Placement, Placement> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }
+
+/** The preferred side, flipped when it has no room and the opposite side has. */
+function flip(side: Placement, a: DOMRect, w: number, h: number, gap: number): Placement {
+  const room: Record<Placement, number> = {
+    bottom: window.innerHeight - MARGIN - (a.bottom + gap + h),
+    top: a.top - gap - h - MARGIN,
+    right: window.innerWidth - MARGIN - (a.right + gap + w),
+    left: a.left - gap - w - MARGIN
+  }
+  return room[side] < 0 && room[OPPOSITE[side]] > 0 ? OPPOSITE[side] : side
+}
+
+/** Start of a panel of `size` aligned along an anchor edge (start, len), kept inside [MARGIN, viewport - MARGIN]. */
+function along(align: Align, start: number, len: number, size: number, viewport: number): number {
+  const v = align === 'end' ? start + len - size : align === 'center' ? start + len / 2 - size / 2 : start
+  return Math.min(Math.max(MARGIN, v), Math.max(MARGIN, viewport - size - MARGIN))
+}
+
+/** True when a laid-out anchor is fully outside the viewport (a zero-size rect — no layout, test DOMs — is not). */
+function offscreen(a: DOMRect): boolean {
+  const laidOut = a.width > 0 || a.height > 0
+  return laidOut && (a.bottom < 0 || a.top > window.innerHeight || a.right < 0 || a.left > window.innerWidth)
+}
 
 export function useFloating(anchor: Ref<HTMLElement | undefined>, panel: Ref<HTMLElement | undefined>, opts: FloatingOptions = {}) {
   const style = ref<Record<string, string>>({ top: '0px', left: '0px' })
-  const actual = ref<Placement>(opts.placement ?? 'bottom')
   let active = false
 
   function update() {
     const el = anchor.value
     if (!el) return
-    if (!el.isConnected) {
-      opts.onLost?.()
-      return
-    }
     const a = el.getBoundingClientRect()
-    // A zero-size rect (no layout: display:none ancestors, test DOMs) is not
-    // "scrolled away"; only a laid-out anchor fully outside the viewport is.
-    const laidOut = a.width > 0 || a.height > 0
-    if (laidOut && (a.bottom < 0 || a.top > window.innerHeight || a.right < 0 || a.left > window.innerWidth)) {
-      opts.onLost?.()
-      return
-    }
-    const p = panel.value
-    const w = p?.offsetWidth || 0
-    const h = p?.offsetHeight || 0
+    if (!el.isConnected || offscreen(a)) return opts.onLost?.()
+    const w = panel.value?.offsetWidth || 0
+    const h = panel.value?.offsetHeight || 0
     const gap = opts.offset ?? 4
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    let place = opts.placement ?? 'bottom'
-    // Flip when the preferred side has no room and the other side has.
-    if (place === 'bottom' && a.bottom + gap + h > vh - MARGIN && a.top - gap - h > MARGIN) place = 'top'
-    else if (place === 'top' && a.top - gap - h < MARGIN && a.bottom + gap + h < vh - MARGIN) place = 'bottom'
-    else if (place === 'right' && a.right + gap + w > vw - MARGIN && a.left - gap - w > MARGIN) place = 'left'
-    else if (place === 'left' && a.left - gap - w < MARGIN && a.right + gap + w < vw - MARGIN) place = 'right'
-    actual.value = place
     const align = opts.align ?? 'start'
+    const side = flip(opts.placement ?? 'bottom', a, w, h, gap)
     let top: number
     let left: number
-    if (place === 'top' || place === 'bottom') {
-      top = place === 'bottom' ? a.bottom + gap : a.top - gap - h
-      const width = opts.matchWidth ? Math.max(w, a.width) : w
-      left = align === 'end' ? a.right - width : align === 'center' ? a.left + a.width / 2 - width / 2 : a.left
-      left = Math.min(Math.max(MARGIN, left), Math.max(MARGIN, vw - width - MARGIN))
+    if (side === 'top' || side === 'bottom') {
+      top = side === 'bottom' ? a.bottom + gap : a.top - gap - h
+      left = along(align, a.left, a.width, opts.matchWidth ? Math.max(w, a.width) : w, window.innerWidth)
     } else {
-      left = place === 'right' ? a.right + gap : a.left - gap - w
-      top = align === 'end' ? a.bottom - h : align === 'center' ? a.top + a.height / 2 - h / 2 : a.top
-      top = Math.min(Math.max(MARGIN, top), Math.max(MARGIN, vh - h - MARGIN))
+      left = side === 'right' ? a.right + gap : a.left - gap - w
+      top = along(align, a.top, a.height, h, window.innerHeight)
     }
     const s: Record<string, string> = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
     if (opts.matchWidth) s.minWidth = `${Math.round(a.width)}px`
@@ -83,5 +84,5 @@ export function useFloating(anchor: Ref<HTMLElement | undefined>, panel: Ref<HTM
     window.removeEventListener('resize', update)
   }
   onBeforeUnmount(stop)
-  return { style, placement: actual, update, start, stop }
+  return { style, update, start, stop }
 }

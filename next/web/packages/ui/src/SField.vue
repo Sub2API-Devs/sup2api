@@ -22,17 +22,15 @@ const props = defineProps<{
 }>()
 const slots = useSlots()
 const uid = useId()
-const controlId = computed(() => props.for || `${uid}-control`)
 const hasError = computed(() => !!props.error || !!slots.error)
 const hasHint = computed(() => !hasError.value && (!!props.hint || !!slots.hint))
-const ctx = provideField({
-  controlId,
+const { labelFor } = provideField(uid, {
+  for: () => props.for,
   labelId: computed(() => (props.label || slots.label ? `${uid}-label` : '')),
   describedBy: computed(() => (hasError.value ? `${uid}-error` : hasHint.value ? `${uid}-hint` : undefined)),
   invalid: hasError,
   size: computed(() => props.size)
 })
-const labelFor = computed(() => (props.for || ctx.claimed.value ? controlId.value : undefined))
 </script>
 
 <template>

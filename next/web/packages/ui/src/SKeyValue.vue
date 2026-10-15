@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useUiT } from './i18n'
 import SInput from './SInput.vue'
 import SButton from './SButton.vue'
 import SIcon from './SIcon.vue'
 import { useFieldControl, type ControlSize } from './field'
+import { TONE_TEXT } from './tones'
 
 // Editor for a string->string map (JSON object). Keeps row order locally;
 // rows with an empty key are dropped from the value. `listId` /
 // `valueListId` name <datalist>s for key / value suggestions; `mono` uses a
 // monospace font; `separator` draws an arrow between key and value (mapping
 // editors); `rowWarn(row, index)` returns a warning shown under a row.
+// Inside SField / SSettingRow the group is labelled by the frame's label and
+// follows its size; `error` (or the frame's error) marks every cell.
 const props = withDefaults(
   defineProps<{
     modelValue: Record<string, string> | null | undefined
@@ -28,11 +31,12 @@ const props = withDefaults(
     error?: boolean
     addLabel?: string
   }>(),
-  { size: 'md' }
+  { size: undefined }
 )
 const emit = defineEmits<{ (e: 'update:modelValue', v: Record<string, string>): void }>()
 const t = useUiT()
-const { a11y } = useFieldControl(props, false)
+const { a11y, invalid, size } = useFieldControl(props, false)
+const grid = computed(() => (props.separator ? 'grid-cols-[1fr_auto_1fr_auto]' : 'grid-cols-[1fr_1fr_auto]'))
 
 interface Row {
   k: string
@@ -90,7 +94,7 @@ function warn(r: Row, i: number): string {
     <div
       v-if="rows.length"
       class="grid gap-2 text-xs text-gray-500 dark:text-dark-400"
-      :class="separator ? 'grid-cols-[1fr_auto_1fr_auto]' : 'grid-cols-[1fr_1fr_auto]'"
+      :class="grid"
       aria-hidden="true"
     >
       <span>{{ keyLabel || t('ui.key') }}</span>
@@ -99,11 +103,12 @@ function warn(r: Row, i: number): string {
       <span class="w-8" />
     </div>
     <div v-for="(r, i) in rows" :key="i">
-      <div class="grid items-center gap-2" :class="separator ? 'grid-cols-[1fr_auto_1fr_auto]' : 'grid-cols-[1fr_1fr_auto]'">
+      <div class="grid items-center gap-2" :class="grid">
         <SInput
           :model-value="r.k"
           :size="size"
           :mono="mono"
+          :error="invalid"
           :placeholder="keyPlaceholder"
           :disabled="disabled"
           :list="listId"
@@ -115,6 +120,7 @@ function warn(r: Row, i: number): string {
           :model-value="r.v"
           :size="size"
           :mono="mono"
+          :error="invalid"
           :placeholder="valuePlaceholder"
           :disabled="disabled"
           :list="valueListId"
@@ -132,7 +138,7 @@ function warn(r: Row, i: number): string {
           @click="remove(i)"
         />
       </div>
-      <p v-if="warn(r, i)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ warn(r, i) }}</p>
+      <p v-if="warn(r, i)" class="mt-1 text-xs" :class="TONE_TEXT.warning">{{ warn(r, i) }}</p>
     </div>
     <SButton size="sm" icon="plus" :disabled="disabled" @click="add">{{ addLabel || t('ui.add') }}</SButton>
   </div>

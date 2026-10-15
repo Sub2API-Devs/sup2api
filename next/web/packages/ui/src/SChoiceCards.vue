@@ -5,11 +5,12 @@
 // array. `cols` 1–4 columns from sm: up (phones: one column). Inside SField
 // / SSettingRow the group is labelled by the frame's label unless
 // `ariaLabel` is given.
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
 import SIcon from './SIcon.vue'
 import { TONE_TEXT, toneOf } from './tones'
 import type { ChoiceOption } from './types'
 import { useFieldControl } from './field'
+import { writeBackChecked } from './controlled'
 
 type V = ChoiceOption['value']
 const props = withDefaults(
@@ -30,12 +31,7 @@ function choose(o: ChoiceOption, checked: boolean) {
     if (checked) next.push(o.value)
     emit('update:modelValue', next)
   } else emit('update:modelValue', o.value)
-  nextTick(() => {
-    root.value?.querySelectorAll<HTMLInputElement>('input').forEach((el, i) => {
-      const want = isOn(props.options[i]?.value)
-      if (el.checked !== want) el.checked = want
-    })
-  })
+  writeBackChecked(root, (i) => isOn(props.options[i]?.value))
 }
 </script>
 
@@ -60,7 +56,7 @@ function choose(o: ChoiceOption, checked: boolean) {
         :aria-describedby="o.description ? `${uid}-d${i}` : undefined"
         @change="choose(o, ($event.target as HTMLInputElement).checked)"
       />
-      <SIcon v-if="o.icon" :name="o.icon" class="mt-0.5 h-5 w-5 shrink-0" :class="isOn(o.value) ? 'text-primary-600 dark:text-primary-400' : TONE_TEXT[toneOf(o.tone)]" />
+      <SIcon v-if="o.icon" :name="o.icon" class="mt-0.5 h-5 w-5 shrink-0" :class="TONE_TEXT[isOn(o.value) ? 'primary' : toneOf(o.tone)]" />
       <span class="min-w-0 flex-1">
         <span class="block text-sm font-medium text-fg">{{ o.label }}</span>
         <span v-if="o.description" :id="`${uid}-d${i}`" class="mt-1 block text-xs leading-5 text-fg-muted">{{ o.description }}</span>

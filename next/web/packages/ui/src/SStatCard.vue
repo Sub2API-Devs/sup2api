@@ -2,8 +2,10 @@
 // Statistic card: label, value (skeleton while `loading`), trend (▲/▼ %),
 // `sub` line, default slot. `compact` is a smaller variant (dense KPI rows).
 // With a `click` listener or `selectable` it renders as a <button>
-// (filter tiles); `selected` highlights it and sets aria-pressed.
+// (filter tiles); `selected` highlights it and sets aria-pressed. `to`
+// renders a <RouterLink>, `href` an <a> (a tile that opens a page).
 import { computed, getCurrentInstance } from 'vue'
+import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SIcon from './SIcon.vue'
 
 const props = withDefaults(
@@ -18,25 +20,34 @@ const props = withDefaults(
     selected?: boolean
     selectable?: boolean
     compact?: boolean
+    to?: string | RouteLocationRaw
+    href?: string
   }>(),
   { tone: 'primary', selected: undefined }
 )
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 const inst = getCurrentInstance()
-const interactive = computed(() => props.selectable || props.selected !== undefined || !!inst?.vnode.props?.onClick)
+const button = computed(() => props.selectable || props.selected !== undefined || !!inst?.vnode.props?.onClick)
+const interactive = computed(() => button.value || !!props.to || !!props.href)
+const target = computed(() => {
+  if (props.to) return { is: RouterLink, attrs: { to: props.to } }
+  if (props.href) return { is: 'a', attrs: { href: props.href } }
+  if (button.value) return { is: 'button', attrs: { type: 'button' } }
+  return { is: 'div', attrs: {} }
+})
 </script>
 
 <template>
   <component
-    :is="interactive ? 'button' : 'div'"
-    :type="interactive ? 'button' : undefined"
+    :is="target.is"
+    v-bind="target.attrs"
     class="stat-card w-full text-left"
     :class="[
       compact ? '!gap-3 !p-3.5' : '',
       interactive ? 'transition-shadow hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50' : '',
       selected ? '!border-primary-400 ring-1 ring-primary-400 dark:!border-primary-500 dark:ring-primary-500' : ''
     ]"
-    :aria-pressed="interactive && selected !== undefined ? selected : undefined"
+    :aria-pressed="button && selected !== undefined ? selected : undefined"
     @click="emit('click', $event)"
   >
     <div v-if="icon" class="stat-icon" :class="[`stat-icon-${tone}`, compact ? '!h-9 !w-9' : '']">

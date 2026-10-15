@@ -6,7 +6,8 @@
 // takes the label's id (`for` names a control id explicitly), and gets
 // aria-describedby (description / error) and aria-invalid. `error` shows a
 // message under the control. Remaining attrs (data-testid, ...) go to the
-// root. `dense` is for rows of a label and a small control only.
+// root. `dense` is for rows of a label and a small control only; `flush`
+// drops the vertical padding (a single row inside a form or modal).
 import { computed, useId, useSlots } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import { provideField, type ControlSize } from './field'
@@ -16,6 +17,7 @@ const props = defineProps<{
   description?: string
   stacked?: boolean
   dense?: boolean
+  flush?: boolean
   for?: string
   error?: string
   required?: boolean
@@ -23,20 +25,18 @@ const props = defineProps<{
 }>()
 const slots = useSlots()
 const uid = useId()
-const controlId = computed(() => props.for || `${uid}-control`)
 const hasDescription = computed(() => !!props.description || !!slots.description)
-const ctx = provideField({
-  controlId,
+const { labelFor } = provideField(uid, {
+  for: () => props.for,
   labelId: computed(() => `${uid}-label`),
   describedBy: computed(() => [props.error ? `${uid}-error` : '', hasDescription.value ? `${uid}-desc` : ''].filter(Boolean).join(' ') || undefined),
   invalid: computed(() => !!props.error),
   size: computed(() => props.size)
 })
-const labelFor = computed(() => (props.for || ctx.claimed.value ? controlId.value : undefined))
 </script>
 
 <template>
-  <div class="grid gap-3" :class="[dense ? 'py-2.5' : 'py-4', stacked ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-8']">
+  <div class="grid gap-3" :class="[flush ? '' : dense ? 'py-2.5' : 'py-4', stacked ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-8']">
     <div class="min-w-0">
       <component :is="labelFor ? 'label' : 'p'" :id="`${uid}-label`" :for="labelFor" class="text-sm font-medium text-fg">
         <slot name="label">{{ label }}</slot><span v-if="required" class="ml-0.5 text-red-500" aria-hidden="true">*</span>

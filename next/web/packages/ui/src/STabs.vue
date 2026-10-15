@@ -7,6 +7,7 @@
 // it). `idPrefix` defaults to a generated id. `size` sm is a compact bar.
 import { computed, nextTick, ref, useId } from 'vue'
 import type { TabItem } from './types'
+import { navIndex } from './keyboard'
 
 const props = withDefaults(defineProps<{ tabs: TabItem[]; modelValue: string; idPrefix?: string; size?: 'sm' | 'md'; ariaLabel?: string }>(), { size: 'md' })
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
@@ -24,13 +25,8 @@ function select(key: string) {
 }
 function onKey(e: KeyboardEvent) {
   const enabled = props.tabs.filter((t) => !t.disabled)
-  if (!enabled.length) return
   const i = enabled.findIndex((t) => t.key === (document.activeElement as HTMLElement | null)?.dataset?.key)
-  let next = -1
-  if (e.key === 'ArrowRight') next = (i + 1) % enabled.length
-  else if (e.key === 'ArrowLeft') next = (i - 1 + enabled.length) % enabled.length
-  else if (e.key === 'Home') next = 0
-  else if (e.key === 'End') next = enabled.length - 1
+  const next = navIndex(e.key, i, enabled.length, 'horizontal')
   if (next < 0) return
   e.preventDefault()
   select(enabled[next].key)

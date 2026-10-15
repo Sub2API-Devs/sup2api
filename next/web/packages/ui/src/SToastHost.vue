@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // Mounted once by the console. Errors are announced assertively
 // (role="alert"), other kinds politely (role="status"); hovering or focusing
-// a toast pauses its countdown.
+// a toast pauses its countdown. Toasts float over content, so they keep
+// stronger backgrounds than SAlert's TONE_BLOCK.
 import { dismissToast, pauseToast, resumeToast, toastState } from './feedback'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
+import { TONE_ICON, toneOf } from './tones'
 
 const t = useUiT()
 const tone: Record<string, string> = {
@@ -13,7 +15,6 @@ const tone: Record<string, string> = {
   warning: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/40 dark:text-amber-200',
   info: 'border-gray-200 bg-white text-gray-800 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-100'
 }
-const icon: Record<string, string> = { success: 'check', error: 'warning', warning: 'warning', info: 'info' }
 </script>
 
 <template>
@@ -32,7 +33,7 @@ const icon: Record<string, string> = { success: 'check', error: 'warning', warni
           @focusin="pauseToast(item.id)"
           @focusout="resumeToast(item.id)"
         >
-          <SIcon :name="icon[item.kind] || 'info'" class="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+          <SIcon :name="TONE_ICON[toneOf(item.kind)]" class="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
           <span class="flex-1 break-words">{{ item.message }}</span>
           <button
             type="button"

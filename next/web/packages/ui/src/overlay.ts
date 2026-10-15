@@ -1,7 +1,9 @@
 // Modal layer stack shared by SModal and SDrawer: only the topmost layer
 // handles Escape and traps Tab; body scrolling is locked while any layer is
 // open; focus moves into a layer when it opens and back to the element that
-// had it when it closes.
+// had it when it closes. Layers stack from z-index 50 (Tailwind z-overlay),
+// two steps per open layer; `top` layers start at 60. Popovers (z-popover,
+// 70) stay above them.
 import { computed, nextTick, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
 
 interface Layer {
@@ -18,7 +20,7 @@ let savedOverflow = ''
 const FOCUSABLE =
   'a[href],area[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]'
 
-export function focusables(root: HTMLElement): HTMLElement[] {
+function focusables(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !el.hasAttribute('inert') && el.getAttribute('aria-hidden') !== 'true')
 }
 
@@ -70,16 +72,16 @@ function sync() {
 /**
  * Registers a layer while `open` is true. `panel` is the dialog element
  * (gets focus when nothing inside is focusable). Returns the stacking depth
- * (0 = first open layer) and whether this layer is the topmost.
+ * (0 = first open layer).
  */
-export function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, onEscape: () => void) {
+function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, onEscape: () => void) {
   const id = ++seq
   let returnTo: HTMLElement | null = null
 
   function push() {
     if (stack.value.some((l) => l.id === id)) return
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    stack.value = [...stack.value, { id, panel, onEscape: () => onEscape() }]
+    stack.value = [...stack.value, { id, panel, onEscape }]
     sync()
     nextTick(() => {
       const el = panel.value
@@ -104,8 +106,32 @@ export function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | un
     const i = stack.value.findIndex((l) => l.id === id)
     return i < 0 ? stack.value.length : i
   })
-  const isTop = computed(() => stack.value[stack.value.length - 1]?.id === id)
-  return { depth, isTop }
+  return depth
+}
+
+const BASE_Z = 50
+const TOP_Z = 60
+
+/**
+ * Dialog behaviour of SModal / SDrawer: a layer of the stack while `open`;
+ * Escape (and the backdrop, via `dismissible`) close it unless it is
+ * `persistent` or not `closable`. `close()` emits update:open(false) and close.
+ */
+export function useDialog(
+  props: { open: boolean; closable?: boolean; persistent?: boolean; top?: boolean },
+  emit: { (e: 'update:open', v: boolean): void; (e: 'close'): void },
+  panel: Ref<HTMLElement | undefined>
+) {
+  const dismissible = computed(() => !!props.closable && !props.persistent)
+  function close() {
+    emit('update:open', false)
+    emit('close')
+  }
+  const depth = useOverlayLayer(() => props.open, panel, () => {
+    if (dismissible.value) close()
+  })
+  const zIndex = computed(() => (props.top ? TOP_Z : BASE_Z) + depth.value * 2)
+  return { dismissible, close, zIndex }
 }
 
 /** Number of open layers (tests / hosts). */

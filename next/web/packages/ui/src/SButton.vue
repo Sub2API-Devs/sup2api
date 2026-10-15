@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { isDev } from './dev'
 // Button with the console's .btn classes. `to` renders a <RouterLink>, `href`
 // an <a> (both with the same classes); otherwise a native <button> honouring
 // `type`, `loading` (spinner + disabled + aria-busy) and `disabled`. A
@@ -11,6 +10,7 @@ import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SSpinner from './SSpinner.vue'
 import SIcon from './SIcon.vue'
+import { isDev } from './dev'
 
 const props = withDefaults(
   defineProps<{
@@ -39,6 +39,7 @@ if (isDev && props.iconOnly && !props.ariaLabel) {
 const SQUARE: Record<string, string> = { sm: 'w-8 px-0', md: 'w-10 px-0', lg: 'w-12 px-0' }
 const ICON: Record<string, string> = { sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
 const inactive = computed(() => props.disabled || props.loading)
+const isLink = computed(() => !!(props.to || props.href))
 const cls = computed(() => [
   'btn',
   `btn-${props.variant}`,
@@ -46,31 +47,22 @@ const cls = computed(() => [
   props.block ? 'w-full' : '',
   props.iconOnly || props.square ? SQUARE[props.size] : '',
   props.tone === 'danger' ? '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20' : '',
-  (props.to || props.href) && inactive.value ? 'pointer-events-none cursor-not-allowed opacity-50' : ''
+  isLink.value && inactive.value ? 'pointer-events-none cursor-not-allowed opacity-50' : ''
 ])
+// Element and its own attributes: a disabled / loading link is an <a> without href.
+const target = computed(() => {
+  if (isLink.value && inactive.value) return { is: 'a', attrs: { role: 'link', 'aria-disabled': 'true' } }
+  if (props.to) return { is: RouterLink, attrs: { to: props.to } }
+  if (props.href) return { is: 'a', attrs: { href: props.href } }
+  return { is: 'button', attrs: { type: props.type, disabled: inactive.value } }
+})
 </script>
 
 <template>
-  <a v-if="(to || href) && inactive" :class="cls" role="link" aria-disabled="true" :aria-label="ariaLabel" :aria-busy="loading || undefined">
+  <component :is="target.is" v-bind="target.attrs" :class="cls" :aria-label="ariaLabel" :aria-busy="loading || undefined">
     <SSpinner v-if="loading" size="sm" decorative />
     <SIcon v-else-if="icon" :name="icon" :class="ICON[size]" />
     <slot v-if="!iconOnly || !icon" />
     <SIcon v-if="iconRight && !iconOnly" :name="iconRight" :class="ICON[size]" />
-  </a>
-  <RouterLink v-else-if="to" :to="to" :class="cls" :aria-label="ariaLabel">
-    <SIcon v-if="icon" :name="icon" :class="ICON[size]" />
-    <slot v-if="!iconOnly || !icon" />
-    <SIcon v-if="iconRight && !iconOnly" :name="iconRight" :class="ICON[size]" />
-  </RouterLink>
-  <a v-else-if="href" :href="href" :class="cls" :aria-label="ariaLabel">
-    <SIcon v-if="icon" :name="icon" :class="ICON[size]" />
-    <slot v-if="!iconOnly || !icon" />
-    <SIcon v-if="iconRight && !iconOnly" :name="iconRight" :class="ICON[size]" />
-  </a>
-  <button v-else :type="type" :class="cls" :disabled="disabled || loading" :aria-label="ariaLabel" :aria-busy="loading || undefined">
-    <SSpinner v-if="loading" size="sm" decorative />
-    <SIcon v-else-if="icon" :name="icon" :class="ICON[size]" />
-    <slot v-if="!iconOnly || !icon" />
-    <SIcon v-if="iconRight && !iconOnly" :name="iconRight" :class="ICON[size]" />
-  </button>
+  </component>
 </template>

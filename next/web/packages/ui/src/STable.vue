@@ -16,7 +16,9 @@ import { computed, ref } from 'vue'
 import { useUiT } from './i18n'
 import SSpinner from './SSpinner.vue'
 import SCheckbox from './SCheckbox.vue'
+import SIcon from './SIcon.vue'
 import type { TableColumn } from './types'
+import { displayValue, getPath } from './value'
 
 const props = withDefaults(
   defineProps<{
@@ -52,31 +54,19 @@ function keyOf(row: T, i: number): unknown {
   const k = row[props.rowKey]
   return k === undefined || k === null ? i : k
 }
+/** Rows with their key (rowKey, else the index), computed once per render. */
+const keyed = computed(() => props.rows.map((row, i) => ({ row, i, key: keyOf(row, i) })))
 
-function toggle(row: T, i: number) {
-  const k = keyOf(row, i)
+function toggle(row: T, key: unknown) {
   const s = new Set(expanded.value)
-  const open = !s.has(k)
-  if (open) s.add(k)
-  else s.delete(k)
+  const open = !s.delete(key)
+  if (open) s.add(key)
   expanded.value = s
   emit('expand', row, open)
 }
 
-function alignCls(a?: string) {
-  return a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left'
-}
-
-function valueOf(row: T, key: string): unknown {
-  if (!key.includes('.')) return row[key]
-  return key.split('.').reduce<any>((o, k) => (o == null ? o : o[k]), row)
-}
-
-function display(v: unknown): string {
-  if (v === null || v === undefined || v === '') return '—'
-  if (typeof v === 'object') return JSON.stringify(v)
-  return String(v)
-}
+const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' }
+const valueOf = (row: T, key: string): unknown => (key.includes('.') ? getPath(row, key) : row[key])
 
 function cellStyle(c: TableColumn) {
   if (!c.ellipsis) return undefined
@@ -86,18 +76,17 @@ function cellStyle(c: TableColumn) {
 // ---------------------------------------------------------------- selection
 const selectedSet = computed(() => new Set(props.selected))
 const canSelect = (row: T) => !props.rowSelectable || props.rowSelectable(row)
-const selectableKeys = computed<unknown[]>(() => props.rows.map((r, i) => (canSelect(r) ? keyOf(r, i) : undefined)).filter((k) => k !== undefined))
+const selectableKeys = computed(() => keyed.value.filter((r) => canSelect(r.row)).map((r) => r.key))
 const allSelected = computed(() => selectableKeys.value.length > 0 && selectableKeys.value.every((k) => selectedSet.value.has(k)))
 const someSelected = computed(() => !allSelected.value && selectableKeys.value.some((k) => selectedSet.value.has(k)))
 function toggleAll(on: boolean) {
-  const pageKeys = new Set<unknown>(selectableKeys.value)
+  const pageKeys = new Set(selectableKeys.value)
   const rest = props.selected.filter((k) => !pageKeys.has(k))
   emit('update:selected', on ? [...rest, ...selectableKeys.value] : rest)
 }
-function toggleRow(row: T, i: number, on: boolean) {
-  const k = keyOf(row, i)
-  const rest = props.selected.filter((x) => x !== k)
-  emit('update:selected', on ? [...rest, k] : rest)
+function toggleRow(key: unknown, on: boolean) {
+  const rest = props.selected.filter((x) => x !== key)
+  emit('update:selected', on ? [...rest, key] : rest)
 }
 
 const span = computed(() => props.columns.length + (props.expandable ? 1 : 0) + (props.selectable ? 1 : 0))
@@ -133,7 +122,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               v-for="c in columns"
               :key="c.key"
               :style="c.width ? { width: c.width } : undefined"
-              :class="[alignCls(c.align), c.headerClass, { 's-table-actions': c.key === 'actions' }]"
+              :class="[ALIGN[c.align ?? 'left'], c.headerClass, { 's-table-actions': c.key === 'actions' }]"
             >
               <slot :name="`head-${c.key}`" :column="c">{{ c.label }}</slot>
             </th>
@@ -150,14 +139,14 @@ function onRowKey(e: KeyboardEvent, row: T) {
               <slot name="empty">{{ emptyText || t('ui.noData') }}</slot>
             </td>
           </tr>
-          <template v-for="(row, i) in rows" :key="String(keyOf(row, i))">
+          <template v-for="{ row, i, key } in keyed" :key="String(key)">
             <tr
               v-bind="rowAttrs?.(row, i)"
               :class="[
                 loading ? 'opacity-60' : '',
                 clickable ? 'cursor-pointer focus:outline-none focus-visible:bg-primary-50/60 dark:focus-visible:bg-primary-900/20' : '',
-                selectable && selectedSet.has(keyOf(row, i)) ? 's-table-selected' : '',
-                rowClass?.(row, i) as any
+                selectable && selectedSet.has(key) ? 's-table-selected' : '',
+                rowClass?.(row, i)
               ]"
               :tabindex="clickable ? 0 : undefined"
               @click="emit('row-click', row)"
@@ -166,46 +155,36 @@ function onRowKey(e: KeyboardEvent, row: T) {
               <td v-if="selectable" class="w-10 !pr-0" @click.stop>
                 <SCheckbox
                   bare
-                  :model-value="selectedSet.has(keyOf(row, i))"
+                  :model-value="selectedSet.has(key)"
                   :disabled="!canSelect(row)"
                   :aria-label="t('ui.selectRow')"
-                  @update:model-value="toggleRow(row, i, $event)"
+                  @update:model-value="toggleRow(key, $event)"
                 />
               </td>
               <td v-if="expandable" class="w-8 !pr-0">
                 <button
                   type="button"
                   class="rounded p-0.5 text-gray-400 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:hover:text-gray-200"
-                  :aria-expanded="expanded.has(keyOf(row, i))"
-                  :aria-label="expanded.has(keyOf(row, i)) ? t('ui.collapseRow') : t('ui.expandRow')"
-                  @click.stop="toggle(row, i)"
+                  :aria-expanded="expanded.has(key)"
+                  :aria-label="expanded.has(key) ? t('ui.collapseRow') : t('ui.expandRow')"
+                  @click.stop="toggle(row, key)"
                 >
-                  <svg
-                    class="h-4 w-4 transition-transform"
-                    :class="expanded.has(keyOf(row, i)) ? 'rotate-90' : ''"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" />
-                  </svg>
+                  <SIcon name="chevron-right" class="h-4 w-4 transition-transform" :class="expanded.has(key) ? 'rotate-90' : ''" />
                 </button>
               </td>
               <td
                 v-for="c in columns"
                 :key="c.key"
-                :class="[alignCls(c.align), c.class, { 's-table-actions': c.key === 'actions', 'whitespace-nowrap': c.nowrap }]"
+                :class="[ALIGN[c.align ?? 'left'], c.class, { 's-table-actions': c.key === 'actions', 'whitespace-nowrap': c.nowrap }]"
                 :style="cellStyle(c)"
-                :title="c.ellipsis && !$slots[`cell-${c.key}`] ? display(valueOf(row, c.key)) : undefined"
+                :title="c.ellipsis && !$slots[`cell-${c.key}`] ? displayValue(valueOf(row, c.key)) : undefined"
               >
                 <slot :name="`cell-${c.key}`" :row="row" :value="valueOf(row, c.key)" :index="i">
-                  {{ display(valueOf(row, c.key)) }}
+                  {{ displayValue(valueOf(row, c.key)) }}
                 </slot>
               </td>
             </tr>
-            <tr v-if="expandable && expanded.has(keyOf(row, i))" class="s-table-expand">
+            <tr v-if="expandable && expanded.has(key)" class="s-table-expand">
               <td :colspan="span" class="bg-gray-50/60 dark:bg-dark-900/40">
                 <div v-if="fitExpandedToContainer" class="s-table-expand-content">
                   <slot name="expand" :row="row" />

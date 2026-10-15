@@ -13,6 +13,7 @@ import { computed, ref, useAttrs, useSlots } from 'vue'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
 import { splitAttrs, useFieldControl, type ControlSize } from './field'
+import { isBlank } from './value'
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
@@ -55,9 +56,23 @@ const reveal = ref(false)
 const DATE_TYPES = new Set(['datetime-local', 'date', 'time'])
 const lazy = computed(() => props.lazy ?? DATE_TYPES.has(props.type))
 const grouped = computed(() => !!(props.icon || props.suffix || props.clearable || props.revealable || slots.prefix || slots.suffix))
-const parts = computed(() => splitAttrs(attrs, () => false))
-const inputType = computed(() => (props.type === 'password' && reveal.value ? 'text' : props.type))
-const hasValue = computed(() => props.modelValue !== null && props.modelValue !== undefined && props.modelValue !== '')
+const parts = computed(() => splitAttrs(attrs))
+const hasValue = computed(() => !isBlank(props.modelValue))
+// Attributes of the <input> in both renderings (bare, or inside the frame).
+const inputProps = computed(() => ({
+  type: props.type === 'password' && reveal.value ? 'text' : props.type,
+  value: props.type === 'file' ? undefined : (props.modelValue ?? ''),
+  placeholder: props.placeholder,
+  disabled: props.disabled,
+  readonly: props.readonly,
+  maxlength: props.maxlength,
+  inputmode: props.inputmode,
+  autocomplete: props.autocomplete,
+  min: props.min,
+  max: props.max,
+  step: props.step,
+  id: id.value
+}))
 
 function onInput(e: Event) {
   const el = e.target as HTMLInputElement
@@ -82,45 +97,16 @@ defineExpose({ focus: () => input.value?.focus(), el: input })
     ref="input"
     class="input"
     :class="[size === 'sm' ? 'input-sm' : '', mono ? 'font-mono' : '', invalid ? 'input-error' : '']"
-    :type="type"
-    :value="type === 'file' ? undefined : (modelValue ?? '')"
-    :placeholder="placeholder"
-    :disabled="disabled"
-    :readonly="readonly"
-    :maxlength="maxlength"
-    :inputmode="inputmode"
-    :autocomplete="autocomplete"
-    :min="min"
-    :max="max"
-    :step="step"
-    :id="id"
-    v-bind="{ ...attrs, ...a11y }"
+    v-bind="{ ...inputProps, ...attrs, ...a11y }"
     @input="lazy ? undefined : onInput($event)"
     @change="lazy || type === 'file' ? onInput($event) : undefined"
   />
-  <div
-    v-else
-    class="input input-group"
-    :class="[size === 'sm' ? 'input-sm' : '', invalid ? 'input-error' : '', disabled ? 'input-group-disabled' : '', parts.wrap.class]"
-    :style="parts.wrap.style as any"
-  >
+  <div v-else class="input input-group" :class="[size === 'sm' ? 'input-sm' : '', invalid ? 'input-error' : '', disabled ? 'input-group-disabled' : '']" v-bind="parts.wrap">
     <slot name="prefix"><SIcon v-if="icon" :name="icon" class="h-4 w-4 shrink-0 text-fg-subtle" /></slot>
     <input
       ref="input"
-      :class="[mono ? 'font-mono' : '']"
-      :type="inputType"
-      :value="type === 'file' ? undefined : (modelValue ?? '')"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :readonly="readonly"
-      :maxlength="maxlength"
-      :inputmode="inputmode"
-      :autocomplete="autocomplete"
-      :min="min"
-      :max="max"
-      :step="step"
-      :id="id"
-      v-bind="{ ...parts.control, ...a11y }"
+      :class="mono ? 'font-mono' : ''"
+      v-bind="{ ...inputProps, ...parts.control, ...a11y }"
       @input="lazy ? undefined : onInput($event)"
       @change="lazy || type === 'file' ? onInput($event) : undefined"
     />

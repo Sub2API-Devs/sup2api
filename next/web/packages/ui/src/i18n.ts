@@ -21,7 +21,7 @@ function format(s: string, params?: Params): string {
 }
 
 /** Fallback translation of a `ui.*` key from the bundled English messages. */
-export function uiFallback(key: string, params?: Params): string {
+function uiFallback(key: string, params?: Params): string {
   return format(lookup(key) ?? key, params)
 }
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useAttrs, useId, watch } from 'vue'
+import { Teleport, computed, nextTick, ref, useAttrs, useId, watch } from 'vue'
 import type { SelectOption } from './types'
 import { useUiT } from './i18n'
 import { splitAttrs, useFieldControl, type ControlSize } from './field'
 import { useFloating } from './floating'
+import SIcon from './SIcon.vue'
 
 // Styled native <select>. Values keep their type (number/string/boolean/null).
 // An option with `options` renders an <optgroup>; the <option> value is the
@@ -33,20 +34,17 @@ const attrs = useAttrs()
 const t = useUiT()
 const { id, a11y, invalid, size } = useFieldControl(props)
 
-type Row = { group: string; items: { o: SelectOption; idx: number }[] } | { o: SelectOption; idx: number }
-
-// Rows to render (groups keep their children) plus the flat list for lookup.
-const rows = computed<Row[]>(() => {
-  let idx = 0
-  return props.options.map((o) =>
-    o.options ? { group: o.label, items: o.options.map((c) => ({ o: c, idx: idx++ })) } : { o, idx: idx++ }
-  )
-})
-const flat = computed(() => props.options.flatMap((o) => o.options ?? [o]))
-
 interface Choice extends SelectOption {
   group?: string
 }
+// Every selectable option in order (group children carry the group label);
+// the native <option> value is the index into this list.
+const flat = computed<Choice[]>(() => props.options.flatMap((o) => (o.options ? o.options.map((c) => ({ ...c, group: o.label })) : [o])))
+// Native <select> rows: groups keep their children.
+const rows = computed(() => {
+  let idx = 0
+  return props.options.map((o) => ({ group: o.options ? o.label : undefined, items: (o.options ?? [o]).map((c) => ({ o: c, idx: idx++ })) }))
+})
 const open = ref(false)
 const query = ref('')
 const active = ref(-1)
@@ -55,10 +53,7 @@ const root = ref<HTMLElement>()
 const menu = ref<HTMLElement>()
 const teleported = ref(false)
 const floating = useFloating(root, menu, { matchWidth: true, onLost: () => (open.value = false) })
-const choices = computed<Choice[]>(() => {
-  const list: Choice[] = props.options.flatMap((o) => (o.options ? o.options.map((c) => ({ ...c, group: o.label })) : [o]))
-  return props.placeholder === undefined ? list : [{ value: null, label: props.placeholder }, ...list]
-})
+const choices = computed<Choice[]>(() => (props.placeholder === undefined ? flat.value : [{ value: null, label: props.placeholder }, ...flat.value]))
 const filtered = computed(() => choices.value.filter((o) => o.label.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
 const selectedLabel = computed(() => choices.value.find((o) => o.value === props.modelValue)?.label ?? props.modelValue?.toString() ?? '')
 const parts = computed(() => splitAttrs(attrs, (k) => k.startsWith('data-')))
@@ -138,14 +133,9 @@ watch(
 )
 
 function onChange(e: Event) {
-  const idx = Number((e.target as HTMLSelectElement).value)
-  if (idx < 0) emit('update:modelValue', null)
-  else emit('update:modelValue', flat.value[idx]?.value ?? null)
+  emit('update:modelValue', flat.value[Number((e.target as HTMLSelectElement).value)]?.value ?? null)
 }
-
-function selectedIndex(): number {
-  return flat.value.findIndex((o) => o.value === props.modelValue)
-}
+const selectedIndex = computed(() => flat.value.findIndex((o) => o.value === props.modelValue))
 </script>
 
 <template>
@@ -171,56 +161,19 @@ function selectedIndex(): number {
       @keydown="onKey"
       @blur="hide"
     />
-    <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path d="m5 7 5 5 5-5H5Z" />
-    </svg>
-    <!-- Inline while detached (tests, previews); teleported in a live page. -->
-    <ul
-      v-if="open && !teleported"
-      :id="listId"
-      ref="menu"
-      role="listbox"
-      :aria-label="ariaLabel"
-      class="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800"
-      @mousedown.prevent
-    >
-      <template v-for="(o, i) in filtered" :key="i">
-        <li
-          v-if="o.group && (i === 0 || filtered[i - 1].group !== o.group)"
-          role="presentation"
-          class="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle"
-        >
-          {{ o.group }}
-        </li>
-        <li
-          :id="`${listId}-${i}`"
-          role="option"
-          :data-index="i"
-          :aria-selected="o.value === modelValue"
-          :aria-disabled="o.disabled || undefined"
-          class="cursor-pointer py-2 text-sm"
-          :class="[
-            o.group ? 'pl-5 pr-3' : 'px-3',
-            i === active ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-700 dark:text-gray-200',
-            o.disabled ? 'cursor-not-allowed opacity-40' : ''
-          ]"
-          @mouseenter="active = i"
-          @click="pick(o)"
-        >
-          {{ o.label }}
-        </li>
-      </template>
-      <li v-if="!filtered.length" role="presentation" class="px-3 py-2 text-sm text-fg-muted">{{ noResults ?? t('ui.noResults') }}</li>
-    </ul>
-    <Teleport v-if="teleported" to="body">
+    <SIcon name="chevron-down" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+    <!-- Teleported in a live page; inline while detached (tests, previews; a
+         disabled <Teleport> would still be stubbed away by shallowMount). -->
+    <component :is="teleported ? Teleport : 'div'" :to="teleported ? 'body' : undefined">
       <ul
         v-if="open"
         :id="listId"
         ref="menu"
         role="listbox"
         :aria-label="ariaLabel"
-        class="fixed z-popover max-h-60 overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800"
-        :style="floating.style.value"
+        class="max-h-60 overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800"
+        :class="teleported ? 'fixed z-popover' : 'absolute z-50 mt-1 w-full'"
+        :style="teleported ? floating.style.value : undefined"
         @mousedown.prevent
       >
         <template v-for="(o, i) in filtered" :key="i">
@@ -251,14 +204,14 @@ function selectedIndex(): number {
         </template>
         <li v-if="!filtered.length" role="presentation" class="px-3 py-2 text-sm text-fg-muted">{{ noResults ?? t('ui.noResults') }}</li>
       </ul>
-    </Teleport>
+    </component>
   </div>
   <select
     v-else
     :id="id"
     class="input"
     :class="[size === 'sm' ? 'input-sm' : '', invalid ? 'input-error' : '']"
-    :value="selectedIndex()"
+    :value="selectedIndex"
     :disabled="disabled"
     :aria-label="ariaLabel"
     v-bind="{ ...attrs, ...a11y }"
@@ -266,10 +219,12 @@ function selectedIndex(): number {
   >
     <option v-if="placeholder !== undefined" :value="-1">{{ placeholder }}</option>
     <template v-for="(r, i) in rows" :key="i">
-      <optgroup v-if="'group' in r" :label="r.group">
+      <optgroup v-if="r.group !== undefined" :label="r.group">
         <option v-for="c in r.items" :key="c.idx" :value="c.idx" :disabled="c.o.disabled">{{ c.o.label }}</option>
       </optgroup>
-      <option v-else :value="r.idx" :disabled="r.o.disabled">{{ r.o.label }}</option>
+      <template v-else>
+        <option v-for="c in r.items" :key="c.idx" :value="c.idx" :disabled="c.o.disabled">{{ c.o.label }}</option>
+      </template>
     </template>
   </select>
 </template>

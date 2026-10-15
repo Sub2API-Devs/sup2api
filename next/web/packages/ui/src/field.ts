@@ -22,20 +22,34 @@ export interface FieldContext {
   release(): void
 }
 
-export const FIELD_KEY: InjectionKey<FieldContext> = Symbol('s-field')
+/** null inside a control: a nested frame's controls are not linked to the outer one. */
+export const FIELD_KEY: InjectionKey<FieldContext | null> = Symbol('s-field')
 
-export function provideField(opts: {
-  controlId: ComputedRef<string>
-  labelId: ComputedRef<string>
-  describedBy: ComputedRef<string | undefined>
-  invalid: ComputedRef<boolean>
-  size?: ComputedRef<ControlSize | undefined>
-}): FieldContext {
+/**
+ * Provides the form-item context of a frame (SField, SSettingRow). `uid` is
+ * the frame's generated id (the control id is `${uid}-control` unless the
+ * frame's `for` names one). Returns the label's `for`: set once a control
+ * took the id (or `for` is given), so a label never points at nothing.
+ */
+export function provideField(
+  uid: string,
+  opts: {
+    for: () => string | undefined
+    labelId: ComputedRef<string>
+    describedBy: ComputedRef<string | undefined>
+    invalid: ComputedRef<boolean>
+    size: ComputedRef<ControlSize | undefined>
+  }
+) {
   const claimed = ref(false)
   let taken = false
+  const controlId = computed(() => opts.for() || `${uid}-control`)
   const ctx: FieldContext = {
-    ...opts,
-    size: opts.size ?? computed(() => undefined),
+    controlId,
+    labelId: opts.labelId,
+    describedBy: opts.describedBy,
+    invalid: opts.invalid,
+    size: opts.size,
     claimed,
     // The flag is plain (a control claims during its setup, inside the
     // frame's render); the ref follows a microtask later so the frame
@@ -52,7 +66,7 @@ export function provideField(opts: {
     }
   }
   provide(FIELD_KEY, ctx)
-  return ctx
+  return { labelFor: computed(() => (opts.for() || claimed.value ? controlId.value : undefined)) }
 }
 
 /**
@@ -63,8 +77,8 @@ export function provideField(opts: {
 export function useFieldControl(props: { error?: boolean; size?: string; ariaLabel?: string }, labelable = true) {
   const field = inject(FIELD_KEY, null)
   const attrs = useAttrs()
-  // Reset the shared context so nested controls of a nested frame are unaffected.
-  provide(FIELD_KEY, null as unknown as FieldContext)
+  // Reset the shared context so controls nested inside this one are unaffected.
+  provide(FIELD_KEY, null)
   const owns = labelable && !!field && attrs.id === undefined && field.claim()
   onBeforeUnmount(() => {
     if (owns) field?.release()
@@ -87,7 +101,7 @@ export function useFieldControl(props: { error?: boolean; size?: string; ariaLab
 }
 
 /** Splits fallthrough attrs: class/style (and optionally data-* / listeners) for the wrapper, the rest for the control. */
-export function splitAttrs(attrs: Record<string, unknown>, wrapperKeys: (k: string) => boolean) {
+export function splitAttrs(attrs: Record<string, unknown>, wrapperKeys: (k: string) => boolean = () => false) {
   const wrap: Record<string, unknown> = {}
   const control: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(attrs)) (k === 'class' || k === 'style' || wrapperKeys(k) ? wrap : control)[k] = v

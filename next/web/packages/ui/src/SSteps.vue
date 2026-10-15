@@ -7,6 +7,7 @@
 import { computed } from 'vue'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
+import { TONE_TEXT } from './tones'
 import type { StepItem, StepState } from './types'
 
 const props = withDefaults(defineProps<{ steps: StepItem[]; current?: string; direction?: 'horizontal' | 'vertical' }>(), { direction: 'horizontal' })
@@ -21,6 +22,7 @@ const DOT: Record<StepState, string> = {
   pending: 'border-line-strong bg-surface text-fg-subtle',
   error: 'border-red-500 bg-red-500 text-white'
 }
+const TITLE: Record<StepState, string> = { done: 'text-fg', current: 'text-fg', pending: 'text-fg-muted', error: TONE_TEXT.danger }
 const SR: Record<StepState, string> = { done: 'ui.stepDone', current: 'ui.stepCurrent', pending: '', error: 'ui.stepError' }
 </script>
 
@@ -46,7 +48,7 @@ const SR: Record<StepState, string> = { done: 'ui.stepDone', current: 'ui.stepCu
       </span>
       <div class="min-w-0 flex-1 pt-0.5">
         <div class="flex items-center gap-2">
-          <p class="text-sm font-medium" :class="states[i] === 'pending' ? 'text-fg-muted' : states[i] === 'error' ? 'text-red-600 dark:text-red-400' : 'text-fg'">
+          <p class="text-sm font-medium" :class="TITLE[states[i]]">
             {{ s.title }}<span v-if="SR[states[i]]" class="sr-only"> ({{ t(SR[states[i]]) }})</span>
           </p>
           <span v-if="direction === 'horizontal' && i < steps.length - 1" class="hidden h-px flex-1 sm:block" :class="states[i] === 'done' ? 'bg-primary-500' : 'bg-line'" aria-hidden="true" />

@@ -25,6 +25,12 @@ const cls = computed(() => [
   interactive.value && !props.disabled ? 'cursor-pointer hover:border-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40' : '',
   props.disabled ? 'cursor-not-allowed opacity-50' : ''
 ])
+// An interactive chip is a <button>; its × must then be a sibling, so both sit in a wrapper.
+const closeCls = computed(() =>
+  interactive.value
+    ? 'ml-0.5 text-fg-subtle hover:text-fg focus-visible:ring-primary-500/40'
+    : '-mr-1 opacity-60 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-current disabled:cursor-not-allowed'
+)
 function onClick(e: MouseEvent) {
   if (props.disabled) return
   if (props.pressed !== undefined) emit('update:pressed', !props.pressed)
@@ -33,29 +39,21 @@ function onClick(e: MouseEvent) {
 </script>
 
 <template>
-  <span v-if="!interactive" :class="cls">
-    <SIcon v-if="icon" :name="icon" class="h-3.5 w-3.5 shrink-0" />
-    <span class="truncate"><slot /></span>
-    <button
-      v-if="closable"
-      type="button"
-      class="-mr-1 shrink-0 rounded-full p-0.5 opacity-60 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-current disabled:cursor-not-allowed"
-      :disabled="disabled"
-      :aria-label="closeLabel || t('ui.remove')"
-      @click.stop="emit('close')"
+  <span :class="interactive ? 'inline-flex max-w-full items-center' : cls">
+    <component
+      :is="interactive ? 'button' : 'span'"
+      :class="interactive ? cls : 'contents'"
+      v-bind="interactive ? { type: 'button', disabled, 'aria-pressed': pressed } : {}"
+      @click="interactive ? onClick($event) : undefined"
     >
-      <SIcon name="x" class="h-3 w-3" />
-    </button>
-  </span>
-  <span v-else class="inline-flex max-w-full items-center">
-    <button type="button" :class="cls" :disabled="disabled" :aria-pressed="pressed === undefined ? undefined : pressed" @click="onClick">
       <SIcon v-if="icon" :name="icon" class="h-3.5 w-3.5 shrink-0" />
       <span class="truncate"><slot /></span>
-    </button>
+    </component>
     <button
       v-if="closable"
       type="button"
-      class="ml-0.5 shrink-0 rounded-full p-0.5 text-fg-subtle hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+      class="shrink-0 rounded-full p-0.5 focus:outline-none focus-visible:ring-2"
+      :class="closeCls"
       :disabled="disabled"
       :aria-label="closeLabel || t('ui.remove')"
       @click.stop="emit('close')"

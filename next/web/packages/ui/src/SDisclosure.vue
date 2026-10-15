@@ -5,9 +5,10 @@
 // (`label` or #title, optional `description`) with a chevron, for collapsible
 // blocks of a page or form. `open` supports v-model:open; uncontrolled
 // (closed, or `defaultOpen`) without it.
-import { computed, ref, useId } from 'vue'
+import { useId } from 'vue'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
+import { useOpenState } from './controlled'
 
 const props = withDefaults(
   defineProps<{
@@ -22,15 +23,8 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const t = useUiT()
-const inner = ref(!!props.defaultOpen)
-const isOpen = computed(() => props.open ?? inner.value)
+const { isOpen, toggle } = useOpenState(props, emit)
 const panelId = useId()
-
-function toggle() {
-  const v = !isOpen.value
-  inner.value = v
-  emit('update:open', v)
-}
 </script>
 
 <template>

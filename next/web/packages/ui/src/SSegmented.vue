@@ -6,9 +6,10 @@
 // SSettingRow the group is labelled by the frame's label unless `ariaLabel`
 // is given; `error` sets aria-invalid. The checked radio is written back to
 // the DOM when the parent keeps the old value (controlled).
-import { nextTick, ref, useId } from 'vue'
+import { ref, useId } from 'vue'
 import type { SelectOption } from './types'
 import { useFieldControl } from './field'
+import { writeBackChecked } from './controlled'
 
 const props = withDefaults(
   defineProps<{
@@ -30,12 +31,7 @@ const root = ref<HTMLElement>()
 
 function choose(v: SelectOption['value']) {
   emit('update:modelValue', v)
-  nextTick(() => {
-    root.value?.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach((el, i) => {
-      const want = props.options[i]?.value === props.modelValue
-      if (el.checked !== want) el.checked = want
-    })
-  })
+  writeBackChecked(root, (i) => props.options[i]?.value === props.modelValue)
 }
 </script>
 

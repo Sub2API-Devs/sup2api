@@ -6,15 +6,12 @@
 import { computed, inject } from 'vue'
 import SCopyButton from './SCopyButton.vue'
 import { DESC_KEY } from './descriptions'
+import { displayValue, isBlank } from './value'
 
 const props = defineProps<{ label?: string; value?: unknown; mono?: boolean; copyable?: boolean; full?: boolean }>()
 const ctx = inject(DESC_KEY, null)
 const labelWidth = computed(() => ctx?.labelWidth.value ?? '8rem')
-const shown = computed(() => {
-  const v = props.value
-  if (v === null || v === undefined || v === '') return '—'
-  return typeof v === 'object' ? JSON.stringify(v) : String(v)
-})
+const shown = computed(() => displayValue(props.value))
 </script>
 
 <template>
@@ -27,7 +24,7 @@ const shown = computed(() => {
     </dt>
     <dd class="mt-0.5 flex min-w-0 flex-1 items-start gap-1 break-words text-sm text-gray-800 sm:mt-0 dark:text-gray-200">
       <span class="min-w-0" :class="mono ? 'font-mono text-xs leading-5' : ''"><slot>{{ shown }}</slot></span>
-      <SCopyButton v-if="copyable && value !== undefined && value !== null && value !== ''" :text="String(value)" icon-only class="-my-1.5 shrink-0" />
+      <SCopyButton v-if="copyable && !isBlank(value)" :text="String(value)" icon-only class="-my-1.5 shrink-0" />
     </dd>
   </div>
 </template>

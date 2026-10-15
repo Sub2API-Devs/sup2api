@@ -5,10 +5,10 @@
 // `side` right (default) / left; `width` sm 24rem, md 32rem (default),
 // lg 42rem, xl 56rem or any CSS width. `persistent`: Escape and the backdrop
 // do not close it; `closable` = false hides the × (and implies persistent).
-import { computed, ref, useId } from 'vue'
+import { ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
-import { useOverlayLayer } from './overlay'
+import { useDialog } from './overlay'
 
 const props = withDefaults(
   defineProps<{
@@ -27,26 +27,13 @@ const t = useUiT()
 const titleId = useId()
 const panel = ref<HTMLElement>()
 const WIDTHS: Record<string, string> = { sm: '24rem', md: '32rem', lg: '42rem', xl: '56rem' }
-const dismissible = computed(() => props.closable && !props.persistent)
-
-function close() {
-  emit('update:open', false)
-  emit('close')
-}
-const { depth } = useOverlayLayer(
-  () => props.open,
-  panel,
-  () => {
-    if (dismissible.value) close()
-  }
-)
-const z = computed(() => 50 + depth.value * 2)
+const { dismissible, close, zIndex } = useDialog(props, emit, panel)
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="s-drawer">
-      <div v-if="open" class="fixed inset-0 flex bg-black/40 backdrop-blur-[2px]" :class="side === 'left' ? 'justify-start' : 'justify-end'" :style="{ zIndex: z }" @mousedown.self="dismissible && close()">
+      <div v-if="open" class="fixed inset-0 flex bg-black/40 backdrop-blur-[2px]" :class="side === 'left' ? 'justify-start' : 'justify-end'" :style="{ zIndex }" @mousedown.self="dismissible && close()">
         <div
           ref="panel"
           class="s-drawer-panel flex h-full w-full flex-col border-line bg-surface shadow-modal outline-none"

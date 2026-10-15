@@ -9,6 +9,7 @@ import SButton from './SButton.vue'
 import { useUiT } from './i18n'
 import { copyToClipboard } from './clipboard'
 import { toast as showToast } from './feedback'
+import { isBlank } from './value'
 
 const props = withDefaults(
   defineProps<{
@@ -54,7 +55,7 @@ onBeforeUnmount(() => {
     :icon-only="iconOnly"
     :aria-label="iconOnly ? label || t('ui.copy') : undefined"
     :title="iconOnly ? label || t('ui.copy') : undefined"
-    :disabled="disabled || text === null || text === undefined || text === ''"
+    :disabled="disabled || isBlank(text)"
     @click.stop="copy"
   >
     {{ done ? t('ui.copied') : label || t('ui.copy') }}

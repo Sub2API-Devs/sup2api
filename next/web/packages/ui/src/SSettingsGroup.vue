@@ -4,23 +4,19 @@
 // explanation of the whole group, collapsed behind a toggle. `collapsible`
 // turns the header into a toggle (v-model:open, or uncontrolled starting at
 // `defaultOpen`). Remaining attrs (data-testid, ...) go to the root.
-import { computed, ref, useId } from 'vue'
+import { computed, useId } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import SIcon from './SIcon.vue'
+import { useOpenState } from './controlled'
 
 const props = withDefaults(
   defineProps<{ title?: string; description?: string; collapsible?: boolean; open?: boolean; defaultOpen?: boolean }>(),
   { open: undefined, defaultOpen: true }
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
-const inner = ref(props.defaultOpen)
-const isOpen = computed(() => !props.collapsible || (props.open ?? inner.value))
+const state = useOpenState(props, emit)
+const isOpen = computed(() => !props.collapsible || state.isOpen.value)
 const bodyId = useId()
-function toggle() {
-  const v = !isOpen.value
-  inner.value = v
-  emit('update:open', v)
-}
 </script>
 
 <template>
@@ -37,7 +33,7 @@ function toggle() {
           class="flex w-full items-center gap-2 rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
           :aria-expanded="isOpen"
           :aria-controls="bodyId"
-          @click="toggle"
+          @click="state.toggle"
         >
           <SIcon name="chevron-right" class="h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-150" :class="isOpen ? 'rotate-90' : ''" />
           <slot name="title"><h5 class="text-sm font-semibold text-fg">{{ title }}</h5></slot>

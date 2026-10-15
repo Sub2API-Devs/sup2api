@@ -3,9 +3,6 @@ import colors from 'tailwindcss/colors'
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{vue,ts}', './packages/ui/src/**/*.{vue,ts}'],
-  // SBadge builds its class at runtime (badge-${tone}); keep every tone
-  // (purple = older name of accent) and size.
-  safelist: ['badge-primary', 'badge-info', 'badge-success', 'badge-warning', 'badge-danger', 'badge-gray', 'badge-accent', 'badge-purple', 'badge-xs'],
   darkMode: 'class',
   theme: {
     extend: {
@@ -110,7 +107,6 @@ export default {
         topbar: '20',
         sidebar: '40',
         overlay: '50',
-        drawer: '55',
         popover: '70',
         toast: '100'
       },

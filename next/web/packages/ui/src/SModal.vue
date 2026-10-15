@@ -8,10 +8,10 @@
 // persistent (the parent closes it). `top` stacks it above everything else
 // (confirmations asked from inside a modal; later modals stack above earlier
 // ones anyway).
-import { computed, ref, useId } from 'vue'
+import { ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
-import { useOverlayLayer } from './overlay'
+import { useDialog } from './overlay'
 
 const props = withDefaults(
   defineProps<{
@@ -40,27 +40,13 @@ const widths: Record<string, string> = {
   '2xl': 'max-w-6xl'
 }
 
-const dismissible = computed(() => props.closable && !props.persistent)
-
-function close() {
-  emit('update:open', false)
-  emit('close')
-}
-
-const { depth } = useOverlayLayer(
-  () => props.open,
-  panel,
-  () => {
-    if (dismissible.value) close()
-  }
-)
-const z = computed(() => (props.top ? 60 : 50) + depth.value * 2)
+const { dismissible, close, zIndex } = useDialog(props, emit, panel)
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="s-modal">
-      <div v-if="open" class="modal-overlay" :style="{ zIndex: z }" @mousedown.self="dismissible && close()">
+      <div v-if="open" class="modal-overlay" :style="{ zIndex }" @mousedown.self="dismissible && close()">
         <div
           ref="panel"
           class="modal-content flex flex-col"

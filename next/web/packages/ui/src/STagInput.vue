@@ -95,7 +95,6 @@ function onKey(e: KeyboardEvent) {
       :placeholder="placeholder || t('ui.addTag')"
       :disabled="disabled"
       v-bind="a11y"
-      :aria-label="ariaLabel || a11y['aria-label']"
       @keydown="onKey"
       @paste="onPaste"
       @blur="add"

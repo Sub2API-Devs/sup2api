@@ -34,6 +34,10 @@
 // `localizedText(v, locale)`; the helpers below take the locale as their last
 // argument (SchemaField passes vue-i18n's current locale).
 
+import { getPath, isBlank } from '../value'
+
+export { getPath }
+
 export const SECRET_MASK = '******'
 
 export type JSONSchema = Record<string, any>
@@ -206,10 +210,6 @@ export function orderedKeys(s: JSONSchema, ui?: UISchema): string[] {
   return out
 }
 
-export function getPath(obj: any, path: string): any {
-  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
-}
-
 export function isVisible(ui: UISchema | undefined, root: any): boolean {
   const cond = uiGet<any>(ui, 'visibleWhen')
   if (!cond || typeof cond !== 'object') return true
@@ -251,10 +251,6 @@ function clone<T>(v: T): T {
   return v === undefined ? v : JSON.parse(JSON.stringify(v))
 }
 
-function isEmpty(v: any): boolean {
-  return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
-}
-
 export interface ValidateMessages {
   required: string
   minLength: (n: number) => string
@@ -288,7 +284,7 @@ export function validate(s: JSONSchema, ui: UISchema | undefined, value: any, ms
       if (!isVisible(cu, root) || uiGet(cu, 'widget') === 'hidden') continue
       const p = path ? `${path}.${k}` : k
       const v = value?.[k]
-      if (req.includes(k) && (isEmpty(v) || (schemaType(cs) === 'boolean' && v === undefined))) {
+      if (req.includes(k) && (isBlank(v) || (schemaType(cs) === 'boolean' && v === undefined))) {
         errs[p] = custom(cu, 'required', msgs) ?? msgs.required
         continue
       }
@@ -296,7 +292,7 @@ export function validate(s: JSONSchema, ui: UISchema | undefined, value: any, ms
     }
     return errs
   }
-  if (isEmpty(value)) return errs
+  if (isBlank(value)) return errs
   if (t === 'string' && typeof value === 'string' && value !== SECRET_MASK) {
     let patternOK = true
     if (s.pattern) {
