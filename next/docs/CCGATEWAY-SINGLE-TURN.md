@@ -1,5 +1,30 @@
 # CCGateway 单轮映射与增量输出
 
+## 2026-10-16：账号 #21 已更新并完成真实客户端验证
+
+此前测试后恢复旧程序的阶段已经结束。按用户“更新上去，然后启动 CC 客户端测试 21 账号”的要求，已提交并推送实现，在服务器从精确提交构建，并通过 Controller `POST /accounts/21/worker` 正式原地更新 #21。新程序保持运行，没有在验收后回滚。
+
+- Worker 版本：`0.1.58-singleturn.1`。
+- 实现提交：`494af0bed19109276f67540eb8c8d2913de08903`。
+- 构建：Go 1.27.1，干净 detached worktree；服务报告 `modified=false`。
+- 制品镜像：`ccgateway-app:0.1.58-singleturn.1`。更新的是既有容器内程序，容器原镜像标签不是实际程序版本。
+- 当前程序 SHA-256：`15c40b02968fcd21743284cf770630981833de6d9a29d7061ec2d803ff785488`。
+- Controller 更新结果：`updated`、`online=true`；Worker health 为 healthy，内部 CLI 保持 2.1.292。
+- 容器 ID、Config/HostConfig/Mounts 摘要保留，另外 7 个账号运行容器的身份、状态和启动时间未变化。
+
+启动了本机真实 Claude Code **2.1.296** 客户端，以隔离配置和只读测试目录执行两项测试，模型为 `claude-haiku-4-5-20251001`：
+
+| 用例 | 客户端模型轮次 | 发给 #21 的 Messages 请求 | 结果 |
+|---|---:|---:|---|
+| 输出 1–60 的文本流 | 1 | 1 | 21 个文本增量，持续约 482 ms，CLI 正常成功结束 |
+| Read 本地随机标记文件，再提交工具结果 | 2 | 2 | 客户端执行一次 Read，工具结果成对，最终准确返回文件中的随机标记 |
+
+三次 Messages 请求均为 HTTP 200。#21 的独立请求日志均记录 `--max-turns 1`、`CCGATEWAY_TOOL_SEARCH=0`、一个主模型 `message_start`。两次客户端进程均退出 0，终态为 success。
+
+测试通过 SSH 私有桥接固定转发到 Controller `/accounts/21/v1/messages`，不会随机选择其他账号。验证覆盖真实客户端、Controller 转发和 #21 Worker，不将其描述为平台用户 API Key 的分组调度或计费验收。临时桥接和客户端配置已清理，没有改动用户全局 CC 配置。
+
+部署记录、构建来源和真实客户端结果位于服务器 `/home/debian/sup2api/checks/single-turn-release-20261016/` 与本地 `artifacts/ccg-single-turn-release-20261016/`。下文中的旧程序恢复和测试版哈希是此前验证阶段的历史记录。
+
 ## 目标与边界
 
 每次客户端请求独立完成参数、工具和历史映射。模型请求客户端工具时，将调用交还客户端；只有客户端提交新的请求和 tool_result 后才继续生成。Worker 不再执行内部 ToolSearch、结构化结果修复或搜索辅助轮次。
