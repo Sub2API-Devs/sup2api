@@ -294,3 +294,11 @@ A credential change recreates only the account's business container, retaining i
 data volume. Existing requests can be interrupted. Proxy-only changes retain the
 business container. Until the new revision passes readiness, calls fail closed.
 API Key accounts are rejected in legacy shared-container mode.
+
+## Shared Xray egress
+
+The optional controller capability `shared-egress-v1` preserves the existing core and Worker contracts. See `next/docs/CONTRACTS.md` section 57 and `next/docs/CCGATEWAY-XRAY-MIGRATION.md` for migration and rollback boundaries.
+
+Build the separate `companions/xray-egress` image as `ccgateway-xray:1` (Linux amd64); optionally pin its immutable image ID in `CCG_XRAY_IMAGE`. Existing runtimes stay on sing-box. The authenticated private `/accounts/<key>/egress` endpoint switches one runtime. `migrate_egress.py` reads the host's private controller env file, migrates explicit keys sequentially, and writes a report. Do not directly downgrade a controller with shared bindings.
+
+`shared_integration.py` requires an isolated `TEST_RUNTIME_ROOT` under `/checks/xray-migration-.../isolated-runtime`, the existing app/egress 0.1.55 images, and a test certificate under its sibling `fixture` directory. The certificate must cover `proxy.fixture.test` and `198.18.0.10`. The fixture directory must permit its isolated container to write events. The suite validates authenticated HTTP/HTTPS/SOCKS5 and DNS, TLS name rejection, source isolation, long-lived streams, restart recovery, rollback and identity retention. It uses test credentials only and does not send model requests. Run under a distinct controller prefix with Docker socket access; never point it at the production runtime root.

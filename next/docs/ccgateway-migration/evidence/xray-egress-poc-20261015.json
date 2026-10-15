@@ -1,0 +1,120 @@
+[
+  {
+    "test": "version",
+    "time": 1792049178.7029138,
+    "output": "Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)\nA unified platform for anti-censorship.",
+    "archive_sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae"
+  },
+  {
+    "test": "topology",
+    "time": 1792049178.85816,
+    "source_a": "10.251.17.10",
+    "source_b": "10.251.18.10",
+    "unknown_source": "10.251.17.11",
+    "upstream": "10.251.19.10",
+    "internal_networks": [
+      "xray-poc-20261015-a-net",
+      "xray-poc-20261015-b-net",
+      "xray-poc-20261015-up-net"
+    ]
+  },
+  {
+    "test": "source_ip_routing",
+    "time": 1792049181.7145689,
+    "a": {
+      "via": "proxy-a"
+    },
+    "b": {
+      "via": "proxy-b"
+    }
+  },
+  {
+    "test": "unknown_source_blocked",
+    "time": 1792049181.7854118,
+    "blocked": true,
+    "error": "Client network socket disconnected before secure TLS connection was established"
+  },
+  {
+    "test": "dynamic_add_outbound",
+    "time": 1792049183.1958156,
+    "response": "adding: proxy-c\n{}"
+  },
+  {
+    "test": "dynamic_replace_routes",
+    "time": 1792049183.30011,
+    "response": "{}"
+  },
+  {
+    "test": "new_connections_use_new_proxy",
+    "time": 1792049183.450399,
+    "a": {
+      "via": "proxy-c-socks"
+    },
+    "b": {
+      "via": "proxy-b"
+    }
+  },
+  {
+    "test": "dynamic_remove_old_outbound_during_stream",
+    "time": 1792049183.5022924,
+    "response": "removing: proxy-a\n{}"
+  },
+  {
+    "test": "existing_sse_after_add_route_remove",
+    "time": 1792049212.1266172,
+    "received": 150,
+    "lastIndex": 150,
+    "via": [
+      "proxy-a"
+    ],
+    "done": true,
+    "error": null,
+    "status": 200
+  },
+  {
+    "test": "removed_outbound_not_listed",
+    "time": 1792049212.2599065,
+    "response": "{\n    \"outbounds\": [\n        {\n            \"proxySettings\": {\n                \"_TypedMessage_\": \"xray.proxy.blackhole.Config\"\n            },\n            \"senderSettings\": {\n                \"_TypedMessage_\": \"xray.app.proxyman.SenderConfig\"\n            },\n            \"tag\": \"block\"\n        },\n        {\n            \"proxySettings\": {\n                \"_TypedMessage_\": \"xray.proxy.http.ClientConfig\",\n                \"server\": {\n                    \"address\": \"10.251.19.10\",\n                    \"port\": 18082\n                }\n            },\n            \"senderSettings\": {\n                \"_TypedMessage_\": \"xray.app.proxyman.SenderConfig\"\n            },\n            \"tag\": \"proxy-b\"\n        },\n        {\n            \"proxySettings\": {\n                \"_TypedMessage_\": \"xray.proxy.socks.ClientConfig\",\n                \"server\": {\n                    \"address\": \"10.251.19.10\",\n                    \"port\": 18083\n                }\n            },\n            \"senderSettings\": {\n                \"_TypedMessage_\": \"xray.app.proxyman.SenderConfig\"\n            },\n            \"tag\": \"proxy-c\"\n        }\n    ]\n}"
+  },
+  {
+    "test": "dynamic_revoke_source",
+    "time": 1792049212.4571152,
+    "a": {
+      "blocked": true,
+      "error": "Client network socket disconnected before secure TLS connection was established"
+    },
+    "b": {
+      "via": "proxy-b"
+    }
+  },
+  {
+    "test": "dynamic_restore_source",
+    "time": 1792049212.585625,
+    "a": {
+      "via": "proxy-c-socks"
+    }
+  },
+  {
+    "test": "passed",
+    "time": 1792049212.6068864,
+    "same_pid": true,
+    "same_started_at": true,
+    "production_changed": false
+  },
+  {
+    "test": "cleanup",
+    "time": 1792049216.1629965,
+    "containers_removed": [
+      "xray-poc-20261015-fixture",
+      "xray-poc-20261015-gateway",
+      "xray-poc-20261015-client-a",
+      "xray-poc-20261015-client-b",
+      "xray-poc-20261015-client-unknown"
+    ],
+    "networks_removed": [
+      "xray-poc-20261015-a-net",
+      "xray-poc-20261015-b-net",
+      "xray-poc-20261015-up-net"
+    ]
+  }
+]

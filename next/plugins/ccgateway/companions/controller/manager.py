@@ -50,7 +50,7 @@ IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update')
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1')
 # Same reference rules as the core (CONTRACTS §49.16).
 IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
@@ -75,7 +75,7 @@ WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSigna
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
+                   r'connection|tunnel|worker|egress|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
@@ -321,6 +321,15 @@ class Manager:
         self.uploads = Uploads(docker.from_env(timeout=LOAD_TIMEOUT), self.root / 'uploads')
         from cli_updates import CLIUpdates
         self.cli_updates = CLIUpdates(self)
+        self._shared = None
+
+    @property
+    def shared(self):
+        with self.lock:
+            if self._shared is None:
+                from shared_egress import SharedEgress
+                self._shared = SharedEgress(self)
+            return self._shared
 
     def health(self):
         return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
@@ -357,7 +366,11 @@ class Manager:
         if not posixpath.isabs(self.env_file) or env_dir == '/':
             raise RuntimeError('invalid runtime environment file path')
         with self.upgrade_lock:
-            self.ensure_image(ref)
+            image = self.ensure_image(ref)
+            if (self.root / 'shared-egress' / 'state.json').exists():
+                if image.attrs.get('Config', {}).get('Labels', {}).get('io.sup2api.ccgateway.shared-egress') != '1':
+                    if self.shared.data['bindings']:
+                        raise BadRequest('migrate shared accounts back before controller downgrade')
             helper_name = self.controller_name + '-upgrade'
             with contextlib.suppress(docker.errors.NotFound):
                 helper = self.docker.containers.get(helper_name)
@@ -441,7 +454,8 @@ class Manager:
         # Fixed helper image, no Docker socket, no host network/PID namespaces.
         d = self.dir(aid)
         write_private(d / 'app.nft', rules)
-        helper_image = image_of(self.owned(aid, 'egress'))
+        helper_image = (image_of(self.shared.container()) if (self.state(aid) or {}).get('egress_backend') == 'shared_xray'
+                        else image_of(self.owned(aid, 'egress')))
         self.oneshot(helper_image, entrypoint=['sh', '-ec'],
             command=[script], network_mode='container:' + app.id,
             cap_drop=['ALL'], cap_add=['NET_ADMIN'], security_opt=['no-new-privileges:true'],
@@ -595,14 +609,28 @@ class Manager:
             # No proxy egresses directly only when the core says so (direct):
             # an older core without the flag still gets the runtime blocked.
             direct = desired.get('direct') is True and not desired.get('proxy')
+            state = self.state(aid)
+            if state:
+                write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
             if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
                 return self.block(aid)
+            if state and state.get('egress_backend') == 'shared_xray':
+                if state.get('network') != policy:
+                    raise BadRequest('migrate back before changing network allocation')
+                if state.get('egress_migration') and state['egress_migration'].get('phase') == 'failed':
+                    raise BadRequest('resume or rollback failed egress migration')
+                if self.public(aid)['revision'] == revision:
+                    return self.public(aid)
+                self.shared.remove(aid)
+                state = self.provision(aid, desired.get('auth'), policy)
+                return self.shared.apply(aid, state, desired)
             old = None
             with contextlib.suppress(docker.errors.NotFound):
                 old = self.owned(aid, 'egress')
             egress_image = image_of(old) if old else self.egress_image
             self.ensure_image(egress_image)
             state = self.provision(aid, desired.get('auth'), policy)
+            write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
             if self.public(aid)['revision'] == revision:
                 app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
                 if app.status == 'running' and egress.status == 'running':
@@ -736,6 +764,8 @@ class Manager:
                     self.owned(aid, role).stop(timeout=10)
             state['status'] = 'blocked'
             self.save(aid, state)
+            if state.get('egress_backend') == 'shared_xray':
+                self.shared.remove(aid)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
     def delete(self, aid, account=False):
@@ -746,6 +776,9 @@ class Manager:
         if not DRAFT.fullmatch(aid) and not account:
             raise NotDraft('only draft runtimes can be deleted')
         with self.guard(aid):
+            if ((self.state(aid) or {}).get('egress_backend') == 'shared_xray'
+                    or ((self.root / 'shared-egress' / 'state.json').exists() and aid in self.shared.data['bindings'])):
+                self.shared.remove(aid, disconnect=True)
             if account and self.state(aid):
                 backup = self.root / 'backups'
                 backup.mkdir(mode=0o700, exist_ok=True)
@@ -801,7 +834,12 @@ class Manager:
         state = self.state(aid) or {}
         if aid in self.online:
             try:
-                containers = [self.owned(aid, role) for role in ('app', 'egress')]
+                if state.get('egress_backend') == 'shared_xray':
+                    containers = [self.owned(aid, 'app'), self.shared.container()]
+                    if not self.shared.healthy(aid, state):
+                        self.online.pop(aid, None)
+                else:
+                    containers = [self.owned(aid, role) for role in ('app', 'egress')]
                 if any(c.status != 'running' for c in containers) or tuple(c.attrs['State']['StartedAt'] for c in containers) != self.boots.get(aid):
                     self.online.pop(aid, None)
             except docker.errors.NotFound:
@@ -971,7 +1009,10 @@ class Manager:
             state = self.state(aid)
             if not state or state.get('revision') != revision:
                 raise RuntimeError('revision changed')
-            self._activate(aid, state, app, self.owned(aid, 'egress'), revision)
+            if state.get('egress_backend') == 'shared_xray':
+                self.shared.apply(aid, state, self.shared.desired(aid))
+            else:
+                self._activate(aid, state, app, self.owned(aid, 'egress'), revision)
             return True
         except Exception:
             # The core's next reconciliation applies the configuration again;
@@ -1245,6 +1286,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(400, 'invalid_request', close=True)
         body = self.rfile.read(n)
         try:
+            if path == 'egress':
+                if self.command == 'GET':
+                    return self.reply(200, manager.shared.status(aid))
+                if self.command == 'POST':
+                    try:
+                        payload = json.loads(body)
+                    except ValueError as e:
+                        raise BadRequest('invalid egress request') from e
+                    if not isinstance(payload, dict) or set(payload) != {'backend'}:
+                        raise BadRequest('invalid egress request')
+                    return self.reply(200, manager.shared.migrate(aid, payload['backend']))
+                return self.fail(405, 'method_not_allowed')
             if aid is None:
                 if self.command != 'GET':
                     return self.fail(405, 'method_not_allowed')
@@ -1380,4 +1433,5 @@ if __name__ == '__main__':
     server.manager = Manager(os.environ['CCG_RUNTIME_ROOT'], os.environ['CCG_APP_IMAGE'],
                              os.environ['CCG_EGRESS_IMAGE'], os.getenv('CCG_RUNTIME_PREFIX', 'ccg'))
     threading.Thread(target=server.manager.cli_updates.run, daemon=True).start()
+    threading.Thread(target=server.manager.shared.run, daemon=True).start()
     server.serve_forever()
