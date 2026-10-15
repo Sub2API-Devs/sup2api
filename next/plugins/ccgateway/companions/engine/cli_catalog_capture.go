@@ -135,6 +135,12 @@ func (p *cliCatalogProbe) recordTools(body Object) error {
 			return fmt.Errorf("invalid native tool definition")
 		}
 		seen[name] = true
+		if name == "DeferredToolPlaceholder" {
+			// This is an API carrier, not an executable native tool. A client
+			// placeholder must remain a deferred MCP entry so the CLI keeps
+			// discovery active even when no other deferred schema was sent.
+			continue
+		}
 		key := name + ":" + digest([]any{str(obj, "description"), schema})
 		old, exists := p.tools[key]
 		if !exists {
@@ -215,7 +221,7 @@ func (runner *Runner) captureToolCatalog(ctx context.Context, version string) (n
 			names[name] = true
 		}
 	}
-	for _, scenario := range []string{"sdk", "named", "teams", "powershell", "fixed-model", "plan"} {
+	for _, scenario := range []string{"sdk", "named", "teams", "powershell", "fixed-model", "plan", "search"} {
 		mode := "default"
 		if scenario == "plan" {
 			mode = "plan"
@@ -247,6 +253,12 @@ func (runner *Runner) captureToolCatalog(ctx context.Context, version string) (n
 		}
 		if scenario == "fixed-model" {
 			profile.Env["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"], profile.Env["CLAUDE_CODE_SUBAGENT_MODEL"] = "1", "claude-opus-5-5"
+		}
+		if scenario == "search" {
+			// These native tools are gated off in ordinary catalogue probes.
+			// Capture their actual schemas rather than treating a declared
+			// client ToolSearch as an unverified MCP replacement.
+			profile.Env["ENABLE_TOOL_SEARCH"] = "true"
 		}
 		cmd.Env = envWith(cmd.Env, profile.environment())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Dir, cmd.WaitDelay = input, io.Discard, io.Discard, root, time.Second

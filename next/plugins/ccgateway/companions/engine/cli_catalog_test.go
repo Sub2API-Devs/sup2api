@@ -136,7 +136,38 @@ func TestRealCLIDynamicCatalog(t *testing.T) {
 	if len(tools["Read"]) == 0 || len(tools["Agent"]) == 0 {
 		t.Fatal("missing baseline tools")
 	}
+	if len(tools["ToolSearch"]) == 0 || len(tools["DeferredToolPlaceholder"]) != 0 {
+		t.Fatal("gated ToolSearch missing, or its synthetic placeholder classified as executable")
+	}
 	snapshot := &cliSnapshot{version: version, tools: tools}
+	searchBody := basic()
+	searchBody["tools"] = []any{
+		Object{"name": "ToolSearch", "description": tools["ToolSearch"][0].Description, "input_schema": tools["ToolSearch"][0].Schema},
+		Object{"name": "DeferredToolPlaceholder", "description": "Reserved placeholder that keeps deferred tool loading active; never call this tool.", "defer_loading": true, "input_schema": Object{"type": "object", "properties": Object{}}},
+	}
+	raw, err := json.Marshal(searchBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	search, err := parsePolicyRequest(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	search.cliSnapshot = snapshot
+	matchNativeTools(search, version)
+	if !search.Native["ToolSearch"] || search.Native["DeferredToolPlaceholder"] || search.nativeProfile == nil || search.nativeProfile.Env["ENABLE_TOOL_SEARCH"] != "true" {
+		t.Fatal("dynamic snapshot did not retain native client search identities", search.Native)
+	}
+	runner.Plugin, err = extractMod(runner.Work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.prepareNativeTools(ctx, search); err != nil {
+		t.Fatal("client search configuration verification failed", err)
+	}
+	if !search.clientToolSearch() || search.bufferedResponse() || search.maxTurns() != "1" {
+		t.Fatal("verified client search gained hidden rounds or buffering")
+	}
 	request := &Request{Tools: []Tool{tools["Read"][0]}, cliSnapshot: snapshot}
 	matchNativeTools(request, version)
 	if !request.Native["Read"] || request.wireName("Read") != "Read" {
