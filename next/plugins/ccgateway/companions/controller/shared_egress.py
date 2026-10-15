@@ -241,7 +241,9 @@ class SharedEgress:
         self.api(c, 'adrules', routes(self.data['bindings']))
         store(self.root / 'dns.json', {b['ip']: {'port': b['port']} for b in self.data['bindings'].values() if b.get('active')})
         write_private(self.root / 'active.nft', firewall(self.data['bindings'], self.data['nodes']))
-        self.exec(c, ['sh', '-ec', '{ echo "delete table inet ccg_shared"; cat /config/active.nft; } | nft -f -'])
+        self.exec(c, ['sh', '-ec',
+            '{ if nft list table inet ccg_shared >/dev/null 2>&1; then echo "delete table inet ccg_shared"; fi; '
+            'cat /config/active.nft; } | nft -f -'])
 
     def fence(self, aid, c):
         b = self.data['bindings'].get(aid)

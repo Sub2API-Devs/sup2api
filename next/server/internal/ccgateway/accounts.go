@@ -51,9 +51,8 @@ type accountDesired struct {
 	Locale   string            `json:"locale,omitempty"`
 	Timezone string            `json:"timezone,omitempty"`
 	Kind     string            `json:"-"`
-	// Blocked says why a disabled runtime is blocked: account_disabled or
-	// proxy_disabled (a bound proxy that is disabled never falls back to
-	// direct egress).
+	// A missing, invalid or disabled bound proxy blocks the runtime. Only an
+	// explicitly unbound account may use direct egress.
 	Blocked string `json:"-"`
 	// Key is the runtime key: the adopted draft key or the account id.
 	Key string `json:"-"`
@@ -112,8 +111,10 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	var password, accountCredentials []byte
 	var settings []byte
 	err := q.QueryRow(ctx, `SELECT
-  a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',true),
+  a.deleted_at IS NULL AND a.status <> 'disabled' AND
+    (a.proxy_id IS NULL OR (p.id IS NOT NULL AND p.status <> 'disabled' AND p.protocol IN ('http','https','socks5'))),
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
+       WHEN a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')) THEN 'proxy_unavailable'
        WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
@@ -174,8 +175,9 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 	var spec core.ProxySpec
 	var password, settings []byte
 	err := s.DB.Pool.QueryRow(ctx, `SELECT
-  COALESCE(p.status <> 'disabled',true),
-  CASE WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
+  r.proxy_id IS NULL OR (p.id IS NOT NULL AND p.status <> 'disabled' AND p.protocol IN ('http','https','socks5')),
+  CASE WHEN r.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')) THEN 'proxy_unavailable'
+       WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,r.initial_settings
   FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
