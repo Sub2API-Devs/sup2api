@@ -135,9 +135,11 @@ type UsageRecord struct {
 	ErrorType        string // see usage_logs.error_type
 	ErrorMessage     string
 	Attempts         int
-	UsageSemantics   string // exclusive | inclusive
-	Tokens           UsageTokens
-	Metrics          map[string]any // plugin usage facts for u("key")
+	// FailurePolicy contains bounded core-only decisions, persisted in anomalies.
+	FailurePolicy  string
+	UsageSemantics string // exclusive | inclusive
+	Tokens         UsageTokens
+	Metrics        map[string]any // plugin usage facts for u("key")
 	// PluginDetail is the free-form JSON object a plugin returned from
 	// PlatformService.ExtractUsage (usage_logs.plugin_detail). It is the only
 	// part of a usage record a plugin writes verbatim, billing never reads
@@ -328,6 +330,7 @@ func (r *UsageRecord) Anomalies() map[string]string {
 	}
 	put(AnomalyResponseMismatch, r.ResponseMismatch)
 	put(AnomalyUsageExtract, r.UsageExtract)
+	put("failure_policy", r.FailurePolicy)
 	if r.ReservationDropped != "" {
 		put(AnomalyReservation, ReservationDropped)
 		put(AnomalyReservationError, r.ReservationDropped)

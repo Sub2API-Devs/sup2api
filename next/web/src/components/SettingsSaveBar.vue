@@ -5,7 +5,7 @@
 import { useI18n } from 'vue-i18n'
 import { SButton } from '@sub2api/ui'
 
-withDefaults(defineProps<{ dirty: boolean; saving?: boolean; canManage?: boolean }>(), { saving: false, canManage: true })
+withDefaults(defineProps<{ dirty: boolean; saving?: boolean; canManage?: boolean; saveLabel?: string }>(), { saving: false, canManage: true })
 const emit = defineEmits<{ (e: 'save'): void; (e: 'reset'): void }>()
 const { t } = useI18n()
 </script>
@@ -14,6 +14,6 @@ const { t } = useI18n()
   <div v-if="canManage" class="flex flex-wrap items-center justify-end gap-2" data-testid="settings-save-bar">
     <slot />
     <SButton v-if="dirty" size="sm" :disabled="saving" data-testid="settings-reset" @click="emit('reset')">{{ t('common.reset') }}</SButton>
-    <SButton size="sm" variant="primary" :loading="saving" :disabled="!dirty" data-testid="settings-save" @click="emit('save')">{{ t('common.save') }}</SButton>
+    <SButton size="sm" variant="primary" :loading="saving" :disabled="!dirty" data-testid="settings-save" @click="emit('save')">{{ saveLabel || t('common.save') }}</SButton>
   </div>
 </template>

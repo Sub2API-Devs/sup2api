@@ -2,6 +2,8 @@
 
 ## 后续改造提案
 
+- [核心失败处理设计与实现](../GATEWAY-FAILURE-POLICY-DESIGN.md)（2026-10-15）：核心通用配置、状态码与可选关键词、原账号重试、换号和粘性重置、独立自动禁用；代码与本地验证完成，尚未部署或启用。
+
 - [出口故障与兜底检查](../CCGATEWAY-EGRESS-FAIL-CLOSED-AUDIT.md)（2026-10-15）：停组件实测、核心 0.1.142 的失败阻断加固，以及账号重试与 DNS 故障边界。
 
 - [共享 Xray 出口改造方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)（2026-10-15）：按容器源 IP 分流、动态代理配置、持久化恢复及逐账号迁移。首版已部署，8 个运行环境已迁移；见[验收记录](evidence/xray-migration-20261015.json)。

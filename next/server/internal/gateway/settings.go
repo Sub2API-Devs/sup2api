@@ -111,10 +111,12 @@ func (s GatewaySettings) hotpathTimeout() time.Duration {
 }
 
 type settingsSnapshot struct {
-	at          time.Time
-	gateway     GatewaySettings
-	sticky      StickySettings
-	autoDisable AutoDisableSettings
+	at               time.Time
+	gateway          GatewaySettings
+	sticky           StickySettings
+	autoDisable      AutoDisableSettings
+	failurePolicy    *FailurePolicy
+	failurePolicyErr error
 }
 
 // settingsCache reads the gateway, sticky and auto-disable rows with a short
@@ -167,6 +169,10 @@ func (c *settingsCache) load(ctx context.Context) settingsSnapshot {
 		autoDisable: defaultAutoDisableSettings()}
 	if c.db == nil {
 		s.at = time.Now()
+		return s
+	}
+	s.failurePolicy, s.failurePolicyErr = loadFailurePolicy(ctx, c.db.Pool)
+	if s.failurePolicyErr != nil {
 		return s
 	}
 	gw, err := loadGatewaySettings(ctx, c.db.Pool)

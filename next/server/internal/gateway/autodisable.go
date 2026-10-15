@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -266,7 +268,27 @@ func (g *Gateway) putAutoDisableHandler(c *gin.Context) {
 	}
 	uid, _ := core.UserID(ctx)
 	cur := defaultAutoDisableSettings()
-	if err := store.PatchSettingJSON(ctx, db, settingsKeyAutoDisable, nullID(uid), in, &cur); err != nil {
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := legacyFailureSettingGuard(ctx, tx); err != nil {
+			return err
+		}
+		_, err := store.UpdateSettingJSONTx(ctx, tx, settingsKeyAutoDisable, nullID(uid), func(raw json.RawMessage) (json.RawMessage, error) {
+			if err := json.Unmarshal(raw, &cur); err != nil {
+				return nil, err
+			}
+			if in.Enabled != nil {
+				cur.Enabled = *in.Enabled
+			}
+			if in.StatusCodes != nil {
+				cur.StatusCodes = *in.StatusCodes
+			}
+			if in.Keywords != nil {
+				cur.Keywords = *in.Keywords
+			}
+			return json.Marshal(cur)
+		})
+		return err
+	}); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

@@ -13,6 +13,8 @@ import UsageBillingFacts from './UsageBillingFacts.vue'
 import UsageTokenFacts from './UsageTokenFacts.vue'
 import CacheWriteFacts from './CacheWriteFacts.vue'
 import { componentCacheWriteMetrics, otherUsageMetrics } from './cacheWriteEvidence'
+import FailureDecisionDetails from '@/views/settings/FailureDecisionDetails.vue'
+import type { FailureDecision } from '@/views/settings/failurePolicy'
 
 // Expanded usage record: billing detail (A.14), request info, tokens, hooks, sticky.
 const props = defineProps<{ row: UsageRow; path?: string }>()
@@ -42,6 +44,12 @@ const knownRounds = computed(() => knownUsageRounds(u.value))
 const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))
 const componentCacheFacts = computed(() => componentCacheWriteMetrics(u.value.billing_detail).filter((item) => !knownRounds.value.length || item.kind !== 'replacement'))
 const hooks = computed(() => u.value.hook_decisions || [])
+const failureDecisions = computed<FailureDecision[]>(() => {
+  try {
+    const value: unknown = JSON.parse(u.value.anomalies?.failure_policy || '[]')
+    return Array.isArray(value) ? value.filter(v => v && typeof v.action === 'string').slice(0, 10) : []
+  } catch { return [] }
+})
 </script>
 
 <template>
@@ -164,6 +172,10 @@ const hooks = computed(() => u.value.hook_decisions || [])
           </ul>
         </div>
 
+        <div v-if="failureDecisions.length" data-testid="failure-decisions">
+          <SSectionTitle :title="t('failurePolicy.decisions')" />
+          <FailureDecisionDetails v-for="(decision, index) in failureDecisions" :key="index" :decision="decision" />
+        </div>
         <div v-if="u.sticky_rule">
           <SSectionTitle :title="t('usage.sticky.title')" />
           <SDescriptions dense>

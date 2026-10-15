@@ -23,7 +23,9 @@ const maxAutomaticDisableDuration = 366 * 24 * time.Hour
 
 func automaticDisableEnabled(ctx context.Context, q store.Querier) (bool, error) {
 	var enabled bool
-	err := q.QueryRow(ctx, `SELECT COALESCE((SELECT (value->>'enabled')::boolean FROM settings WHERE key='auto_disable'),true)`).Scan(&enabled)
+	err := q.QueryRow(ctx, `SELECT COALESCE(
+		(SELECT (value->>'account_enabled')::boolean FROM settings WHERE key='failure_policy'),
+		(SELECT (value->>'enabled')::boolean FROM settings WHERE key='auto_disable'),true)`).Scan(&enabled)
 	return enabled, err
 }
 
@@ -37,17 +39,17 @@ func (s *Service) getAutoDisablePolicy(c *gin.Context) {
 }
 
 func (s *Service) ApplyAccountAutomaticState(ctx context.Context, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
-	return s.applyAutomaticState(ctx, "", id, state)
+	return s.applyAutomaticState(ctx, "", id, state, false)
 }
 
 func (s *Service) ApplyPluginAccountAutomaticState(ctx context.Context, pluginKey string, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
 	if pluginKey == "" {
 		return nil, core.ErrInvalidArgument.WithMessage("plugin key is required")
 	}
-	return s.applyAutomaticState(ctx, pluginKey, id, state)
+	return s.applyAutomaticState(ctx, pluginKey, id, state, false)
 }
 
-func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int64, state *pluginv1.AccountAutomaticState, policyAuthorized bool) (*pluginv1.SetAccountAutomaticStateResponse, error) {
 	if id <= 0 || state == nil || !utf8.ValidString(state.GetReason()) || len(state.GetReason()) > 1000 {
 		return nil, core.ErrInvalidArgument.WithMessage("invalid automatic account state")
 	}
@@ -101,9 +103,12 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 			}
 			next, reason = "active", ""
 		} else {
-			globallyAllowed, err := automaticDisableEnabled(ctx, tx)
-			if err != nil {
-				return err
+			globallyAllowed := policyAuthorized && owner == ""
+			if !globallyAllowed {
+				globallyAllowed, err = automaticDisableEnabled(ctx, tx)
+				if err != nil {
+					return err
+				}
 			}
 			if !allowed || !globallyAllowed {
 				return nil

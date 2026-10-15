@@ -1,0 +1,171 @@
+package gateway
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"slices"
+)
+
+const failurePolicyKey = "failure_policy"
+
+const (
+	failureReturn = "return"
+	failureRetry  = "retry"
+	failureSwitch = "switch"
+	failureReset  = "switch_reset"
+)
+
+// FailurePolicy is owned and executed by the core. No plugin RPC or manifest
+// participates in evaluating these rules. Slice order is rule priority.
+type FailurePolicy struct {
+	Revision          int64         `json:"revision"`
+	SchemaVersion     int           `json:"schema_version"`
+	RetryEnabled      bool          `json:"retry_enabled"`
+	MaxRetries        int           `json:"max_retries"`
+	BackoffMS         int           `json:"backoff_ms"`
+	MaxWaitMS         int           `json:"max_wait_ms"`
+	RespectRetryAfter bool          `json:"respect_retry_after"`
+	AccountEnabled    bool          `json:"account_enabled"`
+	RetryRules        []FailureRule `json:"retry_rules"`
+	AccountRules      []FailureRule `json:"account_rules"`
+}
+
+// JSON null is an empty form field, not an explicit zero retry/wait budget.
+func (p *FailurePolicy) UnmarshalJSON(raw []byte) error {
+	type plain FailurePolicy
+	var value plain
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for _, key := range []string{"max_retries", "backoff_ms", "max_wait_ms"} {
+		if bytes.Equal(bytes.TrimSpace(fields[key]), []byte("null")) {
+			return fmt.Errorf("%s must be an integer, not null", key)
+		}
+	}
+	*p = FailurePolicy(value)
+	return nil
+}
+
+type FailureRule struct {
+	ID                 string       `json:"id"`
+	Name               string       `json:"name"`
+	Enabled            bool         `json:"enabled"`
+	Match              FailureMatch `json:"match"`
+	Action             string       `json:"action"`
+	SameAccountRetries int          `json:"same_account_retries"`
+	ExhaustedAction    string       `json:"exhausted_action"`
+	Egress             string       `json:"egress"`
+	CooldownSeconds    int          `json:"cooldown_seconds"`
+}
+
+type FailureMatch struct {
+	Source      string   `json:"source"` // upstream, transport, core
+	StatusCodes string   `json:"status_codes"`
+	Keywords    []string `json:"keywords"`
+	Mode        string   `json:"mode"` // all or any of the nonempty error conditions
+	Groups      []int64  `json:"groups"`
+	Models      []string `json:"models"`
+	Protocols   []string `json:"protocols"`
+	ranges      []statusRange
+}
+
+type FailureFacts struct {
+	Source   string `json:"source"`
+	Status   int    `json:"status"`
+	Text     string `json:"text"`
+	GroupID  int64  `json:"group_id"`
+	Model    string `json:"model"`
+	Protocol string `json:"protocol"`
+}
+
+type FailureDecision struct {
+	RetryRule          string `json:"retry_rule,omitempty"`
+	AccountRule        string `json:"account_rule,omitempty"`
+	Action             string `json:"action"`
+	AccountAction      string `json:"account_action"`
+	SameAccountRetries int    `json:"same_account_retries,omitempty"`
+	ExhaustedAction    string `json:"exhausted_action,omitempty"`
+	Egress             string `json:"egress,omitempty"`
+	CooldownSeconds    int    `json:"cooldown_seconds,omitempty"`
+}
+
+func defaultFailurePolicy() FailurePolicy {
+	return FailurePolicy{SchemaVersion: 1, MaxRetries: 2, BackoffMS: 200, MaxWaitMS: 5000,
+		RespectRetryAfter: true, RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
+}
+
+// migrationDraft is a visible starting point, not an executable replacement
+// until published. Legacy plugin-specific decisions are intentionally not copied.
+func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
+	p := defaultFailurePolicy()
+	p.MaxRetries = gw.normalized().MaxAttempts - 1
+	p.RetryEnabled = p.MaxRetries > 0
+	p.AccountEnabled = ad.Enabled
+	p.RetryRules = []FailureRule{{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
+		Match:  FailureMatch{Source: "upstream", StatusCodes: "408,429,500-599", Mode: "all"},
+		Action: failureReset, Egress: "same_proxy"}}
+	if ad.StatusCodes != "" || len(ad.Keywords) > 0 {
+		p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
+			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "any"}, Action: "disable"}}
+	}
+	return p
+}
+
+func (m FailureMatch) matches(f FailureFacts) bool {
+	if m.Source != f.Source || len(m.Groups) > 0 && !slices.Contains(m.Groups, f.GroupID) ||
+		!anyGlob(m.Models, f.Model) || !matchList(m.Protocols, f.Protocol) {
+		return false
+	}
+	statusMatch := false
+	for _, r := range m.ranges {
+		if f.Status >= r.lo && f.Status <= r.hi {
+			statusMatch = true
+			break
+		}
+	}
+	text := []byte(f.Text)
+	if len(text) > classifyPrefix {
+		text = text[:classifyPrefix]
+	}
+	text = bytes.ToLower(text)
+	keywordMatch := false
+	for _, k := range m.Keywords {
+		if bytes.Contains(text, []byte(k)) {
+			keywordMatch = true
+			break
+		}
+	}
+	if len(m.ranges) == 0 && len(m.Keywords) == 0 {
+		return m.Source == "transport"
+	}
+	if m.Mode == "any" {
+		return statusMatch || keywordMatch
+	}
+	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch)
+}
+
+func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
+	d := FailureDecision{Action: failureReturn, AccountAction: "none"}
+	if p.RetryEnabled && p.MaxRetries > 0 {
+		for _, r := range p.RetryRules {
+			if r.Enabled && r.Match.matches(f) {
+				d.RetryRule, d.Action, d.SameAccountRetries, d.ExhaustedAction, d.Egress = r.ID, r.Action, r.SameAccountRetries, r.ExhaustedAction, r.Egress
+				break
+			}
+		}
+	}
+	if p.AccountEnabled {
+		for _, r := range p.AccountRules {
+			if r.Enabled && r.Match.matches(f) {
+				d.AccountRule, d.AccountAction, d.CooldownSeconds = r.ID, r.Action, r.CooldownSeconds
+				break
+			}
+		}
+	}
+	return d
+}

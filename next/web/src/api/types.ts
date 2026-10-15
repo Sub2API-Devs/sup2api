@@ -790,6 +790,7 @@ export interface UsageLog {
   expr_hash?: string
   billing_detail?: Record<string, any>
   hook_decisions?: Array<{ plugin_key: string; hook_id: string; decision: string; latency_ms: number; note?: string }>
+  anomalies?: Record<string, string>
   sticky_rule?: string
   sticky_hit?: boolean
   latency_ms: number
@@ -869,6 +870,7 @@ export interface StickyStats {
 }
 
 export interface StickySettings {
+  failure_policy_managed?: boolean
   enabled: boolean
   default_ttl_seconds: number
   keep_on_account_disabled: boolean

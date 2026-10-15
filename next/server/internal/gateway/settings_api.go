@@ -2,9 +2,11 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -32,7 +34,21 @@ func (s dbGatewaySettings) update(ctx context.Context, in gatewaySettingsInput, 
 	if s.db == nil {
 		return v, core.ErrUnavailable
 	}
-	err := store.PatchSettingJSON(ctx, s.db, settingsKeyGateway, nullID(updatedBy), in, &v)
+	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if in.MaxAttempts != nil {
+			if err := legacyFailureSettingGuard(ctx, tx); err != nil {
+				return err
+			}
+		}
+		_, err := store.UpdateSettingJSONTx(ctx, tx, settingsKeyGateway, nullID(updatedBy), func(raw json.RawMessage) (json.RawMessage, error) {
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, err
+			}
+			in.applyTo(&v)
+			return json.Marshal(v.normalized())
+		})
+		return err
+	})
 	return v.normalized(), err
 }
 

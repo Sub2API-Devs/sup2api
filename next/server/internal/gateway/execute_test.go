@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"strings"
@@ -90,6 +91,22 @@ func executeFixture(t *testing.T, svc core.Settler) (*env, *executeTestPlatform)
 	})
 	e.gw.d.Settler = svc
 	return e, p
+}
+
+func TestFailurePolicyExecuteNeverInvokesPluginClassifier(t *testing.T) {
+	db := testutil.DB(t)
+	bill := billing.New(db, nil, nil, nil, nil)
+	svc := usage.New(db, bill, bill, nil, usage.Options{})
+	e, p := executeFixture(t, svc)
+	e.setFailurePolicy(testFailurePolicy())
+	e.up.set("acc-1", &upstreamRule{status: 503})
+	e.plat.classifyHook = func(*pluginv1.ClassifyErrorRequest, *pluginv1.ClassifyErrorResponse) {
+		t.Error("plugin classifier must not run with core policy")
+	}
+	require.Equal(t, 200, e.messages(body(testModel, false)).status)
+	require.Equal(t, int64(2), p.calls.Load())
+	require.Equal(t, []string{"acc-1", "acc-2"}, e.up.keys())
+	require.Empty(t, e.plat.classify)
 }
 
 func TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE(t *testing.T) {

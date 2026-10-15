@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SDropdown, SHint, SSectionTitle, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
-import type { StickyRule, StickyStats } from '@/api/types'
+import type { StickyRule, StickyStats, StickySettings } from '@/api/types'
 import { deleteWithConfirm } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -21,16 +21,19 @@ type Row = StickyRule & { stats?: Stats }
 const rules = ref<StickyRule[]>([])
 const stats = ref<Stats[]>([])
 const loading = ref(false)
+const failurePolicyManaged = ref(false)
 
 async function load() {
   loading.value = true
   try {
-    const [r, s] = await Promise.all([
+    const [r, s, settings] = await Promise.all([
       api.list<StickyRule>('/sticky-rules', { page_size: 200 }),
-      api.get<Stats[]>('/sticky-rules/stats').catch(() => [] as Stats[])
+      api.get<Stats[]>('/sticky-rules/stats').catch(() => [] as Stats[]),
+      api.get<StickySettings>('/settings/sticky')
     ])
     rules.value = [...r.items].sort((a, b) => b.priority - a.priority || a.id - b.id)
     stats.value = Array.isArray(s) ? s : []
+    failurePolicyManaged.value = !!settings.failure_policy_managed
   } catch (e) {
     notifyError(e)
   } finally {
@@ -146,6 +149,7 @@ async function toggle(r: Row, v: boolean) {
         </template>
       </SSectionTitle>
       <SHint class="mb-3">{{ t('sticky.description') }}</SHint>
+      <SHint v-if="failurePolicyManaged" class="mb-3">{{ t('failurePolicy.stickyManaged') }}</SHint>
       <STable card :columns="columns" :rows="rows" :loading="loading">
         <template #cell-name="{ row }">
           <div class="font-mono text-sm">{{ row.name }}</div>
@@ -176,7 +180,7 @@ async function toggle(r: Row, v: boolean) {
           <div class="text-xs">
             <div>{{ t('sticky.cols.ttl') }}: {{ row.ttl_seconds ? t('sticky.ttlValue', { n: formatNumber(row.ttl_seconds) }) : t('sticky.ttlDefault') }}</div>
             <SHint size="xs">{{ t('sticky.cols.keyIncludes') }}: {{ (row.key_includes || []).map((k) => t(`sticky.includes.${k}`)).join(' + ') || '—' }}</SHint>
-            <SBadge class="mt-1" :tone="row.on_failure === 'stick' ? 'warning' : 'gray'">{{ t(`sticky.onFailure.${row.on_failure}`) }}</SBadge>
+            <SBadge v-if="!failurePolicyManaged" class="mt-1" :tone="row.on_failure === 'stick' ? 'warning' : 'gray'">{{ t(`sticky.onFailure.${row.on_failure}`) }}</SBadge>
           </div>
         </template>
         <template #cell-stats="{ row }">
@@ -194,6 +198,6 @@ async function toggle(r: Row, v: boolean) {
       </STable>
     </section>
 
-    <StickyRuleModal v-model:open="modalOpen" :rule="editing" :copy="copying" @saved="load" />
+    <StickyRuleModal v-model:open="modalOpen" :rule="editing" :copy="copying" :failure-policy-managed="failurePolicyManaged" @saved="load" />
   </div>
 </template>

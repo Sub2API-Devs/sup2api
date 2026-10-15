@@ -313,7 +313,7 @@ func (s *wsSession) newCall(body []byte) *call {
 	b := s.base
 	cl := &call{g: s.g, c: b.c, gen: b.gen, ep: b.ep, plugin: b.plugin, platform: b.platform, pf: b.pf, params: b.params,
 		format: b.format, rid: httpapi.NewRequestID(), clientRID: b.clientRID, start: s.g.now(), gw: b.gw, stickyCfg: b.stickyCfg,
-		autoDisable: b.autoDisable, principal: b.principal, body: body, stream: true}
+		autoDisable: b.autoDisable, failurePolicy: b.failurePolicy, principal: b.principal, body: body, stream: true}
 	cl.rec = cl.newRecord()
 	cl.rec.Stream = true
 	return cl
@@ -435,6 +435,9 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 		return nil, availabilityErr
 	}
 	cl.sticky = cl.resolveSticky(ctx)
+	if cl.failureState.stickyErr != nil {
+		return nil, fromCore(core.ErrUnavailable.WithMessage("sticky store unavailable"), errTypeInternal)
+	}
 	cl.session = "ws:" + s.id
 	if cl.sticky != nil && cl.sticky.key != "" {
 		cl.session = cl.sticky.key
@@ -447,7 +450,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			pendingRelease()
 		}
 	}()
-	for cl.rec.Attempts < cl.gw.MaxAttempts {
+	for cl.rec.Attempts < cl.attemptLimit() {
 		ref, release, busy := cl.pick(ctx, cands, excluded)
 		if ref == nil {
 			if last == nil {
@@ -470,6 +473,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 		}
 		cl.rec.Attempts++
 		cl.startObservationAttempt(ref)
+		cl.beginFailureAttempt(ref)
 		res := s.dial(ctx, cl, ref)
 		if res.kind == attemptDone {
 			s.ref = ref
@@ -481,6 +485,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			return release, nil
 		}
 		release()
+		res = cl.planFailure(ctx, ref, res, cl.rec.Attempts, excluded)
 		cl.observeAttemptResult(ref, res)
 		switch res.kind {
 		case attemptFailover:
@@ -739,7 +744,11 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 	status := int(gjson.GetBytes(data, "status").Int())
 	if status >= 400 {
 		cl.classify(ctx, s.rt, s.pacct, status, nil, data, "")
+		if cl.failurePolicy != nil {
+			cl.finishFailureDecision(s.ref, cl.rec.Attempts, "response_committed")
+		}
 	} else {
+		cl.recordStreamFailure(ctx, s.pacct.GetId(), string(data))
 		status = http.StatusBadGateway
 	}
 	msg := gjson.GetBytes(data, "error.message").String()

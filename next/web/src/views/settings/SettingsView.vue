@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import StickyView from '@/views/sticky/StickyView.vue'
 import BillingSettingsCard from './BillingSettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
-import AutoDisableSettingsCard from './AutoDisableSettingsCard.vue'
+import FailurePolicySettings from './FailurePolicySettings.vue'
 import OffloadSettingsCard from './OffloadSettingsCard.vue'
 import UpdateSourceCard from './UpdateSourceCard.vue'
 
@@ -18,6 +18,7 @@ const route = useRoute()
 const TABS = [
   { key: 'billing', perm: 'settings:read', label: 'settings.tabs.billing' },
   { key: 'gateway', perm: 'settings:read', label: 'settings.tabs.gateway' },
+  { key: 'failure', perm: 'settings:read', label: 'failurePolicy.title' },
   { key: 'sticky', perm: 'sticky:read', label: 'settings.tabs.sticky' },
   { key: 'offload', perm: 'settings:read', label: 'settings.tabs.offload' },
   { key: 'updates', perm: 'settings:read', label: 'coreUpdates.sourceTitle' }
@@ -36,8 +37,8 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
     <BillingSettingsCard v-if="active === 'billing'" />
     <template v-else-if="active === 'gateway'">
       <GatewaySettingsCard />
-      <AutoDisableSettingsCard />
     </template>
+    <FailurePolicySettings v-else-if="active === 'failure'" />
     <StickyView v-else-if="active === 'sticky'" />
     <OffloadSettingsCard v-else-if="active === 'offload'" />
     <UpdateSourceCard v-else-if="active === 'updates'" />

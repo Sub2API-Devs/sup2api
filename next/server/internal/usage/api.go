@@ -498,7 +498,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	// every request. Counting it would make this column read "everything is
 	// wrong" exactly where nothing is; "fallback" (the plugin did not answer)
 	// still counts.
-	anomalous := fmt.Sprintf(`(u.anomalies - '%s') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
+	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
 		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, len(f.args))
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),

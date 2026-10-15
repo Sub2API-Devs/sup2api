@@ -21,7 +21,6 @@ const DEFAULTS: GatewaySettings = {
   platform_hotpath_timeout_ms: 300
 }
 const fields: Array<{ key: Key; unit?: string }> = [
-  { key: 'max_attempts' },
   { key: 'platform_call_timeout_ms', unit: 'ms' },
   { key: 'default_hook_timeout_ms', unit: 'ms' },
   { key: 'platform_hotpath_timeout_ms', unit: 'ms' }

@@ -217,6 +217,17 @@ func (s *Service) AutoDisable(ctx context.Context, id int64, reason string) (boo
 	return out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled", nil
 }
 
+// AutoDisableByPolicy executes the core's frozen decision, retaining account opt-out.
+func (s *Service) AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error) {
+	out, err := s.applyAutomaticState(ctx, "", id, &pluginv1.AccountAutomaticState{
+		Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: reason,
+	}, true)
+	if err != nil {
+		return false, err
+	}
+	return out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled", nil
+}
+
 // TouchLastUsed records usage; last_used_at is written in batches by Run.
 func (s *Service) TouchLastUsed(_ context.Context, id int64) {
 	s.touchMu.Lock()

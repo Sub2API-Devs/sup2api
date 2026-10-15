@@ -586,6 +586,10 @@ func (a *fakeAccounts) SetCooldown(_ context.Context, id int64, until time.Time,
 	return nil
 }
 
+func (a *fakeAccounts) AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error) {
+	return a.AutoDisable(ctx, id, reason)
+}
+
 func (a *fakeAccounts) AutoDisable(_ context.Context, id int64, reason string) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

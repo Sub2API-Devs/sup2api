@@ -84,7 +84,12 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 		if cls == nil {
 			cls = defaultClassification(int(x.response.Error.Status))
 		}
-		result := c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.raw, x.response.Error.TransportError, cls)
+		var result attemptResult
+		if c.failurePolicy != nil {
+			result = c.classifyFailure(ctx, acct.GetId(), int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, rt.conv != nil)
+		} else {
+			result = c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.raw, x.response.Error.TransportError, cls)
+		}
 		if c.ep.TaskSubmit() {
 			result.kind = attemptReturn
 		}
@@ -170,6 +175,11 @@ func (x *gatewayExecution) forwardCallback(ctx context.Context, in *pluginv1.For
 		return nil, err
 	}
 	x.result = c.forwardBuilt(nctx, x.rt, x.account, x.acct, x.body, in.Request, x)
+	// Keep the network facts in x for the core. Returning an error terminates
+	// the default Execute flow before it invokes the plugin's ClassifyError.
+	if c.failurePolicy != nil && x.response.GetError() != nil {
+		return nil, errors.New("upstream failure handled by core policy")
+	}
 	if x.response == nil {
 		x.response = &pluginv1.ForwardUpstreamResponse{}
 		if x.result.err != nil {

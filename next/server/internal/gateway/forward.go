@@ -132,6 +132,9 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	}
 	// The client has its bytes. The plugin, if any, is asked in submit -
 	// after the handler returns, so the response is terminated first.
+	if u.StreamError != "" {
+		c.recordStreamFailure(ctx, acct.GetId(), u.StreamError)
+	}
 	c.armUsageExtraction(rt, acct, resp, cap, upBody)
 	return attemptResult{kind: attemptDone}
 }

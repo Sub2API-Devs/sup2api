@@ -42,9 +42,11 @@ type call struct {
 	clientRID string
 	start     time.Time
 
-	gw          GatewaySettings
-	stickyCfg   StickySettings
-	autoDisable AutoDisableSettings
+	gw            GatewaySettings
+	stickyCfg     StickySettings
+	autoDisable   AutoDisableSettings
+	failurePolicy *FailurePolicy
+	failureState  failureState
 
 	principal *core.APIKeyPrincipal
 	body      []byte
@@ -141,7 +143,12 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		return
 	}
 	set := g.settings.get(ctx)
+	if set.failurePolicyErr != nil {
+		writeError(c, cl.format, fromCore(core.ErrUnavailable.WithMessage("failure policy unavailable"), errTypeInternal))
+		return
+	}
 	cl.gw, cl.stickyCfg, cl.autoDisable = set.gateway, set.sticky, set.autoDisable
+	cl.failurePolicy = set.failurePolicy
 	if b.Endpoint.WebSocket() {
 		g.serveWebSocket(ctx, cl)
 		return

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"strconv"
@@ -249,20 +250,28 @@ func listRules(ctx context.Context, q store.Querier) ([]*stickyRule, error) {
 
 // stickySession is the sticky state of one request.
 type stickySession struct {
-	rule  *stickyRule
-	key   string
-	ttl   time.Duration
-	bound int64 // account id bound before this request, 0 = none
-	tried bool  // the bound account was considered
-	hit   bool  // the bound account served (or is serving) the request
-	keep  bool  // keep bindings of disabled accounts
+	rule         *stickyRule
+	key          string
+	ttl          time.Duration
+	bound        int64 // account id bound before this request, 0 = none
+	tried        bool  // the bound account was considered
+	hit          bool  // the bound account served (or is serving) the request
+	keep         bool  // keep bindings of disabled accounts
+	policyValue  string
+	initialBound int64
 }
 
 // resolveSticky finds the first enabled rule that matches the request and
 // yields a session value, and reads its binding.
 func (c *call) resolveSticky(ctx context.Context) *stickySession {
 	g := c.g
-	if g.d.Redis == nil || !c.stickyCfg.Enabled {
+	if !c.stickyCfg.Enabled {
+		return nil
+	}
+	if g.d.Redis == nil {
+		if c.failurePolicy != nil {
+			c.failureState.stickyErr = fmt.Errorf("sticky store unavailable")
+		}
 		return nil
 	}
 	ua := c.c.Request.UserAgent()
@@ -280,11 +289,17 @@ func (c *call) resolveSticky(ctx context.Context) *stickySession {
 		}
 		s := &stickySession{rule: r, key: stickyKey(r, c.principal.Group.ID, c.model, v),
 			ttl: time.Duration(ttl) * time.Second, keep: c.stickyCfg.KeepOnAccountDisabled}
+		if c.failurePolicy != nil {
+			c.failureState.stickyErr = c.readPolicyBinding(ctx, s)
+			return s
+		}
 		rctx, cancel := context.WithTimeout(ctx, stickyRedisTimeout)
 		raw, err := g.d.Redis.Get(rctx, s.key).Result()
 		cancel()
 		if err == nil {
 			s.bound, _ = strconv.ParseInt(raw, 10, 64)
+			s.policyValue = raw
+			s.initialBound = s.bound
 		}
 		return s
 	}
@@ -337,8 +352,12 @@ func (c *call) dropBinding(ctx context.Context, s *stickySession) {
 	}
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
 	defer cancel()
-	if err := c.g.d.Redis.Del(rctx, s.key).Err(); err != nil {
+	deleted, err := c.g.d.Redis.Eval(rctx, `if (redis.call('GET',KEYS[1]) or '') == ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0`, []string{s.key}, s.policyValue).Int()
+	if err != nil {
 		slog.WarnContext(ctx, "gateway: drop sticky binding", "err", err)
+	}
+	if deleted == 1 {
+		s.policyValue = ""
 	}
 	s.bound = 0
 }
@@ -362,8 +381,18 @@ func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) 
 		pipe.HIncrBy(rctx, stats, "misses", 1)
 	}
 	if success && accountID > 0 {
-		pipe.Set(rctx, s.key, strconv.FormatInt(accountID, 10), s.ttl)
-		if s.bound != 0 && s.bound != accountID {
+		previous := s.bound
+		if c.failurePolicy != nil {
+			previous = s.initialBound
+		}
+		if c.failurePolicy == nil {
+			pipe.Eval(rctx, `if (redis.call('GET',KEYS[1]) or '') ~= ARGV[1] then return 0 end redis.call('SET',KEYS[1],ARGV[2],'PX',ARGV[3]) return 1`, []string{s.key}, s.policyValue, strconv.FormatInt(accountID, 10), s.ttl.Milliseconds())
+		} else if !c.failureState.preserveSticky {
+			if err := c.writePolicyBinding(rctx, s, accountID); err != nil {
+				slog.InfoContext(ctx, "gateway: sticky success not written", "request_id", c.rid, "err", err)
+			}
+		}
+		if previous != 0 && previous != accountID && !c.failureState.preserveSticky {
 			pipe.HIncrBy(rctx, stats, "rebinds", 1)
 		}
 	}

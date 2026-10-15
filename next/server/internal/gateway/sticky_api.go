@@ -21,6 +21,10 @@ import (
 // RegisterRoutes mounts the sticky-session console API (CONTRACTS §5.6) and
 // the gateway settings (CONTRACTS §14.4).
 func (g *Gateway) RegisterRoutes(r *httpapi.Router) {
+	r.Perm("GET", "/settings/failure-policy", "settings:read", g.getFailurePolicy)
+	r.Perm("PUT", "/settings/failure-policy", "settings:manage", g.putFailurePolicy)
+	r.Perm("POST", "/settings/failure-policy/preview", "settings:read", g.previewFailurePolicy)
+	r.Perm("GET", "/settings/failure-policy/history", "settings:read", g.failurePolicyHistory)
 	r.Perm("GET", "/settings/gateway", "settings:read", g.getGatewaySettingsHandler)
 	r.Perm("PUT", "/settings/gateway", "settings:manage", g.putGatewaySettingsHandler)
 	r.Perm("GET", "/settings/auto-disable", "settings:read", g.getAutoDisableHandler)
@@ -581,7 +585,15 @@ func (g *Gateway) getStickySettingsHandler(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.OK(c, v)
+	p, err := loadFailurePolicy(c.Request.Context(), db.Pool)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, struct {
+		StickySettings
+		FailurePolicyManaged bool `json:"failure_policy_managed"`
+	}{v, p != nil})
 }
 
 func (g *Gateway) putStickySettingsHandler(c *gin.Context) {

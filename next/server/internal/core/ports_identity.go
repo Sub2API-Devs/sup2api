@@ -200,6 +200,10 @@ type AccountDirectory interface {
 	// account.status_changed, unless the account opted out of automatic
 	// disabling (CONTRACTS §42.3). It reports whether the account is disabled.
 	AutoDisable(ctx context.Context, id int64, reason string) (bool, error)
+	// AutoDisableByPolicy executes a decision already authorized by the core's
+	// request policy snapshot. It still checks the account's own opt-out, but
+	// does not reread the global switch from a newer policy revision.
+	AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error)
 	TouchLastUsed(ctx context.Context, id int64)
 }
 

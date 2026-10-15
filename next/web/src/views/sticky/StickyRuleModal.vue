@@ -9,7 +9,7 @@ import StickyProtocolPicker from './StickyProtocolPicker.vue'
 
 // Create / edit a sticky rule. Built-in rules only allow enabled and
 // priority; "copy" pre-fills a new admin rule from any rule.
-const props = defineProps<{ open: boolean; rule: StickyRule | null; copy?: boolean }>()
+const props = defineProps<{ open: boolean; rule: StickyRule | null; copy?: boolean; failurePolicyManaged?: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const { t } = useI18n()
 
@@ -247,7 +247,8 @@ async function submit() {
         </SField>
       </SGrid>
 
-      <SField :label="t('sticky.cols.onFailure')">
+      <SHint v-if="failurePolicyManaged">{{ t('failurePolicy.stickyManaged') }}</SHint>
+      <SField v-else :label="t('sticky.cols.onFailure')">
         <SChoiceCards
           :model-value="form.on_failure"
           :options="onFailureOptions"

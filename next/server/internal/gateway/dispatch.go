@@ -9,9 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -57,7 +59,7 @@ func (c *call) dispatch(ctx context.Context) {
 	creditExcluded := false
 	diagnosticExcluded := false
 	for i := range all {
-		if c.route(&all[i]) == nil || !c.servesAllModels(&all[i]) || !c.resourceAccountAllowed(&all[i]) || !c.helperAccountAllowed(&all[i]) {
+		if !c.candidateEligible(&all[i]) {
 			continue
 		}
 		if !c.diagnosticAccountAllowed(&all[i]) {
@@ -84,6 +86,10 @@ func (c *call) dispatch(ctx context.Context) {
 		return
 	}
 	c.sticky = c.resolveSticky(ctx)
+	if c.failureState.stickyErr != nil {
+		c.fail(fromCore(core.ErrUnavailable.WithMessage("sticky store unavailable"), errTypeInternal))
+		return
+	}
 	c.session = c.sessionIdentity()
 	excluded := map[int64]bool{}
 	var last *gwError
@@ -92,9 +98,15 @@ func (c *call) dispatch(ctx context.Context) {
 	defer func() {
 		c.rec.Attempts = attempts
 	}()
-	for attempts < c.gw.MaxAttempts {
-		ref, release, busy := c.pick(ctx, cands, excluded)
+	for attempts < c.attemptLimit() {
+		available, err := c.policyCandidates(ctx, cands)
+		if err != nil {
+			c.fail(fromCore(core.ErrUnavailable.WithMessage("account selection unavailable"), errTypeInternal))
+			return
+		}
+		ref, release, busy := c.pick(ctx, available, excluded)
 		if ref == nil {
+			c.endFailurePolicy("no_eligible_account")
 			if last == nil {
 				if busy {
 					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
@@ -123,7 +135,9 @@ func (c *call) dispatch(ctx context.Context) {
 		c.rec.Attempts = attempts
 		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
 		c.startObservationAttempt(ref)
+		c.beginFailureAttempt(ref)
 		res := func() attemptResult { defer release(); return c.attempt(c.slotCtx, ref, attempts-1) }()
+		res = c.planFailure(ctx, ref, res, attempts, excluded)
 		c.observeAttemptResult(ref, res)
 		lastAccount = ref.ID
 		switch res.kind {
@@ -150,6 +164,10 @@ func (c *call) dispatch(ctx context.Context) {
 			c.finishSticky(ctx, ref.ID, false)
 			return
 		case attemptFailover:
+			if c.failurePolicy != nil {
+				last = res.err
+				continue
+			}
 			if c.creditDispatched || c.helperWasDispatched() {
 				c.fail(res.err)
 				c.finishSticky(ctx, ref.ID, false)
@@ -216,7 +234,7 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 						return bound, release, false
 					}
 				}
-			} else if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); err == nil && !cooling {
+			} else if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); c.failurePolicy == nil && err == nil && !cooling {
 				// Not in the group's schedulable set for this request and
 				// not merely cooling down: disabled, deleted, unschedulable,
 				// moved, or of a type that cannot serve this endpoint.
@@ -340,6 +358,9 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	acc, err := c.g.d.Accounts.Load(ctx, ref.ID)
 	if err != nil {
 		return unavailable("load account", err)
+	}
+	if c.failurePolicy != nil && proxyIdentity(acc.ProxyID) != proxyIdentity(ref.ProxyID) {
+		return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("account proxy changed during selection"), errTypeInternal)}
 	}
 	rt := c.route(ref)
 	if rt == nil || rt.binding.Client == nil {
@@ -551,9 +572,16 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if c.creditRequest != nil && c.creditRequest.tokenPresent {
 		c.creditDispatched = true
 	}
+	var requestWritten atomic.Bool
+	if c.failurePolicy != nil {
+		req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { requestWritten.Store(true) }}))
+	}
 	resp, err := hc.Do(req)
 	headerTimedOut := !timer.Stop()
 	if err != nil {
+		if c.failurePolicy != nil {
+			c.failureState.unsafeTransport = requestWritten.Load()
+		}
 		if c.ep.TaskSubmit() {
 			return c.taskFailure(ctx, "task submission outcome is uncertain", err)
 		}
@@ -645,6 +673,9 @@ const (
 // error.
 func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Account,
 	status int, header http.Header, body []byte, transportErr string) attemptResult {
+	if c.failurePolicy != nil {
+		return c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
+	}
 	headers := map[string]string{}
 	for k, v := range header {
 		if len(v) > 0 {
@@ -669,6 +700,9 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 }
 
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
+	if c.failurePolicy != nil {
+		return c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
+	}
 	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
 	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
 
