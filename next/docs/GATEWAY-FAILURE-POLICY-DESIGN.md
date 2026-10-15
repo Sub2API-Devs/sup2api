@@ -1,6 +1,6 @@
 # 核心失败处理设计与实现
 
-日期：2026-10-15。状态：核心 0.1.150 已部署到生产四节点，设置页更名“调度策略”、去掉重复标题并按重试/禁用分区保存；支持 Schema 4 固定 OR 与逐行 Go 正则。线上已由管理员保存的 Schema 3 策略（revision=1）保持原值，新设置在页面保存后生效。
+日期：2026-10-15。状态：核心 0.1.151 已部署到生产四节点，平台共享标签页容器统一处理重复标题，系统设置、插件详情及 CCGateway 已接入。调度策略继续支持分区保存与逐行 Go 正则；管理员既存策略（revision=1）保持原值。
 
 ## 平台标题去重
 
@@ -280,6 +280,15 @@ Schema 2 新增全局计划，仍兼容执行已保存的 Schema 1。升级程�
 - Manifest `f8f4a7af0f6bc67a9a5ba4c64159e52a0bf147665c2c9f4b8faeae458ed3961c`；bundle `d3dbdf5d9abf9de9a1562323a66f1b785804fa6c96c6f0daae55168ecaa23dd0`。升级计划 `45863fb2ee6cc5a42b4e4076ebc7c1e9` 完成 27 步。
 - 新资源 `SettingsView-DPSEXm8S.js` 已含独立保存按钮；入口资源包含“调度策略”。六个内置插件包、10 个运行容器及既存业务配置均不变，四节点规则 revision=1。
 - 私有备份与验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.150/`。数据库备份 21,985,248 字节，SHA-256 `c2cb380d256448f5c076ed2485f74aee9436b733b695bddb660ba4295eda5460`，恢复目录 593 行可读取，未执行恢复。
+
+### 0.1.151 平台标题去重发布验收
+
+- 源码提交 `fd01060802236bdf9c600398279823e72ab0480d`。新增共享 `STabLayout` 及标题上下文；系统设置、插件详情和 CCGateway 设置接入。同名标题默认隐藏，不同分组、说明和操作保留；单标签、折叠、自定义标题、弹窗及抽屉保持对应语义。
+- 前端 184 项相关测试、类型检查、生产构建通过；ESLint 无错误，已有可选属性默认值警告保留。实际浏览器核对六个系统设置标签均不重复标题，计费保存、中英文切换、移动端宽度正常。
+- 四节点均为 `0.1.151`，readyz 均 200，核心 SHA-256 `00773a600247c43cbeb5fb779bfed90da83efe39994692068665fa43d5a48d98`。
+- Manifest `3b537a70ada38d7d5c73bd45794db30f248d6b9c9806b21324606333b994405e`；bundle `fc411b89157a96d5169866772f51846712e5e3ebe4092115fc92d73b1ac4bb67`。升级计划 `6829490092b3738dc95126db08defb64` 完成 27 步。
+- 新资源 `SettingsView-CXZeTkTA.js` 已引用 `STabLayout.vue_vue_type_script_setup_true_lang-YJBnDF7B.js`。六个内置插件包、10 个运行容器及既有配置保持不变；四节点调度策略 revision=1。
+- 私有备份及验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.151/`。数据库备份 22,436,156 字节，SHA-256 `a12d798312834d4791b553ce0f1a4e8adf010a08f1921ea1389ee9353e7b0062`，恢复目录 593 行可读取，未执行恢复。
 
 ## 外部参考
 
