@@ -2,6 +2,8 @@
 
 出口文档：[共享 Xray 出口方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)、[控制器迁移方案](../CCGATEWAY-XRAY-MIGRATION.md)、[代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)。首版已实施，下面按时间记录实际部署。
 
+> **2026-10-15 0.1.143 / 核心通用失败处理。** 源码 `54afc35df` 完成可配置重试、换号、粘性重置和独立自动禁用，并修复审核确认的 5 项问题。四节点升级计划 `99fe4001fbe981791c087abcebbf1ba7` 完成 27 步，版本均 0.1.143、readyz 均 200。六个内置插件包哈希不变，8 个 Worker、控制器、共享 Xray 的 ID/镜像/启动时间不变。新接口、空关键词状态码预览及前端资源验证通过，账号 21 完整 Haiku 模型名请求 200。既有设置保留，`policy_configured=false`，管理员在“系统设置 → 失败处理”首次发布后接管。备份在 `~/sup2api-managed/backups/failure-policy-0.1.143/`；详情及制品哈希见[设计与发布记录](../GATEWAY-FAILURE-POLICY-DESIGN.md)。
+
 > **2026-10-15 0.1.142 / 出口故障检查与加固。** 用户要求故障不能兜底直连。生产核对 8 个 Worker 的唯一默认网关/DNS、internal 网络、权限与环境；隔离测试覆盖停网关/上游代理、删除出站/路由/防火墙表、Docker DNS 旁路和重启窗口。源码 `d0a25545c` 修复绑定代理缺失/协议异常被误判为 direct，以及防火墙表缺失后不能重建。117 项 Linux 核心测试、114 项控制器测试通过。核心四节点升级到 `0.1.142`，控制器 `ccgateway-controller:shared-xray.d0a25545c`；计划 `463ab15ea0e25d321f7b8f85af5184e6` 完成，manifest `5caa004642aac465daa3b51ff95d2a567ea049ca3f4b3498ff9b768435f42469`。8 个 Worker 和 Xray 容器 ID/启动时间未变，全部 ready，账号 21 完整 Haiku 模型名测试 200。备份在 `/home/debian/sup2api-managed/backups/failclosed-0.1.142/`，dump SHA-256 `0b76ad9dba331c0a051b2ace1c1be743fa25aaf6529c0542ebf834cb887cc391`。未修改显式直连账号或全局 `max_attempts=3`，账号切换重试与 DNS 故障时已知 IP 仍可经原代理连接的边界见[完整检查记录](../CCGATEWAY-EGRESS-FAIL-CLOSED-AUDIT.md)。
 
 > **2026-10-15 共享 Xray 出口迁移完成。** 用户要求完成迁移，首版主要改 CCGateway 控制器和出口组件。源码 `bf6a18fdb`；控制器 `ccgateway-controller:shared-xray.bf6a18fdb`，Xray `26.3.27`，共享出口镜像已通过 `CCG_XRAY_IMAGE` 固定为本地不可变镜像身份 `sha256:92305b5b13c97b8b9c93276c3e5430f68f7a4f607e768a63d32f1fb4c61ed0ea`。核心四节点保持 `0.1.141`，本次没有发布 Worker、CLI 或前端。
