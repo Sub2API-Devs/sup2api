@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SDisclosure, SField, SHint, SInput, SSectionTitle, SSelect, STable, STextarea, createItemId, type TableColumn } from '@sub2api/ui'
+import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, SSectionTitle, STable, STextarea, createItemId, type TableColumn } from '@sub2api/ui'
 import FailureRuleDetails from './FailureRuleDetails.vue'
 import { newFailureRule, ruleFormErrors, type FailureRule } from './failurePolicy'
 
 const rules = defineModel<FailureRule[]>({ required: true })
-const props = defineProps<{ account: boolean; disabled: boolean; showErrors?: boolean }>()
+const props = defineProps<{ account: boolean; disabled: boolean; showErrors?: boolean; regexErrors?: Record<string, string> }>()
 const { t } = useI18n()
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('failurePolicy.name'), width: '190px' },
@@ -14,7 +14,6 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'keywords', label: t('failurePolicy.keywordsShort'), class: 'min-w-64' },
   ...(props.disabled ? [] : [{ key: 'actions', label: t('common.actions'), width: '130px' }])
 ])
-const modes = computed(() => ['any', 'all'].map(value => ({ value, label: t(`failurePolicy.modes.${value}`) })))
 const errors = computed(() => new Map(rules.value.map(rule => [rule.id, props.showErrors ? ruleFormErrors(rule, t('failurePolicy.invalidRule')) : {}])))
 
 function add(rule?: FailureRule) {
@@ -99,30 +98,28 @@ function hasScope(rule: FailureRule) {
         </SField>
       </template>
       <template #cell-keywords="{ row }">
-        <SField :error="errors.get(row.id)?.conditions">
+        <SField
+          :error="regexErrors?.[`${account ? 'account_rules' : 'retry_rules'}:${row.id}`] || errors.get(row.id)?.conditions"
+          :hint="row.match.keyword_regex ? t('failurePolicy.regexHint') : undefined"
+        >
           <STextarea
             :model-value="row.match.keywords.join('\n')"
             :disabled="disabled"
             :rows="3"
-            :placeholder="t('failurePolicy.keywords')"
-            :aria-label="t('failurePolicy.keywords')"
+            :placeholder="t(row.match.keyword_regex ? 'failurePolicy.regexPlaceholder' : 'failurePolicy.keywords')"
+            :aria-label="t(row.match.keyword_regex ? 'failurePolicy.regexPlaceholder' : 'failurePolicy.keywords')"
             data-testid="rule-keywords"
             @update:model-value="setKeywords(row, $event)"
           />
         </SField>
-        <SField
-          v-if="row.match.status_codes.trim() && row.match.keywords.some((k: string) => k.trim())"
-          :label="t('failurePolicy.matchMode')"
-          size="sm"
+        <SCheckbox
+          :model-value="!!row.match.keyword_regex"
+          :label="t('failurePolicy.regexLabel')"
+          :disabled="disabled"
           class="mt-2"
-        >
-          <SSelect
-            v-model="row.match.mode"
-            :options="modes"
-            :disabled="disabled"
-            data-testid="rule-mode"
-          />
-        </SField>
+          data-testid="rule-regex"
+          @update:model-value="row.match.keyword_regex = $event"
+        />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center gap-1">

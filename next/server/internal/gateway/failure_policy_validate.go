@@ -15,6 +15,7 @@ type policyValidation struct {
 	errors  []core.FieldError
 	unified bool
 	simple  bool
+	regex   bool
 }
 
 func (v *policyValidation) add(field, en, zh string) {
@@ -29,8 +30,8 @@ func (v *policyValidation) number(field string, n, lo, hi int) {
 	}
 }
 func (p *FailurePolicy) validate(ctx context.Context) []core.FieldError {
-	v := &policyValidation{ctx: ctx, unified: p.SchemaVersion >= 2, simple: p.SchemaVersion >= 3}
-	if p.SchemaVersion < 1 || p.SchemaVersion > 3 {
+	v := &policyValidation{ctx: ctx, unified: p.SchemaVersion >= 2, simple: p.SchemaVersion >= 3, regex: p.SchemaVersion >= 4}
+	if p.SchemaVersion < 1 || p.SchemaVersion > 4 {
 		v.add("schema_version", "unsupported policy version", "不支持的策略版本")
 	}
 	v.number("max_retries", p.MaxRetries, 0, 9)
@@ -90,7 +91,9 @@ func (v *policyValidation) match(base string, m *FailureMatch) {
 	if !slices.Contains([]string{"upstream", "transport", "core"}, m.Source) {
 		v.add(base+".source", "select an error source", "请选择错误来源")
 	}
-	if m.Mode == "" {
+	if v.regex {
+		m.Mode = "any"
+	} else if m.Mode == "" {
 		m.Mode = "all"
 	}
 	if m.Mode != "all" && m.Mode != "any" {
@@ -110,12 +113,17 @@ func (v *policyValidation) match(base string, m *FailureMatch) {
 		}
 	}
 	m.ranges, m.StatusCodes = rs, formatStatusRanges(rs)
-	m.Keywords = normalizeKeywords(m.Keywords)
-	if len(m.Keywords) > 100 {
+	m.patterns = nil
+	if m.KeywordRegex {
+		v.regexKeywords(base, m)
+	} else {
+		m.Keywords = normalizeKeywords(m.Keywords)
+	}
+	if !m.KeywordRegex && len(m.Keywords) > 100 {
 		v.add(base+".keywords", "at most 100 keywords", "最多 100 个关键词")
 	}
 	for _, k := range m.Keywords {
-		if utf8.RuneCountInString(k) > 200 {
+		if !m.KeywordRegex && utf8.RuneCountInString(k) > 200 {
 			v.add(base+".keywords", "keyword exceeds 200 characters", "关键词不能超过 200 字符")
 			break
 		}

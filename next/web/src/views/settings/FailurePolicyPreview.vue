@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SButton, SField, SGrid, SHint, SInput, SSelect, SSettingsGroup, STextarea } from '@sub2api/ui'
-import { errorMessage } from '@/utils/errors'
+import { errorMessage, fieldErrors } from '@/utils/errors'
 import FailureDecisionDetails from './FailureDecisionDetails.vue'
 import { normalizedPolicy, policyFormErrors, type FailurePolicyForm, type FailurePreview } from './failurePolicy'
 
@@ -43,7 +43,7 @@ async function test() {
     const response = await api.post<FailurePreview>('/settings/failure-policy/preview', JSON.parse(payload))
     if (started === generation) result.value = response
   } catch (e) {
-    error.value = errorMessage(e)
+    error.value = Object.values(fieldErrors(e)).join('\n') || errorMessage(e)
   } finally {
     testing.value = false
   }

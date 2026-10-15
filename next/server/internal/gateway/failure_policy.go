@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 )
 
@@ -71,14 +72,16 @@ type FailureRule struct {
 }
 
 type FailureMatch struct {
-	Source      string   `json:"source"` // upstream, transport, core
-	StatusCodes string   `json:"status_codes"`
-	Keywords    []string `json:"keywords"`
-	Mode        string   `json:"mode"` // all or any of the nonempty error conditions
-	Groups      []int64  `json:"groups"`
-	Models      []string `json:"models"`
-	Protocols   []string `json:"protocols"`
-	ranges      []statusRange
+	Source       string   `json:"source"` // upstream, transport, core
+	StatusCodes  string   `json:"status_codes"`
+	Keywords     []string `json:"keywords"`
+	KeywordRegex bool     `json:"keyword_regex,omitempty"`
+	Mode         string   `json:"mode"` // all or any of the nonempty error conditions
+	Groups       []int64  `json:"groups"`
+	Models       []string `json:"models"`
+	Protocols    []string `json:"protocols"`
+	ranges       []statusRange
+	patterns     []*regexp.Regexp
 }
 
 type FailureFacts struct {
@@ -102,7 +105,7 @@ type FailureDecision struct {
 }
 
 func defaultFailurePolicy() FailurePolicy {
-	return FailurePolicy{SchemaVersion: 3, MaxRetries: 2, SwitchAccount: true, ResetSticky: true, Egress: "account_configured", BackoffMS: 200,
+	return FailurePolicy{SchemaVersion: 4, MaxRetries: 2, SwitchAccount: true, ResetSticky: true, Egress: "account_configured", BackoffMS: 200,
 		RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
 }
 
@@ -139,14 +142,7 @@ func (m FailureMatch) matches(f FailureFacts) bool {
 	if len(text) > classifyPrefix {
 		text = text[:classifyPrefix]
 	}
-	text = bytes.ToLower(text)
-	keywordMatch := false
-	for _, k := range m.Keywords {
-		if bytes.Contains(text, []byte(k)) {
-			keywordMatch = true
-			break
-		}
-	}
+	keywordMatch := m.matchesText(text)
 	if len(m.ranges) == 0 && len(m.Keywords) == 0 {
 		return m.Source == "transport"
 	}
@@ -154,6 +150,24 @@ func (m FailureMatch) matches(f FailureFacts) bool {
 		return statusMatch || keywordMatch
 	}
 	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch)
+}
+
+func (m FailureMatch) matchesText(text []byte) bool {
+	if m.KeywordRegex {
+		for _, pattern := range m.patterns {
+			if pattern.Match(text) {
+				return true
+			}
+		}
+		return false
+	}
+	text = bytes.ToLower(text)
+	for _, keyword := range m.Keywords {
+		if bytes.Contains(text, []byte(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {

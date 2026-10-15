@@ -4,6 +4,7 @@ export interface FailureMatch {
   source: 'upstream' | 'transport' | 'core'
   status_codes: string
   keywords: string[]
+  keyword_regex?: boolean
   mode: 'all' | 'any'
   groups: number[]
   models: string[]
@@ -80,7 +81,7 @@ export interface FailurePreview {
 }
 export function emptyFailurePolicy(): FailurePolicy {
   return {
-    schema_version: 3,
+    schema_version: 4,
     revision: 0,
     retry_enabled: false,
     max_retries: 2,
@@ -101,7 +102,7 @@ export function newFailureRule(name: string, account: boolean): FailureRule {
     id: createItemId(),
     name,
     enabled: true,
-    match: { source: 'upstream', status_codes: '', keywords: [], mode: 'any', groups: [], models: [], protocols: [] },
+    match: { source: 'upstream', status_codes: '', keywords: [], keyword_regex: false, mode: 'any', groups: [], models: [], protocols: [] },
     action: account ? 'disable' : 'retry',
     same_account_retries: 0,
     exhausted_action: '',
@@ -122,7 +123,9 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
   }
   for (const r of [...p.retry_rules, ...p.account_rules]) {
     r.name = r.name.trim()
-    r.match.keywords = [...new Set((r.match.keywords || []).map(k => k.trim()).filter(Boolean))]
+    if (p.schema_version >= 4) r.match.mode = 'any'
+    // Preserve regex syntax, whitespace and line numbers for Go validation.
+    if (!r.match.keyword_regex) r.match.keywords = [...new Set((r.match.keywords || []).map(k => k.trim()).filter(Boolean))]
     r.match.status_codes = normalizeStatusCodes(r.match.status_codes)
     r.match.groups ||= []
     r.match.models ||= []
@@ -132,20 +135,20 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
 }
 
 export function needsPolicyMigration(policy: FailurePolicy): boolean {
-  return policy.schema_version < 3
+  return policy.schema_version < 4
 }
 
 // This is an editable migration draft; the server keeps executing v1 until publish.
 export function editablePolicy(policy: FailurePolicy): FailurePolicyForm {
   const p = normalizedPolicy(policy)
-  if (p.schema_version >= 3) return p
+  if (p.schema_version >= 4) return p
   const rule = p.retry_rules.find(r => r.enabled && r.action !== 'return')
   const exhausted = rule?.action === 'retry' ? rule.exhausted_action : rule?.action
   if (p.schema_version === 1) {
     p.retries_per_account = rule?.action === 'retry' ? rule.same_account_retries : 0
     p.switch_account = exhausted !== 'return'
   }
-  p.schema_version = 3
+  p.schema_version = 4
   p.retry_rules = p.retry_rules.filter(r => r.enabled && r.action !== 'return')
   p.account_rules = p.account_rules.filter(r => r.enabled && r.action !== 'none')
   return normalizedPolicy(p)

@@ -79,8 +79,12 @@ export default {
   source: 'Error source',
   codes: 'Status codes (optional, multiple allowed)',
   codesHint:
-    'Accepts 400–599 and ranges, e.g. 429,500-599. Enter only codes, only keywords, or both with the selected relationship. Transport failures have no HTTP status.',
+    'Accepts 400–599 and ranges, e.g. 429,500-599. Enter only codes, only keywords, or both. Transport failures have no HTTP status.',
   keywords: 'Keywords (optional, one per line)',
+  regexLabel: 'Go regex',
+  regexPlaceholder: 'Regular expressions, one per line',
+  regexHint: 'Go regex syntax; case-sensitive. Add (?i) to ignore case.',
+  matchingMigration: 'Save to apply the new matching rules. Existing keywords remain plain text.',
   keywordsHint:
     'One per line, case-insensitive. Empty means status codes only. A transport rule with no conditions matches all transport failures.',
   matchMode: 'Condition relationship',

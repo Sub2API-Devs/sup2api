@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { SInput, SModal, SSwitch } from '@sub2api/ui'
+import { ApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import FailurePolicySettings from './FailurePolicySettings.vue'
 import FailureRulesTable from './FailureRulesTable.vue'
@@ -50,7 +51,7 @@ describe('simplified failure settings', () => {
     for (const label of ['历史版本', '累计等待上限', 'Retry-After', '换号出口限制']) expect(wrapper.text()).not.toContain(label)
     expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(0)
   })
-  it('saves a fixed v3 plan and ignores inactive empty retry counts', async () => {
+  it('saves a fixed v4 plan and ignores inactive empty retry counts', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
     const controls = wrapper.findComponent(FailurePolicyControls)
@@ -62,7 +63,7 @@ describe('simplified failure settings', () => {
     expect(api.put.mock.calls[0]![1]).toMatchObject({
       expected_revision: 7,
       policy: {
-        schema_version: 3,
+        schema_version: 4,
         reset_sticky: true,
         switch_account: false,
         retries_per_account: 0,
@@ -92,7 +93,7 @@ describe('simplified failure settings', () => {
     account.match.status_codes = '401'
     old.account_rules = [account]
     const draft = editablePolicy(old)
-    expect(draft).toMatchObject({ schema_version: 3, retries_per_account: 2, switch_account: true, reset_sticky: true })
+    expect(draft).toMatchObject({ schema_version: 4, retries_per_account: 2, switch_account: true, reset_sticky: true })
     expect(draft.account_rules[0]!.action).toBe('disable')
     expect(old.account_rules[0]!.action).toBe('cooldown')
     api.get.mockResolvedValue({ configured: true, policy: old })
@@ -128,6 +129,39 @@ describe('simplified failure settings', () => {
   })
 })
 describe('rule interaction', () => {
+  it('saves Go expressions verbatim one per line without a relationship control', async () => {
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    const table = wrapper.get('[data-testid="retry-rules"]')
+    await table.get('[data-testid="rule-regex"]').setValue(true)
+    await table.get('[data-testid="rule-keywords"]').setValue('^QUOTA\\D+$\n\n(?i)denied')
+    expect(table.find('[data-testid="rule-mode"]').exists()).toBe(false)
+    expect(table.text()).not.toContain('条件关系')
+    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toMatchObject({
+      keyword_regex: true, keywords: ['^QUOTA\\D+$', '', '(?i)denied'], mode: 'any'
+    })
+  })
+  it('shows Go validation errors on the correct row after sorting and clears corrected row errors', async () => {
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    const table = wrapper.get('[data-testid="retry-rules"]')
+    await table.get('[data-testid="rule-regex"]').setValue(true)
+    await table.get('[data-testid="rule-keywords"]').setValue('quota\n\n[')
+    api.put.mockRejectedValue(new ApiError(400, { code: 'invalid_argument', message: '无效的参数', details: {
+      fields: [{ field: 'retry_rules.0.match.keywords', message: '第 3 行：Go 正则表达式无效' }]
+    } }))
+    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(table.get('[data-testid="rule-keywords"]').attributes('aria-invalid')).toBe('true')
+    expect(table.text()).toContain('第 3 行')
+    await table.get('[data-testid="add-rule"]').trigger('click')
+    await table.get('[data-reorder-handle="0"]').trigger('keydown', { key: 'ArrowDown' })
+    expect(table.findAll('[data-testid="rule-keywords"]')[1]!.attributes('aria-invalid')).toBe('true')
+    await table.findAll('[data-testid="rule-keywords"]')[1]!.setValue('valid')
+    expect(table.findAll('[data-testid="rule-keywords"]')[1]!.attributes('aria-invalid')).not.toBe('true')
+  })
+
   it('adds and edits inline, copies independently and saves normalized conditions without a modal', async () => {
     vi.spyOn(crypto, 'randomUUID').mockImplementation(() => { throw new Error('unavailable in HTTP') })
     const wrapper = mount(FailurePolicySettings, { global })
@@ -191,7 +225,7 @@ describe('rule interaction', () => {
     expect(table.findAllComponents(SSwitch)).toHaveLength(0)
     expect(wrapper.text()).not.toContain('高级匹配范围')
   })
-  it('preserves existing scope and match mode when editing inline', async () => {
+  it('preserves scope and fixes condition matching to OR when editing inline', async () => {
     const policy = fixture()
     Object.assign(policy.retry_rules[0]!.match, { source: 'core', groups: [1], models: ['limited-*'], protocols: ['anthropic'], keywords: ['quota'], mode: 'all' })
     api.get.mockResolvedValue({ configured: true, policy })
@@ -199,7 +233,7 @@ describe('rule interaction', () => {
     await flushPromises()
     await wrapper.get('[data-testid="rule-name"]').setValue('改名')
     await wrapper.get('[data-testid="settings-save"]').trigger('click')
-    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toEqual(policy.retry_rules[0]!.match)
+    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toEqual({ ...policy.retry_rules[0]!.match, mode: 'any' })
     expect(normalizedPolicy(fixture()).retry_rules[0]!.match.keywords).toEqual([])
   })
 })

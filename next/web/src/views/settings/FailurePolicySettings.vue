@@ -10,7 +10,7 @@ import { useFailurePolicy } from './useFailurePolicy'
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))
-const { policy, configured, migrationNeeded, loading, saving, error, errors, dirty, isLoaded, load, save } = useFailurePolicy()
+const { policy, configured, migrationNeeded, migrationMessage, loading, saving, error, errors, regexErrors, dirty, isLoaded, load, save } = useFailurePolicy()
 const disabled = computed(() => !canManage.value || saving.value)
 const ruleErrors = computed(() =>
   Object.entries(errors.value)
@@ -53,7 +53,7 @@ onMounted(load)
         v-if="migrationNeeded"
         tone="warning"
       >
-        {{ t('failurePolicy.unifiedMigration') }}
+        {{ t(migrationMessage) }}
       </SAlert>
       <SSectionTitle :title="t('failurePolicy.title')">
         <template #actions>
@@ -101,6 +101,7 @@ onMounted(load)
         <div class="py-4">
           <FailureRulesTable
             v-model="policy.retry_rules"
+            :regex-errors="regexErrors"
             :show-errors="Object.keys(errors).length > 0"
             :account="false"
             :disabled="disabled"
@@ -122,6 +123,7 @@ onMounted(load)
         <div class="py-4">
           <FailureRulesTable
             v-model="policy.account_rules"
+            :regex-errors="regexErrors"
             :show-errors="Object.keys(errors).length > 0"
             :account="true"
             :disabled="disabled"
