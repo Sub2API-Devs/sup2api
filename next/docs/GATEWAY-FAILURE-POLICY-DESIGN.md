@@ -1,6 +1,6 @@
 # 核心失败处理设计与实现
 
-日期：2026-10-15。状态：核心 0.1.153 已部署到生产四节点，UI 合约升为 2.0.0，旧 STabs 公共入口已移除，全部仓库调用迁入 STabLayout。线上 moderation 0.1.10 已提前完成兼容迁移，管理员既存策略（revision=1）保持原值。
+日期：2026-10-15。状态：核心 0.1.154 已部署到生产四节点，UI 合约 3.0.0，只保留增强 STabs 公共组件；STabLayout 无导出、别名或实现。线上 moderation 0.1.11 已完成迁移，管理员既存策略（revision=1）保持原值。
 
 ## 增强 STabs 主入口
 
@@ -313,6 +313,16 @@ Schema 2 新增全局计划，仍兼容执行已保存的 Schema 1。升级程�
 - Manifest `6cf4af38249a9acc72e32aba535ab241bb564bcb666a3af6f67a18596b14aead`，bundle `c22760abf65ce9416a1af4cc26718a3f13766582c0d24758c9a846c9acc8a3a2`。其他五个内置插件包不变；10 个 CCGateway Worker/控制器/Xray 容器不变。
 - 线上资源 `index-F6FkxA5Y.js`，公共 UI `shared/sub2api-ui-DzQbaxuj.js` 已无 STabs 导出；公共 host 及依赖确认为 UI 2.0.0；当前原生插件资源无旧接口引用。既有 gateway/auto-disable/sticky/failure-policy 设置不变，策略 revision=1。
 - 私有升级与验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.153/`；沿用未切换服务前的 `/home/debian/sup2api-managed/backups/failure-policy-0.1.152/database.dump`，22,944,414 字节，SHA-256 `c32c1b88ab74c778db8250915ac6087e80a1fe3fd6f04bb6f1571df8a6c278e6`，恢复目录 593 行可读取，未执行恢复。
+
+### 0.1.154 单一增强 STabs 发布验收
+
+- 源码 `9793321516b966e82b966b6bf1143d9eeaeb71ed`。将统一容器命名为 STabs；STabLayout 实现、公共导出及实际引用全部删除，不留兼容别名。内部 TabBar 只负责导航渲染，公共 STabs 负责标签内容及标题上下文，两者职责不同。
+- UI 合约 3.0.0；moderation 0.1.11、growth 0.1.4 使用增强 STabs，最低核心 0.1.154；guard 0.2.6 更新兼容范围。没有额外安装或启用 growth、guard。
+- 全部前端 513 项测试、生产构建、类型检查和目标 ESLint 通过；三个插件 Go 测试和前端构建通过。
+- 四节点核心 0.1.154、readyz 200；核心 SHA-256 `16f2fd8b4628b84d0637b23740c5b97754cef13fa6cb486d55c3907d0cbfa2e9`。升级计划 `1a4aec57c56883963497c4d80ccdbb92` 完成 27 步；内置 moderation 随核心更新，四节点 serving=0.1.11，状态 ready。
+- Manifest `f2bee0d1a4c90a2aa74cf5d23bbb5909d92991608a8903a375b50242367d78aa`，bundle `4fe4130521eca6f29782a0777416a72066b6e1f8324988af8d3143371b3a4139`。
+- 公共资源 `shared/sub2api-ui-BIKQILl_.js` 实证只导出 STabs、不含 STabLayout；线上原生插件资源也不引用 STabLayout。其余五个内置插件包、moderation 配置与授权、既有业务配置及 10 个 Worker/控制器/Xray 容器均未变。
+- 私有备份和验收记录 `/home/debian/sup2api-managed/backups/failure-policy-0.1.154/`。数据库备份 23,497,877 字节，SHA-256 `9e69bc78a6a8b22b5249d5f58cbd5347caaef1aeb6ca790aa06fb8db71cf6507`，恢复目录 593 行可读取，未执行恢复。
 
 ## 外部参考
 
