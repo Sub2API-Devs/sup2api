@@ -87,7 +87,7 @@ func verifyToolWhitelist(req *Request, body Object) error {
 		if req.NoTools || !req.runtimeToolSearchable(tool.Name) {
 			continue
 		}
-		eager := !req.toolSearchEnabled() || forced || tool.DeferLoading != nil && !*tool.DeferLoading
+		eager := !req.toolSearchEnabled() || req.singleTurn() && !req.clientToolSearch() || forced || tool.DeferLoading != nil && !*tool.DeferLoading
 		if eager && !seen[req.wireName(tool.Name)] {
 			return fmt.Errorf("CLI omitted client tool: %s", tool.Name)
 		}
@@ -100,6 +100,9 @@ func (r *Runner) prepareNativeTools(ctx context.Context, req *Request) error {
 		return nil
 	}
 	for attempt := 0; attempt < 2; attempt++ {
+		if err := req.validateSingleTurn(); err != nil {
+			return &requestRefusal{err}
+		}
 		key := digest([]any{req.nativeProfile, req.Tools, req.Native, req.Model, req.MaxTokens, req.enabledTools(), req.ToolSearch, req.Fast, req.passthroughEffort(), req.passthroughThinkingArgs(), req.Betas, req.JSONSchema, req.APIOutputFormat, req.offersSkill(), req.webSearch != nil, req.AdditionalDirectories})
 		err := req.cliSnapshot.validation.verify(ctx, key, func() error { return r.probeNativeConfiguration(ctx, req, false) })
 		if err == nil {

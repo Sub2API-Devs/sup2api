@@ -132,6 +132,9 @@ func (r *Runner) baseEnv() []string {
 // run owns one native request lifecycle. Usually it uses one CLI process;
 // an expiring inline instruction permits one same-model native continuation.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
+	if err := req.validateSingleTurn(); err != nil {
+		return nil, &requestRefusal{err}
+	}
 	cfg := newRunConfig(req, p, r.Plugin, dir)
 	if cfg.passthrough, err = req.passthroughBodies(); err != nil {
 		return nil, err

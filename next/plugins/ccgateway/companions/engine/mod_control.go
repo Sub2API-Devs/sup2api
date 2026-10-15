@@ -77,7 +77,8 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	if cfg.scopeResumed {
 		systems = nil // The resumed transcript already contains the retained entry.
 	}
-	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": systems, "scope_boundary": scoped, "scope_resumed": cfg.scopeResumed, "search_calls": cfg.searchCalls, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "continuation_attachment_ack": cfg.reminderMarker != "", "additional_directories": additionalDirs, "passthrough": bodies, "report_attachments": cfg.reportAttachments})
+	singleTurn := cfg.helperRequest == nil || cfg.helperRequest.singleTurn()
+	data, err := json.Marshal(Object{"single_turn": singleTurn, "web_search": webSearch, "attachments": cfg.attachments, "systems": systems, "scope_boundary": scoped, "scope_resumed": cfg.scopeResumed, "search_calls": cfg.searchCalls, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "continuation_attachment_ack": cfg.reminderMarker != "", "additional_directories": additionalDirs, "passthrough": bodies, "report_attachments": cfg.reportAttachments})
 	if err != nil {
 		return nil, err
 	}

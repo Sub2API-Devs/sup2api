@@ -90,7 +90,16 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// The verification belongs to this request's tool set: the account
 		// serves other requests (a broken CLI fails its catalog instead).
 		x.w.Header().Set(errorScopeHeader, "request")
+		var refusal *requestRefusal
+		if errors.As(err, &refusal) {
+			x.fail(400, "invalid_request_error", refusal.Error())
+			return
+		}
 		x.fail(503, "api_error", "CLI tool configuration could not be verified: "+err.Error())
+		return
+	}
+	if err := x.req.validateSingleTurn(); err != nil {
+		x.fail(400, "invalid_request_error", err.Error())
 		return
 	}
 	branch, ok := x.session()

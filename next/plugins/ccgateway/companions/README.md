@@ -158,7 +158,7 @@ CCGateway 请求策略的 `custom_tool_prefix` 可配置普通自定义工具的
 
 原生工具按所运行 CLI 版本的已验证名称和完整输入 schema 自动匹配，无需额外请求头。工具描述不参与匹配，原生和 SDK MCP 路径均通过 Mod `tool.describe` 精确保留客户端描述；`defer_loading` 单独控制发现。不匹配则使用 SDK MCP，保留客户端定义；未验证的新版本或目录外工具也使用 SDK MCP。当前目录来自 CLI 2.1.288、2.1.292 的隔离实际请求；2.1.292包含普通headless和SDK stream-json等模式观测到的29个名称、32个schema变体，不代表所有平台/权限下都可用。旧 `CCG_NATIVE_TOOLS` / `X-CCGateway-Native-Tools` 的显式选择仍接受原有校验，但不会授权容器执行工具。原生名称和参数还会与 CLI 实际出站请求再次比较。运行时缺失、重复或参数不兼容时，仅在尚未向上游发送模型请求且未开始客户端响应的情况下，允许一次退回 SDK MCP 并重建工具历史，记录 native_tools_mcp_fallback；已开始上游推理的请求不得自动重放。
 
-原生和 MCP 客户端工具统一由 Mods 的 `tool.call` 拦截，返回的临时拒绝结果不进入客户端续聊历史；HTTP 返回原始 `tool_use`，下一次请求恢复客户端实际 `tool_result`。只有网关自身的工具发现和结构化输出辅助工具允许在 CLI 内执行。开启 Worker 请求日志后，每个请求目录的 `tool-routing.json` 记录名称和原生匹配结果，`events.jsonl` 的 `mod_tool_call` 记录参数、路由、交接决定及是否在容器执行。关闭日志后不保留这些记录。SDK MCP 负责定义注册，Mods 负责执行拦截，不使用 `$.tool.register` 重新注册原生工具。
+原生和 MCP 客户端工具统一由 Mods 的 `tool.call` 拦截，返回的临时拒绝结果不进入客户端续聊历史；HTTP 返回原始 `tool_use`，下一次请求恢复客户端实际 `tool_result`。当前 native API 请求采用单轮映射，不允许 Worker 执行内部工具发现或结构化输出修复续轮，普通响应的 SSE 增量立即转发。开启 Worker 请求日志后，每个请求目录的 `tool-routing.json` 记录名称和原生匹配结果，`events.jsonl` 的 `mod_tool_call` 记录参数、路由、交接决定及是否在容器执行。关闭日志后不保留这些记录。SDK MCP 负责定义注册，Mods 负责执行拦截，不使用 `$.tool.register` 重新注册原生工具。兼容性变化及 CLI 同轮 HTTP 恢复的限制见 [单轮实现与验证](../../../docs/CCGATEWAY-SINGLE-TURN.md)。
 
 普通请求使用 Claude Code 自己落盘的 JSONL 续聊；网关只保存客户端消息指纹与原生节点的对应关系。会话记录保留 24 小时并受总量上限约束，与供应商的 5 分钟 / 1 小时 token 缓存有效期无关。
 
@@ -201,7 +201,7 @@ CCGateway 请求策略的 `custom_tool_prefix` 可配置普通自定义工具的
 | fine-grained-tool-streaming Beta | CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING |
 | context-1m Beta | CLAUDE_CODE_DISABLE_1M_CONTEXT、CLAUDE_CODE_MAX_CONTEXT_TOKENS |
 
-结构化输出使用 CLI 内部纯格式校验工具，必要时允许一次原生格式整理续轮，成功后再次校验 JSON Schema 并返回 text JSON；禁止外部 schema 引用。此类请求按完整客户端历史重建，不复用含内部格式工具的原生检查点。工具搜索只允许发现已注册的定义，最多 3 次；客户端工具执行仍被拦截，内部 ToolSearch 不对外返回，额外模型调用计入用量。两种模式均缓冲 SSE，验证完后输出标准事件。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
+当前 native 路径将 API 格式字段原样交给上游，不增加格式修复模型轮次。ToolSearch 只有在客户端声明并完成原生匹配时才作为客户端工具交还；显式延迟加载缺少所需客户端搜索工具、需要内部搜索续轮的通用 server web_search，以及显式模型 fallback 链会在执行前拒绝。独立 WebSearch 专用查询保留单次搜索请求及原有结果组装。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
 
 官方依据：[环境变量](https://code.claude.com/docs/en/env-vars)、[结构化输出](https://code.claude.com/docs/en/agent-sdk/structured-outputs)、[工具搜索](https://code.claude.com/docs/en/agent-sdk/tool-search)。Claude Code 2.1.288 的隔离回归共 48 次本地模拟模型请求，验证普通/SSE 结构化输出和工具搜索用量；无真实云端模型调用。
 

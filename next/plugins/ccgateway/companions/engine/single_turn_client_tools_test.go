@@ -1,9 +1,18 @@
 package engine
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,12 +133,12 @@ func TestSingleTurnWithDeferLoading(t *testing.T) {
 		t.Error("expected toolSearchEnabled=true with defer_loading")
 	}
 
-	// MaxTurns should be 4 for tool discovery (3 rounds + 1 answer)
-	if req.maxTurns() != "4" {
-		t.Errorf("expected maxTurns=4 for tool search, got %s", req.maxTurns())
+	// Deferral no longer authorizes hidden discovery/model rounds.
+	if req.maxTurns() != "1" {
+		t.Errorf("expected maxTurns=1 for tool search, got %s", req.maxTurns())
 	}
 
-	// ToolSearch should be in enabled tools
+	// A tool not declared by the client must not be added to the catalog.
 	enabled := req.enabledTools()
 	hasToolSearch := false
 	for _, tool := range enabled {
@@ -138,9 +147,10 @@ func TestSingleTurnWithDeferLoading(t *testing.T) {
 			break
 		}
 	}
-	if !hasToolSearch {
-		t.Error("expected ToolSearch in enabled tools for defer_loading case")
+	if hasToolSearch {
+		t.Error("undeclared ToolSearch added for defer_loading")
 	}
+	require.ErrorContains(t, req.validateSingleTurn(), "client-owned native ToolSearch")
 }
 
 // TestSingleTurnStructuredOutput verifies structured output (API format).
@@ -217,10 +227,9 @@ func TestSingleTurnStructuredWithTools(t *testing.T) {
 		t.Error("expected toolSearchEnabled=true")
 	}
 
-	// With tool search but API format output, maxTurns should be 4
-	// (no need for format validation turn since provider handles it)
-	if req.maxTurns() != "4" {
-		t.Errorf("expected maxTurns=4 for tool search with API format, got %s", req.maxTurns())
+	// Provider formatting never authorizes another model call.
+	if req.maxTurns() != "1" {
+		t.Errorf("expected maxTurns=1 for tool search with API format, got %s", req.maxTurns())
 	}
 }
 
@@ -382,7 +391,7 @@ func TestMaxTurnsLogic(t *testing.T) {
 				// forcedLoadedClientCatalog() checks if all tools are pre-loaded
 				// which is false here
 			},
-			expected: "4", // ToolSearch enabled
+			expected: "1", // Tool discovery cannot add a model call.
 		},
 		{
 			name: "API format structured output",
@@ -413,8 +422,8 @@ func TestMaxTurnsLogic(t *testing.T) {
 	}
 }
 
-// TestResponseViewIncludesToolSearch verifies responseView adds ToolSearch.
-func TestResponseViewIncludesToolSearch(t *testing.T) {
+// Only declared client tools may appear in a native response.
+func TestResponseViewExcludesUndeclaredToolSearch(t *testing.T) {
 	deferTrue := true
 	body := `{
 		"model": "claude-sonnet-4-20250514",
@@ -431,7 +440,7 @@ func TestResponseViewIncludesToolSearch(t *testing.T) {
 
 	view := req.responseView()
 
-	// responseView should include ToolSearch for accumulator validation
+	// The accumulator must reject helpers the client never declared.
 	foundToolSearch := false
 	for _, tool := range view.Tools {
 		if tool.Name == "ToolSearch" {
@@ -440,12 +449,264 @@ func TestResponseViewIncludesToolSearch(t *testing.T) {
 		}
 	}
 
-	if !foundToolSearch {
-		t.Error("responseView should include ToolSearch for defer_loading case")
+	if foundToolSearch {
+		t.Error("responseView added an undeclared ToolSearch")
 	}
 
-	// ToolSearch should be marked as native in the view
-	if !view.Native["ToolSearch"] {
-		t.Error("ToolSearch should be marked as native in responseView")
+	if view.Native["ToolSearch"] {
+		t.Error("undeclared ToolSearch marked as native in responseView")
+	}
+}
+
+func TestSingleTurnAdmissionAndToolOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		beta string
+		want string
+	}{
+		{"hidden search", `{"tools":[{"name":"lookup","defer_loading":true,"input_schema":{"type":"object"}}]}`, "", "client-owned native ToolSearch"},
+		{"model fallback", `{"fallbacks":[{"model":"other"}]}`, "server-side-fallback-2026-06-01", "fallbacks"},
+		{"hidden web search", `{"tools":[{"type":"web_search_20250305","name":"web_search"}]}`, "", "server web_search"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fields, err := decodeObject([]byte(tc.body))
+			require.NoError(t, err)
+			body := basic()
+			for key, value := range fields {
+				body[key] = value
+			}
+			raw, err := json.Marshal(body)
+			require.NoError(t, err)
+			req, err := parsePolicyRequest(raw, http.Header{"Anthropic-Beta": []string{tc.beta}})
+			require.NoError(t, err)
+			require.ErrorContains(t, req.validateSingleTurn(), tc.want)
+			gateway := &Gateway{Runner: &Runner{CLI: "must-not-start", Version: "2.1.292"}, Slots: make(chan struct{}, 1)}
+			request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw))
+			request.Header.Set("Anthropic-Beta", tc.beta)
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			assert.Equal(t, http.StatusBadRequest, response.Code, response.Body.String())
+			assert.Contains(t, response.Body.String(), tc.want)
+		})
+	}
+	req, err := parsePolicyRequest([]byte(`{"model":"m","max_tokens":64,"tools":[{"name":"ToolSearch","input_schema":{"type":"object"}},{"name":"lookup","defer_loading":true,"input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"test"}]}`), nil)
+	require.NoError(t, err)
+	// Identical client names do not establish ownership of the native tool.
+	require.Error(t, req.validateSingleTurn())
+	req.Native["ToolSearch"] = true
+	require.NoError(t, req.validateSingleTurn())
+	assert.False(t, req.bufferedResponse())
+	assert.Equal(t, "1", req.maxTurns())
+	cfg := newRunConfig(req, &Prepared{}, "plugin", "work")
+	assert.Equal(t, "0", cfg.env["CCGATEWAY_TOOL_SEARCH"])
+	assert.Equal(t, "true", cfg.env["ENABLE_TOOL_SEARCH"])
+	control, err := startModControl(cfg, "http://fixture")
+	require.NoError(t, err)
+	defer control.Close()
+	settings, err := decodeObject(control.config)
+	require.NoError(t, err)
+	assert.Equal(t, true, settings["single_turn"])
+	// Runtime compatibility fallback must re-evaluate the final wire identity.
+	delete(req.Native, "ToolSearch")
+	require.Error(t, req.validateSingleTurn())
+}
+
+func TestRealCLISingleTurnProviderFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name, message string
+		status        int
+		maxRequests   int32
+	}{
+		{"overload", "synthetic overload", 503, 1},
+		{"rate_limit", "synthetic rate limit", 429, 1},
+		// CLI 2.1.292 can recover a rejected parameter within one turn,
+		// outside Mod's turn.step boundary and MAX_RETRIES. This documents
+		// that one model turn is not a strict HTTP-attempt budget.
+		{"effort_recovery_boundary", "output_config.effort: Extra inputs are not permitted", 400, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			endpoint, _ := newThinkingOutputFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/messages") {
+					fmt.Fprint(w, `{"input_tokens":1}`)
+					return
+				}
+				calls.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				kind := "api_error"
+				if tc.status == 400 {
+					kind = "invalid_request_error"
+				}
+				if tc.status == 429 {
+					kind = "rate_limit_error"
+				}
+				_ = json.NewEncoder(w).Encode(Object{"type": "error", "error": Object{"type": kind, "message": tc.message}})
+			})
+			body := `{"model":"claude-sonnet-4-6","max_tokens":64,"output_config":{"effort":"high"},"messages":[{"role":"user","content":"failure fixture"}]}`
+			response, err := (&http.Client{Timeout: 25 * time.Second}).Post(endpoint+"/v1/messages", "application/json", strings.NewReader(body))
+			require.NoError(t, err)
+			defer response.Body.Close()
+			_, err = io.Copy(io.Discard, response.Body)
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, response.StatusCode, 400)
+			assert.GreaterOrEqual(t, calls.Load(), int32(1))
+			assert.LessOrEqual(t, calls.Load(), tc.maxRequests)
+			t.Logf("provider HTTP attempts=%d; model generation did not start", calls.Load())
+		})
+	}
+}
+
+// A real CLI talks to a gated local provider. Receiving headers or the final
+// body is insufficient: the client must consume content before the provider
+// is allowed to finish. Each client turn must make exactly one provider call.
+func TestRealCLISingleTurnIncrementalHandoff(t *testing.T) {
+	for _, nativeSearch := range []bool{false, true} {
+		t.Run(fmt.Sprintf("native_search=%v", nativeSearch), func(t *testing.T) {
+			textGate, inputGate := make(chan struct{}), make(chan struct{})
+			var releaseText, releaseInput sync.Once
+			defer releaseText.Do(func() { close(textGate) })
+			defer releaseInput.Do(func() { close(inputGate) })
+			var calls atomic.Int32
+			name, wire, input := "lookup", "mcp__ccgateway__lookup", `{"query":"fixture"}`
+			if nativeSearch {
+				name, wire, input = "ToolSearch", "ToolSearch", `{"query":"select:fixture_deferred","max_results":5}`
+			}
+			endpoint, _ := newThinkingOutputFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/messages") {
+					fmt.Fprint(w, `{"input_tokens":1}`)
+					return
+				}
+				raw, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				body, err := decodeObject(raw)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				n := calls.Add(1)
+				if n > 1 {
+					if n != 2 || !bytes.Contains(raw, []byte("CLIENT_RESULT")) {
+						t.Errorf("unsolicited model request %d", n)
+					}
+					generationFixtureEvents(w, str(body, "model"), "end_turn", "after client", false)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				send := func(event Object) {
+					data, _ := json.Marshal(event)
+					fmt.Fprintf(w, "event: %s\ndata: %s\n\n", str(event, "type"), data)
+					w.(http.Flusher).Flush()
+				}
+				send(Object{"type": "message_start", "message": Object{"id": "msg_single_turn", "type": "message", "role": "assistant", "model": body["model"], "content": []any{}, "stop_reason": nil, "usage": Object{"input_tokens": 2, "output_tokens": 0}}})
+				send(Object{"type": "content_block_start", "index": 0, "content_block": Object{"type": "text", "text": ""}})
+				send(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "text_delta", "text": "before tool"}})
+				select {
+				case <-textGate:
+				case <-r.Context().Done():
+					return
+				}
+				send(Object{"type": "content_block_stop", "index": 0})
+				send(Object{"type": "content_block_start", "index": 1, "content_block": Object{"type": "tool_use", "id": "toolu_single_turn", "name": wire, "input": Object{}}})
+				send(Object{"type": "content_block_delta", "index": 1, "delta": Object{"type": "input_json_delta", "partial_json": input[:9]}})
+				select {
+				case <-inputGate:
+				case <-r.Context().Done():
+					return
+				}
+				send(Object{"type": "content_block_delta", "index": 1, "delta": Object{"type": "input_json_delta", "partial_json": input[9:]}})
+				send(Object{"type": "content_block_stop", "index": 1})
+				send(Object{"type": "message_delta", "delta": Object{"stop_reason": "tool_use"}, "usage": Object{"output_tokens": 9}})
+				send(Object{"type": "message_stop"})
+			})
+			tool := Object{"name": name, "input_schema": Object{"type": "object", "properties": Object{"query": Object{"type": "string"}}}}
+			if nativeSearch {
+				tool["input_schema"] = verifiedNativeToolCatalogues["2.1.292"]["ToolSearch"][0].Schema
+			}
+			body := Object{"model": "claude-opus-5-5", "max_tokens": 128, "stream": true, "messages": []any{Object{"role": "user", "content": "single turn fixture"}}, "tools": []any{tool}}
+			if nativeSearch {
+				body["tools"] = append(body["tools"].([]any), Object{"name": "fixture_deferred", "defer_loading": true, "input_schema": Object{"type": "object"}})
+			}
+			post := func() *http.Response {
+				t.Helper()
+				raw, err := json.Marshal(body)
+				require.NoError(t, err)
+				request, err := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(raw))
+				require.NoError(t, err)
+				request.Header.Set("Content-Type", "application/json")
+				request.Header.Set("Anthropic-Beta", "advanced-tool-use-2025-11-20,fine-grained-tool-streaming-2025-05-14")
+				response, err := (&http.Client{Timeout: 25 * time.Second}).Do(request)
+				require.NoError(t, err)
+				if response.StatusCode != http.StatusOK {
+					data, _ := io.ReadAll(response.Body)
+					response.Body.Close()
+					t.Fatalf("HTTP %d: %s", response.StatusCode, data)
+				}
+				return response
+			}
+			response := post()
+			defer response.Body.Close()
+			scanner := bufio.NewScanner(response.Body)
+			var receivedInput strings.Builder
+			starts, stops, texts := 0, 0, 0
+			for scanner.Scan() {
+				data, ok := strings.CutPrefix(scanner.Text(), "data: ")
+				if !ok {
+					continue
+				}
+				event, err := decodeObject([]byte(data))
+				require.NoError(t, err)
+				switch str(event, "type") {
+				case "error":
+					t.Fatalf("stream error: %s", data)
+				case "message_start":
+					starts++
+				case "message_stop":
+					stops++
+				case "content_block_start":
+					block, _ := event["content_block"].(Object)
+					if str(block, "type") == "tool_use" {
+						assert.Equal(t, name, str(block, "name"))
+					}
+				case "content_block_delta":
+					delta, _ := event["delta"].(Object)
+					switch str(delta, "type") {
+					case "text_delta":
+						texts++
+						assert.Equal(t, "before tool", str(delta, "text"))
+						releaseText.Do(func() { close(textGate) })
+					case "input_json_delta":
+						receivedInput.WriteString(str(delta, "partial_json"))
+						if str(delta, "partial_json") != "" {
+							releaseInput.Do(func() { close(inputGate) })
+						}
+					}
+				}
+			}
+			require.NoError(t, scanner.Err())
+			assert.Equal(t, 1, starts)
+			assert.Equal(t, 1, stops)
+			assert.Positive(t, texts)
+			assert.JSONEq(t, input, receivedInput.String())
+			require.Equal(t, int32(1), calls.Load(), "Worker continued before receiving the client's tool_result")
+			args, err := decodeObject([]byte(input))
+			require.NoError(t, err)
+			body["stream"] = false
+			body["messages"] = append(body["messages"].([]any),
+				Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "before tool"}, Object{"type": "tool_use", "id": "toolu_single_turn", "name": name, "input": args}}},
+				Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_single_turn", "content": "CLIENT_RESULT"}}},
+			)
+			next := post()
+			defer next.Body.Close()
+			raw, err := io.ReadAll(next.Body)
+			require.NoError(t, err)
+			require.Contains(t, string(raw), "after client")
+			require.Equal(t, int32(2), calls.Load(), "two client requests must produce exactly two model requests")
+			t.Log("text and input deltas arrived before provider completion; two client turns produced two model requests")
+		})
 	}
 }

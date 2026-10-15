@@ -465,7 +465,7 @@ func controlReply(f Object, r *Request) Object {
 	case "can_use_tool":
 		payload = Object{"behavior": "deny", "message": "Tools are executed by the API client", "toolUseID": q["tool_use_id"]}
 		webSearch := r.webSearch != nil && str(q, "tool_name") == "WebSearch"
-		if webSearch || structuredBlock(str(q, "tool_name"), r) || internalHistoryAssistant(r, Object{"content": []Object{{"type": "tool_use", "name": str(q, "tool_name")}}}) {
+		if !r.singleTurn() && (webSearch || structuredBlock(str(q, "tool_name"), r) || internalHistoryAssistant(r, Object{"content": []Object{{"type": "tool_use", "name": str(q, "tool_name")}}})) {
 			payload = Object{"behavior": "allow", "updatedInput": q["input"]}
 		}
 	case "mcp_message":

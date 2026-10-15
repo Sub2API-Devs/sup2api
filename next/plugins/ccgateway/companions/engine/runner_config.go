@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,19 +12,62 @@ import (
 // request (policy "true", "auto" or "auto:N").
 func (r *Request) toolSearchEnabled() bool { return r.ToolSearch != "" && r.ToolSearch != "false" }
 
+// Native API requests map one client turn to one model call. Historical
+// protocol helpers also construct Requests, without a native request policy.
+func (r *Request) singleTurn() bool { return r.nativePolicy != nil }
+
+func (r *Request) clientToolSearch() bool {
+	for _, tool := range r.Tools {
+		if r.wireName(tool.Name) == "ToolSearch" {
+			return true
+		}
+	}
+	return false
+}
+
+// Reject features that need another model turn. Without client-owned search,
+// do not silently turn explicitly deferred tools into eager ones.
+func (r *Request) validateSingleTurn() error {
+	if !r.singleTurn() {
+		return nil
+	}
+	if r.hasFallbacks() {
+		return passthroughRefusal("fallbacks", "single-turn mode does not issue additional model requests; the client decides whether to retry")
+	}
+	if r.webSearch != nil {
+		if _, direct := r.webSearchFastQuery(); !direct {
+			return passthroughRefusal("server web_search", "single-turn mode cannot execute hidden search rounds; use a client tool or a dedicated search request")
+		}
+	}
+	if !r.toolSearchEnabled() || r.clientToolSearch() || r.forcedLoadedClientCatalog() {
+		return nil
+	}
+	for _, tool := range r.Tools {
+		if tool.DeferLoading != nil && *tool.DeferLoading {
+			return fmt.Errorf("defer_loading requires a client-owned native ToolSearch tool in single-turn mode")
+		}
+	}
+	return nil
+}
+
 // structuredOutput reports whether the client asked for JSON Schema output.
 func (r *Request) structuredOutput() bool { return r.JSONSchema != nil && !r.APIOutputFormat }
 
-// bufferedResponse reports whether model events are held back until the
-// result frame: structured output is validated first, and tool discovery
-// rounds never reach the client.
+// Native requests stream their single response. The remaining branches serve
+// historical protocol helpers, which can validate or hide complete messages.
 func (r *Request) bufferedResponse() bool {
+	if r.singleTurn() {
+		return false
+	}
 	return r.structuredOutput() || r.APIOutputFormat || r.toolSearchEnabled() || r.webSearch != nil
 }
 
-// maxTurns bounds the CLI's model calls: one answer, plus up to three tool
-// discovery rounds, plus one structured-output continuation.
+// Native requests never authorize a second model turn. Historical protocol
+// helpers retain their bounded discovery/formatting rules.
 func (r *Request) maxTurns() string {
+	if r.singleTurn() {
+		return "1"
+	}
 	if r.webSearch != nil {
 		// Each search the Worker answers continues the turn.
 		turns := 1 + webSearchMaxRounds
@@ -56,7 +100,7 @@ func (r *Request) enabledTools() []string {
 			}
 		}
 	}
-	if r.toolSearchEnabled() && !r.forcedLoadedClientCatalog() {
+	if !r.singleTurn() && r.toolSearchEnabled() && !r.forcedLoadedClientCatalog() {
 		tools = append(tools, "ToolSearch")
 	}
 	if r.webSearch != nil {
@@ -69,6 +113,9 @@ func (r *Request) enabledTools() []string {
 // responseView is the request the accumulator checks model blocks against:
 // with tool discovery, the CLI's own ToolSearch is a declared native tool.
 func (r *Request) responseView() *Request {
+	if r.singleTurn() {
+		return r
+	}
 	view := *r
 	if r.webSearch != nil {
 		// Claude Code's WebSearch stands for the client's web_search.
@@ -123,7 +170,7 @@ type runConfig struct {
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
-	if req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil || req.helperHistory != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
+	if !req.singleTurn() && req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil || req.helperHistory != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
 		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	}
 	c := &runConfig{helperRequest: req, reminderMarker: req.continuation, nativeReminders: nativeContinuationReminders(req, p), args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
@@ -142,10 +189,11 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 	}
 	if req.toolSearchEnabled() {
 		c.deferral = toolDeferral(req)
-		c.env["ENABLE_TOOL_SEARCH"] = req.ToolSearch
-		c.env["CCGATEWAY_TOOL_SEARCH"] = "1"
-		if req.forcedLoadedClientCatalog() {
-			c.env["CCGATEWAY_TOOL_SEARCH"] = "0"
+		if !req.singleTurn() || req.clientToolSearch() || req.forcedLoadedClientCatalog() {
+			c.env["ENABLE_TOOL_SEARCH"] = req.ToolSearch
+		}
+		if !req.singleTurn() && !req.forcedLoadedClientCatalog() {
+			c.env["CCGATEWAY_TOOL_SEARCH"] = "1"
 		}
 	}
 	return c
@@ -221,6 +269,12 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 	env["CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK"] = "1"
 	env["CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL"] = "1"
 	env["CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS"] = "1"
+	if req.singleTurn() {
+		env["CLAUDE_CODE_DISABLE_MODEL_ACCESS_FALLBACK"] = "1"
+		env["CLAUDE_CODE_NO_MODEL_FALLBACK"] = "1"
+		env["CLAUDE_CODE_DISABLE_REFUSAL_RETRY"] = "1"
+		env["CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK"] = "1"
+	}
 	if req.upstreamAgent != "" {
 		// A client subagent: upstream sees A' from the CLI itself.
 		env["ANTHROPIC_CUSTOM_HEADERS"] = "x-claude-code-agent-id: " + req.upstreamAgent

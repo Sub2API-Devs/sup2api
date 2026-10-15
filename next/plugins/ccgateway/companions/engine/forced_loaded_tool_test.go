@@ -94,15 +94,15 @@ func TestForcedLoadedDeferralAndExecutionAreSeparate(t *testing.T) {
 				}
 				return
 			}
-			if deferred["mcp__ccgateway__chosen"] != false || cfg.env["ENABLE_TOOL_SEARCH"] != "true" {
+			wantSearch := "false"
+			if mode == "loaded-forced" {
+				wantSearch = "true"
+			}
+			if deferred["mcp__ccgateway__chosen"] != false || cfg.env["ENABLE_TOOL_SEARCH"] != wantSearch {
 				t.Fatal("directory policy lost")
 			}
-			want := "1"
-			if mode == "loaded-forced" {
-				want = "0"
-			}
-			if cfg.env["CCGATEWAY_TOOL_SEARCH"] != want {
-				t.Fatal("helper permission changed")
+			if cfg.env["CCGATEWAY_TOOL_SEARCH"] != "0" || config["single_turn"] != true {
+				t.Fatal("native API request gained an internal execution round")
 			}
 		})
 	}

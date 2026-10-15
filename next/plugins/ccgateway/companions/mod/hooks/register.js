@@ -49,7 +49,7 @@ export function register(on) {
     // In passthrough a round that also called a client tool ends the run, even
     // when a web search of the same round was answered.
     const handedOff = configuration?.passthrough && clientToolDenied;
-    if (requested && (!searchPending || handedOff) && !formatContinuation) {
+    if (requested && (configuration?.single_turn || (!searchPending || handedOff) && !formatContinuation)) {
       await $.turn.abort({ turnId: e.turnId });
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
     }
@@ -178,8 +178,8 @@ export function register(on) {
   on('tool.call', async ($, e, next) => {
     const route = configuration?.tools?.[e.tool];
     // A declared client tool never becomes an internal helper by its name.
-    const search = !route && e.tool === 'ToolSearch' && await $.env.get('CCGATEWAY_TOOL_SEARCH') === '1' && searches < 3;
-    const structured = !route && e.tool === 'StructuredOutput' && await $.env.get('CCGATEWAY_STRUCTURED_OUTPUT') === '1';
+    const search = !configuration?.single_turn && !route && e.tool === 'ToolSearch' && await $.env.get('CCGATEWAY_TOOL_SEARCH') === '1' && searches < 3;
+    const structured = !configuration?.single_turn && !route && e.tool === 'StructuredOutput' && await $.env.get('CCGATEWAY_STRUCTURED_OUTPUT') === '1';
     if (configuration?.trace) {
       try {
         await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'tool', detail: { call: e, route: route || null, decision: search || structured ? 'internal_execute' : 'client_handoff', local_execution: search || structured } }) });
@@ -188,7 +188,7 @@ export function register(on) {
     if (search) { searches++; searchPending = true; return next(e); }
     // Passthrough web_search: the Worker runs the search in a one-shot process
     // of this account; the model reads the result as WebSearch's own.
-    if (!route && e.tool === 'WebSearch' && configuration?.web_search) {
+    if (!configuration?.single_turn && !route && e.tool === 'WebSearch' && configuration?.web_search) {
       const response = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'web_search', detail: { tool_use_id: e.tool_use_id, input: { query: e.query, allowed_domains: e.allowed_domains, blocked_domains: e.blocked_domains } } }) });
       if (!response.ok) throw new Error('ccgateway: web search unavailable');
       const answer = JSON.parse(response.text);
