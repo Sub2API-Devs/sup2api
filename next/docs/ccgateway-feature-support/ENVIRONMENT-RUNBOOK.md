@@ -2,6 +2,16 @@
 
 出口文档：[共享 Xray 出口方案](../CCGATEWAY-SHARED-XRAY-EGRESS.md)、[控制器迁移方案](../CCGATEWAY-XRAY-MIGRATION.md)、[代理修改端到端同步设计](../CCGATEWAY-XRAY-PROXY-SYNC.md)。首版已实施，下面按时间记录实际部署。
 
+> **2026-10-15 Core 0.1.156 / CCGateway 0.1.57：所有聚合附件的展开子列表。** 产品源码 `70ccccadd33027b4e7a3dd4e6afdecb8e6232c8e`。工作目录、平台、模型说明、日期、会话上下文均可展开；父项统一设置，子项独立设置，混合状态显示“分别配置”，收起不丢值。公共 `SDisclosure` section 增加与展开按钮分离的 actions 插槽；单项保持普通设置行。后端共用分段处理器，核心与 Worker 共享父子类型校验，旧整组策略行为保留。详见 CONTRACTS §53.16。
+>
+> 523 项前端测试、typecheck/构建通过，改动文件 ESLint 0 error（现有样式级 warnings）；engine、contracts/features、Worker 和核心策略保存测试通过。真实 CLI 回环测试验证：只替换模型 ID、保留模型名称/知识截止日期，只替换 Shell、保留目录，单独处理邮箱与日期。浏览器验证父项/子项操作、保存刷新、桌面和 390px 窄屏布局；线上 `/assets/CCGatewayView-BnR6HgXX.js` 已包含展开列表。没有修改生产附件策略。
+>
+> 发布计划 `c55a1cefd09c632e4b53ee9a27852fa8` 在 cursor 10 因从节点观测超过新鲜度阈值暂停（主节点仍服务旧版本）；确认三个从节点心跳更新、停止并转发后，通过原计划 resume 继续，最终 completed / 27 步。四节点版本均 0.1.156、readyz 200、ccgateway 0.1.57 enabled，其余五个内置插件制品哈希不变。manifest `185815337ae50fc30312a13c479dd4391a2f8027111d22dc74bd00e108bdc06f`；bundle `b3669fda8a49cd7aa585fe726f5d5d4feb2258e58fbfe1a382bcf33c40e2f5d6`；核心 SHA-256 `d5ae171edb8533b402574f458503999d25c55948926b8d4b982d40a615a9f895`。
+>
+> 正常 bundled-images 流程先 controller 后 egress/app；目标及加载镜像均 `ccgateway-{controller,app,egress}:0.1.57`、up_to_date=true，controller build `70ccccadd330`。8 个运行中 Worker 原地更新到 0.1.57，实际 build revision 与源码一致，SHA-256 `be332d683fcaf8cbc0b1b966a65475641f48c9c11e1231b451d662aa785381c8`。#20 无容器、#23 原本停止，仍分别报告 not_found/not_running，未启动或重建。8 个容器 ID、挂载、环境、权限、单一 internal 网络、共享默认网关/DNS、代理绑定不变；共享 Xray 未重启、出站节点不变、ip_forward=0、forward 默认 drop。#21 Haiku 模型实测 200（2662 ms）。网关/自动禁用/粘性/失败策略与备份一致。
+>
+> 私有备份与前后验证：`~/sup2api-managed/backups/ccgateway-attachments-0.1.156/`（数据库 dump 及 593 项目录验证、控制器环境和状态、inspect、升级与运行时证据）；构建日志：`~/sup2api/checks/attachments-156/`。子项策略要求实际 Worker 程序 0.1.57，停用账号重新投入使用前应完成程序更新；容器创建镜像标签不是实际程序版本。
+
 > **2026-10-15 21:00（UTC+8）Core 0.1.155 / CCGateway 0.1.56：环境细分与镜像同步。** 源码 `8bb2ef15828e9b19a773b46e80a1e50e5be5d8b5`。工作目录（含额外目录、git 标记）、平台（含 Shell/OS Version）、环境更新分别支持客户端／服务端／擦除，使用现有公共设置组件；旧整组环境策略加载编辑器时展开，Worker 仍接受旧配置。现存策略未改。契约见 CONTRACTS §53.16。
 >
 > 通过签名发布与正常 primary-first 升级，计划 `300b1f38c5c9fb873424c7f97118e83e` 完成 27 步；四节点版本/hash 相同、`/readyz` 200、ccgateway 0.1.56 enabled，其余五个内置插件包哈希不变。manifest `c73dea9639c75382a39f98612206b1990b9f9f9a8f1dcc8e7aeb519fb044650c`，bundle `fdb96c8d55bb65ea65cecbe4eb9238e749b4548f0ddaecc72c159fef35a49c5c`，核心程序 SHA-256 `ee3683e9720e1db14e2ff6836132fe144071b4e281b8a66264de7857664a13aa`。
