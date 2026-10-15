@@ -14,7 +14,7 @@ export default {
   truncated: 'Error text exceeds 4 KiB. Only its first 4 KiB are matched, as in live execution.',
   noHistory: 'No revision history loaded.',
   stickyManaged:
-    'Retries, switching and binding resets are configured in Failure handling. This section controls session identification and retention only.',
+    'Retries, switching and binding resets are configured in Scheduling policy. This section controls session identification and retention only.',
   reasons: {
     return: 'Return error by policy',
     not_replayable: 'Operation cannot be safely replayed',
@@ -39,7 +39,7 @@ export default {
     write_failed: 'Account state write failed',
     diagnostic_request: 'Diagnostic request leaves state unchanged'
   },
-  title: 'Failure handling',
+  title: 'Scheduling policy',
   description:
     'The core controls retries, account switching and automatic account actions. Reset only releases account affinity; it does not delete chat history. Committed or uncertain requests are not replayed.',
   retryEnabled: 'Automatic retries',
@@ -145,5 +145,5 @@ export default {
   errorText: 'Error text',
   history: 'Load revision history',
   restore: 'Use revision as draft',
-  decisions: 'Failure handling decisions'
+  decisions: 'Scheduling policy decisions'
 }

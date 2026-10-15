@@ -30,6 +30,31 @@ beforeEach(() => {
   api.put.mockImplementation((_path, body) => Promise.resolve({ configured: true, policy: { ...body.policy, revision: 8 } }))
 })
 describe('simplified failure settings', () => {
+  it('saves sections independently, preserves the other draft and advances the revision', async () => {
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    const retry = wrapper.get('[data-testid="retry-rules"]')
+    const account = wrapper.get('[data-testid="account-rules"]')
+    await retry.get('[data-testid="rule-name"]').setValue('新重试名称')
+    await account.get('[data-testid="add-rule"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
+    await flushPromises()
+    expect(api.put.mock.calls[0]![1].policy.account_rules).toEqual([])
+    expect(account.findAll('[data-testid="rule-name"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="retry-save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="account-save"]').attributes('disabled')).toBeUndefined()
+    await account.get('[data-testid="rule-codes"]').setValue('401')
+    await retry.get('[data-testid="rule-codes"]').setValue('invalid draft')
+    await wrapper.get('[data-testid="account-save"]').trigger('click')
+    await flushPromises()
+    expect(api.put.mock.calls[1]![1]).toMatchObject({ expected_revision: 8, policy: {
+      retry_rules: [{ name: '新重试名称', match: { status_codes: '429' } }],
+      account_rules: [{ match: { status_codes: '401' } }]
+    } })
+    expect((retry.get('[data-testid="rule-codes"]').element as HTMLInputElement).value).toBe('invalid draft')
+    expect(wrapper.get('[data-testid="account-save"]').attributes('disabled')).toBeDefined()
+  })
+
   it('keeps five additional retries in pairs and reveals only active account controls', async () => {
     const policy = { ...fixture(), max_retries: 5, retries_per_account: 2 }
     expect(retryAccountSequence(policy)).toEqual(['A', 'A', 'A', 'B', 'B', 'C'])
@@ -46,7 +71,11 @@ describe('simplified failure settings', () => {
   it('has only Save, with no removed controls, history or per-rule switches', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
-    expect(wrapper.get('[data-testid="settings-save"]').text()).toBe('保存')
+    expect(wrapper.get('[data-testid="retry-settings"] [data-testid="retry-save"]').text()).toBe('保存')
+    expect(wrapper.get('[data-testid="disable-settings"] [data-testid="account-save"]').text()).toBe('保存')
+    expect(wrapper.find('[data-testid="settings-save"]').exists()).toBe(false)
+    expect(wrapper.findAll('h3').filter(h => h.text() === '调度策略')).toHaveLength(0)
+    expect(i18n.global.t('failurePolicy.title')).toBe('调度策略')
     expect(wrapper.find('[data-testid="settings-reset"]').exists()).toBe(false)
     for (const label of ['历史版本', '累计等待上限', 'Retry-After', '换号出口限制']) expect(wrapper.text()).not.toContain(label)
     expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(0)
@@ -58,7 +87,7 @@ describe('simplified failure settings', () => {
     controls.findAllComponents(SInput)[1]!.vm.$emit('update:modelValue', null)
     controls.findComponent(SSwitch).vm.$emit('update:modelValue', false)
     await flushPromises()
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     await flushPromises()
     expect(api.put.mock.calls[0]![1]).toMatchObject({
       expected_revision: 7,
@@ -72,14 +101,14 @@ describe('simplified failure settings', () => {
         egress: 'account_configured'
       }
     })
-    expect(wrapper.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="retry-save"]').attributes('disabled')).toBeDefined()
   })
   it.each([null, 1.5])('rejects empty or fractional retry budgets: %s', async value => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
     wrapper.findComponent(FailurePolicyControls).findAllComponents(SInput)[0]!.vm.$emit('update:modelValue', value)
     await flushPromises()
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('请填写整数，不能留空')
   })
@@ -108,7 +137,7 @@ describe('simplified failure settings', () => {
     wrapper.findComponent(FailurePolicyControls).findAllComponents(SInput)[0]!.vm.$emit('update:modelValue', 5)
     await flushPromises()
     api.put.mockRejectedValue(new Error('策略已更新，请重新加载'))
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('策略已更新')
     expect(wrapper.findComponent(FailurePolicyControls).findAllComponents(SInput)[0]!.props('modelValue')).toBe(5)
@@ -120,7 +149,8 @@ describe('simplified failure settings', () => {
     api.get.mockResolvedValue({ configured: true, policy: p })
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
-    expect(wrapper.find('[data-testid="settings-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="retry-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="account-save"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="edit-rule"]').exists()).toBe(false)
     expect(wrapper.find('[data-reorder-handle]').exists()).toBe(false)
     for (const input of wrapper.findAll('[data-testid="retry-rules"] input, [data-testid="retry-rules"] textarea')) expect(input.attributes('disabled')).toBeDefined()
@@ -137,7 +167,7 @@ describe('rule interaction', () => {
     await table.get('[data-testid="rule-keywords"]').setValue('^QUOTA\\D+$\n\n(?i)denied')
     expect(table.find('[data-testid="rule-mode"]').exists()).toBe(false)
     expect(table.text()).not.toContain('条件关系')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toMatchObject({
       keyword_regex: true, keywords: ['^QUOTA\\D+$', '', '(?i)denied'], mode: 'any'
     })
@@ -151,7 +181,7 @@ describe('rule interaction', () => {
     api.put.mockRejectedValue(new ApiError(400, { code: 'invalid_argument', message: '无效的参数', details: {
       fields: [{ field: 'retry_rules.0.match.keywords', message: '第 3 行：Go 正则表达式无效' }]
     } }))
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     await flushPromises()
     expect(table.get('[data-testid="rule-keywords"]').attributes('aria-invalid')).toBe('true')
     expect(table.text()).toContain('第 3 行')
@@ -167,7 +197,7 @@ describe('rule interaction', () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
     const table = wrapper.get('[data-testid="retry-rules"]')
-    expect(table.text()).toContain('自动重试')
+    expect(wrapper.findAll('h5').filter(h => h.text() === '自动重试')).toHaveLength(1)
     expect(table.text()).not.toContain('重试与换号规则')
     await table.get('[data-testid="add-rule"]').trigger('click')
     expect(table.findAll('[data-testid="rule-name"]')).toHaveLength(2)
@@ -177,7 +207,7 @@ describe('rule interaction', () => {
     await table.findAll('[data-testid="copy-rule"]')[1]!.trigger('click')
     await table.findAll('[data-testid="rule-name"]')[2]!.setValue('副本独立修改')
     expect((table.findAll('[data-testid="rule-name"]')[1]!.element as HTMLInputElement).value).toBe(' 多个错误码 ')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     await flushPromises()
     const rows = api.put.mock.calls[0]![1].policy.retry_rules
     expect(rows[1]).toMatchObject({ name: '多个错误码', match: { status_codes: '401,403,429,500-599' } })
@@ -198,17 +228,17 @@ describe('rule interaction', () => {
     await flushPromises()
     const table = wrapper.get('[data-testid="retry-rules"]')
     await table.get('[data-testid="add-rule"]').trigger('click')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put).not.toHaveBeenCalled()
     expect(table.findAll('textarea')[1]!.attributes('aria-invalid')).toBe('true')
     await table.get('[data-reorder-handle="1"]').trigger('keydown', { key: 'ArrowUp' })
     expect(table.findAll('textarea')[0]!.attributes('aria-invalid')).toBe('true')
     await table.findAll('[data-testid="rule-codes"]')[0]!.setValue('500-401')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put).not.toHaveBeenCalled()
     expect(table.findAll('[data-testid="rule-codes"]')[0]!.attributes('aria-invalid')).toBe('true')
     await table.findAll('[data-testid="rule-codes"]')[0]!.setValue('503')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put).toHaveBeenCalledTimes(1)
   })
   it('saves keyword-only disable rules one per line with no action or advanced controls', async () => {
@@ -217,7 +247,7 @@ describe('rule interaction', () => {
     const table = wrapper.get('[data-testid="account-rules"]')
     await table.get('[data-testid="add-rule"]').trigger('click')
     await table.get('[data-testid="rule-keywords"]').setValue(' quota \n\npermission denied\nquota')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="account-save"]').trigger('click')
     expect(api.put.mock.calls[0]![1].policy.account_rules[0]).toMatchObject({
       enabled: true, action: 'disable', match: { status_codes: '', keywords: ['quota', 'permission denied'] }
     })
@@ -232,7 +262,7 @@ describe('rule interaction', () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
     await wrapper.get('[data-testid="rule-name"]').setValue('改名')
-    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toEqual({ ...policy.retry_rules[0]!.match, mode: 'any' })
     expect(normalizedPolicy(fixture()).retry_rules[0]!.match.keywords).toEqual([])
   })

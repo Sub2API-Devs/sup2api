@@ -2,6 +2,25 @@
 
 日期：2026-10-15。状态：核心 0.1.149 已部署到生产四节点，支持 Schema 4 固定 OR 与逐行 Go 正则，界面不再显示条件关系。线上已由管理员保存的 Schema 3 策略（revision=1）保持原值，新设置在页面保存后生效。
 
+## 调度策略界面与分区保存
+
+- 系统设置标签及相关提示统一命名为“调度策略”，保留原 `/settings/failure-policy` 接口和 `tab=failure` 地址兼容。
+- 去掉标签下重复的页面标题，以及规则表与所属卡片重复的标题。插件设置通用宿主 `SettingsTab` 没有额外页面标题；CCGateway 在插件详情内使用 `embedded` 隐藏自身页头，原生插件页宿主也已避免重复渲染页头。
+- 自动重试、自动禁用各自在卡片底部提供保存按钮。保存时用已保存的另一分区与当前分区组合请求，成功后保留另一分区未保存的草稿；校验不会被另一分区的无效草稿阻止。沿用服务端版本冲突保护，保存过程中阻止并行提交。
+- 对旧 Schema 的首次保存仍按既有迁移规则升级完整策略格式；升级发布本身不会自动保存或改写业务配置。
+
+### 插件系统配置资源前缀检查
+
+当前没有插件可声明“系统配置键前缀”的 manifest 字段，也没有对应前缀授权/冲突检查机制。这与既有插件配置隔离是两件事：
+
+| 配置 | 声明 / 隔离 | 实际入口及权限 |
+| --- | --- | --- |
+| 通用插件设置 | `ui.settings` 声明表单；`plugins.config_enc` 按插件 key 保存，AES-GCM AAD 为 `plugin-config:<key>`；运行时仅加载该 key 配置后发送 `ConfigureRequest` | `/api/v1/plugins/:key/settings`，读 `plugin:read`、写 `plugin:manage` |
+| CCGateway 系统配置 | manifest 没有 `ui.settings` 或系统配置前缀声明；插件详情页由宿主特殊嵌入核心 CCGateway 设置组件 | 核心注册 `/api/v1/system/ccgateway/*`，配置键 `ccgateway_remote`，AAD `system:ccgateway:v1`，读取 `settings:read`、保存 `settings:manage` |
+| 调度策略 | 核心 `failure_policy` 设置键，无插件声明依赖 | 核心 `/api/v1/settings/failure-policy` |
+
+证据：`next/sdk/manifest/manifest.go`、`next/plugins/ccgateway/manifest.json`、`next/server/internal/plugin/api/{api,settings}.go`、`next/server/internal/plugin/grpcruntime/{runtime,instance}.go`、`next/server/internal/ccgateway/{config,http}.go`。核心 API 路由前缀由 `next/sdk/manifest/routes.go` 预留，插件自有 API 经 `/api/v1/p/<key>` 隔离；这不能代替系统配置键的声明。本次按“检查”范围记录现状，不引入新的插件权限或迁移插件配置。
+
 ## Schema 4：固定条件关系与 Go 正则
 
 - 移除“条件关系”控件。新版保存为 Schema 4，状态码与文本条件固定 OR；关键词或正则均一行一个，多行之间也是 OR，页面不再展示条件关系提示。

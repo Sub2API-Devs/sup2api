@@ -13,7 +13,7 @@ export default {
   accountResult: '账号处理结果',
   truncated: '错误文本超过 4 KiB，仅匹配前 4 KiB，与实际执行一致。',
   noHistory: '暂无已加载的历史版本。',
-  stickyManaged: '失败后的重试、换号和绑定重置由「失败处理」统一配置。这里仅配置会话识别与保留时间。',
+  stickyManaged: '失败后的重试、换号和绑定重置由「调度策略」统一配置。这里仅配置会话识别与保留时间。',
   reasons: {
     return: '按规则返回错误',
     not_replayable: '操作不可安全重放',
@@ -38,7 +38,7 @@ export default {
     write_failed: '账号状态写入失败',
     diagnostic_request: '诊断请求不修改状态'
   },
-  title: '失败处理',
+  title: '调度策略',
   description: '核心统一执行重试、账号切换和自动账号处理。重置只解除账号绑定，不删除聊天记录。已经开始响应或结果不确定的请求不会重放。',
   retryEnabled: '自动重试',
   retrySectionHint: '配置重试总次数、换号阈值和触发条件。换号时自动清除原粘性绑定。',
@@ -117,7 +117,7 @@ export default {
   },
   reload: '重新加载',
   publish: '发布并生效',
-  published: '失败处理设置已保存',
+  published: '调度策略设置已保存',
   reset: '放弃编辑',
   version: '策略版本 {version}',
   budget: '最多尝试 {count} 次（含首次）',
@@ -136,5 +136,5 @@ export default {
   errorText: '错误内容',
   history: '加载历史版本',
   restore: '用此版本填入草稿',
-  decisions: '失败处理记录'
+  decisions: '调度策略记录'
 }

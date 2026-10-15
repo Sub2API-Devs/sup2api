@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SButton, SDisclosure, SSectionTitle, SSettingsGroup, SSpinner, SSwitch } from '@sub2api/ui'
+import { SAlert, SButton, SDisclosure, SSettingsGroup, SSpinner, SSwitch } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import FailurePolicyControls from './FailurePolicyControls.vue'
 import FailureRulesTable from './FailureRulesTable.vue'
@@ -11,7 +11,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))
 const { policy, configured, migrationNeeded, migrationMessage, loading, saving, error, errors, regexErrors, dirty, isLoaded, load, save } = useFailurePolicy()
-const disabled = computed(() => !canManage.value || saving.value)
+const disabled = computed(() => !canManage.value || !!saving.value)
 const ruleErrors = computed(() =>
   Object.entries(errors.value)
     .filter(([key]) => /^(retry_rules|account_rules)/.test(key))
@@ -35,7 +35,7 @@ onMounted(load)
       {{ error
       }}<template #actions>
         <SButton
-          :disabled="saving"
+          :disabled="!!saving"
           @click="load"
         >
           {{ t('failurePolicy.reload') }}
@@ -55,21 +55,6 @@ onMounted(load)
       >
         {{ t(migrationMessage) }}
       </SAlert>
-      <SSectionTitle :title="t('failurePolicy.title')">
-        <template #actions>
-          <SButton
-            v-if="canManage"
-            variant="primary"
-            size="sm"
-            :loading="saving"
-            :disabled="!dirty && configured && !migrationNeeded"
-            data-testid="settings-save"
-            @click="save"
-          >
-            {{ t('common.save') }}
-          </SButton>
-        </template>
-      </SSectionTitle>
       <SAlert
         v-if="ruleErrors.length"
         tone="danger"
@@ -107,6 +92,21 @@ onMounted(load)
             :disabled="disabled"
           />
         </div>
+        <div
+          v-if="canManage"
+          class="flex justify-end py-4"
+        >
+          <SButton
+            variant="primary"
+            size="sm"
+            :loading="saving === 'retry'"
+            :disabled="disabled || (!dirty('retry') && configured && !migrationNeeded)"
+            data-testid="retry-save"
+            @click="save('retry')"
+          >
+            {{ t('common.save') }}
+          </SButton>
+        </div>
       </SSettingsGroup>
       <SSettingsGroup
         :title="t('failurePolicy.disableSection')"
@@ -128,6 +128,21 @@ onMounted(load)
             :account="true"
             :disabled="disabled"
           />
+        </div>
+        <div
+          v-if="canManage"
+          class="flex justify-end py-4"
+        >
+          <SButton
+            variant="primary"
+            size="sm"
+            :loading="saving === 'account'"
+            :disabled="disabled || (!dirty('account') && configured && !migrationNeeded)"
+            data-testid="account-save"
+            @click="save('account')"
+          >
+            {{ t('common.save') }}
+          </SButton>
         </div>
       </SSettingsGroup>
       <SDisclosure :label="t('failurePolicy.preview')">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, SSectionTitle, STable, STextarea, createItemId, type TableColumn } from '@sub2api/ui'
+import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, STable, STextarea, createItemId, type TableColumn } from '@sub2api/ui'
 import FailureRuleDetails from './FailureRuleDetails.vue'
 import { newFailureRule, ruleFormErrors, type FailureRule } from './failurePolicy'
 
@@ -38,23 +38,19 @@ function hasScope(rule: FailureRule) {
 </script>
 <template>
   <section :data-testid="account ? 'account-rules' : 'retry-rules'">
-    <SSectionTitle :title="t(account ? 'failurePolicy.account_rules' : 'failurePolicy.retry_rules')">
-      <template #actions>
-        <SButton
-          v-if="!disabled"
-          icon="plus"
-          size="sm"
-          :disabled="rules.length >= 100"
-          data-testid="add-rule"
-          @click="add()"
-        >
-          {{ t('failurePolicy.add') }}
-        </SButton>
-      </template>
-    </SSectionTitle>
-    <SHint class="mb-3">
-      {{ t('failurePolicy.orderHint') }}
-    </SHint>
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <SHint>{{ t('failurePolicy.orderHint') }}</SHint>
+      <SButton
+        v-if="!disabled"
+        icon="plus"
+        size="sm"
+        :disabled="rules.length >= 100"
+        data-testid="add-rule"
+        @click="add()"
+      >
+        {{ t('failurePolicy.add') }}
+      </SButton>
+    </div>
     <STable
       :columns="columns"
       :rows="rules"

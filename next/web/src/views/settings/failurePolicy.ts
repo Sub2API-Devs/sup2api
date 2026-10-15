@@ -48,6 +48,19 @@ export type FailurePolicyForm = Omit<FailurePolicy, 'max_retries' | 'retries_per
   max_wait_ms: number | null
 }
 
+export type PolicySection = 'retry' | 'account'
+export function policySection(policy: FailurePolicyForm, section: PolicySection) {
+  if (section === 'account') return { account_enabled: policy.account_enabled, account_rules: policy.account_rules }
+  return {
+    retry_enabled: policy.retry_enabled,
+    max_retries: policy.max_retries,
+    retries_per_account: policy.retries_per_account,
+    switch_account: policy.switch_account,
+    backoff_ms: policy.backoff_ms,
+    retry_rules: policy.retry_rules
+  }
+}
+
 export function policyFormErrors(form: FailurePolicyForm, message: string, ruleMessage = message): Record<string, string> {
   const errors: Record<string, string> = {}
   const check = (key: string, value: unknown) => {

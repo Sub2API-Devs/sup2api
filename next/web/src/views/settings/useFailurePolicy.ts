@@ -9,6 +9,8 @@ import {
   normalizedPolicy,
   needsPolicyMigration,
   policyFormErrors,
+  policySection,
+  type PolicySection,
   type FailurePolicyForm,
   type FailurePolicyResponse
 } from './failurePolicy'
@@ -20,10 +22,10 @@ export function useFailurePolicy() {
   const migrationNeeded = ref(false)
   const migrationMessage = ref('failurePolicy.unifiedMigration')
   const loading = ref(false)
-  const saving = ref(false)
+  const saving = ref<PolicySection | null>(null)
   const error = ref('')
   const errors = ref<Record<string, string>>({})
-  const saved = ref('')
+  const saved = ref<FailurePolicyForm | null>(null)
   const revision = ref(0)
   const rejectedPolicy = ref<FailurePolicyForm | null>(null)
   const regexErrors = computed(() => {
@@ -37,7 +39,8 @@ export function useFailurePolicy() {
     }
     return result
   })
-  const dirty = computed(() => JSON.stringify(normalizedPolicy(policy.value)) !== saved.value)
+  const dirty = (section: PolicySection) => !saved.value ||
+    JSON.stringify(policySection(normalizedPolicy(policy.value), section)) !== JSON.stringify(policySection(saved.value, section))
   const isLoaded = computed(() => !!saved.value)
   function apply(response: FailurePolicyResponse) {
     policy.value = editablePolicy(response.policy)
@@ -45,7 +48,7 @@ export function useFailurePolicy() {
     migrationMessage.value = response.policy.schema_version < 3 ? 'failurePolicy.unifiedMigration' : 'failurePolicy.matchingMigration'
     configured.value = response.configured
     revision.value = response.policy.revision
-    saved.value = JSON.stringify(policy.value)
+    saved.value = JSON.parse(JSON.stringify(policy.value))
     errors.value = {}
     rejectedPolicy.value = null
   }
@@ -60,21 +63,24 @@ export function useFailurePolicy() {
       loading.value = false
     }
   }
-  async function save() {
-    errors.value = policyFormErrors(policy.value, i18n.global.t('failurePolicy.numberRequired'), i18n.global.t('failurePolicy.invalidRule'))
+  async function save(section: PolicySection) {
+    if (saving.value || !saved.value) return
+    const submitted = normalizedPolicy({ ...saved.value, ...policySection(policy.value, section) })
+    errors.value = policyFormErrors(submitted, i18n.global.t('failurePolicy.numberRequired'), i18n.global.t('failurePolicy.invalidRule'))
     if (Object.keys(errors.value).length) return
-    saving.value = true
+    saving.value = section
     error.value = ''
-    const submitted: FailurePolicyForm = JSON.parse(JSON.stringify(policy.value))
+    const draft: FailurePolicyForm = JSON.parse(JSON.stringify(policy.value))
     try {
-      apply(await api.put<FailurePolicyResponse>(path, { expected_revision: revision.value, policy: normalizedPolicy(policy.value) }))
+      apply(await api.put<FailurePolicyResponse>(path, { expected_revision: revision.value, policy: submitted }))
+      Object.assign(policy.value, policySection(draft, section === 'retry' ? 'account' : 'retry'))
       toast(i18n.global.t('failurePolicy.published'), 'success')
     } catch (e) {
-      rejectedPolicy.value = submitted
+      rejectedPolicy.value = draft
       errors.value = fieldErrors(e)
       if (!Object.keys(errors.value).length) error.value = errorMessage(e)
     } finally {
-      saving.value = false
+      saving.value = null
     }
   }
   return { policy, configured, migrationNeeded, migrationMessage, loading, saving, error, errors, regexErrors, dirty, isLoaded, load, save }
