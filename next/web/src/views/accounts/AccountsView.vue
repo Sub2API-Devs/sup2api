@@ -144,8 +144,8 @@ function coolingDown(a: Account) {
 type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string }
 function statusOf(a: Account): StatusView {
   if (a.orphaned) return { tone: 'gray', label: t('accounts.status.orphaned'), detail: t('accounts.orphanedHint', { plugin: a.plugin_key }) }
-  if (a.status === 'auto_disabled') return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason }
   if (a.status === 'disabled') return { tone: 'danger', label: t('accounts.status.disabled'), detail: a.status_reason }
+  if (a.status === 'auto_disabled' || (a.status === 'active' && !a.schedulable)) return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason }
   if (a.status === 'error') return { tone: 'danger', label: t('accounts.status.error'), detail: a.status_reason }
   if (coolingDown(a)) {
     return {
@@ -154,7 +154,6 @@ function statusOf(a: Account): StatusView {
       detail: t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) }) + (a.cooldown_reason ? `（${a.cooldown_reason}）` : '')
     }
   }
-  if (!a.schedulable) return { tone: 'gray', label: t('accounts.status.unschedulable') }
   return { tone: 'success', label: t('accounts.status.active') }
 }
 
@@ -435,13 +434,17 @@ async function refreshCreds(a: Account) {
   }
 }
 // ---------------------------------------------------------------- row actions
-async function toggleSchedulable(a: Account, v: boolean) {
-  if (!canUpdate(a) || !accountControl(accountTypes.find(a.plugin_key, a.type), 'schedulable').configurable) return
+const togglingEnabled = ref(new Set<number>())
+async function toggleEnabled(a: Account, v: boolean) {
+  if (togglingEnabled.value.has(a.id) || !canUpdate(a) || !accountControl(accountTypes.find(a.plugin_key, a.type), 'schedulable').configurable) return
+  togglingEnabled.value.add(a.id)
   try {
-    await api.patch(`/accounts/${a.id}`, { schedulable: v })
-    a.schedulable = v
+    const updated = await api.patch<Account>(`/accounts/${a.id}`, { status: v ? 'active' : 'disabled', schedulable: v })
+    patchAccount(a.id, updated)
   } catch (e) {
     notifyError(e)
+  } finally {
+    togglingEnabled.value.delete(a.id)
   }
 }
 
@@ -615,12 +618,12 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <div class="flex items-center justify-end gap-1">
           <SSwitch
             v-if="canUpdate(row) && !row.orphaned"
-            :model-value="row.schedulable"
-            :disabled="!accountControl(accountTypes.find(row.plugin_key, row.type), 'schedulable').configurable"
-            :aria-label="t('accounts.schedulable')"
-            :title="t('accounts.schedulingSwitchHint')"
+            :model-value="row.status !== 'disabled'"
+            :disabled="togglingEnabled.has(row.id) || !accountControl(accountTypes.find(row.plugin_key, row.type), 'schedulable').configurable"
+            :aria-label="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
+            :title="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
             data-testid="account-schedulable-switch"
-            @update:model-value="toggleSchedulable(row, $event)"
+            @update:model-value="toggleEnabled(row, $event)"
           />
           <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
           <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>

@@ -411,7 +411,14 @@ func (s *Service) list(c *gin.Context) {
 		add("a.type = ?", v)
 	}
 	if v := c.Query("status"); v != "" {
-		add("a.status = ?", v)
+		switch v {
+		case "active":
+			add("(a.status = ? AND a.schedulable)", v)
+		case "auto_disabled":
+			add("(a.status = ? OR (a.status = 'active' AND NOT a.schedulable))", v)
+		default:
+			add("a.status = ?", v)
+		}
 	}
 	if v := c.Query("group_id"); v != "" {
 		gid, err := strconv.ParseInt(v, 10, 64)
@@ -1054,6 +1061,12 @@ func (s *Service) update(c *gin.Context) {
 	if fe := in.validate(ctx, false); len(fe) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return
+	}
+	// Explicitly enabling an account restores scheduling as well. Scheduling
+	// alone can still be changed without changing the manual enabled state.
+	if in.Status != nil && *in.Status == "active" && in.Schedulable == nil {
+		enabled := true
+		in.Schedulable = &enabled
 	}
 	scope := core.OwnerScope(ctx, "account:update")
 	cur, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)

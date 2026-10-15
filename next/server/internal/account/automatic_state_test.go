@@ -43,6 +43,9 @@ func TestAccountCommonControls(t *testing.T) {
 		require.Equal(t, 400, status)
 		require.Contains(t, fieldsOf(result), field+":read_only")
 	}
+	status, result = e.do("PATCH", "/accounts/"+itoa(id), map[string]any{"status": "active"})
+	require.Equal(t, 400, status)
+	require.Contains(t, fieldsOf(result), "schedulable:read_only")
 	status, result = e.do("PATCH", "/accounts/"+itoa(legacy), map[string]any{"name": "retained", "auto_disable": true, "schedulable": true, "status": "disabled"})
 	require.Equal(t, 200, status)
 	require.Equal(t, true, data(result)["auto_disable"])
@@ -52,6 +55,63 @@ func TestAccountCommonControls(t *testing.T) {
 	status, result = e.do("PATCH", "/accounts/"+itoa(id), map[string]any{"auto_disable": true})
 	require.Equal(t, 200, status)
 	require.Equal(t, true, data(result)["auto_disable"])
+}
+
+func TestManualEnableRestoresScheduling(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	id := e.mkRawAccount("anthropic", "apikey", "manual-enable", "sk-good-key-123", true)
+	group := e.exec1(`INSERT INTO groups(name) VALUES('manual-enable') RETURNING id`)
+	_, err := e.db.Pool.Exec(ctx, `INSERT INTO account_groups(account_id,group_id) VALUES($1,$2)`, id, group)
+	require.NoError(t, err)
+	path := "/accounts/" + itoa(id)
+
+	// Stopping scheduling does not change the administrator's enabled state.
+	code, result := e.do("PATCH", path, map[string]any{"schedulable": false})
+	require.Equal(t, 200, code)
+	assert.Equal(t, "active", data(result)["status"])
+	assert.Equal(t, false, data(result)["schedulable"])
+	candidates, err := e.svc.Candidates(ctx, group, nil)
+	require.NoError(t, err)
+	assert.Empty(t, candidates)
+	code, result = e.do("GET", "/accounts?status=auto_disabled", nil)
+	require.Equal(t, 200, code)
+	require.Len(t, result["data"].([]any), 1)
+	code, result = e.do("GET", "/accounts?status=active", nil)
+	require.Equal(t, 200, code)
+	assert.Empty(t, result["data"])
+
+	code, result = e.do("PATCH", path, map[string]any{"status": "disabled"})
+	require.Equal(t, 200, code)
+	assert.Equal(t, "disabled", data(result)["status"])
+	// Automatic recovery must not override an explicit manual disable.
+	cleared, err := e.svc.ApplyAccountAutomaticState(ctx, id, &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_CLEAR})
+	require.NoError(t, err)
+	assert.False(t, cleared.GetChanged())
+
+	code, result = e.do("PATCH", path, map[string]any{"status": "active"})
+	require.Equal(t, 200, code)
+	assert.Equal(t, "active", data(result)["status"])
+	assert.Equal(t, true, data(result)["schedulable"])
+	assert.Empty(t, data(result)["status_reason"])
+	candidates, err = e.svc.Candidates(ctx, group, nil)
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	assert.Equal(t, id, candidates[0].ID)
+	code, result = e.do("GET", "/accounts?status=active", nil)
+	require.Equal(t, 200, code)
+	require.Len(t, result["data"].([]any), 1)
+
+	// A manual disable always excludes the account, even with scheduling on.
+	code, result = e.do("PATCH", path, map[string]any{"status": "disabled"})
+	require.Equal(t, 200, code)
+	assert.Equal(t, true, data(result)["schedulable"])
+	candidates, err = e.svc.Candidates(ctx, group, nil)
+	require.NoError(t, err)
+	assert.Empty(t, candidates)
+	code, result = e.do("GET", "/accounts?status=auto_disabled", nil)
+	require.Equal(t, 200, code)
+	assert.Empty(t, result["data"])
 }
 
 func TestAccountAutoDisablePolicy(t *testing.T) {
