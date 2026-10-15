@@ -51,7 +51,7 @@ export function policyFormErrors(form: FailurePolicyForm, message: string): Reco
     if (typeof value !== 'number' || !Number.isInteger(value)) errors[key] = message
   }
   for (const key of ['max_retries', 'backoff_ms', 'max_wait_ms'] as const) check(key, form[key])
-  if (form.schema_version >= 2) check('retries_per_account', form.retries_per_account)
+  if (form.schema_version >= 2 && form.switch_account) check('retries_per_account', form.retries_per_account)
   form.account_rules.forEach((rule, i) => {
     if (rule.action === 'cooldown') check(`account_rules.${i}.cooldown_seconds`, rule.cooldown_seconds)
   })
@@ -107,6 +107,11 @@ export function newFailureRule(name: string, account: boolean): FailureRule {
 }
 export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
   const p: T = JSON.parse(JSON.stringify(policy))
+  if (p.schema_version >= 2) {
+    p.reset_sticky = true
+    const count = p.retries_per_account
+    if (!p.switch_account && (count === null || !Number.isInteger(count) || count < 0 || count > 9)) p.retries_per_account = 0
+  }
   for (const r of [...p.retry_rules, ...p.account_rules]) {
     r.match.keywords = (r.match.keywords || []).map(k => k.trim()).filter(Boolean)
     r.match.groups ||= []
@@ -114,6 +119,10 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
     r.match.protocols ||= []
   }
   return p
+}
+
+export function needsPolicyMigration(policy: FailurePolicy): boolean {
+  return policy.schema_version < 2 || (policy.switch_account && !policy.reset_sticky)
 }
 
 // This is an editable migration draft; the server keeps executing v1 until publish.
@@ -125,7 +134,7 @@ export function editablePolicy(policy: FailurePolicy): FailurePolicyForm {
   p.schema_version = 2
   p.retries_per_account = rule?.action === 'retry' ? rule.same_account_retries : 0
   p.switch_account = exhausted !== 'return'
-  p.reset_sticky = exhausted !== 'switch'
+  p.reset_sticky = true
   p.egress = rule?.egress || 'same_proxy'
   for (const r of p.retry_rules) {
     if (r.action !== 'return') r.action = 'retry'
@@ -135,7 +144,7 @@ export function editablePolicy(policy: FailurePolicy): FailurePolicyForm {
 
 export function retryAccountSequence(policy: FailurePolicyForm): string[] {
   const count = policy.max_retries
-  const perAccount = policy.retries_per_account
+  const perAccount = policy.switch_account ? policy.retries_per_account : 0
   if (count === null || perAccount === null || !Number.isInteger(count) || !Number.isInteger(perAccount)) return []
   if (count < 0 || count > 9 || perAccount < 0 || perAccount > 9) return []
   const sequence = ['A']

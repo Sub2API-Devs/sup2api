@@ -43,7 +43,7 @@ export default {
   description:
     'The core controls retries, account switching and automatic account actions. Reset only releases account affinity; it does not delete chat history. Committed or uncertain requests are not replayed.',
   retryEnabled: 'Automatic retries',
-  retrySectionHint: 'Configure the total retry budget, account switching, sticky resets and matching conditions.',
+  retrySectionHint: 'Configure the total retry budget, account switching and matching conditions. Switching automatically clears the original sticky binding.',
   disableSection: 'Automatic disabling',
   maxRetries: 'Maximum additional retries',
   maxRetriesHint: '0 disables retries. Same-account retries and switches share this budget (up to 9).',
@@ -59,15 +59,12 @@ export default {
   switchAccount: 'Switch accounts at the retry limit',
   switchAccountHint:
     'When enabled, rotate at the per-account limit. When disabled, all retries stay on the original account. Cooldown or disabling causes an early switch when enabled, otherwise stops retries.',
-  resetSticky: 'Reset sticky binding when switching',
-  resetStickyHint:
-    'Release the original binding and bind the new account on success. When disabled, preserve the original binding. Chat history is not deleted.',
   sequence: 'Request order: {sequence}.',
   sequenceHint:
     'The first item is the initial request; the rest are retries. Letters represent accounts. Continues only while retry rules match and accounts remain eligible; stops on success.',
   sharedRetry: 'Retry / switch using the shared plan',
   unifiedMigration:
-    'This is a draft unified retry plan. The saved policy stays active until publication. Global settings come from the first enabled legacy retry rule; separate rule limits, switching and egress settings will be merged. Review before publishing.',
+    'This is a draft unified retry plan. The saved policy stays active until publication. Legacy per-rule retry settings will be merged; the new plan automatically clears the original sticky binding when switching. Review before publishing.',
   retry_rules: 'Retry and switching rules',
   account_rules: 'Account action rules',
   orderHint: 'The first matching rule in each list wins independently. No match returns the error and leaves the account unchanged.',

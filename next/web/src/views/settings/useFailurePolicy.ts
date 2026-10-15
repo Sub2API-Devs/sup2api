@@ -7,6 +7,7 @@ import {
   emptyFailurePolicy,
   editablePolicy,
   normalizedPolicy,
+  needsPolicyMigration,
   policyFormErrors,
   type FailurePolicy,
   type FailurePolicyForm,
@@ -33,7 +34,7 @@ export function useFailurePolicy() {
 
   function apply(response: FailurePolicyResponse) {
     policy.value = editablePolicy(response.policy)
-    migrationNeeded.value = response.policy.schema_version < 2
+    migrationNeeded.value = needsPolicyMigration(response.policy)
     savedMigrationNeeded = migrationNeeded.value
     configured.value = response.configured
     revision.value = response.policy.revision
@@ -94,7 +95,7 @@ export function useFailurePolicy() {
     const previous = history.value.find(p => p.revision === version)
     if (!previous) return
     policy.value = editablePolicy({ ...previous, revision: revision.value })
-    migrationNeeded.value = previous.schema_version < 2
+    migrationNeeded.value = needsPolicyMigration(previous)
   }
 
   return {

@@ -43,6 +43,33 @@ describe('core failure policy settings', () => {
     expect(wrapper.get('[data-testid="retry-sequence"]').text()).toContain('A → A → A → B → B → C')
   })
 
+  it('shows the per-account count only after switching is enabled', async () => {
+    const policy = { ...fixture(), switch_account: false }
+    const wrapper = mount(FailurePolicyControls, { props: { modelValue: policy, disabled: false, errors: {} }, global })
+    expect(wrapper.find('input[aria-label="每个账号承接的重试次数"]').exists()).toBe(false)
+    expect(wrapper.findAllComponents(SSwitch)).toHaveLength(3)
+    await wrapper.setProps({ modelValue: { ...policy, switch_account: true } })
+    expect(wrapper.find('input[aria-label="每个账号承接的重试次数"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents(SSwitch)).toHaveLength(3)
+  })
+
+  it('publishes the fixed sticky reset rule and ignores an inactive empty retry count', async () => {
+    const old = { ...fixture(), reset_sticky: false }
+    api.get.mockResolvedValue({ configured: true, policy: old })
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    expect(wrapper.text()).toContain('换号时自动清除原粘性绑定')
+    const controls = wrapper.findComponent(FailurePolicyControls)
+    controls.findAllComponents(SInput)[1]!.vm.$emit('update:modelValue', null)
+    controls.findAllComponents(SSwitch)[1]!.vm.$emit('update:modelValue', false)
+    await flushPromises()
+    api.put.mockImplementation((_path, body) => Promise.resolve({ configured: true, policy: { ...body.policy, revision: 8 } }))
+    await wrapper.get('[data-testid="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(api.put.mock.calls[0]![1].policy).toMatchObject({ reset_sticky: true, switch_account: false, retries_per_account: 0 })
+    expect(old.reset_sticky).toBe(false)
+  })
+
   it('keeps legacy migration in a visible draft until explicitly published', async () => {
     const legacy = fixture()
     legacy.schema_version = 1

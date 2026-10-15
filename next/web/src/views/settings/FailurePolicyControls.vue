@@ -12,8 +12,6 @@ const egressOptions = computed(() =>
   ['same_proxy', 'proxy_only', 'account_configured'].map(value => ({ value, label: t(`failurePolicy.egresses.${value}`) }))
 )
 const numbers = [
-  { key: 'max_retries', label: 'maxRetries', max: 9, hint: 'maxRetriesHint' },
-  { key: 'retries_per_account', label: 'retriesPerAccount', max: 9, hint: 'retriesPerAccountHint' },
   { key: 'backoff_ms', label: 'backoff', max: 30000 },
   { key: 'max_wait_ms', label: 'maxWait', max: 120000 }
 ] as const
@@ -28,17 +26,15 @@ const numbers = [
     />
   </SSettingRow>
   <SSettingRow
-    v-for="field in numbers"
-    :key="field.key"
-    :label="t(`failurePolicy.${field.label}`)"
-    :description="'hint' in field ? t(`failurePolicy.${field.hint}`) : undefined"
-    :error="errors[field.key]"
+    :label="t('failurePolicy.maxRetries')"
+    :description="t('failurePolicy.maxRetriesHint')"
+    :error="errors.max_retries"
   >
     <SInput
-      v-model="policy[field.key]"
+      v-model="policy.max_retries"
       type="number"
       :min="0"
-      :max="field.max"
+      :max="9"
       :disabled="disabled"
       class="w-full sm:w-48"
     />
@@ -54,16 +50,23 @@ const numbers = [
     />
   </SSettingRow>
   <SSettingRow
-    :label="t('failurePolicy.resetSticky')"
-    :description="t('failurePolicy.resetStickyHint')"
+    v-if="policy.switch_account"
+    :label="t('failurePolicy.retriesPerAccount')"
+    :description="t('failurePolicy.retriesPerAccountHint')"
+    :error="errors.retries_per_account"
   >
-    <SSwitch
-      v-model="policy.reset_sticky"
-      :disabled="disabled || !policy.switch_account"
-      :aria-label="t('failurePolicy.resetSticky')"
+    <SInput
+      v-model="policy.retries_per_account"
+      type="number"
+      :min="0"
+      :max="9"
+      :disabled="disabled"
+      :aria-label="t('failurePolicy.retriesPerAccount')"
+      class="w-full sm:w-48"
     />
   </SSettingRow>
   <SSettingRow
+    v-if="policy.switch_account"
     :label="t('failurePolicy.egress')"
     :description="t('failurePolicy.egressHint')"
     :error="errors.egress"
@@ -71,7 +74,7 @@ const numbers = [
     <SSelect
       v-model="policy.egress"
       :options="egressOptions"
-      :disabled="disabled || !policy.switch_account"
+      :disabled="disabled"
       :aria-label="t('failurePolicy.egress')"
     />
   </SSettingRow>
@@ -83,6 +86,21 @@ const numbers = [
     {{ t('failurePolicy.sequence', { sequence }) }}
     {{ t('failurePolicy.sequenceHint') }}
   </SHint>
+  <SSettingRow
+    v-for="field in numbers"
+    :key="field.key"
+    :label="t(`failurePolicy.${field.label}`)"
+    :error="errors[field.key]"
+  >
+    <SInput
+      v-model="policy[field.key]"
+      type="number"
+      :min="0"
+      :max="field.max"
+      :disabled="disabled"
+      class="w-full sm:w-48"
+    />
+  </SSettingRow>
   <SSettingRow :label="t('failurePolicy.retryAfter')">
     <SSwitch
       v-model="policy.respect_retry_after"
