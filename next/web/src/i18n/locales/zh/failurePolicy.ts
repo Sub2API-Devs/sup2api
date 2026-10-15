@@ -41,6 +41,8 @@ export default {
   title: '失败处理',
   description: '核心统一执行重试、账号切换和自动账号处理。重置只解除账号绑定，不删除聊天记录。已经开始响应或结果不确定的请求不会重放。',
   retryEnabled: '自动重试',
+  retrySectionHint: '配置重试总次数、换号阈值、粘性重置和触发条件。',
+  disableSection: '自动禁用',
   maxRetries: '最多额外重试次数',
   maxRetriesHint: '0 表示不重试。原账号重试和切换账号共用此预算，最多 9 次。',
   backoff: '首次退避间隔（毫秒）',

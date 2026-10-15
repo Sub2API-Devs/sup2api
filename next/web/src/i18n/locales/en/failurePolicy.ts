@@ -43,6 +43,8 @@ export default {
   description:
     'The core controls retries, account switching and automatic account actions. Reset only releases account affinity; it does not delete chat history. Committed or uncertain requests are not replayed.',
   retryEnabled: 'Automatic retries',
+  retrySectionHint: 'Configure the total retry budget, account switching, sticky resets and matching conditions.',
+  disableSection: 'Automatic disabling',
   maxRetries: 'Maximum additional retries',
   maxRetriesHint: '0 disables retries. Same-account retries and switches share this budget (up to 9).',
   backoff: 'Initial backoff (ms)',

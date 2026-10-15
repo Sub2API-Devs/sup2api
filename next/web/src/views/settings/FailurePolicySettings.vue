@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SButton, SDisclosure, SHint, SSelect, SSettingsGroup, SSpinner, SStack } from '@sub2api/ui'
+import { SAlert, SButton, SDisclosure, SHint, SSectionTitle, SSelect, SSettingRow, SSettingsGroup, SSpinner, SStack, SSwitch } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import FailurePolicyControls from './FailurePolicyControls.vue'
@@ -80,10 +80,7 @@ onMounted(load)
       >
         {{ t('failurePolicy.unifiedMigration') }}
       </SAlert>
-      <SSettingsGroup
-        :title="t('failurePolicy.title')"
-        :description="t('failurePolicy.description')"
-      >
+      <SSectionTitle :title="t('failurePolicy.title')">
         <template #actions>
           <SettingsSaveBar
             :dirty="dirty || !configured || migrationNeeded"
@@ -94,18 +91,9 @@ onMounted(load)
             @reset="reset"
           />
         </template>
-        <div class="py-3">
-          <SHint>
-            {{ t('failurePolicy.version', { version: revision }) }} ·
-            {{ t('failurePolicy.budget', { count: policy.retry_enabled ? 1 + Number(policy.max_retries) : 1 }) }}
-          </SHint>
-        </div>
-        <FailurePolicyControls
-          v-model="policy"
-          :disabled="disabled"
-          :errors="errors"
-        />
-      </SSettingsGroup>
+      </SSectionTitle>
+      <SHint>{{ t('failurePolicy.description') }}</SHint>
+      <SHint>{{ t('failurePolicy.version', { version: revision }) }}</SHint>
       <SAlert
         v-if="ruleErrors.length"
         tone="danger"
@@ -117,16 +105,47 @@ onMounted(load)
           {{ message }}
         </div>
       </SAlert>
-      <FailureRulesTable
-        v-model="policy.retry_rules"
-        :account="false"
-        :disabled="disabled"
-      />
-      <FailureRulesTable
-        v-model="policy.account_rules"
-        :account="true"
-        :disabled="disabled"
-      />
+      <SSettingsGroup
+        :title="t('failurePolicy.retryEnabled')"
+        :description="t('failurePolicy.retrySectionHint')"
+        data-testid="retry-settings"
+      >
+        <div class="py-3">
+          <SHint>{{ t('failurePolicy.budget', { count: policy.retry_enabled ? 1 + Number(policy.max_retries) : 1 }) }}</SHint>
+        </div>
+        <FailurePolicyControls
+          v-model="policy"
+          :disabled="disabled"
+          :errors="errors"
+        />
+        <div class="py-4">
+          <FailureRulesTable
+            v-model="policy.retry_rules"
+            :account="false"
+            :disabled="disabled"
+          />
+        </div>
+      </SSettingsGroup>
+      <SSettingsGroup
+        :title="t('failurePolicy.disableSection')"
+        :description="t('failurePolicy.accountHint')"
+        data-testid="disable-settings"
+      >
+        <SSettingRow :label="t('failurePolicy.accountEnabled')">
+          <SSwitch
+            v-model="policy.account_enabled"
+            :disabled="disabled"
+            :aria-label="t('failurePolicy.accountEnabled')"
+          />
+        </SSettingRow>
+        <div class="py-4">
+          <FailureRulesTable
+            v-model="policy.account_rules"
+            :account="true"
+            :disabled="disabled"
+          />
+        </div>
+      </SSettingsGroup>
       <FailurePolicyPreview :policy="policy" />
       <SDisclosure :label="t('failurePolicy.history')">
         <SStack

@@ -132,11 +132,11 @@ describe('core failure policy settings', () => {
   it('discards nested edits without corrupting the saved policy', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
-    wrapper.findAllComponents(SSwitch).at(-1)!.vm.$emit('update:modelValue', false)
+    wrapper.get('[data-testid="retry-rules"]').findComponent(SSwitch).vm.$emit('update:modelValue', false)
     await flushPromises()
     await wrapper.get('[data-testid="settings-reset"]').trigger('click')
     await flushPromises()
-    expect(wrapper.findAllComponents(SSwitch).at(-1)!.props('modelValue')).toBe(true)
+    expect(wrapper.get('[data-testid="retry-rules"]').findComponent(SSwitch).props('modelValue')).toBe(true)
     expect(wrapper.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
   })
 

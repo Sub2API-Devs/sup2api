@@ -90,14 +90,4 @@ const numbers = [
       :aria-label="t('failurePolicy.retryAfter')"
     />
   </SSettingRow>
-  <SSettingRow
-    :label="t('failurePolicy.accountEnabled')"
-    :description="t('failurePolicy.accountHint')"
-  >
-    <SSwitch
-      v-model="policy.account_enabled"
-      :disabled="disabled"
-      :aria-label="t('failurePolicy.accountEnabled')"
-    />
-  </SSettingRow>
 </template>
