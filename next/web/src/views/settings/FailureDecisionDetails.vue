@@ -46,7 +46,7 @@ function ruleName(id?: string) {
       {{ label('actions', decision.account_action) }}
     </SDescItem>
     <SDescItem
-      v-if="decision.egress"
+      v-if="decision.egress && (!policy || policy.schema_version < 3)"
       :label="t('failurePolicy.egress')"
     >
       {{ label('egresses', decision.egress) }}

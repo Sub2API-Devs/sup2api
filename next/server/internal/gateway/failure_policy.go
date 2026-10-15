@@ -47,6 +47,9 @@ func (p *FailurePolicy) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	for _, key := range []string{"max_retries", "retries_per_account", "backoff_ms", "max_wait_ms"} {
+		if value.SchemaVersion >= 3 && (key == "max_wait_ms" || key == "retries_per_account" && !value.SwitchAccount) {
+			continue
+		}
 		if bytes.Equal(bytes.TrimSpace(fields[key]), []byte("null")) {
 			return fmt.Errorf("%s must be an integer, not null", key)
 		}
@@ -99,8 +102,8 @@ type FailureDecision struct {
 }
 
 func defaultFailurePolicy() FailurePolicy {
-	return FailurePolicy{SchemaVersion: 2, MaxRetries: 2, SwitchAccount: true, ResetSticky: true, Egress: "same_proxy", BackoffMS: 200, MaxWaitMS: 5000,
-		RespectRetryAfter: true, RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
+	return FailurePolicy{SchemaVersion: 3, MaxRetries: 2, SwitchAccount: true, ResetSticky: true, Egress: "account_configured", BackoffMS: 200,
+		RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
 }
 
 // migrationDraft is a visible starting point, not an executable replacement

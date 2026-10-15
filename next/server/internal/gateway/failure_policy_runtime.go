@@ -333,12 +333,12 @@ func (c *call) waitForRetry(ctx context.Context, attempts int) string {
 		delay = 30 * time.Second
 	}
 	delay = time.Duration(float64(delay) * (0.5 + c.g.randFloat()*0.5))
-	if c.failurePolicy.RespectRetryAfter {
+	if c.failurePolicy.SchemaVersion < 3 && c.failurePolicy.RespectRetryAfter {
 		if after, ok := retryAfterDuration(s.retryAfter, c.g.now()); ok && after > delay {
 			delay = after
 		}
 	}
-	if s.waited+delay > time.Duration(c.failurePolicy.MaxWaitMS)*time.Millisecond {
+	if c.failurePolicy.SchemaVersion < 3 && s.waited+delay > time.Duration(c.failurePolicy.MaxWaitMS)*time.Millisecond {
 		return "wait_budget"
 	}
 	if deadline, ok := ctx.Deadline(); ok && time.Now().Add(delay).After(deadline) {

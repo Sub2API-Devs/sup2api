@@ -1,93 +1,42 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SDropdown, SHint, SSectionTitle, SSwitch, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SDisclosure, SHint, SSectionTitle, STable, createItemId, type TableColumn } from '@sub2api/ui'
 import FailureRuleModal from './FailureRuleModal.vue'
 import FailureRuleDetails from './FailureRuleDetails.vue'
 import type { FailureRule } from './failurePolicy'
-
 const rules = defineModel<FailureRule[]>({ required: true })
 const props = defineProps<{ account: boolean; disabled: boolean }>()
 const { t } = useI18n()
 const open = ref(false)
 const editing = ref<FailureRule | null>(null)
-const dragging = ref<string | null>(null)
 const columns = computed<TableColumn[]>(() => [
-  { key: 'order', label: t('failurePolicy.order'), width: '70px' },
-  { key: 'name', label: t('failurePolicy.name') },
-  { key: 'enabled', label: t('common.enabled'), width: '80px' },
-  { key: 'match', label: t('failurePolicy.conditions') },
-  { key: 'action', label: t('failurePolicy.action') },
-  { key: 'actions', label: '', width: '60px' }
+  { key: 'name', label: t('failurePolicy.name'), width: '170px' },
+  { key: 'codes', label: t('failurePolicy.codesShort'), width: '150px' },
+  { key: 'keywords', label: t('failurePolicy.keywordsShort'), class: 'max-w-sm break-words' },
+  ...(props.disabled ? [] : [{ key: 'actions', label: t('common.actions'), width: '190px' }])
 ])
-const indexOf = (rule: FailureRule) => rules.value.findIndex(r => r.id === rule.id)
-function move(from: number, to: number) {
-  if (props.disabled || from < 0 || to < 0 || to >= rules.value.length || from === to) return
-  const next = [...rules.value]
-  const [rule] = next.splice(from, 1)
-  if (rule) next.splice(to, 0, rule)
-  rules.value = next
-}
-function rowAttrs(rule: FailureRule) {
-  return {
-    draggable: !props.disabled,
-    onDragstart: () => {
-      dragging.value = rule.id
-    },
-    onDragend: () => {
-      dragging.value = null
-    },
-    onDragover: (event: DragEvent) => {
-      if (dragging.value) event.preventDefault()
-    },
-    onDrop: (event: DragEvent) => {
-      event.preventDefault()
-      move(
-        rules.value.findIndex(r => r.id === dragging.value),
-        indexOf(rule)
-      )
-      dragging.value = null
-    }
-  }
-}
-function actions(rule: FailureRule): MenuAction[] {
-  return [
-    { key: 'edit', label: t('common.edit') },
-    { key: 'copy', label: t('common.copy'), disabled: rules.value.length >= 100 },
-    { key: 'up', label: t('failurePolicy.up'), disabled: indexOf(rule) === 0 },
-    { key: 'down', label: t('failurePolicy.down'), disabled: indexOf(rule) === rules.value.length - 1 },
-    { key: 'remove', label: t('common.delete'), danger: true }
-  ]
-}
-function select(rule: FailureRule, action: string) {
+function edit(rule: FailureRule | null, copy = false) {
   if (props.disabled) return
-  if (action === 'up' || action === 'down') return move(indexOf(rule), indexOf(rule) + (action === 'up' ? -1 : 1))
-  if (action === 'remove') {
-    rules.value = rules.value.filter(r => r.id !== rule.id)
-    return
-  }
-  editing.value = action === 'copy' ? { ...rule, id: crypto.randomUUID(), name: t('failurePolicy.copyName', { name: rule.name }) } : rule
+  editing.value =
+    copy && rule
+      ? { ...JSON.parse(JSON.stringify(rule)), id: createItemId(), name: t('failurePolicy.copyName', { name: rule.name }) }
+      : rule
   open.value = true
 }
-function add() {
-  editing.value = null
-  open.value = true
+function remove(rule: FailureRule) {
+  if (!props.disabled) rules.value = rules.value.filter(r => r.id !== rule.id)
+}
+function reorder(rows: FailureRule[]) {
+  if (!props.disabled) rules.value = rows
 }
 function save(rule: FailureRule) {
   if (props.disabled) return
   const exists = rules.value.some(r => r.id === rule.id)
   rules.value = exists ? rules.value.map(r => (r.id === rule.id ? rule : r)) : [...rules.value, rule]
 }
-function condition(rule: FailureRule) {
-  const keywords = (rule.match.keywords || []).filter(k => k.trim()).join(', ')
-  const parts = [rule.match.status_codes, keywords].filter(Boolean)
-  return (
-    parts.join(rule.match.mode === 'all' ? ' AND ' : ' OR ') ||
-    t(rule.match.source === 'transport' ? 'failurePolicy.anyTransport' : 'failurePolicy.incomplete')
-  )
-}
+const keywords = (rule: FailureRule) => (rule.match.keywords || []).filter(k => k.trim())
 </script>
-
 <template>
   <section :data-testid="account ? 'account-rules' : 'retry-rules'">
     <SSectionTitle :title="t(account ? 'failurePolicy.account_rules' : 'failurePolicy.retry_rules')">
@@ -95,10 +44,14 @@ function condition(rule: FailureRule) {
         <SButton
           v-if="!disabled"
           icon="plus"
+          size="sm"
           :disabled="rules.length >= 100"
-          @click="add"
+          data-testid="add-rule"
+          @click="edit(null)"
         >
-          {{ t('failurePolicy.add') }}
+          {{
+            t('failurePolicy.add')
+          }}
         </SButton>
       </template>
     </SSectionTitle>
@@ -106,50 +59,100 @@ function condition(rule: FailureRule) {
       {{ t('failurePolicy.orderHint') }}
     </SHint>
     <STable
-      card
-      expandable
       :columns="columns"
       :rows="rules"
-      :row-attrs="rowAttrs"
+      :reorderable="!disabled"
+      :reorder-disabled="disabled"
       :empty-text="t('failurePolicy.empty')"
+      @update:rows="reorder"
     >
-      <template #expand="{ row }">
-        <FailureRuleDetails
-          :rule="row"
-          :account="account"
-        />
-      </template>
-      <template #cell-order="{ row }">
-        {{ indexOf(row) + 1 }}
-      </template>
-      <template #cell-enabled="{ row }">
-        <SSwitch
-          v-model="row.enabled"
-          :disabled="disabled"
-          :aria-label="t('common.enabled') + ' · ' + row.name"
-        />
-      </template>
-      <template #cell-match="{ row }">
-        <div>{{ condition(row) }}</div>
+      <template #cell-name="{ row }">
+        <div>{{ row.name }}</div>
         <SHint size="xs">
           {{ t(`failurePolicy.sources.${row.match.source}`) }}
         </SHint>
+        <SDisclosure :label="t('failurePolicy.scopeDetails')">
+          <FailureRuleDetails :rule="row" />
+        </SDisclosure>
       </template>
-      <template #cell-action="{ row }">
-        <div>{{ t(!account && row.action === 'retry' ? 'failurePolicy.sharedRetry' : `failurePolicy.actions.${row.action}`) }}</div>
+      <template #cell-codes="{ row }">
+        <div class="flex flex-wrap gap-1">
+          <SBadge
+            v-for="code in row.match.status_codes.split(',').filter(Boolean)"
+            :key="code"
+            tone="gray"
+            size="xs"
+          >
+            {{ code }}
+          </SBadge><SHint v-if="!row.match.status_codes">
+            —
+          </SHint>
+        </div>
+      </template>
+      <template #cell-keywords="{ row }">
+        <div
+          v-for="(keyword, index) in keywords(row).slice(0, 2)"
+          :key="index"
+          class="break-words"
+        >
+          {{ keyword }}
+        </div>
+        <SHint v-if="!keywords(row).length">
+          —
+        </SHint>
+        <SDisclosure
+          v-if="keywords(row).length > 2"
+          :label="t('failurePolicy.moreKeywords', { count: keywords(row).length - 2 })"
+        >
+          <div
+            v-for="(keyword, index) in keywords(row).slice(2)"
+            :key="index"
+            class="break-words"
+          >
+            {{ keyword }}
+          </div>
+        </SDisclosure>
       </template>
       <template #cell-actions="{ row }">
-        <SDropdown
-          v-if="!disabled"
-          :actions="actions(row)"
-          @select="select(row, $event)"
-        />
+        <div class="flex items-center gap-1">
+          <SButton
+            variant="ghost"
+            size="sm"
+            data-testid="edit-rule"
+            @click.stop="edit(row)"
+          >
+            {{ t('common.edit') }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="sm"
+            :disabled="rules.length >= 100"
+            data-testid="copy-rule"
+            @click.stop="edit(row, true)"
+          >
+            {{
+              t('common.copy')
+            }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="sm"
+            tone="danger"
+            data-testid="remove-rule"
+            @click.stop="remove(row)"
+          >
+            {{
+              t('common.delete')
+            }}
+          </SButton>
+        </div>
       </template>
     </STable>
     <FailureRuleModal
       v-model:open="open"
       :rule="editing"
       :account="account"
+      :disabled="disabled"
       @save="save"
     />
   </section>

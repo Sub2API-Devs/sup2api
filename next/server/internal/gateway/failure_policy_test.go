@@ -21,6 +21,7 @@ import (
 func testFailurePolicy() FailurePolicy {
 	p := defaultFailurePolicy()
 	p.SchemaVersion = 1 // Legacy per-rule plans remain supported until explicitly migrated.
+	p.Egress, p.MaxWaitMS, p.RespectRetryAfter = "same_proxy", 5000, true
 	p.Revision, p.RetryEnabled, p.BackoffMS, p.RespectRetryAfter = 1, true, 0, false
 	p.RetryRules = []FailureRule{{ID: "retry", Name: "Retry HTTP", Enabled: true,
 		Match: FailureMatch{Source: "upstream", StatusCodes: "429,500-599"}, Action: failureReset, Egress: "same_proxy"}}

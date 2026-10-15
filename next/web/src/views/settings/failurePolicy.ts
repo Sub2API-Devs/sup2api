@@ -1,3 +1,5 @@
+import { createItemId } from '@sub2api/ui'
+
 export interface FailureMatch {
   source: 'upstream' | 'transport' | 'core'
   status_codes: string
@@ -50,11 +52,8 @@ export function policyFormErrors(form: FailurePolicyForm, message: string): Reco
   const check = (key: string, value: unknown) => {
     if (typeof value !== 'number' || !Number.isInteger(value)) errors[key] = message
   }
-  for (const key of ['max_retries', 'backoff_ms', 'max_wait_ms'] as const) check(key, form[key])
+  for (const key of ['max_retries', 'backoff_ms'] as const) check(key, form[key])
   if (form.schema_version >= 2 && form.switch_account) check('retries_per_account', form.retries_per_account)
-  form.account_rules.forEach((rule, i) => {
-    if (rule.action === 'cooldown') check(`account_rules.${i}.cooldown_seconds`, rule.cooldown_seconds)
-  })
   return errors
 }
 export interface FailureDecision {
@@ -76,17 +75,17 @@ export interface FailurePreview {
 }
 export function emptyFailurePolicy(): FailurePolicy {
   return {
-    schema_version: 2,
+    schema_version: 3,
     revision: 0,
     retry_enabled: false,
     max_retries: 2,
     retries_per_account: 0,
     switch_account: true,
     reset_sticky: true,
-    egress: 'same_proxy',
+    egress: 'account_configured',
     backoff_ms: 200,
-    max_wait_ms: 5000,
-    respect_retry_after: true,
+    max_wait_ms: 0,
+    respect_retry_after: false,
     account_enabled: false,
     retry_rules: [],
     account_rules: []
@@ -94,26 +93,31 @@ export function emptyFailurePolicy(): FailurePolicy {
 }
 export function newFailureRule(name: string, account: boolean): FailureRule {
   return {
-    id: crypto.randomUUID(),
+    id: createItemId(),
     name,
     enabled: true,
-    match: { source: 'upstream', status_codes: '', keywords: [], mode: 'all', groups: [], models: [], protocols: [] },
-    action: account ? 'none' : 'retry',
-    same_account_retries: 1,
-    exhausted_action: 'return',
-    egress: 'same_proxy',
-    cooldown_seconds: 60
+    match: { source: 'upstream', status_codes: '', keywords: [], mode: 'any', groups: [], models: [], protocols: [] },
+    action: account ? 'disable' : 'retry',
+    same_account_retries: 0,
+    exhausted_action: '',
+    egress: '',
+    cooldown_seconds: 0
   }
 }
 export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
   const p: T = JSON.parse(JSON.stringify(policy))
-  if (p.schema_version >= 2) {
+  if (p.schema_version >= 3) {
     p.reset_sticky = true
-    const count = p.retries_per_account
-    if (!p.switch_account && (count === null || !Number.isInteger(count) || count < 0 || count > 9)) p.retries_per_account = 0
+    p.egress = 'account_configured'
+    p.respect_retry_after = false
+    p.max_wait_ms = 0
+    if (!p.switch_account) p.retries_per_account = 0
+    p.retry_rules.forEach(r => fixedRule(r, false))
+    p.account_rules.forEach(r => fixedRule(r, true))
   }
   for (const r of [...p.retry_rules, ...p.account_rules]) {
-    r.match.keywords = (r.match.keywords || []).map(k => k.trim()).filter(Boolean)
+    r.match.keywords = [...new Set((r.match.keywords || []).map(k => k.trim()).filter(Boolean))]
+    r.match.status_codes = normalizeStatusCodes(r.match.status_codes)
     r.match.groups ||= []
     r.match.models ||= []
     r.match.protocols ||= []
@@ -122,24 +126,58 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
 }
 
 export function needsPolicyMigration(policy: FailurePolicy): boolean {
-  return policy.schema_version < 2 || (policy.switch_account && !policy.reset_sticky)
+  return policy.schema_version < 3
 }
 
 // This is an editable migration draft; the server keeps executing v1 until publish.
 export function editablePolicy(policy: FailurePolicy): FailurePolicyForm {
   const p = normalizedPolicy(policy)
-  if (p.schema_version >= 2) return p
+  if (p.schema_version >= 3) return p
   const rule = p.retry_rules.find(r => r.enabled && r.action !== 'return')
   const exhausted = rule?.action === 'retry' ? rule.exhausted_action : rule?.action
-  p.schema_version = 2
-  p.retries_per_account = rule?.action === 'retry' ? rule.same_account_retries : 0
-  p.switch_account = exhausted !== 'return'
-  p.reset_sticky = true
-  p.egress = rule?.egress || 'same_proxy'
-  for (const r of p.retry_rules) {
-    if (r.action !== 'return') r.action = 'retry'
+  if (p.schema_version === 1) {
+    p.retries_per_account = rule?.action === 'retry' ? rule.same_account_retries : 0
+    p.switch_account = exhausted !== 'return'
   }
-  return p
+  p.schema_version = 3
+  p.retry_rules = p.retry_rules.filter(r => r.enabled && r.action !== 'return')
+  p.account_rules = p.account_rules.filter(r => r.enabled && r.action !== 'none')
+  return normalizedPolicy(p)
+}
+
+function fixedRule(rule: FailureRule, account: boolean) {
+  rule.enabled = true
+  rule.action = account ? 'disable' : 'retry'
+  rule.same_account_retries = 0
+  rule.exhausted_action = ''
+  rule.egress = ''
+  rule.cooldown_seconds = 0
+}
+
+export function normalizeStatusCodes(value: string): string {
+  return value
+    .replace(/[，；;\r\n]/g, ',')
+    .split(',')
+    .map(code => code.trim())
+    .filter(Boolean)
+    .join(',')
+}
+
+export function ruleFormErrors(rule: FailureRule, message: string): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!rule.name.trim()) errors.name = message
+  const codes = normalizeStatusCodes(rule.match.status_codes).split(',').filter(Boolean)
+  if (
+    codes.some(code => {
+      if (!/^\d{3}(\s*-\s*\d{3})?$/.test(code)) return true
+      const [lo = 0, hi = lo] = code.split('-').map(Number)
+      return lo < 400 || hi > 599 || lo > hi
+    })
+  )
+    errors.status_codes = message
+  if (!codes.length && !rule.match.keywords.some(k => k.trim()) && rule.match.source !== 'transport') errors.conditions = message
+  if (rule.match.groups.some(id => !Number.isInteger(id) || id <= 0)) errors.groups = message
+  return errors
 }
 
 export function retryAccountSequence(policy: FailurePolicyForm): string[] {

@@ -14,6 +14,7 @@ type policyValidation struct {
 	ctx     context.Context
 	errors  []core.FieldError
 	unified bool
+	simple  bool
 }
 
 func (v *policyValidation) add(field, en, zh string) {
@@ -28,11 +29,18 @@ func (v *policyValidation) number(field string, n, lo, hi int) {
 	}
 }
 func (p *FailurePolicy) validate(ctx context.Context) []core.FieldError {
-	v := &policyValidation{ctx: ctx, unified: p.SchemaVersion >= 2}
-	if p.SchemaVersion != 1 && p.SchemaVersion != 2 {
+	v := &policyValidation{ctx: ctx, unified: p.SchemaVersion >= 2, simple: p.SchemaVersion >= 3}
+	if p.SchemaVersion < 1 || p.SchemaVersion > 3 {
 		v.add("schema_version", "unsupported policy version", "不支持的策略版本")
 	}
 	v.number("max_retries", p.MaxRetries, 0, 9)
+	if v.simple {
+		// Removed controls have fixed semantics in v3, not hidden legacy values.
+		p.ResetSticky, p.Egress, p.RespectRetryAfter, p.MaxWaitMS = true, "account_configured", false, 0
+		if !p.SwitchAccount {
+			p.RetriesPerAccount = 0
+		}
+	}
 	if v.unified {
 		v.number("retries_per_account", p.RetriesPerAccount, 0, 9)
 		v.egress("egress", &p.Egress)
@@ -63,6 +71,14 @@ func (v *policyValidation) rules(name string, rules *[]FailureRule, account bool
 			v.add(base+"name", "name must be 1-100 characters", "名称为 1–100 个字符")
 		}
 		v.match(base+"match", &r.Match)
+		if v.simple {
+			r.Enabled, r.Action = true, failureRetry
+			if account {
+				r.Action = "disable"
+			}
+			r.SameAccountRetries, r.ExhaustedAction, r.Egress, r.CooldownSeconds = 0, "", "", 0
+			continue
+		}
 		if account {
 			v.accountAction(base, r)
 		} else {
@@ -79,6 +95,9 @@ func (v *policyValidation) match(base string, m *FailureMatch) {
 	}
 	if m.Mode != "all" && m.Mode != "any" {
 		v.add(base+".mode", "select AND or OR", "请选择 AND 或 OR")
+	}
+	if v.simple {
+		m.StatusCodes = strings.NewReplacer("，", ",", "；", ",", ";", ",", "\n", ",", "\r", ",").Replace(m.StatusCodes)
 	}
 	rs, err := parseStatusRanges(m.StatusCodes)
 	if err != nil {
