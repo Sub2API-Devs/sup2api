@@ -12,6 +12,8 @@ import { ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
 import { useDialog } from './overlay'
+import { resetTitleContext } from './titleContext'
+resetTitleContext()
 
 const props = withDefaults(
   defineProps<{

@@ -8,6 +8,7 @@ import { computed, useId } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import SIcon from './SIcon.vue'
 import { useOpenState } from './controlled'
+import { useTitleVisibility } from './titleContext'
 
 const props = withDefaults(
   defineProps<{ title?: string; description?: string; collapsible?: boolean; open?: boolean; defaultOpen?: boolean }>(),
@@ -17,12 +18,13 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const state = useOpenState(props, emit)
 const isOpen = computed(() => !props.collapsible || state.isOpen.value)
 const bodyId = useId()
+const showTitle = useTitleVisibility(() => props.title, () => !!props.collapsible)
 </script>
 
 <template>
   <section class="card">
     <header
-      v-if="title || $slots.title || $slots.actions"
+      v-if="(showTitle && title) || $slots.title || description || $slots.details || $slots.actions"
       class="flex items-start justify-between gap-3 rounded-t-card border-line bg-surface-2/60 px-4 py-3"
       :class="isOpen ? 'border-b' : 'rounded-b-card'"
     >
@@ -35,15 +37,53 @@ const bodyId = useId()
           :aria-controls="bodyId"
           @click="state.toggle"
         >
-          <SIcon name="chevron-right" class="h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-150" :class="isOpen ? 'rotate-90' : ''" />
-          <slot name="title"><h5 class="text-sm font-semibold text-fg">{{ title }}</h5></slot>
+          <SIcon
+            name="chevron-right"
+            class="h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-150"
+            :class="isOpen ? 'rotate-90' : ''"
+          />
+          <slot name="title">
+            <h5 class="text-sm font-semibold text-fg">
+              {{ title }}
+            </h5>
+          </slot>
         </button>
-        <slot v-else name="title"><h5 class="text-sm font-semibold text-fg">{{ title }}</h5></slot>
-        <p v-if="description" class="mt-0.5 max-w-3xl text-xs leading-5 text-fg-muted" :class="collapsible ? 'pl-6' : ''">{{ description }}</p>
-        <SDisclosure v-if="$slots.details" class="mt-1" :class="collapsible ? 'pl-6' : ''"><slot name="details" /></SDisclosure>
+        <slot
+          v-else
+          name="title"
+        >
+          <h5
+            v-if="showTitle && title"
+            class="text-sm font-semibold text-fg"
+          >
+            {{ title }}
+          </h5>
+        </slot>
+        <p
+          v-if="description"
+          class="mt-0.5 max-w-3xl text-xs leading-5 text-fg-muted"
+          :class="collapsible ? 'pl-6' : ''"
+        >
+          {{ description }}
+        </p>
+        <SDisclosure
+          v-if="$slots.details"
+          class="mt-1"
+          :class="collapsible ? 'pl-6' : ''"
+        >
+          <slot name="details" />
+        </SDisclosure>
       </div>
-      <div class="flex shrink-0 items-center gap-2"><slot name="actions" /></div>
+      <div class="flex shrink-0 items-center gap-2">
+        <slot name="actions" />
+      </div>
     </header>
-    <div v-if="isOpen" :id="bodyId" class="divide-y divide-line px-4"><slot /></div>
+    <div
+      v-if="isOpen"
+      :id="bodyId"
+      class="divide-y divide-line px-4"
+    >
+      <slot />
+    </div>
   </section>
 </template>

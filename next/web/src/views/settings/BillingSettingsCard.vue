@@ -41,7 +41,7 @@ onMounted(load)
 
 <template>
   <SSettingsGroup :title="t('settings.billing.title')" data-testid="billing-settings">
-    <template #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
+    <template v-if="canManage" #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
     <SSpinner v-if="loading && !isLoaded" block />
     <template v-else>
       <SSettingRow :label="t('settings.billing.missingPolicy')" :description="t(`settings.billing.policyHint.${form.missing_price_policy}`)">

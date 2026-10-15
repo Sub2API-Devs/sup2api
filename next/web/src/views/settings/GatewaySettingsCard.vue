@@ -52,7 +52,7 @@ onMounted(load)
 
 <template>
   <SSettingsGroup :title="t('settings.gateway.title')" :description="t('settings.gateway.subtitle')" data-testid="gateway-settings">
-    <template #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
+    <template v-if="canManage" #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
     <SSpinner v-if="loading && !isLoaded" block />
     <template v-else>
       <SSettingRow v-for="f in fields" :key="f.key" :label="t(`settings.gateway.fields.${f.key}`)" :description="description(f.key)" :error="errors[f.key]">

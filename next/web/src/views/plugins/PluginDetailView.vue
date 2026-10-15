@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabLayout, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -277,18 +277,20 @@ onMounted(load)
         </template>
       </SAlert>
 
-      <STabs v-model="tab" :tabs="tabs" class="mb-4" />
+      <STabLayout v-model="tab" :tabs="tabs">
 
-      <OverviewTab v-if="tab === 'overview'" :detail="detail" />
-      <GrantsTab v-else-if="tab === 'grants'" :detail="detail" @changed="load" />
-      <NodesTab v-else-if="tab === 'nodes'" :detail="detail" />
-      <HooksTab v-else-if="tab === 'hooks'" :detail="detail" />
-      <JobsTab v-else-if="tab === 'jobs'" :detail="detail" />
-      <EventsTab v-else-if="tab === 'events'" :detail="detail" />
-      <EgressTab v-else-if="tab === 'egress'" :detail="detail" @changed="load" />
-      <ResourcesTab v-else-if="tab === 'resources'" :detail="detail" @changed="load" />
-      <CCGatewaySettings v-else-if="tab === 'settings' && isCCGatewaySettings" embedded />
-      <SettingsTab v-else-if="tab === 'settings' && settings" :plugin-key="detail.key" :settings="settings" @saved="loadSettings" />
+        <OverviewTab v-if="tab === 'overview'" :detail="detail" />
+        <GrantsTab v-else-if="tab === 'grants'" :detail="detail" @changed="load" />
+        <NodesTab v-else-if="tab === 'nodes'" :detail="detail" />
+        <HooksTab v-else-if="tab === 'hooks'" :detail="detail" />
+        <JobsTab v-else-if="tab === 'jobs'" :detail="detail" />
+        <EventsTab v-else-if="tab === 'events'" :detail="detail" />
+        <EgressTab v-else-if="tab === 'egress'" :detail="detail" @changed="load" />
+        <ResourcesTab v-else-if="tab === 'resources'" :detail="detail" @changed="load" />
+        <CCGatewaySettings v-else-if="tab === 'settings' && isCCGatewaySettings" embedded />
+        <SettingsTab v-else-if="tab === 'settings' && settings" :plugin-key="detail.key" :settings="settings" @saved="loadSettings" />
+
+      </STabLayout>
 
       <UninstallModal v-model:open="uninstallOpen" :plugin-key="detail.key" :name="name" @done="onUninstalled" />
 

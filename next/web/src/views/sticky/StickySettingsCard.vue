@@ -34,7 +34,7 @@ onMounted(load)
 
 <template>
   <SSettingsGroup :title="t('sticky.settings.title')" data-testid="sticky-settings">
-    <template #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
+    <template v-if="canManage" #actions><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" /></template>
     <SSpinner v-if="loading && !isLoaded" block />
     <template v-else>
       <SSettingRow :label="t('sticky.settings.enabled')" :description="t('sticky.settings.enabledHint')">

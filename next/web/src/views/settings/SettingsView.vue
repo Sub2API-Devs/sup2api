@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { SPageHeader, STabs } from '@sub2api/ui'
+import { SPageHeader, STabLayout } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import StickyView from '@/views/sticky/StickyView.vue'
 import BillingSettingsCard from './BillingSettingsCard.vue'
@@ -32,15 +32,23 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
 
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="t('settings.title')" :description="t('settings.description')" />
-    <STabs v-if="tabs.length > 1" :model-value="active ?? ''" :tabs="tabs" @update:model-value="tab = $event" />
-    <BillingSettingsCard v-if="active === 'billing'" />
-    <template v-else-if="active === 'gateway'">
-      <GatewaySettingsCard />
-    </template>
-    <FailurePolicySettings v-else-if="active === 'failure'" />
-    <StickyView v-else-if="active === 'sticky'" />
-    <OffloadSettingsCard v-else-if="active === 'offload'" />
-    <UpdateSourceCard v-else-if="active === 'updates'" />
+    <SPageHeader
+      :title="t('settings.title')"
+      :description="t('settings.description')"
+    />
+    <STabLayout
+      :model-value="active ?? ''"
+      :tabs="tabs"
+      @update:model-value="tab = $event"
+    >
+      <BillingSettingsCard v-if="active === 'billing'" />
+      <template v-else-if="active === 'gateway'">
+        <GatewaySettingsCard />
+      </template>
+      <FailurePolicySettings v-else-if="active === 'failure'" />
+      <StickyView v-else-if="active === 'sticky'" />
+      <OffloadSettingsCard v-else-if="active === 'offload'" />
+      <UpdateSourceCard v-else-if="active === 'updates'" />
+    </STabLayout>
   </div>
 </template>
