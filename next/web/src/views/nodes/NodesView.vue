@@ -121,6 +121,9 @@ function dotTone(tone: Tone): StatusTone {
   return tone === 'success' || tone === 'warning' || tone === 'danger' ? tone : 'neutral'
 }
 
+/** Plugin badges per node, built once per load. */
+const badges = computed(() => new Map(nodes.value.map((n) => [n.boot_id, pluginBadges(n)])))
+
 // ------------------------------------------------------------------ table
 
 const columns = computed<TableColumn[]>(() => [
@@ -133,9 +136,7 @@ const columns = computed<TableColumn[]>(() => [
 ])
 
 const healthy = computed(() => nodes.value.filter((n) => !isStale(n)).length)
-const pluginIssues = computed(
-  () => nodes.value.reduce((acc, n) => acc + pluginBadges(n).filter((p) => p.tone === 'danger' || p.tone === 'warning').length, 0)
-)
+const pluginIssues = computed(() => [...badges.value.values()].flat().filter((p) => p.tone === 'danger' || p.tone === 'warning').length)
 const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).size)
 </script>
 
@@ -143,9 +144,11 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
   <div>
     <SPageHeader :title="t('nodes.title')" :description="t('nodes.description')">
       <template #actions>
-        <SStatusDot tone="success" pulse class="!text-xs !text-fg-muted">
-          {{ t('nodes.autoRefresh') }}
-          <template v-if="lastLoaded">· <TimeText :value="lastLoaded" mode="relative" live /></template>
+        <SStatusDot tone="success" pulse size="xs">
+          <SHint inline size="xs">
+            {{ t('nodes.autoRefresh') }}
+            <template v-if="lastLoaded">· <TimeText :value="lastLoaded" mode="relative" live /></template>
+          </SHint>
         </SStatusDot>
         <SButton size="sm" icon="refresh" :loading="loading" @click="load(true)">{{ t('common.refresh') }}</SButton>
       </template>
@@ -176,12 +179,12 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
         <TimeText :value="row.started_at" mode="relative" live />
       </template>
       <template #cell-last_heartbeat="{ row }">
-        <TimeText :value="row.last_heartbeat" mode="relative" live :muted="false" :class="isStale(row) ? 'font-medium text-red-600 dark:text-red-400' : 'text-fg'" />
+        <TimeText :value="row.last_heartbeat" mode="relative" live :muted="false" :class="isStale(row) ? 'font-medium text-danger-600 dark:text-danger-400' : 'text-fg'" />
         <SBadge v-if="isStale(row)" tone="danger" class="ml-2">{{ t('nodes.stale') }}</SBadge>
       </template>
       <template #cell-plugins="{ row }">
         <div class="flex flex-wrap gap-1.5">
-          <SChip v-for="p in pluginBadges(row)" :key="p.key" :title="p.detail" data-testid="node-plugin">
+          <SChip v-for="p in badges.get(row.boot_id)" :key="p.key" :title="p.detail" data-testid="node-plugin">
             <span class="inline-flex items-center gap-1.5">
               <SStatusDot :tone="dotTone(p.tone)" :label="p.state" sr-only />
               <span>{{ p.key }}</span>
@@ -190,7 +193,7 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
               <SBadge v-if="p.fallback" tone="warning">{{ t('observe.fallback') }}</SBadge>
             </span>
           </SChip>
-          <SHint v-if="!pluginBadges(row).length" inline>—</SHint>
+          <SHint v-if="!badges.get(row.boot_id)?.length" inline>—</SHint>
         </div>
       </template>
     </STable>

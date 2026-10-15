@@ -2,8 +2,9 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { Group } from '@/api/types'
+import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
@@ -124,10 +125,7 @@ const visibilityOptions = computed(() => [
   { value: 'public', label: t('groups.public') },
   { value: 'restricted', label: t('groups.restricted') }
 ])
-const statusOptions = computed(() => [
-  { value: 'active', label: t('common.status_.active') },
-  { value: 'disabled', label: t('common.status_.disabled') }
-])
+const statusOptions = useStatusOptions()
 
 function openCreate() {
   loadModels(null)
@@ -189,30 +187,13 @@ async function submit() {
   }
 }
 
-// ------------------------------------------------------------------ delete
+// ------------------------------------------------------------------ row menu
 
-async function onAction(g: Group, key: string) {
-  if (key === 'toggle') {
-    try {
-      await api.patch(`/groups/${g.id}`, { status: g.status === 'active' ? 'disabled' : 'active' })
-      toast(t('common.updated'), 'success')
-      changed()
-    } catch (e) {
-      notifyError(e)
-    }
-    return
-  }
+function onAction(g: Group, key: string) {
+  if (key === 'toggle') return toggleStatus(`/groups/${g.id}`, g.status, changed)
   if (key !== 'delete') return
   const extra = g.account_count || keyCount(g) ? ' ' + t('groups.deleteInUse', { a: g.account_count ?? 0, k: keyCount(g) ?? 0 }) : ''
-  const ok = await confirm({ title: t('common.delete'), message: t('common.confirmDelete', { name: g.name }) + extra, danger: true })
-  if (!ok) return
-  try {
-    await api.del(`/groups/${g.id}`)
-    toast(t('common.deleted'), 'success')
-    changed()
-  } catch (e) {
-    notifyError(e)
-  }
+  return deleteWithConfirm(`/groups/${g.id}`, t('common.confirmDelete', { name: g.name }) + extra, changed)
 }
 </script>
 
@@ -233,7 +214,7 @@ async function onAction(g: Group, key: string) {
         <GroupPlatforms :group="row" />
       </template>
       <template #cell-visibility="{ row }">
-        <SBadge :tone="row.visibility === 'public' ? 'primary' : 'purple'">
+        <SBadge :tone="row.visibility === 'public' ? 'primary' : 'accent'">
           {{ row.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}
         </SBadge>
       </template>
@@ -318,10 +299,8 @@ async function onAction(g: Group, key: string) {
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">
       <template v-if="detail">
         <SDescriptions data-testid="group-detail" dense>
-          <SDescItem :label="t('common.id')">{{ detail.id }}</SDescItem>
-          <template v-if="detail.description">
-            <SDescItem :label="t('common.description')">{{ detail.description }}</SDescItem>
-          </template>
+          <SDescItem :label="t('common.id')" :value="detail.id" />
+          <SDescItem v-if="detail.description" :label="t('common.description')" :value="detail.description" />
           <SDescItem :label="t('common.status')"><StatusBadge :status="detail.status" /></SDescItem>
           <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
           <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
@@ -329,9 +308,7 @@ async function onAction(g: Group, key: string) {
           <SDescItem :label="t('groups.accountCount')">{{ formatNumber(detail.account_count) }}</SDescItem>
           <SDescItem :label="t('groups.keyCount')">{{ formatNumber(keyCount(detail)) }}</SDescItem>
           <SDescItem :label="t('platforms.served')"><GroupPlatforms :group="detail" hint /></SDescItem>
-          <template v-if="detail.platforms?.length && detail.account_count !== 0">
-            <SDescItem :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" /></SDescItem>
-          </template>
+          <SDescItem v-if="detail.platforms?.length && detail.account_count !== 0" :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" /></SDescItem>
         </SDescriptions>
       </template>
       <template #footer>

@@ -2,7 +2,7 @@
 import { computed, onErrorCaptured, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
+import { SButton, SCard, SEmpty, SHint, SPageHeader, SSpinner } from '@sub2api/ui'
 import { usePluginStore, assetURL } from '@/stores/plugins'
 import { lt } from '@/i18n'
 import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
@@ -57,7 +57,7 @@ onErrorCaptured((err) => {
     <SCard v-else-if="crashed" data-testid="plugin-page-crashed">
       <SEmpty icon="warning" :text="t('pluginHost.crashed')">
         <SHint size="xs" tone="danger" class="max-w-xl break-words">{{ crashed }}</SHint>
-        <SButton size="sm" data-testid="plugin-page-retry" @click="retry"><SIcon name="refresh" class="h-4 w-4" />{{ t('pluginHost.retry') }}</SButton>
+        <SButton size="sm" data-testid="plugin-page-retry" icon="refresh" @click="retry">{{ t('pluginHost.retry') }}</SButton>
       </SEmpty>
     </SCard>
     <div v-else :key="attempt">

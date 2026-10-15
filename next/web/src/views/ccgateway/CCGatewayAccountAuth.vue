@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import CcgAuthHeader from './CcgAuthHeader.vue'
-import CredentialStatusNotice from './CredentialStatusNotice.vue'
-import { canAutoStartAuthorization } from './credentialStatus'
 // Claude authorization of a Claude Code (CCGateway) managed account on a draft
 // runtime, shown in the account editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5,
 // docs/CCGATEWAY-REAUTH.md). Same steps and state machine (./ccgAuthFlow) for
@@ -27,20 +24,25 @@ import { canAutoStartAuthorization } from './credentialStatus'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SButton, SCopyButton, SHint, SIcon, SInput, SLink, SSpinner, SSteps, toast } from '@sub2api/ui'
+import { SAlert, SButton, SCopyButton, SField, SHint, SIcon, SInput, SLink, SSteps, toast } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { CcgAuthSession, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
-import { isTrustedAuthorizationURL, sessionExpired } from './validation'
-import { useCcgError } from './ccgError'
+import BusyText from '@/components/BusyText.vue'
+import CcgAuthHeader from './CcgAuthHeader.vue'
+import CcgBlockedAlert from './CcgBlockedAlert.vue'
+import CcgErrorAlert from './CcgErrorAlert.vue'
+import CredentialStatusNotice from './CredentialStatusNotice.vue'
+import { canAutoStartAuthorization } from './credentialStatus'
+import { usableSession, sessionExpired } from './validation'
+import { useCcgText } from './ccgError'
+import { DRAFTS, discardDraft, longCall } from './ccgApi'
 import {
-  blockReason,
   containerPhase,
   currentStep,
   isDraftKey,
-  knownReason,
-  knownStatus,
+  isProxyReason,
   looksLikeAuthCode,
   readyToSave,
   reasonOf,
@@ -65,22 +67,18 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const auth = useAuthStore()
 const { proxies } = useProxiesLookup()
-const DRAFTS = computed(() => props.preparationUrl ? '/account-preparations' : '/system/ccgateway/drafts')
+const { describe, statusLabel } = useCcgText()
+const draftsBase = computed(() => (props.preparationUrl ? '/account-preparations' : DRAFTS))
 const POLL_MS = 2000
 /** Draft keep-alive: the core sweeps drafts untouched for 15 minutes. */
 const HEARTBEAT_MS = 60_000
-/** Container calls may wait for an image pull or the login process. */
-const longCall = () => ({ signal: AbortSignal.timeout(95000) })
-
-type Status = CcgRuntimeStatus
-type Health = CcgRuntimeHealth
-type Session = CcgAuthSession
+/** CCGateway settings, scrolled to the runtime card (install / upgrade the containers). */
+const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 
 /** A re-authorization of a saved account (the draft is given); otherwise a new account's draft. */
 const reauth = computed(() => !props.draft && isDraftKey(props.reauthKey))
 const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
 const canManage = computed(() => auth.has('settings:manage') || (reauth.value ? !!props.canEdit : auth.has([...ACCOUNT_KEYS.create])))
-const canRead = canManage
 
 /** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)
@@ -88,11 +86,12 @@ const draftProxy = ref<number | null | undefined>(undefined)
 /** The draft shown: the new account's, or the re-authorization's. */
 const key = computed(() => (reauth.value ? props.reauthKey! : draftKey.value))
 /** Base path of the draft runtime, '' while there is none. */
-const target = computed(() => (key.value ? `${DRAFTS.value}/${key.value}` : ''))
+const target = computed(() => (key.value ? `${draftsBase.value}/${key.value}` : ''))
+const pickedProxy = () => props.proxyId ?? null
 
-const status = ref<Status | null>(null)
-const health = ref<Health | null>(null)
-const session = ref<Session | null>(null)
+const status = ref<CcgRuntimeStatus | null>(null)
+const health = ref<CcgRuntimeHealth | null>(null)
+const session = ref<CcgAuthSession | null>(null)
 const opened = ref(false)
 const code = ref('')
 /** Which action runs: drives the spinners and disables the buttons. */
@@ -116,7 +115,6 @@ let clockTimer: ReturnType<typeof setInterval> | undefined
 const now = ref(Date.now())
 
 const phase = computed(() => containerPhase(status.value?.status))
-const blocked = computed(() => (phase.value === 'blocked' ? blockReason(status.value?.reason) : null))
 const flow = computed(() => ({
   mode: mode.value,
   proxy: true, // no proxy is direct egress
@@ -127,16 +125,23 @@ const flow = computed(() => ({
   opened: opened.value,
   errorStep: failure.value?.step ?? null
 }))
-const steps = computed(() => stepsOf(mode.value))
 const step = computed(() => currentStep(flow.value))
 const states = computed(() => stepStates(flow.value))
+/** The flow's steps for SSteps (its "pending" is the flow's "todo"). */
+const stepItems = computed(() => stepsOf(mode.value).map(key => ({ key, title: t(`ccgateway.accountAuth.steps.${key}`), state: states.value[key] === 'todo' ? ('pending' as const) : states.value[key] })))
 const authorizedDraft = computed(() => readyToSave(flow.value))
+const headerState = computed(() => {
+  if (step.value === 'done') return 'authorized'
+  return target.value && health.value && !health.value.logged_in ? 'loggedOut' : null
+})
 const containerName = computed(() => status.value?.container || (key.value ? `ccg-${key.value}` : ''))
 const proxyName = computed(() => {
   const id = props.proxyId
   if (id == null) return t('ccgateway.accountAuth.proxyDirect')
   return proxies.value.find((p) => p.id === id)?.name || `#${id}`
 })
+/** The link step shows its error, the open session, or the button that asks for one. */
+const showLogin = computed(() => !!target.value && (['current', 'error'].includes(states.value.login) || failure.value?.step === 'login' || (states.value.login === 'done' && !!session.value)))
 const left = computed(() => (session.value ? secondsLeft(session.value.expires_at, now.value) : 0))
 const expired = computed(() => !!session.value && left.value <= 0)
 const leftText = computed(() => {
@@ -144,21 +149,6 @@ const leftText = computed(() => {
   return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`
 })
 const codeShapeWarn = computed(() => !!code.value.trim() && !looksLikeAuthCode(code.value))
-
-/** Translated status label; an unknown status shows its code. */
-const statusLabel = (s: string | undefined) => {
-  const k = knownStatus(s)
-  return k ? t(`ccgateway.status.${k}`) : s || t('ccgateway.status.unknown')
-}
-/** Why the container is blocked, translated (unknown codes as they are). */
-const blockedText = computed(() => {
-  const r = status.value?.reason
-  const k = knownReason(r)
-  return k ? t(`ccgateway.reason.${k}`) : r || t('ccgateway.accountAuth.blockedUnknown')
-})
-
-/** The cause of a failure: a translated reason code, else the API's message for an unknown code, else a localized generic. */
-const describe = useCcgError()
 
 function fail(stepKey: CcgStep, titleKey: string, e?: unknown, setup?: CcgSetupProblem[]) {
   failure.value = { step: stepKey, title: t(`ccgateway.accountAuth.${titleKey}`), detail: e === undefined ? undefined : describe(e), reason: reasonOf(e) || undefined, setup }
@@ -185,12 +175,12 @@ async function containerFailure(titleKey: string, e: unknown, stamp: number) {
 /** Reads container status and, when ready, the Claude login state. */
 async function refresh(): Promise<void> {
   const base = target.value
-  if (!base || !canRead.value) return
+  if (!base || !canManage.value) return
   const stamp = ++serial
   lastCall = Date.now()
-  let s: Status
+  let s: CcgRuntimeStatus
   try {
-    s = await api.get<Status>(`${base}/status`)
+    s = await api.get<CcgRuntimeStatus>(`${base}/status`)
   } catch (e) {
     if (stamp === serial) await containerFailure('statusFailed', e, stamp)
     return
@@ -203,7 +193,7 @@ async function refresh(): Promise<void> {
     return
   }
   try {
-    const h = await api.get<Health>(`${base}/health`)
+    const h = await api.get<CcgRuntimeHealth>(`${base}/health`)
     if (stamp !== serial) return
     health.value = h
   } catch (e) {
@@ -217,31 +207,32 @@ async function refresh(): Promise<void> {
   maybeAutoStart()
 }
 
-/** Resumes an unfinished authorization session (link + code box) after a reload. */
-async function resumeSession(base: string, stamp: number) {
+/** The authorization session the container holds (link + code box), if it is still usable. */
+async function pendingSession(base: string): Promise<CcgAuthSession | null> {
   try {
-    const s = await api.get<Session | null>(`${base}/session`)
-    if (stamp !== serial || !s?.session_id || !isTrustedAuthorizationURL(s.url) || sessionExpired(s.expires_at)) return
-    session.value = s
-    // The link was most likely opened already: show the code box too.
-    opened.value = true
+    const s = await api.get<CcgAuthSession | null>(`${base}/session`)
+    return usableSession(s) ? s : null
   } catch {
-    // nothing to resume
+    return null
   }
+}
+
+/** Resumes an unfinished authorization session after a reload. */
+async function resumeSession(base: string, stamp: number) {
+  const s = await pendingSession(base)
+  if (stamp !== serial || !s) return
+  session.value = s
+  // The link was most likely opened already: show the code box too.
+  opened.value = true
 }
 
 /** Replaces the shown session with the one the container holds now; false when there is none. */
 async function adoptPendingSession(base: string): Promise<boolean> {
-  try {
-    const s = await api.get<Session | null>(`${base}/session`)
-    if (base !== target.value || !s?.session_id || !isTrustedAuthorizationURL(s.url) || sessionExpired(s.expires_at)) return false
-    if (s.session_id === session.value?.session_id) return false
-    session.value = s
-    opened.value = true
-    return true
-  } catch {
-    return false
-  }
+  const s = await pendingSession(base)
+  if (base !== target.value || !s || s.session_id === session.value?.session_id) return false
+  session.value = s
+  opened.value = true
+  return true
 }
 
 /** The link is requested as soon as the draft's container is ready (once per draft). */
@@ -252,37 +243,46 @@ function maybeAutoStart() {
   void start()
 }
 
+function clearSession() {
+  session.value = null
+  code.value = ''
+  opened.value = false
+}
+
 /** Forgets everything about the current runtime (not the draft key itself). */
 function resetTarget() {
   ++serial
   status.value = null
   health.value = null
-  session.value = null
-  code.value = ''
-  opened.value = false
+  clearSession()
   failure.value = null
   autoStarted = false
   sessionChecked = false
 }
 
-function discard(key: string) {
-  void api.del(`${DRAFTS.value}/${key}`).catch(() => {
-    // best effort: the core's sweep removes abandoned drafts
-  })
+/** Forgets the new account's draft (not deleted here). */
+function forgetDraft() {
+  resetTarget()
+  draftKey.value = null
+  draftProxy.value = undefined
 }
+
+const discard = (key: string) => discardDraft(`${draftsBase.value}/${key}`)
+/** Idempotency key of the preparation request (retries of one attempt reuse it). */
+const randomKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
 
 /** ② of a new account: creates the draft runtime with the picked proxy. */
 async function createDraft() {
   if (!props.draft || draftKey.value || !canManage.value || acting.value || props.configurationReady === false) return
-  const proxy = props.proxyId ?? null
+  const proxy = pickedProxy()
   resetTarget()
   busy.value = 'create'
   const stamp = serial
   let key = ''
   try {
-    if (props.preparationUrl && !preparationAttempt) preparationAttempt = Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, '0')).join('')
+    if (props.preparationUrl && !preparationAttempt) preparationAttempt = randomKey()
     const body = props.preparationUrl ? { proxy_id: proxy, settings: { ...props.settings }, idempotency_key: preparationAttempt } : { proxy_id: proxy }
-    const r = await api.post<CcgDraft>(props.preparationUrl || DRAFTS.value, body, longCall())
+    const r = await api.post<CcgDraft>(props.preparationUrl || DRAFTS, body, longCall())
     if (!isDraftKey(r?.key)) throw new Error(t('ccgateway.accountAuth.badDraft'))
     key = r.key
   } catch (e) {
@@ -291,10 +291,7 @@ async function createDraft() {
     return
   }
   busy.value = ''
-  if (!alive || adopted) {
-    discard(key)
-    return
-  }
+  if (!alive || adopted) return discard(key)
   draftKey.value = key
   draftProxy.value = proxy
   status.value = { status: 'creating' }
@@ -304,14 +301,14 @@ async function createDraft() {
 /** The editor's proxy changed after the draft exists: PUT drafts/:key (re-reconciles the container). */
 async function updateProxy() {
   const key = draftKey.value
-  const p = props.proxyId ?? null
+  const p = pickedProxy()
   if (!props.draft || !key || p === draftProxy.value || acting.value || !canManage.value) return
   busy.value = 'proxy'
   failure.value = null
   health.value = null
   const stamp = ++serial
   try {
-    await api.put(`${DRAFTS.value}/${key}`, { proxy_id: p }, longCall())
+    await api.put(`${draftsBase.value}/${key}`, { proxy_id: p }, longCall())
   } catch (e) {
     busy.value = ''
     if (alive && stamp === serial && key === draftKey.value) await containerFailure('proxyFailed', e, stamp)
@@ -327,15 +324,10 @@ async function updateProxy() {
 /** Deletes the draft and starts a new one (failed container, or the draft is gone); a re-authorization asks its parent. */
 async function restartDraft() {
   if (acting.value) return
-  if (reauth.value) {
-    emit('restart', failure.value?.reason || '')
-    return
-  }
+  if (reauth.value) return emit('restart', failure.value?.reason || '')
   if (!props.draft) return
   const key = draftKey.value
-  resetTarget()
-  draftKey.value = null
-  draftProxy.value = undefined
+  forgetDraft()
   preparationAttempt = ''
   if (key) discard(key)
   await createDraft()
@@ -375,8 +367,8 @@ async function start() {
   failure.value = null
   lastCall = Date.now()
   try {
-    const data = await api.post<Session>(`${base}/start`, {}, longCall())
-    if (!data?.session_id || !isTrustedAuthorizationURL(data.url) || sessionExpired(data.expires_at)) throw new Error(t('ccgateway.accountAuth.badSession'))
+    const data = await api.post<CcgAuthSession>(`${base}/start`, {}, longCall())
+    if (!usableSession(data)) throw new Error(t('ccgateway.accountAuth.badSession'))
     if (base !== target.value) return
     session.value = data
     opened.value = false
@@ -391,10 +383,7 @@ async function start() {
 async function complete() {
   const base = target.value
   if (!base || !session.value || !canManage.value || acting.value || !code.value.trim()) return
-  if (expired.value) {
-    fail('code', 'expired')
-    return
-  }
+  if (expired.value) return fail('code', 'expired')
   busy.value = 'complete'
   failure.value = null
   lastCall = Date.now()
@@ -402,57 +391,50 @@ async function complete() {
     await api.post(`${base}/complete`, { session_id: session.value.session_id, code: code.value.trim() }, longCall())
   } catch (e) {
     busy.value = ''
-    if (base !== target.value) return
-    const reason = reasonOf(e)
-    // session_not_found also answers a stale session id while another login is pending: pick that one up.
-    if (reason === 'session_not_found' && (await adoptPendingSession(base))) {
-      fail('code', 'completeFailed', e)
-      return
-    }
-    if (sessionEnded(reason)) {
-      // The container ended (or never knew) this login: a new link is needed.
-      session.value = null
-      code.value = ''
-      opened.value = false
-      fail('login', 'completeFailed', e)
-    } else {
-      fail('code', 'completeFailed', e)
-    }
+    if (base === target.value) await completeRefused(base, e)
     return
   }
-  // The container writes the credentials asynchronously: confirm the login.
-  let loggedIn = false
-  for (let i = 0; i < 6 && !loggedIn && alive; i++) {
-    if (i) await new Promise((ok) => setTimeout(ok, POLL_MS))
-    try {
-      const h = await api.get<Health>(`${base}/health`)
-      if (base !== target.value) break
-      health.value = h
-      loggedIn = !!h.logged_in
-    } catch {
-      // retried below
-    }
-  }
+  const loggedIn = await waitForLogin(base)
   busy.value = ''
   if (!alive || base !== target.value) return
-  if (!loggedIn) {
-    fail('code', 'notConfirmed')
-    return
-  }
-  session.value = null
-  code.value = ''
-  opened.value = false
+  if (!loggedIn) return fail('code', 'notConfirmed')
+  clearSession()
   // A re-authorization is announced once committed (by the parent).
   if (!reauth.value) toast(t('ccgateway.accountAuth.authorizedToast'), 'success')
   emit('authorized')
 }
 
+/** The code was refused: retry it, pick up another pending login, or (the login ended) ask for a new link. */
+async function completeRefused(base: string, e: unknown) {
+  const reason = reasonOf(e)
+  // session_not_found also answers a stale session id while another login is pending: pick that one up.
+  if (reason === 'session_not_found' && (await adoptPendingSession(base))) return fail('code', 'completeFailed', e)
+  if (!sessionEnded(reason)) return fail('code', 'completeFailed', e)
+  // The container ended (or never knew) this login: a new link is needed.
+  clearSession()
+  fail('login', 'completeFailed', e)
+}
+
+/** The container writes the credentials asynchronously: confirms the login (a few tries). */
+async function waitForLogin(base: string): Promise<boolean> {
+  for (let i = 0; i < 6 && alive; i++) {
+    if (i) await new Promise((ok) => setTimeout(ok, POLL_MS))
+    try {
+      const h = await api.get<CcgRuntimeHealth>(`${base}/health`)
+      if (base !== target.value) return false
+      health.value = h
+      if (h.logged_in) return true
+    } catch {
+      // tried again
+    }
+  }
+  return false
+}
+
 async function cancel() {
   const base = target.value
   const s = session.value
-  session.value = null
-  code.value = ''
-  opened.value = false
+  clearSession()
   failure.value = null
   if (!base || !s || sessionExpired(s.expires_at)) return
   busy.value = 'cancel'
@@ -468,33 +450,27 @@ async function cancel() {
 /** Retry of the failed step. */
 function retry() {
   const f = failure.value
-  if (!f) return
-  if (f.step === 'container') {
-    if ((props.draft && !draftKey.value) || f.reason === 'draft_not_found') void restartDraft()
-    else if (props.draft && (props.proxyId ?? null) !== draftProxy.value) void updateProxy()
-    else void (canManage.value ? sync() : refresh())
-  } else if (f.step === 'login') void start()
-  else if (f.step === 'code') void (expired.value || !session.value ? start() : complete())
+  if (f?.step === 'login') return void start()
+  if (f?.step === 'code') return void (expired.value || !session.value ? start() : complete())
+  if (f?.step !== 'container') return
+  if ((props.draft && !draftKey.value) || f.reason === 'draft_not_found') void restartDraft()
+  else if (props.draft && pickedProxy() !== draftProxy.value) void updateProxy()
+  else void (canManage.value ? sync() : refresh())
 }
 
 function tick() {
   if (!alive || document.hidden) return
   // A proxy picked while another action ran is applied once it is done.
-  if (props.draft && draftKey.value && !acting.value && !failure.value && (props.proxyId ?? null) !== draftProxy.value) {
-    void updateProxy()
-    return
-  }
+  if (props.draft && draftKey.value && !acting.value && !failure.value && pickedProxy() !== draftProxy.value) return void updateProxy()
   if (!target.value || busy.value) return
   // Poll while the container converges (a known login state does not change by
   // itself, a blocked container waits for a change), and keep a draft alive.
   const converging = !session.value && failure.value?.step !== 'container' && phase.value !== 'blocked' && (phase.value !== 'ready' || !health.value)
-  const heartbeat = Date.now() - lastCall >= HEARTBEAT_MS
-  if (converging || heartbeat) {
-    busy.value = 'status'
-    void refresh().finally(() => {
-      if (busy.value === 'status') busy.value = ''
-    })
-  }
+  if (!converging && Date.now() - lastCall < HEARTBEAT_MS) return
+  busy.value = 'status'
+  void refresh().finally(() => {
+    if (busy.value === 'status') busy.value = ''
+  })
 }
 
 async function boot() {
@@ -520,8 +496,7 @@ onBeforeUnmount(() => {
   ++serial
   clearInterval(pollTimer)
   clearInterval(clockTimer)
-  code.value = ''
-  session.value = null
+  clearSession()
   // Editor closed, account type switched, back to the type picker: the entry is abandoned.
   // (A re-authorization draft belongs to the parent, which deletes or commits it.)
   if (props.draft && draftKey.value && !adopted) discard(draftKey.value)
@@ -535,89 +510,71 @@ defineExpose({
   /** POST /accounts (or the re-authorization commit) refused the draft (details.reason): start over or re-check the login. */
   rejected(reason: string) {
     if (!key.value) return
-    if (reason === 'draft_not_found' && props.draft) {
-      resetTarget()
-      draftKey.value = null
-      draftProxy.value = undefined
-      failure.value = { step: 'container', title: t('ccgateway.accountAuth.createFailed'), detail: t('ccgateway.reason.draft_not_found'), reason }
-    } else if (reason !== 'draft_not_found') {
+    if (reason !== 'draft_not_found') {
       health.value = null
       void refresh()
+    } else if (props.draft) {
+      forgetDraft()
+      failure.value = { step: 'container', title: t('ccgateway.accountAuth.createFailed'), detail: t('ccgateway.reason.draft_not_found'), reason }
     }
   }
 })
-
-const stepTitle = (s: CcgStep) => t(`ccgateway.accountAuth.steps.${s}`)
-/** The flow's steps for SSteps (its "pending" is the flow's "todo"). */
-const stepItems = computed(() => steps.value.map(key => ({ key, title: stepTitle(key), state: states.value[key] === 'todo' ? ('pending' as const) : states.value[key] })))
-/** CCGateway settings, scrolled to the runtime card (install / upgrade the containers). */
-const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 </script>
 
 <template>
   <div class="space-y-3 text-sm" data-testid="ccgateway-account-auth" :data-mode="mode">
-    <CcgAuthHeader :title="reauth ? t('ccgateway.reauth.flowTitle') : t('ccgateway.accountAuth.title')" :state="step === 'done' ? 'authorized' : target && health && !health.logged_in ? 'loggedOut' : null" :badge-testid="step === 'done' ? 'ccgateway-auth-authorized' : undefined" />
+    <CcgAuthHeader :title="t(reauth ? 'ccgateway.reauth.flowTitle' : 'ccgateway.accountAuth.title')" :state="headerState" :badge-testid="step === 'done' ? 'ccgateway-auth-authorized' : undefined" />
 
     <CredentialStatusNotice :status="health" />
-    <SHint v-if="!canManage" tone="warning">{{ reauth ? t('ccgateway.accountAuth.readOnly') : t('ccgateway.accountAuth.noCreate') }}</SHint>
+    <SHint v-if="!canManage" tone="warning">{{ t(reauth ? 'ccgateway.accountAuth.readOnly' : 'ccgateway.accountAuth.noCreate') }}</SHint>
 
     <SSteps :steps="stepItems" direction="vertical" data-testid="ccgateway-auth-steps">
-
       <!-- ① proxy (new account) -->
       <template #step-proxy>
         <div v-if="states.proxy === 'current'" class="mt-1 space-y-2">
-          <p class="text-xs text-fg-muted" data-testid="ccgateway-proxy-hint">{{ t('ccgateway.accountAuth.proxyHint') }}</p>
-          <SButton size="sm" variant="primary" data-testid="ccgateway-auth-pick-proxy" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
+          <SHint size="xs" data-testid="ccgateway-proxy-hint">{{ t('ccgateway.accountAuth.proxyHint') }}</SHint>
+          <SButton size="sm" variant="primary" icon="proxy" data-testid="ccgateway-auth-pick-proxy" @click="emit('fix-proxy')">{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
         </div>
         <p v-else class="mt-0.5 flex items-center gap-2 text-xs text-fg-muted">
           <span>{{ t('ccgateway.accountAuth.proxyChosen', { name: proxyName }) }}</span>
-          <span v-if="busy === 'proxy'" class="inline-flex items-center gap-1"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.proxyUpdating') }}</span>
+          <BusyText v-if="busy === 'proxy'">{{ t('ccgateway.accountAuth.proxyUpdating') }}</BusyText>
         </p>
       </template>
 
       <!-- ② container -->
       <template #step-container>
         <template v-if="target || draft">
-          <SAlert v-if="failure?.step === 'container'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-container-error" :data-reason="failure.reason">
-            <ul v-if="failure.setup?.length" class="list-inside list-disc space-y-0.5">
-              <li v-for="p in failure.setup" :key="p">{{ t(`ccgateway.accountAuth.setup.${p}`) }}</li>
-            </ul>
-            <div v-else-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-            <div class="flex flex-wrap gap-2">
-              <SButton size="sm" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
-              <SButton v-if="failure.reason === 'no_proxy' || failure.reason === 'proxy_disabled' || failure.reason === 'proxy_not_found'" size="sm" variant="ghost" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
+          <CcgErrorAlert v-if="failure?.step === 'container'" class="mt-1.5" :title="failure.title" :detail="failure.detail" data-testid="ccgateway-auth-container-error" :data-reason="failure.reason">
+            <template v-if="failure.setup?.length" #default>
+              <ul class="list-inside list-disc space-y-0.5">
+                <li v-for="p in failure.setup" :key="p">{{ t(`ccgateway.accountAuth.setup.${p}`) }}</li>
+              </ul>
+            </template>
+            <template #actions>
+              <SButton size="sm" icon="refresh" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry">{{ t('ccgateway.accountAuth.retry') }}</SButton>
+              <SButton v-if="isProxyReason(failure.reason)" size="sm" variant="ghost" icon="proxy" @click="emit('fix-proxy')">{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
               <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-              <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" :to="settingsLink" data-testid="ccgateway-auth-open-settings"><SIcon name="settings" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
-            </div>
-          </SAlert>
+              <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" icon="settings" :to="settingsLink" data-testid="ccgateway-auth-open-settings">{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
+            </template>
+          </CcgErrorAlert>
           <!-- new account, no draft yet -->
           <template v-else-if="draft && !draftKey">
-            <div v-if="busy === 'create'" class="mt-1 flex items-center gap-2 text-xs text-fg-muted"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.creating') }}</div>
+            <BusyText v-if="busy === 'create'" class="mt-1">{{ t('ccgateway.accountAuth.creating') }}</BusyText>
             <div v-else-if="states.container === 'current'" class="mt-1 space-y-2">
-              <p class="text-xs text-fg-muted">{{ t('ccgateway.accountAuth.startHint') }}</p>
-              <SButton variant="primary" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft"><SIcon name="play" class="h-4 w-4" />{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
+              <SHint size="xs">{{ t('ccgateway.accountAuth.startHint') }}</SHint>
+              <SButton variant="primary" icon="play" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft">{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
             </div>
           </template>
-          <SAlert v-else-if="blocked" tone="danger" dense class="mt-1.5" :title="t('ccgateway.accountAuth.blockedTitle', { reason: blockedText })" data-testid="ccgateway-auth-blocked" :data-reason="blocked">
-            <div class="opacity-90">{{ reauth ? t(`ccgateway.accountAuth.blocked.fixReauth.${blocked}`) : blocked !== 'account_disabled' ? t(`ccgateway.accountAuth.blocked.fixDraft.${blocked}`) : t(`ccgateway.accountAuth.blocked.fix.${blocked}`) }}</div>
-            <div class="flex flex-wrap gap-2">
-              <SButton v-if="blocked === 'no_proxy' || blocked === 'proxy_disabled'" size="sm" variant="primary" data-testid="ccgateway-auth-fix-proxy" @click="emit('fix-proxy')">
-                <SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}
-              </SButton>
-              <SButton v-if="blocked === 'proxy_disabled'" size="sm" variant="ghost" to="/proxies">{{ t('ccgateway.accountAuth.blocked.openProxies') }}</SButton>
-              <SButton v-if="canManage" size="sm" variant="ghost" :loading="busy === 'sync'" :disabled="acting" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
-            </div>
-          </SAlert>
+          <CcgBlockedAlert v-else-if="phase === 'blocked'" class="mt-1.5" :reason="status?.reason" :mode="mode" :can-manage="canManage" :syncing="busy === 'sync'" :disabled="acting" @fix-proxy="emit('fix-proxy')" @sync="sync" />
           <SAlert v-else-if="states.container === 'error'" tone="danger" dense class="mt-1.5">
-            <div>{{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}</div>
-            <div class="flex flex-wrap gap-2">
-              <SButton v-if="canManage" size="sm" :loading="busy === 'sync'" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
+            {{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}
+            <template #actions>
+              <SButton v-if="canManage" size="sm" icon="refresh" :loading="busy === 'sync'" @click="sync">{{ t('ccgateway.accountAuth.resync') }}</SButton>
               <SButton size="sm" variant="ghost" :disabled="acting" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-            </div>
+            </template>
           </SAlert>
-          <div v-else-if="states.container === 'current'" class="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted" data-testid="ccgateway-auth-preparing">
-            <SSpinner size="sm" />
-            <span>{{ busy === 'sync' ? t('ccgateway.accountAuth.containerStarting') : t('ccgateway.accountAuth.containerPreparing', { name: containerName, status: statusLabel(status?.status) }) }}</span>
+          <div v-else-if="states.container === 'current'" class="mt-1 flex flex-wrap items-center gap-2" data-testid="ccgateway-auth-preparing">
+            <BusyText>{{ busy === 'sync' ? t('ccgateway.accountAuth.containerStarting') : t('ccgateway.accountAuth.containerPreparing', { name: containerName, status: statusLabel(status?.status) }) }}</BusyText>
             <SButton v-if="canManage && busy !== 'sync' && busy !== 'proxy'" size="sm" variant="ghost" @click="sync">{{ t('ccgateway.accountAuth.resync') }}</SButton>
           </div>
           <p v-else-if="states.container === 'done'" class="mt-0.5 font-mono text-xs text-fg-muted">{{ t('ccgateway.accountAuth.containerReady', { name: containerName }) }}</p>
@@ -626,16 +583,16 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 
       <!-- ③ open the link -->
       <template #step-login>
-        <template v-if="target && (states.login === 'current' || states.login === 'error' || failure?.step === 'login' || (states.login === 'done' && session))">
-          <SAlert v-if="failure?.step === 'login'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-login-error" :data-reason="failure.reason">
-            <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-            <SButton size="sm" :loading="busy === 'start'" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-          </SAlert>
+        <template v-if="showLogin">
+          <CcgErrorAlert v-if="failure?.step === 'login'" class="mt-1.5" :title="failure.title" :detail="failure.detail" data-testid="ccgateway-auth-login-error" :data-reason="failure.reason">
+            <template #actions>
+              <SButton size="sm" icon="refresh" :loading="busy === 'start'" data-testid="ccgateway-auth-retry" @click="retry">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
+            </template>
+          </CcgErrorAlert>
+          <!-- Copy is the main way: the user signs in to Claude in their own
+               browser (often another machine or profile); opening here is a fallback. -->
           <div v-else-if="session" class="mt-2 space-y-2">
-            <!-- Copy is the main way: the user signs in to Claude in their own
-                 browser (often another machine or profile); opening here is
-                 a fallback. -->
-            <div class="flex items-stretch gap-2" :class="expired ? 'pointer-events-none opacity-50' : ''">
+            <div class="flex items-stretch gap-2" :class="{ 'pointer-events-none opacity-50': expired }">
               <SInput
                 :model-value="session.url"
                 readonly
@@ -647,37 +604,25 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               />
               <SCopyButton :text="session.url" :label="t('ccgateway.accountAuth.copyLink')" variant="secondary" size="md" data-testid="ccgateway-auth-copy" @copied="opened = true" />
             </div>
-            <p class="text-xs text-fg-muted">
+            <SHint size="xs">
               {{ t('ccgateway.accountAuth.linkHint') }}
               <span v-if="!expired" class="ml-1 tabular-nums">{{ t('ccgateway.accountAuth.expiresIn', { time: leftText }) }}</span>
-            </p>
-            <SLink
-              :href="session.url"
-              external
-              class="inline-flex items-center gap-1 text-xs"
-              :class="expired ? 'pointer-events-none opacity-50' : ''"
-              data-testid="ccgateway-auth-open"
-              @click="opened = true"
-            >
+            </SHint>
+            <SLink :href="session.url" external class="inline-flex items-center gap-1 text-xs" :class="{ 'pointer-events-none opacity-50': expired }" data-testid="ccgateway-auth-open" @click="opened = true">
               <SIcon name="external" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openLink') }}
             </SLink>
           </div>
-          <div v-else-if="busy === 'start'" class="mt-1 flex items-center gap-2 text-xs text-fg-muted"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.gettingLink') }}</div>
-          <div v-else-if="canManage" class="mt-2">
-            <SButton variant="primary" :disabled="acting" data-testid="ccgateway-auth-start" @click="start"><SIcon name="link" class="h-4 w-4" />{{ t('ccgateway.accountAuth.getLink') }}</SButton>
-          </div>
+          <BusyText v-else-if="busy === 'start'" class="mt-1">{{ t('ccgateway.accountAuth.gettingLink') }}</BusyText>
+          <SButton v-else-if="canManage" class="mt-2" variant="primary" icon="link" :disabled="acting" data-testid="ccgateway-auth-start" @click="start">{{ t('ccgateway.accountAuth.getLink') }}</SButton>
         </template>
       </template>
 
-      <!-- ④ paste the code -->
+      <!-- ④ paste the code (not a <form>: the panel sits inside the account editor's form) -->
       <template #step-code>
-        <template v-if="target && session">
-          <!-- not a <form>: the panel sits inside the account editor's form -->
-          <div class="mt-2 space-y-2">
-            <label class="input-label !mb-1 text-xs" for="ccg-auth-code">{{ t('ccgateway.accountAuth.codeLabel') }}</label>
+        <div v-if="target && session" class="mt-2 space-y-2">
+          <SField :label="t('ccgateway.accountAuth.codeLabel')" size="sm">
             <div class="flex flex-wrap gap-2">
               <SInput
-                id="ccg-auth-code"
                 v-model="code"
                 type="password"
                 class="min-w-[14rem] flex-1"
@@ -692,28 +637,24 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               />
               <SButton variant="primary" :loading="busy === 'complete'" :disabled="!code.trim() || expired || (acting && busy !== 'complete')" data-testid="ccgateway-auth-complete" @click="complete">{{ t('ccgateway.accountAuth.submit') }}</SButton>
             </div>
-            <p v-if="codeShapeWarn" class="text-xs text-warning-600 dark:text-warning-400">{{ t('ccgateway.accountAuth.codeShape') }}</p>
-            <SAlert v-if="failure?.step === 'code'" tone="danger" dense class="mt-1.5" :title="failure.title" data-testid="ccgateway-auth-code-error" :data-reason="failure.reason">
-              <div v-if="failure.detail" class="break-all opacity-80">{{ t('ccgateway.accountAuth.reason', { message: failure.detail }) }}</div>
-              <div class="flex flex-wrap gap-2">
-                <SButton v-if="code.trim() && !expired" size="sm" :loading="busy === 'complete'" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
-                <SButton size="sm" variant="ghost" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-              </div>
-            </SAlert>
-            <div v-else-if="expired" class="flex flex-wrap items-center gap-2 text-xs text-warning-700 dark:text-warning-300">
-              {{ t('ccgateway.accountAuth.expired') }}
-              <SButton size="sm" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
-            </div>
-            <SButton size="sm" variant="ghost" :disabled="busy === 'complete'" @click="cancel">{{ t('ccgateway.accountAuth.cancel') }}</SButton>
+          </SField>
+          <SHint v-if="codeShapeWarn" tone="warning" size="xs">{{ t('ccgateway.accountAuth.codeShape') }}</SHint>
+          <CcgErrorAlert v-if="failure?.step === 'code'" class="mt-1.5" :title="failure.title" :detail="failure.detail" data-testid="ccgateway-auth-code-error" :data-reason="failure.reason">
+            <template #actions>
+              <SButton v-if="code.trim() && !expired" size="sm" icon="refresh" :loading="busy === 'complete'" @click="retry">{{ t('ccgateway.accountAuth.retry') }}</SButton>
+              <SButton size="sm" variant="ghost" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
+            </template>
+          </CcgErrorAlert>
+          <div v-else-if="expired" class="flex flex-wrap items-center gap-2">
+            <SHint tone="warning" size="xs" inline>{{ t('ccgateway.accountAuth.expired') }}</SHint>
+            <SButton size="sm" :loading="busy === 'start'" @click="start">{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
           </div>
-        </template>
+          <SButton size="sm" variant="ghost" :disabled="busy === 'complete'" @click="cancel">{{ t('ccgateway.accountAuth.cancel') }}</SButton>
+        </div>
       </template>
 
-      <!-- done -->
       <template #step-done>
-        <template v-if="states.done === 'done'">
-          <p class="mt-0.5 text-xs text-success-700 dark:text-success-300" data-testid="ccgateway-auth-done-hint">{{ reauth ? t('ccgateway.reauth.signedIn') : t('ccgateway.accountAuth.authorizedDraftHint') }}</p>
-        </template>
+        <SHint v-if="states.done === 'done'" tone="success" size="xs" class="mt-0.5" data-testid="ccgateway-auth-done-hint">{{ t(reauth ? 'ccgateway.reauth.signedIn' : 'ccgateway.accountAuth.authorizedDraftHint') }}</SHint>
       </template>
     </SSteps>
   </div>

@@ -143,6 +143,34 @@ export function display(v: unknown): string {
   return String(v)
 }
 
+/** Capability ids of a manifest / review (entries may be ids or {id} objects). */
+export function capabilityIdsOf(list: unknown): string[] {
+  return asArray(list).map((c) => (typeof c === 'string' ? c : String(pick(c, 'id') ?? display(c))))
+}
+
+/** "POST /v1/messages (anthropic)" of a gateway endpoint declaration. */
+export function endpointText(e: Record<string, any>): string {
+  const head = [pick(e, 'method'), pick(e, 'path', 'route')].filter(Boolean).join(' ')
+  const proto = pick<string>(e, 'protocol', 'id')
+  return head ? (proto ? `${head} (${proto})` : head) : display(e)
+}
+
+/**
+ * Field errors of PUT /plugins/:key/settings -> SchemaForm paths. Schema
+ * errors are JSON pointers under "values" (values/a/0/b), plugin errors may
+ * be dotted (values.a.0.b); errors of the whole object come back in `root`.
+ */
+export function settingsFieldErrors(fields: Record<string, string>): { fields: Record<string, string>; root: string[] } {
+  const out: Record<string, string> = {}
+  const root: string[] = []
+  for (const [k, v] of Object.entries(fields)) {
+    const p = k.replace(/^values(?=[./]|$)/, '').replace(/^[./]/, '').replace(/\//g, '.')
+    if (p) out[p] = v
+    else root.push(v)
+  }
+  return { fields: out, root }
+}
+
 export interface AccountTypeSummary {
   id: string
   label: LText | undefined

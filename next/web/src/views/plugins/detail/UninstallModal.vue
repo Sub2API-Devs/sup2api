@@ -13,15 +13,16 @@ const props = defineProps<{ open: boolean; pluginKey: string; name: string }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'done'): void }>()
 const { t } = useI18n()
 
-const purge = ref(false)
-const purgeAccounts = ref(false)
+/** Optional deletions picked in the dialog: 'purge' (plugin schema) and / or 'accounts'. */
+const purgeChoice = ref<ChoiceOption['value'][]>([])
+const purge = computed(() => purgeChoice.value.includes('purge'))
+const purgeAccounts = computed(() => purgeChoice.value.includes('accounts'))
 const typed = ref('')
 const busy = ref(false)
 /** Set after a successful uninstall with purge_accounts: the modal shows the result. */
 const result = ref<{ accountsDeleted: number | null } | null>(null)
 const matches = computed(() => typed.value.trim() === props.pluginKey)
 
-// The two optional deletions as one multi-select: 'purge' (plugin schema) and 'accounts'.
 const purgeOptions = computed<ChoiceOption[]>(() => [
   {
     value: 'purge',
@@ -38,19 +39,12 @@ const purgeOptions = computed<ChoiceOption[]>(() => [
     tone: 'danger'
   }
 ])
-const purgeChoice = computed(() => [...(purge.value ? ['purge'] : []), ...(purgeAccounts.value ? ['accounts'] : [])])
-function setPurgeChoice(v: unknown) {
-  const list = Array.isArray(v) ? v : []
-  purge.value = list.includes('purge')
-  purgeAccounts.value = list.includes('accounts')
-}
 
 watch(
   () => props.open,
   (v) => {
     if (v) {
-      purge.value = false
-      purgeAccounts.value = false
+      purgeChoice.value = []
       typed.value = ''
       result.value = null
     }
@@ -98,13 +92,12 @@ function close() {
     <div v-else class="space-y-4 text-sm">
       <p>{{ t('plugins.uninstall.body') }}</p>
       <SChoiceCards
-        :model-value="purgeChoice"
+        v-model="purgeChoice"
         :options="purgeOptions"
         :cols="1"
         multiple
         :aria-label="t('plugins.uninstall.title', { name })"
         data-testid="uninstall-purge"
-        @update:model-value="setPurgeChoice"
       />
       <SHint v-if="purge" size="xs" tone="danger" class="flex items-center gap-1.5">
         <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.uninstall.purgeWarn') }}

@@ -129,7 +129,7 @@ export default {
     version: '控制器版本：{version}',
     install: '安装运行环境', upgrade: '升级运行环境', installing: '正在拉取镜像并重启控制器，可能需要几分钟…',
     confirmMessage: '将通过 SSH 在 Docker 主机上拉取镜像并重启容器控制器；现有账号容器不会因镜像差异重建。新镜像仅用于新建容器，已有账号可用“更新现有账号的 worker”原地更新程序。控制器重启期间连接发现可能短暂受影响。',
-    done: '控制器部署配置已更新', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态', reason: '原因：{message}',
+    done: '控制器部署配置已更新', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态',
     readOnly: '安装或升级运行环境需要 settings:manage 权限。',
     subtitleController: '控制面板模式下，镜像随 ccgateway 插件包分发，可一键推送给控制器；也可手动上传或由控制器拉取。下表核对控制器报告的镜像；各账号实际镜像请查看账号容器状态。',
     confirmMessageController: '将经控制面板把控制器的目标镜像设为已保存的镜像（控制器本地没有会尝试拉取）；控制器镜像不同时会自升级并等待其恢复。现有账号容器不会因此重建，新镜像用于新建或重新授权的容器。'

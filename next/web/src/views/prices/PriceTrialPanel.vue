@@ -24,9 +24,8 @@ function videoSample(estimated: boolean) {
   metrics.value = { video_seconds: '5', video_width: '1280', video_height: '720', video_pixels: '921600', video_input: 'false', video_estimated: String(estimated) }
 }
 
-const usage = reactive<Record<string, number | '' | null>>({ p: 100000, c: 2000, cr: 80000, cc: 0, cc1h: 0 })
-// SInput emits null for an empty number field (the native input gave '').
-const len = ref<number | '' | null>('')
+const usage = reactive<Record<string, number | null>>({ p: 100000, c: 2000, cr: 80000, cc: 0, cc1h: 0 })
+const len = ref<number | null>(null)
 const headers = ref<Record<string, string>>({})
 const params = ref<Record<string, string>>({})
 const at = ref('')
@@ -56,7 +55,7 @@ async function run() {
   error.value = ''
   const u: Record<string, number> = {}
   for (const k of TOKEN_VARS) u[k] = Number(usage[k]) || 0
-  if (len.value !== '' && len.value !== null) u.len = Number(len.value) || 0
+  if (len.value !== null) u.len = len.value
   const body: Record<string, unknown> = {
     ...props.source,
     usage: u,
@@ -92,11 +91,7 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 // Extra response fields (B): base_cost, rate_multiplier, expression, expr_hash.
 const extra = computed(() => (result.value || {}) as PricePreviewResult & { base_cost?: string; rate_multiplier?: string | number })
-const resultLen = computed(() => {
-  const v = (result.value?.breakdown as any)?.vars?.len
-  if (v !== undefined && v !== null) return v
-  return len.value === '' || len.value === null ? defaultLen.value : len.value
-})
+const resultLen = computed(() => (result.value?.breakdown as { vars?: { len?: number } } | undefined)?.vars?.len ?? len.value ?? defaultLen.value)
 </script>
 
 <template>
@@ -128,7 +123,7 @@ const resultLen = computed(() => {
     </SField>
     <div class="flex flex-wrap items-end gap-4">
       <SField :label="t('prices.trial.at')">
-        <SInput v-model="at" type="datetime-local" class="!w-56" />
+        <SInput v-model="at" type="datetime-local" class="w-56" />
       </SField>
       <SField v-if="auth.has('group:read')" :label="t('prices.trial.group')">
         <div class="w-48"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>

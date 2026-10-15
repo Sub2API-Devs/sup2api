@@ -5,3 +5,7 @@ export function sessionExpired(expiresAt: string, now = Date.now()): boolean {
   const expires = Date.parse(expiresAt)
   return !Number.isFinite(expires) || expires <= now
 }
+/** An authorization session the panel may show: an id, a trusted link, not expired. */
+export function usableSession<T extends { session_id?: string; url: string; expires_at: string }>(s: T | null | undefined): s is T {
+  return !!s?.session_id && isTrustedAuthorizationURL(s.url) && !sessionExpired(s.expires_at)
+}

@@ -18,7 +18,7 @@ const groups = computed(() => platforms.endpointsOf(props.ids))
   <div class="space-y-2" data-testid="platform-endpoints">
     <div v-for="g in groups" :key="g.id" :data-platform="g.id">
       <div class="flex items-center gap-1.5 text-xs font-medium text-fg">
-        <SBadge :tone="g.builtin ? 'primary' : 'purple'">{{ g.label }}</SBadge>
+        <SBadge :tone="g.builtin ? 'primary' : 'accent'">{{ g.label }}</SBadge>
       </div>
       <ul v-if="g.endpoints.length" class="mt-1 space-y-0.5 pl-1">
         <li v-for="e in max ? g.endpoints.slice(0, max) : g.endpoints" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5 text-xs">

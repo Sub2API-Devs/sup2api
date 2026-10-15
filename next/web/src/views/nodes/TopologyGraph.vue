@@ -98,7 +98,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         </g>
         <foreignObject v-for="card in cards" :key="card.id" :x="card.index * 340 + 8" y="100" width="324" :height="height - 100">
           <div class="rounded-2xl border-2 p-3 text-sm" :class="card.stale ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-primary-200 bg-primary-50/40 dark:border-primary-800 dark:bg-dark-900'">
-            <div class="flex flex-wrap items-center gap-2"><strong>{{ card.id }}</strong><SBadge v-if="card.id === primary" tone="purple">{{ t('upgrades.primary') }}</SBadge><SBadge v-if="card.stale" tone="danger">{{ t('nodes.stale') }}</SBadge></div>
+            <div class="flex flex-wrap items-center gap-2"><strong>{{ card.id }}</strong><SBadge v-if="card.id === primary" tone="accent">{{ t('upgrades.primary') }}</SBadge><SBadge v-if="card.stale" tone="danger">{{ t('nodes.stale') }}</SBadge></div>
             <div v-if="card.shell" class="my-2 space-y-1">
               <div>{{ t('observe.gateway') }} · {{ card.shell.mode }} · {{ t(!card.shell.enabled ? 'upgrades.disabled' : card.shell.ready ? 'upgrades.serving' : 'upgrades.waiting') }}</div>
               <div>{{ t('common.cpu') }} {{ card.shell.cpu_percent == null ? '—' : card.shell.cpu_percent.toFixed(1) + '%' }} <SBadge :tone="card.shell.offloading ? 'warning' : 'gray'">{{ t(card.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></div>
@@ -112,9 +112,9 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
               <div v-for="plugin in card.plugins" :key="plugin.key" class="mt-2 rounded-lg border p-2" :class="plugin.fallback ? 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30' : 'border-line'">
                 <div class="flex items-center justify-between gap-1"><strong>{{ plugin.key }}</strong><SBadge :tone="statusTone(plugin.state)">{{ plugin.state || '—' }}</SBadge></div>
                 <div class="font-mono text-xs">{{ plugin.serving || '—' }}<span v-if="plugin.standby"> → {{ plugin.standby }}</span></div>
-                <div v-if="plugin.fallback" class="text-xs text-amber-700 dark:text-amber-300">{{ t('observe.fallback') }}: {{ plugin.fallback }}</div>
+                <SHint v-if="plugin.fallback" tone="warning" size="xs">{{ t('observe.fallback') }}: {{ plugin.fallback }}</SHint>
                 <div class="text-xs text-fg-muted">{{ t('observe.instances') }} {{ plugin.instances?.length || 0 }} · {{ t('observe.restarts') }} {{ plugin.instances?.reduce((sum, i) => sum + i.restarts, 0) || 0 }}</div>
-                <div v-if="plugin.error" class="truncate text-xs text-red-500 dark:text-red-400" :title="plugin.error">{{ plugin.error }}</div>
+                <SHint v-if="plugin.error" tone="danger" size="xs" class="truncate" :title="plugin.error">{{ plugin.error }}</SHint>
               </div>
               <SHint v-if="!card.plugins.length">{{ t('observe.noReport') }}</SHint>
             </div>

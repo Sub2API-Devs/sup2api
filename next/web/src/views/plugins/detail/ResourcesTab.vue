@@ -118,7 +118,6 @@ async function save() {
             min="0"
             :step="f.step"
             class="w-32"
-            :error="!!errors[f.key]"
             :disabled="!canManage"
           />
           <SHint v-if="f.unit" inline size="xs">{{ f.unit }}</SHint>

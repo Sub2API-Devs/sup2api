@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountTypesOf, platformsOf } from './pluginUtil'
+import { accountTypesOf, endpointText, platformsOf, settingsFieldErrors } from './pluginUtil'
 
 describe('plugin endpoint declarations', () => {
   it('preserves the same subset in manifests and installation reviews', () => {
@@ -24,5 +24,21 @@ describe('plugin endpoint declarations', () => {
         platforms: [{ id: 'video', endpoints: [{ id: 'generate', method: 'POST', path: '/video', protocol: 'video.generate' }] }]
       })[0].endpoints[0].id
     ).toBe('generate')
+  })
+})
+
+describe('settingsFieldErrors', () => {
+  it('maps JSON pointer and dotted paths under values, root errors apart', () => {
+    expect(settingsFieldErrors({ 'values/a/0/b': 'x', 'values.c': 'y', values: 'missing property d' })).toEqual({
+      fields: { 'a.0.b': 'x', c: 'y' },
+      root: ['missing property d']
+    })
+  })
+})
+
+describe('endpointText', () => {
+  it('joins method, path and protocol', () => {
+    expect(endpointText({ method: 'POST', path: '/v1/messages', protocol: 'anthropic' })).toBe('POST /v1/messages (anthropic)')
+    expect(endpointText({ route: '/x' })).toBe('/x')
   })
 })

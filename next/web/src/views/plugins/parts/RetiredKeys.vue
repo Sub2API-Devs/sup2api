@@ -16,13 +16,14 @@ const auth = useAuthStore()
 
 const items = ref<RetiredKey[]>([])
 const releasing = ref<RetiredKey | null>(null)
-const purge = ref(false)
-const purgeAccounts = ref(false)
+/** What to delete before releasing the key: 'accounts' and / or 'purge' (plugin schema). */
+const purgeChoice = ref<ChoiceOption['value'][]>([])
+const purge = computed(() => purgeChoice.value.includes('purge'))
+const purgeAccounts = computed(() => purgeChoice.value.includes('accounts'))
 const typed = ref('')
 const busy = ref(false)
 const matches = computed(() => !!releasing.value && typed.value.trim() === releasing.value.key)
 
-// What to delete before releasing the key: 'accounts' and / or 'purge' (plugin schema).
 const purgeOptions = computed<ChoiceOption[]>(() => {
   const k = releasing.value
   if (!k) return []
@@ -31,12 +32,6 @@ const purgeOptions = computed<ChoiceOption[]>(() => {
     { value: 'purge', label: t('plugins.retired.purge', { schema: 'plg_' + k.key }), icon: 'trash', tone: 'danger' }
   ]
 })
-const purgeChoice = computed(() => [...(purgeAccounts.value ? ['accounts'] : []), ...(purge.value ? ['purge'] : [])])
-function setPurgeChoice(v: unknown) {
-  const list = Array.isArray(v) ? v : []
-  purge.value = list.includes('purge')
-  purgeAccounts.value = list.includes('accounts')
-}
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'key', label: t('plugins.retired.key') },
@@ -57,8 +52,7 @@ async function load() {
 
 function openRelease(k: RetiredKey) {
   releasing.value = k
-  purge.value = false
-  purgeAccounts.value = false
+  purgeChoice.value = []
   typed.value = ''
 }
 
@@ -107,8 +101,8 @@ defineExpose({ load })
         <span class="text-sm">{{ formatDateTime(row.retired_at) }}</span>
       </template>
       <template #cell-actions="{ row }">
-        <SButton v-if="auth.has('plugin:uninstall') && !row.installed" size="sm" @click="openRelease(row)">
-          <SIcon name="key" class="h-4 w-4" />{{ t('plugins.retired.release') }}
+        <SButton v-if="auth.has('plugin:uninstall') && !row.installed" size="sm" icon="key" @click="openRelease(row)">
+          {{ t('plugins.retired.release') }}
         </SButton>
       </template>
     </STable>
@@ -117,12 +111,11 @@ defineExpose({ load })
       <div v-if="releasing" class="space-y-4 text-sm">
         <p>{{ t('plugins.retired.releaseBody') }}</p>
         <SChoiceCards
-          :model-value="purgeChoice"
+          v-model="purgeChoice"
           :options="purgeOptions"
           :cols="1"
           multiple
           :aria-label="t('plugins.retired.releaseTitle', { key: releasing.key })"
-          @update:model-value="setPurgeChoice"
         />
         <SHint v-if="!purge || !purgeAccounts" size="xs" tone="warning" class="flex items-center gap-1.5">
           <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.retired.inheritWarn') }}

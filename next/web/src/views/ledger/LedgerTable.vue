@@ -5,6 +5,7 @@ import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import TimeText from '@/components/TimeText.vue'
 import { formatDelta, formatNumber } from '@/utils/format'
+import { KIND_TONE } from './kinds'
 
 type Row = LedgerEntry & { user_name?: string; idempotency_key?: string }
 
@@ -27,21 +28,10 @@ function kindLabel(k: string) {
   return te(`ledger.kinds.${k}`) ? t(`ledger.kinds.${k}`) : k
 }
 
-function kindTone(k: string) {
-  if (k === 'usage') return 'gray'
-  if (k === 'admin_adjust') return 'primary'
-  if (k === 'refund' || k === 'plugin_credit') return 'success'
-  if (k === 'plugin_debit') return 'warning'
-  return 'gray'
-}
-
 function deltaCls(v: string) {
   const n = Number(v)
-  return n > 0 ? 'text-emerald-600 dark:text-emerald-400' : n < 0 ? 'text-red-600 dark:text-red-400' : ''
-}
-
-function balance(v: string) {
-  return formatNumber(v, 4)
+  if (n > 0) return 'text-success-600 dark:text-success-400'
+  return n < 0 ? 'text-danger-600 dark:text-danger-400' : ''
 }
 </script>
 
@@ -56,13 +46,13 @@ function balance(v: string) {
       <span class="text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</span>
     </template>
     <template #cell-kind="{ row }">
-      <SBadge :tone="kindTone(row.kind)">{{ kindLabel(row.kind) }}</SBadge>
+      <SBadge :tone="KIND_TONE[row.kind] ?? 'gray'">{{ kindLabel(row.kind) }}</SBadge>
     </template>
     <template #cell-delta="{ row }">
       <span class="font-mono text-sm" :class="deltaCls(row.delta)">{{ formatDelta(row.delta) }}</span>
     </template>
     <template #cell-balance_after="{ row }">
-      <span class="font-mono text-sm">{{ balance(row.balance_after) }}</span>
+      <span class="font-mono text-sm">{{ formatNumber(row.balance_after, 4) }}</span>
     </template>
     <template #cell-note="{ row }">
       <div class="max-w-md text-sm">

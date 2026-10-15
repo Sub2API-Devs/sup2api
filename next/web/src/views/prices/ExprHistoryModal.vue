@@ -39,19 +39,16 @@ watch(
   },
   { immediate: true }
 )
-
 </script>
 
 <template>
   <SModal :open="open" :title="t('prices.history.title')" width="lg" @update:open="emit('update:open', $event)">
-    <div v-if="loading" class="py-8 text-center"><SSpinner /></div>
+    <SSpinner v-if="loading" block />
     <div v-else-if="entry" class="space-y-3">
       <SDescriptions dense>
-        <SDescItem :label="t('prices.exprHash')"><span class="font-mono text-xs">{{ entry.expr_hash }}</span></SDescItem>
+        <SDescItem :label="t('prices.exprHash')" :value="entry.expr_hash" mono />
         <SDescItem :label="t('common.version')">v{{ entry.expr_version ?? 1 }}</SDescItem>
-        <template v-if="entry.created_at">
-          <SDescItem :label="t('common.createdAt')">{{ formatDateTime(entry.created_at) }}</SDescItem>
-        </template>
+        <SDescItem v-if="entry.created_at" :label="t('common.createdAt')">{{ formatDateTime(entry.created_at) }}</SDescItem>
       </SDescriptions>
       <SCode :text="entry.expression" />
     </div>

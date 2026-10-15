@@ -2,11 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SEmpty, SPageHeader, SSectionTitle, STable, STimeRange, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SChart, SEmpty, SPageHeader, SSectionTitle, STable, STimeRange, rangeBounds, type RangeKey, type TableColumn } from '@sub2api/ui'
 import UsageSummaryCards from '@/components/UsageSummaryCards.vue'
 import type { UsageSummaryRow } from '@/api/types'
-import { formatMoney, formatNumber } from '@/utils/format'
-import { rangeBounds, type RangeKey } from './timeRange'
+import { formatMoney, formatNumber, formatPercent } from '@/utils/format'
 import { dailyChartOption } from './usage'
 
 // Mine > Usage statistics: totals, a daily chart and a per-model breakdown of
@@ -45,14 +44,7 @@ async function load() {
 
 watch(() => [filters.from, filters.to], load, { immediate: true })
 
-const chartOption = computed(() =>
-  dailyChartOption(
-    [...days.value]
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .map((r) => ({ key: r.key, requests: Number(r.requests) || 0, cost: Number(r.total_cost) || 0 })),
-    { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }
-  )
-)
+const chartOption = computed(() => dailyChartOption(days.value, { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }))
 
 const modelRows = computed(() => [...models.value].sort((a, b) => Number(b.total_cost) - Number(a.total_cost)))
 const modelColumns = computed<TableColumn[]>(() => [
@@ -63,11 +55,6 @@ const modelColumns = computed<TableColumn[]>(() => [
   { key: 'output_tokens', label: t('usage.stats.output'), align: 'right' },
   { key: 'total_cost', label: t('usage.summary.cost'), align: 'right' }
 ])
-
-function rate(r: UsageSummaryRow) {
-  const n = Number(r.requests) || 0
-  return n ? ((Number(r.success) / n) * 100).toFixed(1) + '%' : '—'
-}
 </script>
 
 <template>
@@ -89,10 +76,10 @@ function rate(r: UsageSummaryRow) {
     </SCard>
 
     <STable card :columns="modelColumns" :rows="modelRows" :loading="loading" row-key="key" data-testid="stats-by-model">
-      <template #toolbar><SSectionTitle tag="h3" class="!mb-0" :title="t('usage.stats.byModel')" /></template>
+      <template #toolbar><SSectionTitle tag="h3" class="mb-0" :title="t('usage.stats.byModel')" /></template>
       <template #cell-key="{ row }"><span class="font-mono">{{ row.key || '—' }}</span></template>
       <template #cell-requests="{ row }">{{ formatNumber(row.requests) }}</template>
-      <template #cell-success="{ row }">{{ rate(row) }}</template>
+      <template #cell-success="{ row }">{{ formatPercent(row.success, row.requests) }}</template>
       <template #cell-input_tokens="{ row }">{{ formatNumber(row.input_tokens || 0) }}</template>
       <template #cell-output_tokens="{ row }">{{ formatNumber(row.output_tokens || 0) }}</template>
       <template #cell-total_cost="{ row }"><span class="font-mono">{{ formatMoney(row.total_cost) }}</span></template>

@@ -139,7 +139,7 @@ async function submit() {
       </SField>
       <SField :label="t('ledger.adjust.amount')" :error="errors.amount" required>
         <div class="flex items-center gap-2">
-          <span class="font-mono text-lg" :class="credit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">{{ credit ? '+' : '-' }}</span>
+          <span class="font-mono text-lg" :class="credit ? 'text-success-600 dark:text-success-400' : 'text-danger-600 dark:text-danger-400'">{{ credit ? '+' : '-' }}</span>
           <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" />
           <SHint inline>{{ t('common.usd') }}</SHint>
         </div>

@@ -20,10 +20,4 @@ describe('applyFormError', () => {
     expect(errors.value).toEqual({})
     expect(toast).toHaveBeenCalledWith('boom', 'error')
   })
-  it('strips a field prefix', () => {
-    const errors = ref<Record<string, string>>({})
-    const e = new ApiError(400, { code: 'invalid_argument', message: 'bad', details: { fields: [{ field: 'credentials.key', message: 'bad key' }] } })
-    applyFormError(e, errors, 'credentials.')
-    expect(errors.value).toEqual({ key: 'bad key' })
-  })
 })

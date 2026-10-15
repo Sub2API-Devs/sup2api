@@ -44,11 +44,9 @@ async function logout() {
 
 <template>
   <header
-    class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur-xl dark:border-dark-800 dark:bg-dark-900/80 sm:px-6"
+    class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-6"
   >
-    <SButton variant="ghost" size="sm" class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true">
-      <SIcon name="menu" class="h-5 w-5" />
-    </SButton>
+    <SButton variant="ghost" size="sm" icon="menu" icon-only class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true" />
     <div class="min-w-0 flex-1 truncate text-sm font-medium text-fg-muted">{{ title }}</div>
 
     <RouterLink
@@ -60,13 +58,8 @@ async function logout() {
       {{ t('nav.balance') }} {{ formatMoney(auth.balance, 2) }}
     </RouterLink>
 
-    <SButton variant="ghost" size="sm" :title="t('common.language')" :aria-label="t('common.language')" @click="toggleLocale">
-      <SIcon name="globe" class="h-4 w-4" />
-      <span>{{ currentLocale() === 'zh' ? '中' : 'EN' }}</span>
-    </SButton>
-    <SButton variant="ghost" size="sm" :title="t('common.theme.toggle')" :aria-label="t('common.theme.toggle')" @click="app.toggleTheme()">
-      <SIcon :name="app.theme === 'dark' ? 'sun' : 'moon'" class="h-4 w-4" />
-    </SButton>
+    <SButton variant="ghost" size="sm" icon="globe" :title="t('common.language')" :aria-label="t('common.language')" @click="toggleLocale">{{ currentLocale() === 'zh' ? '中' : 'EN' }}</SButton>
+    <SButton variant="ghost" size="sm" :icon="app.theme === 'dark' ? 'sun' : 'moon'" icon-only :title="t('common.theme.toggle')" :aria-label="t('common.theme.toggle')" @click="app.toggleTheme()" />
 
     <SDropdown :actions="userActions" width="14rem" @select="onUserAction">
       <template #trigger="{ toggle, attrs }">

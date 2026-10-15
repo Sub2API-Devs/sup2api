@@ -48,6 +48,13 @@ export function formatNumber(v: string | number | null | undefined, digits = 0):
   return n.toLocaleString(currentLocale() === 'zh' ? 'zh-CN' : 'en-US', { maximumFractionDigits: digits })
 }
 
+/** "12.3%" of part / whole, '—' when whole is 0 or part is missing. */
+export function formatPercent(part: string | number | null | undefined, whole: string | number | null | undefined): string {
+  const w = Number(whole) || 0
+  if (!w || part === null || part === undefined) return '—'
+  return ((Number(part) / w) * 100).toFixed(1) + '%'
+}
+
 export function formatDateTime(v: string | number | Date | null | undefined): string {
   if (!v) return '—'
   const d = v instanceof Date ? v : new Date(v)

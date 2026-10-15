@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SIcon, SInput, SPagination, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SInput, SPagination, STable, type TableColumn } from '@sub2api/ui'
 import type { UIPlugin, UIPluginPage } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -113,7 +113,7 @@ onMounted(load)
         :placeholder="t('common.searchPlaceholder')"
         :aria-label="t('common.search')"
       />
-      <SButton size="sm" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
+      <SButton size="sm" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
     </div>
     <STable :columns="columns" :rows="visible" :loading="loading">
       <template v-for="c in columns" :key="c.key" #[`cell-${c.key}`]="{ value }">

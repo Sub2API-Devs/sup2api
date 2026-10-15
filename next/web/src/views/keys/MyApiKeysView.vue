@@ -2,9 +2,10 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SCopyButton, SDropdown, SField, SHint, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SCopyButton, SDropdown, SField, SHint, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput } from '@/api/admin'
+import { deleteWithConfirm } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { fetchMyGroups } from '@/composables/lookups'
 import { usePlatforms } from '@/composables/platforms'
@@ -59,7 +60,6 @@ function isExpired(k: ApiKey) {
 function statusOf(k: ApiKey) {
   return isExpired(k) && k.status === 'active' ? 'expired' : k.status
 }
-
 
 // ------------------------------------------------------------------ create
 
@@ -149,16 +149,8 @@ function closePlain() {
 
 // ------------------------------------------------------------------ delete
 
-async function remove(k: ApiKey) {
-  const ok = await confirm({ title: t('common.delete'), message: t('apikeys.confirmDelete', { name: k.name }), danger: true })
-  if (!ok) return
-  try {
-    await api.del(`/me/api-keys/${k.id}`)
-    toast(t('common.deleted'), 'success')
-    list.reload()
-  } catch (e) {
-    notifyError(e)
-  }
+function remove(k: ApiKey) {
+  return deleteWithConfirm(`/me/api-keys/${k.id}`, t('apikeys.confirmDelete', { name: k.name }), list.reload)
 }
 </script>
 
@@ -256,7 +248,7 @@ async function remove(k: ApiKey) {
       <div class="space-y-4">
         <SAlert tone="warning">{{ t('apikeys.onceWarning') }}</SAlert>
         <div class="flex items-center gap-2">
-          <SCode class="flex-1 select-all !text-sm">{{ plaintext }}</SCode>
+          <SCode class="flex-1 select-all text-sm">{{ plaintext }}</SCode>
           <SCopyButton :text="plaintext" variant="secondary" size="md" :label="t('common.copy')" data-testid="copy-plaintext" />
         </div>
       </div>

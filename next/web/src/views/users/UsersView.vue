@@ -16,13 +16,12 @@ import {
   SPagination,
   SSelect,
   STable,
-  confirm,
   toast,
   type MenuAction,
   type TableColumn
 } from '@sub2api/ui'
 import type { Role, User } from '@/api/types'
-
+import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
@@ -80,11 +79,8 @@ const columns = computed<TableColumn[]>(() => {
   return cols
 })
 
-const statusOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: 'active', label: t('common.status_.active') },
-  { value: 'disabled', label: t('common.status_.disabled') }
-])
+const statusFilterOptions = useStatusOptions(true)
+const statusOptions = useStatusOptions()
 
 const roleOptions = computed(() => [
   { value: '', label: t('users.allRoles') },
@@ -270,16 +266,8 @@ function openBalance(u: User) {
 
 // ------------------------------------------------------------------ delete
 
-async function remove(u: User) {
-  const ok = await confirm({ title: t('common.delete'), message: t('common.confirmDelete', { name: u.email }), danger: true })
-  if (!ok) return
-  try {
-    await api.del(`/users/${u.id}`)
-    toast(t('common.deleted'), 'success')
-    list.reload()
-  } catch (e) {
-    notifyError(e)
-  }
+function remove(u: User) {
+  return deleteWithConfirm(`/users/${u.id}`, t('common.confirmDelete', { name: u.email }), list.reload)
 }
 </script>
 
@@ -293,16 +281,16 @@ async function remove(u: User) {
 
     <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #toolbar>
-        <SInput v-model="list.filters.q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
-        <SSelect v-model="list.filters.status" class="!w-40" :options="statusOptions" :aria-label="t('common.status')" />
-        <SSelect v-if="roles.length" v-model="list.filters.role" class="!w-44" :options="roleOptions" :aria-label="t('users.roles')" />
+        <SInput v-model="list.filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
+        <SSelect v-model="list.filters.status" class="w-40" :options="statusFilterOptions" :aria-label="t('common.status')" />
+        <SSelect v-if="roles.length" v-model="list.filters.role" class="w-44" :options="roleOptions" :aria-label="t('users.roles')" />
       </template>
       <template #cell-email="{ row }">
         <span class="font-medium text-fg">{{ row.email }}</span>
       </template>
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
-          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'purple' : 'primary'">{{ roleName(r) }}</SBadge>
+          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'accent' : 'primary'">{{ roleName(r) }}</SBadge>
           <SHint v-if="!row.roles || !row.roles.length" inline>—</SHint>
         </div>
       </template>
@@ -368,13 +356,7 @@ async function remove(u: User) {
           <SInput v-model="editForm.display_name" />
         </SField>
         <SField :label="t('common.status')" :error="editErrors.status">
-          <SSelect
-            v-model="editForm.status"
-            :options="[
-              { value: 'active', label: t('common.status_.active') },
-              { value: 'disabled', label: t('common.status_.disabled') }
-            ]"
-          />
+          <SSelect v-model="editForm.status" :options="statusOptions" />
         </SField>
         <SField :label="t('users.maxConcurrency')" :hint="t('users.maxConcurrencyHint')" :error="editErrors.max_concurrency">
           <SInput v-model.number="editForm.max_concurrency" type="number" min="0" />
@@ -392,14 +374,14 @@ async function remove(u: User) {
         <label
           v-for="r in roles"
           :key="r.key"
-          class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-800"
+          class="flex cursor-pointer items-start gap-3 rounded-xl border border-line px-3 py-2.5 hover:bg-surface-2"
         >
           <SCheckbox bare class="mt-0.5" :model-value="rolesSel.includes(r.key)" @update:model-value="toggleKey(rolesSel, r.key)" />
           <div class="min-w-0">
             <div class="flex items-center gap-2 text-sm font-medium">
               {{ lt(r.name) || r.key }}
               <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
-              <SBadge v-if="r.superuser" tone="purple">{{ t('users.superuser') }}</SBadge>
+              <SBadge v-if="r.superuser" tone="accent">{{ t('users.superuser') }}</SBadge>
             </div>
             <SHint v-if="lt(r.description)" size="xs" class="mt-0.5">{{ lt(r.description) }}</SHint>
           </div>

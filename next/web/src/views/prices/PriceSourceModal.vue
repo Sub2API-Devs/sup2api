@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ApiError, api } from '@sub2api/host'
 import { SButton, SCheckbox, SField, SHint, SInput, SModal, SSegmented, SSettingRow, SSwitch, STagInput, toast, type SelectOption } from '@sub2api/ui'
 import type { PriceSource, PriceSourceKind } from '@/api/types'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
 import { DEFAULT_PROVIDERS, DEFAULT_URLS, SOURCE_KINDS, isHttpUrl } from './priceSources'
 
 const props = defineProps<{ open: boolean; source: PriceSource | null }>()
@@ -14,52 +14,35 @@ const { t } = useI18n()
 const editing = computed(() => props.source)
 const saving = ref(false)
 const errors = ref<Record<string, string>>({})
-const form = reactive({
-  name: '',
-  kind: 'litellm' as PriceSourceKind,
-  url: DEFAULT_URLS.litellm,
-  apiKey: '',
-  /** Edit only: clear the stored key. */
-  clearKey: false,
-  providers: [...DEFAULT_PROVIDERS.litellm] as string[],
-  applyMultiplier: true,
-  enabled: true
-})
+
+/** The form for `s` (null = a new litellm source). */
+function formFor(s: PriceSource | null) {
+  const kind: PriceSourceKind = s?.kind ?? 'litellm'
+  const providers = s?.options?.providers
+  return {
+    name: s?.name ?? '',
+    kind,
+    url: s?.url ?? DEFAULT_URLS[kind],
+    apiKey: '',
+    /** Edit only: clear the stored key. */
+    clearKey: false,
+    providers: Array.isArray(providers) ? [...providers] : kind === 'sup2api' ? [] : [...DEFAULT_PROVIDERS[kind]],
+    applyMultiplier: s?.options?.apply_multiplier !== false,
+    enabled: s?.enabled ?? true
+  }
+}
+const form = reactive(formFor(null))
 
 const hasStoredKey = computed(() => !!editing.value?.has_api_key)
 const usesProviders = computed(() => form.kind === 'litellm' || form.kind === 'models_dev')
 
-function reset() {
-  errors.value = {}
-  const s = props.source
-  if (s) {
-    Object.assign(form, {
-      name: s.name,
-      kind: s.kind,
-      url: s.url,
-      apiKey: '',
-      clearKey: false,
-      providers: Array.isArray(s.options?.providers) ? [...s.options.providers] : s.kind === 'sup2api' ? [] : [...DEFAULT_PROVIDERS[s.kind]],
-      applyMultiplier: s.options?.apply_multiplier !== false,
-      enabled: s.enabled
-    })
-  } else {
-    Object.assign(form, {
-      name: '',
-      kind: 'litellm',
-      url: DEFAULT_URLS.litellm,
-      apiKey: '',
-      clearKey: false,
-      providers: [...DEFAULT_PROVIDERS.litellm],
-      applyMultiplier: true,
-      enabled: true
-    })
-  }
-}
-
 watch(
   () => props.open,
-  (v) => v && reset(),
+  (open) => {
+    if (!open) return
+    errors.value = {}
+    Object.assign(form, formFor(props.source))
+  },
   { immediate: true }
 )
 
@@ -123,11 +106,8 @@ async function submit() {
     emit('update:open', false)
     emit('saved', r || null)
   } catch (err) {
-    const fe = fieldErrors(err)
-    if (fe['options.providers'] && !fe.providers) fe.providers = fe['options.providers']
-    if (err instanceof ApiError && err.code === 'conflict') fe.name = err.message
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(err)
+    if (err instanceof ApiError && err.code === 'conflict') errors.value = { name: err.message }
+    else if (applyFormError(err, errors) && errors.value['options.providers']) errors.value.providers ??= errors.value['options.providers']
   } finally {
     saving.value = false
   }
@@ -190,7 +170,7 @@ async function submit() {
         <STagInput v-model="form.providers" :placeholder="t('prices.sources.providersPlaceholder')" />
       </SField>
 
-      <SSettingRow v-else :label="t('prices.sources.applyMultiplier')" :description="t('prices.sources.applyMultiplierHint')" dense class="!py-0" for="price-source-multiplier">
+      <SSettingRow v-else :label="t('prices.sources.applyMultiplier')" :description="t('prices.sources.applyMultiplierHint')" dense flush for="price-source-multiplier">
         <SSwitch
           id="price-source-multiplier"
           v-model="form.applyMultiplier"
@@ -200,7 +180,7 @@ async function submit() {
       </SSettingRow>
       <SHint v-if="!usesProviders && errors.options" tone="danger" size="xs">{{ errors.options }}</SHint>
 
-      <SSettingRow :label="t('common.status')" dense class="!py-0" for="price-source-enabled">
+      <SSettingRow :label="t('common.status')" dense flush for="price-source-enabled">
         <SSwitch id="price-source-enabled" v-model="form.enabled" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
       </SSettingRow>
     </form>

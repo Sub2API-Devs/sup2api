@@ -14,6 +14,7 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { copyText } from '@/utils/format'
 import { runPool } from './pool'
+import { isModelId, splitModelIds } from './modelIds'
 import { LATENCY_CLASS, TEST_CONCURRENCY, candidateModels, formatLatency, lastTestOf, latencyLevel, mergeCandidates, prettyBody, summarize, withoutModels, type Candidate, type CandidateSource, type TestRow } from './accountTest'
 
 const props = defineProps<{ open: boolean; account: Account | null; accountType?: AccountType | null }>()
@@ -26,9 +27,6 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const own = useOwnership()
-
-/** A complete model id (CONTRACTS §16): no wildcards. */
-const MODEL_RE = /^[A-Za-z0-9._:/@+-]{1,200}$/
 
 const rows = ref<TestRow[]>([])
 /** The "plugin default model" probe (no model sent), pinned above the list once run. */
@@ -143,8 +141,8 @@ function addRows(models: string[], source: CandidateSource): number {
 }
 
 function addCustom() {
-  const parts = custom.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
-  const bad = parts.find((p) => !MODEL_RE.test(p) || p.includes('*'))
+  const parts = splitModelIds(custom.value)
+  const bad = parts.find((p) => !isModelId(p))
   if (bad) {
     customError.value = t('accounts.modelInvalid', { model: bad })
     return
@@ -248,17 +246,15 @@ function actualModel(r: TestRow): string {
   <SModal :open="open" :title="`${t('accounts.modelTest.title')} · ${account?.name || ''}`" width="2xl" @update:open="(v) => (v ? emit('update:open', true) : close())">
     <div v-if="account" class="space-y-3" data-testid="model-test">
       <!-- summary -->
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gray-100 bg-gray-50/60 px-3.5 py-2.5 text-sm dark:border-dark-700 dark:bg-dark-900/30" data-testid="model-test-summary">
-        <span class="text-gray-600 dark:text-dark-300">{{ t('accounts.modelTest.total', { n: sum.total }) }}</span>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-sm" data-testid="model-test-summary">
+        <span class="text-fg-muted">{{ t('accounts.modelTest.total', { n: sum.total }) }}</span>
         <SBadge tone="success" dot>{{ t('accounts.modelTest.okCount', { n: sum.ok }) }}</SBadge>
         <SBadge tone="danger" dot>{{ t('accounts.modelTest.failCount', { n: sum.fail }) }}</SBadge>
         <SBadge v-if="sum.testing" tone="info" dot>{{ t('accounts.modelTest.testingCount', { n: sum.testing }) }}</SBadge>
         <span class="ml-auto flex flex-wrap items-center gap-1.5">
-          <SButton size="sm" variant="ghost" :disabled="!okModels.length" data-testid="model-test-copy-ok" @click="copyList(okModels)"><SIcon name="copy" class="h-3.5 w-3.5" />{{ t('accounts.modelTest.copyOk') }}</SButton>
-          <SButton size="sm" variant="ghost" :disabled="!failedModels.length" data-testid="model-test-copy-fail" @click="copyList(failedModels)"><SIcon name="copy" class="h-3.5 w-3.5" />{{ t('accounts.modelTest.copyFail') }}</SButton>
-          <SButton v-if="canUpdate && removable.length" size="sm" variant="danger" :disabled="running" data-testid="model-test-remove-failed" @click="removeFailed">
-            <SIcon name="trash" class="h-3.5 w-3.5" />{{ t('accounts.modelTest.removeFailed', { n: removable.length }) }}
-          </SButton>
+          <SButton size="sm" variant="ghost" icon="copy" :disabled="!okModels.length" data-testid="model-test-copy-ok" @click="copyList(okModels)">{{ t('accounts.modelTest.copyOk') }}</SButton>
+          <SButton size="sm" variant="ghost" icon="copy" :disabled="!failedModels.length" data-testid="model-test-copy-fail" @click="copyList(failedModels)">{{ t('accounts.modelTest.copyFail') }}</SButton>
+          <SButton v-if="canUpdate && removable.length" size="sm" variant="danger" icon="trash" :disabled="running" data-testid="model-test-remove-failed" @click="removeFailed">{{ t('accounts.modelTest.removeFailed', { n: removable.length }) }}</SButton>
         </span>
       </div>
       <SHint size="xs">{{ t('accounts.modelTest.diagnosisOnly') }}</SHint>
@@ -271,16 +267,12 @@ function actualModel(r: TestRow): string {
         <form class="flex min-w-[14rem] flex-1 flex-col gap-1" @submit.prevent="addCustom">
           <div class="flex gap-2">
             <SInput v-model="custom" mono :error="!!customError" :placeholder="t('accounts.modelTest.customPlaceholder')" data-testid="model-test-custom" />
-            <SButton type="submit" :disabled="!custom.trim()"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.modelTest.add') }}</SButton>
+            <SButton type="submit" icon="plus" :disabled="!custom.trim()">{{ t('accounts.modelTest.add') }}</SButton>
           </div>
-          <p v-if="customError" class="input-error-text !mt-0">{{ customError }}</p>
+          <SHint v-if="customError" tone="danger" size="xs">{{ customError }}</SHint>
         </form>
-        <SButton v-if="canFetch" :loading="fetching" :title="t('accounts.modelTest.fetchHint')" data-testid="model-test-fetch" @click="fetchUpstream">
-          <SIcon v-if="!fetching" name="download" class="h-4 w-4" />{{ t('accounts.modelTest.fetch') }}
-        </SButton>
-        <SButton :loading="probe?.state === 'testing'" :title="t('accounts.modelTest.probeHint')" data-testid="model-test-probe" @click="testProbe">
-          <SIcon v-if="probe?.state !== 'testing'" name="bolt" class="h-4 w-4" />{{ t('accounts.modelTest.probe') }}
-        </SButton>
+        <SButton v-if="canFetch" icon="download" :loading="fetching" :title="t('accounts.modelTest.fetchHint')" data-testid="model-test-fetch" @click="fetchUpstream">{{ t('accounts.modelTest.fetch') }}</SButton>
+        <SButton icon="bolt" :loading="probe?.state === 'testing'" :title="t('accounts.modelTest.probeHint')" data-testid="model-test-probe" @click="testProbe">{{ t('accounts.modelTest.probe') }}</SButton>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
@@ -316,7 +308,7 @@ function actualModel(r: TestRow): string {
           <span v-else class="text-xs text-fg-subtle">—</span>
         </template>
         <template #cell-http="{ row }">
-          <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-danger-600 dark:text-danger-400' : 'text-gray-600 dark:text-dark-300'">{{ row.result.status }}</span>
+          <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-danger-600 dark:text-danger-400' : 'text-fg-muted'">{{ row.result.status }}</span>
           <span v-else class="text-xs text-fg-subtle" :title="row.result ? t('accounts.testNoHTTPResponse') : undefined">—</span>
         </template>
         <template #cell-detail="{ row }">
@@ -351,13 +343,13 @@ function actualModel(r: TestRow): string {
               <SDescItem v-if="row.result.message" :label="t('accounts.message')" class="break-all">{{ row.result.message }}</SDescItem>
               <SDescItem v-if="row.result.reason" :label="t('accounts.testReason')" class="break-all">{{ row.result.reason }}</SDescItem>
               <SDescItem v-if="effectBadge(row.result.effect)" :label="t('accounts.testEffectTitle')">
-                  <SBadge :tone="effectBadge(row.result.effect)!.tone">{{ effectBadge(row.result.effect)!.label }}</SBadge>
-                  <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
-                </SDescItem>
+                <SBadge :tone="effectBadge(row.result.effect)!.tone">{{ effectBadge(row.result.effect)!.label }}</SBadge>
+                <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
+              </SDescItem>
             </SDescriptions>
             <div v-if="row.result?.body">
               <div class="mb-1 flex items-center justify-between">
-                <span class="font-medium text-gray-700 dark:text-gray-200">{{ t('accounts.testBody') }}</span>
+                <span class="font-medium text-fg">{{ t('accounts.testBody') }}</span>
                 <SCopyButton :text="prettyBody(row.result.body)" />
               </div>
               <SCode class="max-h-64 overflow-y-auto">{{ prettyBody(row.result.body) }}</SCode>
@@ -369,7 +361,7 @@ function actualModel(r: TestRow): string {
       <SHint v-else size="xs">{{ t('accounts.modelTest.noMatch') }}</SHint>
     </div>
     <template #footer>
-      <SButton v-if="running" variant="danger" data-testid="model-test-stop" @click="stop"><SIcon name="stop" class="h-4 w-4" />{{ t('accounts.modelTest.stop') }}</SButton>
+      <SButton v-if="running" variant="danger" icon="stop" data-testid="model-test-stop" @click="stop">{{ t('accounts.modelTest.stop') }}</SButton>
       <SButton @click="close">{{ t('common.close') }}</SButton>
       <SButton :disabled="!selected.size || running" data-testid="model-test-selected" @click="testSelected">{{ t('accounts.modelTest.testSelected', { n: selected.size }) }}</SButton>
       <SButton variant="primary" :loading="running" :disabled="!visible.length || running" data-testid="model-test-all" @click="testAll">{{ t('accounts.modelTest.testAll', { n: visible.length }) }}</SButton>

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SDropdown, SHint, SSectionTitle, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { StickyRule, StickyStats } from '@/api/types'
+import { deleteWithConfirm } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
@@ -114,14 +115,7 @@ async function onAction(r: Row, key: string) {
       notifyError(e)
     }
   } else if (key === 'delete') {
-    if (!(await confirm({ message: t('common.confirmDelete', { name: r.name }), danger: true }))) return
-    try {
-      await api.del(`/sticky-rules/${r.id}`)
-      toast(t('common.deleted'), 'success')
-      load()
-    } catch (e) {
-      notifyError(e)
-    }
+    await deleteWithConfirm(`/sticky-rules/${r.id}`, t('common.confirmDelete', { name: r.name }), load)
   }
 }
 
@@ -156,7 +150,7 @@ async function toggle(r: Row, v: boolean) {
         <template #cell-name="{ row }">
           <div class="font-mono text-sm">{{ row.name }}</div>
           <div class="mt-0.5 flex items-center gap-1">
-            <SBadge :tone="row.source === 'admin' ? 'primary' : 'purple'">
+            <SBadge :tone="row.source === 'admin' ? 'primary' : 'accent'">
               {{ t(`sticky.source.${row.source}`) }}
             </SBadge>
           </div>
@@ -166,15 +160,15 @@ async function toggle(r: Row, v: boolean) {
         </template>
         <template #cell-match="{ row }">
           <dl class="grid grid-cols-[max-content_1fr] gap-x-2 text-xs">
-            <dt class="muted">{{ t('sticky.modal.protocols') }}</dt>
+            <dt class="text-fg-muted">{{ t('sticky.modal.protocols') }}</dt>
             <dd class="font-mono">{{ list(row.match?.protocols) }}</dd>
-            <dt class="muted">{{ t('sticky.modal.models') }}</dt>
+            <dt class="text-fg-muted">{{ t('sticky.modal.models') }}</dt>
             <dd class="font-mono">{{ list(row.match?.models) }}</dd>
             <template v-if="row.match?.userAgentContains?.length">
-              <dt class="muted">{{ t('sticky.cols.ua') }}</dt>
+              <dt class="text-fg-muted">{{ t('sticky.cols.ua') }}</dt>
               <dd class="font-mono">{{ list(row.match.userAgentContains) }}</dd>
             </template>
-            <dt class="muted">{{ t('sticky.cols.keySources') }}</dt>
+            <dt class="text-fg-muted">{{ t('sticky.cols.keySources') }}</dt>
             <dd class="font-mono">{{ sourcesSummary(row) || '—' }}<SHint v-if="row.value_regex" inline size="xs"> /{{ row.value_regex }}/</SHint></dd>
           </dl>
         </template>
@@ -187,7 +181,7 @@ async function toggle(r: Row, v: boolean) {
         </template>
         <template #cell-stats="{ row }">
           <div v-if="row.stats" class="text-xs">
-            <div class="font-semibold text-gray-900 dark:text-white">{{ hitRate(row.stats) }}</div>
+            <div class="font-semibold text-fg">{{ hitRate(row.stats) }}</div>
             <SHint size="xs">
               {{ t('sticky.statsLine', { hits: formatNumber(row.stats.hits), misses: formatNumber(row.stats.misses), rebinds: formatNumber(row.stats.rebinds) }) }}
             </SHint>

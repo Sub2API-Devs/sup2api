@@ -222,16 +222,17 @@ onMounted(load)
             <SButton
               v-if="status === 'installed' || status === 'disabled'"
               variant="primary"
+              icon="play"
               :loading="acting === 'enable'"
               @click="startRollout('enable')"
             >
-              <SIcon name="play" class="h-4 w-4" />{{ t('common.enable') }}
+              {{ t('common.enable') }}
             </SButton>
-            <SButton v-if="status === 'enabled' && approvedUpgrades.length" variant="primary" @click="openUpgrade">
-              <SIcon name="upload" class="h-4 w-4" />{{ t('plugins.detail.upgrade') }}
+            <SButton v-if="status === 'enabled' && approvedUpgrades.length" variant="primary" icon="upload" @click="openUpgrade">
+              {{ t('plugins.detail.upgrade') }}
             </SButton>
-            <SButton v-if="status === 'enabled'" :loading="acting === 'disable'" @click="startRollout('disable')">
-              <SIcon name="stop" class="h-4 w-4" />{{ t('common.disable') }}
+            <SButton v-if="status === 'enabled'" :loading="acting === 'disable'" icon="stop" @click="startRollout('disable')">
+              {{ t('common.disable') }}
             </SButton>
           </template>
           <SDropdown :actions="moreActions" @select="onMore" />

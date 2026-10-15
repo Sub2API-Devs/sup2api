@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -196,6 +196,10 @@ function pickStat(k: string) {
 const applying = ref(false)
 const result = ref<PriceSyncResult | null>(null)
 const resultOpen = ref(false)
+const resultCounts = computed(() => {
+  const r = result.value
+  return r ? ([['created', r.created], ['updated', r.updated], ['unchanged', r.unchanged], ['skipped', r.skipped.length]] as const) : []
+})
 
 async function apply() {
   const models = items.value.filter((x) => selected.value.has(x.model) && selectable(x)).map((x) => x.model)
@@ -240,23 +244,21 @@ async function apply() {
       </template>
     </SPageHeader>
 
-    <!-- fetching -->
-    <div v-if="fetching && !preview" class="card flex flex-col items-center gap-3 py-16 text-sm text-fg-muted" data-testid="price-sync-fetching">
-      <SSpinner size="lg" />
-      {{ t('prices.sync.fetching', { name: sourceName }) }}
-    </div>
+    <SCard v-if="fetching && !preview" data-testid="price-sync-fetching">
+      <div class="flex flex-col items-center gap-3 py-12 text-sm text-fg-muted">
+        <SSpinner size="lg" />
+        {{ t('prices.sync.fetching', { name: sourceName }) }}
+      </div>
+    </SCard>
 
-    <!-- fetch failed -->
-    <div
-      v-else-if="fetchError && !preview"
-      class="card flex flex-col items-center gap-3 py-12 text-center"
-      data-testid="price-sync-error"
-    >
-      <SIcon name="x" class="h-8 w-8 text-red-500 dark:text-red-400" />
-      <p class="font-medium text-fg">{{ t('prices.sync.fetchFailed') }}</p>
-      <SHint tone="danger" class="max-w-xl break-words">{{ fetchError }}</SHint>
-      <SButton variant="primary" :loading="fetching" @click="fetchPreview">{{ t('prices.sync.retry') }}</SButton>
-    </div>
+    <SCard v-else-if="fetchError && !preview" data-testid="price-sync-error">
+      <div class="flex flex-col items-center gap-3 py-8 text-center">
+        <SIcon name="x" class="h-8 w-8 text-danger-500 dark:text-danger-400" />
+        <p class="font-medium text-fg">{{ t('prices.sync.fetchFailed') }}</p>
+        <SHint tone="danger" class="max-w-xl break-words">{{ fetchError }}</SHint>
+        <SButton variant="primary" :loading="fetching" @click="fetchPreview">{{ t('prices.sync.retry') }}</SButton>
+      </div>
+    </SCard>
 
     <template v-else-if="preview">
       <SHint size="xs" class="mb-3" data-testid="price-sync-fetched">
@@ -301,7 +303,7 @@ async function apply() {
           <div class="-mt-1 w-full">
             <STabs v-model="tab" :tabs="tabs" data-testid="price-sync-tabs" />
           </div>
-          <SInput v-model="q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
+          <SInput v-model="q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
           <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
             {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
           </SButton>
@@ -310,7 +312,7 @@ async function apply() {
           <div class="ml-auto flex flex-wrap items-center gap-3">
             <span class="text-sm" data-testid="price-sync-selected">
               {{ t('prices.sync.selected', { n: formatNumber(selectedCount) }) }}
-              <span v-if="selectedManual" class="text-amber-600 dark:text-amber-400">· {{ t('prices.sync.selectedManual', { n: selectedManual }) }}</span>
+              <SHint v-if="selectedManual" inline tone="warning">· {{ t('prices.sync.selectedManual', { n: selectedManual }) }}</SHint>
             </span>
             <SButton variant="primary" :disabled="!selectedCount" :loading="applying" data-testid="price-sync-apply" @click="apply">
               {{ t('prices.sync.apply', { n: formatNumber(selectedCount) }) }}
@@ -346,13 +348,9 @@ async function apply() {
     <SModal v-model:open="resultOpen" :title="t('prices.sync.resultTitle')" width="lg">
       <div v-if="result" class="space-y-4" data-testid="price-sync-result">
         <SGrid :cols-base="2" :cols="4" :gap="3">
-          <div v-for="k in ['created', 'updated', 'unchanged'] as const" :key="k" class="rounded-lg bg-surface-2 px-3 py-2">
+          <div v-for="[k, n] in resultCounts" :key="k" class="rounded-lg bg-surface-2 px-3 py-2">
             <SHint size="xs">{{ t(`prices.sync.result.${k}`) }}</SHint>
-            <p class="text-xl font-semibold tabular-nums" :data-result="k">{{ result[k] }}</p>
-          </div>
-          <div class="rounded-lg bg-surface-2 px-3 py-2">
-            <SHint size="xs">{{ t('prices.sync.result.skipped') }}</SHint>
-            <p class="text-xl font-semibold tabular-nums" :class="result.skipped.length ? 'text-amber-600 dark:text-amber-400' : ''" data-result="skipped">{{ result.skipped.length }}</p>
+            <p class="text-xl font-semibold tabular-nums" :class="k === 'skipped' && n ? 'text-warning-600 dark:text-warning-400' : ''" :data-result="k">{{ n }}</p>
           </div>
         </SGrid>
         <div v-if="result.skipped.length">

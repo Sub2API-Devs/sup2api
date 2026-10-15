@@ -11,7 +11,6 @@ function make() {
   return useSettingsForm<S>({
     path: '/settings/x',
     defaults: { enabled: true, ttl: 60 },
-    responseKey: 'enabled',
     toBody: (f, errs) => {
       if (f.ttl <= 0) errs.ttl = 'positive'
       return { ...f }
@@ -69,6 +68,16 @@ describe('useSettingsForm', () => {
     expect(await s.save()).toBe(false)
     expect(s.errors.value).toEqual({ ttl: 'too small' })
     expect(toast).not.toHaveBeenCalled()
+    expect(s.dirty.value).toBe(true)
+  })
+
+  it('compares the body that would be saved, not the raw form', async () => {
+    get.mockResolvedValue({ name: 'a' })
+    const s = useSettingsForm<{ name: string }>({ path: '/n', defaults: { name: '' }, toBody: (f) => ({ name: f.name.trim() }) })
+    await s.load()
+    s.form.name = ' a '
+    expect(s.dirty.value).toBe(false)
+    s.form.name = 'b'
     expect(s.dirty.value).toBe(true)
   })
 

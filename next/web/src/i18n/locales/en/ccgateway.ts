@@ -129,7 +129,7 @@ export default {
     version: 'Installed version: {version}',
     install: 'Install runtime', upgrade: 'Upgrade runtime', installing: 'Pulling the images and restarting the controller; this can take a few minutes…',
     confirmMessage: 'The images are pulled on the Docker host over SSH and the container controller restarts; existing account containers are kept. New images apply to new containers only; update existing accounts in place with “Update the worker of existing accounts”. Connection discovery may be interrupted briefly during the controller restart.',
-    done: 'The runtime is installed at the latest version', failed: 'Installing the runtime failed', loadFailed: 'The runtime state could not be read', reason: 'Reason: {message}',
+    done: 'The runtime is installed at the latest version', failed: 'Installing the runtime failed', loadFailed: 'The runtime state could not be read',
     readOnly: 'Installing or upgrading the runtime needs settings:manage.',
     subtitleController: 'In control panel mode, the images ship in the ccgateway plugin package and can be pushed to the controller in one step; they can also be uploaded by hand or pulled by the controller. The table compares the images the controller reports; see each account container for its actual image.',
     confirmMessageController: 'The controller’s target images are set to the saved images through the control panel (the controller tries to pull what it lacks); a different controller image upgrades the controller itself and waits for it to recover. Existing account containers are not recreated; new images apply to new or re-authorized containers.'

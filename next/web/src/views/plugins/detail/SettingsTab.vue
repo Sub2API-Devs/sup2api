@@ -6,7 +6,7 @@ import { SchemaForm, SHint, toast } from '@sub2api/ui'
 import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
-import type { PluginSettings } from '../pluginUtil'
+import { settingsFieldErrors, type PluginSettings } from '../pluginUtil'
 
 // Plugin settings rendered from the plugin's JSON Schema in the settings
 // layout (one SSettingsGroup per ui:section, one SSettingRow per field).
@@ -60,9 +60,11 @@ async function save() {
     loaded.value = JSON.stringify(values.value)
     emit('saved')
   } catch (e) {
-    errors.value = fieldErrors(e, 'values.')
-    if (!Object.keys(errors.value).length) errors.value = fieldErrors(e)
-    notifyError(e)
+    const { fields, root } = settingsFieldErrors(fieldErrors(e))
+    errors.value = fields
+    // Errors of the whole object have no field to show at.
+    if (root.length) toast(root.join('; '), 'error')
+    else notifyError(e)
   } finally {
     saving.value = false
   }

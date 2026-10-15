@@ -55,7 +55,7 @@ onMounted(load)
     <STable card :columns="columns" :rows="rows" :loading="loading" row-key="id" expandable>
       <template #toolbar>
         <form class="flex items-center gap-2" data-testid="audit-filter" @submit.prevent="search">
-          <SInput v-model="action" class="!w-64" icon="search" clearable :aria-label="t('observe.filter')" :placeholder="t('observe.filter')" />
+          <SInput v-model="action" class="w-64" icon="search" clearable :aria-label="t('observe.filter')" :placeholder="t('observe.filter')" />
           <SButton type="submit">{{ t('observe.search') }}</SButton>
         </form>
       </template>

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SPagination, STimeRange } from '@sub2api/ui'
+import { SButton, SCard, SChart, SPageHeader, SPagination, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import UsageSummaryCards from '@/components/UsageSummaryCards.vue'
 import UsageFilters from './UsageFilters.vue'
 import type { Group, UsageSummaryRow } from '@/api/types'
@@ -10,7 +10,6 @@ import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import UsageTable from './UsageTable.vue'
-import { rangeBounds, type RangeKey } from './timeRange'
 import { dailyChartOption, type UsageRow } from './usage'
 
 const { t } = useI18n()
@@ -55,14 +54,7 @@ async function loadSummary() {
 
 watch(filters, loadSummary, { deep: true, immediate: true })
 
-const chartOption = computed(() =>
-  dailyChartOption(
-    [...summary.value]
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .map((r) => ({ key: r.key, requests: Number(r.requests) || 0, cost: Number(r.total_cost) || 0 })),
-    { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }
-  )
-)
+const chartOption = computed(() => dailyChartOption(summary.value, { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }))
 
 function refresh() {
   reload()

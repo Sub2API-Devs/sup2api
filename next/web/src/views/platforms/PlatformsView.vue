@@ -60,7 +60,7 @@ function methodTone(m: string) {
               <span class="font-semibold text-fg">{{ lt(p.label) || p.id }}</span>
               <SHint inline size="xs" class="font-mono">{{ p.id }}</SHint>
               <SBadge v-if="p.builtin" tone="primary">{{ t('platforms.builtin') }}</SBadge>
-              <SBadge v-else tone="purple" :title="p.plugin_key || ''">
+              <SBadge v-else tone="accent" :title="p.plugin_key || ''">
                 <RouterLink v-if="p.plugin_key && auth.has('plugin:read')" :to="`/plugins/${encodeURIComponent(p.plugin_key)}`" class="hover:underline">
                   {{ t('platforms.pluginBy', { name: pluginName(p) || p.plugin_key }) }}
                 </RouterLink>

@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SField, SGrid, SHint, SIcon, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSegmented, SSettingRow, SSpinner, SSwitch, STextarea, confirm, toast, type SelectOption } from '@sub2api/ui'
-import type { Price, PriceValidateResult } from '@/api/types'
+import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SField, SGrid, SHint, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSegmented, SSettingRow, SSpinner, SSwitch, STextarea, confirm, toast, type SelectOption } from '@sub2api/ui'
+import type { Price } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
-import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
-import { formatDateTime, formatMoney } from '@/utils/format'
+import { notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
+import { formatDateTime } from '@/utils/format'
 import ExprHistoryModal from './ExprHistoryModal.vue'
 import PriceTrialPanel from './PriceTrialPanel.vue'
 import VisualExprEditor from './VisualExprEditor.vue'
 import VideoPriceEditor from './VideoPriceEditor.vue'
 import { emptyVideoPrice, readVideoPrice, videoExpression } from './videoPrice'
 import { issueText, type Issue } from './issues'
+import PriceValidationCard from './PriceValidationCard.vue'
+import { usePriceValidation, type PricePayload } from './usePriceValidation'
 import {
   CACHE_VARS,
   TOKEN_VARS,
@@ -87,8 +90,7 @@ function resetForm() {
   sourceText.value = ''
   notVisual.value = false
   errors.value = {}
-  validation.value = null
-  validationError.value = ''
+  validator.reset()
 }
 
 function applyPrice(p: Price) {
@@ -134,7 +136,7 @@ async function load() {
 
 // ------------------------------------------------------------------ derived payload
 
-const payload = computed<{ mode: PriceMode; config: Record<string, unknown>; expression: string }>(() => {
+const payload = computed<PricePayload & { mode: PriceMode }>(() => {
   if (mode.value === 'per_request') {
     return { mode: 'per_request', config: { price: num(perRequest.value) }, expression: perRequestExpr(perRequest.value) }
   }
@@ -197,62 +199,8 @@ function toVisual() {
 
 // ------------------------------------------------------------------ validation
 
-interface ValidationView {
-  ok: boolean
-  expression?: string
-  errors: Issue[]
-  warnings: Issue[]
-  cost_per_million_input?: string | number
-}
-
-const validation = ref<ValidationView | null>(null)
-const validationError = ref('')
-const validating = ref(false)
-let vSeq = 0
-let vTimer: ReturnType<typeof setTimeout> | undefined
-
-async function validateNow(): Promise<ValidationView | null> {
-  clearTimeout(vTimer)
-  const body = { ...payload.value }
-  if (!body.expression.trim() || localIssues.value.length) {
-    validation.value = null
-    return null
-  }
-  const my = ++vSeq
-  validating.value = true
-  try {
-    const r = await api.post<PriceValidateResult & { cost_per_million_input?: string }>('/prices/validate', body)
-    if (my === vSeq) {
-      validation.value = { ...r, errors: (r?.errors || []) as Issue[], warnings: (r?.warnings || []) as Issue[] }
-      validationError.value = ''
-    }
-    return validation.value
-  } catch (e) {
-    if (my === vSeq) {
-      validation.value = null
-      validationError.value = errorMessage(e)
-    }
-    return null
-  } finally {
-    if (my === vSeq) validating.value = false
-  }
-}
-
-watch(
-  payload,
-  () => {
-    clearTimeout(vTimer)
-    vTimer = setTimeout(validateNow, 500)
-  },
-  { deep: true, immediate: true }
-)
-onBeforeUnmount(() => clearTimeout(vTimer))
-
-/** Server-normalized expression when it differs from the locally generated one. */
-const serverExpr = computed(() => {
-  const e = validation.value?.expression
-  return e && e.trim() !== payload.value.expression.trim() ? e : ''
-})
+const validator = usePriceValidation(payload, localIssues)
+const { validation, error: validationError, validating, serverExpr } = validator
 
 // ------------------------------------------------------------------ actions
 
@@ -271,15 +219,8 @@ async function submit(body: Record<string, unknown>): Promise<void> {
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === 'invalid_argument') {
-      const d = e.details || {}
-      if (Array.isArray(d.errors) || Array.isArray(d.warnings)) {
-        validation.value = {
-          ok: !(d.errors?.length > 0),
-          expression: d.expression,
-          errors: d.errors || [],
-          warnings: d.warnings || []
-        }
-      }
+      const d = e.details
+      validator.showSaveIssues(d)
       // Big-cost warning: ask, then resend the same body with confirm=true.
       if (d.confirmation_required && !body.confirm) {
         const list = ((d.warnings || []) as Issue[]).map(issueText).join('\n')
@@ -292,9 +233,7 @@ async function submit(body: Record<string, unknown>): Promise<void> {
         return
       }
     }
-    const fe = fieldErrors(e)
-    errors.value = fe
-    if (!Object.keys(fe).length) notifyError(e)
+    applyFormError(e, errors)
   }
 }
 
@@ -329,7 +268,6 @@ async function save() {
   }
 }
 
-// Declared last: load() -> resetForm() touches the validation state above.
 watch(priceId, load, { immediate: true })
 
 const title = computed(() => {
@@ -360,7 +298,7 @@ const title = computed(() => {
 
     <SAlert v-if="syncedNotice && !loading" tone="info" dense data-testid="price-synced-notice">{{ syncedNotice }}</SAlert>
 
-    <div v-if="loading" class="py-16 text-center"><SSpinner size="lg" /></div>
+    <SSpinner v-if="loading" size="lg" block />
     <template v-else>
       <!-- basic -->
       <SCard :title="t('prices.basic')">
@@ -373,7 +311,7 @@ const title = computed(() => {
             <SInput v-model="form.note" :disabled="readonly" />
           </SField>
         </SGrid>
-        <SSettingRow :label="t('common.status')" dense class="mt-2 !py-0" for="price-enabled">
+        <SSettingRow :label="t('common.status')" dense flush class="mt-2" for="price-enabled">
           <SSwitch id="price-enabled" v-model="form.enabled" :disabled="readonly" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
         </SSettingRow>
         <SDescriptions v-if="price" class="mt-4 border-t border-line pt-4" dense>
@@ -382,9 +320,7 @@ const title = computed(() => {
             <SHint inline size="xs">v{{ price.expr_version || 1 }}</SHint>
             <SLink v-if="price.expr_hash" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
           </div></SDescItem>
-          <template v-if="price.updated_at">
-            <SDescItem :label="t('common.updatedAt')">{{ formatDateTime(price.updated_at) }}</SDescItem>
-          </template>
+          <SDescItem v-if="price.updated_at" :label="t('common.updatedAt')">{{ formatDateTime(price.updated_at) }}</SDescItem>
         </SDescriptions>
       </SCard>
 
@@ -456,23 +392,7 @@ const title = computed(() => {
         </div>
       </SCard>
 
-      <!-- validation -->
-      <SCard :title="t('prices.validate.title')">
-        <template #actions><SSpinner v-if="validating" size="sm" /></template>
-        <ul v-if="localIssues.length" class="space-y-1 text-sm text-red-600 dark:text-red-400">
-          <li v-for="(x, i) in localIssues" :key="i" class="flex items-start gap-1"><SIcon name="x" class="mt-0.5 h-4 w-4 shrink-0" />{{ x }}</li>
-        </ul>
-        <SHint v-else-if="validationError" tone="danger">{{ validationError }}</SHint>
-        <div v-else-if="validation" class="space-y-1 text-sm">
-          <SHint v-if="validation.ok && !validation.errors.length" tone="success" class="flex items-start gap-1"><SIcon name="check" class="mt-0.5 h-4 w-4 shrink-0" />{{ t('prices.validate.ok') }}</SHint>
-          <SHint v-for="(x, i) in validation.errors" :key="'e' + i" tone="danger" class="flex items-start gap-1"><SIcon name="x" class="mt-0.5 h-4 w-4 shrink-0" />{{ issueText(x) }}</SHint>
-          <SHint v-if="validation.cost_per_million_input !== undefined && validation.cost_per_million_input !== null">
-            {{ t('prices.validate.costPerMillion', { cost: formatMoney(validation.cost_per_million_input) }) }}
-          </SHint>
-          <SHint v-for="(x, i) in validation.warnings" :key="'w' + i" tone="warning" class="flex items-start gap-1"><SIcon name="warning" class="mt-0.5 h-4 w-4 shrink-0" />{{ issueText(x) }}</SHint>
-        </div>
-        <SHint v-else>{{ t('prices.validate.pending') }}</SHint>
-      </SCard>
+      <PriceValidationCard :local-issues="localIssues" :validation="validation" :error="validationError" :validating="validating" />
 
       <!-- trial -->
       <SCard :title="t('prices.trial.title')">

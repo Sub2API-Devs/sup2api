@@ -9,30 +9,40 @@ import { applyFormError } from '@/utils/formErrors'
  * Load / edit / save one settings object (GET + PUT on the same path).
  *
  * - `defaults`: the form before anything was loaded.
- * - `fromServer(r)`: maps a server response (or the request body when the PUT
- *   returns nothing usable) to the form shape. Defaults to a shallow merge.
- * - `toBody(form, errors)`: validates and builds the PUT body. Put messages in
- *   `errors` (field → text) to stop the save. Defaults to the form itself.
- * - `snapshot(form)`: what `dirty` compares; defaults to the form.
- * - `responseKey`: only treat a PUT response as the saved object when it has
- *   this key (some endpoints answer `{}`).
- * - `inlineLoadError`: put load failures in `loadError` instead of a toast.
+ * - `fromServer(r)`: maps a server object (or the PUT body when the PUT
+ *   answers nothing) to the form. Defaults to a shallow merge over `defaults`.
+ * - `toBody(form, errors)`: validates and builds the PUT body; messages put in
+ *   `errors` (field → text) stop the save. Defaults to the form itself. `dirty`
+ *   compares this body with the loaded one, so formatting-only edits (spaces,
+ *   "3" vs 3) do not count.
+ * - `inlineLoadError`: put a load failure in `loadError` instead of a toast.
+ *
+ * `save()` resolves true once saved; follow-up work goes after it.
  */
 export interface SettingsFormOptions<T extends object, B> {
   path: string
   defaults: T
-  fromServer?: (r: any) => T
+  fromServer?: (r: Partial<B>) => T
   toBody?: (form: T, errors: Record<string, string>) => B
-  snapshot?: (form: T) => unknown
-  responseKey?: string
   inlineLoadError?: boolean
-  /** Called after each successful load or save with the raw response. */
-  onApply?: (r: any) => void
-  onSaved?: (r: any) => void
-  savedMessage?: string
 }
 
-export function useSettingsForm<T extends object, B = T>(opts: SettingsFormOptions<T, B>) {
+export interface SettingsForm<T extends object, B> {
+  form: T
+  loading: Ref<boolean>
+  saving: Ref<boolean>
+  dirty: Ref<boolean>
+  errors: Ref<Record<string, string>>
+  loadError: Ref<string>
+  isLoaded: Ref<boolean>
+  load: () => Promise<void>
+  save: () => Promise<boolean>
+  reset: () => void
+  /** Replaces the form with a server object and marks it clean. */
+  apply: (r: Partial<B> | null | undefined) => void
+}
+
+export function useSettingsForm<T extends object, B = T>(opts: SettingsFormOptions<T, B>): SettingsForm<T, B> {
   // Settings forms are flat objects of primitives, so the reactive proxy has the same shape as T.
   const form = reactive({ ...opts.defaults }) as T
   const loaded = ref<string | null>(null)
@@ -40,25 +50,25 @@ export function useSettingsForm<T extends object, B = T>(opts: SettingsFormOptio
   const saving = ref(false)
   const loadError = ref('')
   const errors = ref<Record<string, string>>({})
-  const fromServer = opts.fromServer ?? ((r: any) => ({ ...opts.defaults, ...(r || {}) }) as T)
-  const snap = () => JSON.stringify(opts.snapshot ? opts.snapshot(form) : form)
-  const dirty = computed(() => loaded.value !== null && snap() !== loaded.value)
-  let savedForm: T | null = null
+  const fromServer = opts.fromServer ?? ((r: Partial<B>) => ({ ...opts.defaults, ...r }) as T)
+  const toBody = opts.toBody ?? ((f: T) => f as unknown as B)
+  const snapshot = () => JSON.stringify(toBody(form, {}))
+  const isLoaded = computed(() => loaded.value !== null)
+  const dirty = computed(() => isLoaded.value && snapshot() !== loaded.value)
+  let saved: T | null = null
 
-  /** Replaces the form with a server object and marks it clean. */
-  function apply(r: any) {
-    const next = fromServer(r)
+  function apply(r: Partial<B> | null | undefined) {
+    const next = fromServer(r ?? {})
     Object.assign(form, next)
-    savedForm = { ...next }
-    loaded.value = snap()
-    opts.onApply?.(r)
+    saved = { ...next }
+    loaded.value = snapshot()
   }
 
   async function load() {
     loading.value = true
     loadError.value = ''
     try {
-      apply(await api.get(opts.path))
+      apply(await api.get<Partial<B>>(opts.path))
     } catch (e) {
       if (opts.inlineLoadError) loadError.value = errorMessage(e)
       else notifyError(e)
@@ -69,16 +79,15 @@ export function useSettingsForm<T extends object, B = T>(opts: SettingsFormOptio
 
   async function save(): Promise<boolean> {
     const errs: Record<string, string> = {}
-    const body = opts.toBody ? opts.toBody(form, errs) : (form as unknown as B)
+    const body = toBody(form, errs)
     errors.value = errs
     if (Object.keys(errs).length) return false
     saving.value = true
     try {
-      const r = await api.put(opts.path, body)
-      const usable = r && typeof r === 'object' && (!opts.responseKey || opts.responseKey in (r as object))
-      apply(usable ? r : body)
-      toast(opts.savedMessage ?? i18n.global.t('common.saved'), 'success')
-      opts.onSaved?.(r)
+      const r = await api.put<Partial<B> | null>(opts.path, body)
+      // Some endpoints answer an empty object: keep what was sent.
+      apply(r && typeof r === 'object' && Object.keys(r).length ? r : body)
+      toast(i18n.global.t('common.saved'), 'success')
       return true
     } catch (e) {
       applyFormError(e, errors)
@@ -89,22 +98,9 @@ export function useSettingsForm<T extends object, B = T>(opts: SettingsFormOptio
   }
 
   function reset() {
-    if (savedForm) Object.assign(form, savedForm)
+    if (saved) Object.assign(form, saved)
     errors.value = {}
   }
 
-  const isLoaded = computed(() => loaded.value !== null)
-  return { form, loading, saving, dirty, errors, loadError, isLoaded, load, save, reset, apply } as {
-    form: T
-    loading: Ref<boolean>
-    saving: Ref<boolean>
-    dirty: Ref<boolean>
-    errors: Ref<Record<string, string>>
-    loadError: Ref<string>
-    isLoaded: Ref<boolean>
-    load: () => Promise<void>
-    save: () => Promise<boolean>
-    reset: () => void
-    apply: (r: any) => void
-  }
+  return { form, loading, saving, dirty, errors, loadError, isLoaded, load, save, reset, apply }
 }

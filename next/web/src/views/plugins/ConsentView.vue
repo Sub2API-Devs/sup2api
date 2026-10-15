@@ -10,7 +10,7 @@ import { errorMessage, notifyError } from '@/utils/errors'
 import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, accountTypesOf, asArray, display, formatDuration, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, accountTypesOf, asArray, capabilityIdsOf, display, endpointText, formatDuration, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import PluginGatewayDecl from './parts/PluginGatewayDecl.vue'
 import RiskDot from './parts/RiskDot.vue'
@@ -108,14 +108,6 @@ function sigLabel(s: string | undefined): string {
 
 // ------------------------------------------------------------------ "provides" formatting
 
-function endpointText(e: Record<string, any>): string {
-  const method = pick<string>(e, 'method')
-  const path = pick<string>(e, 'path', 'route')
-  const proto = pick<string>(e, 'protocol', 'id')
-  const head = [method, path].filter(Boolean).join(' ')
-  return head ? (proto ? `${head} (${proto})` : head) : display(e)
-}
-
 function hookMatch(h: Record<string, any>): string {
   const m = pick<Record<string, any>>(h, 'match') || {}
   const parts: string[] = []
@@ -181,7 +173,7 @@ const resourceItems = computed(() => {
   return out
 })
 
-const capabilityIds = computed(() => asArray(review.value?.capabilities).map((c) => (typeof c === 'string' ? c : String((c as any)?.id ?? display(c)))))
+const capabilityIds = computed(() => capabilityIdsOf(review.value?.capabilities))
 const reviewAccountTypes = computed(() => accountTypesOf(review.value))
 const reviewPlatforms = computed(() => platformsOf(review.value))
 
@@ -562,8 +554,8 @@ onMounted(load)
         </div>
         <div class="flex gap-2">
           <SButton variant="danger" :loading="rejecting" :disabled="submitting" @click="reject">{{ t('plugins.consent.reject') }}</SButton>
-          <SButton variant="primary" :loading="submitting" :disabled="!canSubmit || rejecting" @click="submit">
-            <SIcon name="shield" class="h-4 w-4" />{{ isUpgrade ? t('plugins.consent.approveUpgrade') : t('plugins.consent.approve') }}
+          <SButton variant="primary" :loading="submitting" :disabled="!canSubmit || rejecting" icon="shield" @click="submit">
+            {{ isUpgrade ? t('plugins.consent.approveUpgrade') : t('plugins.consent.approve') }}
           </SButton>
         </div>
       </div>

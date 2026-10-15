@@ -229,3 +229,14 @@ export function installStage(e: unknown): 'connect' | 'tls' | 'http' | '' {
   const s = (e as { details?: { stage?: unknown } } | null)?.details?.stage
   return s === 'connect' || s === 'tls' || s === 'http' ? s : ''
 }
+
+/**
+ * How the saved configuration connects: the controller endpoint (§53.9), a
+ * local / SSH connection saved with per-account containers before §53.9
+ * (still honored, shown as legacy), or nothing yet.
+ */
+export type ConnectionState = 'connected' | 'legacy' | 'unconfigured'
+export function connectionStateOf(cfg: { mode?: string; account_runtimes?: boolean } | null | undefined): ConnectionState {
+  if (cfg?.mode === 'controller') return 'connected'
+  return cfg?.account_runtimes && (cfg.mode === 'ssh' || cfg.mode === 'local') ? 'legacy' : 'unconfigured'
+}

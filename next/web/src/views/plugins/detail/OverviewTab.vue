@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SCode, SDisclosure, SHint } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
-import { accountTypesOf, asArray, display, pick, platformsOf, type PluginDetail } from '../pluginUtil'
+import { accountTypesOf, asArray, capabilityIdsOf, endpointText, pick, platformsOf, type PluginDetail } from '../pluginUtil'
 import PluginGatewayDecl from '../parts/PluginGatewayDecl.vue'
 import StatusBadge from '../parts/StatusBadge.vue'
 import TrustBadge from '../parts/TrustBadge.vue'
@@ -16,9 +16,7 @@ const m = computed<Record<string, any>>(() => props.detail.manifest || {})
 const ui = computed<Record<string, any>>(() => pick(m.value, 'ui') || {})
 
 const description = computed(() => lt(pick(m.value, 'description')))
-const capabilities = computed(() =>
-  asArray(pick(m.value, 'capabilities')).map((c) => (typeof c === 'string' ? c : String((c as any)?.id ?? display(c))))
-)
+const capabilities = computed(() => capabilityIdsOf(pick(m.value, 'capabilities')))
 // New platforms declared by the plugin (CONTRACTS §13); endpoints belong to them.
 const platforms = computed(() => platformsOf(m.value))
 const endpoints = computed(() => asArray<Record<string, any>>(pick(m.value, 'gateway_endpoints', 'gatewayEndpoints')))
@@ -40,12 +38,6 @@ const nodeStates = computed(() => {
   }
   return Object.entries(counts)
 })
-
-function endpointText(e: Record<string, any>): string {
-  const head = [pick(e, 'method'), pick(e, 'path')].filter(Boolean).join(' ')
-  const proto = pick<string>(e, 'protocol', 'id')
-  return head ? (proto ? `${head} (${proto})` : head) : display(e)
-}
 </script>
 
 <template>

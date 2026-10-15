@@ -73,7 +73,7 @@ const paramOpOptions = computed(() => [
     <section>
       <div class="mb-2 flex items-center justify-between">
         <div>
-          <SSectionTitle tag="h4" class="!mb-0">{{ t('prices.visual.tiers') }}</SSectionTitle>
+          <SSectionTitle tag="h4" class="mb-0">{{ t('prices.visual.tiers') }}</SSectionTitle>
           <SHint size="xs">{{ t('prices.visual.tiersHint') }}</SHint>
         </div>
         <SButton size="sm" :disabled="disabled" icon="plus" @click="addTier">{{ t('prices.visual.addTier') }}</SButton>
@@ -87,11 +87,11 @@ const paramOpOptions = computed(() => [
           <div class="mb-2 flex flex-wrap items-center gap-3">
             <label class="flex items-center gap-2 text-sm">
               <SHint inline>{{ t('prices.visual.tierName') }}</SHint>
-              <SInput size="sm" v-model.trim="tier.name" class="!w-40" mono :disabled="disabled" />
+              <SInput size="sm" v-model.trim="tier.name" class="w-40" mono :disabled="disabled" />
             </label>
             <label v-if="i < model.tiers.length - 1" class="flex items-center gap-2 text-sm">
               <SHint inline>{{ t('prices.visual.condLen') }}</SHint>
-              <SInput size="sm" v-model.number="tier.max_len" type="number" min="1" class="!w-36" :disabled="disabled" />
+              <SInput size="sm" v-model.number="tier.max_len" type="number" min="1" class="w-36" :disabled="disabled" />
             </label>
             <SHint v-else inline>{{ model.tiers.length > 1 ? t('prices.visual.otherwise') : t('prices.visual.always') }}</SHint>
             <SButton
@@ -129,7 +129,7 @@ const paramOpOptions = computed(() => [
     <section>
       <div class="mb-2 flex items-center justify-between">
         <div>
-          <SSectionTitle tag="h4" class="!mb-0">{{ t('prices.visual.rules') }}</SSectionTitle>
+          <SSectionTitle tag="h4" class="mb-0">{{ t('prices.visual.rules') }}</SSectionTitle>
           <SHint size="xs">{{ t('prices.visual.rulesHint') }}</SHint>
         </div>
         <SButton size="sm" :disabled="disabled" icon="plus" @click="addRule">{{ t('prices.visual.addRule') }}</SButton>
@@ -138,25 +138,25 @@ const paramOpOptions = computed(() => [
       <div class="space-y-2">
         <div v-for="(r, i) in model.rules" :key="i" class="flex flex-wrap items-center gap-2 text-sm">
           <SHint inline>{{ t('prices.visual.when') }}</SHint>
-          <SSelect class="!w-28" size="sm" :model-value="r.kind" :options="kindOptions" :disabled="disabled" @update:model-value="setKind(i, $event as MarkupRule['kind'])" />
+          <SSelect class="w-28" size="sm" :model-value="r.kind" :options="kindOptions" :disabled="disabled" @update:model-value="setKind(i, $event as MarkupRule['kind'])" />
           <template v-if="r.kind === 'header'">
-            <SInput size="sm" v-model="r.name" class="!w-44" mono :placeholder="t('prices.visual.headerName')" :disabled="disabled" />
-            <SSelect v-model="r.op" class="!w-28" size="sm" :options="headerOpOptions" :disabled="disabled" />
-            <SInput size="sm" v-model="r.value" class="!w-40" mono :placeholder="t('prices.visual.value')" :disabled="disabled" />
+            <SInput size="sm" v-model="r.name" class="w-44" mono :placeholder="t('prices.visual.headerName')" :disabled="disabled" />
+            <SSelect v-model="r.op" class="w-28" size="sm" :options="headerOpOptions" :disabled="disabled" />
+            <SInput size="sm" v-model="r.value" class="w-40" mono :placeholder="t('prices.visual.value')" :disabled="disabled" />
           </template>
           <template v-else-if="r.kind === 'param'">
-            <SInput size="sm" v-model="r.path" class="!w-44" mono :placeholder="t('prices.visual.paramPath')" :disabled="disabled" />
-            <SSelect v-model="r.op" class="!w-28" size="sm" :options="paramOpOptions" :disabled="disabled" />
-            <SInput size="sm" v-model="r.value" class="!w-40" mono :placeholder="t('prices.visual.value')" :disabled="disabled" />
+            <SInput size="sm" v-model="r.path" class="w-44" mono :placeholder="t('prices.visual.paramPath')" :disabled="disabled" />
+            <SSelect v-model="r.op" class="w-28" size="sm" :options="paramOpOptions" :disabled="disabled" />
+            <SInput size="sm" v-model="r.value" class="w-40" mono :placeholder="t('prices.visual.value')" :disabled="disabled" />
           </template>
           <template v-else>
-            <SInput size="sm" v-model="r.tz" class="!w-44" mono :placeholder="t('prices.visual.tz')" :disabled="disabled" />
-            <SSelect v-model.number="r.from_hour" class="!w-24" size="sm" :options="hourOptions.slice(0, 24)" :disabled="disabled" />
+            <SInput size="sm" v-model="r.tz" class="w-44" mono :placeholder="t('prices.visual.tz')" :disabled="disabled" />
+            <SSelect v-model.number="r.from_hour" class="w-24" size="sm" :options="hourOptions.slice(0, 24)" :disabled="disabled" />
             <SHint inline>~</SHint>
-            <SSelect v-model.number="r.to_hour" class="!w-24" size="sm" :options="hourOptions.slice(1)" :disabled="disabled" />
+            <SSelect v-model.number="r.to_hour" class="w-24" size="sm" :options="hourOptions.slice(1)" :disabled="disabled" />
           </template>
           <SHint inline class="ml-2">{{ t('prices.visual.multiplier') }}</SHint>
-          <SInput size="sm" v-model.number="r.multiplier" type="number" min="0" step="any" class="!w-24" :disabled="disabled" />
+          <SInput size="sm" v-model.number="r.multiplier" type="number" min="0" step="any" class="w-24" :disabled="disabled" />
           <SButton variant="ghost" size="sm" :disabled="disabled" :title="t('common.remove')" :aria-label="t('common.remove')" icon-only icon="x" @click="model.rules.splice(i, 1)" />
         </div>
       </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SButton, SDescItem, SDescriptions, SHint, SLink, SModal, SStatusDot } from '@sub2api/ui'
@@ -25,9 +25,19 @@ const releaseURL = computed(() => {
   } catch { return '' }
 })
 const uncertain = computed(() => !!updates.error || !!updates.result?.repository && !updates.result.latest_version)
-const status = computed(() => uncertain.value ? t('coreUpdates.checkFailed') : !updates.result ? t('coreUpdates.notChecked')
-  : !updates.result.repository ? t('coreUpdates.disabled') : newVersion.value ? t('coreUpdates.available')
-  : updates.result.reason || !updates.result.compatible ? t('coreUpdates.blocked') : t('coreUpdates.upToDate'))
+const status = computed(() => {
+  const r = updates.result
+  if (uncertain.value) return t('coreUpdates.checkFailed')
+  if (!r) return t('coreUpdates.notChecked')
+  if (!r.repository) return t('coreUpdates.disabled')
+  if (newVersion.value) return t('coreUpdates.available')
+  return t(r.reason || !r.compatible ? 'coreUpdates.blocked' : 'coreUpdates.upToDate')
+})
+const versionText = computed(() => (version.value ? `v${version.value}` : '—'))
+function go(to: RouteLocationRaw) {
+  open.value = false
+  void router.push(to)
+}
 watch(allowed, can => { if (can) void updates.check(); else { open.value = false; updates.invalidate() } }, { immediate: true })
 async function importRelease() {
   if (!updates.result?.tag || !updates.result.compatible || updates.error) return
@@ -43,16 +53,20 @@ async function importRelease() {
 <template>
   <template v-if="allowed">
     <button
-type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xxs font-medium hover:bg-surface-2"
+      type="button"
+      class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xxs font-medium hover:bg-surface-2"
       :class="newVersion ? 'text-warning-600 dark:text-warning-400' : 'text-fg-muted'"
-      :title="`${t('coreUpdates.current')}: ${version || '—'} · ${status}`" :aria-label="`${t('coreUpdates.title')} · ${status}`" @click="open = true">
-      <span class="truncate">{{ version ? `v${version}` : compact ? '—' : t('coreUpdates.title') }}</span>
+      :title="`${t('coreUpdates.current')}: ${version || '—'} · ${status}`"
+      :aria-label="`${t('coreUpdates.title')} · ${status}`"
+      @click="open = true"
+    >
+      <span class="truncate">{{ version || compact ? versionText : t('coreUpdates.title') }}</span>
       <SStatusDot v-if="newVersion" tone="warning" />
     </button>
     <SModal v-model:open="open" :title="t('coreUpdates.title')">
       <div class="space-y-4">
         <div class="flex items-start justify-between gap-3">
-          <div><p class="text-xs text-fg-muted">{{ t('coreUpdates.current') }}</p><p class="text-2xl font-semibold">{{ version ? `v${version}` : '—' }}</p></div>
+          <div><p class="text-xs text-fg-muted">{{ t('coreUpdates.current') }}</p><p class="text-2xl font-semibold">{{ versionText }}</p></div>
           <SButton size="sm" :loading="updates.busy" :disabled="importing" @click="updates.check(true)">{{ t('coreUpdates.check') }}</SButton>
         </div>
         <SHint :tone="uncertain ? 'danger' : newVersion ? 'warning' : 'muted'">{{ status }}</SHint>
@@ -69,12 +83,12 @@ type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5
         </template>
         <SHint>{{ t('coreUpdates.importHint') }}</SHint>
         <div class="flex flex-wrap justify-end gap-2">
-          <SButton v-if="auth.has('settings:read')" size="sm" @click="open = false; router.push({ path: '/settings', query: { tab: 'updates' } })">{{ t('coreUpdates.configure') }}</SButton>
-          <SButton size="sm" @click="open = false; router.push('/system/upgrades')">{{ t('coreUpdates.openUpgrades') }}</SButton>
+          <SButton v-if="auth.has('settings:read')" size="sm" @click="go({ path: '/settings', query: { tab: 'updates' } })">{{ t('coreUpdates.configure') }}</SButton>
+          <SButton size="sm" @click="go('/system/upgrades')">{{ t('coreUpdates.openUpgrades') }}</SButton>
           <SButton v-if="auth.has('system:update:execute') && newVersion" size="sm" variant="primary" :loading="importing" :disabled="!updates.result?.compatible || updates.busy" @click="importRelease">{{ t('coreUpdates.import') }}</SButton>
         </div>
       </div>
     </SModal>
   </template>
-  <span v-else class="inline-block max-w-full truncate px-1.5 text-xxs text-fg-muted" :title="t('coreUpdates.current')">{{ version ? `v${version}` : '—' }}</span>
+  <span v-else class="inline-block max-w-full truncate px-1.5 text-xxs text-fg-muted" :title="t('coreUpdates.current')">{{ versionText }}</span>
 </template>

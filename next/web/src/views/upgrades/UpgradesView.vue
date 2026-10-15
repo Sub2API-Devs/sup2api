@@ -9,17 +9,17 @@ import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import TopologyGraph from '../nodes/TopologyGraph.vue'
 import StepLanes from './StepLanes.vue'
+import { useUpgradeLabel, type UpgradeEvent, type UpgradeStep } from './upgrades'
 import ReleaseHistory from '../plugins/parts/ReleaseHistory.vue'
 import type { ShellNode as Node } from '@/api/observability'
 
 interface Release { digest: string; manifest: { release_id: string; build_id: string; source_commit: string; created_at: string } }
-interface Step { step_id: number; node_id: string; action: string; status: string; error?: string }
-interface Plan { id: string; release_digest: string; status: string; cursor: number; error?: string; nodes: string[]; created_at: string; steps?: Step[] }
+interface Plan { id: string; release_digest: string; status: string; cursor: number; error?: string; nodes: string[]; created_at: string; steps?: UpgradeStep[] }
 interface Preflight { release_digest: string; expected_revision: number; primary_node: string; nodes: string[]; blockers: string[]; strategy: string }
-interface Event { id: number; kind: string; message: string; created_at: string }
-const { t, te } = useI18n()
+const { t } = useI18n()
+const label = useUpgradeLabel()
 const auth = useAuthStore(), route = useRoute(), router = useRouter()
-const releases = ref<Release[]>([]), nodes = ref<Node[]>([]), plans = ref<Plan[]>([]), events = ref<Event[]>([])
+const releases = ref<Release[]>([]), nodes = ref<Node[]>([]), plans = ref<Plan[]>([]), events = ref<UpgradeEvent[]>([])
 const target = ref<string | number | boolean | null>(''), selected = ref<Plan | null>(null), preflight = ref<Preflight | null>(null)
 const loading = ref(true), busy = ref(false), available = ref(false), primary = ref(''), revision = ref(0), stale = ref(false)
 const selectedID = ref(typeof route.query.upgrade === 'string' ? route.query.upgrade : '')
@@ -32,8 +32,8 @@ const active = computed(() => plans.value.some(p => !['completed', 'cancelled', 
 const columns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'release_digest', label: t('upgrades.version') }, { key: 'mode', label: t('upgrades.mode') }, { key: 'ready', label: t('upgrades.ready') }, { key: 'cpu_percent', label: t('common.cpu') }, { key: 'offloading', label: t('observe.offloadState') }, { key: 'last_seen', label: t('upgrades.lastSeen') }, { key: 'error', label: t('upgrades.reason') }, ...(canRecover.value ? [{ key: 'manage', label: t('upgrades.manageNode') }] : [])])
 const stepColumns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'action', label: t('upgrades.step') }, { key: 'status', label: t('upgrades.status') }, { key: 'error', label: t('upgrades.reason') }])
 const readyToCreate = computed(() => canExecute.value && available.value && !stale.value && !active.value && !!preflight.value && preflight.value.blockers.length === 0 && preflight.value.expected_revision === revision.value && preflight.value.release_digest === target.value)
-function label(group: string, value: string) { const key = `upgrades.${group}.${value}`; return te(key) ? t(key) : value }
-function tone(status: string): Tone { return ['completed', 'done', 'ready'].includes(status) ? 'success' : ['failed', 'error'].includes(status) ? 'danger' : ['paused', 'pending', 'running'].includes(status) ? 'warning' : 'gray' }
+const STATUS_TONE: Record<string, Tone> = { completed: 'success', done: 'success', ready: 'success', failed: 'danger', error: 'danger', paused: 'warning', pending: 'warning', running: 'warning' }
+const tone = (status: string): Tone => STATUS_TONE[status] ?? 'gray'
 function version(digest: string) { return releases.value.find(r => r.digest === digest)?.manifest.release_id || digest.slice(0, 12) || '—' }
 watch(target, () => { preflight.value = null; requestKey = crypto.randomUUID() })
 watch(() => route.query.release, value => { if (typeof value === 'string' && value) target.value = value }, { immediate: true })
@@ -51,7 +51,7 @@ async function load(manual = false) {
   } catch (e) { if (manual || (!stale.value && !active.value)) notifyError(e); stale.value = true } finally { inflight = false; loading.value = false }
 }
 async function loadPlan(id: string) {
-  const [plan, log] = await Promise.all([api.get<Plan>(`/system/upgrades/${encodeURIComponent(id)}`), api.get<{ events: Event[] }>(`/system/upgrades/${encodeURIComponent(id)}/events`)])
+  const [plan, log] = await Promise.all([api.get<Plan>(`/system/upgrades/${encodeURIComponent(id)}`), api.get<{ events: UpgradeEvent[] }>(`/system/upgrades/${encodeURIComponent(id)}/events`)])
   if (disposed || id !== selectedID.value) return
   selected.value = plan; events.value = log.events || []
 }
@@ -99,7 +99,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
     <template v-if="available">
       <STable card :columns="columns" :rows="nodes" row-key="node_id" data-testid="upgrade-nodes">
         <template #toolbar>
-          <SSectionTitle tag="h3" class="!mb-0" :title="t('upgrades.nodes')" />
+          <SSectionTitle tag="h3" class="mb-0" :title="t('upgrades.nodes')" />
           <SHint inline class="ml-auto">{{ t('upgrades.primary') }}: <span class="font-mono">{{ primary || '—' }}</span></SHint>
         </template>
         <template #cell-release_digest="{ row }"><span :title="row.release_digest">{{ version(row.release_digest) }}</span></template>

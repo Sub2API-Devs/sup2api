@@ -116,6 +116,11 @@ export function blockReason(reason: unknown): CcgBlockReason | 'unknown' {
   return reason === 'no_proxy' || reason === 'proxy_disabled' || reason === 'account_disabled' ? reason : 'unknown'
 }
 
+/** Reasons fixed by picking another proxy in the editor. */
+export function isProxyReason(reason: unknown): boolean {
+  return reason === 'no_proxy' || reason === 'proxy_disabled' || reason === 'proxy_not_found'
+}
+
 /** After these reasons the container no longer holds the login session (§2): a new link is needed. */
 export function sessionEnded(reason: string): boolean {
   return reason === 'session_not_found' || reason === 'auth_rejected' || reason === 'auth_process_failed' || reason === 'invalid_auth_url'

@@ -3,15 +3,16 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
+import { deleteWithConfirm } from '@/composables/crud'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { errorMessage, notifyError } from '@/utils/errors'
-import { copyText, formatDateTime, formatRelative, formatTime } from '@/utils/format'
+import { formatDateTime, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
@@ -121,9 +122,19 @@ function limitsOf(a: Account): LimitCell[] {
   return out
 }
 
+function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
+  return refs?.find((g) => g.id === id)?.name || groups.value.find((g) => g.id === id)?.name || `#${id}`
+}
 function groupNames(ids: number[] | undefined, refs?: Array<{ id: number; name: string }>) {
-  if (!ids?.length) return '—'
-  return ids.map((id) => refs?.find((g) => g.id === id)?.name || groups.value.find((g) => g.id === id)?.name || `#${id}`).join(', ')
+  return ids?.length ? ids.map((id) => groupName(id, refs)).join(', ') : '—'
+}
+const groupTags = (a: Account) => (a.group_ids || []).map((id) => ({ id, name: groupName(id, a.groups) }))
+
+/** Applies a server change to the list row and the open detail of the same account. */
+function patchAccount(id: number, patch: Partial<Account>) {
+  const row = list.items.value.find((x) => x.id === id)
+  if (row) Object.assign(row, patch)
+  if (detail.value?.id === id) Object.assign(detail.value, patch)
 }
 
 function coolingDown(a: Account) {
@@ -239,11 +250,7 @@ function openTest(a: Account) {
 }
 
 /** Writes a test outcome onto the list row (the server records it as last_test too). */
-function onTested(id: number, last: AccountLastTest) {
-  const row = list.items.value.find((x) => x.id === id)
-  if (row) row.last_test = last
-  if (detail.value?.id === id) detail.value.last_test = last
-}
+const onTested = (id: number, last: AccountLastTest) => patchAccount(id, { last_test: last })
 
 function onTestUpdated(saved: Account) {
   testTarget.value = { ...(testTarget.value || saved), ...saved }
@@ -327,9 +334,7 @@ async function reveal(a: Account) {
     notifyError(e)
   }
 }
-async function copyRevealed() {
-  if (revealed.value && (await copyText(JSON.stringify(revealed.value, null, 2)))) toast(t('common.copied'), 'success')
-}
+const revealedText = computed(() => JSON.stringify(revealed.value, null, 2))
 
 // ---------------------------------------------------------------- detail
 const detailOpen = ref(false)
@@ -364,11 +369,7 @@ async function openDetail(a: Account) {
 // The snapshot of every row arrives with the list; "refresh" asks the upstream
 // for one account (force) at most every 30 s, never automatically.
 const quotaRefresh = useQuotaRefresh({
-  onSnapshot(id, snapshot) {
-    const row = list.items.value.find((x) => x.id === id)
-    if (row) row.quota = snapshot
-    if (detail.value?.id === id) detail.value.quota = snapshot
-  },
+  onSnapshot: (id, quota) => patchAccount(id, { quota }),
   onThrottled: (_id, n) => toast(t('accounts.quota.refreshThrottled', { n }), 'info'),
   onError: (_id, e) => notifyError(e)
 })
@@ -376,11 +377,7 @@ const quotaRefresh = useQuotaRefresh({
 // ---------------------------------------------------------------- balance refresh
 // Similar to quota refresh, but for account balance (CONTRACTS §52).
 const balanceRefresh = useBalanceRefresh({
-  onSnapshot(id, snapshot) {
-    const row = list.items.value.find((x) => x.id === id)
-    if (row) row.balance = snapshot
-    if (detail.value?.id === id) detail.value.balance = snapshot
-  },
+  onSnapshot: (id, balance) => patchAccount(id, { balance }),
   onThrottled: (_id, n) => toast(t('accounts.balance.refreshThrottled', { n }), 'info'),
   onError: (_id, e) => notifyError(e)
 })
@@ -393,14 +390,13 @@ async function resetStatus(a: Account) {
   try {
     const updated = await resetAccountStatus(a.id)
     Object.assign(a, updated)
-    if (detail.value?.id === a.id) Object.assign(detail.value, updated)
+    patchAccount(a.id, updated)
     toast(t('accounts.resetStatusDone'), 'success')
     list.reload()
   } catch (e) {
     notifyError(e)
   }
 }
-
 
 // ---------------------------------------------------------------- credential refresh (CONTRACTS §48)
 // The core renews expiring tokens by itself; the detail shows the state and
@@ -427,7 +423,7 @@ async function refreshCreds(a: Account) {
   try {
     const out = await refreshAccountCredentials(a.id)
     a.refresh = out.refresh
-    if (detail.value?.id === a.id) detail.value.refresh = out.refresh
+    patchAccount(a.id, { refresh: out.refresh })
     if (out.refreshed) toast(t('accounts.credRefresh.done'), 'success')
     else if (out.skipped === 'in_progress') toast(t('accounts.credRefresh.inProgress'), 'info')
     else if (out.skipped === 'changed') toast(t('accounts.credRefresh.changed'), 'info')
@@ -449,16 +445,7 @@ async function toggleSchedulable(a: Account, v: boolean) {
   }
 }
 
-async function remove(a: Account) {
-  if (!(await confirm({ message: t('common.confirmDelete', { name: a.name }), danger: true }))) return
-  try {
-    await api.del(`/accounts/${a.id}`)
-    toast(t('common.deleted'), 'success')
-    list.reload()
-  } catch (e) {
-    notifyError(e)
-  }
-}
+const remove = (a: Account) => deleteWithConfirm(`/accounts/${a.id}`, t('common.confirmDelete', { name: a.name }), list.reload)
 
 // Plugin-registered actions (CONTRACTS §52). An action that starts a
 // re-authorization answers the draft key: it continues in the editor. A token
@@ -500,16 +487,11 @@ function actionsFor(a: Account) {
   ]
 }
 
+const ROW_ACTIONS: Record<string, (a: Account) => unknown> = { detail: openDetail, reveal, 'reset-status': resetStatus, 'refresh-credentials': refreshCreds, delete: remove }
 function onAction(a: Account, key: string) {
-  if (key === 'detail') openDetail(a)
-  else if (key === 'reveal') reveal(a)
-  else if (key === 'reset-status') resetStatus(a)
-  else if (key === 'refresh-credentials') refreshCreds(a)
-  else if (key.startsWith('plugin:')) {
-    const action = a.actions?.find((x) => `plugin:${x.plugin_key}:${x.id}` === key)
-    if (action) void runPluginAction(a, action)
-  }
-  else if (key === 'delete') remove(a)
+  const action = a.actions?.find((x) => `plugin:${x.plugin_key}:${x.id}` === key)
+  if (action) void runPluginAction(a, action)
+  else void ROW_ACTIONS[key]?.(a)
 }
 
 const statusOptions = ['active', 'auto_disabled', 'disabled', 'error']
@@ -532,9 +514,6 @@ const denseRows = ref(true)
 const filterCount = computed(() => Object.entries(list.filters).filter(([key, value]) => key !== 'plugin_key' && value !== '').length)
 const hasAdvancedFilters = computed(() => !!list.filters.model || !!list.filters.created_by || onlyMine.value || showOrphaned.value)
 function resetFilters() { for (const key of Object.keys(list.filters)) list.filters[key] = '' }
-function groupTags(a: Account) {
-  return (a.group_ids || []).map(id => ({ id, name: a.groups?.find(g => g.id === id)?.name || groups.value.find(g => g.id === id)?.name || `#${id}` }))
-}
 </script>
 
 <template>
@@ -542,41 +521,41 @@ function groupTags(a: Account) {
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
       <template #actions>
         <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
-        <SButton :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()"><SIcon name="refresh" class="h-4 w-4" /></SButton>
-        <SButton v-if="canCreate" variant="primary" data-testid="account-new" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
+        <SButton icon="refresh" icon-only :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
+        <SButton v-if="canCreate" variant="primary" icon="plus" data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
       </template>
     </SPageHeader>
 
-    <section class="mb-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900" :aria-label="t('accounts.listUi.filters')">
+    <section class="mb-4 rounded-xl border border-line bg-surface p-3" :aria-label="t('accounts.listUi.filters')">
       <div class="flex flex-wrap items-center gap-2">
         <div class="min-w-48 flex-1">
           <SInput v-model="list.filters.q" icon="search" clearable :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
         </div>
-        <SSelect v-model="typeFilter" :options="typeOptions" class="!w-52" :aria-label="t('accounts.type')" />
-        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" :aria-label="t('accounts.groups')" />
-        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="!w-36" :aria-label="t('common.status')" />
+        <SSelect v-model="typeFilter" :options="typeOptions" class="w-52" :aria-label="t('accounts.type')" />
+        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-40" :aria-label="t('accounts.groups')" />
+        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-36" :aria-label="t('common.status')" />
         <SButton size="sm" :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
         <SButton v-if="filterCount" size="sm" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
       </div>
-      <div v-if="advancedFilters" class="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-700">
-        <SInput v-model="list.filters.model" class="!w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
-        <SInput v-if="showOwner" v-model="list.filters.created_by" class="!w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
+      <div v-if="advancedFilters" class="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+        <SInput v-model="list.filters.model" class="w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
+        <SInput v-if="showOwner" v-model="list.filters.created_by" class="w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
         <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
         <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
       </div>
       <p v-else-if="hasAdvancedFilters" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
     </section>
     <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-      <span v-if="list.error.value" role="alert" class="text-danger-600 dark:text-danger-400">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</span>
+      <SHint v-if="list.error.value" inline size="xs" tone="danger" role="alert">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</SHint>
       <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
       <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
       <span v-if="pageTestable.length" class="flex flex-wrap items-center gap-2" data-testid="account-batch-bar">
         <SCheckbox size="xs" :model-value="allPicked" :indeterminate="somePicked" :disabled="batchRunning" data-testid="account-pick-page" @update:model-value="pickPage">{{ t('accounts.batchTest.pickPage') }}</SCheckbox>
         <template v-if="picked.size || batchRunning">
-          <SButton size="sm" variant="primary" :loading="batchRunning" :disabled="!picked.size" data-testid="account-batch-test" @click="batchTest">
-            <SIcon v-if="!batchRunning" name="play" class="h-3.5 w-3.5" />{{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.size }) }}
+          <SButton size="sm" variant="primary" :loading="batchRunning" :disabled="!picked.size" icon="play" data-testid="account-batch-test" @click="batchTest">
+            {{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.size }) }}
           </SButton>
-          <SButton v-if="batchRunning" size="sm" variant="danger" @click="stopBatch"><SIcon name="stop" class="h-3.5 w-3.5" />{{ t('accounts.modelTest.stop') }}</SButton>
+          <SButton v-if="batchRunning" size="sm" variant="danger" icon="stop" @click="stopBatch">{{ t('accounts.modelTest.stop') }}</SButton>
           <SLink v-else as="button" class="text-xs" @click="picked = new Set()">{{ t('accounts.batchTest.clear') }}</SLink>
           <SHint inline size="xs">{{ t('accounts.batchTest.hint') }}</SHint>
         </template>
@@ -653,7 +632,7 @@ function groupTags(a: Account) {
 
     <!-- create / edit -->
     <SModal v-model:open="editorOpen" :title="editorTitle" width="2xl" persistent>
-      <div v-if="editorLoading" class="flex justify-center py-10" role="status" :aria-label="t('common.loading')"><SSpinner /></div>
+      <SSpinner v-if="editorLoading" block />
       <AccountTypePicker v-else-if="!editing && step === 1" @pick="pick" />
       <AccountEditor
         v-else
@@ -675,9 +654,9 @@ function groupTags(a: Account) {
     <!-- reveal -->
     <SModal v-model:open="revealOpen" :title="t('accounts.revealCredentials')" width="lg" @close="revealed = null">
       <SHint tone="warning" class="mb-3">{{ t('accounts.revealWarning') }}</SHint>
-      <SCode>{{ JSON.stringify(revealed, null, 2) }}</SCode>
+      <SCode>{{ revealedText }}</SCode>
       <template #footer>
-        <SButton @click="copyRevealed"><SIcon name="copy" class="h-4 w-4" />{{ t('common.copy') }}</SButton>
+        <SCopyButton :text="revealedText" :label="t('common.copy')" variant="secondary" size="md" />
         <SButton variant="primary" @click="revealOpen = false">{{ t('common.close') }}</SButton>
       </template>
     </SModal>
@@ -693,9 +672,7 @@ function groupTags(a: Account) {
               {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
               <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
             </SDescItem>
-            <template v-if="detailType">
-              <SDescItem :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
-            </template>
+            <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
             <SDescItem :label="t('accounts.servesEndpoints')">
               <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
               <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>
@@ -717,18 +694,12 @@ function groupTags(a: Account) {
               </span>
               <SHint v-else inline>—</SHint>
             </SDescItem>
-            <template v-if="detail.refresh">
-              <SDescItem :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
+            <SDescItem v-if="detail.refresh" :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
                 <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
                 <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
-              </SDescItem>
-            </template>
-            <template v-if="hasQuota(detail.quota)">
-              <SDescItem :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
-            </template>
-            <template v-if="hasBalance(detail.balance)">
-              <SDescItem :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
-            </template>
+            </SDescItem>
+            <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
+            <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
             <SDescItem :label="t('accounts.models')">
               <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
                 <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
@@ -746,9 +717,7 @@ function groupTags(a: Account) {
             <SDescItem :label="t('accounts.schedulable')">{{ detail.schedulable ? t('common.yes') : t('common.no') }}</SDescItem>
             <SDescItem :label="t('accounts.lastUsed')">{{ formatDateTime(detail.last_used_at) }}</SDescItem>
             <SDescItem :label="t('accounts.lastTest.column')"><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></SDescItem>
-            <template v-if="showOwner">
-              <SDescItem :label="t('accounts.createdBy')">{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</SDescItem>
-            </template>
+            <SDescItem v-if="showOwner" :label="t('accounts.createdBy')">{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</SDescItem>
             <SDescItem :label="t('common.createdAt')">{{ formatDateTime(detail.created_at) }}</SDescItem>
           </SDescriptions>
           <div v-if="detail.credentials">

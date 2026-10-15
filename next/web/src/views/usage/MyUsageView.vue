@@ -2,13 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, SPagination, STabs, STimeRange, type TabItem } from '@sub2api/ui'
+import { SButton, SPageHeader, SPagination, STabs, STimeRange, rangeBounds, type RangeKey, type TabItem } from '@sub2api/ui'
 import UsageFilters from './UsageFilters.vue'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
 import UsageTable from './UsageTable.vue'
-import { rangeBounds, type RangeKey } from './timeRange'
 import type { UsageRow } from './usage'
 
 // Mine > Usage records: the caller's request log and, on a second tab, their

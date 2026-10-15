@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SCode, SGrid, SHint, SIcon, SStatCard, STable, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SCode, SGrid, SHint, SStatCard, STable, type TableColumn } from '@sub2api/ui'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { display, pick, type PluginDetail, type PluginEvents } from '../pluginUtil'
@@ -57,9 +57,7 @@ onMounted(load)
 
     <SCard :title="t('plugins.events.subscribed')">
       <template #actions>
-        <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" @click="load">
-          <SIcon v-if="!loading" name="refresh" class="h-4 w-4" />
-        </SButton>
+        <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" icon="refresh" icon-only @click="load" />
       </template>
       <div v-if="data.subscribe?.length" class="flex flex-wrap gap-2">
         <SCode v-for="s in data.subscribe" :key="s" inline :text="s" />

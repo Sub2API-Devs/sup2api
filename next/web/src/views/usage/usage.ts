@@ -1,4 +1,4 @@
-import type { UsageLog } from '@/api/types'
+import type { UsageLog, UsageSummaryRow } from '@/api/types'
 
 /** Usage row/detail with the extra fields the billing module returns. */
 export type UsageRow = UsageLog & {
@@ -46,6 +46,18 @@ export function billingTone(s: string): 'success' | 'warning' | 'danger' | 'gray
 
 const BLOCK_DECISIONS = ['deny', 'reject', 'block', 'blocked']
 
+/** A free-form fact value as text: '—' when missing, JSON for objects. */
+export function factText(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
+/** Badge tone of a hook decision. */
+export function hookTone(decision: string): 'danger' | 'success' | 'gray' {
+  if (BLOCK_DECISIONS.includes(decision)) return 'danger'
+  return decision === 'allow' ? 'success' : 'gray'
+}
+
 /** True when a gateway hook rejected the request. */
 export function isBlocked(u: UsageRow): boolean {
   if (/hook|blocked/i.test(u.error_type || '')) return true
@@ -57,14 +69,9 @@ export function blockingHook(u: UsageRow) {
   return (u.hook_decisions || []).find((h) => BLOCK_DECISIONS.includes(h.decision)) || null
 }
 
-export interface DailyPoint {
-  key: string
-  requests: number
-  cost: number
-}
-
-/** Chart option: requests (bars) + cost (line) per day. */
-export function dailyChartOption(points: DailyPoint[], labels: { requests: string; cost: string }) {
+/** Chart option over per-day summary rows: requests (bars) + cost (line). */
+export function dailyChartOption(rows: UsageSummaryRow[], labels: { requests: string; cost: string }) {
+  const points = [...rows].sort((a, b) => a.key.localeCompare(b.key)).map((r) => ({ key: r.key, requests: Number(r.requests) || 0, cost: Number(r.total_cost) || 0 }))
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: [labels.requests, labels.cost], top: 0 },

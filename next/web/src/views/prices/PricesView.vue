@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { Price } from '@/api/types'
+import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
-import { notifyError } from '@/utils/errors'
 import { formatDateTime, formatMoney } from '@/utils/format'
 import { summarize, type PriceSummary } from './priceExpr'
 
@@ -93,7 +93,7 @@ function summaryOf(p: Price): PriceSummary {
   const an = p.analysis as { tiers?: unknown; rules?: unknown } | undefined
   if (s.kind === 'custom' && an && (an.tiers !== undefined || an.rules !== undefined)) {
     const count = (x: unknown) => (Array.isArray(x) ? x.length : typeof x === 'number' ? x : 0)
-    const names = Array.isArray(an.tiers) ? an.tiers.map((x: any) => (typeof x === 'string' ? x : x?.name)).filter(Boolean) : []
+    const names = Array.isArray(an.tiers) ? an.tiers.map((x: unknown) => (typeof x === 'string' ? x : (x as { name?: string } | null)?.name)).filter((x): x is string => !!x) : []
     return { kind: 'visual', tiers: count(an.tiers), rules: count(an.rules), tierNames: names }
   }
   return s
@@ -103,43 +103,17 @@ function price(v: number | null) {
   return v === null || v === undefined ? '—' : formatMoney(v, 6)
 }
 
-function modeTone(m: string) {
-  return m === 'expression' ? 'purple' : m === 'per_token' ? 'primary' : 'gray'
-}
+const MODE_TONE: Record<string, Tone> = { expression: 'accent', per_token: 'primary' }
 
 function sourceLabel(p: Price): string {
   if (p.source === 'sync') return p.sync_source_name ? t('prices.sourceSync', { name: p.sync_source_name }) : t('prices.source.sync')
   return t('prices.source.manual')
 }
 
-const toggling = ref(new Set<number>())
+const { busy: toggling, set: toggle } = useRowSwitch((p: Price, on) => api.patch(`/prices/${p.id}`, { enabled: on }))
 
-async function toggle(p: Price, v: boolean) {
-  const prev = p.enabled
-  p.enabled = v
-  toggling.value = new Set(toggling.value).add(p.id)
-  try {
-    await api.patch(`/prices/${p.id}`, { enabled: v })
-  } catch (e) {
-    p.enabled = prev
-    notifyError(e)
-  } finally {
-    const s = new Set(toggling.value)
-    s.delete(p.id)
-    toggling.value = s
-  }
-}
-
-async function remove(p: Price) {
-  const ok = await confirm({ message: t('common.confirmDelete', { name: p.model }), danger: true })
-  if (!ok) return
-  try {
-    await api.del(`/prices/${p.id}`)
-    toast(t('common.deleted'), 'success')
-    reload()
-  } catch (e) {
-    notifyError(e)
-  }
+function remove(p: Price) {
+  return deleteWithConfirm(`/prices/${p.id}`, t('common.confirmDelete', { name: p.model }), reload)
 }
 </script>
 
@@ -156,9 +130,9 @@ async function remove(p: Price) {
     <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
     <STable card :columns="columns" :rows="rows" :loading="loading">
       <template #toolbar>
-        <SInput v-model="filters.q" class="!w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.searchPlaceholder')" />
-        <SSelect v-model="filters.mode" class="!w-40" :options="modeOptions" :aria-label="t('prices.modeCol')" />
-        <SSelect v-model="filters.source" class="!w-36" :options="sourceOptions" :aria-label="t('common.source')" data-testid="price-source-filter" />
+        <SInput v-model="filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.searchPlaceholder')" />
+        <SSelect v-model="filters.mode" class="w-40" :options="modeOptions" :aria-label="t('prices.modeCol')" />
+        <SSelect v-model="filters.source" class="w-36" :options="sourceOptions" :aria-label="t('common.source')" data-testid="price-source-filter" />
         <SChip
           v-if="filters.sync_source_id"
           tone="info"
@@ -175,7 +149,7 @@ async function remove(p: Price) {
         <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
       </template>
       <template #cell-mode="{ row }">
-        <SBadge :tone="modeTone(row.mode)">{{ row.config?.video ? t('prices.video.title') : t(`prices.mode.${row.mode}`) }}</SBadge>
+        <SBadge :tone="MODE_TONE[row.mode] ?? 'gray'">{{ row.config?.video ? t('prices.video.title') : t(`prices.mode.${row.mode}`) }}</SBadge>
       </template>
       <template #cell-summary="{ row }">
         <template v-for="s in [summaryOf(row)]" :key="s.kind">

@@ -189,7 +189,7 @@ onMounted(async () => {
   <div>
     <SPageHeader :title="t('plugins.market.title')" :description="t('plugins.market.description')">
       <template #actions>
-        <SButton :loading="loading" @click="loadPlugins(), loadInstalled()"><SIcon v-if="!loading" name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="loadPlugins(), loadInstalled()">{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
         <SField :label="t('plugins.market.source')" class="w-56">
@@ -264,11 +264,11 @@ onMounted(async () => {
             v-else-if="auth.has('plugin:install')"
             :variant="stateOf(m) === 'upgrade' ? 'warning' : 'primary'"
             size="sm"
+            :icon="stateOf(m) === 'upgrade' ? 'upload' : 'download'"
             :disabled="noCompatible(m)"
             :title="noCompatible(m) ? t('plugins.market.noCompatible', { version: hostVersion || '?' }) : undefined"
             @click="openPicker(m)"
           >
-            <SIcon :name="stateOf(m) === 'upgrade' ? 'upload' : 'download'" class="h-4 w-4" />
             {{ stateOf(m) === 'upgrade' ? t('plugins.market.upgrade') : t('plugins.market.install') }}
           </SButton>
         </div>
@@ -300,8 +300,8 @@ onMounted(async () => {
       </template>
       <template #footer>
         <SButton @click="picker = null">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="installing" :disabled="pickBlocked" @click="install">
-          <SIcon name="shield" class="h-4 w-4" />{{ t('plugins.market.continue') }}
+        <SButton variant="primary" :loading="installing" :disabled="pickBlocked" icon="shield" @click="install">
+          {{ t('plugins.market.continue') }}
         </SButton>
       </template>
     </SModal>

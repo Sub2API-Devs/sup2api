@@ -20,7 +20,12 @@ function family(id: string): string {
   return t('accounts.editorUi.otherModels')
 }
 const catalog = computed(() => [...new Set([...props.modelValue, ...(browse.value ? props.options : [])])].sort())
-const categories = computed(() => [...new Set(catalog.value.map(family))])
+/** Families of the catalog with their model counts ('' = all). */
+const categories = computed(() => {
+  const counts = new Map<string, number>([['', catalog.value.length]])
+  for (const m of catalog.value) counts.set(family(m), (counts.get(family(m)) || 0) + 1)
+  return [...counts]
+})
 const filtered = computed(() => catalog.value.filter(m => (!category.value || family(m) === category.value) && m.toLowerCase().includes(search.value.trim().toLowerCase())))
 const allChecked = computed(() => filtered.value.length > 0 && filtered.value.every(m => selected.value.has(m)))
 function toggle(model: string) {
@@ -41,7 +46,7 @@ function toggleVisible() {
       <SButton size="sm" :variant="browse ? 'primary' : 'secondary'" :aria-pressed="browse" data-testid="models-browse" @click="browse = !browse; category = ''">{{ t(browse ? 'accounts.editorUi.selectedOnly' : 'accounts.editorUi.chooseModels') }}</SButton>
     </div>
     <div class="flex flex-wrap gap-1 border-b border-line px-3 py-2">
-      <SChip v-for="c in ['', ...categories]" :key="c" size="xs" :pressed="category === c" @update:pressed="category = c">{{ c || t('accounts.editorUi.allCategories') }} <span class="ml-1 opacity-60">{{ c ? catalog.filter(m => family(m) === c).length : catalog.length }}</span></SChip>
+      <SChip v-for="[c, n] in categories" :key="c" size="xs" :pressed="category === c" @update:pressed="category = c">{{ c || t('accounts.editorUi.allCategories') }} <span class="ml-1 opacity-60">{{ n }}</span></SChip>
     </div>
     <div class="flex items-center justify-between border-b border-line px-3 py-2 text-xs text-fg-subtle">
       <SCheckbox size="xs" :model-value="allChecked" :disabled="!filtered.length" data-testid="models-select-visible" @update:model-value="toggleVisible">{{ t('accounts.editorUi.selectVisible') }}</SCheckbox>

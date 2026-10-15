@@ -20,11 +20,11 @@ import {
   SSpinner,
   SSwitch,
   STable,
-  confirm,
   toast,
   type TableColumn
 } from '@sub2api/ui'
 import type { Proxy, ProxyProbeResult, ProxyTestResult } from '@/api/types'
+import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
 import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -33,7 +33,7 @@ import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import StatusBadge from '@/components/StatusBadge.vue'
 import TimeText from '@/components/TimeText.vue'
-import { parseProxyURL } from '@/utils/proxyUrl'
+import { parseProxyURL, type ProxySpec } from '@/utils/proxyUrl'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -115,10 +115,7 @@ const protocolOptions = [
   { value: 'https', label: 'HTTPS' },
   { value: 'socks5', label: 'SOCKS5' }
 ]
-const statusOptions = computed(() => [
-  { value: 'active', label: t('common.status_.active') },
-  { value: 'disabled', label: t('common.status_.disabled') }
-])
+const statusOptions = useStatusOptions()
 
 function openCreate() {
   editing.value = null
@@ -157,17 +154,16 @@ function applyPastedUrl() {
     pasteError.value = t(`proxies.pasteError.${r.error}`)
     return
   }
-  const s = r.spec
-  form.protocol = s.protocol
-  form.host = s.host
-  form.port = s.port
-  form.username = s.username
-  form.password = s.password
-  form.clearPassword = false
+  fillFrom(r.spec)
+  probeResult.value = null
+}
+
+/** Puts a parsed proxy URL into the form (and names the proxy after it when unnamed). */
+function fillFrom(s: ProxySpec) {
+  Object.assign(form, { protocol: s.protocol, host: s.host, port: s.port, username: s.username, password: s.password, clearPassword: false })
   if (!form.name.trim()) form.name = `${s.protocol}://${s.host}:${s.port}`.slice(0, 100)
   errors.value = {}
   pasteUrl.value = ''
-  probeResult.value = null
 }
 
 /** POST /proxies/probe: tries the pasted proxy (socks5, http, then https without a scheme) and fills the form with the protocol that works. */
@@ -185,14 +181,12 @@ async function probeProxy() {
       return
     }
     const parsed = parseProxyURL(r.proxy_url || '')
-    if (parsed.ok) {
-      const s = parsed.spec
-      Object.assign(form, { protocol: s.protocol, host: s.host, port: s.port, username: s.username, password: s.password, clearPassword: false })
-      if (!form.name.trim()) form.name = `${s.protocol}://${s.host}:${s.port}`.slice(0, 100)
+    if (parsed.ok) fillFrom(parsed.spec)
+    else {
+      errors.value = {}
+      pasteUrl.value = ''
     }
     probeResult.value = r
-    errors.value = {}
-    pasteUrl.value = ''
     toast(t('proxies.probeSuccess', { protocol: (r.protocol || '').toUpperCase(), country: r.location?.country_code || '—' }), 'success')
   } catch (e) {
     if (fieldErrors(e).proxy_url) pasteError.value = t('proxies.pasteError.invalid')
@@ -243,28 +237,10 @@ async function submit() {
 
 // ------------------------------------------------------------------ row menu
 
-async function onAction(p: Proxy, key: string) {
-  if (key === 'test') {
-    test(p)
-  } else if (key === 'toggle') {
-    try {
-      await api.patch(`/proxies/${p.id}`, { status: p.status === 'active' ? 'disabled' : 'active' })
-      toast(t('common.updated'), 'success')
-      changed()
-    } catch (e) {
-      notifyError(e)
-    }
-  } else if (key === 'delete') {
-    const ok = await confirm({ title: t('common.delete'), message: t('common.confirmDelete', { name: p.name }), danger: true })
-    if (!ok) return
-    try {
-      await api.del(`/proxies/${p.id}`)
-      toast(t('common.deleted'), 'success')
-      changed()
-    } catch (e) {
-      notifyError(e)
-    }
-  }
+function onAction(p: Proxy, key: string) {
+  if (key === 'test') return test(p)
+  if (key === 'toggle') return toggleStatus(`/proxies/${p.id}`, p.status, changed)
+  if (key === 'delete') return deleteWithConfirm(`/proxies/${p.id}`, t('common.confirmDelete', { name: p.name }), changed)
 }
 </script>
 
@@ -281,7 +257,7 @@ async function onAction(p: Proxy, key: string) {
         <SInput
           v-if="showOwner"
           v-model="list.filters.created_by"
-          class="!w-32"
+          class="w-32"
           inputmode="numeric"
           data-testid="created-by-filter"
           :aria-label="t('common.createdById')"
@@ -316,14 +292,14 @@ async function onAction(p: Proxy, key: string) {
       <template #cell-test="{ row }">
         <SSpinner v-if="testing[row.id]" size="sm" />
         <div v-else-if="results[row.id]" class="text-xs">
-          <span v-if="results[row.id].ok" class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+          <SHint v-if="results[row.id].ok" inline size="xs" tone="success" class="inline-flex items-center gap-1">
             <SIcon name="check" class="h-3.5 w-3.5" />
             {{ t('proxies.ok') }}
             <span v-if="results[row.id].latency_ms !== undefined">· {{ results[row.id].latency_ms }} ms</span>
-          </span>
-          <span v-else class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+          </SHint>
+          <SHint v-else inline size="xs" tone="danger" class="inline-flex items-center gap-1">
             <SIcon name="x" class="h-3.5 w-3.5" />{{ t('proxies.failed') }}
-          </span>
+          </SHint>
           <SHint v-if="results[row.id].ip" size="xs">{{ t('proxies.exitIp') }}: <SCode inline :text="results[row.id].ip" /></SHint>
           <SHint v-if="results[row.id].message" size="xs" class="max-w-xs truncate" :title="results[row.id].message">{{ results[row.id].message }}</SHint>
         </div>
@@ -374,7 +350,7 @@ async function onAction(p: Proxy, key: string) {
             <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
           </div>
           <div v-if="probeResult?.ok" class="mt-2 text-xs text-fg-muted">
-            <SIcon name="check" class="inline h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <SIcon name="check" class="inline h-3.5 w-3.5 text-success-600 dark:text-success-400" />
             {{ String(probeResult.protocol).toUpperCase() }}<span v-if="probeResult.latency_ms"> · {{ probeResult.latency_ms }} ms</span>
             <span v-if="probeResult.location"> · {{ [probeResult.location.country_code, probeResult.location.timezone].filter(Boolean).join(' · ') }}</span>
             <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <SCode inline :text="probeResult.ip" /></span>

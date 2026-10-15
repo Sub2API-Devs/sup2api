@@ -2,12 +2,15 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCheckbox, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSectionTitle, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
-import type { LText, PermissionItem, PermissionModule, User } from '@/api/types'
+import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
+import type { LText, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
+import { deleteWithConfirm } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
+import PermissionTree from './PermissionTree.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -25,14 +28,11 @@ async function loadRoles() {
   roles.value = (await api.list<RoleRow>('/roles', { page_size: 200 })).items
 }
 
-async function loadPermissions() {
-  modules.value = (await api.get<PermissionModule[]>('/permissions')) || []
-}
-
 async function init() {
   loading.value = true
   try {
-    await Promise.all([loadRoles(), loadPermissions()])
+    const [, perms] = await Promise.all([loadRoles(), api.get<PermissionModule[]>('/permissions')])
+    modules.value = perms || []
     if (roles.value.length) selectRole(roles.value[0], true)
   } catch (e) {
     notifyError(e)
@@ -42,15 +42,11 @@ async function init() {
 }
 init()
 
-const coreModules = computed(() => modules.value.filter((m) => m.source !== 'plugin'))
-const pluginModules = computed(() => modules.value.filter((m) => m.source === 'plugin'))
-
 // ------------------------------------------------------------------ editor state
 
 const form = reactive({ nameEn: '', nameZh: '', description: '' })
 const perms = ref(new Set<string>())
 const original = ref({ nameEn: '', nameZh: '', description: '', perms: [] as string[] })
-const collapsed = ref(new Set<string>())
 const saving = ref(false)
 
 const readOnly = computed(() => !canManage.value || !!selected.value?.superuser)
@@ -65,28 +61,18 @@ function splitName(v: LText | undefined): { en: string; zh: string } {
 const metaDirty = computed(
   () => form.nameEn !== original.value.nameEn || form.nameZh !== original.value.nameZh || form.description !== original.value.description
 )
-const permsDirty = computed(() => {
-  const a = [...perms.value].sort()
-  const b = original.value.perms
-  return a.length !== b.length || a.some((x, i) => x !== b[i])
-})
+const permsDirty = computed(() => [...perms.value].sort().join() !== original.value.perms.join())
 const dirty = computed(() => metaDirty.value || permsDirty.value)
 
 async function selectRole(r: RoleRow, force = false) {
   if (!force && r.id === selectedId.value) return
-  if (!force && dirty.value && !readOnly.value) {
-    const ok = await confirm({ message: t('roles.discardChanges') })
-    if (!ok) return
-  }
+  if (!force && dirty.value && !readOnly.value && !(await confirm({ message: t('roles.discardChanges') }))) return
   selectedId.value = r.id
   const n = splitName(r.name)
-  const desc = lt(r.description)
-  form.nameEn = n.en
-  form.nameZh = n.zh
-  form.description = desc
   const keys = [...(r.permission_keys || [])].sort()
+  Object.assign(form, { nameEn: n.en, nameZh: n.zh, description: lt(r.description) })
   perms.value = new Set(keys)
-  original.value = { nameEn: n.en, nameZh: n.zh, description: desc, perms: keys }
+  original.value = { ...form, perms: keys }
   loadMembers(r)
 }
 
@@ -116,66 +102,12 @@ async function loadMembers(r: RoleRow) {
   }
 }
 
-// ------------------------------------------------------------------ permission tree
-
-function isChecked(key: string) {
-  return !!selected.value?.superuser || perms.value.has(key)
-}
-
-function toggle(key: string) {
-  if (readOnly.value) return
-  const s = new Set(perms.value)
-  if (s.has(key)) s.delete(key)
-  else s.add(key)
-  perms.value = s
-}
-
-function moduleState(m: PermissionModule): 'all' | 'some' | 'none' {
-  if (selected.value?.superuser) return 'all'
-  const n = m.permissions.filter((p) => perms.value.has(p.key)).length
-  return n === 0 ? 'none' : n === m.permissions.length ? 'all' : 'some'
-}
-
-function toggleModule(m: PermissionModule) {
-  if (readOnly.value) return
-  const s = new Set(perms.value)
-  const all = moduleState(m) === 'all'
-  for (const p of m.permissions) {
-    if (all) s.delete(p.key)
-    else s.add(p.key)
-  }
-  perms.value = s
-}
-
-function toggleCollapse(m: PermissionModule) {
-  const s = new Set(collapsed.value)
-  if (s.has(m.module)) s.delete(m.module)
-  else s.add(m.module)
-  collapsed.value = s
-}
-
-function moduleInactive(m: PermissionModule) {
-  return m.status !== 'active' && m.status !== ''
-}
-
-function permInactive(m: PermissionModule, p: PermissionItem) {
-  return moduleInactive(m) || (p.status !== 'active' && p.status !== '')
-}
-
-function grantedCount(m: PermissionModule) {
-  if (selected.value?.superuser) return m.permissions.length
-  return m.permissions.filter((p) => perms.value.has(p.key)).length
-}
-
 // ------------------------------------------------------------------ save
 
 async function save() {
   const r = selected.value
   if (!r || readOnly.value) return
-  if (permsDirty.value && permsMissing.value) {
-    const ok = await confirm({ message: t('roles.overwriteUnknown'), danger: true })
-    if (!ok) return
-  }
+  if (permsDirty.value && permsMissing.value && !(await confirm({ message: t('roles.overwriteUnknown'), danger: true }))) return
   saving.value = true
   try {
     if (metaDirty.value) {
@@ -240,28 +172,24 @@ async function submitCreate() {
       selectRole(r, true)
     }
   } catch (e) {
-    const fe = fieldErrors(e)
-    createErrors.value = { ...fe, name: fe.name || fe['name.en'] || fe['name.zh'] || '' }
-    if (!Object.keys(fe).length) notifyError(e)
+    // The name is one field in the form but two (name.en / name.zh) on the server.
+    if (applyFormError(e, createErrors)) {
+      const fe = createErrors.value
+      fe.name ||= fe['name.en'] || fe['name.zh'] || ''
+    }
   } finally {
     creating.value = false
   }
 }
 
-async function removeRole() {
+function removeRole() {
   const r = selected.value
   if (!r || r.builtin) return
-  const ok = await confirm({ title: t('common.delete'), message: t('common.confirmDelete', { name: lt(r.name) || r.key }), danger: true })
-  if (!ok) return
-  try {
-    await api.del(`/roles/${r.id}`)
-    toast(t('common.deleted'), 'success')
+  return deleteWithConfirm(`/roles/${r.id}`, t('common.confirmDelete', { name: lt(r.name) || r.key }), async () => {
     await loadRoles()
     selectedId.value = null
     if (roles.value.length) selectRole(roles.value[0], true)
-  } catch (e) {
-    notifyError(e)
-  }
+  })
 }
 </script>
 
@@ -273,58 +201,55 @@ async function removeRole() {
       </template>
     </SPageHeader>
 
-    <div v-if="loading" class="flex justify-center py-16"><SSpinner /></div>
+    <SSpinner v-if="loading" block />
 
     <SGrid v-else :cols="1" lg-template="260px 1fr">
       <!-- role list -->
-      <div class="card self-start p-2">
-        <SEmpty v-if="!roles.length" />
-        <button
-          v-for="r in roles"
-          :key="r.id"
-          type="button"
-          class="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors"
-          :class="
-            r.id === selectedId
-              ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-              : 'text-fg hover:bg-surface-2'
-          "
-          @click="selectRole(r)"
-        >
-          <span class="min-w-0 flex-1">
-            <span class="block truncate">{{ lt(r.name) || r.key }}</span>
-            <SHint inline size="xs" class="block truncate font-mono">{{ r.key }}</SHint>
-          </span>
-          <span v-if="r.superuser" class="shrink-0 text-purple-500 dark:text-purple-400" :title="t('roles.superuserHint')" :aria-label="t('roles.superuser')" role="img"><SIcon name="lock" class="h-4 w-4" /></span>
-          <SBadge v-else-if="r.builtin" tone="gray">{{ t('roles.builtin') }}</SBadge>
-          <SHint v-if="roleMemberCount(r) !== undefined" inline size="xs" class="shrink-0">{{ roleMemberCount(r) }}</SHint>
-        </button>
-      </div>
+      <SCard :padded="false" class="self-start">
+        <div class="p-2">
+          <SEmpty v-if="!roles.length" />
+          <button
+            v-for="r in roles"
+            :key="r.id"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors"
+            :class="r.id === selectedId ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-fg hover:bg-surface-2'"
+            @click="selectRole(r)"
+          >
+            <span class="min-w-0 flex-1">
+              <span class="block truncate">{{ lt(r.name) || r.key }}</span>
+              <SHint inline size="xs" class="block truncate font-mono">{{ r.key }}</SHint>
+            </span>
+            <span v-if="r.superuser" class="shrink-0 text-accent-500 dark:text-accent-400" :title="t('roles.superuserHint')" :aria-label="t('roles.superuser')" role="img"><SIcon name="lock" class="h-4 w-4" /></span>
+            <SBadge v-else-if="r.builtin" tone="gray">{{ t('roles.builtin') }}</SBadge>
+            <SHint v-if="roleMemberCount(r) !== undefined" inline size="xs" class="shrink-0">{{ roleMemberCount(r) }}</SHint>
+          </button>
+        </div>
+      </SCard>
 
       <!-- editor -->
-      <div v-if="selected" class="card">
-        <div class="card-header flex flex-wrap items-center justify-between gap-3">
-          <div class="flex min-w-0 items-center gap-2">
+      <SCard v-if="selected">
+        <template #title>
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <h3 class="truncate text-base font-semibold text-fg">{{ lt(selected.name) || selected.key }}</h3>
             <SHint inline size="xs" class="font-mono">{{ selected.key }}</SHint>
-            <SBadge v-if="selected.superuser" tone="purple"><SIcon name="lock" class="h-3 w-3" />{{ t('roles.superuser') }}</SBadge>
+            <SBadge v-if="selected.superuser" tone="accent"><SIcon name="lock" class="h-3 w-3" />{{ t('roles.superuser') }}</SBadge>
             <SBadge v-else-if="selected.builtin" tone="gray">{{ t('roles.builtin') }}</SBadge>
             <SHint v-if="roleMemberCount(selected) !== undefined" inline size="xs">{{ t('roles.members', { n: roleMemberCount(selected) }) }}</SHint>
           </div>
-          <div v-if="canManage" class="flex items-center gap-2">
-            <template v-if="!selected.superuser">
-              <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
-              <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
-            </template>
-            <SDropdown v-if="!selected.builtin" :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" data-testid="role-menu" @select="removeRole" />
-          </div>
-        </div>
+        </template>
+        <template v-if="canManage" #actions>
+          <template v-if="!selected.superuser">
+            <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
+            <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
+          </template>
+          <SDropdown v-if="!selected.builtin" :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" data-testid="role-menu" @select="removeRole" />
+        </template>
 
-        <div class="card-body space-y-5">
+        <div class="space-y-5">
           <SAlert v-if="selected.superuser" tone="accent" icon="lock">{{ t('roles.superuserHint') }}</SAlert>
           <SAlert v-else-if="permsMissing" tone="warning">{{ t('roles.permsNotLoaded') }}</SAlert>
 
-          <!-- meta -->
           <SGrid :cols="1" :md-cols="3">
             <SField :label="t('roles.nameEn')">
               <SInput v-model="form.nameEn" :disabled="readOnly" />
@@ -337,87 +262,21 @@ async function removeRole() {
             </SField>
           </SGrid>
 
-          <!-- permission tree -->
-          <div>
-            <SSectionTitle :title="t('roles.permissions')" />
-            <SEmpty v-if="!modules.length" :text="t('roles.noPermissions')" />
-            <div class="space-y-2">
-              <template v-for="(group, gi) in [coreModules, pluginModules]" :key="gi">
-                <div v-if="gi === 1 && group.length" class="flex items-center gap-3 py-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                  <span class="h-px flex-1 bg-line" />
-                  {{ t('roles.pluginPermissions') }}
-                  <span class="h-px flex-1 bg-line" />
-                </div>
-                <div
-                  v-for="m in group"
-                  :key="m.module"
-                  class="rounded-xl border border-line"
-                  :class="moduleInactive(m) ? 'opacity-60' : ''"
-                >
-                  <div class="flex items-center gap-3 px-3 py-2">
-                    <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" :aria-expanded="!collapsed.has(m.module)" @click="toggleCollapse(m)">
-                      <SIcon :name="collapsed.has(m.module) ? 'chevron-right' : 'chevron-down'" class="h-4 w-4 shrink-0 text-fg-subtle" />
-                      <span class="truncate text-sm font-medium text-fg">{{ lt(m.label) || m.module }}</span>
-                      <SHint inline size="xs" class="hidden font-mono sm:inline">{{ m.module }}</SHint>
-                      <SBadge v-if="m.source === 'plugin' && m.status === 'disabled'" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
-                      <SBadge v-else-if="m.status === 'removed'" tone="gray">{{ t('roles.removed') }}</SBadge>
-                      <SHint inline size="xs" class="ml-auto shrink-0">{{ grantedCount(m) }}/{{ m.permissions.length }}</SHint>
-                    </button>
-                    <SCheckbox
-                      size="xs"
-                      class="shrink-0"
-                      :model-value="moduleState(m) === 'all'"
-                      :indeterminate="moduleState(m) === 'some'"
-                      :disabled="readOnly || !m.permissions.length"
-                      :label="t('roles.selectAll')"
-                      @update:model-value="toggleModule(m)"
-                    />
-                  </div>
-                  <div
-                    v-if="!collapsed.has(m.module)"
-                    class="grid gap-x-4 gap-y-2 border-t border-line px-3 py-3 sm:grid-cols-2 xl:grid-cols-3"
-                  >
-                    <!-- SCheckbox's own text span fixes the colour, so the inactive tone goes on the
-                         slot content; [&>span]:min-w-0 lets the truncate inside shrink. -->
-                    <SCheckbox
-                      v-for="p in m.permissions"
-                      :key="p.key"
-                      class="min-w-0 [&>span]:min-w-0"
-                      :model-value="isChecked(p.key)"
-                      :disabled="readOnly"
-                      @update:model-value="toggle(p.key)"
-                    >
-                      <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="p.key">
-                        <span class="truncate">{{ lt(p.label) || p.key }}</span>
-                        <span v-if="p.sensitive" class="shrink-0 text-amber-500 dark:text-amber-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
-                        <SBadge v-if="p.status === 'disabled' && !moduleInactive(m)" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
-                      </span>
-                    </SCheckbox>
-                  </div>
-                </div>
-              </template>
-            </div>
-            <SHint size="xs" class="mt-3 flex items-center gap-1">
-              <SIcon name="lock" class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />{{ t('roles.sensitiveLegend') }}
-            </SHint>
-          </div>
+          <PermissionTree v-model:granted="perms" :modules="modules" :all-granted="selected.superuser" :read-only="readOnly" />
 
-          <!-- members -->
-          <div v-if="auth.has('user:read')" class="border-t border-line pt-4">
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <SHint inline class="shrink-0">{{ t('roles.membersLabel') }}:</SHint>
-              <SSpinner v-if="membersLoading" size="sm" />
-              <template v-else-if="members.length">
-                <SChip v-for="u in members" :key="u.id" size="xs" :title="u.email">{{ u.display_name || u.email }}</SChip>
-                <SHint v-if="membersTotal > members.length" inline size="xs">{{ t('roles.moreMembers', { n: membersTotal - members.length }) }}</SHint>
-              </template>
-              <SHint v-else inline>{{ t('roles.noMembers') }}</SHint>
-              <SLink :to="{ path: '/users', query: { role: selected.key } }" class="ml-auto text-xs">{{ t('roles.manageMembers') }}</SLink>
-            </div>
+          <div v-if="auth.has('user:read')" class="flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm">
+            <SHint inline class="shrink-0">{{ t('roles.membersLabel') }}:</SHint>
+            <SSpinner v-if="membersLoading" size="sm" />
+            <template v-else-if="members.length">
+              <SChip v-for="u in members" :key="u.id" size="xs" :title="u.email">{{ u.display_name || u.email }}</SChip>
+              <SHint v-if="membersTotal > members.length" inline size="xs">{{ t('roles.moreMembers', { n: membersTotal - members.length }) }}</SHint>
+            </template>
+            <SHint v-else inline>{{ t('roles.noMembers') }}</SHint>
+            <SLink :to="{ path: '/users', query: { role: selected.key } }" class="ml-auto text-xs">{{ t('roles.manageMembers') }}</SLink>
           </div>
         </div>
-      </div>
-      <div v-else class="card"><SEmpty :text="t('roles.selectRole')" /></div>
+      </SCard>
+      <SCard v-else :padded="false"><SEmpty :text="t('roles.selectRole')" /></SCard>
     </SGrid>
 
     <SModal v-model:open="createOpen" :title="t('roles.create')">

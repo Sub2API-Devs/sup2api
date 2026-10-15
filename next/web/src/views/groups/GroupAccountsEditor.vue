@@ -154,8 +154,8 @@ defineExpose({ save, dirty })
 <template>
   <div>
     <div class="mb-2 flex flex-wrap items-center gap-2">
-      <SSelect v-model="typeFilter" class="!w-52" :options="typeFilterOptions" :aria-label="t('common.type')" data-testid="group-accounts-type" />
-      <SInput v-model="q" class="!w-48" :aria-label="t('common.search')" :placeholder="t('common.searchPlaceholder')" />
+      <SSelect v-model="typeFilter" class="w-52" :options="typeFilterOptions" :aria-label="t('common.type')" data-testid="group-accounts-type" />
+      <SInput v-model="q" class="w-48" :aria-label="t('common.search')" :placeholder="t('common.searchPlaceholder')" />
       <SCheckbox v-model="onlySelected" :label="t('groups.accounts.onlySelected')" />
       <span class="ml-auto flex gap-2 text-xs">
         <SLink as="button" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</SLink>
@@ -164,7 +164,7 @@ defineExpose({ save, dirty })
     </div>
     <div class="max-h-64 overflow-y-auto rounded-lg border border-line">
       <div v-if="loading" class="flex justify-center py-6"><SSpinner /></div>
-      <SEmpty v-else-if="!rows.length" class="!py-6" :text="t('groups.accounts.none')" />
+      <SEmpty v-else-if="!rows.length" size="sm" :text="t('groups.accounts.none')" />
       <label
         v-for="a in rows"
         v-else

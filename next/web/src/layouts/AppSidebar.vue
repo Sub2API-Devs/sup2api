@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SIcon } from '@sub2api/ui'
+import { SIcon, SSkeleton } from '@sub2api/ui'
 import { useAppStore, type NavItem, type NavSection } from '@/stores/app'
 import { lt } from '@/i18n'
 import VersionBadge from '@/components/VersionBadge.vue'
@@ -33,10 +33,10 @@ function iconContext(i: NavItem): string {
 <template>
   <div v-if="app.mobileNavOpen" class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="app.mobileNavOpen = false" />
   <aside
-    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-gray-200 bg-white transition-all duration-200 dark:border-dark-800 dark:bg-dark-900 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-surface transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
     :class="[app.sidebarCollapsed ? 'w-[72px]' : 'w-60', app.mobileNavOpen ? 'translate-x-0' : '-translate-x-full']"
   >
-    <div class="flex min-h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4 py-2 dark:border-dark-800" :class="app.sidebarCollapsed ? 'flex-col px-1' : ''">
+    <div class="flex min-h-14 shrink-0 items-center gap-2 border-b border-line px-4 py-2" :class="app.sidebarCollapsed ? 'flex-col px-1' : ''">
       <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
         S
       </div>
@@ -47,11 +47,11 @@ function iconContext(i: NavItem): string {
     </div>
     <nav class="flex-1 overflow-y-auto px-3 py-3">
       <div v-if="!app.menusLoaded" class="space-y-2 px-2">
-        <div v-for="i in 8" :key="i" class="h-8 animate-pulse rounded-lg bg-gray-100 dark:bg-dark-800" />
+        <SSkeleton v-for="i in 8" :key="i" height="2rem" />
       </div>
       <div v-for="s in app.menus" :key="s.key" class="mb-3">
         <div
-          v-if="!app.sidebarCollapsed && !(s.key === 'overview')"
+          v-if="!app.sidebarCollapsed && s.key !== 'overview'"
           class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle"
         >
           {{ sectionLabel(s) }}
@@ -65,7 +65,7 @@ function iconContext(i: NavItem): string {
           :class="
             active(i)
               ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white'
+              : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
           "
           @click="app.mobileNavOpen = false"
         >
@@ -76,7 +76,7 @@ function iconContext(i: NavItem): string {
     </nav>
     <button
       type="button"
-      class="hidden h-10 shrink-0 items-center justify-center border-t border-gray-100 text-fg-subtle hover:text-fg dark:border-dark-800 lg:flex"
+      class="hidden h-10 shrink-0 items-center justify-center border-t border-line text-fg-subtle hover:text-fg lg:flex"
       :title="app.sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       :aria-label="app.sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       :aria-expanded="!app.sidebarCollapsed"

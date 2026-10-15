@@ -20,7 +20,8 @@ const location = { ip: '8.8.8.8', country_code: 'US', timezone: 'America/Los_Ang
 function render(account?: Account, realSelect = false) {
   return shallowMount(AccountEditor, { props: { accountType, account }, global: { plugins: [i18n], stubs: {
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
-    SField: { template: '<div><slot /></div>' },
+    SField: { props: ['error'], template: '<div><slot /><p v-if="error">{{ error }}</p><slot v-else name="hint" /></div>' },
+    SHint: { template: '<p><slot /></p>' },
     SSegmented: false,
     SSelect: realSelect ? false : { props: ['modelValue', 'options', 'disabled', 'searchable'], emits: ['update:modelValue'], template: '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
     SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },

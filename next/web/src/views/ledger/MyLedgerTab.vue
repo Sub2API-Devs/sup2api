@@ -2,14 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatMoney } from '@/utils/format'
-import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import LedgerTable from './LedgerTable.vue'
-import { LEDGER_KINDS } from './kinds'
+import { LEDGER_RANGES, useKindOptions } from './kinds'
 
 // "Balance changes" tab of Mine > Usage records: the caller's balance and
 // their own ledger (GET /me/balance, GET /me/ledger).
@@ -40,7 +39,7 @@ onMounted(() => {
 
 const range = ref<RangeKey>('month')
 const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...rangeBounds('month'), kind: '' })
-const kindOptions = computed(() => [{ value: '', label: t('common.all') }, ...LEDGER_KINDS.map((k) => ({ value: k, label: t(`ledger.kinds.${k}`) }))])
+const kindOptions = useKindOptions()
 
 const negative = computed(() => Number(balance.value) < 0)
 
@@ -59,12 +58,7 @@ defineExpose({ reload: reloadAll })
       <SField class="w-40" :label="t('ledger.cols.kind')">
         <SSelect v-model="filters.kind" :options="kindOptions" />
       </SField>
-      <STimeRange
-        v-model:range="range"
-        v-model:from="filters.from"
-        v-model:to="filters.to"
-        :keys="['all', 'today', '7d', '30d', 'month', 'custom']"
-      />
+      <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" :keys="LEDGER_RANGES" />
     </div>
 
     <SGrid :cols="1" :md-cols="3" class="mb-5">

@@ -2,22 +2,21 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SCode, SCopyButton, SDescItem, SDescriptions, SGrid, SHint, SIcon, SLink, SSectionTitle, SSpinner } from '@sub2api/ui'
+import { SBadge, SCode, SCopyButton, SDescItem, SDescriptions, SGrid, SHint, SIcon, SSectionTitle, SSpinner } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
-import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
-import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
-import { billingTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import { factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import UsageBillingFacts from './UsageBillingFacts.vue'
 import UsageTokenFacts from './UsageTokenFacts.vue'
 import CacheWriteFacts from './CacheWriteFacts.vue'
 import { componentCacheWriteMetrics, otherUsageMetrics } from './cacheWriteEvidence'
 
-// Expanded usage record: billing detail (A.14), hooks, sticky, request info.
+// Expanded usage record: billing detail (A.14), request info, tokens, hooks, sticky.
 const props = defineProps<{ row: UsageRow; path?: string }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
 if (auth.has(ACCOUNT_PAGE_PERMS)) accountTypes.load()
@@ -25,7 +24,6 @@ if (auth.has(ACCOUNT_PAGE_PERMS)) accountTypes.load()
 const detail = ref<UsageRow | null>(null)
 const loading = ref(false)
 const error = ref('')
-const historyOpen = ref(false)
 
 onMounted(async () => {
   if (!props.path) return
@@ -42,121 +40,16 @@ onMounted(async () => {
 const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
 const knownRounds = computed(() => knownUsageRounds(u.value))
 const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))
-const bd = computed<Record<string, any>>(() => (u.value.billing_detail as Record<string, any>) || {})
-const componentCacheFacts = computed(() => componentCacheWriteMetrics(bd.value).filter(item => !knownRounds.value.length || item.kind !== 'replacement'))
-const breakdown = computed<Record<string, any>>(() => bd.value.breakdown || {})
-const vars = computed<Record<string, any>>(() => breakdown.value.vars || {})
-const tierName = computed(() => u.value.matched_tier || bd.value.tier || '')
-const rules = computed<Array<{ cond: string; multiplier: number | string; matched: boolean }>>(() =>
-  Array.isArray(bd.value.rules) ? bd.value.rules : []
-)
-const ledgerId = computed(() => u.value.ledger_id ?? bd.value.ledger_id ?? null)
-const rate = computed(() => bd.value.rate_multiplier ?? u.value.rate_multiplier ?? null)
-const exprVersion = computed(() => bd.value.expr_version)
-const billingInputs = computed(() => [
-  ...Object.entries(bd.value.inputs?.params || {}).map(([key, value]) => ({ name: `param("${key}")`, value })),
-  ...Object.entries(bd.value.inputs?.headers || {}).map(([key, value]) => ({ name: `header("${key}")`, value }))
-])
-
-function factValue(value: unknown): string {
-  if (value === null || value === undefined) return '—'
-  return typeof value === 'object' ? JSON.stringify(value) : String(value)
-}
-
+const componentCacheFacts = computed(() => componentCacheWriteMetrics(u.value.billing_detail).filter((item) => !knownRounds.value.length || item.kind !== 'replacement'))
 const hooks = computed(() => u.value.hook_decisions || [])
-
-function statusLabel(s: string) {
-  return te(`usage.billing.status.${s}`) ? t(`usage.billing.status.${s}`) : s
-}
 </script>
 
 <template>
   <div class="usage-detail bg-surface-2/60 p-4 md:p-6">
-    <div v-if="loading" class="py-4 text-center"><SSpinner /></div>
+    <SSpinner v-if="loading" block />
     <SHint v-if="error" tone="danger" class="mb-2">{{ error }}</SHint>
     <SGrid :cols="1" :gap="6" lg-template="3fr 2fr">
-      <!-- billing -->
-      <section class="min-w-0 rounded-xl border border-line bg-surface p-4">
-        <SSectionTitle :title="t('usage.billing.title')" />
-        <SDescriptions dense>
-          <SDescItem :label="t('usage.billing.price')"><div class="flex flex-wrap items-center gap-2">
-            <template v-if="u.price">
-              <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="font-mono text-xs">
-                {{ u.price.model }}
-              </SLink>
-              <span v-else class="font-mono text-xs">{{ u.price.model }}</span>
-              <SBadge :tone="u.price.source === 'sync' ? 'info' : 'primary'">
-                {{ te(`prices.source.${u.price.source}`) ? t(`prices.source.${u.price.source}`) : u.price.source }}
-              </SBadge>
-            </template>
-            <template v-else-if="u.price_id">
-              <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price_id}`">#{{ u.price_id }}</SLink>
-              <span v-else>#{{ u.price_id }}</span>
-            </template>
-            <SHint v-else inline>—</SHint>
-          </div></SDescItem>
-
-          <template v-if="u.expr_hash">
-            <SDescItem :label="t('prices.expression')"><div class="flex flex-wrap items-center gap-2">
-              <span v-if="exprVersion !== undefined">v{{ exprVersion }}</span>
-              <SCode inline :title="u.expr_hash" :text="t('usage.billing.hash', { hash: u.expr_hash.slice(0, 8) })" />
-              <SLink v-if="auth.has('price:read')" as="button" class="text-xs" @click="historyOpen = true">{{
-                t('prices.viewHistory')
-              }}</SLink>
-            </div></SDescItem>
-          </template>
-
-          <template v-if="u.billing_mode">
-            <SDescItem :label="t('prices.modeCol')">{{ te(`prices.mode.${u.billing_mode}`) ? t(`prices.mode.${u.billing_mode}`) : u.billing_mode }}</SDescItem>
-          </template>
-
-          <template v-if="tierName">
-            <SDescItem :label="t('usage.billing.tier')">
-              <span class="font-mono">{{ tierName }}</span>
-              <SHint v-if="vars.len !== undefined" inline size="xs" class="ml-1"> ({{ t('usage.billing.len', { n: formatNumber(vars.len) }) }}) </SHint>
-            </SDescItem>
-          </template>
-
-          <template v-if="rules.length">
-            <SDescItem :label="t('usage.billing.rules')">
-              <ul class="space-y-1">
-                <li v-for="(r, i) in rules" :key="i" class="flex flex-wrap items-center gap-2">
-                  <SCode inline :text="r.cond" />
-                  <span>×{{ r.multiplier }}</span>
-                  <SBadge :tone="r.matched ? 'success' : 'gray'">
-                    <SIcon :name="r.matched ? 'check' : 'x'" class="h-3 w-3" />{{ r.matched ? t('usage.billing.matched') : t('usage.billing.notMatched') }}
-                  </SBadge>
-                </li>
-              </ul>
-            </SDescItem>
-          </template>
-
-          <template v-if="billingInputs.length">
-            <SDescItem :label="t('usage.billing.inputs')"><div class="space-y-1">
-              <div v-for="input in billingInputs" :key="input.name" class="break-all font-mono text-xs">
-                {{ input.name }} = {{ factValue(input.value) }}
-              </div>
-            </div></SDescItem>
-          </template>
-
-          <SDescItem :label="t('usage.billing.breakdown')">
-            <BillingBreakdown
-              v-if="Object.keys(breakdown).length || u.total_cost"
-              :breakdown="breakdown"
-              :rate-multiplier="rate"
-              :total="u.total_cost"
-              :rules="rules"
-              :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"
-            />
-            <SHint v-else inline>—</SHint>
-          </SDescItem>
-
-          <SDescItem :label="t('usage.billing.statusLabel')"><div class="flex flex-wrap items-center gap-2">
-            <SBadge :tone="billingTone(u.billing_status)">{{ statusLabel(u.billing_status) }}</SBadge>
-            <SHint v-if="ledgerId" inline size="xs">{{ t('usage.billing.ledger', { id: ledgerId }) }}</SHint>
-          </div></SDescItem>
-        </SDescriptions>
-      </section>
+      <UsageBillingFacts :u="u" />
 
       <!-- request -->
       <section class="min-w-0 space-y-5 rounded-xl border border-line bg-surface p-4">
@@ -165,9 +58,7 @@ function statusLabel(s: string) {
           <SDescriptions dense>
             <SDescItem :label="t('common.model')"><span class="font-mono text-xs">{{ u.model || '—' }}</span></SDescItem>
             <SDescItem :label="t('common.group')">{{ u.group_name || (u.group_id ? '#' + u.group_id : '—') }}</SDescItem>
-            <template v-if="u.account_id || u.account_name">
-              <SDescItem :label="t('common.account')">{{ u.account_name || '#' + u.account_id }}</SDescItem>
-            </template>
+            <SDescItem v-if="u.account_id || u.account_name" :label="t('common.account')">{{ u.account_name || '#' + u.account_id }}</SDescItem>
             <SDescItem :label="t('usage.request.id')"><div class="flex items-center gap-1">
               <SCode inline class="min-w-0 break-all" :text="u.request_id" />
               <SCopyButton :text="u.request_id" icon-only class="shrink-0" />
@@ -179,12 +70,10 @@ function statusLabel(s: string) {
               </template>
               <SHint v-else inline :title="t('usage.request.clientIdNone')">—</SHint>
             </div></SDescItem>
-            <template v-if="u.endpoint || u.protocol">
-              <SDescItem :label="t('usage.request.endpoint')"><span class="font-mono text-xs">
+            <SDescItem v-if="u.endpoint || u.protocol" :label="t('usage.request.endpoint')"><span class="font-mono text-xs">
                 {{ u.endpoint || '—' }} <SHint inline size="xs">{{ u.protocol }}</SHint>
                 <SHint v-if="u.platform" inline size="xs" class="font-sans"> · {{ t('common.platform') }} {{ u.platform }}</SHint>
               </span></SDescItem>
-            </template>
             <SDescItem :label="t('usage.cols.accountType')">
               <template v-if="u.account_type">
                 {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
@@ -200,31 +89,21 @@ function statusLabel(s: string) {
               <SBadge v-if="isConverted(u)" tone="warning">{{ t('usage.converted') }}</SBadge>
               <SHint v-if="isConverted(u)" inline size="xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</SHint>
             </div></SDescItem>
-            <template v-if="u.upstream_model && u.upstream_model !== u.model">
-              <SDescItem :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
-            </template>
-            <template v-if="u.api_key_name || u.api_key_id">
-              <SDescItem :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
-            </template>
+            <SDescItem v-if="u.upstream_model && u.upstream_model !== u.model" :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
+            <SDescItem v-if="u.api_key_name || u.api_key_id" :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
             <SDescItem :label="t('usage.request.clientIP')"><span class="break-all font-mono text-xs" data-testid="detail-client-ip">{{ u.client_ip || '—' }}</span></SDescItem>
             <SDescItem :label="t('usage.request.userAgent')"><span class="break-all text-xs">{{ u.user_agent || '—' }}</span></SDescItem>
-            <template v-if="u.node_id">
-              <SDescItem :label="t('usage.request.node')"><span class="font-mono text-xs">{{ u.node_id }}</span></SDescItem>
-            </template>
-            <template v-if="u.attempts !== undefined">
-              <SDescItem :label="t('usage.request.attempts')">{{ u.attempts }}</SDescItem>
-            </template>
+            <SDescItem v-if="u.node_id" :label="t('usage.request.node')"><span class="font-mono text-xs">{{ u.node_id }}</span></SDescItem>
+            <SDescItem v-if="u.attempts !== undefined" :label="t('usage.request.attempts')">{{ u.attempts }}</SDescItem>
             <SDescItem :label="t('usage.request.statusCode')">{{ u.status_code || '—' }}</SDescItem>
             <SDescItem :label="t('usage.request.latency')">
               {{ formatNumber(u.latency_ms) }} ms
               <SHint v-if="u.first_token_ms" inline>· {{ t('usage.request.firstToken') }} {{ formatNumber(u.first_token_ms) }} ms</SHint>
             </SDescItem>
-            <template v-if="!u.success && (u.error_type || u.error_message)">
-              <SDescItem :label="t('usage.request.error')"><span class="break-words text-red-600 dark:text-red-400">
-                <span class="font-mono text-xs">{{ u.error_type }}</span>
-                <span v-if="u.error_message" class="block text-xs">{{ u.error_message }}</span>
-              </span></SDescItem>
-            </template>
+            <SDescItem v-if="!u.success && (u.error_type || u.error_message)" :label="t('usage.request.error')"><SHint tone="danger" size="xs" class="break-words">
+                <span class="font-mono">{{ u.error_type }}</span>
+                <span v-if="u.error_message" class="block">{{ u.error_message }}</span>
+              </SHint></SDescItem>
           </SDescriptions>
         </div>
 
@@ -269,9 +148,7 @@ function statusLabel(s: string) {
             <CacheWriteFacts :metrics="item.metrics" />
           </div>
           <SDescriptions v-if="Object.keys(otherMetrics).length" dense>
-            <template v-for="(v, k) in otherMetrics" :key="k">
-              <SDescItem><template #label><span class="font-mono text-xs">u("{{ k }}")</span></template>{{ factValue(v) }}</SDescItem>
-            </template>
+            <SDescItem v-for="(v, k) in otherMetrics" :key="k" :value="factText(v)"><template #label><span class="font-mono text-xs">u("{{ k }}")</span></template></SDescItem>
           </SDescriptions>
         </div>
 
@@ -280,11 +157,7 @@ function statusLabel(s: string) {
           <ul class="space-y-1 text-sm">
             <li v-for="(h, i) in hooks" :key="i" class="flex flex-wrap items-center gap-2">
               <span class="font-mono text-xs">{{ h.plugin_key }}/{{ h.hook_id }}</span>
-              <SBadge
-                :tone="['deny', 'reject', 'block', 'blocked'].includes(h.decision) ? 'danger' : h.decision === 'allow' ? 'success' : 'gray'"
-              >
-                {{ h.decision }}
-              </SBadge>
+              <SBadge :tone="hookTone(h.decision)">{{ h.decision }}</SBadge>
               <SHint inline size="xs">{{ h.latency_ms }} ms</SHint>
               <span v-if="h.note" class="text-xs">{{ h.note }}</span>
             </li>
@@ -305,7 +178,6 @@ function statusLabel(s: string) {
       </section>
     </SGrid>
     <SHint v-if="!u.success && u.billing_status === 'free'" size="xs" class="mt-3">{{ t('usage.billing.freeNote') }}</SHint>
-    <ExprHistoryModal v-model:open="historyOpen" :hash="u.expr_hash" />
   </div>
 </template>
 

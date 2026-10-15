@@ -30,7 +30,7 @@ const list = computed(() => {
       :data-platform="p.id"
       :data-available="p.available ? '1' : '0'"
     >
-      <SBadge :tone="!p.available ? 'gray' : p.builtin ? 'primary' : 'purple'">
+      <SBadge :tone="!p.available ? 'gray' : p.builtin ? 'primary' : 'accent'">
         <span :class="p.available ? '' : 'line-through'">{{ p.label }}</span>
         <span v-if="!p.available" class="ml-1 text-[10px] no-underline">({{ t('platforms.unavailable') }})</span>
       </SBadge>

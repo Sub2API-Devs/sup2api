@@ -1,0 +1,44 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { del, patch, toast, confirm } = vi.hoisted(() => ({ del: vi.fn(), patch: vi.fn(), toast: vi.fn(), confirm: vi.fn() }))
+vi.mock('@sub2api/host', async (orig) => ({ ...(await orig<typeof import('@sub2api/host')>()), api: { del, patch } }))
+vi.mock('@sub2api/ui', async (orig) => ({ ...(await orig<typeof import('@sub2api/ui')>()), toast, confirm }))
+import { ApiError } from '@sub2api/host'
+import { deleteWithConfirm, toggleStatus, useRowSwitch } from './crud'
+
+describe('row actions', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('deletes only after confirmation, then runs done', async () => {
+    const done = vi.fn()
+    confirm.mockResolvedValueOnce(false)
+    expect(await deleteWithConfirm('/x/1', 'sure?', done)).toBe(false)
+    expect(del).not.toHaveBeenCalled()
+    confirm.mockResolvedValueOnce(true)
+    del.mockResolvedValueOnce(undefined)
+    expect(await deleteWithConfirm('/x/1', 'sure?', done)).toBe(true)
+    expect(del).toHaveBeenCalledWith('/x/1')
+    expect(done).toHaveBeenCalledOnce()
+    expect(toast).toHaveBeenCalledWith(expect.any(String), 'success')
+  })
+
+  it('flips the status', async () => {
+    patch.mockResolvedValueOnce(undefined)
+    await toggleStatus('/x/1', 'active')
+    expect(patch).toHaveBeenCalledWith('/x/1', { status: 'disabled' })
+  })
+
+  it('switches a row optimistically and reverts on failure', async () => {
+    const row = { id: 7, enabled: false }
+    let fail: (e: unknown) => void = () => {}
+    const sw = useRowSwitch(() => new Promise((_, reject) => (fail = reject)))
+    const pending = sw.set(row, true)
+    expect(row.enabled).toBe(true)
+    expect(sw.busy.value.has(7)).toBe(true)
+    fail(new ApiError(500, { code: 'internal', message: 'boom' }))
+    await pending
+    expect(row.enabled).toBe(false)
+    expect(sw.busy.value.has(7)).toBe(false)
+    expect(toast).toHaveBeenCalledWith('boom', 'error')
+  })
+})

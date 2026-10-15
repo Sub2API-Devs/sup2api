@@ -2,13 +2,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STimeRange } from '@sub2api/ui'
+import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
-import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import AdjustBalanceModal from './AdjustBalanceModal.vue'
 import LedgerTable from './LedgerTable.vue'
-import { LEDGER_KINDS } from './kinds'
+import { LEDGER_RANGES, useKindOptions } from './kinds'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -21,7 +20,7 @@ const { items, loading, page, pageSize, total, filters, reload } = useList<Ledge
   kind: ''
 })
 
-const kindOptions = computed(() => [{ value: '', label: t('common.all') }, ...LEDGER_KINDS.map((k) => ({ value: k, label: t(`ledger.kinds.${k}`) }))])
+const kindOptions = useKindOptions()
 const adjustOpen = ref(false)
 const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ? Number(filters.user_id) : null))
 </script>
@@ -40,12 +39,7 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
         <SField class="w-40" :label="t('ledger.cols.kind')">
           <SSelect v-model="filters.kind" :options="kindOptions" />
         </SField>
-        <STimeRange
-          v-model:range="range"
-          v-model:from="filters.from"
-          v-model:to="filters.to"
-          :keys="['all', 'today', '7d', '30d', 'month', 'custom']"
-        />
+        <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" :keys="LEDGER_RANGES" />
       </template>
     </SPageHeader>
 

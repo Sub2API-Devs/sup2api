@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SHint, SIcon, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -122,12 +122,12 @@ onMounted(load)
   <div>
     <SPageHeader :title="t('plugins.list.title')" :description="t('plugins.list.description')">
       <template #actions>
-        <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
-        <SButton v-if="auth.has('plugin:market:read')" to="/market">
-          <SIcon name="market" class="h-4 w-4" />{{ t('plugins.market.title') }}
+        <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
+        <SButton v-if="auth.has('plugin:market:read')" to="/market" icon="market">
+          {{ t('plugins.market.title') }}
         </SButton>
-        <SButton v-if="auth.has('plugin:install')" variant="primary" :loading="uploading" @click="pickFile">
-          <SIcon name="upload" class="h-4 w-4" />{{ t('plugins.list.upload') }}
+        <SButton v-if="auth.has('plugin:install')" variant="primary" :loading="uploading" icon="upload" @click="pickFile">
+          {{ t('plugins.list.upload') }}
         </SButton>
         <input ref="fileInput" type="file" accept=".s2plugin" class="hidden" @change="onFile" />
       </template>
@@ -193,12 +193,12 @@ onMounted(load)
       </template>
       <template #cell-actions="{ row }">
         <div class="flex justify-end gap-2" @click.stop>
-          <SButton v-if="row.status === 'awaiting_consent' && auth.has('plugin:install')" size="sm" variant="primary" @click="review(row)">
-            <SIcon name="shield" class="h-4 w-4" />{{ t('plugins.list.review') }}
+          <SButton v-if="row.status === 'awaiting_consent' && auth.has('plugin:install')" size="sm" variant="primary" icon="shield" @click="review(row)">
+            {{ t('plugins.list.review') }}
           </SButton>
           <SButton size="sm" variant="ghost" @click="open(row)">{{ t('common.detail') }}</SButton>
-          <SButton v-if="canOpenSettings(row)" size="sm" :to="`/plugins/${encodeURIComponent(row.key)}?tab=settings`">
-            <SIcon name="settings" class="h-4 w-4" />{{ t('plugins.detail.tabs.settings') }}
+          <SButton v-if="canOpenSettings(row)" size="sm" :to="`/plugins/${encodeURIComponent(row.key)}?tab=settings`" icon="settings">
+            {{ t('plugins.detail.tabs.settings') }}
           </SButton>
         </div>
       </template>

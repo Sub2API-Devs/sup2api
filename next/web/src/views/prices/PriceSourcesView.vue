@@ -3,8 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource } from '@/api/types'
+import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import TimeText from '@/components/TimeText.vue'
@@ -45,9 +46,7 @@ const columns = computed<TableColumn[]>(() => {
   return cols
 })
 
-function kindTone(k: string) {
-  return k === 'sup2api' ? 'purple' : k === 'models_dev' ? 'success' : 'primary'
-}
+const KIND_TONE: Record<string, Tone> = { sup2api: 'accent', models_dev: 'success' }
 
 function optionText(s: PriceSource): string {
   if (s.kind === 'sup2api') return s.options?.apply_multiplier === false ? t('prices.sources.multiplierOff') : t('prices.sources.multiplierOn')
@@ -60,52 +59,19 @@ function optionText(s: PriceSource): string {
 const modalOpen = ref(false)
 const editing = ref<PriceSource | null>(null)
 
-function openCreate() {
-  editing.value = null
-  modalOpen.value = true
-}
-
-function openEdit(s: PriceSource) {
+function openEditor(s: PriceSource | null) {
   editing.value = s
   modalOpen.value = true
 }
 
-const toggling = ref(new Set<number>())
+const { busy: toggling, set: toggle } = useRowSwitch((s: PriceSource, on) => api.patch(`/price-sources/${s.id}`, { enabled: on }))
 
-async function toggle(s: PriceSource, v: boolean) {
-  const prev = s.enabled
-  s.enabled = v
-  toggling.value = new Set(toggling.value).add(s.id)
-  try {
-    await api.patch(`/price-sources/${s.id}`, { enabled: v })
-  } catch (e) {
-    s.enabled = prev
-    notifyError(e)
-  } finally {
-    const n = new Set(toggling.value)
-    n.delete(s.id)
-    toggling.value = n
-  }
-}
-
-async function remove(s: PriceSource) {
-  const ok = await confirm({
-    title: t('common.delete'),
-    message: t('prices.sources.deleteConfirm', { name: s.name, n: s.price_count || 0 }),
-    danger: true
-  })
-  if (!ok) return
-  try {
-    await api.del(`/price-sources/${s.id}`)
-    toast(t('common.deleted'), 'success')
-    load()
-  } catch (e) {
-    notifyError(e)
-  }
+function remove(s: PriceSource) {
+  return deleteWithConfirm(`/price-sources/${s.id}`, t('prices.sources.deleteConfirm', { name: s.name, n: s.price_count || 0 }), load)
 }
 
 function onAction(s: PriceSource, key: string) {
-  if (key === 'edit') openEdit(s)
+  if (key === 'edit') openEditor(s)
   else if (key === 'prices') viewPrices(s)
   else if (key === 'delete') remove(s)
 }
@@ -127,7 +93,7 @@ function viewPrices(s: PriceSource) {
       </template>
       <template #actions>
         <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
-        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" icon="plus" @click="openCreate">{{ t('prices.sources.create') }}</SButton>
+        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" icon="plus" @click="openEditor(null)">{{ t('prices.sources.create') }}</SButton>
       </template>
     </SPageHeader>
 
@@ -137,13 +103,13 @@ function viewPrices(s: PriceSource) {
         <SHint v-if="optionText(row)" size="xs" class="max-w-[11rem] truncate" :title="optionText(row)">{{ optionText(row) }}</SHint>
       </template>
       <template #cell-kind="{ row }">
-        <SBadge :tone="kindTone(row.kind)">{{ t(`prices.sources.kind.${row.kind}`) }}</SBadge>
+        <SBadge :tone="KIND_TONE[row.kind] ?? 'primary'">{{ t(`prices.sources.kind.${row.kind}`) }}</SBadge>
       </template>
       <template #cell-url="{ row }">
         <SCode inline class="block max-w-[13rem] truncate" :title="row.url" :text="row.url" />
         <SHint v-if="row.kind === 'sup2api'" inline size="xs">
           <template v-if="row.has_api_key">{{ t('prices.sources.hasKey') }} ••••</template>
-          <span v-else class="text-red-600 dark:text-red-400">{{ t('prices.sources.apiKeyRequired') }}</span>
+          <SHint v-else inline size="xs" tone="danger">{{ t('prices.sources.apiKeyRequired') }}</SHint>
         </SHint>
       </template>
       <template #cell-enabled="{ row }">
@@ -153,9 +119,7 @@ function viewPrices(s: PriceSource) {
         <TimeText :value="row.last_synced_at" mode="relative" :empty="t('prices.sources.never')" class="text-xs" />
       </template>
       <template #cell-last_error="{ row }">
-        <span v-if="row.last_error" class="block max-w-[11rem] truncate text-xs text-red-600 dark:text-red-400" :title="row.last_error" data-testid="price-source-error">
-          {{ row.last_error }}
-        </span>
+        <SHint v-if="row.last_error" tone="danger" size="xs" class="max-w-[11rem] truncate" :title="row.last_error" data-testid="price-source-error">{{ row.last_error }}</SHint>
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-price_count="{ row }">
