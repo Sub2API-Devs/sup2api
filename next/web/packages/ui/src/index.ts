@@ -60,7 +60,19 @@ export { copyToClipboard } from './clipboard'
 export { default as uiMessages } from './messages'
 export { rangeBounds, toLocalInput, fromLocalInput, dayKey } from './timeRange'
 export type { RangeKey } from './timeRange'
-export type { TableColumn, TabItem, SelectOption, MenuAction, Tone, StatusTone, ChoiceOption, DescItem, StepItem, StepState } from './types'
+export type {
+  TableColumn,
+  TableReorderEvent,
+  TabItem,
+  SelectOption,
+  MenuAction,
+  Tone,
+  StatusTone,
+  ChoiceOption,
+  DescItem,
+  StepItem,
+  StepState
+} from './types'
 // Form-item context (custom controls that want SField / SSettingRow ids).
 export { FIELD_KEY, useFieldControl } from './field'
 export type { FieldContext, ControlSize } from './field'

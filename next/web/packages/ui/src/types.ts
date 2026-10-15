@@ -1,3 +1,12 @@
+/** Indices are zero-based within the supplied rows. The source array is never mutated. */
+export interface TableReorderEvent<T> {
+  row: T
+  key: string | number
+  from: number
+  to: number
+  rows: T[]
+}
+
 export interface TableColumn {
   key: string
   label: string
