@@ -27,6 +27,10 @@ type reauthController struct {
 var reauthPath = regexp.MustCompile(`^/accounts/([0-9a-f]+)(?:/(.*))?$`)
 
 func (c *reauthController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	call := r.Method + " " + r.URL.Path

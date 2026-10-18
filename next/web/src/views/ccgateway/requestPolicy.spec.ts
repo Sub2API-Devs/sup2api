@@ -53,19 +53,19 @@ describe('CCGateway request policy', () => {
     p.betas = [{ name: 'custom-beta', mapping: 'tool_search' }]
     expect(validRequestPolicy(p)).toBe(true)
   })
-  it('defaults to native without account rollout lists', () => {
+  it('defaults to build without account rollout lists', () => {
     const p = defaultRequestPolicy()
-    expect(p.relay_mode).toBe('native')
+    expect(p.relay_mode).toBe('build')
     expect(p).not.toHaveProperty('relay_native_accounts')
     expect(p).not.toHaveProperty('relay_passthrough_accounts')
     expect(p).not.toHaveProperty('pass_upstream_errors')
     expect(validRequestPolicy(p)).toBe(true)
   })
-  it.each(['legacy', 'passthrough', '', undefined])('rejects an unnormalized relay mode %s', relay_mode => {
+  it.each(['native', 'legacy', 'passthrough', '', undefined])('rejects an unnormalized relay mode %s', relay_mode => {
     const policy = { ...defaultRequestPolicy(), relay_mode } as unknown as RequestPolicy
     expect(validRequestPolicy(policy)).toBe(false)
   })
-  it.each(['legacy', 'passthrough', 'native', '', undefined])('normalizes historical mode %s to native and drops obsolete lists without mutating input', relay_mode => {
+  it.each(['legacy', 'passthrough', 'native', '', undefined])('normalizes historical mode %s to build and drops obsolete lists without mutating input', relay_mode => {
     const historical = {
       relay_mode, relay_native_accounts: [24], relay_passthrough_accounts: [23],
       custom_tool_prefix: 'mytools', pass_upstream_errors: true
@@ -73,7 +73,7 @@ describe('CCGateway request policy', () => {
     const policy = normalizeRequestPolicy(historical)
     expect(policy).toEqual({ ...defaultRequestPolicy(), custom_tool_prefix: 'mytools' })
     expect(policy).not.toHaveProperty('pass_upstream_errors')
-    expect(policy.relay_mode).toBe('native')
+    expect(policy.relay_mode).toBe('build')
     expect(policy).not.toHaveProperty('relay_native_accounts')
     expect(policy).not.toHaveProperty('relay_passthrough_accounts')
     expect(validRequestPolicy(policy)).toBe(true)
@@ -109,7 +109,7 @@ describe('CCGateway request policy', () => {
     expect(validRequestPolicy({ ...defaultRequestPolicy(), custom_tool_prefix: 'my__tools' })).toBe(false)
     expect(validRequestPolicy({ ...defaultRequestPolicy(), unknown_field: 'pass' } as unknown as RequestPolicy)).toBe(false)
   })
-  it('normalizes missing policy to native defaults', () => {
+  it('normalizes missing policy to build defaults', () => {
     expect(normalizeRequestPolicy()).toEqual(defaultRequestPolicy())
     expect(normalizeRequestPolicy({})).toEqual(defaultRequestPolicy())
   })

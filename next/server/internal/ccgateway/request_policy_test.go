@@ -139,11 +139,15 @@ func TestThinkingDisabledCompatSave(t *testing.T) {
 	}
 }
 
-func TestNativeRelayPolicySaveAndWorkerProjection(t *testing.T) {
-	assert.Equal(t, "native", defaultRequestPolicy().RelayMode)
-	assert.Equal(t, "native", (Config{}).EffectiveRequestPolicy().RelayMode)
-	for _, mode := range []string{"", "native"} {
+func TestRequestPolicySaveAndWorkerProjection(t *testing.T) {
+	assert.Equal(t, "build", defaultRequestPolicy().RelayMode)
+	assert.Equal(t, "build", (Config{}).EffectiveRequestPolicy().RelayMode)
+	for _, mode := range []string{"", "build", "direct"} {
 		t.Run(mode, func(t *testing.T) {
+			want := mode
+			if want == "" {
+				want = "build"
+			}
 			var in Config
 			require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_mode":"`+mode+`","relay_native_accounts":[24],"relay_passthrough_accounts":[23]}}`), &in))
 			saved, err := mergeConfig(in, Config{Mode: "disabled"})
@@ -154,10 +158,10 @@ func TestNativeRelayPolicySaveAndWorkerProjection(t *testing.T) {
 			assert.NotContains(t, string(raw), "relay_passthrough_accounts")
 			var reloaded Config
 			require.NoError(t, json.Unmarshal(raw, &reloaded))
-			assert.Equal(t, "native", reloaded.EffectiveRequestPolicy().RelayMode)
+			assert.Equal(t, want, reloaded.EffectiveRequestPolicy().RelayMode)
 			for _, id := range []int64{-1, 0, 22, 23, 24} {
 				worker := reloaded.WorkerRequestPolicy(id)
-				assert.Equal(t, "native", worker.RelayMode)
+				assert.Equal(t, want, worker.RelayMode)
 				assert.Equal(t, reloaded.EffectiveRequestPolicy(), worker)
 				wire, err := json.Marshal(worker)
 				require.NoError(t, err)
@@ -169,7 +173,7 @@ func TestNativeRelayPolicySaveAndWorkerProjection(t *testing.T) {
 	}
 }
 
-func TestRelayModeStoredPolicyNormalizesToNative(t *testing.T) {
+func TestRelayModeStoredPolicyNormalizesToBuild(t *testing.T) {
 	cipher, err := secret.New(bytes.Repeat([]byte{7}, 32))
 	require.NoError(t, err)
 	s := &Service{Cipher: cipher}
@@ -186,31 +190,31 @@ func TestRelayModeStoredPolicyNormalizesToNative(t *testing.T) {
 			assert.Equal(t, mode, old.RequestPolicy.RelayMode)
 			for _, id := range []int64{-1, 0, 22, 23, 24} {
 				p := old.WorkerRequestPolicy(id)
-				assert.Equal(t, "native", p.RelayMode)
+				assert.Equal(t, "build", p.RelayMode)
 				assert.Equal(t, "false", p.ToolSearch)
 			}
-			assert.Equal(t, "native", old.EffectiveRequestPolicy().RelayMode)
+			assert.Equal(t, "build", old.EffectiveRequestPolicy().RelayMode)
 			assert.Equal(t, mode, old.RequestPolicy.RelayMode)
 			public, err := json.Marshal(old.Public())
 			require.NoError(t, err)
-			assert.Contains(t, string(public), `"relay_mode":"native"`)
+			assert.Contains(t, string(public), `"relay_mode":"build"`)
 			assert.NotContains(t, string(public), "relay_native_accounts")
 			assert.NotContains(t, string(public), "relay_passthrough_accounts")
 			assert.NotContains(t, string(public), "pass_upstream_errors")
 			saved, err := mergeConfig(Config{Mode: "disabled"}, old)
 			require.NoError(t, err)
-			assert.Equal(t, "native", saved.RequestPolicy.RelayMode)
+			assert.Equal(t, "build", saved.RequestPolicy.RelayMode)
 			assert.Equal(t, "false", saved.RequestPolicy.ToolSearch)
 		})
 	}
 }
 
-func TestRelayModeRejectsExplicitNonNativePolicy(t *testing.T) {
-	for _, mode := range []string{"legacy", "passthrough", "Native", " native "} {
+func TestRelayModeRejectsRetiredModes(t *testing.T) {
+	for _, mode := range []string{"native", "legacy", "passthrough", "Native", " native "} {
 		t.Run(mode, func(t *testing.T) {
 			p := defaultRequestPolicy()
 			p.RelayMode = mode
-			require.EqualError(t, validateRequestPolicy(p), "invalid relay_mode: must be native, build or direct")
+			require.EqualError(t, validateRequestPolicy(p), "invalid relay_mode: must be build or direct")
 			var in Config
 			require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_mode":"`+mode+`"}}`), &in))
 			_, err := mergeConfig(in, Config{Mode: "disabled"})

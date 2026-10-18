@@ -94,7 +94,7 @@ func Load() (*Config, error) {
 		CLISHA256:        os.Getenv("CCG_CLI_SHA256"),
 		CLIPatch:         os.Getenv("CCG_CLI_PATCH"),
 		PluginPath:       os.Getenv("WORKER_PLUGIN_PATH"),
-		RequestMode:      os.Getenv("CCG_REQUEST_MODE"),
+		RequestMode:      getEnv("CCG_REQUEST_MODE", "build"),
 		ConfigDir:        getEnv("CLAUDE_CONFIG_DIR", "/root/.claude"),
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
 		CacheDir:         getEnv("CACHE_DIR", filepath.Join(dataDir, "cache")),
@@ -114,8 +114,11 @@ func Load() (*Config, error) {
 
 // Validate 验证配置
 func (c *Config) Validate() error {
-	if c.RequestMode != "" && c.RequestMode != "direct" && c.RequestMode != "build" {
-		return fmt.Errorf("CCG_REQUEST_MODE must be direct or build, or empty for the native agent loop")
+	if c.RequestMode == "" {
+		c.RequestMode = "build"
+	}
+	if c.RequestMode != "direct" && c.RequestMode != "build" {
+		return fmt.Errorf("CCG_REQUEST_MODE must be direct or build")
 	}
 	if c.WorkerID == "" {
 		return fmt.Errorf("WORKER_ID is required")

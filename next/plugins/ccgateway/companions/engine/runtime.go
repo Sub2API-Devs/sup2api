@@ -14,7 +14,7 @@ import (
 // Options configures one account's gateway without changing process-wide env.
 type Options struct {
 	ExpectedCLIVersion, ExpectedCLISHA256, ExpectedCLIPatch string
-	RequestMode                                             string // opt-in single-request CLI transport: direct or build
+	RequestMode                                             string // single-request CLI transport: direct or build (default)
 	InternalBaseURL                                         string
 	CLI, Plugin, DataDir, CacheDir                          string
 	Key, AdminKey, NativeTools                              string
@@ -47,6 +47,9 @@ type Runtime struct {
 }
 
 func NewRuntime(o Options) (*Runtime, error) {
+	if o.RequestMode == "" {
+		o.RequestMode = "build"
+	}
 	if err := validateRequestMode(o.RequestMode); err != nil {
 		return nil, err
 	}

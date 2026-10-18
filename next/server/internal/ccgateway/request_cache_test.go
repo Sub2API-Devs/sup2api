@@ -28,6 +28,10 @@ type cachePanel struct {
 }
 
 func (p *cachePanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+		return
+	}
 	p.mu.Lock()
 	applied := p.applied
 	tunnel := strings.HasSuffix(r.URL.Path, "/tunnel")
@@ -257,6 +261,10 @@ func TestDisabledRuntimeIsNotRewrittenEveryPass(t *testing.T) {
 	var mu sync.Mutex
 	puts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/config") {
 			mu.Lock()
 			puts++

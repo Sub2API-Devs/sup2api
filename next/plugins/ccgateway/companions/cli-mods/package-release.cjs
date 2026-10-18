@@ -10,6 +10,6 @@ const sha256=crypto.createHash('sha256').update(bytes).digest('hex');
 fs.mkdirSync(path.join(output,version),{recursive:true});
 fs.writeFileSync(path.join(output,version,'claude'),bytes,{mode:0o755});
 fs.copyFileSync(patchFile,path.join(output,version,'ccgateway-patch.json'));
-const manifest={schema:1,versions:{[version]:{path:version+'/claude',sha256,patch:patch.extension,modes:['native','build','direct']}}};
+const manifest={schema:1,versions:{[version]:{path:version+'/claude',sha256,patch:patch.extension,modes:['build','direct']}}};
 fs.writeFileSync(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 console.log(JSON.stringify(manifest));

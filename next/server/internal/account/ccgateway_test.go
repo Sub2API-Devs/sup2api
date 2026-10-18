@@ -26,7 +26,13 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 		Type: manifest.AccountType{ID: "managed", Label: manifest.LocalizedText{"en": "Claude Code"},
 			Form: manifest.Form{Mode: "schema"}, Platforms: []manifest.AccountPlatform{{Platform: "anthropic"}}},
 		FormSchema: json.RawMessage(`{"type":"object"}`), Client: e.plat})
-	srv := httptest.NewServer(ctl)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+			return
+		}
+		ctl(w, r)
+	}))
 	e.t.Cleanup(srv.Close)
 	e.t.Setenv("CCGATEWAY_URL", srv.URL)
 	ccg := ccgateway.New(e.db, e.svc.d.Cipher)

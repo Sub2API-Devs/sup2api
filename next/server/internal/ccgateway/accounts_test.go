@@ -32,6 +32,10 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 	var applied string
 	var writes, calls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+			return
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer controller-secret" {

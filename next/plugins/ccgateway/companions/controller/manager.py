@@ -525,11 +525,13 @@ class Manager:
         # Credential/network changes must not incidentally upgrade the image.
         if existing is None and cli is None and os.getenv('CCG_DEFAULT_CLI_VERSION'):
             try:
-                cli = validate_profile({'version': os.environ['CCG_DEFAULT_CLI_VERSION'], 'request_mode': 'native', 'disable_auto_update': True})
+                cli = validate_profile({'version': os.environ['CCG_DEFAULT_CLI_VERSION'], 'request_mode': 'build', 'disable_auto_update': True})
             except ValueError as e:
                 raise BadRequest('invalid controller default CLI version') from e
         version_changed = cli is not None and (state or {}).get('cli', {}).get('version') != cli['version']
-        image_ref = image_of(existing) if existing and not version_changed else self.app_image
+        retired_mode = cli is not None and (state or {}).get('cli', {}).get('request_mode') not in ('direct', 'build')
+        # Migrating the removed agent path also installs the current Worker.
+        image_ref = image_of(existing) if existing and not version_changed and not retired_mode else self.app_image
         image = self.ensure_image(image_ref)
         # Validate the new image before an existing container is replaced.
         check_business_image(image)

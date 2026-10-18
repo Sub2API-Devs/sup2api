@@ -633,6 +633,9 @@ func Serve() error {
 	}
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestMode = os.Getenv("CCG_REQUEST_MODE")
+	if g.RequestMode == "" {
+		g.RequestMode = "build"
+	}
 	if err := validateRequestMode(g.RequestMode); err != nil {
 		return err
 	}

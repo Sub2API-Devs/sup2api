@@ -68,7 +68,7 @@ export interface RequestPolicy {
   erase_client_attachments?: ErasableAttachment[]
   // Client attachment types replaced in place with the Worker's Claude Code rendering; never an erased type.
   replace_client_attachments?: ReplaceableAttachment[]
-  relay_mode: 'native' | 'direct' | 'build'
+  relay_mode: 'direct' | 'build'
   cli_version?: string
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
@@ -83,7 +83,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     thinking_disabled_compat: 'pass',
     erase_client_attachments: [],
     replace_client_attachments: [],
-    relay_mode: 'native',
+    relay_mode: 'build',
     cli_version: '2.1.302',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -119,7 +119,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     thinking_disabled_compat: policy?.thinking_disabled_compat ?? defaults.thinking_disabled_compat,
     erase_client_attachments: expandEnvironment(policy?.erase_client_attachments),
     replace_client_attachments: expandEnvironment(policy?.replace_client_attachments),
-    relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'native',
+    relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
     cli_version: policy?.cli_version ?? defaults.cli_version,
     betas: policy?.betas ?? defaults.betas
   }
@@ -133,7 +133,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
     (p.erase_client_attachments ?? []).every((type, i, all) => erasableAttachments.includes(type) && all.indexOf(type) === i) &&
     (p.replace_client_attachments ?? []).every((type, i, all) => replaceableAttachments.includes(type) && all.indexOf(type) === i && !p.erase_client_attachments?.some(erased => containsAttachment(erased, type) || containsAttachment(type, erased))) &&
-    ['native', 'direct', 'build'].includes(p.relay_mode) &&
+    ['direct', 'build'].includes(p.relay_mode) &&
     (!p.cli_version || /^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$/.test(p.cli_version))
   )
 }

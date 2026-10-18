@@ -137,7 +137,7 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownField != "reject" {
 			t.Error("trusted request policy not injected")
 		}
-		assert.Equal(t, "native", policy.RelayMode)
+		assert.Equal(t, "build", policy.RelayMode)
 		assert.Equal(t, "request", policy.ToolSearch)
 		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"attachment_source"`)
 		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"unknown_beta"`)

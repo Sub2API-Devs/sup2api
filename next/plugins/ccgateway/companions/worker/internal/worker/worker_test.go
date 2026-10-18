@@ -27,8 +27,7 @@ func TestInternalControlUsesExplicitListenerHost(t *testing.T) {
 	}
 }
 
-// Run an actual subprocess over OS pipes. Reject plaintext input, early user
-// submission or truncated content while exercising the native CLI protocol.
+// Run the request command through a real subprocess and OS pipes.
 func TestMain(m *testing.M) {
 	if strings.Contains(os.Getenv("ANTHROPIC_BASE_URL"), "/ccg-tool-catalog/") {
 		if err := catalogPeer(); err != nil {
@@ -39,7 +38,7 @@ func TestMain(m *testing.M) {
 	}
 	if os.Getenv("WORKER_TEST_PEER") == "1" {
 		if len(os.Args) > 1 && os.Args[1] == "--version" {
-			fmt.Println("2.1.288")
+			fmt.Println("2.1.302")
 			os.Exit(0)
 		}
 		if err := peer(); err != nil {
@@ -72,166 +71,60 @@ func catalogPeer() error {
 }
 
 func peer() error {
-	input, enc := bufio.NewReader(os.Stdin), json.NewEncoder(os.Stdout)
-	line, err := input.ReadBytes('\n')
+	if len(os.Args) < 3 || os.Args[1] != "request" {
+		return fmt.Errorf("expected request command, not agent loop")
+	}
+	mode := os.Args[2]
+	if mode != "--build" && mode != "--direct" {
+		return fmt.Errorf("unexpected request mode")
+	}
+	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return err
 	}
-	var init, user map[string]any
-	if err := json.Unmarshal(line, &init); err != nil {
+	var body map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &body); err != nil {
 		return err
 	}
-	initialize, _ := init["request"].(map[string]any)
-	if init["type"] != "control_request" || initialize["subtype"] != "initialize" || init["request_id"] == nil {
-		return fmt.Errorf("missing initialize")
-	}
-	if err := enc.Encode(map[string]any{"type": "control_response", "response": map[string]any{"request_id": init["request_id"], "subtype": "success"}}); err != nil {
-		return err
-	}
-
-	// Observe input without consuming a user frame until ready is acknowledged.
-	// A short bounded probe catches submission before the authenticated gate.
-	available := make(chan error, 1)
-	go func() {
-		_, err := input.Peek(1)
-		available <- err
-	}()
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{}}
-	defer client.CloseIdleConnections()
-	control := func(method, token, body string) (*http.Response, error) {
-		r, err := http.NewRequest(method, os.Getenv("CCGATEWAY_MOD_URL"), strings.NewReader(body))
+	if mode == "--build" {
+		var parameters map[string]json.RawMessage
+		if err = json.Unmarshal(body["parameters"], &parameters); err != nil {
+			return err
+		}
+		for _, key := range []string{"model", "messages", "stream"} {
+			parameters[key] = body[key]
+		}
+		raw, err = json.Marshal(parameters)
 		if err != nil {
-			return nil, err
-		}
-		if token != "" {
-			r.Header.Set("Authorization", "Bearer "+token)
-		}
-		return client.Do(r)
-	}
-	const ready = `{"event":"ready","version":"ccgateway-v3"}`
-	for _, token := range []string{"", "wrong"} {
-		for _, method := range []string{http.MethodGet, http.MethodPost} {
-			res, err := control(method, token, ready)
-			if err != nil {
-				return err
-			}
-			res.Body.Close()
-			if res.StatusCode != http.StatusNotFound {
-				return fmt.Errorf("unauthenticated Mod %s returned %d", method, res.StatusCode)
-			}
+			return err
 		}
 	}
-	res, err := control(http.MethodGet, os.Getenv("CCGATEWAY_MOD_TOKEN"), "")
-	if err != nil {
-		return err
-	}
-	var mod struct {
-		Passthrough struct {
-			First string `json:"first"`
-		} `json:"passthrough"`
-	}
-	err = json.NewDecoder(res.Body).Decode(&mod)
-	res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("Mod config returned %d", res.StatusCode)
-	}
-	if err != nil {
-		return err
-	}
-	if len(mod.Passthrough.First) == 0 {
-		return fmt.Errorf("missing Mod passthrough.first")
-	}
-	select {
-	case err := <-available:
-		return fmt.Errorf("input before authenticated ready: %v", err)
-	case <-time.After(25 * time.Millisecond):
-	}
-	ack, err := control(http.MethodPost, os.Getenv("CCGATEWAY_MOD_TOKEN"), ready)
-	if err != nil {
-		return err
-	}
-	ack.Body.Close()
-	if ack.StatusCode != http.StatusOK {
-		return fmt.Errorf("Mod ready returned %d", ack.StatusCode)
-	}
-	if err := <-available; err != nil {
-		return err
-	}
-	if err := json.NewDecoder(input).Decode(&user); err != nil {
-		return err
-	}
-	if user["type"] != "user" || user["uuid"] == nil || user["uuid"] == "" {
-		return fmt.Errorf("missing user frame")
-	}
-	msg, _ := user["message"].(map[string]any)
-	blocks, _ := msg["content"].([]any)
-	if msg["role"] != "user" || len(blocks) != 2 {
-		return fmt.Errorf("content lost")
-	}
-	for i, text := range []string{"first block", "second block"} {
-		block, _ := blocks[i].(map[string]any)
-		if block["type"] != "text" || block["text"] != text {
-			return fmt.Errorf("content block %d lost", i)
-		}
-	}
-
-	// Emulate the Mod's first-round EXTRA_BODY merge, preserving raw fields.
-	// The native CLI talks directly to this test's provider, never a real one.
 	provider := os.Getenv("WORKER_TEST_PROVIDER_URL")
 	if !strings.HasPrefix(provider, "http://127.0.0.1:") || os.Getenv("ANTHROPIC_BASE_URL") != provider {
 		return fmt.Errorf("fake provider boundary changed")
 	}
-	upstream := map[string]any{"model": "claude-sonnet-4-6", "max_tokens": 1, "stream": true, "messages": []any{msg}}
-	var first map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(mod.Passthrough.First), &first); err != nil {
-		return err
-	}
-	for name, value := range first {
-		upstream[name] = value
-	}
-	var body bytes.Buffer
-	bodyEncoder := json.NewEncoder(&body)
-	bodyEncoder.SetEscapeHTML(false)
-	if err := bodyEncoder.Encode(upstream); err != nil {
-		return err
-	}
-	res, err = client.Post(provider+"/v1/messages", "application/json", &body)
+	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{}}
+	defer client.CloseIdleConnections()
+	response, err := client.Post(provider+"/v1/messages", "application/json", bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(io.Discard, res.Body)
-	res.Body.Close()
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("fake provider returned %d", res.StatusCode)
-	}
-	message := map[string]any{"id": "msg_worker", "type": "message", "role": "assistant", "model": "claude-sonnet-4-6", "content": []any{map[string]any{"type": "text", "text": "worker answer"}}, "stop_reason": "end_turn", "usage": map[string]any{"input_tokens": 1, "output_tokens": 1}}
-	dir := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", "probe")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-	row, err := json.Marshal(map[string]any{"type": "assistant", "uuid": "77e6ce4c-e0e3-488b-bc40-2c581a42968d", "message": message})
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, user["session_id"].(string)+".jsonl"), append(row, '\n'), 0600); err != nil {
-		return err
-	}
-	for _, event := range []map[string]any{
-		{"type": "message_start", "message": map[string]any{"id": "msg_worker", "type": "message", "role": "assistant", "model": "claude-sonnet-4-6", "content": []any{}, "usage": map[string]any{"input_tokens": 1, "output_tokens": 0}}},
-		{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}},
-		{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": "worker answer"}},
-		{"type": "content_block_stop", "index": 0},
-		{"type": "message_delta", "delta": map[string]any{"stop_reason": "end_turn"}, "usage": map[string]any{"output_tokens": 1}},
-		{"type": "message_stop"},
-	} {
-		if err := enc.Encode(map[string]any{"type": "stream_event", "event": event}); err != nil {
-			return err
+	defer response.Body.Close()
+	meta := ""
+	for i, arg := range os.Args {
+		if arg == "--response-meta" && i+1 < len(os.Args) {
+			meta = os.Args[i+1]
 		}
 	}
-	return enc.Encode(map[string]any{"type": "result", "subtype": "success"})
+	if meta == "" {
+		return fmt.Errorf("response metadata missing")
+	}
+	data, _ := json.Marshal(map[string]any{"status": response.StatusCode, "headers": map[string]string{"content-type": response.Header.Get("Content-Type")}})
+	if err = os.WriteFile(meta, data, 0600); err != nil {
+		return err
+	}
+	_, err = io.Copy(os.Stdout, response.Body)
+	return err
 }
 
 func fixture(t *testing.T, wantRequests int64) Worker {
@@ -248,13 +141,28 @@ func fixture(t *testing.T, wantRequests int64) Worker {
 			http.Error(w, "bad fixture", http.StatusBadRequest)
 			return
 		}
-		assert.Equal(t, "128", string(body["max_tokens"]), "Mod first-round fields must reach the provider")
+		assert.Equal(t, "128", string(body["max_tokens"]), "request generation fields must reach the provider")
 		assert.Equal(t, "0.2500", string(body["temperature"]), "raw generation fields must retain their representation")
 		assert.JSONEq(t, `["fixture stop"]`, string(body["stop_sequences"]))
 		assert.JSONEq(t, `[{"role":"user","content":[{"type":"text","text":"first block"},{"type":"text","text":"second block"}]}]`, string(body["messages"]))
 		assert.Equal(t, `"claude-sonnet-4-6"`, string(body["model"]))
-		assert.Equal(t, "true", string(body["stream"]))
-		fmt.Fprint(w, `{}`)
+		if string(body["stream"]) == "true" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, event := range []map[string]any{
+				{"type": "message_start", "message": map[string]any{"id": "msg_worker", "type": "message", "role": "assistant", "model": "claude-sonnet-4-6", "content": []any{}, "usage": map[string]int{"input_tokens": 1, "output_tokens": 0}}},
+				{"type": "content_block_start", "index": 0, "content_block": map[string]string{"type": "text", "text": ""}},
+				{"type": "content_block_delta", "index": 0, "delta": map[string]string{"type": "text_delta", "text": "worker answer"}},
+				{"type": "content_block_stop", "index": 0},
+				{"type": "message_delta", "delta": map[string]string{"stop_reason": "end_turn"}, "usage": map[string]int{"output_tokens": 1}},
+				{"type": "message_stop"},
+			} {
+				data, _ := json.Marshal(event)
+				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], data)
+			}
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"msg_worker","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[{"type":"text","text":"worker answer"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+		}
 	}))
 	t.Cleanup(func() {
 		upstream.Close()
@@ -326,7 +234,7 @@ func TestWorkerAdmission(t *testing.T) {
 	}
 	status, err := w.Health(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "2.1.288", status.CLIVersion)
+	assert.Equal(t, "2.1.302", status.CLIVersion)
 	require.NoError(t, w.Close())
 	require.NoError(t, w.Close())
 }

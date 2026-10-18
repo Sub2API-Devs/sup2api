@@ -28,6 +28,29 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestRequestModeDefaultsToBuildAndRejectsNative(t *testing.T) {
+	for _, mode := range []string{"", "build", "direct"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("CCG_REQUEST_MODE", mode)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := mode
+			if want == "" {
+				want = "build"
+			}
+			if cfg.RequestMode != want {
+				t.Fatalf("got %s, want %s", cfg.RequestMode, want)
+			}
+		})
+	}
+	t.Setenv("CCG_REQUEST_MODE", "native")
+	if _, err := Load(); err == nil {
+		t.Fatal("retired agent mode accepted")
+	}
+}
+
 func TestExistingAccountContainerConfig(t *testing.T) {
 	t.Setenv("WORKER_ID", "")
 	t.Setenv("WORKER_PORT", "")

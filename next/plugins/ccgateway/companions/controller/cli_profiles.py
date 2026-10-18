@@ -9,7 +9,7 @@ def validate_profile(value):
         return None  # legacy configuration; new UI supplies an explicit version
     if (not isinstance(value, dict) or set(value) != {'version', 'request_mode', 'disable_auto_update'}
             or not isinstance(value['version'], str) or not VERSION.fullmatch(value['version'])
-            or value['request_mode'] not in ('native', 'build', 'direct') or value['disable_auto_update'] is not True):
+            or value['request_mode'] not in ('build', 'direct') or value['disable_auto_update'] is not True):
         raise ValueError('invalid pinned CLI profile')
     return dict(value)
 
@@ -40,4 +40,4 @@ def resolve_profile(manager, image, profile):
         raise ValueError('CLI profile version mismatch')
     return {'WORKER_CLI_PATH': item['path'], 'WORKER_CLI_VERSION': item['version'],
             'CCG_CLI_SHA256': item['sha256'], 'CCG_CLI_PATCH': item['patch'],
-            'CCG_REQUEST_MODE': '' if profile['request_mode'] == 'native' else profile['request_mode']}
+            'CCG_REQUEST_MODE': profile['request_mode']}

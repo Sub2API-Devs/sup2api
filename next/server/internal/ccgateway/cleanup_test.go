@@ -18,7 +18,7 @@ func TestDeletedRuntimePurgesDataAndRetriesFailure(t *testing.T) {
 			purgeHeaders := []string{}
 			f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/health" {
-					_ = json.NewEncoder(w).Encode(map[string]any{"features": []string{cleanupFeature}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"features": []string{cleanupFeature, "cli-profile-v1"}})
 					return
 				}
 				if r.Method == http.MethodDelete {
@@ -81,7 +81,7 @@ func TestCleanupUsesCompleteAuthoritativeKeepList(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
-			_ = json.NewEncoder(w).Encode(map[string]any{"features": []string{cleanupFeature}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"features": []string{cleanupFeature, "cli-profile-v1"}})
 			return
 		}
 		if r.URL.Path == "/runtime/cleanup" {

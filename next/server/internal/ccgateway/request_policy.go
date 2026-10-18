@@ -50,7 +50,7 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "native", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "build", CLIVersion: "2.1.302", Betas: features.BetaRules()}
 }
 
 // EffectiveRequestPolicy is the policy sent to the Worker. Features the
@@ -76,10 +76,11 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.ThinkingDisabledCompat == "" {
 		p.ThinkingDisabledCompat = "pass"
 	}
-	if p.RelayMode != "native" && p.RelayMode != "direct" && p.RelayMode != "build" {
-		p.RelayMode = "native"
+	// Historical native/legacy/passthrough configurations migrate on read.
+	if p.RelayMode != "direct" && p.RelayMode != "build" {
+		p.RelayMode = "build"
 	}
-	if p.RelayMode != "native" && p.CLIVersion == "" {
+	if p.CLIVersion == "" {
 		p.CLIVersion = "2.1.302"
 	}
 	p.Betas = defaultRequestPolicy().Betas
@@ -106,8 +107,8 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.ThinkingDisabledCompat != "" && p.ThinkingDisabledCompat != "pass" && p.ThinkingDisabledCompat != "omit" {
 		return errors.New("invalid thinking_disabled_compat: must be pass or omit")
 	}
-	if p.RelayMode != "" && p.RelayMode != "native" && p.RelayMode != "build" && p.RelayMode != "direct" {
-		return errors.New("invalid relay_mode: must be native, build or direct")
+	if p.RelayMode != "" && p.RelayMode != "build" && p.RelayMode != "direct" {
+		return errors.New("invalid relay_mode: must be build or direct")
 	}
 	if p.CLIVersion != "" && !regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`).MatchString(p.CLIVersion) {
 		return errors.New("invalid cli_version")

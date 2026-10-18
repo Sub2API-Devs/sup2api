@@ -25,7 +25,7 @@ func TestNativePolicyDropsRetiredControlsOnSaveReload(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(raw, &cfg))
 		policy := cfg.EffectiveRequestPolicy()
-		assert.Equal(t, "native", policy.RelayMode)
+		assert.Equal(t, "build", policy.RelayMode)
 		assert.Equal(t, "ignore", policy.UnknownField)
 		assert.Equal(t, "false", policy.ToolSearch)
 		assert.Equal(t, "client-tools", policy.CustomToolPrefix)

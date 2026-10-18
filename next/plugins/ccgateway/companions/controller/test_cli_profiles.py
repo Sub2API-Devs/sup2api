@@ -7,10 +7,24 @@ from cli_profiles import validate_profile, resolve_profile
 PROFILE = {'version':'2.1.302','request_mode':'direct','disable_auto_update':True}
 
 class ProfileTests(Base):
+    def test_retired_agent_mode_uses_current_worker_and_keeps_data(self):
+        with patch('manager.resolve_profile', return_value={}):
+            self.apply('21', cli=PROFILE)
+            old = self.app('21')
+            volume = self.fake.volumes.get('ccg-21-data')
+            state = self.m.state('21')
+            state['cli']['request_mode'] = 'native'
+            self.m.save('21', state)
+            self.new_image()
+            self.apply('21', revision='b'*64, cli={**PROFILE, 'request_mode': 'build'})
+            self.assertTrue(old.removed)
+            self.assertNotEqual(self.app('21').attrs['Image'], old.attrs['Image'])
+            self.assertIs(self.fake.volumes.get('ccg-21-data'), volume)
+
     def test_new_authorization_runtime_uses_controller_default(self):
         with patch.dict(os.environ, {'CCG_DEFAULT_CLI_VERSION':'2.1.302'}), patch('manager.resolve_profile',return_value={'WORKER_CLI_VERSION':'2.1.302'}) as resolve:
             self.apply('22')
-            self.assertEqual(self.m.state('22')['cli'],{**PROFILE,'request_mode':'native'})
+            self.assertEqual(self.m.state('22')['cli'],{**PROFILE,'request_mode':'build'})
             self.assertEqual(resolve.call_args.args[2]['version'],'2.1.302')
 
     def test_creation_passes_version_and_disables_updaters(self):
@@ -35,7 +49,7 @@ class ProfileTests(Base):
 
     def test_bad_profile_does_not_replace_container(self):
         self.apply('21');old=self.app('21')
-        for value in [{**PROFILE,'version':'../bad'},{**PROFILE,'disable_auto_update':False},{**PROFILE,'request_mode':'other'}]:
+        for value in [{**PROFILE,'version':'../bad'},{**PROFILE,'disable_auto_update':False},{**PROFILE,'request_mode':'other'},{**PROFILE,'request_mode':'native'}]:
             with self.assertRaises(BadRequest):self.apply('21',cli=value)
             self.assertIs(self.app('21'),old)
 

@@ -2,8 +2,8 @@ export default {
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Request mode', version: 'CLI version',
-    direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)', native: 'Existing agent path (native)',
-    modeHint: 'Direct forwards the original body; build assembles extracted context through the CLI. Tools run on the caller. Both currently support API key accounts.',
+    direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)',
+    modeHint: 'Build is the default. Direct forwards the original body; build assembles extracted context through the CLI. Tools run on the caller. Both currently support API key accounts.',
     versionHint: 'Authorization containers select this version from the Worker image and verify its patch and checksum. Automatic updates are disabled. Version or mode changes recreate existing containers while preserving their data volumes; switch while idle.',
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },

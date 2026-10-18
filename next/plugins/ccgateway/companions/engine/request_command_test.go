@@ -114,6 +114,36 @@ exit 2
 	}
 }
 
+func TestRuntimeDefaultsToBuildAndRefusesRetiredHostMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux shell fixture")
+	}
+	root := t.TempDir()
+	cli := filepath.Join(root, "claude")
+	if err := os.WriteFile(cli, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.302 (Claude Code)'; exit 0; fi\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	rt, err := NewRuntime(Options{CLI: cli, DataDir: root, Key: "fixture", AdminKey: "fixture-admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	if rt.gateway.RequestMode != "build" {
+		t.Fatalf("default mode: %s", rt.gateway.RequestMode)
+	}
+	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
+	r.Header.Set("x-api-key", "fixture")
+	r.Header.Set(policyHeader, `{"relay_mode":"native"}`)
+	out := httptest.NewRecorder()
+	rt.gateway.ServeHTTP(out, r)
+	if out.Code != 409 {
+		t.Fatalf("retired mode accepted: %d %s", out.Code, out.Body.String())
+	}
+	if _, err := NewRuntime(Options{RequestMode: "native"}); err == nil {
+		t.Fatal("explicit native mode accepted")
+	}
+}
+
 func TestRequestCommandAdmission(t *testing.T) {
 	g := &Gateway{RequestMode: "direct", Key: "secret", Runner: &Runner{}, Slots: make(chan struct{}, 1)}
 	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{}`))

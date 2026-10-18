@@ -196,6 +196,10 @@ func (c *fakeController) seen(prefix string) []string {
 }
 
 func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if r.Header.Get("Authorization") != "Bearer controller-secret" {
@@ -399,6 +403,10 @@ func TestStartRetriesUntilTheRuntimeAnswers(t *testing.T) {
 func TestAccountWithoutProxyEgressesDirectly(t *testing.T) {
 	var puts atomic.Int32
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/config") {
 			var raw map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&raw)
