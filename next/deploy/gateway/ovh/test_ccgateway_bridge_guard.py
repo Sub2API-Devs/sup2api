@@ -1,7 +1,11 @@
 import copy
 import importlib.util
 import pathlib
+import json
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('guard', pathlib.Path(__file__).with_name('ccgateway-bridge-guard.py'))
 guard = importlib.util.module_from_spec(spec)
@@ -54,6 +58,45 @@ class BridgeRules(unittest.TestCase):
         self.assertEqual(self.rules(), [])
         self.gateway['Config']['Labels'][guard.LABEL] = '21'
         self.assertEqual(len(self.rules()), 2)
+
+    def test_disappearing_account_does_not_remove_other_accounts(self):
+        app = copy.deepcopy(self.app)
+        app.update(Name='/ccg-21-app')
+        app['State']['Pid'] = 21
+        disappearing = copy.deepcopy(app)
+        disappearing.update(Name='/ccg-22-app')
+        disappearing['State']['Pid'] = 22
+        gateway = copy.deepcopy(self.gateway)
+        gateway.update(Name='/ccg-shared-egress')
+        gateway['State']['Pid'] = 30
+        original_iterdir = pathlib.Path.iterdir
+
+        def iterdir(path):
+            return iter([]) if str(path).replace('\\', '/') == '/sys/class/net' else original_iterdir(path)
+
+        def command(args, **kwargs):
+            if args[:3] == ['docker', 'ps', '-q']:
+                return 'a\nb\ng'
+            if args[:2] == ['docker', 'inspect']:
+                return json.dumps([app, disappearing, gateway])
+            if args[:3] == ['docker', 'network', 'inspect']:
+                return json.dumps([self.network])
+            if args[0] == 'nsenter' and args[2] == '22':
+                raise subprocess.CalledProcessError(1, args)
+            if 'route' in args:
+                return json.dumps([{'gateway': self.state['gateway_ip']}])
+            address = self.state['app_ip'] if args[2] == '21' else self.state['gateway_ip']
+            return json.dumps([{'link_index': 100, 'addr_info': [{'local': address}]}])
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            for aid in ['21', '22']:
+                (root / aid).mkdir()
+                (root / aid / 'state.json').write_text(json.dumps(self.state))
+            with mock.patch.object(guard, 'run', side_effect=command), \
+                    mock.patch.object(pathlib.Path, 'iterdir', iterdir), \
+                    mock.patch.object(guard, 'rules_for_account', return_value=[['healthy-account-rule']]):
+                self.assertEqual(guard.discover(root, 'ccg'), [['healthy-account-rule']])
 
 
 if __name__ == '__main__':

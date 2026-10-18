@@ -23,7 +23,7 @@ VETH = re.compile(r'veth[0-9a-f]+')
 
 
 def run(args, **kwargs):
-    return subprocess.check_output(args, text=True, timeout=15, **kwargs).strip()
+    return subprocess.check_output(args, text=True, timeout=15, stderr=subprocess.PIPE, **kwargs).strip()
 
 
 def rules_for_account(aid, state, app, gateway, network, app_veth, gateway_veth):
@@ -89,17 +89,23 @@ def discover(root, prefix):
         app = containers.get(prefix + '-' + aid + '-app')
         if app is None or not path.is_file() or path.is_symlink():
             continue
-        state = json.loads(path.read_text())
-        gateway_name = prefix + '-shared-egress' if state.get('egress_backend') == 'shared_xray' else prefix + '-' + aid + '-egress'
-        gateway = containers.get(gateway_name)
-        if gateway is None or state.get('status') == 'blocked':
-            continue
-        network = json.loads(run(['docker', 'network', 'inspect', prefix + '-' + aid + '-net']))[0]
-        routes = json.loads(run(['nsenter', '-t', str(app['State']['Pid']), '-n', 'ip', '-j', 'route', 'show', 'default']))
-        if len(routes) != 1 or routes[0].get('gateway') != state.get('gateway_ip'):
-            continue
-        result.extend(rules_for_account(aid, state, app, gateway, network,
-                                       host_peer(app, state['app_ip']), host_peer(gateway, state['gateway_ip'])))
+        try:
+            state = json.loads(path.read_text())
+            gateway_name = prefix + '-shared-egress' if state.get('egress_backend') == 'shared_xray' else prefix + '-' + aid + '-egress'
+            gateway = containers.get(gateway_name)
+            if gateway is None or state.get('status') == 'blocked':
+                continue
+            network = json.loads(run(['docker', 'network', 'inspect', prefix + '-' + aid + '-net']))[0]
+            routes = json.loads(run(['nsenter', '-t', str(app['State']['Pid']), '-n', 'ip', '-j', 'route', 'show', 'default']))
+            if len(routes) != 1 or routes[0].get('gateway') != state.get('gateway_ip'):
+                continue
+            result.extend(rules_for_account(aid, state, app, gateway, network,
+                                           host_peer(app, state['app_ip']), host_peer(gateway, state['gateway_ip'])))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+            # An endpoint may disappear between inspect and nsenter during a
+            # rebuild. Remove only that account's exception, not healthy peers'.
+            print(json.dumps({'event': 'account_bridge_skipped', 'account': aid,
+                              'type': type(error).__name__}), flush=True)
     return result
 
 
