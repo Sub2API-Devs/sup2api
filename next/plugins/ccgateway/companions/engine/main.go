@@ -21,6 +21,7 @@ import (
 )
 
 type Gateway struct {
+	RequestMode   string
 	credits       *creditRegistry
 	resources     *resourceBroker
 	Runner        *Runner
@@ -68,6 +69,30 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	diagnostic.store = g.RequestLogs
 	w = diagnostic.capture(w, r, g.RequestLogDir)
 	defer diagnostic.finish()
+	// The host's selected mode must match this container. Never silently fall
+	// back to the agent loop when zero-injection forwarding was requested.
+	if r.Header.Get(policyHeader) != "" && g.authorized(r) {
+		var policy struct {
+			RelayMode  string `json:"relay_mode"`
+			CLIVersion string `json:"cli_version"`
+		}
+		if len(r.Header.Get(policyHeader)) > 16384 || json.Unmarshal([]byte(r.Header.Get(policyHeader)), &policy) != nil {
+			apiError(w, 400, "invalid_request_error", "Invalid gateway request policy")
+			return
+		}
+		mode := g.RequestMode
+		if mode == "" {
+			mode = "native"
+		}
+		if policy.RelayMode != "" && policy.RelayMode != mode || policy.CLIVersion != "" && policy.CLIVersion != g.runner(r.Context()).Version {
+			apiError(w, 409, "configuration_error", "Worker CLI version/mode differs from gateway configuration; reconcile the runtime")
+			return
+		}
+	}
+	if g.RequestMode != "" {
+		g.serveRequestCommand(w, r, diagnostic)
+		return
+	}
 	x := &exchange{g: g, w: w, r: r, diagnostic: diagnostic}
 	defer func() { x.resources.close() }()
 	if !x.admit() {
@@ -607,6 +632,13 @@ func Serve() error {
 		return e
 	}
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
+	g.RequestMode = os.Getenv("CCG_REQUEST_MODE")
+	if err := validateRequestMode(g.RequestMode); err != nil {
+		return err
+	}
+	if err := verifyPinnedCLI(cli, version, Options{RequestMode: g.RequestMode, ExpectedCLIVersion: os.Getenv("WORKER_CLI_VERSION"), ExpectedCLISHA256: os.Getenv("CCG_CLI_SHA256"), ExpectedCLIPatch: os.Getenv("CCG_CLI_PATCH")}); err != nil {
+		return err
+	}
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
 	relayHost := "127.0.0.1"
 	if ip != nil && ip.IsLoopback() {

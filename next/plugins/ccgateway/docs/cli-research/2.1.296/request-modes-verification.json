@@ -1,0 +1,198 @@
+{
+  "date": "2026-10-18",
+  "baseline": "linux-x64-glibc/2.1.296",
+  "extension": "ccgateway-v5-request-modes",
+  "binarySha256": "a0736bbcd1c37d65a47e0217dec929d86afc30850a284e0c2e6c9301f64ee2a9",
+  "environment": "ovh Docker --network none; loopback mock; fake API key; no production switch",
+  "inputContracts": {
+    "direct": "Complete Messages HTTP body as original JSON text",
+    "build": "Explicit model/systemPrompt/messages/attachments/tools/parameters/stream components; no implicit attachment extraction",
+    "defaultMode": "direct",
+    "toolExecution": "Single model request; returned tool_use belongs to caller; no tool execution loop"
+  },
+  "unitTestsPassed": 19,
+  "requestModeTests": [
+    {
+      "name": "direct",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "conflict",
+      "exitCode": 1,
+      "requests": 0
+    },
+    {
+      "name": "build-reject-http-body",
+      "exitCode": 1,
+      "requests": 0
+    },
+    {
+      "name": "build-basic",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "build-mixed",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "build-stream",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "build-error",
+      "exitCode": 2,
+      "requests": 1
+    },
+    {
+      "name": "direct-blocked-output",
+      "exitCode": 1,
+      "requests": 1,
+      "alivePastDeadline": false
+    },
+    {
+      "name": "build-blocked-output",
+      "exitCode": 1,
+      "requests": 1,
+      "alivePastDeadline": false
+    }
+  ],
+  "directRegression": [
+    {
+      "name": "json",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "file",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "sse",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "error",
+      "exitCode": 2,
+      "requests": 1
+    },
+    {
+      "name": "websearch",
+      "exitCode": 0,
+      "requests": 1
+    },
+    {
+      "name": "timeout",
+      "exitCode": 1,
+      "requests": 1
+    },
+    {
+      "name": "invalid-json",
+      "exitCode": 1,
+      "requests": 0
+    },
+    {
+      "name": "auth-header",
+      "exitCode": 1,
+      "requests": 0
+    },
+    {
+      "name": "help",
+      "exitCode": 0,
+      "requests": 0
+    },
+    {
+      "name": "interrupt",
+      "exitCode": 130,
+      "requests": 1
+    },
+    {
+      "name": "exact-body",
+      "exitCode": 0,
+      "requests": 1
+    }
+  ],
+  "modsRegression": {
+    "scenario": "normal",
+    "passed": true,
+    "requests": 2
+  },
+  "standaloneRuntime": "v5 ELF --help verified as UID 1000 in Debian runtime image without separate Bun, mounted over prior image CLI",
+  "fixes": [
+    "stdout backpressure can be interrupted by the command deadline or AbortSignal"
+  ],
+  "limitations": [
+    "build input is components, not an unchanged HTTP body",
+    "clear_at next_user_message system records rejected in build",
+    "unsupported MCP tool-change references rejected in build",
+    "No automatic session mod loading or tool.call execution in request modes",
+    "Existing tool dispatcher context/ask/structured-result/resume findings are not fixed",
+    "Only Linux x64/glibc tested",
+    "No new real upstream/OAuth/search test; Go engine/Worker not integrated"
+  ],
+  "patch": {
+    "baseline": "linux-x64-glibc/2.1.296",
+    "extension": "ccgateway-v5-request-modes",
+    "files": {
+      "chunk-kasbfbhj.js": {
+        "before": "4db1e890fb4b277063ca17984811e7cf08b8bf1d2bb45c0da9c22a5e39b3deca",
+        "after": "a34113eaefbec843413bbe692ee4cba3856a1e14f8718bc24c8b61c3942c3857"
+      },
+      "chunk-30jbnw20.js": {
+        "before": "5d498fe6b9e227c6aa6b09ac7438e1adf36a9739fbce96f2177251b022b91b9e",
+        "after": "1220a94fbdf54b9194f4bdf8f6306af40a4066f54a8e71b1a272f8795df5c142"
+      },
+      "chunk-gtj0ecsn.js": {
+        "before": "4533db8fb0e2ca0da3a2491c56695c4349370bebaaebd9ad8887634207212c88",
+        "after": "7f87ddabc0a0cd34676cb8997a5c87d483c79e4bdffefbd8b5bc7ab11b6acd0d"
+      },
+      "chunk-tmrtnnjz.js": {
+        "before": "3680248156229ce33e4a1e0a39c89b742b750b1c66287613fe9d338c47d14cf1",
+        "after": "e7ce2d4338104b1c4a62a7b342f83bbc84a6c8d8c67d30a6659754301cb61136"
+      },
+      "chunk-716kq0mx.js": {
+        "before": "1c4bf55e63548242b60fd677cb145de11efab375c2110607f8edace5c09f66fd",
+        "after": "87023964d32d93841eebefdd102cae714ac448ede120c1de3e2f1dd1c217d21d"
+      },
+      "chunk-daj64yn4.js": {
+        "before": "a8496d811e81e9994d92cdbf82c5015a21f028df27af4c52ff9f1ddd7b1a7b88",
+        "after": "5073cad85c56acc57ef0df82a7d53a082ee5bb1aa01992b0e46303bfc691d094"
+      },
+      "cli.js": {
+        "before": "3b2811253260369e6e046d6d100443c11252b69e821ebe3f6b6c8714455a4e0b",
+        "after": "ff64165a4f40fb88c71ae28b8d913cc7241504a73b788bb8f4ceb72c1897f1ef"
+      }
+    },
+    "supportFiles": {
+      "ccgateway-native-tools.js": {
+        "source": "native-tools.js",
+        "sha256": "570b9225361416fb95b855a4ec80d79a2caeac5947b9cb95a7c5f5c0a993febf"
+      },
+      "ccgateway-model-request.js": {
+        "source": "model-request.js",
+        "sha256": "72c50db9aa4a8943020acfa297e922476b780a38268eb833102487319be1a58e"
+      },
+      "ccgateway-request-command.js": {
+        "source": "request-command.js",
+        "sha256": "04456d828c3e24c72d4c949a30c93fd1ea11050ace7c0de4c24589bd15bc18af"
+      },
+      "ccgateway-request-input.js": {
+        "source": "request-input.js",
+        "sha256": "4129eed73f19400ec8f466495d389476ba74925aca270c05631db598082f2851"
+      },
+      "ccgateway-request-build.js": {
+        "source": "request-build.js",
+        "sha256": "75af5051f5f41d0651afdcf2e012ba5fb6c6f241ab25cfb5890646faf950e8d4"
+      },
+      "ccgateway-request-output.js": {
+        "source": "request-output.js",
+        "sha256": "cd4669523cf5475f90d66690ffe8fe0138b24713f5a0dc6202a1fcd6f3d9624c"
+      }
+    }
+  }
+}

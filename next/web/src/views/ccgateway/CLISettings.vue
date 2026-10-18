@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCcgError } from './ccgError'
 
 interface CLIState {
+  pinned_version?: string
   catalog: { installed_version: string; catalog_version: string; state: string; tool_count: number; variant_count: number; checked_at: string; synced_at: string; error?: string }
   auto_update: boolean
   auto_update_mode: 'managed'
@@ -81,6 +82,7 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
       <SHint>{{ t('ccgateway.cli.hint') }}</SHint>
       <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
       <template v-if="state">
+        <SHint v-if="state.pinned_version">{{ t('ccgateway.cliProfile.pinned', {version: state.pinned_version}) }}</SHint>
         <SDescriptions :columns="2" dense>
           <SDescItem :label="t('ccgateway.cli.installed')" :value="state.catalog.installed_version || '—'" mono />
           <SDescItem :label="t('ccgateway.cli.catalog')" :value="state.catalog.catalog_version || '—'" mono />
@@ -97,7 +99,7 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
             <SSegmented :model-value="state.channel" :options="channels" size="sm" :disabled="!!blocked" :aria-label="t('ccgateway.cli.channel')" data-testid="cli-channel" @update:model-value="policy(state!.auto_update, String($event))" />
           </SSettingRow>
           <SSettingRow :label="t('ccgateway.cli.auto')" :description="t('ccgateway.cli.autoHint')">
-            <SSwitch :model-value="state.auto_update" :disabled="!!blocked" :aria-label="t('ccgateway.cli.auto')" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)" />
+            <SSwitch :model-value="state.auto_update" :disabled="!!blocked || !!state.pinned_version" :aria-label="t('ccgateway.cli.auto')" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)" />
           </SSettingRow>
         </SSettingsGroup>
       </template>
@@ -106,7 +108,7 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
       <SButton :loading="busy" @click="load">{{ t('common.refresh') }}</SButton>
       <SButton :disabled="blocked || !state" @click="action('check')">{{ t('ccgateway.cli.check') }}</SButton>
       <SButton :disabled="blocked || !state" @click="action('sync')">{{ t('ccgateway.cli.sync') }}</SButton>
-      <SButton variant="primary" :disabled="blocked || !state" @click="action('update')">{{ t('ccgateway.cli.update') }}</SButton>
+      <SButton variant="primary" :disabled="blocked || !state || !!state?.pinned_version" @click="action('update')">{{ t('ccgateway.cli.update') }}</SButton>
     </template>
   </SModal>
 </template>

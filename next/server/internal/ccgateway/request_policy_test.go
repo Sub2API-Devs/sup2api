@@ -173,7 +173,7 @@ func TestRelayModeStoredPolicyNormalizesToNative(t *testing.T) {
 	cipher, err := secret.New(bytes.Repeat([]byte{7}, 32))
 	require.NoError(t, err)
 	s := &Service{Cipher: cipher}
-	for _, mode := range []string{"", "legacy", "passthrough", "native", "direct"} {
+	for _, mode := range []string{"", "legacy", "passthrough", "native"} {
 		t.Run(mode, func(t *testing.T) {
 			plain := []byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_mode":"` + mode + `","relay_native_accounts":[24],"relay_passthrough_accounts":[23],"pass_upstream_errors":true,"tool_search":"false"}}`)
 			enc, err := cipher.Encrypt(plain, configAAD)
@@ -206,11 +206,11 @@ func TestRelayModeStoredPolicyNormalizesToNative(t *testing.T) {
 }
 
 func TestRelayModeRejectsExplicitNonNativePolicy(t *testing.T) {
-	for _, mode := range []string{"legacy", "passthrough", "direct", "Native", " native "} {
+	for _, mode := range []string{"legacy", "passthrough", "Native", " native "} {
 		t.Run(mode, func(t *testing.T) {
 			p := defaultRequestPolicy()
 			p.RelayMode = mode
-			require.EqualError(t, validateRequestPolicy(p), "invalid relay_mode: must be native")
+			require.EqualError(t, validateRequestPolicy(p), "invalid relay_mode: must be native, build or direct")
 			var in Config
 			require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_mode":"`+mode+`"}}`), &in))
 			_, err := mergeConfig(in, Config{Mode: "disabled"})

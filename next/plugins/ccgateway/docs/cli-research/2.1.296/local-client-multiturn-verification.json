@@ -1,0 +1,3834 @@
+{
+  "date": "2026-10-18",
+  "cliBaseline": "2.1.296",
+  "patchID": "ccgateway-v6-components-betas",
+  "cliSHA256": "e98293425adf386e6f2588d437440852ee0e4b0f17654ed5e295fa64eb8a5383",
+  "topology": "Official Windows client -> local test recorder / SSH -> isolated OVH Worker -> patched native Linux CLI -> account 21 API key upstream",
+  "authProfile": "api-key; no subscription credentials",
+  "productionControllerIncluded": false,
+  "sourceRoot": "%LOCALAPPDATA%/Temp",
+  "rawLogsLongTermArchived": false,
+  "phases": [
+    {
+      "label": "haiku-build",
+      "model": "claude-haiku-4-5-20251001",
+      "mode": "build",
+      "resultSubtype": "success",
+      "exitCode": 0,
+      "seconds": 187,
+      "toolCounts": {
+        "Glob": 12,
+        "Read": 18,
+        "Grep": 4
+      },
+      "toolCalls": 34,
+      "toolErrors": 2,
+      "workspaceChangedFiles": [],
+      "gitStatusSame": true,
+      "trackedDiffSame": true,
+      "modelRequests": 17,
+      "transport": {
+        "modelRequests": 17,
+        "toolResultRequests": 16,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": false,
+        "allBodiesByteIdentical": false,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true
+      },
+      "countTokensStatuses": [
+        404
+      ],
+      "architectureReportSHA256": null,
+      "requestIndex": [
+        {
+          "index": 1,
+          "inputSHA256": "26fa3ed9dedd076c29c110db76e068977d02a239aabd5d363f981ffd92288410",
+          "captureFile": "outgoing-008.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 6,
+          "differences": []
+        },
+        {
+          "index": 3,
+          "inputSHA256": "0fb3ad5635179e1fd27961ba151dc9aa0500ba75cd730389c8179cd052da888c",
+          "captureFile": "outgoing-009.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 8,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "inputSHA256": "23c454df7b3049347135038fce15768978f0b8e15c3c658a6299fc61013747df",
+          "captureFile": "outgoing-010.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 10,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "inputSHA256": "d79f843531ec17ea603e026e74609be775ff48dd371798c8fb39d895663f594a",
+          "captureFile": "outgoing-011.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 12,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "inputSHA256": "2b030b761c68a18a53f9a4121dcd411016d19a527230a3760218766838d2454d",
+          "captureFile": "outgoing-012.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 14,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "inputSHA256": "2a4316a5c5482a3cdd53b6b3321e23a5af12fa6a2743cd731abe69b69b7262ae",
+          "captureFile": "outgoing-013.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 16,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "inputSHA256": "e6fb9ea67a966c56a4b86fef1a556b5b809f0620e3ca77106588f3d71354d78e",
+          "captureFile": "outgoing-014.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 18,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "inputSHA256": "113a595ab81470ce8dfd1df904bfed3175803c44f22a1aa1f00065c5becf1161",
+          "captureFile": "outgoing-015.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 20,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "inputSHA256": "d7dab1cdb3dc1524ecab6c15f7f0dbdf3d76204121d67d6a1d2dc12c904bd03a",
+          "captureFile": "outgoing-016.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 22,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "inputSHA256": "a7297d8cf8e3d624bc526d436bfe5bd9ee31faf4c85a35ed741d3cb860470545",
+          "captureFile": "outgoing-017.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 24,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "inputSHA256": "bd275c454f1abcf4561511ee7abbaeff53189deb358bc28c477b147ab238982c",
+          "captureFile": "outgoing-018.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 26,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "inputSHA256": "58eebde81f9968a4dfca6fbd0625163e6186023496b3b9a1fd7befecd4d8a38e",
+          "captureFile": "outgoing-019.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 28,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "inputSHA256": "bfa1b6f345a5160d667c7635dff9d1eea2fd387980b175c2f5577d3718b58cea",
+          "captureFile": "outgoing-020.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 30,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/24/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "inputSHA256": "2fd9c66e94b1d37e764c47bde23d0fbcdea3fc05a66437bd66bc6abfec4b4a66",
+          "captureFile": "outgoing-021.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 32,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/24/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/26/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "inputSHA256": "64efd920846c35f0976b9428b6cca74ee18534a99bb313363b0b2720ebd13b5c",
+          "captureFile": "outgoing-022.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 35,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/24/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/26/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "inputSHA256": "c519cb184e00db0eaed28ec69094b94589215f8103fd6e5d054d442e4a03c5d0",
+          "captureFile": "outgoing-023.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 37,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/24/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/26/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/30/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 18,
+          "inputSHA256": "1878cbff7cc90a72a1257c42f2c8a086a41fea5a31e26fed807345cf25af9aa7",
+          "captureFile": "outgoing-024.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 39,
+          "differences": [
+            {
+              "path": "/messages/2/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/4/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/6/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/8/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/10/content/2/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/12/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/14/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/16/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/18/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/20/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/22/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/24/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/26/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/28/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/30/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            },
+            {
+              "path": "/messages/32/content/1/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "haiku-direct",
+      "model": "claude-haiku-4-5-20251001",
+      "mode": "direct",
+      "resultSubtype": "success",
+      "exitCode": 0,
+      "seconds": 158,
+      "toolCounts": {
+        "Glob": 14,
+        "Read": 15,
+        "Grep": 2
+      },
+      "toolCalls": 31,
+      "toolErrors": 2,
+      "workspaceChangedFiles": [],
+      "gitStatusSame": true,
+      "trackedDiffSame": true,
+      "modelRequests": 16,
+      "transport": {
+        "modelRequests": 16,
+        "toolResultRequests": 15,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": true,
+        "allBodiesByteIdentical": true,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true
+      },
+      "countTokensStatuses": [
+        404
+      ],
+      "architectureReportSHA256": null,
+      "requestIndex": [
+        {
+          "index": 1,
+          "inputSHA256": "a12553e7ff829523a20e9fdb45a0edd8476a9b8e505cc53aa920f0a03d3f0aa6",
+          "captureFile": "outgoing-025.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 2,
+          "inputSHA256": "2f8b8ed84650d1ae3dffd7d83babfd56ac0db1e878b3a7f6725e37d952b17625",
+          "captureFile": "outgoing-026.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 4,
+          "inputSHA256": "59e95ec87aefc915629cd58fe683aae28a89693ef6f5f347d9cf8f2f6e9d9e41",
+          "captureFile": "outgoing-027.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 5,
+          "inputSHA256": "9f3830a720247818e266e89be0e3db9d4e7804c6cdcfa0c7f3e657bbebce3259",
+          "captureFile": "outgoing-028.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 6,
+          "inputSHA256": "a17e00fd9dcbfbe36495976011a878699d80fd2b567bc5f54f2b92bfcb2ed5c9",
+          "captureFile": "outgoing-029.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 7,
+          "inputSHA256": "28b5ab86fa966a7af60734a3a26321345d9a4065c4b198d68951a9bbf6419bd9",
+          "captureFile": "outgoing-030.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 8,
+          "inputSHA256": "ba5f8099a892c49a8af1907f00c1759233582cbabbc97c08ffe2a60cd965d1a8",
+          "captureFile": "outgoing-031.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 9,
+          "inputSHA256": "53de61344945f06192ba814a3d6cd81720336d8132a528af58cb4a86c6e59008",
+          "captureFile": "outgoing-032.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 10,
+          "inputSHA256": "5c6fce14ea7edeb72eaa08d1efee6c436564e0c52cc6782f652545ff83f40bec",
+          "captureFile": "outgoing-033.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 11,
+          "inputSHA256": "0be5d71d635ad338555d9345af47132507825fc00a1e36301578c3929d0a4c31",
+          "captureFile": "outgoing-034.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 12,
+          "inputSHA256": "7275ebacf01482968149db3039816c3f70bcef09ed8fda9c3afbd0e1d8400c58",
+          "captureFile": "outgoing-035.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 13,
+          "inputSHA256": "7464f374cc3d556763e999da5cf80b631ee823b07d09930649be2781cfcbc448",
+          "captureFile": "outgoing-036.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 14,
+          "inputSHA256": "e6e41708183ae102dc0443b1623e34df3c3c5c9ca7f6fc3e14f9858589f579d9",
+          "captureFile": "outgoing-037.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 15,
+          "inputSHA256": "e6f2830ae2929e69604da07b852e8d149a714fc28d1641000888d1f7f2106076",
+          "captureFile": "outgoing-038.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 16,
+          "inputSHA256": "f3b79e2e6fccd53680a44cf51f9e6e86977c107eabe139e0dfc83f563303ed23",
+          "captureFile": "outgoing-039.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 17,
+          "inputSHA256": "7178b3d5d5f6da6648e39d112f2b33474afa7606905e554bc9e0cb1f3d8e95a1",
+          "captureFile": "outgoing-040.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        }
+      ]
+    },
+    {
+      "label": "opus-build-exploration",
+      "model": "claude-opus-5-5",
+      "mode": "build",
+      "resultSubtype": "error_max_turns",
+      "exitCode": 1,
+      "seconds": 670,
+      "toolCounts": {
+        "Glob": 32,
+        "Read": 53,
+        "Grep": 52
+      },
+      "toolCalls": 137,
+      "toolErrors": 0,
+      "workspaceChangedFiles": [],
+      "gitStatusSame": true,
+      "trackedDiffSame": true,
+      "modelRequests": 90,
+      "transport": {
+        "modelRequests": 90,
+        "toolResultRequests": 89,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": false,
+        "allBodiesByteIdentical": false,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true
+      },
+      "countTokensStatuses": [],
+      "architectureReportSHA256": null,
+      "requestIndex": [
+        {
+          "index": 1,
+          "inputSHA256": "f70052c035be8cad8237a4725fd5dce919083481822f11d7534e98e60983c267",
+          "captureFile": "outgoing-041.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 2,
+          "differences": []
+        },
+        {
+          "index": 2,
+          "inputSHA256": "e235b63f2af95f063edb1bef63296adba529306ef58fab62ca2732a29bdd80b6",
+          "captureFile": "outgoing-042.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 3,
+          "differences": []
+        },
+        {
+          "index": 3,
+          "inputSHA256": "7e5fa7c57c5f44bbc5782983af3340dc3dbcb5077988e28b177f3245d45aeb2f",
+          "captureFile": "outgoing-043.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 4,
+          "differences": []
+        },
+        {
+          "index": 4,
+          "inputSHA256": "3304a1ab37d09225259f8074a9f3a82aa7620d45b8f358a7150c4accad594cf7",
+          "captureFile": "outgoing-044.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 5,
+          "differences": []
+        },
+        {
+          "index": 5,
+          "inputSHA256": "da1b376bb95638c7e2582b2bc4ffee0eb606b7cea2e857175cf499118937ea05",
+          "captureFile": "outgoing-045.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 6,
+          "differences": []
+        },
+        {
+          "index": 6,
+          "inputSHA256": "732846f75e3d132128cbcbc53c5d97a525d4310efb4080fd9c0283438935ca39",
+          "captureFile": "outgoing-046.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 7,
+          "differences": []
+        },
+        {
+          "index": 7,
+          "inputSHA256": "69ed72f1d02da1bf15dadec6a6f876e50e429c3495f4cd14e9e1e419fe4dfd6b",
+          "captureFile": "outgoing-047.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 8,
+          "differences": []
+        },
+        {
+          "index": 8,
+          "inputSHA256": "98ae2611922a2a6f3ebffbb4bddf106d9a000f170afd66229cecb70901d38ca5",
+          "captureFile": "outgoing-048.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 9,
+          "differences": []
+        },
+        {
+          "index": 9,
+          "inputSHA256": "47a7667a9966b7a81ed65d629800b49706940e0e4b5b5d081a324bcace7707b3",
+          "captureFile": "outgoing-049.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 10,
+          "differences": []
+        },
+        {
+          "index": 10,
+          "inputSHA256": "3061c938376155b1b65baaf826ba31c3a5c2d87845fdab89b8ec3ed7fe4e994c",
+          "captureFile": "outgoing-050.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 11,
+          "differences": []
+        },
+        {
+          "index": 11,
+          "inputSHA256": "56e13b42d9ee6fd2d70f8ba9a6aa896c6b8c937d794ae34b7091b87811facf6f",
+          "captureFile": "outgoing-051.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 12,
+          "differences": []
+        },
+        {
+          "index": 12,
+          "inputSHA256": "867d22083b6651f062dc2fc41ecc4433cb0424f8d6fa61bea92b95933aede096",
+          "captureFile": "outgoing-052.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 13,
+          "differences": []
+        },
+        {
+          "index": 13,
+          "inputSHA256": "98e7465fa2bf7a342e766f66a56cea198cef923357c1fd9d49882fe9c30bc179",
+          "captureFile": "outgoing-053.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 14,
+          "differences": []
+        },
+        {
+          "index": 14,
+          "inputSHA256": "25ddac188fe855bf3833a595deeeae349322b822aa6f6fe3ff1c8ad3a7d056d1",
+          "captureFile": "outgoing-054.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 15,
+          "differences": []
+        },
+        {
+          "index": 15,
+          "inputSHA256": "4d2e2863ef0d5546b7ad2755060c41774f301b82d9370d52d2a38ea47464cfa4",
+          "captureFile": "outgoing-055.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 16,
+          "differences": []
+        },
+        {
+          "index": 16,
+          "inputSHA256": "1893db95d998313ff61d1d1b377734149c8a95b2a6a214f3563dff4764290630",
+          "captureFile": "outgoing-056.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 17,
+          "differences": []
+        },
+        {
+          "index": 17,
+          "inputSHA256": "9d1a47c0459b8849bd82d38313b06304d21dced021f7e4524d1b0940b163ad09",
+          "captureFile": "outgoing-057.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 18,
+          "differences": []
+        },
+        {
+          "index": 18,
+          "inputSHA256": "1ed86f0ee4f3fa86c7b79968d3630277323832d4e69784417ab31550170f930a",
+          "captureFile": "outgoing-058.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 19,
+          "differences": []
+        },
+        {
+          "index": 19,
+          "inputSHA256": "7dec4c1fe80de33c4e4c3cac16c6f36f71ce0d31bd778322c3d06fd913c2285b",
+          "captureFile": "outgoing-059.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 20,
+          "differences": []
+        },
+        {
+          "index": 20,
+          "inputSHA256": "85c780bdffcd779f3679b1a6669a1b28c9e531090cdd5f5e315163f27296ea87",
+          "captureFile": "outgoing-060.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 21,
+          "differences": []
+        },
+        {
+          "index": 21,
+          "inputSHA256": "9bf41971b64fb52904e8522c6bfb3d1ffd0d211ee4ac561009a3be1f13f48400",
+          "captureFile": "outgoing-061.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 22,
+          "differences": []
+        },
+        {
+          "index": 22,
+          "inputSHA256": "4352689ed683c313f79083975e1b9a2fc77976240edbb2f092ea1e18e5469b9e",
+          "captureFile": "outgoing-062.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 23,
+          "differences": []
+        },
+        {
+          "index": 23,
+          "inputSHA256": "5af3c2b4b5098a4b5637db6170b5b23ed9ad3c6e2910f610421e9fdf707e4048",
+          "captureFile": "outgoing-063.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 24,
+          "differences": []
+        },
+        {
+          "index": 24,
+          "inputSHA256": "d807da9862a1ce800bad7d2c2e5791e6cec788c87f99729f71b4f0d336e48e02",
+          "captureFile": "outgoing-064.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 25,
+          "differences": []
+        },
+        {
+          "index": 25,
+          "inputSHA256": "4ab3f2f47b82e178b4b1f2c0b793e52c6c5a6064d0f7e5e38c9e6158d10de38f",
+          "captureFile": "outgoing-065.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 26,
+          "differences": []
+        },
+        {
+          "index": 26,
+          "inputSHA256": "dc6b2f685b6dee683a4949a245b976cd3db4965c4374394d20daffebc39be221",
+          "captureFile": "outgoing-066.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 27,
+          "differences": []
+        },
+        {
+          "index": 27,
+          "inputSHA256": "e5980845814205ac915e2377a712cf97e172baa31b7d44c7c5b62e4ccfd77d90",
+          "captureFile": "outgoing-067.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 28,
+          "differences": []
+        },
+        {
+          "index": 28,
+          "inputSHA256": "60389105de26e4a4a7f3d23dd3490f4c2a4ea66e5c61bebb5d2a389ba5ed16a8",
+          "captureFile": "outgoing-068.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 29,
+          "differences": []
+        },
+        {
+          "index": 29,
+          "inputSHA256": "8a6c4db8ec01257ec70a72bd14a9ed76d5aac02b9865d8a789f0b58fd5eba91a",
+          "captureFile": "outgoing-069.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 30,
+          "differences": []
+        },
+        {
+          "index": 30,
+          "inputSHA256": "801d20a84fa460bcda4231415e6a406b3c9c7c747cd0a4333a1297f6c8ae29df",
+          "captureFile": "outgoing-070.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 31,
+          "differences": []
+        },
+        {
+          "index": 31,
+          "inputSHA256": "c5e1c2b72ca08a0871436c7a404203cd45d10f3a803a99a1e66b9ac9ec999bbd",
+          "captureFile": "outgoing-071.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 32,
+          "differences": []
+        },
+        {
+          "index": 32,
+          "inputSHA256": "a640d3fb255822dbc70ffcf372b8d72be40316ef19d36c140f38f143ab24ed49",
+          "captureFile": "outgoing-072.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 33,
+          "differences": []
+        },
+        {
+          "index": 33,
+          "inputSHA256": "873029f2c6f99473e9e7b26986a67a8b3af08d8394c2f1c399bd5c380a0a71a3",
+          "captureFile": "outgoing-073.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 34,
+          "differences": []
+        },
+        {
+          "index": 34,
+          "inputSHA256": "4ba0153d62b2e2cbd50a696b238a8b197f8cd3a611863ce8adf2390f697a9c5f",
+          "captureFile": "outgoing-074.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 35,
+          "differences": []
+        },
+        {
+          "index": 35,
+          "inputSHA256": "36807d10dabe750388b92f6e3fcc854a17468f33398ad3b1f953c676a3147cb6",
+          "captureFile": "outgoing-075.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 36,
+          "differences": []
+        },
+        {
+          "index": 36,
+          "inputSHA256": "01d53c12040328821212c64f038ddfbf2f468196b7f631940e0cd0c19d22393d",
+          "captureFile": "outgoing-076.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 37,
+          "differences": []
+        },
+        {
+          "index": 37,
+          "inputSHA256": "a2167cabe64debf35dbfd04de64276dc940de5c99101c94d6721f47dd082c369",
+          "captureFile": "outgoing-077.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 38,
+          "differences": []
+        },
+        {
+          "index": 38,
+          "inputSHA256": "e7ff646fa9727a0343a1c8dcad6e3d7b545ae91b5e4ddea3872711c8d47039dc",
+          "captureFile": "outgoing-078.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 39,
+          "differences": []
+        },
+        {
+          "index": 39,
+          "inputSHA256": "d9d0aad6a3eca0073f9b428f8ad73e1e059649119c65b3cce02fdfb865e66a7e",
+          "captureFile": "outgoing-079.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 40,
+          "differences": []
+        },
+        {
+          "index": 40,
+          "inputSHA256": "781ff8286a3894a1b609dce671d5e66b66530c32f85f7de9966d6118efb4e1f9",
+          "captureFile": "outgoing-080.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 41,
+          "differences": []
+        },
+        {
+          "index": 41,
+          "inputSHA256": "94d46a30ba8ebe3661cfea95890a74ad9f2714e7b91884c7c71ad41a88c393b4",
+          "captureFile": "outgoing-081.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 42,
+          "differences": []
+        },
+        {
+          "index": 42,
+          "inputSHA256": "bbbdaa03130923ac0b2533050c4a4ddd8ad7bc02ee9e67aefccfe3418d4acc99",
+          "captureFile": "outgoing-082.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 43,
+          "differences": []
+        },
+        {
+          "index": 43,
+          "inputSHA256": "c165c46635bb7bd5efb7712e800a6d8a83c127fb984dc77524b64bc8e4a4c93d",
+          "captureFile": "outgoing-083.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 44,
+          "differences": []
+        },
+        {
+          "index": 44,
+          "inputSHA256": "1cb18902f6488d14d80d9a1da333fe6a341740b98da38d0a9cf7dac90e542706",
+          "captureFile": "outgoing-084.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 45,
+          "differences": []
+        },
+        {
+          "index": 45,
+          "inputSHA256": "b4c57c631eaa65825979c4f83bb1e901f2ca2dd0553ee3468cdf96223b343dfd",
+          "captureFile": "outgoing-085.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 46,
+          "differences": []
+        },
+        {
+          "index": 46,
+          "inputSHA256": "e2fe7ce10e97f09b1100b72831d6bd50a2a4a48d5dd5c30426cba15b1b6a24c2",
+          "captureFile": "outgoing-086.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 47,
+          "differences": []
+        },
+        {
+          "index": 47,
+          "inputSHA256": "7deba709ab8da27c94d386eb240ab14f1c9c9ca20266f2c2f85b12d917f6bfdd",
+          "captureFile": "outgoing-087.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 48,
+          "differences": []
+        },
+        {
+          "index": 48,
+          "inputSHA256": "30a29fc5266d261ca299a5a64b4d18ae5523da4e9a54a791fa72cc21f0ae945d",
+          "captureFile": "outgoing-088.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 49,
+          "differences": []
+        },
+        {
+          "index": 49,
+          "inputSHA256": "0831cb40987d802a18d5341c6dd4767713ead183fab0347c1d8b962ec2ccda34",
+          "captureFile": "outgoing-089.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 50,
+          "differences": []
+        },
+        {
+          "index": 50,
+          "inputSHA256": "a803e7fc8c2f240a4889d15a8b5bd0cec6bc746d869b5cc8a75dc87c2868812b",
+          "captureFile": "outgoing-090.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 51,
+          "differences": []
+        },
+        {
+          "index": 51,
+          "inputSHA256": "aad552e8696affaffe29b7ec3c993e49012f19b71b09162b3173d1b16c98558a",
+          "captureFile": "outgoing-091.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 52,
+          "differences": []
+        },
+        {
+          "index": 52,
+          "inputSHA256": "5516b627ded7bfd2916c09f4c13b161ce38be14bb8c558e7798b12874e2935b1",
+          "captureFile": "outgoing-092.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 53,
+          "differences": []
+        },
+        {
+          "index": 53,
+          "inputSHA256": "9d6a835fa8590b7b1f3ab166f4b1d87ccd1a6d0c860d9862b22f2e3bfa9c883a",
+          "captureFile": "outgoing-093.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 54,
+          "differences": []
+        },
+        {
+          "index": 54,
+          "inputSHA256": "3fe84ece833f47d0736d8d008d39008f5edf39bab43c33aa47ba4cf08de6a858",
+          "captureFile": "outgoing-094.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 55,
+          "differences": []
+        },
+        {
+          "index": 55,
+          "inputSHA256": "de08b9ecf3f5f38d1bdcd7ddc395d947a830fd8f381584c6f2b559bd47a81c25",
+          "captureFile": "outgoing-095.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 56,
+          "differences": []
+        },
+        {
+          "index": 56,
+          "inputSHA256": "0578e3be298c06d61718b6af4c4c58aceb22ce3afb0c9fb958572024e3b8c37f",
+          "captureFile": "outgoing-096.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 57,
+          "differences": []
+        },
+        {
+          "index": 57,
+          "inputSHA256": "6524a624d880c848bf53f0099b7f0a4782017ac3c47e9da465fad3c505ed3c6b",
+          "captureFile": "outgoing-097.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 58,
+          "differences": []
+        },
+        {
+          "index": 58,
+          "inputSHA256": "b83dbacd4a6c1988eb9f7a6430705b1713d429aaffb9cd9736e7eab2fbf2a496",
+          "captureFile": "outgoing-098.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 59,
+          "differences": []
+        },
+        {
+          "index": 59,
+          "inputSHA256": "166be08ce217715b0000d68552c0f6083f50d39e7cafa5e37a795264309644d7",
+          "captureFile": "outgoing-099.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 60,
+          "differences": []
+        },
+        {
+          "index": 60,
+          "inputSHA256": "e366bf61d7f1c7b5a6341d50f7035a7d0a49cf252700bf3211703585bc76a09c",
+          "captureFile": "outgoing-100.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 61,
+          "differences": []
+        },
+        {
+          "index": 61,
+          "inputSHA256": "f3fd25d8933718e5e987eee34bb9a5d5e5184e2b5a9ffafa54235ed56860bd63",
+          "captureFile": "outgoing-101.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 62,
+          "differences": []
+        },
+        {
+          "index": 62,
+          "inputSHA256": "6c5760b8c2cbe2616128d31a8893ab5e3a19256b93e53545cbfa3f63f861fa3a",
+          "captureFile": "outgoing-102.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 64,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 63,
+          "inputSHA256": "a21470b1522ac5289cf7e08138d4d7ef9ee78b3e4bffa5ebd97798b4413d5ca4",
+          "captureFile": "outgoing-103.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 65,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 64,
+          "inputSHA256": "cde947e614b6c7ac6e6c34368a28320b6e3e047378e24dc0b976267ccf6eddcd",
+          "captureFile": "outgoing-104.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 66,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 65,
+          "inputSHA256": "cc8d11406a5c267a9b9ea572a679e151051a44e856e5e24f431a3d222100adc2",
+          "captureFile": "outgoing-105.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 67,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 66,
+          "inputSHA256": "05acda34bda3347b54edf87049b2ec720ae3155e643431a530792352be7897c2",
+          "captureFile": "outgoing-106.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 68,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 67,
+          "inputSHA256": "8e2fbb6fa0f7c24a79a27149451fa9d018f5be48b221514b6c164ae26ba1ba94",
+          "captureFile": "outgoing-107.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 69,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 68,
+          "inputSHA256": "7db737550b08b39b8f57b15adb6e00394d55631425603554a7ec220b94ad5ebd",
+          "captureFile": "outgoing-108.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 70,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 69,
+          "inputSHA256": "a0b4bbc66d9a975362c55dc1cb34d04c2e437a7148ba27b7613eec7484033c68",
+          "captureFile": "outgoing-109.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 71,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 70,
+          "inputSHA256": "ebe033e3674d21ce6727207badf51e428ab4823882949a35e68ed2a04377d9e7",
+          "captureFile": "outgoing-110.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 72,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 71,
+          "inputSHA256": "60810af5331cc647eca382988041ab071f21bd10ba65063ce1356acd3896f96a",
+          "captureFile": "outgoing-111.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 73,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 72,
+          "inputSHA256": "7bfa412b194ab830ae08b5a59b58cec845ea47306560c888c61eb6bf5538a311",
+          "captureFile": "outgoing-112.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 74,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 73,
+          "inputSHA256": "629113a7e0278762423f8d053d8a1ad4272460139015db413ed162ed50b64018",
+          "captureFile": "outgoing-113.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 75,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 74,
+          "inputSHA256": "a1b90c21d7a20165499997b3d3226b549940761d0272986e601c32c85e451dcb",
+          "captureFile": "outgoing-114.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 76,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 75,
+          "inputSHA256": "958917ff80fa925cd106b1011a7568ae3c37efe5b739664c1c8b793a92227111",
+          "captureFile": "outgoing-115.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 77,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 76,
+          "inputSHA256": "f9e4d324392dfaeffd752c1e324f758af0e79a96759cb21bab1b322829fe4e0f",
+          "captureFile": "outgoing-116.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 78,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 77,
+          "inputSHA256": "1c725611f69b2ffe46db0e438c8917031b235bda1c32dccc9b4f350d8f9b6798",
+          "captureFile": "outgoing-117.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 79,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 78,
+          "inputSHA256": "7fd72b4116817319b2368ef9fed8869c1e554f750821fbc7b1ae7afc48f72b8f",
+          "captureFile": "outgoing-118.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 80,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 79,
+          "inputSHA256": "c7cdbaedb10bfa88305074cd16fe791271567ff4fd4ca1312a1548d05a361b79",
+          "captureFile": "outgoing-119.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 81,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 80,
+          "inputSHA256": "43591fba313348b3bd127b485f259d590029cca097441628655feef25329b45c",
+          "captureFile": "outgoing-120.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 82,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 81,
+          "inputSHA256": "6d7734a5f076098e5781beaf1a2d81e6682e064b7a8a45b9fcb80735d1866a29",
+          "captureFile": "outgoing-121.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 83,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 82,
+          "inputSHA256": "96ee5dbe33e2b8ca0808504626823515d6160c1ab6df0b83e99a5a17cdaba4b2",
+          "captureFile": "outgoing-122.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 84,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 83,
+          "inputSHA256": "cbe631f85a5257494c23d90975aff882476d0e3e81212f49872b4040256bfa11",
+          "captureFile": "outgoing-123.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 85,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 84,
+          "inputSHA256": "1c74a2ca79a3270c8fc56feeb17889bca15039eeee0f4ab7ebf417e375187b51",
+          "captureFile": "outgoing-124.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 86,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 85,
+          "inputSHA256": "40b19437835b26dc7e7d6a4b77b781360aeb3678669bb245b9c051b7aed7bb11",
+          "captureFile": "outgoing-125.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 87,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 86,
+          "inputSHA256": "56ca81b31825d27aa026eacac2e82752ec34802da1482c3cf30454215ade9622",
+          "captureFile": "outgoing-126.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 88,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 87,
+          "inputSHA256": "28a256bc9d6eeb92378d27a2d2e13d0d39ac12f6bb2d54c69cea60a12a411e79",
+          "captureFile": "outgoing-127.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 89,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 88,
+          "inputSHA256": "4efca71bbb406ae4a020c194703f425dc6e131dd4e7da2c64c0477225a9123bf",
+          "captureFile": "outgoing-128.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 90,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 89,
+          "inputSHA256": "b77ac1c21233db9194d823f359e5502aeb698442c9192b3fd46774f2c49a0bdc",
+          "captureFile": "outgoing-129.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 91,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        },
+        {
+          "index": 90,
+          "inputSHA256": "4a1e2e5d863d9a683e8e1d51ce946ed5cc7ca5b60b9bbb85237725f6b6973cff",
+          "captureFile": "outgoing-130.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": false,
+          "bodyByteIdentical": false,
+          "attachments": 92,
+          "differences": [
+            {
+              "path": "/messages/183/content/0/content",
+              "change": "type",
+              "before": "str",
+              "after": "list",
+              "textIdentical": true,
+              "textBlocks": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "opus-build-completion",
+      "model": "claude-opus-5-5",
+      "mode": "build",
+      "resultSubtype": "success",
+      "exitCode": 0,
+      "seconds": 207,
+      "toolCounts": {
+        "Glob": 2,
+        "Grep": 6,
+        "Read": 1
+      },
+      "toolCalls": 9,
+      "toolErrors": 0,
+      "workspaceChangedFiles": [],
+      "gitStatusSame": true,
+      "trackedDiffSame": true,
+      "modelRequests": 5,
+      "transport": {
+        "modelRequests": 5,
+        "toolResultRequests": 4,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": true,
+        "allBodiesByteIdentical": false,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true
+      },
+      "countTokensStatuses": [],
+      "architectureReportSHA256": "acd2e02b0dc8bb011b7b118913127b38709ed838c12fa6b5edb3eef2bda0343f",
+      "requestIndex": [
+        {
+          "index": 1,
+          "inputSHA256": "8ff6b832c9689b3557569fb9776a3c6d9c126d7841937cd6192993bbab3347fc",
+          "captureFile": "outgoing-150.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 3,
+          "differences": []
+        },
+        {
+          "index": 2,
+          "inputSHA256": "a9a34ee39edc914a95fd126f70f9edaf7001dcab955439d213746466e7ec03bb",
+          "captureFile": "outgoing-152.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 4,
+          "differences": []
+        },
+        {
+          "index": 3,
+          "inputSHA256": "dd8b20a0d312764df02a7fea81e7f1e12a4b2dd6f7272623ed51bcf846e5b9ab",
+          "captureFile": "outgoing-155.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 5,
+          "differences": []
+        },
+        {
+          "index": 4,
+          "inputSHA256": "6e6b01736cdd252bfeed315f92ae51d224278a1e021fc353a72aa16d4527ecdd",
+          "captureFile": "outgoing-157.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 6,
+          "differences": []
+        },
+        {
+          "index": 5,
+          "inputSHA256": "646329043da35a345c181caeec08de69bbaa0cdc169ec8adb84e522557724432",
+          "captureFile": "outgoing-180.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": false,
+          "attachments": 6,
+          "differences": []
+        }
+      ]
+    },
+    {
+      "label": "opus-direct",
+      "model": "claude-opus-5-5",
+      "mode": "direct",
+      "resultSubtype": "success",
+      "exitCode": 0,
+      "seconds": 835,
+      "toolCounts": {
+        "Glob": 33,
+        "Read": 56,
+        "Grep": 51
+      },
+      "toolCalls": 140,
+      "toolErrors": 1,
+      "workspaceChangedFiles": [],
+      "gitStatusSame": true,
+      "trackedDiffSame": true,
+      "modelRequests": 90,
+      "transport": {
+        "modelRequests": 90,
+        "toolResultRequests": 89,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": true,
+        "allBodiesByteIdentical": true,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true
+      },
+      "countTokensStatuses": [],
+      "architectureReportSHA256": "4717ccb26ddf0e6ff8a3a12669ab974cd06ae553e6974e191b90240477455322",
+      "requestIndex": [
+        {
+          "index": 1,
+          "inputSHA256": "96aea690df22d1b8669622915deaca41f4271a88da790c2c4caa25016fff7cdb",
+          "captureFile": "outgoing-131.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 2,
+          "inputSHA256": "3e182f3ed9e4f7d2149015c24c4a6265411ed3e34a6dd04c376842326a7bb3eb",
+          "captureFile": "outgoing-132.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 3,
+          "inputSHA256": "6d2d9241b66bc255f18f9daf61b07bce743f9ed7c991d7949c6e63a206203e46",
+          "captureFile": "outgoing-133.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 4,
+          "inputSHA256": "128fdfc308623ccce1a34624d3dc582d6a506b327f4bfcbf3cf7380364f5cf6b",
+          "captureFile": "outgoing-134.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 5,
+          "inputSHA256": "6917a2dedb77d65d329a55ac71a3cb2c7bd0e8ac352a3d8aa197695cce538d7e",
+          "captureFile": "outgoing-135.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 6,
+          "inputSHA256": "cd002525e80f1869ff801bcda7895d8e68c20601bd70bf90d6a12be65d836777",
+          "captureFile": "outgoing-136.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 7,
+          "inputSHA256": "00595595ace1f920dab29db4f7a95e90a0dec9506c802ab36b69912bdd987e33",
+          "captureFile": "outgoing-137.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 8,
+          "inputSHA256": "43565173a7fe19a7c6301755bc86cd169b4e4328d9808f46866d9fbe650c707d",
+          "captureFile": "outgoing-138.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 9,
+          "inputSHA256": "43bb0ff8caa83dfff8b0db3dd8a8c5f14d72e0aab5066482328a175200f9279c",
+          "captureFile": "outgoing-139.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 10,
+          "inputSHA256": "d20e8563fc084c67e455bf4a550a8b95c3c8e2c185f3b84e3569fd2b3e07c3e4",
+          "captureFile": "outgoing-140.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 11,
+          "inputSHA256": "e8504f979cc5f36a51e4cba9ee16ea83d5704c2d5b35cb61609d57820c57d0bd",
+          "captureFile": "outgoing-141.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 12,
+          "inputSHA256": "381d6e1b555f2e1854e4c95271366255f1aaf5c2aa4a811d00bc5849c6c329d3",
+          "captureFile": "outgoing-142.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 13,
+          "inputSHA256": "055115df3eaec630deda862dac404ca16a32d4f721452a15399267e56a8e854e",
+          "captureFile": "outgoing-143.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 14,
+          "inputSHA256": "fc633f5be3c8bc0976d3f9cfead74add1d8d3bfb4edeb1a0b58a722003b7d867",
+          "captureFile": "outgoing-144.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 15,
+          "inputSHA256": "ba87d1a75415ed2c0680e3b9de5760ba50b5a3c7dd90446b7f79c3dc11e1e1c7",
+          "captureFile": "outgoing-145.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 16,
+          "inputSHA256": "d49c8d40333327f1b531d0703033d2bed55457738ec7822f3e3817f620a2023a",
+          "captureFile": "outgoing-146.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 17,
+          "inputSHA256": "64dc953a6cf75c1bed19a70f0f88adf3a7b91ff5b9437847df9fdab24a0a4380",
+          "captureFile": "outgoing-147.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 18,
+          "inputSHA256": "458c8ccb3869db9b6d529019f7546f191aacad27e16aaaac0f740c2c3cbad1e7",
+          "captureFile": "outgoing-148.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 19,
+          "inputSHA256": "f23a2366115f61e78dffa36b6c7a8f2c9e625899250c944482ee603cd77ccfe0",
+          "captureFile": "outgoing-149.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 20,
+          "inputSHA256": "0a5b0e30d6051ead8391be72851dcd05e6cc318a2586c6365e44a33b3ad96f2a",
+          "captureFile": "outgoing-151.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 21,
+          "inputSHA256": "272a3dc0088d65ba9d6bdf329f0dc2f1adf934696f24e972ca0c874536921d04",
+          "captureFile": "outgoing-153.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 22,
+          "inputSHA256": "cb86cbb67c6b7e8e4fe0812588c88a9939acc2ad2448251145ff4be08e201fb2",
+          "captureFile": "outgoing-154.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 23,
+          "inputSHA256": "a5b080c54dac57c2b0d10f22bd278e88f08cbea85afdd98075e98a163825b8da",
+          "captureFile": "outgoing-156.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 24,
+          "inputSHA256": "6098c4339aac11210be73ba224e5425d024850429c85b867943e0bbec40c633c",
+          "captureFile": "outgoing-158.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 25,
+          "inputSHA256": "f4de93c5583f39779d6de875c233629a8d57cb5375015281a267162733cf4084",
+          "captureFile": "outgoing-159.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 26,
+          "inputSHA256": "a06672dfba62189ecd6726296136c58d80821cabb5133611a2b9e65203044489",
+          "captureFile": "outgoing-160.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 27,
+          "inputSHA256": "0021dfae807bf9cd8352a60c10e218124cc8cf030c80efc98ca64a1f35973570",
+          "captureFile": "outgoing-161.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 28,
+          "inputSHA256": "8a34674419663c105759260e8e41bc7d35dac29808c8ddaa5fffcafd74d87960",
+          "captureFile": "outgoing-162.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 29,
+          "inputSHA256": "09bb8a6f1293349820676d4b6e2a0c4d76f29c41d45deb02993d4d7bb245abe3",
+          "captureFile": "outgoing-163.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 30,
+          "inputSHA256": "5029aa8756f125d869ff1c7e1b18df75e58471a2f44e3863dfd521d7e7a03fd2",
+          "captureFile": "outgoing-164.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 31,
+          "inputSHA256": "8722d7829c971368bad938a2232a9de6fe17147fcd6a7deff21095406fc0bb54",
+          "captureFile": "outgoing-165.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 32,
+          "inputSHA256": "1d4285fe5d5d6fdb86f5034a2e4596baae29c3217268596cb199948dffd8cf79",
+          "captureFile": "outgoing-166.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 33,
+          "inputSHA256": "6382194c31d63cfc35fe89f025b87926363647f46c6318dd8050f1985dc78fc4",
+          "captureFile": "outgoing-167.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 34,
+          "inputSHA256": "64fa4f5ec835222440f78cf1a913b9cade59783eee6cd687e60d1a9d3c8d4882",
+          "captureFile": "outgoing-168.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 35,
+          "inputSHA256": "9ef57ffa3c73c7de3d9927747487d9fffa7a4149e4a24530997b81e9c1b8d920",
+          "captureFile": "outgoing-169.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 36,
+          "inputSHA256": "d92f4415357b2d69f43816ba69467e39087564a321176ce9e8f39e2b89f235ed",
+          "captureFile": "outgoing-170.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 37,
+          "inputSHA256": "4a51fa5973bebabc4af5dc99e4141edfbeaaaf53389a526cc7c7751cc298cb4f",
+          "captureFile": "outgoing-171.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 38,
+          "inputSHA256": "5f8c5eb435983a6357d9114cd0294d113286ae5b9e0b72f715fff5b74a83bcd7",
+          "captureFile": "outgoing-172.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 39,
+          "inputSHA256": "93907bd46544a3aa7df1f0e5d7eaff21645497629c2fc0bd1b807027c86bf6ae",
+          "captureFile": "outgoing-173.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 40,
+          "inputSHA256": "6ed5c0a609d63096c9f3504d488e12224d8855bfd83fcb54a3ead122969da1e9",
+          "captureFile": "outgoing-174.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 41,
+          "inputSHA256": "51170b09d71198fa71438fed9e36d3762e40e06ae8ddef1e9b522f358ea539b1",
+          "captureFile": "outgoing-175.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 42,
+          "inputSHA256": "695dd8828817385db04081432ba25c4c9eda00f3cc54598684ad6251d3c19491",
+          "captureFile": "outgoing-176.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 43,
+          "inputSHA256": "bb4a1a80d96a806de52e8b93c61c7a678608f4647167fbe49ed8b4bb4a24c239",
+          "captureFile": "outgoing-177.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 44,
+          "inputSHA256": "cdd392199aa041c085d628d38434848c7adc8eb5257b0279085b16812a24839f",
+          "captureFile": "outgoing-178.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 45,
+          "inputSHA256": "619fd98526e9008b0baa72a816640632262a89765e3e8fdcaea2bb7dbd4f9468",
+          "captureFile": "outgoing-179.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 46,
+          "inputSHA256": "bb0e6a7ea0a4f238a4b9a9028fd56822373c518273da2b3d6378e9312f35b906",
+          "captureFile": "outgoing-181.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 47,
+          "inputSHA256": "8a1cb2625d2ca951dc50963ab08a1b513e5c21d3518320b1d62bf4ff55794513",
+          "captureFile": "outgoing-182.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 48,
+          "inputSHA256": "1034e96da0dcd31caa0622901605cc8f05f896c0d9153841b29f5a452f42e387",
+          "captureFile": "outgoing-183.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 49,
+          "inputSHA256": "4d6573b95d9b3c86fe7470dfd4eb9e8256ac4f8fabdcbe2cdf776702f7416f70",
+          "captureFile": "outgoing-184.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 50,
+          "inputSHA256": "e5928f3bc1efe8757aa7bfc48569173a58e395a9c854a952f1b40c80f1876022",
+          "captureFile": "outgoing-185.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 51,
+          "inputSHA256": "d8d4726d160a3b5eb80838f2100a29e308063ee80c7a8130f1dd5b10ceee7bb9",
+          "captureFile": "outgoing-186.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 52,
+          "inputSHA256": "2ff833795f2ccafe89f0d94ffef34cf7b295d6f2dca6448728af82798f2701c3",
+          "captureFile": "outgoing-187.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 53,
+          "inputSHA256": "fcb37835e1309cdd45528069e2a9c8394e8f627a12e4d86ba2acd107798ee743",
+          "captureFile": "outgoing-188.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 54,
+          "inputSHA256": "d303221e063ce8e7c06398d2eab780a064523547cbc9e9fa78aeecacc008d639",
+          "captureFile": "outgoing-189.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 55,
+          "inputSHA256": "8326d9b1ff5e5bdcc9c0f6567724260e7eac1c433901ca9be5ff761fe25459be",
+          "captureFile": "outgoing-190.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 56,
+          "inputSHA256": "b0b307cc911e704ecc7a62962512a40efc8589c294f9400402f182673018c632",
+          "captureFile": "outgoing-191.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 57,
+          "inputSHA256": "704ea86b7da2ebe3c61771f40927de6bac589889c50f1926a0a7a27f61282c65",
+          "captureFile": "outgoing-192.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 58,
+          "inputSHA256": "631c651e328bc67a8767972e43c372269c38bd8ca52d6b378ce0d1f26d1c2d72",
+          "captureFile": "outgoing-193.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 59,
+          "inputSHA256": "d7a98d2cd62f2ba662960f032aea6bb24e0ba7b54ffc06ef9456d8d16be4259a",
+          "captureFile": "outgoing-194.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 60,
+          "inputSHA256": "6cd84176450bc154a06c63b4c6a8cc36021072e0dafba4be241886d4a900b8ee",
+          "captureFile": "outgoing-195.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 61,
+          "inputSHA256": "ffe9b53f5a33330bef210a7e19f0ede4c2e3fccac8b6213d55a16c739401243b",
+          "captureFile": "outgoing-196.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 62,
+          "inputSHA256": "5e108f306113e4d78286565d376d986b39dfe62053cdad17bb025d0c9c0d4540",
+          "captureFile": "outgoing-197.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 63,
+          "inputSHA256": "83f34e11022dfdda3456fdf26a5e6e9774743833b0b8e71a7b1a6257aa812571",
+          "captureFile": "outgoing-198.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 64,
+          "inputSHA256": "0853cd714eec961ee626d36c92a9488041bdca83a58d8ab46844b08dbc8a657f",
+          "captureFile": "outgoing-199.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 65,
+          "inputSHA256": "4d82f84b77a8f23596e2a35245a376aee8ed230be54f6e80358fe2c3edcb2f37",
+          "captureFile": "outgoing-200.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 66,
+          "inputSHA256": "2c3816610a1306b26f7f57ad5d2e2c329e50e18dda1c52fa6d883edf3ebfe940",
+          "captureFile": "outgoing-201.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 67,
+          "inputSHA256": "0a3c8546f494cec26d05dd7c02e656e54c78b88b1f99a6c7ecf5da5807f14771",
+          "captureFile": "outgoing-202.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 68,
+          "inputSHA256": "b64170595a66536b6b772020f9a648e65d57983bfe50f91c06674e08b0549f3e",
+          "captureFile": "outgoing-203.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 69,
+          "inputSHA256": "1aaf82c557f5864c32019156456a163a47b07f5af8ed1106be7f13a035733e2b",
+          "captureFile": "outgoing-204.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 70,
+          "inputSHA256": "501952c7fdfacc4a592af2f836800180866c300f8b31e8c71ec57c0c00720aa2",
+          "captureFile": "outgoing-205.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 71,
+          "inputSHA256": "06c9e5190c4139300fc750c948f690b4e88c47e606f43b8856c65979ce73fc00",
+          "captureFile": "outgoing-206.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 72,
+          "inputSHA256": "0a79f58e71f896b9935849b215b3aac1efe9c9a683019855cfaee4a8fea4ff0f",
+          "captureFile": "outgoing-207.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 73,
+          "inputSHA256": "3fc04061acbc7a17f7458df9420f11f2c2d937fde7e2ef60585da524b525dc28",
+          "captureFile": "outgoing-208.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 74,
+          "inputSHA256": "10d78b06adecbc1bbf8969f891fa0cb590951515e8f1bd1fa8f107b232cd6d20",
+          "captureFile": "outgoing-209.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 75,
+          "inputSHA256": "09b9cae056f8d015dd7968431ec7a7412bf3df68d0b6096f93cb711161642306",
+          "captureFile": "outgoing-210.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 76,
+          "inputSHA256": "2ce590fd4f5193e4065e7c76faf2eab90d6daca0775da7c1b2e4e94a710f9bb6",
+          "captureFile": "outgoing-211.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 77,
+          "inputSHA256": "ec1f424731a86d001c024327906310fcf6169a6da55d06f414a8e1c92dae70f1",
+          "captureFile": "outgoing-212.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 78,
+          "inputSHA256": "80474ff64f7132eb4619da003c6bd765809d3e1a21ef98fa48c2a6e86eebe5a9",
+          "captureFile": "outgoing-213.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 79,
+          "inputSHA256": "980a8fa485b3c473414b7e7de278a3f1ea07bf781f07a1591046dd9a84b8b9b0",
+          "captureFile": "outgoing-214.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 80,
+          "inputSHA256": "4bbfeeaf724f51d892a8175eab0ec3050675ea0bf046980a8815858f97dff136",
+          "captureFile": "outgoing-215.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 81,
+          "inputSHA256": "5c2819f12d321f81f7f4c6a5f9e0d94bc77a4f9d576d3015394cd1e71a815b74",
+          "captureFile": "outgoing-216.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 82,
+          "inputSHA256": "38389d905ec384b39a04e5fd537a31b81e806e872c1bee4d2096a9db5b5dc467",
+          "captureFile": "outgoing-217.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 83,
+          "inputSHA256": "8bd1db7ab75981e7bc8a017adb054d49ae08d77c7aa169963162fc22031ad00b",
+          "captureFile": "outgoing-218.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 84,
+          "inputSHA256": "9f32dfb34d00a4ed4df04bb355996eea8b682388571a512759e8299a564db0a1",
+          "captureFile": "outgoing-219.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 85,
+          "inputSHA256": "b8da387fe044eac84f9bc103a9490063db3a55e211be11327a426680183f0dc9",
+          "captureFile": "outgoing-220.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 86,
+          "inputSHA256": "5b89a93383a9ffee3b7b3ccf9071d5c911875618dc1c9bdf250b98109dedb8fd",
+          "captureFile": "outgoing-221.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 87,
+          "inputSHA256": "9b18a194b8ec6bcb7fe71f28472c2e18bb635c6bd4f8264c1e9029b4ffac193a",
+          "captureFile": "outgoing-222.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 88,
+          "inputSHA256": "d4373080cf94cc4f9af4c0bc1b61f3cb2777e9a0dc4060cdf0a6009ab242ea42",
+          "captureFile": "outgoing-223.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 89,
+          "inputSHA256": "dc01d66287df1720445c1d6e7a19f1f54337c4b490f9e16235af806b5bf3af8c",
+          "captureFile": "outgoing-224.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        },
+        {
+          "index": 90,
+          "inputSHA256": "bc673993c1416af3ecdc9cfa7a950a2c7d5124c68e8cedb8054587b525dfbe18",
+          "captureFile": "outgoing-225.body",
+          "httpStatus": 200,
+          "bodyJSONIdentical": true,
+          "bodyByteIdentical": true,
+          "attachments": null,
+          "differences": []
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Reports are static model analysis; no claim of exhaustive architectural correctness.",
+    "Build exploration hit error_max_turns. Completion used a new official client session with captured tool evidence, not native resume.",
+    "Long Opus reports required client-side max_tokens continuation; all final text segments were assembled.",
+    "Each remote request is single-send; client tool loops and text continuations cause multiple HTTP requests.",
+    "Build may wrap tool_result.content text in text block arrays; text preserved, not full JSON/byte identity.",
+    "Haiku count_tokens returned 404, not fixed.",
+    "Tool allowlist and disabled hooks/MCP are not an OS filesystem sandbox.",
+    "Reported model IDs do not establish internal routing at a third-party upstream.",
+    "Local default CLI later reported 2.1.302; these test results remain specific to 2.1.296."
+  ],
+  "sources": [
+    {
+      "file": "ccg-local-client-20261018-183946/build/result.json",
+      "sha256": "eb135b4c1cd9c4f51f2ba3bf2c49615b067638ddbf3cb2dd541d85b0b890eb74",
+      "bytes": 23416
+    },
+    {
+      "file": "ccg-local-client-20261018-183946/build/requests.json",
+      "sha256": "96942acbdbf76866824b13139f3db271fdbb41eb24bf38aaf663845195d6678e",
+      "bytes": 7036
+    },
+    {
+      "file": "ccg-local-client-20261018-183946/transport-audit.json",
+      "sha256": "40f24edebb91a97014861be32d597aa6c11ccb9528a1577001b2eb44c1852b0d",
+      "bytes": 55456
+    },
+    {
+      "file": "ccg-local-client-20261018-183946/direct/result.json",
+      "sha256": "007cfd762ad92d06624ea0652c5cf1f9c76e74f804a6e2f9f87621b35a54c733",
+      "bytes": 23196
+    },
+    {
+      "file": "ccg-local-client-20261018-183946/direct/requests.json",
+      "sha256": "298d5de193f9481b7c9838d378b1babe7b42d8e807f2d30c4a15479349f09b54",
+      "bytes": 6639
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/build/result.json",
+      "sha256": "f1be89d5fa5d2321b7600b1db2cd83efb6ae50075d99589ad4820f2333ed7797",
+      "bytes": 50613
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/build/requests.json",
+      "sha256": "26e854daf712c65a2b51608f922a9bf53f6a7b69b122138dc8ceb440962be9d8",
+      "bytes": 46606
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/transport-audit.json",
+      "sha256": "304957b5c31cf21ed33d63f4aa44699b4588637136f65e9ac68ef7b7b1544849",
+      "bytes": 125241
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/build-completion/build/result.json",
+      "sha256": "a3fd3114b8aa689456e3116bfb9301e9d2cc6b9ab16f621ed03c418721287f15",
+      "bytes": 10154
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/build-completion/build/requests.json",
+      "sha256": "3e006662ed9b50f73c82ae5d99186cbce355c970ea8f16e9bf211bc72ff5d779",
+      "bytes": 2588
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/build-completion/transport-audit.json",
+      "sha256": "968078b7f273de0bfb72fad046480ce84fe6bf2a93983998a9dd047414802170",
+      "bytes": 3737
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/direct/result.json",
+      "sha256": "dd70a7a9e0e6f9de90f3860fbbcc554c0079fc766ef592559ff80de15ca116cb",
+      "bytes": 63355
+    },
+    {
+      "file": "ccg-opus55-architecture-20261018-185619/direct/requests.json",
+      "sha256": "6ab32f59003d3de60555bc0fd4cdcb43ffb55b9152a5d4d2b239cbe9d9cc3a4d",
+      "bytes": 46606
+    }
+  ]
+}

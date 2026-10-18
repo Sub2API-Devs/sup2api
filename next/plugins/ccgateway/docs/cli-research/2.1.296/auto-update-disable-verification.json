@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-18",
+  "analysisBaseline": "2.1.296",
+  "local": {
+    "settingsFile": "C:\\Users\\16790\\.claude\\settings.json",
+    "previousSettingsValue": "1",
+    "currentSettingsValue": "1",
+    "otherSettingsPreserved": true,
+    "windowsUserEnvironment": "1",
+    "cliVersion": "2.1.302 (Claude Code)",
+    "versionMatchesAnalysisBaseline": false,
+    "cliSHA256": "3ab075f78998efef8b87f491c2e4a39c309dddf44e51d0103eba4f3713d2a0ae",
+    "settingsBeforeSHA256": "b3c89a8c32f197d7faa01badaff917095668748456b838365eeea3fd7c4310d8",
+    "settingsAfterSHA256": "b3c89a8c32f197d7faa01badaff917095668748456b838365eeea3fd7c4310d8",
+    "existingParentProcessesNeedRestartToInheritUserEnvironment": true,
+    "versionDriftCause": "Not established. No CLI installation or downgrade performed by this configuration task."
+  },
+  "remote": [
+    {
+      "nativeEnvironment": "1",
+      "settingsPrevious": null,
+      "settingsCurrent": "1",
+      "managedAutoUpdateBefore": false,
+      "managedAutoUpdateAfter": false,
+      "channelPreserved": true,
+      "channel": "stable",
+      "updating": false,
+      "container": "ccg-v6-build",
+      "version": "2.1.296 (Claude Code)",
+      "binarySHA256": "e98293425adf386e6f2588d437440852ee0e4b0f17654ed5e295fa64eb8a5383",
+      "binaryUnchanged": true,
+      "startedAt": "2026-10-18T10:08:05.859119007Z",
+      "notRestarted": true
+    },
+    {
+      "nativeEnvironment": "1",
+      "settingsPrevious": null,
+      "settingsCurrent": "1",
+      "managedAutoUpdateBefore": false,
+      "managedAutoUpdateAfter": false,
+      "channelPreserved": true,
+      "channel": "stable",
+      "updating": false,
+      "container": "ccg-v6-direct",
+      "version": "2.1.296 (Claude Code)",
+      "binarySHA256": "e98293425adf386e6f2588d437440852ee0e4b0f17654ed5e295fa64eb8a5383",
+      "binaryUnchanged": true,
+      "startedAt": "2026-10-18T10:08:06.150675268Z",
+      "notRestarted": true
+    },
+    {
+      "nativeEnvironment": "1",
+      "settingsPrevious": null,
+      "settingsCurrent": "1",
+      "managedAutoUpdateBefore": false,
+      "managedAutoUpdateAfter": false,
+      "channelPreserved": true,
+      "channel": "stable",
+      "updating": false,
+      "container": "ccg-21-app",
+      "version": "2.1.301 (Claude Code)",
+      "binarySHA256": "bc1aad9982c7b59c7d889ff92595d61cf46e0a6eae074cb551d932a989bcd222",
+      "binaryUnchanged": true,
+      "startedAt": "2026-10-15T21:02:57.675869152Z",
+      "notRestarted": true
+    }
+  ],
+  "sourceChanges": {
+    "runnerBaseEnv": "Forces DISABLE_AUTOUPDATER=1 after inherited/proxy environment",
+    "cliModsDockerfile": "ENV DISABLE_AUTOUPDATER=1",
+    "newWorkerBinaryDeployed": false,
+    "newImageBuilt": false,
+    "cliELFChanged": false
+  },
+  "limits": [
+    "Disables automatic updates, not manual installation or image replacement.",
+    "Existing parent processes must restart to inherit the Windows user environment; default Claude settings also carry the flag.",
+    "Original account 21 remains its existing 2.1.301; no downgrade or restart."
+  ],
+  "nativeMechanism": {
+    "version": "2.1.296",
+    "module": "chunk-0ycjphb5.js",
+    "moduleSHA256": "611686a3f74fca396e661fe9c7b5c2706d3bcc26024ca2f45a8d2684008d25b9",
+    "characterOffset": 602748,
+    "excerpt": "function VRe(){return sA(Ne(process.env.DISABLE_AUTOUPDATER))}function sA(e){if(a.DISABLE_UPDATES)return{type:\"env\",envVar:\"DISABLE_UPDATES\"};if(e)return{type:\"env\",envVar:\"DISABLE_AUTOUPDATER\"};let n=dpt();if(n)return{type:\"env\",envVa",
+    "meaning": "VRe parses DISABLE_AUTOUPDATER and passes it to sA; truthy value returns the env-disabled reason."
+  },
+  "validation": {
+    "command": "GOWORK=off go test ./engine -run Test(RequestCommand|MessagesBuildComponents|CLIManagement) -count=1",
+    "result": "passed on Windows; Linux shell fixture is platform-skipped",
+    "goSourceChanged": "companions/engine/runner.go",
+    "liveWorkersUseExistingEnvironmentFlag": true
+  }
+}

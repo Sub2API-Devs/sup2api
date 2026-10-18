@@ -25,15 +25,16 @@ type cliUpdatePolicy struct {
 }
 
 type cliManagement struct {
-	mu       sync.Mutex
-	policy   cliUpdatePolicy
-	path     string
-	latest   string
-	checked  time.Time
-	updating bool
-	result   string
-	failure  string
-	install  *cliInstallLease
+	pinnedVersion string
+	mu            sync.Mutex
+	policy        cliUpdatePolicy
+	path          string
+	latest        string
+	checked       time.Time
+	updating      bool
+	result        string
+	failure       string
+	install       *cliInstallLease
 }
 
 func newCLIManagement(root string) (*cliManagement, error) {
@@ -89,7 +90,7 @@ func (r *Runtime) cliView() Object {
 	m := r.cliManagement
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return Object{"catalog": r.catalog.status(), "auto_update": m.policy.AutoUpdate, "auto_update_mode": "managed", "channel": m.policy.Channel, "latest_version": m.latest, "release_checked_at": m.checked, "updating": m.updating, "update_state": m.result, "update_error": m.failure}
+	return Object{"catalog": r.catalog.status(), "auto_update": m.policy.AutoUpdate, "auto_update_mode": "managed", "pinned_version": m.pinnedVersion, "channel": m.policy.Channel, "latest_version": m.latest, "release_checked_at": m.checked, "updating": m.updating, "update_state": m.result, "update_error": m.failure}
 }
 
 func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
@@ -126,6 +127,10 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 			return
 		}
 		auto, ok := body["auto_update"].(bool)
+		if auto && r.cliManagement.pinnedVersion != "" {
+			apiError(w, 409, "configuration_error", "CLI version is pinned by ccgateway; automatic updates are disabled")
+			return
+		}
 		policy := cliUpdatePolicy{AutoUpdate: auto, Channel: str(body, "channel")}
 		if !ok || !policy.valid() {
 			apiError(w, 400, "invalid_request_error", "Invalid CLI update policy")
@@ -139,6 +144,10 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if str(body, "action") == "validate-install" {
+		if r.cliManagement.pinnedVersion != "" {
+			apiError(w, 409, "configuration_error", "CLI is pinned; use a packaged version")
+			return
+		}
 		m := r.cliManagement
 		m.mu.Lock()
 		valid := m.install != nil && m.install.token == str(body, "lease") && time.Until(m.install.expires) > time.Minute && keys(body, "action", "lease") == nil
@@ -182,6 +191,10 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 		}
 		w.WriteHeader(http.StatusAccepted)
 	case "begin-install":
+		if r.cliManagement.pinnedVersion != "" {
+			apiError(w, 409, "configuration_error", "CLI is pinned; use a packaged version")
+			return
+		}
 		lease, beginErr := r.beginCLIInstall(ctx)
 		if beginErr != nil {
 			apiError(w, 409, "api_error", beginErr.Error())

@@ -1,0 +1,200 @@
+{
+  "date": "2026-10-17",
+  "version": "2.1.296",
+  "binaryIdentity": {
+    "windows": {
+      "bytes": 260489376,
+      "sha256": "76de74f7694a5bdc03378a5f837c9e132827bf004c98c276bc4e9094ff06769a"
+    },
+    "linuxNpm": {
+      "path": "official npm linux-x64",
+      "bytes": 257068216,
+      "sha256": "24972e3bc859fab2b46ed4c1e51f7d6130f06d3bd550811a114640de3370d0de"
+    },
+    "linuxVsix": {
+      "path": "artifacts\\claude-mods-research-20261017\\platform-comparison\\vsix\\extension\\resources\\native-binary\\claude",
+      "bytes": 257068216,
+      "sha256": "24972e3bc859fab2b46ed4c1e51f7d6130f06d3bd550811a114640de3370d0de"
+    },
+    "linuxRebuilt": {
+      "native": [
+        "/$bunfs/root/clipboard-napi.node",
+        "/$bunfs/root/audio-capture.node"
+      ],
+      "rebuiltBytes": 146966496,
+      "rebuiltSha256": "e2bf39e055f144db93f813b4d74394c9b27e406c4a476e91935fd0bdde047f58",
+      "magic": "7f454c46"
+    }
+  },
+  "extraction": {
+    "mappedSourceRegions": 2343,
+    "mismatchCount": 0,
+    "errors": []
+  },
+  "isolatedCoreFunctions": {
+    "binarySha256": "76de74f7694a5bdc03378a5f837c9e132827bf004c98c276bc4e9094ff06769a",
+    "scope": "Extracted-function evaluation with controlled host stubs; not an end-to-end modified EXE test.",
+    "checks": [
+      {
+        "case": "tool.describe drops schema/name at host return",
+        "passed": true,
+        "result": {
+          "description": "overridden",
+          "isDeferred": false
+        }
+      },
+      {
+        "case": "model schema prefers inputJSONSchema",
+        "passed": true
+      },
+      {
+        "case": "schema advertised to model does not replace runtime parser",
+        "passed": true,
+        "phase": "parse",
+        "cause": "schema"
+      },
+      {
+        "case": "internal coerceInput adapter can bridge schema rename",
+        "passed": true,
+        "input": {
+          "command": "echo demo"
+        }
+      },
+      {
+        "case": "registration name factory always prefixes normal inputs",
+        "passed": true
+      },
+      {
+        "case": "core lookup accepts an unprefixed tool already in the list",
+        "passed": true
+      },
+      {
+        "case": "in-place list mutation can leave lookup cache stale; new array resolves it",
+        "passed": true
+      }
+    ]
+  },
+  "modTests": [
+    {
+      "name": "source-mod-test",
+      "status": 0,
+      "signal": null,
+      "stdout": "\ntests/description.test.ts:\n(pass) reconstructed host loads a mod and dispatches tool.describe [45.79ms]\n\n 1 pass\n 0 fail\nRan 1 test across 1 file. [0.75s]\n",
+      "stderr": ""
+    },
+    {
+      "name": "binary-mod-test",
+      "status": 0,
+      "signal": null,
+      "stdout": "\ntests/description.test.ts:\n(pass) reconstructed host loads a mod and dispatches tool.describe [43.93ms]\n\n 1 pass\n 0 fail\nRan 1 test across 1 file. [0.93s]\n",
+      "stderr": ""
+    }
+  ],
+  "debianContainerTests": [
+    {
+      "name": "version",
+      "status": 0,
+      "stdout": "2.1.296 (Claude Code)\n",
+      "stderr": ""
+    },
+    {
+      "name": "help",
+      "status": 0,
+      "stdout": "a long-lived authentication token\n                                        (requires Claude subscription)\n  stop|kill <id>                        Stop a background session. Its\n                                        conversation is kept: `claude attach\n                                        <id>` opens it again, `claude --resume`\n                                        works once it is stopped\n  ultrareview [options] [target]        Run a cloud-hosted multi-agent code\n                                        review of the current branch (or a PR\n                                        number / base branch) and print the\n                                        findings\n  update|upgrade                        Check for updates and install if\n                                        available\n",
+      "stderr": ""
+    },
+    {
+      "name": "mod",
+      "status": 0,
+      "stdout": "\ntests/description.test.ts:\n(pass) reconstructed host loads a mod and dispatches tool.describe [44.01ms]\n\n 1 pass\n 0 fail\nRan 1 test across 1 file. [0.93s]\n",
+      "stderr": ""
+    }
+  ],
+  "liveModel": {
+    "exitCode": 0,
+    "isError": false,
+    "result": "7 times 8 is **56**.",
+    "numTurns": 1,
+    "model": "claude-haiku-4-5-20251001",
+    "scope": "One no-tool text request using a user-provided Anthropic-compatible endpoint; credentials and endpoint omitted."
+  },
+  "toolCatalogProbe": {
+    "method": "Original Windows/Linux 2.1.296 executables, fresh config/home, loopback mock API, same model and CLI flags, no actual tool execution",
+    "args": [
+      "--safe-mode",
+      "--tools",
+      "default",
+      "--strict-mcp-config",
+      "--no-session-persistence",
+      "--model",
+      "claude-haiku-4-5-20251001",
+      "--max-turns",
+      "1",
+      "--output-format",
+      "json",
+      "-p",
+      "Reply OK. Do not call any tools."
+    ],
+    "windowsTools": [
+      "Agent",
+      "Bash",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "Edit",
+      "EnterWorktree",
+      "ExitWorktree",
+      "Glob",
+      "Grep",
+      "ListAgents",
+      "NotebookEdit",
+      "Read",
+      "ReportFindings",
+      "ScheduleWakeup",
+      "SendMessage",
+      "Skill",
+      "TaskCreate",
+      "TaskGet",
+      "TaskList",
+      "TaskStop",
+      "TaskUpdate",
+      "WebFetch",
+      "WebSearch",
+      "Workflow",
+      "Write"
+    ],
+    "linuxTools": [
+      "Agent",
+      "Bash",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "Edit",
+      "EnterWorktree",
+      "ExitWorktree",
+      "ListAgents",
+      "NotebookEdit",
+      "Read",
+      "ReportFindings",
+      "ScheduleWakeup",
+      "SendMessage",
+      "Skill",
+      "TaskCreate",
+      "TaskGet",
+      "TaskList",
+      "TaskStop",
+      "TaskUpdate",
+      "WebFetch",
+      "WebSearch",
+      "Workflow",
+      "Write"
+    ],
+    "commonCount": 24,
+    "allCommonInputSchemasEqual": true,
+    "differentDescriptions": [
+      "Agent",
+      "Bash"
+    ],
+    "unresolved": "The observed Glob/Grep listing difference has not been isolated to OS alone; do not generalize it as a platform rule."
+  }
+}

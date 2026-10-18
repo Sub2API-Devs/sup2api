@@ -46,7 +46,7 @@ func TestRuntimeCapabilitiesProjection(t *testing.T) {
 	if got.ExecutionModes != nil {
 		t.Fatal("legacy Worker document claimed execution modes")
 	}
-	for _, modes := range [][]string{{"native"}, {}, nil} {
+	for _, modes := range [][]string{{"native"}, {"request_direct"}, {"request_build"}, {}, nil} {
 		object["execution_modes"] = modes
 		body, err := json.Marshal(object)
 		if err != nil {

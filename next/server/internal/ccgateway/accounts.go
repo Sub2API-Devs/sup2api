@@ -40,6 +40,7 @@ var (
 )
 
 type accountDesired struct {
+	CLI      *RuntimeCLI    `json:"cli,omitempty"`
 	Network  RuntimeNetwork `json:"network"`
 	Revision string         `json:"revision"`
 	Enabled  bool           `json:"enabled"`
@@ -382,6 +383,27 @@ func (s *Service) markBlocked(key, revision string) {
 
 // putConfig applies d to the runtime key on the controller (PUT config).
 func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) error {
+	if d.CLI != nil {
+		cfg, err := s.Load(ctx)
+		if err != nil {
+			return err
+		}
+		var health struct {
+			Features []string `json:"features"`
+		}
+		if err := s.controllerJSON(ctx, cfg, "GET", "/health", nil, &health); err != nil {
+			return err
+		}
+		supported := false
+		for _, feature := range health.Features {
+			if feature == "cli-profile-v1" {
+				supported = true
+			}
+		}
+		if !supported {
+			return errors.New("controller upgrade required: cli-profile-v1")
+		}
+	}
 	body, _ := json.Marshal(d)
 	res, close, e := s.runtimeRequest(ctx, key, "PUT", "config", body, "")
 	if e != nil {

@@ -1,4 +1,11 @@
 export default {
+  cliProfile: {
+    title: 'Claude Code 版本与请求模式', mode: '请求模式', version: 'CLI 版本',
+    direct: '零注入透传（direct）', build: '组件构建（build）', native: '原有 Agent 路径（native）',
+    modeHint: 'direct 原文转发；build 提取上下文后由 CLI 构建。两者均由调用方执行工具，当前支持 API Key 账号。',
+    versionHint: '创建授权容器时从 Worker 镜像选择此版本，并校验补丁和哈希。自动更新关闭；版本或模式变更会重建已有容器并保留账号数据卷，请在空闲时切换。',
+    pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
+  },
   cli: {
     title: 'CC 更新', hint: '本机版本每 10 分钟检查一次；版本变化后加锁同步内存工具目录，不修改会话 JSONL。',
     installed: '已安装版本', catalog: '工具目录版本', available: '渠道最新版本', status: '目录状态 · 工具 / 变体数', operation: '操作状态',

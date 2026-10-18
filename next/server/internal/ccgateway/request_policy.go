@@ -30,6 +30,7 @@ type RequestPolicy struct {
 	// Code's own rendering on that Worker; never an erased type.
 	ReplaceClientAttachments []string   `json:"replace_client_attachments,omitempty"`
 	RelayMode                string     `json:"relay_mode,omitempty"`
+	CLIVersion               string     `json:"cli_version,omitempty"`
 	Betas                    []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
@@ -75,7 +76,12 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.ThinkingDisabledCompat == "" {
 		p.ThinkingDisabledCompat = "pass"
 	}
-	p.RelayMode = "native"
+	if p.RelayMode != "native" && p.RelayMode != "direct" && p.RelayMode != "build" {
+		p.RelayMode = "native"
+	}
+	if p.RelayMode != "native" && p.CLIVersion == "" {
+		p.CLIVersion = "2.1.302"
+	}
 	p.Betas = defaultRequestPolicy().Betas
 	return p
 }
@@ -100,8 +106,11 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.ThinkingDisabledCompat != "" && p.ThinkingDisabledCompat != "pass" && p.ThinkingDisabledCompat != "omit" {
 		return errors.New("invalid thinking_disabled_compat: must be pass or omit")
 	}
-	if p.RelayMode != "" && p.RelayMode != "native" {
-		return errors.New("invalid relay_mode: must be native")
+	if p.RelayMode != "" && p.RelayMode != "native" && p.RelayMode != "build" && p.RelayMode != "direct" {
+		return errors.New("invalid relay_mode: must be native, build or direct")
+	}
+	if p.CLIVersion != "" && !regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`).MatchString(p.CLIVersion) {
+		return errors.New("invalid cli_version")
 	}
 	if err := features.ValidateEraseClientAttachments(p.EraseClientAttachments); err != nil {
 		return err

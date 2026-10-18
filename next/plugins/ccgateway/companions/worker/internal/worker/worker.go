@@ -47,6 +47,8 @@ func New(cfg *config.Config) (Worker, error) {
 		internalBaseURL = workerInternalURL(cfg.BindHost, cfg.Port)
 	}
 	runtime, err := engine.NewRuntime(engine.Options{
+		ExpectedCLIVersion: cfg.CLIVersion, ExpectedCLISHA256: cfg.CLISHA256, ExpectedCLIPatch: cfg.CLIPatch,
+		RequestMode:     cfg.RequestMode,
 		InternalBaseURL: internalBaseURL,
 		CLI:             cfg.CLIPath, Plugin: cfg.PluginPath, DataDir: cfg.HistoryDir, CacheDir: cfg.CacheDir,
 		Key: cfg.APIKey, AdminKey: cfg.AdminKey, NativeTools: cfg.NativeTools,

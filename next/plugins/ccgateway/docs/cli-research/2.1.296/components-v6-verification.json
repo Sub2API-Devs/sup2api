@@ -1,0 +1,474 @@
+{
+  "date": "2026-10-18",
+  "extension": "ccgateway-v6-components-betas",
+  "baseline": "Linux x64/glibc Claude Code 2.1.296",
+  "deployment": {
+    "workers": {
+      "build": {
+        "container": "ccg-v6-build",
+        "address": "127.0.0.1:32774",
+        "authProfile": "api-key",
+        "keyMatches21": true
+      },
+      "direct": {
+        "container": "ccg-v6-direct",
+        "address": "127.0.0.1:32775",
+        "authProfile": "api-key",
+        "keyMatches21": true
+      }
+    },
+    "network": "ccg-v6-test-net",
+    "upstreamURL": "https://cdn.api.codingplus.ai",
+    "cliSHA256": "e98293425adf386e6f2588d437440852ee0e4b0f17654ed5e295fa64eb8a5383",
+    "workerSHA256": "64c3e93f333db29e6070cf9a5ea9c320c55eff29a04ff9c5435c0d624bf7d91a",
+    "cliVersion": "2.1.296",
+    "cliFormat": "ELF",
+    "sourceManifestVerified": true,
+    "original21StartedAt": "2026-10-15T21:02:57.675869152Z",
+    "original21CLI": "2.1.301 (Claude Code)"
+  },
+  "health": {
+    "build": {
+      "status": "healthy",
+      "worker_id": "e7e56a4073d8",
+      "cli_version": "2.1.296",
+      "uptime": 638
+    },
+    "direct": {
+      "status": "healthy",
+      "worker_id": "ca499a774b2d",
+      "cli_version": "2.1.296",
+      "uptime": 638
+    }
+  },
+  "original21": {
+    "binaryUnchanged": true,
+    "sha256": "bc1aad9982c7b59c7d889ff92595d61cf46e0a6eae074cb551d932a989bcd222",
+    "startedAt": "2026-10-15T21:02:57.675869152Z",
+    "subscriptionCredentialsUsed": false
+  },
+  "unitTestsPassed": 24,
+  "offlineCLI": {
+    "passed": true,
+    "reports": [
+      {
+        "name": "direct-file-betas",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "direct-no-betas",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-extracted-system",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-worker-text-templates",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-no-betas",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-stream",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-http-error",
+        "code": 2,
+        "requests": 1
+      },
+      {
+        "name": "missing-api-key",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "unsafe-build-number",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "duplicate-reference",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "forbidden-header",
+        "code": 1,
+        "requests": 0
+      }
+    ]
+  },
+  "offlineWorker": {
+    "passed": true,
+    "reports": [
+      {
+        "mode": "build",
+        "passed": true,
+        "modelRequests": 2,
+        "bodyBytesEqual": false,
+        "systemAndRolesPreserved": true,
+        "headerPolicyPassed": true
+      },
+      {
+        "mode": "direct",
+        "passed": true,
+        "modelRequests": 2,
+        "bodyBytesEqual": true,
+        "systemAndRolesPreserved": true,
+        "headerPolicyPassed": true
+      }
+    ]
+  },
+  "requestRegression": {
+    "passed": true,
+    "reports": [
+      {
+        "name": "json",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "file",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "sse",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "error",
+        "code": 2,
+        "requests": 1
+      },
+      {
+        "name": "websearch",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "timeout",
+        "code": 1,
+        "requests": 1
+      },
+      {
+        "name": "invalid-json",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "auth-header",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "help",
+        "code": 0,
+        "requests": 0
+      },
+      {
+        "name": "interrupt",
+        "code": 130,
+        "requests": 1
+      },
+      {
+        "name": "exact-body",
+        "code": 0,
+        "requests": 1
+      }
+    ]
+  },
+  "modeRegression": {
+    "passed": true,
+    "reports": [
+      {
+        "name": "direct",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "conflict",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "build-reject-http-body",
+        "code": 1,
+        "requests": 0
+      },
+      {
+        "name": "build-basic",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-mixed",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-stream",
+        "code": 0,
+        "requests": 1
+      },
+      {
+        "name": "build-error",
+        "code": 2,
+        "requests": 1
+      },
+      {
+        "name": "direct-blocked-output",
+        "code": 1,
+        "requests": 1
+      },
+      {
+        "name": "build-blocked-output",
+        "code": 1,
+        "requests": 1
+      }
+    ]
+  },
+  "ordinaryModsRegression": {
+    "passed": true,
+    "requests": 2
+  },
+  "controllerTestsPassed": 2,
+  "liveRequests": [
+    {
+      "case": "CC_V6_DIRECT_OK",
+      "mode": "direct",
+      "shape": "old",
+      "model": "claude-haiku-4-5-20251001",
+      "status": 200,
+      "expectedText": true,
+      "modelRequests": 1,
+      "errorType": null,
+      "bodyByteIdentical": true,
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "betas": "context-management-2025-06-27",
+      "headerNames": [
+        "accept",
+        "accept-encoding",
+        "anthropic-beta",
+        "anthropic-version",
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "user-agent"
+      ],
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "contextMarkerCount": 1,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-001.body",
+      "nativeHeaderPollution": false,
+      "stopReason": "end_turn"
+    },
+    {
+      "case": "CC_V6_BUILD_OLD_OK",
+      "mode": "build",
+      "shape": "old",
+      "model": "claude-haiku-4-5-20251001",
+      "status": 200,
+      "expectedText": true,
+      "modelRequests": 1,
+      "errorType": null,
+      "bodyByteIdentical": false,
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "betas": "context-management-2025-06-27",
+      "headerNames": [
+        "accept",
+        "accept-encoding",
+        "anthropic-beta",
+        "anthropic-version",
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "user-agent"
+      ],
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "contextMarkerCount": 1,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-002.body",
+      "nativeHeaderPollution": false,
+      "stopReason": "end_turn"
+    },
+    {
+      "case": "CC_V6_BUILD_SYSTEM_OK",
+      "mode": "build",
+      "shape": "modern",
+      "model": "claude-opus-5-5",
+      "status": 400,
+      "expectedText": false,
+      "modelRequests": 1,
+      "errorType": "<nil>",
+      "errorMessage": "messages.2: role 'system' must follow a 'user' message or an 'assistant' message ending in a server tool result; the directive-only form (content: [] with output_config) is accepted at any position (request id: 202610181009096489526148268d9d6DS9xCoNG)",
+      "bodyByteIdentical": false,
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "betas": "mid-conversation-system-2026-04-07,mid-conversation-system-clear-at-2026-08-21,effort-2025-11-24",
+      "headerNames": [
+        "accept",
+        "accept-encoding",
+        "anthropic-beta",
+        "anthropic-version",
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "user-agent"
+      ],
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "contextMarkerCount": 1,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-003.body",
+      "nativeHeaderPollution": false,
+      "stopReason": null
+    },
+    {
+      "case": "CC_V6_BUILD_SYSTEM_VALID_OK",
+      "mode": "build",
+      "shape": "modern",
+      "model": "claude-opus-5-5",
+      "status": 200,
+      "expectedText": false,
+      "modelRequests": 1,
+      "errorType": null,
+      "bodyByteIdentical": false,
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "betas": "mid-conversation-system-2026-04-07,mid-conversation-system-clear-at-2026-08-21,effort-2025-11-24",
+      "headerNames": [
+        "accept",
+        "accept-encoding",
+        "anthropic-beta",
+        "anthropic-version",
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "user-agent"
+      ],
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "contextMarkerCount": 1,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-004.body",
+      "nativeHeaderPollution": false,
+      "stopReason": "refusal",
+      "stopDetails": {
+        "type": "refusal",
+        "category": "cyber",
+        "explanation": "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, see https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback."
+      }
+    },
+    {
+      "case": "CC_V6_BUILD_SYSTEM_PARIS",
+      "mode": "build",
+      "shape": "modern",
+      "model": "claude-opus-5-5",
+      "question": "法国的首都是哪里？",
+      "status": 200,
+      "expectedText": false,
+      "answer": "",
+      "modelRequests": 1,
+      "stopReason": "max_tokens",
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "systemMessageCount": 1,
+      "betas": "mid-conversation-system-2026-04-07,mid-conversation-system-clear-at-2026-08-21,effort-2025-11-24",
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "nativeHeaderPollution": false,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-006.body",
+      "answerCorrect": false,
+      "exactCityOnly": false
+    },
+    {
+      "case": "CC_V6_BUILD_SYSTEM_PARIS_1024",
+      "mode": "build",
+      "shape": "modern",
+      "model": "claude-opus-5-5",
+      "question": "法国的首都是哪里？",
+      "status": 200,
+      "expectedText": false,
+      "answer": "法国的首都是巴黎。",
+      "modelRequests": 1,
+      "stopReason": "end_turn",
+      "messagesIdentical": true,
+      "systemIdentical": true,
+      "systemMessageCount": 1,
+      "betas": "mid-conversation-system-2026-04-07,mid-conversation-system-clear-at-2026-08-21",
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "nativeHeaderPollution": false,
+      "outputFile": "/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/outgoing-007.body",
+      "answerCorrect": true,
+      "exactCityOnly": false
+    }
+  ],
+  "officialClient": {
+    "exitCode": 0,
+    "resultType": "success",
+    "expectedText": true,
+    "numTurns": 1,
+    "modelRequests": 1,
+    "stderrBytes": 0,
+    "inputBytes": 32098,
+    "outputBytes": 32098,
+    "bodyByteIdentical": false,
+    "bodyJSONIdentical": true,
+    "systemIdentical": true,
+    "messagesIdentical": true,
+    "toolsIdentical": true,
+    "extractedAttachments": 5,
+    "attachmentKinds": [
+      "reminder",
+      "reminder",
+      "reminder",
+      "reminder",
+      "reminder"
+    ],
+    "contextMarkerPreserved": true,
+    "authCheck": {
+      "api_key_matches_expected": true,
+      "authorization_present": false
+    },
+    "betas": "interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219",
+    "inputSHA256": "f16da1d85c2fd817ee34a13389c89bf0abb540bb10ed8b4d67009e843c88bcdb",
+    "outputSHA256": "5a307e3092f4a901f4ef3874dd9aefd092f52d2999c8b2dd1aa8e3332bf3f342"
+  },
+  "limits": [
+    "Explicit API-key route only; request mode does not select or refresh subscription credentials.",
+    "An initial modern fixture was refused by the upstream. At user request a general-knowledge question was used; with 1024 output tokens and low effort it returned the correct answer as a full sentence, not the requested city-only format.",
+    "The first modern live fixture had invalid placement; upstream HTTP 400 was preserved without retry. A 64-token general-knowledge attempt stopped at max_tokens.",
+    "This implementation extracts and replays already-rendered contexts; it does not recreate all startup inputs or original native attachment provenance.",
+    "Build normalizes JSON and rejects unsafe numeric values; direct is the raw-body route.",
+    "Controller source forwarding tests passed; original production controller and account 21 were not redeployed."
+  ]
+}

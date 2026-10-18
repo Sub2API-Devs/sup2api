@@ -23,13 +23,20 @@ RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BUILD_MAX_PROCS} go build -p ${BUILD_M
 # 第二阶段：运行镜像（基于 node，包含 Claude Code CLI）
 FROM node:22-bookworm-slim
 
-# 安装 Claude Code CLI
-ARG CLAUDE_VERSION=2.1.292
+# The release directory is produced by cli-mods/package-release.cjs. Never
+# download an unpatched latest CLI while building the account runtime.
+ARG CLAUDE_VERSION=2.1.302
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl locales tzdata \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
+    && rm -rf /var/lib/apt/lists/*
+COPY cli-mods/release/ /opt/ccgateway/cli/
+RUN test -f /opt/ccgateway/cli/${CLAUDE_VERSION}/claude \
+    && chmod 755 /opt/ccgateway/cli/${CLAUDE_VERSION}/claude \
+    && ln -s /opt/ccgateway/cli/${CLAUDE_VERSION}/claude /usr/local/bin/claude
 COPY contracts/environment/locales.json contracts/environment/install-locales.cjs /tmp/container-locales/
 RUN node /tmp/container-locales/install-locales.cjs
+# Archives prepared on Windows can carry group/world-writable directory modes.
+# Seal the whole CLI tree before a non-root account worker can access it.
+RUN chmod -R a+rX,go-w /opt/ccgateway
 
 # 创建非 root 用户和工作目录
 RUN mkdir -p /work/config /work/data /work/history && \

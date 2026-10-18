@@ -120,13 +120,14 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	return out
 }
 
-// baseEnv is the inherited environment with the configured egress applied.
+// baseEnv applies egress and disables the CLI's own updater. CLI installation
+// is managed separately; a request must not replace the validated executable.
 func (r *Runner) baseEnv() []string {
 	env := r.Env
 	if env == nil {
 		env = os.Environ()
 	}
-	return r.Proxy.Environment(env)
+	return envWith(r.Proxy.Environment(env), map[string]string{"DISABLE_AUTOUPDATER": "1"})
 }
 
 // run owns one native request lifecycle. Usually it uses one CLI process;

@@ -64,5 +64,19 @@ func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d account
 	d.Network = c.EffectiveNetwork()
 	encoded, _ := json.Marshal(d.Network)
 	d.Revision = revisionOf(d.Revision + "|network:" + string(encoded))
+	policy := c.EffectiveRequestPolicy()
+	if policy.CLIVersion != "" {
+		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: policy.RelayMode, DisableAutoUpdate: true}
+		encoded, _ = json.Marshal(d.CLI)
+		d.Revision = revisionOf(d.Revision + "|cli:" + string(encoded))
+	}
 	return d, nil
+}
+
+// RuntimeCLI travels with the account revision, including authorization drafts.
+// An omitted profile keeps legacy containers until an operator selects a version.
+type RuntimeCLI struct {
+	Version           string `json:"version"`
+	RequestMode       string `json:"request_mode"`
+	DisableAutoUpdate bool   `json:"disable_auto_update"`
 }

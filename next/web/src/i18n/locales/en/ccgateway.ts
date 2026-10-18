@@ -1,4 +1,11 @@
 export default {
+  cliProfile: {
+    title: 'Claude Code version and request mode', mode: 'Request mode', version: 'CLI version',
+    direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)', native: 'Existing agent path (native)',
+    modeHint: 'Direct forwards the original body; build assembles extracted context through the CLI. Tools run on the caller. Both currently support API key accounts.',
+    versionHint: 'Authorization containers select this version from the Worker image and verify its patch and checksum. Automatic updates are disabled. Version or mode changes recreate existing containers while preserving their data volumes; switch while idle.',
+    pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
+  },
   cli: {
     title: 'CC updates', hint: 'The installed CLI version is checked every 10 minutes. Changes trigger serialized in-memory tool catalog synchronization without modifying session JSONL.',
     installed: 'Installed version', catalog: 'Catalog version', available: 'Latest channel version', status: 'Catalog state · tools / variants', operation: 'Operation',

@@ -16,9 +16,19 @@ const toolSearchOptions = computed(() => [
   ...(policy.value.tool_search?.startsWith('auto:') ? [{ value: policy.value.tool_search, label: policy.value.tool_search }] : [])
 ])
 const unknownFieldOptions = computed(() => (['ignore', 'reject'] as const).map(value => ({ value, label: t('ccgateway.policy.' + value) })))
+const requestModes = computed(() => (['direct', 'build', 'native'] as const).map(value => ({value, label:t('ccgateway.cliProfile.' + value)})))
 </script>
 <template>
   <section class="space-y-4" data-testid="request-policy">
+    <SSettingsGroup :title="t('ccgateway.cliProfile.title')" data-testid="cli-request-mode">
+      <SSettingRow :label="t('ccgateway.cliProfile.mode')" :description="t('ccgateway.cliProfile.modeHint')">
+        <SSelect v-model="policy.relay_mode" :options="requestModes" data-testid="relay-mode" />
+      </SSettingRow>
+      <SSettingRow :label="t('ccgateway.cliProfile.version')" :description="t('ccgateway.cliProfile.versionHint')">
+        <SInput v-model="policy.cli_version" placeholder="2.1.302" mono data-testid="cli-version" />
+      </SSettingRow>
+    </SSettingsGroup>
+    <div v-if="policy.relay_mode === 'native'" class="space-y-4">
     <h4 class="text-base font-semibold text-fg">{{ t('ccgateway.features.ccTitle') }}</h4>
     <SSettingsGroup :title="t('ccgateway.features.ccRuntime')" data-testid="cc-runtime-settings">
       <SSettingRow :label="t('ccgateway.policy.toolSearch')" :description="t('ccgateway.policy.toolSearchHint')">
@@ -60,5 +70,6 @@ const unknownFieldOptions = computed(() => (['ignore', 'reject'] as const).map(v
         <SSegmented :model-value="policy.unknown_field" :options="unknownFieldOptions" size="sm" :aria-label="t('ccgateway.policy.unknownField')" data-testid="unknown-field" @update:model-value="policy.unknown_field = $event as RequestPolicy['unknown_field']" />
       </SSettingRow>
     </SSettingsGroup>
+    </div>
   </section>
 </template>

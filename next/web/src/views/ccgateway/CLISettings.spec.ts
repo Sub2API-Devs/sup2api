@@ -38,6 +38,14 @@ describe('CC CLI update controls', () => {
     expect(wrapper.text()).toContain('2.1.297')
     wrapper.unmount()
   })
+  it('prevents automatic and manual channel updates for a pinned CLI', async () => {
+    mocks.get.mockResolvedValue({...state(),pinned_version:'2.1.302'})
+    const wrapper=await render()
+    expect(wrapper.text()).toContain('2.1.302')
+    expect(wrapper.get('[data-testid="cli-auto-update"] [role="switch"], [role="switch"][data-testid="cli-auto-update"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button=>button.text()==='手动更新 CC')!.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
   it('keeps the original auto-update state when saving fails', async () => {
     mocks.put.mockRejectedValue(new Error('unreachable'))
     const wrapper = await render()

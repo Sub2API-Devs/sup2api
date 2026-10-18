@@ -1,0 +1,98 @@
+// Copied beside the version-pinned restored modules by patch-cli.cjs.
+import fs from 'node:fs/promises';
+import { eF, rbe, Zre } from './chunk-gr4a0fky.js';
+import { El } from './chunk-0ycjphb5.js';
+import { YEr } from './chunk-6dwnw6av.js';
+import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
+import { writeOutput as write } from './ccgateway-request-output.js';
+import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
+
+const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
+
+Use CC's authenticated client to send either a Messages body or build components.
+The response body is written to stdout, including successful streaming SSE.
+
+  --direct                 Forward the original JSON body (default)
+  --build                  Assemble components through CC, then send once
+  --input <file|->          Read JSON from a file; default: stdin
+  --betas <a,b,...>         API beta features (repeatable; comma separated)
+  --header <name:value>     anthropic-version or anthropic-beta only
+  --timeout-ms <number>     Deadline including response body (default: 600000)
+  --response-meta <file>    Save HTTP status and response headers as JSON
+  --help                   Show this help
+
+Exit codes: 0 success, 1 transport/input error, 2 HTTP error, 130 interrupted.
+
+Build components: model, systemPrompt, messages, attachments, tools, parameters,
+and stream. Custom tools use inputSchema. Worker-extracted attachments use
+references to preserve message/block positions. Generation fields go in parameters.
+This request entry supports an explicit ANTHROPIC_API_KEY; subscription auth is disabled.
+`;
+
+export async function runRequestCommand(args) {
+  const controller = new AbortController();
+  let response, interrupted = false, outputError, deadline;
+  const customHeaders = process.env.ANTHROPIC_CUSTOM_HEADERS;
+  const interrupt = () => { interrupted = true; controller.abort(new Error('request interrupted')); process.stdin.destroy(); };
+  const failedOutput = error => { outputError = error; controller.abort(error); };
+  process.on('SIGINT', interrupt);
+  process.on('SIGTERM', interrupt);
+  process.stdout.on('error', failedOutput);
+  try {
+    const options = parseRequestOptions(args);
+    if (options.help) { await write(process.stdout, help); return 0; }
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw Error('claude request requires ANTHROPIC_API_KEY; subscription authentication is not enabled');
+    // Both eF and the SDK constructor read this variable. Never let arbitrary
+    // server environment headers override authentication or request betas.
+    delete process.env.ANTHROPIC_CUSTOM_HEADERS;
+    if (options.input === '-' && process.stdin.isTTY) throw Error('Provide a Messages JSON body on stdin or use --input <file>');
+    let json;
+    if (options.input === '-') {
+      const parts = [];
+      for await (const chunk of process.stdin) parts.push(chunk);
+      json = Buffer.concat(parts).toString('utf8');
+    } else json = await fs.readFile(options.input, 'utf8');
+    if (controller.signal.aborted) throw controller.signal.reason;
+    const rawBody = json.replace(/^\uFEFF/, '');
+    const body = parseRequestJSON(rawBody, options.mode);
+    const invalid = checkModelRequest({ body, headers: options.headers, timeoutMs: options.timeoutMs });
+    if (invalid) throw Error(invalid);
+    const timeout = options.timeoutMs ?? 600000;
+    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2147483647) throw Error('--timeout-ms must be a positive 32-bit integer');
+    deadline = setTimeout(() => controller.abort(new Error('request timed out')), timeout);
+    deadline.unref?.();
+    let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout };
+    if (options.mode === 'build') {
+      const { buildRequest } = await import('./ccgateway-request-build.js');
+      outgoing = { ...await buildRequest(body, options.headers, controller.signal), timeoutMs: timeout };
+    }
+    const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
+    if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
+    outgoing.headerPolicy = { apiKey, betas, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+    response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
+      const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: true, maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });
+      if (!(client instanceof rbe)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
+      return client;
+    }, Zre);
+    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: response.status, statusText: response.statusText, headers: response.headers, request: { mode: options.mode, authProfile: 'api-key', betas } }, null, 2) + '\n');
+    for (;;) {
+      const part = await readModelResponse(response.id, 'cli-request', controller.signal);
+      if (part.text) await write(process.stdout, part.text, controller.signal);
+      if (part.done) break;
+    }
+    return response.ok ? 0 : 2;
+  } catch (error) {
+    if (outputError?.code === 'EPIPE') return 0;
+    await write(process.stderr, `claude request: ${error instanceof Error ? error.message : String(error)}\n`);
+    return interrupted ? 130 : 1;
+  } finally {
+    clearTimeout(deadline);
+    if (response) await cancelModelResponse(response.id, 'cli-request');
+    process.off('SIGINT', interrupt);
+    process.off('SIGTERM', interrupt);
+    process.stdout.off('error', failedOutput);
+    if (customHeaders === undefined) delete process.env.ANTHROPIC_CUSTOM_HEADERS;
+    else process.env.ANTHROPIC_CUSTOM_HEADERS = customHeaders;
+  }
+}

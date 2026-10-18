@@ -4,6 +4,14 @@ from manager import upstream_headers
 
 
 class HeadersTests(unittest.TestCase):
+    def test_multiple_beta_lines_survive_forwarding(self):
+        inbound = Message()
+        inbound['Anthropic-Beta'] = 'alpha, beta'
+        inbound['anthropic-beta'] = 'gamma'
+        result = upstream_headers(inbound, 'account-key')
+        self.assertEqual(result['anthropic-beta'], 'alpha, beta,gamma')
+        self.assertEqual(upstream_headers({'anthropic-beta': 'alpha'}, 'key')['anthropic-beta'], 'alpha')
+
     def test_session_headers_survive_without_forwarding_caller_credentials(self):
         inbound = Message()
         inbound['X-CCGateway-Session-ID'] = 'conversation-a'

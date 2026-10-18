@@ -305,8 +305,8 @@ func mergeConfig(c, old Config) (Config, error) {
 		return c, err
 	}
 	c.Network = &network
-	if c.RequestPolicy != nil && c.RequestPolicy.RelayMode != "" && c.RequestPolicy.RelayMode != "native" {
-		return c, errors.New("invalid relay_mode: must be native")
+	if c.RequestPolicy != nil && c.RequestPolicy.RelayMode != "" && c.RequestPolicy.RelayMode != "native" && c.RequestPolicy.RelayMode != "build" && c.RequestPolicy.RelayMode != "direct" {
+		return c, errors.New("invalid relay_mode: must be native, build or direct")
 	}
 	if c.RequestPolicy == nil {
 		c.RequestPolicy = old.RequestPolicy

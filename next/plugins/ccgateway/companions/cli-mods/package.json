@@ -1,0 +1,7 @@
+{
+  "name": "ccgateway-cli-mods",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "devDependencies": { "@babel/parser": "8.0.4" }
+}

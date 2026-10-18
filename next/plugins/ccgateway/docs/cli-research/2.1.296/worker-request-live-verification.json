@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-18",
+  "environment": "OVH isolated Docker; real upstream using account 21 API key; original account unchanged",
+  "deployment": {
+    "worker": "ccg-request-build-test",
+    "mode": "build",
+    "port": "127.0.0.1:32771",
+    "artifacts": "/home/debian/sup2api/checks/ccg-request-modes-20261018"
+  },
+  "executables": {
+    "officialMagic": "7f454c46",
+    "customMagic": "7f454c46",
+    "officialSHA256": "24972e3bc859fab2b46ed4c1e51f7d6130f06d3bd550811a114640de3370d0de",
+    "customSHA256": "a0736bbcd1c37d65a47e0217dec929d86afc30850a284e0c2e6c9301f64ee2a9",
+    "installedCustomSHA256": "a0736bbcd1c37d65a47e0217dec929d86afc30850a284e0c2e6c9301f64ee2a9",
+    "workerCLIPath": "/usr/local/bin/claude-request",
+    "workerEntrypoint": [
+      "/usr/local/bin/request-worker"
+    ],
+    "workerState": "running",
+    "upstreamKeyMatches21": true,
+    "original21CLI": "2.1.301 (Claude Code)",
+    "original21SHA256": "bc1aad9982c7b59c7d889ff92595d61cf46e0a6eae074cb551d932a989bcd222",
+    "original21StartedAt": "2026-10-15T21:02:57.675869152Z",
+    "newWorkerMode": "build",
+    "original21BinaryUnchanged": true
+  },
+  "build": {
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 1,
+    "total_cost_usd": 0.010236249999999999,
+    "expectedText": true,
+    "exitCode": 0,
+    "stderrBytes": 0,
+    "container": "ccg-official296-build-test"
+  },
+  "direct": {
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 1,
+    "total_cost_usd": 0.0101075,
+    "expectedText": true,
+    "exitCode": 0,
+    "stderrBytes": 0,
+    "byteIdentical": true,
+    "jsonIdentical": true,
+    "inputSHA256": "cade533c89fb3f39f713452d13b3002defa275391f595fed6f78a412e9b29568",
+    "outputSHA256": "cade533c89fb3f39f713452d13b3002defa275391f595fed6f78a412e9b29568",
+    "modelRequests": 1,
+    "inputBytes": 32096,
+    "outputBytes": 32096
+  },
+  "bodyComparison": {
+    "mode": "build",
+    "requestFile": "/home/debian/sup2api/checks/ccg-request-modes-20261018/build-worker-logs/61dc9aac-79da-492d-8cad-13604fc1e739/request.body",
+    "outgoingFile": "/home/debian/sup2api/checks/ccg-request-modes-20261018/capture/outgoing-001.body",
+    "inputBytes": 32095,
+    "outputBytes": 32021,
+    "inputSHA256": "c55806bca18de3b0ced3c9b56b63f73606b06952af4b866bf7bd7da16cd0c342",
+    "outputSHA256": "3d2a921494c71f0811ba1ba3d59610451e1dd147be90433485dc046b53aaca64",
+    "byteIdentical": false,
+    "jsonIdentical": false,
+    "modelRequests": 1,
+    "differences": [
+      {
+        "path": "$.system[1].cache_control",
+        "removed": {
+          "type": "dict",
+          "length": 1
+        }
+      },
+      {
+        "path": "$.system[2].cache_control",
+        "removed": {
+          "type": "dict",
+          "length": 1
+        }
+      }
+    ],
+    "messageContentIdentical": true,
+    "toolsIdentical": true,
+    "attachmentMarkerInput": true,
+    "attachmentMarkerOutput": true
+  },
+  "limitations": [
+    "Build omits original system block cache_control: two fields in this sample.",
+    "HTTP adapter preserves reminder text and content positions; it does not infer native attachment types.",
+    "Actual model tests used Haiku 4.5 with Read definitions and synthetic CLAUDE.md, one model request per mode.",
+    "No tool execution loop, real OAuth refresh, web search authorization, or general history equivalence claim.",
+    "Linux native ELF format; no node cli.js or bun cli.js entrypoint."
+  ],
+  "tests": [
+    "Engine request adapter and subprocess fixtures passed on Windows and Linux; shell-only fixtures run on Linux.",
+    "Worker config/server/worker packages passed."
+  ],
+  "sourceFiles": [
+    "companions/engine/request_command.go",
+    "companions/engine/request_command_test.go",
+    "companions/worker/internal/config/config.go"
+  ],
+  "finalWorker": {
+    "workerSHA256": "1f6d25e955478f86ef0ca76b9e75cb9676c90661330cb15fc320893e5722e276",
+    "status": "healthy",
+    "workerID": "24ab60f566a8",
+    "cliVersion": "2.1.296",
+    "port": "127.0.0.1:32771",
+    "validation": "Final Linux subprocess tests passed; worker config/server/worker tests passed; final worker deployed and health checked.",
+    "liveTestScope": "The two real model tests preceded final malformed-tool, duplicate-beta-header, and cancellation cleanup changes to the Go worker; those changes were verified with Linux tests. The tested CLI ELF is unchanged."
+  }
+}

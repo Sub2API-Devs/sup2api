@@ -86,6 +86,10 @@ class CLIUpdates:
                 if container.status != 'running':
                     raise RuntimeError('account is not running')
                 view = self.request(state)
+                if state.get('cli'):
+                    if automatic:
+                        return view
+                    raise RuntimeError('CLI is pinned by ccgateway configuration; select a packaged version instead')
                 if automatic and (not view.get('auto_update') or not newer(view.get('latest_version'), view.get('catalog', {}).get('installed_version'))):
                     return view
                 lease = self.request(state, {'action': 'begin-install'})

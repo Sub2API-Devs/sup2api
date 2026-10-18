@@ -30,6 +30,7 @@ import docker
 import requests
 from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
 from images import Uploads, UploadError, MAX_CHUNK
+from cli_profiles import validate_profile, resolve_profile
 
 # Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
 # created by the editor before the account exists. Every key that reaches a
@@ -50,7 +51,7 @@ IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1')
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1')
 # Same reference rules as the core (CONTRACTS §49.16).
 IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
@@ -97,6 +98,10 @@ class InvalidImage(ValueError):
     """A business image carries credential or proxy environment variables."""
 
 
+class InvalidCLIProfile(ValueError):
+    """The selected image cannot provide the pinned CLI identity."""
+
+
 class UpgradeInProgress(RuntimeError):
     """The self-upgrade helper container is still running."""
 
@@ -137,7 +142,9 @@ def upstream_headers(inbound, secret):
     headers = {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
     for name in ('anthropic-version', 'anthropic-beta', 'x-ccgateway-session-scope', 'x-ccgateway-request-policy', 'x-claude-code-agent-id'):
         if name in inbound:
-            headers[name] = inbound[name]
+            # Forward all beta header lines; component parsing belongs to Worker.
+            values = inbound.get_all(name) if name == 'anthropic-beta' and hasattr(inbound, 'get_all') else None
+            headers[name] = ','.join(values) if values else inbound[name]
     return headers
 
 
@@ -483,13 +490,17 @@ class Manager:
                 enable_ipv6=False, ipam=docker.types.IPAMConfig(pool_configs=[
                     docker.types.IPAMPool(subnet=str(subnet), gateway=str(subnet.network_address + 1))]))
 
-    def provision(self, aid, auth=None, policy=None):
+    def provision(self, aid, auth=None, policy=None, cli=None):
         # Serialize allocation and replacement across accounts. Otherwise two
         # parallel reconciliations could select the same still-free subnet.
         with self.network_lock:
-            return self._provision(aid, auth, policy)
+            return self._provision(aid, auth, policy, cli)
 
-    def _provision(self, aid, auth=None, policy=None):
+    def _provision(self, aid, auth=None, policy=None, cli=None):
+        try:
+            cli = validate_profile(cli)
+        except ValueError as e:
+            raise BadRequest(str(e)) from e
         policy = network_policy(policy)
         auth = authentication(auth)
         d = self.dir(aid)
@@ -507,15 +518,26 @@ class Manager:
                 existing = self.owned(aid, 'app')
             # Defaults apply to new containers only. A tag/digest change must
             # never replace a working account (including after controller restart).
-            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint:
+            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and (cli is None or state.get('cli') == cli):
                 state['environment_pending'] = environment != state.get('environment', {'locale': '', 'timezone': ''})
                 self.save(aid, state)
                 return state
         # Credential/network changes must not incidentally upgrade the image.
-        image_ref = image_of(existing) if existing else self.app_image
+        if existing is None and cli is None and os.getenv('CCG_DEFAULT_CLI_VERSION'):
+            try:
+                cli = validate_profile({'version': os.environ['CCG_DEFAULT_CLI_VERSION'], 'request_mode': 'native', 'disable_auto_update': True})
+            except ValueError as e:
+                raise BadRequest('invalid controller default CLI version') from e
+        version_changed = cli is not None and (state or {}).get('cli', {}).get('version') != cli['version']
+        image_ref = image_of(existing) if existing and not version_changed else self.app_image
         image = self.ensure_image(image_ref)
         # Validate the new image before an existing container is replaced.
         check_business_image(image)
+        # Validate the selected version and its digest before stopping anything.
+        try:
+            cli_env = resolve_profile(self, image_ref, cli)
+        except (ValueError, docker.errors.DockerException) as e:
+            raise InvalidCLIProfile('requested CLI version/mode is unavailable or invalid in the selected image') from e
         if not state or state.get('network') != policy:
             old_subnets, occupied = [], []
             for n in self.docker.networks.list():
@@ -565,9 +587,9 @@ class Manager:
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
         self.oneshot(image_ref, entrypoint=['sh', '-ec'],
-            command=['mkdir -p /work/config /work/data; chown -R 1000:1000 /work'],
+            command=['mkdir -p /work/config /work/data; printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; chown -R 1000:1000 /work'],
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
-        env = {}
+        env = {'DISABLE_AUTOUPDATER': '1', **cli_env}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
         if auth['mode'] == 'api_key':
             env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
@@ -588,6 +610,8 @@ class Manager:
                      str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
             mem_limit='2g', nano_cpus=2000000000, **options)
         state['auth_mode'] = auth['mode']
+        if cli is not None:
+            state['cli'] = cli
         state['environment'] = environment
         state['environment_pending'] = False
         self.save(aid, state)
@@ -599,6 +623,10 @@ class Manager:
                 raise BadRequest('failed migration draft must be discarded')
             if not isinstance(desired, dict):
                 raise BadRequest('invalid configuration')
+            try:
+                validate_profile(desired.get('cli'))
+            except ValueError as e:
+                raise BadRequest(str(e)) from e
             revision = desired.get('revision', '')
             if not isinstance(revision, str) or not REVISION.fullmatch(revision):
                 raise BadRequest('invalid revision')
@@ -622,14 +650,14 @@ class Manager:
                 if self.public(aid)['revision'] == revision:
                     return self.public(aid)
                 self.shared.remove(aid)
-                state = self.provision(aid, desired.get('auth'), policy)
+                state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
                 return self.shared.apply(aid, state, desired)
             old = None
             with contextlib.suppress(docker.errors.NotFound):
                 old = self.owned(aid, 'egress')
             egress_image = image_of(old) if old else self.egress_image
             self.ensure_image(egress_image)
-            state = self.provision(aid, desired.get('auth'), policy)
+            state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
             write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
             if self.public(aid)['revision'] == revision:
                 app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
@@ -849,7 +877,7 @@ class Manager:
             current_image = image_of(self.owned(aid, 'app'))
         with contextlib.suppress(docker.errors.DockerException):
             target_id = self.app_image_id()
-        return {'account_id': aid, 'container': self.name(aid, 'app'),
+        return {'account_id': aid, 'container': self.name(aid, 'app'), 'cli': state.get('cli'),
                 'current_image': current_image, 'target_image': self.app_image,
                 'image_update_available': bool(current_image and target_id and current_image != target_id),
                 'target_image_available': bool(target_id),
@@ -1414,6 +1442,10 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             if not self.response_started:
                 self.fail(503, 'image_pull_failed')
+        except InvalidCLIProfile:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(409, 'cli_profile_unavailable')
         except Exception:
             self.close_connection = True
             if not self.response_started:

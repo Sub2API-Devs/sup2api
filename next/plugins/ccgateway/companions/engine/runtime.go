@@ -13,12 +13,14 @@ import (
 
 // Options configures one account's gateway without changing process-wide env.
 type Options struct {
-	InternalBaseURL                string
-	CLI, Plugin, DataDir, CacheDir string
-	Key, AdminKey, NativeTools     string
-	Timeout                        time.Duration
-	CacheLimit                     int64
-	Env                            []string
+	ExpectedCLIVersion, ExpectedCLISHA256, ExpectedCLIPatch string
+	RequestMode                                             string // opt-in single-request CLI transport: direct or build
+	InternalBaseURL                                         string
+	CLI, Plugin, DataDir, CacheDir                          string
+	Key, AdminKey, NativeTools                              string
+	Timeout                                                 time.Duration
+	CacheLimit                                              int64
+	Env                                                     []string
 }
 
 // Runtime shares the original runner, history and management APIs between
@@ -45,6 +47,9 @@ type Runtime struct {
 }
 
 func NewRuntime(o Options) (*Runtime, error) {
+	if err := validateRequestMode(o.RequestMode); err != nil {
+		return nil, err
+	}
 	if o.Key == "" {
 		return nil, fmt.Errorf("CCG_API_KEY is required for an account worker")
 	}
@@ -60,6 +65,9 @@ func NewRuntime(o Options) (*Runtime, error) {
 	}
 	version, err := checkVersion(cli)
 	if err != nil {
+		return nil, err
+	}
+	if err := verifyPinnedCLI(cli, version, o); err != nil {
 		return nil, err
 	}
 	root, err := filepath.Abs(o.DataDir)
@@ -118,6 +126,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 	}
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
+	g.RequestMode = o.RequestMode
 	admin := &authManager{cli: cli, key: o.AdminKey, work: work, proxy: proxy, version: version, requestLogs: g.RequestLogs, env: o.Env}
 	admin.authorizationChanged = func() error { return g.ownershipIndex().rotateAuthorization() }
 	resources, err := newResourceBroker(g, admin, root)
@@ -129,6 +138,15 @@ func NewRuntime(o Options) (*Runtime, error) {
 	if err != nil {
 		_ = resources.lease.Close()
 		return nil, err
+	}
+	if o.ExpectedCLIVersion != "" {
+		cliManagement.pinnedVersion = o.ExpectedCLIVersion
+		policy := cliManagement.policy
+		policy.AutoUpdate = false
+		if err := cliManagement.save(policy); err != nil {
+			_ = resources.lease.Close()
+			return nil, err
+		}
 	}
 	mux := http.NewServeMux()
 	mux.Handle(resourcePrefix+"/", resources)
@@ -220,6 +238,13 @@ func (r *Runtime) CLIVersion() string {
 		return r.catalog.status().Version
 	}
 	return r.Version
+}
+
+func (r *Runtime) ExecutionModes() []string {
+	if r.gateway != nil && r.gateway.RequestMode != "" {
+		return []string{"request_" + r.gateway.RequestMode}
+	}
+	return []string{"native"}
 }
 
 func (r *Runtime) CLIReady() bool {

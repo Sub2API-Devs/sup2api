@@ -21,9 +21,12 @@ type Config struct {
 	NativeTools string
 
 	// CLI 配置
-	CLIPath    string
-	CLIVersion string
-	PluginPath string
+	CLIPath     string
+	CLIVersion  string
+	CLISHA256   string
+	CLIPatch    string
+	PluginPath  string
+	RequestMode string
 
 	// 存储配置
 	ConfigDir  string
@@ -87,8 +90,11 @@ func Load() (*Config, error) {
 		AdminKey:         os.Getenv("CCG_ADMIN_KEY"),
 		NativeTools:      os.Getenv("CCG_NATIVE_TOOLS"),
 		CLIPath:          getEnv("WORKER_CLI_PATH", "/usr/local/bin/claude"),
-		CLIVersion:       getEnv("WORKER_CLI_VERSION", "2.1.288"),
+		CLIVersion:       os.Getenv("WORKER_CLI_VERSION"),
+		CLISHA256:        os.Getenv("CCG_CLI_SHA256"),
+		CLIPatch:         os.Getenv("CCG_CLI_PATCH"),
 		PluginPath:       os.Getenv("WORKER_PLUGIN_PATH"),
+		RequestMode:      os.Getenv("CCG_REQUEST_MODE"),
 		ConfigDir:        getEnv("CLAUDE_CONFIG_DIR", "/root/.claude"),
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
 		CacheDir:         getEnv("CACHE_DIR", filepath.Join(dataDir, "cache")),
@@ -108,6 +114,9 @@ func Load() (*Config, error) {
 
 // Validate 验证配置
 func (c *Config) Validate() error {
+	if c.RequestMode != "" && c.RequestMode != "direct" && c.RequestMode != "build" {
+		return fmt.Errorf("CCG_REQUEST_MODE must be direct or build, or empty for the native agent loop")
+	}
 	if c.WorkerID == "" {
 		return fmt.Errorf("WORKER_ID is required")
 	}

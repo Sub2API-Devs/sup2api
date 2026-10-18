@@ -633,7 +633,7 @@ class HandlerTests(Base):
         self.assertEqual(self.call('GET', '/health'),
                          (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
                                 'controller_image': '', 'network_policy_version': 1,
-                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1']}))
+                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1']}))
         self.m.version = 'abc123def456'
         self.assertEqual(self.call('GET', '/health')[1]['version'], 'abc123def456')
         self.assertEqual(self.call('POST', '/health', ''), (405, {'error': 'method_not_allowed'}))

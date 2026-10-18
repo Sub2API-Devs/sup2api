@@ -224,6 +224,7 @@ func (s *Service) invalidateRequests(keepConfig bool) {
 // cache and the other nodes theirs.
 func (s *Service) configChanged(ctx context.Context) {
 	s.invalidateRequests(false)
+	s.sweepSoon()
 	if s.Bus == nil {
 		return
 	}
@@ -247,6 +248,7 @@ func (s *Service) onConfigChanged(payload []byte) {
 	switch m.Type {
 	case ccgatewayChange:
 		s.invalidateRequests(false)
+		s.sweepSoon()
 	case "proxy":
 		s.invalidateRequests(true)
 		s.sweepSoon()

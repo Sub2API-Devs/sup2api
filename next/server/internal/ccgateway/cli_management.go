@@ -29,6 +29,7 @@ type cliCatalogState struct {
 }
 
 type cliManagementState struct {
+	PinnedVersion    string          `json:"pinned_version,omitempty"`
 	Catalog          cliCatalogState `json:"catalog"`
 	AutoUpdate       *bool           `json:"auto_update"`
 	AutoUpdateMode   string          `json:"auto_update_mode"`

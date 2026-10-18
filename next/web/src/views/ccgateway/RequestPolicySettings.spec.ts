@@ -56,6 +56,21 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
+  it.each(['direct', 'build'] as const)('saves %s and a pinned CLI version without showing agent-only controls', async mode => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    const w = await render()
+    await tab(w, 'cc').trigger('click')
+    await w.get('[data-testid="relay-mode"]').setValue(mode === 'direct' ? '0' : '1')
+    await w.get('[data-testid="cli-version"]').setValue('2.1.302')
+    expect(w.find('[data-testid="tool-search"]').exists()).toBe(false)
+    expect(w.find('[data-testid="client-attachments"]').exists()).toBe(false)
+    const policy = {...defaultRequestPolicy(), relay_mode: mode, cli_version: '2.1.302'}
+    mocks.put.mockResolvedValue(config(policy))
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.302'})}),expect.anything())
+    w.unmount()
+  })
+
   it('shows native CC tools and unsupported-field handling without legacy attachment or beta controls', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
@@ -63,7 +78,7 @@ describe('CCGateway settings categories and CC features', () => {
     await tab(w, 'cc').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
-    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'client-attachments', 'unsupported-requests'])
+    expect(cc.findAll('section[data-testid]').map(s => s.attributes('data-testid'))).toEqual(['cli-request-mode', 'cc-runtime-settings', 'client-attachments', 'unsupported-requests'])
     for (const id of ['tool-search', 'custom-tool-prefix', 'unknown-field']) {
       expect(cc.get(`[data-testid="${id}"]`).isVisible()).toBe(true)
     }
@@ -313,7 +328,9 @@ describe('CCGateway native request policy', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await tab(w, 'cc').trigger('click')
-    for (const id of ['relay-mode', 'relay-native-accounts', 'relay-passthrough-accounts', 'pass-upstream-errors']) {
+    expect(w.find('[data-testid="relay-mode"]').exists()).toBe(true)
+    expect(w.find('[data-testid="cli-version"]').exists()).toBe(true)
+    for (const id of ['relay-native-accounts', 'relay-passthrough-accounts', 'pass-upstream-errors']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
     const copy = locale === 'zh' ? zh : en
