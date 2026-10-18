@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Read-only list of the per-account containers (one container per Claude Code
+// Per-account runtime list and administrator cleanup action (one container per Claude Code
 // account). Authorizing happens on the Accounts page: each row links to the
 // account editor (/accounts?edit=<id>), where the container is started and
 // the Claude login is completed.
@@ -7,7 +7,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SSwitch, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SSwitch, STable, STooltip, confirm, toast, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
@@ -56,6 +56,7 @@ const own = useOwnership()
 const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
 const rows = ref<Row[]>([])
 const loading = ref(false)
+const cleaning = ref(false)
 const error = ref('')
 const canAccounts = computed(() => auth.has('account:read') || auth.has('account:own:read') || auth.has('account:update') || auth.has('account:own:update'))
 
@@ -117,6 +118,23 @@ async function load() {
 }
 onMounted(load)
 
+async function cleanupOrphans() {
+  if (cleaning.value || !auth.has('settings:manage')) return
+  if (!await confirm({ title: t('ccgateway.cleanup.title'), message: t('ccgateway.cleanup.confirm'), confirmText: t('ccgateway.cleanup.action'), danger: true })) return
+  cleaning.value = true
+  try {
+    // Core supplies the complete database list, including disabled accounts and
+    // active authorization preparations. The visible table is not authoritative.
+    const report = await api.post<{ deleted: number; failed: number }>('/system/ccgateway/runtime/cleanup', {}, { signal: AbortSignal.timeout(330000) })
+    toast(t('ccgateway.cleanup.done', report), report.failed ? 'error' : 'success')
+    await load()
+  } catch {
+    toast(t('ccgateway.cleanup.failed'), 'error')
+  } finally {
+    cleaning.value = false
+  }
+}
+
 async function setLogs(r: Row, enabled: boolean) {
   if (r.logsBusy || !canLogs(r)) return
   r.logsBusy = true
@@ -176,6 +194,7 @@ async function refreshAuth(r: Row) {
 <template>
   <SCard :title="t('ccgateway.runtimes.title')" :subtitle="t('ccgateway.runtimes.hint')">
     <template #actions>
+      <SButton v-if="auth.has('settings:manage')" size="sm" :loading="cleaning" :disabled="loading" data-testid="ccgateway-cleanup" @click="cleanupOrphans">{{ t('ccgateway.cleanup.action') }}</SButton>
       <SButton size="sm" icon="refresh" icon-only :loading="loading" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load" />
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>

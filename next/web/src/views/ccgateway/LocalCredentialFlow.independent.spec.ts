@@ -45,4 +45,30 @@ describe('independent local credential flow regression', () => {
       wrapper.unmount()
     }
   })
+
+  it('starts a fresh login in place even when old credentials are present, without treating them as completion', async () => {
+    mocks.get.mockImplementation(async (url: string) => url.endsWith('/health') ? { healthy: true, logged_in: true, credential_present: true } : url.endsWith('/session') ? null : { status: 'ready' })
+    mocks.post.mockResolvedValue({})
+    const wrapper = mount(Auth, { props: { reauthKey: '22', reauthAccountId: 22, canEdit: true }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(mocks.get).toHaveBeenCalledWith('/system/ccgateway/accounts/22/health')
+    expect(mocks.post.mock.calls.some(([url]) => url === '/system/ccgateway/accounts/22/start')).toBe(true)
+    expect(wrapper.emitted('state')?.every(([s]) => !(s as { authorized: boolean }).authorized)).toBe(true)
+    expect(wrapper.emitted('authorized')).toBeUndefined()
+    wrapper.unmount()
+    expect(mocks.del).not.toHaveBeenCalled()
+  })
+
+  it('cancels a login session returned after the editor was closed', async () => {
+    mocks.get.mockImplementation(async (url: string) => url.endsWith('/health') ? { healthy: true, logged_in: true } : url.endsWith('/session') ? null : { status: 'ready' })
+    let finish!: (value: unknown) => void
+    mocks.post.mockImplementation((url: string) => url.endsWith('/start') ? new Promise(resolve => { finish = resolve }) : Promise.resolve({}))
+    const wrapper = mount(Auth, { props: { reauthKey: '22', reauthAccountId: 22, canEdit: true }, global: { plugins: [i18n] } })
+    await flushPromises()
+    wrapper.unmount()
+    finish({ session_id: 'late-login', url: 'https://claude.ai/oauth/authorize', expires_at: new Date(Date.now() + 60000).toISOString() })
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/accounts/22/cancel', { session_id: 'late-login' })
+    expect(mocks.del).not.toHaveBeenCalled()
+  })
 })

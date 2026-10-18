@@ -1,4 +1,5 @@
 export default {
+  cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {
     title: 'Claude Code 版本与请求模式', mode: '请求模式', version: 'CLI 版本',
     direct: '零注入透传（direct）', build: '组件构建（build）', native: '原有 Agent 路径（native）',
@@ -115,7 +116,7 @@ export default {
       fixReauth: {
         no_proxy: '重新授权的容器使用账号已保存的代理。请在上方「代理」选择一个代理并保存，然后删除容器重新开始。',
         proxy_disabled: '账号已保存的代理已停用。请在上方「代理」换一个可用代理并保存后删除容器重新开始，或到代理页重新启用该代理后重新同步。',
-        account_disabled: '账号已停用，当前容器不运行。仍可重新授权；完成后账号保持停用，需要在账号列表手动启用。',
+        account_disabled: '账号已停用，当前容器不运行。请先启用账号，再在原容器中重新授权。',
         unknown: '请检查账号状态与代理设置后重新同步，或删除容器重新开始。'
       },
       pickProxy: '去选择代理', openProxies: '打开代理页'
@@ -123,26 +124,26 @@ export default {
     proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: '不选代理时容器直连出网，使用服务器自身的 IP；选了代理但代理被停用时容器会停止，不会改为直连。', proxyDirect: '直连（不使用代理）'
   },
   reauth: {
-    replaceTitle: '手动替换容器', prepare: '准备新容器', migrate: '迁移授权文件', switchNow: '确认切换到新容器',
+    replaceTitle: "原地重新授权", prepare: "开始授权", migrate: '迁移授权文件', switchNow: "确认授权结果",
     currentImage: '当前容器镜像 ID', targetImage: '新建容器镜像', imageMismatch: '镜像不同，仅提示。保存配置、同步和普通重启不会因镜像差异替换当前容器。',
-    migrateMessage: '创建独立新容器，复制现有 CLI 配置及授权文件。旧容器继续服务，检查本地凭据后由你确认切换；在线有效性以实际请求为准。网关请求日志和持久缓存不复制；旧数据卷保留供恢复。',
-    freshMessage: '创建独立新容器并重新授权。旧容器继续服务，授权完成后由你确认切换；旧数据卷保留供恢复。',
+    migrateMessage: "使用原容器及其现有数据，无需迁移。",
+    freshMessage: "在原容器中完成重新授权。",
     container: '容器', login: 'Claude 登录', checking: '检查中…',
     loginState: { authorized: '凭据已保存', notAuthorized: '未保存凭据', unknown: '未知（容器未就绪）' },
-    hint: '重新授权会用新的 Claude 登录替换当前登录，并清空该账号的全部历史；完成前账号继续用当前登录服务。',
+    hint: "在当前容器中重新登录 Claude，保留容器、数据卷和会话历史。完成后刷新账号状态。",
     hintLoggedOut: '该账号的容器尚未登录 Claude，请重新授权。',
     confirmTitle: '重新授权该账号？',
-    confirmMessage: '将为该账号启动一个新的容器并重新登录 Claude。\n\n新登录成功后会替换旧登录，并清空该账号的全部历史：Claude 登录、对话会话、额度快照、最近测试结果、错误与冷却状态。\n\n完成前账号继续使用旧登录正常服务；中途取消或关闭编辑器不会改变任何内容。',
+    confirmMessage: "在当前账号容器中重新授权，保留数据卷和历史。取消仅关闭本次登录流程。",
     confirmButton: '开始重新授权',
     startFailed: '无法开始重新授权',
     flowTitle: '重新授权',
-    inProgress: '准备替换容器：本地凭据保存后，点击确认切换才会使用新容器。此前账号继续使用旧容器；取消会删除新容器。',
+    inProgress: "正在当前容器中重新授权，数据卷和会话历史保留。",
     cancel: '取消重新授权',
-    signedIn: '新容器凭据已保存，等待确认切换。',
-    committing: '正在按账号配置新容器并替换旧登录，可能需要几十秒…',
-    commitFailed: '新登录未能替换旧登录（账号仍使用旧登录）',
-    commitRetry: '再次替换',
-    done: '替换完成：账号已切换到新容器，旧数据卷保留'
+    signedIn: "新授权已保存，正在确认账号状态。",
+    committing: "正在确认授权并刷新账号状态…",
+    commitFailed: "授权后的账号状态更新失败，可重试确认",
+    commitRetry: "重试确认",
+    done: "重新授权完成，继续使用原容器"
   },
   status: { creating: '创建中', ready: '已就绪', blocked: '已停止', pending: '同步中', unknown: '未知' },
   runtimeInstall: {
@@ -158,7 +159,7 @@ export default {
     done: '控制器部署配置已更新', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态',
     readOnly: '安装或升级运行环境需要 settings:manage 权限。',
     subtitleController: '控制面板模式下，镜像随 ccgateway 插件包分发，可一键推送给控制器；也可手动上传或由控制器拉取。下表核对控制器报告的镜像；各账号实际镜像请查看账号容器状态。',
-    confirmMessageController: '将经控制面板把控制器的目标镜像设为已保存的镜像（控制器本地没有会尝试拉取）；控制器镜像不同时会自升级并等待其恢复。现有账号容器不会因此重建，新镜像用于新建或重新授权的容器。'
+    confirmMessageController: '将经控制面板把控制器的目标镜像设为已保存的镜像（控制器本地没有会尝试拉取）；控制器镜像不同时会自升级并等待其恢复。现有账号容器不会因此重建，新镜像用于新建容器。'
   },
   bundled: {
     groupTitle: '插件内置镜像',
@@ -204,7 +205,7 @@ export default {
     confirmTitle: '上传并启用镜像？',
     confirm: {
       app: '上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）：逐个替换容器内程序并只重启该容器，登录状态不受影响；正在处理请求的账号最多等待 2 分钟，仍忙则跳过，可稍后重试。',
-      egress: '加载后作为出口代理镜像生效。现有账号容器不会被替换，新建或重新授权的容器使用新镜像。',
+      egress: '加载后作为出口代理镜像生效。现有账号容器不会被替换，新建容器使用新镜像。',
       controller: '加载后控制器会用新镜像自升级（约 1–2 分钟），期间账号授权与模型请求可能短暂中断；健康检查失败会自动回滚到原控制器。'
     },
     appHint: '上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）。'
@@ -307,6 +308,8 @@ export default {
     proxy_not_found: '选择的代理不存在或你无权使用，请换一个代理',
     account_disabled: '账号已停用',
     draft_not_found: '这个容器已不存在（可能因长时间未操作被自动清理），请重新启动容器',
+    runtime_not_ready: '原账号容器尚未就绪，请先同步运行环境再重新授权',
+    runtime_cleanup_failed: '运行环境清理失败，可重试',
     draft_not_authorized: '容器尚未完成 Claude 授权',
     unauthorized: '容器控制器拒绝了管理密钥',
     not_found: '容器不存在',

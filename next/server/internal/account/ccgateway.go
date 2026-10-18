@@ -200,9 +200,8 @@ func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int6
 }
 
 // reauthorizeCCGateway serves POST /system/ccgateway/accounts/:id/reauthorize:
-// the open re-authorization draft of the account (200 {key}) or a new one
-// (201 {key}), egressing through the account's proxy. The console drives it
-// with the draft endpoints and commits it.
+// validate and return the existing runtime (200 {key,in_place:true}).
+// The console starts OAuth through the account endpoints, then commits status.
 func (s *Service) reauthorizeCCGateway(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	ctx := audit.Context(c)
@@ -225,43 +224,23 @@ func (s *Service) reauthorizeCCGateway(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument)
 		return
 	}
-	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	key, _, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	if !created {
-		if request.AuthorizationMode == "migrate" {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("An authorization draft already exists; finish or cancel it before migrating."))
-			return
-		}
-		httpapi.OK(c, gin.H{"key": key})
-		return
-	}
 	if err := audit.Audit(ctx, s.d.DB.Pool, uid, "account.ccgateway_reauthorize_start", "account", itoa(id),
-		map[string]any{"runtime": key, "authorization_mode": request.AuthorizationMode}); err != nil {
+		map[string]any{"runtime": key, "authorization_mode": "in_place"}); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	if request.AuthorizationMode == "migrate" {
-		tctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-		defer cancel()
-		if err := s.d.CCGateway.MigrateReauth(tctx, id, key, core.OwnerScope(ctx, "settings:manage")); err != nil {
-			// Return the draft so the console can cancel it safely; the old
-			// runtime was never modified and remains selected for the account.
-			httpapi.Fail(c, core.ErrUnavailable.WithMessage("Authorization migration failed; the current account is unchanged.").WithDetails(map[string]any{"reason": "migration_failed", "draft_key": key}))
-			return
-		}
-	}
-	httpapi.Created(c, gin.H{"key": key})
+	httpapi.OK(c, gin.H{"key": key, "in_place": true})
 }
 
 // commitCCGatewayReauth serves POST
-// /system/ccgateway/accounts/:id/reauthorize/:key/commit: the signed-in
-// draft becomes the account's runtime and the account's state starts over
-// (status error -> active, cooldown, quota snapshot, last test, credential
-// refresh state), in the transaction that swaps the runtimes. 200 with the
-// account view.
+// /system/ccgateway/accounts/:id/reauthorize/:key/commit: verify login on the
+// current runtime and reset account error, cooldown, quota and refresh state.
+// The runtime mapping and data remain in place. Returns the account view.
 func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	ctx := audit.Context(c)

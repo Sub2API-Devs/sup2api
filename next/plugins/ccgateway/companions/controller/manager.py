@@ -51,7 +51,7 @@ IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1')
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1')
 # Same reference rules as the core (CONTRACTS §49.16).
 IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
@@ -78,7 +78,7 @@ SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
                    r'connection|tunnel|worker|egress|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
-RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
+RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller|cleanup)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
 
 
@@ -796,18 +796,30 @@ class Manager:
                 self.shared.remove(aid)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
-    def delete(self, aid, account=False):
+    def delete(self, aid, account=False, purge=False):
         """Remove a runtime completely; idempotent. Drafts always; an account
         runtime only when the caller says so explicitly (account=True): the
-        core retires it after a re-authorization replaced it."""
+        purge=True also removes account data and recovery metadata."""
         check(aid)
         if not DRAFT.fullmatch(aid) and not account:
             raise NotDraft('only draft runtimes can be deleted')
         with self.guard(aid):
+            # Validate every named resource before deleting any of them.
+            # A same-name foreign resource must never be partially dismantled.
+            for role in ('egress', 'app'):
+                with contextlib.suppress(docker.errors.NotFound):
+                    self.owned(aid, role)
+            for collection, roles in ((self.docker.networks, ('net', 'uplink')),
+                                      (self.docker.volumes, ('data',))):
+                for role in roles:
+                    with contextlib.suppress(docker.errors.NotFound):
+                        resource = collection.get(self.name(aid, role))
+                        if (resource.attrs.get('Labels') or {}).get(LABEL) != aid:
+                            raise ValueError('resource ownership mismatch')
             if ((self.state(aid) or {}).get('egress_backend') == 'shared_xray'
                     or ((self.root / 'shared-egress' / 'state.json').exists() and aid in self.shared.data['bindings'])):
                 self.shared.remove(aid, disconnect=True)
-            if account and self.state(aid):
+            if account and not purge and self.state(aid):
                 backup = self.root / 'backups'
                 backup.mkdir(mode=0o700, exist_ok=True)
                 write_private(backup / (aid + '.json'), json.dumps(self.state(aid)))
@@ -828,14 +840,25 @@ class Manager:
                 volume = self.docker.volumes.get(self.name(aid, 'data'))
                 if (volume.attrs.get('Labels') or {}).get(LABEL) != aid:
                     raise ValueError('volume ownership mismatch')
-                if not account:
+                if not account or purge:
                     volume.remove(force=True)
                 # Retired account data is retained for manual recovery. Draft
                 # cancellation still deletes its independent volume.
             d = self.dir(aid)
             if d.is_dir() and not d.is_symlink():
                 shutil.rmtree(d)
+            if purge:
+                with contextlib.suppress(FileNotFoundError):
+                    (self.root / 'backups' / (aid + '.json')).unlink()
         return {'deleted': True}
+
+    def cleanup_inventory(self):
+        from cleanup import inventory
+        return inventory(self)
+
+    def cleanup_runtimes(self, desired):
+        from cleanup import cleanup
+        return cleanup(self, desired)
 
     def runtimes(self):
         out = []
@@ -1133,9 +1156,9 @@ class Handler(BaseHTTPRequestHandler):
             raise BadRequest('invalid body')
         return self.rfile.read(int(raw))
 
-    def read_json(self):
+    def read_json(self, limit=64 << 10):
         try:
-            return json.loads(self.read_body())
+            return json.loads(self.read_body(limit))
         except ValueError as e:
             raise BadRequest('invalid JSON') from e
 
@@ -1152,6 +1175,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route.re is RUNTIME_ROUTE:
                 kind = route[1]
+                if kind == 'cleanup' and self.command == 'GET':
+                    self.read_body()
+                    return self.reply(200, manager.cleanup_inventory())
+                if kind == 'cleanup' and self.command == 'POST':
+                    return self.reply(200, manager.cleanup_runtimes(self.read_json(8 << 20)))
                 if kind == 'images' and self.command == 'GET':
                     self.read_body()
                     return self.reply(200, manager.runtime_images())
@@ -1337,7 +1365,10 @@ class Handler(BaseHTTPRequestHandler):
                     # Deleting an account's runtime needs the header naming it
                     # again (a retired runtime after re-authorization).
                     account = self.headers.get('X-CCG-Delete-Account', '') == aid
-                    return self.reply(200, manager.delete(aid, account=account))
+                    purge = self.headers.get('X-CCG-Delete-Data', '') == '1'
+                    if purge and not account:
+                        raise BadRequest('full deletion requires account confirmation')
+                    return self.reply(200, manager.delete(aid, account=account, purge=purge))
                 except NotDraft:
                     return self.fail(405, 'method_not_allowed')
             if path == 'config' and self.command == 'PUT':

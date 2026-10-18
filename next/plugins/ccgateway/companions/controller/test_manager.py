@@ -633,7 +633,36 @@ class HandlerTests(Base):
         self.assertEqual(self.call('GET', '/health'),
                          (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
                                 'controller_image': '', 'network_policy_version': 1,
-                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1']}))
+                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1']}))
+
+    def test_explicit_account_delete_purges_data(self):
+        self.apply('21')
+        self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Data': '1'})[0], 400)
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Account': '21', 'X-CCG-Delete-Data': '1'}), (200, {'deleted': True}))
+        self.assertNotIn('ccg-21-data', self.fake.volumes.items)
+
+    def test_cleanup_http_requires_auth_and_complete_snapshot(self):
+        self.fake.containers.list = lambda **kwargs: list(self.fake.containers.items.values())
+        self.fake.volumes.list = lambda **kwargs: list(self.fake.volumes.items.values())
+        self.apply('21')
+        self.apply('22')
+        self.assertEqual(self.call('GET', '/runtime/cleanup', key='wrong')[0], 401)
+        code, inventory = self.call('GET', '/runtime/cleanup')
+        self.assertEqual(code, 200)
+        self.assertEqual(self.call('POST', '/runtime/cleanup', '{}')[0], 400)
+        code, result = self.call('POST', '/runtime/cleanup', json.dumps({'keep_keys': ['21'], 'candidates': inventory['runtimes']}))
+        self.assertEqual((code, result['deleted'], result['failed']), (200, 1, 0))
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.assertNotIn('ccg-22-data', self.fake.volumes.items)
+
+    def test_cleanup_accepts_inventory_larger_than_normal_management_body(self):
+        candidates = [{'key': str(i), 'identity': 'a' * 64} for i in range(1000, 1800)]
+        body = json.dumps({'keep_keys': [], 'candidates': candidates})
+        self.assertGreater(len(body), 64 << 10)
+        code, result = self.call('POST', '/runtime/cleanup', body)
+        self.assertEqual((code, result['deleted'], result['failed']), (200, 0, 0))
+        self.assertEqual(len(result['results']), 800)
         self.m.version = 'abc123def456'
         self.assertEqual(self.call('GET', '/health')[1]['version'], 'abc123def456')
         self.assertEqual(self.call('POST', '/health', ''), (405, {'error': 'method_not_allowed'}))

@@ -6,8 +6,9 @@ import AccountRuntimes from './AccountRuntimes.vue'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn(), manage: true }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), manage: true }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
+vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: async () => true, toast: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'settings:manage' ? mocks.manage : key === 'account:read', me: { id: 1 } }) }))
 
 describe('account runtime debug log switches', () => {
@@ -50,6 +51,15 @@ describe('account runtime debug log switches', () => {
     const w = await render()
     expect(w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').attributes('disabled')).toBeDefined()
     expect(mocks.put).not.toHaveBeenCalled()
+    expect(w.find('[data-testid="ccgateway-cleanup"]').exists()).toBe(false)
+    w.unmount()
+  })
+  it('starts authoritative cleanup without sending the paginated account rows', async () => {
+    mocks.post.mockResolvedValue({ deleted: 2, failed: 0 })
+    const w = await render()
+    await w.get('[data-testid="ccgateway-cleanup"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/cleanup', {}, expect.objectContaining({ signal: expect.any(AbortSignal) }))
     w.unmount()
   })
   it('does not invent limits or partial-retention guarantees for legacy Workers', async () => {

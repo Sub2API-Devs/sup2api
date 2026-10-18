@@ -59,6 +59,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
 	// Worker update in place, never recreating account containers (§53.7).
 	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
+	r.Perm("POST", "/system/ccgateway/runtime/cleanup", "settings:manage", s.runtimeCleanup)
 	// The shared-container endpoints (status, proxy, auth/*, remote-action)
 	// are gone: per-account runtimes are the only mode (§53.9).
 	r.Perm("POST", "/system/ccgateway/remote-test", "settings:manage", s.remoteTest)

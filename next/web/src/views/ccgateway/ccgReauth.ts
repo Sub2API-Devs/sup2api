@@ -1,32 +1,26 @@
-// Re-authorization of a saved Claude Code (CCGateway managed) account
-// (docs/CCGATEWAY-REAUTH.md). The account keeps serving with its current
-// runtime while a re-authorization draft (POST accounts/:id/reauthorize) goes
-// through the usual steps; once the draft is signed in, the console commits it
-// (POST accounts/:id/reauthorize/:key/commit) and the account switches to the
-// new login with a clean slate. Closing the editor deletes the draft.
-//
+// In-place authorization keeps the account runtime and its data.
 // Pure helpers, so the decisions are unit-tested apart from the component.
 import { containerPhase, isDraftKey, type CcgContainer } from './ccgAuthFlow'
 
-/** What the step flow reports about the draft it drives. */
+/** What the step flow reports about the runtime it drives. */
 export interface CcgFlowState {
   key: string | null
   authorized: boolean
 }
 
 export interface CcgReauthState {
-  /** The open re-authorization draft, null while there is none. */
+  /** The open re-authorization runtime, null while there is none. */
   key: string | null
   /** Last state reported by the step flow. */
   flow: CcgFlowState
   /** POST .../commit is running. */
   committing: boolean
-  /** The draft whose commit failed: not committed again by itself until a new login or a retry. */
+  /** The runtime whose commit failed: not committed again by itself until a new login or a retry. */
   failedKey: string | null
 }
 
 /**
- * Eligibility for the manual switch button, not an automatic action.
+ * Eligibility for completing the account status reset.
  * A failed commit requires an explicit retry or a fresh login.
  */
 export function shouldCommit(s: CcgReauthState): boolean {
@@ -34,9 +28,9 @@ export function shouldCommit(s: CcgReauthState): boolean {
 }
 
 /**
- * After a refused commit (details.reason): the draft is gone → start a new
- * re-authorization; the draft is not signed in → re-check its login (the steps
- * show where it stands); anything else → keep the draft and offer a retry.
+ * After a refused commit (details.reason): the runtime changed → start a new
+ * re-authorization; the runtime is not signed in → re-check its login (the steps
+ * show where it stands); anything else → keep the runtime and offer a retry.
  */
 export type CcgCommitRecovery = 'restart' | 'recheck' | 'retry'
 export function commitRecovery(reason: string): CcgCommitRecovery {
@@ -55,24 +49,26 @@ export function accountSummary(status: string | null | undefined, loggedIn: bool
 
 // ---------------------------------------------------------------- pending re-authorization (survives a page reload)
 
+export const isRuntimeKey = (value: unknown): value is string => typeof value === 'string' && (isDraftKey(value) || /^[1-9][0-9]{0,17}$/.test(value))
+
 type KeyStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
 export const reauthStoreKey = (accountId: number) => `sub2api.ccgReauth.${accountId}`
 
-/** The re-authorization draft this tab left open for the account, if any. */
+/** The re-authorization runtime this tab left open for the account, if any. */
 export function readPendingReauth(store: KeyStore | null | undefined, accountId: number): string | null {
   try {
     const v = store?.getItem(reauthStoreKey(accountId))
-    return isDraftKey(v) ? v : null
+    return isRuntimeKey(v) ? v : null
   } catch {
     return null
   }
 }
 
-/** Remembers (key) or forgets (null) the open re-authorization draft of the account. */
+/** Remembers (key) or forgets (null) the open re-authorization runtime of the account. */
 export function rememberReauth(store: KeyStore | null | undefined, accountId: number, key: string | null): void {
   try {
-    if (key && isDraftKey(key)) store?.setItem(reauthStoreKey(accountId), key)
+    if (key && isRuntimeKey(key)) store?.setItem(reauthStoreKey(accountId), key)
     else store?.removeItem(reauthStoreKey(accountId))
   } catch {
     // storage unavailable: nothing to resume after a reload

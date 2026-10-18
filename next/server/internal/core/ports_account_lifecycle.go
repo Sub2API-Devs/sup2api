@@ -29,6 +29,12 @@ type AccountActionResource interface {
 	AccountAction(context.Context, int64, string) (any, error)
 }
 
+// AccountDeletionResource records durable cleanup intent in the account
+// deletion transaction. Reconciliation performs the remote cleanup afterward.
+type AccountDeletionResource interface {
+	MarkAccountDeleted(context.Context, pgx.Tx, int64) error
+}
+
 type AccountLifecycleResource interface {
 	PrepareAccount(context.Context, AccountPreparation) error
 	UpdateAccountPreparation(context.Context, pgx.Tx, AccountPreparation) error

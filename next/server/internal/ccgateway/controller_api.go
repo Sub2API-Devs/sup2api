@@ -58,6 +58,10 @@ func (s *Service) controllerCall(ctx context.Context, cfg Config, method, path s
 // controllerJSON sends in (nil: no body) and decodes a 2xx answer into out
 // (nil: ignored). Failures are mapped to the console's error shape.
 func (s *Service) controllerJSON(ctx context.Context, cfg Config, method, path string, in, out any) *core.Error {
+	return s.controllerJSONLimit(ctx, cfg, method, path, in, out, 1<<20)
+}
+
+func (s *Service) controllerJSONLimit(ctx context.Context, cfg Config, method, path string, in, out any, limit int64) *core.Error {
 	var body io.Reader
 	length := int64(-1)
 	header := http.Header{}
@@ -72,8 +76,8 @@ func (s *Service) controllerJSON(ctx context.Context, cfg Config, method, path s
 	}
 	defer close()
 	defer res.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(res.Body, 1<<20+1))
-	if e != nil || len(raw) > 1<<20 {
+	raw, e := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if e != nil || int64(len(raw)) > limit {
 		return reasonError(core.ErrUnavailable, "controller_unhealthy")
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {

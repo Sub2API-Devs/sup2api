@@ -12,9 +12,9 @@
 //   A proxy change calls PUT drafts/:key; unmounting (editor closed, account
 //   type switched) deletes a draft that was not adopted (best effort, the
 //   core's sweep removes the rest).
-// - `reauthKey` (saved account, see CCGatewayAccountReauth): the
-//   re-authorization draft exists already, ② → ③ → ④ run on it; the parent
-//   owns the draft (commits or deletes it), `restart` asks it for a new one.
+// - `reauthKey` + `reauthAccountId` (saved account): use the existing account
+//   runtime. A successful OAuth callback refreshes its credentials in place;
+//   closing the editor cancels only the login session, never the runtime.
 //
 // While a draft is shown it is touched every minute so the core's sweep does
 // not take it while the user is busy elsewhere. Every state and error is a
@@ -56,7 +56,7 @@ import {
   type CcgStep
 } from './ccgAuthFlow'
 
-const props = defineProps<{ draft?: boolean; reauthKey?: string | null; proxyId?: number | null; canEdit?: boolean; preparationUrl?: string; settings?: Record<string, unknown>; configurationReady?: boolean }>()
+const props = defineProps<{ draft?: boolean; reauthKey?: string | null; reauthAccountId?: number; proxyId?: number | null; canEdit?: boolean; preparationUrl?: string; settings?: Record<string, unknown>; configurationReady?: boolean }>()
 const emit = defineEmits<{
   (e: 'state', s: { key: string | null; authorized: boolean }): void
   (e: 'authorized'): void
@@ -76,7 +76,9 @@ const HEARTBEAT_MS = 60_000
 const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 
 /** A re-authorization of a saved account (the draft is given); otherwise a new account's draft. */
-const reauth = computed(() => !props.draft && isDraftKey(props.reauthKey))
+const inPlace = computed(() => Number.isSafeInteger(props.reauthAccountId) && (props.reauthAccountId ?? 0) > 0)
+const reauthCompleted = ref(false)
+const reauth = computed(() => !props.draft && (inPlace.value || isDraftKey(props.reauthKey)))
 const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
 const canManage = computed(() => auth.has('settings:manage') || (reauth.value ? !!props.canEdit : auth.has([...ACCOUNT_KEYS.create])))
 
@@ -86,7 +88,7 @@ const draftProxy = ref<number | null | undefined>(undefined)
 /** The draft shown: the new account's, or the re-authorization's. */
 const key = computed(() => (reauth.value ? props.reauthKey! : draftKey.value))
 /** Base path of the draft runtime, '' while there is none. */
-const target = computed(() => (key.value ? `${draftsBase.value}/${key.value}` : ''))
+const target = computed(() => inPlace.value ? `/system/ccgateway/accounts/${props.reauthAccountId}` : (key.value ? `${draftsBase.value}/${key.value}` : ''))
 const pickedProxy = () => props.proxyId ?? null
 
 const status = ref<CcgRuntimeStatus | null>(null)
@@ -120,7 +122,7 @@ const flow = computed(() => ({
   proxy: true, // no proxy is direct egress
   created: !!target.value,
   container: failure.value?.step === 'container' ? ('error' as const) : phase.value,
-  loggedIn: health.value ? health.value.logged_in : null,
+  loggedIn: inPlace.value && !reauthCompleted.value ? false : (health.value ? health.value.logged_in : null),
   hasSession: !!session.value,
   opened: opened.value,
   errorStep: failure.value?.step ?? null
@@ -238,7 +240,7 @@ async function adoptPendingSession(base: string): Promise<boolean> {
 /** The link is requested as soon as the draft's container is ready (once per draft). */
 function maybeAutoStart() {
   if (autoStarted || !canManage.value) return
-  if (phase.value !== 'ready' || !canAutoStartAuthorization(health.value) || session.value || acting.value) return
+  if (phase.value !== 'ready' || (!inPlace.value && !canAutoStartAuthorization(health.value)) || session.value || acting.value) return
   autoStarted = true
   void start()
 }
@@ -257,6 +259,7 @@ function resetTarget() {
   clearSession()
   failure.value = null
   autoStarted = false
+  reauthCompleted.value = false
   sessionChecked = false
 }
 
@@ -369,12 +372,16 @@ async function start() {
   try {
     const data = await api.post<CcgAuthSession>(`${base}/start`, {}, longCall())
     if (!usableSession(data)) throw new Error(t('ccgateway.accountAuth.badSession'))
-    if (base !== target.value) return
+    if (!alive || base !== target.value) {
+      // The editor may close before /start returns its session ID.
+      await api.post(`${base}/cancel`, { session_id: data.session_id }).catch(() => {})
+      return
+    }
     session.value = data
     opened.value = false
     code.value = ''
   } catch (e) {
-    if (base === target.value) fail('login', 'startFailed', e)
+    if (alive && base === target.value) fail('login', 'startFailed', e)
   } finally {
     busy.value = ''
   }
@@ -398,6 +405,7 @@ async function complete() {
   busy.value = ''
   if (!alive || base !== target.value) return
   if (!loggedIn) return fail('code', 'notConfirmed')
+  reauthCompleted.value = true
   clearSession()
   // A re-authorization is announced once committed (by the parent).
   if (!reauth.value) toast(t('ccgateway.accountAuth.authorizedToast'), 'success')
@@ -496,13 +504,15 @@ onBeforeUnmount(() => {
   ++serial
   clearInterval(pollTimer)
   clearInterval(clockTimer)
-  clearSession()
+  if (inPlace.value) void cancel()
+  else clearSession()
   // Editor closed, account type switched, back to the type picker: the entry is abandoned.
   // (A re-authorization draft belongs to the parent, which deletes or commits it.)
   if (props.draft && draftKey.value && !adopted) discard(draftKey.value)
 })
 
 defineExpose({
+  cancelAuthorization: cancel,
   /** The account was saved with this draft: keep its runtime. */
   adopt() {
     adopted = true

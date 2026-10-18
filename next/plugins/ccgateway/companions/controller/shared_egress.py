@@ -149,11 +149,13 @@ class SharedEgress:
             cmd.append(tag)
         return self.exec(c, cmd)
 
-    def ensure(self, policy):
+    def ensure(self, policy, existing_only=False):
         from manager import write_private
         try:
             c = self.container()
         except docker.errors.NotFound:
+            if existing_only:
+                raise
             image = self.m.ensure_image(self.image)
             if image.attrs.get('Config', {}).get('Labels', {}).get(SCHEMA) != '1':
                 raise RuntimeError('invalid shared egress image')
@@ -172,6 +174,8 @@ class SharedEgress:
                 environment={'GOMAXPROCS': '2'}, restart_policy={'Name': 'unless-stopped'},
                 log_config=docker.types.LogConfig(type='json-file', config={'max-size': '10m', 'max-file': '3'}))
         if c.status != 'running':
+            if existing_only:
+                raise RuntimeError('shared gateway stopped during cleanup')
             c.start()
         c.reload()
         boot = (c.id, c.attrs['State']['StartedAt'])
@@ -331,13 +335,15 @@ class SharedEgress:
             except docker.errors.NotFound:
                 c = None
             if c is not None and c.status == 'running':
-                c = self.ensure((self.m.state(aid) or {})['network'])
+                c = self.ensure((self.m.state(aid) or {}).get('network'), existing_only=True)
                 self.sync(c)
             if disconnect:
                 if c is not None:
                     with contextlib.suppress(docker.errors.NotFound):
                         net = self.m.docker.networks.get(self.m.name(aid, 'net'))
-                        net.disconnect(c, force=True)
+                        c.reload()
+                        if net.name in c.attrs.get('NetworkSettings', {}).get('Networks', {}):
+                            net.disconnect(c, force=True)
                 del self.data['bindings'][aid]
                 self.save()
 

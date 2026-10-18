@@ -1,4 +1,5 @@
 export default {
+  cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Request mode', version: 'CLI version',
     direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)', native: 'Existing agent path (native)',
@@ -115,7 +116,7 @@ export default {
       fixReauth: {
         no_proxy: 'The re-authorization container uses the account’s saved proxy. Pick a proxy under "Proxy" above and save, then delete the container and start over.',
         proxy_disabled: 'The account’s saved proxy is disabled. Pick another proxy under "Proxy" above, save, then delete the container and start over; or enable the proxy again on the Proxies page and synchronize again.',
-        account_disabled: 'The account is disabled, so its container is not running. You can still re-authorize it; the account stays disabled afterwards until you enable it in the list.',
+        account_disabled: 'The account is disabled and its container is stopped. Enable the account before re-authorizing in its existing container.',
         unknown: 'Check the account status and its proxy, then synchronize again, or delete the container and start over.'
       },
       pickProxy: 'Pick a proxy', openProxies: 'Open Proxies'
@@ -123,26 +124,26 @@ export default {
     proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Without a proxy the container connects directly from the server’s own IP; if the chosen proxy is disabled the container stops instead of falling back to direct.', proxyDirect: 'direct (no proxy)'
   },
   reauth: {
-    replaceTitle: 'Replace container manually', prepare: 'Prepare container', migrate: 'Migrate authorization files', switchNow: 'Confirm switch to new container',
+    replaceTitle: "Re-authorize in place", prepare: "Start authorization", migrate: 'Migrate authorization files', switchNow: "Confirm authorization",
     currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'Image mismatch is informational. Saving settings, syncing and ordinary restarts do not replace this container because of an image change.',
-    migrateMessage: 'Create an independent container and copy the existing CLI configuration and authorization. Confirm the switch after checking the local credentials; actual requests determine online validity. Gateway request logs and cache are not copied; the old volume is retained for recovery.',
-    freshMessage: 'Create an independent container and authorize it again. The old container keeps serving until you confirm the switch. Its data volume is retained for recovery.',
+    migrateMessage: "The existing container and data are reused; migration is unnecessary.",
+    freshMessage: "Complete authorization in the existing container.",
     container: 'Container', login: 'Claude login', checking: 'Checking…',
     loginState: { authorized: 'Credentials saved', notAuthorized: 'No saved credentials', unknown: 'Unknown (container not ready)' },
-    hint: 'Re-authorizing replaces the current Claude login with a new one and clears all of this account’s history; until then the account keeps serving with the current login.',
+    hint: "Sign in again in the current container. Keep its volume and conversation history, then refresh account state.",
     hintLoggedOut: 'This account’s container is not signed in to Claude; re-authorize it.',
     confirmTitle: 'Re-authorize this account?',
-    confirmMessage: 'A new container is started for this account and signed in to Claude again.\n\nOnce the new login succeeds it replaces the old one, and all of the account’s history is cleared: the Claude login, conversation sessions, quota snapshot, last test result, and error / cooldown state.\n\nUntil then the account keeps serving with the old login; cancelling or closing the editor changes nothing.',
+    confirmMessage: "Re-authorize in the current container and retain its volume and history. Cancel only closes this login flow.",
     confirmButton: 'Start re-authorization',
     startFailed: 'The re-authorization could not be started',
     flowTitle: 'Re-authorization',
-    inProgress: 'Preparing a replacement: confirm the switch manually after local credentials are saved. The old container keeps serving until then. Cancelling deletes the new container.',
+    inProgress: "Re-authorizing in the existing container. Its volume and history are retained.",
     cancel: 'Cancel re-authorization',
-    signedIn: 'Credentials are saved in the new container; waiting for confirmation.',
-    committing: 'Configuring the new container for this account and replacing the old login; this may take a few dozen seconds…',
-    commitFailed: 'The new login could not replace the old one (the account still uses the old login)',
-    commitRetry: 'Replace again',
-    done: 'Replacement complete: the account uses the new container; the old volume is retained'
+    signedIn: "New credentials saved; confirming account state.",
+    committing: "Confirming authorization and refreshing account state…",
+    commitFailed: "Account state could not be refreshed after authorization; retry confirmation",
+    commitRetry: "Retry confirmation",
+    done: "Authorization refreshed in the existing container"
   },
   status: { creating: 'creating', ready: 'ready', blocked: 'stopped', pending: 'synchronizing', unknown: 'unknown' },
   runtimeInstall: {
@@ -158,7 +159,7 @@ export default {
     done: 'The runtime is installed at the latest version', failed: 'Installing the runtime failed', loadFailed: 'The runtime state could not be read',
     readOnly: 'Installing or upgrading the runtime needs settings:manage.',
     subtitleController: 'In control panel mode, the images ship in the ccgateway plugin package and can be pushed to the controller in one step; they can also be uploaded by hand or pulled by the controller. The table compares the images the controller reports; see each account container for its actual image.',
-    confirmMessageController: 'The controller’s target images are set to the saved images through the control panel (the controller tries to pull what it lacks); a different controller image upgrades the controller itself and waits for it to recover. Existing account containers are not recreated; new images apply to new or re-authorized containers.'
+    confirmMessageController: 'The controller’s target images are set to the saved images through the control panel (the controller tries to pull what it lacks); a different controller image upgrades the controller itself and waits for it to recover. Existing account containers are not recreated; new images apply to new containers.'
   },
   bundled: {
     groupTitle: 'Images bundled with the plugin',
@@ -307,6 +308,8 @@ export default {
     proxy_not_found: 'The chosen proxy does not exist or is not yours to use; pick another one',
     account_disabled: 'the account is disabled',
     draft_not_found: 'This container no longer exists (it may have been cleaned up after a long pause); start the container again',
+    runtime_not_ready: 'The existing container is not ready. Synchronize its runtime before re-authorizing.',
+    runtime_cleanup_failed: 'Runtime cleanup failed; retry the operation.',
     draft_not_authorized: 'The container has not completed the Claude authorization',
     unauthorized: 'The container controller rejected the admin key',
     not_found: 'The container does not exist',

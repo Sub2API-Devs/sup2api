@@ -1364,6 +1364,15 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
 			return err
 		}
+		resource := s.d.LifecycleResources[pk]
+		if resource == nil && pk == "ccgateway" && s.d.CCGateway != nil {
+			resource = s.d.CCGateway
+		}
+		if deletion, ok := resource.(core.AccountDeletionResource); ok {
+			if err := deletion.MarkAccountDeleted(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		if err := audit.Audit(ctx, tx, uid, "account.delete", "account", itoa(id), map[string]any{"name": name}); err != nil {
 			return err
 		}

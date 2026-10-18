@@ -126,8 +126,8 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 		"key":     key,
 		"created": created,
 		"message": t(ctx,
-			"Re-authorization draft created. Complete the authorization flow to refresh credentials.",
-			"已创建重新授权草稿。完成授权流程以刷新凭证。"),
+			"Re-authorize in the existing account container.",
+			"请在当前账号容器中完成重新授权。"),
 	})
 }
 

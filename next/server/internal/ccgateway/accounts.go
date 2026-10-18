@@ -40,11 +40,13 @@ var (
 )
 
 type accountDesired struct {
-	CLI      *RuntimeCLI    `json:"cli,omitempty"`
-	Network  RuntimeNetwork `json:"network"`
-	Revision string         `json:"revision"`
-	Enabled  bool           `json:"enabled"`
-	Proxy    map[string]any `json:"proxy"`
+	Deleted        bool           `json:"-"`
+	PurgeRequested bool           `json:"-"`
+	CLI            *RuntimeCLI    `json:"cli,omitempty"`
+	Network        RuntimeNetwork `json:"network"`
+	Revision       string         `json:"revision"`
+	Enabled        bool           `json:"enabled"`
+	Proxy          map[string]any `json:"proxy"`
 	// Direct: no proxy is bound, the runtime egresses directly. A controller
 	// without direct support blocks such a runtime (proxy null).
 	Direct   bool              `json:"direct,omitempty"`
@@ -112,17 +114,19 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	var password, accountCredentials []byte
 	var settings []byte
 	err := q.QueryRow(ctx, `SELECT
+  a.deleted_at IS NOT NULL,
+  r.retired_at IS NOT NULL,
   a.deleted_at IS NULL AND a.status <> 'disabled' AND
     (a.proxy_id IS NULL OR (p.id IS NOT NULL AND p.status <> 'disabled' AND p.protocol IN ('http','https','socks5'))),
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
        WHEN a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')) THEN 'proxy_unavailable'
        WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
-  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text),
+  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text,r.retired_at),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
   COALESCE(r.key, a.id::text), a.settings
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
-		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
+		Scan(&d.Deleted, &d.PurgeRequested, &d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
 	if err != nil {
 		return d, err
 	}
@@ -323,6 +327,12 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 	}
 	if !d.Enabled && s.blockedRecently(key, d.Revision) {
 		return nil
+	}
+	if d.Deleted && d.PurgeRequested {
+		if e = s.purgeRuntime(ctx, key); e == nil {
+			s.markBlocked(key, d.Revision)
+		}
+		return e
 	}
 	// Check remote readiness without rewriting an unchanged configuration.
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "status", nil, "")

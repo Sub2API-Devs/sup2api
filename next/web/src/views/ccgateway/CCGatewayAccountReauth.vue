@@ -1,20 +1,9 @@
 <script setup lang="ts">
-// Credentials card of a saved Claude Code (CCGateway managed) account
-// (docs/CCGATEWAY-REAUTH.md): the current runtime's state (container, Claude
-// login) and "re-authorize". Re-authorizing never touches the running
-// runtime: after a confirmation, POST accounts/:id/reauthorize opens a draft
-// (an open one is returned again), the usual steps run on it
-// (CCGatewayAccountAuth in reauth mode), and once the draft is signed in the
-// operator explicitly confirms the switch. The account switches and its
-// history (Claude login, sessions, quota snapshot, last test, error/cooldown)
-// is cleared. Cancelling or closing the editor deletes the draft. The draft
-// key is kept in sessionStorage so a page reload resumes it.
-// `syncKey` changes when the saved account changes (proxy, status): the
-// current container is synchronized again.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+// Re-authorize in the existing account container. Cancelling only closes the login session.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SButton, SCard, SDescItem, SDescriptions, SHint, SSegmented, confirm, toast } from '@sub2api/ui'
+import { SAlert, SButton, SCard, SDescItem, SDescriptions, SHint, toast } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { Account, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
 import BusyText from '@/components/BusyText.vue'
@@ -24,9 +13,9 @@ import CcgBlockedAlert from './CcgBlockedAlert.vue'
 import CcgErrorAlert from './CcgErrorAlert.vue'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import { useCcgText, type CcgFailure } from './ccgError'
-import { DRAFTS, discardDraft, longCall } from './ccgApi'
-import { isDraftKey, isProxyReason, reasonOf } from './ccgAuthFlow'
-import { accountSummary, commitRecovery, readPendingReauth, rememberReauth, shouldCommit, type CcgFlowState } from './ccgReauth'
+import { longCall } from './ccgApi'
+import { isProxyReason, reasonOf } from './ccgAuthFlow'
+import { accountSummary, commitRecovery, isRuntimeKey, readPendingReauth, rememberReauth, shouldCommit, type CcgFlowState } from './ccgReauth'
 
 const props = defineProps<{ accountId: number; canEdit?: boolean; syncKey?: string }>()
 const emit = defineEmits<{
@@ -107,13 +96,11 @@ function tick() {
 }
 
 // ---------------------------------------------------------------- re-authorization
-/** The open re-authorization draft. */
+/** Runtime key of the in-place authorization. */
 const reauthKey = ref<string | null>(null)
 const flow = ref<CcgFlowState>({ key: null, authorized: false })
 const flowEl = ref<InstanceType<typeof CCGatewayAccountAuth>>()
 const starting = ref(false)
-const authorizationMode = ref<'migrate' | 'fresh'>('migrate')
-const authorizationModes = computed(() => [{ value: 'migrate', label: t('ccgateway.reauth.migrate') }, { value: 'fresh', label: t('ccgateway.accountAuth.reauthorize') }])
 const startError = ref<CcgFailure | null>(null)
 const committing = ref(false)
 const failedKey = ref<string | null>(null)
@@ -127,28 +114,21 @@ function setKey(key: string | null) {
   failedKey.value = null
 }
 
-const discard = (key: string) => discardDraft(`${DRAFTS}/${key}`)
+const discard = (_key: string) => flowEl.value?.cancelAuthorization()
 
 async function askReauth() {
-  if (!canManage.value || starting.value || reauthKey.value) return
-  const ok = await confirm({
-    title: t('ccgateway.reauth.replaceTitle'),
-    message: t(authorizationMode.value === 'migrate' ? 'ccgateway.reauth.migrateMessage' : 'ccgateway.reauth.freshMessage'),
-    confirmText: t('ccgateway.reauth.prepare'),
-    danger: true
-  })
-  if (ok && alive) await begin()
+  if (canManage.value && !starting.value && !reauthKey.value) await begin()
 }
 
-/** POST reauthorize: a new draft, or the one already open for this account. */
+/** POST reauthorize validates and returns the existing account runtime. */
 async function begin() {
   if (!canManage.value || starting.value) return
   starting.value = true
   startError.value = null
   commitError.value = null
   try {
-    const r = await api.post<CcgDraft>(`${base.value}/reauthorize`, { authorization_mode: authorizationMode.value }, longCall())
-    if (!isDraftKey(r?.key)) throw new Error(t('ccgateway.accountAuth.badDraft'))
+    const r = await api.post<CcgDraft>(`${base.value}/reauthorize`, { authorization_mode: 'fresh' }, longCall())
+    if (!isRuntimeKey(r?.key)) throw new Error(t('ccgateway.accountAuth.badDraft'))
     if (!alive) {
       discard(r.key)
       return
@@ -156,17 +136,12 @@ async function begin() {
     setKey(r.key)
   } catch (e) {
     if (alive) startError.value = failureOf(e)
-    const failedDraft = (e as { details?: { draft_key?: unknown } })?.details?.draft_key
-    if (typeof failedDraft === 'string' && isDraftKey(failedDraft)) discard(failedDraft)
   } finally {
     starting.value = false
   }
 }
 
-/**
- * The draft is broken (delete it) or gone (draft_not_found: not ours to delete any more, e.g. another
- * user took it over): ask for a re-authorization draft again — the user confirmed already.
- */
+/** Cancel the pending login, then recheck the same account runtime. */
 async function restart(reason = '') {
   const key = reauthKey.value
   setKey(null)
@@ -182,10 +157,11 @@ function cancelReauth() {
   discard(key)
 }
 
-/** A fresh login on the draft: a refused commit may be tried again by itself. */
+/** A fresh login allows a previously refused commit to be retried. */
 function onFlowAuthorized() {
   failedKey.value = null
   commitError.value = null
+  void nextTick(commit)
 }
 
 async function commit() {
@@ -197,7 +173,7 @@ async function commit() {
   try {
     const a = await api.post<Account>(`${base.value}/reauthorize/${key}/commit`, {}, longCall())
     if (!alive) return
-    // The account runs on the new runtime now: the draft is no longer ours to delete.
+    // The existing runtime has the refreshed login; clear the local flow.
     setKey(null)
     toast(t('ccgateway.reauth.done'), 'success')
     status.value = null
@@ -210,7 +186,7 @@ async function commit() {
     const { reason } = commitError.value
     const next = commitRecovery(reason)
     if (next === 'restart') {
-      // The draft is gone: back to the button (a new login is needed).
+      // The runtime changed: return to the button and recheck its identity.
       setKey(null)
     } else {
       failedKey.value = key
@@ -234,12 +210,12 @@ watch(
   }
 )
 
-/** Resumes the re-authorization this tab left open (page reload), unless its draft is gone. */
+/** Resume only if this tab's key still belongs to the account. */
 async function resume() {
   const key = readPendingReauth(store, props.accountId)
   if (!key || !canManage.value) return
-  const gone = await api.get(`${DRAFTS}/${key}/status`).then(
-    () => false,
+  const gone = await api.get<CcgRuntimeStatus & { key?: string }>(`${base.value}/status`).then(
+    (current) => current.key !== key,
     (e: unknown) => isApiError(e) && (e.status === 404 || reasonOf(e) === 'draft_not_found')
   )
   if (gone) rememberReauth(store, props.accountId, null)
@@ -319,7 +295,6 @@ onBeforeUnmount(() => {
         <SHint v-if="status.image_update_available" size="xs">{{ t('ccgateway.reauth.imageMismatch') }}</SHint>
       </div>
       <div v-if="canManage" class="flex flex-wrap items-center gap-2">
-        <SSegmented :model-value="authorizationMode" :options="authorizationModes" size="sm" :aria-label="t('ccgateway.reauth.replaceTitle')" data-testid="ccgateway-reauth-mode" @update:model-value="authorizationMode = $event as 'migrate' | 'fresh'" />
         <SButton size="sm" icon="refresh" :variant="summary.login === 'notAuthorized' ? 'primary' : 'secondary'" :loading="starting" data-testid="ccgateway-reauth-start" @click="askReauth">{{ t('ccgateway.reauth.replaceTitle') }}</SButton>
       </div>
       <CcgErrorAlert v-if="startError" :title="t('ccgateway.reauth.startFailed')" :detail="startError.detail" data-testid="ccgateway-reauth-start-error" :data-reason="startError.reason">
@@ -341,6 +316,7 @@ onBeforeUnmount(() => {
         :key="reauthKey"
         ref="flowEl"
         :reauth-key="reauthKey"
+        :reauth-account-id="accountId"
         :can-edit="canEdit"
         @state="flow = $event"
         @authorized="onFlowAuthorized"
