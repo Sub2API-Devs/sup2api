@@ -1,5 +1,7 @@
 # OVH当前部署入口
 
+2026-10-19 最新：Core **0.1.161**、CCGateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 支持原生 OAuth。21/30 号保留原数据卷和授权并重建到新镜像；30 号完整 CC 请求 build、direct CLI 重放均 200，21 号 API Key 回归 200。默认 build、禁更保持。简化空 system 的 OAuth 请求仍可能上游 429；实现与验证边界见 [302 OAuth 记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
+
 2026-10-19 后续更新：Core 四节点 **0.1.160**、CCGateway/Controller/Worker **0.1.60**，移除原有 Agent/native 请求模式，仅保留 direct/build，默认及历史 native 配置迁移为 **build**。21 号已使用新镜像/build，保留原数据卷；Opus 真实请求与本地 CC Read 工具回合通过。见 [请求模式与正式发布记录](../../../plugins/ccgateway/docs/REQUEST-MODES.md)。
 
 2026-10-19：已更新 Core 四节点 **0.1.159**、CCGateway/Controller/21 号 Worker 程序 **0.1.59**，上线账号删除完整清理、原地重新授权和设置页孤立资源清理。21 号保留原容器与数据卷、CLI 2.1.302/native；公网 Key 实测 `claude-opus-5-5` HTTP 200，用量记录确认 account_id=21。详细版本、备份与验证见 [账号生命周期发布记录](../../../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md#ovh-正式发布与模型验收2026-10-19北京时间)。

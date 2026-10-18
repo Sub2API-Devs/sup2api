@@ -5,7 +5,9 @@
 - `build`：Worker 提取消息组件，调用 `claude request --build` 构建并发送一次模型请求。
 - `direct`：完整 Messages body 交给 `claude request --direct` 转发。
 
-两种模式都将工具调用返回调用方执行，不由网关运行 Agent 工具循环。原 native 选项和仅适用于 Agent 的设置控件移除。当前 request 命令仍只支持 API Key；既有 OAuth 授权管理接口保留，不代表 request 已支持 OAuth 上游。
+两种模式都将工具调用返回调用方执行，不由网关运行 Agent 工具循环。原 native 选项和仅适用于 Agent 的设置控件移除。2026-10-19 的 0.1.61 / CLI v8 更新已移除 request 的 API Key-only 限制：显式 API Key 保留原隔离路线，没有 API Key 时复用 CC 原生 OAuth 读取、发送前刷新及 Bearer 认证。详见 [302 OAuth 实现与验证](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
+
+认证支持不意味着上游接受任意 Messages 形状。30 号完整 CC 客户端经 build、其完整请求经 direct，均成功调用 `claude-opus-5-5`；简化空 system 的 OAuth 请求实测仍返回上游 429。request 不伪造成功、不自动换模型，也不在 direct 中补写提示。原有简化账号测试请求可能仍失败，不能据此判断 OAuth 凭证无效。
 
 ## 配置和迁移
 

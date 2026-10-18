@@ -1,5 +1,7 @@
 # Claude Code 2.1.302 分析与改动记录
 
+> 2026-10-19 最新：Core **0.1.161**、ccgateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 已上线。request 支持原生 OAuth；30 号完整 CC 请求的 build/direct 与 21 号 API Key 回归通过。第 10 节取代下文 v7 的 API Key-only 限制和产物身份；不改变 direct 原文契约。
+
 > 2026-10-19 更新：Core 0.1.160 / ccgateway 0.1.60 已移除可配置的 native 请求路径，仅保留 direct/build，默认 build；21 号已迁移并通过真实模型及本地 CC 工具回合验证。下文 native 模式部署描述属于 2026-10-18 的历史基线，当前模式规则见 [请求模式说明](REQUEST-MODES.md)。本次未改变 2.1.302 CLI 补丁本身。
 
 记录日期：2026-10-18。**这是 2.1.302 的独立实现记录；2.1.296 文档保持历史基线，不覆盖或重用其验证结论。** 已正式部署 Core 0.1.158、CCGateway/Controller/Worker 0.1.58，生产 21 号固定 CLI 2.1.302，保留 native 模式。第 8 节保留首次隔离验证时的限制；其透明出口阻塞已在正式部署中修复，新建容器 build/direct 的就绪与真实请求验证见第 9 节。
@@ -156,3 +158,41 @@ Worker 每请求日志仍为 `/work/data/request-logs/<id>/`，包含请求/响�
 4. 脱敏结果见 [正式部署验证](cli-research/2.1.302/production-deployment.json)。服务器私有备份在 `~/sup2api-managed/backups/ccgateway-302-0.1.158/`，包括已验证恢复目录的 PostgreSQL dump、控制器状态/环境、21 号数据卷及旧 CLI/Worker 程序；构建日志在 `~/sup2api-managed/stage/0.1.158/`。
 
 当前仍保留第 5 节的 API Key-only、build 默认值和 mods 兼容边界。`count_tokens` 不支持的 404 也未在本次发布中补齐。
+
+## 10 request OAuth 支持（2026-10-19）
+
+### 根因和实现
+
+30 号原先在读取请求和发送网络之前，被 `request-command.js` 的 API Key-only 检查拒绝。Worker 丢弃 CLI stderr，界面因而只显示通用 502。原生 302 本身支持 OAuth，限制来自我们的 request 扩展。
+
+- `request-command.js` 不再强制 `ANTHROPIC_API_KEY`。显式 Key 时仍向 `GU` 传 `ccgatewayAPIKeyOnly:true`，避免混选账号内的 OAuth；否则传 false，执行原生 `mle → Nn → hqn → mUs → CEe`，复用发送前刷新、凭证读取、订阅判断及 SDK Bearer 设置。没有自行实现 token 刷新或把 OAuth token 当 API Key。
+- `patch-cli-2.1.302.cjs` 从原生 `chunk-yn324528.js / Ake.header` 获取认证 beta（当前值 `oauth-2025-04-20`），传给 request 入口。原生 `FYn/kte` 的描述符体系同样使用 Ake；不复制 token、不放宽 baseline 哈希校验。
+- `authenticatedRequestHeaders` 在最终 fetch 边界分流：API Key 保持原最小头集合；OAuth 校验原生 Bearer 且禁止同时出现 X-Api-Key，保留 CC 生成的身份、SDK 和压缩等传输头，合并显式/构建 beta 与 OAuth beta。CLI 请求入口继续移除 `ANTHROPIC_CUSTOM_HEADERS`，调用方仍不能通过 `--header` 注入 Authorization、X-Api-Key 或身份头。
+- `model-request.js` 仍单次发送，direct 的 JSON 原文不变；build 的组件/附件规则不变。响应 meta 中的 `authProfile` 与 `betas` 来自最终 fetch 头，只有模式/认证类型/功能名，不包含凭证。Worker 目前仍不持久化该 meta 或最终出站 body/header；其 request.body 是入站请求，build-components.json 是组件输入。
+- 新身份 `ccgateway-v8-request-oauth`，新增 `request_oauth` capability。发布物由 Bun 1.4.3 双入口编译成原生 Linux ELF，SHA-256 为 `339e2e0d2df25fb89181b30c1e5c00b463b72729103038705b1210ddd197cd9a`；没有交付裸 JS。
+
+### 验证与边界
+
+27 项支持模块单测通过；原生 ELF 的模式/传输回归通过。组件 probe 更新了旧的“缺 API Key 必须失败”预期，13 个场景覆盖 OAuth build/direct、客户端 beta、环境头隔离和 direct 原文字节保留。
+
+30 号授权用量接口返回正常，不能把此前 502 解释为订阅无效或额度耗尽。实测有以下差异：
+
+1. 简化 Messages 请求使用空 system 时，OAuth build/direct 均得到上游 HTTP 429 `rate_limit_error`，有上游 request-id。补充 Claude Code beta 本身没有让简化 direct 请求成功。上游没有提供更具体的拒绝原因，不能断言所有 429 都由某一个字段造成。
+2. build 使用字符串 systemPrompt 的原生提示构建路径时，`claude-opus-5-5` 返回 200。该路径原本就包含原生提示构建行为，不是在此次补丁中新写身份文本。
+3. 更新后的正式 30 号 Worker 默认 build。完整 CC 客户端通过其 8787 入口发送请求，HTTP 200、约 5.9 秒，返回 `REAL_CLIENT_OAUTH_OK`，modelUsage 只有 `claude-opus-5-5`。该客户端使用同版编译 CLI 的常规 `-p` 路径和独立临时配置，没有运行工具。
+4. 将第 3 项 Worker 日志中保存的完整入站 body 和 beta 交给正式 CLI `request --direct` 原文重放，HTTP 200、SSE 有 message_stop，返回同一标记。此项验证 direct CLI；正式 Worker 配置保持 build，没有切全局模式。
+5. 21 号 API Key 在候选 ELF 上的 build/direct 均 200；上线后正式 Worker 再次以 `claude-opus-5-5` 返回 `APIKEY_21_V8_OK`。
+
+因此支持 OAuth 的结论适用于已验证的原生 CC 请求形状，不等于任意简化 API 请求都会被订阅上游接受。原简化账号测试仍可能显示上游 429；request 不自动改模型、不向 direct body 注入 system。原生发送前刷新调用已恢复，本次没有故意破坏真实凭证测试过期 token/401 恢复，也不宣称恢复了完整 Agent 重试/回退循环。
+
+临时 Worker 曾尝试在同容器的 8788 监听验证，但账号隔离规则只允许业务 8787 的 loopback，健康探测被阻断，不能计为功能通过。随后使用正式允许的 8787 完成第 3 项；临时进程已停止，没有放宽防火墙。
+
+### 正式发布
+
+源码 `437feaabc9d3329738139e83e2011c7131b3779c`，Core 四节点 **0.1.161**，插件、Controller、Worker **0.1.61**。release `v0.1.161`，manifest `ed1e2add33e61b7ff7d7684fdedd42a3f4e4b564d4a22f8dd42f23f5c2eda696`，升级计划 `03ed4fac1d8f457eb2a31222949a65ba` 完成 27 步。Core SHA-256 为 `bc2c664e3f3a24c507017078fd99e6d0fedbe04636024ec76a8245fddec84fad`。
+
+同一个 2.1.302 版本的新补丁不会只靠版本号触发现有容器替换。本次在空闲时停止并暂存 21/30 旧容器，由正常账号同步使用新镜像重建，保留原专属数据卷、授权和网络。确认新容器的 ELF 哈希、patch、features、Worker revision、禁更状态与真实调用后，仅移除本轮临时保留的旧容器，未删除数据卷。停止的历史账号和共享出口身份/启动时间未变。
+
+四节点 ready 200，模式均为 build，runtime up_to_date；新创建账号选择 0.1.61 镜像中的 v8 CLI，禁更保持。插件验签开关和 release 签名策略沿用原部署，未改其他 builtin 包。备份位于 `~/sup2api-managed/backups/ccgateway-request-oauth-0.1.161/`，数据库恢复列表及 21/30 卷归档已验证；原生构建和测试记录位于 `~/sup2api/checks/ccg-302-v8/`。
+
+脱敏证据见 [OAuth 发布验证](cli-research/2.1.302/oauth-deployment-0.1.161.json)。

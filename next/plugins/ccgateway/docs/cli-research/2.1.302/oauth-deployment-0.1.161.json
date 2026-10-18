@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "437feaabc9d3329738139e83e2011c7131b3779c",
+  "releaseID": "v0.1.161",
+  "manifest": "ed1e2add33e61b7ff7d7684fdedd42a3f4e4b564d4a22f8dd42f23f5c2eda696",
+  "upgradePlan": "03ed4fac1d8f457eb2a31222949a65ba",
+  "upgradeStatus": "completed",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.161",
+      "sha256": "bc2c664e3f3a24c507017078fd99e6d0fedbe04636024ec76a8245fddec84fad",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.161",
+      "sha256": "bc2c664e3f3a24c507017078fd99e6d0fedbe04636024ec76a8245fddec84fad",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.161",
+      "sha256": "bc2c664e3f3a24c507017078fd99e6d0fedbe04636024ec76a8245fddec84fad",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.161",
+      "sha256": "bc2c664e3f3a24c507017078fd99e6d0fedbe04636024ec76a8245fddec84fad",
+      "readyHTTP": 200,
+      "mode": "build"
+    }
+  ],
+  "pluginVersion": "0.1.61",
+  "controllerImage": "ccgateway-controller:0.1.61",
+  "runtimeUpToDate": true,
+  "workers": [
+    {
+      "account": 21,
+      "image": "ccgateway-app:0.1.61",
+      "ready": true,
+      "volumePreserved": true,
+      "mode": "build",
+      "cli": {
+        "version": "2.1.302",
+        "patch": "ccgateway-v8-request-oauth",
+        "capabilities": [
+          "request_direct",
+          "request_build",
+          "request_oauth",
+          "native_tools",
+          "mods_dispatch"
+        ]
+      },
+      "sha256": "339e2e0d2df25fb89181b30c1e5c00b463b72729103038705b1210ddd197cd9a",
+      "workerBuild": {
+        "version": "0.1.61",
+        "revision": "437feaabc9d3329738139e83e2011c7131b3779c",
+        "modified": false
+      },
+      "disableAutoUpdate": true
+    },
+    {
+      "account": 30,
+      "image": "ccgateway-app:0.1.61",
+      "ready": true,
+      "volumePreserved": true,
+      "mode": "build",
+      "cli": {
+        "version": "2.1.302",
+        "patch": "ccgateway-v8-request-oauth",
+        "capabilities": [
+          "request_direct",
+          "request_build",
+          "request_oauth",
+          "native_tools",
+          "mods_dispatch"
+        ]
+      },
+      "sha256": "339e2e0d2df25fb89181b30c1e5c00b463b72729103038705b1210ddd197cd9a",
+      "workerBuild": {
+        "version": "0.1.61",
+        "revision": "437feaabc9d3329738139e83e2011c7131b3779c",
+        "modified": false
+      },
+      "disableAutoUpdate": true
+    }
+  ],
+  "sharedEgressUnchanged": true,
+  "stoppedAccountsUnchanged": [
+    "ccg-d3037c7dc8376b940-app",
+    "ccg-d4d9ec52e2bb74205-app",
+    "ccg-d61ad737f7dcd6912-app",
+    "ccg-de509b30280535378-app",
+    "ccg-d367149b7e7b26bcc-app",
+    "ccg-d4863b4ae1bc6aa8c-app",
+    "ccg-d1d2964e14bf728d9-app"
+  ],
+  "tests": {
+    "supportUnitTests": 27,
+    "nativeModesProbe": true,
+    "nativeTransportProbe": true,
+    "nativeComponentsOAuthProbe": true,
+    "oauthBuildRealClient": {
+      "root": "/tmp/ccg-real-oauth-1FvnPK",
+      "exit": 0,
+      "result": "REAL_CLIENT_OAUTH_OK",
+      "is_error": false,
+      "modelUsage": [
+        "claude-opus-5-5"
+      ],
+      "stderr": ""
+    },
+    "oauthDirectReplay": {
+      "source": "/work/data/request-logs/3e821430-a90e-4234-9a09-091cd578695d",
+      "exit": 0,
+      "status": 200,
+      "request": {
+        "mode": "direct",
+        "authProfile": "oauth",
+        "betas": [
+          "claude-code-20250219",
+          "interleaved-thinking-2025-05-14",
+          "thinking-token-count-2026-05-13",
+          "context-management-2025-06-27",
+          "prompt-caching-scope-2026-01-05",
+          "per-turn-control-2026-07-01",
+          "mid-conversation-tool-changes-2026-07-01",
+          "effort-2025-11-24",
+          "oauth-2025-04-20"
+        ]
+      },
+      "receivedBeta": true,
+      "responseBytes": 1590,
+      "text": "REAL_CLIENT_OAUTH_OK",
+      "messageStop": true,
+      "stderr": ""
+    },
+    "apiKey21Worker": {
+      "status": 200,
+      "model": "claude-opus-5-5",
+      "text": "APIKEY_21_V8_OK"
+    }
+  },
+  "limitations": [
+    "Minimal OAuth requests with an empty system returned upstream 429; arbitrary Messages body compatibility is not claimed.",
+    "Native preflight OAuth refresh is reused; forced expired-token/401 refresh was not tested.",
+    "Final outgoing body/headers are not persisted by Worker; CLI response-meta reports authProfile and final betas."
+  ],
+  "backupsVerified": true
+}
