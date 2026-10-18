@@ -72,7 +72,20 @@ server.listen(0, '127.0.0.1', async () => {
     assert.equal(r.code,0,r.stderr); assert.equal(r.requests.length,1); cleanHeaders(r.requests[0]); assert.equal(r.requests[0].headers['anthropic-beta'],undefined);
     r=await run('build-stream',{...components,stream:true},['--build','--betas','client-beta']); assert.equal(r.code,0,r.stderr);assert.equal(r.requests.length,1);assert.equal(r.stdout,sse);
     r=await run('build-http-error',{...components,parameters:{max_tokens:64,probe:'error'}},['--build']); assert.equal(r.code,2,r.stderr);assert.equal(r.requests.length,1);assert.equal(r.stdout,'{ "error": "fixture" }');
-    r=await run('missing-api-key',direct,['--direct'],{env:{ANTHROPIC_API_KEY:'',CLAUDE_CODE_OAUTH_TOKEN:'fake-subscription'}});assert.equal(r.code,1);assert.equal(r.requests.length,0);
+    for (const mode of ['direct','build']) {
+      r=await run('oauth-'+mode,mode==='direct'?direct:{...components,messages:[{role:'user',content:'OAUTH'}],attachments:[]},['--'+mode,'--betas','client-beta'],{env:{ANTHROPIC_API_KEY:'',CLAUDE_CODE_OAUTH_TOKEN:'fake-subscription'}});
+      assert.equal(r.code,0,r.stderr);assert.equal(r.requests.length,1);
+      const request=r.requests[0];
+      assert.equal(request.headers.authorization,'Bearer fake-subscription');
+      assert.equal(request.headers['x-api-key'],undefined);
+      assert.equal(request.headers['x-private-test'],undefined);
+      assert.ok(!JSON.stringify(request.headers).includes('ENV_AUTH'));
+      assert.ok(request.headers['user-agent'].startsWith('claude-cli/2.1.302'));
+      const betas=request.headers['anthropic-beta'].split(',');
+      assert.ok(betas.includes('client-beta')&&betas.includes('oauth-2025-04-20'));
+      assert.ok(!betas.includes('ENV_BETA'));
+      if(mode==='direct')assert.equal(request.raw,direct);
+    }
     r=await run('unsafe-build-number','{"model":"fixture","messages":[{"role":"user","content":"x"}],"parameters":{"large":9007199254740993}}',['--build']);assert.equal(r.code,1);assert.equal(r.requests.length,0);
     r=await run('duplicate-reference',{...components,messages:[{attachment:'s'},{attachment:'s'}],attachments:[components.attachments[1]]},['--build']);assert.equal(r.code,1);assert.equal(r.requests.length,0);
     r=await run('forbidden-header',direct,['--direct','--header','X-Claude-Code-Session-Id: fake']);assert.equal(r.code,1);assert.equal(r.requests.length,0);
