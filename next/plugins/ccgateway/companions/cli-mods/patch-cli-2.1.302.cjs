@@ -41,7 +41,7 @@ function edit(file, name, transform, method = false) {
   files.set(file, text.slice(0, n.start) + after + text.slice(n.end)); modified.add(file);
 }
 const core = 'chunk-8242685m.js', guest = 'chunk-ctwws12s.js', headless = 'chunk-sdr1wqge.js', terminal = 'chunk-2rs9vjmc.js';
-edit('cli.js', 'Ge', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.302",patch:"ccgateway-v7-request-modes",capabilities:["request_direct","request_build","native_tools","mods_dispatch"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-7p9rzbaa.js");let refusal=await policy(s);if(refusal){console.error(refusal);process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");process.exit(await run(e.slice(1)))}if(n!==void 0){'));
+edit('cli.js', 'Ge', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.302",patch:"ccgateway-v8-request-oauth",capabilities:["request_direct","request_build","request_oauth","native_tools","mods_dispatch"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-7p9rzbaa.js");let refusal=await policy(s);if(refusal){console.error(refusal);process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{Ake:oauthAuth}=await import("./chunk-yn324528.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
 edit(guest, 'bE', t => once(t, 'name:o.name,description:o.description,inputSchema:', 'name:o.name,description:o.description,...o.kind==="native"?{kind:"native"}:{},inputSchema:'));
 edit(core, 'hRr', t => once(t, 'async function hRr(e,n){', 'async function hRr(e,n){if(e.kind==="native"){let binding=qp(n,"$.tool.register"),context=binding.toolContext(new AbortController);return ccgRegister(context.session,n,e)}'));
 edit(headless, 'ka', t => once(once(t, 'Fe=[P.toolPermissionContext', 'Fe=[ccgRevision(e),P.toolPermissionContext'), '$t=eKt($t,P.toolPermissionContext)', '$t=ccgMerge(e,eKt($t,P.toolPermissionContext))'));
@@ -85,7 +85,7 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {uLo as ccgBeta} from "./chunk-yn324528.js";\n' + files.get(core));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.302', extension: 'ccgateway-v7-request-modes', capabilities: ['request_direct','request_build','native_tools','mods_dispatch'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.302', extension: 'ccgateway-v8-request-oauth', capabilities: ['request_direct','request_build','request_oauth','native_tools','mods_dispatch'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

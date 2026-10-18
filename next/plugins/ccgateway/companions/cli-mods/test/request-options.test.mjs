@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeBetas, parseRequestOptions, parseRequestJSON, apiKeyRequestHeaders } from '../request-options.js';
+import { normalizeBetas, parseRequestOptions, parseRequestJSON, apiKeyRequestHeaders, authenticatedRequestHeaders } from '../request-options.js';
 
 test('betas have one canonical representation across flags and differently cased headers', () => {
   const parsed = parseRequestOptions(['--build', '--betas', 'a, b,,a', '--header', 'Anthropic-Beta: c,b', '--header', 'anthropic-beta: D', 'body.json']);
@@ -40,4 +40,27 @@ test('build rejects unsafe numbers before parsing, direct keeps raw-source eligi
   assert.throws(() => parseRequestJSON(raw, 'build'), /unsafe JSON number/);
   assert.doesNotThrow(() => parseRequestJSON(raw, 'direct'));
   assert.equal(parseRequestJSON('{"text":"9007199254740993","n":12.5}', 'build').n, 12.5);
+});
+
+test('OAuth retains native authentication and transport while selecting explicit and auth betas', () => {
+  const native = new Headers({ authorization: 'Bearer native-fixture', 'user-agent': 'native-cc', 'x-app': 'cli', 'content-encoding': 'gzip', 'anthropic-beta': 'ambient-feature' });
+  const result = authenticatedRequestHeaders(native, { betas: ['client-beta', 'oauth-fixture'], oauthBeta: 'oauth-fixture' });
+  assert.equal(result.get('authorization'), 'Bearer native-fixture');
+  assert.equal(result.get('user-agent'), 'native-cc');
+  assert.equal(result.get('x-app'), 'cli');
+  assert.equal(result.get('content-encoding'), 'gzip');
+  assert.equal(result.get('anthropic-beta'), 'client-beta,oauth-fixture');
+  assert.equal(result.get('anthropic-version'), '2023-06-01');
+  assert.equal(result.has('x-api-key'), false);
+  assert.equal(native.get('anthropic-beta'), 'ambient-feature');
+  assert.throws(() => authenticatedRequestHeaders({}, {}), /OAuth authentication/);
+  assert.throws(() => authenticatedRequestHeaders({ authorization: 'Basic invalid' }, {}), /OAuth authentication/);
+  native.set('x-api-key', 'ambiguous');
+  assert.throws(() => authenticatedRequestHeaders(native, {}), /OAuth authentication/);
+});
+
+test('explicit API key does not select native OAuth even when OAuth metadata is available', () => {
+  const result = authenticatedRequestHeaders({ 'x-api-key': 'fixture' }, { apiKey: 'fixture', betas: ['client-beta'], oauthBeta: 'oauth-fixture' });
+  assert.equal(result.has('authorization'), false);
+  assert.equal(result.get('anthropic-beta'), 'client-beta');
 });

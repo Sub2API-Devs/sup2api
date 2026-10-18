@@ -68,8 +68,21 @@ export function parseRequestJSON(raw, mode) {
   return JSON.parse(raw);
 }
 
-// Runs after native SDK/CC header construction, before native compression.
-// Only the explicit API-key route is enabled. No subscription credentials.
+// Runs at the final native fetch boundary. Explicit API keys retain their
+// isolated headers; OAuth keeps the identity/transport headers built by CC.
+export function authenticatedRequestHeaders(nativeHeaders, policy) {
+  if (policy.apiKey) return apiKeyRequestHeaders(nativeHeaders, policy);
+  const headers = new Headers(nativeHeaders);
+  if (!/^Bearer \S+$/i.test(headers.get('authorization') ?? '') || headers.has('x-api-key')) {
+    throw Error('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY');
+  }
+  headers.set('anthropic-version', policy.version ?? '2023-06-01');
+  const tokens = normalizeBetas(policy.betas, policy.oauthBeta);
+  if (tokens.length) headers.set('anthropic-beta', tokens.join(','));
+  else headers.delete('anthropic-beta');
+  return headers;
+}
+
 export function apiKeyRequestHeaders(nativeHeaders, { apiKey, betas, version = '2023-06-01' }) {
   const original = new Headers(nativeHeaders);
   if (!apiKey || original.get('x-api-key') !== apiKey || original.has('authorization')) {

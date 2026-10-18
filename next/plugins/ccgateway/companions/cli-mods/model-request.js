@@ -1,6 +1,6 @@
 // Host-side raw Messages transport. The caller supplies CC's authenticated
 // client factory; credentials and fetch policy stay inside that factory.
-import { apiKeyRequestHeaders } from './request-options.js';
+import { authenticatedRequestHeaders, normalizeBetas } from './request-options.js';
 const streams = new Map();
 const forbiddenHeaders = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'cookie', 'connection', 'content-length', 'transfer-encoding']);
 const defaultTimeout = 600000;
@@ -44,7 +44,7 @@ export async function openModelRequest(options, owner, signal, createClient, tra
   signal?.addEventListener('abort', entry.onAbort, { once: true });
   entry.timer = setTimeout(() => { void close(entry, new Error('model request timed out')); }, options.timeoutMs ?? defaultTimeout);
   entry.timer.unref?.();
-  let errorResponse;
+  let errorResponse, request;
   try {
     const client = await createClient({
       model: options.body.model, signal: entry.controller.signal,
@@ -52,7 +52,9 @@ export async function openModelRequest(options, owner, signal, createClient, tra
         if (options.headerPolicy) {
           const [url, init] = args;
           if (!init || init.headers === undefined) throw Error('CC transport did not supply request headers');
-          args = [url, { ...init, headers: apiKeyRequestHeaders(init.headers, options.headerPolicy) }];
+          const headers = authenticatedRequestHeaders(init.headers, options.headerPolicy);
+          request = { authProfile: headers.has('authorization') ? 'oauth' : 'api-key', betas: normalizeBetas(headers.get('anthropic-beta')) };
+          args = [url, { ...init, headers }];
         }
         const response = await transportFetch(...args);
         if (!response.ok) {
@@ -80,7 +82,7 @@ export async function openModelRequest(options, owner, signal, createClient, tra
     await errorResponse?.body?.cancel().catch(() => {});
     entry.reader = response.body?.getReader();
     streams.set(entry.id, entry);
-    return { id: entry.id, status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), ok: response.ok };
+    return { id: entry.id, status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), ok: response.ok, ...(request && { request }) };
   } catch (error) {
     await close(entry, error);
     await errorResponse?.body?.cancel().catch(() => {});

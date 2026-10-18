@@ -58,3 +58,18 @@ test('captured HTTP errors preserve their exact response body', async () => {
   for (;;) { const part = await readModelResponse(response.id, 'owner'); actual += part.text; if (part.done) break; }
   assert.equal(actual, text);
 });
+
+test('OAuth direct fetch preserves body bytes and exposes only safe authentication metadata', async () => {
+  const rawBody = '{ "model":"fixture", "messages":[], "n":9007199254740993 }';
+  const response = await openModelRequest({ ...options, rawBody, headerPolicy: { betas: ['client-beta'], oauthBeta: 'oauth-fixture' } }, 'owner', undefined,
+    async init => ({ post: (url, request) => ({ asResponse: () => init.fetchOverride(url, { body: request.body, headers: { authorization: 'Bearer native-secret', 'user-agent': 'native-cc' } }) }) }),
+    async (url, init) => {
+      assert.equal(init.body, rawBody);
+      assert.equal(init.headers.get('authorization'), 'Bearer native-secret');
+      assert.equal(init.headers.get('anthropic-beta'), 'client-beta,oauth-fixture');
+      return new Response('ok');
+    });
+  assert.deepEqual(response.request, { authProfile: 'oauth', betas: ['client-beta', 'oauth-fixture'] });
+  assert.equal(JSON.stringify(response).includes('native-secret'), false);
+  await cancelModelResponse(response.id, 'owner');
+});

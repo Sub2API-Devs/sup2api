@@ -26,10 +26,10 @@ Exit codes: 0 success, 1 transport/input error, 2 HTTP error, 130 interrupted.
 Build components: model, systemPrompt, messages, attachments, tools, parameters,
 and stream. Custom tools use inputSchema. Worker-extracted attachments use
 references to preserve message/block positions. Generation fields go in parameters.
-This request entry supports an explicit ANTHROPIC_API_KEY; subscription auth is disabled.
+Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-export async function runRequestCommand(args) {
+export async function runRequestCommand(args, { oauthBeta } = {}) {
   const controller = new AbortController();
   let response, interrupted = false, outputError, deadline;
   const customHeaders = process.env.ANTHROPIC_CUSTOM_HEADERS;
@@ -42,7 +42,6 @@ export async function runRequestCommand(args) {
     const options = parseRequestOptions(args);
     if (options.help) { await write(process.stdout, help); return 0; }
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw Error('claude request requires ANTHROPIC_API_KEY; subscription authentication is not enabled');
     // Both eF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
@@ -69,13 +68,13 @@ export async function runRequestCommand(args) {
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
-    outgoing.headerPolicy = { apiKey, betas, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+    outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
     response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
-      const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: true, maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });
+      const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });
       if (!(client instanceof rbe)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
       return client;
     }, Zre);
-    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: response.status, statusText: response.statusText, headers: response.headers, request: { mode: options.mode, authProfile: 'api-key', betas } }, null, 2) + '\n');
+    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: response.status, statusText: response.statusText, headers: response.headers, request: { mode: options.mode, ...response.request } }, null, 2) + '\n');
     for (;;) {
       const part = await readModelResponse(response.id, 'cli-request', controller.signal);
       if (part.text) await write(process.stdout, part.text, controller.signal);
