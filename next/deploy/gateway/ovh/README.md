@@ -1,5 +1,7 @@
 # OVH当前部署入口
 
+2026-10-19 后续更新：Core 四节点 **0.1.160**、CCGateway/Controller/Worker **0.1.60**，移除原有 Agent/native 请求模式，仅保留 direct/build，默认及历史 native 配置迁移为 **build**。21 号已使用新镜像/build，保留原数据卷；Opus 真实请求与本地 CC Read 工具回合通过。见 [请求模式与正式发布记录](../../../plugins/ccgateway/docs/REQUEST-MODES.md)。
+
 2026-10-19：已更新 Core 四节点 **0.1.159**、CCGateway/Controller/21 号 Worker 程序 **0.1.59**，上线账号删除完整清理、原地重新授权和设置页孤立资源清理。21 号保留原容器与数据卷、CLI 2.1.302/native；公网 Key 实测 `claude-opus-5-5` HTTP 200，用量记录确认 account_id=21。详细版本、备份与验证见 [账号生命周期发布记录](../../../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md#ovh-正式发布与模型验收2026-10-19北京时间)。
 
 2026-10-18：已发布 Core **0.1.158**、CCGateway/Controller/Worker **0.1.58**，21 号使用固定的定制 CLI **2.1.302**，保留 native 模式和数据卷。四节点 ready，官方 CC/Opus 工具回合及新建容器 build/direct 实测通过。部署配套新增宿主 `ccgateway-bridge-guard.service`，为 internal 桥接中的账号到指定代理 peer 维护精确 veth 规则；镜像更新本身不替代该服务。详细版本、签名检查状态、出口断路验证与备份见 [302 正式部署记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。

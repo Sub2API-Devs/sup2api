@@ -19,4 +19,17 @@ Controller 新建容器默认 build。迁移已存在的 Agent 容器时，使�
 
 先构建并加载新 Worker/Controller 镜像，再更新 Controller 及其未来镜像配置，最后通过正常发布流程升级 Core。新版 Core 会归一旧配置并同步已有账号，因此原 native 容器可能在此时重建；应先保存容器基线和数据卷备份，在账号空闲时切换。不要先对旧 Core 管理下的 native 容器单独更新 Worker，以免旧 native 请求头与新 build 默认值产生冲突。
 
-发布后核对四节点设置回读为 build、Controller 状态中的 CLI profile、Worker features 的 `request_build`、CLI 哈希及禁更状态；以真实 Messages 请求和本地 CC 工具回合验证。测试与正式发布结果在完成后追加。
+发布后核对四节点设置回读为 build、Controller 状态中的 CLI profile、Worker features 的 `request_build`、CLI 哈希及禁更状态；以真实 Messages 请求和本地 CC 工具回合验证。
+
+## OVH 正式发布（2026-10-19，北京时间）
+
+- 源码 `1ab76a3a5f91582d2c96aa558b8aa5763a094b67`；Core 四节点 **0.1.160**，ccgateway 插件/Controller/Worker **0.1.60**。release `v0.1.160`，升级计划 `22d4715a46d5e171a3b2d8cd0f3e6f87` 完成 27 步。
+- Controller 先升级并设置未来镜像为 0.1.60，再升级 Core。经正常管理 API 将归一后的 build 配置写回，21 号同步为 `ccgateway-app:0.1.60`、`CCG_REQUEST_MODE=build`，features 返回 `execution_modes:["request_build"]`。
+- 21 号容器因模式迁移重建，原 `ccg-21-data` 卷、挂载与 API Key 配置保留；CLI 仍为 **2.1.302 / ccgateway-v7-request-modes**，哈希 `b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8`，自动更新关闭。停止的历史账号未启动，共享出口的容器身份和启动时间未变。
+- 四节点 ready HTTP 200，配置回读均为 build，实际前端 `CCGatewayView-BySpskJP.js` 与构建产物一致。Core SHA-256 为 `1b98651cdda558ca752d0639ed4785feb2a093d22e5036a785a11b642f8bbd9a`。签名配置沿用此前发布，其他 builtin 包字节与 trust 未改变。
+- 真实公网 Messages 请求：`claude-opus-5-5` HTTP 200，4.38 秒，回答 `BUILD_21_OK`。用量日志确认 account_id=21、plugin_version=0.1.60。
+- 本地官方 Windows CC **2.1.302** 经同一公网入口调用 `claude-opus-5-5`，9 秒完成一次 Read、两轮模型请求，正确读出本次插件版本 0.1.60 / grpc 并回答 `BUILD_TOOL_OK`。工具错误为 0，Git 状态和源码 diff 未变化；两次模型调用均由 21 号成功处理。
+- 验证：控制台 ccgateway 198 项测试及类型检查、Controller 135 项、Core ccgateway/account、Linux Engine/Worker 全包回归通过。旧 native 模式的测试预期及模拟 CLI 已改为 build/request；定制 CLI 二进制未在本次重新修改。
+- 私有备份：`~/sup2api-managed/backups/ccgateway-build-default-0.1.160/`，包括数据库 dump、21 号数据卷 tar、Controller 环境及容器基线；数据库恢复列表和卷归档可读取性已验证。构建记录位于 `~/sup2api-managed/stage/0.1.160/`。未对生产孤立资源执行清理。
+
+脱敏证据见 [build 默认模式发布验证](build-default-deployment-0.1.160.json)。

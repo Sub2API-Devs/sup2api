@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "coreSource": "1ab76a3a5f91582d2c96aa558b8aa5763a094b67",
+  "releaseID": "v0.1.160",
+  "manifest": "e0f829d1a3dcbad0e45384c16d4080c3946a89326456aab302a52ce6d7117859",
+  "upgradePlan": "22d4715a46d5e171a3b2d8cd0f3e6f87",
+  "upgradeStatus": "completed",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.160",
+      "sha256": "1b98651cdda558ca752d0639ed4785feb2a093d22e5036a785a11b642f8bbd9a",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-BySpskJP.js",
+      "frontendMatchesBuild": true,
+      "mode": "build",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.160",
+      "sha256": "1b98651cdda558ca752d0639ed4785feb2a093d22e5036a785a11b642f8bbd9a",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-BySpskJP.js",
+      "frontendMatchesBuild": true,
+      "mode": "build",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.160",
+      "sha256": "1b98651cdda558ca752d0639ed4785feb2a093d22e5036a785a11b642f8bbd9a",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-BySpskJP.js",
+      "frontendMatchesBuild": true,
+      "mode": "build",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.160",
+      "sha256": "1b98651cdda558ca752d0639ed4785feb2a093d22e5036a785a11b642f8bbd9a",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-BySpskJP.js",
+      "frontendMatchesBuild": true,
+      "mode": "build",
+      "cliVersion": "2.1.302"
+    }
+  ],
+  "pluginVersion": "0.1.60",
+  "controllerImage": "ccgateway-controller:0.1.60",
+  "worker21": {
+    "containerImage": "ccgateway-app:0.1.60",
+    "containerRecreatedForModeMigration": true,
+    "mountsPreserved": true,
+    "workerSHA256": "2a5284729a442484e166917b8d59fac2a6fab260b6188602ac0bc302205eed2c",
+    "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+    "cli": {
+      "version": "2.1.302",
+      "patch": "ccgateway-v7-request-modes",
+      "capabilities": [
+        "request_direct",
+        "request_build",
+        "native_tools",
+        "mods_dispatch"
+      ]
+    },
+    "disableAutoUpdate": true,
+    "mode": "build",
+    "status": "ready"
+  },
+  "runtimeUpToDate": true,
+  "stoppedContainersUnchanged": [
+    "ccg-d3037c7dc8376b940-app",
+    "ccg-d4d9ec52e2bb74205-app",
+    "ccg-d61ad737f7dcd6912-app",
+    "ccg-de509b30280535378-app",
+    "ccg-d367149b7e7b26bcc-app",
+    "ccg-d4863b4ae1bc6aa8c-app",
+    "ccg-d1d2964e14bf728d9-app"
+  ],
+  "sharedEgressUnchanged": true,
+  "pluginSignatureVerification": false,
+  "modelTest": {
+    "http": 200,
+    "model": "claude-opus-5-5",
+    "answer": "BUILD_21_OK",
+    "seconds": 4.38,
+    "request_id": "298f10a4ac3dbfa6761b97c7",
+    "usage": {
+      "input_tokens": 30,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 11,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "service_tier": "standard",
+      "inference_geo": "global",
+      "speed": "standard"
+    },
+    "usageLog": {
+      "request_id": "298f10a4ac3dbfa6761b97c7",
+      "account_id": 21,
+      "model": "claude-opus-5-5",
+      "plugin_version": "0.1.60",
+      "http": 200,
+      "success": true
+    }
+  },
+  "localClient": {
+    "seconds": 9,
+    "exitCode": 0,
+    "toolCounts": {
+      "Read": 1
+    },
+    "toolErrors": 0,
+    "gitStatusSame": true,
+    "trackedDiffSame": true,
+    "model": "claude-opus-5-5",
+    "client": "2.1.302",
+    "turns": 2,
+    "answer": "插件版本是 `0.1.60`（`next/plugins/ccgateway/manifest.json:12`），运行时是 `grpc`（`next/plugins/ccgateway/manifest.json:15`）。\n\nBUILD_TOOL_OK",
+    "usageLogs": [
+      {
+        "account_id": 21,
+        "model": "claude-opus-5-5",
+        "http": 200,
+        "success": true
+      },
+      {
+        "account_id": 21,
+        "model": "claude-opus-5-5",
+        "http": 200,
+        "success": true
+      }
+    ]
+  },
+  "volumeBackup": {
+    "tarExitCode": 0
+  },
+  "tests": {
+    "web": 198,
+    "controller": 135,
+    "coreCCGateway": "passed",
+    "coreAccount": "passed",
+    "engineLinux": "passed",
+    "workerLinux": "passed"
+  }
+}
