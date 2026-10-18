@@ -49,8 +49,20 @@ Controller 端每个列表上限 20,000 项，此接口 body/response 上限 8 M
 
 ## 发布与验证
 
-本次源码实现尚未部署到生产。发布需更新 Controller、Core 和控制台；先更新支持 `runtime-cleanup-v1` 的 Controller，再更新全部 Core/控制台。旧 Controller 会明确报 `controller_outdated`，不会把仅删除容器误报成完整删除。Worker、CLI 不需要因本次生命周期功能另改协议。
+2026-10-19 已部署到 OVH：先更新支持 `runtime-cleanup-v1` 的 Controller，再通过正常升级流程更新全部 Core/控制台。旧 Controller 会明确报 `controller_outdated`，不会把仅删除容器误报成完整删除。Worker、CLI 不需要因本次生命周期功能另改协议。
 
 验证包括 Controller 全套 133 项测试、控制台 ccgateway 目录 210 项测试、Core `internal/ccgateway` 与 `internal/account` 全包测试（OVH 独立测试 PostgreSQL），覆盖完整释放、保留名单超过 200 个账号、停用/草稿保护、资源身份变化、归属冲突、失败重试和原地授权。不使用生产数据库验证删除行为。
 
 另在 OVH 以随机独立 `ccg-clean-*` 前缀创建临时 Docker 容器、网络及写有测试历史文件的数据卷，调用真实 Controller HTTP 删除/批量清理接口，确认完整删除、重复请求成功、保留名单及非归属资源不受影响。测试结束删除该前缀的所有测试资源；未对生产账号执行清理。最后补充的“只剩日志目录”用例另经清理模块回归验证。
+
+### OVH 正式发布与模型验收（2026-10-19，北京时间）
+
+- 源码 `f8d0dbab3de653ef68d69504bf048b79d515e5de`，Core 四节点 **0.1.159**，ccgateway 插件、Controller 和当前 21 号 Worker 程序 **0.1.59**。CLI 仍固定 **2.1.302 / ccgateway-v7-request-modes**，保持 native 模式、禁用自动更新。
+- 签名发布 `v0.1.159`，升级计划 `37248494a71c9aa2c303e82b5af5d438` 完成全部 27 步。四节点 Core SHA-256 均为 `cdd6af1b24d698cff6a042584edaee9fa992263c2167bc56df921e9a86f30f48`；ready HTTP 200，实际前端 `CCGatewayView-CXaa6FTx.js` 与构建产物匹配。
+- Controller 使用新镜像，管理接口已报告 `runtime-cleanup-v1`。Core 新清理接口实测拒绝浏览器提供的局部保留名单（HTTP 400），没有执行生产孤立资源清理。插件验签继续沿用既有关闭配置；Core 发布签名仍正常验证，其他 builtin 包及 trust 文件字节未改。
+- 21 号通过正式接口原地更新 Worker 程序到 0.1.59，容器 ID、挂载及授权数据保留；Docker 原创建镜像标签仍为 `ccgateway-app:0.1.58`，不能用该标签判断容器内程序版本。Worker SHA-256 为 `c0db81dff78a67c3587c9b7380192192b7f4891c7fbc2c84b189eeb84e285afc`，features 显示新源码 revision、`modified:false`。未来新容器默认 app/egress/Controller 镜像均为 0.1.59。
+- 批量 Worker 更新时，20 号及已删除的 23 号没有容器，结果为 `not_found`；其余停止的历史账号返回 `not_running`，未启动或重建。共享出口身份和启动时间未变。
+- 使用用户提供的公网入口 `http://15.204.107.38:3130/v1/messages` 和 Key 调用 `claude-opus-5-5`：HTTP 200，约 6 秒，响应 `CCGATEWAY_21_OK`，57 input tokens / 15 output tokens。用量日志确认 account_id=21、plugin_version=0.1.59、upstream_model=claude-opus-5-5、success=true；request_id 为 `8f60a4502793eebab84f397a`。不保存 Key。
+- 私有恢复材料：`~/sup2api-managed/backups/ccgateway-lifecycle-0.1.159/`，包含 PostgreSQL dump（恢复列表验证通过）、容器基线、Controller 配置/环境、Worker 更新报告。全量 Controller tar 可读取，但打包时目录存在并发变化，因此另存原子配置文件快照，不把该 tar 宣称为停机一致性快照。构建日志在 `~/sup2api-managed/stage/0.1.159/`。
+
+脱敏机器记录见 [正式发布验证](lifecycle-deployment-0.1.159.json)。

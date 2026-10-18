@@ -1,0 +1,186 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "coreSource": "f8d0dbab3de653ef68d69504bf048b79d515e5de",
+  "releaseID": "v0.1.159",
+  "manifest": "d700ad6d8e8b8213e27754fdbee9b60bd4c622482e060f9a023d1de0fa23ac29",
+  "upgradePlan": "37248494a71c9aa2c303e82b5af5d438",
+  "upgradeStatus": "completed",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.159",
+      "sha256": "cdd6af1b24d698cff6a042584edaee9fa992263c2167bc56df921e9a86f30f48",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-CXaa6FTx.js",
+      "frontendMatchesBuild": true,
+      "mode": "native",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.159",
+      "sha256": "cdd6af1b24d698cff6a042584edaee9fa992263c2167bc56df921e9a86f30f48",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-CXaa6FTx.js",
+      "frontendMatchesBuild": true,
+      "mode": "native",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.159",
+      "sha256": "cdd6af1b24d698cff6a042584edaee9fa992263c2167bc56df921e9a86f30f48",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-CXaa6FTx.js",
+      "frontendMatchesBuild": true,
+      "mode": "native",
+      "cliVersion": "2.1.302"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.159",
+      "sha256": "cdd6af1b24d698cff6a042584edaee9fa992263c2167bc56df921e9a86f30f48",
+      "readyHTTP": 200,
+      "frontend": "CCGatewayView-CXaa6FTx.js",
+      "frontendMatchesBuild": true,
+      "mode": "native",
+      "cliVersion": "2.1.302"
+    }
+  ],
+  "pluginVersion": "0.1.59",
+  "controllerImage": "ccgateway-controller:0.1.59",
+  "worker21": {
+    "containerImage": "ccgateway-app:0.1.58",
+    "containerIDPreserved": true,
+    "mountsPreserved": true,
+    "workerSHA256": "c0db81dff78a67c3587c9b7380192192b7f4891c7fbc2c84b189eeb84e285afc",
+    "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+    "cli": {
+      "version": "2.1.302",
+      "patch": "ccgateway-v7-request-modes",
+      "capabilities": [
+        "request_direct",
+        "request_build",
+        "native_tools",
+        "mods_dispatch"
+      ]
+    },
+    "disableAutoUpdate": true,
+    "mode": "native",
+    "status": "ready",
+    "buildVersion": "0.1.59"
+  },
+  "runtimeUpToDate": true,
+  "stoppedContainersUnchanged": [
+    "ccg-d3037c7dc8376b940-app",
+    "ccg-d4d9ec52e2bb74205-app",
+    "ccg-d61ad737f7dcd6912-app",
+    "ccg-de509b30280535378-app",
+    "ccg-d367149b7e7b26bcc-app",
+    "ccg-d4863b4ae1bc6aa8c-app",
+    "ccg-d1d2964e14bf728d9-app"
+  ],
+  "sharedEgressUnchanged": true,
+  "pluginSignatureVerification": false,
+  "modelTest": {
+    "endpoint": "http://15.204.107.38:3130/v1/messages",
+    "requested_model": "claude-opus-5-5",
+    "http": 200,
+    "model": "claude-opus-5-5",
+    "answer": "CCGATEWAY_21_OK",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 57,
+      "output_tokens": 15,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "service_tier": "standard",
+      "speed": "standard"
+    },
+    "seconds": 6.0,
+    "client_request_id": "ccg159-b3e6400802fd41cd96f29a4c23413c97",
+    "request_id": "8f60a4502793eebab84f397a",
+    "usageLog": {
+      "request_id": "8f60a4502793eebab84f397a",
+      "account_id": 21,
+      "plugin_version": "0.1.59",
+      "model": "claude-opus-5-5",
+      "upstream_model": "claude-opus-5-5",
+      "http": 200,
+      "success": true,
+      "input_tokens": 57,
+      "output_tokens": 15,
+      "node": "sup2api-1",
+      "latency_ms": 5450
+    }
+  },
+  "cleanupRouteRejectsClientKeepList": true,
+  "workerUpdate": {
+    "image": "ccgateway-app:0.1.59",
+    "results": [
+      {
+        "key": "20",
+        "account_id": 20,
+        "status": "failed",
+        "reason": "not_found"
+      },
+      {
+        "key": "21",
+        "account_id": 21,
+        "status": "updated",
+        "sha256": "c0db81dff78a67c3587c9b7380192192b7f4891c7fbc2c84b189eeb84e285afc",
+        "previous_sha256": "35a92364f0e9d4578c7247a7bb3b823304d8eddd455418acd62c6506e70c43c1"
+      },
+      {
+        "key": "d1d2964e14bf728d9",
+        "account_id": 22,
+        "status": "not_running"
+      },
+      {
+        "key": "d3037c7dc8376b940",
+        "account_id": 29,
+        "status": "not_running"
+      },
+      {
+        "key": "d367149b7e7b26bcc",
+        "account_id": 25,
+        "status": "not_running"
+      },
+      {
+        "key": "d4863b4ae1bc6aa8c",
+        "account_id": 24,
+        "status": "not_running"
+      },
+      {
+        "key": "d4d9ec52e2bb74205",
+        "account_id": 28,
+        "status": "not_running"
+      },
+      {
+        "key": "d61ad737f7dcd6912",
+        "account_id": 27,
+        "status": "not_running"
+      },
+      {
+        "key": "d869b0046479d0708",
+        "account_id": 23,
+        "status": "failed",
+        "reason": "not_found"
+      },
+      {
+        "key": "de509b30280535378",
+        "account_id": 26,
+        "status": "not_running"
+      }
+    ]
+  }
+}

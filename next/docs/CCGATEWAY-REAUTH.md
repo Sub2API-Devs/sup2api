@@ -1,6 +1,6 @@
 # Claude Code accounts: re-authorization with a clean slate (2026-10-05)
 
-> 2026-10-19：本文是旧版替换容器方案。当前源码已按用户要求改为原容器重新授权，删除账号时完整释放专属资源；以 [账号生命周期说明](../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md) 为准。新实现尚未部署。
+> 2026-10-19：本文是旧版替换容器方案。现已按用户要求改为原容器重新授权，删除账号时完整释放专属资源，并随 Core 0.1.159 / ccgateway 0.1.59 部署；以 [账号生命周期说明](../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md) 为准。
 
 > **Merged into CONTRACTS §49.17** (2026-10-05). That section is authoritative
 > and lists where the implementation deviates from this draft.
