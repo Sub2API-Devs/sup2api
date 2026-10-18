@@ -1,0 +1,19 @@
+[Unit]
+Description=CCGateway account-to-proxy bridge rules
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/libexec/ccgateway-bridge-guard.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/run /tmp
+
+[Install]
+WantedBy=multi-user.target
