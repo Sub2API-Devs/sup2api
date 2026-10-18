@@ -31,7 +31,7 @@ Worker Docker 构建上下文为 companions；controller 和 egress 各自使用
 
 ## CLI 机制与改造
 
-**当前 2.1.302 实现入口：[Claude Code 2.1.302 独立分析与改动记录](docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v7 迁移了原生 CLI 补丁，并在 ccgateway「CC 特性」中接入 direct/build 模式和 CLI 版本选择。账号授权创建时选择镜像内校验过的 CLI，禁用原生与受管自动更新；已有账号按配置 revision 同步并保留数据卷。生产控制器、账号和默认发布镜像尚未切换；OVH 透明出口的 Docker 隔离链路另有实测阻塞，状态见新文档。
+**当前 2.1.302 实现入口：[Claude Code 2.1.302 独立分析与改动记录](docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v7 迁移了原生 CLI 补丁，并在 ccgateway「CC 特性」中接入 direct/build 模式和 CLI 版本选择。账号授权创建时选择镜像内校验过的 CLI，禁用原生与受管自动更新；已有账号按配置 revision 同步并保留数据卷。2026-10-18 已部署 Core 0.1.158、插件/Controller/Worker 0.1.58，生产 21 号固定 CLI 2.1.302、保留 native 模式。OVH 透明出口阻塞已通过配套宿主 bridge guard 修复；正式发布、插件验签关闭状态与新建容器验证见新文档第 9 节。
 
 [Claude Code 2.1.296 分析与改动记录](docs/CLAUDE-CODE-2.1.296-ANALYSIS-AND-CHANGES.md) 保留为历史入口：以下 v3/v6 和 2.1.296 的分析、哈希及测试不作为 2.1.302 的验证结果。
 

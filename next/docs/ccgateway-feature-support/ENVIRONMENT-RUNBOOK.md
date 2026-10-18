@@ -1,5 +1,9 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-18：Core 0.1.158 / CCGateway 0.1.58 / CLI 2.1.302 正式上线。** 四节点通过正常 primary-first 升级；Controller、默认 app/egress 镜像与运行中的 21 号 Worker 已更新。21 号固定定制 CLI 2.1.302，native 模式不变，自动更新关闭，数据卷保留。停止的历史账号未启动，共享 Xray 容器保持原实例。新增 `ccgateway-bridge-guard.service` 修复 Docker internal 桥对发往代理 peer 的公网目的帧的丢弃；规则限定账号 IP 与双方 veth，断路及宿主直连尝试均验证失败关闭。新建草稿容器 build/direct 均 ready 且真实 API 返回 200；官方 CC 2.1.302 经 21 号 Opus 完成 Read 回合。
+>
+> 用户要求先关闭插件签名检查；四节点原有 `SUB2API_PLUGIN_VERIFY_SIGNATURES=false` 已核对沿用。新插件包在旧私钥缺失时采用独立构建密钥封装，重新开启验签前必须重新签发或迁移信任；Core 发布签名仍有效。源码 `bcaa5915219cfc2fd2236c38dff6a259853f2342`，网络配套源码 `41794f07b2561981f70db8df7127928253431244`，manifest `88875593dcb638c4586345e1f2f91a1f68a4e5f6243486f5e61deb8848831262`，升级计划 `16f9829865a2611801c985e62e648b6a` completed/27。私有备份 `~/sup2api-managed/backups/ccgateway-302-0.1.158/`；完整证据与仍未支持的场景见 [302 分析和部署文档](../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
+
 > **2026-10-16：全部现有 Worker 内 Claude Code 更新至 2.1.301。** 用户在确认 #21 的 CLI 为 2.1.292 后授权更新所有 Worker 到最新版本；本轮更新对象是容器内 Claude Code，不是 Worker 服务程序。官方 `latest` 当时为 2.1.301，`stable` 仍为 2.1.292。通过核心 `/system/ccgateway/cli/:id` 托管安装流程逐个完成 #21、#22、#24、#25、#26、#27、#28、#29；#20/#23 无现存容器，不创建或启动。八个容器实际 `claude --version` 均为 2.1.301，CLI SHA-256 均与官方 linux-x64 manifest 一致：`bc1aad9982c7b59c7d889ff92595d61cf46e0a6eae074cb551d932a989bcd222`；工具目录版本同步且 ready，health 均 healthy。#21 目录 31 个工具，其余 30 个；未执行付费模型回归。
 >
 > 安装采用 Controller 的空闲维护租约、旧程序备份、摘要校验、原子替换及目录同步。原容器 ID、启动时间、配置、挂载与 Worker 程序哈希保持一致；没有重启或重建容器。各账号原 `auto_update=false / channel=stable` 策略在一次性 latest 更新后已恢复。部署证据在 `~/sup2api-managed/backups/cli-update-2.1.301-20261015T215555Z/`，旧 CLI 由 Controller 保存在各 runtime 的 `cli-backups/`。镜像内默认 CLI 未变，此记录仅代表现存八个容器。

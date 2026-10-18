@@ -1,6 +1,6 @@
 # Claude Code 2.1.302 分析与改动记录
 
-记录日期：2026-10-18。**这是 2.1.302 的独立实现记录；2.1.296 文档保持历史基线，不覆盖或重用其验证结论。** v7 CLI 及配置链路已实现并完成下述验证；只部署了隔离测试实例，生产系统没有切换。Controller 创建账号后的透明出口联网探测仍受 OVH Docker 隔离规则阻断，不将这条链路标为已验收。
+记录日期：2026-10-18。**这是 2.1.302 的独立实现记录；2.1.296 文档保持历史基线，不覆盖或重用其验证结论。** 已正式部署 Core 0.1.158、CCGateway/Controller/Worker 0.1.58，生产 21 号固定 CLI 2.1.302，保留 native 模式。第 8 节保留首次隔离验证时的限制；其透明出口阻塞已在正式部署中修复，新建容器 build/direct 的就绪与真实请求验证见第 9 节。
 
 ## 1 官方产物身份
 
@@ -109,9 +109,9 @@ docker build -f worker/Dockerfile -t ccgateway-worker:302-v7-final .
 - 本机 ELF：`artifacts/claude-2.1.302/claude-linux-native`。
 - 独立测试最终镜像：`ccgateway-worker:302-v7-final`、`ccgateway-controller:302-v7-final`；早期 `302-v7-test` 标签仅属于本轮中间验证。
 - 先准备包含 CLI 的 Worker 镜像和支持 cli-profile-v1 的 Controller，再更新 Core/界面并选择版本和模式；只有 source/semver 相同不证明镜像具备补丁。
-- 默认远程发布镜像与插件发布包未上传/改指向测试 tag。部署到生产前仍须完成新镜像分发、网络阻塞处理和目标账号验收。
+- 首次隔离验证没有切换生产镜像。后续正式发布使用插件内置的 `ccgateway-{app,controller,egress}:0.1.58` 镜像，不使用测试 tag；部署详情见第 9 节。
 
-## 8 验证结果与日志
+## 8 首次隔离验证结果与日志（正式部署前）
 
 本轮重新执行了 302 ELF 的 11 个组件请求场景及 12 个工具/mods/hooks 场景，24 项支持模块单测通过。前端 53 项模式保存、版本输入、旧模式归一化和更新锁控件测试与类型检查通过；Controller 46 项测试、Worker 配置/server/worker 测试和管理校验通过。Core ccgateway 包的 121 个顶层测试在 Linux 隔离 PostgreSQL 上通过，包括配置保存及 cli profile/revision 下发；本机嵌入式 PostgreSQL 的符号链接失败和通过 SSH 跑全套测试超时不计为通过。
 
@@ -128,3 +128,29 @@ docker build -f worker/Dockerfile -t ccgateway-worker:302-v7-final .
 本轮正式证据为 [302 验证摘要](cli-research/2.1.302/verification.json) 和 [函数迁移映射](cli-research/2.1.302/migration-map.json)。远端根目录 `/home/debian/sup2api/checks/ccg-302-v7/` 保存构建、测试和实际 API 记录；完整认证 env 文件为私有文件，不进入仓库。独立 Worker 分别是 `ccg-302-build-test`（127.0.0.1:32777）和 `ccg-302-direct-test`（127.0.0.1:32778）。
 
 Worker 每请求日志仍为 `/work/data/request-logs/<id>/`，包含请求/响应、metadata/events，build 另有 build-components。出口 capture 文件在既有 `/home/debian/sup2api/checks/ccg-components-v6-20261018/capture/`；目录名称属于测试记录器，不代表其中新增请求仍由 v6 CLI 发出。应按请求哈希与 302 证据索引区分。本地临时会话日志不保证永久保留，仓库只保存脱敏摘要及源材料哈希。
+
+## 9 OVH 正式部署（2026-10-18，北京时间）
+
+用户授权构建并更新服务后，发布源码为 `bcaa5915219cfc2fd2236c38dff6a259853f2342`。Core 四节点均为 **0.1.158**，CCGateway 插件、Controller 和 Worker 为 **0.1.58**，21 号容器改用 `ccgateway-app:0.1.58`，CLI 固定 **2.1.302 / ccgateway-v7-request-modes**。保留原 `native` 请求模式，数据卷仍为 `ccg-21-data`；停止的历史账号容器未启动，原共享 Xray 容器身份和启动时间不变。
+
+- Core SHA-256：`2877a0e3afcdc057b5135f0abf75c8e4d492ed42c86355243ce4c170dd90ddee`；Worker：`35a92364f0e9d4578c7247a7bb3b823304d8eddd455418acd62c6506e70c43c1`。
+- 正式 release 为 `v0.1.158-r2`，manifest 为 `88875593dcb638c4586345e1f2f91a1f68a4e5f6243486f5e61deb8848831262`，bundle 为 `1281602fd82b9cf4b03baa642a4a824a311438dc27af466447e107d21282bfd0`。升级计划 `16f9829865a2611801c985e62e648b6a` 完成 27 步。首次打包误用旧 `local` 工具写入 Host API 6，被预检拒绝；改用生产外壳同版 `sup2api-gateway:0.1.125` 打包为 Host API 7，原失败制品保留，没有绕过兼容检查。
+- 用户要求先关闭插件包签名检查。核对发现四节点已有 `SUB2API_PLUGIN_VERIFY_SIGNATURES=false`，本次沿用该开关。旧插件签名私钥缓存缺失，新 ccgateway 包采用独立构建密钥生成包封装；旧 trust 元数据与其余五个 builtin 包字节保留。**重新开启插件验签前，需要使用可信密钥重新签发该包，或完成明确的信任迁移。** Core release 仍由原发布私钥签名并正常验签导入。
+- 管理 API 回读 `pinned_version=2.1.302`、`auto_update=false`，Worker build 为 0.1.58、源码 revision 一致、`modified=false`，runtime `up_to_date=true`。四入口 `/readyz` 均 200，实际前端 `CCGatewayView-D2CTSQjF.js` 与构建产物一致。
+
+### 9.1 透明出口修复
+
+重建 21 号时再次确认：DNS、路由及 Worker 健康，但 Docker `DOCKER-INTERNAL` 按原始公网目的 IP 丢弃已送往代理 MAC 的桥接帧，导致 `_activate` 网络探测失败。增加宿主部署服务 [ccgateway-bridge-guard.py](../../../deploy/gateway/ovh/ccgateway-bridge-guard.py) 和 [systemd unit](../../../deploy/gateway/ovh/ccgateway-bridge-guard.service)，版本 `41794f07b2561981f70db8df7127928253431244`。
+
+服务只管理 `CCG-PROXY-BRIDGE` 链与一个 `DOCKER-USER` 跳转，按运行中的账号身份、internal 网络、默认代理网关、双方 IP 和物理 veth 对生成规则：账号 TCP 只允许桥接到指定代理 peer，回包必须为 established/related。不放开宿主直连，不改默认路由或全局 sysctl；代理命名空间中的 TPROXY、input/forward 隔离继续生效。每 3 秒刷新，处理容器重建/删除；某个账号的 PID 在刷新中消失时仅撤掉该账号规则，不清空健康账号规则。新增 6 项测试覆盖身份、网络、端点变化和此竞态。
+
+服务已启用为 `/etc/systemd/system/ccgateway-bridge-guard.service`，程序安装在 `/usr/local/libexec/ccgateway-bridge-guard.py`。当前 OVH Docker 网络模式需要此宿主配套服务；仅复制 Worker/Controller 镜像到另一台采用相同 internal 桥接过滤的主机，不能认为透明出口自动可用。
+
+### 9.2 正式验收与恢复材料
+
+1. 官方 Windows CC 2.1.302 经生产 21 号调用 `claude-opus-5-5`，完成一次 Read 与两次模型请求，17 秒正常退出，工具错误为 0，项目文件和 Git diff 不变。
+2. 通过生产 Controller 新建独立草稿容器，先 build 后 direct；两次均 ready、CLI 2.1.302、创建时禁更，真实 API 均返回 200/OK。测试完成后删除此草稿（HTTP 200），未改生产 21 号的模式。
+3. 对专用探测目标进行断路验证：代理 peer 丢弃该流时请求超时；将该目标临时路由到 Docker 宿主网关时也超时；恢复指定代理路径后返回 204。测试规则和临时路由均已移除。该测试针对探测流，不声称穷尽所有网络故障场景。
+4. 脱敏结果见 [正式部署验证](cli-research/2.1.302/production-deployment.json)。服务器私有备份在 `~/sup2api-managed/backups/ccgateway-302-0.1.158/`，包括已验证恢复目录的 PostgreSQL dump、控制器状态/环境、21 号数据卷及旧 CLI/Worker 程序；构建日志在 `~/sup2api-managed/stage/0.1.158/`。
+
+当前仍保留第 5 节的 API Key-only、build 默认值和 mods 兼容边界。`count_tokens` 不支持的 404 也未在本次发布中补齐。
