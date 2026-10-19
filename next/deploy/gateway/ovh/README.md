@@ -1,6 +1,8 @@
 # OVH当前部署入口
 
-2026-10-19 最新：Core 四节点仍为 **0.1.168**，插件/Controller/Worker 更新至 **0.1.67**，21/30/31/32 固定 **CLI 2.1.302/v11**。build 已删除 extraBody 参数整包覆盖；21 号真实搜索请求和页面摘要请求均返回 200。通过插件 rollout 151 与 runtime/install 完成更新，账号保留卷和 IP，默认 build、禁更。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/native-build-v11-deployment-0.1.67.json)。
+2026-10-19 最新：Core 四节点 **0.1.169**、UI SDK **3.1.0**，上线使用日志改版、默认展开的调用 IP 汇总、通用 IP 单元格及列设置。列偏好默认每用户保存一个 JSON 对象，以开发者指定的表名为 key；可传入自定义存储适配器接服务端。缓存命中率使用归一化的 `prompt_tokens`。源码 `dffe8bfb2`，计划 `98bc4936a3f7eac3922abba7b7a1814d` completed/27；四节点版本、资源哈希、汇总 API 和 readyz 通过，浏览器验证列显隐、刷新保留、管理端/个人端隔离及滚动菜单后的恢复默认。数据库契约、内置包、当前插件版本及所有容器身份/启动时间/配置保持原样。插件/Controller/Worker 仍为 **0.1.67**。[发布验收](usage-ui-0.1.169.json)。
+
+2026-10-19 历史发布：Core 四节点仍为 **0.1.168**，插件/Controller/Worker 更新至 **0.1.67**，21/30/31/32 固定 **CLI 2.1.302/v11**。build 已删除 extraBody 参数整包覆盖；21 号真实搜索请求和页面摘要请求均返回 200。通过插件 rollout 151 与 runtime/install 完成更新，账号保留卷和 IP，默认 build、禁更。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/native-build-v11-deployment-0.1.67.json)。
 
 2026-10-19 历史发布：Core 四节点 **0.1.168**、插件/Controller/Worker **0.1.66**、CLI **2.1.302/v10**。上游 HTTP 错误状态和正文原样透传，非 JSON/空/大正文不再封装；仅本地转发失败生成错误。21/30/31/32 已迁移新镜像并固定原生 ELF SHA `2b88af3a…b1e905`，保留授权卷和 IP、默认 build、禁更。公网 400 正文与 Worker 哈希一致，Core 日志记录实际 `top_p: range: 0..1`。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。0.1.167 仅构建，未切换线上；最终 Core 源码为 `9c690dcbb`，Worker/镜像源码为 `234840c2c`。
 

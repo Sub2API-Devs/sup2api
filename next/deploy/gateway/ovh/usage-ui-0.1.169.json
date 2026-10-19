@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-19",
+  "release": "0.1.169",
+  "hostUIVersion": "3.1.0",
+  "sourceCommit": "dffe8bfb2cc37aaae02b4c00eeedfaa837f66897",
+  "manifest": "8c5f3b831480f6f249b8b6afb286d309bd8e308e2ecf25e54e332ce77baeacaa",
+  "bundle": "f0ed12e178ab263213c32f99a0db1d9cd42bb9749b3ab8050c4db61c1291b499",
+  "upgradePlan": "98bc4936a3f7eac3922abba7b7a1814d",
+  "upgradeStatus": "completed",
+  "upgradeCursor": 27,
+  "coreSHA256": "d35d025490b2ee29ed447729cf98e517b9285dd870f84431b544a42d276598d4",
+  "schemaContract": "ab632807227d05b55f414c1b36127689f69b66696e23dc00a05380fbaea65f1a",
+  "nodes": [
+    { "node": "sup2api-1", "version": "0.1.169", "readyHTTP": 200 },
+    { "node": "sup2api-2", "version": "0.1.169", "readyHTTP": 200 },
+    { "node": "sup2api-3", "version": "0.1.169", "readyHTTP": 200 },
+    { "node": "sup2api-4", "version": "0.1.169", "readyHTTP": 200 }
+  ],
+  "preservation": {
+    "schemaUnchanged": true,
+    "builtinPackagesUnchanged": true,
+    "activePluginVersionsUnchanged": true,
+    "containerIDsStartTimesAndConfigurationsUnchanged": true,
+    "mountOrderNote": "Docker inspect returned Mounts in different orders. Each differing configuration digest was required to match the exact baseline after reordering only that array."
+  },
+  "features": {
+    "ipPanelDefaultOpen": true,
+    "genericIPColumn": "TableColumn.format = ip; SIPAddress for custom layouts",
+    "genericColumnSettings": "STable.columnSettingsKey, STableColumnSettings, useTableColumns",
+    "defaultPersistence": "One localStorage JSON document per user, keyed inside by developer-defined table names",
+    "usageTableNames": ["usage-log", "my-usage-log"],
+    "customPersistence": "Caller-provided TableColumnStorage getItem/setItem/removeItem adapter; no default server preference API",
+    "cacheHitSummary": "Normalized prompt_tokens; unknown cached historical semantics return null"
+  },
+  "verification": {
+    "finalTargetedUITests": 55,
+    "typecheck": "passed",
+    "targetedLint": "passed",
+    "productionFrontendBuild": "passed",
+    "usageGoTests": "passed with isolated local PostgreSQL",
+    "linuxReleaseBuild": "passed",
+    "fourNodeAssetHashesMatchCandidate": true,
+    "fourNodeSummaryAPIChecks": 12,
+    "browser": {
+      "source": "Live production assets and read-only API through a loopback verification proxy; real credentials remained in server memory",
+      "ipPanelVisible": true,
+      "columnVisibility": true,
+      "persistenceAcrossReload": true,
+      "adminAndPersonalTableIsolation": true,
+      "restoreDefaultsAfterMenuScroll": true,
+      "pageErrors": 0,
+      "note": "Initial direct clicks on the off-screen reset item timed out. Explicit PageDown within the long admin menu followed by a normal click completed restoration.",
+      "persistenceEvidence": "ev_ca4934887fb6eba0fbc8befb55f4562e49408a278aacbb655a1575fa7fc073f7",
+      "restoreEvidence": "ev_7aff3025a46ce4ccce1103d6a95216f99d8edf8e50e2afd9bdf572471c53021a"
+    }
+  },
+  "backup": {
+    "directory": "/home/debian/sup2api-managed/backups/usage-ui-0.1.169",
+    "databaseBytes": 18464210,
+    "databaseSHA256": "d456a8eeef9303f636c966d0da9a4a0b194b0e4dfa5ad3008899b305c1b6e10a",
+    "restoreDirectoryEntries": 593,
+    "restoreExecuted": false
+  }
+}
