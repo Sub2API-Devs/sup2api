@@ -60,6 +60,7 @@ type row struct {
 	LastTestErrorSource *string
 	// SubscriptionType is the plan the runtime reported (CONTRACTS §59); nil while unknown.
 	SubscriptionType *string
+	AutoModels       *bool
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -69,7 +70,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.auto_models
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -79,7 +80,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.AutoModels)
 	return &a, err
 }
 
@@ -176,6 +177,7 @@ type View struct {
 	// Models the account serves (empty = all) and the client → upstream
 	// model mapping (CONTRACTS §18).
 	Models         []string          `json:"models"`
+	AutoModels     *bool             `json:"auto_models"`
 	ModelMapping   map[string]string `json:"model_mapping"`
 	RPMLimit       int               `json:"rpm_limit"`
 	TPMLimit       int64             `json:"tpm_limit"`
@@ -237,7 +239,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
-			MaxConcurrency: a.MaxConcurrency, Models: models, ModelMapping: a.mapping(),
+			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
@@ -514,6 +516,7 @@ type input struct {
 	AutoDisable    *bool              `json:"auto_disable"`
 	Status         *string            `json:"status"`
 	Models         *[]string          `json:"models"`
+	AutoModels     *bool              `json:"auto_models"`
 	ModelMapping   *map[string]string `json:"model_mapping"`
 	RPMLimit       *int               `json:"rpm_limit"`
 	TPMLimit       *int64             `json:"tpm_limit"`
@@ -552,6 +555,7 @@ func (in *input) changedFields() []string {
 	set("auto_disable", in.AutoDisable != nil)
 	set("status", in.Status != nil)
 	set("models", in.Models != nil)
+	set("auto_models", in.AutoModels != nil)
 	set("model_mapping", in.ModelMapping != nil)
 	set("rpm_limit", in.RPMLimit != nil)
 	set("tpm_limit", in.TPMLimit != nil)
@@ -978,7 +982,7 @@ func (s *Service) create(c *gin.Context) {
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
 			Status: status, Schedulable: sched, AutoDisable: autoDisable, Priority: int32(prio), Weight: int32(weight), MaxConcurrency: int32(maxc),
-			RpmLimit: int32(rpm), TpmLimit: tpm, ProxyId: proxyID, Models: models, ModelMapping: mapping,
+			RpmLimit: int32(rpm), TpmLimit: tpm, ProxyId: proxyID, Models: models, AutoModels: in.AutoModels, ModelMapping: mapping,
 		},
 	}})
 	if err != nil {
@@ -1004,12 +1008,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, '')) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1157,9 +1161,29 @@ func (s *Service) update(c *gin.Context) {
 		lifecycleSettings = &value
 	}
 	actorID, _ := core.UserID(ctx)
-	if _, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_update", Caller: &pluginv1.Caller{UserId: actorID}, Account: in.lifecycleSnapshot(cur, lifecycleSettings), ChangedFields: in.changedFields()}); err != nil {
+	snapshot := in.lifecycleSnapshot(cur, lifecycleSettings)
+	facts := core.AccountPreparationFacts{SubscriptionType: valueOr(cur.SubscriptionType, "")}
+	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{
+		Phase: "before_update", Caller: &pluginv1.Caller{UserId: actorID}, Account: snapshot,
+		ResourceFactsJson: factsJSON(facts), ChangedFields: in.changedFields(),
+	})
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
+	}
+	models, modelMapping := snapshot.GetProperties().GetModels(), snapshot.GetProperties().GetModelMapping()
+	patched, err := applyAccountPatch(ctx, before, &models, &modelMapping)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	for _, field := range patched {
+		switch field {
+		case "models":
+			in.Models = &models
+		case "model_mapping":
+			in.ModelMapping = &modelMapping
+		}
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)
@@ -1223,10 +1247,11 @@ func (s *Service) update(c *gin.Context) {
 			rpm_limit = COALESCE($15, rpm_limit),
 			tpm_limit = COALESCE($16, tpm_limit),
 			auto_disable = COALESCE($18, auto_disable),
+			auto_models = COALESCE($19, auto_models),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
-			in.AutoDisable); err != nil {
+			in.AutoDisable, in.AutoModels); err != nil {
 			return err
 		}
 		if in.GroupIDs != nil {
@@ -1240,7 +1265,7 @@ func (s *Service) update(c *gin.Context) {
 			}
 		}
 		if err := audit.Audit(ctx, tx, uid, "account.update", "account", itoa(id),
-			map[string]any{"fields": in.changedFields()}); err != nil {
+			map[string]any{"fields": in.changedFields(), "plugin_changed": patched}); err != nil {
 			return err
 		}
 		name := locked.Name

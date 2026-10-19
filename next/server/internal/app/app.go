@@ -225,6 +225,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	})
 	// Register balance providers (CONTRACTS §51).
 	acc.RegisterClaudeOAuthBalanceProvider()
+	// A changed subscription type recomputes automatic model lists (§59);
+	// account already imports ccgateway, so the hook is wired here.
+	ccg.SubscriptionChanged = acc.SubscriptionChanged
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).
 	bill.SetSyncDeps(billing.SyncDeps{Cipher: cipher, Keys: keys})

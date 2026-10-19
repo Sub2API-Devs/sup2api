@@ -5,6 +5,8 @@ import type { Account, AccountType } from '@/api/types'
 import AccountEditor from './AccountEditor.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
+import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
+import { SSwitch } from '@sub2api/ui'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }) }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
@@ -17,9 +19,10 @@ enableAutoUnmount(afterEach)
 const accountType = { plugin_key: 'ccgateway', type: 'apikey', creation_group: 'ccgateway', form: { mode: 'schema' }, platforms: [], default_models: [], default_model_mapping: {} } as unknown as AccountType
 const location = { ip: '8.8.8.8', country_code: 'US', timezone: 'America/Los_Angeles' }
 
-function render(account?: Account, realSelect = false) {
-  return shallowMount(AccountEditor, { props: { accountType, account }, global: { plugins: [i18n], stubs: {
+function render(account?: Account, realSelect = false, type: AccountType = accountType) {
+  return shallowMount(AccountEditor, { props: { accountType: type, account }, global: { plugins: [i18n], stubs: {
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
+    SSettingRow: { template: '<div><slot /></div>' },
     SField: { props: ['error'], template: '<div><slot /><p v-if="error">{{ error }}</p><slot v-else name="hint" /></div>' },
     SHint: { template: '<p><slot /></p>' },
     SSegmented: false,
@@ -254,5 +257,68 @@ describe('account container environment', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ settings: { locale: '', timezone: '' } }))
+  })
+})
+
+describe('automatic Claude Code models', () => {
+  const maxModels = ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5']
+  const proModels = ['claude-opus-5', 'claude-sonnet-5']
+  const managed = { ...accountType, type: 'managed', default_models: maxModels, default_models_by_subscription: { pro: proModels } } as unknown as AccountType
+  const subscribed = (subscription_type: string, extra: Partial<Account> = {}) =>
+    ({ ...savedAccount(), models: ['custom-model'], subscription_type, ...extra }) as Account
+  const tags = (w: ReturnType<typeof render>) => w.getComponent(ModelTagSelect)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    mocks.patch.mockResolvedValue(savedAccount())
+  })
+
+  it('shows the subscription preset read-only while on and submits auto_models', async () => {
+    const w = render(subscribed('pro'), false, managed)
+    await flushPromises()
+    expect(w.getComponent(SSwitch).props('modelValue')).toBe(true)
+    expect(tags(w).props('readonly')).toBe(true)
+    expect(tags(w).props('modelValue')).toEqual(proModels)
+    expect(w.find('[data-testid="models-clear"]').exists()).toBe(false)
+    expect(w.find('[data-testid="models-fill-defaults"]').exists()).toBe(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ auto_models: true, models: proModels }))
+  })
+
+  it('fills the preset when turned off and then submits the edited list', async () => {
+    const w = render(subscribed('max'), false, managed)
+    await flushPromises()
+    expect(tags(w).props('modelValue')).toEqual(maxModels)
+    w.getComponent(SSwitch).vm.$emit('update:modelValue', false)
+    await flushPromises()
+    expect(tags(w).props('readonly')).toBe(false)
+    expect(tags(w).props('modelValue')).toEqual(maxModels)
+    expect(w.find('[data-testid="models-clear"]').exists()).toBe(true)
+    tags(w).vm.$emit('update:modelValue', ['claude-opus-5', 'my-model'])
+    await flushPromises()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ auto_models: false, models: ['claude-opus-5', 'my-model'] }))
+  })
+
+  it('opens a manual account with its own list', async () => {
+    const w = render(subscribed('pro', { auto_models: false, models: ['my-model'] }), false, managed)
+    await flushPromises()
+    expect(w.getComponent(SSwitch).props('modelValue')).toBe(false)
+    expect(tags(w).props('readonly')).toBe(false)
+    expect(tags(w).props('modelValue')).toEqual(['my-model'])
+  })
+
+  it('follows the subscription the authorization reports for a new account', async () => {
+    const w = render(undefined, false, managed)
+    await flushPromises()
+    expect(tags(w).props('modelValue')).toEqual(maxModels)
+    w.getComponent(CCGatewayAccountAuth).vm.$emit('state', { key: 'd0123456789abcdef', authorized: true, subscription_type: 'pro' })
+    await flushPromises()
+    expect(tags(w).props('modelValue')).toEqual(proModels)
+    expect(tags(w).props('readonly')).toBe(true)
   })
 })

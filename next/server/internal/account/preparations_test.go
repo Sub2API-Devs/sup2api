@@ -16,17 +16,18 @@ import (
 type preparationPlugin struct {
 	*fakePlatform
 	phases []string
-	// facts is the resource_facts_json of the last before_create; patch
-	// answers it when set.
-	facts string
-	patch func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch
+	// facts / changed are the resource_facts_json and changed_fields of the
+	// last before_create or before_update; patch answers both when set.
+	facts   string
+	changed []string
+	patch   func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch
 }
 
 func (p *preparationPlugin) OnAccountLifecycle(_ context.Context, in *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error) {
 	p.phases = append(p.phases, in.Phase)
 	out := &pluginv1.AccountLifecycleResponse{SettingsJson: in.Account.SettingsJson, RunResource: true}
-	if in.Phase == "before_create" {
-		p.facts = in.ResourceFactsJson
+	if in.Phase == "before_create" || in.Phase == "before_update" {
+		p.facts, p.changed = in.ResourceFactsJson, in.ChangedFields
 		if p.patch != nil {
 			out.AccountPatch = p.patch(in)
 		}

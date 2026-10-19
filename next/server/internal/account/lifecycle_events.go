@@ -159,6 +159,9 @@ func (in *input) lifecycleSnapshot(current *row, settings *string) *pluginv1.Acc
 	properties.RpmLimit = int32(valueOr(in.RPMLimit, current.RPMLimit))
 	properties.TpmLimit = valueOr(in.TPMLimit, properties.TpmLimit)
 	properties.Models = valueOr(in.Models, properties.Models)
+	if in.AutoModels != nil {
+		properties.AutoModels = in.AutoModels
+	}
 	properties.ModelMapping = valueOr(in.ModelMapping, properties.ModelMapping)
 	if in.ProxyID.Set {
 		properties.ProxyId = nil
@@ -179,6 +182,6 @@ func (a *row) pluginAccount(credentials []byte) *pluginv1.Account {
 func (a *row) lifecycleSnapshot() *pluginv1.Account {
 	return &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type, SettingsJson: string(a.Settings), Properties: &pluginv1.AccountProperties{
 		Status: a.Status, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: int32(a.Priority), Weight: int32(a.Weight), MaxConcurrency: int32(a.MaxConcurrency),
-		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, ModelMapping: a.mapping(),
+		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 	}}
 }

@@ -2372,14 +2372,15 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 |---|---|---|
 | `defaultModels` | `string[]` | 预设模型列表。每项是完整模型 ID（§16，`manifest.ValidModelID`），不重复，最多 `manifest.MaxDefaultModels`（500，与账号上限一致） |
 | `defaultModelMapping` | `{from: to}` | 预设模型映射。两侧都是完整模型 ID，最多 500 条；`defaultModels` 非空时每个 `from` 都必须在其中（否则账号永远不会因该模型被调度） |
+| `defaultModelsBySubscription` | `{订阅类型: string[]}` | 按订阅类型（§59.1，键须匹配 `^[a-z][a-z0-9_]{0,31}$`，最多 32 个）替换 `defaultModels` 的预设，规则同 `defaultModels`。只供控制台预填与展示；保存时真正生效的列表由插件的 `before_create` / `before_update` 决定（§59.3） |
 
-校验（`sdk/manifest/check` 的 `defaultModels`）字段错误：`accountTypes[i].defaultModels`（`too_many`）、`accountTypes[i].defaultModels[j]`（`invalid` / `duplicate`）、`accountTypes[i].defaultModelMapping`（`too_many`）、`accountTypes[i].defaultModelMapping.<from>`（`invalid` / `not_in_models`）。旧宿主忽略这两个字段，`hostCompat` 不需要提高。
+校验（`sdk/manifest/check` 的 `defaultModels`）字段错误：`accountTypes[i].defaultModels`（`too_many`）、`accountTypes[i].defaultModels[j]`（`invalid` / `duplicate`）、`accountTypes[i].defaultModelMapping`（`too_many`）、`accountTypes[i].defaultModelMapping.<from>`（`invalid` / `not_in_models`）；`accountTypes[i].defaultModelsBySubscription`（`too_many`，或键名 `invalid`）、`accountTypes[i].defaultModelsBySubscription.<订阅>.defaultModels[...]`（同 `defaultModels`）。旧宿主忽略这些字段，`hostCompat` 不需要提高。
 
 核心**不会**自动把预设写进账号：经 API 创建、不带 `models` 的账号仍是"空 = 所有模型"。
 
 ### 41.2 接口
 
-`GET /account-types` 每项新增 `default_models: string[]`、`default_model_mapping: {from: to}`；未声明时为 `[]` / `{}`，不为 null。
+`GET /account-types` 每项新增 `default_models: string[]`、`default_model_mapping: {from: to}`；未声明时为 `[]` / `{}`，不为 null。声明了 `defaultModelsBySubscription` 时另有 `default_models_by_subscription: {订阅: string[]}`（未声明时省略）；控制台按账号的 `subscription_type` 取对应预设，没有对应项时用 `default_models`。
 
 ### 41.3 控制台
 
@@ -2397,7 +2398,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 |---|---|---|---|
 | anthropic 0.2.5 | `apikey` | Claude 现行与仍可用的模型（别名与带日期 ID），不含已退役模型 | 无 |
 | claude-oauth 0.2.1 | `claude_oauth`、`claude_setup_token` | 同 anthropic | 无 |
-| ccgateway 0.1.68 | `managed`、`apikey` | `claude-fable-5`、`claude-opus-5`、`claude-opus-4-8`、`claude-opus-4-7`、`claude-opus-4-6`、`claude-sonnet-5`、`claude-sonnet-4-6`、`claude-haiku-4-5-20251001`、`claude-fable-5-1`、`claude-opus-5-5`、`claude-sonnet-5-5`；Pro 订阅账号保存时去掉两个 Fable 模型（§59） | 无 |
+| ccgateway 0.1.68 | `managed`、`apikey` | `claude-fable-5`、`claude-opus-5`、`claude-opus-4-8`、`claude-opus-4-7`、`claude-opus-4-6`、`claude-sonnet-5`、`claude-sonnet-4-6`、`claude-haiku-4-5-20251001`、`claude-fable-5-1`、`claude-opus-5-5`、`claude-sonnet-5-5`；Pro 订阅账号保存时去掉两个 Fable 模型（§59）；0.1.69 起 `defaultModelsBySubscription.pro` 为去掉 Fable 后的 9 个，账号默认自动配置模型（§59.4） | 无 |
 | relay 0.2.2 | `relay_key` | 同 anthropic | 无（由中转站自己决定模型） |
 | openai 0.3.4 | `apikey` | new-api OpenAI 列表中走 chat / responses / embeddings 的模型（不含本平台没有端点的音频、图片、实时、视频模型，也不含 `gpt-4.5-preview*`、`o1-preview`、`o1-mini` 等已退役模型） | 无 |
 | gemini 0.2.4 | `apikey` | new-api Gemini 列表中走 generateContent 的模型（不含 imagen、veo、TTS、原生音频，也不含 `gemini-1.5-*` 与旧 2.5 预览版） | 无 |
@@ -4062,19 +4063,24 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - `core.AccountLifecycleResource.CheckAccountPreparation` 改为返回 `core.AccountPreparationFacts{SubscriptionType}`；ccgateway 实现从准备容器的 `admin/status` 读取。旧的 `ccgateway_runtime` 创建路径同样取得。
 - `POST /accounts` 保存前：把事实写入 `subscription_type`，并作为 `resource_facts_json`（JSON 对象，未知时为空串）随 `before_create` 交给插件。
 - 已有账号：控制台查看凭证状态（`GET …/health`）与重新授权提交时，Worker 报告了订阅类型就更新账号；报告为空不清除已有值（旧 Worker 不报告）。
+- 迁移 0055：`accounts.auto_models boolean`（NULL = 按插件默认，即自动；`false` = 用户手动维护模型列表）。账号视图与 `POST /accounts`、`PATCH /accounts/:id` 增加 `auto_models: boolean | null`，并作为 `AccountProperties.auto_models`（字段 12，optional）随生命周期请求交给插件。
+- 订阅类型确实改变后（`UPDATE … IS DISTINCT FROM` 影响了行；重新授权在事务提交之后），ccgateway 服务调用 `SubscriptionChanged` 回调（由 `app` 注入账号服务，ccgateway 包不反向依赖 account）：`auto_models` 不为 `false` 的账号用 `before_update`（`changed_fields = ["subscription_type"]`，`resource_facts_json` 为当前订阅）重新询问插件，补丁改变了模型时写回、审计 `account.models.auto`（`detail` 含 `subscription_type`、`plugin_changed`、`models`），并照常发 `account.updated`、标记生命周期待同步、失效账号缓存。只在账号行未被并发修改（`updated_at` 不变）且仍为自动模式时写入。失败只记日志，下次保存或订阅变化时再算。
 
-### 59.3 插件协议：`before_create` 可以修改账号
+### 59.3 插件协议：`before_create` / `before_update` 可以修改账号
 
 - `AccountLifecycleRequest.resource_facts_json`（字段 7）：准备阶段观察到的事实，目前只有 `subscription_type`。
-- `AccountLifecycleResponse.account_patch`（字段 4，`AccountPatch`）：`models`（`ModelList.ids`）与 `model_mapping`（`ModelMappingValue.entries`），未给的字段不改，给了就整体替换；只在 `before_create` 生效。
-- 核心按调用方输入的同一规则校验（完整模型 ID、去重、最多 500 个），不合规返回插件不可用错误、账号不保存。审计 `account.create` 的 `detail` 增加 `subscription_type` 与 `plugin_changed`（被插件改过的字段）。
+- `AccountLifecycleResponse.account_patch`（字段 4，`AccountPatch`）：`models`（`ModelList.ids`）与 `model_mapping`（`ModelMappingValue.entries`），未给的字段不改，给了就整体替换；在 `before_create` 与 `before_update` 生效（核心 0.1.172 起；`before_update` 同样带 `resource_facts_json`，取账号已记录的订阅类型）。
+- 核心按调用方输入的同一规则校验（完整模型 ID、去重、最多 500 个），不合规返回插件不可用错误、账号不保存。审计 `account.create` 的 `detail` 增加 `subscription_type` 与 `plugin_changed`（被插件改过的字段）；`account.update` 的 `detail` 增加 `plugin_changed`。
 - 旧插件不返回补丁，行为不变，不需要 manifest 开关；旧核心忽略补丁，新插件的 `hostCompat` 不需要提高。
 
 ### 59.4 ccgateway 0.1.68 的规则
 
 `managed` 账号、`subscription_type == "pro"`、提交的模型列表与内置列表元素相同（不计顺序）时，返回去掉两个 Fable 模型的列表；Max、team、enterprise、未知订阅、用户改过的列表和 `apikey` 账号都不改。内置列表定义在 `internal/ccgateway/models.go` 的 `DefaultModels`，测试保证与 manifest 一致。
 
+**0.1.69 修订（自动配置模型，`hostCompat >=0.1.172`）：** `before_create` 与 `before_update` 中，`auto_models` 不为 `false`（含未设置）时总是返回内置列表：`pro` 去掉两个 Fable 模型（9 个，`DefaultModelsForSubscription`），其他与未知订阅为全部 11 个，`apikey` 账号没有订阅类型、按全部处理；用户提交的列表被覆盖。`auto_models == false` 时不返回补丁，用户的列表（包括空 = 所有模型）原样保存。manifest 的 `defaultModelsBySubscription.pro` 与该规则一致（测试保证）。
+
 ### 59.5 控制台
 
 - 账号列表在类型后显示订阅徽标（Max / Pro …），详情增加"订阅"一行。
 - 新建 Claude Code 订阅账号的模型区提示保存时会按订阅类型调整；保存结果与提交的列表不同时提示"已按 Pro 订阅调整模型列表（N 个模型）"。保存后照常编辑。
+- Claude Code 账号的模型区顶部有"自动配置模型"开关，默认打开（账号 `auto_models` 为 null 或 true）：模型列表只读，显示按订阅取的预设（41.2；新建时用授权面板报告的订阅），填入预设、获取、清空等按钮隐藏，保存时提交该预设与 `auto_models: true`。关闭时先填入当前预设，之后可随意增删，保存 `auto_models: false`，插件不再改动。模型映射不受开关影响。

@@ -297,12 +297,15 @@ type AccountType struct {
 	// (ValidModelID), at most MaxDefaultModels each; every mapping key must
 	// be in DefaultModels when that list is not empty, or the mapped model
 	// could never be scheduled.
-	DefaultModels       []string                        `json:"defaultModels,omitempty"`
-	DefaultModelMapping map[string]string               `json:"defaultModelMapping,omitempty"`
-	CommonControls      map[string]AccountCommonControl `json:"commonControls,omitempty"`
-	ExtensionsSchema    json.RawMessage                 `json:"extensionsSchema,omitempty"`
-	Lifecycle           *AccountLifecycle               `json:"lifecycle,omitempty"`
-	ModelAvailability   bool                            `json:"modelAvailability,omitempty"`
+	DefaultModels []string `json:"defaultModels,omitempty"`
+	// Optional UI presets by runtime-reported subscription type. Business
+	// enforcement still belongs to the plugin's account lifecycle hooks.
+	DefaultModelsBySubscription map[string][]string             `json:"defaultModelsBySubscription,omitempty"`
+	DefaultModelMapping         map[string]string               `json:"defaultModelMapping,omitempty"`
+	CommonControls              map[string]AccountCommonControl `json:"commonControls,omitempty"`
+	ExtensionsSchema            json.RawMessage                 `json:"extensionsSchema,omitempty"`
+	Lifecycle                   *AccountLifecycle               `json:"lifecycle,omitempty"`
+	ModelAvailability           bool                            `json:"modelAvailability,omitempty"`
 	// Quota declares that accounts of this type have subscription quota
 	// windows (5-hour / weekly limits and the like) the host can track
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console

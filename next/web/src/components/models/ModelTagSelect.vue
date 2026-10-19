@@ -5,13 +5,13 @@
 // highlighted suggestion, pasting a comma / line separated list adds every
 // id, Backspace in an empty box removes the last chip. A chip whose model is
 // mapped shows the target. Ids are checked by the parent (`invalid` emits).
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SIcon, toast } from '@sub2api/ui'
 import { copyText } from '@/utils/format'
 import { isModelId, splitModelIds } from '@/views/accounts/modelIds'
 
-const props = defineProps<{ modelValue: string[]; options: string[]; mapping?: Record<string, string>; placeholder?: string; error?: boolean }>()
+const props = defineProps<{ modelValue: string[]; options: string[]; mapping?: Record<string, string>; placeholder?: string; error?: boolean; readonly?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string[]): void; (e: 'invalid', model: string): void }>()
 const { t } = useI18n()
 const draft = ref('')
@@ -19,6 +19,7 @@ const open = ref(false)
 const active = ref(0)
 const box = ref<HTMLInputElement>()
 const chosen = computed(() => new Set(props.modelValue))
+watch(() => props.readonly, () => { open.value = false; draft.value = '' })
 
 /** Suggestions matching the typed text, chosen ones last; at most 50. */
 const suggestions = computed(() => {
@@ -28,6 +29,7 @@ const suggestions = computed(() => {
 })
 
 function add(text: string) {
+  if (props.readonly) return
   const list = [...props.modelValue]
   for (const id of splitModelIds(text)) {
     if (!isModelId(id)) {
@@ -40,12 +42,14 @@ function add(text: string) {
 }
 
 function toggle(model: string) {
+  if (props.readonly) return
   emit('update:modelValue', chosen.value.has(model) ? props.modelValue.filter((m) => m !== model) : [...props.modelValue, model])
   draft.value = ''
   box.value?.focus()
 }
 
 function commit() {
+  if (props.readonly) return
   const typed = draft.value.trim()
   const pick = open.value ? suggestions.value[active.value] : undefined
   draft.value = ''
@@ -100,9 +104,9 @@ async function copy(model: string) {
 <template>
   <div class="relative" data-testid="models-tags">
     <div
-      class="input input-group !h-auto min-h-control flex-wrap !gap-1.5 !py-1.5 cursor-text"
-      :class="error ? 'input-error' : ''"
-      @click="box?.focus(); open = true"
+      class="input input-group !h-auto min-h-control flex-wrap !gap-1.5 !py-1.5"
+      :class="[error ? 'input-error' : '', readonly ? 'cursor-default' : 'cursor-text']"
+      @click="if (!readonly) { box?.focus(); open = true }"
     >
       <span
         v-for="model in modelValue"
@@ -114,11 +118,12 @@ async function copy(model: string) {
         <button type="button" class="truncate" :title="mapping?.[model] ? t('accounts.editorUi.mappedTo', { model: mapping[model] }) : t('accounts.editorUi.clickToCopy')" @click.stop="copy(model)">
           {{ model }}<template v-if="mapping?.[model]"> → {{ mapping[model] }}</template>
         </button>
-        <button type="button" class="shrink-0 rounded opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" :aria-label="t('accounts.editorUi.removeModel', { model })" @click.stop="toggle(model)">
+        <button v-if="!readonly" type="button" class="shrink-0 rounded opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" :aria-label="t('accounts.editorUi.removeModel', { model })" @click.stop="toggle(model)">
           <SIcon name="x" class="h-3 w-3" />
         </button>
       </span>
       <input
+        v-if="!readonly"
         ref="box"
         v-model="draft"
         class="!h-7 min-w-[10rem] !flex-1 !p-0.5 font-mono text-sm"
@@ -136,7 +141,7 @@ async function copy(model: string) {
       />
     </div>
     <ul
-      v-if="open && suggestions.length"
+      v-if="!readonly && open && suggestions.length"
       role="listbox"
       class="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800"
       data-testid="models-suggestions"

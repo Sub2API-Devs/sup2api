@@ -57,6 +57,7 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 	if !accountKeyPattern.MatchString(key) && !isDraftKey(key) {
 		return "", draftNotFound(core.ErrInvalidArgument)
 	}
+	subscriptionChanged := false
 	err := s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, reauthLockSQL, accountID); err != nil {
 			return err
@@ -90,9 +91,11 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&health) != nil || !health.LoggedIn {
 			return reasonError(core.ErrInvalidArgument, "draft_not_authorized")
 		}
-		if err := recordSubscription(ctx, tx, accountID, health.SubscriptionType); err != nil {
+		changed, err := recordSubscription(ctx, tx, accountID, health.SubscriptionType)
+		if err != nil {
 			return err
 		}
+		subscriptionChanged = changed
 		if fn != nil {
 			return fn(tx, "")
 		}
@@ -100,6 +103,10 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 	})
 	if err == nil {
 		s.Kick(key)
+		// Only once the new subscription type is committed (CONTRACTS §59).
+		if subscriptionChanged {
+			s.subscriptionChanged(ctx, accountID)
+		}
 	}
 	return "", err
 }

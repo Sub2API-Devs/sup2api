@@ -129,13 +129,39 @@ const activeSection = ref<EditorSection>('connection')
 const formEl = ref<HTMLFormElement>()
 watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { flush: 'post' })
 
-const editorModels = useModelsEditor(() => props.accountType)
+const autoModels = ref(true)
+const ccgState = ref<{ key: string | null; authorized: boolean; subscription_type?: string }>({ key: null, authorized: false })
+const automaticModels = computed(() => props.accountType?.plugin_key === 'ccgateway' && autoModels.value)
+const editorModels = useModelsEditor(
+  () => props.accountType,
+  () => props.account?.subscription_type ?? ccgState.value.subscription_type
+)
 const {
   models, mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
   modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
-  rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
+  rejectModel, syncModelsText, setModelsTextMode, formatModelsText, clearModels, copyModels, fillDefaultModels,
   syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping, clearPrefill
 } = editorModels
+function setAutoModels(value: boolean) {
+  autoModels.value = value
+  // Both transitions start from the preset; only loading a saved manual
+  // account keeps its custom list. Mapping remains an independent setting.
+  editorModels.setModels([...defaultModels.value])
+  prefilled.value = false
+}
+function mergeModels(ids: string[]) {
+  if (automaticModels.value) {
+    toast(t('accounts.editorUi.autoModelsHint'), 'info')
+    return 0
+  }
+  return editorModels.mergeModels(ids)
+}
+watch(defaultModels, (next, previous) => {
+  if (props.accountType?.plugin_key !== 'ccgateway') return
+  if (automaticModels.value || (!props.account && JSON.stringify(models.value) === JSON.stringify(previous))) {
+    editorModels.setModels([...next])
+  }
+})
 /** JSON example of the mapping box (not an i18n message: braces are placeholders there). */
 const mappingPlaceholder = '{\n  "claude-3-5-sonnet-latest": "claude-sonnet-4-5"\n}'
 /** 可视化 / JSON switch of the model list and mapping cards (new-api's 可视化 / 手动编辑). */
@@ -185,7 +211,6 @@ const preparationUrl = computed(() => props.accountType?.lifecycle?.preparation 
 /** New Claude Code account: authorized in a draft container before it is saved. */
 const ccgDraft = computed(() => ccgOAuth.value && !editing.value)
 /** Draft state reported by the authorization panel: saving waits for `authorized`. */
-const ccgState = ref<{ key: string | null; authorized: boolean }>({ key: null, authorized: false })
 const ccgAuth = ref<InstanceType<typeof CCGatewayAccountAuth>>()
 const ccgSaveBlocked = computed(() => ccgDraft.value && !ccgState.value.authorized)
 /** A prepared runtime keeps the environment it was started with. */
@@ -371,6 +396,7 @@ const syncModelsTextIfNeeded = () => !modelsTextMode.value || syncModelsText()
 
 /** Fills the form from the account (or a new one) and the account type. */
 function fillForm(a: Account | null | undefined, at: AccountType | null) {
+  autoModels.value = a?.auto_models ?? true
   basic.name = a?.name || ''
   basic.group_ids = [...(a?.group_ids || [])]
   basic.proxy_id = a?.proxy_id ?? null
@@ -386,7 +412,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.tpm_limit = a?.tpm_limit ?? 0
   resetEnvironment(a?.settings)
   if (a) editorModels.setSaved(a.models, a.model_mapping)
-  if (!a || shouldPrefillOnEdit(a, at)) editorModels.applyDefaults(at)
+  if (!a || (at?.plugin_key === 'ccgateway' ? autoModels.value : shouldPrefillOnEdit(a, at))) editorModels.applyDefaults(at)
 }
 
 /** Switching the auth method of a new account: untouched defaults and common controls follow the type. */
@@ -479,6 +505,7 @@ async function invalidSection(form: HTMLFormElement): Promise<EditorSection | 'n
 }
 
 function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
+  if (automaticModels.value) editorModels.setModels([...defaultModels.value])
   const body: Record<string, unknown> = {
     name: basic.name.trim(),
     group_ids: basic.group_ids,
@@ -492,6 +519,7 @@ function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
   if (schedulingControl.value.configurable) body.schedulable = basic.schedulable
   if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
   if (needsProxy.value) body.settings = { locale: ccgSettings.locale, timezone: ccgSettings.timezone }
+  if (needsProxy.value) body.auto_models = autoModels.value
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   if (proxyUrlToSend.value) body.proxy_url = proxyUrlToSend.value
   else body.proxy_id = basic.proxy_id
@@ -691,14 +719,17 @@ async function save(event: Event) {
 
         <!-- ============================================================ models -->
         <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-4">
-          <SAlert v-if="prefilled && !editing" tone="primary" dense data-testid="models-prefilled">{{ t('accounts.editorUi.prefilled', { what: prefillWhat }) }}</SAlert>
-          <SAlert v-else-if="prefilled" tone="warning" dense data-testid="models-prefilled-edit">
+          <SSettingRow v-if="needsProxy" :label="t('accounts.editorUi.autoModels')" :description="t('accounts.editorUi.autoModelsHint')">
+            <SSwitch :model-value="autoModels" :aria-label="t('accounts.editorUi.autoModels')" data-testid="auto-models" @update:model-value="setAutoModels" />
+          </SSettingRow>
+          <SAlert v-if="prefilled && !editing && !automaticModels" tone="primary" dense data-testid="models-prefilled">{{ t('accounts.editorUi.prefilled', { what: prefillWhat }) }}</SAlert>
+          <SAlert v-else-if="prefilled && !automaticModels" tone="warning" dense data-testid="models-prefilled-edit">
             {{ t('accounts.editorUi.prefilledEdit', { what: prefillWhat }) }}
             <template #actions>
               <SButton size="sm" variant="ghost" data-testid="models-prefilled-clear" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SButton>
             </template>
           </SAlert>
-          <SHint v-if="ccgDraft" size="xs" class="block" data-testid="models-by-subscription">{{ t('accounts.modelsBySubscription') }}</SHint>
+          <SHint v-if="ccgDraft && automaticModels" size="xs" class="block" data-testid="models-by-subscription">{{ t('accounts.modelsBySubscription') }}</SHint>
 
           <SCard :subtitle="t('accounts.editorUi.modelsCardHint')">
             <template #title>
@@ -713,21 +744,22 @@ async function save(event: Event) {
 
             <SField :error="modelsError || serverModelsError">
               <div v-if="modelsTextMode" class="space-y-2">
-                <STextarea v-model="modelsText" mono :rows="10" :placeholder="t('accounts.modelsJsonPlaceholder')" data-testid="models-json" @blur="syncModelsText()" />
+                <STextarea v-model="modelsText" :readonly="automaticModels" mono :rows="10" :placeholder="t('accounts.modelsJsonPlaceholder')" data-testid="models-json" @blur="syncModelsText()" />
               </div>
-              <ModelTagSelect v-else v-model="models" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" :placeholder="t('accounts.modelsPlaceholder')" :error="!!(modelsError || serverModelsError)" @update:model-value="modelsError = ''" @invalid="rejectModel" />
+              <ModelTagSelect v-else v-model="models" :readonly="automaticModels" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" :placeholder="t('accounts.modelsPlaceholder')" :error="!!(modelsError || serverModelsError)" @update:model-value="modelsError = ''" @invalid="rejectModel" />
               <template #hint>
-                <SHint v-if="!models.length && !modelsTextMode" inline size="xs" tone="success" class="inline-flex items-center gap-1"><SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}</SHint>
+                <span v-if="automaticModels">{{ t('accounts.editorUi.autoModelsHint') }}</span>
+                <SHint v-else-if="!models.length && !modelsTextMode" inline size="xs" tone="success" class="inline-flex items-center gap-1"><SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}</SHint>
                 <template v-else>{{ modelsTextMode ? t('accounts.editorUi.modelsJsonHint') : t('accounts.editorUi.modelsInputHint') }}</template>
               </template>
             </SField>
 
             <div class="mt-3 flex flex-wrap items-center gap-2">
-              <SButton v-if="defaultModels.length" size="sm" variant="primary" icon="download" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}</SButton>
-              <SButton v-if="canFetch" size="sm" icon="refresh" :loading="fetching" data-testid="models-fetch" :title="t('accounts.fetchModelsHint')" @click="fetchModels">{{ t('accounts.fetchModels') }}</SButton>
-              <SButton v-if="modelsTextMode" size="sm" variant="ghost" icon="code" data-testid="models-format" @click="formatModelsText">{{ t('accounts.editorUi.formatJson') }}</SButton>
+              <SButton v-if="defaultModels.length && !automaticModels" size="sm" variant="primary" icon="download" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}</SButton>
+              <SButton v-if="canFetch && !automaticModels" size="sm" icon="refresh" :loading="fetching" data-testid="models-fetch" :title="t('accounts.fetchModelsHint')" @click="fetchModels">{{ t('accounts.fetchModels') }}</SButton>
+              <SButton v-if="modelsTextMode && !automaticModels" size="sm" variant="ghost" icon="code" data-testid="models-format" @click="formatModelsText">{{ t('accounts.editorUi.formatJson') }}</SButton>
               <SButton size="sm" variant="ghost" icon="copy" :disabled="!models.length" data-testid="models-copy" @click="copyModels">{{ t('accounts.editorUi.copyModels') }}</SButton>
-              <SButton size="sm" variant="ghost" icon="trash" :disabled="!models.length && !modelsText.trim()" data-testid="models-clear" @click="clearModels">{{ t('accounts.editorUi.clearModels') }}</SButton>
+              <SButton v-if="!automaticModels" size="sm" variant="ghost" icon="trash" :disabled="!models.length && !modelsText.trim()" data-testid="models-clear" @click="clearModels">{{ t('accounts.editorUi.clearModels') }}</SButton>
             </div>
             <p class="mt-3 flex items-start gap-1.5 text-xs text-fg-subtle"><SIcon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />{{ t('accounts.editorUi.groupModelHint') }}</p>
             <datalist id="account-model-options">

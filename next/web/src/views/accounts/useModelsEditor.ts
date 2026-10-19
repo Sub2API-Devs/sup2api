@@ -19,7 +19,7 @@ const MAPPING_TEMPLATE: Mapping = { 'claude-3-5-sonnet-latest': 'claude-sonnet-4
 const modelsJSON = (list: string[]) => (list.length ? JSON.stringify(list, null, 2) : '')
 const mappingJSON = (m: Mapping) => (Object.keys(m).length ? JSON.stringify(m, null, 2) : '')
 
-export function useModelsEditor(accountType: () => AccountType | null | undefined) {
+export function useModelsEditor(accountType: () => AccountType | null | undefined, subscription: () => string | null | undefined = () => undefined) {
   const { t } = useI18n()
   const models = ref<string[]>([])
   const mapping = ref<Mapping>({})
@@ -36,7 +36,9 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
   const mappingJsonMode = ref(false)
   const mappingError = ref('')
 
-  const defaultModels = computed(() => accountType()?.default_models || [])
+  const defaultsFor = (at: AccountType | null | undefined) =>
+    at?.default_models_by_subscription?.[subscription() || ''] ?? at?.default_models ?? []
+  const defaultModels = computed(() => defaultsFor(accountType()))
   const defaultMapping = computed<Mapping>(() => accountType()?.default_model_mapping || {})
   /** "12 models" (+ "and 3 mappings" only when the preset has a mapping; most have none). */
   const prefillWhat = computed(() => {
@@ -196,9 +198,9 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
     prefilled.value = false
   }
   const sameDefaults = (at: AccountType | null | undefined) =>
-    JSON.stringify(models.value) === JSON.stringify(at?.default_models || []) && JSON.stringify(mapping.value) === JSON.stringify(at?.default_model_mapping || {})
+    JSON.stringify(models.value) === JSON.stringify(defaultsFor(at)) && JSON.stringify(mapping.value) === JSON.stringify(at?.default_model_mapping || {})
   function applyDefaults(at: AccountType | null | undefined) {
-    models.value = [...(at?.default_models || [])]
+    models.value = [...defaultsFor(at)]
     mapping.value = { ...(at?.default_model_mapping || {}) }
     prefilled.value = models.value.length > 0 || Object.keys(mapping.value).length > 0
   }
@@ -235,7 +237,7 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
   return {
     models, mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
     modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
-    rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
+    setModels, rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
     syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping,
     clearPrefill, sameDefaults, applyDefaults, setSaved, resetEditing, commitPending, payload
   }

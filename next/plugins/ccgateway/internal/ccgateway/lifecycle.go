@@ -23,10 +23,10 @@ func (p *Plugin) OnAccountLifecycle(_ context.Context, in *pluginv1.AccountLifec
 	encoded, _ := json.Marshal(settings)
 	out := &pluginv1.AccountLifecycleResponse{SettingsJson: string(encoded)}
 	switch in.GetPhase() {
-	case "before_create":
+	case "before_create", "before_update":
 		out.AccountPatch = subscriptionModels(in)
 		return out, nil
-	case "validate", "before_update":
+	case "validate":
 		return out, nil
 	case "prepare":
 		// No proxy is direct egress from the runtime host.

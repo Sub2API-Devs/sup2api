@@ -20,7 +20,7 @@ func TestQuotaReleaseHostCompatibility(t *testing.T) {
 	if err := json.Unmarshal(manifestJSON, &m); err != nil {
 		t.Fatal(err)
 	}
-	for version, want := range map[string]bool{"0.1.115": false, "0.1.123": false, "0.1.124": true, "0.1.124-dev": true, "0.2.0": false} {
+	for version, want := range map[string]bool{"0.1.124": false, "0.1.171": false, "0.1.172": true, "0.1.172-dev": true, "0.2.0": false} {
 		got, err := check.HostCompatible(m.HostCompat, version)
 		if err != nil || got != want {
 			t.Fatalf("host %s: compatible=%v want=%v err=%v", version, got, want, err)
@@ -73,6 +73,9 @@ func TestManifestAndUsageContract(t *testing.T) {
 		}
 	}
 	managed := m.AccountTypes[0]
+	if !slices.Equal(managed.DefaultModelsBySubscription["pro"], ccgateway.DefaultModelsForSubscription("pro")) {
+		t.Fatal("the Pro UI preset must match the plugin's save policy")
+	}
 	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || !managed.Quota.AutoRefresh || len(managed.Quota.Windows) != 4 {
 		t.Fatal("managed accounts require quota refresh and model availability")
 	}

@@ -720,8 +720,10 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 				SubscriptionType string `json:"subscription_type"`
 			}
 			if json.Unmarshal(raw, &facts) == nil {
-				if err := recordSubscription(ctx, s.DB.Pool, d.AccountID, facts.SubscriptionType); err != nil {
+				if changed, err := recordSubscription(ctx, s.DB.Pool, d.AccountID, facts.SubscriptionType); err != nil {
 					slog.WarnContext(ctx, "ccgateway: record subscription type", "account", d.AccountID, "err", err)
+				} else if changed {
+					s.subscriptionChanged(ctx, d.AccountID)
 				}
 			}
 		}

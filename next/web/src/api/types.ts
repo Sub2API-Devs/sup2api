@@ -276,6 +276,7 @@ export interface AccountType {
   sensitive_fields: string[]
   /** Plugin suggestions prefilled into a new account's models / model_mapping (CONTRACTS §41). */
   default_models?: string[]
+  default_models_by_subscription?: Record<string, string[]>
   default_model_mapping?: Record<string, string>
   common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
@@ -306,6 +307,8 @@ export interface Account {
   auto_disable: boolean
   /** Models this account can serve; empty = all models. */
   models: string[]
+  /** Null/absent follows the account plugin's default. */
+  auto_models?: boolean | null
   /** Client model -> upstream model, rewritten before the plugin builds the request. */
   model_mapping: Record<string, string>
   /** 0 = unlimited. */
@@ -386,6 +389,7 @@ export interface CcgRuntimeStatus {
 
 /** GET .../health: the Claude login state inside the container. */
 export interface CcgRuntimeHealth {
+  subscription_type?: string
   healthy: boolean
   logged_in: boolean
   auth_method?: string

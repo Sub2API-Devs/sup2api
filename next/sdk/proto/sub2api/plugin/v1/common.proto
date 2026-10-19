@@ -51,6 +51,8 @@ message AccountProperties {
   optional int64 proxy_id = 9;
   repeated string models = 10;
   map<string, string> model_mapping = 11;
+  // Explicit automatic/manual model configuration; absent uses the plugin default.
+  optional bool auto_models = 12;
 }
 
 message AccountLifecycleRequest {
@@ -61,7 +63,7 @@ message AccountLifecycleRequest {
   string action = 5;
   repeated string changed_fields = 6;
   // Facts the core learned from the account's preparation, as a JSON object;
-  // only on before_create of a prepared account, "" otherwise. Known keys:
+  // on before_create or before_update (saved account facts), "" when unknown. Known keys:
   // "subscription_type" (e.g. "max", "pro"), absent when unknown.
   string resource_facts_json = 7;
 }
@@ -70,8 +72,8 @@ message AccountLifecycleResponse {
   repeated FieldError errors = 1;
   string settings_json = 2;
   bool run_resource = 3;
-  // before_create only: changes the plugin makes to the account before it is
-  // saved; ignored in other phases. The core validates them like the
+  // before_create / before_update: changes the plugin makes before saving;
+  // ignored in other phases. The core validates them like the
   // caller's own input.
   AccountPatch account_patch = 4;
 }

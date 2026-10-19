@@ -77,11 +77,23 @@ func safeAuthStatus(raw []byte) (any, error) {
 
 // recordSubscription keeps on the account the subscription type Claude Code
 // reported in its runtime (CONTRACTS §59). An unknown value ("") leaves the
-// recorded one alone: older Workers do not report it.
-func recordSubscription(ctx context.Context, q store.Querier, accountID int64, value string) error {
+// recorded one alone: older Workers do not report it. It reports whether the
+// recorded value actually changed.
+func recordSubscription(ctx context.Context, q store.Querier, accountID int64, value string) (bool, error) {
 	if value = normalizeSubscription(value); value == "" || accountID <= 0 {
-		return nil
+		return false, nil
 	}
-	_, err := q.Exec(ctx, `UPDATE accounts SET subscription_type=$2 WHERE id=$1 AND subscription_type IS DISTINCT FROM $2`, accountID, value)
-	return err
+	tag, err := q.Exec(ctx, `UPDATE accounts SET subscription_type=$2 WHERE id=$1 AND subscription_type IS DISTINCT FROM $2`, accountID, value)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// subscriptionChanged runs the SubscriptionChanged hook, when any, after a
+// changed subscription type was committed.
+func (s *Service) subscriptionChanged(ctx context.Context, accountID int64) {
+	if s.SubscriptionChanged != nil {
+		s.SubscriptionChanged(ctx, accountID)
+	}
 }

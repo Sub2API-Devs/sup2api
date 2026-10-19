@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.124 <0.2.0",
+  "hostCompat": ">=0.1.172 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -68,6 +68,9 @@
         "schedulable": {"configurable": true, "default": true}
       },
       "defaultModels": ["claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"],
+      "defaultModelsBySubscription": {
+        "pro": ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-sonnet-5-5"]
+      },
       "platforms": [
         {
           "platform": "anthropic",

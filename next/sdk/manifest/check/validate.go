@@ -23,6 +23,7 @@ var (
 	userPermKeyRe   = regexp.MustCompile(`^[a-z0-9_]+(:[a-z0-9_]+)+$`)
 	idRe            = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
 	accountTypeIDRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
+	subscriptionRe  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	protocolRe      = regexp.MustCompile(`^[a-z0-9_.-]+$`)
 	allowedMethods  = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 	// errorFormats are the upstream error renderings the gateway implements
@@ -1004,6 +1005,16 @@ func (v *validator) guardedSettings(f string, at manifest.AccountType) {
 // manifest.MaxDefaultModels each. A mapping key missing from a non-empty
 // defaultModels is rejected too: the account would never be scheduled for it.
 func (v *validator) defaultModels(f string, at manifest.AccountType) {
+	if len(at.DefaultModelsBySubscription) > 32 {
+		v.add(f+".defaultModelsBySubscription", "too_many", "at most 32 subscription presets")
+	}
+	for _, plan := range sortedKeys(at.DefaultModelsBySubscription) {
+		if !subscriptionRe.MatchString(plan) {
+			v.add(f+".defaultModelsBySubscription", "invalid", "invalid subscription type %q", plan)
+		}
+		// Reuse the same bounded complete-id validation for each preset.
+		v.defaultModels(f+".defaultModelsBySubscription."+plan, manifest.AccountType{DefaultModels: at.DefaultModelsBySubscription[plan]})
+	}
 	if len(at.DefaultModels) > manifest.MaxDefaultModels {
 		v.add(f+".defaultModels", "too_many", "at most %d default models", manifest.MaxDefaultModels)
 	}

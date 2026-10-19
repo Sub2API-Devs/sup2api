@@ -470,6 +470,8 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 		t.Fatalf("health: %d %v", code, out)
 	}
 	// Health keeps the subscription type Claude Code reported on the account (§59).
+	var changed []int64
+	f.s.SubscriptionChanged = func(_ context.Context, account int64) { changed = append(changed, account) }
 	ctl.mu.Lock()
 	ctl.subscription = "max"
 	ctl.mu.Unlock()
@@ -479,6 +481,13 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 	var subscription *string
 	if err := f.s.DB.Pool.QueryRow(t.Context(), `SELECT subscription_type FROM accounts WHERE id=$1`, id).Scan(&subscription); err != nil || subscription == nil || *subscription != "max" {
 		t.Fatalf("recorded subscription %v %v", subscription, err)
+	}
+	// Only an actual change runs the hook.
+	if code, out = f.call("GET", id, "health", ""); code != 200 {
+		t.Fatalf("health: %d %v", code, out)
+	}
+	if len(changed) != 1 || changed[0] != id {
+		t.Fatalf("subscription change hook calls %v", changed)
 	}
 	if code, out = f.call("POST", id, "complete", `{"code":"abc#st"}`); code != 400 || reason(out) != "session_not_found" {
 		t.Fatalf("complete without a login: %d %v", code, out)

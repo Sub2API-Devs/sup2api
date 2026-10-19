@@ -58,7 +58,7 @@ import {
 
 const props = defineProps<{ draft?: boolean; reauthKey?: string | null; reauthAccountId?: number; proxyId?: number | null; canEdit?: boolean; preparationUrl?: string; settings?: Record<string, unknown>; configurationReady?: boolean }>()
 const emit = defineEmits<{
-  (e: 'state', s: { key: string | null; authorized: boolean }): void
+  (e: 'state', s: { key: string | null; authorized: boolean; subscription_type?: string }): void
   (e: 'authorized'): void
   (e: 'fix-proxy'): void
   /** Re-authorization: the draft is gone (reason draft_not_found) or broken, the parent starts a new one. */
@@ -492,7 +492,10 @@ watch(() => props.proxyId, () => {
   if (props.draft && !draftKey.value && failure.value?.step === 'container' && !acting.value) failure.value = null
   void updateProxy()
 })
-watch([key, authorizedDraft], () => emit('state', { key: key.value, authorized: !!key.value && authorizedDraft.value }), { immediate: true })
+watch([key, authorizedDraft, () => health.value?.subscription_type], () => emit('state', {
+  key: key.value, authorized: !!key.value && authorizedDraft.value,
+  ...(health.value?.subscription_type ? { subscription_type: health.value.subscription_type } : {})
+}), { immediate: true })
 
 onMounted(() => {
   void boot()

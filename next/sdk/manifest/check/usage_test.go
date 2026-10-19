@@ -387,3 +387,45 @@ func TestAccountTypeDefaultModels(t *testing.T) {
 		t.Fatalf("codes = %v", got)
 	}
 }
+
+// Subscription presets (defaultModelsBySubscription, CONTRACTS §41.4) need
+// a subscription type name as key and follow the defaultModels rules.
+func TestAccountTypeDefaultModelsBySubscription(t *testing.T) {
+	m := minimal()
+	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}}
+	m.HostPermissions = []manifest.HostPermission{
+		{ID: "gateway.endpoint"}, {ID: "platform.register"},
+		{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
+	}
+	m.Platforms = []manifest.Platform{validPlatform()}
+	m.AccountTypes = []manifest.AccountType{{
+		ID: "apikey", Label: manifest.LocalizedText{"en": "Key"},
+		Form:                        manifest.Form{Mode: "schema", Schema: "forms/k.json"},
+		Platforms:                   []manifest.AccountPlatform{{Platform: "video"}},
+		DefaultModels:               []string{"video-2", "video-3"},
+		DefaultModelsBySubscription: map[string][]string{"pro": {"video-2"}, "max_20x": {"video-2", "video-3"}},
+	}}
+	files := map[string][]byte{"forms/k.json": []byte(`{}`)}
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("valid subscription presets rejected: %v", codes(err))
+	}
+	m.AccountTypes[0].DefaultModelsBySubscription = map[string][]string{"Pro Plan": {"video-2"}, "pro": {"video-*", "video-2", "video-2"}}
+	got := codes(Validate(m, files, ValidateOptions{Tooling: true}))
+	want := map[string]string{
+		"accountTypes[0].defaultModelsBySubscription":                      "invalid",
+		"accountTypes[0].defaultModelsBySubscription.pro.defaultModels[0]": "invalid",
+		"accountTypes[0].defaultModelsBySubscription.pro.defaultModels[2]": "duplicate",
+	}
+	for f, c := range want {
+		if got[f] != c {
+			t.Errorf("%s = %q, want %q (all: %v)", f, got[f], c, got)
+		}
+	}
+	m.AccountTypes[0].DefaultModelsBySubscription = map[string][]string{"pro": make([]string, manifest.MaxDefaultModels+1)}
+	for i := range m.AccountTypes[0].DefaultModelsBySubscription["pro"] {
+		m.AccountTypes[0].DefaultModelsBySubscription["pro"][i] = "m-" + strconv.Itoa(i)
+	}
+	if got := codes(Validate(m, files, ValidateOptions{Tooling: true})); got["accountTypes[0].defaultModelsBySubscription.pro.defaultModels"] != "too_many" {
+		t.Fatalf("codes = %v", got)
+	}
+}

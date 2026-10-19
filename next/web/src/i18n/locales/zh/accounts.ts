@@ -30,6 +30,7 @@ export default {
     modelsCardHint: '账号可服务的请求模型；留空表示不限制', mappingCardHint: '把请求模型改写为上游模型；计费、白名单仍按请求模型', prefilled: '已按插件预设填入 {what}，可直接保存，也可按需增删；清空模型列表表示可服务所有模型。',
     prefilledEdit: "该账号原为不限模型，已按插件预设填充 {what}，保存后生效；如需保持不限请点'清空'。", prefillWhat: '{models} 个模型', prefillWhatMapping: '{models} 个模型与 {mapping} 条映射', prefilledFooter: '模型已按插件预设填充，保存后生效', prefilledView: '查看',
     fillDefaults: '填入预设模型（{n}）', fillDefaultsHint: '把插件预设的模型合并进列表，已有的保留', fillDefaultMapping: '填入预设映射（{n}）', defaultsAdded: '已加入 {n} 个预设模型', defaultMappingAdded: '已加入 {n} 条预设映射', defaultsNothingNew: '预设内容都已在列表中',
+    autoModels: '自动配置模型', autoModelsHint: '打开时使用内置模型列表，并按 Max / Pro 订阅自动调整，保存时生效；关闭后可手动修改。',
     copyModels: '复制', copied: '已复制 {n} 个模型', clearModels: '清空', unrestricted: '未限制：账号可服务所有请求模型', mappedTo: '映射到 {model}',
     mappingEmpty: '未配置映射：请求模型原样发往上游', mappingAdd: '添加映射', mappingRowNotInModels: '不在模型列表中，账号不会因此模型被调度', mappingNotInModels: '{n} 个请求模型不在模型列表中，账号不会因它们被调度：{models}', mappingAddToModels: '加入模型列表',
     schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 网关 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: '达到任一上限后，本窗口内不再调度该账号；0 表示不限',
