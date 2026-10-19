@@ -180,8 +180,26 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 			return err
 		}
 		if exists {
-			if _, err := tx.Exec(ctx, "ALTER ROLE "+rid+" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20 PASSWORD "+pw); err != nil {
+			// Name only the attributes to take away: on PostgreSQL 16+ a
+			// non-superuser host (CREATEROLE + ADMIN OPTION, e.g. Supabase)
+			// may not mention SUPERUSER, REPLICATION or BYPASSRLS at all,
+			// not even to restate NO.
+			var super, repl, bypass, createdb, createrole bool
+			if err := tx.QueryRow(ctx, `SELECT rolsuper, rolreplication, rolbypassrls, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = $1`, role).
+				Scan(&super, &repl, &bypass, &createdb, &createrole); err != nil {
 				return err
+			}
+			attrs := "LOGIN"
+			for _, a := range []struct {
+				set  bool
+				name string
+			}{{super, "NOSUPERUSER"}, {createdb, "NOCREATEDB"}, {createrole, "NOCREATEROLE"}, {repl, "NOREPLICATION"}, {bypass, "NOBYPASSRLS"}} {
+				if a.set {
+					attrs += " " + a.name
+				}
+			}
+			if _, err := tx.Exec(ctx, "ALTER ROLE "+rid+" WITH "+attrs+" CONNECTION LIMIT 20 PASSWORD "+pw); err != nil {
+				return fmt.Errorf("alter role %s: %w", role, err)
 			}
 		} else {
 			if _, err := tx.Exec(ctx, "CREATE ROLE "+rid+" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20 PASSWORD "+pw); err != nil {

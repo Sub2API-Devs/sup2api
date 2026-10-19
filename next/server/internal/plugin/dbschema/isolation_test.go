@@ -134,6 +134,60 @@ func TestEnsureRefusesForeignRole(t *testing.T) {
 	}
 }
 
+// A host that may create roles but is not a superuser (managed PostgreSQL such
+// as Supabase) re-ensures an existing plugin role: on PostgreSQL 16+ it may
+// not even restate NOSUPERUSER/NOREPLICATION/NOBYPASSRLS.
+func TestEnsureExistingRoleAsNonSuperuser(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	role := "cr_" + randKey()
+	pw := "pw-" + randKey()
+	rid := pgx.Identifier{role}.Sanitize()
+	var dbname string
+	if err := db.Pool.QueryRow(ctx, `SELECT current_database()`).Scan(&dbname); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{
+		"CREATE ROLE " + rid + " LOGIN CREATEROLE NOSUPERUSER PASSWORD '" + pw + "'",
+		"GRANT CREATE, CONNECT ON DATABASE " + pgx.Identifier{dbname}.Sanitize() + " TO " + rid,
+		"GRANT EXECUTE ON FUNCTION public.plugin_migrations_applied(varchar), public.plugin_migration_record(varchar, varchar, varchar) TO " + rid + " WITH GRANT OPTION",
+	} {
+		if _, err := db.Pool.Exec(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u, err := url.Parse(db.Pool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = url.UserPassword(role, pw)
+	host, err := store.Open(ctx, u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := randKey()
+	mk := make([]byte, 32)
+	_, _ = rand.Read(mk)
+	m := dbschema.New(host, host.Pool.Config().ConnString(), mk, true)
+	t.Cleanup(func() {
+		c := context.Background()
+		_ = m.Drop(c, key)
+		host.Close()
+		_, _ = db.Pool.Exec(c, "DROP OWNED BY "+rid)
+		_, _ = db.Pool.Exec(c, "DROP ROLE IF EXISTS "+rid)
+	})
+	if _, err := m.Ensure(ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	m2 := dbschema.New(host, host.Pool.Config().ConnString(), mk, true)
+	if st, err := m2.Ensure(ctx, key); err != nil || !st.RoleIsolated {
+		t.Fatalf("re-ensure as non-superuser: %+v %v", st, err)
+	}
+	if _, _, err := m2.DSN(ctx, key); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A role this core created keeps working across Ensure calls and is marked
 // as belonging to this database and plugin.
 func TestEnsureAdoptsOwnRole(t *testing.T) {
