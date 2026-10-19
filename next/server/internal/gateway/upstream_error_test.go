@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/gin-gonic/gin"
@@ -46,6 +48,8 @@ func TestUpstreamHTTPErrorVerbatim(t *testing.T) {
 			if tc.name == "json" {
 				require.Equal(t, "actual upstream reason", c.rec.ErrorMessage)
 			}
+			require.True(t, utf8.ValidString(c.rec.ErrorMessage))
+			require.False(t, strings.ContainsRune(c.rec.ErrorMessage, 0))
 			if body.file != nil {
 				path := body.file.Name()
 				c.closeErrorBodies()

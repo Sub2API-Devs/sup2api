@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 )
@@ -64,7 +65,12 @@ func (c *call) preserveHTTPError(e *gwError, status int, h http.Header, body *up
 	}
 }
 
-func upstreamErrorMessage(raw []byte) string {
+func upstreamErrorMessage(raw []byte) (message string) {
+	// PostgreSQL text rejects NUL/invalid UTF-8. Escape only the diagnostic
+	// representation; the HTTP response still uses the untouched raw body.
+	defer func() {
+		message = strings.ToValidUTF8(strings.ReplaceAll(message, "\x00", `\x00`), "\uFFFD")
+	}()
 	var v any
 	if json.Unmarshal(raw, &v) == nil {
 		if s, ok := v.(string); ok {
