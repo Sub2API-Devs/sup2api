@@ -1,6 +1,8 @@
 # OVH当前部署入口
 
-2026-10-19 最新：Core 四节点 **0.1.169**、UI SDK **3.1.0**，上线使用日志改版、默认展开的调用 IP 汇总、通用 IP 单元格及列设置。列偏好默认每用户保存一个 JSON 对象，以开发者指定的表名为 key；可传入自定义存储适配器接服务端。缓存命中率使用归一化的 `prompt_tokens`。源码 `dffe8bfb2`，计划 `98bc4936a3f7eac3922abba7b7a1814d` completed/27；四节点版本、资源哈希、汇总 API 和 readyz 通过，浏览器验证列显隐、刷新保留、管理端/个人端隔离及滚动菜单后的恢复默认。数据库契约、内置包、当前插件版本及所有容器身份/启动时间/配置保持原样。插件/Controller/Worker 仍为 **0.1.67**。[发布验收](usage-ui-0.1.169.json)。
+2026-10-19 最新：Core 四节点 **0.1.170**（源码 `400cd101f`，manifest `aaf9557b…b0b38c3`，计划 `40a8797e6e299aaf9cd1456da43fbde0` completed/27，四节点 readyz 200）。修复迁到 Supabase 后插件数据库报错 `GetDSN: permission denied to alter role`：PG16+ 非超级用户不能在 ALTER ROLE 里写 NOSUPERUSER/NOREPLICATION/NOBYPASSRLS，现只写需要去掉的属性。另上线内置角色「运维」(`operator`) 和内置角色「恢复默认」(`POST /roles/:id/reset`)、CC 特性页标签精简。schema 契约不变；builtin 目录与 `sub2api-plugin` 与 0.1.169 逐字节相同，只重建 UI 和核心二进制（`stage/0.1.170/build.sh`；BuildKit 的 devkeys 缓存为空，`prepare-core-release.sh` 会拒绝构建）。备份 `~/sup2api-managed/backups/roles-dbschema-0.1.170/database.dump`。
+
+2026-10-19 历史发布：Core 四节点 **0.1.169**、UI SDK **3.1.0**，上线使用日志改版、默认展开的调用 IP 汇总、通用 IP 单元格及列设置。列偏好默认每用户保存一个 JSON 对象，以开发者指定的表名为 key；可传入自定义存储适配器接服务端。缓存命中率使用归一化的 `prompt_tokens`。源码 `dffe8bfb2`，计划 `98bc4936a3f7eac3922abba7b7a1814d` completed/27；四节点版本、资源哈希、汇总 API 和 readyz 通过，浏览器验证列显隐、刷新保留、管理端/个人端隔离及滚动菜单后的恢复默认。数据库契约、内置包、当前插件版本及所有容器身份/启动时间/配置保持原样。插件/Controller/Worker 仍为 **0.1.67**。[发布验收](usage-ui-0.1.169.json)。
 
 2026-10-19 历史发布：Core 四节点仍为 **0.1.168**，插件/Controller/Worker 更新至 **0.1.67**，21/30/31/32 固定 **CLI 2.1.302/v11**。build 已删除 extraBody 参数整包覆盖；21 号真实搜索请求和页面摘要请求均返回 200。通过插件 rollout 151 与 runtime/install 完成更新，账号保留卷和 IP，默认 build、禁更。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/native-build-v11-deployment-0.1.67.json)。
 
