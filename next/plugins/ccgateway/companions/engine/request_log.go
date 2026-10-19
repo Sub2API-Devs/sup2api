@@ -58,6 +58,13 @@ func (d *requestDiagnostic) setField(key string, value any) {
 	d.mu.Unlock()
 }
 
+func (d *requestDiagnostic) setHTTPStatus(status int) {
+	d.mu.Lock()
+	d.status = status
+	d.fields["http_status"] = status
+	d.mu.Unlock()
+}
+
 type diagnosticWriter struct {
 	http.ResponseWriter
 	diagnostic *requestDiagnostic
@@ -70,7 +77,7 @@ func (w *diagnosticWriter) WriteHeader(status int) {
 		return
 	}
 	w.written = true
-	w.diagnostic.setField("http_status", status)
+	w.diagnostic.setHTTPStatus(status)
 	w.ResponseWriter.WriteHeader(status)
 }
 func (w *diagnosticWriter) Write(b []byte) (int, error) {

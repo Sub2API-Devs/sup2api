@@ -1,6 +1,7 @@
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const http = require('node:http'), { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
+function failure(r) { assert.equal(r.stdout, ''); const line=r.stderr.split('\n').find(l=>l.startsWith('CCG_REQUEST_ERROR ')); assert.ok(line,r.stderr); const f=JSON.parse(line.slice('CCG_REQUEST_ERROR '.length)); assert.equal(f.protocol,'ccgateway.request.error.v1'); return f; }
 const [binary, entry, output] = process.argv.slice(2);
 if (!output) throw Error('request-probe.cjs binary entry-or-dash output.json');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-request-probe-'));
@@ -18,6 +19,16 @@ const server = http.createServer(async (req, res) => {
   const body = JSON.parse(raw); seen.push({ raw, body, authPresent: req.headers['x-api-key'] === 'local-mock-key', beta: req.headers['anthropic-beta'] });
   if (body.probe === 'timeout') { const timer = setTimeout(() => res.end('{}'), 2000); res.on('close', () => clearTimeout(timer)); return; }
   if (body.probe === 'error') { res.writeHead(429, { 'content-type': 'application/json', 'x-probe-error': 'kept' }); res.end(errorText); return; }
+  if (body.probe === 'http-error') {
+    res.writeHead(body.error_status, { 'content-type': 'application/json', 'retry-after': '7', 'x-should-retry': 'true' });
+    res.end(JSON.stringify({ type: 'error', error: { type: 'fixture_error', code: 'PROVIDER_CODE', message: 'fixture detail' } })); return;
+  }
+  if (body.probe === 'large-error') { res.writeHead(503); res.end('x'.repeat(100000)); return; }
+  if (body.probe === 'empty-error') { res.writeHead(401); res.end(); return; }
+  if (body.probe === 'stream-reset') {
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('event: message_start\ndata: {}\n\n');
+    setTimeout(() => res.destroy(), 150); return;
+  }
   if (body.stream) {
     streamEnded = false;
     res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -56,10 +67,17 @@ server.listen(0, '127.0.0.1', async () => {
     r = await run('file', { ...base, probe: 'file' }, [], true); reports.push(r); assert.equal(r.code, 0, r.stderr); assert.equal(r.requests.length, 1);
     const streaming = { ...base, stream: true };
     r = await run('sse', streaming); reports.push(r); assert.equal(r.code, 0, r.stderr); assert.equal(r.stdout, sse); assert.equal(r.incremental, true); assert.deepEqual(r.requests[0].body, streaming);
-    r = await run('error', { ...base, probe: 'error' }, ['--response-meta', metaFile]); reports.push(r); assert.equal(r.code, 2, r.stderr); assert.equal(r.requests.length, 1); assert.equal(r.stdout, errorText); assert.equal(JSON.parse(fs.readFileSync(metaFile)).headers['x-probe-error'], 'kept');
+    r = await run('error', { ...base, probe: 'error' }, ['--response-meta', metaFile]); reports.push(r); assert.equal(r.code, 2, r.stderr); assert.equal(r.requests.length, 1); assert.equal(failure(r).status,429); assert.equal(failure(r).body,errorText); assert.equal(fs.existsSync(metaFile),false);
+    for (const status of [400, 401, 403, 429, 500, 529]) {
+      r = await run('http-'+status, { ...base, probe:'http-error', error_status:status }); reports.push(r);
+      assert.equal(r.code,2,r.stderr); const f=failure(r); assert.equal(f.status,status); assert.equal(f.error.code,'PROVIDER_CODE'); assert.equal(f.error.message,'fixture detail'); assert.equal(f.headers['retry-after'],'7');
+    }
+    r=await run('large-error',{...base,probe:'large-error'});reports.push(r);assert.equal(r.code,2);assert.equal(failure(r).status,503);assert.equal(failure(r).truncated,true);assert.ok(r.stderr.length<4096);
+    r=await run('empty-error',{...base,probe:'empty-error'});reports.push(r);assert.equal(r.code,2);assert.equal(failure(r).status,401);
+    r=await run('stream-reset',{...base,stream:true,probe:'stream-reset'});reports.push(r);assert.equal(r.code,1);assert.ok(r.stdout.includes('message_start'));assert.ok(!r.stdout.includes('message_stop'));assert.ok(r.stderr.includes('CCG_REQUEST_ERROR '));
     const search = { ...base, probe: 'websearch', tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }], tool_choice: { type: 'tool', name: 'web_search' } };
     r = await run('websearch', search); reports.push(r); assert.equal(r.code, 0, r.stderr); assert.deepEqual(r.requests[0].body, search); assert.deepEqual(JSON.parse(r.stdout), webResponse);
-    r = await run('timeout', { ...base, probe: 'timeout' }, ['--timeout-ms', '100']); reports.push(r); assert.equal(r.code, 1); assert.equal(r.stdout, '');
+    r = await run('timeout', { ...base, probe: 'timeout' }, ['--timeout-ms', '100']); reports.push(r); assert.equal(r.code, 1); assert.equal(failure(r).status, 504); assert.equal(failure(r).error.code,'cli_timeout');
     r = await run('invalid-json', '{'); reports.push(r); assert.equal(r.code, 1); assert.equal(r.requests.length, 0);
     r = await run('auth-header', base, ['--header', 'Authorization:should-not-forward']); reports.push(r); assert.equal(r.code, 1); assert.equal(r.requests.length, 0);
     r = await run('help', '', ['--help']); reports.push(r); assert.equal(r.code, 0); assert.equal(r.requests.length, 0); assert.ok(r.stdout.includes('Usage: claude request'));

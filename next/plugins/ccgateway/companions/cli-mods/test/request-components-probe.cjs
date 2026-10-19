@@ -2,6 +2,7 @@
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const http = require('node:http'), zlib = require('node:zlib'), { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
+function failure(r) { assert.equal(r.stdout, ''); const line=r.stderr.split('\n').find(l=>l.startsWith('CCG_REQUEST_ERROR ')); assert.ok(line,r.stderr); const f=JSON.parse(line.slice('CCG_REQUEST_ERROR '.length)); assert.equal(f.protocol,'ccgateway.request.error.v1'); return f; }
 const [binary, output] = process.argv.slice(2);
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-v6-'));
 const requests = [], reports = [];
@@ -71,7 +72,7 @@ server.listen(0, '127.0.0.1', async () => {
     r=await run('build-no-betas',{...components,messages:[{role:'user',content:'BASIC'}],attachments:[]},['--build']);
     assert.equal(r.code,0,r.stderr); assert.equal(r.requests.length,1); cleanHeaders(r.requests[0]); assert.equal(r.requests[0].headers['anthropic-beta'],undefined);
     r=await run('build-stream',{...components,stream:true},['--build','--betas','client-beta']); assert.equal(r.code,0,r.stderr);assert.equal(r.requests.length,1);assert.equal(r.stdout,sse);
-    r=await run('build-http-error',{...components,parameters:{max_tokens:64,probe:'error'}},['--build']); assert.equal(r.code,2,r.stderr);assert.equal(r.requests.length,1);assert.equal(r.stdout,'{ "error": "fixture" }');
+    r=await run('build-http-error',{...components,parameters:{max_tokens:64,probe:'error'}},['--build']); assert.equal(r.code,2,r.stderr);assert.equal(r.requests.length,1);assert.equal(failure(r).status,429); assert.equal(failure(r).body,'{ "error": "fixture" }');
     for (const mode of ['direct','build']) {
       r=await run('oauth-'+mode,mode==='direct'?direct:{...components,messages:[{role:'user',content:'OAUTH'}],attachments:[]},['--'+mode,'--betas','client-beta'],{env:{ANTHROPIC_API_KEY:'',CLAUDE_CODE_OAUTH_TOKEN:'fake-subscription'}});
       assert.equal(r.code,0,r.stderr);assert.equal(r.requests.length,1);

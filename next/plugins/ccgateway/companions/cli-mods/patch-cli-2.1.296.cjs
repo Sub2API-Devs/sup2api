@@ -134,7 +134,7 @@ for (const [file, text] of files) {
   fs.writeFileSync(path.join(output, file), text);
   manifest.files[file] = { before: expected[file], after: digest(text) };
 }
-for (const [input, target] of [['native-tools.js', 'ccgateway-native-tools.js'], ['model-request.js', 'ccgateway-model-request.js'], ['request-command.js', 'ccgateway-request-command.js'], ['request-input.js', 'ccgateway-request-input.js'], ['request-build.js', 'ccgateway-request-build.js'], ['request-output.js', 'ccgateway-request-output.js'], ['request-options.js', 'ccgateway-request-options.js']]) {
+for (const [input, target] of [['native-tools.js', 'ccgateway-native-tools.js'], ['model-request.js', 'ccgateway-model-request.js'], ['request-command.js', 'ccgateway-request-command.js'], ['request-input.js', 'ccgateway-request-input.js'], ['request-build.js', 'ccgateway-request-build.js'], ['request-output.js', 'ccgateway-request-output.js'], ['request-options.js', 'ccgateway-request-options.js'], ['request-error.js', 'ccgateway-request-error.js']]) {
   const bytes = Buffer.from(fs.readFileSync(path.join(__dirname, input), 'utf8').replaceAll("'./request-options.js'", "'./ccgateway-request-options.js'"));
   fs.writeFileSync(path.join(output, target), bytes);
   manifest.supportFiles[target] = { source: input, sha256: digest(bytes) };

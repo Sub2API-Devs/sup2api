@@ -1,6 +1,7 @@
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const http = require('node:http'), { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
+function failure(r) { assert.equal(r.stdout, ''); const line=r.stderr.split('\n').find(l=>l.startsWith('CCG_REQUEST_ERROR ')); assert.ok(line,r.stderr); const f=JSON.parse(line.slice('CCG_REQUEST_ERROR '.length)); assert.equal(f.protocol,'ccgateway.request.error.v1'); return f; }
 const [binary, entry, output] = process.argv.slice(2);
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-request-modes-'));
 const requests = [], reports = [];
@@ -62,7 +63,7 @@ server.listen(0, '127.0.0.1', async () => {
     assert.equal(text.split('CONTEXT_SENTINEL').length - 1, 1); assert.ok(!text.includes('client hook additional context'));
     assert.equal(b.messages.at(-1).role, 'system'); assert.ok(b.messages.some(m => Array.isArray(m.content) && m.content.some(x => x.type === 'image' && x.source.data === image.source.data)));
     r = await run('build-stream', components({ ...base, stream: true }), ['--build']); assert.equal(r.code, 0, r.stderr); assert.equal(r.requests.length, 1); assert.equal(r.stdout, sse);
-    r = await run('build-error', components({ ...base, probe: 'error' }), ['--build']); assert.equal(r.code, 2, r.stderr); assert.equal(r.requests.length, 1); assert.equal(r.stdout, '{ "error": "MOCK_LIMIT" }');
+    r = await run('build-error', components({ ...base, probe: 'error' }), ['--build']); assert.equal(r.code, 2, r.stderr); assert.equal(r.requests.length, 1); assert.equal(failure(r).status,429); assert.equal(failure(r).body,'{ "error": "MOCK_LIMIT" }');
     const blockedBody = { ...base, probe: 'blocked', stream: true };
     await blocked('direct-blocked-output', blockedBody, '--direct');
     await blocked('build-blocked-output', components(blockedBody), '--build');

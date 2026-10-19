@@ -6,11 +6,12 @@ import { YEr } from './chunk-6dwnw6av.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
+import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
 
 Use CC's authenticated client to send either a Messages body or build components.
-The response body is written to stdout, including successful streaming SSE.
+Successful responses (including SSE) use stdout. Errors use a structured stderr line.
 
   --direct                 Forward the original JSON body (default)
   --build                  Assemble components through CC, then send once
@@ -31,7 +32,8 @@ Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 
 export async function runRequestCommand(args, { oauthBeta } = {}) {
   const controller = new AbortController();
-  let response, interrupted = false, outputError, deadline;
+  let response, interrupted = false, timedOut = false, outputError, deadline;
+  let phase = 'input', responseStarted = false;
   const customHeaders = process.env.ANTHROPIC_CUSTOM_HEADERS;
   const interrupt = () => { interrupted = true; controller.abort(new Error('request interrupted')); process.stdin.destroy(); };
   const failedOutput = error => { outputError = error; controller.abort(error); };
@@ -41,6 +43,8 @@ export async function runRequestCommand(args, { oauthBeta } = {}) {
   try {
     const options = parseRequestOptions(args);
     if (options.help) { await write(process.stdout, help); return 0; }
+    // A reused metadata path must not describe an earlier successful request.
+    if (options.meta) { phase = 'output'; await fs.rm(options.meta, { force: true }); phase = 'input'; }
     const apiKey = process.env.ANTHROPIC_API_KEY;
     // Both eF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
@@ -59,31 +63,50 @@ export async function runRequestCommand(args, { oauthBeta } = {}) {
     if (invalid) throw Error(invalid);
     const timeout = options.timeoutMs ?? 600000;
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2147483647) throw Error('--timeout-ms must be a positive 32-bit integer');
-    deadline = setTimeout(() => controller.abort(new Error('request timed out')), timeout);
+    deadline = setTimeout(() => { timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
     deadline.unref?.();
     let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout };
     if (options.mode === 'build') {
+      phase = 'build';
       const { buildRequest } = await import('./ccgateway-request-build.js');
       outgoing = { ...await buildRequest(body, options.headers, controller.signal), timeoutMs: timeout };
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+    phase = 'transport';
     response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
       const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });
       if (!(client instanceof rbe)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
       return client;
     }, Zre);
+    if (!response.ok) {
+      let body = '', bytes = 0, truncated = false;
+      try {
+        for (;;) {
+          const part = await readModelResponse(response.id, 'cli-request', controller.signal);
+          bytes += Buffer.byteLength(part.text);
+          if (bytes > maxErrorBody) { truncated = true; break; }
+          body += part.text;
+          if (part.done) break;
+        }
+      } catch { truncated = true; }
+      await write(process.stderr, encodeErrorFrame(httpErrorFrame(response, body, truncated)));
+      return 2;
+    }
+    phase = 'output';
     if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: response.status, statusText: response.statusText, headers: response.headers, request: { mode: options.mode, ...response.request } }, null, 2) + '\n');
     for (;;) {
+      phase = 'transport';
       const part = await readModelResponse(response.id, 'cli-request', controller.signal);
-      if (part.text) await write(process.stdout, part.text, controller.signal);
+      phase = 'output';
+      if (part.text) { responseStarted = true; await write(process.stdout, part.text, controller.signal); }
       if (part.done) break;
     }
-    return response.ok ? 0 : 2;
+    return 0;
   } catch (error) {
     if (outputError?.code === 'EPIPE') return 0;
-    await write(process.stderr, `claude request: ${error instanceof Error ? error.message : String(error)}\n`);
+    await write(process.stderr, encodeErrorFrame(localErrorFrame(error, { phase, timedOut, interrupted, responseStarted })));
     return interrupted ? 130 : 1;
   } finally {
     clearTimeout(deadline);
