@@ -1,6 +1,8 @@
 # OVH当前部署入口
 
-2026-10-19 最新：Core 四节点 **0.1.165**、插件/Controller/Worker **0.1.65**。Worker 已区分调用方取消和自身超时；公网取消确认为 Core 499/client_canceled、单次尝试，Worker 保留已发 200 并记 client_canceled。21/30 原地更新 Worker，容器、授权卷、CLI 2.1.302/v9 及 SHA 均保留；未来目标镜像 .65，默认 build、禁更保持。两账号 Opus 及公网 JSON/SSE 回归通过。[验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
+2026-10-19 最新：Core 四节点 **0.1.166**，移除前端和后端手动配额刷新 30 秒冷却；完成后可立即再刷，进行中查询仍受 singleflight/PG 租约保护。30 号连续两次强制查询成功，快照更新时间相隔 **0.442 秒**；四节点 ready、Core 哈希及线上前端资源一致。插件/Controller/Worker 仍为 **0.1.65**，21/30 Worker、Controller 和共享出口容器 ID/启动时间均未变化。35 项前端测试、类型检查、账号模块及配额数据库测试通过（数据库测试使用独立容器）。源码 `cd4ef1700a1dea01180938b165baa1ae3569da89`；发布 manifest `ed9f67075d384b09456ad6572ae610aa1c43e09435fbe9738f1a097b8deeaedb`；升级计划 `08d77f44999916df98bb5f7310f01994` completed/27。备份位于服务器 `~/sup2api-managed/backups/quota-refresh-0.1.166`，数据库备份目录校验通过。[验收记录](quota-refresh-0.1.166.json)。
+
+2026-10-19 历史发布：Core 四节点 **0.1.165**、插件/Controller/Worker **0.1.65**。Worker 已区分调用方取消和自身超时；公网取消确认为 Core 499/client_canceled、单次尝试，Worker 保留已发 200 并记 client_canceled。21/30 原地更新 Worker，容器、授权卷、CLI 2.1.302/v9 及 SHA 均保留；未来目标镜像 .65，默认 build、禁更保持。两账号 Opus 及公网 JSON/SSE 回归通过。[验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
 
 2026-10-19 历史发布：Core 四节点 **0.1.164**、插件/Controller/Worker **0.1.64**。21/30 app 已迁移至 .64 镜像，CLI **2.1.302/v9** 重新编译并固定新 SHA `e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`，修复字符串错误消息和中断类型。两账号 Opus 均 200，公网错误正文哈希与 Worker 日志一致，正常 SSE 完整。原授权卷/IP/安全配置保留，旧 app 以 `-rollback-errors164` 后缀停止断网保留。详见 [验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
 

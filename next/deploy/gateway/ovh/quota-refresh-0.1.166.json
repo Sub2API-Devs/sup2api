@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "cd4ef1700a1dea01180938b165baa1ae3569da89",
+  "coreVersion": "0.1.166",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.166",
+      "sha256": "f6bebe7c236d71a29e8993776dfd5bf1ba52ba9853e2b6e481e73bc5c71a52a9",
+      "readyHTTP": 200,
+      "uiAssetMatched": true
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.166",
+      "sha256": "f6bebe7c236d71a29e8993776dfd5bf1ba52ba9853e2b6e481e73bc5c71a52a9",
+      "readyHTTP": 200,
+      "uiAssetMatched": true
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.166",
+      "sha256": "f6bebe7c236d71a29e8993776dfd5bf1ba52ba9853e2b6e481e73bc5c71a52a9",
+      "readyHTTP": 200,
+      "uiAssetMatched": true
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.166",
+      "sha256": "f6bebe7c236d71a29e8993776dfd5bf1ba52ba9853e2b6e481e73bc5c71a52a9",
+      "readyHTTP": 200,
+      "uiAssetMatched": true
+    }
+  ],
+  "pluginVersion": "0.1.65",
+  "unchangedRuntimes": [
+    "ccg-21-app",
+    "ccg-de046df67b4908784-app",
+    "ccg-controller",
+    "ccg-shared-egress"
+  ],
+  "quotaAccount": 30,
+  "consecutiveForcedRefreshes": [
+    {
+      "durationSeconds": 0.6,
+      "source": "active",
+      "updatedAt": "2026-10-19T06:20:32.813215Z",
+      "error": "",
+      "windowCount": 2
+    },
+    {
+      "durationSeconds": 0.442,
+      "source": "active",
+      "updatedAt": "2026-10-19T06:20:33.255259Z",
+      "error": "",
+      "windowCount": 2
+    }
+  ],
+  "refreshTimestampGapSeconds": 0.442044,
+  "uiAsset": "AccountsView-Dri9RzCa.js",
+  "uiAssetSHA256": "e5f06735d268e23a4a38f1b00da0b67755fe6461ff37c9077c694f53ecf67150",
+  "backupVerified": true,
+  "tests": {
+    "frontend": 35,
+    "typecheck": "passed",
+    "accountPackage": "passed",
+    "storeQuota": "passed"
+  }
+}
