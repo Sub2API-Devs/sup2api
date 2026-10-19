@@ -4050,8 +4050,8 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 
 ### 59.1 订阅类型从哪里来
 
-- 账号容器的 Worker 在**授权完成**（`POST /admin/auth/complete` 成功）和**刷新令牌**（`POST /admin/auth/refresh` 成功）后各执行一次 `claude auth status --json`，取 `loggedIn && authMethod == "claude.ai"` 时的 `subscriptionType`，写入凭证目录旁的 `.ccgateway-subscription`；登出时删除。
-- `GET /admin/status` 仍是本地快照、不启动 CLI（`TestAuthSnapshotNeverSpawnsCLIOrClaimsOnlineValidity`），只在存在 Claude 账号凭证时读上述记录，作为 `subscription_type` 返回。凭证文件里的 `subscriptionType` 不直接采用，以 CLI 报告为准。
+- Claude Code 自己的订阅类型来自凭证 `claudeAiOauth.subscriptionType`（CLI 登录和刷新令牌时写入；`claude auth status` 报告的就是这个字段，CLI 内部函数先读它）。Worker 的 `GET /admin/status` 仍是本地快照、不启动 CLI（`TestAuthSnapshotNeverSpawnsCLIOrClaimsOnlineValidity`），存在 Claude 账号凭证时把该字段作为 `subscription_type` 返回。
+- 不直接执行 `claude auth status --json`：2026-10-19 在线上账号容器里实测（2.1.302/v11，含或不含 TTY、干净环境）都不退出，150 秒后被超时杀掉，没有输出。
 - 值必须匹配 `^[a-z][a-z0-9_]{0,31}$`（目前为 `max` / `pro` / `team` / `enterprise`），否则视为未知。Worker 与核心各校验一次。
 
 ### 59.2 核心

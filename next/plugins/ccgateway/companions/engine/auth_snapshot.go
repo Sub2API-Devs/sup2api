@@ -114,7 +114,7 @@ func localAuthSnapshot(env []string) (Object, error) {
 		if expiry, ok := oauth["expiresAt"].(float64); ok && expiry > 0 {
 			result["access_token_expired"] = float64(time.Now().UnixMilli()) >= expiry
 		}
-		if subscription := storedSubscription(env); subscription != "" {
+		if subscription := storedSubscription(oauth); subscription != "" {
 			result["subscription_type"] = subscription
 		}
 	}

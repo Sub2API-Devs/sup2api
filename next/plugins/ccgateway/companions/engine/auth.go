@@ -246,7 +246,6 @@ func (a *authManager) complete(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		return nil, err
 	}
-	a.recordSubscription(ctx)
 	return Object{"success": true}, nil
 }
 
@@ -313,7 +312,6 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		cmd := exec.CommandContext(ctx, a.cli, "auth", "logout")
 		cmd.Env = a.environment()
-		forgetSubscription(cmd.Env)
 		if cmd.Run() != nil {
 			err = authFail(codeLogoutFailed, "Claude Code logout failed.")
 		} else {

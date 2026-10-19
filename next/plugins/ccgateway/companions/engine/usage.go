@@ -335,6 +335,5 @@ func (a *authManager) refreshToken(ctx context.Context) (Object, error) {
 	if err != nil {
 		return nil, authFail(codeRefreshFailed, "Claude Code could not renew the stored OAuth token: "+err.Error())
 	}
-	a.recordSubscription(ctx)
 	return Object{"refreshed": after.fingerprint != before.fingerprint, "expires_at": time.UnixMilli(int64(after.expiresAt)).UTC()}, nil
 }
