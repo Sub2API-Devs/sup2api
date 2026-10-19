@@ -65,7 +65,7 @@ func quotaNextCheck(now time.Time, res *pluginv1.QuotaResult, failures int, fail
 	return next
 }
 
-func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row, force bool) (*store.QuotaSnapshot, error) {
+func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row, manual bool, floor time.Duration) (*store.QuotaSnapshot, error) {
 	if !s.quotaReady(ctx, a, bt) {
 		return s.d.DB.AccountQuota(ctx, a.ID)
 	}
@@ -77,7 +77,7 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	if err := store.EnsureAccountQuota(ctx, s.d.DB.Pool, a.ID, revision, bt.Type.Quota.AutoRefresh); err != nil {
 		return nil, err
 	}
-	claim, err := s.d.DB.LeaseAccountQuota(ctx, a.ID, revision, quotaQueryFloor, quotaQueryTimeout+10*time.Second, force)
+	claim, err := s.d.DB.LeaseAccountQuota(ctx, a.ID, revision, floor, quotaQueryTimeout+10*time.Second, manual)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	if err != nil {
 		return nil, err
 	}
-	if !valid || !s.quotaReady(ctx, a, bt) || (!force && !claim.Initial && !a.Schedulable) {
+	if !valid || !s.quotaReady(ctx, a, bt) || (!manual && !claim.Initial && !a.Schedulable) {
 		return s.d.DB.AccountQuota(ctx, a.ID)
 	}
 	qctx, cancel := context.WithTimeout(ctx, quotaQueryTimeout)
@@ -270,7 +270,7 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 				if decl == nil || !decl.Query || !decl.AutoRefresh || bt.Client == nil || (s.d.CanWork != nil && !s.d.CanWork()) {
 					return nil, nil
 				}
-				return s.executeQuotaQuery(ctx, bt, a, false)
+				return s.executeQuotaQuery(ctx, bt, a, false, quotaQueryFloor)
 			})
 			if err != nil && ctx.Err() == nil {
 				slog.WarnContext(ctx, "account: refresh quota", "account", id, "err", err)

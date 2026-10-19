@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { QuotaSnapshot } from '@/api/types'
-import { QUOTA_REFRESH_MIN_MS, formatPercent, hasQuota, quotaCountdown, quotaLevel, sortWindows, useQuotaRefresh } from './accountQuota'
+import { formatPercent, hasQuota, quotaCountdown, quotaLevel, sortWindows, useQuotaRefresh } from './accountQuota'
 
 const snap = (over: Partial<QuotaSnapshot> = {}): QuotaSnapshot => ({ supported: true, source: 'passive', updated_at: null, error: '', windows: [], ...over })
 
@@ -61,15 +61,13 @@ describe('quota helpers', () => {
 })
 
 describe('useQuotaRefresh', () => {
-  function setup(start = 1_000_000) {
-    let t = start
+  function setup() {
     let release: (s: QuotaSnapshot) => void = () => {}
     const fetcher = vi.fn((_id: number) => new Promise<QuotaSnapshot>((ok) => (release = ok)))
     const onSnapshot = vi.fn()
-    const onThrottled = vi.fn()
     const onError = vi.fn()
-    const r = useQuotaRefresh({ fetcher, onSnapshot, onThrottled, onError, now: () => t })
-    return { r, fetcher, onSnapshot, onThrottled, onError, advance: (ms: number) => (t += ms), resolve: (s: QuotaSnapshot) => release(s), now: () => t }
+    const r = useQuotaRefresh({ fetcher, onSnapshot, onError })
+    return { r, fetcher, onSnapshot, onError, resolve: (s: QuotaSnapshot) => release(s) }
   }
 
   it('sends one request while refreshing and ignores further clicks', async () => {
@@ -85,44 +83,17 @@ describe('useQuotaRefresh', () => {
     expect(s.r.refreshing.has(7)).toBe(false)
   })
 
-  it('does not send again within 30 s; tells how long to wait', async () => {
+  it('allows another refresh immediately after a successful active snapshot', async () => {
     const s = setup()
-    const p = s.r.refresh(7)
-    s.resolve(snap())
-    await p
-    s.advance(10_000)
-    expect(await s.r.refresh(7)).toBe('throttled')
-    expect(s.onThrottled).toHaveBeenCalledWith(7, 20)
-    expect(s.fetcher).toHaveBeenCalledTimes(1)
-    // other accounts are independent
-    const other = s.r.refresh(8)
+    const fresh = snap({ source: 'active', updated_at: new Date().toISOString() })
+    const first = s.r.refresh(7)
+    s.resolve(fresh)
+    expect(await first).toBe('ok')
+    const second = s.r.refresh(7)
     expect(s.fetcher).toHaveBeenCalledTimes(2)
-    s.resolve(snap())
-    await other
-    s.advance(QUOTA_REFRESH_MIN_MS - 10_000)
-    const again = s.r.refresh(7)
-    expect(s.fetcher).toHaveBeenCalledTimes(3)
-    s.resolve(snap())
-    expect(await again).toBe('ok')
-  })
-
-  it('counts a recent active snapshot from the server toward the floor', async () => {
-    const s = setup()
-    const recent = snap({ source: 'active', updated_at: new Date(s.now() - 5_000).toISOString() })
-    expect(await s.r.refresh(3, recent)).toBe('throttled')
-    expect(s.onThrottled).toHaveBeenCalledWith(3, 25)
-    // a passive snapshot (request headers) does not block a manual query
-    const passive = snap({ source: 'passive', updated_at: new Date(s.now() - 5_000).toISOString() })
-    const p = s.r.refresh(3, passive)
-    expect(s.fetcher).toHaveBeenCalledTimes(1)
-    s.resolve(snap())
-    await p
-  })
-
-  it('caps a server timestamp in the future at now', async () => {
-    const s = setup()
-    const skewed = snap({ source: 'active', updated_at: new Date(s.now() + 3_600_000).toISOString() })
-    expect(s.r.waitMs(3, skewed)).toBe(QUOTA_REFRESH_MIN_MS)
+    s.resolve(fresh)
+    expect(await second).toBe('ok')
+    expect(s.onSnapshot).toHaveBeenCalledTimes(2)
   })
 
   it('reports errors and clears the refreshing state', async () => {
@@ -132,5 +103,9 @@ describe('useQuotaRefresh', () => {
     expect(s.onError).toHaveBeenCalledWith(9, expect.any(Error))
     expect(s.onSnapshot).not.toHaveBeenCalled()
     expect(s.r.refreshing.has(9)).toBe(false)
+    const retry = s.r.refresh(9)
+    expect(s.fetcher).toHaveBeenCalledTimes(2)
+    s.resolve(snap())
+    expect(await retry).toBe('ok')
   })
 })

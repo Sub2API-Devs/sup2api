@@ -94,7 +94,8 @@ func TestShouldQueryQuota(t *testing.T) {
 		{"fresh passive, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute)}, true, true},
 		{"stale", &store.QuotaSnapshot{UpdatedAt: ago(4 * time.Minute)}, false, true},
 		{"floor", &store.QuotaSnapshot{UpdatedAt: ago(4 * time.Minute), LastActiveAt: ago(10 * time.Second)}, false, false},
-		{"floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(10 * time.Second)}, true, false},
+		{"floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(10 * time.Second)}, true, true},
+		{"future timestamp, forced", &store.QuotaSnapshot{LastActiveAt: ago(-time.Hour)}, true, true},
 		{"after floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(31 * time.Second)}, true, true},
 		{"negative cache", &store.QuotaSnapshot{Error: "x", UpdatedAt: ago(10 * time.Minute), LastActiveAt: ago(40 * time.Second)}, false, false},
 		{"negative cache, forced", &store.QuotaSnapshot{Error: "x", UpdatedAt: ago(10 * time.Minute), LastActiveAt: ago(40 * time.Second)}, true, true},
@@ -281,26 +282,19 @@ func TestAccountQuotaAPI(t *testing.T) {
 	if up.calls.Load() != 1 {
 		t.Fatalf("fresh snapshot queried again: %d", up.calls.Load())
 	}
-	// force inside the 30-second floor is still refused.
-	e.do("GET", path+"?force=true", nil)
-	if up.calls.Load() != 1 {
-		t.Fatalf("forced inside the floor: %d", up.calls.Load())
-	}
-	// Past the floor, force queries; concurrent callers share one query.
-	ctx := context.Background()
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '31 seconds'`); err != nil {
-		t.Fatal(err)
+	// Completed manual refreshes can run again immediately, including when
+	// the snapshot is fresh and the previous active query was seconds ago.
+	up.pct.Store(50)
+	_, out = e.do("GET", path+"?force=true", nil)
+	if up.calls.Load() != 2 || out["data"].(map[string]any)["windows"].([]any)[0].(map[string]any)["utilization"].(float64) != 50 {
+		t.Fatalf("first immediate refresh: %v calls=%d", out, up.calls.Load())
 	}
 	up.pct.Store(55)
-	var wg sync.WaitGroup
-	for range 5 {
-		wg.Add(1)
-		go func() { defer wg.Done(); e.do("GET", path+"?force=true", nil) }()
+	_, out = e.do("GET", path+"?force=true", nil)
+	if up.calls.Load() != 3 || out["data"].(map[string]any)["windows"].([]any)[0].(map[string]any)["utilization"].(float64) != 55 {
+		t.Fatalf("second immediate refresh: %v calls=%d", out, up.calls.Load())
 	}
-	wg.Wait()
-	if up.calls.Load() != 2 {
-		t.Fatalf("concurrent forced reads: %d upstream calls, want 2", up.calls.Load())
-	}
+	ctx := context.Background()
 
 	// A failure is recorded and negatively cached for a minute.
 	up.failStatus.Store(503)
@@ -310,14 +304,14 @@ func TestAccountQuotaAPI(t *testing.T) {
 	}
 	_, out = e.do("GET", path, nil)
 	d = out["data"].(map[string]any)
-	if up.calls.Load() != 3 || d["error"] == "" || d["windows"].([]any)[0].(map[string]any)["utilization"].(float64) != 55 {
+	if up.calls.Load() != 4 || d["error"] == "" || d["windows"].([]any)[0].(map[string]any)["utilization"].(float64) != 55 {
 		t.Fatalf("failure: %v (calls %d)", out, up.calls.Load())
 	}
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '40 seconds'`); err != nil {
 		t.Fatal(err)
 	}
 	e.do("GET", path, nil)
-	if up.calls.Load() != 3 {
+	if up.calls.Load() != 4 {
 		t.Fatalf("negative cache ignored: %d", up.calls.Load())
 	}
 
@@ -340,7 +334,7 @@ func TestAccountQuotaAPI(t *testing.T) {
 			}
 		}
 	}
-	if up.calls.Load() != 3 {
+	if up.calls.Load() != 4 {
 		t.Fatalf("list asked the upstream: %d", up.calls.Load())
 	}
 

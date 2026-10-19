@@ -366,10 +366,9 @@ async function openDetail(a: Account) {
 
 // ---------------------------------------------------------------- quota refresh / reset status
 // The snapshot of every row arrives with the list; "refresh" asks the upstream
-// for one account (force) at most every 30 s, never automatically.
+// for one account (force), with duplicate in-flight clicks coalesced.
 const quotaRefresh = useQuotaRefresh({
   onSnapshot: (id, quota) => patchAccount(id, { quota }),
-  onThrottled: (_id, n) => toast(t('accounts.quota.refreshThrottled', { n }), 'info'),
   onError: (_id, e) => notifyError(e)
 })
 
@@ -466,7 +465,7 @@ async function runPluginAction(a: Account, action: AccountAction) {
     } else if (typeof out?.refreshed === 'boolean') {
       const time = typeof out.expires_at === 'string' ? formatDateTime(out.expires_at) : ''
       toast(t(out.refreshed ? 'accounts.pluginActions.tokenRefreshed' : 'accounts.pluginActions.tokenValid', { time }), 'success')
-      if (hasQuota(a.quota)) void quotaRefresh.refresh(a.id, a.quota)
+      if (hasQuota(a.quota)) void quotaRefresh.refresh(a.id)
     } else {
       toast(t('accounts.pluginActions.done', { name }), 'success')
     }
@@ -605,7 +604,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-warning-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
       </template>
       <template #cell-quota="{ row }">
-        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :compact="denseRows" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />
+        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :compact="denseRows" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
         <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />
       </template>
@@ -701,7 +700,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
                   <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
                   <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
               </SDescItem>
-              <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></SDescItem>
+              <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id)" /></SDescItem>
               <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
               <SDescItem :label="t('accounts.models')">
                 <span v-if="detail.models?.length" class="flex flex-wrap gap-1">

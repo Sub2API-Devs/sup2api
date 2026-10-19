@@ -98,6 +98,36 @@ func TestAccountQuota(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestQuotaManualRefreshWithoutCooldownPreservesLease(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	id := createTestAccount(t, db)
+	require.NoError(t, store.EnsureAccountQuota(ctx, db.Pool, id, "v1", true))
+	claim, err := db.LeaseAccountQuota(ctx, id, "v1", 0, time.Minute, true)
+	require.NoError(t, err)
+	require.NotNil(t, claim)
+	busy, err := db.LeaseAccountQuota(ctx, id, "v1", 0, time.Minute, true)
+	require.NoError(t, err)
+	require.Nil(t, busy, "force must not bypass an active query lease")
+	applied, err := db.CompleteAccountQuota(ctx, claim, map[string]store.QuotaWindow{"daily": {Utilization: 10}}, "", time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	require.True(t, applied)
+	limited, err := db.LeaseAccountQuota(ctx, id, "v1", 30*time.Second, time.Minute, true)
+	require.NoError(t, err)
+	require.Nil(t, limited, "a nonzero floor still applies")
+	claim, err = db.LeaseAccountQuota(ctx, id, "v1", 0, time.Minute, true)
+	require.NoError(t, err)
+	require.NotNil(t, claim, "a completed refresh can be repeated immediately")
+	released, err := db.ReleaseAccountQuotaQuery(ctx, claim, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	require.True(t, released)
+	_, err = db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at=now()+interval '1 hour' WHERE account_id=$1`, id)
+	require.NoError(t, err)
+	claim, err = db.LeaseAccountQuota(ctx, id, "v1", 0, time.Minute, true)
+	require.NoError(t, err)
+	require.NotNil(t, claim, "force ignores elapsed time even with a future timestamp")
+}
+
 func TestQuotaLeaseFencesIdentityAndLateCompletion(t *testing.T) {
 	ctx := t.Context()
 	db := testutil.DB(t)

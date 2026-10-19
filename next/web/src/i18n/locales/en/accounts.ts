@@ -210,8 +210,7 @@ export default {
     passiveHint: 'Read from the headers of recent responses; the upstream is not queried',
     refresh: 'Refresh',
     refreshing: 'Refreshing',
-    refreshHint: 'Query the upstream now (at most once per account every 30 seconds)',
-    refreshThrottled: 'Just refreshed; try again in {n}s',
+    refreshHint: 'Query the upstream now',
     refreshed: 'Usage updated'
   },
   autoReleaseAt: 'Automatically re-enable at {time}',

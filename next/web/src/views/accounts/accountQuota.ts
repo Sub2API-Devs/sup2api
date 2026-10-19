@@ -1,13 +1,10 @@
 // Subscription quota of accounts (5h / 7d / 7d Sonnet / 7d Fable windows):
-// API calls, display helpers and the throttled manual refresh. The list
+// API calls, display helpers and manual refresh. The list
 // endpoint already carries every row's snapshot, so the page never polls this
 // per row — only the "refresh" action asks the upstream (force=true).
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
 import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
-
-/** The server answers force refreshes at most this often per account; the console does not ask sooner. */
-export const QUOTA_REFRESH_MIN_MS = 30_000
 
 /** GET /accounts/:id/quota — `force` makes the server query the upstream now. */
 export function fetchAccountQuota(id: number, force = true): Promise<QuotaSnapshot> {
@@ -84,54 +81,28 @@ export function useQuotaClock(): Ref<number> {
   return clock
 }
 
-// ---------------------------------------------------------------- throttled refresh
+// ---------------------------------------------------------------- manual refresh
 
 export type RefreshOutcome = 'ok' | 'busy' | 'throttled' | 'error'
 
 export interface QuotaRefreshOptions {
   /** A fresh snapshot for the account. */
   onSnapshot: (id: number, snapshot: QuotaSnapshot) => void
-  /** Clicked again within QUOTA_REFRESH_MIN_MS; nothing was sent. */
-  onThrottled?: (id: number, waitSeconds: number) => void
   onError?: (id: number, e: unknown) => void
   /** Injected in tests. */
   fetcher?: (id: number) => Promise<QuotaSnapshot>
-  now?: () => number
 }
 
 /**
- * Manual "refresh usage" with a per-account 30 s floor. The floor starts at
- * the last click in this page and at the snapshot's `updated_at` when it came
- * from an active query (a server timestamp in the future counts as now).
- * While a request runs the account is in `refreshing` and further clicks are
- * ignored.
+ * Manual "refresh usage" without a cooldown after completion. While a request
+ * runs the account is in `refreshing` and duplicate clicks are ignored.
  */
 export function useQuotaRefresh(opts: QuotaRefreshOptions) {
-  const now = opts.now ?? Date.now
   const fetcher = opts.fetcher ?? ((id: number) => fetchAccountQuota(id, true))
   const refreshing = reactive(new Set<number>())
-  const lastAt = new Map<number, number>()
-
-  /** Milliseconds until a force refresh of the account may be sent (0 = now). */
-  function waitMs(id: number, current?: QuotaSnapshot | null): number {
-    const t = now()
-    let base = lastAt.get(id) ?? 0
-    if (current?.source === 'active' && current.updated_at) {
-      const at = Date.parse(current.updated_at)
-      if (!Number.isNaN(at)) base = Math.max(base, Math.min(at, t))
-    }
-    return Math.max(0, base + QUOTA_REFRESH_MIN_MS - t)
-  }
-
-  async function refresh(id: number, current?: QuotaSnapshot | null): Promise<RefreshOutcome> {
+  async function refresh(id: number): Promise<RefreshOutcome> {
     if (refreshing.has(id)) return 'busy'
-    const wait = waitMs(id, current)
-    if (wait > 0) {
-      opts.onThrottled?.(id, Math.ceil(wait / 1000))
-      return 'throttled'
-    }
     refreshing.add(id)
-    lastAt.set(id, now())
     try {
       opts.onSnapshot(id, await fetcher(id))
       return 'ok'
@@ -143,7 +114,7 @@ export function useQuotaRefresh(opts: QuotaRefreshOptions) {
     }
   }
 
-  return { refreshing, refresh, waitMs }
+  return { refreshing, refresh }
 }
 
 /** POST /accounts/:id/refresh-credentials — renews the credentials now (CONTRACTS §48). */

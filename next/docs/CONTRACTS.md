@@ -2559,7 +2559,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 | `source` | 最新数据来源 `passive` / `active`；只有查询占位、尚无数据时为 `''` |
 | `error` | 最近一次主动查询的错误（`auth_rejected: …` / `transient: …` / `plugin: …`），冒号后为插件 `QuotaResult.error_message`（去控制字符、合并空白、最多 256 字节；为空时为 `quota query failed`），控制台据此显示原因、插件可用性据此判断；任何一次成功写入（被动或主动）清空 |
 | `updated_at` | 窗口最近一次写入时间（数据库时钟）；NULL = 尚无数据 |
-| `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），30 秒下限按后者在 PG 中原子判断，多节点有效 |
+| `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），非强制查询的 30 秒下限按后者在 PG 中原子判断，多节点有效；手动 `force=true` 不受时间间隔限制 |
 
 窗口 key：`5h`、`7d`、`7d_sonnet`、`7d_fable` 为控制台已知 key（Anthropic 的 `7d_oi` 头 / `seven_day_overage_included` 字段即 Fable 周窗口；2026-10 起 usage 应答不再给该字段，改在 `limits[]` 中以 `kind: "weekly_scoped"`、`scope.model.display_name: "Fable"`、`percent` 给出，旧字段缺失时取它；Sonnet 同理），其他供应商可用自定义 key（`^[a-z0-9][a-z0-9_]{0,31}$`）。`utilization` 一律为**百分比**（0–100，可因超额超过 100）。
 
@@ -2610,7 +2610,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 ```
 
 - 类型不支持额度：`{supported: false, source: "", updated_at: null, error: "", windows: []}`，不访问上游。
-- 是否主动查询（仅 `quota.query` 类型）：快照 `updated_at` 在 3 分钟内（被动或主动都算）→ 直接返回；上次主动查询失败且距 `last_active_at` 不足 1 分钟 → 直接返回（负缓存）；距 `last_active_at` 不足 30 秒 → 直接返回；否则查一次。`force=true` 跳过 3 分钟新鲜度与 1 分钟负缓存，但仍受 30 秒下限约束。同一节点同一账号的并发请求经 singleflight 合并为一次查询；跨节点由 `ClaimAccountQuotaQuery`（`UPDATE … WHERE last_active_at <= now() - 30s`）保证 30 秒内只有一个节点真正发请求，抢不到的直接返回当前快照。
+- 是否主动查询（仅 `quota.query` 类型）：非强制请求距 `last_active_at` 不足 30 秒时直接返回快照；有 `next_check_at` 则按该时间决定是否查询。没有调度时间时，快照 `updated_at` 不足 3 分钟（被动或主动都算），或上次主动查询失败且距 `last_active_at` 不足 1 分钟，也直接返回。手动 `force=true` 跳过这些新鲜度、负缓存、调度时间与时间间隔限制，完成后可立即再次刷新；前端同样没有刷新冷却。同一节点同一账号正在进行的查询经 singleflight 合并；跨节点由 `LeaseAccountQuota` 的有效租约阻止并发查询，抢不到的直接返回当前快照。强制刷新不绕过有效租约，自动调度及非强制查询仍保留原有间隔。
 - 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。
 - 窗口顺序、名称与短标签由插件的 `quota.windows` 声明；未声明的窗口按通用回退规则展示 key。`resets_at` 已过仅表示等待核验，返回 `expired: true`，保留上次实际观测的使用率、重置时间和状态；不得把时间经过伪装成上游已确认恢复。窗口可附 `label`、`short_label` 本地化文本，快照附 `next_check_at` 与 `refresh_status`（`pending` / `ready` / `error`）。
 
@@ -3374,7 +3374,7 @@ ccgateway 的实现（`server/internal/ccgateway/usage.go`）：
 
 **manifest 变更**（可选）：`next/plugins/ccgateway/manifest.json` 若需声明 `quota`（让核心识别该类型支持配额），可以只声明空的 `quota: {}`（不声明 headers，不声明 query）——核心通过 provider 扩展点查询，不走 manifest 声明的 RPC。若不改 manifest（保持版本 0.1.6），核心按"插件未实现 quota RPC"处理，provider 注册后同样生效。实际采用第二种：manifest 不变，核心按 provider 优先。
 
-沿用 §44 的新鲜度（3 分钟）、错误间隔（1 分钟）、每账号查询下限（30 秒，跨节点 PG 原子保证）、PG 快照逻辑。账号列表加载时批量读取 quota 快照，显示在列表里（前端 `AccountsView.vue` 已经渲染 `quota`，CC 账号同样显示）。
+沿用 §44 的 PG 快照逻辑；非强制查询保留新鲜度（3 分钟）、错误间隔（1 分钟）、每账号查询下限（30 秒，跨节点 PG 原子保证）。手动 `force=true` 无时间间隔限制，但仍受进行中查询的租约保护。账号列表加载时批量读取 quota 快照，显示在列表里（前端 `AccountsView.vue` 已经渲染 `quota`，CC 账号同样显示）。
 
 ### 51.3 配额快照 Redis 缓存
 

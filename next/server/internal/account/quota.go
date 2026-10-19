@@ -32,7 +32,7 @@ import (
 // the gateway's own upstream responses (passive, no extra upstream call) and,
 // for account types whose plugin can ask the upstream, by an active query
 // that runs only when the console asks for a snapshot older than three
-// minutes, at most once per account every 30 seconds.
+// minutes. Explicit force refreshes have no elapsed-time cooldown.
 
 const (
 	// quotaFresh: a snapshot younger than this (either source) is served as
@@ -41,8 +41,8 @@ const (
 	// quotaErrorTTL: after a failed active query the next one waits this long
 	// unless forced (sub2api apiErrorCacheTTL).
 	quotaErrorTTL = time.Minute
-	// quotaQueryFloor is the minimum gap between two active queries of one
-	// account, forced or not, on any node (enforced in PG).
+	// quotaQueryFloor is the minimum gap for non-forced/background queries
+	// of one account, on any node (enforced in PG).
 	quotaQueryFloor = 30 * time.Second
 	// quotaPassiveInterval is the minimum gap between two passive writes of
 	// one account on one node; a status change is written at once.
@@ -199,7 +199,7 @@ func (s *Service) getQuota(c *gin.Context) {
 
 // accountQuota returns the account's snapshot, refreshing it with one active
 // query first when the type supports it and the snapshot is stale (or force
-// is set, still bounded by the 30-second floor). Concurrent callers for one
+// is set, bypassing the elapsed-time floor). Concurrent callers for one
 // account share the query. Upstream and plugin failures do not fail the
 // call: they are recorded on the snapshot (negative cache, quotaErrorTTL).
 func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaSnapshot, error) {
@@ -216,7 +216,7 @@ func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaS
 			// Not tied to the first caller: the others wait for the same result.
 			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), quotaQueryTimeout+5*time.Second)
 			defer cancel()
-			return s.queryQuota(qctx, bt, a)
+			return s.queryQuota(qctx, bt, a, force)
 		})
 		if err != nil {
 			return nil, err
@@ -229,17 +229,14 @@ func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaS
 }
 
 // shouldQueryQuota decides, on this node's reading of the snapshot, whether
-// an active query is worth attempting. ClaimAccountQuotaQuery re-checks the
-// floor atomically in PG.
+// an active query is worth attempting. LeaseAccountQuota re-checks the
+// non-forced floor and the in-flight lease atomically in PG.
 func shouldQueryQuota(snap *store.QuotaSnapshot, force bool, now time.Time) bool {
-	if snap == nil {
+	if force || snap == nil {
 		return true
 	}
 	if snap.LastActiveAt != nil && now.Sub(*snap.LastActiveAt) < quotaQueryFloor {
 		return false
-	}
-	if force {
-		return true
 	}
 	if snap.NextCheckAt != nil {
 		return !now.Before(*snap.NextCheckAt)
@@ -257,8 +254,12 @@ func shouldQueryQuota(snap *store.QuotaSnapshot, force bool, now time.Time) bool
 // request, sends it through the account's proxy and stores what the plugin
 // read out of the answer. It returns the snapshot as stored afterwards; only
 // database errors are returned as errors.
-func (s *Service) queryQuota(ctx context.Context, bt core.AccountTypeBinding, a *row) (*store.QuotaSnapshot, error) {
-	return s.executeQuotaQuery(ctx, bt, a, true)
+func (s *Service) queryQuota(ctx context.Context, bt core.AccountTypeBinding, a *row, force bool) (*store.QuotaSnapshot, error) {
+	floor := quotaQueryFloor
+	if force {
+		floor = 0
+	}
+	return s.executeQuotaQuery(ctx, bt, a, true, floor)
 }
 
 // runQuotaQuery performs one active query and saves its windows. It returns

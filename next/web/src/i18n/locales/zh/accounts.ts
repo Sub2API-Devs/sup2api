@@ -203,8 +203,7 @@ export default {
     passiveHint: '来自最近请求的响应头，不额外查询上游',
     refresh: '刷新',
     refreshing: '刷新中',
-    refreshHint: '立即向上游查询用量（每个账号 30 秒内只查询一次）',
-    refreshThrottled: '刚刚刷新过，请 {n} 秒后再试',
+    refreshHint: '立即向上游查询用量',
     refreshed: '用量已更新'
   },
   autoReleaseAt: '{time} 自动解除禁用',

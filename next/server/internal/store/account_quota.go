@@ -236,7 +236,7 @@ func (d *DB) LeaseAccountQuota(ctx context.Context, id int64, pluginRevision str
 		lease_token=nextval('account_quota_generation_seq'),lease_until=clock_timestamp()+make_interval(secs=>$4::float8)
 		WHERE account_id=$1 AND plugin_revision=$2
 		AND (lease_until IS NULL OR lease_until<=clock_timestamp())
-		AND (last_active_at IS NULL OR last_active_at<=clock_timestamp()-make_interval(secs=>$3::float8))
+		AND ($3::float8<=0 OR last_active_at IS NULL OR last_active_at<=clock_timestamp()-make_interval(secs=>$3::float8))
 		AND ($5 OR next_check_at IS NULL OR next_check_at<=clock_timestamp())
 		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL AND a.status='active'
 		AND ($5 OR a.schedulable OR q.updated_at IS NULL)
