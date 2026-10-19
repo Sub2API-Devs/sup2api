@@ -1,5 +1,7 @@
 # OVH当前部署入口
 
+2026-10-19 最新：Core 四节点 **0.1.163**，插件/Controller/运行中的 Worker 程序 **0.1.63**。账号测试使用 CC 原生 build 单次探测，21/30 号 Opus 5.5 测试均 200；HTTP 错误只展示实际状态、错误码和正文，不加推导原因或禁用建议。21/30 原容器和卷保留（基础镜像标签仍 .62，Worker 程序已原地升 .63），未来容器目标镜像 .63，CLI 固定 2.1.302/v9 并禁更。详见 [发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+
 2026-10-19 最新：Core **0.1.162**、CCGateway/Controller/Worker **0.1.62**，CLI **2.1.302 / ccgateway-v9-stderr-errors**。错误状态/code/message 经结构化 stderr 交给 Worker 封装 HTTP；正常 JSON/SSE 仍从 stdout 返回，修复错误日志误记 200，并将已提交响应的中断传递到客户端。21/30 号保留授权和卷，默认 build、禁更保持。验收见 [302 stderr 协议与发布](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#11-stderr-错误协议v9)。
 
 2026-10-19 最新：Core **0.1.161**、CCGateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 支持原生 OAuth。21/30 号保留原数据卷和授权并重建到新镜像；30 号完整 CC 请求 build、direct CLI 重放均 200，21 号 API Key 回归 200。默认 build、禁更保持。简化空 system 的 OAuth 请求仍可能上游 429；实现与验证边界见 [302 OAuth 记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。

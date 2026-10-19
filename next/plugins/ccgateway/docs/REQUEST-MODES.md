@@ -1,5 +1,7 @@
 # CCGateway 请求模式
 
+2026-10-19 最新：Core **0.1.163** / ccgateway **0.1.63** 已修复账号测试请求构建，并按上游原始状态、错误码和正文展示 HTTP 错误。21/30 号通过真实账号测试接口调用 `claude-opus-5-5`，均 HTTP 200、回答 Paris。CLI 继续使用 2.1.302/v9，业务默认 build；[发布验收](cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+
 2026-10-19 最新：Core **0.1.162** / ccgateway **0.1.62** 已发布 CLI v9 结构化 stderr 错误通道，21/30 号更新并保留授权；公网 HTTP 错误和正常 SSE、OAuth 普通问答验收通过。模式仍为默认 build。
 
 2026-10-19：请求模式只保留 `build` 和 `direct`，默认 `build`。定制 CLI 仍为 2.1.302。

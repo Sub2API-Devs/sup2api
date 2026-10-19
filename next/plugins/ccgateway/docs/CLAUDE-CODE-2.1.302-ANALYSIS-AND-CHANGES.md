@@ -245,3 +245,14 @@ CCG_REQUEST_ERROR {"protocol":"ccgateway.request.error.v1","source":"http","stat
 这次没有修改 CLI 字节：继续使用 **2.1.302 / ccgateway-v9-stderr-errors**。业务 `/v1/messages` 路径与 direct 原始 body 透传保持；内部账号探测不能代替业务 direct 请求验收。
 
 Core 账号测试保留实际状态、错误码、正文及白名单响应头。没有响应错误码时不合成 http_XXX。对 HTTP response 错误，不返回或持久化插件推导的 reason/effect，前端也屏蔽旧结果中的推导字段；不补充“原因未知”“配额耗尽”等解释。分类仍用于区分本地故障来源，业务请求的原有分类/调度策略不变。
+
+### 发布验收
+
+发布源码 `80d734868ac9c66ef3939fd2cb9a02aa9b2f170a`；测试专用后续提交 `b58531c38` 修正 API Key 入口的原生 Agent SDK 身份断言，没有修改运行代码或 ELF。Core **0.1.163**、插件/Controller/Worker 程序 **0.1.63** 已上线，升级计划 `711828d791bcb388e9a96dd8fb824aa9` 完成 27 步。四节点版本、核心哈希和实际 AccountsView 前端文件均验证一致。
+
+- 前端类型检查及 34 项测试、插件/Engine 回归通过；Core account/ccgateway 包在隔离 PostgreSQL 上通过。原生 ELF 加正式 Worker 的 build/direct 组合通过，包含真实错误转发及新增探测；direct 业务 body 逐字节一致。
+- 经前端同一 `/accounts/:id/test` 接口，21、30 号所选 `claude-opus-5-5` 均返回 HTTP 200、test_mode=native_build，正文为 Paris。升级过程中首次 21 号调用赶在异步插件激活完成前，仍是旧 ping 请求；已在四节点激活 .63 后重测，未将旧结果作为本次验收。
+- 21/30 原容器、卷、授权和 CLI 哈希保留，Worker 程序原地升级；容器的基础镜像标签仍为 .62，未来创建目标镜像为 .63。默认 build、禁更设置保持。共享出口、停止的历史账号未变。
+- 私有备份 `~/sup2api-managed/backups/ccgateway-probe-0.1.163/` 的数据库与卷归档已检查；构建位于 `~/sup2api-managed/stage/0.1.163/`，验证位于 `~/sup2api/checks/ccg-probe-163/`。
+
+脱敏证据见 [账号探测发布验收](cli-research/2.1.302/account-probe-deployment-0.1.163.json)。

@@ -1,0 +1,108 @@
+{
+  "source_commit": "80d734868ac9c66ef3939fd2cb9a02aa9b2f170a",
+  "core_version": "0.1.163",
+  "plugin_version": "0.1.63",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.163",
+      "sha256": "9af75b68336a9fdfa449eacf6b01f889ea284bcbad741e3fa2db6dd07d2c95b7",
+      "ready": true,
+      "active_plugin": "0.1.63"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.163",
+      "sha256": "9af75b68336a9fdfa449eacf6b01f889ea284bcbad741e3fa2db6dd07d2c95b7",
+      "ready": true,
+      "active_plugin": "0.1.63"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.163",
+      "sha256": "9af75b68336a9fdfa449eacf6b01f889ea284bcbad741e3fa2db6dd07d2c95b7",
+      "ready": true,
+      "active_plugin": "0.1.63"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.163",
+      "sha256": "9af75b68336a9fdfa449eacf6b01f889ea284bcbad741e3fa2db6dd07d2c95b7",
+      "ready": true,
+      "active_plugin": "0.1.63"
+    }
+  ],
+  "workers": [
+    {
+      "account": 21,
+      "build": {
+        "version": "0.1.63",
+        "revision": "80d734868ac9c66ef3939fd2cb9a02aa9b2f170a",
+        "modified": false
+      },
+      "containerPreserved": true,
+      "volumePreserved": true,
+      "cliSHA256": "b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152",
+      "autoUpdateDisabled": true,
+      "test": {
+        "status": 200,
+        "mode": "native_build",
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "Paris."
+          }
+        ]
+      }
+    },
+    {
+      "account": 30,
+      "build": {
+        "version": "0.1.63",
+        "revision": "80d734868ac9c66ef3939fd2cb9a02aa9b2f170a",
+        "modified": false
+      },
+      "containerPreserved": true,
+      "volumePreserved": true,
+      "cliSHA256": "b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152",
+      "autoUpdateDisabled": true,
+      "test": {
+        "status": 200,
+        "mode": "native_build",
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "Paris."
+          }
+        ]
+      }
+    }
+  ],
+  "sharedEgressAndStoppedAccountsUnchanged": true,
+  "runtimeUpToDate": true,
+  "ui": {
+    "file": "AccountsView-CYMup-Wp.js",
+    "sha256": "df6508529993f41fc9a40eecc9a718e3d940ad0f724102034587f43c5bb1d3f3",
+    "verifiedOnAllNodes": true
+  },
+  "date": "2026-10-19",
+  "release": "v0.1.163",
+  "manifest": "7752f93bba8ac194243888649082d9aa481315114849d4f4fe39dc5d148f3bf0",
+  "upgradePlan": "711828d791bcb388e9a96dd8fb824aa9",
+  "upgradeStatus": "completed",
+  "verificationCommit": "b58531c3867846c098bcfeacfe88293ed502b5b0",
+  "tests": [
+    "frontend typecheck and 34 unit tests passed",
+    "Go plugin, HTTP facts and Engine passed",
+    "Core account and ccgateway packages passed on an isolated PostgreSQL instance",
+    "Native ELF + production Worker build/direct probes passed; direct body bytes preserved",
+    "Account test API for accounts 21 and 30: HTTP 200, native_build, claude-opus-5-5"
+  ],
+  "notes": [
+    "The first account 21 probe during asynchronous builtin activation still used the old plugin; it was repeated after all four nodes activated 0.1.63. Only the new native_build result is recorded here.",
+    "The native probe test initially assumed a Claude Code identity; the native API Key entrypoint produces an Agent SDK identity. A test-only follow-up corrected this assertion before deployment; runtime source and native ELF were unchanged.",
+    "Actual upstream HTTP errors are shown without classification reason/effect. No inferred quota cause is added."
+  ]
+}
