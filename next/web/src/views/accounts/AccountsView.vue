@@ -367,10 +367,15 @@ async function openDetail(a: Account) {
 
 // ---------------------------------------------------------------- quota refresh / reset status
 // The snapshot of every row arrives with the list; "refresh" asks the upstream
-// for one account (force), with duplicate in-flight clicks coalesced.
+// for one account (force), with duplicate in-flight clicks coalesced. An
+// account that cannot be queried yet (409 details.reason) is named in the toast.
 const quotaRefresh = useQuotaRefresh({
   onSnapshot: (id, quota) => patchAccount(id, { quota }),
-  onError: (_id, e) => notifyError(e)
+  onError: (_id, e) => {
+    const key = `accounts.quota.refreshBlocked.${reasonOf(e)}`
+    if (reasonOf(e) && te(key)) toast(t(key), 'error')
+    else notifyError(e)
+  }
 })
 
 // ---------------------------------------------------------------- balance refresh
@@ -466,7 +471,7 @@ async function runPluginAction(a: Account, action: AccountAction) {
     } else if (typeof out?.refreshed === 'boolean') {
       const time = typeof out.expires_at === 'string' ? formatDateTime(out.expires_at) : ''
       toast(t(out.refreshed ? 'accounts.pluginActions.tokenRefreshed' : 'accounts.pluginActions.tokenValid', { time }), 'success')
-      if (hasQuota(a.quota)) void quotaRefresh.refresh(a.id)
+      if (hasQuota(a.quota) && a.status === 'active') void quotaRefresh.refresh(a.id)
     } else {
       toast(t('accounts.pluginActions.done', { name }), 'success')
     }

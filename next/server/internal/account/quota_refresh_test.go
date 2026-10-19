@@ -190,6 +190,79 @@ func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {
 	require.True(t, schedulable)
 }
 
+// A runtime waiting only for its new environment (locale / timezone) keeps
+// serving with the existing container: its quota is queried as usual. Any
+// other pending synchronization keeps the account out of automatic refresh,
+// and a manual refresh says why instead of answering the old snapshot.
+func TestQuotaLifecycleEnvironmentPendingIsReady(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	up := newQuotaUpstream(t)
+	e.plat.quotaURL = up.srv.URL
+	e.withQuota(&manifest.AccountQuota{Query: true, AutoRefresh: true})
+	_, err := e.db.Pool.Exec(ctx, `INSERT INTO plugins(key,name,status) VALUES('anthropic','{"en":"Fixture"}','enabled')`)
+	require.NoError(t, err)
+	e.gen.types[0].Type.Lifecycle = &manifest.AccountLifecycle{}
+	e.gen.types[0].Client = &preparationPlugin{fakePlatform: e.plat}
+	e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"anthropic": &preparationResource{}}
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "environment", "plugin_key": "anthropic", "type": "apikey", "credentials": map[string]any{"api_key": "sk-good-key-123"}})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	id := int64(data(out)["id"].(float64))
+	path := fmt.Sprintf("/accounts/%d/quota?force=true", id)
+	setSync := func(status, code string) {
+		t.Helper()
+		tag, err := e.db.Pool.Exec(ctx, `UPDATE account_lifecycle_sync SET status=$2,code=$3 WHERE account_id=$1`, id, status, code)
+		require.NoError(t, err)
+		require.EqualValues(t, 1, tag.RowsAffected())
+	}
+	blocked := func() string {
+		t.Helper()
+		a, err := e.svc.loadRow(ctx, e.db.Pool, id, nil, false)
+		require.NoError(t, err)
+		reason, err := e.svc.quotaBlocked(ctx, a, e.gen.types[0])
+		require.NoError(t, err)
+		return reason
+	}
+	reasonOf := func(out map[string]any) string {
+		errObj, _ := out["error"].(map[string]any)
+		details, _ := errObj["details"].(map[string]any)
+		reason, _ := details["reason"].(string)
+		return reason
+	}
+
+	for _, pending := range []struct{ status, code string }{{"pending", "runtime_pending"}, {"pending", "controller_outdated"}, {"failed", "environment_requires_new_runtime"}} {
+		setSync(pending.status, pending.code)
+		require.Equal(t, "runtime_not_ready", blocked(), pending)
+		require.NoError(t, e.svc.sweepQuotas(ctx))
+		require.Zero(t, up.calls.Load(), pending)
+		code, out = e.do("GET", path, nil)
+		require.Equal(t, 409, code, fmt.Sprint(out))
+		require.Equal(t, "runtime_not_ready", reasonOf(out))
+		require.Zero(t, up.calls.Load(), pending)
+	}
+	snap, err := e.db.AccountQuota(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", snap.RefreshStatus)
+
+	setSync("pending", "environment_requires_new_runtime")
+	require.Empty(t, blocked())
+	require.NoError(t, e.svc.sweepQuotas(ctx))
+	require.EqualValues(t, 1, up.calls.Load(), "the sweep selects an account whose runtime only waits for a new environment")
+	snap, err = e.db.AccountQuota(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "ready", snap.RefreshStatus)
+	code, out = e.do("GET", path, nil)
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.EqualValues(t, 2, up.calls.Load())
+
+	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled' WHERE id=$1`, id)
+	require.NoError(t, err)
+	code, out = e.do("GET", path, nil)
+	require.Equal(t, 409, code, fmt.Sprint(out))
+	require.Equal(t, "account_not_active", reasonOf(out))
+	require.EqualValues(t, 2, up.calls.Load())
+}
+
 func TestQuotaInitialRecordingWithSchedulingOff(t *testing.T) {
 	e := setup(t)
 	up := newQuotaUpstream(t)

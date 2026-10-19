@@ -36,16 +36,48 @@ func (s *Service) initializeQuota(ctx context.Context, q store.Querier, id int64
 	return store.EnsureAccountQuota(ctx, q, id, quotaPluginRevision(bt), true)
 }
 
-func (s *Service) quotaReady(ctx context.Context, a *row, bt core.AccountTypeBinding) bool {
+// lifecycleQuotaReady is the SQL condition (on account_lifecycle_sync l)
+// under which a lifecycle account may be queried for its quota: the runtime
+// configuration is applied, or only a new environment (locale / timezone)
+// waits for the next runtime while the existing container keeps serving.
+const lifecycleQuotaReady = `(l.status='applied' OR (l.status='pending' AND l.code='environment_requires_new_runtime'))`
+
+// quotaBlocked is why an active quota query of the account cannot run now
+// ("" when it can): account_not_active, or runtime_not_ready while the
+// lifecycle plugin has not synchronized the account's runtime.
+func (s *Service) quotaBlocked(ctx context.Context, a *row, bt core.AccountTypeBinding) (string, error) {
 	if a.Status != "active" {
-		return false
+		return "account_not_active", nil
 	}
 	if bt.Type.Lifecycle == nil {
-		return true
+		return "", nil
 	}
 	var ready bool
-	err := s.d.DB.Pool.QueryRow(ctx, `SELECT COALESCE((SELECT status='applied' FROM account_lifecycle_sync WHERE account_id=$1),true)`, a.ID).Scan(&ready)
-	return err == nil && ready
+	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT COALESCE((SELECT `+lifecycleQuotaReady+` FROM account_lifecycle_sync l WHERE l.account_id=$1),true)`, a.ID).Scan(&ready); err != nil {
+		return "", err
+	}
+	if !ready {
+		return "runtime_not_ready", nil
+	}
+	return "", nil
+}
+
+var quotaBlockedMessages = map[string]string{
+	"account_not_active": "The account is not active; enable it before refreshing its quota.",
+	"runtime_not_ready":  "The account runtime is not synchronized yet; the quota can be refreshed once it is.",
+}
+
+// quotaNotReady answers a query the account cannot take now: the background
+// refresh keeps the stored snapshot, a manual refresh is told why (409 with
+// details.reason) instead of silently getting the old snapshot.
+func (s *Service) quotaNotReady(ctx context.Context, id int64, manual bool, reason string, err error) (*store.QuotaSnapshot, error) {
+	if !manual {
+		return s.d.DB.AccountQuota(ctx, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return nil, core.ErrConflict.WithMessage(quotaBlockedMessages[reason]).WithDetails(map[string]any{"reason": reason})
 }
 
 func quotaNextCheck(now time.Time, res *pluginv1.QuotaResult, failures int, failed bool) time.Time {
@@ -66,8 +98,8 @@ func quotaNextCheck(now time.Time, res *pluginv1.QuotaResult, failures int, fail
 }
 
 func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row, manual bool, floor time.Duration) (*store.QuotaSnapshot, error) {
-	if !s.quotaReady(ctx, a, bt) {
-		return s.d.DB.AccountQuota(ctx, a.ID)
+	if reason, err := s.quotaBlocked(ctx, a, bt); err != nil || reason != "" {
+		return s.quotaNotReady(ctx, a.ID, manual, reason, err)
 	}
 	revision := quotaPluginRevision(bt)
 	current, ok := s.accountType(a.PluginKey, a.Type)
@@ -92,8 +124,11 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	if err != nil {
 		return nil, err
 	}
-	if !valid || !s.quotaReady(ctx, a, bt) || (!manual && !claim.Initial && !a.Schedulable) {
+	if !valid || (!manual && !claim.Initial && !a.Schedulable) {
 		return s.d.DB.AccountQuota(ctx, a.ID)
+	}
+	if reason, err := s.quotaBlocked(ctx, a, bt); err != nil || reason != "" {
+		return s.quotaNotReady(ctx, a.ID, manual, reason, err)
 	}
 	qctx, cancel := context.WithTimeout(ctx, quotaQueryTimeout)
 	done := make(chan struct{})
@@ -227,7 +262,7 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
   WHERE q.auto_refresh AND q.next_check_at<=now() AND (q.lease_until IS NULL OR q.lease_until<=now())
   AND (q.last_active_at IS NULL OR q.last_active_at<=now()-make_interval(secs=>$3::float8))
   AND a.status='active' AND (a.schedulable OR q.updated_at IS NULL) AND a.deleted_at IS NULL AND a.plugin_key||'/'||a.type=ANY($1)
-  AND NOT EXISTS(SELECT 1 FROM account_lifecycle_sync l WHERE l.account_id=a.id AND l.status<>'applied')
+  AND NOT EXISTS(SELECT 1 FROM account_lifecycle_sync l WHERE l.account_id=a.id AND NOT `+lifecycleQuotaReady+`)
   ORDER BY q.next_check_at,q.account_id LIMIT $2`, keys, quotaSweepPage, quotaQueryFloor.Seconds())
 	if err != nil {
 		return err

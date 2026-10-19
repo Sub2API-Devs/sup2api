@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount, type DOMWrapper } from '@vue/test-utils'
 import { ref } from 'vue'
-import type { Account, AccountType } from '@/api/types'
+import type { Account, AccountType, QuotaSnapshot } from '@/api/types'
 import { i18n } from '@/i18n'
 import { SDropdown } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
@@ -354,5 +354,24 @@ describe('plugin account actions', () => {
     await flushPromises()
     expect(mocks.get).toHaveBeenCalledWith('/accounts/29/quota', { force: true })
     expect(list.items.value[0].quota).toEqual(recovered)
+  })
+
+  it('names why a manual quota refresh cannot run instead of keeping the old snapshot silently', async () => {
+    const stale: QuotaSnapshot = { supported: true, source: '', updated_at: null, error: '', refresh_status: 'pending', windows: [] }
+    list.items.value[0].quota = stale
+    mocks.post.mockResolvedValue({ refreshed: true, expires_at: '2026-10-15T20:04:00Z' })
+    mocks.get.mockRejectedValueOnce(Object.assign(new Error('conflict'), { details: { reason: 'runtime_not_ready' } }))
+    const w = render()
+    dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
+    await flushPromises()
+    expect(mocks.get).toHaveBeenCalledWith('/accounts/29/quota', { force: true })
+    expect(mocks.toast).toHaveBeenLastCalledWith('账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试', 'error')
+    expect(mocks.notifyError).not.toHaveBeenCalled()
+    expect(list.items.value[0].quota).toEqual(stale)
+    const unknown = Object.assign(new Error('conflict'), { details: { reason: 'something_else' } })
+    mocks.get.mockRejectedValueOnce(unknown)
+    dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
+    await flushPromises()
+    expect(mocks.notifyError).toHaveBeenCalledWith(unknown)
   })
 })

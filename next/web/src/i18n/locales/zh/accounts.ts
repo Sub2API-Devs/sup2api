@@ -2,6 +2,7 @@ export default {
   lifecycle: {
     pending: '运行配置待同步', applied: '运行配置已同步', failed: '运行配置同步失败，请检查运行环境',
     environmentDeferred: '配置已保存，现有容器保持不变。语言和时区仅在新运行环境创建时生效。',
+    environmentKept: '更换代理不会自动改写已保存的语言和时区；如需修改，请手动选择。',
     preparationFrozen: '授权容器已创建，语言和时区已锁定；如需修改，请取消本次准备后重新开始。'
   },
   listUi: {
@@ -213,7 +214,11 @@ export default {
     refresh: '刷新',
     refreshing: '刷新中',
     refreshHint: '点击配额立即刷新用量',
-    refreshed: '用量已更新'
+    refreshed: '用量已更新',
+    refreshBlocked: {
+      runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试',
+      account_not_active: '账号未启用，无法查询额度；请先恢复账号状态'
+    }
   },
   autoReleaseAt: '{time} 自动解除禁用',
   schedulingSwitchHint: '控制是否参与调度；禁用或异常请使用“重置状态”恢复',

@@ -76,18 +76,55 @@ describe('account container environment', () => {
     expect(w.get('[data-testid="account-lifecycle-status"]').text()).toContain('现有容器保持不变')
   })
 
-  it('prefills from the selected proxy, then allows manual overrides and submits them', async () => {
-    const w = render(savedAccount())
+  it('prefills a new account from the selected proxy and refills it when the proxy changes', async () => {
+    const w = render()
     await chooseProxy(w, 20)
     expect(value(w, 'locale')).toBe('en-US')
     expect(value(w, 'timezone')).toBe('America/Los_Angeles')
     await w.get('[data-testid="container-locale"]').setValue('zh-CN')
+    expect(value(w, 'locale')).toBe('zh-CN')
+    await chooseProxy(w, 21)
+    expect(value(w, 'locale')).toBe('en-US')
+    expect(mocks.get.mock.calls.filter(([path]) => path.endsWith('/location'))).toHaveLength(2)
+  })
+
+  it('keeps the saved environment of an existing account when its proxy changes, and still accepts manual overrides', async () => {
+    const w = render(savedAccount())
+    await flushPromises()
+    await chooseProxy(w, 20)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    expect(value(w, 'timezone')).toBe('Asia/Tokyo')
+    expect(w.get('[data-testid="container-location-status"]').text()).toContain('不会自动改写')
+    await chooseProxy(w, null)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    await chooseProxy(w, 21)
     await w.get('[data-testid="container-timezone"]').setValue('Asia/Shanghai')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ settings: { locale: 'zh-CN', timezone: 'Asia/Shanghai' }, proxy_id: 20 }))
-    await chooseProxy(w, 21)
-    expect(value(w, 'locale')).toBe('en-US')
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ settings: { locale: 'ja-JP', timezone: 'Asia/Shanghai' }, proxy_id: 21 }))
+    expect(mocks.get.mock.calls.some(([path]) => path.endsWith('/location'))).toBe(false)
+  })
+
+  it('keeps the saved environment of an existing account when switching the proxy mode or testing a pasted proxy', async () => {
+    const w = render(savedAccount(), false, { ...accountType, type: 'managed' })
+    await flushPromises()
+    await w.get('[data-testid="proxy-mode"] input[value="url"]').setValue(true)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    expect(value(w, 'timezone')).toBe('Asia/Tokyo')
+    expect(w.get('[data-testid="container-location-status"]').text()).toContain('不会自动改写')
+    mocks.post.mockResolvedValueOnce({ ok: true, protocol: 'http', ip: '1.2.3.4', proxy_url: 'http://u:p@h:8443', proxy_id: 42, proxy_created: true, location, attempts: [] })
+    await w.get('[data-testid="proxy-url"]').setValue('h:8443:u:p')
+    await w.get('[data-testid="proxy-url"]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(w.getComponent(ProxyPicker).props('modelValue')).toBe(42)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    expect(value(w, 'timezone')).toBe('Asia/Tokyo')
+    await w.get('[data-testid="proxy-mode"] input[value="existing"]').setValue(true)
+    expect(value(w, 'locale')).toBe('ja-JP')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ settings: { locale: 'ja-JP', timezone: 'Asia/Tokyo' }, proxy_id: 42 }))
+    expect(mocks.get.mock.calls.some(([path]) => path.endsWith('/location'))).toBe(false)
   })
 
   it('does not overwrite a saved environment just by opening an account', async () => {
@@ -171,16 +208,17 @@ describe('account container environment', () => {
     expect(w.text()).toContain('socks5: refused; http: 407')
   })
 
-  it('restores saved values without probing when a refresh discards an unsaved proxy change', async () => {
+  it('restores saved values when a refresh discards an unsaved proxy change', async () => {
     const w = render(savedAccount())
     await chooseProxy(w, 20)
-    expect(value(w, 'locale')).toBe('en-US')
+    expect(value(w, 'locale')).toBe('ja-JP')
+    await w.get('[data-testid="container-locale"]').setValue('zh-CN')
     await w.setProps({ account: { ...savedAccount(), models: ['updated-model'] } })
     await flushPromises()
     expect(w.getComponent(ProxyPicker).props('modelValue')).toBe(10)
     expect(value(w, 'locale')).toBe('ja-JP')
     expect(value(w, 'timezone')).toBe('Asia/Tokyo')
-    expect(mocks.get.mock.calls.filter(([path]) => path.endsWith('/location'))).toHaveLength(1)
+    expect(mocks.get.mock.calls.some(([path]) => path.endsWith('/location'))).toBe(false)
   })
 
   it('loads another account without copying the previous environment or querying its proxy', async () => {

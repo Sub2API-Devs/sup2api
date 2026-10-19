@@ -247,6 +247,7 @@ const environmentStatus = computed(() => {
   if (locationLoading.value) return t('ccgateway.environmentLoading')
   if (locationStatus.value === 'filled') return t('ccgateway.environmentFilled', { ip: locationIP.value })
   if (locationStatus.value === 'failed') return t('ccgateway.environmentFailed')
+  if (editing.value) return proxyMode.value === 'url' || basic.proxy_id !== (props.account?.proxy_id ?? null) ? t('accounts.lifecycle.environmentKept') : ''
   return proxyMode.value === 'url' ? t('ccgateway.environmentProxyURL') : ''
 })
 
@@ -281,8 +282,13 @@ const proxyUrlHint = computed(() => {
 const probed = ref<{ protocol: string; ip: string; id: number; created: boolean } | null>(null)
 const probing = ref(false)
 const showProbed = computed(() => !!probed.value && proxyMode.value === 'existing' && basic.proxy_id === probed.value.id)
-/** The container environment follows the proxy (unless the prepared runtime froze it). */
-const followsProxy = () => needsProxy.value && !environmentFrozen.value
+/**
+ * The container environment follows the proxy only while a new account is set
+ * up (unless the prepared runtime froze it). A saved account keeps its saved
+ * locale and timezone when its proxy changes: its running container keeps the
+ * old environment anyway, and an unasked rewrite only defers to a new runtime.
+ */
+const followsProxy = () => needsProxy.value && !environmentFrozen.value && !editing.value
 
 function clearErrors(...keys: string[]) {
   if (keys.some((k) => errors.value[k])) errors.value = Object.fromEntries(Object.entries(errors.value).filter(([k]) => !keys.includes(k)))
@@ -292,7 +298,7 @@ function setProxy(value: number | null) {
   if (followsProxy()) void prefillEnvironment(value)
 }
 function setProxyMode(m: string) {
-  if (proxyMode.value !== m && needsProxy.value) void prefillEnvironment(m === 'existing' ? basic.proxy_id : null)
+  if (proxyMode.value !== m && followsProxy()) void prefillEnvironment(m === 'existing' ? basic.proxy_id : null)
   proxyMode.value = m as ProxyMode
   clearErrors('proxy_url', 'proxy_id')
 }

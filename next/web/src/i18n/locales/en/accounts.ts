@@ -2,6 +2,7 @@ export default {
   lifecycle: {
     pending: 'Runtime configuration pending', applied: 'Runtime configuration synchronized', failed: 'Runtime synchronization failed; check the runtime',
     environmentDeferred: 'Configuration saved. The existing container is unchanged. Language and timezone apply when a new runtime is created.',
+    environmentKept: 'Changing the proxy does not rewrite the saved language and timezone; select them manually to change them.',
     preparationFrozen: 'The authorization container has been created. Language and timezone are locked; cancel this preparation to choose different values.'
   },
   listUi: {
@@ -220,7 +221,11 @@ export default {
     refresh: 'Refresh',
     refreshing: 'Refreshing',
     refreshHint: 'Click quota to refresh usage now',
-    refreshed: 'Usage updated'
+    refreshed: 'Usage updated',
+    refreshBlocked: {
+      runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.',
+      account_not_active: 'The account is not active, so its quota cannot be queried. Restore the account status first.'
+    }
   },
   autoReleaseAt: 'Automatically re-enable at {time}',
   schedulingSwitchHint: 'Controls scheduling eligibility; use Reset status to recover disabled or error accounts',
