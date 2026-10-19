@@ -58,6 +58,8 @@ type row struct {
 	LastTestStatus      *int
 	LastTestErrorCode   *string
 	LastTestErrorSource *string
+	// SubscriptionType is the plan the runtime reported (CONTRACTS §59); nil while unknown.
+	SubscriptionType *string
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -67,7 +69,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -77,7 +79,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType)
 	return &a, err
 }
 
@@ -192,6 +194,9 @@ type View struct {
 	Refresh *RefreshView `json:"refresh"`
 	// LastTest is the last console test (CONTRACTS §50); null until tested.
 	LastTest *LastTest `json:"last_test"`
+	// SubscriptionType is the plan the account's runtime reported ("max",
+	// "pro" ...), CONTRACTS §59; null while unknown.
+	SubscriptionType *string `json:"subscription_type"`
 	// Orphaned is true when the plugin declaring the account type is not
 	// enabled (disabled or uninstalled).
 	Orphaned      bool                         `json:"orphaned"`
@@ -237,7 +242,8 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
-			LastTest: a.lastTest(),
+			LastTest:         a.lastTest(),
+			SubscriptionType: a.SubscriptionType,
 		}
 		out[i], ids[i], byID[a.ID] = v, a.ID, v
 	}
@@ -920,7 +926,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	preparation, err := s.checkPreparationForCreate(ctx, bt, &in, p.settings)
+	preparation, facts, err := s.checkPreparationForCreate(ctx, bt, &in, p.settings)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -929,7 +935,7 @@ func (s *Service) create(c *gin.Context) {
 	// runtime in the insert transaction (CONTRACTS §49.10).
 	var draftScope *int64
 	if in.CCGatewayRuntime != nil {
-		if draftScope, err = s.checkCCGatewayRuntime(ctx, *in.CCGatewayRuntime); err != nil {
+		if draftScope, facts, err = s.checkCCGatewayRuntime(ctx, *in.CCGatewayRuntime); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
@@ -969,12 +975,19 @@ func (s *Service) create(c *gin.Context) {
 		tpm = *in.TPMLimit
 	}
 	uid, _ := core.UserID(ctx)
-	if _, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, Account: &pluginv1.Account{
+	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
 			Status: status, Schedulable: sched, AutoDisable: autoDisable, Priority: int32(prio), Weight: int32(weight), MaxConcurrency: int32(maxc),
 			RpmLimit: int32(rpm), TpmLimit: tpm, ProxyId: proxyID, Models: models, ModelMapping: mapping,
 		},
-	}}); err != nil {
+	}})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	// The plugin may adjust the account before it is saved (CONTRACTS §59).
+	patched, err := applyAccountPatch(ctx, before, &models, &mapping)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -991,12 +1004,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, '')) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1021,7 +1034,7 @@ func (s *Service) create(c *gin.Context) {
 			}
 		}
 		if err := audit.Audit(ctx, tx, uid, "account.create", "account", itoa(id),
-			map[string]any{"name": *in.Name, "plugin_key": bt.Plugin.Key, "type": bt.Type.ID}); err != nil {
+			createAudit(*in.Name, bt, facts, patched)); err != nil {
 			return err
 		}
 		if bt.Type.Lifecycle != nil {

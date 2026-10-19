@@ -37,11 +37,14 @@ func TestLifecyclePreparationUsesConfiguredEnvironment(t *testing.T) {
 	if _, err := fixture.s.AccountPreparationAction(ctx, preparation, "POST", "complete", json.RawMessage(`{"session_id":"s1","code":"code#state"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.s.CheckAccountPreparation(ctx, preparation); err != nil {
-		t.Fatal(err)
+	controller.mu.Lock()
+	controller.subscription = "pro"
+	controller.mu.Unlock()
+	if facts, err := fixture.s.CheckAccountPreparation(ctx, preparation); err != nil || facts.SubscriptionType != "pro" {
+		t.Fatal(facts, err)
 	}
 	preparation.CreatedBy = fixture.user("other@example.test")
-	if err := fixture.s.CheckAccountPreparation(ctx, preparation); err == nil {
+	if _, err := fixture.s.CheckAccountPreparation(ctx, preparation); err == nil {
 		t.Fatal("preparation accepted for another owner")
 	}
 }

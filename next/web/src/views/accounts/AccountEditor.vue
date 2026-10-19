@@ -39,6 +39,7 @@ import { containerLocales, containerTimezones, environmentOptions } from './cont
 import { useContainerEnvironment } from './useContainerEnvironment'
 import { useModelsEditor } from './useModelsEditor'
 import { CONNECTION_FIELDS, SCHEDULING_FIELDS, sectionOfErrors, splitFieldErrors, type EditorSection } from './editorErrors'
+import { subscriptionLabel } from './subscription'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -544,6 +545,10 @@ async function save(event: Event) {
   try {
     const saved = await submit(body)
     toast(editing.value ? t('common.updated') : t('common.created'), 'success')
+    // The plugin may adjust a new account's models to its subscription (CONTRACTS §59).
+    if (!editing.value && saved?.models && saved.subscription_type && JSON.stringify(saved.models) !== JSON.stringify(body.models)) {
+      toast(t('accounts.modelsAdjusted', { plan: subscriptionLabel(saved.subscription_type), n: saved.models.length }), 'info')
+    }
     if (body.proxy_url) {
       // The proxy picker cache may now miss the (re)used proxy.
       useProxiesLookup(true)
@@ -689,6 +694,7 @@ async function save(event: Event) {
               <SButton size="sm" variant="ghost" data-testid="models-prefilled-clear" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SButton>
             </template>
           </SAlert>
+          <SHint v-if="ccgDraft" size="xs" class="block" data-testid="models-by-subscription">{{ t('accounts.modelsBySubscription') }}</SHint>
 
           <SCard :subtitle="t('accounts.editorUi.modelsCardHint')">
             <template #title>

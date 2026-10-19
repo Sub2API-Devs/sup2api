@@ -21,6 +21,15 @@ type AccountSynchronization struct {
 	Code   string `json:"code,omitempty"`
 }
 
+// AccountPreparationFacts is what the preparation resource observed of the
+// prepared account (CONTRACTS §59). The core records SubscriptionType on the
+// account and hands the facts to the plugin's before_create.
+type AccountPreparationFacts struct {
+	// SubscriptionType is the plan the upstream reported ("max", "pro" ...);
+	// "" when unknown.
+	SubscriptionType string `json:"subscription_type,omitempty"`
+}
+
 type AccountSynchronizationReader interface {
 	AccountSynchronization(context.Context, int64) (AccountSynchronization, error)
 }
@@ -39,7 +48,7 @@ type AccountLifecycleResource interface {
 	PrepareAccount(context.Context, AccountPreparation) error
 	UpdateAccountPreparation(context.Context, pgx.Tx, AccountPreparation) error
 	AccountPreparationAction(context.Context, AccountPreparation, string, string, json.RawMessage) (any, error)
-	CheckAccountPreparation(context.Context, AccountPreparation) error
+	CheckAccountPreparation(context.Context, AccountPreparation) (AccountPreparationFacts, error)
 	AdoptAccountPreparation(context.Context, pgx.Tx, AccountPreparation, int64) error
 	CancelAccountPreparation(context.Context, AccountPreparation) error
 	ReconcileAccount(context.Context, int64) error

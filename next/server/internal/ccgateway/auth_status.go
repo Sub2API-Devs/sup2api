@@ -1,9 +1,24 @@
 package ccgateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
+
+var subscriptionPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
+// normalizeSubscription keeps a subscription type the Worker reported from
+// Claude Code ("max", "pro", "team", "enterprise" ...); "" for anything else.
+func normalizeSubscription(value string) string {
+	if subscriptionPattern.MatchString(value) {
+		return value
+	}
+	return ""
+}
 
 // Local credential presence is not a provider authorization verdict.
 func safeAuthStatus(raw []byte) (any, error) {
@@ -18,6 +33,9 @@ func safeAuthStatus(raw []byte) (any, error) {
 		CredentialSources          []string `json:"credential_sources,omitempty"`
 		CredentialSourceUnresolved *bool    `json:"credential_source_unresolved,omitempty"`
 		AccessTokenExpired         *bool    `json:"access_token_expired,omitempty"`
+		// SubscriptionType is what Claude Code reported for the signed-in
+		// account (CONTRACTS §59); absent when unknown.
+		SubscriptionType string `json:"subscription_type,omitempty"`
 	}
 	if json.Unmarshal(raw, &v) != nil {
 		return nil, errors.New("invalid status")
@@ -53,5 +71,17 @@ func safeAuthStatus(raw []byte) (any, error) {
 		seen[source] = true
 	}
 	v.LoggedIn = *v.CredentialPresent
+	v.SubscriptionType = normalizeSubscription(v.SubscriptionType)
 	return v, nil
+}
+
+// recordSubscription keeps on the account the subscription type Claude Code
+// reported in its runtime (CONTRACTS §59). An unknown value ("") leaves the
+// recorded one alone: older Workers do not report it.
+func recordSubscription(ctx context.Context, q store.Querier, accountID int64, value string) error {
+	if value = normalizeSubscription(value); value == "" || accountID <= 0 {
+		return nil
+	}
+	_, err := q.Exec(ctx, `UPDATE accounts SET subscription_type=$2 WHERE id=$1 AND subscription_type IS DISTINCT FROM $2`, accountID, value)
+	return err
 }

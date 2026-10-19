@@ -114,13 +114,13 @@ func (s *Service) UpdateAccountPreparation(ctx context.Context, tx pgx.Tx, p cor
 	return nil
 }
 
-func (s *Service) CheckAccountPreparation(ctx context.Context, p core.AccountPreparation) error {
+func (s *Service) CheckAccountPreparation(ctx context.Context, p core.AccountPreparation) (core.AccountPreparationFacts, error) {
 	var matches bool
 	if err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1 AND created_by=$2 AND proxy_id IS NOT DISTINCT FROM $3 AND initial_settings=$4::jsonb AND account_id IS NULL AND for_account IS NULL AND retired_at IS NULL)`, p.Key, p.CreatedBy, p.ProxyID, p.Settings).Scan(&matches); err != nil {
-		return err
+		return core.AccountPreparationFacts{}, err
 	}
 	if !matches {
-		return core.ErrConflict.WithMessage("Account preparation configuration changed")
+		return core.AccountPreparationFacts{}, core.ErrConflict.WithMessage("Account preparation configuration changed")
 	}
 	return s.CheckDraft(ctx, p.Key, &p.CreatedBy)
 }

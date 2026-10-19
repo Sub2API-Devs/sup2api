@@ -169,6 +169,8 @@ type fakeController struct {
 	calls      []string
 	deleteCode int
 	cliVersion string // cli_version probe of admin/features ("" reports none)
+	// subscription is the subscription_type admin/status reports ("" none).
+	subscription string
 }
 
 func newFakeController(t *testing.T) *fakeController {
@@ -279,7 +281,11 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "connection":
 		_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: c.revision[key]})
 	case "admin/status":
-		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"})
+		status := map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"}
+		if c.subscription != "" {
+			status["subscription_type"] = c.subscription
+		}
+		_ = json.NewEncoder(w).Encode(status)
 	case "admin/features":
 		probes := []features.RuntimeProbe{}
 		if c.cliVersion != "" {
@@ -462,6 +468,17 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 	}
 	if code, out = f.call("GET", id, "health", ""); code != 200 || data(out)["logged_in"] != true {
 		t.Fatalf("health: %d %v", code, out)
+	}
+	// Health keeps the subscription type Claude Code reported on the account (§59).
+	ctl.mu.Lock()
+	ctl.subscription = "max"
+	ctl.mu.Unlock()
+	if code, out = f.call("GET", id, "health", ""); code != 200 {
+		t.Fatalf("health: %d %v", code, out)
+	}
+	var subscription *string
+	if err := f.s.DB.Pool.QueryRow(t.Context(), `SELECT subscription_type FROM accounts WHERE id=$1`, id).Scan(&subscription); err != nil || subscription == nil || *subscription != "max" {
+		t.Fatalf("recorded subscription %v %v", subscription, err)
 	}
 	if code, out = f.call("POST", id, "complete", `{"code":"abc#st"}`); code != 400 || reason(out) != "session_not_found" {
 		t.Fatalf("complete without a login: %d %v", code, out)

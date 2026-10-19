@@ -714,6 +714,17 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 	switch action {
 	case "health":
 		out, e = safeResult("/status", raw)
+		if e == nil && !draft {
+			// Keep the account's subscription type current (CONTRACTS §59).
+			var facts struct {
+				SubscriptionType string `json:"subscription_type"`
+			}
+			if json.Unmarshal(raw, &facts) == nil {
+				if err := recordSubscription(ctx, s.DB.Pool, d.AccountID, facts.SubscriptionType); err != nil {
+					slog.WarnContext(ctx, "ccgateway: record subscription type", "account", d.AccountID, "err", err)
+				}
+			}
+		}
 		if e == nil && cliVersion != nil {
 			out = withCLIVersion(out, <-cliVersion)
 		}

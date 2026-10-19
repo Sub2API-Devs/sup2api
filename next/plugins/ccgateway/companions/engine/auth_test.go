@@ -59,7 +59,7 @@ func authPeer(mode string) {
 			os.Exit(1)
 		}
 		if args[1] == "status" {
-			_ = json.NewEncoder(os.Stdout).Encode(Object{"loggedIn": true, "authMethod": "claude.ai"})
+			_ = json.NewEncoder(os.Stdout).Encode(Object{"loggedIn": true, "authMethod": "claude.ai", "subscriptionType": "pro"})
 		}
 		return
 	}
@@ -116,6 +116,9 @@ func peerManager(t *testing.T, mode string) *authManager {
 		t.Fatal(err)
 	}
 	t.Setenv("CCG_TEST_AUTH_PEER", mode)
+	// The subscription record lands next to the credentials, never in the real home.
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLAUDE_SECURESTORAGE_CONFIG_DIR", "")
 	a := &authManager{cli: exe, key: "admin-key"}
 	t.Cleanup(func() {
 		if s := a.session; s != nil {
@@ -232,6 +235,10 @@ func TestAuthFlowThroughCLI(t *testing.T) {
 		t.Fatal("leaked CLI account details")
 	}
 	<-process.done
+	// The subscription Claude Code reports is kept for the status snapshot.
+	if got := storedSubscription(a.environment()); got != "pro" {
+		t.Fatalf("subscription after authorization = %q", got)
+	}
 }
 
 func TestAuthStartFailures(t *testing.T) {

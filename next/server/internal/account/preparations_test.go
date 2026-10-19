@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -15,18 +16,30 @@ import (
 type preparationPlugin struct {
 	*fakePlatform
 	phases []string
+	// facts is the resource_facts_json of the last before_create; patch
+	// answers it when set.
+	facts string
+	patch func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch
 }
 
 func (p *preparationPlugin) OnAccountLifecycle(_ context.Context, in *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error) {
 	p.phases = append(p.phases, in.Phase)
-	return &pluginv1.AccountLifecycleResponse{SettingsJson: in.Account.SettingsJson, RunResource: true}, nil
+	out := &pluginv1.AccountLifecycleResponse{SettingsJson: in.Account.SettingsJson, RunResource: true}
+	if in.Phase == "before_create" {
+		p.facts = in.ResourceFactsJson
+		if p.patch != nil {
+			out.AccountPatch = p.patch(in)
+		}
+	}
+	return out, nil
 }
 
 type preparationResource struct {
-	prepared  map[string]bool
-	ready     bool
-	cancelled int
-	adopted   int64
+	prepared     map[string]bool
+	ready        bool
+	subscription string
+	cancelled    int
+	adopted      int64
 }
 
 func (r *preparationResource) PrepareAccount(_ context.Context, p core.AccountPreparation) error {
@@ -39,11 +52,11 @@ func (r *preparationResource) UpdateAccountPreparation(context.Context, pgx.Tx, 
 func (r *preparationResource) AccountPreparationAction(context.Context, core.AccountPreparation, string, string, json.RawMessage) (any, error) {
 	return map[string]string{"status": "ready"}, nil
 }
-func (r *preparationResource) CheckAccountPreparation(context.Context, core.AccountPreparation) error {
+func (r *preparationResource) CheckAccountPreparation(context.Context, core.AccountPreparation) (core.AccountPreparationFacts, error) {
 	if !r.ready {
-		return core.ErrInvalidArgument.WithMessage("not ready")
+		return core.AccountPreparationFacts{}, core.ErrInvalidArgument.WithMessage("not ready")
 	}
-	return nil
+	return core.AccountPreparationFacts{SubscriptionType: r.subscription}, nil
 }
 func (r *preparationResource) AdoptAccountPreparation(_ context.Context, _ pgx.Tx, _ core.AccountPreparation, id int64) error {
 	r.adopted = id
@@ -57,6 +70,11 @@ func (r *preparationResource) CancelAccountPreparation(_ context.Context, p core
 func (r *preparationResource) ReconcileAccount(context.Context, int64) error { return nil }
 
 func preparationFixture(t *testing.T) (*env, *preparationResource, int64) {
+	e, resource, proxy, _ := preparationPluginFixture(t)
+	return e, resource, proxy
+}
+
+func preparationPluginFixture(t *testing.T) (*env, *preparationResource, int64, *preparationPlugin) {
 	t.Helper()
 	e := setup(t)
 	if _, err := e.db.Pool.Exec(t.Context(), `INSERT INTO plugins(key,name,status) VALUES('fixture','{"en":"Fixture"}','enabled')`); err != nil {
@@ -66,12 +84,13 @@ func preparationFixture(t *testing.T) (*env, *preparationResource, int64) {
 	resource := &preparationResource{prepared: map[string]bool{}}
 	info := core.PluginInfo{Key: "fixture", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Fixture"}}}
 	e.gen.plugins = append(e.gen.plugins, info)
-	e.gen.types = append(e.gen.types, core.AccountTypeBinding{Plugin: info, Client: &preparationPlugin{fakePlatform: e.plat},
+	plugin := &preparationPlugin{fakePlatform: e.plat}
+	e.gen.types = append(e.gen.types, core.AccountTypeBinding{Plugin: info, Client: plugin,
 		Type:       manifest.AccountType{ID: "managed", Form: manifest.Form{Mode: "schema"}, Lifecycle: &manifest.AccountLifecycle{Preparation: true, Required: true}, ExtensionsSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"region":{"type":"string"}}}`)},
 		FormSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`)})
 	e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"fixture": resource}
 	proxy := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('preparation','http','proxy.invalid',3128) RETURNING id`)
-	return e, resource, proxy
+	return e, resource, proxy, plugin
 }
 
 func TestAccountPreparationOwnershipReadinessAndAdoption(t *testing.T) {
@@ -207,5 +226,64 @@ func TestAccountPreparationRejectsConfigurationMismatch(t *testing.T) {
 	}
 	if code, _ := e.do("DELETE", "/account-preparations/"+key, nil); code != 204 || resource.cancelled != 1 {
 		t.Fatalf("cancel: %d %d", code, resource.cancelled)
+	}
+}
+
+// before_create receives what the preparation observed and may change the
+// models before the account is saved; the subscription type is recorded on
+// the account (CONTRACTS §59).
+func TestBeforeCreateFactsAndAccountPatch(t *testing.T) {
+	e, resource, proxy, plugin := preparationPluginFixture(t)
+	resource.ready, resource.subscription = true, "pro"
+	plugin.patch = func(in *pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch {
+		models := in.GetAccount().GetProperties().GetModels()
+		if len(models) == 0 || models[0] != "claude-fable-5" {
+			return nil
+		}
+		return &pluginv1.AccountPatch{Models: &pluginv1.ModelList{Ids: models[1:]}}
+	}
+	create := func(models []string) (int, map[string]any) {
+		code, out := e.do("POST", "/account-types/fixture/managed/preparations", map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}})
+		if code != 201 {
+			t.Fatalf("prepare: %d %v", code, out)
+		}
+		return e.do("POST", "/accounts", map[string]any{"name": "patched", "plugin_key": "fixture", "type": "managed", "proxy_id": proxy,
+			"credentials": map[string]any{}, "settings": map[string]string{"region": "jp"}, "preparation_key": data(out)["key"], "models": models})
+	}
+	code, out := create([]string{"claude-fable-5", "claude-opus-5"})
+	if code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	if plugin.facts != `{"subscription_type":"pro"}` {
+		t.Fatalf("facts = %q", plugin.facts)
+	}
+	got := data(out)
+	if models, _ := got["models"].([]any); len(models) != 1 || models[0] != "claude-opus-5" || got["subscription_type"] != "pro" {
+		t.Fatalf("saved account %v", got)
+	}
+	var detail string
+	if err := e.db.Pool.QueryRow(t.Context(), `SELECT detail::text FROM audit_logs WHERE action='account.create' ORDER BY id DESC LIMIT 1`).Scan(&detail); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(detail, `"plugin_changed": ["models"]`) || !strings.Contains(detail, `"subscription_type": "pro"`) {
+		t.Fatalf("audit detail %s", detail)
+	}
+	// A list the plugin leaves alone is saved as sent.
+	if code, out = create([]string{"claude-opus-5"}); code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	if models, _ := data(out)["models"].([]any); len(models) != 1 || models[0] != "claude-opus-5" {
+		t.Fatalf("unpatched account %v", data(out))
+	}
+	// An invalid change is refused like invalid input; nothing is saved.
+	plugin.patch = func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch {
+		return &pluginv1.AccountPatch{Models: &pluginv1.ModelList{Ids: []string{"claude-*"}}}
+	}
+	before := e.exec1(`SELECT count(*) FROM accounts`)
+	if code, out = create([]string{"claude-opus-5"}); code < 400 {
+		t.Fatalf("invalid patch accepted: %d %v", code, out)
+	}
+	if after := e.exec1(`SELECT count(*) FROM accounts`); after != before {
+		t.Fatalf("account saved after an invalid patch: %d -> %d", before, after)
 	}
 }

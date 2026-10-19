@@ -94,10 +94,11 @@ func (s *Service) kickCCGateway(id int64, pluginKey, typ string) {
 // checkCCGatewayRuntime is the POST /accounts check of ccgateway_runtime
 // (CONTRACTS §49.10): only for ccgateway/managed; the draft must be the
 // caller's unless it holds settings:manage, unadopted and signed in. It
-// returns the scope AdoptDraft uses in the transaction.
-func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64, error) {
+// returns the scope AdoptDraft uses in the transaction and what the runtime
+// reported of the account (CONTRACTS §59).
+func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64, core.AccountPreparationFacts, error) {
 	if s.d.CCGateway == nil {
-		return nil, core.ErrInvalidArgument.WithMessage("Account runtimes are not configured.").
+		return nil, core.AccountPreparationFacts{}, core.ErrInvalidArgument.WithMessage("Account runtimes are not configured.").
 			WithDetails(map[string]any{"reason": "not_configured"})
 	}
 	var scope *int64
@@ -105,7 +106,8 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 		uid, _ := core.UserID(ctx)
 		scope = &uid
 	}
-	return scope, s.d.CCGateway.CheckDraft(ctx, key, scope)
+	facts, err := s.d.CCGateway.CheckDraft(ctx, key, scope)
+	return scope, facts, err
 }
 
 func (s *Service) connectCCGateway(c *gin.Context) {

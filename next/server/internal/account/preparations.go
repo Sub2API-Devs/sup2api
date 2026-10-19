@@ -325,42 +325,46 @@ func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparat
 	return err
 }
 
-func (s *Service) checkPreparationForCreate(ctx context.Context, bt core.AccountTypeBinding, in *input, settings []byte) (*core.AccountPreparation, error) {
+// checkPreparationForCreate checks the preparation_key of POST /accounts and
+// returns what the preparation observed of the account (CONTRACTS §59).
+func (s *Service) checkPreparationForCreate(ctx context.Context, bt core.AccountTypeBinding, in *input, settings []byte) (*core.AccountPreparation, core.AccountPreparationFacts, error) {
+	var none core.AccountPreparationFacts
 	if in.PreparationKey == nil {
 		if bt.Type.Lifecycle != nil && bt.Type.Lifecycle.Required && in.CCGatewayRuntime == nil {
-			return nil, core.ErrInvalidArgument.WithMessage("Account preparation is required")
+			return nil, none, core.ErrInvalidArgument.WithMessage("Account preparation is required")
 		}
-		return nil, nil
+		return nil, none, nil
 	}
 	if in.CCGatewayRuntime != nil || in.ProxyURL != nil {
-		return nil, core.ErrInvalidArgument.WithMessage("Preparation cannot be combined with another runtime or proxy URL")
+		return nil, none, core.ErrInvalidArgument.WithMessage("Preparation cannot be combined with another runtime or proxy URL")
 	}
 	p, err := s.loadPreparation(ctx, *in.PreparationKey)
 	if err != nil {
-		return nil, err
+		return nil, none, err
 	}
 	proxyMatches := p.ProxyID == nil && !in.ProxyID.Valid || p.ProxyID != nil && in.ProxyID.Valid && *p.ProxyID == in.ProxyID.V
 	if p.PluginKey != bt.Plugin.Key || p.Type != bt.Type.ID || !proxyMatches {
-		return nil, core.ErrInvalidArgument.WithMessage("Preparation does not match this account")
+		return nil, none, core.ErrInvalidArgument.WithMessage("Preparation does not match this account")
 	}
 	var equal bool
 	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT $1::jsonb=$2::jsonb`, p.Settings, settings).Scan(&equal); err != nil {
-		return nil, err
+		return nil, none, err
 	}
 	if !equal {
-		return nil, core.ErrConflict.WithMessage("Preparation settings changed; prepare a new runtime first")
+		return nil, none, core.ErrConflict.WithMessage("Preparation settings changed; prepare a new runtime first")
 	}
 	if err := s.preparationCallback(ctx, p, "check", ""); err != nil {
-		return nil, err
+		return nil, none, err
 	}
 	resource, err := s.preparationResource(p)
 	if err != nil {
-		return nil, err
+		return nil, none, err
 	}
-	if err := resource.CheckAccountPreparation(ctx, p); err != nil {
-		return nil, err
+	facts, err := resource.CheckAccountPreparation(ctx, p)
+	if err != nil {
+		return nil, none, err
 	}
-	return &p, nil
+	return &p, facts, nil
 }
 
 func (s *Service) adoptPreparation(ctx context.Context, tx pgx.Tx, p core.AccountPreparation, id int64) error {

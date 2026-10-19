@@ -2397,7 +2397,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 |---|---|---|---|
 | anthropic 0.2.5 | `apikey` | Claude 现行与仍可用的模型（别名与带日期 ID），不含已退役模型 | 无 |
 | claude-oauth 0.2.1 | `claude_oauth`、`claude_setup_token` | 同 anthropic | 无 |
-| ccgateway 0.1.6 | `managed`、`apikey` | 同 anthropic | 无 |
+| ccgateway 0.1.68 | `managed`、`apikey` | `claude-fable-5`、`claude-opus-5`、`claude-opus-4-8`、`claude-opus-4-7`、`claude-opus-4-6`、`claude-sonnet-5`、`claude-sonnet-4-6`、`claude-haiku-4-5-20251001`、`claude-fable-5-1`、`claude-opus-5-5`、`claude-sonnet-5-5`；Pro 订阅账号保存时去掉两个 Fable 模型（§59） | 无 |
 | relay 0.2.2 | `relay_key` | 同 anthropic | 无（由中转站自己决定模型） |
 | openai 0.3.4 | `apikey` | new-api OpenAI 列表中走 chat / responses / embeddings 的模型（不含本平台没有端点的音频、图片、实时、视频模型，也不含 `gpt-4.5-preview*`、`o1-preview`、`o1-mini` 等已退役模型） | 无 |
 | gemini 0.2.4 | `apikey` | new-api Gemini 列表中走 generateContent 的模型（不含 imagen、veo、TTS、原生音频，也不含 `gemini-1.5-*` 与旧 2.5 预览版） | 无 |
@@ -4043,3 +4043,36 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 换号支持同一代理、仅代理账号或各账号原配置三种出口约束；默认同一代理，后续规则不能放宽已生效限制。没有合格账号即失败，不修改代理或增加直连兜底。
 - 响应已提交、WebSocket 已升级、任务/辅助操作不可重放、传输结果不确定、账号资源硬绑定、预算或期限耗尽时不自动重放。内层 SDK/CLI 请求不属于核心尝试计数。
 - 决策记录保存到 `usage_logs.anomalies.failure_policy`，用量详情显示，统计时不把该过程记录本身算作异常。界面复用公共设置卡片、保存条、表格、菜单、弹窗和描述组件。详见 [设计与实现](GATEWAY-FAILURE-POLICY-DESIGN.md)。
+
+## 59. 账号订阅类型与保存前插件调整（2026-10-19，用户要求）
+
+新建 Claude Code 订阅账号时按订阅类型自动调整模型列表：Max 保留全部内置模型，Pro 去掉 `claude-fable-5`、`claude-fable-5-1`；账号上记录订阅类型并在控制台展示。核心只提供通用能力，Fable / Pro 的规则写在 ccgateway 插件里。
+
+### 59.1 订阅类型从哪里来
+
+- 账号容器的 Worker 在**授权完成**（`POST /admin/auth/complete` 成功）和**刷新令牌**（`POST /admin/auth/refresh` 成功）后各执行一次 `claude auth status --json`，取 `loggedIn && authMethod == "claude.ai"` 时的 `subscriptionType`，写入凭证目录旁的 `.ccgateway-subscription`；登出时删除。
+- `GET /admin/status` 仍是本地快照、不启动 CLI（`TestAuthSnapshotNeverSpawnsCLIOrClaimsOnlineValidity`），只在存在 Claude 账号凭证时读上述记录，作为 `subscription_type` 返回。凭证文件里的 `subscriptionType` 不直接采用，以 CLI 报告为准。
+- 值必须匹配 `^[a-z][a-z0-9_]{0,31}$`（目前为 `max` / `pro` / `team` / `enterprise`），否则视为未知。Worker 与核心各校验一次。
+
+### 59.2 核心
+
+- 迁移 0054：`accounts.subscription_type text`（NULL = 未知）。账号视图新增 `subscription_type: string | null`。
+- `core.AccountLifecycleResource.CheckAccountPreparation` 改为返回 `core.AccountPreparationFacts{SubscriptionType}`；ccgateway 实现从准备容器的 `admin/status` 读取。旧的 `ccgateway_runtime` 创建路径同样取得。
+- `POST /accounts` 保存前：把事实写入 `subscription_type`，并作为 `resource_facts_json`（JSON 对象，未知时为空串）随 `before_create` 交给插件。
+- 已有账号：控制台查看凭证状态（`GET …/health`）与重新授权提交时，Worker 报告了订阅类型就更新账号；报告为空不清除已有值（旧 Worker 不报告）。
+
+### 59.3 插件协议：`before_create` 可以修改账号
+
+- `AccountLifecycleRequest.resource_facts_json`（字段 7）：准备阶段观察到的事实，目前只有 `subscription_type`。
+- `AccountLifecycleResponse.account_patch`（字段 4，`AccountPatch`）：`models`（`ModelList.ids`）与 `model_mapping`（`ModelMappingValue.entries`），未给的字段不改，给了就整体替换；只在 `before_create` 生效。
+- 核心按调用方输入的同一规则校验（完整模型 ID、去重、最多 500 个），不合规返回插件不可用错误、账号不保存。审计 `account.create` 的 `detail` 增加 `subscription_type` 与 `plugin_changed`（被插件改过的字段）。
+- 旧插件不返回补丁，行为不变，不需要 manifest 开关；旧核心忽略补丁，新插件的 `hostCompat` 不需要提高。
+
+### 59.4 ccgateway 0.1.68 的规则
+
+`managed` 账号、`subscription_type == "pro"`、提交的模型列表与内置列表元素相同（不计顺序）时，返回去掉两个 Fable 模型的列表；Max、team、enterprise、未知订阅、用户改过的列表和 `apikey` 账号都不改。内置列表定义在 `internal/ccgateway/models.go` 的 `DefaultModels`，测试保证与 manifest 一致。
+
+### 59.5 控制台
+
+- 账号列表在类型后显示订阅徽标（Max / Pro …），详情增加"订阅"一行。
+- 新建 Claude Code 订阅账号的模型区提示保存时会按订阅类型调整；保存结果与提交的列表不同时提示"已按 Pro 订阅调整模型列表（N 个模型）"。保存后照常编辑。

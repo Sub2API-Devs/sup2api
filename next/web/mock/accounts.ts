@@ -137,7 +137,12 @@ interface MockAccountType {
   supports: string[]
   /** Endpoints of other platforms served through a core converter. */
   converts?: Array<{ platform: string; path: string }>
+  default_models?: string[]
+  default_model_mapping?: Record<string, string>
 }
+
+// Built-in model list of the Claude Code account types (plugins/ccgateway/manifest.json).
+const CC_MODELS = ['claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5']
 
 // Account types (CONTRACTS §13): identified by (plugin_key, type); each
 // declares the platforms it supports. GET /account-types adds `platforms`
@@ -208,6 +213,8 @@ const accountTypeDecls: MockAccountType[] = [
     description: { en: 'Managed Claude Code account (OAuth); no credential fields', zh: '托管 Claude Code 账号（OAuth），无需填写凭证' },
     form: { mode: 'schema' },
     sensitive_fields: [],
+    default_models: CC_MODELS,
+    default_model_mapping: {},
     supports: ['anthropic']
   },
   {
@@ -331,7 +338,7 @@ export const accounts: any[] = [
   { id: 23, name: 'claude-pro-3', plugin_key: 'claude_oauth', type: 'claude_setup_token', created_by: 6, group_ids: [2], proxy_id: null, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-95), created_at: now(-86400 * 6), credentials: { access_token: '******' } },
   { id: 24, name: 'claude-max-new', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-600), credentials: { access_token: '******', refresh_token: '******' } },
   // Claude Code (CCGateway) managed accounts, one container each (mock/ccgateway.ts with SUB2API_MOCK_CCGATEWAY): authorized / not yet.
-  { id: 25, name: 'cc-main', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-420), created_at: now(-86400 * 4), credentials: {} },
+  { id: 25, name: 'cc-main', plugin_key: 'ccgateway', type: 'managed', created_by: 1, subscription_type: 'max', group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-420), created_at: now(-86400 * 4), credentials: {} },
   { id: 26, name: 'cc-pending', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 5, weight: 1, max_concurrency: 4, schedulable: true, models: ['claude-sonnet-4-5'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-3600), credentials: {} },
   // Legacy row without a proxy: its container is blocked (no_proxy) until one is picked.
   { id: 27, name: 'cc-noproxy', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: null, priority: 6, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-7200), credentials: {} },
@@ -721,6 +728,11 @@ on('POST', '/accounts', (req) => {
     created_by: who.id,
     type_label: at.label,
     credentials: masked
+  }
+  if (typeof runtime === 'string') {
+    // The draft reports a Pro subscription; the plugin drops the Fable models from the built-in list (CONTRACTS §59).
+    a.subscription_type = 'pro'
+    if ([...a.models].sort().join() === [...CC_MODELS].sort().join()) a.models = CC_MODELS.filter((m) => !m.startsWith('claude-fable-'))
   }
   accounts.unshift(a)
   if (typeof runtime === 'string') ccgDrafts?.adopt(runtime, a.id)

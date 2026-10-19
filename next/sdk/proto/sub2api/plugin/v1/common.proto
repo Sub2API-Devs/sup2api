@@ -60,12 +60,36 @@ message AccountLifecycleRequest {
   string preparation_key = 4;
   string action = 5;
   repeated string changed_fields = 6;
+  // Facts the core learned from the account's preparation, as a JSON object;
+  // only on before_create of a prepared account, "" otherwise. Known keys:
+  // "subscription_type" (e.g. "max", "pro"), absent when unknown.
+  string resource_facts_json = 7;
 }
 
 message AccountLifecycleResponse {
   repeated FieldError errors = 1;
   string settings_json = 2;
   bool run_resource = 3;
+  // before_create only: changes the plugin makes to the account before it is
+  // saved; ignored in other phases. The core validates them like the
+  // caller's own input.
+  AccountPatch account_patch = 4;
+}
+
+// AccountPatch replaces account fields; an absent field is left unchanged.
+message AccountPatch {
+  ModelList models = 1;
+  ModelMappingValue model_mapping = 2;
+}
+
+// ModelList is a model id list; empty means every model.
+message ModelList {
+  repeated string ids = 1;
+}
+
+// ModelMappingValue is a client model -> upstream model mapping.
+message ModelMappingValue {
+  map<string, string> entries = 1;
 }
 
 // Caller identifies the console user on whose behalf the host calls a plugin.

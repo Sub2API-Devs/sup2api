@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -35,5 +36,21 @@ func TestLegacyCredentialStatusDoesNotInventOnlineVerification(t *testing.T) {
 	raw, _ := json.Marshal(got)
 	if bytes.Contains(raw, []byte("online_verified")) || bytes.Contains(raw, []byte("credential_present")) || bytes.Contains(raw, []byte("secret")) {
 		t.Fatal("legacy status invented facts or leaked data")
+	}
+}
+
+func TestAuthStatusKeepsOnlyIdentifierSubscriptions(t *testing.T) {
+	base := `{"healthy":true,"logged_in":true,"auth_method":"claude.ai","status_source":"local_snapshot","online_verified":false,"selection_verified":false,"credential_present":true,"credential_sources":["stored_oauth"],"subscription_type":%q}`
+	for value, want := range map[string]any{"max": "max", "pro": "pro", "Max Plan": nil, "": nil, "<script>": nil} {
+		got, err := safeResult("/status", []byte(fmt.Sprintf(base, value)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(got)
+		var v map[string]any
+		_ = json.Unmarshal(raw, &v)
+		if v["subscription_type"] != want {
+			t.Errorf("%q: got %v", value, v["subscription_type"])
+		}
 	}
 }

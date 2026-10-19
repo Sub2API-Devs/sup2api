@@ -84,10 +84,14 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		defer close()
 		defer res.Body.Close()
 		var health struct {
-			LoggedIn bool `json:"logged_in"`
+			LoggedIn         bool   `json:"logged_in"`
+			SubscriptionType string `json:"subscription_type"`
 		}
 		if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&health) != nil || !health.LoggedIn {
 			return reasonError(core.ErrInvalidArgument, "draft_not_authorized")
+		}
+		if err := recordSubscription(ctx, tx, accountID, health.SubscriptionType); err != nil {
+			return err
 		}
 		if fn != nil {
 			return fn(tx, "")

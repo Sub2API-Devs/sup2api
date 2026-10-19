@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"slices"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
@@ -130,4 +133,16 @@ func TestManifestAndUsageContract(t *testing.T) {
 		return
 	}
 	t.Fatal("core anthropic platform missing")
+}
+
+func TestManifestDefaultModelsMatchThePlugin(t *testing.T) {
+	var m manifest.Manifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, at := range m.AccountTypes {
+		if !slices.Equal(at.DefaultModels, ccgateway.DefaultModels) {
+			t.Errorf("%s defaultModels %v differ from ccgateway.DefaultModels", at.ID, at.DefaultModels)
+		}
+	}
 }

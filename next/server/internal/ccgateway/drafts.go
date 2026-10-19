@@ -354,43 +354,47 @@ func (s *Service) deleteRemote(ctx context.Context, key string, retired bool) er
 // §49.10): the draft exists, the caller may see it (scope nil: every draft),
 // it is not adopted, not a re-authorization draft, and Claude Code in its
 // container is signed in. Failures are 400 with details.reason
-// draft_not_found or draft_not_authorized.
-func (s *Service) CheckDraft(ctx context.Context, key string, scope *int64) error {
+// draft_not_found or draft_not_authorized. The facts carry the subscription
+// type Claude Code reported (CONTRACTS §59).
+func (s *Service) CheckDraft(ctx context.Context, key string, scope *int64) (core.AccountPreparationFacts, error) {
 	return s.checkDraftLogin(ctx, key, scope, accountDraft)
 }
 
 // checkDraftLogin checks an open draft of the given kind (accountDraft or an
 // account id) and that Claude Code is signed in in it.
-func (s *Service) checkDraftLogin(ctx context.Context, key string, scope *int64, kind int64) error {
+func (s *Service) checkDraftLogin(ctx context.Context, key string, scope *int64, kind int64) (core.AccountPreparationFacts, error) {
+	var facts core.AccountPreparationFacts
 	if ok, e := s.touchDraftOf(ctx, key, scope, kind); e != nil || !ok {
-		return errOr(e, draftNotFound(core.ErrInvalidArgument))
+		return facts, errOr(e, draftNotFound(core.ErrInvalidArgument))
 	}
 	notAuthorized := reasonError(core.ErrInvalidArgument, "draft_not_authorized")
 	d, e := s.draftDesired(ctx, key, false)
 	if store.IsNoRows(e) {
-		return draftNotFound(core.ErrInvalidArgument)
+		return facts, draftNotFound(core.ErrInvalidArgument)
 	}
 	if e != nil {
-		return e
+		return facts, e
 	}
 	if !d.Enabled {
-		return notAuthorized
+		return facts, notAuthorized
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "admin/status", nil, d.Revision)
 	if e != nil {
-		return notAuthorized
+		return facts, notAuthorized
 	}
 	defer close()
 	defer res.Body.Close()
 	var v struct {
-		LoggedIn bool `json:"logged_in"`
+		LoggedIn         bool   `json:"logged_in"`
+		SubscriptionType string `json:"subscription_type"`
 	}
 	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&v) != nil || !v.LoggedIn {
-		return notAuthorized
+		return facts, notAuthorized
 	}
-	return nil
+	facts.SubscriptionType = normalizeSubscription(v.SubscriptionType)
+	return facts, nil
 }
 
 // AdoptDraft makes the draft key the runtime of account accountID, inside

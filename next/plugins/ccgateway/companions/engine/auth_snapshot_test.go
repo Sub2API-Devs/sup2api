@@ -102,3 +102,45 @@ func TestAuthSnapshotDefaultGlobalConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthSnapshotReportsRecordedSubscription(t *testing.T) {
+	config := t.TempDir()
+	env := []string{"CLAUDE_CONFIG_DIR=" + config}
+	if err := os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"secret-fixture","subscriptionType":"max"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Only what the CLI reported counts, not the credentials file.
+	got, err := localAuthSnapshot(env)
+	if err != nil || got["subscription_type"] != nil {
+		t.Fatal(got, err)
+	}
+	if err := os.WriteFile(subscriptionPathIn(env), []byte("pro\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = localAuthSnapshot(env); err != nil || got["subscription_type"] != "pro" {
+		t.Fatal(got, err)
+	}
+	// A record left after the credentials went away is not reported.
+	if err := os.Remove(filepath.Join(config, ".credentials.json")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = localAuthSnapshot(env); err != nil || got["subscription_type"] != nil {
+		t.Fatal(got, err)
+	}
+}
+
+func TestParseAuthStatusSubscription(t *testing.T) {
+	for out, want := range map[string]string{
+		`{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}`:                                     "max",
+		"\x1b[0m{\n  \"loggedIn\": true,\n  \"authMethod\": \"claude.ai\",\n  \"subscriptionType\": \"pro\"\n}\n": "pro",
+		`{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":null}`:                                      "",
+		`{"loggedIn":false,"authMethod":"none"}`:                                                                  "",
+		`{"loggedIn":true,"authMethod":"api_key","subscriptionType":"max"}`:                                       "",
+		`{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"Max Plan"}`:                                "",
+		`not json`: "",
+	} {
+		if got := parseAuthStatusSubscription([]byte(out)); got != want {
+			t.Errorf("%q: got %q want %q", out, got, want)
+		}
+	}
+}
