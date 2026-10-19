@@ -10,7 +10,7 @@ const fields = { input_tokens: 'p', output_tokens: 'c', cache_read_tokens: 'cr',
 </script>
 
 <template>
-  <SDescriptions dense>
+  <SDescriptions dense divided label-width="min(14rem, 62%)">
     <template
       v-for="(label, field) in fields"
       :key="field"

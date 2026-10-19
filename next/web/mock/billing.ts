@@ -1070,7 +1070,22 @@ function usageFilter(rows: any[], q: Record<string, string>) {
 }
 
 function usageDetail(u: any, self = false) {
-  return { ...publicUsage(u, self), billing_detail: u._detail ? { ...u._detail, ledger_id: u.ledger_id ?? null } : null, price: u._price, metrics: {} }
+  // Explicit synthetic TTL evidence lets the detail preview exercise both the
+  // compact summary and its expanded counters without using production data.
+  const cacheWrite = u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
+  const metrics = cacheWrite ? { cache_write_evidence: {
+    version: 1, total: { state: 'value', value: cacheWrite },
+    explicit_5m: { state: 'value', value: u.cache_creation_tokens },
+    explicit_1h: { state: 'value', value: u.cache_creation_1h_tokens || 0 },
+    unclassified_tokens: 0, completeness: 'complete', source: 'json',
+    pricing_policy: 'platform_default_cache_write_compat'
+  } } : {}
+  return {
+    ...publicUsage(u, self),
+    billing_detail: u._detail ? { ...u._detail, ledger_id: u.ledger_id ?? null } : null,
+    price: u._price, metrics, attempts: 1,
+    user_agent: 'claude-cli/mock (external, cli; usage-detail-preview)'
+  }
 }
 
 function usageSummary(rows: any[], query: Record<string, string>) {

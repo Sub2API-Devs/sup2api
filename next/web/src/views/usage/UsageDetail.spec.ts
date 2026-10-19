@@ -44,12 +44,25 @@ describe('known partial usage in failed request details', () => {
     const before = JSON.stringify(value)
     const wrapper = render(value)
     const facts = wrapper.get('[data-testid="cache-write-facts"]')
+    expect(facts.get('button[aria-expanded]').attributes('aria-expanded')).toBe('true')
     expect(facts.text()).toContain('已报告的 5 分钟写入')
     expect(facts.text()).toContain('TTL 未细分')
     expect(facts.text()).toContain('1,219')
     expect(facts.text()).toContain('平台默认缓存写入费率')
     expect(wrapper.text()).not.toContain('u("cache_write_evidence")')
     expect(JSON.stringify(value)).toBe(before)
+  })
+  it('keeps complete cache observations compact while allowing the full counters to be opened', async () => {
+    const value = { ...row, success: true, status_code: 200, cache_creation_tokens: 1200,
+      metrics: { cache_write_evidence: { version: 1, total: { state: 'value', value: 1200 }, explicit_5m: { state: 'value', value: 1200 }, explicit_1h: { state: 'value', value: 0 }, unclassified_tokens: 0, completeness: 'complete', source: 'sse', pricing_policy: 'platform_default_cache_write_compat' } }
+    } as unknown as UsageRow
+    const wrapper = render(value)
+    const facts = wrapper.get('[data-testid="cache-write-facts"]')
+    expect(facts.text()).toContain('已报告的 TTL 细分完整')
+    expect(facts.find('dd').exists()).toBe(false)
+    await facts.get('button[aria-expanded]').trigger('click')
+    expect(facts.findAll('dd').map(node => node.text())).toEqual(['1,200', '1,200', '0', '0'])
+    expect(facts.text()).toContain('平台默认缓存写入费率')
   })
   it('shows recorded rounds and 1h cache separately without inventing totals or missing counts', () => {
     const before = JSON.stringify(row)

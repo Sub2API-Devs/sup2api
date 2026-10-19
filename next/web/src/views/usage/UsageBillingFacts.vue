@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCode, SDescItem, SDescriptions, SHint, SIcon, SLink, SSectionTitle } from '@sub2api/ui'
+import { SBadge, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SHint, SIcon, SLink } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatNumber } from '@/utils/format'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
@@ -35,9 +35,11 @@ function label(prefix: string, value: string) {
 </script>
 
 <template>
-  <section class="min-w-0 rounded-xl border border-line bg-surface p-4">
-    <SSectionTitle :title="t('usage.billing.title')" />
-    <SDescriptions dense>
+  <SCard variant="flat" :title="t('usage.billing.title')" class="min-w-0" data-testid="usage-billing-facts">
+    <template #actions>
+      <SBadge :tone="billingTone(u.billing_status)">{{ label('usage.billing.status', u.billing_status) }}</SBadge>
+    </template>
+    <SDescriptions dense stacked :columns="2">
       <SDescItem :label="t('usage.billing.price')"><div class="flex flex-wrap items-center gap-2">
         <template v-if="u.price">
           <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="font-mono text-xs">{{ u.price.model }}</SLink>
@@ -63,40 +65,36 @@ function label(prefix: string, value: string) {
         <span class="font-mono">{{ tierName }}</span>
         <SHint v-if="tierLen !== undefined" inline size="xs" class="ml-1"> ({{ t('usage.billing.len', { n: formatNumber(tierLen) }) }}) </SHint>
       </SDescItem>
-
-      <SDescItem v-if="rules.length" :label="t('usage.billing.rules')">
-        <ul class="space-y-1">
-          <li v-for="(r, i) in rules" :key="i" class="flex flex-wrap items-center gap-2">
-            <SCode inline :text="r.cond" />
-            <span>×{{ r.multiplier }}</span>
-            <SBadge :tone="r.matched ? 'success' : 'gray'">
-              <SIcon :name="r.matched ? 'check' : 'x'" class="h-3 w-3" />{{ r.matched ? t('usage.billing.matched') : t('usage.billing.notMatched') }}
-            </SBadge>
-          </li>
-        </ul>
-      </SDescItem>
-
-      <SDescItem v-if="inputs.length" :label="t('usage.billing.inputs')">
-        <div v-for="input in inputs" :key="input.name" class="break-all font-mono text-xs">{{ input.name }} = {{ factText(input.value) }}</div>
-      </SDescItem>
-
-      <SDescItem :label="t('usage.billing.breakdown')">
-        <BillingBreakdown
-          v-if="Object.keys(breakdown).length || u.total_cost"
-          :breakdown="breakdown"
-          :rate-multiplier="rate"
-          :total="u.total_cost"
-          :rules="rules"
-          :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"
-        />
-        <SHint v-else inline>—</SHint>
-      </SDescItem>
-
-      <SDescItem :label="t('usage.billing.statusLabel')"><div class="flex flex-wrap items-center gap-2">
-        <SBadge :tone="billingTone(u.billing_status)">{{ label('usage.billing.status', u.billing_status) }}</SBadge>
-        <SHint v-if="ledgerId" inline size="xs">{{ t('usage.billing.ledger', { id: ledgerId }) }}</SHint>
-      </div></SDescItem>
     </SDescriptions>
+
+    <div class="mt-3 border-t border-line pt-3">
+      <BillingBreakdown
+        v-if="Object.keys(breakdown).length || u.total_cost"
+        :breakdown="breakdown"
+        :rate-multiplier="rate"
+        :total="u.total_cost"
+        :rules="rules"
+        :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"
+      />
+      <SHint v-else inline>—</SHint>
+      <SHint v-if="ledgerId" size="xs" class="mt-2">{{ t('usage.billing.ledger', { id: ledgerId }) }}</SHint>
+    </div>
+
+    <SDisclosure v-if="rules.length" :label="t('usage.billing.rules')" :open-label="t('usage.billing.rules')" class="mt-3">
+      <ul class="space-y-1">
+        <li v-for="(r, i) in rules" :key="i" class="flex flex-wrap items-center gap-2">
+          <SCode inline :text="r.cond" />
+          <span>×{{ r.multiplier }}</span>
+          <SBadge :tone="r.matched ? 'success' : 'gray'">
+            <SIcon :name="r.matched ? 'check' : 'x'" class="h-3 w-3" />{{ r.matched ? t('usage.billing.matched') : t('usage.billing.notMatched') }}
+          </SBadge>
+        </li>
+      </ul>
+    </SDisclosure>
+
+    <SDisclosure v-if="inputs.length" :label="t('usage.billing.inputs')" :open-label="t('usage.billing.inputs')" class="mt-3">
+      <div v-for="input in inputs" :key="input.name" class="break-all font-mono text-xs">{{ input.name }} = {{ factText(input.value) }}</div>
+    </SDisclosure>
     <ExprHistoryModal v-model:open="historyOpen" :hash="u.expr_hash" />
-  </section>
+  </SCard>
 </template>

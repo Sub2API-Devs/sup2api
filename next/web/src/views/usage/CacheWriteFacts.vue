@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SDescItem, SDescriptions, SHint } from '@sub2api/ui'
+import { SDescItem, SDescriptions, SDisclosure, SHint } from '@sub2api/ui'
 import { formatNumber } from '@/utils/format'
 import { cacheWriteEvidence, type CacheWriteCounter } from './cacheWriteEvidence'
 
-const props = defineProps<{ metrics?: unknown; hasCacheWrites?: boolean }>()
+const props = defineProps<{ metrics?: unknown; hasCacheWrites?: boolean; compact?: boolean }>()
 const { t } = useI18n()
 const evidence = computed(() => cacheWriteEvidence(props.metrics))
 const counters = computed(() => evidence.value ? [
@@ -19,15 +19,17 @@ function display(counter: CacheWriteCounter): string {
 </script>
 
 <template>
-  <div
+  <SDisclosure
     v-if="evidence"
-    class="mt-3 space-y-2 rounded-lg border border-line p-3"
+    :key="evidence.completeness"
+    variant="section"
+    :label="t('usage.cacheEvidence.title')"
+    :description="evidence.completeness === 'complete' ? t('usage.cacheEvidence.status.complete') : undefined"
+    :default-open="!compact || evidence.completeness !== 'complete'"
+    class="mt-3 rounded-lg border border-line p-3"
     data-testid="cache-write-facts"
   >
-    <h4 class="text-sm font-medium">
-      {{ t('usage.cacheEvidence.title') }}
-    </h4>
-    <SHint :tone="evidence.completeness === 'complete' ? 'muted' : 'warning'">
+    <SHint v-if="evidence.completeness !== 'complete'" tone="warning" class="mb-2">
       {{ t(`usage.cacheEvidence.status.${evidence.completeness}`) }}
     </SHint>
     <SDescriptions dense>
@@ -39,8 +41,8 @@ function display(counter: CacheWriteCounter): string {
       </template>
       <SDescItem :label="t('usage.cacheEvidence.unclassified')">{{ evidence.unclassified_tokens === undefined ? '—' : formatNumber(evidence.unclassified_tokens) }}</SDescItem>
     </SDescriptions>
-    <SHint>{{ t('usage.cacheEvidence.pricing') }}</SHint>
-  </div>
+    <SHint size="xs" class="mt-2 leading-relaxed">{{ t('usage.cacheEvidence.pricing') }}</SHint>
+  </SDisclosure>
   <SHint
     v-else-if="hasCacheWrites"
     class="mt-2"
