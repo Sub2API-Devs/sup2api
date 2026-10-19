@@ -328,3 +328,19 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 - 备份在 `~/sup2api-managed/backups/ccgateway-raw-errors-0.1.167/`。数据库/四账号卷归档已检查；Controller 全目录在线归档遇到文件变动，因此另外短暂暂停 Controller、保存并校验 `controller-config-consistent.tar.gz` 的配置快照，不把前一份在线归档当作一致快照。最终制品和验证在 `~/sup2api-managed/stage/0.1.168/`，原生测试在 `~/sup2api/checks/ccg-302-v10/`。
 
 证据：[原生探针](cli-research/2.1.302/raw-http-errors-native-probe.json)、[发布与公网验收](cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。
+
+## 16. v10 对正常客户端使用的增量审核（2026-10-19）
+
+`--build` 在调用原生构建函数之后，与 `--direct` 汇合到同一个 `openModelRequest` 和 `if (!response.ok)` 分支。因此 v10 的 HTTP 错误透传同时适用于两种模式；不是只修其中一个。成功响应仍走默认 `binary=false` 的文本/SSE 读取及 stdout，只有 HTTP 错误分支显式开启字节读取。请求组件、beta/认证、工具定义和本地工具循环未在 v10 增量中修改。
+
+对服务器 v9-r3 与 v10 的实际补丁树逐项核验：8 个修改的原生模块中，7 个 after 哈希完全相同；唯一不同的 cli.js，在归一补丁名称和 `request_raw_http_errors` 能力字段后全文一致。8 个支持模块只有 model-request、request-command、request-error 变化；native-tools、request-build、request-input、request-options、request-output 均未变。这证明本次增量边界，不代表整个定制 CLI 等同官方实现。
+
+新增运行验证：
+
+- 官方 Windows **2.1.302** 原生客户端（官方基线 SHA `3ab075f7…3d2a0ae`），连接隔离的 Linux v10 Worker/CLI，在 build 和 direct 各完成一次两请求工具回合：模拟上游返回 Read，官方客户端本地读取临时文件，将包含标记的非错误 tool_result 送回，最后获得 `OFFICIAL_CLIENT_TOOL_LOOP_OK`。两种模式 exit=0，文件内容不变。没有使用真实订阅凭据或模型上游，也没有修改项目文件。
+- 定制 v9/v10 分别直接运行普通 `-p`：纯文本均一次模型请求、exit=0；不加载 mods 时的 Read 回合，两者均两次请求，且都返回 `No tool.call mod handler answered Read`。这是此前全工具交给 mods、未处理不回退的行为；**不能把当前定制 ELF 当作无 mods 的官方普通 Agent 替代品**。
+- v10 的 `runtime-probe original`（Bash/Read/TaskCreate/WebFetch 由 mods 接管）和 `hooks-update`（PreToolUse 改输入、PostToolUse 改输出）通过，均两次模型请求、exit=0。
+
+结论：已验证官方客户端经网关的普通文本/Read 工具回合、request 成功 JSON/SSE、HTTP 错误透传，以及上述 mods/hooks 场景。没有发现相对 v9 的 Agent 回归；尚未逐项覆盖交互 TUI、resume、所有 MCP/hooks、所有模型和真实 OAuth 场景，不能声称“任何场景都绝对无影响”。此外 Core 修改覆盖通用 HTTP 错误路径：跨协议错误现在也保留上游正文，不再转换成调用方协议的错误 envelope，这是用户要求的行为变化。
+
+证据：[正常客户端与 v9/v10 对比](cli-research/2.1.302/normal-client-regression-v10.json)。本轮仅审核和记录，没有再次改动运行逻辑或切换生产配置。
