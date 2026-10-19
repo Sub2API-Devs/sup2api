@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -93,6 +95,8 @@ type gwError struct {
 	// Raw is an upstream error body passed through verbatim when the
 	// platform plugin gave no client-facing type or message.
 	Raw         []byte
+	RawResponse bool // Includes empty and non-JSON upstream HTTP responses.
+	RawFile     *os.File
 	ContentType string
 	Headers     http.Header
 	// RecordType is the usage_logs.error_type for this failure.
@@ -117,7 +121,7 @@ const statusOverloaded = 529
 // "Overloaded"), which Claude Code and the SDKs retry with backoff; the usage
 // record keeps the host's message.
 func clientError(format string, err *gwError) *gwError {
-	if strings.EqualFold(format, FormatAnthropic) && err.Code == core.ErrNoAvailableAccount.Code && len(err.Raw) == 0 {
+	if strings.EqualFold(format, FormatAnthropic) && err.Code == core.ErrNoAvailableAccount.Code && len(err.Raw) == 0 && !err.RawResponse {
 		shown := *err
 		shown.Status, shown.Type, shown.Message = statusOverloaded, "overloaded_error", "Overloaded"
 		return &shown
@@ -134,6 +138,23 @@ func writeError(c *gin.Context, format string, err *gwError) {
 	status := err.Status
 	if status <= 0 {
 		status = http.StatusInternalServerError
+	}
+	if err.RawResponse {
+		if err.ContentType != "" {
+			c.Header("Content-Type", err.ContentType)
+		} else {
+			c.Writer.Header()["Content-Type"] = nil // Do not sniff an upstream error.
+		}
+		c.Status(status)
+		var src io.Reader = strings.NewReader(string(err.Raw))
+		if err.RawFile != nil {
+			src = err.RawFile
+		}
+		c.Writer.WriteHeaderNow()
+		if _, copyErr := io.Copy(c.Writer, src); copyErr != nil {
+			panic(http.ErrAbortHandler)
+		}
+		return
 	}
 	if len(err.Raw) > 0 && json.Valid(err.Raw) {
 		ct := err.ContentType

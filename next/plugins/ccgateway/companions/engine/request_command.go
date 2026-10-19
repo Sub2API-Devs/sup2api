@@ -243,6 +243,14 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		panic(http.ErrAbortHandler)
 	}
 	frame := stderr.result()
+	if frame != nil {
+		body, bodyErr := frame.openBody(meta)
+		if bodyErr != nil {
+			frame = localRequestError(502, "api_error", "cli_error_protocol", "CLI returned an incomplete HTTP error body")
+		} else if body != nil {
+			defer body.Close()
+		}
+	}
 	if frame == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request timed out")
 		frame.Source = "timeout"

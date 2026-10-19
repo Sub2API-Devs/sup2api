@@ -6,6 +6,14 @@ const options = { body: { model: 'fixture', messages: [], unknown: { keep: true 
 const factory = response => async () => ({ post: () => ({ asResponse: async () => response }) });
 const unusedFetch = () => assert.fail('unexpected network access');
 
+test('binary error reads preserve invalid UTF-8, NUL and bodies larger than 64 KiB', async () => {
+  const bytes = Buffer.concat([Buffer.from([0xff, 0, 0x80]), Buffer.alloc(150000, 0x61)]);
+  const response = await openModelRequest(options, 'owner', undefined, factory(new Response(bytes, { status: 400 })), unusedFetch);
+  const parts = [];
+  for (;;) { const part = await readModelResponse(response.id, 'owner', undefined, true); parts.push(part.bytes); if (part.done) break; }
+  assert.deepEqual(Buffer.concat(parts), bytes);
+});
+
 test('authentication belongs to CC, while beta headers and body fields remain available', () => {
   assert.equal(checkModelRequest({ ...options, headers: { 'anthropic-beta': 'fixture' } }), undefined);
   assert.match(checkModelRequest({ ...options, headers: { AUTHORIZATION: 'bad' } }), /owned by the CC transport/);

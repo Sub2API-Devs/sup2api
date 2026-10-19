@@ -304,3 +304,14 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 - 私有备份位于 `~/sup2api-managed/backups/ccgateway-cancel-0.1.165/`，包含已检查的数据库/卷归档和 Controller 状态；Controller 的 Worker 更新操作还自动保留旧 Worker 程序。构建位于 `~/sup2api-managed/stage/0.1.165/`，测试与验收位于 `~/sup2api/checks/ccg-cancel-165/`。
 
 脱敏证据见 [取消分类发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
+
+## 15. v10 上游 HTTP 错误原样透传（实现，待发布验收）
+
+本节取代 v9 对非 JSON/超长 HTTP 错误重新封装的行为。真实上游 HTTP 错误的状态码、正文和 Content-Type 保留；JSON 不重序列化、不新增 code，文本、HTML、空正文和非 UTF-8 字节同样透传。只有本地输入校验、连接/超时、正文读取失败、CLI 协议/临时文件故障等本系统错误才生成错误结构。重试及账号状态策略仍可执行，但最终选择返回的上游响应不由错误分类器改写。
+
+- CLI `readModelResponse` 增加内部字节读取模式，默认文本模式保留给既有 mods。`request` 错误分支使用字节模式；带 `--response-meta P` 时，将完整原始错误体写入请求临时目录的 `P.error-body`，完成后才输出 stderr 帧。帧仍为 `ccgateway.request.error.v1`，新增 `bodyFile=true`、`bodyBytes`；64 KiB 只作为诊断消息提取前缀，不再限制客户端正文。没有 meta 路径的直接命令行调用在帧里提供完整 `bodyBase64`。stdout 仍只包含成功 JSON/SSE。
+- Worker 根据自己创建的 meta 路径打开 sidecar，不接受 CLI 提供任意文件路径；检查普通文件和完整长度后按原字节发送。无 JSON 合法性要求，不把空正文替换为 envelope。若文件缺失、不完整或协议损坏，则作为本地转发错误返回 502。请求结束清理临时目录；已有取消/超时语义保持。
+- Core 将错误分类前缀与完整响应分开：小正文保留在内存，大正文写入私有临时文件，最终发出原始状态/正文，结束时删除文件（含重试与取消）。读取中断不会伪装成完整的上游 HTTP 错误。兼容路径和 Execute 回调路径均使用同一保留逻辑，跨协议错误也不重封装。
+- 用量日志从 `error.message`、顶层 message、字符串 error 或原始文本提取真实消息，与客户端正文渲染分离；`error_type=upstream_error` 仍是 Core 内部故障类别。客户端得到的上游 error.type/code 不变。没有消息的正文不补充猜测原因。
+
+补丁身份为 `ccgateway-v10-raw-http-errors`，增加 `request_raw_http_errors` 能力；必须重新构建原生 Bun ELF 并更新 CLI SHA/patch 固定，单独更新 Worker 或 Core 不能升级旧 CLI 的 64 KiB 行为。此前各节的 v9 发布 SHA 和测试是历史事实，不代表 v10 已部署。

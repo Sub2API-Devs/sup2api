@@ -90,7 +90,7 @@ export async function openModelRequest(options, owner, signal, createClient, tra
   }
 }
 
-export async function readModelResponse(id, owner, signal) {
+export async function readModelResponse(id, owner, signal, binary = false) {
   const entry = owned(id, owner);
   if (entry.busy) throw new Error('model response already has an active reader');
   entry.busy = true;
@@ -102,15 +102,15 @@ export async function readModelResponse(id, owner, signal) {
       const read = await entry.reader?.read() ?? { done: true };
       if (entry.controller.signal.aborted) throw entry.controller.signal.reason;
       if (read.done) {
-        const text = entry.decoder.decode();
+        const text = binary ? undefined : entry.decoder.decode();
         await close(entry);
-        return { done: true, text };
+        return binary ? { done: true, bytes: new Uint8Array() } : { done: true, text };
       }
       entry.pending = read.value;
     }
     const part = entry.pending.subarray(0, 65536);
     entry.pending = entry.pending.subarray(part.length);
-    return { done: false, text: entry.decoder.decode(part, { stream: true }) };
+    return binary ? { done: false, bytes: part } : { done: false, text: entry.decoder.decode(part, { stream: true }) };
   } catch (error) { await close(entry, error); throw error; }
   finally { entry.busy = false; signal?.removeEventListener('abort', abort); }
 }

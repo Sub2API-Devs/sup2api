@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -118,6 +119,7 @@ type call struct {
 	observationResponseAt    time.Time
 	observationFirstStreamAt time.Time
 	abortResponse            bool // A committed CCGateway response ended incompletely.
+	errorBodies              []*os.File
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
@@ -163,6 +165,7 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 }
 
 func (c *call) run(ctx context.Context) {
+	defer c.closeErrorBodies()
 	// 1. API key.
 	key := c.apiKey()
 	if key == "" {

@@ -32,6 +32,8 @@ type gatewayExecution struct {
 	response                 *pluginv1.ForwardUpstreamResponse
 	result                   attemptResult
 	raw                      []byte
+	errorBody                *upstreamErrorBody
+	localFailure             *gwError
 	header                   http.Header
 	observed, recorded, sent bool
 	base                     *core.UsageRecord
@@ -79,6 +81,9 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 	defer cancel()
 	callbacks := core.ExecutionCallbacks{PrepareTimeout: c.gw.platformTimeout(), FinishTimeout: 15 * time.Second, Forward: x.forwardCallback, Record: x.record, Watch: x.watch}
 	out, err := rt.binding.Client.(core.ExecutePlugin).Execute(ectx, &pluginv1.ExecuteRequest{Request: request}, callbacks)
+	if x.localFailure != nil {
+		return attemptResult{kind: attemptReturn, err: x.localFailure}
+	}
 	if x.response != nil && x.response.Error != nil {
 		cls := out.GetClassification()
 		if cls == nil {
@@ -93,9 +98,7 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 		if c.ep.TaskSubmit() {
 			result.kind = attemptReturn
 		}
-		if result.err != nil && result.err.Raw != nil {
-			result.err.ContentType = x.header.Get("Content-Type")
-		}
+		c.preserveHTTPError(result.err, int(x.response.Error.Status), x.header, x.errorBody)
 		return result
 	}
 	if x.base != nil && !x.observed {

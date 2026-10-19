@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"io"
 	"log/slog"
@@ -612,7 +611,18 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	c.g.observeQuota(rt, acc.ID, resp.StatusCode, resp.Header)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		raw, _ := readPrefix(resp.Body, maxErrorBody)
+		body, readErr := c.readUpstreamError(resp.Body)
+		if readErr != nil {
+			if ctx.Err() != nil {
+				return attemptResult{kind: attemptCanceled, err: canceledErr()}
+			}
+			e := &gwError{Status: http.StatusBadGateway, Code: "upstream_response_incomplete", RecordType: errTypeUpstream, Message: "Could not read the complete upstream error response"}
+			if execution != nil {
+				execution.localFailure = e
+			}
+			return attemptResult{kind: attemptReturn, err: e}
+		}
+		raw := body.prefix
 		ct := resp.Header.Get("Content-Type")
 		if resp.StatusCode >= 500 {
 			// A server error names no cause in the usage log; who answered
@@ -623,6 +633,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		var res attemptResult
 		if execution != nil {
+			execution.errorBody = body
 			res = execution.classify(ctx, resp.StatusCode, resp.Header, raw, "")
 		} else {
 			res = c.classify(ctx, rt, pacct, resp.StatusCode, resp.Header, raw, "")
@@ -631,12 +642,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			c.recordTaskFailure(ctx, resp.StatusCode, raw, "upstream rejected task submission")
 			res.kind = attemptReturn
 		}
-		if res.err != nil && res.err.Raw != nil {
-			res.err.ContentType = ct
-		}
-		if res.err != nil {
-			res.err.Headers = httpfacts.Select(resp.Header)
-		}
+		c.preserveHTTPError(res.err, resp.StatusCode, resp.Header, body)
 		return res
 	}
 	if execution != nil {

@@ -2,8 +2,12 @@ package engine
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
@@ -20,13 +24,17 @@ type requestErrorDetail struct {
 }
 
 type requestErrorFrame struct {
-	Protocol  string             `json:"protocol"`
-	Source    string             `json:"source"`
-	Status    int                `json:"status"`
-	Error     requestErrorDetail `json:"error"`
-	Headers   map[string]string  `json:"headers,omitempty"`
-	Body      string             `json:"body,omitempty"`
-	Truncated bool               `json:"truncated,omitempty"`
+	Protocol   string             `json:"protocol"`
+	Source     string             `json:"source"`
+	Status     int                `json:"status"`
+	Error      requestErrorDetail `json:"error"`
+	Headers    map[string]string  `json:"headers,omitempty"`
+	Body       string             `json:"body,omitempty"`
+	Truncated  bool               `json:"truncated,omitempty"`
+	BodyFile   bool               `json:"bodyFile,omitempty"`
+	BodyBytes  int64              `json:"bodyBytes,omitempty"`
+	BodyBase64 *string            `json:"bodyBase64,omitempty"`
+	bodyReader io.Reader
 }
 
 // Drain stderr continuously without blocking the child or retaining native
@@ -93,12 +101,47 @@ func (f *requestErrorFrame) valid() bool {
 	if f.Protocol != requestErrorProtocol || f.Status < 400 || f.Status > 599 || len(f.Body) > 64<<10 || len(f.Headers) > 32 {
 		return false
 	}
+	if f.BodyBytes < 0 || f.Source == "http" && f.Truncated || f.BodyFile && (f.Source != "http" || f.Body != "" || f.BodyBase64 != nil) {
+		return false
+	}
+	if f.BodyBase64 != nil && (f.Source != "http" || f.Body != "" || f.BodyFile) {
+		return false
+	}
 	switch f.Source {
 	case "http", "input", "transport", "timeout", "interrupted", "internal":
 	default:
 		return false
 	}
 	return f.Error.Type != "" && len(f.Error.Type) <= 512 && f.Error.Code != "" && len(f.Error.Code) <= 512 && f.Error.Message != "" && len(f.Error.Message) <= 8192
+}
+
+// The CLI only chooses a marker, never a filesystem path. The Worker opens
+// its own request-local sidecar after the CLI exits and verifies completion.
+func (f *requestErrorFrame) openBody(meta string) (io.Closer, error) {
+	if f.Source != "http" {
+		return nil, nil
+	}
+	if f.BodyFile {
+		path := meta + ".error-body"
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() != f.BodyBytes {
+			return nil, errors.New("invalid CLI HTTP error body file")
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		f.bodyReader = file
+		return file, nil
+	}
+	if f.BodyBase64 != nil {
+		body, err := base64.StdEncoding.Strict().DecodeString(*f.BodyBase64)
+		if err != nil || int64(len(body)) != f.BodyBytes {
+			return nil, errors.New("invalid CLI HTTP error body encoding")
+		}
+		f.bodyReader = bytes.NewReader(body)
+	}
+	return nil, nil
 }
 
 func (f *requestErrorFrame) record(d *requestDiagnostic, committed bool) {
@@ -122,13 +165,24 @@ func (f *requestErrorFrame) write(w http.ResponseWriter) {
 		}
 	}
 	httpfacts.Apply(w.Header(), h)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(f.Status)
-	// Preserve complete upstream JSON errors, including provider-specific fields.
-	if f.Source == "http" && !f.Truncated && json.Valid([]byte(f.Body)) {
-		_, _ = w.Write([]byte(f.Body))
+	if f.Source == "http" {
+		if ct := h.Get("Content-Type"); ct != "" {
+			w.Header().Set("Content-Type", ct)
+		} else {
+			w.Header()["Content-Type"] = nil
+		}
+		w.WriteHeader(f.Status)
+		body := f.bodyReader
+		if body == nil {
+			body = strings.NewReader(f.Body)
+		}
+		if _, err := io.Copy(w, body); err != nil {
+			panic(http.ErrAbortHandler)
+		}
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(f.Status)
 	_ = json.NewEncoder(w).Encode(struct {
 		Type  string             `json:"type"`
 		Error requestErrorDetail `json:"error"`

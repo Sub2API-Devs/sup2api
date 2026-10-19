@@ -1,5 +1,7 @@
 # Claude Code mods 工具注入扩展
 
+当前源码新增 **2.1.302 / `ccgateway-v10-raw-http-errors`**（发布验收待完成）：HTTP 错误正文按原字节保存/透传，stderr 仍传状态与诊断；不再把非 JSON 或超过 64 KiB 的上游错误包装成新 JSON。见 [302 文档第 15 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#15-v10-上游-http-错误原样透传实现待发布验收)。以下 v9 是此前发布基线。
+
 **当前版本为 2.1.302 / `ccgateway-v9-stderr-errors`，完整说明见 [302 独立文档](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v9 新增 `request_error_stderr` 能力：错误通过带版本的 stderr JSON 行交给 Worker，正常 JSON/SSE 继续走 stdout。延续 v8 的显式 API Key / 原生 OAuth 支持；没有 API Key 时使用 CC 读取/刷新凭证及生成 Bearer，并合并原生 OAuth beta。`patch-cli.cjs` 按恢复目录 package.json 选择独立的 `patch-cli-2.1.296.cjs` 或 `patch-cli-2.1.302.cjs`，每个版本仍做自己的哈希和唯一锚点检查。302 基线映射在 `profiles/linux-x64-2.1.302.json`；`--ccgateway-info` 报告补丁能力，Worker 启动还需匹配二进制 SHA-256。296 未在本次重新发布或验证，下面的 v6 限制是历史记录。
 
 302 构建原生 ELF 后，用 `node package-release.cjs <ELF> <ccgateway-patch.json> <新 release 目录>` 生成 Worker 的 `cli-mods/release/` 输入。Worker 与兼容入口 Dockerfile 从此目录安装指定版本，不再在构建时下载官方 CLI。镜像内目录会去掉组/其他用户写权限；Controller 创建账号时验证 manifest、版本与哈希，然后设置禁更和版本环境。管理更新不能把已固定的定制 CLI 替换成官方渠道包。

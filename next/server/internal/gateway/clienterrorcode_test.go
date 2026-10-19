@@ -8,10 +8,8 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// ClassifyErrorResponse.client_error_code is the only way the plugin's own
-// classification of an upstream failure reaches the client: without it every
-// upstream error carries code "upstream_error", so a content-moderation block
-// and a bad parameter look identical to an SDK.
+// Plugin codes describe locally rendered failures. A real upstream HTTP
+// response retains its own fields, regardless of the classification metadata.
 
 func TestClientErrorCodeFromPlugin(t *testing.T) {
 	e := newEnv(t)
@@ -20,7 +18,7 @@ func TestClientErrorCodeFromPlugin(t *testing.T) {
 		out.ClientErrorCode = "InputTextSensitiveContentDetected"
 	}
 	r := e.messages(body(testModel, false))
-	if r.status != 400 || r.json().Get("error.code").String() != "InputTextSensitiveContentDetected" {
+	if r.status != 400 || r.json().Get("error.code").Exists() {
 		t.Fatalf("400: %d %s", r.status, r.body)
 	}
 	// The classification the plugin already made is unchanged otherwise.
@@ -29,13 +27,12 @@ func TestClientErrorCodeFromPlugin(t *testing.T) {
 	}
 }
 
-// Backward compatibility: a plugin that never heard of the field (every plugin
-// written before it) must produce exactly the body it produced before.
-func TestClientErrorCodeDefaultsToUpstreamError(t *testing.T) {
+// The gateway must not add a generic code absent from the upstream body.
+func TestClientErrorCodeDoesNotInventUpstreamCode(t *testing.T) {
 	e := newEnv(t)
 	e.up.set("acc-1", &upstreamRule{status: 400})
 	r := e.messages(body(testModel, false))
-	if r.status != 400 || r.json().Get("error.code").String() != "upstream_error" {
+	if r.status != 400 || r.json().Get("error.code").Exists() {
 		t.Fatalf("400: %d %s", r.status, r.body)
 	}
 }
@@ -63,7 +60,7 @@ func TestClientErrorCodeRejectsUnusableValues(t *testing.T) {
 				out.ClientErrorCode = code
 			}
 			r := e.messages(body(testModel, false))
-			if got := r.json().Get("error.code").String(); got != "upstream_error" {
+			if got := r.json().Get("error.code").String(); got != "" {
 				t.Fatalf("code = %q for %q", got, code)
 			}
 		})
@@ -88,10 +85,8 @@ func TestClientErrorCodeAccepts(t *testing.T) {
 	}
 }
 
-// A plugin that names a code but neither a type nor a message asks for the
-// rendered envelope; passing the upstream body through would throw the code
-// away. Without a code the old passthrough is unchanged.
-func TestClientErrorCodeSuppressesRawPassthrough(t *testing.T) {
+// Plugin classifications cannot replace or remove upstream error fields.
+func TestClientErrorCodePreservesRawPassthrough(t *testing.T) {
 	const raw = `{"vendor":"ark","error":{"code":"InputTextSensitiveContentDetected"}}`
 
 	e := newEnv(t)
@@ -110,8 +105,8 @@ func TestClientErrorCodeSuppressesRawPassthrough(t *testing.T) {
 		out.ClientErrorCode = "InputTextSensitiveContentDetected"
 	}
 	r := e2.messages(body(testModel, false))
-	if r.json().Get("vendor").Exists() {
-		t.Fatalf("raw body returned although the plugin named a code: %s", r.body)
+	if string(r.body) != raw {
+		t.Fatalf("plugin classification changed raw body: %s", r.body)
 	}
 	if r.json().Get("error.code").String() != "InputTextSensitiveContentDetected" {
 		t.Fatalf("code lost: %s", r.body)

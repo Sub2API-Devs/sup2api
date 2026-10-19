@@ -16,7 +16,7 @@ function text(value, fallback, max = 2048) {
 export function httpErrorFrame(response, body, truncated = false) {
   const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
   let parsed;
-  try { parsed = JSON.parse(body); } catch { /* Non-JSON errors get a JSON envelope. */ }
+  try { parsed = JSON.parse(body); } catch { /* Diagnostics only; HTTP bytes remain opaque. */ }
   const detail = parsed?.error;
   const type = text(detail?.type, errorType(status), 128);
   const nativeCode = typeof detail?.code === 'number' && Number.isFinite(detail.code) ? String(detail.code) : detail?.code;
@@ -26,7 +26,7 @@ export function httpErrorFrame(response, body, truncated = false) {
   const original = new Headers(response.headers);
   const hop = new Set((original.get('connection') ?? '').split(',').map(name => name.trim().toLowerCase()));
   for (const [name, value] of original) {
-    if (!hop.has(name) && /^(request-id|anthropic-request-id|retry-after|x-should-retry|anthropic-ratelimit-[\w-]+|anthropic-fast-[\w-]+)$/.test(name) && value.length <= 1024) headers[name] = value;
+    if (!hop.has(name) && /^(content-type|request-id|anthropic-request-id|retry-after|x-should-retry|anthropic-ratelimit-[\w-]+|anthropic-fast-[\w-]+)$/.test(name) && value.length <= 1024) headers[name] = value;
   }
   // Bound header metadata even if an upstream sends many distinct names.
   const selected = Object.fromEntries(Object.entries(headers).slice(0, 32));

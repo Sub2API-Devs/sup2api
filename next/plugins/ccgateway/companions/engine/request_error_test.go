@@ -105,6 +105,7 @@ func TestRequestCommandStructuredStderrThroughProcess(t *testing.T) {
 			f := localRequestError(429, "rate_limit_error", "upstream_limit", "original")
 			f.Source = "http"
 			f.Headers = map[string]string{"retry-after": "7"}
+			f.Body = `{"error":{"code":"upstream_limit","message":"original"}}`
 			wire := string(errorWire(t, f))
 			script := "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' 'ordinary diagnostic with credentials' >&2\nprintf '%s' '" + wire + "' >&2\nexit 2\n"
 			if err := os.WriteFile(cli, []byte(script), 0700); err != nil {

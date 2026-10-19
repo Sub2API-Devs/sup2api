@@ -433,11 +433,11 @@ func TestConvertedStream(t *testing.T) {
 }
 
 func TestConvertedErrors(t *testing.T) {
-	// Upstream 400 on a converted route: endpoint error format, no raw q body.
+	// Error responses remain upstream bytes even on a converted route.
 	e, q, qp := convEnv(t, nil)
 	q.status = 400
 	r := e.messages(body(testModel, false))
-	if r.status != 400 || r.json().Get("type").String() != "error" || strings.Contains(string(r.body), "q_error") {
+	if r.status != 400 || string(r.body) != `{"q_error":"boom"}` {
 		t.Fatalf("converted 400: %d %s", r.status, r.body)
 	}
 	if c := qp.classify[0]; c.GetMeta().GetProtocol() != "q.chat" || !strings.Contains(string(c.GetBodyPrefix()), "q_error") {

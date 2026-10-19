@@ -12,6 +12,8 @@ const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-
 
 Use CC's authenticated client to send either a Messages body or build components.
 Successful responses (including SSE) use stdout. Errors use a structured stderr line.
+HTTP error bytes are stored beside --response-meta as <file>.error-body, or in
+the stderr frame as bodyBase64 when no metadata path is supplied.
 
   --direct                 Forward the original JSON body (default)
   --build                  Assemble components through CC, then send once
@@ -44,7 +46,12 @@ export async function runRequestCommand(args, { oauthBeta } = {}) {
     const options = parseRequestOptions(args);
     if (options.help) { await write(process.stdout, help); return 0; }
     // A reused metadata path must not describe an earlier successful request.
-    if (options.meta) { phase = 'output'; await fs.rm(options.meta, { force: true }); phase = 'input'; }
+    if (options.meta) {
+      phase = 'output';
+      await fs.rm(options.meta, { force: true });
+      await fs.rm(options.meta + '.error-body', { force: true });
+      phase = 'input';
+    }
     const apiKey = process.env.ANTHROPIC_API_KEY;
     // Both eF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
@@ -81,17 +88,32 @@ export async function runRequestCommand(args, { oauthBeta } = {}) {
       return client;
     }, Zre);
     if (!response.ok) {
-      let body = '', bytes = 0, truncated = false;
+      const parts = [], preview = [];
+      let size = 0, previewBytes = 0, file;
       try {
+        phase = 'output';
+        if (options.meta) file = await fs.open(options.meta + '.error-body', 'wx', 0o600);
         for (;;) {
-          const part = await readModelResponse(response.id, 'cli-request', controller.signal);
-          bytes += Buffer.byteLength(part.text);
-          if (bytes > maxErrorBody) { truncated = true; break; }
-          body += part.text;
+          phase = 'transport';
+          const part = await readModelResponse(response.id, 'cli-request', controller.signal, true);
+          const bytes = Buffer.from(part.bytes);
+          size += bytes.length;
+          if (previewBytes < maxErrorBody) {
+            const sample = bytes.subarray(0, maxErrorBody - previewBytes);
+            preview.push(sample); previewBytes += sample.length;
+          }
+          phase = 'output';
+          if (file) await file.writeFile(bytes);
+          else parts.push(bytes);
           if (part.done) break;
         }
-      } catch { truncated = true; }
-      await write(process.stderr, encodeErrorFrame(httpErrorFrame(response, body, truncated)));
+      } finally { await file?.close(); }
+      const frame = httpErrorFrame(response, Buffer.concat(preview).toString('utf8'));
+      delete frame.body;
+      frame.bodyBytes = size;
+      if (options.meta) frame.bodyFile = true;
+      else frame.bodyBase64 = Buffer.concat(parts).toString('base64');
+      await write(process.stderr, encodeErrorFrame(frame));
       return 2;
     }
     phase = 'output';
