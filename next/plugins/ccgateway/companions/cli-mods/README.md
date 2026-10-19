@@ -1,5 +1,7 @@
 # Claude Code mods 工具注入扩展
 
+工作区已实现 **2.1.302 / `ccgateway-v11-native-build-parameters`**，尚未部署：build 删除客户端 parameters 的 extraBody 整包覆盖，改由原生接口处理生成参数；补充 temperature/output_config.format 映射。未映射字段不再自动透传，需要完整 body 保真时使用 direct。37 项支持模块测试、19 次 Linux 原生 ELF 隔离抓包通过；这不等于真实 WebSearch/WebFetch 完整回合验收。详见 [302 文档第 19 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#19-v11-移除-build-的-extrabody-覆盖已实现未部署)。
+
 当前为 **2.1.302 / `ccgateway-v10-raw-http-errors`**，已随 Core 0.1.168 / ccgateway 0.1.66 发布：HTTP 错误正文按原字节保存/透传，stderr 仍传状态与诊断；不再把非 JSON 或超过 64 KiB 的上游错误包装成新 JSON。见 [302 文档第 15 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。以下 v9 是此前发布基线。
 
 **此前发布基线为 2.1.302 / `ccgateway-v9-stderr-errors`，完整说明见 [302 独立文档](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v9 新增 `request_error_stderr` 能力：错误通过带版本的 stderr JSON 行交给 Worker，正常 JSON/SSE 继续走 stdout。延续 v8 的显式 API Key / 原生 OAuth 支持；没有 API Key 时使用 CC 读取/刷新凭证及生成 Bearer，并合并原生 OAuth beta。`patch-cli.cjs` 按恢复目录 package.json 选择独立的 `patch-cli-2.1.296.cjs` 或 `patch-cli-2.1.302.cjs`，每个版本仍做自己的哈希和唯一锚点检查。302 基线映射在 `profiles/linux-x64-2.1.302.json`；`--ccgateway-info` 报告补丁能力，Worker 启动还需匹配二进制 SHA-256。296 未在本次重新发布或验证，下面的 v6 限制是历史记录。

@@ -163,6 +163,5 @@ export function prepareBuildInput(components, renderAttachment) {
     }
   }
   const request = { ...parameters, model: components.model, stream: components.stream === true };
-  const { betas, ...extraBody } = parameters;
-  return { request, messages, systemPrompt, systemBlocks, customTools, extraToolSchemas, extraBody };
+  return { request, messages, systemPrompt, systemBlocks, customTools, extraToolSchemas };
 }

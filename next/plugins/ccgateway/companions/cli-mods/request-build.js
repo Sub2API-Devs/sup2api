@@ -38,8 +38,11 @@ export async function buildRequest(components, headers, signal) {
     agents: [], allowedAgentTypes: [], mcpClients: [],
     extraToolSchemas: input.extraToolSchemas, toolChoice: body.tool_choice,
     maxOutputTokensOverride: body.max_tokens, effortValue: body.output_config?.effort,
+    temperatureOverride: body.temperature, outputFormat: body.output_config?.format,
     enablePromptCaching: false, skipMessageCacheMarkers: true,
-    ccgatewayBuildOnly: true, ccgatewayExtraBody: input.extraBody,
+    // Native model rules own generation parameters; never overlay the input
+    // body onto their result (in particular thinking and tool_choice).
+    ccgatewayBuildOnly: true,
     ccgatewayRequestBetas: clientBetas, ccgatewaySystemBlocks: input.systemBlocks,
   };
   let built;

@@ -397,3 +397,60 @@ Worker `main.go` 在 RequestMode 非空时直接进入 `serveRequestCommand`，�
 首先修正 deferred 属性映射，但不能只加 ENABLE_TOOL_SEARCH 或全局强制开启原生搜索。build 应以调用方传来的工具声明、引用和 caller 为准，不用临时 CLI 的本地工具目录/会话状态删除它们。应在 ccgatewayBuildOnly/ccgatewayInput 边界约束 xRn 的 ToolSearch 过滤及 gRn/Jtt/MRn/DRn 的破坏性修复，同时保留原生附件渲染和请求构建；普通 Agent 路径不要随之改变。修复后要补官方 CC + MCP ToolSearch 完整回合，以及程序化调用/暂停续传的回归，不能只验证首个请求或返回码。
 
 本轮只分析、抓包和记录；没有修改 CLI/Worker/Core 运行逻辑，也没有切换线上模式。现有 Core 0.1.168 / Worker 0.1.66 / CLI v10 的上述缺口仍存在。
+
+## 18. WebSearch / WebFetch 的 thinking 参数失败（2026-10-19 确认，未修复）
+
+第 17 节只验证了基础工具字段/历史块的保留，不能据此认定真实 WebSearch/WebFetch 可用。用户实际调用发生 HTTP 400 后，本轮结合生产日志、官方恢复源码的 REA/Babel AST 分析以及当前 v10 原生 ELF 出站抓包，确认以下问题。没有修改运行代码或部署。
+
+### 生产请求证据
+
+30 号账号在北京时间 16:11:34 的请求 `29b11161ac7ed59fc0679ec6`，以及 16:12:13 的请求 `4c7b44177899ec27f70048ef`，均收到上游错误：`"thinking.type.disabled" is not supported for this model. Use "thinking.type.adaptive" and "output_config.effort" to control thinking behavior.`
+
+- 第一条 Worker 入站 body 已有 `model=claude-opus-5-5`、`thinking={type:"disabled"}`、`output_config={effort:"medium"}`、`web_search_20250305` 工具和强制 `tool_choice=web_search`，消息含原生 `Perform a web search` 提示。日志目录为 `1ff1032f-a484-43c0-acf0-bfa5bede0781`。
+- 第二条也是相同 model/thinking/effort，但没有 tools/tool_choice，消息包含原生网页摘要模板 `Provide a concise response based...`，符合 WebFetch 后续模型整理请求。日志目录为 `3b4cfbd1-fe5f-42ff-8820-e253b8ecd96c`。该模型请求的 400 不能解释成网页 HTTP 抓取失败，也不构成网页内容完整抓取成功的证明。
+- 两条请求的 `build-components.json.parameters` 均保留 disabled；客户端 billing header 标记版本为 2.1.299。这里直接观测的是 Worker 入站 body，不是客户端出网处抓包，不能仅据此排除更前面的模型映射等处理。
+- 30/31 号的安全检查类辅助请求也曾以同样的 disabled 参数失败。影响不局限于上述两个工具。新错误透传链已把具体上游消息写入 Core 日志和返回客户端。
+
+### 原生构建与当前补丁的差异
+
+官方 WebSearch 的 `call` 在 `chunk-3veydjj5.js` 使用内部 `thinkingConfig={type:"disabled",mechanical:true}` 发起 `web_search_tool` 请求；这不等价于最终 HTTP body 必然发送 disabled。
+
+官方 WebFetch 的 `call` 位于 `chunk-8242685m.js` 字符偏移 2533311–2541321，先调用 `Xdo` 获取页面；需要整理内容时进入 `nPt`（2519752–2520603），其 `querySource=web_fetch_apply`。后续 `QL` 选择辅助模型，`CYr`（3512189–3512779）同样使用 mechanical disabled 的内部配置调用 `AZ`。部分原生分支可直接返回原始页面内容，并非每一次 WebFetch 都发摘要请求。
+
+`xRn` 用 `Vd` 获取模型能力，`Ijs` 处理 always-on thinking。mechanical disabled 不会被 Ijs 直接转换为 adaptive；最终 body 构造还会检查 `rejectsDisabled`，原生只在允许关闭 thinking 时生成 `{type:"disabled"}`。原生构造也会根据实际 thinking 状态处理强制 tool_choice 等约束。
+
+当前 `request-build.js` 一方面将 thinking 映射为内部 thinkingConfig，另一方面 `request-input.js` 将 parameters（除 betas）完整放入 extraBody。补丁又在 `xRn` 中执行 `Na={...xz(rl),...Q.ccgatewayExtraBody}`，最终请求对象的 `...Na` 位于原生 `thinking:lf`、`tool_choice:MR` 之后。因此客户端显式 thinking/tool_choice 可以覆盖内置计算结果。复用原生构建函数并不等于这些参数最终经过原生兼容处理；简单把 disabled 文本换成 adaptive 也不足以验证强制工具选择、effort、历史 thinking 等组合。
+
+### 原生 ELF 抓包与验证边界
+
+使用第 15 节同一 v10 ELF（SHA `2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905`），以假 key 和回环模拟上游，分别测试搜索型/摘要型请求，thinking 缺省/disabled/adaptive/enabled 四种输入，以及 direct/build，共 16 次：
+
+- 显式 disabled 在两模式最终 HTTP body 中均保留；build 没有消除本次已被真实上游拒绝的参数。
+- 缺省 thinking 时，两模式最终 body 均不含 thinking；build 不会无条件新增 disabled。
+- 显式 adaptive/enabled 也原样保留；搜索型强制 tool_choice 同样保留。这里只证明出站形状，不代表模型接受这些组合。
+- 模拟上游返回 200 是为了抓包，不能作为搜索、摘要或模型参数兼容成功的依据。本轮没有真实执行成功的联网搜索完整回合。
+
+REA 分析了官方恢复目录内 `chunk-mam1wjsh.js` 和 `chunk-8242685m.js`，2 个文件解析成功、0 解析失败；父证据 `ev_3cc67173b33104c37cfe91bc789d062ee72bf0df1e12445857a34c3ba1c6c181`。其语义图达到节点预算而不完整，其余 2440 个文件未分析；这里的函数边界和具体语句由 Babel AST 独立提取核对，不把 REA 摘要当作完整调用图或运行证明。
+
+脱敏抓包及生产字段证据见 [thinking 兼容性确认](cli-research/2.1.302/search-thinking-audit.json)。修复应限定 build 的原生参数映射与 extraBody 覆盖边界；direct 继续承担 body 透传，不暗中修正客户端参数。第 17 节的 ToolSearch/reference/caller 丢失仍需单独修复和完整回合验证。上述问题解决前，不应宣称正常 CC 客户端的全部工具均兼容。
+
+## 19. v11 移除 build 的 extraBody 覆盖（已实现，未部署）
+
+用户明确要求去掉 extraBody 整包覆盖。本节记录工作区实现及隔离验证；线上仍是第 15 节的 v10，第 18 节生产失败记录保持为历史事实。
+
+- `request-input.js` 不再生成或返回 extraBody；`request-build.js` 不再传 ccgatewayExtraBody；302 补丁器删除对 `Na=xz(rl)` 的替换，恢复该处原生表达式。这里删除的是客户端 parameters 的覆盖机制，不删除 CC 本身的 xz 逻辑。
+- 生成参数只通过原生接口传入：max_tokens → maxOutputTokensOverride，thinking → thinkingConfig，tool_choice → toolChoice，output_config.effort → effortValue。本次补充 temperature → temperatureOverride、output_config.format → outputFormat。最终请求采用原生构建结果，不再用原值恢复其已调整的字段。
+- tools/extraToolSchemas、消息、附件和 system 组件继续使用现有通路；beta 继续通过独立的规范化/原生 beta 流程处理；direct 原始 body、认证、响应及错误透传代码未改。
+- 不再存在任意参数兜底补传。未接到原生接口的字段（例如 top_p、stop_sequences、调用方 metadata，以及其他 output_config 扩展字段）不会因放进 parameters 就自动出现在出站 body；原生仍可能生成自己的 metadata 等字段。需保持这些字段原值时使用 direct。未新增另一层 body 合并或未映射字段拒绝规则。
+- 296 补丁器同一覆盖锚点也移除，避免共享支持模块去掉参数后留下无效补丁；本轮没有重新构建或发布 296，不能把 302 验证推广给它。
+
+补丁标识为 `ccgateway-v11-native-build-parameters`，package-release 同步要求此标识。已在 Windows 使用本机 Bun 1.4.3 以 `--compile --target=bun-linux-x64` 编译两个原有入口（CLI + hooks worker），生成实际 Linux ELF，不以 JS 脚本代替交付。ELF SHA-256 为 `14da5daf8e6ea2dc8aa7e39a0f2da38427543fa3bfb4ce66274c5e806ee4007e`；本机输出为 `artifacts/claude-2.1.302/claude-linux-v11`，已生成 `release-v11` 及固定 SHA/patch 的 manifest。远端只上传此编译产物，在 `/home/debian/sup2api/checks/ccg-302-v11/` 隔离执行，没有替换任何账号容器。
+
+验证：
+
+1. 支持模块测试 **37/37** 通过。新增构建边界测试覆盖 disabled/adaptive/enabled 参数映射，确认原生返回的 thinking/tool_choice/max_tokens/effort/metadata 结果不会被入参覆盖，并核对 temperature/format 映射及 beta 合并。
+2. 官方 302 基线哈希、唯一补丁锚点、生成模块 AST 解析通过；Serena 对 request-input/request-build/302 补丁器返回空诊断；CodeGraph 当次连接关闭，改用已定位源码和 AST 核对。
+3. 同一原生 ELF 在 Linux 使用假 key、回环模拟上游执行 **19 次请求**。搜索/摘要型 × 四种 thinking 输入 × direct/build 共 16 次；另有原生参数映射、未映射字段 build/direct 三次。所有 direct 对照按字节保持原始请求。
+4. Opus 5.5 build 的 disabled 输入最终不再携带 thinking；强制 web_search 的 tool_choice 由原生改为 auto。adaptive/enabled 输入由原生生成 adaptive（该环境含 display=updates）。Sonnet 4.5 对照保留允许的 disabled、temperature=0.25 和 JSON Schema format，并将 max_tokens=1000000 按原生上限调整为 32000。不是全模型无差别删除 thinking。
+
+证据见 [v11 原生构建抓包](cli-research/2.1.302/native-build-v11-verification.json)。本轮模拟上游只验证请求形状，不证明真实服务接受每个组合或 WebSearch/WebFetch 完整回合成功；第 17 节的 ToolSearch/reference/caller 问题未在本改动中修复。线上 Core/Controller/Worker/CLI 均未更新。

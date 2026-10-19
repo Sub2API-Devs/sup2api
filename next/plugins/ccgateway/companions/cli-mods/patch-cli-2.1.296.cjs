@@ -92,7 +92,6 @@ editBinding(core, 'uln', text => {
   text = once(text, 'let ut=_e(()=>hBn(Y.model,{isAgenticQuery:dt})),', 'let ut=Y.ccgatewayBuildOnly===true?(Y.ccgatewayRequestBetas??[]).map(ccgBeta):_e(()=>hBn(Y.model,{isAgenticQuery:dt})),');
   text = once(text, 'system:Dc.system,', 'system:Y.ccgatewayBuildOnly===true&&Y.ccgatewaySystemBlocks!==void 0?Y.ccgatewaySystemBlocks:Dc.system,');
   text = once(text, 'Mi={model:Y.model,', 'Mi={ccgatewayInput:Y.ccgatewayBuildOnly===true,model:Y.model,');
-  text = once(text, 'sa=w6(za);', 'sa=Y.ccgatewayBuildOnly===true?{...w6(za),...Y.ccgatewayExtraBody}:w6(za);');
   return once(text, 'let Jn=ybe(()=>eF({maxRetries:0,', 'if(Y.ccgatewayBuildOnly===true){yield{type:"ccgateway_request",body:PCe({model:Y.model,fastMode:false})};return}let Jn=ybe(()=>eF({maxRetries:0,');
 });
 editBinding(core, 'Jan', text => once(text, 'withoutAttachmentHooks:n.withoutAttachmentHooks,', 'ccgatewayInput:n.ccgatewayInput===true,withoutAttachmentHooks:n.withoutAttachmentHooks,'));

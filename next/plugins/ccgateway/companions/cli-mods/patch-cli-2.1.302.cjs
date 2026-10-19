@@ -41,7 +41,7 @@ function edit(file, name, transform, method = false) {
   files.set(file, text.slice(0, n.start) + after + text.slice(n.end)); modified.add(file);
 }
 const core = 'chunk-8242685m.js', guest = 'chunk-ctwws12s.js', headless = 'chunk-sdr1wqge.js', terminal = 'chunk-2rs9vjmc.js';
-edit('cli.js', 'Ge', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.302",patch:"ccgateway-v10-raw-http-errors",capabilities:["request_direct","request_build","request_oauth","request_error_stderr","request_raw_http_errors","native_tools","mods_dispatch"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-7p9rzbaa.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{Ake:oauthAuth}=await import("./chunk-yn324528.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
+edit('cli.js', 'Ge', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.302",patch:"ccgateway-v11-native-build-parameters",capabilities:["request_direct","request_build","request_oauth","request_error_stderr","request_raw_http_errors","native_tools","mods_dispatch"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-7p9rzbaa.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{Ake:oauthAuth}=await import("./chunk-yn324528.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
 edit(guest, 'bE', t => once(t, 'name:o.name,description:o.description,inputSchema:', 'name:o.name,description:o.description,...o.kind==="native"?{kind:"native"}:{},inputSchema:'));
 edit(core, 'hRr', t => once(t, 'async function hRr(e,n){', 'async function hRr(e,n){if(e.kind==="native"){let binding=qp(n,"$.tool.register"),context=binding.toolContext(new AbortController);return ccgRegister(context.session,n,e)}'));
 edit(headless, 'ka', t => once(once(t, 'Fe=[P.toolPermissionContext', 'Fe=[ccgRevision(e),P.toolPermissionContext'), '$t=eKt($t,P.toolPermissionContext)', '$t=ccgMerge(e,eKt($t,P.toolPermissionContext))'));
@@ -62,7 +62,6 @@ edit(core, 'xRn', t => {
   t = once(t, 'let ft=ke(()=>FYn(Q.model,{isAgenticQuery:Et})),', 'let ft=Q.ccgatewayBuildOnly===true?(Q.ccgatewayRequestBetas??[]).map(ccgBeta):ke(()=>FYn(Q.model,{isAgenticQuery:Et})),');
   t = once(t, 'system:Rf.system,', 'system:Q.ccgatewayBuildOnly===true&&Q.ccgatewaySystemBlocks!==void 0?Q.ccgatewaySystemBlocks:Rf.system,');
   t = once(t, 'fl={model:Q.model,', 'fl={ccgatewayInput:Q.ccgatewayBuildOnly===true,model:Q.model,');
-  t = once(t, 'Na=xz(rl);', 'Na=Q.ccgatewayBuildOnly===true?{...xz(rl),...Q.ccgatewayExtraBody}:xz(rl);');
   return once(t, 'let Zn=qCe(()=>GU({maxRetries:0,', 'if(Q.ccgatewayBuildOnly===true){yield{type:"ccgateway_request",body:dIe({model:Q.model,fastMode:false})};return}let Zn=qCe(()=>GU({maxRetries:0,');
 });
 edit(core, 'gRn', t => once(t, 'withoutAttachmentHooks:n.withoutAttachmentHooks,', 'ccgatewayInput:n.ccgatewayInput===true,withoutAttachmentHooks:n.withoutAttachmentHooks,'));
@@ -85,7 +84,7 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {uLo as ccgBeta} from "./chunk-yn324528.js";\n' + files.get(core));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.302', extension: 'ccgateway-v10-raw-http-errors', capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.302', extension: 'ccgateway-v11-native-build-parameters', capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

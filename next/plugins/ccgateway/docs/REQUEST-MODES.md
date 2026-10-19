@@ -1,5 +1,7 @@
 # CCGateway 请求模式
 
+2026-10-19 工作区更新（**未部署**）：CLI v11 的 build 已去掉客户端 parameters 经 extraBody 覆盖原生结果的路径。max_tokens、thinking、tool_choice、temperature、output_config.effort/format 映射到 CC 原生构建接口，最终值由模型规则决定；不再承诺任意 parameters 字段直接进入 HTTP body。top_p、stop_sequences、调用方 metadata 等没有映射的字段不会自动补传，需原样请求时使用 direct。详见 [302 文档第 19 节](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#19-v11-移除-build-的-extrabody-覆盖已实现未部署)。
+
 2026-10-19 最新：Core **0.1.168** / ccgateway **0.1.66** / CLI **2.1.302/v10** 已上线。direct/build 均将上游 HTTP 错误状态和正文原样返回，包括空正文、非 JSON、非 UTF-8 和超过 64 KiB 的内容；只在本地转发失败时生成错误。21/30/31/32 均已固定新原生 ELF，日志保存上游实际消息。[发布验收](cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。
 
 2026-10-19 0.1.165 发布：Core **0.1.165** / ccgateway **0.1.65** 已区分调用方取消与 Worker 超时。未发响应时取消只记诊断 499；已发响应时保留 HTTP 状态并记录 client_canceled。21/30 Worker 已原地更新，CLI 2.1.302/v9 及固定 SHA 保持。[发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
