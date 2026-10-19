@@ -1,6 +1,8 @@
 # OVH当前部署入口
 
-2026-10-19 最新：Core 四节点 **0.1.168**、插件/Controller/Worker **0.1.66**、CLI **2.1.302/v10**。上游 HTTP 错误状态和正文原样透传，非 JSON/空/大正文不再封装；仅本地转发失败生成错误。21/30/31/32 已迁移新镜像并固定原生 ELF SHA `2b88af3a…b1e905`，保留授权卷和 IP、默认 build、禁更。公网 400 正文与 Worker 哈希一致，Core 日志记录实际 `top_p: range: 0..1`。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。0.1.167 仅构建，未切换线上；最终 Core 源码为 `9c690dcbb`，Worker/镜像源码为 `234840c2c`。
+2026-10-19 最新：Core 四节点仍为 **0.1.168**，插件/Controller/Worker 更新至 **0.1.67**，21/30/31/32 固定 **CLI 2.1.302/v11**。build 已删除 extraBody 参数整包覆盖；21 号真实搜索请求和页面摘要请求均返回 200。通过插件 rollout 151 与 runtime/install 完成更新，账号保留卷和 IP，默认 build、禁更。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/native-build-v11-deployment-0.1.67.json)。
+
+2026-10-19 历史发布：Core 四节点 **0.1.168**、插件/Controller/Worker **0.1.66**、CLI **2.1.302/v10**。上游 HTTP 错误状态和正文原样透传，非 JSON/空/大正文不再封装；仅本地转发失败生成错误。21/30/31/32 已迁移新镜像并固定原生 ELF SHA `2b88af3a…b1e905`，保留授权卷和 IP、默认 build、禁更。公网 400 正文与 Worker 哈希一致，Core 日志记录实际 `top_p: range: 0..1`。[发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。0.1.167 仅构建，未切换线上；最终 Core 源码为 `9c690dcbb`，Worker/镜像源码为 `234840c2c`。
 
 2026-10-19 历史发布：Core 四节点 **0.1.166**，移除前端和后端手动配额刷新 30 秒冷却；完成后可立即再刷，进行中查询仍受 singleflight/PG 租约保护。30 号连续两次强制查询成功，快照更新时间相隔 **0.442 秒**；四节点 ready、Core 哈希及线上前端资源一致。插件/Controller/Worker 仍为 **0.1.65**，21/30 Worker、Controller 和共享出口容器 ID/启动时间均未变化。35 项前端测试、类型检查、账号模块及配额数据库测试通过（数据库测试使用独立容器）。源码 `cd4ef1700a1dea01180938b165baa1ae3569da89`；发布 manifest `ed9f67075d384b09456ad6572ae610aa1c43e09435fbe9738f1a097b8deeaedb`；升级计划 `08d77f44999916df98bb5f7310f01994` completed/27。备份位于服务器 `~/sup2api-managed/backups/quota-refresh-0.1.166`，数据库备份目录校验通过。[验收记录](quota-refresh-0.1.166.json)。
 

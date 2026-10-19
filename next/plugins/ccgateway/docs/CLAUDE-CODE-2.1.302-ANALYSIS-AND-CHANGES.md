@@ -434,9 +434,9 @@ REA 分析了官方恢复目录内 `chunk-mam1wjsh.js` 和 `chunk-8242685m.js`�
 
 脱敏抓包及生产字段证据见 [thinking 兼容性确认](cli-research/2.1.302/search-thinking-audit.json)。修复应限定 build 的原生参数映射与 extraBody 覆盖边界；direct 继续承担 body 透传，不暗中修正客户端参数。第 17 节的 ToolSearch/reference/caller 丢失仍需单独修复和完整回合验证。上述问题解决前，不应宣称正常 CC 客户端的全部工具均兼容。
 
-## 19. v11 移除 build 的 extraBody 覆盖（已实现，未部署）
+## 19. v11 移除 build 的 extraBody 覆盖（实现与隔离验证）
 
-用户明确要求去掉 extraBody 整包覆盖。本节记录工作区实现及隔离验证；线上仍是第 15 节的 v10，第 18 节生产失败记录保持为历史事实。
+用户明确要求去掉 extraBody 整包覆盖。本节记录实现及隔离验证；本节验证时线上仍是第 15 节的 v10，后续正式部署见第 20 节。第 18 节生产失败记录保持为历史事实。
 
 - `request-input.js` 不再生成或返回 extraBody；`request-build.js` 不再传 ccgatewayExtraBody；302 补丁器删除对 `Na=xz(rl)` 的替换，恢复该处原生表达式。这里删除的是客户端 parameters 的覆盖机制，不删除 CC 本身的 xz 逻辑。
 - 生成参数只通过原生接口传入：max_tokens → maxOutputTokensOverride，thinking → thinkingConfig，tool_choice → toolChoice，output_config.effort → effortValue。本次补充 temperature → temperatureOverride、output_config.format → outputFormat。最终请求采用原生构建结果，不再用原值恢复其已调整的字段。
@@ -453,4 +453,18 @@ REA 分析了官方恢复目录内 `chunk-mam1wjsh.js` 和 `chunk-8242685m.js`�
 3. 同一原生 ELF 在 Linux 使用假 key、回环模拟上游执行 **19 次请求**。搜索/摘要型 × 四种 thinking 输入 × direct/build 共 16 次；另有原生参数映射、未映射字段 build/direct 三次。所有 direct 对照按字节保持原始请求。
 4. Opus 5.5 build 的 disabled 输入最终不再携带 thinking；强制 web_search 的 tool_choice 由原生改为 auto。adaptive/enabled 输入由原生生成 adaptive（该环境含 display=updates）。Sonnet 4.5 对照保留允许的 disabled、temperature=0.25 和 JSON Schema format，并将 max_tokens=1000000 按原生上限调整为 32000。不是全模型无差别删除 thinking。
 
-证据见 [v11 原生构建抓包](cli-research/2.1.302/native-build-v11-verification.json)。本轮模拟上游只验证请求形状，不证明真实服务接受每个组合或 WebSearch/WebFetch 完整回合成功；第 17 节的 ToolSearch/reference/caller 问题未在本改动中修复。线上 Core/Controller/Worker/CLI 均未更新。
+证据见 [v11 原生构建抓包](cli-research/2.1.302/native-build-v11-verification.json)。本轮模拟上游只验证请求形状，不证明真实服务接受每个组合或 WebSearch/WebFetch 完整回合成功；第 17 节的 ToolSearch/reference/caller 问题未在本改动中修复。该隔离验证阶段没有更新线上服务。
+
+## 20. v11 正式部署（ccgateway 0.1.67，2026-10-19）
+
+- 源码提交 `81f3c2c1fb19ddbe8e62e1840dd5957d33632d97` 已推送。服务器通过 Git 获取精确 SHA 并创建干净工作区 `/home/debian/sup2api/release-ccgateway-0.1.67`，构建 app/egress/controller 镜像和插件包；CLI 使用第 19 节已验证的实际 Linux ELF。插件包 SHA 为 `cb6135df6f2891f8c9be5e8f58e64c6d8e28b680f3dd89370b17cb135fecb290`。
+- 通过正常插件上传/升级接口发布，rollout **151** 完成，四节点均为 ccgateway **0.1.67**。随后调用 runtime/install 更新 Controller 及未来 app/egress 目标镜像。四节点 Core 仍为 **0.1.168**，二进制 SHA 与上一发布一致；没有打包或部署分支中其他 Core/UI 改动。管理的内置插件升级逻辑不会将管理员已安装的新版本降回旧 bundle。
+- 21/30/31/32 app 全部迁移至 `ccgateway-app:0.1.67`，固定 CLI **2.1.302 / ccgateway-v11-native-build-parameters** 和 SHA `14da5daf8e6ea2dc8aa7e39a0f2da38427543fa3bfb4ce66274c5e806ee4007e`。Worker build revision 与源码一致，modified=false；保留授权卷、挂载和固定 IP，默认 build、禁更保持，四账号均 ready。旧 app 以 `-rollback-native-v11` 后缀停止断网保存；更早回滚容器及共享出口未更换。
+- 数据库、四个账号专属卷和 Controller 配置的备份已校验，路径为 `~/sup2api-managed/backups/ccgateway-native-v11-0.1.67/`。Controller 全目录归档包含历史缓存、耗时较长，已中止；该文件不算有效备份，改用已校验的 `controller-config-consistent.tar.gz`（79 项配置）。配置快照时短暂停 Controller，完成后恢复。
+- 切换前发现四个 Core 容器在 **17:02:19 北京时间**停止，exit=0、OOMKilled=false，停止原因未确定。用户确认没有其他维护并授权恢复后，启动原四个容器，确认全部 ready，再执行本次插件升级。
+
+真实验证：21 号管理测试接口使用 `claude-opus-5-5` 返回 HTTP 200、回答 Paris；21 号已部署 Worker 的本地 HTTP 入口接收 disabled 输入，经原生 build 发送的真实 WebSearch 请求返回 HTTP 200、`server_tool_use(name=web_search)`、`web_search_tool_result` 及结果链接，stop_reason=end_turn。页面摘要样例同样返回 HTTP 200、回答 Example Domain。这验证了搜索/摘要模型子请求，尚不等于官方客户端整个 WebFetch 抓网页回合验收。
+
+公网 key 的另一条 disabled 输入测试返回 HTTP **429**，上游正文为 `rate_limit_error / Error`，request ID `974a297403cff799c9c99f4e`；当次未找到对应 usage 行，因此不推断账号或配额原因，也不记为成功。该项与 21 号明确出口的成功结果分别保留。
+
+脱敏发布证据见 [v11 部署验收](cli-research/2.1.302/native-build-v11-deployment-0.1.67.json)。第 17 节的 ToolSearch/reference/caller 历史问题仍未修复，不能将本次成功推广为全部 CC 工具兼容。
