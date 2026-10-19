@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -17,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
@@ -28,12 +28,14 @@ import (
 
 // TestResult is returned by POST /accounts/:id/test.
 type TestResult struct {
-	OK          bool   `json:"ok"`
-	Status      int    `json:"status"`
-	LatencyMs   int64  `json:"latency_ms"`
-	Message     string `json:"message"`
-	ErrorCode   string `json:"error_code,omitempty"`
-	ErrorSource string `json:"error_source,omitempty"`
+	OK              bool              `json:"ok"`
+	Status          int               `json:"status"`
+	LatencyMs       int64             `json:"latency_ms"`
+	Message         string            `json:"message"`
+	ErrorCode       string            `json:"error_code,omitempty"`
+	ErrorSource     string            `json:"error_source,omitempty"`
+	TestMode        string            `json:"test_mode,omitempty"`
+	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	// Model actually requested: the model the plugin reported, else the
 	// requested model after the account's mapping.
 	Model string `json:"model,omitempty"`
@@ -49,7 +51,7 @@ type TestResult struct {
 	// response; nil when the plugin named no usage protocol, the rules do not
 	// cover JSON responses or nothing was found.
 	Usage *TestUsage `json:"usage,omitempty"`
-	// Reason is the plugin's explanation of a failure (ClassifyError).
+	// Reason is the plugin's explanation of a local/transport failure.
 	Reason string `json:"reason,omitempty"`
 	// Effect is the account effect the plugin would apply in the gateway:
 	// "cooldown", "disable" or empty. Shown to the operator only: a test
@@ -166,7 +168,7 @@ func (s *Service) recordTest(ctx context.Context, id int64, res TestResult) {
 		// reason alone ("upstream server error (502)") hides the cause.
 		reason, upstream := strings.TrimSpace(res.Reason), strings.TrimSpace(res.Message)
 		switch {
-		case reason == "":
+		case res.ErrorSource == "response" || reason == "":
 			msg = upstream
 		case upstream == "" || strings.HasSuffix(reason, upstream):
 			msg = reason
@@ -214,6 +216,9 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	}
 	res.Upstream = upstreamAddr(u)
 	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil
+	if managedCCG && tr.GetUrl() == ccgateway.VirtualTestURL {
+		res.TestMode = "native_build"
+	}
 	if !managedCCG {
 		if err := s.guardUpstream(ctx, u, proxyID != nil); err != nil {
 			res.Message, res.ErrorCode = err.Error(), "upstream_validation_failed"
@@ -273,6 +278,15 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, maxTestBody))
 	res.OK = resp.StatusCode >= 200 && resp.StatusCode < 300
 	res.Status = resp.StatusCode
+	res.ResponseHeaders = map[string]string{}
+	for k, values := range httpfacts.Select(resp.Header) {
+		if len(res.ResponseHeaders) >= 32 {
+			break
+		}
+		if len(values) > 0 && len(values[0]) <= 1024 {
+			res.ResponseHeaders[strings.ToLower(k)] = values[0]
+		}
+	}
 	res.Body = truncate(strings.TrimSpace(string(snippet)), maxTestBodyOut)
 	if res.OK {
 		res.ErrorCode, res.ErrorSource = "", ""
@@ -283,7 +297,9 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	if res.Message == "" {
 		res.Message = resp.Status
 	}
-	res.ErrorCode, res.ErrorSource = "http_"+strconv.Itoa(resp.StatusCode), "response"
+	// HTTP status is already reported separately. Only use an error code
+	// actually supplied by the response; do not invent one for an empty body.
+	res.ErrorCode, res.ErrorSource = "", "response"
 	for _, path := range []string{"error.code", "error.type", "code"} {
 		code := gjson.GetBytes(snippet, path)
 		if (code.Type == gjson.String || code.Type == gjson.Number) && code.String() != "" {
@@ -291,10 +307,10 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 			break
 		}
 	}
-	var local bool
-	res.Reason, res.Effect, local = s.classifyTest(ctx, bt, acct, res.Model, resp.StatusCode, resp.Header, snippet, "")
+	reason, effect, local := s.classifyTest(ctx, bt, acct, res.Model, resp.StatusCode, resp.Header, snippet, "")
 	if local {
 		res.ErrorSource = "gateway"
+		res.Reason, res.Effect = reason, effect
 	}
 	return res
 }

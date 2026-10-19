@@ -54,6 +54,9 @@ async function modeTest(mode){
     }
     const invalidBeta=await fetch(base+'/v1/messages',{method:'POST',headers:{'x-api-key':'gateway-fake','anthropic-beta':'not a valid token'},body:JSON.stringify(input)});
     assert.equal(invalidBeta.status,400);assert.equal((await invalidBeta.json()).error.code,'cli_invalid_request');
+    const beforeProbe=seen.length;
+    const probe=await fetch(base+'/v1/ccgateway/probe',{method:'POST',headers:{'x-api-key':'gateway-fake'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:128,system:'Answer the user concisely.',messages:[{role:'user',content:'What is the capital of France?'}]})});
+    assert.equal(probe.status,200);await probe.text();assert.equal(probe.headers.get('x-ccgateway-test-mode'),'native_build');assert.equal(seen.length-beforeProbe,1);assert.ok(JSON.stringify(seen.at(-1).body.system).includes('Answer the user concisely.'));assert.ok(JSON.stringify(seen.at(-1).body.system).includes('Claude Code'));
     const logs=path.join(home,'data','request-logs');
     const records=fs.readdirSync(logs).map(n=>JSON.parse(fs.readFileSync(path.join(logs,n,'metadata.json'))));
     for(const status of [400,401,403,429,500,529])assert.ok(records.some(m=>m.status===status&&m.http_status===status&&m.error_code==='fixture_'+status),'missing accurate error log '+status);

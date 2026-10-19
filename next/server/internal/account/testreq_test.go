@@ -215,9 +215,50 @@ func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
 	})
 }
 
-// TestAccountTestFailureIsClassifiedButHarmless checks that a failing test
-// reports the plugin's reason and the account effect it would have in the
-// gateway, without ever applying it.
+func TestAccountTestPreserves429WithoutInferredReason(t *testing.T) {
+	for _, tc := range []struct{ name, retryAfter, body, code string }{
+		{"raw error", "", `{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}`, "rate_limit_error"},
+		{"retry header", "7", `{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}`, "rate_limit_error"},
+		{"status only", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := setup(t)
+			e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "rate limited until tomorrow (default)", AccountEffect: pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE}
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Request-Id", "req-fixture")
+				w.Header().Set("Set-Cookie", "private")
+				w.Header().Set("Authorization", "private")
+				if tc.retryAfter != "" {
+					w.Header().Set("Retry-After", tc.retryAfter)
+				}
+				w.WriteHeader(429)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer up.Close()
+			e.plat.testURL = up.URL + "/v1/messages"
+			id := e.mkAccount("sk-good-key-123")
+			_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
+			d := gjson.GetBytes(raw, "data")
+			if d.Get("status").Int() != 429 || d.Get("error_code").String() != tc.code || d.Get("response_headers.request-id").String() != "req-fixture" || d.Get("response_headers.retry-after").String() != tc.retryAfter {
+				t.Fatal(string(raw))
+			}
+			if d.Get("reason").Exists() || d.Get("effect").Exists() || d.Get("body").String() != tc.body {
+				t.Fatal("test must report the response without inferred causes", string(raw))
+			}
+			_, saved := e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
+			if gjson.GetBytes(saved, "data.last_test.message").String() != d.Get("message").String() {
+				t.Fatal("last test must preserve the upstream message", string(saved))
+			}
+			if d.Get("response_headers.authorization").Exists() || d.Get("response_headers.set-cookie").Exists() {
+				t.Fatal("credential header exposed")
+			}
+		})
+	}
+}
+
+// Classification determines origin, but its inferred reason and scheduling
+// recommendation must not replace a real HTTP error or alter the account.
 func TestAccountTestFailureIsClassifiedButHarmless(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -246,7 +287,7 @@ func TestAccountTestFailureIsClassifiedButHarmless(t *testing.T) {
 			!strings.Contains(d.Get("message").String(), "invalid x-api-key") {
 			t.Fatalf("%s body/message: %s", tc.want, d)
 		}
-		if d.Get("reason").String() != "upstream rejected credentials (401)" || d.Get("effect").String() != tc.want {
+		if d.Get("reason").Exists() || d.Get("effect").Exists() {
 			t.Fatalf("%s classification: %s", tc.want, d)
 		}
 	}
@@ -358,8 +399,8 @@ func TestAccountTestRecordsLastTest(t *testing.T) {
 		t.Fatalf("requested_model without a model: %s", raw)
 	}
 
-	// Failure: the plugin's reason comes first, the record is cut to 512
-	// bytes on a rune boundary.
+	// Failure: retain the actual HTTP message, even if classification invents
+	// a long reason. The saved record remains bounded and valid UTF-8.
 	bad := e.mkAccount("sk-other-key-1")
 	e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: strings.Repeat("凭证无效", 100)}
 	_, raw = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", bad), nil)
@@ -371,16 +412,16 @@ func TestAccountTestRecordsLastTest(t *testing.T) {
 	if err := e.db.Pool.QueryRow(ctx, `SELECT last_test_ok, last_test_message FROM accounts WHERE id = $1`, bad).Scan(&ok, &msg); err != nil {
 		t.Fatal(err)
 	}
-	if ok || len(msg) > maxLastTestMessage || len(msg) < maxLastTestMessage-3 || !utf8.ValidString(msg) || !strings.HasPrefix(msg, "凭证无效") {
+	if ok || len(msg) > maxLastTestMessage || !utf8.ValidString(msg) || msg != gjson.GetBytes(raw, "data.message").String() {
 		t.Fatalf("failure record: ok=%v %d bytes %q", ok, len(msg), msg)
 	}
-	// A short reason is followed by what the upstream answered.
+	// A short classification reason must not be prepended either.
 	e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "bad key"}
 	_, _ = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", bad), nil)
 	if err := e.db.Pool.QueryRow(ctx, `SELECT last_test_message FROM accounts WHERE id = $1`, bad).Scan(&msg); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(msg, "bad key: ") || !strings.Contains(msg, "invalid x-api-key") {
+	if strings.HasPrefix(msg, "bad key: ") || !strings.Contains(msg, "invalid x-api-key") {
 		t.Fatalf("reason and upstream message: %q", msg)
 	}
 	// Without a reason the upstream message is kept.

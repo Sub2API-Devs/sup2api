@@ -237,6 +237,7 @@ describe('account status recovery', () => {
   it.each([
     { status: 0, error_code: 'account_disabled', error_source: 'gateway' },
     { status: 401, error_code: 'token_revoked', error_source: 'response' },
+    { status: 429, error_code: 'rate_limit_error', error_source: 'response', message: '{"error":{"type":"rate_limit_error","message":"Error"}}', reason: 'rate limited until tomorrow (default)', effect: 'disable', test_mode: 'native_build', response_headers: { 'request-id': 'req-test-429' } },
   ])('shows diagnostic code without fabricating HTTP status: $error_code', async (diagnostic) => {
     mocks.post.mockResolvedValue({ ok: false, latency_ms: 0, message: 'failure', ...diagnostic })
     const w = shallowMount(AccountModelTest, { props: { open: false, account: { ...list.items.value[0], models: ['claude-test'] } }, global: { plugins: [i18n], stubs: {
@@ -251,7 +252,14 @@ describe('account status recovery', () => {
     await flushPromises()
     expect(w.get('[data-testid="model-test-error-code"]').text()).toContain(diagnostic.error_code)
     expect(w.text().includes('401')).toBe(diagnostic.status === 401)
-    expect(w.emitted('tested')?.[0]?.[1]).toMatchObject(diagnostic)
+    expect(w.emitted('tested')?.[0]?.[1]).toMatchObject({ status: diagnostic.status, error_code: diagnostic.error_code, error_source: diagnostic.error_source })
+    if (diagnostic.status === 429) {
+      expect(w.get('[data-testid="model-test-error-body"]').text()).toBe(diagnostic.message)
+      expect(w.text()).not.toContain('rate limited until')
+      expect(w.text()).not.toContain('原因尚不能确认')
+      expect(w.get('[data-testid="model-test-request-id"]').text()).toContain('req-test-429')
+      expect(w.text()).not.toContain('建议禁用')
+    }
   })
 
   it('shows an enabled unschedulable account as automatically disabled and restores it through manual off/on', async () => {

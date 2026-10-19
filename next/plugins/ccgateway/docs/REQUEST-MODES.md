@@ -9,7 +9,11 @@
 
 两种模式都将工具调用返回调用方执行，不由网关运行 Agent 工具循环。原 native 选项和仅适用于 Agent 的设置控件移除。2026-10-19 的 0.1.61 / CLI v8 更新已移除 request 的 API Key-only 限制：显式 API Key 保留原隔离路线，没有 API Key 时复用 CC 原生 OAuth 读取、发送前刷新及 Bearer 认证。详见 [302 OAuth 实现与验证](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
 
-认证支持不意味着上游接受任意 Messages 形状。30 号完整 CC 客户端经 build、其完整请求经 direct，均成功调用 `claude-opus-5-5`；简化空 system 的 OAuth 请求实测仍返回上游 429。request 不伪造成功、不自动换模型，也不在 direct 中补写提示。原有简化账号测试请求可能仍失败，不能据此判断 OAuth 凭证无效。
+认证支持不意味着上游接受任意 Messages 形状。30 号完整 CC 客户端经 build、其完整请求经 direct，均成功调用 `claude-opus-5-5`；简化空 system 的 OAuth 请求实测返回上游 429。request 不伪造成功、不自动换模型，也不在 direct 中补写提示。
+
+0.1.63 的账号测试使用内部 `/v1/ccgateway/probe`，传入所选模型、普通字符串 system 和一个简短问题，由 CC 的 `request --build` 内建函数构建并发送一次请求。该测试测账号连通性，结果明确标注 `test_mode: native_build`；即使业务配置为 direct，测试也走此构建路径。正常 `/v1/messages` 仍严格使用配置的 build/direct 模式。
+
+测试错误只展示实际 HTTP 状态、上游错误码和响应正文；上游没有错误码时只保留 HTTP 状态，不生成额外错误码。实际响应头按既有白名单返回。HTTP 失败不显示或持久化 ClassifyError 推导的原因、禁用/冷却建议，也不根据配额读数补充原因。业务转发的分类和调度规则保持原样。
 
 CLI v9 的错误通道使用结构化 stderr，由 Worker 按错误帧封装 HTTP 状态和错误正文；正常 JSON/SSE 继续从 stdout 返回。流中途断开会向客户端传播为中断，不作为正常完成；详细契约见 [stderr 错误协议](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#11-stderr-错误协议v9)。
 

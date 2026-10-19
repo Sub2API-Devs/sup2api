@@ -235,3 +235,13 @@ CCG_REQUEST_ERROR {"protocol":"ccgateway.request.error.v1","source":"http","stat
 - 30 号完整 CC 客户端经正式 build Worker/OAuth，以 `claude-opus-5-5` 正确回答法国首都为巴黎，未降级。此前固定标记测试出现模型拒答及原生模型回退，不计为目标模型成功；它是正常 HTTP 内容，不能误判成 stderr 传输失败。
 
 私有备份位于 `~/sup2api-managed/backups/ccgateway-stderr-errors-0.1.162/`，数据库 dump 和 21/30 卷归档已检查；测试/构建记录位于 `~/sup2api/checks/ccg-302-v9/`，发布构建在 `~/sup2api-managed/stage/0.1.162/`。仅移除了本轮临时保留的旧容器，未移除数据卷或生产孤立资源。脱敏证据见 [stderr 发布验收](cli-research/2.1.302/stderr-deployment-0.1.162.json)。
+
+## 12. 账号测试请求与原始错误展示（0.1.63）
+
+30 号旧测试请求为 `max_tokens:64`、单条 `ping` 且没有 system，实测收到 HTTP 429，错误码 `rate_limit_error`、message `Error`。同账号以普通字符串 system `Answer the user concisely.` 和问题 `What is the capital of France?` 经内建 build 构建后，收到 HTTP 200 并回答 Paris；有无显式 claude-code beta 均成功。该 A/B 只证明两种请求形状的观测结果，不解释上游 429 原因。
+
+插件 `BuildTestRequest` 改用内部 `https://ccgateway.internal/v1/ccgateway/probe`，保留用户选定模型，设置 max_tokens 128。Core 只允许 ccgateway 的 managed/apikey 类型访问此精确虚拟 URL。Worker 认证后识别 probe，局部使用 build，复用 `messagesBuildComponents` 和既有原生 ELF 的 `request --build`；无 Agent 循环、无模型替换、无手写 CC 身份。Worker 日志记录 configured_mode、mode、probe，测试结果返回 test_mode=native_build。
+
+这次没有修改 CLI 字节：继续使用 **2.1.302 / ccgateway-v9-stderr-errors**。业务 `/v1/messages` 路径与 direct 原始 body 透传保持；内部账号探测不能代替业务 direct 请求验收。
+
+Core 账号测试保留实际状态、错误码、正文及白名单响应头。没有响应错误码时不合成 http_XXX。对 HTTP response 错误，不返回或持久化插件推导的 reason/effect，前端也屏蔽旧结果中的推导字段；不补充“原因未知”“配额耗尽”等解释。分类仍用于区分本地故障来源，业务请求的原有分类/调度策略不变。

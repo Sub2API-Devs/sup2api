@@ -4,7 +4,7 @@
 // request models + the plugin default models; more can be typed in or fetched
 // from the upstream. Single / selected / all tests run at most 3 at a time.
 // A test is a diagnosis: it never cools down or disables the account, the
-// plugin's verdict (reason / effect) is only shown.
+// HTTP failures show the response without the plugin's inferred reason/effect.
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -317,14 +317,15 @@ function actualModel(r: TestRow): string {
             <template v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)">
               <div v-if="row.result.error_code" class="break-all font-mono text-danger-600 dark:text-danger-400" data-testid="model-test-error-code">{{ t('accounts.testErrorCode') }}: {{ row.result.error_code }}</div>
               <SHint v-if="row.result.error_source" size="xs">{{ t('accounts.testErrorSource') }}: {{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SHint>
-              <div v-if="row.result.reason" class="line-clamp-2 break-all font-medium text-danger-600 dark:text-danger-400" :title="row.result.reason">{{ row.result.reason }}</div>
+              <div v-if="row.result.error_source !== 'response' && row.result.reason" class="line-clamp-2 break-all font-medium text-danger-600 dark:text-danger-400" :title="row.result.reason">{{ row.result.reason }}</div>
               <!-- What the upstream answered: the plugin's reason alone hides it. -->
-              <div v-if="row.result.message && !row.result.reason?.includes(row.result.message)" class="line-clamp-3 break-all font-mono text-xxs text-danger-500/90 dark:text-danger-300/90" :title="row.result.message" data-testid="model-test-error-body">
+              <div v-if="row.result.message && (row.result.error_source === 'response' || !row.result.reason?.includes(row.result.message))" class="line-clamp-3 break-all font-mono text-xxs text-danger-500/90 dark:text-danger-300/90" :title="row.result.message" data-testid="model-test-error-body">
                 {{ row.result.message }}
               </div>
             </template>
             <div v-else-if="row.result?.message" class="line-clamp-1 break-all text-fg-muted" :title="row.result.message">{{ row.result.message }}</div>
-            <SBadge v-if="effectBadge(row.result?.effect)" :tone="effectBadge(row.result?.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result?.effect)!.label }}</SBadge>
+            <div v-if="row.result?.response_headers?.['request-id'] || row.result?.response_headers?.['anthropic-request-id']" class="break-all font-mono text-xxs text-fg-muted" data-testid="model-test-request-id">Request ID: {{ row.result.response_headers['request-id'] || row.result.response_headers['anthropic-request-id'] }}</div>
+            <SBadge v-if="row.result?.error_source !== 'response' && effectBadge(row.result?.effect)" :tone="effectBadge(row.result?.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result?.effect)!.label }}</SBadge>
           </div>
         </template>
         <template #cell-actions="{ row }">
@@ -337,12 +338,14 @@ function actualModel(r: TestRow): string {
               <SDescItem v-if="row.result.requested_model" :label="t('accounts.modelTest.requested')" mono>{{ row.result.requested_model }}</SDescItem>
               <SDescItem v-if="row.result.model" :label="t('accounts.testActualModel')" mono>{{ row.result.model }}</SDescItem>
               <SDescItem v-if="row.result.upstream" :label="t('accounts.testUpstream')" mono class="break-all">{{ row.result.upstream }}</SDescItem>
+              <SDescItem v-if="row.result.test_mode === 'native_build'" :label="t('accounts.testMethod')">{{ t('accounts.testNativeBuild') }}</SDescItem>
+              <SDescItem v-if="row.result.response_headers?.['retry-after']" label="Retry-After" mono>{{ row.result.response_headers['retry-after'] }}</SDescItem>
               <SDescItem v-if="usageText(row.result)" :label="t('accounts.testUsage')" class="tabular-nums">{{ usageText(row.result) }}</SDescItem>
               <SDescItem v-if="row.result.error_code" :label="t('accounts.testErrorCode')" mono>{{ row.result.error_code }}</SDescItem>
               <SDescItem v-if="row.result.error_source" :label="t('accounts.testErrorSource')">{{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SDescItem>
               <SDescItem v-if="row.result.message" :label="t('accounts.message')" class="break-all">{{ row.result.message }}</SDescItem>
-              <SDescItem v-if="row.result.reason" :label="t('accounts.testReason')" class="break-all">{{ row.result.reason }}</SDescItem>
-              <SDescItem v-if="effectBadge(row.result.effect)" :label="t('accounts.testEffectTitle')">
+              <SDescItem v-if="row.result.error_source !== 'response' && row.result.reason" :label="t('accounts.testReason')" class="break-all">{{ row.result.reason }}</SDescItem>
+              <SDescItem v-if="row.result.error_source !== 'response' && effectBadge(row.result.effect)" :label="t('accounts.testEffectTitle')">
                 <SBadge :tone="effectBadge(row.result.effect)!.tone">{{ effectBadge(row.result.effect)!.label }}</SBadge>
                 <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
               </SDescItem>
@@ -355,6 +358,10 @@ function actualModel(r: TestRow): string {
               <SCode class="max-h-64 overflow-y-auto">{{ prettyBody(row.result.body) }}</SCode>
             </div>
             <SHint v-else-if="row.result" size="xs">{{ t('accounts.testBodyEmpty') }}</SHint>
+            <div v-if="row.result?.response_headers && Object.keys(row.result.response_headers).length">
+              <div class="mb-1 font-medium">{{ t('accounts.testResponseHeaders') }}</div>
+              <SCode class="max-h-48 overflow-y-auto">{{ JSON.stringify(row.result.response_headers, null, 2) }}</SCode>
+            </div>
           </div>
         </template>
       </STable>

@@ -601,6 +601,8 @@ export interface AccountTestUsage {
 }
 
 export interface AccountTestResult {
+  test_mode?: 'native_build'
+  response_headers?: Record<string, string>
   error_code?: string
   error_source?: string
   ok: boolean

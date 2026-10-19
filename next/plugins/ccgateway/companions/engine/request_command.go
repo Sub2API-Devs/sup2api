@@ -115,6 +115,7 @@ func messagesBuildComponents(raw []byte) ([]byte, error) {
 }
 
 func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d *requestDiagnostic) {
+	requestMode := g.RequestMode
 	fail := func(status int, kind, message string) {
 		d.fail(status, kind, message)
 		apiError(w, status, kind, message)
@@ -123,9 +124,15 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(401, "authentication_error", "Invalid gateway API key")
 		return
 	}
-	if r.URL.Path != "/v1/messages" {
+	probe := r.URL.Path == "/v1/ccgateway/probe"
+	if r.URL.Path != "/v1/messages" && !probe {
 		fail(404, "not_found_error", "Request mode supports /v1/messages only")
 		return
+	}
+	if probe {
+		requestMode = "build"
+		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
+		d.setField("test_mode", "native_build")
 	}
 	if r.Method != http.MethodPost {
 		fail(405, "invalid_request_error", "Use POST")
@@ -148,7 +155,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	d.prepareSecrets(raw, r.Header.Values("anthropic-beta")...)
 	d.request(raw, r.Header)
 	input := raw
-	if g.RequestMode == "build" {
+	if requestMode == "build" {
 		input, err = messagesBuildComponents(raw)
 	} else {
 		var body map[string]json.RawMessage
@@ -189,7 +196,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	defer os.RemoveAll(dir)
 	meta := filepath.Join(dir, "response-meta.json")
-	args := []string{"request", "--" + g.RequestMode, "--response-meta", meta, "--timeout-ms", strconv.FormatInt(min(timeout.Milliseconds(), 2147483647), 10)}
+	args := []string{"request", "--" + requestMode, "--response-meta", meta, "--timeout-ms", strconv.FormatInt(min(timeout.Milliseconds(), 2147483647), 10)}
 	// Inbound gateway credentials must never become upstream credentials.
 	for _, name := range []string{"anthropic-version", "anthropic-beta"} {
 		if values := r.Header.Values(name); len(values) > 0 {
@@ -207,8 +214,8 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	cmd.Stdout = output
 	stderr := &requestErrorReader{}
 	cmd.Stderr = stderr
-	d.trace("request_command", Object{"mode": g.RequestMode, "cli_version": runner.Version})
-	if g.RequestMode == "build" {
+	d.trace("request_command", Object{"mode": requestMode, "configured_mode": g.RequestMode, "probe": probe, "cli_version": runner.Version})
+	if requestMode == "build" {
 		d.save("build-components.json", input)
 	}
 	d.setStage("request_command")

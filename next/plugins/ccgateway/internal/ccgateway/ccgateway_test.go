@@ -35,13 +35,14 @@ func TestManagedRPCRequests(t *testing.T) {
 		}
 	}
 	r, e := h.Platform.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{Account: acc})
-	if e != nil || r.GetUrl() != VirtualURL || r.GetUsageProtocol() != ProtocolMessages || r.GetModel() != DefaultTestModel {
+	if e != nil || r.GetUrl() != VirtualTestURL || r.GetUsageProtocol() != ProtocolMessages || r.GetModel() != DefaultTestModel {
 		t.Fatalf("test request %v %v", r, e)
 	}
 	var probe struct {
-		MaxTokens int `json:"max_tokens"`
+		MaxTokens int    `json:"max_tokens"`
+		System    string `json:"system"`
 	}
-	if err := json.Unmarshal([]byte(r.GetBodyJson()), &probe); err != nil || probe.MaxTokens < 64 {
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &probe); err != nil || probe.MaxTokens < 64 || probe.System == "" {
 		t.Fatalf("probe can truncate the CLI response before persistence: %s (%v)", r.GetBodyJson(), err)
 	}
 }
@@ -235,7 +236,7 @@ func TestAPIKeyCredentialsAndVirtualRouting(t *testing.T) {
 	}
 	acc := &pluginv1.Account{Type: AccountTypeAPIKey, CredentialsJson: r.NormalizedCredentialsJson}
 	req, err := p.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{Account: acc})
-	if err != nil || req.Url != VirtualURL || len(req.Headers) != 2 {
+	if err != nil || req.Url != VirtualTestURL || len(req.Headers) != 2 {
 		t.Fatal("API key bypassed managed transport")
 	}
 	for _, v := range req.Headers {
