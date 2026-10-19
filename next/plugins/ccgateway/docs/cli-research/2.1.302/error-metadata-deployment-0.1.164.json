@@ -1,0 +1,187 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "a9d6a0678baf0115062a97c8547ff6b3ecdbad80",
+  "coreVersion": "0.1.164",
+  "pluginVersion": "0.1.64",
+  "cli": {
+    "sourceCommit": "a9d6a0678baf0115062a97c8547ff6b3ecdbad80",
+    "sha256": "e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4",
+    "info": {
+      "version": "2.1.302",
+      "patch": "ccgateway-v9-stderr-errors",
+      "capabilities": [
+        "request_direct",
+        "request_build",
+        "request_oauth",
+        "request_error_stderr",
+        "native_tools",
+        "mods_dispatch"
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.164",
+      "sha256": "eff358fdf7e10c8b56f6627fbb2b98645e3854596f4449007988f2c2148e9104",
+      "ready": true,
+      "plugin": "0.1.64",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.164",
+      "sha256": "eff358fdf7e10c8b56f6627fbb2b98645e3854596f4449007988f2c2148e9104",
+      "ready": true,
+      "plugin": "0.1.64",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.164",
+      "sha256": "eff358fdf7e10c8b56f6627fbb2b98645e3854596f4449007988f2c2148e9104",
+      "ready": true,
+      "plugin": "0.1.64",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.164",
+      "sha256": "eff358fdf7e10c8b56f6627fbb2b98645e3854596f4449007988f2c2148e9104",
+      "ready": true,
+      "plugin": "0.1.64",
+      "mode": "build"
+    }
+  ],
+  "workers": [
+    {
+      "account": 21,
+      "image": "ccgateway-app:0.1.64",
+      "build": {
+        "version": "0.1.64",
+        "revision": "a9d6a0678baf0115062a97c8547ff6b3ecdbad80",
+        "modified": false
+      },
+      "sha256": "e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4",
+      "cliPatch": "ccgateway-v9-stderr-errors",
+      "volumeCredentialsIPAndSecurityPreserved": true,
+      "autoUpdateDisabled": true,
+      "rollbackRetainedStoppedAndDisconnected": true,
+      "test": {
+        "status": 200,
+        "mode": "native_build",
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "Paris."
+          }
+        ]
+      }
+    },
+    {
+      "account": 30,
+      "image": "ccgateway-app:0.1.64",
+      "build": {
+        "version": "0.1.64",
+        "revision": "a9d6a0678baf0115062a97c8547ff6b3ecdbad80",
+        "modified": false
+      },
+      "sha256": "e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4",
+      "cliPatch": "ccgateway-v9-stderr-errors",
+      "volumeCredentialsIPAndSecurityPreserved": true,
+      "autoUpdateDisabled": true,
+      "rollbackRetainedStoppedAndDisconnected": true,
+      "test": {
+        "status": 200,
+        "mode": "native_build",
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "Paris."
+          }
+        ]
+      }
+    }
+  ],
+  "release": "v0.1.164",
+  "manifest": "19d6c642e341cb8b4aeb60b07d988b7c0e717f78601c2a3bb40c693a81844303",
+  "upgradePlan": "4d0540074139ded00682db922346cfba",
+  "upgradeStatus": "completed",
+  "sharedEgressAndStoppedAccountsUnchanged": true,
+  "ui": {
+    "file": "AccountsView-CYMup-Wp.js",
+    "sha256": "df6508529993f41fc9a40eecc9a718e3d940ad0f724102034587f43c5bb1d3f3",
+    "allNodesMatch": true
+  },
+  "publicError": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json",
+      "Request-Id": "169f4f07-8c12-4c16-90b2-0e32577b914b",
+      "X-Request-Id": "7ba7af7d524a2e7854200327"
+    },
+    "body": "{\"error\":{\"type\":\"\\u003cnil\\u003e\",\"message\":\"`top_p` is deprecated for this model. (request id: 202610190443480460912928268d9d6W7pjBUAW)\"},\"type\":\"error\"}",
+    "sha256": "54ba1f346c73f39cd11be2fadcf1862a7655ffc9c7a085a4dd8d2d214e8d9c84",
+    "seconds": 1.859
+  },
+  "workerErrorLog": {
+    "status": 400,
+    "httpStatus": 400,
+    "code": "<nil>",
+    "source": "http",
+    "sha256": "54ba1f346c73f39cd11be2fadcf1862a7655ffc9c7a085a4dd8d2d214e8d9c84",
+    "cliError": {
+      "detail": {
+        "code": "<nil>",
+        "response_started": false,
+        "source": "http",
+        "status": 400,
+        "truncated": false
+      },
+      "event": "cli_error",
+      "time": "2026-10-19T04:43:48.17857508Z"
+    },
+    "finished": {
+      "detail": {
+        "stage": "request_command",
+        "status": 400
+      },
+      "event": "request_finished",
+      "time": "2026-10-19T04:43:48.178723821Z"
+    }
+  },
+  "publicStream": {
+    "status": 200,
+    "messageStop": true,
+    "text": "STDERR_V9_R3_PUBLIC_STREAM_OK",
+    "events": 14
+  },
+  "tests": {
+    "supportModules": 34,
+    "native": {
+      "request-probe": {
+        "passed": true,
+        "scenarios": 25
+      },
+      "request-modes-probe": {
+        "passed": true,
+        "scenarios": 9
+      },
+      "request-components-probe": {
+        "passed": true,
+        "scenarios": 12
+      },
+      "worker-probe": {
+        "passed": true,
+        "scenarios": 2
+      }
+    }
+  },
+  "notes": [
+    "The initial blocked-output probe hit its outer 1.8-second guard before making a request while sharing a CPU-limited cgroup with concurrent builds. The unchanged probe passed all nine scenarios when rerun with a separate CPU budget. Initial failure evidence is retained.",
+    "The patch name remains ccgateway-v9-stderr-errors; the new ELF SHA and account container pins identify this source revision.",
+    "Signal probe verifies interruption after handler installation and before sending a model request; all input/build/transport/output types are also covered by unit tests."
+  ]
+}

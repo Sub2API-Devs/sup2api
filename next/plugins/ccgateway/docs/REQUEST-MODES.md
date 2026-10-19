@@ -1,8 +1,10 @@
 # CCGateway 请求模式
 
-2026-10-19 最新：Core **0.1.163** / ccgateway **0.1.63** 已修复账号测试请求构建，并按上游原始状态、错误码和正文展示 HTTP 错误。21/30 号通过真实账号测试接口调用 `claude-opus-5-5`，均 HTTP 200、回答 Paris。CLI 继续使用 2.1.302/v9，业务默认 build；[发布验收](cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+2026-10-19 最新：Core **0.1.164** / ccgateway **0.1.64** 已发布重新编译的 **2.1.302/v9** 原生 CLI，修复字符串错误消息提取和中断类型，21/30 号固定新 ELF SHA。两账号 Opus 测试、公网错误透传和正常 SSE 均通过；业务默认 build。[修订与发布验收](cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
 
-2026-10-19 最新：Core **0.1.162** / ccgateway **0.1.62** 已发布 CLI v9 结构化 stderr 错误通道，21/30 号更新并保留授权；公网 HTTP 错误和正常 SSE、OAuth 普通问答验收通过。模式仍为默认 build。
+2026-10-19 0.1.163 发布：Core **0.1.163** / ccgateway **0.1.63** 已修复账号测试请求构建，并按上游原始状态、错误码和正文展示 HTTP 错误。21/30 号通过真实账号测试接口调用 `claude-opus-5-5`，均 HTTP 200、回答 Paris。CLI 继续使用 2.1.302/v9，业务默认 build；[发布验收](cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+
+2026-10-19 0.1.162 发布：Core **0.1.162** / ccgateway **0.1.62** 已发布 CLI v9 结构化 stderr 错误通道，21/30 号更新并保留授权；公网 HTTP 错误和正常 SSE、OAuth 普通问答验收通过。模式仍为默认 build。
 
 2026-10-19：请求模式只保留 `build` 和 `direct`，默认 `build`。定制 CLI 仍为 2.1.302。
 
