@@ -2,7 +2,9 @@
 
 基线：Linux x64/glibc Claude Code 2.1.296；分析及实现日期：2026-10-18。
 
-当前版本为 `ccgateway-v6-components-betas`：Worker 提取两种 system 上下文，CLI 原生组装并支持 `--betas`、位置文件参数及 API Key 出口头隔离。[v6 验证](cli-research/2.1.296/components-v6-verification.json) 包含实际 ELF、Worker 和真实上游结果。历史 v5 结果见 [模式验证](cli-research/2.1.296/request-modes-verification.json)，旧版审计见 [completion-audit.json](cli-research/2.1.296/completion-audit.json)。
+**本文记录 2.1.296 / v6 的历史基线，不再是当前实现。当前 CLI 为 2.1.302 / `ccgateway-v9-stderr-errors`：请求模式、默认值与发布状态以 [请求模式说明](REQUEST-MODES.md) 为准，OAuth 与结构化 stderr 见 [302 记录第 10、11 节](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。**
+
+本文所述版本为 `ccgateway-v6-components-betas`：Worker 提取两种 system 上下文，CLI 原生组装并支持 `--betas`、位置文件参数及 API Key 出口头隔离。[v6 验证](cli-research/2.1.296/components-v6-verification.json) 包含实际 ELF、Worker 和真实上游结果。历史 v5 结果见 [模式验证](cli-research/2.1.296/request-modes-verification.json)，旧版审计见 [completion-audit.json](cli-research/2.1.296/completion-audit.json)。
 
 ## 两种输入契约
 
@@ -97,7 +99,7 @@ claude request --build --betas "mid-conversation-system-2026-04-07" components.j
 
 ## beta 与请求头归属
 
-仅 request 入口要求显式 ANTHROPIC_API_KEY，eF 的受控分支跳过订阅选择与刷新，使用原生 API Key 认证。普通 `-p` 和交互路径不受此开关影响。request 启动时屏蔽 ANTHROPIC_CUSTOM_HEADERS 的任意覆盖；客户端只能通过 --header 指定 anthropic-version/anthropic-beta。
+v6 时仅 request 入口要求显式 ANTHROPIC_API_KEY（v8 起无 Key 时复用原生 OAuth），eF 的受控分支跳过订阅选择与刷新，使用原生 API Key 认证。普通 `-p` 和交互路径不受此开关影响。request 启动时屏蔽 ANTHROPIC_CUSTOM_HEADERS 的任意覆盖；客户端只能通过 --header 指定 anthropic-version/anthropic-beta。
 
 direct 的最终 beta 为显式客户端集合。build 在 Kvt/uln 构建前通过原生 Y_o 转成 beta 描述符，不继承默认 CC 会话 beta；保留显式集合及本次构建产出的能力 beta。组织 beta 策略仍由 YEr 检查。最终 beta 不作为 SDK 参数残留在 body。
 
@@ -130,11 +132,11 @@ claude request --input request.json --response-meta response-meta.json
 claude request --input request.json --header 'anthropic-beta:your-beta'
 ```
 
-标准输出只有响应正文；成功的 `stream:true` 响应逐块输出 UTF-8 SSE，不等待整个响应结束。HTTP 错误需等 SDK 读取完成，不保证增量输出；非 UTF-8 响应字节会被文本解码重编码。诊断输出到 stderr。`--response-meta` 单独保存 HTTP 状态、状态文本及响应头。
+标准输出只有响应正文；成功的 `stream:true` 响应逐块输出 UTF-8 SSE，不等待整个响应结束。v6 中 HTTP 错误需等 SDK 读取完成，不保证增量输出；v9 起 HTTP 错误与本地异常改由结构化 stderr 帧返回，stdout 不再输出错误正文（302 记录第 11 节）。非 UTF-8 响应字节会被文本解码重编码。诊断输出到 stderr。`--response-meta` 单独保存 HTTP 状态、状态文本及响应头。
 
-退出码：成功为 0，输入或传输错误为 1，上游 HTTP 错误为 2，中断为 130。HTTP 错误正文仍写入 stdout。请求默认总超时 600000ms，可用 `--timeout-ms` 修改。认证头由 CC 负责，`--header` 不接受 Authorization、X-Api-Key、Host 等传输归属字段。输入只为路由和 stream 开关解析，发送使用原始 JSON 文本（去除可选 UTF-8 BOM），不重新序列化，因此大整数、空白和键序不会在此步骤改变。HTTP 传输仍可使用 CC 自身的压缩。
+退出码：成功为 0，输入或传输错误为 1，上游 HTTP 错误为 2，中断为 130（v9 沿用）。v6 的 HTTP 错误正文写入 stdout；v9 改为一行 `CCG_REQUEST_ERROR` JSON 帧写入 stderr，并在开始时清除复用的 meta 路径。请求默认总超时 600000ms，可用 `--timeout-ms` 修改。认证头由 CC 负责，`--header` 不接受 Authorization、X-Api-Key、Host 等传输归属字段。输入只为路由和 stream 开关解析，发送使用原始 JSON 文本（去除可选 UTF-8 BOM），不重新序列化，因此大整数、空白和键序不会在此步骤改变。HTTP 传输仍可使用 CC 自身的压缩。
 
-当前仅支持显式 API Key 的 Anthropic-compatible Messages 路线；订阅账号、Bedrock、Vertex、Foundry 等不在 request 入口支持范围。入口沿用 CC 的 fast-path 策略和原生客户端；direct 不执行高层 prompt/history 转换。
+v6 基线仅支持显式 API Key 的 Anthropic-compatible Messages 路线；v8 起支持原生 OAuth（302 记录第 10 节）。订阅账号、Bedrock、Vertex、Foundry 等仍不在 request 入口支持范围。入口沿用 CC 的 fast-path 策略和原生客户端；direct 不执行高层 prompt/history 转换。
 
 这是新增命令行入口，不是新增 `$.model.request` mods API。后者在实现过程中根据需求改为了此命令。原有 mods 功能仍保留。
 
@@ -209,7 +211,7 @@ v5 ELF SHA-256：`a0736bbcd1c37d65a47e0217dec929d86afc30850a284e0c2e6c9301f64ee2
 
 以下为 v5 初次接入记录，保留当时发现的缓存差异。v6 已保留 system 原缓存块，并实现 messages 中两种 system 载体的提取；当前结果见文末。
 
-账号 Worker 使用 `CCG_REQUEST_MODE=direct` 或 `CCG_REQUEST_MODE=build`，`WORKER_CLI_PATH` 指向已编译的定制 ELF。留空保持旧 native 模式。Go Worker 直接启动 `claude request --direct/--build`，通过 stdin 传参、stdout 接收 JSON/SSE、独立 meta 文件读取上游状态；不使用 JS 启动器。正常成功响应逐块转发，客户端自行处理 tool_use。
+账号 Worker 使用 `CCG_REQUEST_MODE=direct` 或 `CCG_REQUEST_MODE=build`，`WORKER_CLI_PATH` 指向已编译的定制 ELF。v6 时留空保持旧 native 模式；当前缺省与空值均按 build，显式 native 会启动失败（见 [请求模式说明](REQUEST-MODES.md)）。Go Worker 直接启动 `claude request --direct/--build`，通过 stdin 传参、stdout 接收 JSON/SSE、独立 meta 文件读取上游状态；不使用 JS 启动器。正常成功响应逐块转发，客户端自行处理 tool_use。
 
 HTTP build 适配器将顶层 system 文本映射为 systemPrompt、tools[].input_schema 映射为 inputSchema，其他生成选项放入 parameters。messages 原始块的位置和类型保留到组件输入，不根据 system-reminder 猜测原始附件类型；显式 typed attachments 仍通过 CLI 组件接口传入。适配器会丢弃顶层 system 块的 cache_control，原生 builder 不自动恢复这些缓存标记。
 

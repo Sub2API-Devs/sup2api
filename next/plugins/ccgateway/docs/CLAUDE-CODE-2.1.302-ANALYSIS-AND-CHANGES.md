@@ -31,7 +31,7 @@
 
 ## 4 302 的补丁定位与实现
 
-补丁器为 [patch-cli-2.1.302.cjs](../companions/cli-mods/patch-cli-2.1.302.cjs)，输入模块哈希为 [302 profile](../companions/cli-mods/profiles/linux-x64-2.1.302.json)。统一入口仅分派到明确支持的版本，不放宽 296 的原有检查。实际修改 8 个模块，另校验导入依赖模块；复制 7 个支持模块，保存修改后哈希。
+补丁器为 [patch-cli-2.1.302.cjs](../companions/cli-mods/patch-cli-2.1.302.cjs)，输入模块哈希为 [302 profile](../companions/cli-mods/profiles/linux-x64-2.1.302.json)。统一入口仅分派到明确支持的版本，不放宽 296 的原有检查。实际修改 8 个模块，另校验导入依赖模块；复制 8 个支持模块（v9 新增 `ccgateway-request-error.js`），保存修改后哈希。
 
 | 职责 | 302 定位 | 本次改动 |
 |---|---|---|
@@ -42,7 +42,7 @@
 | mods / hooks | core `jz`、`j7/aur/gDn/Fao/vhn` | tools 交给 mods，执行配置 hooks；无人处理返回错误，不回退原工具执行器 |
 | 组件构建 | core `XPt → xRn → gRn/_A → TYr`；渲染 `$Fe` | 原生构建器返回 body 后退出网络循环，再发送一次；显式 system 消息保留 wire 字段 |
 | beta | `chunk-yn324528.js / uLo/Y0r` | 显式 beta 在构建前进入原生描述符与策略检查，构建后合并能力 beta |
-| 发送/认证 | `chunk-pmgddf3s.js / GU/CEe/Tae` | request 专用 API Key 路径，不选择/刷新订阅账号；发送前隔离 CC/SDK 身份头 |
+| 发送/认证 | `chunk-pmgddf3s.js / GU/CEe/Tae` | request 专用认证路径：显式 API Key 时隔离 CC/SDK 身份头；无 Key 时复用原生 OAuth 读取/刷新与 Bearer（见第 10 节） |
 
 302 的 `j7` 聚合器包含新版 ask 相关返回信息，`jz` 和主构建器也有结构变化；迁移经过对应调用点检查及新 ELF 的行为测试，不仅依赖静态相似度。build 的 api_system 分支在 `_A` 内先调用 `tr/Fr` 排空待处理上下文，再按原位置加入 `dn`；`TYr` 在 wire 边界保留组件提供的原始 system 字段。
 
@@ -63,9 +63,9 @@ claude --ccgateway-info
 - 不从标签猜测内部附件类型，不重新读取 Worker 的 CLAUDE.md、图片或 PDF，不补入 Worker startup 环境；每次请求带来的历史原位处理一次，不跨请求猜测去重。
 - build 不承诺字节或 JSON 形状相等。文字可以变成 text 数组；没有提供 system/tools/metadata/thinking/temperature/stream 时，原生构建器可能补默认值。本轮最小输入实际出现 `system:[]`、`tools:[]`、原生 metadata.user_id、thinking.disabled、temperature:1、stream:false。需要保持字段完全缺省时用 direct。
 - CLI build 接口的 `systemPrompt` 字符串采用原生提示构建路径，回归中会加入 billing 提示和 Agent SDK 身份提示；数组形式按显式 system blocks 保留。Worker 提取 HTTP system 后使用结构化 blocks 路径，已通过真实客户端出入口对比；不要把 CLI 字符串输入的行为等同于 Worker 的 HTTP 重建路径。
-- request 当前只接受显式 API Key 的 Anthropic-compatible 路线；订阅/OAuth 的请求发送未实现。原有 native 路径和授权管理不因此改成 API Key-only，但选择 direct/build 的账号必须具备 API Key。
+- request 现支持显式 API Key 与原生 OAuth 两条 Anthropic-compatible 路线（OAuth 实现见第 10 节）；选择 direct/build 的账号不再必须具备 API Key。OAuth 的可用性适用于已验证的原生 CC 请求形状，不表示上游接受任意简化的 Messages body。
 - 原生认证头在最终 fetch 边界校验；允许 X-Api-Key、anthropic-version/beta、JSON Content-Type、Accept 和固定 UA；CC/Stainless 会话头及客户端凭证不沿用。自定义环境头不能覆盖认证或 beta。
-- build 拒绝 JS 无法精确表示的整数；direct 保留有效 JSON 的原文数字。HTTP 错误、取消、超时、SSE 输出沿用 v7 实际测试过的公共发送实现。
+- build 拒绝 JS 无法精确表示的整数；direct 保留有效 JSON 的原文数字。取消、超时与 SSE 输出沿用 v7 实际测试过的公共发送实现；v9 起 HTTP 错误与本地异常改走结构化 stderr 帧，不再写入 stdout 或成功 meta，详见第 11 节。
 
 mods 的 native 工具注册独立于 request：同名完整覆盖，未知名称可交给 mods，hooks 明确拒绝仍生效。旧有 context、ask、结构化结果、完整 resume/TUI/ToolSearch 兼容缺口并未因迁移版本而自动修复，本轮不宣称这些场景完整兼容。
 
@@ -105,15 +105,15 @@ mods 的 native 工具注册独立于 request：同名完整覆盖，未知名�
 node patch-cli.cjs /absolute/restored-302 /absolute/new-patched-302
 sh build.sh /absolute/new-patched-302 /absolute/claude-linux-native
 node package-release.cjs /absolute/claude-linux-native /absolute/new-patched-302/ccgateway-patch.json /absolute/companions/cli-mods/release
-docker build -f worker/Dockerfile -t ccgateway-worker:302-v7-final .
+docker build -f worker/Dockerfile -t ccgateway-worker:302-local .
 ```
 
 使用 Bun **1.4.3**，编译 CLI 和 hooks-worker 双入口。release 目录包含 manifest.json 和版本目录中的原生 ELF/补丁清单；它被 git 忽略，构建 Worker 前必须准备。Dockerfile 固定默认版本 2.1.302，并去除 Windows 打包可能带来的目录组写权限，避免控制器拒绝不安全的目录。目录不存在或版本缺失时构建/创建失败，不退回安装未修改官方 CLI。
 
-- 当前补丁：`ccgateway-v7-request-modes`。
-- 当前 ELF SHA-256：`b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8`。
-- 本机 ELF：`artifacts/claude-2.1.302/claude-linux-native`。
-- 独立测试最终镜像：`ccgateway-worker:302-v7-final`、`ccgateway-controller:302-v7-final`；早期 `302-v7-test` 标签仅属于本轮中间验证。
+- 当前补丁：`ccgateway-v9-stderr-errors`。
+- 当前 ELF SHA-256：`b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152`（v9）。
+- 本机 ELF：`artifacts/claude-2.1.302/claude-linux-native` 是 2026-10-18 生成的 **v7** 产物（SHA-256 `b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8`）；v8/v9 在 Linux 构建机产出，本机没有对应 ELF，重新构建前不要直接打包。
+- 历史测试镜像：v7 轮次的 `ccgateway-worker:302-v7-final`、`ccgateway-controller:302-v7-final`；`302-v7-test` 属于该轮中间验证。当前构建示例使用本地中性 tag `302-local`，不代表已验收产物。
 - 先准备包含 CLI 的 Worker 镜像和支持 cli-profile-v1 的 Controller，再更新 Core/界面并选择版本和模式；只有 source/semver 相同不证明镜像具备补丁。
 - 首次隔离验证没有切换生产镜像。后续正式发布使用插件内置的 `ccgateway-{app,controller,egress}:0.1.58` 镜像，不使用测试 tag；部署详情见第 9 节。
 
@@ -159,7 +159,7 @@ Worker 每请求日志仍为 `/work/data/request-logs/<id>/`，包含请求/响�
 3. 对专用探测目标进行断路验证：代理 peer 丢弃该流时请求超时；将该目标临时路由到 Docker 宿主网关时也超时；恢复指定代理路径后返回 204。测试规则和临时路由均已移除。该测试针对探测流，不声称穷尽所有网络故障场景。
 4. 脱敏结果见 [正式部署验证](cli-research/2.1.302/production-deployment.json)。服务器私有备份在 `~/sup2api-managed/backups/ccgateway-302-0.1.158/`，包括已验证恢复目录的 PostgreSQL dump、控制器状态/环境、21 号数据卷及旧 CLI/Worker 程序；构建日志在 `~/sup2api-managed/stage/0.1.158/`。
 
-当前仍保留第 5 节的 API Key-only、build 默认值和 mods 兼容边界。`count_tokens` 不支持的 404 也未在本次发布中补齐。
+当时仍保留第 5 节的 API Key-only、build 默认值和 mods 兼容边界；API Key-only 已由第 10 节取代。`count_tokens` 不支持的 404 也未在本次发布中补齐。
 
 ## 10 request OAuth 支持（2026-10-19）
 

@@ -6,7 +6,7 @@
 
 下面保留的是 2.1.296/v6 的使用背景；**302 的函数名、产物身份和测试以新文档为准**，旧版本文档不覆盖。
 
-此目录维护 Linux x64/glibc Claude Code **2.1.296** 的源码补丁。当前版本 `ccgateway-v6-components-betas` 支持 `claude request --direct/--build --betas "a,b" file.json`，也支持 stdin 和原 `--input`。direct 传完整 HTTP body；build 接收 Worker 提取的组件，复用 CC 内置渲染和构建后单次发送。request 入口仅启用显式 `ANTHROPIC_API_KEY`，不选择或刷新订阅账号。组件契约、构建链和 WebSearch 见 [请求与搜索说明](../../docs/CLAUDE-REQUEST-AND-WEBSEARCH.md)。
+此目录维护 Linux x64/glibc Claude Code **2.1.296** 的源码补丁。2.1.296 基线版本为 `ccgateway-v6-components-betas`，支持 `claude request --direct/--build --betas "a,b" file.json`，也支持 stdin 和原 `--input`。direct 传完整 HTTP body；build 接收 Worker 提取的组件，复用 CC 内置渲染和构建后单次发送。request 入口仅启用显式 `ANTHROPIC_API_KEY`，不选择或刷新订阅账号。组件契约、构建链和 WebSearch 见 [请求与搜索说明](../../docs/CLAUDE-REQUEST-AND-WEBSEARCH.md)。
 
 v6 中 Worker 提取 user 文本内完整的 `<system-reminder>` 片段和独立 `role:system` 消息，用引用保留原位置。CLI 通过原生 `MDe` 回放提醒文本，通过 `hT/Jan/Xyr` 保留 system 角色、原内容块和生命周期字段；不猜测 CLAUDE.md/memory 类型，也不重新生成 Worker 本机上下文。顶层 system text 块的缓存字段保留。API Key 由 CC 工厂生成认证头，最终发送前隔离 CC/SDK 环境头；beta 在构建前进入原生 beta 描述符流程。
 
