@@ -21,7 +21,7 @@ export function httpErrorFrame(response, body, truncated = false) {
   const type = text(detail?.type, errorType(status), 128);
   const nativeCode = typeof detail?.code === 'number' && Number.isFinite(detail.code) ? String(detail.code) : detail?.code;
   const code = text(nativeCode, type, 128);
-  const message = text(detail?.message ?? parsed?.message ?? (typeof detail === 'string' ? detail : undefined), `Upstream returned HTTP ${response.status}`);
+  const message = text(detail?.message ?? parsed?.message ?? (typeof parsed === 'string' ? parsed : undefined), `Upstream returned HTTP ${response.status}`);
   const headers = {};
   const original = new Headers(response.headers);
   const hop = new Set((original.get('connection') ?? '').split(',').map(name => name.trim().toLowerCase()));
@@ -43,7 +43,7 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
   if (timedOut) {
     source = 'timeout'; status = 504; type = 'timeout_error'; code = 'cli_timeout'; message = 'CC request timed out';
   } else if (interrupted) {
-    source = 'interrupted'; status = 502; code = 'cli_interrupted'; message = 'CC request was interrupted';
+    source = 'interrupted'; status = 502; type = 'api_error'; code = 'cli_interrupted'; message = 'CC request was interrupted';
   } else if (phase === 'output') {
     source = 'internal'; status = 502; code = 'cli_output_error'; message = 'CC response output failed';
   }

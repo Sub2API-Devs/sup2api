@@ -34,3 +34,19 @@ test('local exceptions expose stable codes without leaking exception messages or
   assert.equal(localErrorFrame(error, { timedOut: true }).status, 504);
   assert.equal(localErrorFrame(error, { responseStarted: true }).responseStarted, true);
 });
+
+test('a JSON string error body supplies the message instead of the fallback', () => {
+  const frame = httpErrorFrame({ status: 429, headers: {} }, JSON.stringify('quota exceeded'));
+  assert.equal(frame.error.message, 'quota exceeded');
+  assert.equal(frame.body, '"quota exceeded"');
+});
+
+test('interruption keeps the type consistent with its 502 status', () => {
+  for (const phase of ['input', 'build', 'transport']) {
+    const frame = localErrorFrame(new Error('interrupted'), { phase, interrupted: true });
+    assert.equal(frame.source, 'interrupted');
+    assert.equal(frame.status, 502);
+    assert.equal(frame.error.type, 'api_error');
+    assert.equal(frame.error.code, 'cli_interrupted');
+  }
+});
