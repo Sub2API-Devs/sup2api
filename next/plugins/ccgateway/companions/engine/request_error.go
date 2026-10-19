@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 )
 
 const requestErrorPrefix = "CCG_REQUEST_ERROR "
@@ -112,7 +113,9 @@ func (f *requestErrorFrame) valid() bool {
 	default:
 		return false
 	}
-	return f.Error.Type != "" && len(f.Error.Type) <= 512 && f.Error.Code != "" && len(f.Error.Code) <= 512 && f.Error.Message != "" && len(f.Error.Message) <= 8192
+	// The reader already bounds the entire protocol frame. Do not replace a
+	// native message merely because it is empty or exceeds the old 8 KiB cap.
+	return f.Error.Type != "" && len(f.Error.Type) <= 512 && f.Error.Code != "" && len(f.Error.Code) <= 512
 }
 
 // The CLI only chooses a marker, never a filesystem path. The Worker opens
@@ -158,6 +161,8 @@ func (f *requestErrorFrame) record(d *requestDiagnostic, committed bool) {
 }
 
 func (f *requestErrorFrame) write(w http.ResponseWriter) {
+	// The CLI frame sets the source; provider headers cannot spoof it.
+	w.Header().Set(requestfailure.SourceHeader, f.Source)
 	h := http.Header{}
 	for k, v := range f.Headers {
 		if len(v) <= 1024 && !strings.ContainsAny(k+v, "\r\n\x00") {

@@ -24,7 +24,7 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
         export const cancelModelResponse=async()=>{};
         export const readModelResponse=async(id,owner,signal,binary)=>{
           if(!binary)throw Error('HTTP errors must use byte reads');
-          if(process.env.CCG_FIXTURE_FAIL && offset>0)throw Object.assign(Error('private detail'),{code:'ECONNRESET'});
+          if(process.env.CCG_FIXTURE_FAIL && offset>0)throw Object.assign(Error('read ECONNRESET'),{code:'ECONNRESET',stack:'private detail'});
           const bytes=body.subarray(offset,offset+40000);offset+=bytes.length;
           return {done:bytes.length===0,bytes};
         };`,
@@ -58,6 +58,7 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
     const failed=await run(['--direct','--response-meta','fail.json']);
     const frame=JSON.parse(failed.stderr.slice('CCG_REQUEST_ERROR '.length));
     assert.equal(failed.code,1);assert.equal(frame.source,'transport');assert.equal(frame.error.code,'ECONNRESET');
+    assert.equal(frame.error.message,'read ECONNRESET');
     assert.ok(!('bodyFile' in frame));assert.ok(!failed.stderr.includes('private detail'));
   } finally { await fs.rm(dir,{recursive:true,force:true}); }
 });

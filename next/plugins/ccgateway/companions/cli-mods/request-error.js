@@ -47,8 +47,9 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
   } else if (phase === 'output') {
     source = 'internal'; status = 502; code = 'cli_output_error'; message = 'CC response output failed';
   }
-  // Native exception messages/stacks can contain URLs, proxy credentials or
-  // tokens. Only a machine error code is exposed, never arbitrary stderr text.
+  // Return the actual CC exception message, without redaction, truncation or
+  // an inferred explanation. The envelope is not an exception stack dump.
+  if (typeof error?.message === 'string') message = error.message;
   const nativeCode = error?.code ?? error?.cause?.code;
   if (source === 'transport' && typeof nativeCode === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(nativeCode)) code = nativeCode;
   return { protocol: errorProtocol, source, status, error: { type, code, message }, responseStarted: !!responseStarted };

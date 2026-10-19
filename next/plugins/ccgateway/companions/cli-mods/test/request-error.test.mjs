@@ -23,16 +23,54 @@ test('HTML, empty and oversized HTTP errors have usable bounded fallback fields'
   assert.equal(httpErrorFrame({ status: 500 }, 'large', true).body, undefined);
 });
 
-test('local exceptions expose stable codes without leaking exception messages or stacks', () => {
+test('local exceptions preserve codes and exact messages including URLs', () => {
   const error = Object.assign(new Error('https://user:secret@host/?token=private'), { code: 'ECONNRESET' });
   const frame = localErrorFrame(error, { phase: 'transport' });
   assert.equal(frame.status, 502);
   assert.equal(frame.error.code, 'ECONNRESET');
-  assert.ok(!encodeErrorFrame(frame).includes('private'));
-  assert.ok(!encodeErrorFrame(frame).includes('secret'));
+  assert.equal(frame.error.message, error.message);
   assert.equal(localErrorFrame(error, { phase: 'input' }).status, 400);
   assert.equal(localErrorFrame(error, { timedOut: true }).status, 504);
   assert.equal(localErrorFrame(error, { responseStarted: true }).responseStarted, true);
+});
+
+test('transport failures preserve native messages without inferring a proxy failure', () => {
+  for (const [code, message] of [
+    ['ECONNRESET', 'Client network socket disconnected before secure TLS connection was established'],
+    ['EAI_AGAIN', 'getaddrinfo EAI_AGAIN api.anthropic.com'],
+    ['ECONNREFUSED', 'connect ECONNREFUSED 127.0.0.1:8443'],
+  ]) {
+    const error = Object.assign(new Error(message), { code });
+    error.stack = 'private stack';
+    const frame = localErrorFrame(error, { phase: 'transport' });
+    assert.equal(frame.source, 'transport');
+    assert.equal(frame.error.code, code);
+    assert.equal(frame.error.message, message);
+    assert.ok(!encodeErrorFrame(frame).includes('private stack'));
+  }
+  assert.equal(localErrorFrame(new Error('fetch failed', { cause: { code: 'ECONNRESET' } })).error.message, 'fetch failed');
+  assert.equal(localErrorFrame({}).error.message, 'CC request transport failed');
+});
+
+test('native messages are not redacted, truncated or rewritten', () => {
+  for (const message of [
+    'failed: Authorization: Bearer secretvalue',
+    'failed: Proxy-Authorization: Basic secretvalue',
+    'failed: "password": "secretvalue"',
+    'failed: api_key=secretvalue',
+    'failed: sk-ant-secretvalue',
+    'failed: https://user:secretvalue@host/path?' + 'token=secretvalue'.repeat(1000),
+    JSON.stringify({ password: 'prefix"SYNTHETIC_SECRET' }),
+    JSON.stringify({ 'x-api-key': ['SYNTHETIC_SECRET', 'SECOND_SENTINEL'] }),
+    '原始错误\n' + 'x'.repeat(16000),
+    '',
+  ]) {
+    for (const options of [{ phase: 'transport' }, { phase: 'input' }, { phase: 'build' }, { phase: 'output' }, { timedOut: true }, { interrupted: true }]) {
+      const frame = localErrorFrame(new Error(message), options);
+      assert.equal(frame.error.message, message);
+      assert.equal(JSON.parse(encodeErrorFrame(frame).slice(errorPrefix.length)).error.message, message);
+    }
+  }
 });
 
 test('a JSON string error body supplies the message instead of the fallback', () => {

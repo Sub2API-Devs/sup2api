@@ -17,6 +17,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
@@ -305,6 +306,17 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 		if (code.Type == gjson.String || code.Type == gjson.Number) && code.String() != "" {
 			res.ErrorCode = cutBytes(code.String(), 128)
 			break
+		}
+	}
+	// The managed Worker reports the actual CLI failure source. Keep its
+	// code/message/status intact, without a plugin's inferred explanation.
+	// Ordinary providers cannot assert this internal marker.
+	if managedCCG {
+		if source := requestfailure.Source(resp.Header); source != "" {
+			if source != "http" {
+				res.ErrorSource = source
+			}
+			return res
 		}
 	}
 	reason, effect, local := s.classifyTest(ctx, bt, acct, res.Model, resp.StatusCode, resp.Header, snippet, "")

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 )
 
 func errorWire(t *testing.T, f *requestErrorFrame) []byte {
@@ -59,7 +61,9 @@ func TestRequestErrorHTTPResponseAndLogStatus(t *testing.T) {
 			f.Source = "http"
 			f.Body = body
 			f.Headers = map[string]string{"retry-after": "7", "x-should-retry": "true", "authorization": "private", "set-cookie": "private", "content-length": "999"}
+			f.Headers[requestfailure.SourceHeader] = "transport"
 			out := httptest.NewRecorder()
+			out.Header().Set(requestfailure.SourceHeader, "internal")
 			r := httptest.NewRequest("POST", "/v1/messages", nil)
 			d := newRequestDiagnostic(out, r)
 			w := d.capture(out, r, t.TempDir())
@@ -68,6 +72,9 @@ func TestRequestErrorHTTPResponseAndLogStatus(t *testing.T) {
 			d.finish()
 			if out.Code != status || out.Body.String() != body || out.Header().Get("Retry-After") != "7" || out.Header().Get("X-Should-Retry") != "true" {
 				t.Fatal(out.Code, out.Header(), out.Body.String())
+			}
+			if requestfailure.Source(out.Header()) != "http" {
+				t.Fatal("provider spoofed error source", out.Header())
 			}
 			for _, h := range []string{"Authorization", "Set-Cookie", "Content-Length"} {
 				if out.Header().Get(h) != "" {
@@ -78,6 +85,48 @@ func TestRequestErrorHTTPResponseAndLogStatus(t *testing.T) {
 				t.Fatal("log disagrees with wire", d.fields)
 			}
 		})
+	}
+}
+
+func TestLocalRequestErrorPreservesCLIMessageAndSource(t *testing.T) {
+	for _, source := range []string{"input", "transport", "timeout", "interrupted", "internal"} {
+		f := localRequestError(502, "api_error", "ECONNRESET", "read ECONNRESET")
+		f.Source = source
+		out := httptest.NewRecorder()
+		f.write(out)
+		var response struct {
+			Error requestErrorDetail `json:"error"`
+		}
+		if err := json.Unmarshal(out.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if out.Code != 502 || requestfailure.Source(out.Header()) != source || response.Error != f.Error {
+			t.Fatal(out.Code, out.Header(), out.Body.String())
+		}
+	}
+}
+
+func TestLocalRequestErrorMessageIsNotRewritten(t *testing.T) {
+	for _, message := range []string{"", `{"password":"prefix\"SYNTHETIC_SECRET"}`, "original\n" + strings.Repeat("原文", 9000)} {
+		f := localRequestError(502, "api_error", "ECONNRESET", message)
+		f.Source = "transport"
+		var reader requestErrorReader
+		_, _ = reader.Write(errorWire(t, f))
+		parsed := reader.result()
+		if parsed == nil {
+			t.Fatal("native message rejected")
+		}
+		out := httptest.NewRecorder()
+		parsed.write(out)
+		var response struct {
+			Error requestErrorDetail `json:"error"`
+		}
+		if err := json.Unmarshal(out.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Error.Message != message {
+			t.Fatal("native message changed")
+		}
 	}
 }
 

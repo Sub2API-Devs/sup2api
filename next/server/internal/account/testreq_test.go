@@ -3,6 +3,7 @@ package account
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -197,6 +199,7 @@ func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
 		e := setup(t)
 		up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(requestfailure.SourceHeader, "transport") // an ordinary provider cannot assert a CLI source
 			w.WriteHeader(401)
 			_, _ = w.Write([]byte(`{"error":{"type":"authentication_error","code":"token_revoked","message":"token revoked"}}`))
 		}))
@@ -213,6 +216,61 @@ func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
 			t.Fatalf("persisted upstream diagnostic: %s", raw)
 		}
 	})
+}
+
+func TestAccountTestPreservesManagedCLIErrorWithoutInference(t *testing.T) {
+	for _, source := range []string{"http", "transport", "timeout", "input", "interrupted", "internal"} {
+		t.Run(source, func(t *testing.T) {
+			e := setup(t)
+			const body = `{"type":"error","error":{"type":"api_error","code":"ECONNRESET","message":"read ECONNRESET"}}`
+			var calls atomic.Int32
+			ccg := e.withCCGateway(false, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.URL.Path != "/v1/ccgateway/probe" {
+					t.Error(r.URL.Path)
+				}
+				w.Header().Set(requestfailure.SourceHeader, source)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(502)
+				_, _ = w.Write([]byte(body))
+			})
+			// Configure the legacy local Worker transport used by this fixture.
+			cfg, err := ccg.Load(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.APIKey = "worker-secret"
+			plain, _ := json.Marshal(cfg)
+			enc, err := e.svc.d.Cipher.Encrypt(plain, []byte("system:ccgateway:v1"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			envelope, _ := json.Marshal(map[string]any{"cipher": enc})
+			if _, err := e.db.Pool.Exec(context.Background(), `UPDATE settings SET value=$1 WHERE key='ccgateway_remote'`, envelope); err != nil {
+				t.Fatal(err)
+			}
+			e.plat.testURL = ccgateway.VirtualTestURL
+			e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "inferred proxy failure", LocalFailure: true, AccountEffect: pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE}
+			id := e.mkRawAccount("ccgateway", "managed", "active", "unused", false)
+			_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
+			d := gjson.GetBytes(raw, "data")
+			wantSource := source
+			if source == "http" {
+				wantSource = "response"
+			}
+			if d.Get("status").Int() != 502 || d.Get("error_code").String() != "ECONNRESET" || d.Get("error_source").String() != wantSource || d.Get("message").String() != body || d.Get("body").String() != body {
+				t.Fatal(string(raw))
+			}
+			if d.Get("reason").Exists() || d.Get("effect").Exists() || calls.Load() != 1 {
+				t.Fatal("added inference or extra request", string(raw), calls.Load())
+			}
+			_, saved := e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
+			last := gjson.GetBytes(saved, "data.last_test")
+			if last.Get("message").String() != body || last.Get("error_source").String() != wantSource {
+				t.Fatal(string(saved))
+			}
+		})
+	}
 }
 
 func TestAccountTestPreserves429WithoutInferredReason(t *testing.T) {

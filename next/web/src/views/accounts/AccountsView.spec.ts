@@ -237,6 +237,8 @@ describe('account status recovery', () => {
   it.each([
     { status: 0, error_code: 'account_disabled', error_source: 'gateway' },
     { status: 401, error_code: 'token_revoked', error_source: 'response' },
+    { status: 502, error_code: 'ECONNRESET', error_source: 'transport', message: '{"error":{"code":"ECONNRESET","message":"read ECONNRESET"}}' },
+    { status: 504, error_code: 'cli_timeout', error_source: 'timeout', message: '{"error":{"code":"cli_timeout","message":"CC request timed out"}}' },
     { status: 429, error_code: 'rate_limit_error', error_source: 'response', message: '{"error":{"type":"rate_limit_error","message":"Error"}}', reason: 'rate limited until tomorrow (default)', effect: 'disable', test_mode: 'native_build', response_headers: { 'request-id': 'req-test-429' } },
   ])('shows diagnostic code without fabricating HTTP status: $error_code', async (diagnostic) => {
     mocks.post.mockResolvedValue({ ok: false, latency_ms: 0, message: 'failure', ...diagnostic })
@@ -253,6 +255,12 @@ describe('account status recovery', () => {
     expect(w.get('[data-testid="model-test-error-code"]').text()).toContain(diagnostic.error_code)
     expect(w.text().includes('401')).toBe(diagnostic.status === 401)
     expect(w.emitted('tested')?.[0]?.[1]).toMatchObject({ status: diagnostic.status, error_code: diagnostic.error_code, error_source: diagnostic.error_source })
+    if (diagnostic.error_source === 'transport' || diagnostic.error_source === 'timeout') {
+      expect(w.get('[data-testid="model-test-error-body"]').text()).toBe(diagnostic.message)
+      expect(w.text()).toContain(diagnostic.error_source === 'transport' ? '传输链路' : 'CC 请求超时')
+      expect(w.text()).not.toContain('代理故障')
+      expect(w.text()).not.toContain('HTTP 响应')
+    }
     if (diagnostic.status === 429) {
       expect(w.get('[data-testid="model-test-error-body"]').text()).toBe(diagnostic.message)
       expect(w.text()).not.toContain('rate limited until')
