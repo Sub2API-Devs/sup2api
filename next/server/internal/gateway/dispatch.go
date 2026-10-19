@@ -154,6 +154,9 @@ func (c *call) dispatch(ctx context.Context) {
 			if c.rec.Success {
 				c.g.d.Accounts.TouchLastUsed(context.WithoutCancel(ctx), ref.ID)
 			}
+			if c.abortResponse {
+				panic(http.ErrAbortHandler)
+			}
 			return
 		case attemptCanceled:
 			c.fail(res.err)

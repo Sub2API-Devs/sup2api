@@ -117,6 +117,7 @@ type call struct {
 	observationAttemptAt     time.Time
 	observationResponseAt    time.Time
 	observationFirstStreamAt time.Time
+	abortResponse            bool // A committed CCGateway response ended incompletely.
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
