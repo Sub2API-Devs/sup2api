@@ -26,5 +26,8 @@ export default {
   permsNotLoaded: 'The permissions currently granted to this role could not be loaded. Saving will replace them with the selection below.',
   overwriteUnknown: 'The current permissions of this role are unknown. Replace them with the selection shown?',
   discardChanges: 'Discard unsaved changes to this role?',
+  restoreDefaults: 'Restore defaults',
+  restoreConfirm: 'Restore the name, description and core permissions of "{name}" to the built-in defaults? Plugin permissions are kept.',
+  restored: 'Defaults restored',
   selectRole: 'Select a role on the left'
 }

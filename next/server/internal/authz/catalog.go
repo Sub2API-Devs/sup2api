@@ -1,6 +1,8 @@
 package authz
 
 import (
+	"slices"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -8,6 +10,7 @@ import (
 const (
 	RoleSuperAdmin = "super_admin"
 	RoleAdmin      = "admin"
+	RoleOperator   = "operator"
 	RoleUser       = "user"
 )
 
@@ -128,17 +131,55 @@ var coreModules = []coreModule{
 // userRolePermissions are granted to the built-in "user" role.
 var userRolePermissions = []string{"apikey:self:manage", "balance:self:read", "usage:self:read", "gateway:use"}
 
+// operatorExcludedModules are the core modules the built-in "operator" role
+// does not get: settings (sticky sessions live on the settings page) and the
+// plugin pages (plugins, market, publishers).
+var operatorExcludedModules = []string{"settings", "sticky", "plugin", "publisher"}
+
 type builtinRole struct {
 	key         string
 	name        core.LocalizedText
 	description core.LocalizedText
 	superuser   bool
+	// grants reports whether a core permission is in the role's defaults;
+	// nil means none. New core permissions are granted to the role when
+	// grants accepts them, and a reset restores exactly this set.
+	grants func(module, key string) bool
 }
 
 var builtinRoles = []builtinRole{
-	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true},
-	{RoleAdmin, lt("Admin", "管理员"), lt("All core permissions by default", "默认拥有全部核心权限"), false},
-	{RoleUser, lt("User", "普通用户"), lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), false},
+	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true, nil},
+	{RoleAdmin, lt("Admin", "管理员"), lt("All core permissions by default", "默认拥有全部核心权限"), false,
+		func(string, string) bool { return true }},
+	{RoleOperator, lt("Operator", "运维"), lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"), false,
+		func(module, _ string) bool { return !slices.Contains(operatorExcludedModules, module) }},
+	{RoleUser, lt("User", "普通用户"), lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), false,
+		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }},
+}
+
+func builtinRoleByKey(key string) (builtinRole, bool) {
+	for _, r := range builtinRoles {
+		if r.key == key {
+			return r, true
+		}
+	}
+	return builtinRole{}, false
+}
+
+// defaultPermissions returns the core permissions r has by default.
+func (r builtinRole) defaultPermissions() []string {
+	var out []string
+	if r.grants == nil {
+		return out
+	}
+	for _, m := range coreModules {
+		for _, p := range m.perms {
+			if r.grants(m.key, p.key) {
+				out = append(out, p.key)
+			}
+		}
+	}
+	return out
 }
 
 // CorePermissions returns the core catalog as permission definitions.

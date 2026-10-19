@@ -108,11 +108,18 @@ interface MockRole {
 }
 
 const CORE_KEYS = ALL_PERMISSIONS.filter((k) => !k.startsWith('plugin.'))
+// Built-in defaults (CONTRACTS §4); operator lacks settings and plugin pages.
+const OPERATOR_KEYS = CORE_KEYS.filter((k) => !/^(settings|sticky|plugin|publisher):/.test(k))
+const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[] }> = {
+  admin: { name: L('Admin', '管理员'), description: 'All core permissions by default', keys: CORE_KEYS },
+  operator: { name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', keys: OPERATOR_KEYS },
+  user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'] }
+}
 const roles: MockRole[] = [
   { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
   { id: 2, key: 'admin', name: L('Administrator', '管理员'), description: 'All core permissions', builtin: true, superuser: false, permission_keys: [...CORE_KEYS], created_at: now(-86400 * 90), updated_at: now(-86400 * 10) },
   { id: 3, key: 'user', name: L('User', '普通用户'), description: 'Own keys, usage and balance', builtin: true, superuser: false, permission_keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 4, key: 'operator', name: L('Operator', '运营'), description: 'Day-to-day account operations', builtin: false, superuser: false, permission_keys: ['account:read', 'account:create', 'account:update', 'account:test', 'group:read', 'proxy:read', 'proxy:manage', 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read', 'plugin.foo:dashboard:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 4, key: 'operator', name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', builtin: true, superuser: false, permission_keys: [...OPERATOR_KEYS, 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
   { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
   { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
@@ -157,6 +164,20 @@ on('PUT', '/roles/:id/permissions', (req) => {
   const bad = keys.find((k) => !known.has(k))
   if (bad) return invalid('permission_keys', `unknown permission ${bad}`)
   r.permission_keys = [...new Set(keys)]
+  r.updated_at = now()
+  return roleOut(r)
+})
+on('POST', '/roles/:id/reset', (req) => {
+  const r = roles.find((x) => x.id === Number(req.params.id))
+  if (!r) return fail(404, 'not_found', 'role not found')
+  const d = BUILTIN_DEFAULTS[r.key]
+  if (!r.builtin || (!d && !r.superuser)) return fail(409, 'conflict', 'only built-in roles can be reset')
+  if (d) {
+    // Plugin permissions on the role are kept.
+    r.permission_keys = [...d.keys, ...r.permission_keys.filter((k) => k.startsWith('plugin.'))]
+    r.name = d.name
+    r.description = d.description
+  }
   r.updated_at = now()
   return roleOut(r)
 })

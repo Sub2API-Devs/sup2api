@@ -18,6 +18,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPatch, "/roles/:id", "role:manage", s.handleUpdateRole)
 	r.Perm(http.MethodDelete, "/roles/:id", "role:manage", s.handleDeleteRole)
 	r.Perm(http.MethodPut, "/roles/:id/permissions", "role:manage", s.handleSetRolePermissions)
+	r.Perm(http.MethodPost, "/roles/:id/reset", "role:manage", s.handleResetRole)
 	r.Perm(http.MethodGet, "/permissions", "role:read", s.handleListPermissions)
 }
 
@@ -108,6 +109,20 @@ func (s *Service) handleSetRolePermissions(c *gin.Context) {
 	}
 	actorID, _ := core.UserID(c.Request.Context())
 	role, err := s.SetRolePermissions(c.Request.Context(), actorID, id, in.PermissionKeys)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, role)
+}
+
+func (s *Service) handleResetRole(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	actorID, _ := core.UserID(c.Request.Context())
+	role, err := s.ResetRole(c.Request.Context(), actorID, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

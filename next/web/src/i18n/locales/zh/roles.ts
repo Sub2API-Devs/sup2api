@@ -26,5 +26,8 @@ export default {
   permsNotLoaded: '无法加载该角色当前拥有的权限。保存后将以下方的勾选结果替换现有权限。',
   overwriteUnknown: '该角色当前的权限未知，确定用当前勾选的结果替换吗？',
   discardChanges: '放弃对该角色未保存的修改？',
+  restoreDefaults: '恢复默认',
+  restoreConfirm: '将「{name}」的名称、描述和核心权限恢复为内置默认值？插件权限保持不变。',
+  restored: '已恢复默认',
   selectRole: '请在左侧选择一个角色'
 }

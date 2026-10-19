@@ -11,10 +11,10 @@ const requestModes = computed(() => (['direct', 'build'] as const).map(value => 
 <template>
   <section class="space-y-4" data-testid="request-policy">
     <SSettingsGroup :title="t('ccgateway.cliProfile.title')" data-testid="cli-request-mode">
-      <SSettingRow :label="t('ccgateway.cliProfile.mode')" :description="t('ccgateway.cliProfile.modeHint')">
+      <SSettingRow :label="t('ccgateway.cliProfile.mode')">
         <SSelect v-model="policy.relay_mode" :options="requestModes" data-testid="relay-mode" />
       </SSettingRow>
-      <SSettingRow :label="t('ccgateway.cliProfile.version')" :description="t('ccgateway.cliProfile.versionHint')">
+      <SSettingRow :label="t('ccgateway.cliProfile.version')">
         <SInput v-model="policy.cli_version" placeholder="2.1.302" mono data-testid="cli-version" />
       </SSettingRow>
     </SSettingsGroup>

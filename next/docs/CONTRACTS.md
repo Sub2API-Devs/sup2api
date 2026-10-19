@@ -94,7 +94,7 @@
 | gateway | `gateway:use` |
 | settings | `settings:read` `settings:manage` |
 
-内置角色：`super_admin`（superuser）、`admin`（全部核心权限）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，不可编辑）、`admin`（全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的权限可以编辑；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
 
 ## 5. REST API（`/api/v1`）
 
@@ -123,6 +123,7 @@
 | GET `/users/:id/groups`，PUT `/users/:id/groups` `{group_ids[]}` | `group:read` / `group:manage` |
 | GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage` |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage`；授予的 permission_keys 必须是操作者持有权限的子集 |
+| POST `/roles/:id/reset` | `role:manage`；内置角色恢复默认（§15.7） |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,status}]}]` |
 
 ### 5.3 API Key、分组、代理（A）
@@ -657,6 +658,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | PATCH `/roles/:id` | `role:manage` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
 | DELETE `/roles/:id` | `role:manage` | | 内置角色 409；用户的该角色随之删除 |
 | PUT `/roles/:id/permissions` | `role:manage` | `{permission_keys}` | 整体替换；超级管理员角色 409；已移除（`status=removed`）的权限视为未知 |
+| POST `/roles/:id/reset` | `role:manage` | | 内置角色恢复默认：名称、描述和核心权限（§4）；角色上的插件权限不动；超级管理员只恢复名称和描述；自定义角色 409；操作者须持有全部默认权限（同上，否则 403） |
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 

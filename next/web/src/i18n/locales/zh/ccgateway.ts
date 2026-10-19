@@ -1,10 +1,8 @@
 export default {
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {
-    title: 'Claude Code 版本与请求模式', mode: '请求模式', version: 'CLI 版本',
+    title: 'Claude Code 版本与请求模式', mode: '透传/转发', version: '版本指定',
     direct: '零注入透传（direct）', build: '组件构建（build）',
-    modeHint: '默认使用 build。direct 原文转发；build 提取上下文后由 CLI 构建。两者均由调用方执行工具，当前支持 API Key 账号。',
-    versionHint: '创建授权容器时从 Worker 镜像选择此版本，并校验补丁和哈希。自动更新关闭；版本或模式变更会重建已有容器并保留账号数据卷，请在空闲时切换。',
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   cli: {

@@ -32,6 +32,7 @@ var roleKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 
 var (
 	errBuiltinRole      = core.ErrConflict.WithMessage("built-in roles cannot be deleted")
+	errNotBuiltinRole   = core.ErrConflict.WithMessage("only built-in roles can be reset")
 	errSuperuserPerms   = core.ErrConflict.WithMessage("the permissions of the super admin role cannot be changed")
 	errLastSuperAdmin   = core.ErrConflict.WithMessage("the last super admin cannot be removed")
 	errOwnSuperAdmin    = core.ErrConflict.WithMessage("you cannot revoke your own super admin role")
@@ -185,6 +186,51 @@ func (s *Service) DeleteRole(ctx context.Context, id int64) error {
 		_, err = tx.Exec(ctx, `DELETE FROM roles WHERE id = $1`, id)
 		return err
 	})
+}
+
+// ResetRole restores a built-in role to its defaults: name, description and
+// core permissions. Plugin permissions on the role are left alone, since
+// they are granted per plugin at consent time. The actor must hold every
+// default permission, as for SetRolePermissions.
+func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, error) {
+	var key string
+	var builtin bool
+	err := s.db.Pool.QueryRow(ctx, `SELECT key, builtin FROM roles WHERE id = $1`, id).Scan(&key, &builtin)
+	if store.IsNoRows(err) {
+		return nil, core.ErrNotFound.WithMessage("role not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	def, ok := builtinRoleByKey(key)
+	if !builtin || !ok {
+		return nil, errNotBuiltinRole
+	}
+	keys := def.defaultPermissions()
+	if err := s.CanGrant(ctx, actorID, keys); err != nil {
+		return nil, err
+	}
+	err = s.mutate(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, updated_at = now() WHERE id = $1`,
+			id, def.name, def.description); err != nil {
+			return err
+		}
+		if def.superuser {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p
+WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.source = 'core' AND p.key <> ALL($2)`, id, keys); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id)
+SELECT $1, p.id FROM permissions p WHERE p.source = 'core' AND p.status <> 'removed' AND p.key = ANY($2)
+ON CONFLICT DO NOTHING`, id, keys)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetRole(ctx, id)
 }
 
 // SetRolePermissions replaces the permissions of a (non-superuser) role.

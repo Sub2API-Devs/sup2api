@@ -10,7 +10,7 @@ import (
 
 // SyncCore upserts the core permission catalog, marks core permissions no
 // longer in code as removed, seeds built-in roles and grants newly created
-// core permissions to admin (and the user defaults to user). Safe to run
+// core permissions to the built-in roles whose defaults include them. Safe to run
 // concurrently from several nodes; set-based to keep round trips low. The
 // version is only bumped when something changed.
 func (s *Service) SyncCore(ctx context.Context) error {
@@ -93,21 +93,18 @@ SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = $1 AND p.key = ANY($
 ON CONFLICT DO NOTHING`, role, keys)
 			return err
 		}
-		adminKeys := inserted
-		if newRoles[RoleAdmin] {
-			adminKeys = keys
-		}
-		if err := grant(RoleAdmin, adminKeys); err != nil {
-			return err
-		}
-		var userKeys []string
-		for _, k := range userRolePermissions {
-			if newRoles[RoleUser] || slices.Contains(inserted, k) {
-				userKeys = append(userKeys, k)
+		// A new built-in role gets all its defaults; an existing one only the
+		// newly created core permissions it accepts.
+		for _, r := range builtinRoles {
+			var roleKeys []string
+			for _, k := range r.defaultPermissions() {
+				if newRoles[r.key] || slices.Contains(inserted, k) {
+					roleKeys = append(roleKeys, k)
+				}
 			}
-		}
-		if err := grant(RoleUser, userKeys); err != nil {
-			return err
+			if err := grant(r.key, roleKeys); err != nil {
+				return err
+			}
 		}
 
 		tag, err := tx.Exec(ctx, `UPDATE permissions SET status = 'removed' WHERE source = 'core' AND status <> 'removed' AND key <> ALL($1)`, keys)

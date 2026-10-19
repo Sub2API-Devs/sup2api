@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -171,6 +172,18 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
 	}
+	op := byKey[RoleOperator]
+	if op == nil || !op.Builtin || op.Superuser || len(op.PermissionKeys) == 0 || len(op.PermissionKeys) >= n {
+		t.Fatalf("operator: %+v", op)
+	}
+	for _, k := range op.PermissionKeys {
+		if strings.HasPrefix(k, "settings:") || strings.HasPrefix(k, "sticky:") || strings.HasPrefix(k, "plugin:") || strings.HasPrefix(k, "publisher:") {
+			t.Fatalf("operator has %s", k)
+		}
+	}
+	if !slices.Contains(op.PermissionKeys, "account:update") || !slices.Contains(op.PermissionKeys, "system:update:execute") {
+		t.Fatalf("operator perms = %v", op.PermissionKeys)
+	}
 
 	// Idempotent: a second sync does not bump the version.
 	v1, _ := s.currentVersion(ctx)
@@ -201,6 +214,89 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	admin := addUser(t, s, "a@x.com", RoleAdmin)
 	mustCan(t, s, admin, "node:read", true)
 	mustCan(t, s, admin, "legacy:thing", false)
+	operator := addUser(t, s, "o@x.com", RoleOperator)
+	mustCan(t, s, operator, "node:read", true)
+
+	// A new settings permission reaches admin but not operator.
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM permissions WHERE key = 'settings:manage'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, s, admin, "settings:manage", true)
+	mustCan(t, s, operator, "settings:manage", false)
+}
+
+func TestResetBuiltinRole(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	opUser := addUser(t, s, "o@x.com", RoleOperator)
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'installed')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleOperator})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	opID := roleID(t, s, RoleOperator)
+	orig, err := s.GetRole(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Edit: rename, drop a core permission, add a settings one.
+	if _, err := s.UpdateRole(ctx, opID, UpdateRoleInput{Name: lt("Night shift", "夜班")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetRolePermissions(ctx, root, opID, []string{"user:read", "settings:manage", "plugin.guard:stats:read"}); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, s, opUser, "settings:manage", true)
+	mustCan(t, s, opUser, "account:update", false)
+
+	// The operator itself lacks settings and plugin permissions: it cannot
+	// reset the admin role to defaults that include them.
+	if _, err := s.ResetRole(ctx, opUser, roleID(t, s, RoleAdmin)); !isCode(err, "permission_denied") {
+		t.Fatalf("operator resets admin: %v", err)
+	}
+
+	r, err := s.ResetRole(ctx, root, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := orig.PermissionKeys
+	if r.Name.Get("zh") != "运维" || strings.Join(r.PermissionKeys, ",") != strings.Join(want, ",") {
+		t.Fatalf("reset: name=%v perms=%v want %v", r.Name, r.PermissionKeys, want)
+	}
+	if !slices.Contains(r.PermissionKeys, "plugin.guard:stats:read") {
+		t.Fatalf("plugin permission dropped: %v", r.PermissionKeys)
+	}
+	mustCan(t, s, opUser, "settings:manage", false)
+	mustCan(t, s, opUser, "account:update", true)
+
+	// super_admin: only name/description; custom roles cannot be reset.
+	suID := roleID(t, s, RoleSuperAdmin)
+	if _, err := s.UpdateRole(ctx, suID, UpdateRoleInput{Name: lt("Root", "根")}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.ResetRole(ctx, root, suID); err != nil || r.Name.Get("zh") != "超级管理员" || !r.Superuser {
+		t.Fatalf("reset super_admin: %+v %v", r, err)
+	}
+	custom, err := s.CreateRole(ctx, CreateRoleInput{Key: "viewer", Name: lt("Viewer", "只读")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ResetRole(ctx, root, custom.ID); !isCode(err, "conflict") {
+		t.Fatalf("reset custom: %v", err)
+	}
+	if _, err := s.ResetRole(ctx, root, 999999); !isCode(err, "not_found") {
+		t.Fatalf("reset missing: %v", err)
+	}
 }
 
 func TestAuthorizerCacheInvalidation(t *testing.T) {

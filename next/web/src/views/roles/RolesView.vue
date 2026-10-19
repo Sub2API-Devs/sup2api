@@ -191,6 +191,36 @@ function removeRole() {
     if (roles.value.length) selectRole(roles.value[0], true)
   })
 }
+
+const roleActions = computed(() =>
+  selected.value?.builtin ? [{ key: 'restore', label: t('roles.restoreDefaults') }] : [{ key: 'delete', label: t('common.delete'), danger: true }]
+)
+
+function onRoleAction(key: string) {
+  if (key === 'restore') return restoreDefaults()
+  return removeRole()
+}
+
+// POST /roles/:id/reset: name, description and core permissions back to the
+// built-in defaults; plugin permissions stay.
+async function restoreDefaults() {
+  const r = selected.value
+  if (!r?.builtin || r.superuser) return
+  if (!(await confirm({ message: t('roles.restoreConfirm', { name: lt(r.name) || r.key }) }))) return
+  saving.value = true
+  try {
+    await api.post(`/roles/${r.id}/reset`)
+    toast(t('roles.restored'), 'success')
+    await loadRoles()
+    const fresh = roles.value.find((x) => x.id === r.id)
+    if (fresh) selectRole(fresh, true)
+    if (auth.me?.roles.includes(r.key)) auth.loadMe().catch(() => undefined)
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <template>
@@ -243,7 +273,7 @@ function removeRole() {
             <SButton size="sm" :disabled="!dirty || saving" @click="resetEditor">{{ t('common.reset') }}</SButton>
             <SButton variant="primary" size="sm" :disabled="!dirty" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
           </template>
-          <SDropdown v-if="!selected.builtin" :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" data-testid="role-menu" @select="removeRole" />
+          <SDropdown v-if="!selected.superuser" :actions="roleActions" data-testid="role-menu" @select="onRoleAction" />
         </template>
 
         <div class="space-y-5">
@@ -282,14 +312,14 @@ function removeRole() {
     <SModal v-model:open="createOpen" :title="t('roles.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">
         <SField :label="t('roles.key')" required :hint="t('roles.keyHint')" :error="createErrors.key">
-          <SInput v-model="createForm.key" mono placeholder="operator" />
+          <SInput v-model="createForm.key" mono placeholder="auditor" />
         </SField>
         <SGrid>
           <SField :label="t('roles.nameEn')" :error="createErrors.name">
-            <SInput v-model="createForm.nameEn" placeholder="Operator" />
+            <SInput v-model="createForm.nameEn" placeholder="Auditor" />
           </SField>
           <SField :label="t('roles.nameZh')">
-            <SInput v-model="createForm.nameZh" placeholder="运营" />
+            <SInput v-model="createForm.nameZh" placeholder="审计" />
           </SField>
         </SGrid>
         <SField :label="t('common.description')" :error="createErrors.description">
