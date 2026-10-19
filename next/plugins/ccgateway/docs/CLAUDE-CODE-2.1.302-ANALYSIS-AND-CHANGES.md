@@ -1,6 +1,8 @@
 # Claude Code 2.1.302 分析与改动记录
 
-> 2026-10-19 最新上线：Core **0.1.164**、ccgateway/Controller/Worker **0.1.64**；CLI 仍为 **2.1.302 / ccgateway-v9-stderr-errors**，已重新编译为新 SHA `e7f4c17a…a145f4`。修复字符串错误消息提取与中断类型，21/30 号已迁移并固定新 ELF；实现和验收见第 13 节。
+> 2026-10-19 最新上线：Core **0.1.165**、ccgateway/Controller/Worker **0.1.65**。Worker 区分调用方取消与自身超时，公网取消已验证为 Core 499/client_canceled、Worker 保留已发 HTTP 200 并记录 client_canceled。CLI 沿用第 13 节的 2.1.302/v9 原生 ELF，SHA 未变；详见第 14 节。
+
+> 2026-10-19 0.1.164 发布：Core **0.1.164**、ccgateway/Controller/Worker **0.1.64**；CLI 仍为 **2.1.302 / ccgateway-v9-stderr-errors**，已重新编译为新 SHA `e7f4c17a…a145f4`。修复字符串错误消息提取与中断类型，21/30 号已迁移并固定新 ELF；实现和验收见第 13 节。
 
 > 2026-10-19 v9 首次上线：Core **0.1.162**、ccgateway/Controller/Worker **0.1.62**、CLI **2.1.302 / ccgateway-v9-stderr-errors** 将 HTTP 错误和 CLI 本地异常改为结构化 stderr；Worker 封装 HTTP 错误，正常 JSON/SSE 仍走 stdout。协议与验证见第 11 节；v8 的“HTTP 错误正文走 stdout”描述保留作历史记录。
 
@@ -280,7 +282,7 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 
 脱敏证据见 [错误元数据修订发布验收](cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
 
-## 14. Worker 区分调用方取消与自身超时（待发布）
+## 14. Worker 区分调用方取消与自身超时（0.1.165 / 0.1.65 已发布）
 
 `serveRequestCommand` 等待子进程结束后，先检查父请求 context。父请求取消/到期或派生 context 为 Canceled 时，记录 `canceled=true`、`error_type/error_code=client_canceled`、`error_source=client`，不把已取消请求误判成 CLI 错误或超时。未发出响应时仅诊断 status 为 499，不向已离开的客户端写 JSON 或隐式成功响应；已发出响应时保留原 status/http_status（例如 200），并置 response_interrupted。两种情况均以 ErrAbortHandler 结束处理。
 
@@ -289,3 +291,16 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 保留 Process.Kill、WaitDelay、并发槽位与临时目录清理，以及解除阻塞响应写的机制；不改为 SIGTERM，也不在调用方离开后继续读取上游补齐 usage。Core 的取消分类、重试策略及已捕获用量结算保持。关闭请求只能证明本地连接与进程被中止，不能证明供应商立即停止计算或计费。
 
 本次仅修改 Worker 和相关测试/记录，CLI 继续使用第 13 节的原生 2.1.302/v9 ELF（SHA `e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`），无需重新编译 CLI。
+
+### 发布与验收
+
+源码 `0cf7e18aa905a72679a607f80786a73f4d0f3b50`，Core **0.1.165**、插件/Controller/Worker 程序 **0.1.65**；升级计划 `cd2f180e3b3dd65c0c09a7d6cf40f7a5` 完成 27 步。四节点核心版本、哈希、ready、插件激活和前端文件均核对一致。
+
+- Windows Engine 全量、Linux Engine/Worker 全量测试通过。新增 16 个真实子进程与 HTTP 场景，覆盖 direct/build、响应前后、客户端取消、已有错误帧时取消、Worker deadline、父请求 deadline；校验无隐式成功响应、无追加错误 JSON、并发槽位释放和临时目录清理。
+- 新 Worker 与既有原生 ELF 的 build/direct 组合均通过，每组 15 次模型请求，包含响应前后真实客户端取消；模拟上游连接关闭、取消日志以及后续正常请求均已验证。此结果不代表供应商后台计算或计费立即停止。
+- 公网测试经 21 号，在收到首个 SSE 事件后关闭客户端连接：Worker metadata 保留 status/http_status=200，canceled=true、error_type/error_code=client_canceled、error_source=client；request_command_failed 为 cancelled=true、timed_out=false。Core 同一 request_id 的记录为 HTTP 499、client_canceled、attempts=1，没有重试；捕获用量为 input=71/output=0，这不是供应商最终消耗或零输出计算的证明。
+- 21/30 号真实账号测试均用 `claude-opus-5-5` 返回 HTTP 200、回答 Paris；公网正常 SSE 完整结束。真实 HTTP 400 经 30 号返回，客户端与 Worker response.body SHA 一致，保留上游 invalid_request_error 和正文。
+- 21/30 仅原地更新 `/usr/local/bin/worker`，Worker SHA 为 `e33ec9e6cbce45a94fca03e9d9e23effaa058324877f4b71e45725dff60c1011`。容器 ID、Config/HostConfig、授权、卷和 CLI SHA 均未改变；基础镜像标签仍 .64，未来创建目标镜像 .65。默认 build、CLI 禁更保持。旧回滚容器、其他停止账号及共享出口未变。
+- 私有备份位于 `~/sup2api-managed/backups/ccgateway-cancel-0.1.165/`，包含已检查的数据库/卷归档和 Controller 状态；Controller 的 Worker 更新操作还自动保留旧 Worker 程序。构建位于 `~/sup2api-managed/stage/0.1.165/`，测试与验收位于 `~/sup2api/checks/ccg-cancel-165/`。
+
+脱敏证据见 [取消分类发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。

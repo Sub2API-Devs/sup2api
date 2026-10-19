@@ -1,12 +1,14 @@
 # OVH当前部署入口
 
-2026-10-19 最新：Core 四节点 **0.1.164**、插件/Controller/Worker **0.1.64**。21/30 app 已迁移至 .64 镜像，CLI **2.1.302/v9** 重新编译并固定新 SHA `e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`，修复字符串错误消息和中断类型。两账号 Opus 均 200，公网错误正文哈希与 Worker 日志一致，正常 SSE 完整。原授权卷/IP/安全配置保留，旧 app 以 `-rollback-errors164` 后缀停止断网保留。详见 [验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
+2026-10-19 最新：Core 四节点 **0.1.165**、插件/Controller/Worker **0.1.65**。Worker 已区分调用方取消和自身超时；公网取消确认为 Core 499/client_canceled、单次尝试，Worker 保留已发 200 并记 client_canceled。21/30 原地更新 Worker，容器、授权卷、CLI 2.1.302/v9 及 SHA 均保留；未来目标镜像 .65，默认 build、禁更保持。两账号 Opus 及公网 JSON/SSE 回归通过。[验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
 
-2026-10-19 最新：Core 四节点 **0.1.163**，插件/Controller/运行中的 Worker 程序 **0.1.63**。账号测试使用 CC 原生 build 单次探测，21/30 号 Opus 5.5 测试均 200；HTTP 错误只展示实际状态、错误码和正文，不加推导原因或禁用建议。21/30 原容器和卷保留（基础镜像标签仍 .62，Worker 程序已原地升 .63），未来容器目标镜像 .63，CLI 固定 2.1.302/v9 并禁更。详见 [发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+2026-10-19 历史发布：Core 四节点 **0.1.164**、插件/Controller/Worker **0.1.64**。21/30 app 已迁移至 .64 镜像，CLI **2.1.302/v9** 重新编译并固定新 SHA `e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`，修复字符串错误消息和中断类型。两账号 Opus 均 200，公网错误正文哈希与 Worker 日志一致，正常 SSE 完整。原授权卷/IP/安全配置保留，旧 app 以 `-rollback-errors164` 后缀停止断网保留。详见 [验收记录](../../../plugins/ccgateway/docs/cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
 
-2026-10-19 最新：Core **0.1.162**、CCGateway/Controller/Worker **0.1.62**，CLI **2.1.302 / ccgateway-v9-stderr-errors**。错误状态/code/message 经结构化 stderr 交给 Worker 封装 HTTP；正常 JSON/SSE 仍从 stdout 返回，修复错误日志误记 200，并将已提交响应的中断传递到客户端。21/30 号保留授权和卷，默认 build、禁更保持。验收见 [302 stderr 协议与发布](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#11-stderr-错误协议v9)。
+2026-10-19 历史发布：Core 四节点 **0.1.163**，插件/Controller/运行中的 Worker 程序 **0.1.63**。账号测试使用 CC 原生 build 单次探测，21/30 号 Opus 5.5 测试均 200；HTTP 错误只展示实际状态、错误码和正文，不加推导原因或禁用建议。21/30 原容器和卷保留（基础镜像标签仍 .62，Worker 程序已原地升 .63），未来容器目标镜像 .63，CLI 固定 2.1.302/v9 并禁更。详见 [发布验收](../../../plugins/ccgateway/docs/cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
 
-2026-10-19 最新：Core **0.1.161**、CCGateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 支持原生 OAuth。21/30 号保留原数据卷和授权并重建到新镜像；30 号完整 CC 请求 build、direct CLI 重放均 200，21 号 API Key 回归 200。默认 build、禁更保持。简化空 system 的 OAuth 请求仍可能上游 429；实现与验证边界见 [302 OAuth 记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
+2026-10-19 历史发布：Core **0.1.162**、CCGateway/Controller/Worker **0.1.62**，CLI **2.1.302 / ccgateway-v9-stderr-errors**。错误状态/code/message 经结构化 stderr 交给 Worker 封装 HTTP；正常 JSON/SSE 仍从 stdout 返回，修复错误日志误记 200，并将已提交响应的中断传递到客户端。21/30 号保留授权和卷，默认 build、禁更保持。验收见 [302 stderr 协议与发布](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#11-stderr-错误协议v9)。
+
+2026-10-19 历史发布：Core **0.1.161**、CCGateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 支持原生 OAuth。21/30 号保留原数据卷和授权并重建到新镜像；30 号完整 CC 请求 build、direct CLI 重放均 200，21 号 API Key 回归 200。默认 build、禁更保持。简化空 system 的 OAuth 请求仍可能上游 429；实现与验证边界见 [302 OAuth 记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
 
 2026-10-19 后续更新：Core 四节点 **0.1.160**、CCGateway/Controller/Worker **0.1.60**，移除原有 Agent/native 请求模式，仅保留 direct/build，默认及历史 native 配置迁移为 **build**。21 号已使用新镜像/build，保留原数据卷；Opus 真实请求与本地 CC Read 工具回合通过。见 [请求模式与正式发布记录](../../../plugins/ccgateway/docs/REQUEST-MODES.md)。
 
