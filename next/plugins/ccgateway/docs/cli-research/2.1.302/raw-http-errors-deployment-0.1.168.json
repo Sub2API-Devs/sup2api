@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "9c690dcbbf9b958a36d6281e1d8a3aec93989b32",
+  "release": "0.1.168",
+  "pluginVersion": "0.1.66",
+  "manifest": "c6cdd7355d6ad6da43f7e3603f6f196842036609a82d4e1e4528ecd59b6677a0",
+  "upgradePlan": "8e642aab6dd95811fd4eb02fba7a32b3",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.168",
+      "sha256": "f7f0a8e62cebc8d683b590622532bcd21cd70756441cb516f3c095fe93f3c2b4",
+      "readyHTTP": 200
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.168",
+      "sha256": "f7f0a8e62cebc8d683b590622532bcd21cd70756441cb516f3c095fe93f3c2b4",
+      "readyHTTP": 200
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.168",
+      "sha256": "f7f0a8e62cebc8d683b590622532bcd21cd70756441cb516f3c095fe93f3c2b4",
+      "readyHTTP": 200
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.168",
+      "sha256": "f7f0a8e62cebc8d683b590622532bcd21cd70756441cb516f3c095fe93f3c2b4",
+      "readyHTTP": 200
+    }
+  ],
+  "workers": [
+    {
+      "account": 21,
+      "image": "ccgateway-app:0.1.66",
+      "mode": "build",
+      "workerBuild": {
+        "version": "0.1.66",
+        "revision": "234840c2c5a6c614377b1621d64aecc10aa92bb0",
+        "modified": false
+      },
+      "cliVersion": "2.1.302",
+      "cliSHA256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905",
+      "patch": "ccgateway-v10-raw-http-errors",
+      "volumePreserved": true,
+      "ready": true,
+      "autoUpdateDisabled": true
+    },
+    {
+      "account": 30,
+      "image": "ccgateway-app:0.1.66",
+      "mode": "build",
+      "workerBuild": {
+        "version": "0.1.66",
+        "revision": "234840c2c5a6c614377b1621d64aecc10aa92bb0",
+        "modified": false
+      },
+      "cliVersion": "2.1.302",
+      "cliSHA256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905",
+      "patch": "ccgateway-v10-raw-http-errors",
+      "volumePreserved": true,
+      "ready": true,
+      "autoUpdateDisabled": true
+    },
+    {
+      "account": 31,
+      "image": "ccgateway-app:0.1.66",
+      "mode": "build",
+      "workerBuild": {
+        "version": "0.1.66",
+        "revision": "234840c2c5a6c614377b1621d64aecc10aa92bb0",
+        "modified": false
+      },
+      "cliVersion": "2.1.302",
+      "cliSHA256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905",
+      "patch": "ccgateway-v10-raw-http-errors",
+      "volumePreserved": true,
+      "ready": true,
+      "autoUpdateDisabled": true
+    },
+    {
+      "account": 32,
+      "image": "ccgateway-app:0.1.66",
+      "mode": "build",
+      "workerBuild": {
+        "version": "0.1.66",
+        "revision": "234840c2c5a6c614377b1621d64aecc10aa92bb0",
+        "modified": false
+      },
+      "cliVersion": "2.1.302",
+      "cliSHA256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905",
+      "patch": "ccgateway-v10-raw-http-errors",
+      "volumePreserved": true,
+      "ready": true,
+      "autoUpdateDisabled": true
+    }
+  ],
+  "sharedEgressUnchanged": true,
+  "tests": {
+    "supportUnitTests": 36,
+    "linuxGateway": "passed",
+    "linuxEngine": "passed",
+    "linuxWorker": "passed",
+    "nativeProbeCases": 32
+  },
+  "backupVerified": true,
+  "publicError": {
+    "requestID": "2647d19ad8e76527c2198cd7",
+    "account": 32,
+    "status": 400,
+    "clientWorkerBodySHA256": "e0f1000425018590e0678903a4424ffd8bb799b7d0b07df680602183cbdce63a",
+    "clientWorkerBodiesIdentical": true,
+    "usageErrorMessage": "top_p: range: 0..1",
+    "attempts": 1
+  }
+}

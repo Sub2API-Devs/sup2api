@@ -1567,6 +1567,8 @@ message RankedAccount {
 
 #### 1. `ClassifyErrorResponse.client_error_code`
 
+**2026-10-19 更新（Core 0.1.168）：以下插件错误码规则只用于本系统生成的错误结构。收到真实上游 HTTP 错误时，最终响应的状态、Content-Type 和正文原样传给客户端，不新增/替换 code，不因插件分类或协议转换重新包装 JSON；空正文、HTML、文本、非 UTF-8 和超长正文同样保留。分类仍用于重试及账号效果。Core 的 64 KiB 限制现在仅用于分类/诊断前缀，完整大错误体写私有临时文件，调用结束清理；读取不完整等本地转发失败才生成自己的错误。用量日志独立提取真实 message，不用调度原因替代它；数据库不接受的字节只在诊断中转义。CCGateway 的 CLI/Worker 侧同样按 [302 v10 协议](../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md) 保留错误正文。**
+
 网关原来把客户端错误码**硬编码**成 `"upstream_error"`，插件已经分类出来的信息在最后一步被抹掉——Ark 的 `InputTextSensitiveContentDetected`（内容审核拦截）和普通参数错误，到 OpenAI SDK 手里都是 `400 + invalid_request_error + code="upstream_error"`，客户端分不出「换个 prompt」和「改参数」。
 
 现在插件可以填 `client_error_code`：

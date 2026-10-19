@@ -1,0 +1,292 @@
+{
+  "passed": true,
+  "identity": {
+    "version": "2.1.302",
+    "patch": "ccgateway-v10-raw-http-errors",
+    "capabilities": [
+      "request_direct",
+      "request_build",
+      "request_oauth",
+      "request_error_stderr",
+      "request_raw_http_errors",
+      "native_tools",
+      "mods_dispatch"
+    ],
+    "sha256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905"
+  },
+  "requests": 32,
+  "reports": [
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "json",
+      "status": 400,
+      "bodyBytes": 110,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "html",
+      "status": 502,
+      "bodyBytes": 30,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "text",
+      "status": 429,
+      "bodyBytes": 14,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "empty",
+      "status": 400,
+      "bodyBytes": 0,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "binary",
+      "status": 400,
+      "bodyBytes": 6,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "large",
+      "status": 400,
+      "bodyBytes": 180057,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "success",
+      "status": 200,
+      "bodyBytes": 24,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "direct",
+      "case": "sse",
+      "status": 200,
+      "bodyBytes": 82,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "json",
+      "status": 400,
+      "bodySHA256": "7bbcf4ccf79967b37089924cbee5976d064b5105c0eabeaa3915914bae9e4609",
+      "bodyBytes": 110,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "html",
+      "status": 502,
+      "bodySHA256": "73a1a47611799cd684caa73e6ecb0d393cf8501becac39499047e1f6804a1dcf",
+      "bodyBytes": 30,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "text",
+      "status": 429,
+      "bodySHA256": "dc8f74f0408731dc83ff7d57caf2fd9642c291a33f86cebd82207a0b47a2f9a8",
+      "bodyBytes": 14,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "empty",
+      "status": 400,
+      "bodySHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bodyBytes": 0,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "binary",
+      "status": 400,
+      "bodySHA256": "60f655cf73c38db60c1ecbee9673cff033903c14f257d1d6824acb07cb19bc7a",
+      "bodyBytes": 6,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "large",
+      "status": 400,
+      "bodySHA256": "0c59f7ba3e95e61836e798ae95a22e69dde859feb62ba3fac81e552dd18e9489",
+      "bodyBytes": 180057,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "success",
+      "status": 200,
+      "bodySHA256": "741570e0a8fcd73e1a59c1b12d070b523a16c5af402f5c41d5b2cb7e681cc7d8",
+      "bodyBytes": 24,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "direct",
+      "case": "sse",
+      "status": 200,
+      "bodySHA256": "0e1dfaf3b6cc88553878595d8177da0f76a0845172850589685a2d27d4e01d15",
+      "bodyBytes": 82,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "json",
+      "status": 400,
+      "bodyBytes": 110,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "html",
+      "status": 502,
+      "bodyBytes": 30,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "text",
+      "status": 429,
+      "bodyBytes": 14,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "empty",
+      "status": 400,
+      "bodyBytes": 0,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "binary",
+      "status": 400,
+      "bodyBytes": 6,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "large",
+      "status": 400,
+      "bodyBytes": 180057,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "success",
+      "status": 200,
+      "bodyBytes": 24,
+      "matched": true
+    },
+    {
+      "layer": "cli",
+      "mode": "build",
+      "case": "sse",
+      "status": 200,
+      "bodyBytes": 82,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "json",
+      "status": 400,
+      "bodySHA256": "7bbcf4ccf79967b37089924cbee5976d064b5105c0eabeaa3915914bae9e4609",
+      "bodyBytes": 110,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "html",
+      "status": 502,
+      "bodySHA256": "73a1a47611799cd684caa73e6ecb0d393cf8501becac39499047e1f6804a1dcf",
+      "bodyBytes": 30,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "text",
+      "status": 429,
+      "bodySHA256": "dc8f74f0408731dc83ff7d57caf2fd9642c291a33f86cebd82207a0b47a2f9a8",
+      "bodyBytes": 14,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "empty",
+      "status": 400,
+      "bodySHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bodyBytes": 0,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "binary",
+      "status": 400,
+      "bodySHA256": "60f655cf73c38db60c1ecbee9673cff033903c14f257d1d6824acb07cb19bc7a",
+      "bodyBytes": 6,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "large",
+      "status": 400,
+      "bodySHA256": "0c59f7ba3e95e61836e798ae95a22e69dde859feb62ba3fac81e552dd18e9489",
+      "bodyBytes": 180057,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "success",
+      "status": 200,
+      "bodySHA256": "741570e0a8fcd73e1a59c1b12d070b523a16c5af402f5c41d5b2cb7e681cc7d8",
+      "bodyBytes": 24,
+      "matched": true
+    },
+    {
+      "layer": "worker",
+      "mode": "build",
+      "case": "sse",
+      "status": 200,
+      "bodySHA256": "0e1dfaf3b6cc88553878595d8177da0f76a0845172850589685a2d27d4e01d15",
+      "bodyBytes": 82,
+      "matched": true
+    }
+  ]
+}

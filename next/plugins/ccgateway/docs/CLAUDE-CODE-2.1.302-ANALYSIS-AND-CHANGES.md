@@ -1,6 +1,8 @@
 # Claude Code 2.1.302 分析与改动记录
 
-> 2026-10-19 最新上线：Core **0.1.165**、ccgateway/Controller/Worker **0.1.65**。Worker 区分调用方取消与自身超时，公网取消已验证为 Core 499/client_canceled、Worker 保留已发 HTTP 200 并记录 client_canceled。CLI 沿用第 13 节的 2.1.302/v9 原生 ELF，SHA 未变；详见第 14 节。
+> 2026-10-19 最新上线：Core **0.1.168**、ccgateway/Controller/Worker **0.1.66**、CLI **2.1.302 / ccgateway-v10-raw-http-errors**。上游 HTTP 错误状态/正文原样透传，非 JSON、空正文和超长正文不再重新封装；仅本地转发失败生成错误。21/30/31/32 号均已固定新原生 ELF，公网 400 正文与 Worker 哈希一致，日志记录实际错误消息。详见第 15 节。
+
+> 2026-10-19 0.1.165 发布：Core **0.1.165**、ccgateway/Controller/Worker **0.1.65**。Worker 区分调用方取消与自身超时，公网取消已验证为 Core 499/client_canceled、Worker 保留已发 HTTP 200 并记录 client_canceled。CLI 沿用第 13 节的 2.1.302/v9 原生 ELF，SHA 未变；详见第 14 节。
 
 > 2026-10-19 0.1.164 发布：Core **0.1.164**、ccgateway/Controller/Worker **0.1.64**；CLI 仍为 **2.1.302 / ccgateway-v9-stderr-errors**，已重新编译为新 SHA `e7f4c17a…a145f4`。修复字符串错误消息提取与中断类型，21/30 号已迁移并固定新 ELF；实现和验收见第 13 节。
 
@@ -114,8 +116,8 @@ docker build -f worker/Dockerfile -t ccgateway-worker:302-local .
 
 使用 Bun **1.4.3**，编译 CLI 和 hooks-worker 双入口。release 目录包含 manifest.json 和版本目录中的原生 ELF/补丁清单；它被 git 忽略，构建 Worker 前必须准备。Dockerfile 固定默认版本 2.1.302，并去除 Windows 打包可能带来的目录组写权限，避免控制器拒绝不安全的目录。目录不存在或版本缺失时构建/创建失败，不退回安装未修改官方 CLI。
 
-- 当前补丁：`ccgateway-v9-stderr-errors`。
-- 当前 ELF SHA-256：`e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`（v9 错误元数据修订，第 13 节）；`b254b658…28152` 属于第 11 节的首次 v9 发布。
+- 当前补丁：`ccgateway-v10-raw-http-errors`。
+- 当前 ELF SHA-256：`2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905`（v10，第 15 节）；`e7f4c17a…a145f4` 属于第 13 节的 v9 修订，`b254b658…28152` 属于第 11 节的首次 v9 发布。
 - 本机 ELF：`artifacts/claude-2.1.302/claude-linux-native` 是 2026-10-18 生成的 **v7** 产物（SHA-256 `b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8`）；v8/v9 在 Linux 构建机产出，本机没有对应 ELF，重新构建前不要直接打包。
 - 历史测试镜像：v7 轮次的 `ccgateway-worker:302-v7-final`、`ccgateway-controller:302-v7-final`；`302-v7-test` 属于该轮中间验证。当前构建示例使用本地中性 tag `302-local`，不代表已验收产物。
 - 先准备包含 CLI 的 Worker 镜像和支持 cli-profile-v1 的 Controller，再更新 Core/界面并选择版本和模式；只有 source/semver 相同不证明镜像具备补丁。
@@ -305,7 +307,7 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 
 脱敏证据见 [取消分类发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
 
-## 15. v10 上游 HTTP 错误原样透传（实现，待发布验收）
+## 15. v10 上游 HTTP 错误原样透传（0.1.168 / 0.1.66 已发布）
 
 本节取代 v9 对非 JSON/超长 HTTP 错误重新封装的行为。真实上游 HTTP 错误的状态码、正文和 Content-Type 保留；JSON 不重序列化、不新增 code，文本、HTML、空正文和非 UTF-8 字节同样透传。只有本地输入校验、连接/超时、正文读取失败、CLI 协议/临时文件故障等本系统错误才生成错误结构。重试及账号状态策略仍可执行，但最终选择返回的上游响应不由错误分类器改写。
 
@@ -314,4 +316,15 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 - Core 将错误分类前缀与完整响应分开：小正文保留在内存，大正文写入私有临时文件，最终发出原始状态/正文，结束时删除文件（含重试与取消）。读取中断不会伪装成完整的上游 HTTP 错误。兼容路径和 Execute 回调路径均使用同一保留逻辑，跨协议错误也不重封装。
 - 用量日志从 `error.message`、顶层 message、字符串 error 或原始文本提取真实消息，与客户端正文渲染分离；`error_type=upstream_error` 仍是 Core 内部故障类别。客户端得到的上游 error.type/code 不变。没有消息的正文不补充猜测原因。
 
-补丁身份为 `ccgateway-v10-raw-http-errors`，增加 `request_raw_http_errors` 能力；必须重新构建原生 Bun ELF 并更新 CLI SHA/patch 固定，单独更新 Worker 或 Core 不能升级旧 CLI 的 64 KiB 行为。此前各节的 v9 发布 SHA 和测试是历史事实，不代表 v10 已部署。
+补丁身份为 `ccgateway-v10-raw-http-errors`，增加 `request_raw_http_errors` 能力；必须重新构建原生 Bun ELF 并更新 CLI SHA/patch 固定，单独更新 Worker 或 Core 不能升级旧 CLI 的 64 KiB 行为。诊断字段会转义数据库不接受的 NUL/非法 UTF-8；客户端正文仍使用未经改变的字节。此前各节的 v9 SHA 和验收记录保留为历史事实。
+
+### 发布与验收
+
+- Core 源码 `9c690dcbbf9b958a36d6281e1d8a3aec93989b32`，运行环境源码 `234840c2c5a6c614377b1621d64aecc10aa92bb0`。后一个 Core 提交仅补充诊断存储处理，不改变运行环境源码。Bun 1.4.3 编译双入口原生 ELF，SHA-256 为 `2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905`。
+- 36 项支持模块测试通过；Windows Engine 全量和 Core 专项通过，Linux Core gateway/Engine/Worker 全量通过（数据库使用隔离 PostgreSQL）。原生 CLI + Worker 在 direct/build 各层共 32 个场景通过，涵盖 JSON、HTML、文本、空正文、非法 UTF-8、180 KiB 错误正文、成功 JSON/SSE；HTTP 状态、Content-Type 和正文均核对。首次 Worker 探针 10 秒启动等待不足，扩大等待至 60 秒后对相同二进制验证通过，未修改就绪检查。
+- 四个 Core 节点升级至 **0.1.168**，插件/Controller/Worker 为 **0.1.66**，升级计划 `8e642aab6dd95811fd4eb02fba7a32b3` completed/27，manifest `c6cdd7355d6ad6da43f7e3603f6f196842036609a82d4e1e4528ecd59b6677a0`。0.1.167 只完成构建，没有切换线上；最终版加入诊断存储修订后以 0.1.168 发布。
+- 21/30/31/32 app 逐个迁移至 `ccgateway-app:0.1.66`，保留授权卷、环境、安全配置、固定 IP；旧 app 以 `-rollback-raw167` 后缀停止断网留作回滚。四账号均 ready，CLI 版本/patch/SHA 和 Worker build 校验通过，默认 build、禁更保持；未来创建目标镜像同为 .66，共享出口未变。
+- 公网真实请求 `2647d19ad8e76527c2198cd7` 经 32 号返回 HTTP 400，原始 `invalid_request_error` 与 `top_p: range: 0..1` 均保留；客户端正文和 Worker response.body SHA-256 同为 `e0f1000425018590e0678903a4424ffd8bb799b7d0b07df680602183cbdce63a`。Core 用量日志记录实际消息、attempts=1。
+- 备份在 `~/sup2api-managed/backups/ccgateway-raw-errors-0.1.167/`。数据库/四账号卷归档已检查；Controller 全目录在线归档遇到文件变动，因此另外短暂暂停 Controller、保存并校验 `controller-config-consistent.tar.gz` 的配置快照，不把前一份在线归档当作一致快照。最终制品和验证在 `~/sup2api-managed/stage/0.1.168/`，原生测试在 `~/sup2api/checks/ccg-302-v10/`。
+
+证据：[原生探针](cli-research/2.1.302/raw-http-errors-native-probe.json)、[发布与公网验收](cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。

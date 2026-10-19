@@ -1,6 +1,8 @@
 # CCGateway 请求模式
 
-2026-10-19 最新：Core **0.1.165** / ccgateway **0.1.65** 已区分调用方取消与 Worker 超时。未发响应时取消只记诊断 499；已发响应时保留 HTTP 状态并记录 client_canceled。21/30 Worker 已原地更新，CLI 2.1.302/v9 及固定 SHA 保持。[发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
+2026-10-19 最新：Core **0.1.168** / ccgateway **0.1.66** / CLI **2.1.302/v10** 已上线。direct/build 均将上游 HTTP 错误状态和正文原样返回，包括空正文、非 JSON、非 UTF-8 和超过 64 KiB 的内容；只在本地转发失败时生成错误。21/30/31/32 均已固定新原生 ELF，日志保存上游实际消息。[发布验收](cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。
+
+2026-10-19 0.1.165 发布：Core **0.1.165** / ccgateway **0.1.65** 已区分调用方取消与 Worker 超时。未发响应时取消只记诊断 499；已发响应时保留 HTTP 状态并记录 client_canceled。21/30 Worker 已原地更新，CLI 2.1.302/v9 及固定 SHA 保持。[发布验收](cli-research/2.1.302/cancellation-deployment-0.1.165.json)。
 
 2026-10-19 0.1.164 发布：Core **0.1.164** / ccgateway **0.1.64** 已发布重新编译的 **2.1.302/v9** 原生 CLI，修复字符串错误消息提取和中断类型，21/30 号固定新 ELF SHA。两账号 Opus 测试、公网错误透传和正常 SSE 均通过；业务默认 build。[修订与发布验收](cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
 
@@ -21,7 +23,7 @@
 
 测试错误只展示实际 HTTP 状态、上游错误码和响应正文；上游没有错误码时只保留 HTTP 状态，不生成额外错误码。实际响应头按既有白名单返回。HTTP 失败不显示或持久化 ClassifyError 推导的原因、禁用/冷却建议，也不根据配额读数补充原因。业务转发的分类和调度规则保持原样。
 
-CLI v9 的错误通道使用结构化 stderr，由 Worker 按错误帧封装 HTTP 状态和错误正文；正常 JSON/SSE 继续从 stdout 返回。流中途断开会向客户端传播为中断，不作为正常完成；详细契约见 [stderr 错误协议](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#11-stderr-错误协议v9)。
+CLI v10 保留结构化 stderr 状态/诊断通道，完整 HTTP 错误正文通过 Worker 请求目录中的 sidecar 文件传递，不受 stderr 行长度限制；Worker/Core 原样发送上游状态、Content-Type 和正文。正常 JSON/SSE 继续从 stdout 返回。流中途断开会向客户端传播为中断，不作为正常完成；v9 的非 JSON/超长错误封装行为已被替代，详细契约见 [302 文档第 15 节](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。
 
 ## 配置和迁移
 
