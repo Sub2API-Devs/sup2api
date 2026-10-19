@@ -21,7 +21,7 @@ export function httpErrorFrame(response, body, truncated = false) {
   const type = text(detail?.type, errorType(status), 128);
   const nativeCode = typeof detail?.code === 'number' && Number.isFinite(detail.code) ? String(detail.code) : detail?.code;
   const code = text(nativeCode, type, 128);
-  const message = text(detail?.message ?? parsed?.message ?? (typeof parsed === 'string' ? parsed : undefined), `Upstream returned HTTP ${response.status}`);
+  const message = text(detail?.message ?? parsed?.message ?? (typeof detail === 'string' ? detail : undefined) ?? (typeof parsed === 'string' ? parsed : undefined), `Upstream returned HTTP ${response.status}`);
   const headers = {};
   const original = new Headers(response.headers);
   const hop = new Set((original.get('connection') ?? '').split(',').map(name => name.trim().toLowerCase()));

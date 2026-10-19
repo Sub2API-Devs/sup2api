@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix } from '../request-error.js';
+import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix, maxErrorBody } from '../request-error.js';
 
 test('HTTP error frame preserves status, provider code, JSON bytes and safe headers', () => {
   const body = '{ "type":"error", "error":{"type":"rate_limit_error","code":"provider_quota","message":"line1\\nline2"},"request_id":"r" }\n';
@@ -41,8 +41,30 @@ test('a JSON string error body supplies the message instead of the fallback', ()
   assert.equal(frame.body, '"quota exceeded"');
 });
 
+test('string error fields remain supported alongside object and top-level messages', () => {
+  for (const payload of [{ error: 'quota exceeded' }, { error: { message: 'quota exceeded' } }, { message: 'quota exceeded' }]) {
+    const body = JSON.stringify(payload);
+    const frame = httpErrorFrame({ status: 429, headers: {} }, body);
+    assert.equal(frame.error.message, 'quota exceeded');
+    assert.equal(frame.body, body);
+  }
+  const frame = httpErrorFrame({ status: 429 }, '{"error":"secondary","message":"primary"}');
+  assert.equal(frame.error.message, 'primary');
+});
+
+test('a truncated JSON response retains its string error for the Worker envelope', () => {
+  for (const payload of ['quota exceeded', { error: 'quota exceeded' }]) {
+    const prefix = JSON.stringify(payload).padEnd(maxErrorBody, ' ');
+    const frame = httpErrorFrame({ status: 429 }, prefix, true);
+    assert.equal(frame.error.message, 'quota exceeded');
+    assert.equal(frame.status, 429);
+    assert.equal(frame.truncated, true);
+    assert.equal(frame.body, undefined);
+  }
+});
+
 test('interruption keeps the type consistent with its 502 status', () => {
-  for (const phase of ['input', 'build', 'transport']) {
+  for (const phase of ['input', 'build', 'transport', 'output']) {
     const frame = localErrorFrame(new Error('interrupted'), { phase, interrupted: true });
     assert.equal(frame.source, 'interrupted');
     assert.equal(frame.status, 502);

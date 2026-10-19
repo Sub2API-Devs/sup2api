@@ -64,7 +64,7 @@ claude --ccgateway-info
 - build 不承诺字节或 JSON 形状相等。文字可以变成 text 数组；没有提供 system/tools/metadata/thinking/temperature/stream 时，原生构建器可能补默认值。本轮最小输入实际出现 `system:[]`、`tools:[]`、原生 metadata.user_id、thinking.disabled、temperature:1、stream:false。需要保持字段完全缺省时用 direct。
 - CLI build 接口的 `systemPrompt` 字符串采用原生提示构建路径，回归中会加入 billing 提示和 Agent SDK 身份提示；数组形式按显式 system blocks 保留。Worker 提取 HTTP system 后使用结构化 blocks 路径，已通过真实客户端出入口对比；不要把 CLI 字符串输入的行为等同于 Worker 的 HTTP 重建路径。
 - request 现支持显式 API Key 与原生 OAuth 两条 Anthropic-compatible 路线（OAuth 实现见第 10 节）；选择 direct/build 的账号不再必须具备 API Key。OAuth 的可用性适用于已验证的原生 CC 请求形状，不表示上游接受任意简化的 Messages body。
-- 原生认证头在最终 fetch 边界校验；允许 X-Api-Key、anthropic-version/beta、JSON Content-Type、Accept 和固定 UA；CC/Stainless 会话头及客户端凭证不沿用。自定义环境头不能覆盖认证或 beta。
+- 原生认证头在最终 fetch 边界按认证路线校验。显式 API Key 路线仅保留 X-Api-Key、anthropic-version/beta、JSON Content-Type、Accept 和固定 UA，不沿用 CC/Stainless 会话头；OAuth 路线校验原生 Bearer 且禁止同时出现 X-Api-Key，保留 CC 生成的身份、SDK 和传输头，并合并认证 beta（见第 10 节）。两条路线都不沿用调用方凭证，自定义环境头不能覆盖认证或 beta。
 - build 拒绝 JS 无法精确表示的整数；direct 保留有效 JSON 的原文数字。取消、超时与 SSE 输出沿用 v7 实际测试过的公共发送实现；v9 起 HTTP 错误与本地异常改走结构化 stderr 帧，不再写入 stdout 或成功 meta，详见第 11 节。
 
 mods 的 native 工具注册独立于 request：同名完整覆盖，未知名称可交给 mods，hooks 明确拒绝仍生效。旧有 context、ask、结构化结果、完整 resume/TUI/ToolSearch 兼容缺口并未因迁移版本而自动修复，本轮不宣称这些场景完整兼容。
@@ -256,3 +256,9 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 - 私有备份 `~/sup2api-managed/backups/ccgateway-probe-0.1.163/` 的数据库与卷归档已检查；构建位于 `~/sup2api-managed/stage/0.1.163/`，验证位于 `~/sup2api/checks/ccg-probe-163/`。
 
 脱敏证据见 [账号探测发布验收](cli-research/2.1.302/account-probe-deployment-0.1.163.json)。
+
+## 13. v9 错误元数据修订（待构建与发布）
+
+本次修订 `request-error.js` 的错误元数据提取：同时支持顶层 JSON 字符串（如 `"quota exceeded"`）和字符串 `error` 字段（如 `{"error":"quota exceeded"}`），保留已有对象错误的 message 提取；不改写错误帧保存的原始 body。input/build/transport 阶段发生信号中断时统一使用 `source=interrupted`、HTTP 502、`type=api_error` 和 `code=cli_interrupted`，避免沿用输入阶段的 `invalid_request_error`。
+
+补丁名称仍为 `ccgateway-v9-stderr-errors`，但源码修订需要重新构建原生 ELF、生成 release manifest，并以新 ELF SHA-256 和 patch 固定账号容器；同版本号或同补丁名不能证明修订已应用。第 7、11、12 节的 `b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152` 是此前已发布 v9 的身份，不是本次修订的二进制验收结果。本节尚不声明新 ELF 已构建、部署或通过原生运行验证；新产物身份与上线结果应在发布后追加。

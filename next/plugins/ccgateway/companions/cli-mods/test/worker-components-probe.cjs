@@ -6,6 +6,10 @@ const server=http.createServer(async(req,res)=>{
   const chunks=[];for await(const chunk of req)chunks.push(chunk);let bytes=Buffer.concat(chunks);if(req.headers['content-encoding']==='gzip')bytes=zlib.gunzipSync(bytes);
   const raw=bytes.toString('utf8'),body=JSON.parse(raw);seen.push({raw,body,headers:req.headers});
   if(body.probe==='error'){const status=body.error_status??429;res.writeHead(status,{'content-type':'application/json','retry-after':'3','x-should-retry':'true','set-cookie':'private'});res.end(JSON.stringify({type:'error',error:{type:'fixture_error',code:'fixture_'+status,message:'fixture'}}));return;}
+  if(body.probe==='string-error'){
+    const raw=JSON.stringify(body.nested?{error:'quota exceeded'}:'quota exceeded');
+    res.writeHead(429,{'content-type':'application/json'});res.end(raw+(body.large?' '.repeat(70000):''));return;
+  }
   const message={id:'msg_worker_test',type:'message',role:'assistant',model:body.model,content:[{type:'tool_use',id:'t_worker',name:'ClientTool',input:{value:'caller executes'}}],stop_reason:'tool_use',usage:{input_tokens:1,output_tokens:1}};
   if(body.stream){res.writeHead(200,{'content-type':'text/event-stream'});res.end(`event: message_start\ndata: ${JSON.stringify({type:'message_start',message})}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n`);}
   else{res.setHeader('content-type','application/json');res.end(JSON.stringify(message));}
@@ -52,6 +56,12 @@ async function modeTest(mode){
       const response=await fetch(base+'/v1/messages',{method:'POST',headers:{'x-api-key':'gateway-fake'},body:JSON.stringify({...input,stream:false,probe:'error',error_status:status})});
       const error=await response.json();assert.equal(response.status,status);assert.equal(error.error.code,'fixture_'+status);assert.equal(response.headers.get('retry-after'),'3');assert.equal(response.headers.get('x-should-retry'),'true');assert.equal(response.headers.get('set-cookie'),null);
     }
+    for(const nested of [false,true])for(const large of [false,true]){
+      const response=await fetch(base+'/v1/messages',{method:'POST',headers:{'x-api-key':'gateway-fake'},body:JSON.stringify({...input,stream:false,probe:'string-error',nested,large})});
+      const raw=await response.text();assert.equal(response.status,429);
+      if(large)assert.equal(JSON.parse(raw).error.message,'quota exceeded');
+      else assert.equal(raw,JSON.stringify(nested?{error:'quota exceeded'}:'quota exceeded'));
+    }
     const invalidBeta=await fetch(base+'/v1/messages',{method:'POST',headers:{'x-api-key':'gateway-fake','anthropic-beta':'not a valid token'},body:JSON.stringify(input)});
     assert.equal(invalidBeta.status,400);assert.equal((await invalidBeta.json()).error.code,'cli_invalid_request');
     const beforeProbe=seen.length;
@@ -60,6 +70,7 @@ async function modeTest(mode){
     const logs=path.join(home,'data','request-logs');
     const records=fs.readdirSync(logs).map(n=>JSON.parse(fs.readFileSync(path.join(logs,n,'metadata.json'))));
     for(const status of [400,401,403,429,500,529])assert.ok(records.some(m=>m.status===status&&m.http_status===status&&m.error_code==='fixture_'+status),'missing accurate error log '+status);
+    assert.equal(records.filter(m=>m.status===429&&m.error==='quota exceeded').length,4,'string errors must retain upstream text in diagnostics');
     reports.push({mode,passed:true,modelRequests:seen.length-before,bodyBytesEqual:request.raw===raw,systemAndRolesPreserved:true,headerPolicyPassed:true});
   }finally{child.kill('SIGTERM');const timer=setTimeout(()=>child.kill('SIGKILL'),5000);await closed;clearTimeout(timer);}
 }

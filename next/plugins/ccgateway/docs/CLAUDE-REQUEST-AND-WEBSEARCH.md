@@ -136,7 +136,7 @@ claude request --input request.json --header 'anthropic-beta:your-beta'
 
 退出码：成功为 0，输入或传输错误为 1，上游 HTTP 错误为 2，中断为 130（v9 沿用）。v6 的 HTTP 错误正文写入 stdout；v9 改为一行 `CCG_REQUEST_ERROR` JSON 帧写入 stderr，并在开始时清除复用的 meta 路径。请求默认总超时 600000ms，可用 `--timeout-ms` 修改。认证头由 CC 负责，`--header` 不接受 Authorization、X-Api-Key、Host 等传输归属字段。输入只为路由和 stream 开关解析，发送使用原始 JSON 文本（去除可选 UTF-8 BOM），不重新序列化，因此大整数、空白和键序不会在此步骤改变。HTTP 传输仍可使用 CC 自身的压缩。
 
-v6 基线仅支持显式 API Key 的 Anthropic-compatible Messages 路线；v8 起支持原生 OAuth（302 记录第 10 节）。订阅账号、Bedrock、Vertex、Foundry 等仍不在 request 入口支持范围。入口沿用 CC 的 fast-path 策略和原生客户端；direct 不执行高层 prompt/history 转换。
+v6 基线仅支持显式 API Key 的 Anthropic-compatible Messages 路线；v8 起支持订阅账号的原生 OAuth（302 记录第 10 节）。Bedrock、Vertex、Foundry 等仍不在 request 入口支持范围。入口沿用 CC 的 fast-path 策略和原生客户端；direct 不执行高层 prompt/history 转换。
 
 这是新增命令行入口，不是新增 `$.model.request` mods API。后者在实现过程中根据需求改为了此命令。原有 mods 功能仍保留。
 

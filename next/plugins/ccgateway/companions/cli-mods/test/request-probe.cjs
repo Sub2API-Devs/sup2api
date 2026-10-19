@@ -19,6 +19,10 @@ const server = http.createServer(async (req, res) => {
   const body = JSON.parse(raw); seen.push({ raw, body, authPresent: req.headers['x-api-key'] === 'local-mock-key', beta: req.headers['anthropic-beta'] });
   if (body.probe === 'timeout') { const timer = setTimeout(() => res.end('{}'), 2000); res.on('close', () => clearTimeout(timer)); return; }
   if (body.probe === 'error') { res.writeHead(429, { 'content-type': 'application/json', 'x-probe-error': 'kept' }); res.end(errorText); return; }
+  if (body.probe === 'string-error') {
+    res.writeHead(429, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(body.nested ? { error: 'quota exceeded' } : 'quota exceeded') + (body.large ? ' '.repeat(70000) : '')); return;
+  }
   if (body.probe === 'http-error') {
     res.writeHead(body.error_status, { 'content-type': 'application/json', 'retry-after': '7', 'x-should-retry': 'true' });
     res.end(JSON.stringify({ type: 'error', error: { type: 'fixture_error', code: 'PROVIDER_CODE', message: 'fixture detail' } })); return;
@@ -52,9 +56,15 @@ async function run(name, body, extra = [], inputFile = false) {
     let stdout = '', stderr = '', incremental = false;
     child.stdout.on('data', chunk => { stdout += chunk; if (body?.stream && !streamEnded) incremental = true; if (name === 'interrupt') child.kill('SIGINT'); });
     child.stderr.on('data', chunk => stderr += chunk);
-    child.stdin.end(inputFile ? undefined : text);
+    let interruptPoll;
+    if (name === 'interrupt-input') {
+      const meta = extra[extra.indexOf('--response-meta') + 1];
+      // Metadata cleanup proves that the signal handler is installed. Keep
+      // stdin open to interrupt the input phase, without timing assumptions.
+      interruptPoll = setInterval(() => { if (!fs.existsSync(meta)) { clearInterval(interruptPoll); child.kill('SIGINT'); } }, 10);
+    } else child.stdin.end(inputFile ? undefined : text);
     const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
-    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ name, code, signal, stdout, stderr, incremental, requests: seen.slice(before) }); });
+    child.on('close', (code, signal) => { clearTimeout(timer); clearInterval(interruptPoll); resolve({ name, code, signal, stdout, stderr, incremental, requests: seen.slice(before) }); });
   });
 }
 
@@ -68,6 +78,18 @@ server.listen(0, '127.0.0.1', async () => {
     const streaming = { ...base, stream: true };
     r = await run('sse', streaming); reports.push(r); assert.equal(r.code, 0, r.stderr); assert.equal(r.stdout, sse); assert.equal(r.incremental, true); assert.deepEqual(r.requests[0].body, streaming);
     r = await run('error', { ...base, probe: 'error' }, ['--response-meta', metaFile]); reports.push(r); assert.equal(r.code, 2, r.stderr); assert.equal(r.requests.length, 1); assert.equal(failure(r).status,429); assert.equal(failure(r).body,errorText); assert.equal(fs.existsSync(metaFile),false);
+    for (const nested of [false, true]) for (const large of [false, true]) {
+      r = await run('string-error', { ...base, probe: 'string-error', nested, large }); reports.push(r);
+      assert.equal(r.code, 2, r.stderr); const frame = failure(r);
+      assert.equal(frame.status, 429); assert.equal(frame.error.message, 'quota exceeded');
+      if (large) { assert.equal(frame.truncated, true); assert.equal(frame.body, undefined); }
+      else assert.equal(frame.body, JSON.stringify(nested ? { error: 'quota exceeded' } : 'quota exceeded'));
+    }
+    fs.writeFileSync(metaFile, '{}');
+    r = await run('interrupt-input', base, ['--response-meta', metaFile]); reports.push(r);
+    assert.equal(r.code, 130, r.stderr); assert.equal(r.requests.length, 0);
+    assert.deepEqual(failure(r).error, {type:'api_error',code:'cli_interrupted',message:'CC request was interrupted'});
+    assert.equal(failure(r).source,'interrupted'); assert.equal(failure(r).status,502);
     for (const status of [400, 401, 403, 429, 500, 529]) {
       r = await run('http-'+status, { ...base, probe:'http-error', error_status:status }); reports.push(r);
       assert.equal(r.code,2,r.stderr); const f=failure(r); assert.equal(f.status,status); assert.equal(f.error.code,'PROVIDER_CODE'); assert.equal(f.error.message,'fixture detail'); assert.equal(f.headers['retry-after'],'7');
