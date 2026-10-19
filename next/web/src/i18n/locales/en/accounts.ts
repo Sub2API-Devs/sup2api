@@ -12,6 +12,8 @@ export default {
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', priorityWeight: 'Priority / weight'
   },
   editorUi: {
+    visualEdit: 'Visual', formatJson: 'Format', fillTemplate: 'Fill template', clickToCopy: 'Click to copy the model id', copiedModel: 'Copied {model}', removeModel: 'Remove {model}',
+    modelsJsonHint: 'A JSON array such as ["claude-opus-4-1", "claude-sonnet-4-5"]; comma or line separated ids work too.', mappingKeyHint: 'Keys are the requested model names, values the upstream model names they are replaced with',
     searchModels: 'Search model ID',
     chooseModels: 'Choose models',
     selectedOnly: 'Selected only',
@@ -33,7 +35,7 @@ export default {
     schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Gateway → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'Once any limit is reached the account is skipped for the rest of the window; 0 means unlimited',
     commonControlFixed: 'The plugin makes this control read-only. Existing accounts keep their current setting.',
     autoDisableGlobalOff: 'Automatic disabling is globally off. This switch has no effect and cannot be changed; the account preference is preserved.', autoDisableUnavailable: 'Unable to load the global automatic disabling setting. This switch cannot be changed for now; the account preference is preserved.',
-    unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type a complete model ID and press Enter or comma; mapping targets appear below each model' },
+    unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
   title: 'Accounts',
   subtitle: 'Upstream accounts used by the gateway. Account types are declared by plugins; a group can mix accounts of different types.',
   autoRefresh: 'Auto refresh',
@@ -95,6 +97,8 @@ export default {
   modelFilter: 'Filter by model',
   allModels: 'All models',
   modelInvalid: 'Not a complete model id (wildcards are not allowed): {model}',
+  modelsNotArray: 'Must be a JSON array of model id strings',
+  modelsJsonPlaceholder: '[\n  "claude-opus-4-1",\n  "claude-sonnet-4-5"\n]',
   modelDuplicate: 'Duplicate model: {model}',
   modelMapping: 'Model mapping',
   modelMappingHint: 'Request model → upstream model; both must be complete model ids',

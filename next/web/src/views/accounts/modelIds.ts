@@ -36,3 +36,21 @@ export function mappingProblem(v: unknown): { kind: 'notObject' } | ModelIdProbl
 
 /** Appends the ids not listed yet. */
 export const mergeIds = (list: readonly string[], add: readonly string[]) => [...new Set([...list, ...add])]
+
+/**
+ * The model list typed in the JSON box: a JSON array of ids
+ * (`["a","b"]`), or plain ids separated by commas, spaces or new lines.
+ * The ids, or what is wrong (`notArray`: JSON that is not a string array).
+ */
+export function parseModelListText(raw: string): { ids: string[] } | { problem: ModelIdProblem | { kind: 'notArray' } } {
+  const text = raw.trim()
+  if (!text.startsWith('[')) return parseModelIds(text)
+  let v: unknown
+  try {
+    v = JSON.parse(text)
+  } catch {
+    return { problem: { kind: 'notArray' } }
+  }
+  if (!Array.isArray(v) || v.some((m) => typeof m !== 'string')) return { problem: { kind: 'notArray' } }
+  return parseModelIds((v as string[]).join('\n'))
+}

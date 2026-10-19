@@ -1,16 +1,23 @@
-// Model list and model mapping of the account editor (CONTRACTS §16, §18):
-// tag / text editing of the list, table / JSON editing of the mapping, the
-// plugin defaults (§41) and the priced models offered as suggestions. The
-// editor commits pending edits (commitPending) before it saves.
+// Model list and model mapping of the account editor (CONTRACTS §16, §18),
+// edited like new-api's channel form: the list as a tag select or a JSON
+// array, the mapping as rows or a JSON object; plus the plugin defaults
+// (§41) and the priced models offered as suggestions. The editor commits
+// the JSON boxes (commitPending) before it saves.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
 import type { AccountType, Price } from '@/api/types'
 import { copyText } from '@/utils/format'
-import { mappingProblem, mergeIds, parseModelIds, type ModelIdProblem } from './modelIds'
+import { mappingProblem, mergeIds, parseModelListText, type ModelIdProblem } from './modelIds'
 
 type Mapping = Record<string, string>
+
+/** Example of the mapping JSON box: request model -> upstream model. */
+const MAPPING_TEMPLATE: Mapping = { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5', 'claude-3-opus-latest': 'claude-opus-4-1' }
+
+const modelsJSON = (list: string[]) => (list.length ? JSON.stringify(list, null, 2) : '')
+const mappingJSON = (m: Mapping) => (Object.keys(m).length ? JSON.stringify(m, null, 2) : '')
 
 export function useModelsEditor(accountType: () => AccountType | null | undefined) {
   const { t } = useI18n()
@@ -22,7 +29,6 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
    * stored until it is saved.
    */
   const prefilled = ref(false)
-  const modelDraft = ref('')
   const modelsText = ref('')
   const modelsTextMode = ref(false)
   const modelsError = ref('')
@@ -45,40 +51,29 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
     .then((r) => { modelOptions.value = [...new Set(r.items.map((p) => p.model).filter(Boolean))].sort() })
     .catch(() => undefined)
 
-  const problemText = (p: ModelIdProblem | { kind: 'notObject' }) =>
-    p.kind === 'notObject' ? t('accounts.mappingNotObject') : t(p.kind === 'invalid' ? 'accounts.modelInvalid' : 'accounts.modelDuplicate', { model: p.model })
+  const problemText = (p: ModelIdProblem | { kind: 'notObject' } | { kind: 'notArray' }) =>
+    p.kind === 'notObject'
+      ? t('accounts.mappingNotObject')
+      : p.kind === 'notArray'
+        ? t('accounts.modelsNotArray')
+        : t(p.kind === 'invalid' ? 'accounts.modelInvalid' : 'accounts.modelDuplicate', { model: p.model })
 
   // ---------------------------------------------------------------- model list
 
   function setModels(next: string[]) {
     models.value = next
-    if (modelsTextMode.value) modelsText.value = next.join('\n')
+    if (modelsTextMode.value) modelsText.value = modelsJSON(next)
     modelsError.value = ''
   }
 
-  function commitDraft() {
-    if (!modelDraft.value.trim()) return
-    const r = parseModelIds(modelDraft.value, models.value)
-    if ('problem' in r) {
-      modelsError.value = problemText(r.problem)
-      return
-    }
-    setModels([...models.value, ...r.ids])
-    modelDraft.value = ''
+  /** A typed id the tag select refused. */
+  function rejectModel(model: string) {
+    modelsError.value = t('accounts.modelInvalid', { model })
   }
 
-  function onModelKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      commitDraft()
-    } else if (e.key === 'Backspace' && !modelDraft.value && models.value.length) {
-      setModels(models.value.slice(0, -1))
-    }
-  }
-
-  /** Parses the textarea back into `models`; false (with an error) on bad input. */
+  /** Parses the JSON box back into `models`; false (with an error) on bad input. */
   function syncModelsText(): boolean {
-    const r = parseModelIds(modelsText.value)
+    const r = parseModelListText(modelsText.value)
     if ('problem' in r) {
       modelsError.value = problemText(r.problem)
       return false
@@ -87,18 +82,24 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
     modelsError.value = ''
     return true
   }
-  /** The text mode is parsed first (a no-op in tag mode). */
+  /** The JSON box is parsed first (a no-op with the tag select). */
   const modelsSynced = () => !modelsTextMode.value || syncModelsText()
 
-  function toggleModelsText() {
-    if (modelsTextMode.value) {
+  /** Switches between the tag select (false) and the JSON box (true). */
+  function setModelsTextMode(on: boolean) {
+    if (on === modelsTextMode.value) return
+    if (!on) {
       if (syncModelsText()) modelsTextMode.value = false
       return
     }
-    commitDraft()
-    modelsText.value = models.value.join('\n')
+    modelsText.value = modelsJSON(models.value)
     modelsError.value = ''
     modelsTextMode.value = true
+  }
+
+  /** Rewrites the JSON box as a formatted array. */
+  function formatModelsText() {
+    if (syncModelsText()) modelsText.value = modelsJSON(models.value)
   }
 
   /** Appends the models missing from the list; returns how many were added. */
@@ -112,7 +113,6 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
   function clearModels() {
     models.value = []
     modelsText.value = ''
-    modelDraft.value = ''
     modelsError.value = ''
   }
 
@@ -124,14 +124,13 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
   /** Merges the default models into the list; existing entries are kept. */
   function fillDefaultModels() {
     if (!modelsSynced()) return
-    commitDraft()
     const added = mergeModels(defaultModels.value)
     toast(added ? t('accounts.editorUi.defaultsAdded', { n: added }) : t('accounts.editorUi.defaultsNothingNew'), added ? 'success' : 'info')
   }
 
   // ---------------------------------------------------------------- mapping
 
-  /** Parses the raw JSON textarea back into `mapping`. */
+  /** Parses the JSON box back into `mapping`. */
   function syncMappingText(): boolean {
     const raw = mappingText.value.trim()
     let parsed: unknown = {}
@@ -147,14 +146,27 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
     return !p
   }
 
-  function toggleMappingJSON() {
-    if (mappingJsonMode.value) {
+  /** Switches between the row editor (false) and the JSON box (true). */
+  function setMappingJsonMode(on: boolean) {
+    if (on === mappingJsonMode.value) return
+    if (!on) {
       if (syncMappingText()) mappingJsonMode.value = false
       return
     }
-    mappingText.value = Object.keys(mapping.value).length ? JSON.stringify(mapping.value, null, 2) : ''
+    mappingText.value = mappingJSON(mapping.value)
     mappingError.value = ''
     mappingJsonMode.value = true
+  }
+
+  /** Rewrites the JSON box formatted. */
+  function formatMappingText() {
+    if (syncMappingText()) mappingText.value = mappingJSON(mapping.value)
+  }
+
+  /** An example mapping to start from (new-api's 填入模板); replaces the JSON box. */
+  function fillMappingTemplate() {
+    mappingText.value = JSON.stringify(MAPPING_TEMPLATE, null, 2)
+    mappingError.value = ''
   }
 
   /** Merges the default mapping (existing keys win) and keeps its request models schedulable. */
@@ -168,7 +180,7 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
       added++
     }
     mapping.value = next
-    if (mappingJsonMode.value) mappingText.value = JSON.stringify(next, null, 2)
+    if (mappingJsonMode.value) mappingText.value = mappingJSON(next)
     if (models.value.length) mergeModels(Object.keys(defaultMapping.value))
     toast(added ? t('accounts.editorUi.defaultMappingAdded', { n: added }) : t('accounts.editorUi.defaultsNothingNew'), added ? 'success' : 'info')
   }
@@ -196,23 +208,18 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
     mapping.value = { ...(map || {}) }
     prefilled.value = false
   }
-  /** Back to tag / table editing without pending input or errors. */
+  /** Back to tag / row editing without errors. */
   function resetEditing() {
     modelsError.value = ''
     mappingError.value = ''
     modelsTextMode.value = false
     mappingJsonMode.value = false
-    modelDraft.value = ''
   }
 
-  /** Commits the text / JSON modes and the typed draft; false (with an error shown) when something is invalid. */
+  /** Commits the JSON boxes; false (with an error shown) when something is invalid. */
   function commitPending(): boolean {
-    if (modelsTextMode.value) {
-      if (!syncModelsText()) return false
-    } else {
-      commitDraft()
-      if (modelsError.value) return false
-    }
+    if (modelsTextMode.value && !syncModelsText()) return false
+    if (!modelsTextMode.value && modelsError.value) return false
     if (mappingJsonMode.value && !syncMappingText()) return false
     const p = mappingProblem(mapping.value)
     if (p) mappingError.value = problemText(p)
@@ -227,9 +234,9 @@ export function useModelsEditor(accountType: () => AccountType | null | undefine
 
   return {
     models, mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
-    modelDraft, modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
-    commitDraft, onModelKey, syncModelsText, toggleModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
-    syncMappingText, toggleMappingJSON, fillDefaultMapping,
+    modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
+    rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
+    syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping,
     clearPrefill, sameDefaults, applyDefaults, setSaved, resetEditing, commitPending, payload
   }
 }

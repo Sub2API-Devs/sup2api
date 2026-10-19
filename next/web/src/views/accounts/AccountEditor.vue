@@ -19,7 +19,7 @@ import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
-import ModelListEditor from '@/components/models/ModelListEditor.vue'
+import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import { lt } from '@/i18n'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
@@ -132,10 +132,14 @@ watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { f
 const editorModels = useModelsEditor(() => props.accountType)
 const {
   models, mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
-  modelDraft, modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
-  commitDraft, onModelKey, syncModelsText, toggleModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
-  syncMappingText, toggleMappingJSON, fillDefaultMapping, clearPrefill
+  modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
+  rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, fillDefaultModels,
+  syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping, clearPrefill
 } = editorModels
+/** JSON example of the mapping box (not an i18n message: braces are placeholders there). */
+const mappingPlaceholder = '{\n  "claude-3-5-sonnet-latest": "claude-sonnet-4-5"\n}'
+/** 可视化 / JSON switch of the model list and mapping cards (new-api's 可视化 / 手动编辑). */
+const editModes = computed(() => [{ value: 'visual', label: t('accounts.editorUi.visualEdit') }, { value: 'json', label: 'JSON' }])
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 const defaultMappingCount = computed(() => Object.keys(defaultMapping.value).length)
 
@@ -704,30 +708,27 @@ async function save(event: Event) {
               </h3>
             </template>
             <template #actions>
-              <SLink as="button" class="text-xs" data-testid="models-text-toggle" @click="toggleModelsText">{{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}</SLink>
+              <SSegmented size="sm" :options="editModes" :model-value="modelsTextMode ? 'json' : 'visual'" :aria-label="t('accounts.models')" data-testid="models-mode" @update:model-value="setModelsTextMode($event === 'json')" />
             </template>
 
-            <div class="mb-3 flex flex-wrap items-center gap-2">
-              <SButton v-if="defaultModels.length" size="sm" icon="download" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}</SButton>
+            <SField :error="modelsError || serverModelsError">
+              <div v-if="modelsTextMode" class="space-y-2">
+                <STextarea v-model="modelsText" mono :rows="10" :placeholder="t('accounts.modelsJsonPlaceholder')" data-testid="models-json" @blur="syncModelsText()" />
+              </div>
+              <ModelTagSelect v-else v-model="models" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" :placeholder="t('accounts.modelsPlaceholder')" :error="!!(modelsError || serverModelsError)" @update:model-value="modelsError = ''" @invalid="rejectModel" />
+              <template #hint>
+                <SHint v-if="!models.length && !modelsTextMode" inline size="xs" tone="success" class="inline-flex items-center gap-1"><SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}</SHint>
+                <template v-else>{{ modelsTextMode ? t('accounts.editorUi.modelsJsonHint') : t('accounts.editorUi.modelsInputHint') }}</template>
+              </template>
+            </SField>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <SButton v-if="defaultModels.length" size="sm" variant="primary" icon="download" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}</SButton>
               <SButton v-if="canFetch" size="sm" icon="refresh" :loading="fetching" data-testid="models-fetch" :title="t('accounts.fetchModelsHint')" @click="fetchModels">{{ t('accounts.fetchModels') }}</SButton>
+              <SButton v-if="modelsTextMode" size="sm" variant="ghost" icon="code" data-testid="models-format" @click="formatModelsText">{{ t('accounts.editorUi.formatJson') }}</SButton>
               <SButton size="sm" variant="ghost" icon="copy" :disabled="!models.length" data-testid="models-copy" @click="copyModels">{{ t('accounts.editorUi.copyModels') }}</SButton>
               <SButton size="sm" variant="ghost" icon="trash" :disabled="!models.length && !modelsText.trim()" data-testid="models-clear" @click="clearModels">{{ t('accounts.editorUi.clearModels') }}</SButton>
             </div>
-
-            <SField :error="modelsError || serverModelsError">
-              <STextarea v-if="modelsTextMode" v-model="modelsText" mono :rows="8" :placeholder="t('accounts.modelsTextPlaceholder')" @blur="syncModelsText()" />
-              <div v-else class="space-y-3">
-                <ModelListEditor v-model="models" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" @update:model-value="modelsError = ''" />
-                <div class="flex items-center gap-2">
-                  <SInput v-model="modelDraft" size="sm" mono list="account-model-options" class="min-w-0 flex-1" :placeholder="t('accounts.modelsPlaceholder')" :aria-label="t('accounts.modelsPlaceholder')" @keydown="onModelKey" @blur="commitDraft" />
-                  <SButton size="sm" icon="plus" :disabled="!modelDraft.trim()" @click="commitDraft">{{ t('accounts.editorUi.addModels') }}</SButton>
-                </div>
-              </div>
-              <template #hint>
-                <SHint v-if="!models.length" inline size="xs" tone="success" class="inline-flex items-center gap-1"><SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}</SHint>
-                <template v-else>{{ t('accounts.editorUi.modelsInputHint') }}</template>
-              </template>
-            </SField>
             <p class="mt-3 flex items-start gap-1.5 text-xs text-fg-subtle"><SIcon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />{{ t('accounts.editorUi.groupModelHint') }}</p>
             <datalist id="account-model-options">
               <option v-for="o in modelOptions" :key="o" :value="o" />
@@ -739,14 +740,21 @@ async function save(event: Event) {
               <h3 class="flex items-center gap-2 text-sm font-semibold text-fg">{{ t('accounts.modelMapping') }}<SBadge v-if="mappingCount" tone="accent">{{ mappingCount }}</SBadge></h3>
             </template>
             <template #actions>
-              <SButton v-if="defaultMappingCount" size="sm" icon="download" data-testid="mapping-fill-defaults" @click="fillDefaultMapping">{{ t('accounts.editorUi.fillDefaultMapping', { n: defaultMappingCount }) }}</SButton>
-              <SLink as="button" class="ml-1 text-xs" data-testid="mapping-json-toggle" @click="toggleMappingJSON">{{ mappingJsonMode ? t('accounts.tableEdit') : t('accounts.jsonEdit') }}</SLink>
+              <SSegmented size="sm" :options="editModes" :model-value="mappingJsonMode ? 'json' : 'visual'" :aria-label="t('accounts.modelMapping')" data-testid="mapping-mode" @update:model-value="setMappingJsonMode($event === 'json')" />
             </template>
 
             <SField :error="mappingError || serverMappingError">
-              <STextarea v-if="mappingJsonMode" v-model="mappingText" mono :rows="8" placeholder="{&quot;claude-3-5-sonnet-latest&quot;: &quot;claude-sonnet-4-5&quot;}" @blur="syncMappingText()" />
+              <STextarea v-if="mappingJsonMode" v-model="mappingText" mono :rows="10" :placeholder="mappingPlaceholder" data-testid="mapping-json" @blur="syncMappingText()" />
               <ModelMappingEditor v-else v-model="mapping" :models="models" list-id="account-model-options" @add-models="mergeModels" />
+              <template #hint>{{ t('accounts.editorUi.mappingKeyHint') }}</template>
             </SField>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <SButton v-if="defaultMappingCount" size="sm" icon="download" data-testid="mapping-fill-defaults" @click="fillDefaultMapping">{{ t('accounts.editorUi.fillDefaultMapping', { n: defaultMappingCount }) }}</SButton>
+              <template v-if="mappingJsonMode">
+                <SButton size="sm" variant="ghost" icon="list" data-testid="mapping-template" @click="fillMappingTemplate">{{ t('accounts.editorUi.fillTemplate') }}</SButton>
+                <SButton size="sm" variant="ghost" icon="code" data-testid="mapping-format" @click="formatMappingText">{{ t('accounts.editorUi.formatJson') }}</SButton>
+              </template>
+            </div>
           </SCard>
         </div>
 

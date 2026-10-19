@@ -12,6 +12,8 @@ export default {
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', priorityWeight: '优先级 / 权重'
   },
   editorUi: {
+    visualEdit: '可视化', formatJson: '格式化', fillTemplate: '填入模板', clickToCopy: '点击复制模型 ID', copiedModel: '已复制 {model}', removeModel: '移除 {model}',
+    modelsJsonHint: 'JSON 数组，例如 ["claude-opus-4-1", "claude-sonnet-4-5"]；也可以直接粘贴逗号或换行分隔的模型 ID。', mappingKeyHint: '键为请求中的模型名称，值为要替换成的上游模型名称',
     searchModels: '搜索模型 ID',
     chooseModels: '选择模型',
     selectedOnly: '只看已选',
@@ -33,7 +35,7 @@ export default {
     schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 网关 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: '达到任一上限后，本窗口内不再调度该账号；0 表示不限',
     commonControlFixed: '该通用开关由插件设为不可配置，已有账号保留当前设置。',
     autoDisableGlobalOff: '全局自动禁用已关闭，此开关暂不生效且不可修改；账号原有设置会保留。', autoDisableUnavailable: '无法读取全局自动禁用设置，暂时无法修改此开关；账号原有设置会保留。',
-    unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', unitSpm: '会话 / 分钟', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入完整模型 ID，回车或逗号添加；映射目标显示在模型下方' },
+    unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', unitSpm: '会话 / 分钟', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入或从下拉中选择模型，回车或逗号添加，可粘贴逗号或换行分隔的列表；点击标签复制，已映射的模型显示 → 目标' },
   title: '账号',
   subtitle: '网关使用的上游账号。账号类型由插件声明，同一分组可以混放不同类型的账号。',
   autoRefresh: '自动刷新',
@@ -95,6 +97,8 @@ export default {
   modelFilter: '按模型筛选',
   allModels: '全部模型',
   modelInvalid: '不是合法的完整模型 ID（不允许通配符）：{model}',
+  modelsNotArray: '必须是由模型 ID 字符串组成的 JSON 数组',
+  modelsJsonPlaceholder: '[\n  "claude-opus-4-1",\n  "claude-sonnet-4-5"\n]',
   modelDuplicate: '模型重复：{model}',
   modelMapping: '模型映射',
   modelMappingHint: '请求模型 → 上游模型；两侧都必须是完整模型 ID',
