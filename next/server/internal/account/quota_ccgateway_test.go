@@ -63,9 +63,10 @@ func TestQuotaRuntimeBoundToOwningPlugin(t *testing.T) {
 	require.Equal(t, id, plugin.account)
 	require.EqualValues(t, 1, plugin.parsed.Load())
 	e.do("GET", fmt.Sprintf("/accounts/%d/quota?force=true", id), nil)
-	require.EqualValues(t, 1, runtime.calls.Load())
+	require.EqualValues(t, 2, runtime.calls.Load())
+	require.EqualValues(t, 2, plugin.parsed.Load())
 	snapshots, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
 	require.NoError(t, err)
 	require.Equal(t, "custom", snapshots[id].Windows[0].Key)
-	require.EqualValues(t, 1, runtime.calls.Load())
+	require.EqualValues(t, 2, runtime.calls.Load())
 }
