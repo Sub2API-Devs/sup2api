@@ -169,7 +169,7 @@ func TestQuotaNextCheckUsesRefreshAndObservedResets(t *testing.T) {
 		status string
 		delay  time.Duration
 	}{
-		{0, "allowed", quotaRefresh}, {now.Add(time.Hour).Unix(), "rejected", quotaRefresh},
+		{0, "allowed", 30 * time.Minute}, {now.Add(time.Hour).Unix(), "rejected", 30 * time.Minute},
 		{now.Add(10 * time.Second).Unix(), "rejected", 11 * time.Second}, {now.Add(-time.Second).Unix(), "rejected", 30 * time.Second},
 	} {
 		require.Equal(t, now.Add(tc.delay).Unix(), nextQuotaCheck(now, []*pluginv1.QuotaWindow{{Key: "5h", ResetsAtUnix: tc.reset, Status: tc.status}}))

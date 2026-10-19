@@ -2573,7 +2573,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 | `source` | 最新数据来源 `passive` / `active`；只有查询占位、尚无数据时为 `''` |
 | `error` | 最近一次主动查询的错误（`auth_rejected: …` / `transient: …` / `plugin: …`），冒号后为插件 `QuotaResult.error_message`（去控制字符、合并空白、最多 256 字节；为空时为 `quota query failed`），控制台据此显示原因、插件可用性据此判断；任何一次成功写入（被动或主动）清空 |
 | `updated_at` | 窗口最近一次写入时间（数据库时钟）；NULL = 尚无数据 |
-| `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），非强制查询的 30 秒下限按后者在 PG 中原子判断，多节点有效；手动 `force=true` 不受时间间隔限制 |
+| `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），非强制查询的 30 分钟下限按后者在 PG 中原子判断，多节点有效；手动 `force=true` 不受时间间隔限制 |
 
 窗口 key：`5h`、`7d`、`7d_sonnet`、`7d_fable` 为控制台已知 key（Anthropic 的 `7d_oi` 头 / `seven_day_overage_included` 字段即 Fable 周窗口；2026-10 起 usage 应答不再给该字段，改在 `limits[]` 中以 `kind: "weekly_scoped"`、`scope.model.display_name: "Fable"`、`percent` 给出，旧字段缺失时取它；Sonnet 同理），其他供应商可用自定义 key（`^[a-z0-9][a-z0-9_]{0,31}$`）。`utilization` 一律为**百分比**（0–100，可因超额超过 100）。
 
@@ -2624,9 +2624,10 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 ```
 
 - 类型不支持额度：`{supported: false, source: "", updated_at: null, error: "", windows: []}`，不访问上游。
-- 是否主动查询（仅 `quota.query` 类型）：非强制请求距 `last_active_at` 不足 30 秒时直接返回快照；有 `next_check_at` 则按该时间决定是否查询。没有调度时间时，快照 `updated_at` 不足 3 分钟（被动或主动都算），或上次主动查询失败且距 `last_active_at` 不足 1 分钟，也直接返回。手动 `force=true` 跳过这些新鲜度、负缓存、调度时间与时间间隔限制，完成后可立即再次刷新；前端同样没有刷新冷却。同一节点同一账号正在进行的查询经 singleflight 合并；跨节点由 `LeaseAccountQuota` 的有效租约阻止并发查询，抢不到的直接返回当前快照。强制刷新不绕过有效租约，自动调度及非强制查询仍保留原有间隔。
+- 是否主动查询（仅 `quota.query` 类型）：非强制请求距 `last_active_at` 不足 30 分钟时直接返回快照；有 `next_check_at` 则在满足该下限后按调度时间决定。没有调度时间时，快照 `updated_at` 不足 30 分钟（被动或主动都算）也直接返回；失败重试同样等待 30 分钟。手动 `force=true` 跳过这些新鲜度、负缓存、调度时间与时间间隔限制，完成后可立即再次刷新；前端同样没有刷新冷却。同一节点同一账号正在进行的查询经 singleflight 合并；跨节点由 `LeaseAccountQuota` 的有效租约阻止并发查询，抢不到的直接返回当前快照。后台候选筛选和实际领取租约使用相同的 30 分钟下限，旧的提前调度记录也不能绕过；强制刷新仍不绕过有效租约。
 - 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。
 - 窗口顺序、名称与短标签由插件的 `quota.windows` 声明；未声明的窗口按通用回退规则展示 key。`resets_at` 已过仅表示等待核验，返回 `expired: true`，保留上次实际观测的使用率、重置时间和状态；不得把时间经过伪装成上游已确认恢复。窗口可附 `label`、`short_label` 本地化文本，快照附 `next_check_at` 与 `refresh_status`（`pending` / `ready` / `error`）。
+- 控制台配额窗口始终竖排（包括紧凑列表），显示最近观测时间，不显示下次查询时间或独立刷新按钮。点击配额区域立即强制刷新；键盘 Enter/空格同样可用，进行中显示状态并阻止重复点击。列表和账号详情复用同一组件。
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
@@ -2655,10 +2656,11 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - 请求按插件批量携带 `ModelAvailabilityCandidate{account_id, account_type, model, client_model, quota}` 与 `now_unix`。`model` 为上游模型，`quota` 为持久化快照，不携带凭据或任意账号配置。结果逐账号、逐模型返回 `AVAILABLE`、`UNAVAILABLE` 或 `UNKNOWN`，可附原因及可信重试时间。核心不认识供应商模型前缀、套餐窗口和耗尽阈值。
 - SDK 提供可选 `ModelAvailabilityChecker`；启用模型准入或自动配额查询的插件需要 Host API 7。wire protocol 仍为 1，旧插件不需要实现新接口。新插件必须在不支持能力的旧核心上拒绝初始化，不能静默忽略准入限制。
 - 权重、优先级及粘性规则保持原有行为。有效粘性绑定不参加权重抽选，也不累计分配补偿；模型不可用是硬准入，不可用 `scheduler.rank` 的权重 0 代替，不可被排序插件 fail-open 恢复。
-- `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。后台到期复查、人工刷新共用查询下限与租约。失败保留账号及调度开关，记录错误并退避；不得为额度查询启用停用账号、启动停止的运行时、注销或刷新 OAuth 授权。
+- `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。后台正常复查与失败重试默认 30 分钟，插件建议不能早于该间隔，较晚的调度时间仍保留（最多 24 小时）；手动强制刷新跳过时间限制，但共用租约。失败保留账号及调度开关并记录错误；不得为额度查询启用停用账号、启动停止的运行时、注销或刷新 OAuth 授权。
 - `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。例外（2026-10-14）：快照错误为 `transient: token_expired: …`（CCGateway 容器报访问令牌过期且存有刷新令牌）时 CCGateway 插件返回 `AVAILABLE`（原因 `quota_auth_refresh_on_request`）——容器内 Claude Code 只在模型请求时刷新令牌，按 UNKNOWN 拦截会让空闲超过令牌有效期的账号永远不可调度；已知耗尽窗口仍拦截、无效快照仍为 `UNKNOWN`。真的未登录（`auth_rejected: not_logged_in: …`）与令牌被拒且无法续期（`auth_rejected: token_revoked: …`）返回 `UNKNOWN`（原因 `authorization_required`），重新授权后恢复。
 - `BuildQuotaRequestResponse.runtime_operation` 与普通 HTTP URL 目标区分。运行时请求通过已注册的 `AccountQuotaRuntime`、当前账号与受限只读操作执行；不接受插件指定任意运行时 URL，也不向插件暴露 Worker 管理密钥或容器 OAuth token。配额解析仍统一由插件的 `ParseQuotaResponse` 完成。
 - CCGateway 的托管账号声明运行时 `usage` 查询。插件解析共享窗口与模型专属窗口，用映射后模型的 `claude-fable-` 前缀识别 Fable；共享耗尽优先限制全部模型，Fable 专属耗尽只影响 Fable。缺失窗口、失败查询和仅仅到达 reset 时间都不能清除已知耗尽事实。
+- CCGateway 0.1.69 的快照有效期同步为 30 分钟；本轮核心查询周期变更需配合该插件版本发布，不能留下旧插件 3 分钟的过期判断。插件仍可报告窗口重置后的提前核验建议，核心按上述 30 分钟下限调度；手动强制查询不受影响。
 - `ClassifyErrorResponse.quota` 承载插件确认的配额观测，核心只校验及存储。观测保存使用准入时由核心捕获的 `AccountQuotaSnapshot.generation`，不得信任插件指定的身份代次；重新授权前的迟到拒绝或恢复不能覆盖新身份。revision 已变化的旧查询不能延后更新的复查计划或覆盖失败计数。
 - `QuotaWindow.utilization_unknown` 默认为 false，兼容旧插件的数值语义。只有状态、没有数值的 CLI 观测设为 true，且 utilization、used、limit 必须都为 0；这三个默认值不表示真实使用量。API 保留未知标记，界面显示未知而非 0%，后续明确的真实 0 才作为已知数值展示。
 - 可信 CLI 事件明确指出模型专属限额时，CC 插件不附整账号冷却；未知范围仍采用保守分类，不能只凭请求模型猜测范围。管理员自动禁用规则与人工状态始终独立有效。配额查询与模型准入不发送收费模型探针，不重新引入模型 HTTP/TLS 中继。
@@ -3388,7 +3390,7 @@ ccgateway 的实现（`server/internal/ccgateway/usage.go`）：
 
 **manifest 变更**（可选）：`next/plugins/ccgateway/manifest.json` 若需声明 `quota`（让核心识别该类型支持配额），可以只声明空的 `quota: {}`（不声明 headers，不声明 query）——核心通过 provider 扩展点查询，不走 manifest 声明的 RPC。若不改 manifest（保持版本 0.1.6），核心按"插件未实现 quota RPC"处理，provider 注册后同样生效。实际采用第二种：manifest 不变，核心按 provider 优先。
 
-沿用 §44 的 PG 快照逻辑；非强制查询保留新鲜度（3 分钟）、错误间隔（1 分钟）、每账号查询下限（30 秒，跨节点 PG 原子保证）。手动 `force=true` 无时间间隔限制，但仍受进行中查询的租约保护。账号列表加载时批量读取 quota 快照，显示在列表里（前端 `AccountsView.vue` 已经渲染 `quota`，CC 账号同样显示）。
+沿用 §44 的 PG 快照逻辑；非强制查询的新鲜度、错误间隔、每账号查询下限均为 30 分钟（跨节点 PG 原子保证，核心也会限制插件的提前查询建议）。手动 `force=true` 无时间间隔限制，但仍受进行中查询的租约保护。账号列表加载时批量读取 quota 快照，显示在列表里（前端 `AccountsView.vue` 已经渲染 `quota`，CC 账号同样显示）。
 
 ### 51.3 配额快照 Redis 缓存
 

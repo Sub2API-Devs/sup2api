@@ -92,14 +92,18 @@ func TestShouldQueryQuota(t *testing.T) {
 		{"no snapshot", nil, false, true},
 		{"fresh passive", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute)}, false, false},
 		{"fresh passive, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute)}, true, true},
-		{"stale", &store.QuotaSnapshot{UpdatedAt: ago(4 * time.Minute)}, false, true},
-		{"floor", &store.QuotaSnapshot{UpdatedAt: ago(4 * time.Minute), LastActiveAt: ago(10 * time.Second)}, false, false},
+		{"fresh for 30 minutes", &store.QuotaSnapshot{UpdatedAt: ago(29 * time.Minute)}, false, false},
+		{"stale", &store.QuotaSnapshot{UpdatedAt: ago(30 * time.Minute)}, false, true},
+		{"floor", &store.QuotaSnapshot{UpdatedAt: ago(time.Hour), LastActiveAt: ago(29 * time.Minute)}, false, false},
+		{"earlier saved schedule", &store.QuotaSnapshot{NextCheckAt: ago(time.Minute), LastActiveAt: ago(29 * time.Minute)}, false, false},
+		{"due after 30 minutes", &store.QuotaSnapshot{NextCheckAt: ago(time.Minute), LastActiveAt: ago(30 * time.Minute)}, false, true},
 		{"floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(10 * time.Second)}, true, true},
 		{"future timestamp, forced", &store.QuotaSnapshot{LastActiveAt: ago(-time.Hour)}, true, true},
-		{"after floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(31 * time.Second)}, true, true},
+		{"within automatic floor, forced", &store.QuotaSnapshot{UpdatedAt: ago(time.Minute), LastActiveAt: ago(31 * time.Second)}, true, true},
 		{"negative cache", &store.QuotaSnapshot{Error: "x", UpdatedAt: ago(10 * time.Minute), LastActiveAt: ago(40 * time.Second)}, false, false},
 		{"negative cache, forced", &store.QuotaSnapshot{Error: "x", UpdatedAt: ago(10 * time.Minute), LastActiveAt: ago(40 * time.Second)}, true, true},
-		{"negative cache expired", &store.QuotaSnapshot{Error: "x", LastActiveAt: ago(61 * time.Second)}, false, true},
+		{"negative cache remains fresh", &store.QuotaSnapshot{Error: "x", LastActiveAt: ago(29 * time.Minute)}, false, false},
+		{"negative cache expired", &store.QuotaSnapshot{Error: "x", LastActiveAt: ago(30 * time.Minute)}, false, true},
 	}
 	for _, c := range cases {
 		if got := shouldQueryQuota(c.snap, c.force, now); got != c.want {
@@ -296,10 +300,10 @@ func TestAccountQuotaAPI(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// A failure is recorded and negatively cached for a minute.
+	// A failure is recorded and negatively cached for 30 minutes.
 	up.failStatus.Store(503)
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '5 minutes',
-		updated_at = now() - interval '5 minutes', next_check_at = now() - interval '1 second'`); err != nil {
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '31 minutes',
+		updated_at = now() - interval '31 minutes', next_check_at = now() - interval '1 second'`); err != nil {
 		t.Fatal(err)
 	}
 	_, out = e.do("GET", path, nil)
@@ -307,7 +311,7 @@ func TestAccountQuotaAPI(t *testing.T) {
 	if up.calls.Load() != 4 || d["error"] == "" || d["windows"].([]any)[0].(map[string]any)["utilization"].(float64) != 55 {
 		t.Fatalf("failure: %v (calls %d)", out, up.calls.Load())
 	}
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '40 seconds'`); err != nil {
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_quota_snapshots SET last_active_at = now() - interval '29 minutes'`); err != nil {
 		t.Fatal(err)
 	}
 	e.do("GET", path, nil)

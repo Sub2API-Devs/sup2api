@@ -31,19 +31,19 @@ import (
 // AccountUsageService: the snapshot is fed mainly by the quota headers of
 // the gateway's own upstream responses (passive, no extra upstream call) and,
 // for account types whose plugin can ask the upstream, by an active query
-// that runs only when the console asks for a snapshot older than three
-// minutes. Explicit force refreshes have no elapsed-time cooldown.
+// with a minimum interval of 30 minutes. Explicit force refreshes have no
+// elapsed-time cooldown; passive response observations remain timely.
 
 const (
 	// quotaFresh: a snapshot younger than this (either source) is served as
 	// is (sub2api apiCacheTTL).
-	quotaFresh = 3 * time.Minute
+	quotaFresh = 30 * time.Minute
 	// quotaErrorTTL: after a failed active query the next one waits this long
 	// unless forced (sub2api apiErrorCacheTTL).
-	quotaErrorTTL = time.Minute
+	quotaErrorTTL = quotaFresh
 	// quotaQueryFloor is the minimum gap for non-forced/background queries
 	// of one account, on any node (enforced in PG).
-	quotaQueryFloor = 30 * time.Second
+	quotaQueryFloor = quotaFresh
 	// quotaPassiveInterval is the minimum gap between two passive writes of
 	// one account on one node; a status change is written at once.
 	quotaPassiveInterval = 30 * time.Second

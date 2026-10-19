@@ -211,7 +211,7 @@ export default {
     passiveHint: '来自最近请求的响应头，不额外查询上游',
     refresh: '刷新',
     refreshing: '刷新中',
-    refreshHint: '立即向上游查询用量',
+    refreshHint: '点击配额立即刷新用量',
     refreshed: '用量已更新'
   },
   autoReleaseAt: '{time} 自动解除禁用',

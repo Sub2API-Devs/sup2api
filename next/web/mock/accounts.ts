@@ -834,15 +834,14 @@ on('POST', '/accounts/:id/models/fetch', (req) => {
   const a = r.a
   return fetchUpstreamModels(a.plugin_key, req.body?.credentials || a.credentials)
 })
-// Subscription quota (QuotaSnapshot). force=true queries the "upstream" at
-// most every 30 s per account (sooner gets the cached snapshot back), with some
-// latency and drift; a rejected window stays rejected until it resets.
+// Subscription quota (QuotaSnapshot). Explicit refreshes have no cooldown;
+// the page coalesces in-flight clicks. A rejected window stays rejected.
 on('GET', '/accounts/:id/quota', async (req) => {
   const r = scopedAccount(req, 'read')
   if (!('a' in r)) return r
   const st = quotaStateOf(r.a)
   if (!st) return { supported: false, source: '', updated_at: null, error: '', windows: [] }
-  if (req.query.force === 'true' && Date.now() - st.activeAt >= 30_000) {
+  if (req.query.force === 'true') {
     await new Promise((ok) => setTimeout(ok, 700))
     st.activeAt = Date.now()
     st.source = 'active'

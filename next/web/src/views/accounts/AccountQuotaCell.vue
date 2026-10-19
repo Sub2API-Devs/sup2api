@@ -3,22 +3,28 @@
 // window (5h / 7d / 7d Sonnet / 7d Fable / unknown keys verbatim) with the
 // percentage and the time to reset, coloured by usage; a rejected window is
 // flagged. The snapshot comes from the list row — this cell never fetches;
-// "refresh" is emitted and the page applies the 30 s floor.
+// clicking the cell emits "refresh"; the page coalesces in-flight requests.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SIcon, SLink } from '@sub2api/ui'
+import { SBadge, SIcon } from '@sub2api/ui'
 import type { QuotaSnapshot } from '@/api/types'
 import { formatDateTime, formatRelative } from '@/utils/format'
 import { lt } from '@/i18n'
 import { formatPercent, quotaCountdown, quotaLevel, sortWindows, useQuotaClock, type QuotaLevel } from './accountQuota'
 
-const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean; compact?: boolean }>(), {
+const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean }>(), {
   refreshing: false,
   refreshable: true
 })
 const emit = defineEmits<{ (e: 'refresh'): void }>()
 const { t } = useI18n()
 const clock = useQuotaClock()
+
+function refresh(event: Event) {
+  if (!props.refreshable) return
+  event.stopPropagation()
+  if (!props.refreshing) emit('refresh')
+}
 
 const BAR: Record<QuotaLevel, string> = { ok: 'bg-success-500', warning: 'bg-warning-500', danger: 'bg-danger-500' }
 const TEXT: Record<QuotaLevel, string> = {
@@ -92,7 +98,18 @@ const updated = computed(() => {
 </script>
 
 <template>
-  <div class="min-w-44 space-y-1 text-xxs" data-testid="quota-cell">
+  <component
+    :is="refreshable ? 'button' : 'div'"
+    :type="refreshable ? 'button' : undefined"
+    :disabled="refreshable && refreshing ? true : undefined"
+    :aria-busy="refreshing || undefined"
+    :aria-description="refreshable ? t('accounts.quota.refreshHint') : undefined"
+    :title="refreshable ? t('accounts.quota.refreshHint') : undefined"
+    class="block min-w-44 space-y-1 rounded-md text-left text-xxs"
+    :class="refreshable ? 'cursor-pointer transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:cursor-wait disabled:opacity-60' : ''"
+    data-testid="quota-cell"
+    @click="refresh"
+  >
     <p
       v-if="queryError"
       class="max-w-[14rem] truncate text-warning-600 dark:text-warning-400"
@@ -108,7 +125,7 @@ const updated = computed(() => {
     >
       {{ pending }}
     </p>
-    <div :class="compact ? 'flex items-center gap-4' : 'space-y-1'">
+    <div class="space-y-1">
       <div
         v-for="r in rows"
         :key="r.key"
@@ -117,7 +134,7 @@ const updated = computed(() => {
         :data-testid="`quota-window-${r.key}`"
         :data-level="r.level"
       >
-        <span class="w-9 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
+        <span class="w-14 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
         <div
           class="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700"
           role="progressbar"
@@ -148,13 +165,6 @@ const updated = computed(() => {
     >
       {{ t('accounts.quota.noData') }}
     </p>
-    <p
-      v-if="quota.next_check_at"
-      class="text-fg-subtle"
-      data-testid="quota-next-check"
-    >
-      {{ t('accounts.quota.nextCheck', { time: formatDateTime(quota.next_check_at) }) }}
-    </p>
     <div class="flex items-center gap-1.5 text-fg-subtle">
       <span v-if="quota.source === 'passive'" class="italic" :title="t('accounts.quota.passiveHint')">{{
         t('accounts.quota.passive')
@@ -165,19 +175,9 @@ const updated = computed(() => {
         :title="formatDateTime(quota.updated_at)"
         data-testid="quota-observed"
       >{{ t('accounts.quota.lastObserved', { time: updated }) }}</span>
-      <SLink
-        v-if="refreshable"
-        as="button"
-        class="inline-flex items-center gap-0.5 whitespace-nowrap"
-        :disabled="refreshing"
-        :title="t('accounts.quota.refreshHint')"
-        data-testid="quota-refresh"
-        @click="emit('refresh')"
-      >
-        <SIcon name="refresh" class="h-3 w-3" :class="refreshing ? 'animate-spin' : ''" />{{
-          refreshing ? t('accounts.quota.refreshing') : t('accounts.quota.refresh')
-        }}
-      </SLink>
+      <span v-if="refreshing" class="inline-flex items-center gap-0.5 whitespace-nowrap" role="status">
+        <SIcon name="refresh" class="h-3 w-3 animate-spin" />{{ t('accounts.quota.refreshing') }}
+      </span>
     </div>
-  </div>
+  </component>
 </template>

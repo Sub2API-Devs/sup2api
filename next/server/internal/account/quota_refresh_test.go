@@ -87,7 +87,7 @@ func TestQuotaOptionalReaderAbsentPreservesObservations(t *testing.T) {
 					require.Equal(t, after.Windows, retried.Windows)
 					require.Equal(t, after.UpdatedAt, retried.UpdatedAt)
 					require.Equal(t, after.Error, retried.Error)
-					_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 seconds' WHERE account_id=$1`, id)
+					_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
 					require.NoError(t, err)
 					e.do("GET", path, nil)
 					require.NoError(t, e.svc.sweepQuotas(t.Context()))
@@ -156,13 +156,20 @@ func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "ready", snap.RefreshStatus)
 	require.NotNil(t, snap.NextCheckAt)
+	require.WithinDuration(t, time.Now().Add(30*time.Minute), *snap.NextCheckAt, 5*time.Second)
 	require.NoError(t, e.svc.SetCooldown(t.Context(), id, time.Now().Add(time.Hour), "manual hold"))
 	code, _ = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"name": "renamed"})
 	require.Equal(t, 200, code)
 	require.NoError(t, e.svc.deliverAccountLifecycle(t.Context(), id, "anthropic", core.EventAccountUpdated, []string{"name"}))
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 1, up.calls.Load())
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 seconds' WHERE account_id=$1`, id)
+	// Existing schedules (including plugin hints) cannot pull an automatic
+	// query forward into the 30-minute interval.
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '29 minutes' WHERE account_id=$1`, id)
+	require.NoError(t, err)
+	require.NoError(t, e.svc.sweepQuotas(t.Context()))
+	require.EqualValues(t, 1, up.calls.Load())
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	up.failStatus.Store(503)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
@@ -172,7 +179,7 @@ func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {
 	require.Equal(t, "error", snap.RefreshStatus)
 	require.NotEmpty(t, snap.Error)
 	require.Equal(t, float64(100), snap.Windows["5h"].Utilization)
-	require.True(t, snap.NextCheckAt.After(time.Now().Add(50*time.Second)))
+	require.WithinDuration(t, time.Now().Add(30*time.Minute), *snap.NextCheckAt, 5*time.Second)
 	require.True(t, e.mr.Exists(cooldownKey(id)))
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 2, up.calls.Load())
@@ -208,12 +215,12 @@ func TestQuotaInitialRecordingWithSchedulingOff(t *testing.T) {
 	require.Nil(t, snap.UpdatedAt)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 1, up.calls.Load())
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 seconds' WHERE account_id=$1`, id)
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	up.failStatus.Store(0)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 2, up.calls.Load())
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 seconds' WHERE account_id=$1`, id)
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 2, up.calls.Load())
@@ -276,7 +283,7 @@ func TestQuotaInitialFailureAndStaleAuthResult(t *testing.T) {
 	require.Empty(t, snap.Windows)
 	require.Nil(t, snap.UpdatedAt)
 	require.Equal(t, "pending", snap.RefreshStatus)
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 seconds' WHERE account_id=$1`, id)
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	snap, err = e.db.AccountQuota(t.Context(), id)
@@ -566,9 +573,14 @@ func TestQuotaSweepCancellation(t *testing.T) {
 
 func TestQuotaNextCheckBounds(t *testing.T) {
 	now := time.Now()
-	require.Equal(t, now.Add(quotaQueryFloor), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(-time.Hour).Unix()}, 0, false))
+	require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, nil, 0, false))
+	for _, hint := range []time.Duration{-time.Hour, time.Minute, 3 * time.Minute, 29 * time.Minute} {
+		require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(hint).Unix()}, 0, false))
+	}
 	require.Equal(t, now.Add(24*time.Hour), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(48 * time.Hour).Unix()}, 0, false))
-	require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, nil, 100, true))
+	for _, failures := range []int{0, 1, 6, 100} {
+		require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, nil, failures, true))
+	}
 }
 
 func TestQuotaGenericModuleHasNoProviderBranches(t *testing.T) {

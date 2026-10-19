@@ -218,7 +218,7 @@ export default {
     passiveHint: 'Read from the headers of recent responses; the upstream is not queried',
     refresh: 'Refresh',
     refreshing: 'Refreshing',
-    refreshHint: 'Query the upstream now',
+    refreshHint: 'Click quota to refresh usage now',
     refreshed: 'Usage updated'
   },
   autoReleaseAt: 'Automatically re-enable at {time}',

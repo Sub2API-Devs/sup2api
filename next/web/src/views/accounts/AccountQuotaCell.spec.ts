@@ -199,16 +199,16 @@ describe('AccountQuotaCell', () => {
     expect(w.find('[data-testid="quota-empty"]').exists()).toBe(false)
     expect(w.find('[role="progressbar"]').exists()).toBe(false)
     expect(w.text()).not.toContain('0%')
-    expect(w.find('[data-testid="quota-refresh"]').exists()).toBe(true)
+    expect(w.element.tagName).toBe('BUTTON')
   })
 
-  it('preserves last observed usage while a query is pending and shows the next check', () => {
+  it('preserves last observed usage while a query is pending without displaying its schedule', () => {
     const w = render(snap({ refresh_status: 'pending', next_check_at: inSec(60), windows: [win('custom', 83, { expired: true })] }))
     expect(w.get('[data-testid="quota-pending"]').text()).toBe('额度查询待完成')
     expect(w.get('[data-testid="quota-window-custom"]').text()).toContain('83%')
     expect(w.get('[data-testid="quota-observed"]').text()).toContain('最近观测')
-    expect(w.get('[data-testid="quota-next-check"]').text()).toContain(formatDateTime(inSec(60)))
-    expect(w.get('[data-testid="quota-next-check"]').text()).toContain('下次查询')
+    expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('下次查询')
   })
 
   it('retains last observed usage and a scheduled retry after a query failure', () => {
@@ -216,7 +216,7 @@ describe('AccountQuotaCell', () => {
     expect(w.get('[data-testid="quota-window-custom"]').text()).toContain('83%')
     expect(w.get('[data-testid="quota-error"]').text()).toContain('upstream 503')
     expect(w.get('[data-testid="quota-observed"]').text()).toContain('最近观测')
-    expect(w.get('[data-testid="quota-next-check"]').text()).toContain(formatDateTime(inSec(60)))
+    expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
   })
 
   it.each([true, false])('silences refreshable token expiry while preserving existing usage: %s', async (observed) => {
@@ -232,7 +232,7 @@ describe('AccountQuotaCell', () => {
     expect(w.find('[data-testid="quota-pending"]').exists()).toBe(false)
     expect(w.text()).not.toContain('等待令牌续期')
     expect(w.text()).not.toContain('token_expired')
-    expect(w.get('[data-testid="quota-next-check"]').text()).toContain(formatDateTime(inSec(60)))
+    expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
     expect(w.find('[data-testid="quota-empty"]').exists()).toBe(!observed)
     expect(w.find('[data-testid="quota-observed"]').exists()).toBe(observed)
     if (observed) {
@@ -262,19 +262,33 @@ describe('AccountQuotaCell', () => {
     expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
   })
 
-  it('emits refresh, and disables the button while refreshing', async () => {
+  it('refreshes by clicking a window without triggering the row and blocks duplicate clicks while busy', async () => {
     const w = render(snap({ windows: [win('5h', 10)] }))
-    await w.get('[data-testid="quota-refresh"]').trigger('click')
+    const rowClick = vi.fn()
+    w.element.parentElement!.addEventListener('click', rowClick)
+    expect(w.find('[data-testid="quota-refresh"]').exists()).toBe(false)
+    expect(w.element.tagName).toBe('BUTTON')
+    expect(w.attributes('type')).toBe('button')
+    await w.get('[data-testid="quota-window-5h"]').trigger('click')
     expect(w.emitted('refresh')).toHaveLength(1)
+    expect(rowClick).not.toHaveBeenCalled()
     await w.setProps({ refreshing: true })
-    const btn = w.get('[data-testid="quota-refresh"]')
-    expect(btn.attributes('disabled')).toBeDefined()
-    expect(btn.text()).toContain('刷新中')
+    expect(w.attributes('disabled')).toBeDefined()
+    expect(w.attributes('aria-busy')).toBe('true')
+    expect(w.get('[role="status"]').text()).toContain('刷新中')
+    await w.get('[data-testid="quota-window-5h"]').trigger('click')
+    expect(w.emitted('refresh')).toHaveLength(1)
+    await w.setProps({ refreshing: false })
+    await w.get('[data-testid="quota-observed"]').trigger('click')
+    expect(w.emitted('refresh')).toHaveLength(2)
   })
 
-  it('hides the refresh action when not refreshable', () => {
+  it('keeps non-refreshable quotas as non-interactive content', async () => {
     const w = render(snap(), { refreshable: false })
+    expect(w.element.tagName).toBe('DIV')
     expect(w.find('[data-testid="quota-refresh"]').exists()).toBe(false)
+    await w.trigger('click')
+    expect(w.emitted('refresh')).toBeUndefined()
   })
 
   it('moves the countdown with the shared clock and preserves usage after expiry', async () => {
@@ -309,11 +323,11 @@ describe('AccountQuotaCell', () => {
     expect(w.get('[data-testid="quota-window-custom"]').text()).toContain('Custom')
   })
 
-  it('renders English initial query, failure, next check and last observed text', async () => {
+  it('renders English initial query, failure and last observed text without the next check', async () => {
     i18n.global.locale.value = 'en'
     const w = render(snap({ source: '', updated_at: null, refresh_status: 'pending', next_check_at: inSec(60) }))
     expect(w.get('[data-testid="quota-pending"]').text()).toBe('Initial quota query pending')
-    expect(w.get('[data-testid="quota-next-check"]').text()).toContain('Next check')
+    expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
     await w.setProps({ quota: snap({ refresh_status: 'error' }) })
     expect(w.get('[data-testid="quota-error"]').text()).toBe('Quota query failed')
     expect(w.get('[data-testid="quota-observed"]').text()).toContain('Last observed')

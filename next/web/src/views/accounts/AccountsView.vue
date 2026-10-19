@@ -605,7 +605,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-warning-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
       </template>
       <template #cell-quota="{ row }">
-        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :compact="denseRows" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
+        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
         <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />
       </template>

@@ -225,10 +225,10 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 	}
 	rows, err = s.d.DB.Pool.Query(ctx, `SELECT q.account_id FROM account_quota_snapshots q JOIN accounts a ON a.id=q.account_id
   WHERE q.auto_refresh AND q.next_check_at<=now() AND (q.lease_until IS NULL OR q.lease_until<=now())
-  AND (q.last_active_at IS NULL OR q.last_active_at<=now()-interval '30 seconds')
+  AND (q.last_active_at IS NULL OR q.last_active_at<=now()-make_interval(secs=>$3::float8))
   AND a.status='active' AND (a.schedulable OR q.updated_at IS NULL) AND a.deleted_at IS NULL AND a.plugin_key||'/'||a.type=ANY($1)
   AND NOT EXISTS(SELECT 1 FROM account_lifecycle_sync l WHERE l.account_id=a.id AND l.status<>'applied')
-  ORDER BY q.next_check_at,q.account_id LIMIT $2`, keys, quotaSweepPage)
+  ORDER BY q.next_check_at,q.account_id LIMIT $2`, keys, quotaSweepPage, quotaQueryFloor.Seconds())
 	if err != nil {
 		return err
 	}

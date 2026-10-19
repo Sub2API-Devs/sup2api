@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	quotaRefresh = 3 * time.Minute
-	quotaRetry   = time.Minute
+	// Keep model-admission freshness aligned with the core's query interval.
+	quotaRefresh = 30 * time.Minute
+	quotaRetry   = quotaRefresh
 	maxQuotaBody = 64 << 10
 )
 
