@@ -93,6 +93,38 @@ func TestUsageSearchListSummaryAndPrivacy(t *testing.T) {
 	require.Empty(t, detail["node_id"])
 }
 
+func TestUsageSummaryByClientIP(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	var recs []*core.UsageRecord
+	for i, ip := range []string{"192.0.2.1", "192.0.2.2", "192.0.2.2", "192.0.2.2", "192.0.2.3", "192.0.2.3"} {
+		r := f.record("ip-"+strconv.Itoa(i), false)
+		r.ClientIP = ip
+		recs = append(recs, r)
+	}
+	other := f.record("ip-other", false)
+	other.UserID, other.ClientIP = f.other, "198.51.100.1"
+	f.svc.process(ctx, append(recs, other))
+
+	rows := f.get(f.user, "/usage/summary?group_by=ip&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	keys := []string{}
+	for _, r := range rows {
+		m := r.(map[string]any)
+		keys = append(keys, m["key"].(string))
+		require.NotEmpty(t, m["last_at"])
+	}
+	require.Equal(t, []string{"192.0.2.2", "192.0.2.3", "192.0.2.1", "198.51.100.1"}, keys) // busiest first
+	require.Equal(t, float64(3), rows[0].(map[string]any)["requests"])
+
+	mine := f.get(f.user, "/me/usage/summary?group_by=ip&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	require.Len(t, mine, 3)
+	for _, r := range mine {
+		require.NotEqual(t, "198.51.100.1", r.(map[string]any)["key"])
+	}
+	days := f.get(f.user, "/usage/summary?group_by=day&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	require.NotContains(t, days[0].(map[string]any), "last_at")
+}
+
 func TestTruncClientRequestID(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("x", 127) + "界界"

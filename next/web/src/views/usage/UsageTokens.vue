@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/utils/format'
 import type { UsageRow } from './usage'
 
+// Input / output tokens on one line, cache reads (↓) and writes (↑) under it.
 const props = defineProps<{ row: UsageRow }>()
 const { t } = useI18n()
 const cacheWrite = computed(() => (props.row.cache_creation_tokens || 0) + (props.row.cache_creation_1h_tokens || 0))
@@ -18,23 +19,18 @@ const cacheWrite = computed(() => (props.row.cache_creation_tokens || 0) + (prop
   </div>
   <div
     v-else
-    class="space-y-1 text-xs tabular-nums"
-    :title="t('usage.cacheTitle', { r: formatNumber(row.cache_read_tokens), w: formatNumber(cacheWrite) })"
+    class="space-y-0.5"
+    :title="`${t('usage.cols.input')} ${formatNumber(row.input_tokens)} · ${t('usage.cols.output')} ${formatNumber(row.output_tokens)} · ${t('usage.cacheTitle', { r: formatNumber(row.cache_read_tokens), w: formatNumber(cacheWrite) })}`"
   >
-    <div class="flex items-center justify-between gap-4">
-      <span class="text-fg-muted">{{ t('usage.cols.input') }}</span
-      ><span>{{ formatNumber(row.input_tokens) }}</span>
-    </div>
-    <div class="flex items-center justify-between gap-4">
-      <span class="text-fg-muted">{{ t('usage.cols.output') }}</span
-      ><span>{{ formatNumber(row.output_tokens) }}</span>
-    </div>
-    <div
+    <p class="whitespace-nowrap font-mono text-xs font-medium tabular-nums">
+      {{ formatNumber(row.input_tokens) }} <span class="text-fg-subtle">/</span> {{ formatNumber(row.output_tokens) }}
+    </p>
+    <p
       v-if="row.cache_read_tokens || cacheWrite"
-      class="flex items-center justify-between gap-4 text-primary-600 dark:text-primary-400"
+      class="flex gap-1.5 whitespace-nowrap text-xxs tabular-nums text-fg-subtle"
     >
-      <span>{{ t('usage.cached') }}</span
-      ><span>{{ formatNumber((row.cache_read_tokens || 0) + cacheWrite) }}</span>
-    </div>
+      <span v-if="row.cache_read_tokens">{{ t('usage.cached') }}↓ {{ formatNumber(row.cache_read_tokens) }}</span>
+      <span v-if="cacheWrite">↑ {{ formatNumber(cacheWrite) }}</span>
+    </p>
   </div>
 </template>

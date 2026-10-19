@@ -37,6 +37,39 @@ export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>)
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol
 }
 
+export type SpeedTone = 'success' | 'warning' | 'danger'
+
+/** Colour of a first-token latency: under 5 s fine, under 10 s slow. */
+export function firstTokenTone(ms: number): SpeedTone {
+  return ms < 5000 ? 'success' : ms < 10000 ? 'warning' : 'danger'
+}
+
+/** Output tokens per second, timed from the first token on a stream; null without output. */
+export function tokensPerSecond(u: Pick<UsageLog, 'output_tokens' | 'latency_ms' | 'first_token_ms' | 'stream'>): number | null {
+  const out = u.output_tokens || 0
+  let ms = u.latency_ms || 0
+  // A stream's first token waits on the prompt; the rest is generation.
+  if (u.stream && u.first_token_ms && ms - u.first_token_ms >= 1000) ms -= u.first_token_ms
+  return out > 0 && ms > 0 ? (out * 1000) / ms : null
+}
+
+/** Colour of a total latency: by throughput once there is enough output, else by duration. */
+export function latencyTone(u: Pick<UsageLog, 'output_tokens' | 'latency_ms'>): SpeedTone {
+  const s = (u.latency_ms || 0) / 1000
+  if ((u.output_tokens || 0) < 100 || s <= 0) return s < 10 ? 'success' : s < 30 ? 'warning' : 'danger'
+  const tps = (u.output_tokens || 0) / s
+  return tps >= 30 ? 'success' : tps >= 15 ? 'warning' : 'danger'
+}
+
+const HASH_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-fuchsia-500', 'bg-lime-600']
+
+/** A fill colour picked by the text, stable across renders (model dots, user avatars). */
+export function hashColor(text: string): string {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
+  return HASH_COLORS[Math.abs(h) % HASH_COLORS.length]
+}
+
 export function billingTone(s: string): 'success' | 'warning' | 'danger' | 'gray' {
   if (s === 'billed') return 'success'
   if (s === 'pending') return 'warning'

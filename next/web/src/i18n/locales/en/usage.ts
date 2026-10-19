@@ -61,6 +61,8 @@ export default {
     tokensSub: 'in {input} · out {output}',
     cost: 'Cost',
     daily: 'Daily',
+    trend: 'Trend',
+    cacheHit: 'Cache hit',
     partial: 'Based on the latest {n} requests'
   },
   showDetails: 'View details',
@@ -71,8 +73,10 @@ export default {
     rate_limit_exceeded: 'Rate limit exceeded'
   },
   cols: {
-    client: 'API key / client IP',
-    route: 'Group / account',
+    modelAccount: 'Model / account',
+    timing: 'Timing',
+    ip: 'IP',
+    detail: 'Details',
     input: 'Input',
     output: 'Output',
     cost: 'Cost',
@@ -103,7 +107,17 @@ export default {
   converted: 'converted',
   convertedFrom: 'Converted from endpoint protocol {protocol}',
   free: 'Free',
-  stream: 'stream',
+  stream: 'Streaming',
+  ips: {
+    title: 'Client IPs',
+    count: '{n} IPs, busiest first',
+    top: 'The {n} busiest IPs',
+    empty: 'No client IP recorded in this period',
+    filter: '{ip} (click to filter by this IP)',
+    clear: 'Stop filtering by this IP',
+    unknown: 'Not recorded',
+    lastAt: 'Last call'
+  },
   blocked: 'blocked',
   blockedBy: 'blocked by {plugin}',
   billing: {

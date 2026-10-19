@@ -867,6 +867,8 @@ const ACCOUNTS = [
   { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', upstream: 'openai.chat' },
   { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', upstream: 'gemini.generate' }
 ]
+// Client addresses per user: most calls come from one machine, some from a second.
+const CLIENT_IPS: Record<number, string[]> = { 1: ['203.0.113.10', '203.0.113.11'], 2: ['198.51.100.23', '2001:db8::5'], 3: ['192.0.2.44', '192.0.2.45'] }
 const MODELS = ['claude-sonnet-x', 'claude-sonnet-4-5', 'claude-haiku-4-5']
 const OWN_MODELS: Record<string, string[]> = { openai: ['gpt-4o', 'gpt-4o-mini'], gemini: ['gemini-2.5-flash'] }
 /** Client endpoint per upstream protocol of the native accounts. */
@@ -951,6 +953,7 @@ for (let i = 0; i < 90; i++) {
     user_email: user.email,
     api_key_id: user.id * 10,
     api_key_name: `${user.name}-key`,
+    client_ip: CLIENT_IPS[user.id][r(21) < 0.75 ? 0 : 1],
     group_id: group.id,
     group_name: group.name,
     account_id: blocked ? null : account.id,
@@ -1051,6 +1054,11 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.group_id && String(u.group_id) !== q.group_id) return false
     if (q.account_id && String(u.account_id) !== q.account_id) return false
     if (q.client_request_id && u.client_request_id !== q.client_request_id) return false
+    if (q.client_ip && u.client_ip !== q.client_ip) return false
+    if (q.model_contains && !u.model.toLowerCase().includes(q.model_contains.toLowerCase())) return false
+    if (q.api_key_name && !u.api_key_name.toLowerCase().includes(q.api_key_name.toLowerCase())) return false
+    if (q.stream && String(u.stream) !== q.stream) return false
+    if (q.billing_status && u.billing_status !== q.billing_status) return false
     if (q.model) {
       const pat = q.model
       if (pat.endsWith('*') ? !u.model.startsWith(pat.slice(0, -1)) : !u.model.includes(pat)) return false
@@ -1065,15 +1073,16 @@ function usageDetail(u: any, self = false) {
   return { ...publicUsage(u, self), billing_detail: u._detail ? { ...u._detail, ledger_id: u.ledger_id ?? null } : null, price: u._price, metrics: {} }
 }
 
-on('GET', '/usage/summary', (req) => {
-  const q = { ...req.query }
+function usageSummary(rows: any[], query: Record<string, string>) {
+  const q = { ...query }
   if (!q.from && !q.to) q.from = new Date(Date.now() - 30 * 86400000).toISOString()
   const by = q.group_by || 'day'
   const map = new Map<string, any>()
-  for (const u of usageFilter(usageRows, q)) {
-    const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : u.created_at.slice(0, 10)
+  for (const u of usageFilter(rows, q)) {
+    const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : by === 'ip' ? u.client_ip : u.created_at.slice(0, 10)
     const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, total_cost: 0 }
     if (by === 'user') s.user_email = u.user_email
+    if (by === 'ip' && (!s.last_at || u.created_at > s.last_at)) s.last_at = u.created_at
     s.requests++
     if (u.success) s.success++
     s.input_tokens += u.input_tokens
@@ -1083,8 +1092,14 @@ on('GET', '/usage/summary', (req) => {
     s.total_cost += Number(u.total_cost)
     map.set(key, s)
   }
-  return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map((s) => ({ ...s, total_cost: money(s.total_cost) }))
-})
+  const out = [...map.values()].map((s) => ({ ...s, total_cost: money(s.total_cost) }))
+  return by === 'ip' ? out.sort((a, b) => b.requests - a.requests || a.key.localeCompare(b.key)).slice(0, 100) : out.sort((a, b) => a.key.localeCompare(b.key))
+}
+
+on('GET', '/usage/summary', (req) => usageSummary(usageRows, req.query))
+on('GET', '/me/usage/summary', (req) =>
+  req.query.group_by === 'user' ? fail(400, 'invalid_argument', 'group_by must be day, model or ip') : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
+)
 on('GET', '/usage', (req) => paginate(usageFilter(usageRows, req.query).map((u) => publicUsage(u)), req.query))
 on('GET', '/usage/:id', (req) => {
   const u = usageRows.find((x) => x.id === Number(req.params.id))

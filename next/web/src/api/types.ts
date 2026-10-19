@@ -807,7 +807,11 @@ export interface UsageSummaryRow {
   success?: number
   input_tokens?: number
   output_tokens?: number
+  cache_read_tokens?: number
+  cache_creation_tokens?: number
   total_cost: Money
+  /** group_by=ip: the newest request from the address. */
+  last_at?: string
 }
 
 export interface BillingSettings {

@@ -3,6 +3,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
+import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
 import type { UsageRow } from './usage'
 
@@ -45,8 +46,10 @@ describe('usage records layout', () => {
     expect(w.text()).toContain(row.model)
     expect(w.text()).toContain(row.group_name)
     expect(w.get('[data-testid="usage-client"]').text()).toContain('my-laptop')
-    expect(w.get('[data-testid="usage-client"]').text()).toContain('2001:db8::7')
+    expect(w.get('[data-testid="usage-ip"]').text()).toBe('2001:db8::7')
     expect(w.get('[data-testid="mobile-usage-record"]').text()).toContain('2001:db8::7')
+    await w.get('[data-testid="usage-ip"]').trigger('click')
+    expect(w.emitted('filter-client-ip')).toEqual([['2001:db8::7']])
     expect(w.text()).toContain('403')
     expect(w.text()).not.toContain('usage.errors.model_not_allowed')
     await w.get('[data-testid="client-request-id"]').trigger('click')
@@ -71,9 +74,9 @@ describe('usage records layout', () => {
     expect(w.text()).toContain('1,234')
     expect(w.attributes('title')).toContain('1,234')
   })
-  it('shows stream and HTTP status alongside translated errors', () => {
-    const w = mount(UsageStatus, { props: { row: { ...row, stream: true } }, global })
-    expect(w.text()).toContain('403')
+  it('shows the HTTP status and a translated error with the raw message on hover', () => {
+    expect(mount(UsageStatus, { props: { row }, global }).text()).toContain('403')
+    const w = mount(UsageError, { props: { row }, global })
     expect(w.text()).not.toContain('model_not_allowed')
     expect(w.get('p').attributes('title')).toContain('model not allowed for this group')
   })

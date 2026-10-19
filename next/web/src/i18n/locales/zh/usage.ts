@@ -61,6 +61,8 @@ export default {
     tokensSub: '输入 {input} · 输出 {output}',
     cost: '费用',
     daily: '每日',
+    trend: '趋势',
+    cacheHit: '缓存命中',
     partial: '按最近 {n} 条请求统计'
   },
   showDetails: '查看详情',
@@ -71,8 +73,10 @@ export default {
     rate_limit_exceeded: '超过速率限制'
   },
   cols: {
-    client: 'API Key / 调用 IP',
-    route: '分组 / 账号',
+    modelAccount: '模型 / 账号',
+    timing: '计时',
+    ip: 'IP',
+    detail: '详情',
     input: '输入',
     output: '输出',
     cost: '费用',
@@ -103,7 +107,17 @@ export default {
   converted: '已转换',
   convertedFrom: '由端点协议 {protocol} 转换',
   free: '免费',
-  stream: '流',
+  stream: '流式',
+  ips: {
+    title: '调用 IP',
+    count: '共 {n} 个 IP，按请求数排序',
+    top: '请求最多的 {n} 个 IP',
+    empty: '这段时间没有记录到调用 IP',
+    filter: '{ip}（点击按此 IP 筛选）',
+    clear: '取消按此 IP 筛选',
+    unknown: '未记录',
+    lastAt: '最近调用'
+  },
   blocked: '拦截',
   blockedBy: '被 {plugin} 拦截',
   billing: {

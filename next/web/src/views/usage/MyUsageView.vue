@@ -2,16 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, SPagination, STabs, STimeRange, rangeBounds, type RangeKey, type TabItem } from '@sub2api/ui'
-import UsageFilters from './UsageFilters.vue'
-import { useList } from '@/composables/useList'
+import { SButton, SPageHeader, STabs, type TabItem } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
-import UsageTable from './UsageTable.vue'
-import type { UsageRow } from './usage'
+import UsageRecords from './UsageRecords.vue'
 
 // Mine > Usage records: the caller's request log and, on a second tab, their
-// balance and its changes. ?tab=ledger opens the latter. Totals and charts
+// balance and its changes. ?tab=ledger opens the latter. Charts by model
 // live in Mine > Usage statistics (MyStatsView).
 const { t } = useI18n()
 const route = useRoute()
@@ -29,19 +26,12 @@ watch(tab, (v) => {
   if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
 })
 
-const range = ref<RangeKey>('7d')
-const { items, loading, page, pageSize, total, filters, reload } = useList<UsageRow>('/me/usage', {
-  ...rangeBounds('7d'),
-  model_contains: '',
-  success: '',
-  client_request_id: ''
-})
-
+const records = ref<InstanceType<typeof UsageRecords> | null>(null)
 const ledgerRef = ref<InstanceType<typeof MyLedgerTab> | null>(null)
 
 function refresh() {
   if (tab.value === 'ledger') ledgerRef.value?.reload()
-  else reload()
+  else records.value?.reload()
 }
 </script>
 
@@ -49,23 +39,14 @@ function refresh() {
   <div>
     <SPageHeader :title="t('usage.myTitle')" :description="t('usage.myDescription')">
       <template #actions>
-        <SButton :loading="tab === 'requests' && loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
-      </template>
-      <template v-if="tab === 'requests'" #filters>
-        <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
-        <UsageFilters :model-value="filters" @update:model-value="Object.assign(filters, $event)" />
+        <SButton :loading="tab === 'requests' && records?.loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
 
     <STabs v-model="tab" :tabs="tabs">
-
-      <template v-if="tab === 'requests'">
-        <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" show-client-request-id :detail-path="(id: number) => `/me/usage/${id}`" @filter-client-request-id="(id: string) => (filters.client_request_id = id)">
-          <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
-        </UsageTable>
-      </template>
-
-      <MyLedgerTab v-else ref="ledgerRef" />
+      <!-- v-show: the search survives a visit to the ledger tab -->
+      <UsageRecords v-show="tab === 'requests'" ref="records" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
+      <MyLedgerTab v-if="tab === 'ledger'" ref="ledgerRef" />
     </STabs>
   </div>
 </template>

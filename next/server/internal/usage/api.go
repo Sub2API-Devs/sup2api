@@ -445,10 +445,17 @@ type SummaryRow struct {
 	// of which a share is invented and nothing in the summary says so.
 	Estimated     int64           `json:"estimated"`
 	EstimatedCost decimal.Decimal `json:"estimated_cost"`
+	// LastAt is the newest request of the group; only group_by=ip sets it.
+	LastAt *time.Time `json:"last_at,omitempty"`
 }
 
-// GET /usage/summary?from=&to=&group_by=day|model|user (default: day, last
-// 30 days). Days are UTC dates "YYYY-MM-DD"; users are keyed by id.
+// maxIPGroups caps group_by=ip: a key leaked to the internet can call from
+// thousands of addresses, and the console only lists the busiest ones.
+const maxIPGroups = 100
+
+// GET /usage/summary?from=&to=&group_by=day|model|user|ip (default: day, last
+// 30 days). Days are UTC dates "YYYY-MM-DD"; users are keyed by id; client IPs
+// come busiest first, at most maxIPGroups of them.
 func (s *Service) summary(c *gin.Context) { s.summarize(c, nil) }
 
 // GET /me/usage/summary: the same for the caller (group_by=user refused).
@@ -468,21 +475,26 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		f.add("u.created_at >= ?", time.Now().AddDate(0, 0, -30))
 	}
 	var key, join, extra string
+	order, lastAt := ` ORDER BY k`, `NULL::timestamptz`
 	switch c.DefaultQuery("group_by", "day") {
 	case "day":
 		key = `to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
 	case "model":
 		key = `u.model`
+	case "ip":
+		key = `u.client_ip`
+		lastAt = `max(u.created_at)`
+		order = ` ORDER BY count(*) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
 	case "user":
 		if self != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day or model"))
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model or ip"))
 			return
 		}
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
 		extra = `, COALESCE(max(us.email), '')`
 	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model or user"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, user or ip"))
 		return
 	}
 	if extra == "" {
@@ -508,8 +520,8 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		       COALESCE(sum(u.total_cost), 0),
 		       count(*) FILTER (WHERE `+anomalous+`),
 		       count(*) FILTER (WHERE `+est+`),
-		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0)
-		FROM usage_logs u`+join+f.sql()+` GROUP BY k ORDER BY k`, f.args...)
+		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`
+		FROM usage_logs u`+join+f.sql()+` GROUP BY k`+order, f.args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -519,7 +531,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	for rows.Next() {
 		var r SummaryRow
 		if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost); err != nil {
+			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
