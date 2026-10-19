@@ -1,5 +1,7 @@
 # Claude Code 2.1.302 分析与改动记录
 
+> 2026-10-19 最新上线：Core **0.1.162**、ccgateway/Controller/Worker **0.1.62**、CLI **2.1.302 / ccgateway-v9-stderr-errors** 将 HTTP 错误和 CLI 本地异常改为结构化 stderr；Worker 封装 HTTP 错误，正常 JSON/SSE 仍走 stdout。协议与验证见第 11 节；v8 的“HTTP 错误正文走 stdout”描述保留作历史记录。
+
 > 2026-10-19 最新：Core **0.1.161**、ccgateway/Controller/Worker **0.1.61**，CLI **2.1.302 / ccgateway-v8-request-oauth** 已上线。request 支持原生 OAuth；30 号完整 CC 请求的 build/direct 与 21 号 API Key 回归通过。第 10 节取代下文 v7 的 API Key-only 限制和产物身份；不改变 direct 原文契约。
 
 > 2026-10-19 更新：Core 0.1.160 / ccgateway 0.1.60 已移除可配置的 native 请求路径，仅保留 direct/build，默认 build；21 号已迁移并通过真实模型及本地 CC 工具回合验证。下文 native 模式部署描述属于 2026-10-18 的历史基线，当前模式规则见 [请求模式说明](REQUEST-MODES.md)。本次未改变 2.1.302 CLI 补丁本身。
@@ -196,3 +198,40 @@ Worker 每请求日志仍为 `/work/data/request-logs/<id>/`，包含请求/响�
 四节点 ready 200，模式均为 build，runtime up_to_date；新创建账号选择 0.1.61 镜像中的 v8 CLI，禁更保持。插件验签开关和 release 签名策略沿用原部署，未改其他 builtin 包。备份位于 `~/sup2api-managed/backups/ccgateway-request-oauth-0.1.161/`，数据库恢复列表及 21/30 卷归档已验证；原生构建和测试记录位于 `~/sup2api/checks/ccg-302-v8/`。
 
 脱敏证据见 [OAuth 发布验证](cli-research/2.1.302/oauth-deployment-0.1.161.json)。
+
+## 11 stderr 错误协议（v9）
+
+CLI 到 Worker 的错误通道改为一行 `CCG_REQUEST_ERROR ` 前缀加 JSON，协议版本为 `ccgateway.request.error.v1`。例如：
+
+```text
+CCG_REQUEST_ERROR {"protocol":"ccgateway.request.error.v1","source":"http","status":429,"error":{"type":"rate_limit_error","code":"provider_quota","message":"quota exceeded"},"headers":{"retry-after":"7"},"body":"{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"code\":\"provider_quota\",\"message\":\"quota exceeded\"}}"}
+```
+
+`status` 是 HTTP 状态，`error.code` 优先使用上游 code，缺失时使用 error.type；`source` 区分 http/input/transport/timeout/interrupted/internal。HTTP 错误退出码为 2；本地异常为 1，信号中断为 130。fast-path policy 明确拒绝时输出 403 / cli_policy_denied；进程崩溃或缺失有效错误帧由 Worker 生成 502 / cli_process_error。
+
+- **HTTP 非 2xx**：原生 SDK 抛异常前保存的 Response 仍是事实来源。CLI 读取错误正文，输出 stderr 错误帧，stdout 不输出错误正文，也不写成功 meta。复用的 meta 路径在开始时清除，避免残留上一次成功状态。
+- **正常 JSON/SSE**：保持 meta 状态/响应头加 stdout 响应字节，不解析或改写 SSE。上游 HTTP 200 中原本就有的 `event:error` 是 SSE 协议内容，仍原样传递；不会伪造一个新的 HTTP 状态。
+- **本地异常**：输入/构建错误为 400 / cli_invalid_request，超时为 504 / cli_timeout，连接异常为 502，提供可用的原生机器错误码（如 ECONNRESET）或 cli_transport_error。任意异常 message/stack 可能包含凭证或代理 URL，因此不直接下发，使用固定公开说明。
+- **Worker**：持续消费 stderr，仅接受一个完整、版本正确、字段合法的协议行；普通日志丢弃。错误行限 512 KiB，错误正文限 64 KiB，超大、重复、损坏的协议帧不会作为有效响应。收到错误帧后按其状态写 HTTP；完整合法上游 JSON 错误正文保留原文字节，否则生成 Anthropic 格式的 type/code/message 错误对象。
+- **响应头**：只保留 request-id、anthropic-request-id、retry-after、x-should-retry、anthropic-ratelimit-*、anthropic-fast-* 等已允许事实头；不带出 Authorization、Cookie、压缩/分帧头以及 Connection 指定的逐跳头。
+- **响应已开始后失败**：不能重写 HTTP 状态或在半截 JSON/SSE 后追加普通 JSON。Worker 记录 stderr 错误并中断 HTTP framing；Core 的 ccgateway 路线在完成已有用量、账号和粘性处理后，也中断客户端响应，避免把上游中断转换成正常 EOF。已经发出的 HTTP 200 保持 200，日志以 response_interrupted/error_code 标明失败，不重放已开始的请求。
+- **日志**：修复 diagnosticWriter 只写 http_status、却未更新 status 的问题。普通 HTTP 400/429 等在 metadata.json 和 request_finished 中记录真实状态；新增 cli_error 事件，保存 status/code/source/response_started，不保存任意 native stderr。
+
+新 Worker 兼容旧 CLI 的 meta + stdout HTTP 错误协议，便于滚动更新；新 CLI 的结构化错误需要新 Worker 才能解释，因此正式账号容器应同时更新 Worker、ELF 和固定 SHA/patch。Controller 的原始连接/隧道无需新增错误解析；Core 原有错误策略仍可能重试或切换账号，最终返回被选中的失败，已提交响应不重试。
+
+本次未承诺无限制错误正文、任意异常原文透出，或在 HTTP 200 已发送后把状态改为 4xx/5xx。
+
+### v9 构建、部署与验收
+
+实现提交 `d11bb221ee85ae39a9a63b737a8a0cbce5d02e11`；最终发布源码 `de02308b9808763c3861f62e35e88b145cd2ed65` 追加 Core 流中断传递和完整 Worker/ELF 组合回归。CLI 继续使用 Bun 1.4.3 编译原生 ELF，SHA-256 `b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152`，声明 `request_error_stderr` 能力。
+
+30 项 JS 支持模块测试、Linux Engine/Worker 测试和 Core 针对 HTTP 错误/流中断的回归通过。原生 CLI transport probe 为 20 个场景，mode probe 9 个、component probe 12 个；真实 Worker 加原生 ELF 的 build/direct 两组均通过，覆盖 400/401/403/429/500/529、错误头、普通 stderr 忽略、无效 beta、本地超时、流中断及日志状态。中断用量仍计入账本，已发出的回合没有被重试。
+
+正式 Core 四节点 **0.1.162**，插件/Controller/Worker **0.1.62**。release `v0.1.162`，manifest `3a8108c53d3f4715f888448e9fcd1abfca532054454e673b5e1b3ef95807051b`，升级计划 `68b70bc5e548e9ff9ae98c7ef187715f` 完成 27 步。Core SHA-256 `e6f1a1c293009a455fba3e357011ddf196266a0e649be4bbec9e0c0a2bd18240`。21/30 号更新为新容器，固定 v9 CLI，保留数据卷/授权，默认 build、禁更保持。共享出口和停止的历史账号未改动。
+
+- 公网入口经 21 号实测上游 HTTP 400：客户端和 Worker 响应 body SHA-256 均为 `1a8d8b45ac9a61551d80700981a301ccb23aa5a553f73e873073b7033d7ffa13`，错误正文没有丢失。metadata.status/http_status、cli_error 和 request_finished 均为 400。该转发上游的原始 error.type 为字符串 `<nil>`，原值保留，未伪造供应商错误码。
+- 单独运行正式 CLI direct 的同类错误：退出码 2，stdout 0 字节，无成功 meta 文件；stderr 错误帧包含 HTTP 400、code/message 和原错误正文。
+- 公网正常 SSE：HTTP 200、9 个事件、完整 message_stop，输出 `STDERR_V9_PUBLIC_STREAM_OK`。Worker 直连正常 SSE 也通过。
+- 30 号完整 CC 客户端经正式 build Worker/OAuth，以 `claude-opus-5-5` 正确回答法国首都为巴黎，未降级。此前固定标记测试出现模型拒答及原生模型回退，不计为目标模型成功；它是正常 HTTP 内容，不能误判成 stderr 传输失败。
+
+私有备份位于 `~/sup2api-managed/backups/ccgateway-stderr-errors-0.1.162/`，数据库 dump 和 21/30 卷归档已检查；测试/构建记录位于 `~/sup2api/checks/ccg-302-v9/`，发布构建在 `~/sup2api-managed/stage/0.1.162/`。仅移除了本轮临时保留的旧容器，未移除数据卷或生产孤立资源。脱敏证据见 [stderr 发布验收](cli-research/2.1.302/stderr-deployment-0.1.162.json)。

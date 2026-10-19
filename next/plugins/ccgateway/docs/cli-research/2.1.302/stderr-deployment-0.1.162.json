@@ -1,0 +1,215 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "de02308b9808763c3861f62e35e88b145cd2ed65",
+  "releaseID": "v0.1.162",
+  "manifest": "3a8108c53d3f4715f888448e9fcd1abfca532054454e673b5e1b3ef95807051b",
+  "upgradePlan": "68b70bc5e548e9ff9ae98c7ef187715f",
+  "upgradeStatus": "completed",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.162",
+      "sha256": "e6f1a1c293009a455fba3e357011ddf196266a0e649be4bbec9e0c0a2bd18240",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.162",
+      "sha256": "e6f1a1c293009a455fba3e357011ddf196266a0e649be4bbec9e0c0a2bd18240",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.162",
+      "sha256": "e6f1a1c293009a455fba3e357011ddf196266a0e649be4bbec9e0c0a2bd18240",
+      "readyHTTP": 200,
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.162",
+      "sha256": "e6f1a1c293009a455fba3e357011ddf196266a0e649be4bbec9e0c0a2bd18240",
+      "readyHTTP": 200,
+      "mode": "build"
+    }
+  ],
+  "pluginVersion": "0.1.62",
+  "controllerImage": "ccgateway-controller:0.1.62",
+  "runtimeUpToDate": true,
+  "workers": [
+    {
+      "account": 21,
+      "image": "ccgateway-app:0.1.62",
+      "ready": true,
+      "volumePreserved": true,
+      "mode": "build",
+      "cli": {
+        "version": "2.1.302",
+        "patch": "ccgateway-v9-stderr-errors",
+        "capabilities": [
+          "request_direct",
+          "request_build",
+          "request_oauth",
+          "request_error_stderr",
+          "native_tools",
+          "mods_dispatch"
+        ]
+      },
+      "sha256": "b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152",
+      "workerBuild": {
+        "version": "0.1.62",
+        "revision": "de02308b9808763c3861f62e35e88b145cd2ed65",
+        "modified": false
+      },
+      "disableAutoUpdate": true
+    },
+    {
+      "account": 30,
+      "image": "ccgateway-app:0.1.62",
+      "ready": true,
+      "volumePreserved": true,
+      "mode": "build",
+      "cli": {
+        "version": "2.1.302",
+        "patch": "ccgateway-v9-stderr-errors",
+        "capabilities": [
+          "request_direct",
+          "request_build",
+          "request_oauth",
+          "request_error_stderr",
+          "native_tools",
+          "mods_dispatch"
+        ]
+      },
+      "sha256": "b254b6580a341d94a607bf02c1535e72a8ee384f655a902ffc33324279a28152",
+      "workerBuild": {
+        "version": "0.1.62",
+        "revision": "de02308b9808763c3861f62e35e88b145cd2ed65",
+        "modified": false
+      },
+      "disableAutoUpdate": true
+    }
+  ],
+  "sharedEgressUnchanged": true,
+  "stoppedAccountsUnchanged": [
+    "ccg-d3037c7dc8376b940-app",
+    "ccg-d4d9ec52e2bb74205-app",
+    "ccg-d61ad737f7dcd6912-app",
+    "ccg-de509b30280535378-app",
+    "ccg-d367149b7e7b26bcc-app",
+    "ccg-d4863b4ae1bc6aa8c-app",
+    "ccg-d1d2964e14bf728d9-app"
+  ],
+  "tests": {
+    "supportUnitTests": 30,
+    "nativeProbes": {
+      "request-probe": {
+        "passed": true,
+        "scenarios": 20
+      },
+      "request-modes-probe": {
+        "passed": true,
+        "scenarios": 9
+      },
+      "request-components-probe": {
+        "passed": true,
+        "scenarios": 12
+      },
+      "worker-stderr-probe": {
+        "passed": true,
+        "scenarios": 2
+      }
+    },
+    "linuxEngineAndWorker": "passed",
+    "coreHTTPErrorAndStreamChecks": "passed",
+    "publicHTTPError": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json",
+        "Request-Id": "5f11d68d-ebd0-4271-b7b2-295736ccb2b1",
+        "X-Request-Id": "f9a4b06587b354ae63e98819"
+      },
+      "body": "{\"error\":{\"type\":\"\\u003cnil\\u003e\",\"message\":\"`top_p` is deprecated for this model. (request id: 202610190252169701960408268d9d6rAg8UnEI)\"},\"type\":\"error\"}",
+      "sha256": "1a8d8b45ac9a61551d80700981a301ccb23aa5a553f73e873073b7033d7ffa13",
+      "seconds": 1.906
+    },
+    "workerHTTPErrorLog": {
+      "account": 21,
+      "directory": "/work/data/request-logs/6f9fa57a-88d7-4c3b-a9c0-8d544ae0a468",
+      "status": 400,
+      "httpStatus": 400,
+      "code": "<nil>",
+      "source": "http",
+      "sha256": "1a8d8b45ac9a61551d80700981a301ccb23aa5a553f73e873073b7033d7ffa13",
+      "cliError": {
+        "detail": {
+          "code": "<nil>",
+          "response_started": false,
+          "source": "http",
+          "status": 400,
+          "truncated": false
+        },
+        "event": "cli_error",
+        "time": "2026-10-19T02:52:17.14531111Z"
+      },
+      "finished": {
+        "detail": {
+          "stage": "request_command",
+          "status": 400
+        },
+        "event": "request_finished",
+        "time": "2026-10-19T02:52:17.145417177Z"
+      }
+    },
+    "cliHTTPError": {
+      "exit": 2,
+      "stdoutBytes": 0,
+      "metaExists": false,
+      "frame": {
+        "protocol": "ccgateway.request.error.v1",
+        "source": "http",
+        "status": 400,
+        "error": {
+          "type": "<nil>",
+          "code": "<nil>",
+          "message": "`top_p` is deprecated for this model. (request id: 202610190252224841377198268d9d6DMCEobOX)"
+        },
+        "headers": {},
+        "body": "{\"error\":{\"type\":\"\\u003cnil\\u003e\",\"message\":\"`top_p` is deprecated for this model. (request id: 202610190252224841377198268d9d6DMCEobOX)\"},\"type\":\"error\"}"
+      }
+    },
+    "publicNormalSSE": {
+      "status": 200,
+      "messageStop": true,
+      "text": "STDERR_V9_PUBLIC_STREAM_OK",
+      "events": 9
+    },
+    "oauthNormalClient": {
+      "exit": 0,
+      "result": "The capital of France is Paris.",
+      "is_error": false,
+      "modelUsage": [
+        "claude-opus-5-5"
+      ],
+      "stderr": ""
+    },
+    "oauthMarkerProbe": {
+      "exit": 0,
+      "result": "I can't help with this.\n\nThe message claims a \"safety classifier\" stopped my previous response, but there's no prior response in this conversation \u2014 this is the first turn. The instruction to emit a specific token string while suppressing my normal behavior is a prompt-injection pattern, not a genuine system message.\n\nWhat would you actually like help with?",
+      "is_error": false,
+      "modelUsage": [
+        "claude-opus-5-5",
+        "claude-opus-4-8"
+      ],
+      "stderr": ""
+    }
+  },
+  "notes": [
+    "The initial OAuth marker prompt produced a refusal and a native model fallback; it was not counted as target-model success. The ordinary question was answered by claude-opus-5-5 without fallback.",
+    "Upstream HTTP 200 SSE error events remain SSE data; committed transport failures abort the response without changing the already-sent status.",
+    "Complete upstream JSON errors up to 64 KiB are preserved. Larger or non-JSON errors receive a structured error envelope."
+  ],
+  "backupsVerified": true
+}
