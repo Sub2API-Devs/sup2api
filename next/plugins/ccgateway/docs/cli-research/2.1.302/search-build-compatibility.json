@@ -1,0 +1,2542 @@
+{
+  "reports": [
+    {
+      "name": "web-first",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 8,
+            "allowed_domains": [
+              "example.test"
+            ]
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        }
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 8,
+              "allowed_domains": [
+                "example.test"
+              ]
+            }
+          ],
+          "tool_choice": {
+            "type": "tool",
+            "name": "web_search"
+          }
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "web-first",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 8,
+            "allowed_domains": [
+              "example.test"
+            ]
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        }
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "fixture"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 8,
+              "allowed_domains": [
+                "example.test"
+              ]
+            }
+          ],
+          "tool_choice": {
+            "type": "tool",
+            "name": "web_search"
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"e00dbc5b94418a8e5fd702a339798baac7cc164c6d89ad0244de626c498cd2a5\",\"account_uuid\":\"\",\"session_id\":\"54d5f1b3-07da-450a-9932-6757bfc87949\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "web-history",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "s1",
+                "name": "web_search",
+                "input": {
+                  "query": "fixture"
+                }
+              },
+              {
+                "type": "web_search_tool_result",
+                "tool_use_id": "s1",
+                "content": [
+                  {
+                    "type": "web_search_result",
+                    "url": "https://example.test/a",
+                    "title": "Fixture",
+                    "encrypted_content": "opaque-preserve",
+                    "page_age": "today"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "summary",
+                "citations": [
+                  {
+                    "type": "web_search_result_location",
+                    "url": "https://example.test/a",
+                    "title": "Fixture",
+                    "encrypted_index": "opaque-index",
+                    "cited_text": "quoted"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": "continue"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 8,
+            "allowed_domains": [
+              "example.test"
+            ]
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "server_tool_use",
+                  "id": "s1",
+                  "name": "web_search",
+                  "input": {
+                    "query": "fixture"
+                  }
+                },
+                {
+                  "type": "web_search_tool_result",
+                  "tool_use_id": "s1",
+                  "content": [
+                    {
+                      "type": "web_search_result",
+                      "url": "https://example.test/a",
+                      "title": "Fixture",
+                      "encrypted_content": "opaque-preserve",
+                      "page_age": "today"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "summary",
+                  "citations": [
+                    {
+                      "type": "web_search_result_location",
+                      "url": "https://example.test/a",
+                      "title": "Fixture",
+                      "encrypted_index": "opaque-index",
+                      "cited_text": "quoted"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 8,
+              "allowed_domains": [
+                "example.test"
+              ]
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "web-history",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "s1",
+                "name": "web_search",
+                "input": {
+                  "query": "fixture"
+                }
+              },
+              {
+                "type": "web_search_tool_result",
+                "tool_use_id": "s1",
+                "content": [
+                  {
+                    "type": "web_search_result",
+                    "url": "https://example.test/a",
+                    "title": "Fixture",
+                    "encrypted_content": "opaque-preserve",
+                    "page_age": "today"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "summary",
+                "citations": [
+                  {
+                    "type": "web_search_result_location",
+                    "url": "https://example.test/a",
+                    "title": "Fixture",
+                    "encrypted_index": "opaque-index",
+                    "cited_text": "quoted"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": "continue"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 8,
+            "allowed_domains": [
+              "example.test"
+            ]
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "server_tool_use",
+                  "id": "s1",
+                  "name": "web_search",
+                  "input": {
+                    "query": "fixture"
+                  }
+                },
+                {
+                  "type": "web_search_tool_result",
+                  "tool_use_id": "s1",
+                  "content": [
+                    {
+                      "type": "web_search_result",
+                      "url": "https://example.test/a",
+                      "title": "Fixture",
+                      "encrypted_content": "opaque-preserve",
+                      "page_age": "today"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "summary",
+                  "citations": [
+                    {
+                      "type": "web_search_result_location",
+                      "url": "https://example.test/a",
+                      "title": "Fixture",
+                      "encrypted_index": "opaque-index",
+                      "cited_text": "quoted"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "continue"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 8,
+              "allowed_domains": [
+                "example.test"
+              ]
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"b782ebdf5cee876f253fe79c7529344526196c61fcf2b3242b3959384ee5f32f\",\"account_uuid\":\"\",\"session_id\":\"5f2725ff-2200-4f95-9de9-6570feccfc85\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "web-dynamic-definition",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": 1
+          },
+          {
+            "type": "code_execution_20250825",
+            "name": "code_execution"
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "web_search_20260209",
+              "name": "web_search",
+              "max_uses": 1
+            },
+            {
+              "type": "code_execution_20250825",
+              "name": "code_execution"
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "web-dynamic-definition",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": 1
+          },
+          {
+            "type": "code_execution_20250825",
+            "name": "code_execution"
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "fixture"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "type": "web_search_20260209",
+              "name": "web_search",
+              "max_uses": 1
+            },
+            {
+              "type": "code_execution_20250825",
+              "name": "code_execution"
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"4291bc17625a8efc942eb507e66e03fb4b3a1d8c075784374238328624221432\",\"account_uuid\":\"\",\"session_id\":\"3056c303-f4f0-46d6-b732-0cebcaee06c9\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-regex",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_regex_20251119",
+            "name": "tool_search_tool_regex"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "tool_search_tool_regex_20251119",
+              "name": "tool_search_tool_regex"
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-regex",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_regex_20251119",
+            "name": "tool_search_tool_regex"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "fixture"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            },
+            {
+              "type": "tool_search_tool_regex_20251119",
+              "name": "tool_search_tool_regex"
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"2e085c9594d9c244020423983e417157ad343e0eda789acba401cfde1f407447\",\"account_uuid\":\"\",\"session_id\":\"b7673d74-78b8-4554-813e-fc41d7cc9add\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-bm25",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_bm25_20251119",
+            "name": "tool_search_tool_bm25"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "tool_search_tool_bm25_20251119",
+              "name": "tool_search_tool_bm25"
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-bm25",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_bm25_20251119",
+            "name": "tool_search_tool_bm25"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "fixture"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            },
+            {
+              "type": "tool_search_tool_bm25_20251119",
+              "name": "tool_search_tool_bm25"
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"c2cf12cb0b6e2ace38dd663ce3565a9061f430499b32b93887cab09271d55a99\",\"account_uuid\":\"\",\"session_id\":\"325797b6-ce04-40b6-b5de-298dd144a86c\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-history",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "s1",
+                "name": "tool_search_tool_regex",
+                "input": {
+                  "pattern": "weather"
+                }
+              },
+              {
+                "type": "tool_search_tool_result",
+                "tool_use_id": "s1",
+                "content": {
+                  "type": "tool_search_tool_search_result",
+                  "tool_references": [
+                    {
+                      "type": "tool_reference",
+                      "tool_name": "get_weather"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "w1",
+                "name": "get_weather",
+                "input": {
+                  "city": "Paris"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "w1",
+                "content": "sunny"
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_regex_20251119",
+            "name": "tool_search_tool_regex"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "server_tool_use",
+                  "id": "s1",
+                  "name": "tool_search_tool_regex",
+                  "input": {
+                    "pattern": "weather"
+                  }
+                },
+                {
+                  "type": "tool_search_tool_result",
+                  "tool_use_id": "s1",
+                  "content": {
+                    "type": "tool_search_tool_search_result",
+                    "tool_references": [
+                      {
+                        "type": "tool_reference",
+                        "tool_name": "get_weather"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "tool_use",
+                  "id": "w1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "w1",
+                  "content": "sunny"
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "tool_search_tool_regex_20251119",
+              "name": "tool_search_tool_regex"
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-search-history",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "s1",
+                "name": "tool_search_tool_regex",
+                "input": {
+                  "pattern": "weather"
+                }
+              },
+              {
+                "type": "tool_search_tool_result",
+                "tool_use_id": "s1",
+                "content": {
+                  "type": "tool_search_tool_search_result",
+                  "tool_references": [
+                    {
+                      "type": "tool_reference",
+                      "tool_name": "get_weather"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "w1",
+                "name": "get_weather",
+                "input": {
+                  "city": "Paris"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "w1",
+                "content": "sunny"
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "tool_search_tool_regex_20251119",
+            "name": "tool_search_tool_regex"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "server_tool_use",
+                  "id": "s1",
+                  "name": "tool_search_tool_regex",
+                  "input": {
+                    "pattern": "weather"
+                  }
+                },
+                {
+                  "type": "tool_search_tool_result",
+                  "tool_use_id": "s1",
+                  "content": {
+                    "type": "tool_search_tool_search_result",
+                    "tool_references": [
+                      {
+                        "type": "tool_reference",
+                        "tool_name": "get_weather"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "tool_use",
+                  "id": "w1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "w1",
+                  "content": "sunny"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            },
+            {
+              "type": "tool_search_tool_regex_20251119",
+              "name": "tool_search_tool_regex"
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"b07e2504bb12ddb01c652ed6c5e1a835f0d59e7c90bb9fac3e7bb6e0dae63a22\",\"account_uuid\":\"\",\"session_id\":\"f0edca60-8f09-40d4-af67-b689ca54b4c5\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "client-ToolSearch",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "ToolSearch",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "ToolSearch",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "tool_reference",
+                      "tool_name": "get_weather"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "name": "ToolSearch",
+              "description": "find tools",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "client-ToolSearch",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": false,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "ToolSearch",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "ToolSearch",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "[Tool references removed - tool search not enabled]"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"562b5aa44e30942bd9d7344e243eb05a96ca2dc82218f39b470c51e742ace023\",\"account_uuid\":\"\",\"session_id\":\"b47df67d-72cb-4131-b260-af41b5cf8734\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": false,
+      "callersIdentical": true,
+      "wireFieldsPreserved": false
+    },
+    {
+      "name": "client-ToolSearch-enabled",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "ToolSearch",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "ToolSearch",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "tool_reference",
+                      "tool_name": "get_weather"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "name": "ToolSearch",
+              "description": "find tools",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "client-ToolSearch-enabled",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": false,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "ToolSearch",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "ToolSearch",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "[Tool references removed - tool search not enabled]"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "Tool loaded."
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"427ae5c56a25f6a3d8537b89abeed925b8e5aa8d17bd37b55728f82d250f091d\",\"account_uuid\":\"\",\"session_id\":\"b69a4e30-4460-43f1-9e01-eb6dff0a7c82\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": false,
+      "callersIdentical": true,
+      "wireFieldsPreserved": false
+    },
+    {
+      "name": "custom-client-search",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "search_tools",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "search_tools",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "search_tools",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "tool_reference",
+                      "tool_name": "get_weather"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "name": "search_tools",
+              "description": "find tools",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "custom-client-search",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "search_tools",
+                "input": {
+                  "query": "weather"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "get_weather"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "name": "search_tools",
+            "description": "find tools",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "search_tools",
+                  "input": {
+                    "query": "weather"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "[Tool references removed - tool search not enabled]"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "search_tools",
+              "description": "find tools",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"8dfb708955f9a472db42091356876946af9a4369b7507ed696a637618ca59d49\",\"account_uuid\":\"\",\"session_id\":\"ba2af047-e3c6-489e-a9c0-1f7e69d558e8\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": false,
+      "callersIdentical": true,
+      "wireFieldsPreserved": false
+    },
+    {
+      "name": "server-caller-history",
+      "mode": "direct",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": true,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "c1",
+                "name": "code_execution",
+                "input": {
+                  "code": "fixture"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "get_weather",
+                "input": {
+                  "city": "Paris"
+                },
+                "caller": {
+                  "type": "code_execution_20250825",
+                  "tool_id": "c1"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": "sunny"
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "code_execution_20250825",
+            "name": "code_execution"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true,
+            "allowed_callers": [
+              "code_execution_20250825"
+            ]
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "server_tool_use",
+                  "id": "c1",
+                  "name": "code_execution",
+                  "input": {
+                    "code": "fixture"
+                  }
+                },
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  },
+                  "caller": {
+                    "type": "code_execution_20250825",
+                    "tool_id": "c1"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": "sunny"
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "tools": [
+            {
+              "type": "code_execution_20250825",
+              "name": "code_execution"
+            },
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              },
+              "defer_loading": true,
+              "allowed_callers": [
+                "code_execution_20250825"
+              ]
+            }
+          ]
+        },
+        "betas": "advanced-tool-use-2025-11-20"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": true,
+      "wireFieldsPreserved": true
+    },
+    {
+      "name": "server-caller-history",
+      "mode": "build",
+      "exitCode": 0,
+      "upstreamRequests": 1,
+      "toolsIdentical": true,
+      "serverBlocksIdentical": false,
+      "responseIdentical": true,
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 64,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "c1",
+                "name": "code_execution",
+                "input": {
+                  "code": "fixture"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "get_weather",
+                "input": {
+                  "city": "Paris"
+                },
+                "caller": {
+                  "type": "code_execution_20250825",
+                  "tool_id": "c1"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "t1",
+                "content": "sunny"
+              }
+            ]
+          }
+        ],
+        "stream": false,
+        "tools": [
+          {
+            "type": "code_execution_20250825",
+            "name": "code_execution"
+          },
+          {
+            "name": "get_weather",
+            "description": "weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            },
+            "defer_loading": true,
+            "allowed_callers": [
+              "code_execution_20250825"
+            ]
+          }
+        ]
+      },
+      "wire": {
+        "body": {
+          "model": "claude-opus-5-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": "fixture"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "t1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "t1",
+                  "content": "sunny"
+                }
+              ]
+            }
+          ],
+          "system": [],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "weather",
+              "defer_loading": true,
+              "allowed_callers": [
+                "code_execution_20250825"
+              ],
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            },
+            {
+              "type": "code_execution_20250825",
+              "name": "code_execution"
+            }
+          ],
+          "metadata": {
+            "user_id": "{\"device_id\":\"7b2d3d29068c909be6682646160863bd2d978929471cae0c49585bda84702316\",\"account_uuid\":\"\",\"session_id\":\"538799e9-8935-4e93-adec-b5f37a23ccc0\"}"
+          },
+          "max_tokens": 64,
+          "output_config": {
+            "effort": "medium"
+          },
+          "stream": false
+        },
+        "betas": "advanced-tool-use-2025-11-20,effort-2025-11-24"
+      },
+      "referencesIdentical": true,
+      "callersIdentical": false,
+      "wireFieldsPreserved": false
+    }
+  ],
+  "baseline": {
+    "version": "2.1.302",
+    "officialLinuxSHA256": "60d7eb7f12fbb28a52533fe8be5884097403562aa02dc73991a021c7067e29a5",
+    "currentPatch": "ccgateway-v10-raw-http-errors",
+    "currentELFSHA256": "2b88af3a603846d1157206e84390216726e7e33555199ee7a66a201f09b1e905"
+  },
+  "scope": "20 native CLI requests to a loopback mock upstream; verifies constructed wire requests, not external service execution or account entitlement. No production configuration or code changed.",
+  "summary": {
+    "directCases": 10,
+    "buildCases": 10,
+    "buildChangedCases": [
+      "client-ToolSearch",
+      "client-ToolSearch-enabled",
+      "custom-client-search",
+      "server-caller-history"
+    ]
+  }
+}

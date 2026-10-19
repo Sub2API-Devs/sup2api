@@ -344,3 +344,56 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 结论：已验证官方客户端经网关的普通文本/Read 工具回合、request 成功 JSON/SSE、HTTP 错误透传，以及上述 mods/hooks 场景。没有发现相对 v9 的 Agent 回归；尚未逐项覆盖交互 TUI、resume、所有 MCP/hooks、所有模型和真实 OAuth 场景，不能声称“任何场景都绝对无影响”。此外 Core 修改覆盖通用 HTTP 错误路径：跨协议错误现在也保留上游正文，不再转换成调用方协议的错误 envelope，这是用户要求的行为变化。
 
 证据：[正常客户端与 v9/v10 对比](cli-research/2.1.302/normal-client-regression-v10.json)。本轮仅审核和记录，没有再次改动运行逻辑或切换生产配置。
+
+## 17. WebSearch / ToolSearch 原生机制与 build 兼容性审核（2026-10-19，存在未修复缺口）
+
+本节先分析 2.1.302 未修改恢复源码，再对照当前 v10 原生 ELF。REA 成功解析选定的 3 个 JavaScript 文件（0 个解析失败），但关系图受选定范围和节点上限限制；不能据此声称完整调用图。关键函数再用 Babel AST 按函数/对象节点边界提取和检查；核心模块 SHA 与版本 profile 一致。原生工具代码只作为分析数据读取，未执行其中的指令文本。证据见 [REA 摘要](cli-research/2.1.302/search-rea-summary.json)。
+
+### 原版 WebSearch
+
+`chunk-3veydjj5.js` 的 WebSearch `create(...).call(...)`（恢复文件字符偏移 43340–48160）先检查会话搜索预算。普通本地分支创建独立搜索子请求：用户消息包含查询，工具为 `web_search_20250305` / `web_search`，`max_uses=8`，保留 allowed_domains/blocked_domains，强制 `tool_choice={type:"tool",name:"web_search"}`，通过原生 `XPt` 请求构建/发送链执行。querySource 为 `web_search_tool`，不建立独立的本地搜索引擎；原生认证、模型/effort 选择和 sticky betas 由客户端上下文提供。
+
+它读取 `server_tool_use`、`web_search_tool_result`、文本和流事件；同文件 `fs` 将搜索结果收敛为 URL/title 与摘要，作为外层 WebSearch 的工具结果交回主模型。`ho` 还显示另一个 CCR 分支：调用 `zdo` 的 `route:"web-search"` 会话代理接口，不是普通 Messages 子请求。本轮未验证 CCR 专用路由。
+
+### 原版 ToolSearch 与 API 服务端 tool search 是两套执行者
+
+- 原生 ToolSearch 对象位于 `chunk-8242685m.js` 字符偏移 1492303–1501089，输入包括 query/max_results，依赖工具池、MCP 连接状态、会话工具状态与 sticky betas。支持 `select:` 按名称选择，也支持关键词搜索和等待正在连接的 MCP 刷新工具池。
+- `OTr` 位于 `chunk-fgk2rzb0.js`，执行本地名称/前缀匹配和关键词加权排序（名称分段、描述、searchHint），不是调用 `tool_search_tool_regex_20251119` 服务端工具。`MD` 构造 matches 等结果，ToolSearch 的 `mapToolResultToToolResultBlockParam` 将 matches 映射成 `tool_result.content=[{type:"tool_reference",tool_name:...}]`。
+- API 的 regex/BM25 tool search 则通过 tools 中的类型化定义声明给上游，由上游搜索带 `defer_loading:true` 的完整工具定义，返回 `server_tool_use` / `tool_search_tool_result`。官方接口说明：[Tool search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool)、[Web search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)。API 上游实际是否可用还取决于模型、服务和账号资格。
+
+### 当前 build 在哪里复用，在哪里丢失上下文
+
+Worker `main.go` 在 RequestMode 非空时直接进入 `serveRequestCommand`，不会进入后面的旧 exchange/Agent 模拟搜索链。`messagesBuildComponents` 提取组件；`prepareBuildInput` 将非 custom 的工具定义放入 `extraToolSchemas`，自定义工具经 registerNative 创建临时工具对象；`buildRequest` 调用原生 `XPt`（源码适配前名 Kvt）构建一次请求。原生 `xRn` 将 custom schemas 与 extraToolSchemas 合并，补丁在真正模型循环之前截获构建结果；上游的服务端工具由上游执行，调用方本地工具由调用方执行。
+
+**确认的 ToolSearch 缺口：**
+
+1. 我们的 registerNative 设置 `isMcp:false` 和 `isDeferred`。但原生 `pBe` → `T`（`chunk-fm7w7yv5.js`）用于 engine placement 的字段是 `isMcp`、内置白名单和 **`shouldDefer`**，不读取 `isDeferred`。
+2. `xRn` 调用 `t_r`/`b7e` 检查 ToolSearch，再据工具池算 Go（可延迟工具）。重建环境没有原客户端完整的工具/MCP/会话状态，上述属性不匹配会使 Go 为空；`xRn` 随后将 dn/useToolSearch 关闭，并在无延迟通道分支删除名称为 ToolSearch 的定义。
+3. `gRn` 在 useToolSearch=false 时执行 `Jtt`/`MRn`：Jtt 删除用户 tool_result 内的 tool_reference，空结果改成 `[Tool references removed - tool search not enabled]`；MRn 重建 assistant tool_use，只留 type/id/name/input，移除 caller。
+4. 原生 `DRn` 还会移除同一 assistant 消息中没有对应结果的 server_tool_use。对于正在等待客户端工具结果的程序化调用历史，本轮观察到 code_execution 的 server_tool_use 被删除。这是原生会话修复规则与转发外部 API 历史的边界不匹配，不能靠 HTTP 返回 200 判断正确。
+
+### 当前 v10 原生请求抓包结果
+
+使用当前 ELF `2b88af3a…b1e905`、假 API key、回环模拟上游，对 10 类输入分别执行 direct/build，共 20 次请求。核对工具定义、defer_loading、历史块、tool_reference、caller、引用信息及 beta；不是实际调用互联网搜索服务。
+
+| 输入 | build 结果 | direct 对照 |
+| --- | --- | --- |
+| `web_search_20250305` 定义、max_uses、域名过滤、tool_choice | 保留 | 保留 |
+| WebSearch 历史的 server_tool_use、结果、encrypted_content、文本 citations | 保留 | 保留 |
+| `web_search_20260209` + code_execution 定义 | 定义保留；不代表动态过滤实际执行已验证 | 保留 |
+| 服务端 regex/BM25 定义 + deferred custom 工具 | 定义及 defer_loading 保留 | 保留 |
+| 服务端 tool_search_tool_result 内的 tool_references 历史 | 基础样例保留 | 保留 |
+| 客户端 ToolSearch + tool_result/tool_reference | **ToolSearch 定义删除，reference 换成文本** | 保留 |
+| 同上并设置 ENABLE_TOOL_SEARCH=true | **仍有相同丢失** | 保留 |
+| 自定义客户端搜索工具 search_tools + tool_reference | **reference 换成文本** | 保留 |
+| code_execution 发起客户端调用、tool_use 带 caller | **caller 和待完成的 server_tool_use 丢失** | 保留 |
+
+服务端 tool_search_tool_result 的引用位于 assistant 服务端结果内部，不在 Jtt 针对的 user tool_result.content 内，所以基础样例通过；不能把该通过推广到所有客户端发现工具或程序化调用组合。WebSearch 子请求本身可承载，但如果外层客户端先依赖 ToolSearch 发现 WebSearch，会先受上述 ToolSearch 缺口影响。build 抓包也保留了客户端 advanced-tool-use beta，并由原生构建器追加 effort beta；它不是 direct 的逐字节零注入语义。
+
+完整输入/实际构建结果和逐项差异见 [搜索兼容性探针](cli-research/2.1.302/search-build-compatibility.json)。所有样例 CLI 都 exit=0、模拟上游都返回成功，但其中 4 类 build 输入发生语义字段丢失，已明确标记为未通过，不能当成兼容性成功。
+
+### 后续修复边界（本轮未实施）
+
+首先修正 deferred 属性映射，但不能只加 ENABLE_TOOL_SEARCH 或全局强制开启原生搜索。build 应以调用方传来的工具声明、引用和 caller 为准，不用临时 CLI 的本地工具目录/会话状态删除它们。应在 ccgatewayBuildOnly/ccgatewayInput 边界约束 xRn 的 ToolSearch 过滤及 gRn/Jtt/MRn/DRn 的破坏性修复，同时保留原生附件渲染和请求构建；普通 Agent 路径不要随之改变。修复后要补官方 CC + MCP ToolSearch 完整回合，以及程序化调用/暂停续传的回归，不能只验证首个请求或返回码。
+
+本轮只分析、抓包和记录；没有修改 CLI/Worker/Core 运行逻辑，也没有切换线上模式。现有 Core 0.1.168 / Worker 0.1.66 / CLI v10 的上述缺口仍存在。
