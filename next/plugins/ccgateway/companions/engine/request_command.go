@@ -229,10 +229,30 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		<-deadlineSet
 	}
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+	// A caller ending its request is not a Worker deadline or a CLI failure.
+	// Check this before interpreting stdout/stderr: a killed process may leave
+	// a partial frame, or exit successfully while its output pipe is closing.
+	clientCanceled := r.Context().Err() != nil || errors.Is(ctx.Err(), context.Canceled)
 	if err != nil {
-		d.trace("request_command_failed", Object{"response_started": output.started, "cancelled": ctx.Err() != nil})
+		d.trace("request_command_failed", Object{"response_started": output.started, "cancelled": clientCanceled, "timed_out": !clientCanceled && errors.Is(ctx.Err(), context.DeadlineExceeded)})
+	}
+	if clientCanceled {
+		d.clientCanceled(output.started)
+		// Do not fabricate a response to a vanished caller, including an empty
+		// implicit 200. Committed status and bytes remain unchanged.
+		panic(http.ErrAbortHandler)
 	}
 	frame := stderr.result()
+	if frame == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request timed out")
+		frame.Source = "timeout"
+		frame.record(d, output.started)
+		if output.started {
+			panic(http.ErrAbortHandler)
+		}
+		frame.write(w)
+		return
+	}
 	if output.started {
 		// Compatibility with the old CLI's meta + stdout HTTP-error contract.
 		legacyHTTPError := frame == nil && output.status >= 400 && cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 2
@@ -262,12 +282,6 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		if output.start() == nil {
 			return
 		}
-	}
-	if ctx.Err() != nil {
-		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request cancelled or timed out")
-		frame.record(d, false)
-		frame.write(w)
-		return
 	}
 	frame = localRequestError(502, "api_error", "cli_process_error", "CLI request failed without a valid structured error")
 	frame.record(d, false)

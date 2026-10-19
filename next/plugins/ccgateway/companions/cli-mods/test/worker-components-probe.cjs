@@ -2,9 +2,15 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http
 const {spawn}=require('node:child_process'),assert=require('node:assert/strict');
 const [workerBinary,cliBinary,output]=process.argv.slice(2);
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'cc-worker-v6-')),seen=[],reports=[];
+const holds=new Map();
 const server=http.createServer(async(req,res)=>{
   const chunks=[];for await(const chunk of req)chunks.push(chunk);let bytes=Buffer.concat(chunks);if(req.headers['content-encoding']==='gzip')bytes=zlib.gunzipSync(bytes);
   const raw=bytes.toString('utf8'),body=JSON.parse(raw);seen.push({raw,body,headers:req.headers});
+  if(body.probe==='hold'){
+    const state={closed:false};holds.set(body.hold_id,state);res.on('close',()=>state.closed=true);
+    if(body.stream){res.writeHead(200,{'content-type':'text/event-stream'});res.write('event: message_start\ndata: {}\n\n');}
+    return;
+  }
   if(body.probe==='error'){const status=body.error_status??429;res.writeHead(status,{'content-type':'application/json','retry-after':'3','x-should-retry':'true','set-cookie':'private'});res.end(JSON.stringify({type:'error',error:{type:'fixture_error',code:'fixture_'+status,message:'fixture'}}));return;}
   if(body.probe==='string-error'){
     const raw=JSON.stringify(body.nested?{error:'quota exceeded'}:'quota exceeded');
@@ -15,6 +21,7 @@ const server=http.createServer(async(req,res)=>{
   else{res.setHeader('content-type','application/json');res.end(JSON.stringify(message));}
 });
 const listen=s=>new Promise(resolve=>s.listen(0,'127.0.0.1',()=>resolve(s.address().port)));
+async function until(check,label){const deadline=Date.now()+15000;while(!check()){assert.ok(Date.now()<deadline,label);await new Promise(r=>setTimeout(r,25));}}
 async function modeTest(mode){
   const reservation=http.createServer(),port=await listen(reservation);await new Promise(r=>reservation.close(r));
   const home=fs.mkdtempSync(path.join(root,mode+'-'));
@@ -64,14 +71,31 @@ async function modeTest(mode){
     }
     const invalidBeta=await fetch(base+'/v1/messages',{method:'POST',headers:{'x-api-key':'gateway-fake','anthropic-beta':'not a valid token'},body:JSON.stringify(input)});
     assert.equal(invalidBeta.status,400);assert.equal((await invalidBeta.json()).error.code,'cli_invalid_request');
+    const logs=path.join(home,'data','request-logs');
+    const completed=()=>fs.readdirSync(logs).flatMap(n=>{try{const m=JSON.parse(fs.readFileSync(path.join(logs,n,'metadata.json')));return m.duration_ms===undefined?[]:[m];}catch{return [];}});
+    let cancellations=0;
+    for(const stream of [false,true]){
+      const id=mode+'-'+stream,abort=new AbortController();
+      const pending=fetch(base+'/v1/messages',{method:'POST',signal:abort.signal,headers:{'x-api-key':'gateway-fake'},body:JSON.stringify({...input,stream,probe:'hold',hold_id:id})});
+      // Observe rejection immediately while waiting for the upstream connection.
+      const settled=pending.then(r=>({response:r}),error=>({error}));
+      await until(()=>holds.has(id),'CLI did not open cancellation fixture');
+      if(stream){const result=await settled;assert.equal(result.response.status,200);const reader=result.response.body.getReader();assert.equal((await reader.read()).done,false);abort.abort();await reader.cancel().catch(()=>{});}
+      else{abort.abort();assert.ok((await settled).error,'canceled request unexpectedly received headers');}
+      await until(()=>holds.get(id).closed,'CLI cancellation did not close the upstream socket');
+      cancellations++;
+      await until(()=>completed().filter(m=>m.canceled===true).length===cancellations,'cancellation diagnostic missing');
+      const m=completed().find(m=>m.canceled===true&&(stream?m.http_status===200:m.http_status===undefined));
+      assert.ok(m);assert.equal(m.status,stream?200:499);assert.equal(m.error_code,'client_canceled');assert.equal(m.error_type,'client_canceled');assert.equal(m.error_source,'client');
+      if(stream)assert.equal(m.response_interrupted,true);
+    }
     const beforeProbe=seen.length;
     const probe=await fetch(base+'/v1/ccgateway/probe',{method:'POST',headers:{'x-api-key':'gateway-fake'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:128,system:'Answer the user concisely.',messages:[{role:'user',content:'What is the capital of France?'}]})});
     assert.equal(probe.status,200);await probe.text();assert.equal(probe.headers.get('x-ccgateway-test-mode'),'native_build');assert.equal(seen.length-beforeProbe,1);assert.ok(JSON.stringify(seen.at(-1).body.system).includes('Answer the user concisely.'));assert.match(JSON.stringify(seen.at(-1).body.system), /You are (?:Claude Code|a Claude agent)/);assert.ok(JSON.stringify(seen.at(-1).body.system).includes('x-anthropic-billing-header:'));
-    const logs=path.join(home,'data','request-logs');
     const records=fs.readdirSync(logs).map(n=>JSON.parse(fs.readFileSync(path.join(logs,n,'metadata.json'))));
     for(const status of [400,401,403,429,500,529])assert.ok(records.some(m=>m.status===status&&m.http_status===status&&m.error_code==='fixture_'+status),'missing accurate error log '+status);
     assert.equal(records.filter(m=>m.status===429&&m.error==='quota exceeded').length,4,'string errors must retain upstream text in diagnostics');
-    reports.push({mode,passed:true,modelRequests:seen.length-before,bodyBytesEqual:request.raw===raw,systemAndRolesPreserved:true,headerPolicyPassed:true});
+    reports.push({mode,passed:true,modelRequests:seen.length-before,bodyBytesEqual:request.raw===raw,systemAndRolesPreserved:true,headerPolicyPassed:true,cancellation:{beforeHeaders:true,afterHeaders:true,upstreamSocketClosed:true}});
   }finally{child.kill('SIGTERM');const timer=setTimeout(()=>child.kill('SIGKILL'),5000);await closed;clearTimeout(timer);}
 }
 (async()=>{await listen(server);try{await modeTest('build');await modeTest('direct');fs.writeFileSync(output,JSON.stringify({passed:true,reports},null,2));console.log(JSON.stringify({passed:true,reports}));}catch(error){fs.writeFileSync(output,JSON.stringify({passed:false,error:String(error),reports,last:seen.at(-1)},null,2));console.log(JSON.stringify({passed:false,error:String(error),reports,last:seen.at(-1)}));process.exitCode=1;}finally{server.closeAllConnections?.();server.close();}})();

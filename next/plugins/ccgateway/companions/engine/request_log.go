@@ -353,6 +353,24 @@ func (d *requestDiagnostic) fail(status int, kind, message string) {
 	d.fields["error"] = logValue(message)
 }
 
+// clientCanceled records a Worker-observed caller cancellation, not a CLI
+// stderr frame. 499 is diagnostic-only when no HTTP response was committed.
+func (d *requestDiagnostic) clientCanceled(committed bool) {
+	d.mu.Lock()
+	if !committed {
+		d.status = 499
+	} else {
+		d.fields["response_interrupted"] = true
+	}
+	d.fields["canceled"] = true
+	d.fields["error_type"] = "client_canceled"
+	d.fields["error_code"] = "client_canceled"
+	d.fields["error_source"] = "client"
+	d.fields["error"] = "Client canceled request"
+	d.mu.Unlock()
+	d.trace("request_canceled", Object{"response_started": committed})
+}
+
 func (d *requestDiagnostic) finish() {
 	d.mu.Lock()
 	detail := Object{"stage": d.stage, "status": d.status}

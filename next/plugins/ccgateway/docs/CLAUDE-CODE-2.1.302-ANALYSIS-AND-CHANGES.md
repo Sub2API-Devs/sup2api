@@ -211,6 +211,8 @@ CCG_REQUEST_ERROR {"protocol":"ccgateway.request.error.v1","source":"http","stat
 
 `status` 是 HTTP 状态，`error.code` 优先使用上游 code，缺失时使用 error.type；`source` 区分 http/input/transport/timeout/interrupted/internal。HTTP 错误退出码为 2；本地异常为 1，信号中断为 130。fast-path policy 明确拒绝时输出 403 / cli_policy_denied；进程崩溃或缺失有效错误帧由 Worker 生成 502 / cli_process_error。
 
+上述 interrupted/130 指 CLI 自身收到并处理 SIGINT/SIGTERM。Worker 使用 `exec.CommandContext` 默认的 Process.Kill（Linux 上为 SIGKILL）取消子进程，不能依赖 CLI 信号处理器生成该帧；Worker 的调用方取消和自身 deadline 分别在本地识别，见第 14 节。
+
 - **HTTP 非 2xx**：原生 SDK 抛异常前保存的 Response 仍是事实来源。CLI 读取错误正文，输出 stderr 错误帧，stdout 不输出错误正文，也不写成功 meta。复用的 meta 路径在开始时清除，避免残留上一次成功状态。
 - **正常 JSON/SSE**：保持 meta 状态/响应头加 stdout 响应字节，不解析或改写 SSE。上游 HTTP 200 中原本就有的 `event:error` 是 SSE 协议内容，仍原样传递；不会伪造一个新的 HTTP 状态。
 - **本地异常**：输入/构建错误为 400 / cli_invalid_request，超时为 504 / cli_timeout，连接异常为 502，提供可用的原生机器错误码（如 ECONNRESET）或 cli_transport_error。任意异常 message/stack 可能包含凭证或代理 URL，因此不直接下发，使用固定公开说明。
@@ -277,3 +279,13 @@ Core 账号测试保留实际状态、错误码、正文及白名单响应头。
 - 私有备份位于 `~/sup2api-managed/backups/ccgateway-errors-0.1.164/`，数据库与账号卷归档已检查，并备份 Controller 状态；构建在 `~/sup2api-managed/stage/0.1.164/`，原生测试与产物在 `~/sup2api/checks/ccg-302-v9-r3/`。
 
 脱敏证据见 [错误元数据修订发布验收](cli-research/2.1.302/error-metadata-deployment-0.1.164.json)。
+
+## 14. Worker 区分调用方取消与自身超时（待发布）
+
+`serveRequestCommand` 等待子进程结束后，先检查父请求 context。父请求取消/到期或派生 context 为 Canceled 时，记录 `canceled=true`、`error_type/error_code=client_canceled`、`error_source=client`，不把已取消请求误判成 CLI 错误或超时。未发出响应时仅诊断 status 为 499，不向已离开的客户端写 JSON 或隐式成功响应；已发出响应时保留原 status/http_status（例如 200），并置 response_interrupted。两种情况均以 ErrAbortHandler 结束处理。
+
+父请求仍有效、Worker 自己的 WithTimeout 到期且没有有效 CLI 错误帧时，记录 `cli_timeout`、`error_source=timeout`；尚未发响应则返回 HTTP 504，已发响应则只记录原因并中断 framing。真实上游错误帧仍按既有协议处理。request_command_failed 事件分别记录 cancelled/timed_out，不再把 deadline 统称为取消。
+
+保留 Process.Kill、WaitDelay、并发槽位与临时目录清理，以及解除阻塞响应写的机制；不改为 SIGTERM，也不在调用方离开后继续读取上游补齐 usage。Core 的取消分类、重试策略及已捕获用量结算保持。关闭请求只能证明本地连接与进程被中止，不能证明供应商立即停止计算或计费。
+
+本次仅修改 Worker 和相关测试/记录，CLI 继续使用第 13 节的原生 2.1.302/v9 ELF（SHA `e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4`），无需重新编译 CLI。
