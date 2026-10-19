@@ -1080,7 +1080,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
   const map = new Map<string, any>()
   for (const u of usageFilter(rows, q)) {
     const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : by === 'ip' ? u.client_ip : u.created_at.slice(0, 10)
-    const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, total_cost: 0 }
+    const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0 }
     if (by === 'user') s.user_email = u.user_email
     if (by === 'ip' && (!s.last_at || u.created_at > s.last_at)) s.last_at = u.created_at
     s.requests++
@@ -1088,7 +1088,9 @@ function usageSummary(rows: any[], query: Record<string, string>) {
     s.input_tokens += u.input_tokens
     s.output_tokens += u.output_tokens
     s.cache_read_tokens += u.cache_read_tokens
-    s.cache_creation_tokens += u.cache_creation_tokens
+    s.cache_creation_tokens += u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
+    // The mock generator's input_tokens are the exclusive pricing variable p.
+    s.prompt_tokens += u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
     s.total_cost += Number(u.total_cost)
     map.set(key, s)
   }

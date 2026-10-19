@@ -17,8 +17,8 @@ import { useFloating } from './floating'
 import { navIndex } from './keyboard'
 
 const props = withDefaults(
-  defineProps<{ actions: MenuAction[]; label?: string; ariaLabel?: string; align?: 'start' | 'end'; width?: string; disabled?: boolean }>(),
-  { align: 'end', width: '11rem' }
+  defineProps<{ actions: MenuAction[]; label?: string; ariaLabel?: string; align?: 'start' | 'end'; width?: string; maxHeight?: string; disabled?: boolean; closeOnSelect?: boolean }>(),
+  { align: 'end', width: '11rem', closeOnSelect: true }
 )
 const emit = defineEmits<{ (e: 'select', key: string): void; (e: 'open'): void; (e: 'close'): void }>()
 const t = useUiT()
@@ -35,7 +35,7 @@ function onDoc(e: MouseEvent) {
   close(false)
 }
 function items(): HTMLButtonElement[] {
-  return Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [])
+  return Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('button[role^="menuitem"]:not([disabled])') ?? [])
 }
 function show(focus: 'first' | 'last' = 'first') {
   if (props.disabled || open.value) return
@@ -61,7 +61,7 @@ function toggle() {
 }
 function pick(a: MenuAction) {
   if (a.disabled) return
-  close()
+  if (props.closeOnSelect) close()
   emit('select', a.key)
 }
 function onTriggerKey(e: KeyboardEvent) {
@@ -118,7 +118,7 @@ defineExpose({ open: () => show(), close: () => close(false) })
         ref="menu"
         role="menu"
         class="dropdown fixed"
-        :style="{ ...floating.style.value, width }"
+        :style="{ ...floating.style.value, width, maxHeight, overflowY: maxHeight ? 'auto' : undefined }"
         @keydown="onMenuKey"
       >
         <div v-if="$slots.header" class="border-b border-line px-4 pb-2 pt-1.5 text-xs text-fg-muted" role="presentation"><slot name="header" /></div>
@@ -126,7 +126,8 @@ defineExpose({ open: () => show(), close: () => close(false) })
           <div v-if="a.divider" class="my-1 border-t border-line" role="separator" />
           <button
             type="button"
-            role="menuitem"
+            :role="a.checked === undefined ? 'menuitem' : 'menuitemcheckbox'"
+            :aria-checked="a.checked"
             tabindex="-1"
             class="dropdown-item"
             :class="a.danger ? '!text-red-600 dark:!text-red-400' : ''"
@@ -135,6 +136,7 @@ defineExpose({ open: () => show(), close: () => close(false) })
           >
             <SIcon v-if="a.icon" :name="a.icon" class="h-4 w-4 shrink-0 opacity-70" />
             <span class="min-w-0 flex-1 truncate">{{ a.label }}</span>
+            <SIcon v-if="a.checked" name="check" class="h-4 w-4 shrink-0 text-primary-600" />
           </button>
         </template>
       </div>

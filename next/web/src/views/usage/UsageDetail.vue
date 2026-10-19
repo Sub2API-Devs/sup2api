@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SCode, SCopyButton, SDescItem, SDescriptions, SGrid, SHint, SIcon, SSectionTitle, SSpinner } from '@sub2api/ui'
+import { SBadge, SCode, SCopyButton, SDescItem, SDescriptions, SGrid, SHint, SIcon, SIPAddress, SSectionTitle, SSpinner } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { formatNumber } from '@/utils/format'
@@ -99,10 +99,7 @@ const failureDecisions = computed<FailureDecision[]>(() => {
             </div></SDescItem>
             <SDescItem v-if="u.upstream_model && u.upstream_model !== u.model" :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
             <SDescItem v-if="u.api_key_name || u.api_key_id" :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
-            <SDescItem :label="t('usage.request.clientIP')"><div class="flex min-w-0 items-center gap-1">
-              <span class="break-all font-mono text-xs" data-testid="detail-client-ip">{{ u.client_ip || '—' }}</span>
-              <SCopyButton v-if="u.client_ip" :text="u.client_ip" icon-only class="shrink-0" />
-            </div></SDescItem>
+            <SDescItem :label="t('usage.request.clientIP')"><SIPAddress :value="u.client_ip" data-testid="detail-client-ip" /></SDescItem>
             <SDescItem :label="t('usage.request.userAgent')"><span class="break-all text-xs">{{ u.user_agent || '—' }}</span></SDescItem>
             <SDescItem v-if="u.node_id" :label="t('usage.request.node')"><span class="font-mono text-xs">{{ u.node_id }}</span></SDescItem>
             <SDescItem v-if="u.attempts !== undefined" :label="t('usage.request.attempts')">{{ u.attempts }}</SDescItem>
@@ -195,4 +192,3 @@ const failureDecisions = computed<FailureDecision[]>(() => {
     <SHint v-if="!u.success && u.billing_status === 'free'" size="xs" class="mt-3">{{ t('usage.billing.freeNote') }}</SHint>
   </div>
 </template>
-

@@ -125,6 +125,55 @@ func TestUsageSummaryByClientIP(t *testing.T) {
 	require.NotContains(t, days[0].(map[string]any), "last_at")
 }
 
+func TestUsageSummaryPromptTokens(t *testing.T) {
+	f := newFixture(t)
+	for _, tc := range []struct {
+		id        string
+		semantics string
+		tokens    core.UsageTokens
+		billable  bool
+		legacy    bool
+		prompt    any
+	}{
+		{"exclusive", "exclusive", core.UsageTokens{CacheRead: 100, CacheCreation: 700, CacheCreation1h: 200}, false, false, float64(1000)},
+		{"inclusive", "inclusive", core.UsageTokens{Input: 1000, CacheRead: 100, CacheCreation: 700, CacheCreation1h: 200}, false, false, float64(1000)},
+		{"billed", "inclusive", core.UsageTokens{Input: 1000, CacheRead: 100}, true, false, float64(1000)},
+		{"default", "", core.UsageTokens{Input: 20, CacheRead: 80}, false, false, float64(100)},
+		{"legacy-cached", "exclusive", core.UsageTokens{CacheRead: 100, CacheCreation: 900}, false, true, nil},
+		{"legacy-uncached", "inclusive", core.UsageTokens{Input: 100}, false, true, float64(100)},
+	} {
+		r := f.record(tc.id, tc.billable)
+		r.UsageSemantics, r.Tokens = tc.semantics, tc.tokens
+		r.ClientIP = "192.0.2.1"
+		// Free records must not start storing request pricing metadata.
+		r.PriceParams = map[string]string{"test-param": "private"}
+		r.PriceHeaders = map[string]string{"test-header": "private"}
+		f.svc.process(t.Context(), []*core.UsageRecord{r})
+		if tc.legacy {
+			_, err := f.db.Pool.Exec(t.Context(), `UPDATE usage_logs SET billing_detail = '{}' WHERE request_id = $1`, tc.id)
+			require.NoError(t, err)
+		} else if !tc.billable {
+			detail := f.scalar(`SELECT billing_detail::text FROM usage_logs WHERE request_id = $1`, tc.id)
+			require.NotContains(t, detail, "private")
+		}
+		for _, prefix := range []string{"/usage", "/me/usage"} {
+			for _, by := range []string{"day", "model", "ip"} {
+				rows := f.get(f.user, prefix+"/summary?from=2026-09-01T00:00:00Z&group_by="+by+"&request_id="+tc.id, 200)["data"].([]any)
+				require.Len(t, rows, 1)
+				require.Equal(t, tc.prompt, rows[0].(map[string]any)["prompt_tokens"], tc.id+" "+by)
+			}
+		}
+	}
+	// Mixed semantics are normalized before summing. Unknown cached history
+	// must not silently disappear from the denominator of the entire group.
+	all := f.get(f.user, "/usage/summary?from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	require.Nil(t, all[0].(map[string]any)["prompt_tokens"])
+	_, err := f.db.Pool.Exec(t.Context(), `DELETE FROM usage_logs WHERE request_id = 'legacy-cached'`)
+	require.NoError(t, err)
+	all = f.get(f.user, "/usage/summary?from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	require.Equal(t, float64(3200), all[0].(map[string]any)["prompt_tokens"])
+}
+
 func TestTruncClientRequestID(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("x", 127) + "界界"

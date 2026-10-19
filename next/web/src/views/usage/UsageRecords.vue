@@ -37,7 +37,7 @@ const { items, loading, page, pageSize, total, filters, reload: reloadList } = u
 })
 
 const showTrend = ref(false)
-const showIPs = ref(false)
+const showIPs = ref(true)
 const days = useUsageSummary(props.summaryPath, filters, 'day')
 const ips = useUsageSummary(props.summaryPath, filters, 'ip', showIPs)
 const chartOption = computed(() => dailyChartOption(days.rows.value, { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }))
@@ -73,6 +73,7 @@ defineExpose({ reload, loading })
       :loading="loading"
       :show-user="admin"
       :show-account="admin"
+      :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
       show-client-request-id
       :detail-path="(id: number) => `${listPath}/${id}`"
       @filter-client-request-id="(id: string) => (filters.client_request_id = id)"

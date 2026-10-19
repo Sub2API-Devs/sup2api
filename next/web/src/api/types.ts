@@ -809,6 +809,8 @@ export interface UsageSummaryRow {
   output_tokens?: number
   cache_read_tokens?: number
   cache_creation_tokens?: number
+  /** Full prompt including cache; null when historical usage semantics are unknown. */
+  prompt_tokens?: number | null
   total_cost: Money
   /** group_by=ip: the newest request from the address. */
   last_at?: string

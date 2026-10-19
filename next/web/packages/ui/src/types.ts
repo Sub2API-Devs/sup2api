@@ -22,6 +22,16 @@ export interface TableColumn {
   ellipsis?: boolean | string
   /** Extra class of the header cell. */
   headerClass?: string
+  /** False keeps a required column visible in the column picker. */
+  hideable?: boolean
+  /** Initial visibility when column settings are enabled. */
+  defaultHidden?: boolean
+  /** Built-in cell rendering; a cell slot still takes precedence. */
+  format?: 'ip'
+  /** IP cells: show a copy button (default true). */
+  copyable?: boolean
+  /** IP cells: clicking the address emits STable's filter event (default false). */
+  filterable?: boolean
 }
 
 export interface TabItem {
@@ -49,6 +59,8 @@ export interface MenuAction {
   icon?: string
   /** Draw a separator line above this item. */
   divider?: boolean
+  /** Renders a menuitemcheckbox; omitted for ordinary actions. */
+  checked?: boolean
 }
 
 /** `purple` is the older name of `accent` (same colours). */

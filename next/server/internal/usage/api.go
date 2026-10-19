@@ -447,6 +447,9 @@ type SummaryRow struct {
 	EstimatedCost decimal.Decimal `json:"estimated_cost"`
 	// LastAt is the newest request of the group; only group_by=ip sets it.
 	LastAt *time.Time `json:"last_at,omitempty"`
+	// PromptTokens includes cached input exactly once. Older free records may
+	// lack semantics; a group containing such cached usage returns null.
+	PromptTokens *int64 `json:"prompt_tokens"`
 }
 
 // maxIPGroups caps group_by=ip: a key leaked to the internet can call from
@@ -512,6 +515,15 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	// still counts.
 	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
 		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, len(f.args))
+	// Match expr.Normalize's inclusive/exclusive input convention, including
+	// both cache-write buckets. Do not guess missing historical semantics from
+	// the client protocol: the gateway may have converted it.
+	promptTokens := `CASE
+		WHEN u.cache_read_tokens + u.cache_creation_tokens + u.cache_creation_1h_tokens = 0 THEN u.input_tokens
+		WHEN u.billing_detail->'inputs'->>'semantics' = 'inclusive' THEN u.input_tokens
+		WHEN u.billing_detail->'inputs'->>'semantics' IN ('exclusive', '') THEN
+			u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + u.cache_creation_1h_tokens
+		END`
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
 		       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
@@ -520,7 +532,8 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		       COALESCE(sum(u.total_cost), 0),
 		       count(*) FILTER (WHERE `+anomalous+`),
 		       count(*) FILTER (WHERE `+est+`),
-		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`
+		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
+		       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END
 		FROM usage_logs u`+join+f.sql()+` GROUP BY k`+order, f.args...)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -531,7 +544,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	for rows.Next() {
 		var r SummaryRow
 		if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt); err != nil {
+			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}

@@ -5,7 +5,7 @@
 // clears that filter.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SCard, SCopyButton, STable, type TableColumn } from '@sub2api/ui'
+import { SCard, SIPAddress, STable, type TableColumn } from '@sub2api/ui'
 import TimeText from '@/components/TimeText.vue'
 import type { UsageSummaryRow } from '@/api/types'
 import { formatMoney, formatNumber, formatPercent } from '@/utils/format'
@@ -37,25 +37,13 @@ const columns = computed<TableColumn[]>(() => [
     <div class="max-h-96 overflow-y-auto">
       <STable :columns="columns" :rows="rows" :loading="loading" row-key="key" dense :empty-text="t('usage.ips.empty')">
         <template #cell-key="{ row }">
-          <div class="flex min-w-0 items-center gap-1">
-            <button
-              type="button"
-              class="min-w-0 truncate rounded-md border px-2 py-0.5 font-mono text-xs transition-colors"
-              :class="
-                row.key && row.key === active
-                  ? 'border-primary-500 bg-primary-500 text-white'
-                  : 'border-line bg-surface-2/60 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400'
-              "
-              :disabled="!row.key"
-              :aria-pressed="row.key === active"
-              :title="row.key ? (row.key === active ? t('usage.ips.clear') : t('usage.ips.filter', { ip: row.key })) : t('usage.ips.unknown')"
-              data-testid="usage-ip-filter"
-              @click="emit('filter', row.key === active ? '' : row.key)"
-            >
-              {{ row.key || t('usage.ips.unknown') }}
-            </button>
-            <SCopyButton v-if="row.key" :text="row.key" icon-only class="shrink-0" />
-          </div>
+          <SIPAddress
+            :value="row.key"
+            filterable
+            :active="row.key === active"
+            :empty="t('usage.ips.unknown')"
+            @filter="ip => emit('filter', ip === active ? '' : ip)"
+          />
         </template>
         <template #cell-requests="{ row }">
           <div class="flex items-center gap-2">

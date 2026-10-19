@@ -4,6 +4,7 @@ import { reactive, ref } from 'vue'
 import { i18n } from '@/i18n'
 import UsageFilters from './UsageFilters.vue'
 import UsageView from './UsageView.vue'
+import UsageIPPanel from './UsageIPPanel.vue'
 
 const get = vi.hoisted(() => vi.fn(async () => []))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
@@ -19,7 +20,19 @@ describe('shared usage search', () => {
     await flushPromises()
     w.getComponent(UsageFilters).vm.$emit('update:modelValue', { client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true' })
     await flushPromises()
-    expect(get).toHaveBeenLastCalledWith('/usage/summary', expect.objectContaining({ client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true', group_by: 'day' }))
+    for (const group_by of ['day', 'ip']) {
+      expect(get).toHaveBeenCalledWith('/usage/summary', expect.objectContaining({ client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true', group_by }))
+    }
+  })
+
+  it('shows client IP statistics on entry and filters records when an address is selected', async () => {
+    const w = mount(UsageView, { global: { ...global, stubs: { UsageTable: true, SChart: true } } })
+    await flushPromises()
+    expect(w.get('[data-testid="usage-ip-panel"]').isVisible()).toBe(true)
+    w.getComponent(UsageIPPanel).vm.$emit('filter', '192.0.2.7')
+    await flushPromises()
+    expect(w.getComponent(UsageFilters).props('modelValue').client_ip).toBe('192.0.2.7')
+    expect(get).toHaveBeenCalledWith('/usage/summary', expect.objectContaining({ client_ip: '192.0.2.7', group_by: 'ip' }))
   })
 
   it('retains selected groups when query IDs are strings', async () => {

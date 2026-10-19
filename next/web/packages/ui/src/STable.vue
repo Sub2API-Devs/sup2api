@@ -22,6 +22,9 @@ import SIcon from './SIcon.vue'
 import type { TableColumn, TableReorderEvent } from './types'
 import { displayValue, getPath } from './value'
 import { useTableReorder } from './tableReorder'
+import { useTableColumns, type TableColumnStorage } from './tableColumns'
+import STableColumnSettings from './STableColumnSettings.vue'
+import SIPAddress from './SIPAddress.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -44,6 +47,10 @@ const props = withDefaults(
     card?: boolean
     reorderable?: boolean
     reorderDisabled?: boolean
+    /** Enables the SDK column picker, persisted under this stable table key. */
+    columnSettingsKey?: string
+    /** Optional server/custom persistence; defaults to browser localStorage. */
+    columnStorage?: TableColumnStorage
   }>(),
   { rowKey: 'id', selected: () => [], emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined }
 )
@@ -53,8 +60,11 @@ const emit = defineEmits<{
   (e: 'update:selected', keys: unknown[]): void
   (e: 'update:rows', rows: T[]): void
   (e: 'reorder', event: TableReorderEvent<T>): void
+  (e: 'filter', column: TableColumn, value: string, row: T): void
 }>()
 const t = useUiT()
+const columnState = useTableColumns(() => props.columns, () => props.columnSettingsKey, () => props.columnStorage)
+const visibleColumns = computed(() => props.columnSettingsKey ? columnState.visibleColumns.value : props.columns)
 const expanded = ref(new Set<unknown>())
 const table = ref<HTMLTableElement>()
 const reorderHelp = useId()
@@ -110,7 +120,7 @@ function toggleRow(key: unknown, on: boolean) {
 }
 
 const span = computed(
-  () => props.columns.length + Number(props.expandable || false) + Number(props.selectable || false) + Number(props.reorderable || false)
+  () => visibleColumns.value.length + Number(props.expandable || false) + Number(props.selectable || false) + Number(props.reorderable || false)
 )
 
 function onRowKey(e: KeyboardEvent, row: T) {
@@ -139,10 +149,11 @@ function onRowKey(e: KeyboardEvent, row: T) {
       >{{ reorderMessage }}</span>
     </template>
     <div
-      v-if="card && $slots.toolbar"
+      v-if="columnSettingsKey || (card && $slots.toolbar)"
       class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3"
     >
       <slot name="toolbar" />
+      <STableColumnSettings v-if="columnSettingsKey" :state="columnState" class="ms-auto" />
     </div>
     <div :class="card ? ['table-container s-table-in-card', { 's-table-fit-expanded': fitExpandedToContainer }] : 'contents'">
       <table
@@ -176,7 +187,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               class="w-8"
             />
             <th
-              v-for="c in columns"
+              v-for="c in visibleColumns"
               :key="c.key"
               :style="c.width ? { width: c.width } : undefined"
               :class="[ALIGN[c.align ?? 'left'], c.headerClass, { 's-table-actions': c.key === 'actions' }]"
@@ -281,7 +292,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
                 </button>
               </td>
               <td
-                v-for="c in columns"
+                v-for="c in visibleColumns"
                 :key="c.key"
                 :class="[ALIGN[c.align ?? 'left'], c.class, { 's-table-actions': c.key === 'actions', 'whitespace-nowrap': c.nowrap }]"
                 :style="cellStyle(c)"
@@ -293,7 +304,14 @@ function onRowKey(e: KeyboardEvent, row: T) {
                   :value="valueOf(row, c.key)"
                   :index="i"
                 >
-                  {{ displayValue(valueOf(row, c.key)) }}
+                  <SIPAddress
+                    v-if="c.format === 'ip'"
+                    :value="valueOf(row, c.key)"
+                    :copyable="c.copyable"
+                    :filterable="c.filterable"
+                    @filter="emit('filter', c, $event, row)"
+                  />
+                  <template v-else>{{ displayValue(valueOf(row, c.key)) }}</template>
                 </slot>
               </td>
             </tr>

@@ -58,7 +58,7 @@ function reset() {
     <div class="flex flex-wrap items-start gap-2">
       <div
         v-if="$slots.range"
-        class="shrink-0"
+        class="min-w-0 max-w-full"
       >
         <slot name="range" />
       </div>

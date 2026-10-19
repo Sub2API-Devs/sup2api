@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SAlert from './SAlert.vue'
 import SCopyButton from './SCopyButton.vue'
+import SIPAddress from './SIPAddress.vue'
 import SProgress from './SProgress.vue'
 import SChoiceCards from './SChoiceCards.vue'
 import STooltip from './STooltip.vue'
@@ -58,6 +59,36 @@ describe('SCopyButton', () => {
     await flushPromises()
     expect(w.emitted('error')).toHaveLength(1)
     expect(toastState.items).toHaveLength(0)
+  })
+})
+
+describe('SIPAddress', () => {
+  it('preserves IPv6 text for copying and emits filtering only when enabled', async () => {
+    const address = '2001:db8:abcd:1234:5678:90ab:cdef:1234'
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const w = mount(SIPAddress, { props: { value: address } })
+    expect(w.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
+    expect(w.get('span[title]').attributes('title')).toBe(address)
+    await w.get('button[aria-label="Copy"]').trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith(address)
+    expect(w.emitted('filter')).toBeUndefined()
+    await w.setProps({ filterable: true, active: true, copyable: false })
+    const filter = w.get('[data-testid="ip-address-filter"]')
+    expect(filter.attributes('aria-pressed')).toBe('true')
+    await filter.trigger('click')
+    expect(w.emitted('filter')).toEqual([[address]])
+    expect(w.find('button[aria-label="Copy"]').exists()).toBe(false)
+  })
+
+  it('keeps missing addresses inert and never stringifies arbitrary row objects', async () => {
+    const w = mount(SIPAddress, { props: { value: null, filterable: true, empty: 'Unknown' } })
+    for (const value of [null, undefined, '', '   ', {}, 123]) {
+      await w.setProps({ value })
+      expect(w.text()).toBe('Unknown')
+      expect(w.find('button').exists()).toBe(false)
+    }
   })
 })
 

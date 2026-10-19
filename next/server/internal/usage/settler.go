@@ -392,7 +392,9 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 			status := initialStatus(rec)
 			var priceID *int64
 			var exprHash, mode string
-			detail := []byte("{}")
+			// Free requests also need their token semantics for usage summaries.
+			// Only billable requests retain pricing headers and parameters below.
+			detail := jsonOr(pendingDetail{Inputs: pendingInputs{Semantics: rec.UsageSemantics}}, "{}")
 			if status == StatusPending || status == StatusReserved {
 				if rec.Price != nil {
 					exprHash, mode = rec.Price.ExprHash, rec.Price.Mode

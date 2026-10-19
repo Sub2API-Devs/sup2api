@@ -18,6 +18,7 @@ const chips = computed(() => {
   const input = sum((r) => r.input_tokens)
   const output = sum((r) => r.output_tokens)
   const cacheRead = sum((r) => r.cache_read_tokens)
+  const prompt = props.rows.every((r) => r.prompt_tokens != null) ? sum((r) => r.prompt_tokens) : null
   return [
     { key: 'requests', label: t('usage.summary.requests'), value: formatNumber(requests), accent: 'bg-sky-500/70' },
     { key: 'success', label: t('usage.summary.successRate'), value: formatPercent(reported ? sum((r) => r.success) : null, requests), accent: 'bg-emerald-500/70' },
@@ -28,8 +29,8 @@ const chips = computed(() => {
       title: t('usage.summary.tokensSub', { input: formatNumber(input), output: formatNumber(output) }),
       accent: 'bg-amber-500/70'
     },
-    // Share of the prompt served from cache: cache reads over everything read.
-    { key: 'cache', label: t('usage.summary.cacheHit'), value: formatPercent(cacheRead, input + cacheRead), accent: 'bg-violet-500/70' },
+    // The server normalizes each request before combining inclusive/exclusive usage.
+    { key: 'cache', label: t('usage.summary.cacheHit'), value: formatPercent(cacheRead, prompt), accent: 'bg-violet-500/70' },
     { key: 'cost', label: t('usage.summary.cost'), value: formatMoney(sum((r) => r.total_cost)), accent: 'bg-rose-500/65' }
   ]
 })

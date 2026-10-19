@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { i18n } from '@/i18n'
 import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
+import UsageStatsBar from './UsageStatsBar.vue'
 import type { UsageRow } from './usage'
 
 enableAutoUnmount(afterEach)
@@ -40,18 +42,37 @@ const global = {
 }
 
 describe('usage records layout', () => {
+  it('uses the SDK picker for desktop and mobile fields and persists separately for self-service', async () => {
+    localStorage.clear()
+    const w = mount(UsageTable, { props: { rows: [row], columnSettingsKey: 'core.usage.all' }, global, attachTo: document.body })
+    await w.get('[data-testid="table-column-settings"]').trigger('click')
+    const ip = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]'))
+      .find(button => button.textContent?.trim() === i18n.global.t('usage.request.clientIP'))!
+    ip.click()
+    await nextTick()
+    expect(w.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
+    expect(w.get('[data-testid="mobile-usage-record"]').text()).not.toContain(row.client_ip)
+    w.unmount()
+    const restored = mount(UsageTable, { props: { rows: [row], columnSettingsKey: 'core.usage.all' }, global })
+    expect(restored.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
+    const mine = mount(UsageTable, { props: { rows: [row], showUser: false, showAccount: false, columnSettingsKey: 'core.usage.self' }, global })
+    expect(mine.get('[data-testid="ip-address-filter"]').text()).toBe(row.client_ip)
+  })
   it('keeps model, routing and error readable while preserving request-id filtering', async () => {
     const w = mount(UsageTable, { props: { rows: [row], showClientRequestId: true }, global })
     expect(w.findAll('th').length).toBe(10)
     expect(w.text()).toContain(row.model)
     expect(w.text()).toContain(row.group_name)
     expect(w.get('[data-testid="usage-client"]').text()).toContain('my-laptop')
-    expect(w.get('[data-testid="usage-ip"]').text()).toBe('2001:db8::7')
+    expect(w.get('[data-testid="ip-address-filter"]').text()).toBe('2001:db8::7')
     expect(w.get('[data-testid="mobile-usage-record"]').text()).toContain('2001:db8::7')
-    await w.get('[data-testid="usage-ip"]').trigger('click')
+    await w.get('[data-testid="ip-address-filter"]').trigger('click')
     expect(w.emitted('filter-client-ip')).toEqual([['2001:db8::7']])
     expect(w.text()).toContain('403')
     expect(w.text()).not.toContain('usage.errors.model_not_allowed')
+    expect(w.get('[data-testid="usage-error-summary"]').element.closest('td')?.querySelector('time')).not.toBeNull()
+    const headers = w.findAll('th').map(th => th.text())
+    expect(headers.indexOf(i18n.global.t('usage.request.clientIP'))).toBeLessThan(headers.indexOf(i18n.global.t('usage.cols.modelAccount')))
     await w.get('[data-testid="client-request-id"]').trigger('click')
     expect(w.emitted('filter-client-request-id')).toEqual([['client-request-one']])
   })
@@ -79,5 +100,17 @@ describe('usage records layout', () => {
     const w = mount(UsageError, { props: { row }, global })
     expect(w.text()).not.toContain('model_not_allowed')
     expect(w.get('p').attributes('title')).toContain('model not allowed for this group')
+  })
+  it('uses normalized prompt totals for cache hit and preserves unknown historical usage', async () => {
+    const w = mount(UsageStatsBar, {
+      props: { rows: [
+        { key: 'exclusive', requests: 1, input_tokens: 0, cache_read_tokens: 100, cache_creation_tokens: 900, prompt_tokens: 1000, total_cost: '0' },
+        { key: 'inclusive', requests: 1, input_tokens: 1000, cache_read_tokens: 100, cache_creation_tokens: 900, prompt_tokens: 1000, total_cost: '0' }
+      ] },
+      global
+    })
+    expect(w.get('[data-testid="usage-stat-cache"]').text()).toContain('10.0%')
+    await w.setProps({ rows: [...w.props('rows'), { key: 'legacy', requests: 1, cache_read_tokens: 100, prompt_tokens: null, total_cost: '0' }] })
+    expect(w.get('[data-testid="usage-stat-cache"]').text()).toContain('—')
   })
 })
