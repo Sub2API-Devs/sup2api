@@ -12,7 +12,7 @@ import shutil
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from http.server import ThreadingHTTPServer
 
 import docker
@@ -467,12 +467,75 @@ class ManagerTests(Base):
         app = self.app('7')
         egress = self.fake.containers.get('ccg-7-egress')
         volume = self.fake.volumes.items['ccg-7-data']
-        self.apply('7', revision='b' * 64, auth={'mode': 'oauth', 'locale': 'ja_JP.UTF-8', 'timezone': 'Asia/Tokyo'})
+        # An older Worker has no /admin/environment: the change stays pending.
+        with patch('manager.requests.Session', EnvironmentSession.respond(404)):
+            self.apply('7', revision='b' * 64, auth={'mode': 'oauth', 'locale': 'ja_JP.UTF-8', 'timezone': 'Asia/Tokyo'})
+        self.assertEqual(len(EnvironmentSession.calls), 1)
         self.assertIs(self.app('7'), app)
         self.assertIs(self.fake.containers.get('ccg-7-egress'), egress)
         self.assertIs(self.fake.volumes.items['ccg-7-data'], volume)
         self.assertFalse(app.removed or egress.removed or volume.removed)
         self.assertTrue(self.m.public('7')['environment_pending'])
+        self.assertEqual(self.m.state('7')['environment'], {'locale': '', 'timezone': ''})
+
+    def test_environment_change_applied_in_place_by_worker(self):
+        self.apply('7')
+        app, boot = self.app('7'), self.app('7').attrs['State']['StartedAt']
+        state = self.m.state('7')
+        environment = {'locale': 'ja_JP.UTF-8', 'timezone': 'Asia/Tokyo'}
+        with patch('manager.requests.Session', EnvironmentSession.respond(200)):
+            self.apply('7', revision='b' * 64, auth={'mode': 'oauth', **environment})
+        self.assertEqual(len(EnvironmentSession.calls), 1)
+        method, url, body, headers = EnvironmentSession.calls[0]
+        self.assertEqual((method, url), ('PUT', f'http://{state["app_ip"]}:{manager.ACCOUNT_PORT}/admin/environment'))
+        self.assertEqual(body, environment)
+        self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        self.assertIs(self.app('7'), app)
+        self.assertFalse(app.removed)
+        self.assertEqual(app.attrs['State']['StartedAt'], boot)  # not even restarted
+        self.assertFalse(self.m.public('7')['environment_pending'])
+        saved = self.m.state('7')
+        self.assertEqual(saved['environment'], environment)
+        self.assertNotIn('environment_desired', saved)
+        # Nothing changed: no further Worker call.
+        with patch('manager.requests.Session', EnvironmentSession.respond(200)):
+            self.apply('7', revision='b' * 64, auth={'mode': 'oauth', **environment})
+        self.assertEqual(EnvironmentSession.calls, [])
+        self.assertFalse(self.m.public('7')['environment_pending'])
+
+    def test_environment_retried_after_worker_failure(self):
+        self.apply('7')
+        auth = {'mode': 'oauth', 'locale': 'de_DE.UTF-8', 'timezone': 'Europe/Berlin'}
+        for failure in (EnvironmentSession.respond(405), EnvironmentSession.respond(500),
+                        EnvironmentSession.respond(200, {'locale': 'other', 'timezone': 'Europe/Berlin'}),
+                        EnvironmentSession.unreachable()):
+            with patch('manager.requests.Session', failure):
+                self.assertEqual(self.apply('7', revision='b' * 64, auth=auth)['status'], 'ready')
+            self.assertTrue(self.m.public('7')['environment_pending'])
+        # The Worker updated in place later: the next reconciliation applies it.
+        with patch('manager.requests.Session', EnvironmentSession.respond(200)):
+            self.apply('7', revision='b' * 64, auth=auth)
+        self.assertFalse(self.m.public('7')['environment_pending'])
+
+    def test_environment_set_at_creation_cannot_be_cleared_in_place(self):
+        self.apply('7', auth={'mode': 'oauth', 'timezone': 'Asia/Tokyo'})
+        self.assertFalse(self.m.public('7')['environment_pending'])
+        # Empty means "the container's own value", which is Asia/Tokyo here.
+        with patch('manager.requests.Session', EnvironmentSession.respond(200)):
+            self.apply('7', revision='b' * 64, auth={'mode': 'oauth'})
+        self.assertEqual(EnvironmentSession.calls, [])
+        self.assertTrue(self.m.public('7')['environment_pending'])
+        # Another timezone can still be applied in place.
+        with patch('manager.requests.Session', EnvironmentSession.respond(200)):
+            self.apply('7', revision='b' * 64, auth={'mode': 'oauth', 'timezone': 'Europe/Paris'})
+        self.assertEqual(len(EnvironmentSession.calls), 1)
+        self.assertFalse(self.m.public('7')['environment_pending'])
+
+    def test_new_container_discards_in_place_environment(self):
+        with patch.object(self.fake.containers, 'run') as run:
+            self.apply('7')
+        commands = [c.kwargs['command'][0] for c in run.call_args_list if 'command' in c.kwargs]
+        self.assertTrue(any('rm -f /work/data/environment.json' in c and 'mkdir -p /work/config /work/data' in c for c in commands), commands)
 
     def test_pull_failure(self):
         self.m.lockfile.close()
@@ -575,6 +638,39 @@ class FakeSession:
     def request(self, method, url, data=None, headers=None, **kwargs):
         FakeSession.calls.append((method, url, dict(headers or {})))
         return FakeResponse()
+
+
+class EnvironmentSession:
+    """requests.Session stand-in for the Worker's PUT /admin/environment."""
+    calls = []
+
+    @classmethod
+    def respond(cls, status, view=None):
+        cls.calls = []
+
+        class Session(cls):
+            def request(self, method, url, json=None, headers=None, **kwargs):
+                cls.calls.append((method, url, json, dict(headers or {})))
+                response = Mock(status_code=status)
+                response.json.return_value = view if view is not None else dict(json or {}, effective={})
+                return response
+        return Session
+
+    @classmethod
+    def unreachable(cls):
+        cls.calls = []
+
+        class Session(cls):
+            def request(self, method, url, **kwargs):
+                cls.calls.append((method, url, kwargs.get('json'), kwargs.get('headers')))
+                raise manager.requests.exceptions.ConnectTimeout('no route')
+        return Session
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
 
 
 class HandlerTests(Base):

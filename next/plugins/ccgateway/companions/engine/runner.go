@@ -23,7 +23,8 @@ type Runner struct {
 	CLI, Version, Plugin, Work string
 	Env                        []string
 	Proxy                      *ProxyConfigStore
-	Stderr                     io.Writer // diagnostics only; discarded when nil
+	Overrides                  *EnvironmentOverrides // account locale/timezone for new CLI processes
+	Stderr                     io.Writer             // diagnostics only; discarded when nil
 }
 
 func extractMod(root string) (string, error) {
@@ -120,14 +121,15 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	return out
 }
 
-// baseEnv applies egress and disables the CLI's own updater. CLI installation
-// is managed separately; a request must not replace the validated executable.
+// baseEnv applies the account locale/timezone and egress and disables the
+// CLI's own updater. CLI installation is managed separately; a request must
+// not replace the validated executable.
 func (r *Runner) baseEnv() []string {
 	env := r.Env
 	if env == nil {
 		env = os.Environ()
 	}
-	return envWith(r.Proxy.Environment(env), map[string]string{"DISABLE_AUTOUPDATER": "1"})
+	return envWith(r.Proxy.Environment(r.Overrides.Apply(env)), map[string]string{"DISABLE_AUTOUPDATER": "1"})
 }
 
 // run owns one native request lifecycle. Usually it uses one CLI process;

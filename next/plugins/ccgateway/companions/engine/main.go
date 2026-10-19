@@ -217,6 +217,11 @@ func (x *exchange) admit() bool {
 	var gateway map[string]string
 	if key, types, err := gatewayAttachmentRequest(body, r.Header); err == nil && len(types) > 0 {
 		key.Version = x.g.runner(r.Context()).Version
+		if key.Date != "" {
+			// The rendering is cached per day of the CLI's timezone, which an
+			// in-place account timezone may move away from the Worker's.
+			key.Date = x.g.Runner.Overrides.today(time.Now())
+		}
 		gateway = x.g.gatewayAttachments(r.Context(), key, types, x.diagnostic)
 	}
 	req, e := parsePolicyRequestWithGateway(body, r.Header, x.resources, nil, gateway)
@@ -631,7 +636,8 @@ func Serve() error {
 	if e != nil {
 		return e
 	}
-	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
+	overrides := NewEnvironmentOverrides(root)
+	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestMode = os.Getenv("CCG_REQUEST_MODE")
 	if g.RequestMode == "" {
 		g.RequestMode = "build"
@@ -648,7 +654,7 @@ func Serve() error {
 		relayHost = ip.String()
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
-	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), work: work, proxy: proxy, version: version, requestLogs: g.RequestLogs, authorizationChanged: func() error { return g.ownershipIndex().rotateAuthorization() }}
+	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: g.RequestLogs, authorizationChanged: func() error { return g.ownershipIndex().rotateAuthorization() }}
 	return g.listen(bind, admin, logDir)
 }
 

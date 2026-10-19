@@ -82,6 +82,12 @@ func peer() error {
 	if err != nil {
 		return err
 	}
+	if capture := os.Getenv("WORKER_TEST_ENV_CAPTURE"); capture != "" {
+		data, _ := json.Marshal(map[string]string{"LANG": os.Getenv("LANG"), "LC_ALL": os.Getenv("LC_ALL"), "TZ": os.Getenv("TZ")})
+		if err = os.WriteFile(capture, data, 0600); err != nil {
+			return err
+		}
+	}
 	var body map[string]json.RawMessage
 	if err = json.Unmarshal(raw, &body); err != nil {
 		return err
@@ -129,6 +135,13 @@ func peer() error {
 
 func fixture(t *testing.T, wantRequests int64) Worker {
 	t.Helper()
+	return fixtureAt(t, wantRequests, t.TempDir())
+}
+
+// fixtureAt starts a worker on root; a second worker on the same root
+// stands for a restarted container keeping its data volume.
+func fixtureAt(t *testing.T, wantRequests int64, root string) Worker {
+	t.Helper()
 	t.Setenv("WORKER_TEST_PEER", "1")
 	var requests atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +185,6 @@ func fixture(t *testing.T, wantRequests int64) Worker {
 	t.Setenv("WORKER_TEST_PROVIDER_URL", upstream.URL)
 	cli, err := os.Executable()
 	require.NoError(t, err)
-	root := t.TempDir()
 	w, err := New(&config.Config{WorkerID: "test", CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "worker-test-key", AdminKey: "worker-admin-key", RequestTimeout: 5 * time.Second})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, w.Close()) })
@@ -242,4 +254,54 @@ func TestWorkerAdmission(t *testing.T) {
 func TestWorkerRequiresKey(t *testing.T) {
 	_, err := New(&config.Config{})
 	require.ErrorContains(t, err, "CCG_API_KEY")
+}
+
+// Account locale/timezone changes reach new CLI processes without a new
+// container, and survive a worker restart on the same data directory.
+func TestWorkerEnvironmentAppliesToNewCLIProcesses(t *testing.T) {
+	t.Setenv("LANG", "C.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("TZ", "UTC")
+	root := t.TempDir()
+	capture := filepath.Join(t.TempDir(), "env.json")
+	t.Setenv("WORKER_TEST_ENV_CAPTURE", capture)
+	admin := func(w Worker, method, body, key string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/admin/environment", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+key)
+		out := httptest.NewRecorder()
+		w.ServeHTTP(out, req)
+		return out
+	}
+	request := func(w Worker) map[string]string {
+		body := `{"model":"claude-sonnet-4-6","max_tokens":128,"temperature":0.2500,"stop_sequences":["fixture stop"],"messages":[{"role":"user","content":[{"type":"text","text":"first block"},{"type":"text","text":"second block"}]}]}`
+		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
+		req.Header.Set("x-api-key", "worker-test-key")
+		out := httptest.NewRecorder()
+		w.ServeHTTP(out, req)
+		require.Equal(t, http.StatusOK, out.Code, out.Body.String())
+		raw, err := os.ReadFile(capture)
+		require.NoError(t, err)
+		var env map[string]string
+		require.NoError(t, json.Unmarshal(raw, &env))
+		return env
+	}
+
+	w := fixtureAt(t, 2, root)
+	assert.Equal(t, http.StatusUnauthorized, admin(w, http.MethodPut, `{"timezone":"Asia/Tokyo"}`, "worker-test-key").Code, "the API key is not a management key")
+	assert.Equal(t, http.StatusBadRequest, admin(w, http.MethodPut, `{"timezone":"Mars/Olympus"}`, "worker-admin-key").Code)
+	assert.Equal(t, map[string]string{"LANG": "C.UTF-8", "LC_ALL": "", "TZ": "UTC"}, request(w))
+
+	out := admin(w, http.MethodPut, `{"locale":"ja_JP","timezone":"Asia/Tokyo"}`, "worker-admin-key")
+	require.Equal(t, http.StatusOK, out.Code, out.Body.String())
+	assert.Equal(t, map[string]string{"LANG": "ja_JP.UTF-8", "LC_ALL": "ja_JP.UTF-8", "TZ": "Asia/Tokyo"}, request(w))
+	require.NoError(t, w.Close())
+
+	restarted := fixtureAt(t, 0, root)
+	out = admin(restarted, http.MethodGet, "", "worker-admin-key")
+	require.Equal(t, http.StatusOK, out.Code, out.Body.String())
+	var view map[string]any
+	require.NoError(t, json.Unmarshal(out.Body.Bytes(), &view))
+	assert.Equal(t, "ja_JP", view["locale"])
+	assert.Equal(t, "Asia/Tokyo", view["timezone"])
+	assert.Equal(t, map[string]any{"LANG": "ja_JP.UTF-8", "LC_ALL": "ja_JP.UTF-8", "TZ": "Asia/Tokyo"}, view["effective"])
 }

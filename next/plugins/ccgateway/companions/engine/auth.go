@@ -56,6 +56,7 @@ type authManager struct {
 	cli, key             string
 	env                  []string
 	proxy                *ProxyConfigStore
+	overrides            *EnvironmentOverrides // account locale/timezone (PUT /admin/environment)
 	// version is the CLI version (usage request user agent); usageURL
 	// overrides the Anthropic usage endpoint in tests.
 	version, usageURL string
@@ -107,8 +108,14 @@ func (s *authSession) call(ctx context.Context, request Object) (Object, error) 
 	}
 }
 
-// pending returns the live session, ending a dead or expired one. Caller holds a.mu.
+// environment is the base of every CLI process the management API starts
+// (login, refresh, logout): account locale/timezone, then egress.
 func (a *authManager) environment() []string {
+	return a.overrides.Apply(a.inherited())
+}
+
+// inherited is the container environment with egress, before locale/timezone.
+func (a *authManager) inherited() []string {
 	env := a.env
 	if env == nil {
 		env = os.Environ()
@@ -116,6 +123,7 @@ func (a *authManager) environment() []string {
 	return a.proxy.Environment(env)
 }
 
+// pending returns the live session, ending a dead or expired one. Caller holds a.mu.
 func (a *authManager) pending() *authSession {
 	if a.session == nil {
 		return nil
@@ -273,6 +281,10 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.proxy.serve(w, r)
 		return
 	}
+	if r.URL.Path == "/admin/environment" {
+		a.overrides.serve(w, r, a.inherited())
+		return
+	}
 	if r.URL.Path == "/admin/request-logs" {
 		a.requestLogs.serve(w, r)
 		return
@@ -290,6 +302,9 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method + " " + r.URL.Path {
 	case "GET /admin/status":
 		result, err = localAuthSnapshot(a.environment())
+		if err == nil && a.overrides != nil {
+			result["environment"] = a.overrides.View(a.inherited())
+		}
 	case "GET /admin/auth/session":
 		result = Object{"session": nil}
 		if s := a.pending(); s != nil {

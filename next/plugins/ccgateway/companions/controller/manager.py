@@ -494,7 +494,47 @@ class Manager:
         # Serialize allocation and replacement across accounts. Otherwise two
         # parallel reconciliations could select the same still-free subnet.
         with self.network_lock:
-            return self._provision(aid, auth, policy, cli)
+            state = self._provision(aid, auth, policy, cli)
+        # Outside the network lock: a slow account Worker must not hold up
+        # the reconciliation of other accounts.
+        if state.get('environment_pending') and isinstance(state.get('environment_desired'), dict):
+            self._sync_environment(aid, state)
+        return state
+
+    def _sync_environment(self, aid, state):
+        """Apply a locale/timezone change to the existing container in place.
+
+        Docker cannot change a container's environment and account containers
+        are never recreated for this: a Worker with PUT /admin/environment
+        applies it to every CLI process it starts afterwards (and keeps it in
+        its data volume). An older Worker (404/405), a stopped container or a
+        failed call leaves environment_pending set, as before; the next
+        reconciliation tries again. Never fails the apply."""
+        desired = state['environment_desired']
+        created = state.get('environment_created') or {}
+        # An empty value means "the container's own value": a value fixed at
+        # container creation cannot be cleared without a new container.
+        if any(not desired.get(key) and created.get(key) for key in ('locale', 'timezone')):
+            return
+        try:
+            if self.owned(aid, 'app').status != 'running':
+                return
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.request('PUT', f'http://{state["app_ip"]}:{ACCOUNT_PORT}/admin/environment',
+                    json=desired, headers={'Authorization': 'Bearer ' + state['admin_key']},
+                    timeout=(3, 10), allow_redirects=False)
+                if response.status_code != 200:
+                    return
+                view = response.json()
+        except (docker.errors.DockerException, requests.exceptions.RequestException, ValueError, KeyError):
+            return
+        if not isinstance(view, dict) or any(view.get(key) != desired.get(key) for key in ('locale', 'timezone')):
+            return
+        state['environment'] = desired
+        state['environment_pending'] = False
+        state.pop('environment_desired', None)
+        self.save(aid, state)
 
     def _provision(self, aid, auth=None, policy=None, cli=None):
         try:
@@ -519,7 +559,15 @@ class Manager:
             # Defaults apply to new containers only. A tag/digest change must
             # never replace a working account (including after controller restart).
             if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and (cli is None or state.get('cli') == cli):
-                state['environment_pending'] = environment != state.get('environment', {'locale': '', 'timezone': ''})
+                current = state.get('environment', {'locale': '', 'timezone': ''})
+                # State written before in-place changes: the values the
+                # container was created with are the last applied ones.
+                state.setdefault('environment_created', current)
+                state['environment_pending'] = environment != current
+                if state['environment_pending']:
+                    state['environment_desired'] = environment  # provision() pushes it to the Worker
+                else:
+                    state.pop('environment_desired', None)
                 self.save(aid, state)
                 return state
         # Credential/network changes must not incidentally upgrade the image.
@@ -588,8 +636,10 @@ class Manager:
                      revision='', status='pending')
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
+        # A new container gets locale/timezone from its environment below; drop
+        # the in-place values an earlier container's Worker kept in the volume.
         self.oneshot(image_ref, entrypoint=['sh', '-ec'],
-            command=['mkdir -p /work/config /work/data; printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; chown -R 1000:1000 /work'],
+            command=['mkdir -p /work/config /work/data; rm -f /work/data/environment.json; printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; chown -R 1000:1000 /work'],
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
         env = {'DISABLE_AUTOUPDATER': '1', **cli_env}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
@@ -615,7 +665,9 @@ class Manager:
         if cli is not None:
             state['cli'] = cli
         state['environment'] = environment
+        state['environment_created'] = environment
         state['environment_pending'] = False
+        state.pop('environment_desired', None)
         self.save(aid, state)
         return state
 

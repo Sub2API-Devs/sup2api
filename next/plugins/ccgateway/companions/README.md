@@ -130,6 +130,10 @@ Docker 操作复用原生 Docker CLI；SSH 使用 `golang.org/x/crypto/ssh`，HT
 
 配置通过管理接口 `/admin/proxy` 更新，以 AES-GCM 加密保存到数据卷内的 `proxy.enc`。加密密钥从管理密钥派生；更换 CCG_ADMIN_KEY 前需安排配置迁移或重置，旧文件不能用新密钥解密。SSH 密码/私钥和代理 URL 不进入管理审计请求体。
 
+### 语言／时区（原地生效）
+
+账号设置的语言／时区在新建容器时写入容器环境（LANG、LC_ALL、TZ）。已有容器改设置时不重建：控制器调用 Worker 管理接口 `PUT /admin/environment`（管理密钥鉴权，body `{"locale":"ja_JP.UTF-8","timezone":"Asia/Tokyo"}`，空串表示沿用容器原值），Worker 校验后原子写入数据卷 `/work/data/environment.json`，之后启动的每个 Claude Code 进程（模型请求、授权、刷新、登出）都用它覆盖 LANG、LC_ALL（无编码时补 `.UTF-8`）和 TZ；已运行的进程不变。`GET /admin/environment` 和 `GET /admin/status` 的 `environment` 字段返回当前值与新进程实际得到的 `effective`。旧 Worker（无此接口）、容器未运行或调用失败时控制器保留 `environment_pending`，下次对账重试；把容器创建时带的值清空成「默认」无法原地做到，同样保持待新容器生效。新建容器前控制器删除数据卷里的 `environment.json`，以容器环境为准。
+
 ### 2026-10-03 验证记录
 
 - 后端管理/服务/审计测试、远程 SSH 框架测试、Go vet 与宿主编译通过；前端 16 个相关测试、类型检查和生产构建通过。
