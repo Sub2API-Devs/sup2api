@@ -51,7 +51,9 @@ IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1')
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1')
+DISK_QUOTA_LABEL = 'io.sup2api.ccgateway.disk-quota-bytes'
+DEFAULT_ACCOUNT_DISK_GIB = 10
 # Same reference rules as the core (CONTRACTS §49.16).
 IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
@@ -100,6 +102,10 @@ class InvalidImage(ValueError):
 
 class InvalidCLIProfile(ValueError):
     """The selected image cannot provide the pinned CLI identity."""
+
+
+class DiskQuotaUnavailable(RuntimeError):
+    """A requested hard quota cannot be enforced by the storage backend."""
 
 
 class UpgradeInProgress(RuntimeError):
@@ -285,6 +291,11 @@ class Manager:
     def __init__(self, root, app_image, egress_image, prefix='ccg', probe_url='https://www.gstatic.com/generate_204'):
         if not re.fullmatch(r'[a-z][a-z0-9-]{0,24}', prefix):
             raise ValueError('invalid prefix')
+        disk_gib = os.getenv('CCG_ACCOUNT_DISK_GIB', str(DEFAULT_ACCOUNT_DISK_GIB))
+        if not re.fullmatch(r'[1-9][0-9]{0,3}', disk_gib) or not 1 <= int(disk_gib) <= 1024:
+            raise ValueError('CCG_ACCOUNT_DISK_GIB must be an integer between 1 and 1024')
+        self.account_disk_bytes = int(disk_gib) << 30
+        self.disk_quota_support = 'unknown'
         # Name and port of this controller's own container (an isolated test
         # instance on the same host uses others; self-upgrade must not touch
         # the production controller).
@@ -341,7 +352,52 @@ class Manager:
     def health(self):
         return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
                 'controller_image': self.controller_image, 'network_policy_version': 1,
-                'features': list(FEATURES)}
+                'features': list(FEATURES),
+                'disk_quota': {'default_bytes': self.account_disk_bytes, 'support': self.disk_quota_support}}
+
+    def account_volume(self, aid, allow_legacy=False):
+        """Native Docker local-volume project quota. Never replace saved data."""
+        name = self.name(aid, 'data')
+        try:
+            volume = self.docker.volumes.get(name)
+        except docker.errors.NotFound:
+            try:
+                volume = self.docker.volumes.create(name, driver='local',
+                    driver_opts={'size': str(self.account_disk_bytes)},
+                    labels={LABEL: aid, DISK_QUOTA_LABEL: str(self.account_disk_bytes)})
+            except docker.errors.APIError as error:
+                if 'no quota support' in str(error).lower():
+                    self.disk_quota_support = 'unavailable'
+                    raise DiskQuotaUnavailable('Docker data volumes do not support disk quotas') from error
+                raise
+        labels = volume.attrs.get('Labels') or {}
+        if labels.get(LABEL) != aid:
+            raise ValueError('volume ownership mismatch')
+        size = (volume.attrs.get('Options') or {}).get('size')
+        if not size and allow_legacy and DISK_QUOTA_LABEL not in labels:
+            return volume, 0
+        if (volume.attrs.get('Driver') != 'local' or not isinstance(size, str) or
+                not re.fullmatch(r'[1-9][0-9]{0,14}', size) or
+                labels.get(DISK_QUOTA_LABEL) != size or not (1 << 30) <= int(size) <= (1024 << 30)):
+            raise DiskQuotaUnavailable('Existing volume requires explicit disk quota migration')
+        self.disk_quota_support = 'available'
+        # The stored limit wins: changing a default must never resize or
+        # replace a volume which may contain authorization and request history.
+        return volume, int(size)
+
+    def verify_disk_quota(self, image, volume, disk_bytes):
+        if not disk_bytes:
+            return
+        # XFS project quotas make statfs on the quota root report its hard limit.
+        # Validate before replacing any running container or network.
+        script = ("const fs=require('fs'),s=fs.statfsSync('/work',{bigint:true});"
+                  f"if(s.blocks<=0n||s.blocks*s.bsize>BigInt('{disk_bytes}'))process.exit(42);")
+        try:
+            self.oneshot(image, entrypoint=['node'], command=['-e', script], user='1000:1000',
+                network_mode='none', cap_drop=['ALL'], security_opt=['no-new-privileges:true'],
+                volumes={volume.name: {'bind': '/work', 'mode': 'ro'}})
+        except docker.errors.DockerException as error:
+            raise DiskQuotaUnavailable('The account volume does not expose its enforced quota') from error
 
     def runtime_images(self):
         return {'app': self.app_image, 'egress': self.egress_image, 'controller': self.controller_image}
@@ -600,6 +656,10 @@ class Manager:
             cli_env = resolve_profile(self, image_ref, cli)
         except (ValueError, docker.errors.DockerException) as e:
             raise InvalidCLIProfile('requested CLI version/mode is unavailable or invalid in the selected image') from e
+        # Fail unsupported storage BEFORE removing a working container/network.
+        legacy = state is not None and state.get('disk_quota', {}).get('status', 'legacy_unbounded') == 'legacy_unbounded'
+        volume, disk_bytes = self.account_volume(aid, allow_legacy=legacy)
+        self.verify_disk_quota(image_ref, volume, disk_bytes)
         if not state or state.get('network') != policy:
             old_subnets, occupied = [], []
             for n in self.docker.networks.list():
@@ -647,7 +707,8 @@ class Manager:
         state.update(network=policy, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip,
                      revision='', status='pending')
         self.save(aid, state)
-        volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
+        state['disk_quota'] = {'limit_bytes': disk_bytes, 'status': 'enforced' if disk_bytes else 'legacy_unbounded'}
+        self.save(aid, state)
         # A new container gets locale/timezone from its environment below; drop
         # the in-place values an earlier container's Worker kept in the volume.
         self.oneshot(image_ref, entrypoint=['sh', '-ec'],
@@ -655,6 +716,8 @@ class Manager:
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
         env = {'DISABLE_AUTOUPDATER': '1', **cli_env}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
+        if disk_bytes:
+            env['CCG_ACCOUNT_DISK_QUOTA_BYTES'] = str(disk_bytes)
         if auth['mode'] == 'api_key':
             env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
         # Apply locale and timezone configuration from account settings
@@ -672,7 +735,7 @@ class Manager:
             network=network.name, networking_config={network.name: self.docker.api.create_endpoint_config(ipv4_address=app_ip)}, user='1000:1000', environment=env,
             volumes={volume.name: {'bind': '/work', 'mode': 'rw'},
                      str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
-            mem_limit='2g', nano_cpus=2000000000, **options)
+            mem_limit='1g', nano_cpus=2000000000, **options)
         state['auth_mode'] = auth['mode']
         if cli is not None:
             state['cli'] = cli
@@ -971,6 +1034,7 @@ class Manager:
                 'image_update_available': bool(current_image and target_id and current_image != target_id),
                 'target_image_available': bool(target_id),
                 'environment_pending': bool(state.get('environment_pending')),
+                'disk_quota': state.get('disk_quota', {'limit_bytes': 0, 'status': 'legacy_unbounded'}),
                 'status': 'ready' if self.online.get(aid) == state.get('revision') and aid in self.online else 'pending',
                 'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth'),
                 'network': state.get('network'), 'app_ip': state.get('app_ip', ''),
@@ -1546,6 +1610,10 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             if not self.response_started:
                 self.fail(409, 'cli_profile_unavailable')
+        except DiskQuotaUnavailable:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(503, 'disk_quota_unavailable')
         except Exception:
             self.close_connection = True
             if not self.response_started:

@@ -15,6 +15,69 @@ The existing SSH management integration still lives in the core. This change
 does not claim a completed extraction of all CCGateway UI/services into plugin
 RPCs. The remote runtime lifecycle is implemented here, outside the core.
 
+## Account data-volume quotas
+
+New account volumes have a hard disk quota of **10 GiB**. Set
+`CCG_ACCOUNT_DISK_GIB` in the controller environment to an integer from 1 to
+1024 to change the default for newly created volumes. New Workers have a
+**1 GiB RAM limit** and a **shared CPU quota of at most 2 cores** (no dedicated
+CPU reservation). A changed default does not resize or replace an existing
+account container or volume.
+
+The implementation uses Docker's native local-volume `size` option. Docker's
+volume storage must support project quotas (normally XFS with `prjquota` /
+`pquota`). It does not enable quotas on the host, format disks or relocate
+Docker data. Unsupported storage returns `disk_quota_unavailable` (503);
+there is no unlimited fallback for a new volume.
+
+Before replacing a container, the controller verifies volume ownership,
+stored quota options and the bounded `statfs` view using a read-only,
+network-disabled helper. It then passes `CCG_ACCOUNT_DISK_QUOTA_BYTES` to the
+Worker. The CLI reports the volume's actual available space in whole GiB
+only when its filesystem view is bounded by that verified quota.
+
+The quota covers the account's persistent `/work` volume, including
+configuration, history, cache and request data. Container writable layers and
+Docker's own logs are outside this volume. A hard quota limits maximum usage;
+it does not reserve that much space in the shared storage pool.
+
+`GET /health` includes `disk_quota.default_bytes` and `support`
+(`unknown`, `available`, `unavailable`). This is backend/configuration
+information; `GET /accounts/<key>/status` reports the individual
+`disk_quota.limit_bytes` and status (`enforced` or `legacy_unbounded`).
+Existing unbounded data volumes are preserved and explicitly marked as
+legacy. They are never relabeled as enforced or automatically deleted.
+
+**Deployment prerequisite on the currently inspected host:** the Docker
+volume directory is on ext4, and a real Docker size-option probe returned
+`quota size requested but no quota support`. Prepare quota-capable storage
+before deploying this controller for new account creation. Migrating the
+Docker volume directory can affect other services using Docker volumes and
+needs a maintenance window and verified backups.
+
+Read-only inspection found two 3.84 TB NVMe disks (`nvme2n1`, `nvme3n1`) with
+no mounts or recognized filesystem/partition signatures. The proposed pool is
+a mirror (RAID1), providing about 3.84 TB nominal / 3.49 TiB before filesystem
+overhead, with XFS project quotas enabled. Disk identities and authorization
+to erase both drives must be confirmed before creating this pool. It has not
+been created. Moving Docker's volume directory also affects the Core nodes,
+Caddy and Redis volumes currently using that directory.
+
+The three inspected account `/work` volumes currently occupy approximately
+0.7 MiB, 2.7 MiB and 15.8 MiB. A 10 GiB maximum is ample for this observed
+usage; retained request data and runtime versions should still be monitored.
+A new volume does not allocate a 10 GiB backing file: physical storage grows
+with written data and filesystem metadata, subject to the hard quota and
+the pool's available capacity.
+
+For existing accounts, record the original enabled/scheduling state, drain
+requests, stop writes, back up the complete account volume and controller
+state, and verify recovery before rebuilding a bounded volume and restoring
+the data. Recheck the active Worker/CLI pair, authentication, quota and model
+request before restoring the original state. Previously disabled accounts
+must remain disabled. This migration is separate from saving defaults and
+has not been performed by this change.
+
 ## Networking
 
 The business container has only an internal interface. A short-lived Docker
@@ -58,7 +121,7 @@ Caddy container on the same host terminates HTTPS and proxies to it).
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/health` | `{"version","app_image","egress_image","controller_image","network_policy_version","features"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`), `controller_image` is `CCG_CONTROLLER_IMAGE` |
+| GET | `/health` | `{"version","app_image","egress_image","controller_image","network_policy_version","features","disk_quota"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`), `controller_image` is `CCG_CONTROLLER_IMAGE` |
 | GET | `/accounts` | `{"runtimes":[{"key","status","created_at"}]}` for every state directory |
 | DELETE | `/accounts/<key>` | draft keys only: removes both containers, the network, the data volume and the state directory; `200 {"deleted":true}` also when nothing existed; account ids → 405 |
 | PUT | `/accounts/<key>/config` | reconcile (proxy, enabled, revision, auth) |
@@ -89,7 +152,7 @@ Controller errors are `{"error":"<code>"}`: `unauthorized` (401), `not_found`
 (404), `method_not_allowed` (405), `invalid_request` (400: framing, JSON,
 revision, authentication or proxy settings), `not_synchronized` (409),
 `api_key_account` (409: OAuth action on an API key account),
-`image_pull_failed` (503) and `runtime_unavailable` (503); the §53.5 endpoints
+`image_pull_failed`, `disk_quota_unavailable` and `runtime_unavailable` (503); the §53.5 endpoints
 add `offset_mismatch`, `too_many_uploads`, `incomplete`, `upgrade_in_progress`
 (409), `checksum_mismatch`, `load_failed`, `invalid_image` (400); the worker
 update adds `unsupported_container` (409) and `container_changed` (503). Answers of the app

@@ -69,6 +69,7 @@ class FakeContainers:
         if name in self.items:
             raise docker.errors.APIError('Conflict: ' + name)
         c = FakeContainer(self.client, name, image, labels)
+        c.kwargs = kwargs
         self.items[name] = c
         return c
 
@@ -143,8 +144,9 @@ class FakeNetworks:
 
 
 class FakeVolume:
-    def __init__(self, volumes, name, labels):
+    def __init__(self, volumes, name, labels, driver='local', driver_opts=None):
         self.volumes, self.name, self.attrs, self.removed = volumes, name, {'Labels': dict(labels or {})}, False
+        self.attrs.update(Driver=driver, Options=dict(driver_opts or {}))
 
     def remove(self, force=False):
         self.volumes.items.pop(self.name, None)
@@ -160,9 +162,9 @@ class FakeVolumes:
             raise not_found(name)
         return self.items[name]
 
-    def create(self, name, labels=None):
+    def create(self, name, labels=None, driver='local', driver_opts=None):
         # Docker returns the existing volume for an existing name.
-        return self.items.setdefault(name, FakeVolume(self, name, labels))
+        return self.items.setdefault(name, FakeVolume(self, name, labels, driver, driver_opts))
 
 
 class FakeAPI:
@@ -217,6 +219,88 @@ class Base(unittest.TestCase):
     def new_image(self):
         self.fake.images.tags['app:test'] = 'sha256:app2'
         self.m.image_seen = (0.0, '')  # skip the 30 s status cache
+
+
+class DiskQuotaTests(Base):
+    def test_invalid_disk_defaults_are_rejected_before_state_is_opened(self):
+        for value in ('0', '-1', '1.5', '010', '1025', '10g', ''):
+            with patch.dict(os.environ, {'CCG_ACCOUNT_DISK_GIB': value}):
+                with self.assertRaisesRegex(ValueError, 'CCG_ACCOUNT_DISK_GIB'):
+                    self.make('app:test', 'egress:test')
+
+    def test_new_account_uses_a_hard_volume_quota_and_passes_the_verified_limit(self):
+        state = self.m.provision('7')
+        volume = self.fake.volumes.get('ccg-7-data')
+        limit = 10 << 30
+        self.assertEqual(volume.attrs['Options'], {'size': str(limit)})
+        self.assertEqual(volume.attrs['Labels'][manager.DISK_QUOTA_LABEL], str(limit))
+        self.assertEqual(state['disk_quota'], {'limit_bytes': limit, 'status': 'enforced'})
+        self.assertEqual(self.app('7').kwargs['environment']['CCG_ACCOUNT_DISK_QUOTA_BYTES'], str(limit))
+        self.assertEqual(self.app('7').kwargs['mem_limit'], '1g')
+        self.assertEqual(self.app('7').kwargs['nano_cpus'], 2000000000)
+
+    def test_unsupported_storage_never_creates_an_unlimited_fallback(self):
+        with patch.object(self.fake.volumes, 'create', side_effect=docker.errors.APIError('quota size requested but no quota support')):
+            with self.assertRaises(manager.DiskQuotaUnavailable):
+                self.m.provision('7')
+        self.assertIsNone(self.app('7'))
+        self.assertEqual(self.fake.volumes.items, {})
+        self.assertEqual(self.fake.networks.items, {})
+        self.assertEqual(self.m.health()['disk_quota']['support'], 'unavailable')
+
+    def test_failed_mount_verification_keeps_the_working_runtime(self):
+        self.m.provision('7')
+        old = self.app('7')
+        volume = self.fake.volumes.get('ccg-7-data')
+        state = self.m.state('7')
+        with patch.object(self.m, 'oneshot', side_effect=docker.errors.APIError('quota verification failed')):
+            with self.assertRaises(manager.DiskQuotaUnavailable):
+                self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
+        self.assertIs(self.app('7'), old)
+        self.assertFalse(old.removed)
+        self.assertIs(self.fake.volumes.get('ccg-7-data'), volume)
+        self.assertEqual(self.m.state('7'), state)
+
+    def test_default_changes_do_not_resize_existing_data(self):
+        self.m.provision('7')
+        self.m.account_disk_bytes = 20 << 30
+        self.m.provision('8')
+        self.assertEqual(self.m.account_volume('7')[1], 10 << 30)
+        self.assertEqual(self.m.account_volume('8')[1], 20 << 30)
+
+    def test_legacy_data_is_preserved_and_not_claimed_to_have_a_quota(self):
+        self.m.provision('7')
+        volume = self.fake.volumes.get('ccg-7-data')
+        volume.attrs['Options'] = {}
+        del volume.attrs['Labels'][manager.DISK_QUOTA_LABEL]
+        state = self.m.state('7')
+        del state['disk_quota']
+        self.m.save('7', state)
+        state = self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
+        self.assertIs(self.fake.volumes.get('ccg-7-data'), volume)
+        self.assertEqual(state['disk_quota']['status'], 'legacy_unbounded')
+        self.assertNotIn('CCG_ACCOUNT_DISK_QUOTA_BYTES', self.app('7').kwargs['environment'])
+
+    def test_unowned_or_inconsistent_volumes_cannot_be_adopted(self):
+        volume = self.fake.volumes.create('ccg-7-data', labels={LABEL: 'other'})
+        with self.assertRaisesRegex(ValueError, 'ownership'):
+            self.m.account_volume('7', allow_legacy=True)
+        volume.attrs['Labels'] = {LABEL: '7', manager.DISK_QUOTA_LABEL: str(10 << 30)}
+        volume.attrs['Options'] = {'size': str(20 << 30)}
+        with self.assertRaises(manager.DiskQuotaUnavailable):
+            self.m.account_volume('7', allow_legacy=True)
+        self.assertFalse(volume.removed)
+
+    def test_a_previously_enforced_volume_cannot_silently_become_legacy(self):
+        self.m.provision('7')
+        old = self.app('7')
+        volume = self.fake.volumes.get('ccg-7-data')
+        volume.attrs['Options'] = {}
+        del volume.attrs['Labels'][manager.DISK_QUOTA_LABEL]
+        with self.assertRaises(manager.DiskQuotaUnavailable):
+            self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
+        self.assertIs(self.app('7'), old)
+        self.assertFalse(old.removed)
 
 
 class KeyTests(unittest.TestCase):
@@ -729,7 +813,14 @@ class HandlerTests(Base):
         self.assertEqual(self.call('GET', '/health'),
                          (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
                                 'controller_image': '', 'network_policy_version': 1,
-                            'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1']}))
+                            'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1'],
+                            'disk_quota': {'default_bytes': 10 << 30, 'support': 'unknown'}}))
+
+    def test_unsupported_disk_quota_has_a_specific_error(self):
+        with patch.object(self.fake.volumes, 'create', side_effect=docker.errors.APIError('quota size requested but no quota support')):
+            self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
+                             (503, {'error': 'disk_quota_unavailable'}))
+        self.assertIsNone(self.app('1'))
 
     def test_explicit_account_delete_purges_data(self):
         self.apply('21')
