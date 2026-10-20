@@ -1,6 +1,6 @@
 # CCGateway 当前文档
 
-2026-10-20 当前状态：Core **0.1.172**、CCGateway／Controller／Worker **0.1.70**、全局 **build＋CLI 2.1.304** 已部署。账号 30、31、32 在线升级并通过真实上游复测；账号 21 已离线升级，按用户要求保持停用。接手先读 [304 实施与部署记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12 节和 [环境指南](ENVIRONMENT-RUNBOOK.md)顶部状态。
+2026-10-20 当前状态：Core **0.1.173**、CCGateway／Controller／Worker **0.1.70**、全局 **build＋CLI 2.1.304** 已部署。分组 CC 配置默认可选，账号可直接覆盖全局；只有已启用的分组限制才阻止账号覆盖。账号 30、31、32 在线升级并通过真实上游复测；账号 21 已离线升级，按用户要求保持停用。接手先读 [304 实施与部署记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12–13 节和 [环境指南](ENVIRONMENT-RUNBOOK.md)顶部状态。
 
 专项设计：[CC 特性分层配置与请求内容转换设计](CC-FEATURE-LAYERS-DESIGN.md)，涵盖计费归属、10 个环境字段、连续会话与客户端动态 system 排除参数兼容。配套 [UI 设计稿](cc-feature-layers-mockup.html) 和 [讨论记录](CC-FEATURE-LAYERS-DISCUSSION.md)。实际实现、测试及限制以实施记录为准。
 

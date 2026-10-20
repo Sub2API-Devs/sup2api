@@ -248,3 +248,13 @@
 Core 发行包使用既有发布钥签名；插件沿用服务器既存的关闭密码学验签配置，没有改变 trust 或该设置，不能把包上传状态中的 valid 当作此次完成密码学验签。数据库新增 0055／0056，已备份；旧 171 不能直接读取新增迁移后数据库，恢复需要遵循数据库恢复边界。
 
 证据：[生产汇总](../../artifacts/claude-2.1.304/production-migration-summary.json)、[真实上游复测](../../artifacts/claude-2.1.304/production-live-smoke.json)、[最终镜像验收](../../artifacts/claude-2.1.304/final-image-core172-plugin70-results/summary.json)、[离线迁移演练](../../artifacts/claude-2.1.304/offline-21-migration-probe-report.json)。
+
+## 13 分组配置可选（Core 0.1.173）
+
+按用户确认，分组 CC 策略不是账号自定义的前置条件：没有分组配置、或分组覆盖关闭时，账号自定义直接覆盖全局；只有已启用分组明确禁止账号覆盖时才忽略该账号的覆盖。保存校验、预览与真实请求解析共用同一判断。缺少请求分组上下文的后台探测仍使用全局，账号／分组归属权限和 revision 冲突检查保持有效。
+
+UI 默认提示无需配置并隐藏覆盖字段，只有手动启用后展开；不因浏览／切换分组创建记录，不将继承值复制成固定覆盖。新建分组配置默认允许账号覆盖，已有关闭的分组草稿保留。
+
+源码 `83107b8eeead030672a88ebbce6106d3d74edfc4` 已部署到四个 Core 节点，版本 **0.1.173**。前端 66 项测试、类型检查通过；隔离 PostgreSQL 上 account／ccgateway／gateway 三包的 Feature／CCGateway 专项通过，包括 4,128 个字段继承组合及认证分组到实际请求策略头的链路。四节点生产预览确认未配置分组可编辑、账号字段来源为 account，并确认预览不保存、配置未改写、四个账号容器未重启，账号 21 继续停用。此次生产核验未发起模型请求；CLI／Worker 没有改动。
+
+数据库契约与 0.1.172 相同，插件／Worker／Controller 保持 0.1.70。生产验收：[optional-group-production-verification.json](../../artifacts/claude-2.1.304/optional-group-production-verification.json)。
