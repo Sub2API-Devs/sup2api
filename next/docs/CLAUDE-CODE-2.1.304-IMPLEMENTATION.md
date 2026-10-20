@@ -234,3 +234,17 @@
 迁移必须先补齐 Controller 配对更新能力，并在摘流后对运行中的目标完成旧 Worker 的维护接口 bootstrap，再激活 Worker＋304 CLI，最后保存 Core 的 304 版本并核验协调结果。不能先改全局版本。既有 active-runtime 指针优先于旧环境变量及 `/usr/local/bin/claude` 链接，验收应检查实际激活路径、SHA、Worker health 和内容处理能力。CLI 的 native/mods 测试通过不代表新 Worker 仍提供原 native 请求模式；正式请求模式为 build／direct。
 
 证据保存在 `artifacts/claude-2.1.304/migration-cli-audit.json`、`controller-migration-review-tests.log`、`core-migration-validation-report.json`。发布前需再验证干净 Git 构建、最终镜像及真实迁移；本节不声明生产迁移完成。
+
+## 12 正式迁移结果（2026-10-20）
+
+生产迁移已完成：四个 Core 节点均为 **0.1.172**，CCGateway／Controller 为 **0.1.70**，全局选择 **build＋2.1.304**。运行制品来自 Git `9dfcb60b9c155d80e50f4aff1ee292f65e8522be`，离线迁移辅助程序来自 `a2f2fa17c2ee18d4363aed952a36d82dc53baded`；服务器使用精确 Git 工作树构建，没有上传源码替代 Git。
+
+账号 30、31、32 原地完成 Worker＋CLI 配对升级，保持容器身份与账号卷；最终真实上游模型测试 **3/3 返回 200 和有效消息**。账号 21 在迁移期间被独立账号编辑操作停用（审计 1467，早于迁移摘流）；按用户要求完成 **离线更新到 304，保持 disabled／schedulable=false／容器 exited**。其 StartedAt 仍为原值，迁移没有启动它，因此没有将离线文件验收称为在线健康或真实上游通过。7 个原已停止的历史草稿保持原状；需要恢复它们时另行迁移。
+
+最终运行镜像重新验证：官方真实 CLI **10/10**、组件组合 **216/216**，无失败、未知或漏跑；停机迁移故障恢复／启动保护演练 **4/4**。真实上游烟测使用管理端账号 native-build 测试，覆盖全局策略到 Worker／CLI／上游，不等同于平台 API Key 分组调度的全链路验收。Core 的 9 个可选真实 CLI fixture 用例仍为跳过，未计入通过。
+
+正式 Worker SHA256：`5ece090925153f055d36c84894d134aa24f0346eec34b3c2a598809fc618360a`；304 CLI SHA256：`138da88ed5895fbc099115e7662df7ff9a6bd848d5a4cd142e29f2c9baaa56bd`。旧容器镜像标签和旧 CLI 链接保留作恢复用途，实际选择以 active-runtime 指针及 Worker health 为准。临时镜像覆盖已恢复为自动使用插件包；账号配置比对保留了上述独立的 21 编辑，没有覆盖它。
+
+Core 发行包使用既有发布钥签名；插件沿用服务器既存的关闭密码学验签配置，没有改变 trust 或该设置，不能把包上传状态中的 valid 当作此次完成密码学验签。数据库新增 0055／0056，已备份；旧 171 不能直接读取新增迁移后数据库，恢复需要遵循数据库恢复边界。
+
+证据：[生产汇总](../../artifacts/claude-2.1.304/production-migration-summary.json)、[真实上游复测](../../artifacts/claude-2.1.304/production-live-smoke.json)、[最终镜像验收](../../artifacts/claude-2.1.304/final-image-core172-plugin70-results/summary.json)、[离线迁移演练](../../artifacts/claude-2.1.304/offline-21-migration-probe-report.json)。

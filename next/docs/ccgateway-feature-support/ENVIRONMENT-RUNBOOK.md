@@ -1,5 +1,9 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-20：Core 0.1.172 / CCGateway、Controller、Worker 0.1.70 / CLI 2.1.304 已部署。** 四个 Core 节点全局为 build＋304；账号 30、31、32 原地配对升级后真实上游测试 3/3 通过。账号 21 按用户要求离线更新到 304，仍 disabled、不可调度、容器停止，未启动验收。7 个历史停止草稿保持原状。最终镜像官方 CLI 10/10、组合替换 216/216 通过。运行容器旧镜像标签与旧 CLI 链接可能仍为 302 时代值，应以 active-runtime 指针及 Worker health 为准。详情及测试边界见 [304 实施记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12 节。
+>
+> 本轮运行制品源码 `9dfcb60b9c155d80e50f4aff1ee292f65e8522be`，离线辅助程序 `a2f2fa17c2ee18d4363aed952a36d82dc53baded`。私有备份在 `~/sup2api-managed/backups/cli304-core172/`；Controller 内另有在线配对与离线 21 的逐账号恢复备份。0055／0056 已迁移，旧 Core 171 不能直接回滚读取新数据库。插件验签关闭设置与 trust 沿用原配置，Core 发布包使用既有发布钥签名。以下较早部署条目为历史记录。
+
 > **2026-10-18：Core 0.1.158 / CCGateway 0.1.58 / CLI 2.1.302 正式上线。** 四节点通过正常 primary-first 升级；Controller、默认 app/egress 镜像与运行中的 21 号 Worker 已更新。21 号固定定制 CLI 2.1.302，native 模式不变，自动更新关闭，数据卷保留。停止的历史账号未启动，共享 Xray 容器保持原实例。新增 `ccgateway-bridge-guard.service` 修复 Docker internal 桥对发往代理 peer 的公网目的帧的丢弃；规则限定账号 IP 与双方 veth，断路及宿主直连尝试均验证失败关闭。新建草稿容器 build/direct 均 ready 且真实 API 返回 200；官方 CC 2.1.302 经 21 号 Opus 完成 Read 回合。
 >
 > 用户要求先关闭插件签名检查；四节点原有 `SUB2API_PLUGIN_VERIFY_SIGNATURES=false` 已核对沿用。新插件包在旧私钥缺失时采用独立构建密钥封装，重新开启验签前必须重新签发或迁移信任；Core 发布签名仍有效。源码 `bcaa5915219cfc2fd2236c38dff6a259853f2342`，网络配套源码 `41794f07b2561981f70db8df7127928253431244`，manifest `88875593dcb638c4586345e1f2f91a1f68a4e5f6243486f5e61deb8848831262`，升级计划 `16f9829865a2611801c985e62e648b6a` completed/27。私有备份 `~/sup2api-managed/backups/ccgateway-302-0.1.158/`；完整证据与仍未支持的场景见 [302 分析和部署文档](../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
