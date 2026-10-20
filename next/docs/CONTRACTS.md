@@ -3963,6 +3963,15 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 保存仍使用 erase/replace 两个数组。父项选择保留原组键；第一次改子项时，编辑器把该父项物化为各子项，保留兄弟项原选择。核心/Worker 共享 `AttachmentChildren` 校验祖先与后代的跨列表冲突，旧整组配置继续有效。子项需要先更新 Worker 到 0.1.57，schema 仍为 1。配置仅影响附件文字，不更改 API model、实际系统、目录或仓库。
 - Worker 共用分段替换器：环境只识别标准 Environment 区块的字段；模型说明按 CC 标准句式拆分，未知形式留在其他模型说明；会话上下文只识别 `# claudeMd`、`# gitStatus`、`# userEmail`、`# currentDate` 标记，其他普通 Markdown 标题及代码围栏中的标记仍属于原段。其他上下文含旧版 currentDate。服务端子项从同一次 CC 渲染提取，不重新拼造内容。日期子项仍每天更新缓存；整组选择保留原处理顺序与行为。已识别客户端格式边界与“不会擦空用户消息”的限制仍适用。
 
+### 53.17 build 附件来源（2026-10-20）
+
+- 插件设置“CC 特性 → 附件转换”保存 `request_policy.build_attachment_sources`。对象仅允许 `platform_name`、`os_version` 两个键，值为 `client`（默认）或 `worker`；缺失/空对象保留客户端。核心和 Worker 共享 `features.BuildAttachmentSources` 校验。沿用远程配置加密存储、读取和请求策略下发，不新增数据库表。它与旧 native 的擦除/替换数组独立，升级不激活旧规则。
+- build 模式在消息组件提取前原位替换已识别环境文本中的平台/系统版本。支持顶层 system、role=system 的直接 text 和完整 user 环境 reminder；模板包括 `# Environment`、固定引导行和唯一平台字段。代码围栏、混合用户正文、嵌套/不平衡包裹、重复字段和未知模板保留。工具结果不递归转换；cwd、额外目录、Git/worktree、Shell、CLAUDE.md、媒体、工具参数、签名、缓存标记和 system 生命周期保持。
+- 平台来自实际 Worker 的 OS（Windows 为 `win32`）；Unix 系统版本使用本机 `uname -sr`（与 CC 302 的 os.type/release 口径一致），Windows 使用 `cmd.exe /d /c ver`。结果在 Worker 进程内缓存；采集失败返回 503，不删除或伪造内容。不启动 CC 渲染循环、不访问客户端目录、不调用额外模型。
+- build Worker 的 `/healthz.capabilities` 包含 `build_attachment_sources_v1`；`/admin/features` 目录增加 `F-BUILD-ATTACHMENTS`。选择 Worker 来源时，核心每次通过实际账号路由在模型发送前读取 `/healthz`，核对能力和配置的 CLI 版本；不支持、版本不符或无法确认时拒绝发送。能力不跨请求缓存，以覆盖原地更新/降级。该探测是本地管理读取，不是模型生成。
+- direct 正文不变且不执行能力探测；设置保留，界面禁用并说明切回 build 后生效。业务 direct 下的账号 build 连通性 probe 也不应用转换。`build_attachment_transform` 诊断只增加选择、改动数量、位置和前后摘要。
+- 不承诺从 HTTP 渲染文本逆推出所有 CC 内部 attachment。302 的默认渲染器显式识别 131 类，其中 43 类不直接输出正文；库存、可复现脚本与本地验证边界见 `plugins/ccgateway/docs/BUILD-ATTACHMENT-TRANSFORM-DESIGN.md`。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

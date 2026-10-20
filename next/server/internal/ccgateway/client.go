@@ -206,6 +206,12 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 			finish()
 			return nil, false, err
 		}
+		if policy.RelayMode == "build" && policy.BuildAttachmentSources.UsesWorker() {
+			if err := requireBuildAttachmentCapability(ctx, client, base, modelKey, policy.CLIVersion); err != nil {
+				finish()
+				return nil, false, err
+			}
+		}
 		policyJSON, _ := json.Marshal(policy)
 		clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	}

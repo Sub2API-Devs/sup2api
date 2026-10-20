@@ -43,4 +43,6 @@ Worker Docker 构建上下文为 companions；controller 和 egress 各自使用
 
 [附件组装机制与类型对照](docs/CLAUDE-CODE-ATTACHMENTS.md) 列出 CC 内部附件的字段、渲染方式和最终消息位置；内部附件类型不等于 mods 的创建接口数量。
 
+[build 附件转换研究与实现](docs/BUILD-ATTACHMENT-TRANSFORM-DESIGN.md) 包含 2.1.302 渲染入口的 131 类清单和官方客户端请求捕获；插件设置可用 `build_attachment_sources` 为平台/OS 选择 Worker 来源，cwd、Git 和其他客户端内容保留。实际实现与验证范围见第 8 节。
+
 2026-10-18 已补充本地官方 2.1.296 客户端的 Haiku / Opus 多轮项目分析记录。direct 正文逐字节一致；build 在部分 tool_result.content 上发生等价的字符串→text 数组转换，不能将上面的单回合 JSON 相等结论泛化。详见总记录的多轮验证、日志和自动更新章节。固定此基线需要同时禁用 CC 自带更新器（DISABLE_AUTOUPDATER=1）和 Worker 的受管 auto_update；原 21 号不会因此自动降级或替换二进制。

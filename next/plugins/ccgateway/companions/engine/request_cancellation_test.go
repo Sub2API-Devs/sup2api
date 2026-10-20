@@ -15,9 +15,25 @@ import (
 
 const cancellationFirstEvent = "event: message_start\ndata: {}\n\n"
 
-// Invoked by TestMain as a real subprocess on Windows and Linux. It never
-// finishes by itself within a test, so completion proves process cancellation.
+// Invoked by TestMain as a real subprocess on Windows and Linux. Waiting modes
+// only finish on cancellation; capture mode records one request and exits.
 func requestCancellationPeer() {
+	if os.Getenv("CCG_TEST_REQUEST_PEER") == "capture" {
+		raw, _ := io.ReadAll(os.Stdin)
+		file, err := os.OpenFile(os.Getenv("CCG_TEST_REQUEST_READY"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
+		_, _ = file.Write(append(raw, '\n'))
+		_ = file.Close()
+		for i, arg := range os.Args {
+			if arg == "--response-meta" && i+1 < len(os.Args) {
+				_ = os.WriteFile(os.Args[i+1], []byte(`{"status":200,"headers":{"content-type":"text/event-stream"}}`), 0600)
+			}
+		}
+		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n")
+		return
+	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
 	if os.Getenv("CCG_TEST_REQUEST_PEER") == "stream" {
 		for i, arg := range os.Args {

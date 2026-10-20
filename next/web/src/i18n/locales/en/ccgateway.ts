@@ -5,6 +5,14 @@ export default {
     direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)',
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
+  buildAttachments: {
+    title: 'Attachment conversion',
+    hint: 'Choose the source of environment information in requests. Only recognized fields are replaced; client content is kept by default.',
+    directHint: 'Direct mode forwards the body unchanged. Saved choices apply when you switch back to build.',
+    client: 'Keep client',
+    worker: 'Use Worker',
+    kept: 'Working directories, Git, shell, CLAUDE.md and other attachments keep client content. Tools still run on the client.'
+  },
   cli: {
     title: 'CC updates', hint: 'The installed CLI version is checked every 10 minutes. Changes trigger serialized in-memory tool catalog synchronization without modifying session JSONL.',
     installed: 'Installed version', catalog: 'Catalog version', available: 'Latest channel version', status: 'Catalog state · tools / variants', operation: 'Operation',

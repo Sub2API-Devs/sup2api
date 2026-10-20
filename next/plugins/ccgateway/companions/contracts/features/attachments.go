@@ -5,6 +5,32 @@ import (
 	"slices"
 )
 
+const BuildAttachmentCapability = "build_attachment_sources_v1"
+
+// BuildAttachmentSources is deliberately separate from the retired agent
+// policy: upgrading a Worker must not activate old saved erase/replace rules.
+// Missing fields keep the client's text. Only observed environment fields
+// have a Worker source; paths, Git and tool execution context remain client-owned.
+type BuildAttachmentSources map[string]string
+
+func (p BuildAttachmentSources) Validate() error {
+	for field, source := range p {
+		if (field != "platform_name" && field != "os_version") || (source != "client" && source != "worker") {
+			return fmt.Errorf("invalid build_attachment_sources: %s=%s", field, source)
+		}
+	}
+	return nil
+}
+
+func (p BuildAttachmentSources) UsesWorker() bool {
+	for _, source := range p {
+		if source == "worker" {
+			return true
+		}
+	}
+	return false
+}
+
 // ErasableClientAttachments is the vocabulary of policy erase_client_attachments,
 // including the historical whole environment: types the Worker may erase from a
 // request before admission (engine client_attachment_erase.go).

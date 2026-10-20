@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 type Gateway struct {
@@ -62,7 +64,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/healthz" && r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version})
+		capabilities := []string{}
+		if g.RequestMode == "build" {
+			capabilities = append(capabilities, features.BuildAttachmentCapability)
+		}
+		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version, "capabilities": capabilities})
 		return
 	}
 	diagnostic := newRequestDiagnostic(w, r)

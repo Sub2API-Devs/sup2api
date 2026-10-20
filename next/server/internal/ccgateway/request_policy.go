@@ -10,12 +10,13 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
-	SchemaVersion    int    `json:"schema_version"`
-	UnknownField     string `json:"unknown_field"`
-	AllowFast        bool   `json:"allow_fast"`
-	ToolSearch       string `json:"tool_search,omitempty"`
-	AllowEffort      bool   `json:"allow_effort"`
-	CustomToolPrefix string `json:"custom_tool_prefix"`
+	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
+	SchemaVersion          int                             `json:"schema_version"`
+	UnknownField           string                          `json:"unknown_field"`
+	AllowFast              bool                            `json:"allow_fast"`
+	ToolSearch             string                          `json:"tool_search,omitempty"`
+	AllowEffort            bool                            `json:"allow_effort"`
+	CustomToolPrefix       string                          `json:"custom_tool_prefix"`
 	// ThinkingDisabledCompat is "pass" (default: thinking "disabled" goes
 	// upstream as sent, so a model that rejects it answers 400 as the official
 	// API does) or "omit" (the Worker drops it for the models it knows reject
@@ -92,6 +93,9 @@ func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
+	if err := p.BuildAttachmentSources.Validate(); err != nil {
+		return err
+	}
 	if p.SchemaVersion != 0 && p.SchemaVersion != features.PolicySchemaVersion {
 		return errors.New("unsupported request policy schema_version")
 	}

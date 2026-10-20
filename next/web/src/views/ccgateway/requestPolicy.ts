@@ -1,4 +1,7 @@
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
+export const buildAttachmentFields = ['platform_name', 'os_version'] as const
+export type BuildAttachmentField = (typeof buildAttachmentFields)[number]
+export type BuildAttachmentSource = 'client' | 'worker'
 // Independently editable types; the core also accepts the former whole environment type.
 export const attachmentGroups = {
   working_directory: ['primary_directory', 'additional_directories', 'git_repository'],
@@ -56,6 +59,7 @@ export function setAttachmentAction(policy: RequestPolicy, type: ErasableAttachm
 }
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {
+  build_attachment_sources?: Partial<Record<BuildAttachmentField, BuildAttachmentSource>>
   schema_version?: number
   unknown_field: 'reject' | 'ignore'
   allow_fast: boolean
@@ -83,6 +87,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     thinking_disabled_compat: 'pass',
     erase_client_attachments: [],
     replace_client_attachments: [],
+    build_attachment_sources: {},
     relay_mode: 'build',
     cli_version: '2.1.302',
     betas: [
@@ -119,6 +124,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     thinking_disabled_compat: policy?.thinking_disabled_compat ?? defaults.thinking_disabled_compat,
     erase_client_attachments: expandEnvironment(policy?.erase_client_attachments),
     replace_client_attachments: expandEnvironment(policy?.replace_client_attachments),
+    build_attachment_sources: { ...policy?.build_attachment_sources },
     relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
     cli_version: policy?.cli_version ?? defaults.cli_version,
     betas: policy?.betas ?? defaults.betas
@@ -127,6 +133,8 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
     (p.schema_version === undefined || p.schema_version === 1) &&
+    Object.entries(p.build_attachment_sources ?? {}).every(([field, source]) =>
+      (buildAttachmentFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&

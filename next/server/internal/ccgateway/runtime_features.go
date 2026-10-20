@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -13,6 +14,36 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
 )
+
+// Probe the same account route immediately before sending a transformed model
+// request. Do not cache this across in-place Worker updates/downgrades: an old
+// Worker ignores unknown policy fields. This local read never calls a model.
+func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, base, key, cliVersion string) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("x-api-key", key)
+	res, err := client.Do(req)
+	if err == nil {
+		defer res.Body.Close()
+		raw, readErr := io.ReadAll(io.LimitReader(res.Body, 8193))
+		var health struct {
+			Status       string   `json:"status"`
+			CLIVersion   string   `json:"claude_version"`
+			Capabilities []string `json:"capabilities"`
+		}
+		if res.StatusCode == http.StatusOK && readErr == nil && len(raw) <= 8192 &&
+			json.Unmarshal(raw, &health) == nil && health.Status == "ok" &&
+			(cliVersion == "" || cliVersion == health.CLIVersion) &&
+			slices.Contains(health.Capabilities, features.BuildAttachmentCapability) {
+			return nil
+		}
+	}
+	return core.ErrUnavailable.WithMessage("The account Worker does not confirm build attachment conversion support; update the Worker or keep client attachment sources.")
+}
 
 // Inspection only: never reconcile, start a container or change routing state.
 func (s *Service) serveFeatures(c *gin.Context, ctx context.Context, d accountDesired) {

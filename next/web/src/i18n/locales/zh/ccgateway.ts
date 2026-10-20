@@ -5,6 +5,14 @@ export default {
     direct: '零注入透传（direct）', build: '组件构建（build）',
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
+  buildAttachments: {
+    title: '附件转换',
+    hint: '为请求中的环境信息选择来源。只替换已识别的对应字段；默认保留客户端内容。',
+    directHint: 'direct 模式原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
+    client: '保留客户端',
+    worker: '使用 Worker',
+    kept: '工作目录、额外目录、Git、Shell、CLAUDE.md 和其他附件保留客户端内容。工具仍由客户端执行。'
+  },
   cli: {
     title: 'CC 更新', hint: '本机版本每 10 分钟检查一次；版本变化后加锁同步内存工具目录，不修改会话 JSONL。',
     installed: '已安装版本', catalog: '工具目录版本', available: '渠道最新版本', status: '目录状态 · 工具 / 变体数', operation: '操作状态',

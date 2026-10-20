@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http/httptest"
 	"os"
@@ -9,7 +10,70 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/stretchr/testify/require"
 )
+
+func TestBuildAttachmentsReachCLIWithoutExtraGenerations(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	sources := features.BuildAttachmentSources{"platform_name": "worker", "os_version": "worker"}
+	facts, err := buildAttachmentEnvironment(sources)
+	require.NoError(t, err)
+	for _, mode := range []string{"build", "direct"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			capture := filepath.Join(root, "requests.jsonl")
+			g := &Gateway{RequestMode: mode, Key: "fixture",
+				Runner: &Runner{CLI: exe, Version: "2.1.302", Work: root, Env: envWith(os.Environ(), map[string]string{
+					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture,
+				})}, Slots: make(chan struct{}, 1), Timeout: 10 * time.Second}
+			reminder := "<system-reminder>\n" + buildClientEnvironment + "</system-reminder>"
+			rows := []any{Object{"role": "user", "content": reminder}}
+			body := Object{"model": "fixture", "stream": true, "messages": rows}
+			// Optional real-client capture, generated against a local mock.
+			// The normal CI case remains self-contained.
+			if fixture := os.Getenv("CCG_BUILD_ATTACHMENT_CAPTURE"); fixture != "" {
+				raw, err := os.ReadFile(fixture)
+				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal(raw, &body))
+				rows = body["messages"].([]any)
+			}
+			for turn := 0; turn < 2; turn++ {
+				body["messages"] = rows
+				raw, _ := json.Marshal(body)
+				req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
+				req.Header.Set("x-api-key", "fixture")
+				req.Header.Set(policyHeader, `{"build_attachment_sources":{"platform_name":"worker","os_version":"worker"}}`)
+				out := httptest.NewRecorder()
+				g.ServeHTTP(out, req)
+				require.Equal(t, 200, out.Code, out.Body.String())
+				require.Equal(t, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n", out.Body.String())
+				captured, err := os.ReadFile(capture)
+				require.NoError(t, err)
+				lines := bytes.Split(bytes.TrimSpace(captured), []byte("\n"))
+				require.Len(t, lines, turn+1, "exactly one CLI generation per client request")
+				if mode == "direct" {
+					require.Equal(t, raw, lines[turn])
+				} else {
+					expected, _, err := transformBuildAttachments(raw, sources, facts)
+					require.NoError(t, err)
+					expected, err = messagesBuildComponents(expected)
+					require.NoError(t, err)
+					require.JSONEq(t, string(expected), string(lines[turn]))
+					require.Contains(t, string(lines[turn]), "PowerShell")
+					require.Contains(t, string(lines[turn]), `D:\\`)
+				}
+				// The caller, not the Worker, supplies the next tool result.
+				rows = append(rows, Object{"role": "assistant", "content": []any{Object{
+					"type": "tool_use", "id": "t", "name": "Read", "input": Object{"file_path": "D:\\项目\\file"},
+				}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "t", "content": reminder}}})
+			}
+			require.Empty(t, g.Slots)
+		})
+	}
+}
 
 func TestMessagesBuildComponentsPreservesHistoryAndSchemas(t *testing.T) {
 	raw := []byte(`{"model":"m","system":[{"type":"text","text":"policy","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"custom":9007199254740993}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"},{"type":"text","text":"<system-reminder>keep position</system-reminder>"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}}]}],"tools":[{"name":"Bash","description":"custom","input_schema":{"type":"object","properties":{"custom":{"type":"integer"}}},"strict":true},{"type":"web_search_20250305","name":"web_search"}],"max_tokens":128,"stream":true,"unknown_generation_field":{"value":9007199254740993}}`)

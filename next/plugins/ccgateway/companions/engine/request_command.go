@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 )
 
@@ -156,7 +157,32 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	d.request(raw, r.Header)
 	input := raw
 	if requestMode == "build" {
-		input, err = messagesBuildComponents(raw)
+		var policy struct {
+			Sources features.BuildAttachmentSources `json:"build_attachment_sources"`
+		}
+		if value := r.Header.Get(policyHeader); value != "" && g.RequestMode == "build" {
+			if len(value) > 16384 || features.ValidatePolicySchemaJSON([]byte(value)) != nil || json.Unmarshal([]byte(value), &policy) != nil {
+				fail(400, "invalid_request_error", "Invalid gateway request policy")
+				return
+			}
+		}
+		if err := policy.Sources.Validate(); err != nil {
+			fail(400, "invalid_request_error", err.Error())
+			return
+		}
+		if policy.Sources.UsesWorker() {
+			facts, factErr := buildAttachmentEnvironment(policy.Sources)
+			if factErr != nil {
+				fail(503, "configuration_error", factErr.Error())
+				return
+			}
+			var decisions []Object
+			input, decisions, err = transformBuildAttachments(raw, policy.Sources, facts)
+			d.trace("build_attachment_transform", Object{"sources": policy.Sources, "changed": len(decisions), "decisions": decisions})
+		}
+		if err == nil {
+			input, err = messagesBuildComponents(input)
+		}
 	} else {
 		var body map[string]json.RawMessage
 		err = json.Unmarshal(raw, &body)
