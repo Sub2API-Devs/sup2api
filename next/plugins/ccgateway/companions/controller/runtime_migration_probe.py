@@ -123,6 +123,11 @@ def main():
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             })
         created.append(app)
+        legacy_snapshot = pathlib.Path("/input/ccg-worker-302-live-snapshot-linux")
+        if legacy_snapshot.exists():
+            legacy_worker = legacy_snapshot.read_bytes()
+            assert digest(legacy_worker) == "915ade391b1b511a975161388868aa9a39c373870723242070510a32213a32d2"
+            assert app.put_archive("/usr/local/bin", archive([("worker", legacy_worker)]))
         app.start()
         key = "d" + secrets.token_hex(8)
         with tempfile.TemporaryDirectory(prefix="ccg304-controller-state-") as state_root:
