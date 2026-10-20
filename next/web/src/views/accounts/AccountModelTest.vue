@@ -73,12 +73,12 @@ const someVisibleSelected = computed(() => !allVisibleSelected.value && visible.
 const columns = computed<TableColumn[]>(() => [
   { key: 'select', label: '', width: '2rem' },
   { key: 'model', label: t('accounts.modelTest.model') },
-  { key: 'state', label: t('common.status'), width: '6.5rem' },
-  { key: 'latency', label: t('accounts.latency'), align: 'right', width: '6rem' },
-  { key: 'http', label: 'HTTP', align: 'right', width: '4.5rem' },
-  { key: 'detail', label: t('accounts.modelTest.detail') },
+  { key: 'state', label: t('common.status') },
   { key: 'actions', label: '', align: 'right', width: '5.5rem' }
 ])
+
+/** The upstream request id of a test, when the response carried one. */
+const requestId = (row: TestRow) => row.result?.response_headers?.['request-id'] || row.result?.response_headers?.['anthropic-request-id'] || ''
 
 function toggle(model: string, v: boolean) {
   if (v) selected.add(model)
@@ -300,32 +300,27 @@ function actualModel(r: TestRow): string {
             <SIcon name="chevron-right" class="h-3 w-3" />{{ actualModel(row) || row.result?.model }}
           </div>
         </template>
+        <!-- Like new-api: the outcome and request time; a failure lists what went wrong below it. -->
         <template #cell-state="{ row }">
-          <SBadge :tone="stateBadge(row).tone" dot>{{ stateBadge(row).label }}</SBadge>
-        </template>
-        <template #cell-latency="{ row }">
-          <span v-if="row.result" class="font-mono text-xs tabular-nums" :class="LATENCY_CLASS[latencyLevel(row.result.latency_ms)]">{{ formatLatency(row.result.latency_ms) }}</span>
-          <span v-else class="text-xs text-fg-subtle">—</span>
-        </template>
-        <template #cell-http="{ row }">
-          <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-danger-600 dark:text-danger-400' : 'text-fg-muted'">{{ row.result.status }}</span>
-          <span v-else class="text-xs text-fg-subtle" :title="row.result ? t('accounts.testNoHTTPResponse') : undefined">—</span>
-        </template>
-        <template #cell-detail="{ row }">
-          <div class="max-w-[22rem] space-y-0.5 text-xs">
+          <div class="max-w-[26rem] space-y-0.5 text-xs">
+            <div class="flex items-center gap-2">
+              <SBadge :tone="stateBadge(row).tone" dot>{{ stateBadge(row).label }}</SBadge>
+              <span v-if="row.result" class="tabular-nums" :class="LATENCY_CLASS[latencyLevel(row.result.latency_ms)]" data-testid="model-test-duration">{{ t('accounts.modelTest.duration', { time: formatLatency(row.result.latency_ms) }) }}</span>
+            </div>
             <div v-if="row.error" class="line-clamp-2 break-all text-danger-600 dark:text-danger-400" :title="row.error">{{ row.error }}</div>
-            <template v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)">
-              <div v-if="row.result.error_code" class="break-all font-mono text-danger-600 dark:text-danger-400" data-testid="model-test-error-code">{{ t('accounts.testErrorCode') }}: {{ row.result.error_code }}</div>
+            <template v-else-if="row.result && !row.result.ok">
+              <div v-if="row.result.status || row.result.error_code" class="break-all font-mono text-danger-600 dark:text-danger-400" data-testid="model-test-error-code">
+                <template v-if="row.result.status">HTTP {{ row.result.status }}</template><template v-if="row.result.status && row.result.error_code"> · </template><template v-if="row.result.error_code">{{ row.result.error_code }}</template>
+              </div>
               <SHint v-if="row.result.error_source" size="xs">{{ t('accounts.testErrorSource') }}: {{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SHint>
               <div v-if="row.result.error_source !== 'response' && row.result.reason" class="line-clamp-2 break-all font-medium text-danger-600 dark:text-danger-400" :title="row.result.reason">{{ row.result.reason }}</div>
               <!-- What the upstream answered: the plugin's reason alone hides it. -->
               <div v-if="row.result.message && (row.result.error_source === 'response' || !row.result.reason?.includes(row.result.message))" class="line-clamp-3 break-all font-mono text-xxs text-danger-500/90 dark:text-danger-300/90" :title="row.result.message" data-testid="model-test-error-body">
                 {{ row.result.message }}
               </div>
+              <div v-if="requestId(row)" class="break-all font-mono text-xxs text-fg-muted" data-testid="model-test-request-id">Request ID: {{ requestId(row) }}</div>
+              <SBadge v-if="row.result.error_source !== 'response' && effectBadge(row.result.effect)" :tone="effectBadge(row.result.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result.effect)!.label }}</SBadge>
             </template>
-            <div v-else-if="row.result?.message" class="line-clamp-1 break-all text-fg-muted" :title="row.result.message">{{ row.result.message }}</div>
-            <div v-if="row.result?.response_headers?.['request-id'] || row.result?.response_headers?.['anthropic-request-id']" class="break-all font-mono text-xxs text-fg-muted" data-testid="model-test-request-id">Request ID: {{ row.result.response_headers['request-id'] || row.result.response_headers['anthropic-request-id'] }}</div>
-            <SBadge v-if="row.result?.error_source !== 'response' && effectBadge(row.result?.effect)" :tone="effectBadge(row.result?.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result?.effect)!.label }}</SBadge>
           </div>
         </template>
         <template #cell-actions="{ row }">
@@ -339,6 +334,11 @@ function actualModel(r: TestRow): string {
               <SDescItem v-if="row.result.model" :label="t('accounts.testActualModel')" mono>{{ row.result.model }}</SDescItem>
               <SDescItem v-if="row.result.upstream" :label="t('accounts.testUpstream')" mono class="break-all">{{ row.result.upstream }}</SDescItem>
               <SDescItem v-if="row.result.test_mode === 'native_build'" :label="t('accounts.testMethod')">{{ t('accounts.testNativeBuild') }}</SDescItem>
+              <SDescItem label="HTTP" mono>{{ row.result.status || t('accounts.testNoHTTPResponse') }}</SDescItem>
+              <SDescItem v-if="requestId(row)" label="Request ID" mono class="break-all">
+                <span data-testid="model-test-request-id-detail">{{ requestId(row) }}</span>
+                <SCopyButton :text="requestId(row)" class="ml-1 align-middle" />
+              </SDescItem>
               <SDescItem v-if="row.result.response_headers?.['retry-after']" label="Retry-After" mono>{{ row.result.response_headers['retry-after'] }}</SDescItem>
               <SDescItem v-if="usageText(row.result)" :label="t('accounts.testUsage')" class="tabular-nums">{{ usageText(row.result) }}</SDescItem>
               <SDescItem v-if="row.result.error_code" :label="t('accounts.testErrorCode')" mono>{{ row.result.error_code }}</SDescItem>

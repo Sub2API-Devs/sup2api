@@ -156,7 +156,7 @@ export default {
   },
   testEffectNotApplied: '仅为插件判定，本次测试未对账号生效',
   modelTest: {
-    title: '模型测试', model: '模型', detail: '结果',
+    title: '模型测试', model: '模型', detail: '结果', duration: '请求时长 {time}',
     total: '共 {n} 个模型', okCount: '成功 {n}', failCount: '失败 {n}', testingCount: '测试中 {n}',
     copyOk: '复制成功的', copyFail: '复制失败的',
     removeFailed: '从模型列表移除失败的（{n}）', removeTitle: '移除失败的模型',

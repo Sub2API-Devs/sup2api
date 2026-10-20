@@ -244,7 +244,7 @@ describe('account status recovery', () => {
     mocks.post.mockResolvedValue({ ok: false, latency_ms: 0, message: 'failure', ...diagnostic })
     const w = shallowMount(AccountModelTest, { props: { open: false, account: { ...list.items.value[0], models: ['claude-test'] } }, global: { plugins: [i18n], stubs: {
       SModal: { template: '<div><slot /></div>' },
-      STable: { props: ['rows'], template: '<div><div v-for="row in rows" :key="row.model"><slot name="cell-http" :row="row" /><slot name="cell-detail" :row="row" /><slot name="cell-actions" :row="row" /></div></div>' },
+      STable: { props: ['rows'], template: '<div><div v-for="row in rows" :key="row.model"><slot name="cell-state" :row="row" /><slot name="cell-actions" :row="row" /></div></div>' },
       SButton: { template: '<button><slot /></button>' },
       SBadge: { template: '<span><slot /></span>' },
       SHint: { template: '<span><slot /></span>' },
@@ -268,6 +268,23 @@ describe('account status recovery', () => {
       expect(w.get('[data-testid="model-test-request-id"]').text()).toContain('req-test-429')
       expect(w.text()).not.toContain('建议禁用')
     }
+  })
+
+  it('shows a successful model test like new-api: outcome and request time, request id only in the details', async () => {
+    mocks.post.mockResolvedValue({ ok: true, status: 200, latency_ms: 3550, model: 'claude-test', message: 'ok', response_headers: { 'request-id': 'req_ok_1' } })
+    const w = shallowMount(AccountModelTest, { props: { open: false, account: { ...list.items.value[0], models: ['claude-test'] } }, global: { plugins: [i18n], stubs: {
+      SModal: { template: '<div><slot /></div>' },
+      STable: { props: ['rows'], template: '<div><div v-for="row in rows" :key="row.model"><slot name="cell-state" :row="row" /><slot name="cell-actions" :row="row" /></div></div>' },
+      SButton: { template: '<button><slot /></button>' },
+      SBadge: { template: '<span><slot /></span>' },
+      SHint: { template: '<span><slot /></span>' },
+    } } })
+    await w.setProps({ open: true })
+    await w.get('[data-testid="model-test-one"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="model-test-duration"]').text()).toBe('请求时长 3.55 s')
+    expect(w.find('[data-testid="model-test-request-id"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('req_ok_1')
   })
 
   it('shows an enabled unschedulable account as automatically disabled and restores it through manual off/on', async () => {

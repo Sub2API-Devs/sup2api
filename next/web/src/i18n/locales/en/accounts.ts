@@ -156,7 +156,7 @@ export default {
   },
   testEffectNotApplied: "the plugin's verdict only — this test did not change the account",
   modelTest: {
-    title: 'Model test', model: 'Model', detail: 'Result',
+    title: 'Model test', model: 'Model', detail: 'Result', duration: 'Request time {time}',
     total: '{n} models', okCount: '{n} passed', failCount: '{n} failed', testingCount: '{n} running',
     copyOk: 'Copy passed', copyFail: 'Copy failed',
     removeFailed: 'Remove failed from the model list ({n})', removeTitle: 'Remove failed models',
