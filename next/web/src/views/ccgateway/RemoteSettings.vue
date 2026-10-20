@@ -10,12 +10,13 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSelect, SSwitch, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea } from '@sub2api/ui'
 import type { CcgRemoteConfig, CcgRuntimeImages } from '@/api/types'
 import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
+import GroupPolicyList from './GroupPolicyList.vue'
 import ControllerInstall, { type InstallResult } from './ControllerInstall.vue'
-import { defaultRequestPolicy, newRequestPolicy, featureDifferenceCount, mergeFeaturePolicy, normalizeRequestPolicy, validRequestPolicy, validFeatureOverrides, type FeatureGroup, type RequestPolicy } from './requestPolicy'
+import { defaultRequestPolicy, newRequestPolicy, normalizeRequestPolicy, validRequestPolicy, validFeatureOverrides, type FeatureGroup, type RequestPolicy } from './requestPolicy'
 import { reasonDisplay, reasonOf } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import { basePathOf, connectionStateOf, controllerFormProblem, endpointScheme, formatControllerEndpoint, parseControllerEndpoint, schemeOf } from './controllerMode'
@@ -59,41 +60,9 @@ const runtimeRevision = ref(0)
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
 const featureTab = ref('global')
 const featureGroups = ref<Record<string, FeatureGroup>>({})
+/** The configuration read after a revision conflict, shown next to the draft for review. */
 const latestFeatureConfig = ref<RemoteConfig | null>(null)
-const groups = ref<Array<{ id: number; name: string }>>([])
-const selectedGroup = ref<number | null>(null)
-const groupsError = ref(false)
-const groupOptions = computed(() => groups.value.map(group => ({
-  value: group.id,
-  label: group.name + (featureGroups.value[group.id] ? ` · ${t('ccgateway.layers.differences', { n: featureDifferenceCount(requestPolicy.value, featureGroups.value[group.id].overrides) })}` : '')
-})))
-const currentGroup = computed({
-  get: () => selectedGroup.value == null ? null : featureGroups.value[selectedGroup.value] ?? { enabled: false, allow_account_override: true, overrides: {} },
-  set: (value: FeatureGroup | null) => { if (selectedGroup.value != null && value) featureGroups.value = { ...featureGroups.value, [selectedGroup.value]: value } }
-})
-const latestFeatureEffective = computed(() => {
-  if (!latestFeatureConfig.value) return null
-  const global = normalizeRequestPolicy(latestFeatureConfig.value.request_policy)
-  const group = selectedGroup.value == null ? undefined : latestFeatureConfig.value.cc_feature_groups?.[selectedGroup.value]
-  return featureTab.value === 'group' && group?.enabled ? mergeFeaturePolicy(global, group.overrides) : global
-})
-function setGroup(patch: Partial<FeatureGroup>) {
-  if (currentGroup.value) currentGroup.value = { ...currentGroup.value, ...patch }
-}
-async function loadGroups() {
-  groupsError.value = false
-  try {
-    const all: Array<{ id: number; name: string }> = []
-    for (let page = 1; ; page++) {
-      const result = await api.list<{ id: number; name: string }>('/groups', { page, page_size: 200 })
-      all.push(...result.items)
-      if (!result.paged || !result.items.length || all.length >= result.page.total) break
-    }
-    groups.value = all
-    if (!all.some(g => g.id === selectedGroup.value)) selectedGroup.value = all[0]?.id ?? null
-  } catch { groupsError.value = true }
-}
-watch(featureTab, tab => { if (tab === 'group' && !groups.value.length) void loadGroups() })
+const latestGlobalPolicy = computed(() => latestFeatureConfig.value && normalizeRequestPolicy(latestFeatureConfig.value.request_policy))
 const groupChanged = computed(() => JSON.stringify(featureGroups.value) !== JSON.stringify(saved.value?.cc_feature_groups ?? {}))
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: DEFAULT_POOL, allocation: 'random' as 'random' | 'sequential' })
@@ -349,25 +318,15 @@ onBeforeUnmount(() => {
               <SCode class="max-h-72 overflow-auto" data-testid="remote-output">{{ output }}</SCode>
             </div>
           </SSettingsGroup>
-          <div v-show="activeTab === 'cc'" class="space-y-4">
-            <SDisclosure v-if="latestFeatureEffective" :label="t('ccgateway.layers.latestSaved')" variant="section" :default-open="true">
-              <RequestPolicySettings :model-value="latestFeatureEffective" disabled />
-            </SDisclosure>
+          <div v-show="activeTab === 'cc'" class="space-y-3">
             <SSegmented v-model="featureTab" :options="[{ value: 'global', label: t('ccgateway.layers.globalTab') }, { value: 'group', label: t('ccgateway.layers.groupTab') }]" :aria-label="t('ccgateway.features.ccTitle')" data-testid="feature-layer" />
-            <RequestPolicySettings v-if="featureTab === 'global'" v-model="requestPolicy" :disabled="disabled" />
-            <div v-else class="space-y-4" data-testid="feature-groups">
-              <SHint>{{ t('ccgateway.layers.groupOptional') }}</SHint>
-              <SAlert v-if="groupsError" tone="danger">{{ t('ccgateway.layers.previewFailed') }} <SButton size="sm" @click="loadGroups">{{ t('ccgateway.layers.retry') }}</SButton></SAlert>
-              <SSelect v-model="selectedGroup" :options="groupOptions" :aria-label="t('ccgateway.layers.selectGroup')" data-testid="feature-group" />
-              <template v-if="currentGroup">
-                <SSettingRow :label="t('ccgateway.layers.enabled')"><SSwitch :model-value="currentGroup.enabled" :disabled="disabled" data-testid="group-enabled" @update:model-value="setGroup({ enabled: $event })" /></SSettingRow>
-                <SHint v-if="!currentGroup.enabled">{{ t('ccgateway.layers.disabledHint') }}</SHint>
-                <template v-if="currentGroup.enabled">
-                  <SSettingRow :label="t('ccgateway.layers.allowAccount')" :description="t('ccgateway.layers.allowHint')"><SSwitch :model-value="currentGroup.allow_account_override" :disabled="disabled" data-testid="group-allow-account" @update:model-value="setGroup({ allow_account_override: $event })" /></SSettingRow>
-                  <RequestPolicySettings v-model="requestPolicy" :overrides="currentGroup.overrides" :inherited="requestPolicy" :disabled="disabled" @update:overrides="setGroup({ overrides: $event })" />
-                </template>
-              </template>
-            </div>
+            <template v-if="featureTab === 'global'">
+              <SDisclosure v-if="latestGlobalPolicy" :label="t('ccgateway.layers.latestSaved')" variant="section" :default-open="true">
+                <RequestPolicySettings :model-value="latestGlobalPolicy" disabled />
+              </SDisclosure>
+              <RequestPolicySettings v-model="requestPolicy" :disabled="disabled" />
+            </template>
+            <GroupPolicyList v-else v-model="featureGroups" :global="requestPolicy" :saved="saved.cc_feature_groups ?? {}" :latest="latestFeatureConfig" :disabled="disabled" />
           </div>
           <SAlert v-if="imageError" tone="danger" dense>{{ imageError }}</SAlert>
           <div class="space-y-4" data-testid="remote-images">

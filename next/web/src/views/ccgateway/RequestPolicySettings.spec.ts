@@ -20,11 +20,16 @@ function config(policy: Partial<RequestPolicy> | undefined) {
 }
 const TABS = ['connection', 'network', 'cc', 'deployment'] as const
 const tab = (w: VueWrapper, key: (typeof TABS)[number]) => w.findAll('[data-testid="settings-tabs"] [role="tab"]')[TABS.indexOf(key)]
+// The source columns became one radio matrix: a row is a radiogroup keyed by the
+// field, and its cells follow the column order (client, worker, erase).
+const radios = (w: VueWrapper, sel: string) => w.get(sel).findAll('input')
+const picked = (w: VueWrapper, sel: string) => radios(w, sel).findIndex(i => (i.element as HTMLInputElement).checked)
+const pick = (w: VueWrapper, sel: string, index: number) => radios(w, sel)[index]!.setValue(true)
 
 describe('CCGateway single-request modes', () => {
   beforeEach(() => { vi.resetAllMocks(); i18n.global.locale.value = 'zh' })
   async function render() {
-    const w = mount(RemoteSettings, { global: { plugins: [i18n, createPinia()] } })
+    const w = mount(RemoteSettings, { global: { plugins: [i18n, createPinia()], stubs: { teleport: true } } })
     await flushPromises()
     await tab(w, 'cc').trigger('click')
     return w
@@ -37,9 +42,8 @@ describe('CCGateway single-request modes', () => {
     const w = await render()
     await w.get('[data-testid="feature-layer"] input[value="group"]').setValue(true)
     await flushPromises()
-    const group = w.getComponent({ name: 'SSwitch' })
-    group.vm.$emit('update:modelValue', false)
-    await flushPromises()
+    await w.get('[data-testid="group-policy-3"] [data-testid="group-configure"]').trigger('click')
+    await w.get('[data-testid="group-enabled"]').setValue(false)
     expect(w.find('[data-testid="billing-cc_version"]').exists()).toBe(false)
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ feature_revision: 12, cc_feature_groups: { 3: { enabled: false, allow_account_override: true, overrides: { build_billing_sources: { cc_version: 'worker' } } } } }), expect.anything())
@@ -61,7 +65,6 @@ describe('CCGateway single-request modes', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await w.get('[data-testid="relay-mode"]').setValue(mode === 'direct' ? '0' : '1')
-    await w.get('[data-testid="cli-version"]').setValue('2.1.304')
     mocks.put.mockResolvedValue(config({...defaultRequestPolicy(), relay_mode: mode}))
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.304'})}),expect.anything())
@@ -77,26 +80,26 @@ describe('CCGateway single-request modes', () => {
     let w = await render()
     const platform = '[data-testid="build-attachment-platform_name"]'
     const os = '[data-testid="build-attachment-os_version"]'
-    expect(w.get<HTMLSelectElement>(platform).element.selectedOptions[0].textContent).toBe('保留客户端')
-    await w.get(platform).setValue('1')
+    expect(picked(w, platform)).toBe(0)
+    await pick(w, platform, 1)
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.put).toHaveBeenCalled()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker' })
     w.unmount()
     w = await render()
-    expect(w.get<HTMLSelectElement>(platform).element.selectedOptions[0].textContent).toBe('使用服务端')
-    expect(w.get<HTMLSelectElement>(os).element.selectedOptions[0].textContent).toBe('保留客户端')
-    await w.get(os).setValue('1')
+    expect(picked(w, platform)).toBe(1)
+    expect(picked(w, os)).toBe(0)
+    await pick(w, os, 1)
     await w.get('[data-testid="relay-mode"]').setValue('0')
-    expect(w.get<HTMLSelectElement>(platform).element.disabled).toBe(true)
+    expect(w.find(platform).exists()).toBe(false)
     expect(w.text()).toContain('direct 模式原样转发')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })
     await w.get('[data-testid="relay-mode"]').setValue('1')
-    await w.get(platform).setValue('0')
-    await w.get(os).setValue('0')
+    await pick(w, platform, 0)
+    await pick(w, os, 0)
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'client', os_version: 'client' })
@@ -107,7 +110,6 @@ describe('CCGateway single-request modes', () => {
     const w = await render()
     const select = w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element
     expect(select.options[select.selectedIndex].textContent).toContain('build')
-    await w.get('[data-testid="cli-version"]').setValue('2.1.304')
     mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:'build'})}),expect.anything())

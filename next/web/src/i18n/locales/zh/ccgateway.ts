@@ -3,12 +3,18 @@ export default {
     global: '全局', group: '分组', account: '账号', follow: '跟随默认', custom: '自定义',
     globalTab: '全局默认', groupTab: '分组默认', selectGroup: '按分组查看',
     enabled: '启用分组覆盖', allowAccount: '允许账号级别覆盖',
-    groupOptional: '分组配置是可选的，默认继承全局。仅在需要不同设置时手动启用，并只覆盖你指定的字段。',
+    groupOptional: '分组配置是可选的：未列出的分组继承全局默认，已添加的分组只覆盖你指定的字段。',
     disabledHint: '当前分组继承全局默认，无需配置。已保存的分组自定义值保留，但暂不生效。',
     allowHint: '仅在分组覆盖启用时生效。关闭后忽略账号自定义，已保存的账号值保留。',
     accountHint: '分组无需预先配置，账号可直接覆盖全局默认；只有已启用的分组限制才会阻止账号覆盖。切回跟随默认会清空全部自定义；随账号表单一起保存。',
     newAccount: '创建后默认跟随全局／分组配置。保存账号后可按分组预览与自定义。',
     source: '来源：{source}', effective: '当前生效：{value}', differences: '{n} 项差异',
+    summaryBilling: '计费 {n} 项服务端', summaryEnv: '环境 {n} 项服务端', summaryErase: '擦除 {n} 项',
+    environment: '附件转换', diffColumn: '差异', accountColumn: '账号覆盖', sameAsGlobal: '与全局相同',
+    addGroup: '添加分组配置', configureGroup: '配置', removeGroup: '移除配置',
+    noGroupPolicies: '暂无分组专门配置，全部分组继承全局默认。',
+    removeGroupConfirm: '将删除该分组的专门配置，分组回归继承全局默认；未保存的草稿一并丢弃。',
+    draftHint: '改动随页面底部的保存一起提交。', resetToGlobal: '恢复为继承全局',
     billing: '计费归属', billingHint: '仅调整 cc_version 与 cc_entrypoint；服务端使用本次请求的 CLI 原生生成值。',
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
@@ -30,13 +36,10 @@ export default {
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   buildAttachments: {
-    title: '附件转换',
-    hint: '为请求中的环境信息选择来源。只替换已识别的对应字段；默认保留客户端内容。',
     directHint: 'direct 模式原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
     client: '保留客户端',
     worker: '使用服务端',
-    erase: '擦除',
-    kept: '工作目录、额外目录、Git、Shell、CLAUDE.md 和其他附件保留客户端内容。工具仍由客户端执行。'
+    erase: '擦除'
   },
   cli: {
     title: 'CC 更新', hint: '本机版本每 10 分钟检查一次；版本变化后加锁同步内存工具目录，不修改会话 JSONL。',

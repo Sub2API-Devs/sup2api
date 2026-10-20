@@ -3,18 +3,21 @@
 // with the same card surface as SCard. The `details` slot is a longer
 // explanation of the whole group, collapsed behind a toggle. `collapsible`
 // turns the header into a toggle (v-model:open, or uncontrolled starting at
-// `defaultOpen`). Remaining attrs (data-testid, ...) go to the root.
+// `defaultOpen`). `dense` tightens the header and makes rows without their
+// own `dense` compact. Remaining attrs (data-testid, ...) go to the root.
 import { computed, useId } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import SIcon from './SIcon.vue'
 import { useOpenState } from './controlled'
 import { useTitleVisibility } from './titleContext'
+import { provideSettingsDensity } from './settings'
 
 const props = withDefaults(
-  defineProps<{ title?: string; description?: string; collapsible?: boolean; open?: boolean; defaultOpen?: boolean }>(),
+  defineProps<{ title?: string; description?: string; collapsible?: boolean; open?: boolean; defaultOpen?: boolean; dense?: boolean }>(),
   { open: undefined, defaultOpen: true }
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
+provideSettingsDensity(() => props.dense)
 const state = useOpenState(props, emit)
 const isOpen = computed(() => !props.collapsible || state.isOpen.value)
 const bodyId = useId()
@@ -25,8 +28,8 @@ const showTitle = useTitleVisibility(() => props.title, () => !!props.collapsibl
   <section class="card">
     <header
       v-if="(showTitle && title) || $slots.title || description || $slots.details || $slots.actions"
-      class="flex items-start justify-between gap-3 rounded-t-card border-line bg-surface-2/60 px-4 py-3"
-      :class="isOpen ? 'border-b' : 'rounded-b-card'"
+      class="flex items-start justify-between gap-3 rounded-t-card border-line bg-surface-2/60 px-4"
+      :class="[dense ? 'py-2' : 'py-3', isOpen ? 'border-b' : 'rounded-b-card']"
     >
       <div class="min-w-0 flex-1">
         <button

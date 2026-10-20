@@ -16,6 +16,9 @@ import SDescriptions from './SDescriptions.vue'
 import SDescItem from './SDescItem.vue'
 import SEmpty from './SEmpty.vue'
 import SStatCard from './SStatCard.vue'
+import SOptionMatrix from './SOptionMatrix.vue'
+import SSettingsGroup from './SSettingsGroup.vue'
+import SSettingRow from './SSettingRow.vue'
 import { toastState } from './feedback'
 
 enableAutoUnmount(afterEach)
@@ -220,5 +223,96 @@ describe('SEmpty / SStatCard', () => {
     await w.trigger('click')
     expect(w.emitted('click')).toHaveLength(1)
     expect(mount(SStatCard, { props: { label: 'x', value: 1 } }).element.tagName).toBe('DIV')
+  })
+})
+
+describe('SOptionMatrix', () => {
+  const columns = [{ value: 'follow', label: 'Follow' }, { value: 'client', label: 'Client' }, { value: 'worker', label: 'Server' }, { value: 'erase', label: 'Erase' }]
+  const checked = (w: ReturnType<typeof mount>, label: string) =>
+    w.get(`[role="radiogroup"][aria-label="${label}"]`).findAll('input').findIndex((i) => (i.element as HTMLInputElement).checked)
+
+  it('shares one header, makes every row a radiogroup and emits the whole record', async () => {
+    const rows = [{ key: 'a', label: 'A' }, { key: 'b', label: 'B', options: columns.slice(0, 3), hint: 'resolves to Client', marked: true }]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'client', b: 'follow' }, columns, rows, ariaLabel: 'Sources' } })
+    expect(w.get('[role="group"]').attributes('aria-label')).toBe('Sources')
+    expect(w.findAll('[aria-hidden="true"] span')).toHaveLength(columns.length + 1)
+    expect(w.findAll('[role="radiogroup"]')).toHaveLength(2)
+    expect(checked(w, 'A')).toBe(1)
+    const rowB = w.get('[role="radiogroup"][aria-label="B"]')
+    expect(rowB.text()).toContain('resolves to Client')
+    expect(rowB.findAll('input')[3].attributes('disabled')).toBeDefined()
+    await w.get('[role="radiogroup"][aria-label="A"]').findAll('input')[2].setValue(true)
+    expect(w.emitted('update:modelValue')).toEqual([[{ a: 'worker', b: 'follow' }]])
+  })
+
+  it('sets a whole group from its header and only shows a value when the rows agree', async () => {
+    const groups = [{ key: 'env', label: 'Runtime', badge: '2 changed', rows: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] }]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'client', b: 'worker' }, columns, groups } })
+    expect(w.text()).toContain('2 changed')
+    expect(checked(w, 'Runtime · Set all')).toBe(-1)
+    await w.get('[role="radiogroup"][aria-label="Runtime · Set all"]').findAll('input')[1].setValue(true)
+    expect(w.emitted('update:modelValue')).toEqual([[{ a: 'client', b: 'client' }]])
+    await w.setProps({ modelValue: { a: 'worker', b: 'worker' } })
+    expect(checked(w, 'Runtime · Set all')).toBe(2)
+  })
+
+  it('folds groups when collapsible and disables every cell when disabled', async () => {
+    const groups = [
+      { key: 'env', label: 'Runtime', rows: [{ key: 'a', label: 'A' }] },
+      { key: 'dirs', label: 'Directories', defaultOpen: false, rows: [{ key: 'b', label: 'B' }] }
+    ]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'client', b: 'client' }, columns, groups, collapsible: true } })
+    expect(w.find('[role="radiogroup"][aria-label="A"]').exists()).toBe(true)
+    expect(w.find('[role="radiogroup"][aria-label="B"]').exists()).toBe(false)
+    await w.findAll('button')[1].trigger('click')
+    expect(w.find('[role="radiogroup"][aria-label="B"]').exists()).toBe(true)
+    const off = mount(SOptionMatrix, { props: { modelValue: { a: 'client' }, columns, groups: [groups[0]], disabled: true } })
+    expect(off.findAll('input').every((i) => i.attributes('disabled') !== undefined)).toBe(true)
+    await off.get('[role="radiogroup"][aria-label="A"]').findAll('input')[2].trigger('change')
+    expect(off.emitted('update:modelValue')).toBeUndefined()
+  })
+})
+
+describe('SOptionMatrix group header / SSettingsGroup density', () => {
+  it('disables a header cell that would set no row of its group', () => {
+    const columns = [{ value: 'client', label: 'Client' }, { value: 'erase', label: 'Erase' }]
+    const groups = [{ key: 'billing', label: 'Billing', rows: [{ key: 'a', label: 'A', options: columns.slice(0, 1) }] }]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'client' }, columns, groups } })
+    const header = w.get('[role="radiogroup"][aria-label="Billing · Set all"]').findAll('input')
+    expect(header.map((i) => i.attributes('disabled') !== undefined)).toEqual([false, true])
+  })
+
+  it('makes rows compact inside a dense group unless a row says otherwise', () => {
+    const row = (props = {}) => h(SSettingRow, { label: 'x', ...props })
+    const w = mount(SSettingsGroup, { props: { dense: true }, slots: { default: () => [row(), row({ dense: false })] } })
+    const rows = w.findAll('.grid')
+    expect(rows[0].classes()).toContain('py-2.5')
+    expect(rows[1].classes()).toContain('py-4')
+    expect(mount(SSettingRow, { props: { label: 'x' } }).classes()).toContain('py-4')
+  })
+})
+
+describe('SOptionMatrix effective', () => {
+  it('tints the cell a deferring row resolves to and shows a legend', () => {
+    const columns = [{ value: 'follow', label: 'Follow' }, { value: 'client', label: 'Client' }]
+    const rows = [{ key: 'a', label: 'A', effective: 'client' }, { key: 'b', label: 'B', effective: 'client' }]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'follow', b: 'client' }, columns, rows } })
+    const labels = (row: string) => w.get(`[role="radiogroup"][aria-label="${row}"]`).findAll('input').map((i) => i.attributes('aria-label'))
+    expect(labels('A')).toEqual(['Follow', 'Client · Applies now'])
+    expect(labels('B')).toEqual(['Follow', 'Client'])
+    expect(w.text()).toContain('Applies now')
+  })
+})
+
+describe('SOptionMatrix defaultOpen', () => {
+  it('follows defaultOpen until a row of the group is edited, then stays open', async () => {
+    const columns = [{ value: 'follow', label: 'Follow' }, { value: 'client', label: 'Client' }]
+    const groups = (open: boolean) => [{ key: 'env', label: 'Env', defaultOpen: open, rows: [{ key: 'a', label: 'A' }] }]
+    const w = mount(SOptionMatrix, { props: { modelValue: { a: 'follow' }, columns, groups: groups(false), collapsible: true } })
+    expect(w.find('[role="radiogroup"][aria-label="A"]').exists()).toBe(false)
+    await w.setProps({ groups: groups(true) })
+    await w.get('[role="radiogroup"][aria-label="A"]').findAll('input')[1].setValue(true)
+    await w.setProps({ groups: groups(false) })
+    expect(w.find('[role="radiogroup"][aria-label="A"]').exists()).toBe(true)
   })
 })

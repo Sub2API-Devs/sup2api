@@ -32,6 +32,7 @@ export { default as SPagination } from './SPagination.vue'
 export { default as SProgress } from './SProgress.vue'
 export { default as SSegmented } from './SSegmented.vue'
 export { default as SSelect } from './SSelect.vue'
+export { default as SOptionMatrix } from './SOptionMatrix.vue'
 export { default as SSettingRow } from './SSettingRow.vue'
 export { default as SSettingsGroup } from './SSettingsGroup.vue'
 export { default as SSkeleton } from './SSkeleton.vue'
@@ -76,7 +77,9 @@ export type {
   ChoiceOption,
   DescItem,
   StepItem,
-  StepState
+  StepState,
+  OptionMatrixRow,
+  OptionMatrixGroup
 } from './types'
 // Form-item context (custom controls that want SField / SSettingRow ids).
 export { FIELD_KEY, useFieldControl } from './field'

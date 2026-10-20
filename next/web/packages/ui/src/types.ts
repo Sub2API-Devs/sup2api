@@ -97,3 +97,30 @@ export interface StepItem {
   description?: string
   state?: StepState
 }
+
+/** One field of an SOptionMatrix: a row of radios under the shared columns. */
+export interface OptionMatrixRow {
+  key: string
+  label: string
+  /** Second line under the label (e.g. what an inherited value resolves to). */
+  hint?: string
+  /** Narrows the choices; columns missing here render disabled. */
+  options?: SelectOption[]
+  disabled?: boolean
+  /** Draws a marker beside the label (e.g. differs from the inherited value). */
+  marked?: boolean
+  /** The value that applies while the row's own value defers (e.g. "follow"); its cell is tinted. */
+  effective?: SelectOption['value']
+  testid?: string
+}
+
+/** A labelled block of SOptionMatrix rows whose header sets them all at once. */
+export interface OptionMatrixGroup {
+  key: string
+  label: string
+  rows: OptionMatrixRow[]
+  /** Short text beside the label (e.g. a count of changed rows). */
+  badge?: string
+  /** Applies when the matrix is `collapsible`; open unless false. */
+  defaultOpen?: boolean
+}

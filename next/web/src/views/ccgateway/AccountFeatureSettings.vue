@@ -111,20 +111,25 @@ onBeforeUnmount(() => { sequence++; clearTimeout(timer); controller?.abort() })
       {{ t('ccgateway.layers.loading') }}
     </SHint>
     <template v-if="preview && model">
-      <SSelect
-        v-model="groupId"
-        :options="options"
-        :aria-label="t('ccgateway.layers.selectGroup')"
-        data-testid="account-feature-group"
-      />
-      <SSegmented
-        :model-value="model.mode"
-        :options="[{ value: 'follow', label: t('ccgateway.layers.follow') }, { value: 'custom', label: t('ccgateway.layers.custom') }]"
-        :disabled="!editable"
-        :aria-label="t('ccgateway.features.ccTitle')"
-        data-testid="account-feature-mode"
-        @update:model-value="setMode"
-      />
+      <div class="flex flex-wrap items-center gap-2">
+        <SSelect
+          v-model="groupId"
+          :options="options"
+          size="sm"
+          class="w-full sm:w-56"
+          :aria-label="t('ccgateway.layers.selectGroup')"
+          data-testid="account-feature-group"
+        />
+        <SSegmented
+          :model-value="model.mode"
+          :options="[{ value: 'follow', label: t('ccgateway.layers.follow') }, { value: 'custom', label: t('ccgateway.layers.custom') }]"
+          size="sm"
+          :disabled="!editable"
+          :aria-label="t('ccgateway.features.ccTitle')"
+          data-testid="account-feature-mode"
+          @update:model-value="setMode"
+        />
+      </div>
       <SAlert
         v-if="preview.disabled_reason"
         tone="neutral"

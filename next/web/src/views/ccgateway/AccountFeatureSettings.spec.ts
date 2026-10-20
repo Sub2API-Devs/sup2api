@@ -26,8 +26,9 @@ describe('account feature preview', () => {
     mocks.post.mockResolvedValue(response({ editable: false, disabled_reason: 'account_override_disabled', sources: { 'build_billing_sources.cc_version': 'group' } }))
     await w.get('[data-testid="account-feature-group"]').setValue('1'); await settle()
     expect(w.vm.draft?.overrides.build_billing_sources?.cc_version).toBe('worker')
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(true)
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.selectedOptions[0].textContent).toBe('保留客户端')
+    const billing = () => w.get('[data-testid="billing-cc_version"]').findAll('input')
+    expect(billing().every(i => i.attributes('disabled') !== undefined)).toBe(true)
+    expect(billing().findIndex(i => (i.element as HTMLInputElement).checked)).toBe(1) // client, the effective value
     w.unmount()
   })
   it('ignores an older response after a newer group selection', async () => {
@@ -38,13 +39,13 @@ describe('account feature preview', () => {
     mocks.post.mockResolvedValue(response({ editable: true }))
     await w.get('[data-testid="account-feature-group"]').setValue('0'); await settle()
     finish(response({ editable: false, disabled_reason: 'group_disabled' })); await flushPromises()
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(false)
+    expect(w.get('[data-testid="billing-cc_version"]').findAll('input').some(i => i.attributes('disabled') === undefined)).toBe(true)
     w.unmount()
   })
   it('uses read-only GET previews when account updates are forbidden', async () => {
     const w = mount(AccountFeatureSettings, { props: { accountId: 9, canEdit: false }, global: { plugins: [i18n] } }); await settle()
     expect(mocks.post).not.toHaveBeenCalled()
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(true)
+    expect(w.get('[data-testid="billing-cc_version"]').findAll('input').every(i => i.attributes('disabled') !== undefined)).toBe(true)
     w.unmount()
   })
 
@@ -57,7 +58,7 @@ describe('account feature preview', () => {
     await w.get('[data-testid="account-feature-group"]').setValue('0'); await settle()
     rejectOld(new Error('obsolete preview failed')); await flushPromises()
     expect(w.text()).not.toContain('无法读取生效配置')
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(false)
+    expect(w.get('[data-testid="billing-cc_version"]').findAll('input').some(i => i.attributes('disabled') === undefined)).toBe(true)
     w.unmount()
   })
 

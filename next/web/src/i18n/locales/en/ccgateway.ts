@@ -3,12 +3,18 @@ export default {
     global: 'Global', group: 'Group', account: 'Account', follow: 'Inherit defaults', custom: 'Customize',
     globalTab: 'Global defaults', groupTab: 'Group defaults', selectGroup: 'Preview for group',
     enabled: 'Enable group overrides', allowAccount: 'Allow account overrides',
-    groupOptional: 'Group settings are optional and inherit global defaults. Enable them only when needed; only fields you explicitly set are overridden.',
+    groupOptional: 'Group settings are optional: groups not listed inherit the global defaults, and a listed group overrides only the fields you set.',
     disabledHint: 'This group inherits global defaults; no configuration is needed. Saved group overrides are retained but inactive.',
     allowHint: 'Applies only while group overrides are enabled. When turned off, saved account overrides are retained but ignored.',
     accountHint: 'No group configuration is required: accounts can override global defaults unless an enabled group policy prohibits it. Returning to inherit clears all overrides. Changes save with the account form.',
     newAccount: 'New accounts inherit defaults. Save the account before previewing or customizing its policy.',
     source: 'Source: {source}', effective: 'Effective: {value}', differences: '{n} differences',
+    summaryBilling: 'Billing: {n} from server', summaryEnv: 'Environment: {n} from server', summaryErase: 'Erased: {n}',
+    environment: 'Attachment conversion', diffColumn: 'Differences', accountColumn: 'Account override', sameAsGlobal: 'Same as global',
+    addGroup: 'Add group policy', configureGroup: 'Configure', removeGroup: 'Remove policy',
+    noGroupPolicies: 'No group policies yet; every group inherits the global defaults.',
+    removeGroupConfirm: 'Removes this group policy so the group inherits the global defaults again; unsaved drafts are discarded.',
+    draftHint: 'Changes are submitted with the save button at the bottom of the page.', resetToGlobal: 'Reset to global',
     billing: 'Billing attribution', billingHint: 'Only cc_version and cc_entrypoint are changed. Server values use native CLI generation for this request.',
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
@@ -30,13 +36,10 @@ export default {
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
   buildAttachments: {
-    title: 'Attachment conversion',
-    hint: 'Choose the source of environment information in requests. Only recognized fields are replaced; client content is kept by default.',
     directHint: 'Direct mode forwards the body unchanged. Saved choices apply when you switch back to build.',
     client: 'Keep client',
     worker: 'Use server',
-    erase: 'Erase',
-    kept: 'Working directories, Git, shell, CLAUDE.md and other attachments keep client content. Tools still run on the client.'
+    erase: 'Erase'
   },
   cli: {
     title: 'CC updates', hint: 'The installed CLI version is checked every 10 minutes. Changes trigger serialized in-memory tool catalog synchronization without modifying session JSONL.',
