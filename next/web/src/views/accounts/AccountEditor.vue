@@ -23,6 +23,8 @@ import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import { lt } from '@/i18n'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
+import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
+import { validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
@@ -80,6 +82,11 @@ const formError = ref('')
 const errors = ref<Record<string, string>>({})
 const credErrors = ref<Record<string, string>>({})
 const saving = ref(false)
+const ccFeaturePolicy = ref<AccountFeaturePolicy>()
+const ccFeatureSaved = ref('')
+const ccFeatureBlocked = ref(false)
+const ccFeatureDirty = computed(() => ccFeaturePolicy.value !== undefined && JSON.stringify(ccFeaturePolicy.value) !== ccFeatureSaved.value)
+function loadedFeatures(value: AccountFeaturePolicy) { ccFeatureSaved.value = JSON.stringify(value) }
 
 const schemaForm = ref<InstanceType<typeof SchemaForm>>()
 const iframe = ref<InstanceType<typeof PluginIframe>>()
@@ -180,7 +187,8 @@ const editorSections = computed(() => [
       ...(mappingCount.value ? [t('accounts.editorUi.mappingSummary', { n: mappingCount.value })] : [])
     ].join(' · ')
   },
-  { key: 'scheduling' as const, icon: 'bolt', label: t('accounts.editorUi.scheduling'), summary: t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }) }
+  { key: 'scheduling' as const, icon: 'bolt', label: t('accounts.editorUi.scheduling'), summary: t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }) },
+  ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
 const limitFields = computed(() => [
   { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), unit: t('accounts.editorUi.unitRpm') },
@@ -199,7 +207,8 @@ const serverMappingError = computed(() => {
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
-  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k])
+  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k]),
+  cc_features: Object.keys(errors.value).some(k => k.startsWith('cc_feature_policy'))
 }))
 
 // ---------------------------------------------------------------- Claude Code (CCGateway)
@@ -402,6 +411,9 @@ const syncModelsTextIfNeeded = () => !modelsTextMode.value || syncModelsText()
 
 /** Fills the form from the account (or a new one) and the account type. */
 function fillForm(a: Account | null | undefined, at: AccountType | null) {
+  ccFeaturePolicy.value = undefined
+  ccFeatureSaved.value = ''
+  ccFeatureBlocked.value = false
   autoModels.value = a?.auto_models ?? true
   basic.name = a?.name || ''
   basic.group_ids = [...(a?.group_ids || [])]
@@ -491,6 +503,10 @@ async function collectCredentials(): Promise<Record<string, unknown> | null> {
 
 /** Checks done before the request; the section to show when one fails. */
 async function invalidSection(form: HTMLFormElement): Promise<EditorSection | 'native' | 'ccg' | null> {
+  if (ccFeatureDirty.value && (ccFeatureBlocked.value || !validFeatureOverrides(ccFeaturePolicy.value!.overrides))) {
+    errors.value = { cc_feature_policy: t('ccgateway.layers.invalid') }
+    return 'cc_features'
+  }
   // Native constraints are checked explicitly so the first invalid field can
   // be revealed before the browser tries to focus it in a hidden pane.
   const invalid = form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input:invalid, select:invalid, textarea:invalid')
@@ -526,6 +542,7 @@ function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
   if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
   if (needsProxy.value) body.settings = { locale: ccgSettings.locale, timezone: ccgSettings.timezone }
   if (needsProxy.value) body.auto_models = autoModels.value
+  if (needsProxy.value && editing.value && ccFeatureDirty.value) body.cc_feature_policy = ccFeaturePolicy.value
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   if (proxyUrlToSend.value) body.proxy_url = proxyUrlToSend.value
   else body.proxy_id = basic.proxy_id
@@ -547,6 +564,11 @@ async function submit(body: Record<string, unknown>): Promise<Account> {
 }
 
 function showSaveError(e: unknown) {
+  if (reasonOf(e) === 'feature_revision_conflict') {
+    errors.value = { cc_feature_policy: t('ccgateway.layers.conflict') }
+    activeSection.value = 'cc_features'
+    return
+  }
   // The draft was refused (gone, or no longer signed in): back to the authorization steps.
   const ccgReason = ccgDraft.value ? reasonOf(e) : ''
   if (ccgReason === 'draft_not_found' || ccgReason === 'draft_not_authorized') {
@@ -797,6 +819,10 @@ async function save(event: Event) {
         </div>
 
         <!-- ============================================================ scheduling and limits -->
+        <div v-if="needsProxy" v-show="activeSection === 'cc_features'" data-editor-section="cc_features" class="space-y-4">
+          <AccountFeatureSettings v-if="editing" :key="account!.id" v-model="ccFeaturePolicy" :account-id="account!.id" :can-edit="canEditAccount" :disabled="saving" :errors="errors" @loaded="loadedFeatures" @status="ccFeatureBlocked = $event" />
+          <SHint v-else>{{ t('ccgateway.layers.newAccount') }}</SHint>
+        </div>
         <div v-show="activeSection === 'scheduling'" data-editor-section="scheduling" class="space-y-4">
           <SSettingsGroup :title="t('accounts.scheduling')" :description="t('accounts.editorUi.schedulingCardHint')" data-testid="account-scheduling">
             <SSettingRow :label="t('accounts.priority')" :description="t('accounts.priorityHint')" :error="errors.priority">

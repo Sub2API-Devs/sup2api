@@ -132,6 +132,35 @@ describe('CCGateway worker update in place', () => {
     w.unmount()
   })
 
+  it('requests paired Worker and CLI activation explicitly and displays per-account outcomes', async () => {
+    const paired = report()
+    mocks.post.mockResolvedValue({ ...paired, components: ['worker', 'cli'], cli_version: '2.1.304', results: paired.results.map(row => ({ ...row, cli_version: '2.1.304', cli_patch: 'ccgateway-v12-feature-policy', cli_sha256: 'c'.repeat(64), online: true })) })
+    const w = await render(configured('controller'))
+    expect(w.get('[data-testid="ccgateway-workers-cli-hint"]').text()).toContain('存量 302 配置不在后台自动迁移')
+    await w.get('[data-testid="ccgateway-workers-cli-update"]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm.mock.calls[0][0].message).toContain('不重建账号容器')
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/workers', { components: ['worker', 'cli'], cli_version: '2.1.304' }, { signal: expect.any(AbortSignal) })
+    expect(rows(w)).toHaveLength(7)
+    expect(w.get('[data-testid="ccgateway-workers-result"]').text()).toContain('Worker + CLI 2.1.304')
+    expect(w.get('[data-testid="ccgateway-worker-cli"]').text()).toContain('ccgateway-v12-feature-policy')
+    expect(w.get('[data-testid="ccgateway-worker-cli"]').text()).toContain('cccccccccccc')
+    w.unmount()
+  })
+
+  it('locks both update actions while paired activation runs and honors disabled state', async () => {
+    let finish!: (value: ReturnType<typeof report>) => void
+    mocks.post.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const w = await render(configured('controller'))
+    await w.get('[data-testid="ccgateway-workers-cli-update"]').trigger('click'); await flushPromises()
+    expect(w.get<HTMLButtonElement>('[data-testid="ccgateway-workers-update"]').element.disabled).toBe(true)
+    expect(w.get<HTMLButtonElement>('[data-testid="ccgateway-workers-cli-update"]').element.disabled).toBe(true)
+    finish(report()); await flushPromises()
+    await w.setProps({ disabled: true })
+    expect(w.get<HTMLButtonElement>('[data-testid="ccgateway-workers-cli-update"]').element.disabled).toBe(true)
+    w.unmount()
+  })
+
   it('shows the translated reason of a refused update', async () => {
     mocks.post.mockRejectedValue(Object.assign(new Error('conflict'), { details: { reason: 'install_in_progress' } }))
     const w = await render(configured('ssh'))

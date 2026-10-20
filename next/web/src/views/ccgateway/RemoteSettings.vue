@@ -10,18 +10,18 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SDisclosure, SField, SHint, SInput, SSelect, SSwitch, SSegmented, SSettingRow, SSettingsGroup, STabs, STextarea } from '@sub2api/ui'
 import type { CcgRemoteConfig, CcgRuntimeImages } from '@/api/types'
 import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
 import ControllerInstall, { type InstallResult } from './ControllerInstall.vue'
-import { defaultRequestPolicy, normalizeRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
+import { defaultRequestPolicy, newRequestPolicy, featureDifferenceCount, mergeFeaturePolicy, normalizeRequestPolicy, validRequestPolicy, validFeatureOverrides, type FeatureGroup, type RequestPolicy } from './requestPolicy'
 import { reasonDisplay, reasonOf } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import { basePathOf, connectionStateOf, controllerFormProblem, endpointScheme, formatControllerEndpoint, parseControllerEndpoint, schemeOf } from './controllerMode'
 
 interface RuntimeImages { app: string; egress: string; controller: string }
-interface RemoteConfig extends CcgRemoteConfig { request_policy?: Partial<RequestPolicy> }
+interface RemoteConfig extends CcgRemoteConfig { request_policy?: Partial<RequestPolicy>; cc_feature_groups?: Record<string, FeatureGroup>; feature_revision?: number }
 /** Install warnings with a translation (ccgateway.controllerInstall.warnings.*); others are shown as their code. */
 const INSTALL_WARNINGS = ['dns_mismatch']
 /** A form input problem: its message is shown as is (other failures show a generic text). */
@@ -57,6 +57,44 @@ const runtimeRevision = ref(0)
 // ---------------------------------------------------------------- the other tabs (images, network, request policy)
 
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
+const featureTab = ref('global')
+const featureGroups = ref<Record<string, FeatureGroup>>({})
+const latestFeatureConfig = ref<RemoteConfig | null>(null)
+const groups = ref<Array<{ id: number; name: string }>>([])
+const selectedGroup = ref<number | null>(null)
+const groupsError = ref(false)
+const groupOptions = computed(() => groups.value.map(group => ({
+  value: group.id,
+  label: group.name + (featureGroups.value[group.id] ? ` · ${t('ccgateway.layers.differences', { n: featureDifferenceCount(requestPolicy.value, featureGroups.value[group.id].overrides) })}` : '')
+})))
+const currentGroup = computed({
+  get: () => selectedGroup.value == null ? null : featureGroups.value[selectedGroup.value] ?? { enabled: false, allow_account_override: false, overrides: {} },
+  set: (value: FeatureGroup | null) => { if (selectedGroup.value != null && value) featureGroups.value = { ...featureGroups.value, [selectedGroup.value]: value } }
+})
+const latestFeatureEffective = computed(() => {
+  if (!latestFeatureConfig.value) return null
+  const global = normalizeRequestPolicy(latestFeatureConfig.value.request_policy)
+  const group = selectedGroup.value == null ? undefined : latestFeatureConfig.value.cc_feature_groups?.[selectedGroup.value]
+  return featureTab.value === 'group' && group?.enabled ? mergeFeaturePolicy(global, group.overrides) : global
+})
+function setGroup(patch: Partial<FeatureGroup>) {
+  if (currentGroup.value) currentGroup.value = { ...currentGroup.value, ...patch }
+}
+async function loadGroups() {
+  groupsError.value = false
+  try {
+    const all: Array<{ id: number; name: string }> = []
+    for (let page = 1; ; page++) {
+      const result = await api.list<{ id: number; name: string }>('/groups', { page, page_size: 200 })
+      all.push(...result.items)
+      if (!result.paged || !result.items.length || all.length >= result.page.total) break
+    }
+    groups.value = all
+    if (!all.some(g => g.id === selectedGroup.value)) selectedGroup.value = all[0]?.id ?? null
+  } catch { groupsError.value = true }
+}
+watch(featureTab, tab => { if (tab === 'group' && !groups.value.length) void loadGroups() })
+const groupChanged = computed(() => JSON.stringify(featureGroups.value) !== JSON.stringify(saved.value?.cc_feature_groups ?? {}))
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: DEFAULT_POOL, allocation: 'random' as 'random' | 'sequential' })
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizeRequestPolicy(saved.value?.request_policy)))
@@ -64,7 +102,7 @@ const networkChanged = computed(() => network.pool.trim() !== (saved.value?.netw
 const imagesPayload = computed<RuntimeImages>(() => ({ app: images.app.trim(), egress: images.egress.trim(), controller: images.controller.trim() }))
 const imagesChanged = computed(() => IMAGE_KEYS.some(k => imagesPayload.value[k] !== (saved.value?.images?.[k] || '')))
 /** Unsaved settings of the other tabs would be replaced by the configuration an install returns. */
-const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value)
+const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value || groupChanged.value)
 const imageLabel = (key: typeof IMAGE_KEYS[number]) => t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`)
 
 // ---------------------------------------------------------------- controller connection
@@ -140,8 +178,11 @@ const connectionNotice = computed(() => {
 // ---------------------------------------------------------------- load / save
 
 function assign(config: RemoteConfig) {
+  latestFeatureConfig.value = null
   saved.value = config
   requestPolicy.value = structuredClone(normalizeRequestPolicy(config.request_policy))
+  if (config.mode === 'disabled' && !config.request_policy) requestPolicy.value = newRequestPolicy()
+  featureGroups.value = structuredClone(config.cc_feature_groups ?? {})
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || DEFAULT_POOL
   network.allocation = config.network?.allocation || 'random'
@@ -168,12 +209,19 @@ async function run(action: () => Promise<void>) {
     await action()
   } catch (e) {
     const known = reasonDisplay(e)
-    error.value = e instanceof FormError ? e.message : known && 'key' in known ? t(known.key) : t('ccgateway.remote.failed')
+    error.value = e instanceof FormError ? e.message : reasonOf(e) === 'feature_revision_conflict' ? t('ccgateway.layers.conflict') : known && 'key' in known ? t(known.key) : t('ccgateway.remote.failed')
   } finally {
     busy.value = false
   }
 }
 async function load() { assign(await api.get<RemoteConfig>(base)) }
+async function refreshFeatureRevision() {
+  const latest = await api.get<RemoteConfig>(base)
+  latestFeatureConfig.value = latest
+  if (saved.value) saved.value = { ...saved.value, feature_revision: latest.feature_revision }
+  activeTab.value = 'cc'
+  notice.value = t('ccgateway.layers.reviewLatest')
+}
 /** Re-reads the saved configuration after the runtime card changed it (an applied upload writes images.<role>). */
 async function reloadQuietly() {
   try {
@@ -200,7 +248,7 @@ function connectionPayload(s: RemoteConfig): Record<string, unknown> {
 function otherSettingsProblem(): string {
   const bad = IMAGE_KEYS.map(k => imagesPayload.value[k]).find(ref => ref && !IMAGE_RE.test(ref))
   if (bad) return t('ccgateway.remote.imageInvalid', { ref: bad })
-  return validRequestPolicy(requestPolicy.value) ? '' : t('ccgateway.policy.invalid')
+  return validRequestPolicy(requestPolicy.value) && Object.values(featureGroups.value).every(g => typeof g.enabled === 'boolean' && typeof g.allow_account_override === 'boolean' && validFeatureOverrides(g.overrides)) ? '' : t('ccgateway.policy.invalid')
 }
 async function save() {
   const s = saved.value
@@ -216,6 +264,8 @@ async function save() {
     account_runtimes: true,
     ...connection,
     request_policy: normalizeRequestPolicy(requestPolicy.value),
+    cc_feature_groups: featureGroups.value,
+    feature_revision: s.feature_revision ?? 0,
     images: gateway ? { ...imagesPayload.value, gateway } : imagesPayload.value,
     network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation }
   }, { signal: AbortSignal.timeout(55000) })
@@ -258,6 +308,7 @@ onBeforeUnmount(() => {
         <SHint class="mt-1">{{ t('ccgateway.remote.description') }}</SHint>
       </div>
       <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+      <SButton v-if="error === t('ccgateway.layers.conflict')" size="sm" @click="run(refreshFeatureRevision)">{{ t('ccgateway.layers.retry') }}</SButton>
       <SAlert v-if="notice" tone="success" dense>{{ notice }}</SAlert>
       <SAlert v-for="w in installWarnings" :key="w" tone="warning" data-testid="controller-install-warning">{{ installWarning(w) }}</SAlert>
       <SButton v-if="!saved" size="sm" :disabled="disabled" @click="run(load)">{{ t('ccgateway.remote.reload') }}</SButton>
@@ -298,7 +349,23 @@ onBeforeUnmount(() => {
               <SCode class="max-h-72 overflow-auto" data-testid="remote-output">{{ output }}</SCode>
             </div>
           </SSettingsGroup>
-          <RequestPolicySettings v-show="activeTab === 'cc'" v-model="requestPolicy" />
+          <div v-show="activeTab === 'cc'" class="space-y-4">
+            <SDisclosure v-if="latestFeatureEffective" :label="t('ccgateway.layers.latestSaved')" variant="section" :default-open="true">
+              <RequestPolicySettings :model-value="latestFeatureEffective" disabled />
+            </SDisclosure>
+            <SSegmented v-model="featureTab" :options="[{ value: 'global', label: t('ccgateway.layers.globalTab') }, { value: 'group', label: t('ccgateway.layers.groupTab') }]" :aria-label="t('ccgateway.features.ccTitle')" data-testid="feature-layer" />
+            <RequestPolicySettings v-if="featureTab === 'global'" v-model="requestPolicy" :disabled="disabled" />
+            <div v-else class="space-y-4" data-testid="feature-groups">
+              <SAlert v-if="groupsError" tone="danger">{{ t('ccgateway.layers.previewFailed') }} <SButton size="sm" @click="loadGroups">{{ t('ccgateway.layers.retry') }}</SButton></SAlert>
+              <SSelect v-model="selectedGroup" :options="groupOptions" :aria-label="t('ccgateway.layers.selectGroup')" data-testid="feature-group" />
+              <template v-if="currentGroup">
+                <SSettingRow :label="t('ccgateway.layers.enabled')"><SSwitch :model-value="currentGroup.enabled" data-testid="group-enabled" @update:model-value="setGroup({ enabled: $event })" /></SSettingRow>
+                <SHint v-if="!currentGroup.enabled">{{ t('ccgateway.layers.disabledHint') }}</SHint>
+                <SSettingRow :label="t('ccgateway.layers.allowAccount')" :description="t('ccgateway.layers.allowHint')"><SSwitch :model-value="currentGroup.allow_account_override" :disabled="!currentGroup.enabled" data-testid="group-allow-account" @update:model-value="setGroup({ allow_account_override: $event })" /></SSettingRow>
+                <RequestPolicySettings v-model="requestPolicy" :overrides="currentGroup.overrides" :inherited="requestPolicy" :effective="currentGroup.enabled ? undefined : requestPolicy" show-saved-when-disabled :disabled="disabled || !currentGroup.enabled" @update:overrides="setGroup({ overrides: $event })" />
+              </template>
+            </div>
+          </div>
           <SAlert v-if="imageError" tone="danger" dense>{{ imageError }}</SAlert>
           <div class="space-y-4" data-testid="remote-images">
             <SSettingsGroup v-show="activeTab === 'network'" :title="t('ccgateway.settingsTabs.network')" :description="t('ccgateway.remote.networkShort')" data-testid="settings-network">

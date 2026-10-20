@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -21,12 +22,16 @@ type Config struct {
 	NativeTools string
 
 	// CLI 配置
-	CLIPath     string
-	CLIVersion  string
-	CLISHA256   string
-	CLIPatch    string
-	PluginPath  string
-	RequestMode string
+	CLIPath                   string
+	CLIVersion                string
+	CLISHA256                 string
+	CLIPatch                  string
+	PluginPath                string
+	RequestMode               string
+	WorkingDirectory          string
+	RuntimeMaintenanceLease   string
+	RuntimeMaintenanceExpires time.Time
+	MaintenanceOnly           bool
 
 	// 存储配置
 	ConfigDir  string
@@ -95,6 +100,7 @@ func Load() (*Config, error) {
 		CLIPatch:         os.Getenv("CCG_CLI_PATCH"),
 		PluginPath:       os.Getenv("WORKER_PLUGIN_PATH"),
 		RequestMode:      getEnv("CCG_REQUEST_MODE", "build"),
+		WorkingDirectory: getEnv("CCG_WORKING_DIRECTORY", "/work"),
 		ConfigDir:        getEnv("CLAUDE_CONFIG_DIR", "/root/.claude"),
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
 		CacheDir:         getEnv("CACHE_DIR", filepath.Join(dataDir, "cache")),
@@ -105,6 +111,15 @@ func Load() (*Config, error) {
 		HealthTimeout:    getEnvDuration("HEALTH_TIMEOUT", 5*time.Second),
 	}
 
+	if cfg.RequestMode == "native" {
+		// A Worker-only bootstrap must be installable in a retired native
+		// container so its trusted controller can activate the new pair.
+		// It exposes management only, never silently switches model routing.
+		cfg.RequestMode, cfg.MaintenanceOnly = "build", true
+	}
+	if err := cfg.loadActiveRuntime("/opt/ccgateway/cli"); err != nil {
+		return nil, err
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -131,6 +146,9 @@ func (c *Config) Validate() error {
 	}
 	if c.CLIPath == "" {
 		return fmt.Errorf("WORKER_CLI_PATH is required")
+	}
+	if c.WorkingDirectory != "" && !filepath.IsAbs(c.WorkingDirectory) && !strings.HasPrefix(c.WorkingDirectory, "/") {
+		return fmt.Errorf("CCG_WORKING_DIRECTORY must be an absolute trusted account directory")
 	}
 	if c.ConfigDir == "" {
 		return fmt.Errorf("CLAUDE_CONFIG_DIR is required")

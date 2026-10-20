@@ -17,6 +17,10 @@ type Options struct {
 	RequestMode                                             string // single-request CLI transport: direct or build (default)
 	InternalBaseURL                                         string
 	CLI, Plugin, DataDir, CacheDir                          string
+	WorkingDirectory                                        string
+	RuntimeMaintenanceLease                                 string
+	RuntimeMaintenanceExpires                               time.Time
+	MaintenanceOnly                                         bool
 	Key, AdminKey, NativeTools                              string
 	Timeout                                                 time.Duration
 	CacheLimit                                              int64
@@ -31,19 +35,23 @@ type Runtime struct {
 	cliManagement *cliManagement
 	cliGate       sync.RWMutex
 	http.Handler
-	Version   string
-	gateway   *Gateway
-	admin     *authManager
-	resources *resourceBroker
-	work      string
-	stop      context.CancelFunc
-	done      chan struct{}
-	life      context.Context
-	mu        sync.Mutex
-	closed    bool
-	active    sync.WaitGroup
-	once      sync.Once
-	err       error
+	Version             string
+	gateway             *Gateway
+	admin               *authManager
+	resources           *resourceBroker
+	work                string
+	stop                context.CancelFunc
+	done                chan struct{}
+	life                context.Context
+	mu                  sync.Mutex
+	closed              bool
+	active              sync.WaitGroup
+	once                sync.Once
+	err                 error
+	requests            int
+	runtimeLease        string
+	runtimeLeaseExpires time.Time
+	maintenanceOnly     bool
 }
 
 func NewRuntime(o Options) (*Runtime, error) {
@@ -70,15 +78,36 @@ func NewRuntime(o Options) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyPinnedCLI(cli, version, o); err != nil {
+	verifyOptions := o
+	if o.MaintenanceOnly {
+		verifyOptions.RequestMode = ""
+	}
+	if err := verifyPinnedCLI(cli, version, verifyOptions); err != nil {
 		return nil, err
 	}
+	cliInfo, infoErr := readCLIRequestInfo(cli, version, o)
+	if infoErr != nil && o.ExpectedCLIVersion != "" {
+		return nil, infoErr
+	}
+	if !o.MaintenanceOnly && infoErr == nil && !cliInfo.supports("request_"+o.RequestMode) {
+		return nil, fmt.Errorf("loaded CLI does not support configured request mode")
+	}
+	cliInfo.SHA256 = o.ExpectedCLISHA256
 	root, err := filepath.Abs(o.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	if err = os.MkdirAll(root, 0700); err != nil {
 		return nil, err
+	}
+	if o.WorkingDirectory != "" {
+		if !filepath.IsAbs(o.WorkingDirectory) {
+			return nil, fmt.Errorf("trusted account working directory must be absolute")
+		}
+		info, err := os.Stat(o.WorkingDirectory)
+		if err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("trusted account working directory is unavailable")
+		}
 	}
 	work, err := os.MkdirTemp(root, "worker-")
 	if err != nil {
@@ -131,6 +160,12 @@ func NewRuntime(o Options) (*Runtime, error) {
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
 	g.RequestMode = o.RequestMode
+	g.CLIInfo = cliInfo
+	g.MaintenanceOnly = o.MaintenanceOnly
+	g.Runner.WorkingDirectory = o.WorkingDirectory
+	if g.Runner.WorkingDirectory == "" {
+		g.Runner.WorkingDirectory = root
+	}
 	admin := &authManager{cli: cli, key: o.AdminKey, work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: g.RequestLogs, env: o.Env}
 	admin.authorizationChanged = func() error { return g.ownershipIndex().rotateAuthorization() }
 	resources, err := newResourceBroker(g, admin, root)
@@ -158,9 +193,12 @@ func NewRuntime(o Options) (*Runtime, error) {
 	mux.Handle("/admin/", admin)
 	ctx, stop := context.WithCancel(context.Background())
 	r := &Runtime{Handler: mux, Version: version, gateway: g, admin: admin, resources: resources, work: work, stop: stop, life: ctx, done: make(chan struct{})}
+	r.runtimeLease, r.runtimeLeaseExpires = o.RuntimeMaintenanceLease, o.RuntimeMaintenanceExpires
+	r.maintenanceOnly = o.MaintenanceOnly
 	r.cliManagement = cliManagement
 	mux.HandleFunc("/admin/cli", r.serveCLI)
 	mux.HandleFunc("/admin/cli/catalog", r.serveCLI)
+	mux.HandleFunc("/admin/runtime", r.serveRuntimeMaintenance)
 	r.catalog = newCLICatalog(func(ctx context.Context) (string, error) { return checkCLIVersion(ctx, cli) }, func(ctx context.Context, version string) (nativeCatalogue, error) {
 		tools, err := g.Runner.captureToolCatalog(ctx, version)
 		if err == nil && r.catalog.current.Load() != nil {
@@ -214,9 +252,26 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		apiError(w, 503, "api_error", "Worker is shutting down")
 		return
 	}
+	business := request.URL.Path == "/v1/messages" || request.URL.Path == "/v1/ccgateway/probe"
+	if business && r.maintenanceOnly {
+		r.mu.Unlock()
+		apiError(w, 409, "configuration_error", "Retired native runtime requires packaged Worker and CLI activation")
+		return
+	}
+	if business && r.runtimeLease != "" {
+		r.mu.Unlock()
+		apiError(w, 503, "api_error", "Worker runtime maintenance is in progress")
+		return
+	}
+	if business {
+		r.requests++
+	}
 	r.active.Add(1)
 	r.mu.Unlock()
 	defer r.active.Done()
+	if business {
+		defer func() { r.mu.Lock(); r.requests--; r.mu.Unlock() }()
+	}
 	ctx, cancel := context.WithCancel(request.Context())
 	stop := context.AfterFunc(r.life, cancel)
 	defer stop()
@@ -245,10 +300,38 @@ func (r *Runtime) CLIVersion() string {
 }
 
 func (r *Runtime) ExecutionModes() []string {
+	if r.maintenanceOnly {
+		return []string{}
+	}
 	if r.gateway != nil && r.gateway.RequestMode != "" {
+		var modes []string
+		for _, mode := range []string{"request_direct", "request_build"} {
+			if r.gateway.CLIInfo.supports(mode) {
+				modes = append(modes, mode)
+			}
+		}
+		if len(modes) > 0 {
+			return modes
+		}
 		return []string{"request_" + r.gateway.RequestMode}
 	}
 	return []string{"native"}
+}
+
+func (r *Runtime) RequestCapabilities() []string {
+	if r.gateway == nil || r.maintenanceOnly {
+		return []string{}
+	}
+	return r.gateway.requestCapabilities()
+}
+
+func (r *Runtime) MaintenanceOnly() bool { return r.maintenanceOnly }
+
+func (r *Runtime) CLIIdentity() (string, string) {
+	if r.gateway == nil {
+		return "", ""
+	}
+	return r.gateway.CLIInfo.Patch, r.gateway.CLIInfo.SHA256
 }
 
 func (r *Runtime) CLIReady() bool {

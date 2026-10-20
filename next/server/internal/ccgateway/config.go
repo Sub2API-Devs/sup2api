@@ -15,12 +15,34 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
 
 const settingKey = "ccgateway_remote"
+
+func (c Config) featureGroups() map[string]GroupFeaturePolicy {
+	if c.CCFeatureGroups == nil {
+		return map[string]GroupFeaturePolicy{}
+	}
+	return c.CCFeatureGroups
+}
+
+func sameRuntimeConfig(a, b Config) bool {
+	av, bv := a.EffectiveRequestPolicy().CLIVersion, b.EffectiveRequestPolicy().CLIVersion
+	an, bn := a.EffectiveNetwork(), b.EffectiveNetwork()
+	ai, bi := a.EffectiveImages(), b.EffectiveImages()
+	a.Network, b.Network = &an, &bn
+	a.Images, b.Images = &ai, &bi
+	a.RequestPolicy, b.RequestPolicy = nil, nil
+	a.CCFeatureGroups, b.CCFeatureGroups = nil, nil
+	a.FeatureRevision, b.FeatureRevision = 0, 0
+	a.bundled, b.bundled = nil, nil
+	return av == bv && reflect.DeepEqual(a, b)
+}
 
 // SensitiveEnv are the legacy local-mode keys. They are read once at program
 // start, before main removes them from the process environment
@@ -59,9 +81,11 @@ type Config struct {
 	// Images overrides the pinned runtime images (images.go) per role, e.g.
 	// with tags built on the Docker host itself; empty fields use the
 	// pinned references (CONTRACTS §49.16).
-	Images        *RuntimeImages  `json:"images,omitempty"`
-	Network       *RuntimeNetwork `json:"network,omitempty"`
-	RequestPolicy *RequestPolicy  `json:"request_policy,omitempty"`
+	Images          *RuntimeImages                `json:"images,omitempty"`
+	Network         *RuntimeNetwork               `json:"network,omitempty"`
+	RequestPolicy   *RequestPolicy                `json:"request_policy,omitempty"`
+	CCFeatureGroups map[string]GroupFeaturePolicy `json:"cc_feature_groups,omitempty"`
+	FeatureRevision int64                         `json:"feature_revision"`
 
 	// bundled holds the image references of the active plugin package
 	// (§53.10), set when the configuration is loaded; never saved.
@@ -155,6 +179,8 @@ func (c Config) Public() map[string]any {
 		"effective_images":          c.EffectiveImages(),
 		"network":                   c.EffectiveNetwork(),
 		"request_policy":            c.EffectiveRequestPolicy(),
+		"cc_feature_groups":         c.featureGroups(),
+		"feature_revision":          c.FeatureRevision,
 	}
 }
 
@@ -230,12 +256,16 @@ func (s *Service) decodeStored(raw []byte) (Config, error) {
 		Cipher []byte `json:"cipher"`
 	}
 	if len(raw) == 0 {
+		p := newRequestPolicy()
+		c.RequestPolicy = &p
 		return c, nil
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
 		return c, errors.New("invalid configuration")
 	}
 	if len(envelope.Cipher) == 0 {
+		p := newRequestPolicy()
+		c.RequestPolicy = &p
 		return c, nil
 	}
 	if s.Cipher == nil {
@@ -289,6 +319,18 @@ func (s *Service) loadVersioned(ctx context.Context) (Config, []byte, error) {
 // target stay the same, but nothing can switch to a legacy mode; installing
 // a controller migrates it.
 func mergeConfig(c, old Config) (Config, error) {
+	if c.CCFeatureGroups == nil {
+		c.CCFeatureGroups = old.CCFeatureGroups
+	}
+	for key, group := range c.CCFeatureGroups {
+		id, err := strconv.ParseInt(key, 10, 64)
+		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != key {
+			return c, errors.New("invalid feature group id")
+		}
+		if err := group.Overrides.Validate(); err != nil {
+			return c, err
+		}
+	}
 	c.AccountRuntimes = true
 	if c.Mode == "ssh" && c.Port == 0 {
 		c.Port = 22
@@ -314,12 +356,41 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	if c.RequestPolicy == nil {
 		c.RequestPolicy = old.RequestPolicy
+	} else if old.RequestPolicy != nil {
+		// Older clients do not know the new source maps. Omission preserves
+		// them, while an explicit {} remains an intentional reset.
+		if c.RequestPolicy.BuildBillingSources == nil {
+			c.RequestPolicy.BuildBillingSources = old.RequestPolicy.BuildBillingSources
+		} else if len(c.RequestPolicy.BuildBillingSources) > 0 {
+			merged := cloneSourceMap(old.RequestPolicy.BuildBillingSources)
+			for k, v := range c.RequestPolicy.BuildBillingSources {
+				merged[k] = v
+			}
+			c.RequestPolicy.BuildBillingSources = merged
+		}
+		if c.RequestPolicy.BuildAttachmentSources == nil {
+			c.RequestPolicy.BuildAttachmentSources = old.RequestPolicy.BuildAttachmentSources
+		} else if len(c.RequestPolicy.BuildAttachmentSources) > 0 {
+			merged := cloneSourceMap(old.RequestPolicy.BuildAttachmentSources)
+			for k, v := range c.RequestPolicy.BuildAttachmentSources {
+				merged[k] = v
+			}
+			c.RequestPolicy.BuildAttachmentSources = merged
+		}
 	}
 	policy := c.EffectiveRequestPolicy()
 	if err := validateRequestPolicy(policy); err != nil {
 		return c, err
 	}
 	c.RequestPolicy = &policy
+	featureChanged := !reflect.DeepEqual(c.EffectiveRequestPolicy(), old.EffectiveRequestPolicy()) || !reflect.DeepEqual(c.CCFeatureGroups, old.CCFeatureGroups)
+	if featureChanged && c.FeatureRevision != old.FeatureRevision {
+		return c, featureRevisionConflict()
+	}
+	c.FeatureRevision = old.FeatureRevision
+	if featureChanged {
+		c.FeatureRevision++
+	}
 	// Images: omitted keeps the saved ones, {} (empty fields) returns to the
 	// pinned references.
 	if c.Images == nil {
@@ -337,7 +408,7 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	if c.Mode == "disabled" {
 		// Not configured: no target, no keys.
-		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images}, nil
+		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images, CCFeatureGroups: c.CCFeatureGroups, FeatureRevision: c.FeatureRevision}, nil
 	}
 	if legacy {
 		return mergeLegacy(c, old)
@@ -469,6 +540,7 @@ func (s *Service) save(c *gin.Context) {
 		updatedBy = &uid
 	}
 	var saved Config
+	var runtimeChanged bool
 	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
 		_, e := store.UpdateSettingJSONTx(ctx, tx, settingKey, updatedBy, func(raw json.RawMessage) (json.RawMessage, error) {
 			old, e := s.decode(raw)
@@ -479,6 +551,18 @@ func (s *Service) save(c *gin.Context) {
 			if e != nil {
 				return nil, e
 			}
+			if in.CCFeatureGroups != nil {
+				for key := range in.CCFeatureGroups {
+					var exists bool
+					if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id=$1)", key).Scan(&exists); err != nil {
+						return nil, err
+					}
+					if !exists {
+						return nil, core.ErrInvalidArgument.WithMessage("Unknown CC feature group.")
+					}
+				}
+			}
+			runtimeChanged = !sameRuntimeConfig(saved, old)
 			saved.bundled = old.bundled
 			plain, _ := json.Marshal(saved)
 			if s.Cipher == nil {
@@ -496,11 +580,19 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
+		if core.AsError(e).Code == core.ErrConflict.Code {
+			httpapi.Fail(c, e)
+			return
+		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, the connection mode (controller or disabled), or the control panel scheme, address, management key and root certificate."))
 		return
 	}
-	s.configChanged(ctx)
-	if saved.AccountRuntimes {
+	if runtimeChanged {
+		s.configChanged(ctx)
+	} else {
+		s.featureConfigChanged(ctx)
+	}
+	if runtimeChanged && saved.AccountRuntimes {
 		if keys, err := s.runtimeKeys(ctx); err == nil {
 			for _, key := range keys {
 				s.Kick(key)

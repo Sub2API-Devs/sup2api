@@ -19,6 +19,36 @@ import (
 // request. Do not cache this across in-place Worker updates/downgrades: an old
 // Worker ignores unknown policy fields. This local read never calls a model.
 func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, base, key, cliVersion string) error {
+	return requireCapabilities(ctx, client, base, key, cliVersion, []string{features.BuildAttachmentCapability})
+}
+
+func requestPolicyCapabilities(p RequestPolicy) []string {
+	required := []string{}
+	if p.CLIVersion == "2.1.304" || p.RelayMode == "direct" {
+		required = append(required, features.RequestPolicyModeCapability)
+	}
+	if p.RelayMode == "direct" {
+		return required
+	}
+	if p.CLIVersion == "2.1.304" {
+		required = append(required, features.BuildContentPreservationCapability)
+	}
+	if p.BuildAttachmentSources.RequiresV2() {
+		required = append(required, features.BuildAttachmentCapabilityV2)
+	} else if p.BuildAttachmentSources.UsesWorker() {
+		required = append(required, features.BuildAttachmentCapability)
+	}
+	if p.BuildBillingSources.UsesWorker() {
+		required = append(required, features.BuildBillingCapability)
+	}
+	return required
+}
+
+func requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, p RequestPolicy) error {
+	return requireCapabilities(ctx, client, base, key, p.CLIVersion, requestPolicyCapabilities(p))
+}
+
+func requireCapabilities(ctx context.Context, client *http.Client, base, key, cliVersion string, required []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/healthz", nil)
@@ -37,12 +67,17 @@ func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, 
 		}
 		if res.StatusCode == http.StatusOK && readErr == nil && len(raw) <= 8192 &&
 			json.Unmarshal(raw, &health) == nil && health.Status == "ok" &&
-			(cliVersion == "" || cliVersion == health.CLIVersion) &&
-			slices.Contains(health.Capabilities, features.BuildAttachmentCapability) {
-			return nil
+			(cliVersion == "" || cliVersion == health.CLIVersion) {
+			complete := true
+			for _, capability := range required {
+				complete = complete && slices.Contains(health.Capabilities, capability)
+			}
+			if complete {
+				return nil
+			}
 		}
 	}
-	return core.ErrUnavailable.WithMessage("The account Worker does not confirm build attachment conversion support; update the Worker or keep client attachment sources.")
+	return core.ErrConflict.WithMessage("The account Worker/CLI does not confirm the requested feature policy capabilities or CLI version.").WithDetails(map[string]any{"reason": "configuration_error", "required_capabilities": required})
 }
 
 // Inspection only: never reconcile, start a container or change routing state.

@@ -47,6 +47,10 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(0, '127.0.0.1', () => {
   const env = { PATH: process.env.PATH, HOME: tmp, CLAUDE_CONFIG_DIR: path.join(tmp, 'config'), ANTHROPIC_API_KEY: 'local-mock-only', ANTHROPIC_BASE_URL: `http://127.0.0.1:${server.address().port}`, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CCG_PROBE_SCENARIO: scenario };
+  // 2.1.304 defaults to deferred ToolSearch for TaskCreate/WebFetch and MCP
+  // tools. These scenarios assert full advertised definitions, so explicitly
+  // request the non-deferred surface; others keep their native default.
+  if (scenario === 'original' || scenario === 'mcp') env.ENABLE_TOOL_SEARCH = 'false';
   const args = [...entry === '-' ? [] : [entry], '--debug-file', debugFile, '--plugin-dir', fixture, '--settings', settings, '--strict-mcp-config', '--no-session-persistence', '--model', 'claude-haiku-4-5-20251001', '--max-turns', '4', '--output-format', 'json'];
   if (scenario === 'disabled') args.push('--tools', '');
   if (scenario === 'denied') args.push('--disallowedTools', 'Bash,NativeEcho');

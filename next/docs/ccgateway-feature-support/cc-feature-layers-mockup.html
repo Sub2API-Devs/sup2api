@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CC 特性分层配置 · UI 设计稿 v8.3</title>
+<style>
+:root{--bg:#f6f7f9;--surface:#fff;--line:#e4e7ec;--fg:#111827;--muted:#6b7280;--primary:#2563eb;--soft:#eff4ff;--orange:#b45309;--orange-bg:#fff7e8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}button,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed}button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #93b4fd;outline-offset:3px}h1,h2,h3,p{margin:0}h1{font-size:23px;letter-spacing:-.4px}h2{font-size:17px}h3{font-size:14px}small{font-size:12px}.page{max-width:1160px;margin:auto;padding:28px 24px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px}.eyebrow{font-size:11px;letter-spacing:.12em;color:var(--primary);font-weight:700;margin-bottom:5px}.lead{color:var(--muted);margin:7px 0 18px;max-width:900px}.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:6px;background:#eef1f5;color:#596477;white-space:nowrap}.tag.blue{background:var(--soft);color:var(--primary)}.tag.orange{background:var(--orange-bg);color:var(--orange)}.scenes{display:flex;flex-wrap:wrap;gap:7px;margin:16px 0 22px}.scenes button{border:1px solid var(--line);border-radius:99px;background:#fff;padding:6px 13px;color:var(--muted)}.scenes button[aria-pressed=true]{background:#182235;color:white;border-color:#182235}.crumb{font-size:12px;color:#8992a2;margin:0 0 11px}.tabs{display:flex;gap:22px;border-bottom:1px solid var(--line);margin-bottom:16px;color:var(--muted)}.tabs span{padding:7px 0}.tabs .on{color:var(--fg);border-bottom:2px solid var(--primary);font-weight:600}.subtabs{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:9px;background:white;margin-bottom:16px}.subtabs button{border:0;background:none;padding:5px 17px;border-radius:6px;color:var(--muted)}.subtabs button.on{background:var(--soft);color:var(--primary)}.layout{display:grid;grid-template-columns:218px minmax(0,1fr);gap:18px}.aside{align-self:start;border:1px solid var(--line);border-radius:12px;background:white;padding:7px;position:sticky;top:16px}.aside button,.aside .nav-item{width:100%;display:flex;justify-content:space-between;gap:7px;align-items:center;text-align:left;padding:11px 10px;border:0;border-radius:7px;background:none;color:var(--fg)}.aside button.on,.aside .nav-item.on{background:var(--soft);color:var(--primary)}.aside small{color:var(--muted)}.aside .add{color:var(--primary);border-top:1px solid var(--line);border-radius:0;margin-top:4px}.card{background:white;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}.card-header{padding:16px 19px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}.card-header p,.desc{font-size:12px;color:var(--muted);margin-top:3px}.card-header p{max-width:620px}.title-line{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:12px 19px;border-top:1px solid #eef0f3;min-height:65px}.card-header+.row{border-top:0}.row.changed{box-shadow:inset 3px 0 #f59e0b}.label{font-weight:500}.code{display:block;color:#8b94a3;font:11px/1.6 ui-monospace,Consolas,monospace;margin-top:2px;overflow-wrap:anywhere}.control{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;flex-shrink:0}.seg{display:inline-flex;border:1px solid var(--line);padding:2px;border-radius:8px;background:#f8fafc}.seg button{border:0;border-radius:5px;background:transparent;padding:4px 12px;font-size:12px;color:#687386;white-space:nowrap}.seg button[aria-pressed=true]{background:white;box-shadow:0 1px 3px #10182820;color:#17233c;font-weight:600}.seg button.follow[aria-pressed=true]{font-weight:400;color:var(--muted)}.inherit{font-size:12px;color:var(--muted)}.diff{display:inline-block;margin-left:7px;color:var(--orange);background:var(--orange-bg);border-radius:5px;padding:1px 6px;font-size:11px;font-weight:400}.part{border-top:1px solid var(--line)}.part:first-child{border-top:0}.part>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 19px;cursor:pointer;list-style:none;background:#fcfcfd}.part>summary::-webkit-details-marker{display:none}.part>summary .part-label:before{content:'▸';display:inline-block;color:#8992a2;width:17px}.part[open]>summary .part-label:before{content:'▾'}.part small{color:#8992a2;font-weight:400;margin-left:5px}.part-body{margin:0 14px 9px 24px;border-left:2px solid #e8edf4}.part-body .row{padding:10px 10px 10px 15px}.hint{padding:10px 19px;color:var(--muted);background:#fcfcfd;border-top:1px solid var(--line);font-size:12px}.hint strong{color:#526078;font-weight:500}.banner{padding:12px 16px;border-radius:8px;background:var(--soft);color:#36517e;margin-bottom:14px;font-size:13px}.banner.warn{background:var(--orange-bg);color:#87551b}.disabled-fields{opacity:.48}.switch{display:inline-block;width:35px;height:20px;background:#cbd2dd;border:0;border-radius:20px;position:relative;flex:none}.switch:after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;background:white;border-radius:50%;box-shadow:0 1px 2px #0002}.switch[aria-checked=true]{background:var(--primary)}.switch[aria-checked=true]:after{left:18px}.switch:disabled{opacity:.5}.btn{background:white;border:1px solid var(--line);border-radius:7px;padding:7px 13px;font-size:13px;color:#485367}.btn.primary{background:var(--primary);border-color:var(--primary);color:white}.btn.link{border:0;background:transparent;padding:2px;color:var(--primary)}.footer{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;max-width:100%;color:var(--fg);background:white}.readonly{font-size:13px;display:flex;gap:8px;align-items:center}.rules{border:1px solid var(--line);border-radius:10px;background:white;margin-top:18px;overflow:hidden}.rules>summary{cursor:pointer;padding:13px 17px;color:#526078;font-size:13px}.rules-body{padding:0 17px 16px;font-size:12px;color:#58657a}.rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rule-box{padding:12px;background:#f8fafc;border-radius:7px}.rule-box strong{color:#23324a;display:block;margin-bottom:4px}.rules-body p+p{margin-top:9px}.design-notes{margin-top:25px;color:var(--muted);font-size:12px}.design-notes>summary{cursor:pointer}.design-notes p{margin-top:9px}#notice{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:10px 18px;background:#17233c;color:white;border-radius:9px;box-shadow:0 5px 25px #0002;font-size:13px;max-width:90%;z-index:2}#notice:empty{display:none}.fixed-version{display:flex;align-items:center;justify-content:space-between;padding:13px 19px}.mode-summary{font-size:12px;color:var(--muted)}.plain{padding:15px 19px;color:var(--muted);font-size:13px}.intro-badges{display:flex;gap:6px;flex-wrap:wrap}.batch{font-size:11px;color:var(--muted)}
+@media(max-width:1000px){.layout{grid-template-columns:180px minmax(0,1fr)}.row{flex-wrap:wrap;gap:8px}.row .control{margin-left:auto}.card-header{align-items:flex-start}.seg button{padding:4px 10px}}
+@media(max-width:650px){.page{padding:18px 12px 40px}.layout{grid-template-columns:1fr}.aside{position:static}.aside button{padding:8px 10px}.tabs{gap:15px;font-size:12px}.top{align-items:flex-start}.top .tag{display:none}h1{font-size:20px}.rule-grid{grid-template-columns:1fr}.row .control{max-width:100%;justify-content:flex-start;margin-left:0}.card-header{flex-wrap:wrap}.seg{max-width:100%}.seg button{padding:5px 9px}.part-body{margin-left:14px}.inherit{width:100%}.footer{align-items:flex-start}.label .diff{margin-left:0}.row{padding:11px 14px}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="top"><div><div class="eyebrow">CCGATEWAY / FEATURE POLICY</div><h1>CC 特性分层配置</h1></div><span class="tag">交互设计稿 v8.3 · 不连接后端</span></div>
+  <p class="lead">仅配置计费归属与环境信息。全局设定默认值，分组按需覆盖，账号在获准后自定义；保存后下一次请求生效。</p>
+  <div class="intro-badges"><span class="tag blue">计费归属 2 项</span><span class="tag blue">环境信息 10 项</span><span class="tag">连续会话逐次生效</span><span class="tag">不重建账号容器</span></div>
+  <nav class="scenes" aria-label="设计场景" id="scenes"></nav>
+  <div id="app"></div>
+  <details class="design-notes"><summary>设计与实现说明 · 不进入正式设置界面</summary><p>本稿是交互设计参考。正式 Vue 界面、三层配置和请求链路已在本地实现，验证状态见正式设计文档链接；本稿仍不连接后端，也不代表已部署。环境字段依据 CLI 2.1.304 的环境结构与完整／增量渲染代码整理。GitHub 工具及 Agent 代理说明由运行能力决定，不能把空值当成读取失败。</p><p>新增环境字段默认保留客户端；平台、系统版本沿用原稿默认服务端。计费归属默认客户端，direct 不改写。完整规则见 <a href="CC-FEATURE-LAYERS-DESIGN.md">正式设计文档</a>。路径、Shell 与能力说明选择服务端后会改变模型看到的执行环境，不会把客户端工具迁移到服务端。UI 操作只保存在当前页面内存，刷新后恢复示例。</p></details>
+</main>
+<div id="notice" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+const fields = [
+  {id:'cc_version',label:'版本标识',wire:'cc_version',section:'billing',desc:'服务端：按本次请求生成完整版本标识'},
+  {id:'cc_entrypoint',label:'入口标识',wire:'cc_entrypoint',section:'billing',desc:'服务端：使用当前 CLI 的实际入口'},
+  {id:'platform_name',label:'平台名称',wire:'Platform',section:'runtime'},
+  {id:'os_version',label:'系统版本',wire:'OS Version',section:'runtime'},
+  {id:'shell',label:'Shell',wire:'Shell',section:'runtime'},
+  {id:'primary_directory',label:'工作目录',wire:'Primary working directory',section:'workspace'},
+  {id:'additional_directories',label:'额外工作目录',wire:'Additional working directories',section:'workspace'},
+  {id:'git_repository',label:'Git 仓库状态',wire:'Is a git repository',section:'workspace'},
+  {id:'worktree',label:'Worktree 状态与说明',wire:'isWorktree',section:'workspace'},
+  {id:'scratchpad_directory',label:'临时目录',wire:'Scratchpad directory',section:'workspace'},
+  {id:'github_cli',label:'GitHub 工具说明',wire:'githubCli',section:'capabilities'},
+  {id:'agent_proxy',label:'Agent 代理说明',wire:'agentProxy',section:'capabilities'},
+];
+const sections=[{id:'runtime',label:'运行环境'},{id:'workspace',label:'目录与仓库'},{id:'capabilities',label:'工具与代理说明'}];
+const labels={client:'客户端',worker:'服务端',erase:'擦除',build:'build',direct:'direct',follow:'跟随'};
+const globalConfig={mode:'build',...Object.fromEntries(fields.map(f=>[f.id,f.id==='platform_name'||f.id==='os_version'?'worker':'client']))};
+const groups={max:{name:'Max 账号组',count:12,enabled:true,allow:false,configured:true,values:{os_version:'client'}},pro:{name:'Pro 账号组',count:5,enabled:true,allow:true,configured:true,values:{mode:'direct'}},team:{name:'Team 账号组',count:3,enabled:false,allow:true,configured:true,values:{shell:'worker',cc_entrypoint:'worker'}}};
+const accounts={custom:{name:'#30 pro-a',custom:true,values:{mode:'build',os_version:'erase',cc_entrypoint:'worker'}},locked:{name:'#21 cc-max-01',custom:false,values:{}}};
+const scenes=[['global','① 全局默认'],['group','② 分组默认'],['group-direct','③ 分组 · direct'],['group-off','④ 分组 · 覆盖关闭'],['acc-custom','⑤ 账号 · 自定义'],['acc-locked','⑥ 账号 · 只读']];
+const ui={scene:'global',page:'global',group:'max',account:'custom',preview:'pro',open:{runtime:true,workspace:false,capabilities:false}};
+let toastTimer;
+function esc(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function same(a,b){return a===b;}
+function groupEffective(g){return g.configured&&g.enabled?{...globalConfig,...g.values}:{...globalConfig};}
+function inheritedSource(g,id){return g.configured&&g.enabled&&g.values[id]!==undefined?'分组 · '+g.name:'全局';}
+function context(){
+ if(ui.page==='global')return {level:'global',values:globalConfig,effective:globalConfig,inherited:null,editable:true,dormant:false};
+ if(ui.page==='group'){const g=groups[ui.group];return {level:'group',g,values:g.values,effective:g.configured?{...globalConfig,...g.values}:globalConfig,inherited:globalConfig,editable:g.configured&&g.enabled,dormant:g.configured&&!g.enabled};}
+ const g=groups[ui.preview],a=accounts[ui.account],base=groupEffective(g),allowed=g.configured&&g.enabled&&g.allow;
+ return {level:'account',g,a,values:a.values,inherited:base,effective:allowed&&a.custom?{...base,...a.values}:base,editable:allowed&&a.custom,allowed,dormant:false};
+}
+function diffCount(values,base,ids){return ids.filter(id=>values[id]!==undefined&&!same(values[id],base[id])).length;}
+function groupDiff(g){return diffCount(g.values,globalConfig,['mode',...fields.map(f=>f.id)]);}
+function segment(id,choices,c,disabled){const value=c.level==='global'?c.values[id]:(c.values[id]??'follow');return '<div class="seg" role="group" aria-label="'+esc(id==='mode'?'请求模式':fields.find(f=>f.id===id).label)+'">'+choices.map(v=>'<button type="button" data-field="'+id+'" data-value="'+v+'" class="'+(v==='follow'?'follow':'')+'" aria-pressed="'+(v===value)+'" '+(disabled?'disabled':'')+'>'+esc(v==='follow'?(c.level==='group'?'跟随全局':'跟随'):labels[v])+'</button>').join('')+'</div>';}
+function fieldRow(f,c){
+ const id=f.id,mode=id==='mode',locked=!c.editable||(!mode&&c.effective.mode==='direct');
+ const readonly=c.level==='account'&&!c.editable||c.level==='group'&&!c.g.configured;
+ const own=c.values[id],diff=c.inherited&&own!==undefined&&own!==c.inherited[id]&&!readonly;
+ const origin=c.level==='account'?inheritedSource(c.g,id):'全局';
+ const sourceLabel=origin.startsWith('分组')?'分组':'全局';
+ let control;
+ if(readonly){const actualSource=c.level==='account'?inheritedSource(c.g,id):'全局';control='<div class="readonly">'+esc(labels[c.effective[id]])+' <span class="tag '+(actualSource==='全局'?'':'blue')+'">'+esc(actualSource)+'</span></div>';}
+ else {const choices=mode?['direct','build']:(f.section==='billing'?['client','worker']:['client','worker','erase']);if(c.level!=='global')choices.unshift('follow');control=(c.inherited&&own===undefined?'<span class="inherit">'+esc(labels[c.inherited[id]])+(c.level==='account'?' · '+esc(origin):'')+'</span>':'')+segment(id,choices,c,locked);}
+ return '<div class="row '+(diff?'changed':'')+'" data-row="'+id+'"><div><div class="label">'+esc(f.label)+(diff?'<span class="diff">'+sourceLabel+'为 '+esc(labels[c.inherited[id]])+'</span>':'')+'</div>'+(f.wire?'<span class="code">'+esc(f.wire)+'</span>':'')+(f.desc&&c.level==='global'?'<p class="desc">'+esc(f.desc)+'</p>':'')+'</div><div class="control">'+control+'</div></div>';
+}
+function contentCards(c){
+ const direct=c.effective.mode==='direct';
+ const totalIds=fields.map(f=>f.id),billIds=fields.filter(f=>f.section==='billing').map(f=>f.id);
+ const canShowDiff=c.inherited&&!(c.level==='account'&&!c.editable);
+ const billingDiff=canShowDiff?diffCount(c.values,c.inherited,billIds):0;
+ const envDiff=canShowDiff?diffCount(c.values,c.inherited,totalIds.filter(id=>!billIds.includes(id))):0;
+ return '<section class="card"><header class="card-header"><div><h2>请求模式</h2><p>build 按配置构建；direct 保留原请求内容。</p></div></header>'+fieldRow({id:'mode',label:'请求模式'},c)+'</section>'+
+ (direct?'<div class="banner warn">当前生效模式为 direct，计费归属和环境信息保持原样。下方保存的设置不会执行，切回 build 后恢复。</div>':'')+
+ '<div class="'+(direct||c.dormant?'disabled-fields':'')+'">'+
+ '<section class="card"><header class="card-header"><div><div class="title-line"><h2>计费归属</h2><span class="tag">2 项</span>'+(billingDiff?'<span class="tag orange">'+billingDiff+' 项不同</span>':'')+'</div><p>客户端保留原值；服务端根据本次请求生成对应字段。</p></div></header>'+fields.filter(f=>f.section==='billing').map(f=>fieldRow(f,c)).join('')+'<div class="hint">选择服务端时，确认缺失的字段会自动补齐；选择客户端时不补。其他计费字段保持原样。</div></section>'+
+ '<section class="card"><header class="card-header"><div><div class="title-line"><h2>环境信息</h2><span class="tag">10 项</span>'+(envDiff?'<span class="tag orange">'+envDiff+' 项不同</span>':'')+'</div><p>逐项选择客户端、服务端或擦除。应用于完整环境说明及后续环境更新。</p></div></header>'+
+ sections.map(s=>{const list=fields.filter(f=>f.section===s.id),n=canShowDiff?diffCount(c.values,c.inherited,list.map(f=>f.id)):0;return '<details class="part" data-part="'+s.id+'" '+(ui.open[s.id]?'open':'')+'><summary><span class="part-label">'+esc(s.label)+'<small>'+list.length+' 项</small></span>'+(n?'<span class="tag orange">'+n+' 项不同</span>':'<span class="batch">展开配置</span>')+'</summary><div class="part-body">'+list.map(f=>fieldRow(f,c)).join('')+'</div></details>';}).join('')+
+ '<div class="hint"><strong>未出现的不补，无法确认的不改。</strong>仅修改已识别的环境字段；其他提醒、项目指令、文件及工具结果保持原文。路径和 Shell 的来源不会改变工具实际执行的位置。</div></section></div>';
+}
+function behaviorRules(){return '<details class="rules"><summary>处理规则 · 客户端兼容、未匹配与连续会话</summary><div class="rules-body"><div class="rule-grid"><div class="rule-box"><strong>计费归属缺失</strong>服务端来源：按本次请求生成并补齐对应字段。客户端来源：保持缺失。确认整块不存在时才新增，避免重复。</div><div class="rule-box"><strong>环境信息缺失</strong>客户端未发送环境块或对应字段时，跳过对应转换，不补回整段默认环境。其他已识别字段继续按配置处理。</div><div class="rule-box"><strong>格式异常或存在歧义</strong>疑似目标无法确认、同字段重复时，保留原文，不盲目追加。诊断记录具体跳过原因。</div><div class="rule-box"><strong>客户端提示布局</strong>环境放在 system 或 user 消息时，均在原位置处理。客户端将动态内容移到 user 时，不会再复制回 system。</div><div class="rule-box"><strong>省略与自定义提示</strong>兼容客户端省略动态段落或使用自定义系统提示。没有目标环境字段时，不依赖无关的服务端环境读取。</div><div class="rule-box"><strong>连续会话</strong>每次处理本次请求携带的全部相关历史；完整环境与环境更新使用同一策略，客户端变化不能覆盖选定的服务端值。</div></div><p style="margin-top:12px">需要使用的服务端值读取失败时明确报错；服务端明确没有某可选环境字段时，移除已识别的客户端对应描述；读取失败时报错。重复处理同一请求不新增重复内容。</p><p>处理结果区分：未找到、格式不支持、有歧义、无需变化、已替换、已擦除、已补齐。这里只展示规则，不把模拟数据作为实时命中统计。</p></div></details>';}
+function groupSidebar(){return '<aside class="aside" aria-label="分组列表">'+Object.entries(groups).map(([id,g])=>'<button type="button" data-group="'+id+'" class="'+(ui.group===id?'on':'')+'"><span>'+esc(g.name)+'</span><small>'+(!g.configured?'未配置':!g.enabled?'已关闭':groupDiff(g)+' 项不同')+'</small></button>').join('')+'<button type="button" class="add" data-action="add">＋ 添加分组</button></aside>';}
+function groupControls(c){const g=c.g;return '<section class="card"><header class="card-header"><div><h2>'+esc(g.name)+'</h2><p>'+g.count+' 个 CC 账号 · 本组请求按 API Key 的分组应用策略</p></div><button type="button" class="btn" data-action="'+(g.configured?'remove':'configure')+'">'+(g.configured?'移除分组配置':'添加分组配置')+'</button></header>'+(g.configured?'<div class="row"><div><div class="label">启用分组覆盖</div><p class="desc">关闭后全部使用全局值；分组与账号自定义均保留。</p></div><button type="button" class="switch" role="switch" aria-label="启用分组覆盖" aria-checked="'+g.enabled+'" data-action="enable"></button></div><div class="row"><div><div class="label">允许账号级别覆盖</div><p class="desc">关闭时账号自定义不生效，已保存的值保留。</p></div><button type="button" class="switch" role="switch" aria-label="允许账号级别覆盖" aria-checked="'+g.allow+'" data-action="allow" '+(!g.enabled?'disabled':'')+'></button></div>':'<div class="plain">此分组没有单独配置，使用全局默认，账号自定义不生效。</div>')+'</section>'+(!g.enabled&&g.configured?'<div class="banner">分组覆盖已关闭。下面展示保存着的设置；本组实际使用全局默认，重新启用后恢复。</div>':'');}
+function accountControls(c){return '<section class="card"><header class="card-header"><div><h2>CC 特性</h2><p>账号自定义 → 本次请求 API Key 的分组 → 全局。</p></div>'+(c.allowed?'<div class="seg" role="group" aria-label="账号配置方式"><button type="button" data-action="follow-account" aria-pressed="'+(!c.a.custom)+'">跟随默认</button><button type="button" data-action="custom-account" aria-pressed="'+c.a.custom+'">自定义</button></div>':'<span class="tag">只读</span>')+'</header><div class="row"><div><div class="label">按分组查看</div><p class="desc">预览不同分组的生效值；账号自定义只有一份。</p></div><select class="select" id="preview-group" aria-label="按分组查看">'+Object.entries(groups).map(([id,g])=>'<option value="'+id+'" '+(ui.preview===id?'selected':'')+'>'+esc(g.name)+'（'+(g.configured&&g.enabled&&g.allow?'允许覆盖':'只读')+'）</option>').join('')+'</select></div></section>'+(!c.allowed?'<div class="banner">该分组不允许账号覆盖，下面只展示生效值及来源。账号已保存的自定义仍保留。</div>':!c.a.custom?'<div class="banner">当前跟随默认。选择自定义后可逐项修改；切回跟随默认会清空全部账号自定义值。</div>':'<div class="banner">只修改需要覆盖的项，其余保持跟随。切回跟随默认会清空全部账号自定义值。</div>');}
+function render(){
+ const c=context();
+ document.getElementById('scenes').innerHTML=scenes.map(([id,name])=>'<button type="button" data-scene="'+id+'" aria-pressed="'+(ui.scene===id)+'">'+name+'</button>').join('');
+ let header='<div class="crumb">'+(ui.page==='account'?'账号 › 编辑账号 '+esc(c.a.name):'CCGateway 管理 › 设置')+'</div>';
+ if(ui.page!=='account')header+='<div class="tabs"><span>连接与授权</span><span>网络配置</span><span class="on">CC 特性</span><span>部署与运行</span></div><nav class="subtabs" aria-label="配置层级"><button type="button" data-page="global" class="'+(ui.page==='global'?'on':'')+'">全局默认</button><button type="button" data-page="group" class="'+(ui.page==='group'?'on':'')+'">分组默认 · '+Object.values(groups).filter(g=>g.configured).length+'</button></nav>';
+ const content=(ui.page==='group'?groupControls(c):ui.page==='account'?accountControls(c):'')+contentCards(c)+(ui.page==='global'?'<section class="card fixed-version"><span>CLI 版本</span><span class="code">2.1.304</span></section>':'')+behaviorRules()+'<div class="footer"><span>下一次请求生效 · 不重建容器</span><button type="button" class="btn primary" data-action="save">'+(ui.page==='account'?'保存账号':'保存全部配置')+'</button></div>';
+ const sidebar=ui.page==='group'?groupSidebar():ui.page==='account'?'<aside class="aside"><div class="nav-item">连接</div><div class="nav-item">模型</div><div class="nav-item on"><span>CC 特性</span><small>'+Object.keys(c.a.values).length+' 项自定义</small></div><div class="nav-item">调度与限制</div></aside>':'';
+ document.getElementById('app').innerHTML=header+(sidebar?'<div class="layout">'+sidebar+'<div>'+content+'</div></div>':content);
+ document.querySelectorAll('details[data-part]').forEach(el=>el.addEventListener('toggle',()=>{ui.open[el.dataset.part]=el.open;}));
+}
+function notify(message){document.getElementById('notice').textContent=message;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{document.getElementById('notice').textContent='';},3300);}
+function chooseScene(id){ui.scene=id;if(id==='global')ui.page='global';else if(id.startsWith('acc')){ui.page='account';ui.account=id==='acc-custom'?'custom':'locked';ui.preview=id==='acc-custom'?'pro':'max';}else{ui.page='group';ui.group=id==='group'?'max':id==='group-direct'?'pro':'team';}render();}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b||b.disabled)return;
+ if(b.dataset.scene){chooseScene(b.dataset.scene);return;}
+ if(b.dataset.page){ui.page=b.dataset.page;ui.scene=ui.page==='global'?'global':'group';render();return;}
+ if(b.dataset.group){ui.group=b.dataset.group;ui.scene=ui.group==='pro'?'group-direct':ui.group==='team'?'group-off':'group';render();return;}
+ const c=context();
+ if(b.dataset.field){const id=b.dataset.field;if(!c.editable||(id!=='mode'&&c.effective.mode==='direct'))return;if(b.dataset.value==='follow')delete c.values[id];else c.values[id]=b.dataset.value;render();document.querySelector('[data-field="'+id+'"][data-value="'+b.dataset.value+'"]')?.focus({preventScroll:true});return;}
+ switch(b.dataset.action){
+ case 'enable':c.g.enabled=!c.g.enabled;break;
+ case 'allow':if(c.g.enabled)c.g.allow=!c.g.allow;break;
+ case 'remove':c.g.configured=false;c.g.enabled=false;c.g.allow=false;c.g.values={};notify('预览：已移除该分组配置，账号自定义保留。');break;
+ case 'configure':c.g.configured=true;c.g.enabled=true;c.g.allow=false;break;
+ case 'add':if(!groups.extra){groups.extra={name:'新分组',count:0,configured:true,enabled:true,allow:false,values:{}};}ui.group='extra';notify('预览：已加入示例分组。正式界面从现有分组中选择。');break;
+ case 'follow-account':if(c.allowed){c.a.custom=false;c.a.values={};}break;
+ case 'custom-account':if(c.allowed)c.a.custom=true;break;
+ case 'save':notify('设计稿预览：未写入后端，当前修改只保留在页面内存。');return;
+ default:return;
+ }
+ render();
+});
+document.addEventListener('change',e=>{if(e.target.id==='preview-group'){ui.preview=e.target.value;render();}});
+render();
+</script>
+</body>
+</html>

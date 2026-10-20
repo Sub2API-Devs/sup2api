@@ -110,8 +110,14 @@ func buildEnvironmentSpans(text string) [][]int {
 // preserves opaque RawMessages, including numbers, signed thinking, tool
 // arguments, tool results, media and system lifecycle/inline-tool fields.
 func transformBuildAttachments(raw []byte, sources features.BuildAttachmentSources, facts map[string]string) ([]byte, []Object, error) {
+	if err := validateBuildContent(raw); err != nil {
+		return nil, nil, err
+	}
 	if err := sources.Validate(); err != nil {
 		return nil, nil, err
+	}
+	if sources.RequiresV2() {
+		return nil, nil, fmt.Errorf("extended environment policy requires CLI v2 content adapter")
 	}
 	if !sources.UsesWorker() {
 		return raw, nil, nil
@@ -211,8 +217,9 @@ func transformBuildAttachments(raw []byte, sources features.BuildAttachmentSourc
 		}
 		changed := false
 		for i, block := range blocks {
+			var text string
 			var kind string
-			if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || json.Unmarshal(block["text"], &text) != nil {
+			if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || !isJSONString(block["text"]) || json.Unmarshal(block["text"], &text) != nil {
 				continue
 			}
 			if next := rewrite(text, fmt.Sprintf("%s[%d]", where, i), system); next != text {

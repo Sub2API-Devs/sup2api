@@ -41,10 +41,12 @@ type requestErrorFrame struct {
 // Drain stderr continuously without blocking the child or retaining native
 // diagnostics. Only one complete, bounded protocol line can become a response.
 type requestErrorReader struct {
-	line     []byte
-	dropping bool
-	invalid  bool
-	frame    *requestErrorFrame
+	line            []byte
+	dropping        bool
+	invalid         bool
+	frame           *requestErrorFrame
+	diagnostic      *requestDiagnostic
+	diagnosticCount int
 }
 
 func (p *requestErrorReader) Write(data []byte) (int, error) {
@@ -80,6 +82,10 @@ func (p *requestErrorReader) Write(data []byte) (int, error) {
 }
 
 func (p *requestErrorReader) accept(line []byte) {
+	if bytes.HasPrefix(line, []byte(requestContentDiagnosticPrefix)) {
+		p.acceptContentDiagnostic(line[len(requestContentDiagnosticPrefix):])
+		return
+	}
 	if !bytes.HasPrefix(line, []byte(requestErrorPrefix)) {
 		return
 	}

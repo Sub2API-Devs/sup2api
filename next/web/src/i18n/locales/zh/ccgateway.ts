@@ -1,4 +1,27 @@
 export default {
+  layers: {
+    global: '全局', group: '分组', account: '账号', follow: '跟随默认', custom: '自定义',
+    globalTab: '全局默认', groupTab: '分组默认', selectGroup: '按分组查看',
+    enabled: '启用分组覆盖', allowAccount: '允许账号级别覆盖',
+    disabledHint: '分组覆盖已关闭，实际请求使用全局配置；已保存的分组值保留。',
+    allowHint: '关闭后忽略账号自定义，已保存的账号值保留。',
+    accountHint: '一份账号自定义应用于允许覆盖的分组。切回跟随默认会清空全部自定义；随账号表单一起保存。',
+    newAccount: '创建后默认跟随全局／分组配置。保存账号后可按分组预览与自定义。',
+    source: '来源：{source}', effective: '当前生效：{value}', differences: '{n} 项差异',
+    billing: '计费归属', billingHint: '仅调整 cc_version 与 cc_entrypoint；服务端使用本次请求的 CLI 原生生成值。',
+    cc_version: '版本标识', cc_entrypoint: '入口标识',
+    runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
+    environmentHint: '只修改已识别的完整环境或环境更新字段。客户端没有发送的环境字段不补齐。',
+    executionHint: '服务端来源只改变模型看到的说明，不改变工具执行位置。其他提示内容保持原样。',
+    rules: '处理规则',
+    rulesHint: '兼容动态上下文从 system 移到 user；保留原位置。连续会话只处理本次携带的环境及更新。环境缺失时跳过；计费字段选择服务端时允许补齐。格式不支持或存在歧义时保留原文并记录原因；必要服务端值获取失败时明确报错。',
+    previewFailed: '无法读取生效配置，请重试；草稿已保留。', retry: '重新读取', loading: '正在读取生效配置…',
+    conflict: '配置已被其他操作更新。草稿已保留，请重新读取后核对再保存。',
+    latestSaved: '当前已保存的配置（供核对）', reviewLatest: '已读取最新版本；下方保留你的草稿。请与当前已保存配置核对后再保存。',
+    invalid: 'CC 特性配置不合法，请检查来源选项。',
+    disabledReasons: { no_group: '请选择账号所属分组查看生效配置。', group_unconfigured: '该分组尚未允许账号覆盖。', group_disabled: '该分组未启用覆盖，使用全局配置。', account_override_disabled: '该分组不允许账号覆盖。' },
+    fields: { platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
+  },
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {
     title: 'Claude Code 版本与请求模式', mode: '透传/转发', version: '版本指定',
@@ -10,7 +33,8 @@ export default {
     hint: '为请求中的环境信息选择来源。只替换已识别的对应字段；默认保留客户端内容。',
     directHint: 'direct 模式原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
     client: '保留客户端',
-    worker: '使用 Worker',
+    worker: '使用服务端',
+    erase: '擦除',
     kept: '工作目录、额外目录、Git、Shell、CLAUDE.md 和其他附件保留客户端内容。工具仍由客户端执行。'
   },
   cli: {
@@ -217,12 +241,19 @@ export default {
     appHint: '上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）。'
   },
   workers: {
+    pairedUpdate: '升级 Worker + CLI 2.1.304',
+    pairedConfirmTitle: '成对升级 Worker 与 CLI 2.1.304？',
+    pairedConfirmMessage: '将对各账号执行 Worker 与 CLI 2.1.304 成对激活并核对健康状态，不重建账号容器、不改变登录身份。旧 Worker 请先使用单独的 worker 更新完成程序升级，再执行成对激活。有活动请求的账号可能跳过；请查看逐账号结果。',
+    pairedHint: '304 策略需先完成 Worker + CLI 成对激活。旧 Worker 先点左侧更新程序，再成对激活；旧 native 模式在这两步之间仅提供维护管理，模型请求暂不可用。不重建账号容器。存量 302 配置不在后台自动迁移，保存 CC 配置才切换目标 304；保存配置不会自动升级运行程序。',
+    pairedDone: 'Worker + CLI 升级检查已完成，请查看各账号结果',
+    pairedTitle: 'Worker + CLI 2.1.304 成对升级结果',
+    activeCLI: '实际 CLI', online: '在线', offline: '未确认在线',
     groupTitle: 'Worker 更新',
     update: '更新现有账号的 worker',
     updating: '正在逐个更新账号的 worker，账号较多时可能需要较长时间…',
     hint: '用当前生效的业务容器镜像原地更新所有现有账号的 worker 程序，可用于重试“正在处理请求”或“容器未运行”的账号。',
     confirmTitle: '更新现有账号的 worker？',
-    confirmMessage: '只替换各账号容器内的 worker 程序并重启该容器，不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求的账号会等待最多 2 分钟，仍忙则跳过。',
+    confirmMessage: '只替换各账号容器内的 worker 程序并重启该容器，不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求的账号会等待最多 2 分钟，仍忙则跳过。旧 native 模式升级后进入维护状态，需要继续成对激活 Worker + CLI 2.1.304 才能恢复模型请求。',
     done: 'worker 更新已完成，请查看各账号结果',
     failed: 'worker 更新失败',
     title: 'worker 更新结果',

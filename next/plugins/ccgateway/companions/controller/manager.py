@@ -51,7 +51,7 @@ IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1')
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1')
 # Same reference rules as the core (CONTRACTS §49.16).
 IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
@@ -558,7 +558,15 @@ class Manager:
                 existing = self.owned(aid, 'app')
             # Defaults apply to new containers only. A tag/digest change must
             # never replace a working account (including after controller restart).
-            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and (cli is None or state.get('cli') == cli):
+            active = state.get('active_runtime') or {}
+            active_matches = (existing and active.get('container_identity') == container_identity(existing)
+                              and cli is not None and cli['version'] == active.get('version'))
+            saved_cli = state.get('cli') or {}
+            same_runtime = (cli is None or saved_cli == cli or active_matches or
+                            cli.get('version') == saved_cli.get('version') and
+                            cli.get('request_mode') in ('direct', 'build') and
+                            saved_cli.get('request_mode') in ('direct', 'build'))
+            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and same_runtime:
                 current = state.get('environment', {'locale': '', 'timezone': ''})
                 # State written before in-place changes: the values the
                 # container was created with are the last applied ones.
@@ -570,6 +578,10 @@ class Manager:
                     state.pop('environment_desired', None)
                 self.save(aid, state)
                 return state
+            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and not same_runtime:
+                raise InvalidCLIProfile('CLI version changes require a packaged in-place Worker+CLI activation')
+            if existing and active.get('container_identity') == container_identity(existing) and cli is not None and not same_runtime:
+                raise InvalidCLIProfile('activate a packaged Worker+CLI pair before selecting a different CLI version')
         # Credential/network changes must not incidentally upgrade the image.
         if existing is None and cli is None and os.getenv('CCG_DEFAULT_CLI_VERSION'):
             try:
@@ -954,7 +966,7 @@ class Manager:
             current_image = image_of(self.owned(aid, 'app'))
         with contextlib.suppress(docker.errors.DockerException):
             target_id = self.app_image_id()
-        return {'account_id': aid, 'container': self.name(aid, 'app'), 'cli': state.get('cli'),
+        return {'account_id': aid, 'container': self.name(aid, 'app'), 'cli': state.get('cli'), 'active_runtime': state.get('active_runtime'),
                 'current_image': current_image, 'target_image': self.app_image,
                 'image_update_available': bool(current_image and target_id and current_image != target_id),
                 'target_image_available': bool(target_id),
@@ -1127,6 +1139,9 @@ class Manager:
 
     def update_worker(self, aid, desired):
         """POST /accounts/<key>/worker {"image": ref} (CONTRACTS §53.7)."""
+        if isinstance(desired, dict) and 'components' in desired:
+            from runtime_updates import RuntimeUpdates
+            return RuntimeUpdates(self).update(aid, desired)
         check(aid)
         ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
         if not valid_image(ref):

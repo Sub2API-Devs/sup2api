@@ -10,6 +10,7 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
+	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	SchemaVersion          int                             `json:"schema_version"`
 	UnknownField           string                          `json:"unknown_field"`
@@ -51,7 +52,15 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "build", CLIVersion: "2.1.302", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "build", CLIVersion: "2.1.304", Betas: features.BetaRules()}
+}
+
+// Used only when no encrypted configuration has ever been stored. Historic
+// configurations with omitted source maps retain client defaults.
+func newRequestPolicy() RequestPolicy {
+	p := defaultRequestPolicy()
+	p.BuildAttachmentSources = features.BuildAttachmentSources{"platform_name": "worker", "os_version": "worker"}
+	return p
 }
 
 // EffectiveRequestPolicy is the policy sent to the Worker. Features the
@@ -82,7 +91,7 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 		p.RelayMode = "build"
 	}
 	if p.CLIVersion == "" {
-		p.CLIVersion = "2.1.302"
+		p.CLIVersion = "2.1.304"
 	}
 	p.Betas = defaultRequestPolicy().Betas
 	return p
@@ -93,6 +102,9 @@ func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
+	if err := p.BuildBillingSources.Validate(); err != nil {
+		return err
+	}
 	if err := p.BuildAttachmentSources.Validate(); err != nil {
 		return err
 	}

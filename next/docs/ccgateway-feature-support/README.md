@@ -1,5 +1,9 @@
 # CCGateway 当前文档
 
+2026-10-20 专项设计：[CC 特性分层配置与请求内容转换设计](CC-FEATURE-LAYERS-DESIGN.md)，涵盖计费归属、10 个环境字段、连续会话与客户端动态 system 排除参数兼容。配套 [UI 设计稿](cc-feature-layers-mockup.html) 和 [讨论记录](CC-FEATURE-LAYERS-DISCUSSION.md)。这是待实施设计，不代表已部署。
+
+304 组装专项验收：[按原生组装链路分组的测试方案](CC-304-ASSEMBLY-TEST-PLAN.md)。包含 AST／REA 证据、真实官方请求回放、逐字段合同与失败门禁；已修复本轮已确认缺陷，新制品 75/75 合同通过，完整原生分支覆盖仍单独列明范围。
+
 状态：2026-10-09，Core .78 / Plugin .14 / Worker .80 / Controller .48。**整体兼容工作尚未完成。**
 
 日常只需按目的读以下文件：

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -36,22 +38,56 @@ type workerResult struct {
 	SHA256         string `json:"sha256,omitempty"`
 	PreviousSHA256 string `json:"previous_sha256,omitempty"`
 	Reason         string `json:"reason,omitempty"`
+	CLIVersion     string `json:"cli_version,omitempty"`
+	CLIPatch       string `json:"cli_patch,omitempty"`
+	CLISHA256      string `json:"cli_sha256,omitempty"`
+	Online         *bool  `json:"online,omitempty"`
 }
 
 // workersReport is the answer of POST /system/ccgateway/runtime/workers and
 // the workers field of an applied app upload. reason is set (and results
 // empty) when the runtimes could not be listed.
 type workersReport struct {
-	Image   string         `json:"image"`
-	Results []workerResult `json:"results"`
-	Reason  string         `json:"reason,omitempty"`
+	Image      string         `json:"image"`
+	Results    []workerResult `json:"results"`
+	Reason     string         `json:"reason,omitempty"`
+	Components []string       `json:"components,omitempty"`
+	CLIVersion string         `json:"cli_version,omitempty"`
+}
+
+type workerUpdateOptions struct {
+	Components []string `json:"components,omitempty"`
+	CLIVersion string   `json:"cli_version,omitempty"`
+}
+
+func (o workerUpdateOptions) paired() bool {
+	return slices.Equal(o.Components, []string{"worker", "cli"})
+}
+func (o workerUpdateOptions) validate() error {
+	if o.Components == nil && o.CLIVersion == "" {
+		return nil
+	}
+	if slices.Equal(o.Components, []string{"worker"}) && o.CLIVersion == "" {
+		return nil
+	}
+	if o.paired() && o.CLIVersion == "2.1.304" {
+		return nil
+	}
+	return errors.New("components must be worker-only, or worker and cli with cli_version 2.1.304")
 }
 
 // updateWorkers updates the worker of every runtime the controller lists,
 // one after the other. A failure of one runtime never stops the others; only
 // failing to list them is an error. The caller holds the install lock.
 func (s *Service) updateWorkers(ctx context.Context, cfg Config, image string) (workersReport, *core.Error) {
-	report := workersReport{Image: image, Results: []workerResult{}}
+	return s.updateWorkersWithOptions(ctx, cfg, image, workerUpdateOptions{})
+}
+
+func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, image string, options workerUpdateOptions) (workersReport, *core.Error) {
+	report := workersReport{Image: image, Results: []workerResult{}, Components: options.Components, CLIVersion: options.CLIVersion}
+	if err := options.validate(); err != nil {
+		return report, core.ErrInvalidArgument.WithMessage(err.Error())
+	}
 	// An older controller answers the unknown route 404 not_found, the same
 	// as a missing container: ask what it supports first.
 	healthCtx, cancelHealth := context.WithTimeout(ctx, 30*time.Second)
@@ -61,6 +97,9 @@ func (s *Service) updateWorkers(ctx context.Context, cfg Config, image string) (
 		return report, reasonError(core.ErrUnavailable, "controller_unhealthy")
 	}
 	if !h.has("worker-update") {
+		return report, reasonError(core.ErrUnavailable, "controller_outdated")
+	}
+	if options.paired() && !h.has("runtime-pair-update-v1") {
 		return report, reasonError(core.ErrUnavailable, "controller_outdated")
 	}
 	var list struct {
@@ -88,7 +127,7 @@ func (s *Service) updateWorkers(ctx context.Context, cfg Config, image string) (
 		if ctx.Err() != nil {
 			r = workerResult{Key: key, Status: "failed", Reason: "timeout"}
 		} else {
-			r = s.updateWorker(ctx, cfg, key, image)
+			r = s.updateWorkerWithOptions(ctx, cfg, key, image, options)
 		}
 		if id, ok := accounts[key]; ok {
 			r.AccountID = &id
@@ -96,7 +135,14 @@ func (s *Service) updateWorkers(ctx context.Context, cfg Config, image string) (
 		if r.Status == "updated" || r.Status == "rolled_back" {
 			// The restart rebuilt the container's network namespace; the
 			// controller restores it, a reconcile makes sure.
-			s.Kick(key)
+			if options.paired() {
+				// A paired activation already verifies the same container.
+				// Reconcile could still carry the deliberately retained old
+				// global CLI version until the operator saves new policy.
+				s.forgetAccount(accounts[key], key)
+			} else {
+				s.Kick(key)
+			}
 		}
 		report.Results = append(report.Results, r)
 	}
@@ -137,8 +183,24 @@ func (s *Service) runtimeAccounts(ctx context.Context, keys []string) map[string
 // updateWorker calls the controller's POST /accounts/<key>/worker, at most
 // workerLimit.
 func (s *Service) updateWorker(ctx context.Context, cfg Config, key, image string) workerResult {
+	return s.updateWorkerWithOptions(ctx, cfg, key, image, workerUpdateOptions{})
+}
+
+func (s *Service) updateWorkerWithOptions(ctx context.Context, cfg Config, key, image string, options workerUpdateOptions) workerResult {
 	failed := func(reason string) workerResult { return workerResult{Key: key, Status: "failed", Reason: reason} }
-	raw, _ := json.Marshal(map[string]string{"image": image})
+	if options.validate() != nil {
+		return failed("invalid_request")
+	}
+	request := struct {
+		Image string `json:"image"`
+		workerUpdateOptions
+	}{Image: image, workerUpdateOptions: options}
+	if !options.paired() {
+		// Old controllers accept exactly {"image"}; explicit worker-only is
+		// equivalent to the existing default and needs no new wire fields.
+		request.workerUpdateOptions = workerUpdateOptions{}
+	}
+	raw, _ := json.Marshal(request)
 	header := http.Header{}
 	header.Set("Content-Type", "application/json")
 	callCtx, cancel := context.WithTimeout(ctx, workerLimit)
@@ -173,11 +235,31 @@ func (s *Service) updateWorker(ctx context.Context, cfg Config, key, image strin
 		SHA256         string `json:"sha256"`
 		PreviousSHA256 string `json:"previous_sha256"`
 		Reason         string `json:"reason"`
+		CLIVersion     string `json:"cli_version"`
+		CLIPatch       string `json:"cli_patch"`
+		CLISHA256      string `json:"cli_sha256"`
+		Online         *bool  `json:"online"`
 	}
 	if json.Unmarshal(body, &answer) != nil || !workerStatuses[answer.Status] {
 		return failed("invalid_response")
 	}
+	if options.paired() && (answer.Status == "updated" || answer.Status == "unchanged") &&
+		(answer.CLIVersion != options.CLIVersion || !sha256Pattern.MatchString(answer.CLISHA256) || !cliVersionPattern.MatchString(answer.CLIPatch)) {
+		return failed("invalid_response")
+	}
 	r := workerResult{Key: key, Status: answer.Status}
+	if options.paired() {
+		r.Online = answer.Online
+		if answer.CLIVersion == options.CLIVersion {
+			r.CLIVersion = answer.CLIVersion
+		}
+		if cliVersionPattern.MatchString(answer.CLIPatch) {
+			r.CLIPatch = answer.CLIPatch
+		}
+		if sha256Pattern.MatchString(answer.CLISHA256) {
+			r.CLISHA256 = answer.CLISHA256
+		}
+	}
 	if sha256Pattern.MatchString(answer.SHA256) {
 		r.SHA256 = answer.SHA256
 	}
@@ -198,8 +280,35 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	var in struct {
 		Image string `json:"image"`
+		workerUpdateOptions
 	}
-	if e != nil || (len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &in) != nil) {
+	decode := func() error {
+		if len(bytes.TrimSpace(raw)) == 0 {
+			return nil
+		}
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return errors.New("body must be object")
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+		for _, value := range fields {
+			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return errors.New("null update fields are not accepted")
+			}
+		}
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.DisallowUnknownFields()
+		if err := d.Decode(&in); err != nil {
+			return err
+		}
+		if err := d.Decode(new(any)); err != io.EOF {
+			return errors.New("unexpected trailing JSON")
+		}
+		return nil
+	}
+	if e != nil || decode() != nil || in.workerUpdateOptions.validate() != nil {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
 		return
 	}
@@ -240,7 +349,7 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 		return
 	}
 	defer release()
-	report, err := s.updateWorkers(ctx, cfg, image)
+	report, err := s.updateWorkersWithOptions(ctx, cfg, image, in.workerUpdateOptions)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -259,7 +368,14 @@ func (s *Service) auditWorkers(ctx context.Context, report workersReport) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	uid, _ := core.UserID(ctx)
-	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.workers", "system", "ccgateway", map[string]any{"image": report.Image, "statuses": counts}); e != nil {
+	detail := map[string]any{"image": report.Image, "statuses": counts}
+	if len(report.Components) > 0 {
+		detail["components"] = report.Components
+	}
+	if report.CLIVersion != "" {
+		detail["cli_version"] = report.CLIVersion
+	}
+	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.workers", "system", "ccgateway", detail); e != nil {
 		slog.Error("CCGateway audit failed", "action", "runtime.workers")
 	}
 }

@@ -6,21 +6,60 @@ import (
 )
 
 const BuildAttachmentCapability = "build_attachment_sources_v1"
+const BuildAttachmentCapabilityV2 = "build_attachment_sources_v2"
+const BuildBillingCapability = "build_billing_sources_v1"
+const BuildContentPreservationCapability = "build_content_preservation_v1"
+const RequestPolicyModeCapability = "request_policy_mode_v1"
+
+var BuildAttachmentFields = []string{"platform_name", "os_version", "shell", "primary_directory", "additional_directories", "git_repository", "worktree", "scratchpad_directory", "github_cli", "agent_proxy"}
 
 // BuildAttachmentSources is deliberately separate from the retired agent
 // policy: upgrading a Worker must not activate old saved erase/replace rules.
-// Missing fields keep the client's text. Only observed environment fields
-// have a Worker source; paths, Git and tool execution context remain client-owned.
+// Missing fields keep the client's text. Extended fields and erasure require
+// the versioned CLI content adapter; the v1 Worker path only owns platform/OS.
 type BuildAttachmentSources map[string]string
 
 func (p BuildAttachmentSources) Validate() error {
 	for field, source := range p {
-		if (field != "platform_name" && field != "os_version") || (source != "client" && source != "worker") {
+		if !slices.Contains(BuildAttachmentFields, field) || (source != "client" && source != "worker" && source != "erase") {
 			return fmt.Errorf("invalid build_attachment_sources: %s=%s", field, source)
 		}
 	}
 	return nil
 }
+
+func (p BuildAttachmentSources) RequiresV2() bool {
+	for field, source := range p {
+		if source != "client" && (source == "erase" || field != "platform_name" && field != "os_version") {
+			return true
+		}
+	}
+	return false
+}
+
+func (p BuildAttachmentSources) RequiresWorker() bool { return p.UsesWorker() }
+
+type BuildBillingSources map[string]string
+
+func (p BuildBillingSources) Validate() error {
+	for field, source := range p {
+		if (field != "cc_version" && field != "cc_entrypoint") || (source != "client" && source != "worker") {
+			return fmt.Errorf("invalid build_billing_sources: %s=%s", field, source)
+		}
+	}
+	return nil
+}
+
+func (p BuildBillingSources) UsesWorker() bool {
+	for _, source := range p {
+		if source == "worker" {
+			return true
+		}
+	}
+	return false
+}
+
+func (p BuildBillingSources) RequiresWorker() bool { return p.UsesWorker() }
 
 func (p BuildAttachmentSources) UsesWorker() bool {
 	for _, source := range p {

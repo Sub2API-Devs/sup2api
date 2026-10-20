@@ -5,6 +5,7 @@ import type { Account, AccountType } from '@/api/types'
 import AccountEditor from './AccountEditor.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
+import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import { SSwitch } from '@sub2api/ui'
 
@@ -52,6 +53,24 @@ describe('account container environment', () => {
     mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
     mocks.patch.mockResolvedValue(savedAccount())
     mocks.post.mockResolvedValue(savedAccount())
+  })
+
+  it('saves a feature draft atomically with account fields and omits unchanged policy', async () => {
+    const w = render(savedAccount())
+    await flushPromises()
+    const features = w.getComponent(AccountFeatureSettings)
+    const original = { mode: 'follow', overrides: {}, revision: 7 }
+    features.vm.$emit('update:modelValue', original)
+    features.vm.$emit('loaded', original)
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('cc_feature_policy')
+    const draft = { mode: 'custom', overrides: { build_billing_sources: { cc_version: 'worker' } }, revision: 7 }
+    features.vm.$emit('update:modelValue', draft)
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/1', expect.objectContaining({ name: 'saved', cc_feature_policy: draft }))
+    expect(mocks.post).not.toHaveBeenCalled()
   })
 
   it('uses the declared preparation endpoint and locks the prepared environment', async () => {

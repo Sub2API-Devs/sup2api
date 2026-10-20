@@ -1,4 +1,27 @@
 export default {
+  layers: {
+    global: 'Global', group: 'Group', account: 'Account', follow: 'Inherit defaults', custom: 'Customize',
+    globalTab: 'Global defaults', groupTab: 'Group defaults', selectGroup: 'Preview for group',
+    enabled: 'Enable group overrides', allowAccount: 'Allow account overrides',
+    disabledHint: 'Group overrides are disabled. Requests use global settings; saved group values are retained.',
+    allowHint: 'When disabled, saved account overrides are retained but ignored.',
+    accountHint: 'One account policy applies to groups that allow overrides. Returning to inherit clears all overrides. Changes save with the account form.',
+    newAccount: 'New accounts inherit defaults. Save the account before previewing or customizing its policy.',
+    source: 'Source: {source}', effective: 'Effective: {value}', differences: '{n} differences',
+    billing: 'Billing attribution', billingHint: 'Only cc_version and cc_entrypoint are changed. Server values use native CLI generation for this request.',
+    cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
+    runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
+    environmentHint: 'Only recognized full environment or update fields are changed. Missing client environment fields are not added.',
+    executionHint: 'Server sources change descriptions visible to the model, not where tools execute. Other prompt content is retained.',
+    rules: 'Processing rules',
+    rulesHint: 'Dynamic sections moved from system to user stay in place. Continuous conversations process only the supplied environment and updates. Missing environment is skipped; server billing fields may be inserted. Unsupported or ambiguous content is preserved and diagnosed. Required server-source failures return an error.',
+    previewFailed: 'Could not read effective settings. Retry; your draft is retained.', retry: 'Reload', loading: 'Loading effective settings…',
+    conflict: 'Settings changed elsewhere. Your draft is retained. Reload and review before saving.',
+    latestSaved: 'Current saved settings for comparison', reviewLatest: 'Latest revision loaded. Your draft remains below. Compare it with the current saved settings before saving.',
+    invalid: 'Invalid CC feature settings. Check source options.',
+    disabledReasons: { no_group: 'Select an account group to preview its settings.', group_unconfigured: 'This group has not enabled account overrides.', group_disabled: 'This group uses global settings.', account_override_disabled: 'This group does not allow account overrides.' },
+    fields: { platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
+  },
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Passthrough / forwarding', version: 'Pinned version',
@@ -10,7 +33,8 @@ export default {
     hint: 'Choose the source of environment information in requests. Only recognized fields are replaced; client content is kept by default.',
     directHint: 'Direct mode forwards the body unchanged. Saved choices apply when you switch back to build.',
     client: 'Keep client',
-    worker: 'Use Worker',
+    worker: 'Use server',
+    erase: 'Erase',
     kept: 'Working directories, Git, shell, CLAUDE.md and other attachments keep client content. Tools still run on the client.'
   },
   cli: {
@@ -217,12 +241,19 @@ export default {
     appHint: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place (containers are not recreated).'
   },
   workers: {
+    pairedUpdate: 'Upgrade Worker + CLI 2.1.304',
+    pairedConfirmTitle: 'Upgrade Worker and CLI 2.1.304 together?',
+    pairedConfirmMessage: 'Activate Worker and CLI 2.1.304 together and check each account runtime. Containers and login identities are retained. Bootstrap older workers using the worker-only action first. Busy accounts may be skipped; review the per-account results.',
+    pairedHint: '304 policies require paired Worker + CLI activation first. Bootstrap older workers using the worker-only action, then activate the pair. Legacy native mode provides maintenance management only between these steps; model requests are temporarily unavailable. Containers are retained. Existing 302 settings are not migrated in the background. Saving CC settings selects 304 but does not upgrade running programs.',
+    pairedDone: 'Worker + CLI upgrade checks completed. Review the per-account results.',
+    pairedTitle: 'Worker + CLI 2.1.304 upgrade results',
+    activeCLI: 'Active CLI', online: 'Online', offline: 'Not confirmed online',
     groupTitle: 'Worker update',
     update: 'Update the worker of existing accounts',
     updating: 'Updating the workers one account at a time; with many accounts this can take a while…',
     hint: 'Updates the worker program of every existing account in place with the effective app image; use it to retry accounts that were busy or not running.',
     confirmTitle: 'Update the worker of existing accounts?',
-    confirmMessage: 'Only the worker program inside each account container is replaced and that container restarted; no container is recreated and sign-ins are kept. The restart briefly interrupts requests in progress on that account; an account handling a request is waited for at most 2 minutes, then skipped.',
+    confirmMessage: 'Only the worker program inside each account container is replaced and that container restarted; no container is recreated and sign-ins are kept. The restart briefly interrupts requests in progress on that account; an account handling a request is waited for at most 2 minutes, then skipped. Legacy native mode enters maintenance after this update; activate Worker + CLI 2.1.304 together to restore model requests.',
     done: 'The worker update finished; see the result of each account',
     failed: 'Updating the workers failed',
     title: 'Worker update results',

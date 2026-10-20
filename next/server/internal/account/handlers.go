@@ -154,10 +154,11 @@ type GroupRef struct {
 
 // View is the API representation of an account.
 type View struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	PluginKey string `json:"plugin_key"`
-	Type      string `json:"type"`
+	CCFeaturePolicy *ccgateway.AccountFeaturePolicy `json:"cc_feature_policy,omitempty"`
+	ID              int64                           `json:"id"`
+	Name            string                          `json:"name"`
+	PluginKey       string                          `json:"plugin_key"`
+	Type            string                          `json:"type"`
 	// TypeLabel is the account type label; null when the type is no longer
 	// registered (plugin disabled or uninstalled).
 	TypeLabel         manifest.LocalizedText `json:"type_label"`
@@ -360,6 +361,13 @@ func (s *Service) fullView(ctx context.Context, id int64, scope *int64) (*View, 
 	if vs[0].Credentials, err = s.credentialView(a); err != nil {
 		return nil, err
 	}
+	if a.PluginKey == "ccgateway" && (a.Type == "managed" || a.Type == "apikey") {
+		p, err := ccgateway.LoadAccountFeaturePolicy(ctx, s.d.DB.Pool, id)
+		if err != nil {
+			return nil, err
+		}
+		vs[0].CCFeaturePolicy = &p
+	}
 	return vs[0], nil
 }
 
@@ -501,11 +509,12 @@ func (n *nullable[T]) UnmarshalJSON(b []byte) error {
 }
 
 type input struct {
-	Name      *string         `json:"name"`
-	PluginKey string          `json:"plugin_key"`
-	Type      string          `json:"type"`
-	GroupIDs  *[]int64        `json:"group_ids"`
-	ProxyID   nullable[int64] `json:"proxy_id"`
+	CCFeaturePolicy *ccgateway.AccountFeaturePolicy `json:"cc_feature_policy"`
+	Name            *string                         `json:"name"`
+	PluginKey       string                          `json:"plugin_key"`
+	Type            string                          `json:"type"`
+	GroupIDs        *[]int64                        `json:"group_ids"`
+	ProxyID         nullable[int64]                 `json:"proxy_id"`
 	// ProxyURL names a proxy by address instead of id (CONTRACTS §21.4); it
 	// is looked up or created when the account is saved. Blank means absent.
 	ProxyURL       *string            `json:"proxy_url"`
@@ -561,6 +570,7 @@ func (in *input) changedFields() []string {
 	set("tpm_limit", in.TPMLimit != nil)
 	set("credentials", in.hasCredentials())
 	set("settings", len(in.Settings) > 0)
+	set("cc_feature_policy", in.CCFeaturePolicy != nil)
 	return out
 }
 
@@ -659,6 +669,13 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 			if in.ProxyID.Set {
 				add("proxy_url", "conflict", "proxy_url and proxy_id cannot both be given", "proxy_url 与 proxy_id 不能同时给出")
 			}
+		}
+	}
+	if in.CCFeaturePolicy != nil {
+		if create {
+			add("cc_feature_policy", "invalid", "configure CC features after account creation", "请在账号创建后配置 CC 特性")
+		} else if err := in.CCFeaturePolicy.Validate(); err != nil {
+			add("cc_feature_policy", "invalid", err.Error(), "CC 特性配置无效")
 		}
 	}
 	if create && len(in.Credentials) == 0 {
@@ -1091,6 +1108,11 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	if in.CCFeaturePolicy != nil && (cur.PluginKey != "ccgateway" || (cur.Type != "managed" && cur.Type != "apikey")) {
+		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "cc_feature_policy", Code: "invalid", Message: "CC features are only available for CCGateway accounts."}))
+		return
+	}
+	featureOnly := in.CCFeaturePolicy != nil && len(in.changedFields()) == 1
 	var groupIDs []int64
 	if in.GroupIDs != nil {
 		groupIDs = uniqueIDs(*in.GroupIDs)
@@ -1259,6 +1281,14 @@ func (s *Service) update(c *gin.Context) {
 				return err
 			}
 		}
+		if in.CCFeaturePolicy != nil {
+			if s.d.CCGateway == nil {
+				return core.ErrUnavailable.WithMessage("CC feature configuration unavailable.")
+			}
+			if err := s.d.CCGateway.SaveAccountFeatures(ctx, tx, id, *in.CCFeaturePolicy); err != nil {
+				return err
+			}
+		}
 		if proxyID != nil {
 			if err := s.auditProxy(ctx, tx, proxyCreated, *proxyID, uid, id); err != nil {
 				return err
@@ -1272,7 +1302,7 @@ func (s *Service) update(c *gin.Context) {
 		if in.Name != nil {
 			name = *in.Name
 		}
-		if bt.Type.Lifecycle != nil {
+		if bt.Type.Lifecycle != nil && !featureOnly {
 			if err := markLifecyclePending(ctx, tx, id); err != nil {
 				return err
 			}
@@ -1295,7 +1325,9 @@ func (s *Service) update(c *gin.Context) {
 		s.evictQuotaCache(ctx, id)
 	}
 	s.changed(ctx, id)
-	s.kickCCGateway(id, cur.PluginKey, cur.Type)
+	if !featureOnly {
+		s.kickCCGateway(id, cur.PluginKey, cur.Type)
+	}
 	v, err := s.fullView(ctx, id, scope)
 	if err != nil {
 		httpapi.Fail(c, err)

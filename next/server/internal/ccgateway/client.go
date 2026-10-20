@@ -80,9 +80,23 @@ func (s *Service) ModelClientFor(id int64, proxyID *int64) *http.Client {
 	return s.ModelClient(id, proxy)
 }
 
+// ModelRequestContext carries the authenticated API key group, never a client
+// header. Other callers (notably probes) retain global-only semantics.
+type ModelRequestContext struct {
+	AccountID int64
+	ProxyID   *int64
+	GroupID   int64
+}
+
+func (s *Service) ModelClientForRequest(in ModelRequestContext) *http.Client {
+	return &http.Client{Transport: modelTransport{s: s, accountID: in.AccountID, groupID: in.GroupID, proxySelected: in.ProxyID != nil && *in.ProxyID > 0},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
 type modelTransport struct {
 	s             *Service
 	accountID     int64
+	groupID       int64
 	proxySelected bool
 }
 
@@ -201,13 +215,17 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
 	if !resource {
-		policy := cfg.WorkerRequestPolicy(t.accountID)
+		policy, err := t.s.resolvedWorkerPolicy(ctx, cfg, t.accountID, t.groupID)
+		if err != nil {
+			finish()
+			return nil, false, err
+		}
 		if err := validateRequestPolicy(policy); err != nil {
 			finish()
 			return nil, false, err
 		}
-		if policy.RelayMode == "build" && policy.BuildAttachmentSources.UsesWorker() {
-			if err := requireBuildAttachmentCapability(ctx, client, base, modelKey, policy.CLIVersion); err != nil {
+		if (path == "/v1/messages" || path == "/v1/ccgateway/probe") && (policy.RelayMode == "direct" || policy.CLIVersion == "2.1.304" || policy.BuildAttachmentSources.UsesWorker() || policy.BuildAttachmentSources.RequiresV2() || policy.BuildBillingSources.UsesWorker() || policy.RelayMode != cfg.EffectiveRequestPolicy().RelayMode) {
+			if err := requireRequestPolicyCapabilities(ctx, client, base, modelKey, policy); err != nil {
 				finish()
 				return nil, false, err
 			}

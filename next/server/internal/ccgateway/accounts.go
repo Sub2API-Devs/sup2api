@@ -567,6 +567,14 @@ func callerScope(ctx context.Context, allKeys ...string) *int64 {
 // itself; own-level callers only reach accounts they created, others are 404.
 // Arbitrary remote paths are never accepted.
 func (s *Service) accountManage(c *gin.Context) {
+	if c.Param("action") == "cc-features" {
+		if c.Request.Method != "GET" {
+			httpapi.Fail(c, core.ErrNotFound)
+			return
+		}
+		s.accountFeaturePreview(c)
+		return
+	}
 	c.Header("Cache-Control", "no-store")
 	id, e := strconv.ParseInt(c.Param("id"), 10, 64)
 	if e != nil || id <= 0 {

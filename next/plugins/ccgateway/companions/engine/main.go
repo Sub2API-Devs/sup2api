@@ -18,25 +18,25 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 type Gateway struct {
-	RequestMode   string
-	credits       *creditRegistry
-	resources     *resourceBroker
-	Runner        *Runner
-	Cache         *HistoryCache
-	Key           string
-	Timeout       time.Duration
-	Slots         chan struct{}
-	NativeAllowed map[string]bool
-	RequestLogDir string
-	RequestLogs   *requestLogStore
-	mu            sync.Mutex
-	busy          map[string]bool
-	messageIDs    *messageOwnership
+	RequestMode     string
+	CLIInfo         cliRequestInfo
+	MaintenanceOnly bool
+	credits         *creditRegistry
+	resources       *resourceBroker
+	Runner          *Runner
+	Cache           *HistoryCache
+	Key             string
+	Timeout         time.Duration
+	Slots           chan struct{}
+	NativeAllowed   map[string]bool
+	RequestLogDir   string
+	RequestLogs     *requestLogStore
+	mu              sync.Mutex
+	busy            map[string]bool
+	messageIDs      *messageOwnership
 }
 
 func apiError(w http.ResponseWriter, status int, kind, msg string) {
@@ -64,11 +64,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/healthz" && r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/json")
-		capabilities := []string{}
-		if g.RequestMode == "build" {
-			capabilities = append(capabilities, features.BuildAttachmentCapability)
-		}
-		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version, "capabilities": capabilities})
+		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version, "cli_patch": g.CLIInfo.Patch, "cli_sha256": g.CLIInfo.SHA256, "capabilities": g.requestCapabilities()})
 		return
 	}
 	diagnostic := newRequestDiagnostic(w, r)
@@ -90,7 +86,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if mode == "" {
 			mode = "native"
 		}
-		if policy.RelayMode != "" && policy.RelayMode != mode || policy.CLIVersion != "" && policy.CLIVersion != g.runner(r.Context()).Version {
+		modeMismatch := policy.RelayMode != "" && policy.RelayMode != mode
+		if modeMismatch && mode != "native" && (policy.RelayMode == "build" || policy.RelayMode == "direct") && g.CLIInfo.supports("request_"+policy.RelayMode) {
+			modeMismatch = false
+		}
+		if modeMismatch || policy.CLIVersion != "" && policy.CLIVersion != g.runner(r.Context()).Version {
 			apiError(w, 409, "configuration_error", "Worker CLI version/mode differs from gateway configuration; reconcile the runtime")
 			return
 		}
@@ -654,6 +654,9 @@ func Serve() error {
 	if err := verifyPinnedCLI(cli, version, Options{RequestMode: g.RequestMode, ExpectedCLIVersion: os.Getenv("WORKER_CLI_VERSION"), ExpectedCLISHA256: os.Getenv("CCG_CLI_SHA256"), ExpectedCLIPatch: os.Getenv("CCG_CLI_PATCH")}); err != nil {
 		return err
 	}
+	g.CLIInfo, _ = readCLIRequestInfo(cli, version, Options{})
+	g.CLIInfo.SHA256 = os.Getenv("CCG_CLI_SHA256")
+	g.Runner.WorkingDirectory = envDefault("CCG_WORKING_DIRECTORY", root)
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
 	relayHost := "127.0.0.1"
 	if ip != nil && ip.IsLoopback() {

@@ -1,5 +1,8 @@
 # Claude Code mods 工具注入扩展
 
+本次开发目标已升级为 **2.1.304 / `ccgateway-v12-feature-policy`**，新增独立 SHA 绑定补丁、12 字段来源策略、外部历史保真以及原生归属捕获。旧 296/302 patcher 保留；下方 302 上线记录属于历史状态。本次没有自动部署。详见 [304 实现与验证记录](../../../../docs/CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)。
+
+
 工作树中的错误透传修复（尚未发布）：HTTP 错误继续保留原状态码和正文；本地异常的 message 按 CC 实际返回值传递，不脱敏、不改写、不添加消息截断，不增加代理原因推断或额外探测。Worker 通过内部 `X-CCGateway-Error-Source` 传递已有错误来源，核心账号测试保留该来源，不再附加插件分类解释。既有 stderr 协议帧总大小限制、控制台错误正文预览及最近测试记录长度限制仍保留。普通上游响应不能设置这个内部来源；旧 Worker 未提供来源时沿用原行为。生效需同时发布 CLI 支持模块、Worker 和核心／前端。
 
 当前线上为 **2.1.302 / `ccgateway-v11-native-build-parameters`**，随 ccgateway **0.1.67** 部署至 21/30/31/32，Core 保持 0.1.168。build 删除客户端 parameters 的 extraBody 整包覆盖，改由原生接口处理生成参数；补充 temperature/output_config.format 映射。未映射字段不再自动透传，需要完整 body 保真时使用 direct。37 项支持模块测试、19 次 Linux 原生 ELF 隔离抓包通过；21 号真实搜索请求和页面摘要请求均 HTTP 200。详见 [302 文档第 19/20 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。

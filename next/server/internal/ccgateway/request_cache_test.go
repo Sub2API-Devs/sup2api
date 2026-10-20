@@ -115,6 +115,7 @@ func TestRequestCacheControllerMode(t *testing.T) {
 	defer srv.Close()
 	cfg := testPanelConfig("127.0.0.1", srv.Listener.Addr().(*net.TCPAddr).Port, "")
 	cfg.Scheme = "http"
+	cfg.RequestPolicy = &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}
 	plain, _ := json.Marshal(cfg)
 	encrypted, _ := cipher.Encrypt(plain, configAAD)
 	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
@@ -276,7 +277,7 @@ func TestDisabledRuntimeIsNotRewrittenEveryPass(t *testing.T) {
 	}))
 	defer server.Close()
 	t.Setenv("CCGATEWAY_URL", server.URL)
-	cfg, _ := json.Marshal(Config{Mode: "local", AccountRuntimes: true, AdminKey: "controller-secret"})
+	cfg, _ := json.Marshal(Config{Mode: "local", AccountRuntimes: true, AdminKey: "controller-secret", RequestPolicy: &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}})
 	encrypted, _ := cipher.Encrypt(cfg, configAAD)
 	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
 	if _, e := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey, envelope); e != nil {

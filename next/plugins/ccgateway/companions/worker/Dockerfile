@@ -25,7 +25,7 @@ FROM node:22-bookworm-slim
 
 # The release directory is produced by cli-mods/package-release.cjs. Never
 # download an unpatched latest CLI while building the account runtime.
-ARG CLAUDE_VERSION=2.1.302
+ARG CLAUDE_VERSION=2.1.304
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl locales tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY cli-mods/release/ /opt/ccgateway/cli/
@@ -53,6 +53,7 @@ WORKDIR /work
 ENV CLAUDE_CONFIG_DIR=/work/config \
     CLAUDE_SECURESTORAGE_CONFIG_DIR=/work/config \
     DISABLE_AUTOUPDATER=1 \
+    CCG_WORKING_DIRECTORY=/work \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
     CCG_BIND=0.0.0.0:8787 \
     CCG_DATA_DIR=/work/data \

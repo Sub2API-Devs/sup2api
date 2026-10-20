@@ -52,6 +52,20 @@ export function parseRequestOptions(args) {
   return options;
 }
 
+// JSON.parse may round a nonintegral token such as 1.00000000000000001 to 1.
+// Check only that integer-looking Number result against the original decimal
+// token; ordinary fractional values retain the established JSON Number rules.
+function exactIntegerToken(token) {
+  const match = /^-?(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(token);
+  if (!match) return false;
+  const fraction = match[2] ?? '', digits = match[1] + fraction;
+  if (/^0+$/.test(digits)) return true;
+  const removed = fraction.length - Number(match[3] ?? 0);
+  if (removed <= 0) return true;
+  if (removed > digits.length) return false;
+  return /^0+$/.test(digits.slice(-removed));
+}
+
 export function parseRequestJSON(raw, mode) {
   if (mode === 'build') {
     // A native JS builder cannot round-trip an unsafe integer. Reject it
@@ -60,7 +74,7 @@ export function parseRequestJSON(raw, mode) {
     for (const match of raw.matchAll(tokens)) {
       if (match[1] === undefined) continue;
       const value = Number(match[1]);
-      if (!Number.isFinite(value) || Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      if (!Number.isFinite(value) || Number.isInteger(value) && (!Number.isSafeInteger(value) || !exactIntegerToken(match[1]))) {
         throw Error('request --build cannot represent an unsafe JSON number; use --direct');
       }
     }

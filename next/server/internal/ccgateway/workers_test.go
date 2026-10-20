@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -27,6 +28,68 @@ type fakeWorkers struct {
 }
 
 var workerPath = regexp.MustCompile(`^/accounts/([^/]+)/worker$`)
+
+func TestRuntimePairedWorkersExplicitAndAudited(t *testing.T) {
+	requests := []map[string]any{}
+	pairedCap := true
+	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			caps := []string{"worker-update"}
+			if pairedCap {
+				caps = append(caps, "runtime-pair-update-v1")
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"features": caps})
+		case "/accounts":
+			_, _ = w.Write([]byte(`{"runtimes":[{"key":"21"},{"key":"22"}]}`))
+		case "/accounts/21/worker", "/accounts/22/worker":
+			var in map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
+			requests = append(requests, in)
+			if r.URL.Path == "/accounts/22/worker" {
+				_, _ = w.Write([]byte(`{"status":"rolled_back","reason":"rollback_unhealthy","online":false}`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "updated", "sha256": strings.Repeat("b", 64), "cli_version": "2.1.304", "cli_patch": "ccgateway-v12-feature-policy", "cli_sha256": strings.Repeat("c", 64), "online": true})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	admin := f.user("pair@test")
+	path := "/system/ccgateway/runtime/workers"
+	body := `{"components":["worker","cli"],"cli_version":"2.1.304","image":"ccgateway:304"}`
+	code, out := f.request(admin, "POST", path, body)
+	require.Equal(t, 200, code, out)
+	require.Len(t, requests, 2)
+	require.Equal(t, []any{"worker", "cli"}, requests[0]["components"])
+	require.Equal(t, "2.1.304", requests[0]["cli_version"])
+	require.Equal(t, "2.1.304", data(out)["cli_version"])
+	results := workerResults(t, out)
+	require.Equal(t, "ccgateway-v12-feature-policy", results["21"]["cli_patch"])
+	require.Equal(t, strings.Repeat("c", 64), results["21"]["cli_sha256"])
+	require.Equal(t, "rolled_back", results["22"]["status"])
+	require.Equal(t, false, results["22"]["online"])
+	require.Equal(t, "rollback_unhealthy", results["22"]["reason"])
+	require.Empty(t, f.s.kick)
+	var n int
+	require.NoError(t, f.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='ccgateway.runtime.workers' AND detail->>'cli_version'='2.1.304' AND detail->'components'='["worker","cli"]'::jsonb`).Scan(&n))
+	require.Equal(t, 1, n)
+	for _, bad := range []string{`{"components":[]}`, `{"components":["cli"]}`, `{"components":["cli","worker"],"cli_version":"2.1.304"}`, `{"components":["worker","cli"],"cli_version":"2.1.302"}`, `{"cli_version":"2.1.304"}`, `{"path":"/tmp/evil"}`, `{"components":["worker","cli"],"cli_version":"2.1.304","target":"/etc"}`} {
+		code, out = f.request(admin, "POST", path, bad)
+		require.Equal(t, 400, code, out)
+	}
+	require.Len(t, requests, 2)
+	code, out = f.request(admin, "POST", path, `{"components":["worker"]}`)
+	require.Equal(t, 200, code, out)
+	require.Len(t, requests, 4)
+	require.NotContains(t, requests[2], "components")
+	require.NotContains(t, requests[2], "cli_version")
+	pairedCap = false
+	code, out = f.request(admin, "POST", path, body)
+	require.Equal(t, 503, code, out)
+	require.Equal(t, "controller_outdated", reason(out))
+	require.Len(t, requests, 4)
+}
 
 func (c *fakeWorkers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer controller-secret" {

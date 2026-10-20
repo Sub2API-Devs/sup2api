@@ -83,7 +83,9 @@ func newRuntimeFixture(t *testing.T, controller http.HandlerFunc) *runtimeFixtur
 // runtimes turns per-account runtimes on or off.
 func (f *runtimeFixture) runtimes(on bool) {
 	f.t.Helper()
-	cfg, _ := json.Marshal(Config{Mode: "local", AccountRuntimes: on, AdminKey: "controller-secret"})
+	// The controller fixture models the pre-feature-policy runtime. Tests
+	// exercising 304 capabilities opt in explicitly.
+	cfg, _ := json.Marshal(Config{Mode: "local", AccountRuntimes: on, AdminKey: "controller-secret", RequestPolicy: &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}})
 	encrypted, _ := f.cipher.Encrypt(cfg, configAAD)
 	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
 	if _, e := f.db.Pool.Exec(context.Background(), `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey, envelope); e != nil {

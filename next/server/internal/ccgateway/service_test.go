@@ -121,7 +121,7 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		t.Fatalf("account_runtimes not forced on: %+v %v", saved, e)
 	}
 	// A legacy shared-container configuration saved before §53.9 still runs.
-	plain, _ := json.Marshal(Config{Mode: "local", AdminKey: "secret-admin", APIKey: "secret-api"})
+	plain, _ := json.Marshal(Config{Mode: "local", AdminKey: "secret-admin", APIKey: "secret-api", RequestPolicy: &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}})
 	encrypted, _ := cipher.Encrypt(plain, configAAD)
 	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
 	if _, e := db.Pool.Exec(context.Background(), `UPDATE settings SET value=$2 WHERE key=$1`, settingKey, envelope); e != nil {

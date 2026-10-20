@@ -1,0 +1,166 @@
+// Hash-bound native patch integration plus extracted final-object execution.
+// Native model/profile collaborators are explicit stubs here; the real
+// Worker/CLI assembly suite remains the end-to-end acceptance check.
+import assert from 'node:assert/strict';
+import { before, after, test } from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import vm from 'node:vm';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '../../../../../..');
+const mods = path.dirname(here);
+const baseline = path.join(root, 'artifacts/claude-2.1.304/linux-restored');
+const packageFile = process.env.CCG_BABEL_PACKAGE || path.join(root, 'next/web/package.json');
+const parser = createRequire(packageFile)('@babel/parser');
+const sha = data => crypto.createHash('sha256').update(data).digest('hex');
+const plain = value => JSON.parse(JSON.stringify(value));
+let ownedDirectory, output, finalObject, extraBodyExpression, patchManifest;
+
+function find(node, predicate) {
+  const matches = [];
+  function visit(value) {
+    if (!value || typeof value !== 'object') return;
+    if (predicate(value)) matches.push(value);
+    for (const [key, child] of Object.entries(value)) {
+      if (['loc', 'extra', 'comments', 'leadingComments', 'trailingComments'].includes(key)) continue;
+      if (Array.isArray(child)) child.forEach(visit);
+      else if (child && typeof child === 'object') visit(child);
+    }
+  }
+  visit(node);
+  return matches;
+}
+function one(matches, label) {
+  assert.equal(matches.length, 1, `Expected unique AST anchor: ${label}`);
+  return matches[0];
+}
+
+before(() => {
+  assert(fs.existsSync(baseline), 'Recovered 2.1.304 baseline is required; this test must not silently pass without it');
+  ownedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg304-wire-test-'));
+  output = path.join(ownedDirectory, 'patched');
+  execFileSync(process.execPath, [path.join(mods, 'patch-cli-2.1.304.cjs'), baseline, output], {
+    env: { ...process.env, CCG_BABEL_PACKAGE: packageFile },
+    encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 120000,
+  });
+  patchManifest = JSON.parse(fs.readFileSync(path.join(output, 'ccgateway-patch.json'), 'utf8'));
+  const source = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  const tree = parser.parse(source, { sourceType: 'module' });
+  const qmn = one(find(tree, n => n.type === 'FunctionDeclaration' && n.id?.name === 'qmn'), 'qmn');
+  const uXn = one(find(qmn, n => n.type === 'VariableDeclarator' && n.id?.name === 'uXn'), 'qmn.uXn');
+  const body = one(find(uXn.init, n => n.type === 'VariableDeclarator' && n.id?.name === '$c'), 'qmn.uXn.$c');
+  const extra = one(find(uXn.init, n => n.type === 'VariableDeclarator' && n.id?.name === 'Xa'), 'qmn.uXn.Xa');
+  finalObject = source.slice(body.init.start, body.init.end);
+  extraBodyExpression = source.slice(extra.init.start, extra.init.end);
+});
+
+after(() => {
+  if (!ownedDirectory) return;
+  // Delete only the fresh test-owned directory immediately inside OS temp.
+  const target = path.resolve(ownedDirectory), parent = path.resolve(os.tmpdir());
+  assert.equal(path.dirname(target), parent);
+  assert(path.basename(target).startsWith('ccg304-wire-test-'));
+  fs.rmSync(target, { recursive: true, force: true });
+});
+
+function assemble({ external, tools, extra = {}, choice = { type: 'auto' }, thinking = { type: 'disabled' } }) {
+  let extraBodyCalls = 0;
+  const messages = [{ role: 'user', content: [{ type: 'text', text: 'original user' }] }];
+  const system = [{ type: 'text', text: 'original system' }];
+  const nativeTools = [{ name: 'native_reordered', description: 'native' }];
+  const J = {
+    ccgatewayBuildOnly: external, ccgatewayWireTools: tools,
+    ccgatewayWireMessages: messages, ccgatewaySystemBlocks: system, model: 'claude-sonnet-4-6',
+  };
+  const context = {
+    structuredClone, J, yl: [],
+    z2() { extraBodyCalls++; return structuredClone(extra); },
+    fC: value => value, Rk: null, Gf: messages, jh: { system, tools: nativeTools },
+    CT: choice, OF: false, yBe: () => ({ user_id: 'native-stub-identity' }),
+    db: 128, kf: thinking, hse: 1, MA: null, oF: false, o5: false,
+    iy: false, Zk: null, Kw: null, qm: {}, Il: { effort: 'high' },
+    VO: undefined, vR: () => false,
+  };
+  vm.createContext(context);
+  context.Xa = vm.runInContext(`(${extraBodyExpression})`, context);
+  const result = vm.runInContext(`(${finalObject})`, context);
+  return { result, extraBodyCalls, messages, system, nativeTools };
+}
+
+test('304 patch binds baseline hashes and emits a matching native module hash', () => {
+  const profile = JSON.parse(fs.readFileSync(path.join(mods, 'profiles/linux-x64-2.1.304.json'), 'utf8'));
+  for (const [name, hashes] of Object.entries(patchManifest.files)) {
+    assert.equal(hashes.before, profile.modules[name]);
+    assert.equal(hashes.before, sha(fs.readFileSync(path.join(baseline, name))));
+    assert.equal(hashes.after, sha(fs.readFileSync(path.join(output, name))));
+  }
+});
+
+test('external native final object preserves ToolSearch, mixed order, missing description and opaque fields', () => {
+  const tools = [
+    { name: 'ToolSearch', input_schema: { type: 'object' } },
+    { type: 'web_search_20250305', name: 'web_search', max_uses: 3 },
+    { name: 'deferred_custom', defer_loading: true, input_schema: { type: 'object' }, opaque: { nested: [1, 2] } },
+    { name: 'cached_custom', description: '', cache_control: { type: 'ephemeral' }, input_schema: { type: 'object' } },
+  ];
+  const original = structuredClone(tools);
+  const { result } = assemble({ external: true, tools });
+  assert.deepEqual(plain(result.tools), original);
+  assert(!Object.hasOwn(result.tools[0], 'description'));
+  result.tools[2].opaque.nested.push(3);
+  assert.deepEqual(tools, original, 'native output must not alias the adapter input');
+});
+
+test('external tool absence and explicit empty list remain distinguishable', () => {
+  const absent = assemble({ external: true, tools: undefined }).result;
+  const empty = assemble({ external: true, tools: [] }).result;
+  assert(!Object.hasOwn(absent, 'tools'));
+  assert.deepEqual(plain(empty.tools), []);
+});
+
+test('external build ignores EXTRA_BODY before it can replace content, tools or native parameters', () => {
+  const tools = [{ name: 'original', input_schema: { type: 'object' } }];
+  const extra = {
+    model: 'override', messages: [], system: 'override', tools: [], max_tokens: 777,
+    thinking: { type: 'adaptive' }, metadata: { user_id: 'override' },
+    tool_choice: { type: 'none' }, temperature: 0.99, unknown_extra: true,
+    output_config: { effort: 'low' },
+  };
+  const { result, extraBodyCalls, messages, system } = assemble({ external: true, tools, extra });
+  assert.equal(extraBodyCalls, 0, 'do not evaluate process-global EXTRA_BODY at all for external build');
+  assert.deepEqual(plain(result.messages), messages);
+  assert.deepEqual(plain(result.system), system);
+  assert.deepEqual(plain(result.tools), tools);
+  assert.equal(result.model, 'claude-sonnet-4-6');
+  assert.equal(result.max_tokens, 128);
+  assert.deepEqual(plain(result.thinking), { type: 'disabled' });
+  assert.deepEqual(plain(result.tool_choice), { type: 'auto' });
+  assert.deepEqual(plain(result.metadata), { user_id: 'native-stub-identity' });
+  assert.equal(result.temperature, 1);
+  assert.deepEqual(plain(result.output_config), { effort: 'high' });
+  assert(!Object.hasOwn(result, 'unknown_extra'));
+});
+
+test('ordinary native CLI retains its own tools and EXTRA_BODY behavior', () => {
+  const native = assemble({ external: false, tools: [{ name: 'external_ignored' }] });
+  assert.equal(native.extraBodyCalls, 1);
+  assert.deepEqual(plain(native.result.tools), native.nativeTools);
+  const overridden = assemble({ external: false, extra: { max_tokens: 777, unknown_extra: true, tools: [{ name: 'env' }] } });
+  assert.equal(overridden.extraBodyCalls, 1);
+  assert.equal(overridden.result.max_tokens, 777);
+  assert.equal(overridden.result.unknown_extra, true);
+  assert.deepEqual(plain(overridden.result.tools), [{ name: 'env' }]);
+});
+
+test('external tools override leaves native-derived thinking and tool-choice values intact', () => {
+  const choice = { type: 'auto' }, thinking = { type: 'adaptive', display: 'updates' };
+  const { result } = assemble({ external: true, tools: [{ name: 'ToolSearch' }], choice, thinking });
+  assert.deepEqual(plain(result.tool_choice), choice);
+  assert.deepEqual(plain(result.thinking), thinking);
+});

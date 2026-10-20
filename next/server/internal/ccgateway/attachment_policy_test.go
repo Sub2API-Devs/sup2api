@@ -29,7 +29,7 @@ func TestBuildAttachmentPolicySaveAndForward(t *testing.T) {
 	require.Equal(t, want, loaded.WorkerRequestPolicy(21).BuildAttachmentSources)
 	public, _ := json.Marshal(loaded.Public())
 	require.Contains(t, string(public), `"build_attachment_sources":{"os_version":"worker","platform_name":"client"}`)
-	for _, sources := range []features.BuildAttachmentSources{{"cwd": "worker"}, {"os_version": "erase"}} {
+	for _, sources := range []features.BuildAttachmentSources{{"cwd": "worker"}, {"os_version": "unknown"}} {
 		bad := *saved.RequestPolicy
 		bad.BuildAttachmentSources = sources
 		_, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &bad}, saved)
@@ -43,10 +43,11 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 		capable       bool
 		blocked       bool
 	}{
-		{"build", "2.1.302", false, true},
+		{"build", "2.1.304", false, true},
 		{"build", "2.1.296", true, true},
-		{"build", "2.1.302", true, false},
-		{"direct", "2.1.302", false, false},
+		{"build", "2.1.304", true, false},
+		{"direct", "2.1.304", true, false},
+		{"direct", "2.1.304", false, true},
 	} {
 		t.Run(tc.mode+"/"+tc.version+"/"+strconv.FormatBool(tc.capable), func(t *testing.T) {
 			probes, modelRequests := 0, 0
@@ -57,7 +58,7 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 					probes++
 					caps := []string{}
 					if tc.capable {
-						caps = append(caps, features.BuildAttachmentCapability)
+						caps = append(caps, features.BuildAttachmentCapability, features.RequestPolicyModeCapability, features.BuildContentPreservationCapability)
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": tc.version, "capabilities": caps})
 					return
@@ -65,7 +66,11 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 				modelRequests++
 				var policy RequestPolicy
 				require.NoError(t, json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy))
-				require.Equal(t, "worker", policy.BuildAttachmentSources["os_version"])
+				if tc.mode == "build" {
+					require.Equal(t, "worker", policy.BuildAttachmentSources["os_version"])
+				} else {
+					require.Empty(t, policy.BuildAttachmentSources)
+				}
 				body, _ := io.ReadAll(r.Body)
 				require.Equal(t, `{"model":"fixture","messages":[{"role":"user","content":"hello"}]}`, string(body))
 				_, _ = w.Write([]byte(`{"ok":true}`))
@@ -82,18 +87,14 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer inbound-not-upstream")
 			res, err := svc.ModelClient().Do(req)
 			if tc.blocked {
-				require.ErrorContains(t, err, "attachment conversion")
+				require.ErrorContains(t, err, "capabilities")
 				require.Equal(t, 0, modelRequests)
 			} else {
 				require.NoError(t, err)
 				res.Body.Close()
 				require.Equal(t, 1, modelRequests)
 			}
-			if tc.mode == "build" {
-				require.Equal(t, 1, probes)
-			} else {
-				require.Zero(t, probes)
-			}
+			require.Equal(t, 1, probes)
 		})
 	}
 }
@@ -102,6 +103,7 @@ func TestNativePolicyDropsRetiredControlsOnSaveReload(t *testing.T) {
 	var cfg Config
 	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_field":"ignore","unknown_beta":"reject","attachment_source":"both","attachment_sources":{"environment":"gateway"},"environment_fields":{"workingDirectory":"gateway"},"unknown_client_attachment":"ignore","unknown_gateway_attachment":"pass","tool_search":"false","custom_tool_prefix":"client-tools","thinking_disabled_compat":"omit"}}`), &cfg))
 	for range 2 {
+		cfg.FeatureRevision = 0 // each iteration models a fresh persistence target
 		saved, err := mergeConfig(cfg, Config{Mode: "disabled"})
 		require.NoError(t, err)
 		for _, value := range []any{saved, saved.Public(), saved.WorkerRequestPolicy(26)} {

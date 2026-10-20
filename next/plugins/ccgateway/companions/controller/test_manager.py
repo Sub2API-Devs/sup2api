@@ -729,7 +729,7 @@ class HandlerTests(Base):
         self.assertEqual(self.call('GET', '/health'),
                          (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
                                 'controller_image': '', 'network_policy_version': 1,
-                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1']}))
+                            'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1']}))
 
     def test_explicit_account_delete_purges_data(self):
         self.apply('21')

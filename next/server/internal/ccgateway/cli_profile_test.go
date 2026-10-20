@@ -44,8 +44,8 @@ func TestPinnedCLIDesiredRevisionAndControllerConfig(t *testing.T) {
 	save("direct")
 	changed, err := f.s.desired(context.Background(), id, true)
 	require.NoError(t, err)
-	require.NotEqual(t, d.Revision, changed.Revision)
-	require.Equal(t, "direct", changed.CLI.RequestMode)
+	require.Equal(t, d.Revision, changed.Revision)
+	require.Equal(t, "build", changed.CLI.RequestMode)
 }
 
 func TestPinnedRequestModesSaveReload(t *testing.T) {
@@ -59,7 +59,7 @@ func TestPinnedRequestModesSaveReload(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &reloaded))
 		got := reloaded.WorkerRequestPolicy(21)
 		require.Equal(t, mode, got.RelayMode)
-		require.Equal(t, "2.1.302", got.CLIVersion)
+		require.Equal(t, "2.1.304", got.CLIVersion)
 		require.Equal(t, mode, reloaded.EffectiveRequestPolicy().RelayMode)
 	}
 	for _, version := range []string{"../2.1.302", "latest", "2.1.302\n", "2.1.302;sh"} {

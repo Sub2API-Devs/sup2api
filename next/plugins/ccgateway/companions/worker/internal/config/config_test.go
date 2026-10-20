@@ -28,7 +28,7 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-func TestRequestModeDefaultsToBuildAndRejectsNative(t *testing.T) {
+func TestRequestModeDefaultsToBuildAndBootstrapsNativeForManagementOnly(t *testing.T) {
 	for _, mode := range []string{"", "build", "direct"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("CCG_REQUEST_MODE", mode)
@@ -46,8 +46,12 @@ func TestRequestModeDefaultsToBuildAndRejectsNative(t *testing.T) {
 		})
 	}
 	t.Setenv("CCG_REQUEST_MODE", "native")
-	if _, err := Load(); err == nil {
-		t.Fatal("retired agent mode accepted")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.MaintenanceOnly || cfg.RequestMode != "build" {
+		t.Fatal("retired native mode must only expose management bootstrap")
 	}
 }
 

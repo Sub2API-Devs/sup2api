@@ -162,6 +162,87 @@ mounts, data volume and authorization stay as they are.
    `Args` are compared with their initial values throughout; a difference stops
    the update with `container_changed`.
 
+### Paired Worker + CLI activation
+
+Controllers declaring `runtime-pair-update-v1` also accept
+`POST /accounts/<key>/worker` with
+`{"image":"trusted:release","components":["worker","cli"],"cli_version":"2.1.304"}`.
+The original image-only operation remains Worker-only. Arbitrary filesystem
+paths and partial component lists are not accepted.
+
+The selected image must contain the Worker and a hash-bound CLI release
+manifest under `/opt/ccgateway/cli/manifest.json`. The controller validates
+the staged CLI's actual `--ccgateway-info` identity and content capabilities,
+then switches both programs without recreating the account container.
+The existing Worker must support authenticated `/admin/runtime`
+pause/validate/resume leases. An older Worker must first receive the
+Worker-only upgrade; an unavailable pause API never falls back to container
+replacement or killing active requests.
+For a pinned legacy container with `CCG_REQUEST_MODE=native`, the new
+Worker starts in management-only bootstrap mode: health and maintenance are
+available, model requests return 409 until the packaged pair is activated.
+The legacy CLI must still pass its existing version/hash/patch checks and
+reside under the trusted CLI root. For older images without a manifest,
+the controller records the sealed binary's observed identity in a rollback
+manifest without changing that binary.
+This rollback snapshot requires the old CLI to actually declare both
+`request_direct` and `request_build`; a version string or native agent-loop
+support is not enough. An official/unpatched or native-only CLI is not
+automatically eligible for this bootstrap path. A rollback after native
+bootstrap returns to the old CLI with the bootstrap Worker in management-only
+mode, not to the retired native agent path; restore the separately backed-up
+original Worker if returning to that original service is required.
+
+For an existing 302 account, upgrade the controller to a build that packages
+`runtime_updates.py` and reports `runtime-pair-update-v1` first. The core must
+understand the paired update operation before using its UI/API for this step.
+Temporarily remove the account from new request routing and drain active calls
+before the initial Worker-only bootstrap: an old Worker without maintenance
+leases cannot atomically close admission during its replacement. Then activate
+the packaged 304 pair, update the core's effective CLI selection to 304, and
+check identity/capabilities and a request before restoring traffic. Changing
+only the core profile before activation is rejected; leaving its explicit
+302 request policy after activation causes version-mismatch rejection.
+Controller defaults now select 304 for newly created runtimes. Existing
+containers and explicit historical CLI selections remain unchanged.
+
+The root-owned `active-runtime.json` selects a manifest relative to the trusted
+CLI root and a version. New Worker startup validates all ancestor ownership,
+write permissions, regular-file types, mode support and SHA before accepting
+that selection. Without a pointer, the existing pinned environment remains
+the fallback. A short maintenance lease can accompany the selection to keep
+model admission paused across restart until health, patch, SHA and capabilities
+have been checked. Failure restores the previous pointer (or its equivalent
+pinned selection) together with the previous Worker.
+Lease expiry never reopens model admission. If the controller is interrupted,
+an administrator can authenticate to `GET /admin/runtime` to inspect/recover
+the pause token and explicitly resume after checking the installed pair.
+Both recovery requests use `Authorization: Bearer <account-admin-key>`.
+The status response includes `paused`, `lease`, `active_requests` and `expired`;
+after confirming no controller transaction is still switching files and the
+installed Worker/CLI identity is healthy, send
+`POST /admin/runtime {"action":"resume","lease":"<returned-token>"}`.
+If the active pointer still carries a lease, first complete or roll back its
+artifact selection and atomically remove the persisted lease after verifying
+the pair; otherwise a later restart will correctly re-enter the paused state.
+An expired token can resume explicitly, but cannot validate/continue a stale
+deployment transaction. A failed partial rollback must first restore and
+verify a complete pair; the status endpoint does not repair artifact files.
+Rollback also carries the pause through restart; an incomplete or unhealthy
+rollback remains paused. After resume may have succeeded, routing/readiness
+failure only leaves `online: false`, and never restarts newly accepted work.
+
+Successful results contain `status: updated`, Worker `sha256`, `cli_version`,
+`cli_patch`, `cli_sha256` and `online`. The controller stores `active_runtime`
+separately from the original container profile. Merely changing request mode
+or selecting the already activated CLI does not recreate the container.
+Selecting another CLI requires explicit paired activation.
+
+`test_runtime_updates.py` covers isolated paired-switch, failed verification,
+busy, rollback and path-contract cases. Linux permission enforcement and the
+actual Worker → patched CLI → local mock path require the separate runtime
+acceptance probe; mocked transactions do not establish real Docker rollback.
+
 ## Installation
 
 The core installs and upgrades the remote runtime itself: open the CCGateway

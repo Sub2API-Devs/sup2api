@@ -57,6 +57,9 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 			out.Catalog = features.RequestCatalog(out.ExecutionModes[0])
 		}
 	}
+	if worker, ok := s.worker.(interface{ RequestCapabilities() []string }); ok {
+		out.Catalog = features.RequestRuntimeCatalog(worker.RequestCapabilities())
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

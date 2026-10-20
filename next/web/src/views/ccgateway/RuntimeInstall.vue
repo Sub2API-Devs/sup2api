@@ -43,6 +43,8 @@ const info = ref<CcgRuntimeImages | null>(null)
 const loading = ref(false)
 const installing = ref(false)
 const updatingWorkers = ref(false)
+const pairedUpdate = ref(false)
+const pairedReport = ref(false)
 const pushing = ref(false)
 const uploading = ref(false)
 /** Load or install failure, translated. */
@@ -98,6 +100,7 @@ const workerColumns = computed<TableColumn[]>(() => [
   { key: 'status', label: t('ccgateway.workers.status') },
   { key: 'previous', label: t('ccgateway.workers.previous') },
   { key: 'current', label: t('ccgateway.workers.current') },
+  ...(pairedReport.value ? [{ key: 'cli', label: t('ccgateway.workers.activeCLI') }] : []),
   { key: 'reason', label: t('ccgateway.workers.reason') }
 ])
 
@@ -138,7 +141,7 @@ async function install() {
 
 /** An applied image (bundled push or upload) is written into the saved configuration (images.<role>). */
 async function applied(runtime?: CcgRuntimeImages | null, report?: CcgWorkersReport | null) {
-  if (report) workers.value = report
+  if (report) { workers.value = report; pairedReport.value = false }
   emit('changed')
   if (runtime) info.value = runtime
   else await load()
@@ -158,16 +161,22 @@ const workerCounts = computed(() => {
   return { total: list.length, updated, unchanged, other: list.length - updated - unchanged }
 })
 
-async function updateWorkers() {
-  if (updatingWorkers.value) return
-  const ok = await confirm({ title: t('ccgateway.workers.confirmTitle'), message: t('ccgateway.workers.confirmMessage'), confirmText: t('ccgateway.workers.update') })
-  if (!ok || updatingWorkers.value) return
+async function updateWorkers(paired = false) {
+  if (locked.value || !workersReady.value) return
+  const ok = await confirm({
+    title: t(paired ? 'ccgateway.workers.pairedConfirmTitle' : 'ccgateway.workers.confirmTitle'),
+    message: t(paired ? 'ccgateway.workers.pairedConfirmMessage' : 'ccgateway.workers.confirmMessage'),
+    confirmText: t(paired ? 'ccgateway.workers.pairedUpdate' : 'ccgateway.workers.update')
+  })
+  if (!ok || locked.value || !workersReady.value) return
+  pairedUpdate.value = paired
   updatingWorkers.value = true
   workersError.value = ''
   try {
     // One synchronous request: every runtime in turn, at most 5 minutes each, 25 minutes in all (the core keeps going if this tab gives up).
-    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
-    toast(t('ccgateway.workers.done'), 'success')
+    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'], cli_version: '2.1.304' } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
+    pairedReport.value = paired
+    toast(t(paired ? 'ccgateway.workers.pairedDone' : 'ccgateway.workers.done'), 'success')
   } catch (e) {
     workersError.value = describe(e) || t('ccgateway.workers.failed')
   } finally {
@@ -274,12 +283,14 @@ onMounted(async () => {
           <div class="space-y-3 py-4">
             <div v-if="workersReady" class="space-y-2" data-testid="ccgateway-workers">
               <div class="flex flex-wrap items-center gap-3">
-                <SButton size="sm" icon="refresh" :loading="updatingWorkers" :disabled="locked" data-testid="ccgateway-workers-update" @click="updateWorkers">{{ t('ccgateway.workers.update') }}</SButton>
+                <SButton size="sm" icon="refresh" :loading="updatingWorkers && !pairedUpdate" :disabled="locked" data-testid="ccgateway-workers-update" @click="updateWorkers(false)">{{ t('ccgateway.workers.update') }}</SButton>
+                <SButton size="sm" variant="primary" icon="refresh" :loading="updatingWorkers && pairedUpdate" :disabled="locked" data-testid="ccgateway-workers-cli-update" @click="updateWorkers(true)">{{ t('ccgateway.workers.pairedUpdate') }}</SButton>
                 <SHint v-if="updatingWorkers" inline size="xs">{{ t('ccgateway.workers.updating') }}</SHint>
               </div>
+              <SHint data-testid="ccgateway-workers-cli-hint">{{ t('ccgateway.workers.pairedHint') }}</SHint>
               <SAlert v-if="workersError" tone="danger" dense data-testid="ccgateway-workers-error"><span class="break-all">{{ workersError }}</span></SAlert>
             </div>
-            <SCard v-if="workers" variant="flat" :title="t('ccgateway.workers.title')" role="status" data-testid="ccgateway-workers-result">
+            <SCard v-if="workers" variant="flat" :title="t(pairedReport ? 'ccgateway.workers.pairedTitle' : 'ccgateway.workers.title')" role="status" data-testid="ccgateway-workers-result">
               <template #actions><span class="break-all font-mono text-xs text-fg-muted" :title="workers.image">{{ t('ccgateway.workers.image', { image: displayImage(workers.image) || workers.image }) }}</span></template>
               <div class="space-y-2">
                 <SHint v-if="workers.reason" tone="warning" data-testid="ccgateway-workers-list-failed">{{ t('ccgateway.workers.listFailed', { reason: workerReason(workers.reason) }) }}</SHint>
@@ -293,6 +304,14 @@ onMounted(async () => {
                       <span v-if="row.key !== String(row.account_id)" class="ml-1 font-mono text-fg-subtle">{{ row.key }}</span>
                     </template>
                     <template #cell-status="{ row }"><SBadge :tone="WORKER_TONES[row.status] || 'gray'">{{ codeText('ccgateway.workers.statuses', row.status) }}</SBadge></template>
+                    <template #cell-cli="{ row }">
+                      <div class="space-y-1 text-xs" data-testid="ccgateway-worker-cli">
+                        <span class="font-mono">{{ row.cli_version || '—' }}</span>
+                        <span v-if="row.cli_patch" class="block break-all font-mono">{{ row.cli_patch }}</span>
+                        <span v-if="row.cli_sha256" class="block font-mono" :title="row.cli_sha256">{{ shortSha(row.cli_sha256) }}</span>
+                        <SBadge v-if="row.online !== undefined" :tone="row.online ? 'success' : 'warning'">{{ t(row.online ? 'ccgateway.workers.online' : 'ccgateway.workers.offline') }}</SBadge>
+                      </div>
+                    </template>
                     <template #cell-previous="{ row }"><span class="font-mono" :title="row.previous_sha256">{{ shortSha(row.previous_sha256) || '—' }}</span></template>
                     <template #cell-current="{ row }"><span class="font-mono" :title="row.sha256">{{ shortSha(row.sha256) || '—' }}</span></template>
                     <template #cell-reason="{ row }"><span class="break-all text-fg-muted">{{ workerReason(row.reason) }}</span></template>

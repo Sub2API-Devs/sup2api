@@ -1,6 +1,7 @@
 // DTOs of the console REST API (docs/CONTRACTS.md §5). Fields marked
 // "assumed" are not spelled out in the contract; views must tolerate their
 // absence.
+import type { AccountFeaturePolicy, FeatureGroup } from '@/views/ccgateway/requestPolicy'
 
 export type LText = string | Record<string, string>
 
@@ -288,6 +289,7 @@ export interface AccountType {
 }
 
 export interface Account {
+  cc_feature_policy?: AccountFeaturePolicy
   lifecycle_sync?: { status: 'pending' | 'applied' | 'failed'; code?: string }
   id: number
   name: string
@@ -469,12 +471,18 @@ export interface CcgWorkerResult {
   sha256?: string
   previous_sha256?: string
   reason?: string
+  cli_version?: string
+  cli_patch?: string
+  cli_sha256?: string
+  online?: boolean
 }
 /** POST /system/ccgateway/runtime/workers, and `workers` of an applied app upload; `reason` set (results empty) when the runtimes could not be listed. */
 export interface CcgWorkersReport {
   image: string
   results: CcgWorkerResult[]
   reason?: string
+  components?: string[]
+  cli_version?: string
 }
 
 /** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3). */
@@ -491,6 +499,8 @@ export interface CcgRemoteImages {
  * mode host/port are the control panel's HTTPS address and the SSH fields are empty.
  */
 export interface CcgRemoteConfig {
+  cc_feature_groups?: Record<string, FeatureGroup>
+  feature_revision?: number
   /** Always true for configurations saved by this console: per-account containers are the only mode. */
   account_runtimes: boolean
   /** controller: connected to a controller endpoint; ssh / local: legacy connections still honored (CONTRACTS §53.9). */

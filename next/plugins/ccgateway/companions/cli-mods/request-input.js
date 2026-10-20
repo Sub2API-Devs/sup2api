@@ -32,7 +32,7 @@ function systemRecord(message) {
   return result;
 }
 
-export function prepareBuildInput(components, renderAttachment) {
+export function prepareBuildInput(components, renderAttachment, { preserveContent = false } = {}) {
   if (!object(components) || typeof components.model !== 'string' || !components.model.trim()) fail('model must be a non-empty string');
   const allowed = new Set(['model', 'systemPrompt', 'messages', 'attachments', 'tools', 'parameters', 'stream']);
   for (const key of Object.keys(components)) if (!allowed.has(key)) fail(`unknown component ${key}; use parameters for generation options, or --direct for a complete HTTP body`);
@@ -43,7 +43,10 @@ export function prepareBuildInput(components, renderAttachment) {
   for (const key of ['model', 'system', 'messages', 'tools', 'stream']) if (Object.hasOwn(parameters, key)) fail(`parameters.${key} cannot replace a build component`);
   if (parameters.betas !== undefined && (!Array.isArray(parameters.betas) || !parameters.betas.every(b => typeof b === 'string'))) fail('parameters.betas must be an array of strings');
   let systemPrompt = [], systemBlocks;
-  if (typeof components.systemPrompt === 'string') systemPrompt = [components.systemPrompt];
+  if (typeof components.systemPrompt === 'string') {
+    systemPrompt = [components.systemPrompt];
+    if (preserveContent) systemBlocks = [{ type: 'text', text: components.systemPrompt }];
+  }
   else if (components.systemPrompt !== undefined) {
     if (!Array.isArray(components.systemPrompt)) fail('systemPrompt must be text or an array');
     systemBlocks = components.systemPrompt.map(block => {
@@ -53,6 +56,7 @@ export function prepareBuildInput(components, renderAttachment) {
     });
     systemPrompt = systemBlocks.map(block => block.text);
   }
+  if (preserveContent && systemBlocks === undefined) systemBlocks = [];
   const attachments = components.attachments ?? [];
   if (!Array.isArray(attachments)) fail('attachments must be an array');
   const byMessage = new Map(), references = new Map(), used = new Set();
@@ -88,6 +92,11 @@ export function prepareBuildInput(components, renderAttachment) {
     if (typeof content === 'string') return content;
     if (!Array.isArray(content)) fail('message content must be text or a block array');
     return content.flatMap(block => {
+      if (preserveContent) {
+        if (!object(block) || typeof block.type !== 'string' || !block.type) fail('invalid message content block');
+        if (block.type === 'text' && typeof block.text !== 'string') fail('text block requires text');
+        if (block.type === 'tool_result' && block.content !== undefined && typeof block.content !== 'string' && !Array.isArray(block.content)) fail('invalid tool result content');
+      }
       if (block?.type === 'ccgateway_attachment') {
         return renderReminder(block.id);
       }
@@ -143,14 +152,34 @@ export function prepareBuildInput(components, renderAttachment) {
     else if (message.role === 'assistant') {
       if (typeof message.content !== 'string' && !Array.isArray(message.content)) fail(`invalid content at messages[${messageIndex}]`);
       const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
-      messages.push(record('assistant', { message: { id: `msg_${crypto.randomUUID()}`, type: 'message', model: components.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 }, ...message, content } }));
+      messages.push(record('assistant', { ...(preserveContent && { ccgatewayWireMessage: structuredClone(message) }), message: { id: `msg_${crypto.randomUUID()}`, type: 'message', model: components.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 }, ...message, content } }));
     } else {
       if (typeof message.content !== 'string' && !Array.isArray(message.content)) fail(`invalid content at messages[${messageIndex}]`);
-      messages.push(record('user', { message }));
+      messages.push(record('user', { ...(preserveContent && { ccgatewayWireMessage: structuredClone(message) }), message }));
     }
     messages.push(...byMessage.get(messageIndex) ?? []);
   }
   if (used.size !== references.size) fail('unreferenced extracted attachments are not allowed');
+  if (preserveContent) {
+    const pending = new Set(), seen = new Set();
+    for (const row of messages) {
+      const message = row.ccgatewayWireSystem ?? row.ccgatewayWireMessage;
+      if (!message || message.role === 'system') continue;
+      const blocks = Array.isArray(message.content) ? message.content : [];
+      if (message.role === 'assistant' && pending.size) fail('tool results must precede the next assistant turn');
+      for (const block of blocks) {
+        if (block.type === 'tool_use') {
+          if (message.role !== 'assistant' || typeof block.id !== 'string' || !block.id || seen.has(block.id)) fail('invalid or duplicate tool_use id');
+          if (typeof block.name !== 'string' || !block.name || !object(block.input)) fail('invalid tool_use definition');
+          seen.add(block.id); pending.add(block.id);
+        } else if (block.type === 'tool_result') {
+          if (message.role !== 'user' || typeof block.tool_use_id !== 'string' || !pending.delete(block.tool_use_id)) fail('tool_result has no matching pending tool_use');
+        }
+      }
+      if (message.role === 'user' && pending.size) fail('missing tool results');
+    }
+    if (pending.size) fail('missing tool results');
+  }
   if (components.tools !== undefined && !Array.isArray(components.tools)) fail('tools must be an array');
   const customTools = [], extraToolSchemas = [];
   for (const tool of components.tools ?? []) {

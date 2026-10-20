@@ -486,7 +486,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 	var client *http.Client
 	if managedCCG {
-		client = c.g.d.CCGateway.ModelClientFor(acc.ID, acc.ProxyID)
+		client = c.g.d.CCGateway.ModelClientForRequest(ccgateway.ModelRequestContext{AccountID: acc.ID, ProxyID: acc.ProxyID, GroupID: c.principal.Group.ID})
 	} else {
 		client, err = c.g.d.Proxies.HTTPClient(prepareCtx, acc.ProxyID)
 	}

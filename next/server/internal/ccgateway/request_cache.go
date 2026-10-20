@@ -32,6 +32,24 @@ const routeIdleTimeout = 30 * time.Second
 // ccgatewayChange is published on config:changed when the CCGateway
 // configuration is saved.
 const ccgatewayChange = "ccgateway"
+const ccgatewayFeatureChange = "ccgateway_features"
+
+func (s *Service) invalidateFeatureConfig() {
+	s.cache.mu.Lock()
+	s.cache.gen++
+	s.cache.cfg = nil
+	s.cache.mu.Unlock()
+}
+
+func (s *Service) featureConfigChanged(ctx context.Context) {
+	s.invalidateFeatureConfig()
+	if s.Bus != nil {
+		b, _ := json.Marshal(map[string]string{"type": ccgatewayFeatureChange})
+		if err := s.Bus.Publish(context.WithoutCancel(ctx), core.ChannelConfigChanged, b); err != nil {
+			slog.WarnContext(ctx, "CCGateway: publish feature config change", "err", err)
+		}
+	}
+}
 
 type requestCache struct {
 	mu sync.Mutex
@@ -246,6 +264,8 @@ func (s *Service) onConfigChanged(payload []byte) {
 		return
 	}
 	switch m.Type {
+	case ccgatewayFeatureChange:
+		s.invalidateFeatureConfig()
 	case ccgatewayChange:
 		s.invalidateRequests(false)
 		s.sweepSoon()

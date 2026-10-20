@@ -1,7 +1,7 @@
 // Server field errors of the account editor (ApiError.fields) and the section
 // that holds each field.
 
-export type EditorSection = 'connection' | 'models' | 'scheduling'
+export type EditorSection = 'connection' | 'models' | 'scheduling' | 'cc_features'
 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
 export const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit']
@@ -25,5 +25,6 @@ export function splitFieldErrors(all: Record<string, string>): { cred: Record<st
 export function sectionOfErrors(base: Record<string, string>, cred: Record<string, string>): EditorSection | null {
   if (Object.keys(cred).length || CONNECTION_FIELDS.some((k) => k in base)) return 'connection'
   if (Object.keys(base).some(isModelsField)) return 'models'
+  if (Object.keys(base).some(k => k.startsWith('cc_feature_policy'))) return 'cc_features'
   return Object.keys(base).length ? 'scheduling' : null
 }

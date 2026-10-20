@@ -5,7 +5,7 @@ import { i18n } from '@/i18n'
 import RemoteSettings from './RemoteSettings.vue'
 import { defaultRequestPolicy, type RequestPolicy } from './requestPolicy'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn() }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 
@@ -29,13 +29,29 @@ describe('CCGateway single-request modes', () => {
     await tab(w, 'cc').trigger('click')
     return w
   }
+  it('preserves disabled group drafts and sends revision with the settings transaction', async () => {
+    const saved = { ...config(defaultRequestPolicy()), feature_revision: 12, cc_feature_groups: { 3: { enabled: true, allow_account_override: true, overrides: { build_billing_sources: { cc_version: 'worker' } } } } }
+    mocks.get.mockResolvedValue(saved)
+    mocks.list.mockResolvedValue({ items: [{ id: 3, name: 'Group 3' }], paged: false })
+    mocks.put.mockResolvedValue(saved)
+    const w = await render()
+    await w.get('[data-testid="feature-layer"] input[value="group"]').setValue(true)
+    await flushPromises()
+    const group = w.getComponent({ name: 'SSwitch' })
+    group.vm.$emit('update:modelValue', false)
+    await flushPromises()
+    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(true)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ feature_revision: 12, cc_feature_groups: { 3: { enabled: false, allow_account_override: true, overrides: { build_billing_sources: { cc_version: 'worker' } } } } }), expect.anything())
+    w.unmount()
+  })
   it('offers only direct and build, defaults to build and hides removed agent controls', async () => {
     mocks.get.mockResolvedValue(config(undefined))
     const w = await render()
     const select = w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element
     expect(Array.from(select.options).filter(o => !o.disabled).map(o => o.textContent)).toHaveLength(2)
     expect(select.options[select.selectedIndex].textContent).toContain('build')
-    expect(w.text()).not.toContain('native')
+    expect(w.get('[data-testid="cli-request-mode"]').text()).not.toContain('native')
     for (const id of ['tool-search', 'client-attachments', 'custom-tool-prefix', 'thinking-disabled-compat', 'unknown-field']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
@@ -45,10 +61,10 @@ describe('CCGateway single-request modes', () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     await w.get('[data-testid="relay-mode"]').setValue(mode === 'direct' ? '0' : '1')
-    await w.get('[data-testid="cli-version"]').setValue('2.1.302')
+    await w.get('[data-testid="cli-version"]').setValue('2.1.304')
     mocks.put.mockResolvedValue(config({...defaultRequestPolicy(), relay_mode: mode}))
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.302'})}),expect.anything())
+    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.304'})}),expect.anything())
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {
@@ -69,7 +85,7 @@ describe('CCGateway single-request modes', () => {
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker' })
     w.unmount()
     w = await render()
-    expect(w.get<HTMLSelectElement>(platform).element.selectedOptions[0].textContent).toBe('使用 Worker')
+    expect(w.get<HTMLSelectElement>(platform).element.selectedOptions[0].textContent).toBe('使用服务端')
     expect(w.get<HTMLSelectElement>(os).element.selectedOptions[0].textContent).toBe('保留客户端')
     await w.get(os).setValue('1')
     await w.get('[data-testid="relay-mode"]').setValue('0')
@@ -91,7 +107,7 @@ describe('CCGateway single-request modes', () => {
     const w = await render()
     const select = w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element
     expect(select.options[select.selectedIndex].textContent).toContain('build')
-    await w.get('[data-testid="cli-version"]').setValue('2.1.302')
+    await w.get('[data-testid="cli-version"]').setValue('2.1.304')
     mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:'build'})}),expect.anything())

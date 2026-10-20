@@ -48,9 +48,13 @@ func New(cfg *config.Config) (Worker, error) {
 	}
 	runtime, err := engine.NewRuntime(engine.Options{
 		ExpectedCLIVersion: cfg.CLIVersion, ExpectedCLISHA256: cfg.CLISHA256, ExpectedCLIPatch: cfg.CLIPatch,
-		RequestMode:     cfg.RequestMode,
-		InternalBaseURL: internalBaseURL,
-		CLI:             cfg.CLIPath, Plugin: cfg.PluginPath, DataDir: cfg.HistoryDir, CacheDir: cfg.CacheDir,
+		RequestMode:               cfg.RequestMode,
+		WorkingDirectory:          cfg.WorkingDirectory,
+		RuntimeMaintenanceLease:   cfg.RuntimeMaintenanceLease,
+		RuntimeMaintenanceExpires: cfg.RuntimeMaintenanceExpires,
+		MaintenanceOnly:           cfg.MaintenanceOnly,
+		InternalBaseURL:           internalBaseURL,
+		CLI:                       cfg.CLIPath, Plugin: cfg.PluginPath, DataDir: cfg.HistoryDir, CacheDir: cfg.CacheDir,
 		Key: cfg.APIKey, AdminKey: cfg.AdminKey, NativeTools: cfg.NativeTools,
 		Timeout: timeout, CacheLimit: cfg.MaxCacheSize, Env: env,
 	})
@@ -75,5 +79,6 @@ func (w *impl) Health(ctx context.Context) (*types.HealthStatus, error) {
 	if !w.CLIReady() {
 		status = "starting"
 	}
-	return &types.HealthStatus{Status: status, WorkerID: w.id, CLIVersion: w.CLIVersion(), Uptime: int64(time.Since(w.startTime).Seconds())}, nil
+	patch, checksum := w.CLIIdentity()
+	return &types.HealthStatus{Status: status, WorkerID: w.id, CLIVersion: w.CLIVersion(), Uptime: int64(time.Since(w.startTime).Seconds()), CLIPatch: patch, CLISHA256: checksum, Capabilities: w.RequestCapabilities(), MaintenanceOnly: w.MaintenanceOnly()}, nil
 }

@@ -21,6 +21,7 @@ var modFiles = mod.Files
 type Runner struct {
 	InternalBaseURL            string
 	CLI, Version, Plugin, Work string
+	WorkingDirectory           string // trusted stable account context; never a request path
 	Env                        []string
 	Proxy                      *ProxyConfigStore
 	Overrides                  *EnvironmentOverrides // account locale/timezone for new CLI processes

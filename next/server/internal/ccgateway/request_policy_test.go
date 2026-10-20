@@ -287,7 +287,7 @@ func TestReplaceClientAttachmentsSave(t *testing.T) {
 	require.Equal(t, []string{"environment", "model"}, reloaded.WorkerRequestPolicy(26).ReplaceClientAttachments)
 	all := *saved.RequestPolicy
 	all.EraseClientAttachments, all.ReplaceClientAttachments = nil, []string{"environment", "model", "date", "total_tokens_reminder", "session_context"}
-	_, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &all}, reloaded)
+	_, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &all, FeatureRevision: reloaded.FeatureRevision}, reloaded)
 	require.NoError(t, err)
 	for _, c := range []struct{ erase, replace []string }{{nil, []string{"weather"}}, {[]string{"date"}, []string{"date"}}, {nil, []string{"model", "model"}}, {[]string{"model"}, []string{"model"}}} {
 		bad := *saved.RequestPolicy

@@ -46,7 +46,7 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 	t.Setenv("CCG_API_KEY", "")
 	t.Setenv("CCG_ADMIN_KEY", "")
 	if configured {
-		plain, _ := json.Marshal(ccgateway.Config{Mode: "local", APIKey: "managed-sidecar-secret", AdminKey: "managed-admin-secret"})
+		plain, _ := json.Marshal(ccgateway.Config{Mode: "local", APIKey: "managed-sidecar-secret", AdminKey: "managed-admin-secret", RequestPolicy: &ccgateway.RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}})
 		encrypted, err := cipher.Encrypt(plain, []byte("system:ccgateway:v1"))
 		if err != nil {
 			t.Fatal(err)

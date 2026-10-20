@@ -9,8 +9,61 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
+
+type cliRequestInfo struct {
+	Version      string   `json:"version"`
+	Patch        string   `json:"patch"`
+	Capabilities []string `json:"capabilities"`
+	SHA256       string   `json:"-"`
+}
+
+func readCLIRequestInfo(cli, version string, o Options) (cliRequestInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cli, "--ccgateway-info")
+	env := o.Env
+	if env == nil {
+		env = os.Environ()
+	}
+	cmd.Env = envWith(env, map[string]string{"DISABLE_AUTOUPDATER": "1"})
+	raw, err := cmd.Output()
+	var info cliRequestInfo
+	if err != nil || len(raw) > 8192 || json.Unmarshal(raw, &info) != nil || info.Version != version || info.Patch == "" {
+		return cliRequestInfo{}, fmt.Errorf("cannot verify CLI request capabilities")
+	}
+	return info, nil
+}
+
+// Capabilities are an intersection, never inferred from a product version.
+func (i cliRequestInfo) supports(capability string) bool {
+	return slices.Contains(i.Capabilities, capability)
+}
+
+func (g *Gateway) requestCapabilities() []string {
+	out := []string{}
+	if g.MaintenanceOnly || !g.CLIInfo.supports("request_build") {
+		return out
+	}
+	for _, capability := range []string{features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildContentPreservationCapability} {
+		if g.CLIInfo.supports(capability) {
+			out = append(out, capability)
+		}
+	}
+	// v1 transformation is implemented by this Worker, with the CLI's
+	// verified build input contract. It does not imply v2 support.
+	if !slices.Contains(out, features.BuildAttachmentCapability) && (!g.CLIInfo.supports(features.BuildContentPreservationCapability) || g.CLIInfo.supports(features.BuildAttachmentCapabilityV2)) {
+		out = append(out, features.BuildAttachmentCapability)
+	}
+	if g.CLIInfo.supports("request_direct") {
+		out = append(out, features.RequestPolicyModeCapability)
+	}
+	return out
+}
 
 // Validate the actual file before authentication or requests. A version string
 // alone cannot distinguish the official binary from the required patched CLI.
@@ -35,21 +88,8 @@ func verifyPinnedCLI(cli, version string, o Options) error {
 	if err != nil || hex.EncodeToString(h.Sum(nil)) != o.ExpectedCLISHA256 {
 		return fmt.Errorf("pinned CLI checksum mismatch")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, cli, "--ccgateway-info")
-	env := o.Env
-	if env == nil {
-		env = os.Environ()
-	}
-	cmd.Env = envWith(env, map[string]string{"DISABLE_AUTOUPDATER": "1"})
-	raw, err := cmd.Output()
-	var info struct {
-		Version      string   `json:"version"`
-		Patch        string   `json:"patch"`
-		Capabilities []string `json:"capabilities"`
-	}
-	if err != nil || len(raw) > 8192 || json.Unmarshal(raw, &info) != nil || info.Version != version || info.Patch != o.ExpectedCLIPatch {
+	info, err := readCLIRequestInfo(cli, version, o)
+	if err != nil || info.Patch != o.ExpectedCLIPatch {
 		return fmt.Errorf("pinned CLI patch identity mismatch")
 	}
 	if o.RequestMode != "" {

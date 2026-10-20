@@ -1,7 +1,10 @@
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
-export const buildAttachmentFields = ['platform_name', 'os_version'] as const
+export const buildAttachmentFields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'] as const
 export type BuildAttachmentField = (typeof buildAttachmentFields)[number]
-export type BuildAttachmentSource = 'client' | 'worker'
+export type BuildAttachmentSource = 'client' | 'worker' | 'erase'
+export const billingFields = ['cc_version', 'cc_entrypoint'] as const
+export type BillingField = (typeof billingFields)[number]
+export type BillingSource = 'client' | 'worker'
 // Independently editable types; the core also accepts the former whole environment type.
 export const attachmentGroups = {
   working_directory: ['primary_directory', 'additional_directories', 'git_repository'],
@@ -60,6 +63,7 @@ export function setAttachmentAction(policy: RequestPolicy, type: ErasableAttachm
 // Native editor state. Legacy attachment and unknown-beta choices are not settings.
 export interface RequestPolicy {
   build_attachment_sources?: Partial<Record<BuildAttachmentField, BuildAttachmentSource>>
+  build_billing_sources?: Partial<Record<BillingField, BillingSource>>
   schema_version?: number
   unknown_field: 'reject' | 'ignore'
   allow_fast: boolean
@@ -88,8 +92,9 @@ export function defaultRequestPolicy(): RequestPolicy {
     erase_client_attachments: [],
     replace_client_attachments: [],
     build_attachment_sources: {},
+    build_billing_sources: {},
     relay_mode: 'build',
-    cli_version: '2.1.302',
+    cli_version: '2.1.304',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
       { name: 'fine-grained-tool-streaming-2025-05-14', mapping: 'fine_grained_tools' },
@@ -125,16 +130,19 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     erase_client_attachments: expandEnvironment(policy?.erase_client_attachments),
     replace_client_attachments: expandEnvironment(policy?.replace_client_attachments),
     build_attachment_sources: { ...policy?.build_attachment_sources },
+    build_billing_sources: { ...policy?.build_billing_sources },
     relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
-    cli_version: policy?.cli_version ?? defaults.cli_version,
+    cli_version: defaults.cli_version,
     betas: policy?.betas ?? defaults.betas
   }
 }
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
-    (p.schema_version === undefined || p.schema_version === 1) &&
+    (p.schema_version === undefined || p.schema_version === 1 || p.schema_version === 2) &&
     Object.entries(p.build_attachment_sources ?? {}).every(([field, source]) =>
-      (buildAttachmentFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
+      (buildAttachmentFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker' || source === 'erase')) &&
+    Object.entries(p.build_billing_sources ?? {}).every(([field, source]) =>
+      (billingFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
@@ -144,4 +152,45 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['direct', 'build'].includes(p.relay_mode) &&
     (!p.cli_version || /^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$/.test(p.cli_version))
   )
+}
+
+// An absent key follows its parent; this also applies independently to nested fields.
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources'>>
+export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
+export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
+export interface FeaturePreview {
+  cc_feature_policy: AccountFeaturePolicy
+  groups: Array<{ id: number; name: string }>
+  effective: RequestPolicy
+  inherited: RequestPolicy
+  sources: Record<string, 'global' | 'group' | 'account'>
+  editable: boolean
+  disabled_reason: string
+  policy_revision: string
+}
+export function newRequestPolicy(): RequestPolicy {
+  return { ...defaultRequestPolicy(), schema_version: 2, build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
+}
+export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOverrides): RequestPolicy {
+  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources } }
+}
+export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
+  let count = 0
+  for (const [key, value] of Object.entries(overrides)) {
+    if (key === 'build_attachment_sources' || key === 'build_billing_sources') {
+      for (const [field, source] of Object.entries(value as Record<string, string>)) {
+        if (((parent[key] as Record<string, string> | undefined)?.[field] ?? 'client') !== source) count++
+      }
+    } else if (parent[key as keyof RequestPolicy] !== value) count++
+  }
+  return count
+}
+export function validFeatureOverrides(value: FeatureOverrides): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources']
+  if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
+  for (const key of ['build_attachment_sources', 'build_billing_sources'] as const) {
+    if (value[key] !== undefined && (typeof value[key] !== 'object' || Array.isArray(value[key]))) return false
+  }
+  return validRequestPolicy(mergeFeaturePolicy(defaultRequestPolicy(), value))
 }

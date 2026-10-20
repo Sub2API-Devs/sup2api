@@ -32,7 +32,22 @@ func validateRequestMode(mode string) error {
 // in their original positions. Tags alone cannot recover native attachment
 // types. Explicit typed attachments remain a CLI component-level API.
 func messagesBuildComponents(raw []byte) ([]byte, error) {
+	return messagesBuildComponentsPolicy(raw, nil, "")
+}
+
+type buildRequestPolicy struct {
+	ContractVersion int                             `json:"contract_version"`
+	Sources         features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
+	Billing         features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	RelayMode       string                          `json:"relay_mode,omitempty"`
+	CLIVersion      string                          `json:"cli_version,omitempty"`
+}
+
+func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, workingDirectory string) ([]byte, error) {
 	if err := validateBuildNumbers(raw); err != nil {
+		return nil, err
+	}
+	if err := validateBuildContent(raw); err != nil {
 		return nil, err
 	}
 	var body map[string]json.RawMessage
@@ -62,7 +77,7 @@ func messagesBuildComponents(raw []byte) ([]byte, error) {
 			}
 			for _, block := range blocks {
 				var kind string
-				if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || json.Unmarshal(block["text"], &text) != nil {
+				if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || !isJSONString(block["text"]) || json.Unmarshal(block["text"], &text) != nil {
 					return nil, fmt.Errorf("build mode requires text system blocks")
 				}
 				for key := range block {
@@ -75,7 +90,8 @@ func messagesBuildComponents(raw []byte) ([]byte, error) {
 		}
 	}
 	tools := []map[string]json.RawMessage{}
-	if rawTools, ok := body["tools"]; ok {
+	rawTools, hasTools := body["tools"]
+	if hasTools {
 		if json.Unmarshal(rawTools, &tools) != nil || tools == nil {
 			return nil, fmt.Errorf("tools must be an array")
 		}
@@ -108,11 +124,25 @@ func messagesBuildComponents(raw []byte) ([]byte, error) {
 	for _, key := range []string{"model", "system", "messages", "tools", "stream"} {
 		delete(body, key)
 	}
+	components := map[string]any{
+		"model": model, "systemPrompt": system, "messages": messages, "attachments": []any{}, "parameters": body, "stream": stream,
+	}
+	// An absent tool catalog differs from an explicit empty catalog. Retain
+	// that distinction through both legacy and preserving CLI build paths.
+	if hasTools {
+		components["tools"] = tools
+	}
+	if policy != nil {
+		components["requestPolicy"] = policy
+		components["runtimeContext"] = map[string]any{"workingDirectory": workingDirectory, "additionalWorkingDirectories": []string{}}
+		return json.Marshal(components)
+	}
 	extracted, attachments, err := extractSystemComponents(messages)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(map[string]any{"model": model, "systemPrompt": system, "messages": extracted, "attachments": attachments, "tools": tools, "parameters": body, "stream": stream})
+	components["messages"], components["attachments"] = extracted, attachments
+	return json.Marshal(components)
 }
 
 func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d *requestDiagnostic) {
@@ -125,6 +155,16 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(401, "authentication_error", "Invalid gateway API key")
 		return
 	}
+	var policy buildRequestPolicy
+	if value := r.Header.Get(policyHeader); value != "" {
+		if len(value) > 16384 || features.ValidatePolicySchemaJSON([]byte(value)) != nil || json.Unmarshal([]byte(value), &policy) != nil {
+			fail(400, "invalid_request_error", "Invalid gateway request policy")
+			return
+		}
+		if policy.RelayMode != "" {
+			requestMode = policy.RelayMode
+		}
+	}
 	probe := r.URL.Path == "/v1/ccgateway/probe"
 	if r.URL.Path != "/v1/messages" && !probe {
 		fail(404, "not_found_error", "Request mode supports /v1/messages only")
@@ -134,6 +174,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		requestMode = "build"
 		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
 		d.setField("test_mode", "native_build")
+	}
+	if g.CLIInfo.Version != "" && !g.CLIInfo.supports("request_"+requestMode) {
+		fail(409, "configuration_error", "Loaded CLI does not support the requested mode")
+		return
 	}
 	if r.Method != http.MethodPost {
 		fail(405, "invalid_request_error", "Use POST")
@@ -157,31 +201,53 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	d.request(raw, r.Header)
 	input := raw
 	if requestMode == "build" {
-		var policy struct {
-			Sources features.BuildAttachmentSources `json:"build_attachment_sources"`
-		}
-		if value := r.Header.Get(policyHeader); value != "" && g.RequestMode == "build" {
-			if len(value) > 16384 || features.ValidatePolicySchemaJSON([]byte(value)) != nil || json.Unmarshal([]byte(value), &policy) != nil {
-				fail(400, "invalid_request_error", "Invalid gateway request policy")
-				return
-			}
-		}
 		if err := policy.Sources.Validate(); err != nil {
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}
-		if policy.Sources.UsesWorker() {
-			facts, factErr := buildAttachmentEnvironment(policy.Sources)
+		if err := policy.Billing.Validate(); err != nil {
+			fail(400, "invalid_request_error", err.Error())
+			return
+		}
+		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
+		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) {
+			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
+			return
+		}
+		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker()) && !v2 {
+			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
+			return
+		}
+		if !v2 && policy.Sources.UsesWorker() {
+			// Reject invalid content before v1 host fact collection; v2
+			// validates once while constructing its preserved envelope.
+			if err = validateBuildContent(raw); err != nil {
+				fail(400, "invalid_request_error", err.Error())
+				return
+			}
+			legacySources := features.BuildAttachmentSources{}
+			for _, field := range []string{"platform_name", "os_version"} {
+				if source, ok := policy.Sources[field]; ok {
+					legacySources[field] = source
+				}
+			}
+			facts, factErr := buildAttachmentEnvironment(legacySources)
 			if factErr != nil {
 				fail(503, "configuration_error", factErr.Error())
 				return
 			}
 			var decisions []Object
-			input, decisions, err = transformBuildAttachments(raw, policy.Sources, facts)
+			input, decisions, err = transformBuildAttachments(raw, legacySources, facts)
 			d.trace("build_attachment_transform", Object{"sources": policy.Sources, "changed": len(decisions), "decisions": decisions})
 		}
 		if err == nil {
-			input, err = messagesBuildComponents(input)
+			if v2 {
+				policy.ContractVersion = 2
+				policy.RelayMode, policy.CLIVersion = "", ""
+				input, err = messagesBuildComponentsPolicy(input, &policy, g.Runner.WorkingDirectory)
+			} else {
+				input, err = messagesBuildComponents(input)
+			}
 		}
 	} else {
 		var body map[string]json.RawMessage
@@ -235,10 +301,24 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	cmd := exec.CommandContext(ctx, runner.CLI, args...)
 	cmd.Env, cmd.Dir, cmd.Stdin = runner.baseEnv(), dir, bytes.NewReader(input)
+	// The patched request command runs before the interactive CLI initializer.
+	// Apply its non-interactive entrypoint default at process startup; an
+	// explicitly configured SDK/editor entrypoint remains unchanged.
+	entrypoint := "sdk-cli"
+	for _, item := range cmd.Env {
+		key, value, _ := strings.Cut(item, "=")
+		if strings.EqualFold(key, "CLAUDE_CODE_ENTRYPOINT") && value != "" && value != "cli" {
+			entrypoint = value
+		}
+	}
+	cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_ENTRYPOINT": entrypoint})
+	if requestMode == "build" && g.CLIInfo.supports(features.BuildContentPreservationCapability) {
+		cmd.Dir = runner.WorkingDirectory
+	}
 	cmd.WaitDelay = 2 * time.Second
 	output := &requestCommandOutput{writer: w, meta: meta, diagnostic: d}
 	cmd.Stdout = output
-	stderr := &requestErrorReader{}
+	stderr := &requestErrorReader{diagnostic: d}
 	cmd.Stderr = stderr
 	d.trace("request_command", Object{"mode": requestMode, "configured_mode": g.RequestMode, "probe": probe, "cli_version": runner.Version})
 	if requestMode == "build" {

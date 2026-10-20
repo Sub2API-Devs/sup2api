@@ -66,7 +66,7 @@ func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d account
 	d.Revision = revisionOf(d.Revision + "|network:" + string(encoded))
 	policy := c.EffectiveRequestPolicy()
 	if policy.CLIVersion != "" {
-		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: policy.RelayMode, DisableAutoUpdate: true}
+		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: "build", DisableAutoUpdate: true}
 		encoded, _ = json.Marshal(d.CLI)
 		d.Revision = revisionOf(d.Revision + "|cli:" + string(encoded))
 	}
