@@ -36,7 +36,7 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 			BuildAttachmentSources: features.BuildAttachmentSources{"platform_name": "erase", "shell": "worker"},
 			BuildBillingSources:    features.BuildBillingSources{"cc_version": "worker"},
 		}},
-		"5": {Enabled: false, AllowAccountOverride: true, Overrides: ccgateway.FeatureOverrides{
+		"5": {Enabled: false, AllowAccountOverride: false, Overrides: ccgateway.FeatureOverrides{
 			BuildAttachmentSources: features.BuildAttachmentSources{"platform_name": "erase"},
 		}},
 		// Group 6 intentionally has no configured overrides.
@@ -113,8 +113,8 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 	}
 	check(3, "build", features.BuildAttachmentSources{"os_version": "worker", "shell": "erase"}, features.BuildBillingSources{"cc_version": "worker", "cc_entrypoint": "worker"})
 	check(4, "build", features.BuildAttachmentSources{"platform_name": "erase", "shell": "worker"}, features.BuildBillingSources{"cc_version": "worker"})
-	check(5, "build", features.BuildAttachmentSources{"platform_name": "worker"}, nil)
-	check(6, "build", features.BuildAttachmentSources{"platform_name": "worker"}, nil)
+	check(5, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
+	check(6, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
 	check(7, "direct", nil, nil)
 	check(8, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
 	// Returning to the first key must restore that key's context, not retain
@@ -130,7 +130,9 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 	require.Equal(t, ccgateway.FeatureOverrides{}, stored.Overrides)
 	require.EqualValues(t, 2, stored.Revision)
 	check(3, "build", features.BuildAttachmentSources{"platform_name": "erase", "os_version": "worker"}, features.BuildBillingSources{"cc_version": "worker"})
+	check(5, "build", features.BuildAttachmentSources{"platform_name": "worker"}, nil)
+	check(6, "build", features.BuildAttachmentSources{"platform_name": "worker"}, nil)
 	check(8, "direct", nil, nil)
-	require.Equal(t, 9, len(e.up.keys()))
-	require.EqualValues(t, 9, healthProbes.Load())
+	require.Equal(t, 11, len(e.up.keys()))
+	require.EqualValues(t, 11, healthProbes.Load())
 }

@@ -119,8 +119,9 @@ func (s *Service) accountFeaturePreview(c *gin.Context) {
 	httpapi.OK(c, out)
 }
 
-// Saving a custom draft requires at least one current account group to permit
-// it. Retaining an unchanged dormant draft is allowed when editing other fields.
+// Saving a custom draft requires at least one current account group without an
+// enabled prohibition. Groups need no separate CC configuration. Retaining an
+// unchanged dormant draft is allowed when editing other fields.
 func (s *Service) SaveAccountFeatures(ctx context.Context, tx pgx.Tx, id int64, p AccountFeaturePolicy) error {
 	old, err := LoadAccountFeaturePolicy(ctx, tx, id)
 	if err != nil {
@@ -146,8 +147,7 @@ func (s *Service) SaveAccountFeatures(ctx context.Context, tx pgx.Tx, id int64, 
 			if err = rows.Scan(&gid); err != nil {
 				break
 			}
-			g, ok := cfg.CCFeatureGroups[strconv.FormatInt(gid, 10)]
-			allowed = allowed || ok && g.Enabled && g.AllowAccountOverride
+			allowed = allowed || cfg.allowsAccountFeatures(gid)
 		}
 		if err == nil {
 			err = rows.Err()

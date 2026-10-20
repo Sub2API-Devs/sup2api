@@ -40,7 +40,7 @@ describe('CCGateway single-request modes', () => {
     const group = w.getComponent({ name: 'SSwitch' })
     group.vm.$emit('update:modelValue', false)
     await flushPromises()
-    expect(w.get<HTMLSelectElement>('[data-testid="billing-cc_version"]').element.disabled).toBe(true)
+    expect(w.find('[data-testid="billing-cc_version"]').exists()).toBe(false)
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ feature_revision: 12, cc_feature_groups: { 3: { enabled: false, allow_account_override: true, overrides: { build_billing_sources: { cc_version: 'worker' } } } } }), expect.anything())
     w.unmount()

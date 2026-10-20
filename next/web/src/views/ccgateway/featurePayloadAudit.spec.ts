@@ -136,7 +136,7 @@ describe('account field payload matrix', () => {
     expect(body.cc_feature_policy.overrides).toEqual({ ...allWorker(), relay_mode: 'direct' })
   })
 
-  it.each(['no_group', 'group_unconfigured', 'group_disabled', 'account_override_disabled'])('read-only %s shows the effective values and does not resubmit dormant overrides', async reason => {
+  it.each(['no_group', 'account_override_disabled'])('read-only %s shows the effective values and does not resubmit dormant overrides', async reason => {
     mocks.post.mockImplementation(async (_path, body) => ({ ...preview(body.cc_feature_policy, defaultRequestPolicy()), editable: false, disabled_reason: reason }))
     const w = await account()
     for (const row of rows) {
@@ -150,6 +150,38 @@ describe('account field payload matrix', () => {
 })
 
 describe('group switches and inactive values', () => {
+  it('browsing unconfigured groups inherits without creating saved overrides', async () => {
+    stored.cc_feature_groups = {} as typeof stored.cc_feature_groups
+    mocks.list.mockResolvedValue({ items: [{ id: 3, name: 'Group 3' }, { id: 4, name: 'Group 4' }], paged: false })
+    const w = await remote('group')
+    expect(w.text()).toContain('分组配置是可选的')
+    expect(w.get<HTMLInputElement>('[data-testid="group-enabled"]').element.checked).toBe(false)
+    expect(w.find('[data-testid="group-allow-account"]').exists()).toBe(false)
+    expect(w.find('[data-testid="build-attachment-shell"]').exists()).toBe(false)
+    await w.get('[data-testid="feature-group"]').setValue('1')
+    expect(w.get<HTMLInputElement>('[data-testid="group-enabled"]').element.checked).toBe(false)
+    // Saving an unrelated global edit must not materialize either viewed group.
+    await w.get('[data-testid="feature-layer"] input[value="global"]').setValue(true)
+    await w.get('[data-testid="billing-cc_entrypoint"]').setValue('1')
+    const body = await submit(w)
+    expect(body.cc_feature_groups).toEqual({})
+    expect(body.request_policy.build_billing_sources).toEqual({ cc_entrypoint: 'worker' })
+  })
+  it('enabling a new group saves only fields the user explicitly overrides', async () => {
+    stored.cc_feature_groups = {} as typeof stored.cc_feature_groups
+    stored.request_policy = { ...defaultRequestPolicy(), ...allWorker() }
+    const w = await remote('group')
+    await w.get('[data-testid="group-enabled"]').setValue(true)
+    expect((await submit(w)).cc_feature_groups[3]).toEqual({ enabled: true, allow_account_override: true, overrides: {} })
+    await w.get('[data-testid="build-attachment-shell"]').setValue('3')
+    let body = await submit(w)
+    expect(body.cc_feature_groups[3].overrides).toEqual({ build_attachment_sources: { shell: 'erase' } })
+    expect(body.request_policy).toMatchObject(allWorker())
+    await w.get('[data-testid="build-attachment-shell"]').setValue('0')
+    body = await submit(w)
+    expect(body.cc_feature_groups[3].overrides.build_attachment_sources).not.toHaveProperty('shell')
+    expect(body.cc_feature_groups[3].overrides.build_billing_sources).toBeUndefined()
+  })
   it('global direct saves all twelve choices unchanged and restores them after returning to build', async () => {
     stored.request_policy = { ...defaultRequestPolicy(), ...allWorker() }
     const w = await remote('global')
@@ -173,10 +205,10 @@ describe('group switches and inactive values', () => {
     expect(body.cc_feature_groups[3]).toEqual({ enabled: true, allow_account_override: false, overrides: allWorker() })
     for (const row of rows) expect(w.get<HTMLSelectElement>(`[data-testid="${row[2]}"]`).element.disabled).toBe(false)
     await w.get('[data-testid="group-enabled"]').setValue(false)
-    for (const row of rows) expect(w.get<HTMLSelectElement>(`[data-testid="${row[2]}"]`).element.disabled).toBe(true)
+    for (const row of rows) expect(w.find(`[data-testid="${row[2]}"]`).exists()).toBe(false)
     body = await submit(w)
     expect(body.cc_feature_groups[3]).toEqual({ enabled: false, allow_account_override: false, overrides: allWorker() })
-    expect(w.get<HTMLInputElement>('[data-testid="group-allow-account"]').element.disabled).toBe(true)
+    expect(w.find('[data-testid="group-allow-account"]').exists()).toBe(false)
     await w.get('[data-testid="group-enabled"]').setValue(true)
     await w.get('[data-testid="group-allow-account"]').setValue(true)
     expect((await submit(w)).cc_feature_groups[3]).toEqual({ enabled: true, allow_account_override: true, overrides: allWorker() })

@@ -68,7 +68,7 @@ const groupOptions = computed(() => groups.value.map(group => ({
   label: group.name + (featureGroups.value[group.id] ? ` · ${t('ccgateway.layers.differences', { n: featureDifferenceCount(requestPolicy.value, featureGroups.value[group.id].overrides) })}` : '')
 })))
 const currentGroup = computed({
-  get: () => selectedGroup.value == null ? null : featureGroups.value[selectedGroup.value] ?? { enabled: false, allow_account_override: false, overrides: {} },
+  get: () => selectedGroup.value == null ? null : featureGroups.value[selectedGroup.value] ?? { enabled: false, allow_account_override: true, overrides: {} },
   set: (value: FeatureGroup | null) => { if (selectedGroup.value != null && value) featureGroups.value = { ...featureGroups.value, [selectedGroup.value]: value } }
 })
 const latestFeatureEffective = computed(() => {
@@ -356,13 +356,16 @@ onBeforeUnmount(() => {
             <SSegmented v-model="featureTab" :options="[{ value: 'global', label: t('ccgateway.layers.globalTab') }, { value: 'group', label: t('ccgateway.layers.groupTab') }]" :aria-label="t('ccgateway.features.ccTitle')" data-testid="feature-layer" />
             <RequestPolicySettings v-if="featureTab === 'global'" v-model="requestPolicy" :disabled="disabled" />
             <div v-else class="space-y-4" data-testid="feature-groups">
+              <SHint>{{ t('ccgateway.layers.groupOptional') }}</SHint>
               <SAlert v-if="groupsError" tone="danger">{{ t('ccgateway.layers.previewFailed') }} <SButton size="sm" @click="loadGroups">{{ t('ccgateway.layers.retry') }}</SButton></SAlert>
               <SSelect v-model="selectedGroup" :options="groupOptions" :aria-label="t('ccgateway.layers.selectGroup')" data-testid="feature-group" />
               <template v-if="currentGroup">
-                <SSettingRow :label="t('ccgateway.layers.enabled')"><SSwitch :model-value="currentGroup.enabled" data-testid="group-enabled" @update:model-value="setGroup({ enabled: $event })" /></SSettingRow>
+                <SSettingRow :label="t('ccgateway.layers.enabled')"><SSwitch :model-value="currentGroup.enabled" :disabled="disabled" data-testid="group-enabled" @update:model-value="setGroup({ enabled: $event })" /></SSettingRow>
                 <SHint v-if="!currentGroup.enabled">{{ t('ccgateway.layers.disabledHint') }}</SHint>
-                <SSettingRow :label="t('ccgateway.layers.allowAccount')" :description="t('ccgateway.layers.allowHint')"><SSwitch :model-value="currentGroup.allow_account_override" :disabled="!currentGroup.enabled" data-testid="group-allow-account" @update:model-value="setGroup({ allow_account_override: $event })" /></SSettingRow>
-                <RequestPolicySettings v-model="requestPolicy" :overrides="currentGroup.overrides" :inherited="requestPolicy" :effective="currentGroup.enabled ? undefined : requestPolicy" show-saved-when-disabled :disabled="disabled || !currentGroup.enabled" @update:overrides="setGroup({ overrides: $event })" />
+                <template v-if="currentGroup.enabled">
+                  <SSettingRow :label="t('ccgateway.layers.allowAccount')" :description="t('ccgateway.layers.allowHint')"><SSwitch :model-value="currentGroup.allow_account_override" :disabled="disabled" data-testid="group-allow-account" @update:model-value="setGroup({ allow_account_override: $event })" /></SSettingRow>
+                  <RequestPolicySettings v-model="requestPolicy" :overrides="currentGroup.overrides" :inherited="requestPolicy" :disabled="disabled" @update:overrides="setGroup({ overrides: $event })" />
+                </template>
               </template>
             </div>
           </div>

@@ -39,13 +39,22 @@ func TestFeatureLayersResolve(t *testing.T) {
 	for _, tc := range []struct {
 		id           int64
 		mode, reason string
-	}{{0, "build", "no_group"}, {2, "direct", "account_override_disabled"}, {3, "build", "group_disabled"}, {4, "build", "group_unconfigured"}} {
+	}{{0, "build", "no_group"}, {2, "direct", "account_override_disabled"}} {
 		r := cfg.ResolveFeaturePolicy(tc.id, account)
 		require.False(t, r.Editable)
 		require.Equal(t, tc.reason, r.DisabledReason)
 		require.Equal(t, tc.mode, r.Effective.RelayMode)
 		require.Equal(t, "worker", r.Effective.BuildAttachmentSources["platform_name"])
 		require.Equal(t, "client", r.Effective.BuildBillingSources["cc_version"])
+	}
+	for _, id := range []int64{3, 4} {
+		r := cfg.ResolveFeaturePolicy(id, account)
+		require.True(t, r.Editable)
+		require.Empty(t, r.DisabledReason)
+		require.Equal(t, "build", r.Effective.RelayMode)
+		require.Equal(t, "client", r.Effective.BuildAttachmentSources["platform_name"])
+		require.Equal(t, "worker", r.Effective.BuildBillingSources["cc_version"])
+		require.Equal(t, "account", r.Sources["build_billing_sources.cc_version"])
 	}
 	// Neither preview nor the next account can mutate cached global maps.
 	got.Effective.BuildAttachmentSources["platform_name"] = "erase"
@@ -130,6 +139,17 @@ func TestAccountFeaturePolicyRevisionAndClear(t *testing.T) {
 	require.EqualValues(t, 1, read.Revision)
 	require.Len(t, read.Overrides.BuildAttachmentSources, 10)
 	require.Len(t, read.Overrides.BuildBillingSources, 2)
+	for _, group := range []*GroupFeaturePolicy{nil, {Enabled: false, AllowAccountOverride: false}} {
+		cfg := Config{RequestPolicy: ptrPolicy(defaultRequestPolicy())}
+		if group != nil {
+			cfg.CCFeatureGroups = map[string]GroupFeaturePolicy{"7": *group}
+		}
+		wire, err := f.s.resolvedWorkerPolicy(ctx, cfg, id, 7)
+		require.NoError(t, err)
+		require.Equal(t, "direct", wire.RelayMode, "load the saved account override without enabled group settings")
+		require.Equal(t, "account-tools", wire.CustomToolPrefix)
+		require.Empty(t, wire.BuildBillingSources, "direct still omits content transformations")
+	}
 	read.Mode = "follow"
 	require.NoError(t, save(read))
 	read, err = LoadAccountFeaturePolicy(ctx, f.db.Pool, id)
@@ -174,8 +194,8 @@ func TestFeaturePreviewPermissionsAndNoWorker(t *testing.T) {
 	require.NoError(t, err)
 	code, out := f.callAs(uid, "GET", id, "cc-features?group_id="+strconv.FormatInt(gid, 10), "")
 	require.Equal(t, 200, code, out)
-	require.Equal(t, "group_unconfigured", data(out)["disabled_reason"])
-	require.Equal(t, false, data(out)["editable"])
+	require.Equal(t, "", data(out)["disabled_reason"])
+	require.Equal(t, true, data(out)["editable"])
 	code, _ = f.callAs(outsider, "GET", id, "cc-features", "")
 	require.Equal(t, 404, code)
 	code, _ = f.callAs(uid, "GET", id, "cc-features?group_id=99999", "")
@@ -183,6 +203,9 @@ func TestFeaturePreviewPermissionsAndNoWorker(t *testing.T) {
 	code, out = f.callAs(uid, "POST", id, "cc-features/preview", `{"group_id":null,"cc_feature_policy":{"mode":"custom","revision":0,"overrides":{"relay_mode":"direct"}}}`)
 	require.Equal(t, 200, code, out)
 	require.Equal(t, "build", data(out)["effective"].(map[string]any)["relay_mode"])
+	code, out = f.callAs(uid, "POST", id, "cc-features/preview", `{"group_id":`+strconv.FormatInt(gid, 10)+`,"cc_feature_policy":{"mode":"custom","revision":0,"overrides":{"relay_mode":"direct"}}}`)
+	require.Equal(t, 200, code, out)
+	require.Equal(t, "direct", data(out)["effective"].(map[string]any)["relay_mode"])
 	read, err := LoadAccountFeaturePolicy(ctx, f.db.Pool, id)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, read.Revision)

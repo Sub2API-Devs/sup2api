@@ -143,6 +143,17 @@ type FeatureResolution struct {
 	PolicyRevision string            `json:"policy_revision"`
 }
 
+// Group CC settings are optional. Only an enabled group policy can prohibit
+// account overrides; absent/disabled policies inherit global defaults.
+// A missing request group remains global-only (for example account probes).
+func (c Config) allowsAccountFeatures(groupID int64) bool {
+	if groupID <= 0 {
+		return false
+	}
+	g, configured := c.CCFeatureGroups[strconv.FormatInt(groupID, 10)]
+	return !configured || !g.Enabled || g.AllowAccountOverride
+}
+
 // ResolveFeaturePolicy is shared by preview and transport. A missing request
 // group deliberately disables account overrides; probes never choose a group.
 func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy) FeatureResolution {
@@ -168,11 +179,7 @@ func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy
 	switch {
 	case groupID <= 0:
 		reason = "no_group"
-	case !ok:
-		reason = "group_unconfigured"
-	case !g.Enabled:
-		reason = "group_disabled"
-	case !g.AllowAccountOverride:
+	case !c.allowsAccountFeatures(groupID):
 		reason = "account_override_disabled"
 	}
 	if groupID > 0 && ok && g.Enabled {
@@ -228,8 +235,7 @@ func SaveAccountFeaturePolicyTx(ctx context.Context, tx pgx.Tx, id int64, p Acco
 
 func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID, groupID int64) (RequestPolicy, error) {
 	account := AccountFeaturePolicy{Mode: "follow"}
-	g, ok := c.CCFeatureGroups[strconv.FormatInt(groupID, 10)]
-	if accountID > 0 && groupID > 0 && ok && g.Enabled && g.AllowAccountOverride {
+	if accountID > 0 && c.allowsAccountFeatures(groupID) {
 		var err error
 		account, err = LoadAccountFeaturePolicy(ctx, s.DB.Pool, accountID)
 		if err != nil {

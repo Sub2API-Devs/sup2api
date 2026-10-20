@@ -95,14 +95,14 @@ func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 									if enabled && group != "inherit" {
 										want, inherited, origin = group, group, "group"
 									}
-									if enabled && allow && mode == "custom" && account != "inherit" {
+									if (!enabled || allow) && mode == "custom" && account != "inherit" {
 										want, origin = account, "account"
 									}
 									r := cfg.ResolveFeaturePolicy(7, ap)
 									require.Equal(t, want, matrixValue(r.Effective, field.path))
 									require.Equal(t, inherited, matrixValue(r.Inherited, field.path))
 									require.Equal(t, origin, r.Sources[field.path])
-									require.Equal(t, enabled && allow, r.Editable)
+									require.Equal(t, !enabled || allow, r.Editable)
 									require.NoError(t, validateRequestPolicy(r.Effective))
 									for _, other := range matrixFields() {
 										if other.path != field.path {
@@ -124,7 +124,7 @@ func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 	require.Equal(t, 4128, cases)
 }
 
-func TestFeatureNoGroupAndMissingGroupIgnoreEveryAccountSource(t *testing.T) {
+func TestFeatureMissingGroupPolicyAllowsAccountsButNoRequestGroupStaysGlobal(t *testing.T) {
 	cases := 0
 	for _, field := range matrixFields() {
 		for _, global := range field.sources {
@@ -136,9 +136,13 @@ func TestFeatureNoGroupAndMissingGroupIgnoreEveryAccountSource(t *testing.T) {
 					}}
 					ap := AccountFeaturePolicy{Mode: "custom", Overrides: matrixOverride(field.path, account)}
 					r := cfg.ResolveFeaturePolicy(groupID, ap)
-					require.Equal(t, global, matrixValue(r.Effective, field.path), field.path)
-					require.Equal(t, "global", r.Sources[field.path])
-					require.False(t, r.Editable)
+					want, origin := global, "global"
+					if groupID > 0 {
+						want, origin = account, "account"
+					}
+					require.Equal(t, want, matrixValue(r.Effective, field.path), field.path)
+					require.Equal(t, origin, r.Sources[field.path])
+					require.Equal(t, groupID > 0, r.Editable)
 					cases++
 				}
 			}
@@ -272,7 +276,7 @@ func representativeFeatureCases() []matrixRepresentative {
 				if enabled {
 					want, origin = "worker", "group"
 				}
-				if enabled && allow && mode == "custom" {
+				if (!enabled || allow) && mode == "custom" {
 					want, origin = "erase", "account"
 				}
 				cases = append(cases, matrixRepresentative{Name: fmt.Sprintf("gates-enabled-%t-allow-%t-%s", enabled, allow, mode),
@@ -299,8 +303,12 @@ func representativeFeatureCases() []matrixRepresentative {
 	}
 	for _, groupID := range []int64{0, 999} {
 		p := matrixGlobal(field, "client")
+		want, origin := "client", "global"
+		if groupID > 0 {
+			want, origin = "erase", "account"
+		}
 		cases = append(cases, matrixRepresentative{Name: fmt.Sprintf("missing-request-group-%d", groupID), Field: field,
-			ExpectedSource: "client", ExpectedOrigin: "global", ExpectedMode: "build", GroupID: groupID,
+			ExpectedSource: want, ExpectedOrigin: origin, ExpectedMode: "build", GroupID: groupID,
 			Config:  Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, AllowAccountOverride: true, Overrides: matrixOverride(field, "worker")}}},
 			Account: AccountFeaturePolicy{Mode: "custom", Overrides: matrixOverride(field, "erase")},
 		})
