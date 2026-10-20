@@ -3,10 +3,30 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestContainerResourceReportingRequiresVerifiedCLICapability(t *testing.T) {
+	g := &Gateway{Runner: &Runner{}}
+	g.configureResourceReporting()
+	if g.Runner.ReportContainerResources {
+		t.Fatal("unverified CLI enabled container reporting")
+	}
+	g.CLIInfo.Capabilities = []string{"request_build", "container_resource_reporting_v1"}
+	g.configureResourceReporting()
+	if !g.Runner.ReportContainerResources ||
+		!slices.Contains(g.requestCapabilities(), "container_resource_reporting_v1") {
+		t.Fatal("supporting CLI did not enable container reporting")
+	}
+	g.MaintenanceOnly = true
+	g.configureResourceReporting()
+	if g.Runner.ReportContainerResources || slices.Contains(g.requestCapabilities(), "container_resource_reporting_v1") {
+		t.Fatal("maintenance runtime advertised active container reporting")
+	}
+}
 
 func TestEnvironmentManagementAPI(t *testing.T) {
 	dir := t.TempDir()

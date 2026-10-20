@@ -22,6 +22,7 @@ type Runner struct {
 	InternalBaseURL            string
 	CLI, Version, Plugin, Work string
 	WorkingDirectory           string // trusted stable account context; never a request path
+	ReportContainerResources   bool   // verified CLI reports allocation rather than host totals
 	Env                        []string
 	Proxy                      *ProxyConfigStore
 	Overrides                  *EnvironmentOverrides // account locale/timezone for new CLI processes
@@ -122,15 +123,25 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	return out
 }
 
-// baseEnv applies the account locale/timezone and egress and disables the
-// CLI's own updater. CLI installation is managed separately; a request must
-// not replace the validated executable.
+// baseEnv applies account settings and the managed request privacy defaults.
+// This is also the direct/build entrypoint; it does not use cliEnv.
 func (r *Runner) baseEnv() []string {
 	env := r.Env
 	if env == nil {
 		env = os.Environ()
 	}
-	return envWith(r.Proxy.Environment(r.Overrides.Apply(env)), map[string]string{"DISABLE_AUTOUPDATER": "1"})
+	values := map[string]string{
+		"DISABLE_AUTOUPDATER":                      "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"DISABLE_TELEMETRY":                        "1",
+		"DO_NOT_TRACK":                             "1",
+		"DISABLE_ERROR_REPORTING":                  "1",
+		"CLAUDE_CODE_ENABLE_TELEMETRY":             "0",
+	}
+	if r.ReportContainerResources {
+		values["CCG_REPORT_CONTAINER_RESOURCES"] = "1"
+	}
+	return envWith(r.Proxy.Environment(r.Overrides.Apply(env)), values, "CCG_HARDWARE_PROFILE_PATH", "CCG_REPORT_CONTAINER_RESOURCES", requestIdentityEnv)
 }
 
 // run owns one native request lifecycle. Usually it uses one CLI process;

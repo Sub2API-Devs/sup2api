@@ -16,6 +16,8 @@ export default {
     removeGroupConfirm: '将删除该分组的专门配置，分组回归继承全局默认；未保存的草稿一并丢弃。',
     draftHint: '改动随页面底部的保存一起提交。', resetToGlobal: '恢复为继承全局',
     billing: '计费归属', billingHint: '仅调整 cc_version 与 cc_entrypoint；服务端使用本次请求的 CLI 原生生成值。',
+    identity: '身份标识', identityHint: '只影响 metadata.user_id。替换（默认）用该账号邮箱派生的密钥做单向映射：同一账号同一会话结果稳定，不同账号不同。客户端未发送时不生成，上游请求不带 metadata。',
+    identitySources: { client: '客户端原始', worker: '服务端', replace: '替换' },
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
     environmentHint: '只修改已识别的完整环境或环境更新字段。客户端没有发送的环境字段不补齐。',
@@ -27,7 +29,7 @@ export default {
     latestSaved: '当前已保存的配置（供核对）', reviewLatest: '已读取最新版本；下方保留你的草稿。请与当前已保存配置核对后再保存。',
     invalid: 'CC 特性配置不合法，请检查来源选项。',
     disabledReasons: { no_group: '请选择账号所属分组查看生效配置。', group_unconfigured: '该分组尚未允许账号覆盖。', group_disabled: '该分组未启用覆盖，使用全局配置。', account_override_disabled: '该分组不允许账号覆盖。' },
-    fields: { platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
+    fields: { user_id: 'metadata.user_id', platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
   },
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {

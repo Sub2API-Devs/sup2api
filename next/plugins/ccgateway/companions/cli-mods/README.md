@@ -1,6 +1,10 @@
 # Claude Code mods 工具注入扩展
 
-本次开发目标已升级为 **2.1.304 / `ccgateway-v12-feature-policy`**，新增独立 SHA 绑定补丁、12 字段来源策略、外部历史保真以及原生归属捕获。旧 296/302 patcher 保留；下方 302 上线记录属于历史状态。本次没有自动部署。详见 [304 实现与验证记录](../../../../docs/CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)。
+当前本地开发目标为 **2.1.304 / `ccgateway-v14-account-identity`**，新增 `request_identity_v1`：**只有 OAuth（Claude 账号）**才映射，映射密钥由该账号的 **Claude 邮箱**派生（`CLAUDE_CODE_USER_EMAIL`，否则 `.claude.json` 的 `oauthAccount.emailAddress`），不保存任何密钥文件。同一邮箱在任意 Worker 上得到同一映射，不同账号不同。Worker 对客户端用户／会话 ID 做 HMAC-SHA256，输出 64 位 hex 设备 ID 和 UUIDv4 格式会话 ID；父会话使用同一会话映射。原生会话初始化使用该结果，metadata 与原生会话头保持一致，`account_uuid` 保留 Worker 原生账号上下文。direct 只替换 `metadata.user_id` 字符串，其余字节不变；build 在原生 metadata 组装及大小预算内映射。身份来源在插件设置中配置：**客户端原始／服务端／替换（默认）**，按全局→分组→账号继承；客户端没发 `metadata.user_id` 时不生成身份，build 也会删掉 CLI 自带的 metadata。**API Key 账号不做任何替换**：direct 原样转发，build 保持 CLI 原生 metadata。详见 [实现与验证](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#按账号邮箱的身份映射-v14未部署)。
+
+v14 同时保留 v13 的容器资源报告：新 Worker 为支持 `container_resource_reporting_v1` 的 CLI 设置可信 `CCG_REPORT_CONTAINER_RESOURCES=1`，采集时读取当前 cgroup v2 配额和使用量；不随机、不保存硬件 profile。Controller 验证数据卷硬配额后传入 `CCG_ACCOUNT_DISK_QUOTA_BYTES`，CLI 才会读取 `/work` 的实际剩余空间；旧无限额卷和宿主机 loadavg 不报告。实际资源控制、系统调用及原生设备 ID 的生成／存储保持原实现，非必要遥测及显式第三方 OTEL 在 Worker 请求进程入口关闭。账号身份映射不依赖 XFS 或磁盘迁移；磁盘配额的部署前提另见 [Controller 说明](../controller/README.md#account-data-volume-quotas)。
+
+此前 v12 提供独立 SHA 绑定补丁、12 字段来源策略、外部历史保真以及原生归属捕获。旧 296/302 patcher 保留；下方 302 上线记录属于历史状态。本次没有自动部署。已发布的 304 基线见 [304 实现与验证记录](../../../../docs/CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)。
 
 
 工作树中的错误透传修复（尚未发布）：HTTP 错误继续保留原状态码和正文；本地异常的 message 按 CC 实际返回值传递，不脱敏、不改写、不添加消息截断，不增加代理原因推断或额外探测。Worker 通过内部 `X-CCGateway-Error-Source` 传递已有错误来源，核心账号测试保留该来源，不再附加插件分类解释。既有 stderr 协议帧总大小限制、控制台错误正文预览及最近测试记录长度限制仍保留。普通上游响应不能设置这个内部来源；旧 Worker 未提供来源时沿用原行为。生效需同时发布 CLI 支持模块、Worker 和核心／前端。

@@ -32,7 +32,7 @@ references to preserve message/block positions. Generation fields go in paramete
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-export async function runRequestCommand(args, { oauthBeta } = {}) {
+export async function runRequestCommand(args, { oauthBeta, identityBody, identityBuild } = {}) {
   const controller = new AbortController();
   let response, interrupted = false, timedOut = false, outputError, deadline;
   let phase = 'input', responseStarted = false;
@@ -77,10 +77,14 @@ export async function runRequestCommand(args, { oauthBeta } = {}) {
       phase = 'build';
       const { buildRequest } = await import('./ccgateway-request-build.js');
       outgoing = { ...await buildRequest(body, options.headers, controller.signal), timeoutMs: timeout };
+      // Build always invents metadata; the identity source decides what the
+      // upstream request really carries, and a client that sent none gets none.
+      if (identityBuild) outgoing.body = identityBuild(outgoing.body, body.parameters?.metadata);
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+    if (options.mode === 'direct' && identityBody) outgoing.transformBody = identityBody;
     phase = 'transport';
     response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
       const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });

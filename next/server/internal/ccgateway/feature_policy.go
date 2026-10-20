@@ -24,6 +24,7 @@ type FeatureOverrides struct {
 	CustomToolPrefix       *string                         `json:"custom_tool_prefix,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 }
 
 func featureRevisionConflict() error {
@@ -90,6 +91,7 @@ func (p AccountFeaturePolicy) Validate() error {
 func copyPolicy(p RequestPolicy) RequestPolicy {
 	p.BuildAttachmentSources = cloneSourceMap(p.BuildAttachmentSources)
 	p.BuildBillingSources = cloneSourceMap(p.BuildBillingSources)
+	p.RequestIdentitySources = cloneSourceMap(p.RequestIdentitySources)
 	return p
 }
 
@@ -120,6 +122,9 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 	if p.BuildBillingSources == nil {
 		p.BuildBillingSources = features.BuildBillingSources{}
 	}
+	if p.RequestIdentitySources == nil {
+		p.RequestIdentitySources = features.RequestIdentitySources{}
+	}
 	for k, v := range o.BuildAttachmentSources {
 		p.BuildAttachmentSources[k] = v
 		if sources != nil {
@@ -130,6 +135,12 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 		p.BuildBillingSources[k] = v
 		if sources != nil {
 			sources["build_billing_sources."+k] = layer
+		}
+	}
+	for k, v := range o.RequestIdentitySources {
+		p.RequestIdentitySources[k] = v
+		if sources != nil {
+			sources["request_identity_sources."+k] = layer
 		}
 	}
 }
@@ -173,6 +184,12 @@ func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy
 			p.BuildBillingSources[k] = "client"
 		}
 		sources["build_billing_sources."+k] = "global"
+	}
+	for _, k := range features.RequestIdentityFields {
+		if p.RequestIdentitySources[k] == "" {
+			p.RequestIdentitySources[k] = "replace"
+		}
+		sources["request_identity_sources."+k] = "global"
 	}
 	g, ok := c.CCFeatureGroups[strconv.FormatInt(groupID, 10)]
 	reason := ""

@@ -39,6 +39,7 @@ type buildRequestPolicy struct {
 	ContractVersion int                             `json:"contract_version"`
 	Sources         features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	Billing         features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	Identity        features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	RelayMode       string                          `json:"relay_mode,omitempty"`
 	CLIVersion      string                          `json:"cli_version,omitempty"`
 }
@@ -198,6 +199,32 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		return
 	}
 	d.prepareSecrets(raw, r.Header.Values("anthropic-beta")...)
+	if err := policy.Identity.Validate(); err != nil {
+		fail(400, "invalid_request_error", err.Error())
+		return
+	}
+	// An explicitly configured source must be honoured or refused; the default
+	// source simply stays unapplied on a CLI that cannot express it, so an old
+	// runtime keeps serving requests.
+	identityMode := policy.Identity.Mode()
+	if identityMode != "client" && !g.CLIInfo.supports(features.RequestIdentityCapability) {
+		if policy.Identity["user_id"] != "" {
+			fail(409, "configuration_error", "Loaded CLI does not support the requested identity source")
+			return
+		}
+		identityMode = "client"
+	}
+	var identity *requestIdentity
+	if g.requestIdentityEnabled && identityMode != "client" {
+		if key, oauth := accountIdentityKey(g.runner(r.Context()).baseEnv()); oauth {
+			mapped, mapErr := mapRequestIdentity(key, raw, identityMode)
+			if mapErr != nil {
+				fail(400, "invalid_request_error", mapErr.Error())
+				return
+			}
+			identity = &mapped
+		}
+	}
 	d.request(raw, r.Header)
 	input := raw
 	if requestMode == "build" {
@@ -301,6 +328,14 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	cmd := exec.CommandContext(ctx, runner.CLI, args...)
 	cmd.Env, cmd.Dir, cmd.Stdin = runner.baseEnv(), dir, bytes.NewReader(input)
+	// The CLI needs the context whenever it must produce a value: a replaced
+	// client identity, or the client's own session for a forwarded request.
+	if identity != nil && (identity.Rewrite || identity.Session != "") {
+		mapped, _ := json.Marshal(identity)
+		cmd.Env = envWith(cmd.Env, map[string]string{
+			requestIdentityEnv: string(mapped),
+		}, "CLAUDE_CODE_REMOTE_SESSION_ID")
+	}
 	// The patched request command runs before the interactive CLI initializer.
 	// Apply its non-interactive entrypoint default at process startup; an
 	// explicitly configured SDK/editor entrypoint remains unchanged.

@@ -15,6 +15,108 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRequestCommandReportsContainerResourcesAndDisablesTelemetry(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	for _, mode := range []string{"direct", "build"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			target := filepath.Join(root, "child-env.json")
+			g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
+				Runner: &Runner{CLI: exe, Work: root, ReportContainerResources: true, Env: envWith(os.Environ(), map[string]string{
+					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"),
+					"CCG_TEST_REQUEST_ENV_CAPTURE": target, "CCG_HARDWARE_PROFILE_PATH": "untrusted-inherited.json",
+					"CCG_REPORT_CONTAINER_RESOURCES":           "0",
+					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "", "DISABLE_TELEMETRY": "",
+					"DO_NOT_TRACK": "0", "DISABLE_ERROR_REPORTING": "", "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+				})}}
+			req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"max_tokens":16}`))
+			req.Header.Set("x-api-key", "fixture")
+			out := httptest.NewRecorder()
+			g.ServeHTTP(out, req)
+			require.Equal(t, 200, out.Code, out.Body.String())
+			data, err := os.ReadFile(target)
+			require.NoError(t, err)
+			var child map[string]string
+			require.NoError(t, json.Unmarshal(data, &child))
+			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING"} {
+				require.Equal(t, "1", child[name], name)
+			}
+			require.Equal(t, "0", child["CLAUDE_CODE_ENABLE_TELEMETRY"])
+			require.Equal(t, "1", child["CCG_REPORT_CONTAINER_RESOURCES"])
+			require.Empty(t, child["CCG_HARDWARE_PROFILE_PATH"])
+		})
+	}
+}
+
+func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	for _, mode := range []string{"direct", "build"} {
+		for _, apiKey := range []bool{false, true} {
+			name := mode
+			if apiKey {
+				name += "/api-key"
+			}
+			t.Run(name, func(t *testing.T) {
+				root := t.TempDir()
+				target := filepath.Join(root, "identity-env.json")
+				config := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(config, ".claude.json"), []byte(`{"oauthAccount":{"emailAddress":"account@example.invalid"}}`), 0600))
+				require.NoError(t, os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"fixture"}}`), 0600))
+				account := map[string]string{
+					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"),
+					"CCG_TEST_REQUEST_ENV_CAPTURE": target, requestIdentityEnv: "untrusted",
+					"CLAUDE_CODE_REMOTE_SESSION_ID": "untrusted",
+					"HOME":                          config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,
+				}
+				remove := []string{"CLAUDE_CODE_USER_EMAIL"}
+				if apiKey {
+					account["ANTHROPIC_API_KEY"] = "fixture"
+				} else {
+					remove = append(remove, "ANTHROPIC_API_KEY")
+				}
+				g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
+					CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestIdentityCapability}},
+					Runner:  &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), account, remove...)}}
+				g.configureRequestIdentity()
+				body := `{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"source-device\",\"session_id\":\"source-session\"}"}}`
+				request := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
+				request.Header.Set("x-api-key", "fixture")
+				response := httptest.NewRecorder()
+				g.ServeHTTP(response, request)
+				require.Equal(t, 200, response.Code, response.Body.String())
+				data, err := os.ReadFile(target)
+				require.NoError(t, err)
+				var env map[string]string
+				require.NoError(t, json.Unmarshal(data, &env))
+				if apiKey {
+					require.Empty(t, env[requestIdentityEnv], "an API-key account keeps its own identifiers")
+					require.Equal(t, "untrusted", env["CLAUDE_CODE_REMOTE_SESSION_ID"])
+					return
+				}
+				var identity requestIdentity
+				require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity))
+				require.Empty(t, env["CLAUDE_CODE_REMOTE_SESSION_ID"], "the native remote-session override would hash the ID again")
+				require.NotContains(t, env[requestIdentityEnv], "source-device")
+				require.NotContains(t, env[requestIdentityEnv], "source-session")
+				require.Len(t, identity.Device, 64)
+				require.True(t, identity.Rewrite)
+				// A request that carries no identity starts the CLI natively.
+				request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}]}`))
+				request.Header.Set("x-api-key", "fixture")
+				response = httptest.NewRecorder()
+				g.ServeHTTP(response, request)
+				require.Equal(t, 200, response.Code, response.Body.String())
+				data, err = os.ReadFile(target)
+				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal(data, &env))
+				require.Empty(t, env[requestIdentityEnv], "no client identity: the CLI runs natively")
+			})
+		}
+	}
+}
+
 func TestBuildAttachmentsReachCLIWithoutExtraGenerations(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)

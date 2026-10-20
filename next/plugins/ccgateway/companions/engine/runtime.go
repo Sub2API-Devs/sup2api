@@ -162,6 +162,8 @@ func NewRuntime(o Options) (*Runtime, error) {
 	g.RequestMode = o.RequestMode
 	g.CLIInfo = cliInfo
 	g.MaintenanceOnly = o.MaintenanceOnly
+	g.configureResourceReporting()
+	g.configureRequestIdentity()
 	g.Runner.WorkingDirectory = o.WorkingDirectory
 	if g.Runner.WorkingDirectory == "" {
 		g.Runner.WorkingDirectory = root

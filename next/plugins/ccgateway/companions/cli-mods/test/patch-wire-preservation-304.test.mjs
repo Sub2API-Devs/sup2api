@@ -11,6 +11,7 @@ import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requestSessionID } from '../request-identity.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../../../..');
@@ -163,4 +164,78 @@ test('external tools override leaves native-derived thinking and tool-choice val
   const { result } = assemble({ external: true, tools: [{ name: 'ToolSearch' }], choice, thinking });
   assert.deepEqual(plain(result.tool_choice), choice);
   assert.deepEqual(plain(result.thinking), thinking);
+});
+
+function nativeFunction(directory, file, name) {
+  const source = fs.readFileSync(path.join(directory, file), 'utf8');
+  const ast = parser.parse(source, { sourceType: 'module' });
+  const node = one(find(ast, n => n.type === 'FunctionDeclaration' && n.id?.name === name), file + ':' + name);
+  return source.slice(node.start, node.end);
+}
+
+test('container resource reporting does not read host CPU, RAM, load or disk', async () => {
+  const resources = { cpus: 2, memory_gb: 2, free_mem_mb: 1536 };
+  const forbidden = () => { throw Error('host hardware was read'); };
+  const context = {
+    ccgContainerResources: () => resources, qir: () => true, AbortSignal,
+    w8r: async () => ({ complete: true, profile: { tools: ['fixture'] } }),
+    s: 2000, c: [], $Hr: 100, UHr: 10000, FHr: 1e6, a: 2n ** 30n,
+    d: forbidden, p: forbidden, u: forbidden, Ne: value => value,
+    _: JSON.stringify, m: forbidden, l: forbidden, U: value => value, f() {}, g() {},
+  };
+  vm.createContext(context);
+  vm.runInContext(nativeFunction(output, 'chunk-yqea5hk4.js', 'Ali'), context);
+  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2 });
+  context.ccgContainerResources = () => ({ ...resources, disk_free_gb: 7 });
+  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2, disk_free_gb: 7 });
+  context.ccgContainerResources = () => ({});
+  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'] }, 'unknown limits must not fall back to the host');
+  context.qir = () => false;
+  context.ccgContainerResources = forbidden;
+  assert.equal(await context.Ali('/work'), undefined, 'native feature gate stays ahead of collection');
+
+  const performance = {
+    ccgContainerResources: () => resources,
+    sce: () => ({ getEntriesByType: () => [{ name: 'main_after_run', startTime: 1 }] }),
+    _t: {}, ft: new Set(), F: { freemem: forbidden, loadavg: forbidden },
+    a: {}, v: undefined, H: undefined, yGt: () => undefined,
+  };
+  vm.createContext(performance);
+  vm.runInContext(nativeFunction(output, 'chunk-sx3g9k86.js', 'V'), performance);
+  const result = performance.V({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
+  assert.equal(result.free_mem_mb, 1536);
+  assert(!Object.hasOwn(result, 'load_avg_1m'));
+  performance.ccgContainerResources = () => ({});
+  const unknown = performance.V({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
+  assert(!Object.hasOwn(unknown, 'free_mem_mb'));
+  assert(!Object.hasOwn(unknown, 'load_avg_1m'));
+  assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
+  assert.equal(patchManifest.extension, 'ccgateway-v14-account-identity');
+  assert(patchManifest.capabilities.includes('request_identity_v1'));
+});
+
+test('container reporting patches preserve resource admission, Git concurrency and native identity generators', () => {
+  for (const [file, names] of [
+    ['chunk-rncrmfyt.js', ['Jwn', 'rOr', 'Xnt', 'poo']],
+    ['chunk-7p6jp6kj.js', ['ZM', 'I_t', 'd1']],
+  ]) for (const name of names) assert.equal(nativeFunction(output, file, name), nativeFunction(baseline, file, name));
+});
+
+test('the patched root session is the Worker identity, never a re-derived UUID', () => {
+  const mapped = { version: 2, mode: 'replace', rewrite: true, device_id: 'a'.repeat(64),
+    session_id: '12345678-1234-4123-8123-123456789012', parent_session_id: '23456789-2345-4234-9234-234567890123',
+    carrier: 'json' };
+  const old = process.env.CCG_REQUEST_IDENTITY;
+  process.env.CCG_REQUEST_IDENTITY = JSON.stringify(mapped);
+  try {
+    const rootContext = { ccgRequestSessionID: requestSessionID, Xzr: x => x, vn: () => ({}),
+      ier: () => assert.fail('must not hash the mapped session through remote UUIDv5'),
+      Ure: () => assert.fail('mapped session must not be replaced by a random session') };
+    vm.createContext(rootContext);
+    vm.runInContext(nativeFunction(output, 'chunk-dxktn51d.js', 'Yi'), rootContext);
+    assert.equal(rootContext.Yi('/work').id, mapped.session_id);
+  } finally {
+    if (old === undefined) delete process.env.CCG_REQUEST_IDENTITY;
+    else process.env.CCG_REQUEST_IDENTITY = old;
+  }
 });

@@ -21,22 +21,23 @@ import (
 )
 
 type Gateway struct {
-	RequestMode     string
-	CLIInfo         cliRequestInfo
-	MaintenanceOnly bool
-	credits         *creditRegistry
-	resources       *resourceBroker
-	Runner          *Runner
-	Cache           *HistoryCache
-	Key             string
-	Timeout         time.Duration
-	Slots           chan struct{}
-	NativeAllowed   map[string]bool
-	RequestLogDir   string
-	RequestLogs     *requestLogStore
-	mu              sync.Mutex
-	busy            map[string]bool
-	messageIDs      *messageOwnership
+	RequestMode            string
+	CLIInfo                cliRequestInfo
+	MaintenanceOnly        bool
+	credits                *creditRegistry
+	resources              *resourceBroker
+	Runner                 *Runner
+	Cache                  *HistoryCache
+	Key                    string
+	Timeout                time.Duration
+	Slots                  chan struct{}
+	NativeAllowed          map[string]bool
+	RequestLogDir          string
+	RequestLogs            *requestLogStore
+	mu                     sync.Mutex
+	busy                   map[string]bool
+	messageIDs             *messageOwnership
+	requestIdentityEnabled bool
 }
 
 func apiError(w http.ResponseWriter, status int, kind, msg string) {
@@ -656,6 +657,8 @@ func Serve() error {
 	}
 	g.CLIInfo, _ = readCLIRequestInfo(cli, version, Options{})
 	g.CLIInfo.SHA256 = os.Getenv("CCG_CLI_SHA256")
+	g.configureResourceReporting()
+	g.configureRequestIdentity()
 	g.Runner.WorkingDirectory = envDefault("CCG_WORKING_DIRECTORY", root)
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
 	relayHost := "127.0.0.1"

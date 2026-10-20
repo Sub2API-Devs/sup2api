@@ -44,6 +44,10 @@ func (i cliRequestInfo) supports(capability string) bool {
 	return slices.Contains(i.Capabilities, capability)
 }
 
+func (g *Gateway) configureResourceReporting() {
+	g.Runner.ReportContainerResources = !g.MaintenanceOnly && g.CLIInfo.supports(features.ContainerResourceReportingCapability)
+}
+
 func (g *Gateway) requestCapabilities() []string {
 	out := []string{}
 	if g.MaintenanceOnly || !g.CLIInfo.supports("request_build") {
@@ -61,6 +65,12 @@ func (g *Gateway) requestCapabilities() []string {
 	}
 	if g.CLIInfo.supports("request_direct") {
 		out = append(out, features.RequestPolicyModeCapability)
+	}
+	if g.Runner != nil && g.Runner.ReportContainerResources && g.CLIInfo.supports(features.ContainerResourceReportingCapability) {
+		out = append(out, features.ContainerResourceReportingCapability)
+	}
+	if g.requestIdentityEnabled {
+		out = append(out, features.RequestIdentityCapability)
 	}
 	return out
 }

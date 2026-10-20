@@ -85,19 +85,20 @@ async function startRuntime(options = {}) {
   }
   worker = cp.spawn(workerInput, [], { uid: 1000, gid: 1000, cwd: workingDirectory, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
   for (const stream of [worker.stdout, worker.stderr]) stream.on('data', data => { workerLog = (workerLog + data).slice(-12000); });
+  let workerCapabilities = [];
   try {
     let healthy = false;
     for (let i = 0; i < 300; i++) {
       if (worker.exitCode !== null) throw Error('Worker exited: ' + workerLog);
       try { const r = await fetch('http://127.0.0.1:18087/health'); const health = await r.json();
-        if (r.status === 200) { assert.equal(health.cli_sha256, cliSHA); healthy = true; break; } } catch (error) { if (error.code === 'ERR_ASSERTION') throw error; }
+        if (r.status === 200) { assert.equal(health.cli_sha256, cliSHA); workerCapabilities = health.capabilities ?? []; healthy = true; break; } } catch (error) { if (error.code === 'ERR_ASSERTION') throw error; }
       await sleep(100);
     }
     assert(healthy, 'Worker readiness timed out');
     assert.equal(captures.length, 0, 'readiness probes cannot issue model calls');
   } catch (error) { await close(); throw error; }
   return {
-    identity: { cli: info, cli_sha256: cliSHA, worker_sha256: sha(fs.readFileSync(workerInput)) },
+    identity: { cli: info, cli_sha256: cliSHA, worker_sha256: sha(fs.readFileSync(workerInput)), worker_capabilities: workerCapabilities },
     captures, workingDirectory, close,
     async send(test) {
       responseFixture = test.response_fixture ?? {};

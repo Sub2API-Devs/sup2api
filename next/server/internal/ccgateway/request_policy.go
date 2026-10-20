@@ -12,6 +12,7 @@ import (
 type RequestPolicy struct {
 	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
+	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	SchemaVersion          int                             `json:"schema_version"`
 	UnknownField           string                          `json:"unknown_field"`
 	AllowFast              bool                            `json:"allow_fast"`
@@ -106,6 +107,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 		return err
 	}
 	if err := p.BuildAttachmentSources.Validate(); err != nil {
+		return err
+	}
+	if err := p.RequestIdentitySources.Validate(); err != nil {
 		return err
 	}
 	if p.SchemaVersion != 0 && p.SchemaVersion != features.PolicySchemaVersion {

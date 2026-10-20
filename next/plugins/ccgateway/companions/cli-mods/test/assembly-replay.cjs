@@ -2,7 +2,7 @@
 // Known tool/parameter drops fail; unproved native-model rules remain unknown.
 const fs = require('node:fs'), path = require('node:path');
 const { startRuntime } = require('./assembly-runtime.cjs');
-const { sha, normalizeSystem, same, differences, definitionHash } = require('./replay-helpers.cjs');
+const { sha, normalizeSystem, same, differences, definitionHash, onlyUserIDChanged } = require('./replay-helpers.cjs');
 const manifestPath = process.env.PROBE_MANIFEST || path.join(__dirname, 'fixtures/assembly-cases.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const record = { suite: manifest.suite, scope: manifest.scope, manifest_sha256: sha(fs.readFileSync(manifestPath)),
@@ -13,7 +13,8 @@ function validNativeMetadata(value) {
   try {
     if (!same(Object.keys(value).sort(), ['user_id'])) return false;
     const identity = JSON.parse(value.user_id);
-    return same(Object.keys(identity).sort(), ['account_uuid', 'device_id', 'session_id']) &&
+    return same(Object.keys(identity).filter(k => k !== 'parent_session_id').sort(), ['account_uuid', 'device_id', 'session_id']) &&
+      (identity.parent_session_id === undefined || /^[a-f0-9-]{36}$/.test(identity.parent_session_id)) &&
       /^[a-f0-9]{64}$/.test(identity.device_id) && identity.account_uuid === '' &&
       /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(identity.session_id);
   } catch { return false; }
@@ -80,8 +81,15 @@ function evaluate(test, response) {
     check('content.messages', result.diffs.messages.length === 0);
     if (contract.tools === 'exact') check('content.tools-exact', result.diffs.tools.length === 0);
     if (test.mode === 'direct' || contract.whole_body === 'exact') {
-      check('send.direct-whole-body', same(wire, test.body), { diff: differences(test.body, wire) });
-      check('send.direct-raw-bytes', capture.raw === response.sent_raw, { expected_sha256: sha(response.sent_raw), actual_sha256: sha(capture.raw) });
+      const privacy = test.transport !== 'standalone-cli' && runtime.identity.worker_capabilities.includes('request_identity_v1') &&
+        typeof test.body.metadata?.user_id === 'string' && test.body.metadata.user_id !== '';
+      if (privacy) {
+        check('send.direct-only-user-id-change', onlyUserIDChanged(response.sent_raw, capture.raw));
+        check('metadata.private-identity', validNativeMetadata({ user_id: wire.metadata?.user_id }));
+      } else {
+        check('send.direct-whole-body', same(wire, test.body), { diff: differences(test.body, wire) });
+        check('send.direct-raw-bytes', capture.raw === response.sent_raw, { expected_sha256: sha(response.sent_raw), actual_sha256: sha(capture.raw) });
+      }
     }
     for (const [key, value] of Object.entries(contract.parameters ?? {})) {
       check('parameter.' + key, same(wire[key], value), { expected: value, actual: wire[key] ?? '<absent>' });

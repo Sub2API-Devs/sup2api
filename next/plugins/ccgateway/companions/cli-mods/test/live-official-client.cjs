@@ -4,7 +4,7 @@
 const fs = require('node:fs'), http = require('node:http'), cp = require('node:child_process');
 const crypto = require('node:crypto'), assert = require('node:assert/strict'), os = require('node:os');
 const { startRuntime } = require('./assembly-runtime.cjs');
-const { sha, normalizeSystem, differences, same } = require('./replay-helpers.cjs');
+const { sha, normalizeSystem, differences, same, onlyUserIDChanged } = require('./replay-helpers.cjs');
 const official = process.env.PROBE_OFFICIAL || '/input/claude-official-304';
 const officialSHA = 'ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912';
 assert.equal(sha(fs.readFileSync(official)), officialSHA);
@@ -37,7 +37,7 @@ const report = {
   suite: 'live-unmodified-official-2.1.304-through-worker',
   source_cli_sha256: officialSHA, source_cli_version: officialVersion, harness_sha256: sha(fs.readFileSync(__filename)),
   provenance: 'Every model request is freshly emitted by the official executable during this run; the ingress forwards its original bytes and only supplies the trusted test policy header.',
-  byte_evidence: 'Ingress passes the original Buffer to fetch without reserialization (source-level evidence). The direct scenario independently compares ingress bytes against final model-side bytes. Build scenarios compare structured content and selected transformations; no raw-byte tap inside Worker is claimed.',
+  byte_evidence: 'Ingress passes the original Buffer to fetch without reserialization (source-level evidence). Direct compares all bytes, with only the metadata.user_id exception when Worker identity mapping is active. Build compares structured content and selected transformations; no raw-byte tap inside Worker is claimed.',
   scope: 'One isolated network-none Docker container, separate official and patched CLI processes, synthetic API keys, loopback model responses. No real Anthropic model calls and no production gateway deployment.',
   cases: [], auxiliary_requests: [], ingress_errors: [],
 };
@@ -138,7 +138,8 @@ function nativeMetadata(value) {
   try {
     const parsed = JSON.parse(value.user_id);
     return same(Object.keys(value).sort(), ['user_id']) &&
-      same(Object.keys(parsed).sort(), ['account_uuid', 'device_id', 'session_id']) &&
+      same(Object.keys(parsed).filter(k => k !== 'parent_session_id').sort(), ['account_uuid', 'device_id', 'session_id']) &&
+      (parsed.parent_session_id === undefined || /^[a-f0-9-]{36}$/.test(parsed.parent_session_id)) &&
       /^[a-f0-9]{64}$/.test(parsed.device_id) && parsed.account_uuid === '' &&
       /^[a-f0-9-]{36}$/.test(parsed.session_id);
   } catch { return false; }
@@ -146,7 +147,7 @@ function nativeMetadata(value) {
 (async () => {
   runtime = await startRuntime();
   report.identity = runtime.identity;
-  assert.equal(runtime.identity.worker_sha256, '98f2746fed500a3b6fb4a6574431d2ebe74bd1ea8e269f6b07895149eced79db');
+  assert.equal(runtime.identity.worker_sha256, process.env.PROBE_EXPECTED_WORKER_SHA256 ?? '98f2746fed500a3b6fb4a6574431d2ebe74bd1ea8e269f6b07895149eced79db');
   proxy = http.createServer(async (req, res) => {
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -217,7 +218,13 @@ function nativeMetadata(value) {
         check('content.messages', row.diffs.messages.length === 0);
         check('content.tools', row.diffs.tools.length === 0);
         check('billing.one-block', billingLines(wire).length === 1);
-        if (scenario.mode === 'direct') check('direct.raw-bytes', outgoing.raw === inbound.raw);
+        if (scenario.mode === 'direct') {
+          const privacy = runtime.identity.worker_capabilities.includes('request_identity_v1') &&
+            typeof input.metadata?.user_id === 'string' && input.metadata.user_id !== '';
+          check(privacy ? 'direct.only-user-id-change' : 'direct.raw-bytes',
+            privacy ? onlyUserIDChanged(inbound.raw, outgoing.raw) : outgoing.raw === inbound.raw);
+          if (privacy) check('metadata.native-identity', nativeMetadata(wire.metadata));
+        }
         else {
           check('metadata.native-identity', nativeMetadata(wire.metadata));
           const parameters = object => Object.fromEntries(Object.entries(object).filter(([k]) => !['system', 'messages', 'tools', 'metadata'].includes(k)));

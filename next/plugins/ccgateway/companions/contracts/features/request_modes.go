@@ -2,6 +2,9 @@ package features
 
 import "slices"
 
+const ContainerResourceReportingCapability = "container_resource_reporting_v1"
+const RequestIdentityCapability = "request_identity_v1"
+
 // RequestRuntimeCatalog distinguishes declared Worker code from capabilities
 // observed on the selected CLI. It never promotes model/provider verification.
 func RequestRuntimeCatalog(capabilities []string) Document {

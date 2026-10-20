@@ -16,6 +16,8 @@ export default {
     removeGroupConfirm: 'Removes this group policy so the group inherits the global defaults again; unsaved drafts are discarded.',
     draftHint: 'Changes are submitted with the save button at the bottom of the page.', resetToGlobal: 'Reset to global',
     billing: 'Billing attribution', billingHint: 'Only cc_version and cc_entrypoint are changed. Server values use native CLI generation for this request.',
+    identity: 'Identity', identityHint: 'Affects metadata.user_id only. Replace (default) maps the value one way with a key derived from the account email: stable per account and conversation, different across accounts. Nothing is generated when the client sends none, so the request carries no metadata.',
+    identitySources: { client: 'Client value', worker: 'Server', replace: 'Replace' },
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
     environmentHint: 'Only recognized full environment or update fields are changed. Missing client environment fields are not added.',
@@ -27,7 +29,7 @@ export default {
     latestSaved: 'Current saved settings for comparison', reviewLatest: 'Latest revision loaded. Your draft remains below. Compare it with the current saved settings before saving.',
     invalid: 'Invalid CC feature settings. Check source options.',
     disabledReasons: { no_group: 'Select an account group to preview its settings.', group_unconfigured: 'This group has not enabled account overrides.', group_disabled: 'This group uses global settings.', account_override_disabled: 'This group does not allow account overrides.' },
-    fields: { platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
+    fields: { user_id: 'metadata.user_id', platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
   },
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {

@@ -68,8 +68,9 @@ export async function openModelRequest(options, owner, signal, createClient, tra
     try {
       const headers = new Headers(options.headers);
       if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+      const body = options.transformBody ? options.transformBody(options.rawBody ?? options.body) : options.rawBody ?? options.body;
       response = await client.post('/v1/messages', {
-        body: options.rawBody ?? options.body, stream: options.body.stream === true,
+        body, stream: options.body.stream === true,
         headers, signal: entry.controller.signal,
         maxRetries: 0, timeout: options.timeoutMs ?? defaultTimeout,
       }).asResponse();

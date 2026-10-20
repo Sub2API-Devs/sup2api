@@ -18,4 +18,21 @@ const definitionHash = test => sha(Object.fromEntries([
   'id', 'group', 'body', 'raw_body', 'contract', 'runtime_environment', 'mode',
   'transport', 'policy', 'headers', 'response_fixture', 'unknown_reason',
 ].map(key => [key, test[key] ?? null])));
-module.exports = { sha, normalizeSystem, same, summary, differences, definitionHash };
+// Independent oracle: structured comparison locates the changed field, and
+// token replacement proves every other byte stayed intact (including numbers).
+function onlyUserIDChanged(before, after) {
+  try {
+    const input = JSON.parse(before), output = JSON.parse(after);
+    const source = input.metadata?.user_id, target = output.metadata?.user_id;
+    if (typeof source !== 'string' || typeof target !== 'string' || source === target) return false;
+    const expected = structuredClone(input);
+    expected.metadata.user_id = target;
+    if (!same(expected, output)) return false;
+    for (const match of before.matchAll(/"(?:[^"\\]|\\.)*"/g)) {
+      if (JSON.parse(match[0]) === source &&
+          before.slice(0, match.index) + JSON.stringify(target) + before.slice(match.index + match[0].length) === after) return true;
+    }
+  } catch {}
+  return false;
+}
+module.exports = { sha, normalizeSystem, same, summary, differences, definitionHash, onlyUserIDChanged };
