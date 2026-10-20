@@ -135,27 +135,8 @@ export default {
     readOnly: 'Starting the container and authorizing need the right to edit this account (or settings:manage); ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
     saveBlocked: 'The account can be saved once Claude is authorized', saveBlockedFix: 'Show the authorization steps',
     blockedTitle: 'Account container stopped: {reason}', blockedUnknown: 'the core stopped this container',
-    blocked: {
-      fix: {
-        no_proxy: 'Claude Code accounts must reach the internet through a proxy (the container has no direct egress). Pick or paste a proxy under "Proxy" above and save; the container restarts by itself.',
-        proxy_disabled: 'Pick another proxy under "Proxy" above and save, or enable the proxy again on the Proxies page, then synchronize again.',
-        account_disabled: 'Disabled accounts run no container. Reset or enable the account in the list first, then come back to authorize it.',
-        unknown: 'Check the account status and its proxy, then synchronize again.'
-      },
-      fixDraft: {
-        no_proxy: 'Pick a proxy under "Proxy" above; the container restarts with it.',
-        proxy_disabled: 'Pick another proxy under "Proxy" above (the container is rebuilt with it), or enable the proxy again on the Proxies page and synchronize again.',
-        unknown: 'Check the proxy, then synchronize again, or delete the container and start over.'
-      },
-      fixReauth: {
-        no_proxy: 'The re-authorization container uses the account’s saved proxy. Pick a proxy under "Proxy" above and save, then delete the container and start over.',
-        proxy_disabled: 'The account’s saved proxy is disabled. Pick another proxy under "Proxy" above, save, then delete the container and start over; or enable the proxy again on the Proxies page and synchronize again.',
-        account_disabled: 'The account is disabled and its container is stopped. Enable the account before re-authorizing in its existing container.',
-        unknown: 'Check the account status and its proxy, then synchronize again, or delete the container and start over.'
-      },
-      pickProxy: 'Pick a proxy', openProxies: 'Open Proxies'
-    },
-    proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Without a proxy the container connects directly from the server’s own IP; if the chosen proxy is disabled the container stops instead of falling back to direct.', proxyDirect: 'direct (no proxy)'
+    blocked: { pickProxy: 'Pick a proxy' },
+    proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Without a proxy the container connects directly from the server’s own IP. A disabled proxy keeps being used; if the proxy is deleted or unusable, requests fail instead of falling back to direct.', proxyDirect: 'direct (no proxy)'
   },
   reauth: {
     replaceTitle: "Re-authorize in place", prepare: "Start authorization", migrate: 'Migrate authorization files', switchNow: "Confirm authorization",
@@ -344,10 +325,10 @@ export default {
     not_configured: 'The account container runtime is not ready: per-account containers are off, the Docker connection is not configured, or the runtime is not installed',
     not_synchronized: 'The container is not ready yet; wait a moment',
     sync_failed: 'Creating the container or checking its proxy failed; check the proxy and retry',
-    no_proxy: 'no proxy',
-    proxy_disabled: 'its proxy is disabled',
+    proxy_disabled: 'the chosen proxy is disabled; pick another one',
     proxy_not_found: 'The chosen proxy does not exist or is not yours to use; pick another one',
-    account_disabled: 'the account is disabled',
+    proxy_unavailable: 'the bound proxy no longer exists or has an unsupported protocol; pick another one',
+    account_deleted: 'the account was deleted',
     draft_not_found: 'This container no longer exists (it may have been cleaned up after a long pause); start the container again',
     runtime_not_ready: 'The existing container is not ready. Synchronize its runtime before re-authorizing.',
     runtime_cleanup_failed: 'Runtime cleanup failed; retry the operation.',
@@ -356,6 +337,7 @@ export default {
     not_found: 'The container does not exist',
     api_key_account: 'API key accounts need no Claude authorization',
     runtime_unavailable: 'The container runtime is unavailable',
+    disk_quota_unavailable: 'The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.',
     method_not_allowed: 'The container controller does not allow this operation',
     authentication_error: 'Claude Code authentication failed; authorize again',
     not_found_error: 'Claude Code could not find the requested resource',

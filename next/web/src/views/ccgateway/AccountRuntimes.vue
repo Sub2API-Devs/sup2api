@@ -30,7 +30,7 @@ interface Row {
   name: string
   type: string
   status: string
-  /** Why a blocked container is stopped (no_proxy / proxy_disabled / account_disabled). */
+  /** Why a blocked container is stopped (account_deleted). */
   reason: string
   container: string
   phase: CcgContainer

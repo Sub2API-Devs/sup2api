@@ -20,8 +20,8 @@ func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accoun
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if !d.Enabled {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, d.Blocked))
+	if reason := d.unavailable(); reason != "" {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
 		return
 	}
 	var body []byte

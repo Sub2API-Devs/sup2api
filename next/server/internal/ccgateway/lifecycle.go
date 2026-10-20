@@ -49,9 +49,6 @@ func (s *Service) AccountPreparationAction(ctx context.Context, p core.AccountPr
 	if err != nil {
 		return nil, err
 	}
-	if !desired.Enabled {
-		return nil, reasonError(core.ErrInvalidArgument, desired.Blocked)
-	}
 	if action == "sync" {
 		if err := s.Reconcile(ctx, p.Key); err != nil {
 			return nil, transportError(err)
@@ -159,7 +156,7 @@ func (s *Service) AccountSynchronization(ctx context.Context, id int64) (core.Ac
 	if err != nil {
 		return state, err
 	}
-	if !desired.Enabled {
+	if desired.Deleted {
 		return core.AccountSynchronization{Status: "applied"}, nil
 	}
 	response, close, err := s.runtimeRequest(ctx, desired.Key, "GET", "status", nil, desired.Revision)

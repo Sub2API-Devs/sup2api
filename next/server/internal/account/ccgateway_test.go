@@ -225,49 +225,53 @@ func TestAutomaticDisableKeepsCCGatewayRuntimeAvailable(t *testing.T) {
 	}
 }
 
-func TestResetCCGatewayStatusRestartsRuntime(t *testing.T) {
+// TestDisabledAccountAndProxyKeepCCGatewayRuntime: disabling the account or
+// its proxy only takes it out of scheduling; the runtime keeps running with
+// the same proxy, so tests and authorization still work.
+func TestDisabledAccountAndProxyKeepCCGatewayRuntime(t *testing.T) {
 	e := setup(t)
-	enabled := make(chan bool, 4)
+	type put struct {
+		Enabled  bool           `json:"enabled"`
+		Proxy    map[string]any `json:"proxy"`
+		Revision string         `json:"revision"`
+	}
+	puts := make(chan put, 4)
 	ccg := e.withCCGateway(true, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/config") {
-			var cfg struct {
-				Enabled bool `json:"enabled"`
-			}
+			var cfg put
 			if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 				t.Error(err)
 			}
-			enabled <- cfg.Enabled
+			puts <- cfg
 		}
 		_, _ = w.Write([]byte(`{"status":"pending"}`))
 	})
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	id := e.mkRawAccount("ccgateway", "managed", "reset-worker", "unused", true)
+	id := e.mkRawAccount("ccgateway", "managed", "disabled-worker", "unused", true)
 	pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('ccg','http','proxy.example',3128) RETURNING id`)
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET proxy_id=$2 WHERE id=$1`, id, pid); err != nil {
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET proxy_id=$2 WHERE id=$1`, id, pid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled',status_reason='disabled by administrator' WHERE id=$1`, id); err != nil {
+	if err := ccg.Reconcile(t.Context(), itoa(id)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ccg.Reconcile(ctx, itoa(id)); err != nil {
+	before := <-puts
+	if !before.Enabled || before.Proxy["host"] != "proxy.example" {
+		t.Fatalf("initial runtime: %+v", before)
+	}
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET status='disabled',status_reason='disabled by administrator',schedulable=false WHERE id=$1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if <-enabled {
-		t.Fatal("disabled account runtime was enabled")
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE proxies SET status='disabled' WHERE id=$1`, pid); err != nil {
+		t.Fatal(err)
 	}
-	go ccg.Run(ctx)
-	code, out := e.do("POST", "/accounts/"+itoa(id)+"/reset-status", nil)
-	if code != http.StatusOK || data(out)["status"] != "active" {
-		t.Fatalf("reset: %d %v", code, out)
+	ccg.Kick(itoa(id))
+	if err := ccg.Reconcile(t.Context(), itoa(id)); err != nil {
+		t.Fatal(err)
 	}
-	select {
-	case active := <-enabled:
-		if !active {
-			t.Fatal("reset kept the runtime blocked")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("reset did not immediately reconcile the runtime")
+	// The fake controller never reports ready, so the core writes the
+	// configuration again: it is the same one (same revision, still enabled).
+	if after := <-puts; !after.Enabled || after.Revision != before.Revision || after.Proxy["host"] != "proxy.example" {
+		t.Fatalf("disabling the account or proxy changed the runtime: %+v, was %+v", after, before)
 	}
 }
 

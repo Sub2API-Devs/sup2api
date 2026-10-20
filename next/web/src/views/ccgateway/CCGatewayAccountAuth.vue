@@ -578,7 +578,7 @@ defineExpose({
               <SButton variant="primary" icon="play" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft">{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
             </div>
           </template>
-          <CcgBlockedAlert v-else-if="phase === 'blocked'" class="mt-1.5" :reason="status?.reason" :mode="mode" :can-manage="canManage" :syncing="busy === 'sync'" :disabled="acting" @fix-proxy="emit('fix-proxy')" @sync="sync" />
+          <CcgBlockedAlert v-else-if="phase === 'blocked'" class="mt-1.5" :reason="status?.reason" :can-manage="canManage" :syncing="busy === 'sync'" :disabled="acting" @sync="sync" />
           <SAlert v-else-if="states.container === 'error'" tone="danger" dense class="mt-1.5">
             {{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}
             <template #actions>

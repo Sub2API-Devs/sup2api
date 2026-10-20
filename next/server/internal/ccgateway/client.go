@@ -167,8 +167,8 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 		if err != nil {
 			return fail(transportError(err))
 		}
-		if !d.Enabled {
-			return fail(reasonError(core.ErrUnavailable, d.Blocked))
+		if reason := d.unavailable(); reason != "" {
+			return fail(reasonError(core.ErrUnavailable, reason))
 		}
 		revision, key, cached = d.Revision, d.Key, fromCache
 	}

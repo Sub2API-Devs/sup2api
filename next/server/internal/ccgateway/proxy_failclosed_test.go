@@ -24,13 +24,15 @@ func TestMissingOrInvalidBoundProxyNeverBecomesDirect(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key,proxy_id,initial_settings) VALUES($1,$2,'{}')`, draft, proxyID); err != nil {
 		t.Fatal(err)
 	}
+	// The runtime is left running as it is (enabled, never reconfigured) and
+	// its requests fail; it never becomes direct.
 	assertBlocked := func(d accountDesired, err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if d.Enabled || d.Direct || d.Proxy != nil || d.Blocked != "proxy_unavailable" {
-			t.Fatalf("unavailable bound proxy did not fail closed: enabled=%v direct=%v reason=%s", d.Enabled, d.Direct, d.Blocked)
+		if !d.Enabled || d.Direct || d.Proxy != nil || d.unavailable() != reasonProxyUnavailable {
+			t.Fatalf("unavailable bound proxy did not fail closed: enabled=%v direct=%v reason=%s", d.Enabled, d.Direct, d.unavailable())
 		}
 	}
 	// The database schema currently permits an empty protocol. It must not

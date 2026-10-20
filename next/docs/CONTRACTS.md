@@ -2657,7 +2657,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - 请求按插件批量携带 `ModelAvailabilityCandidate{account_id, account_type, model, client_model, quota}` 与 `now_unix`。`model` 为上游模型，`quota` 为持久化快照，不携带凭据或任意账号配置。结果逐账号、逐模型返回 `AVAILABLE`、`UNAVAILABLE` 或 `UNKNOWN`，可附原因及可信重试时间。核心不认识供应商模型前缀、套餐窗口和耗尽阈值。
 - SDK 提供可选 `ModelAvailabilityChecker`；启用模型准入或自动配额查询的插件需要 Host API 7。wire protocol 仍为 1，旧插件不需要实现新接口。新插件必须在不支持能力的旧核心上拒绝初始化，不能静默忽略准入限制。
 - 权重、优先级及粘性规则保持原有行为。有效粘性绑定不参加权重抽选，也不累计分配补偿；模型不可用是硬准入，不可用 `scheduler.rank` 的权重 0 代替，不可被排序插件 fail-open 恢复。
-- `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。「就绪」指 `account_lifecycle_sync` 为 `applied`，或为 `pending` 且 `code = environment_requires_new_runtime`（只有新语言／时区等新容器生效，现有容器照常服务，2026-10-20；ccgateway 0.1.69 起控制器经 Worker `PUT /admin/environment` 原地生效，只有旧 Worker 或要清空容器创建时写入的值才停在这个状态）；其余 `pending`／`failed` 后台跳过、手动刷新回 409 `runtime_not_ready`。后台正常复查与失败重试默认 30 分钟，插件建议不能早于该间隔，较晚的调度时间仍保留（最多 24 小时）；手动强制刷新跳过时间限制，但共用租约。失败保留账号及调度开关并记录错误；不得为额度查询启用停用账号、启动停止的运行时、注销或刷新 OAuth 授权。
+- `quota.autoRefresh` 依赖 `quota.query`。录入事务记录待查询状态，提交并且账号生命周期资源就绪后执行首次查询；网络请求不在账号事务内。「就绪」指 `account_lifecycle_sync` 为 `applied`，或为 `pending` 且 `code = environment_requires_new_runtime`（只有新语言／时区等新容器生效，现有容器照常服务，2026-10-20；ccgateway 0.1.69 起控制器经 Worker `PUT /admin/environment` 原地生效，只有旧 Worker 或要清空容器创建时写入的值才停在这个状态）；其余 `pending`／`failed` 后台跳过、手动刷新回 409 `runtime_not_ready`。后台正常复查与失败重试默认 30 分钟，插件建议不能早于该间隔，较晚的调度时间仍保留（最多 24 小时）；手动强制刷新跳过时间限制，但共用租约。失败保留账号及调度开关并记录错误；不得为额度查询启用停用账号、注销或刷新 OAuth 授权（停用账号的运行时照常运行，见 §49.22，但额度查询仍只针对启用的账号）。
 - `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。例外（2026-10-14）：快照错误为 `transient: token_expired: …`（CCGateway 容器报访问令牌过期且存有刷新令牌）时 CCGateway 插件返回 `AVAILABLE`（原因 `quota_auth_refresh_on_request`）——容器内 Claude Code 只在模型请求时刷新令牌，按 UNKNOWN 拦截会让空闲超过令牌有效期的账号永远不可调度；已知耗尽窗口仍拦截、无效快照仍为 `UNKNOWN`。真的未登录（`auth_rejected: not_logged_in: …`）与令牌被拒且无法续期（`auth_rejected: token_revoked: …`）返回 `UNKNOWN`（原因 `authorization_required`），重新授权后恢复。
 - `BuildQuotaRequestResponse.runtime_operation` 与普通 HTTP URL 目标区分。运行时请求通过已注册的 `AccountQuotaRuntime`、当前账号与受限只读操作执行；不接受插件指定任意运行时 URL，也不向插件暴露 Worker 管理密钥或容器 OAuth token。配额解析仍统一由插件的 `ParseQuotaResponse` 完成。
 - CCGateway 的托管账号声明运行时 `usage` 查询。插件解析共享窗口与模型专属窗口，用映射后模型的 `claude-fable-` 前缀识别 Fable；共享耗尽优先限制全部模型，Fable 专属耗尽只影响 Fable。缺失窗口、失败查询和仅仅到达 reset 时间都不能清除已知耗尽事实。
@@ -3023,7 +3023,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 授权在**账号管理 → 新建 / 编辑 CCGateway 账号**里完成；CCGateway 插件页只显示容器状态并跳转到账号页。
 
-1. 控制台保存 ccgateway `managed`（或 `apikey`）账号。**账号必须绑定可用代理**，否则不会起容器（status 为 `blocked`，`reason: "no_proxy"`）。
+1. 控制台保存 ccgateway `managed`（或 `apikey`）账号。不绑定代理时容器直连出网（§49.20）。
 2. 核心在账号创建、修改成功后调 `ccgateway.Service.Kick(key)`（`key` 为账号 id 或运行环境 key，账号 id 会解析成该账号的运行环境 key，§49.7）：非阻塞投递到本节点的 kick 队列（容量 64，满了直接丢，每分钟一轮的扫描仍会覆盖），由 `Run` 里单独的 goroutine 立即 `Reconcile`，不排在全量扫描后面；失败时每 5 秒再 kick 一次，最多 12 次，之后交给扫描（§49.18）。未开启 `account_runtimes` 时忽略。
 3. 控制台同时可以调 `POST /system/ccgateway/accounts/:id/sync`（同步执行一次 `Reconcile`，最长 90 秒），然后轮询 `GET .../status` / `GET .../health`。
 4. `status = ready` 后调 `POST .../start` 取授权链接，用户登录 Claude 后把 `code#state` 粘贴回来调 `POST .../complete {session_id?, code}`，容器里的 Claude Code 完成授权。页面刷新后先调 `GET .../session` 恢复未完成的授权（49.4）。
@@ -3032,7 +3032,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 | 方法 action | 说明 |
 |---|---|
-| GET `status` | `{account_id, key, container, status, revision}`，`status` 为 `ready` / `pending` / `blocked`，`key` 为运行环境 key（§49.7）。被阻断时直接返回 `{account_id, key, container: "", status: "blocked", revision: "", reason}`，不访问控制器；`reason` 取值 `account_disabled` / `no_proxy` / `proxy_disabled` |
+| GET `status` | `{account_id, key, container, status, revision}`，`status` 为 `ready` / `pending` / `blocked`，`key` 为运行环境 key（§49.7）。只有已删除账号的运行环境被阻断，此时直接返回 `{account_id, key, container: "", status: "blocked", revision: "", reason: "account_deleted"}`，不访问控制器（§49.22） |
 | GET `health` | 容器内 Claude Code 授权状态 `{healthy, logged_in, auth_method}` |
 | GET `session` | 透传业务容器 `GET /admin/auth/session`：`{session_id, url, expires_at}`，没有时 `data: null`；容器镜像较旧、没有该端点（404）时也是 `null` |
 | POST `sync` | 立即同步。成功 `{synced: true}`；被阻断时 `{synced: true, status: "blocked", reason}`。失败 503，`details.reason` 为 `sync_failed`（容器创建或代理连通性检查未通过）或 `not_configured` |
@@ -3094,7 +3094,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 账号的运行环境 key = `ccgateway_runtimes.key`（`account_id` = 该账号），否则账号 id。核心内所有按运行环境的操作都以 key 为单位：`desired`、`Reconcile`（`Reconcile(ctx, key)`，传账号 id 时先解析成该账号的 key）、控制器请求路径 `/accounts/<key>/...`、模型请求 `/accounts/<key>/v1/messages`、`Run` 的定时扫描（每个 ccgateway 账号一个 key + 每个未认领草稿）、`Kick(key)`。
 
-草稿的期望状态：代理取草稿行的 `proxy_id`；`enabled` = 代理存在且未停用（否则 `blocked`，原因 `no_proxy` / `proxy_disabled`）；`auth = {"mode":"oauth"}`；修订号 = sha256(`draft|key|proxy_id|proxy.updated_at|proxy.status`)，任何节点都能算出同一个值。认领后改用账号的期望状态（账号的代理与草稿不同时以账号为准，下一次 reconcile 换出口）。
+草稿的期望状态：代理取草稿行的 `proxy_id`；`enabled` 恒为 true（代理停用不影响；代理记录不存在或协议不受支持时不重写配置，见 §49.22）；`auth = {"mode":"oauth"}`；修订号 = sha256(`draft|key|proxy_id|proxy.updated_at`)，任何节点都能算出同一个值。认领后改用账号的期望状态（账号的代理与草稿不同时以账号为准，下一次 reconcile 换出口）。
 
 ### 49.8 流程（新建 `ccgateway/managed` 账号）
 
@@ -3120,7 +3120,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 | GET | `/system/ccgateway/drafts/:key/session` | `{session_id, url, expires_at}` 或 `null` |
 | POST | `/system/ccgateway/drafts/:key/{sync,start,complete,cancel}` | 同账号接口（§49.2）；草稿没有 `logout` |
 
-`proxy_id` 校验（POST / PUT）：缺少或 ≤0 → 400 `no_proxy`；不存在或调用者不可见 → 400 `proxy_not_found`；已停用 → 400 `proxy_disabled`。可见性与 `POST /accounts` 相同（§21.4）：持有 `account:create` 时任何存在的代理都行；否则 `proxy:read` 看全部，`proxy:own:read` / `proxy:own:manage` 只看自己建的，都没有则看不到任何代理。草稿只接受 `proxy_id`，不支持 `proxy_url`。未开启 `account_runtimes` 时 `POST drafts` 返回 503 `not_configured`，不建行。
+`proxy_id` 校验（POST / PUT）：缺少或 null → 直连（§49.20）；≤0、不存在或调用者不可见 → 400 `proxy_not_found`；已停用 → 400 `proxy_disabled`。可见性与 `POST /accounts` 相同（§21.4）：持有 `account:create` 时任何存在的代理都行；否则 `proxy:read` 看全部，`proxy:own:read` / `proxy:own:manage` 只看自己建的，都没有则看不到任何代理。草稿只接受 `proxy_id`，不支持 `proxy_url`。未开启 `account_runtimes` 时 `POST drafts` 返回 503 `not_configured`，不建行。
 
 ### 49.10 `POST /accounts` 的 `ccgateway_runtime`
 
@@ -3129,7 +3129,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 ### 49.11 状态
 
 - 账号 `status`：`ready` / `pending` / `blocked`（§49.2，不变）。
-- 草稿 `status`：`creating`（控制器尚未按当前修订号就绪，含控制器还没有这个运行环境）/ `ready` / `blocked`（附 `reason`：`no_proxy` / `proxy_disabled`）。注意账号与草稿对"未就绪"用了不同的词（`pending` 与 `creating`），这是本契约的原样定义。
+- 草稿 `status`：`creating`（控制器尚未按当前修订号就绪，含控制器还没有这个运行环境）/ `ready` （草稿不会被阻断，§49.22）。注意账号与草稿对"未就绪"用了不同的词（`pending` 与 `creating`），这是本契约的原样定义。
 - `sync`：`{synced: true}` 或 `{synced: true, status: "blocked", reason}`。
 
 ### 49.12 错误
@@ -3146,7 +3146,9 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 | `not_synchronized` | 503 | 运行环境尚未按当前修订号就绪（控制器 409） |
 | `sync_failed` | 503 | `sync` 失败：容器创建或代理连通性检查未通过 |
 | `runtime_unavailable` | 503 | 控制器 / 容器的其他失败（含控制器没给出代码的 5xx） |
-| `no_proxy` / `proxy_disabled` / `account_disabled` | 400 | 运行环境被阻断；草稿 POST/PUT 的代理校验也用前两个 |
+| `account_deleted` | 400 | 账号已删除，运行环境已停止（§49.22） |
+| `proxy_unavailable` | 400 / 503 | 绑定的代理记录不存在或协议不受支持；运行环境保持原样，请求失败而不改为直连（§49.22） |
+| `proxy_disabled` | 400 | 草稿 POST/PUT 选择了已停用的代理（只校验新选择，不影响已运行的容器） |
 | `proxy_not_found` | 400 | 草稿的 `proxy_id` 不存在或调用者不可见（契约草案没有这个代码，实现时补的） |
 | `api_key_account` | 400 | `apikey` 账号不做 OAuth 授权 |
 | `draft_not_found` | 404 / 400 | 草稿接口 404；`POST /accounts` 400 |
@@ -3253,7 +3255,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 | POST | `/system/ccgateway/accounts/:id/reauthorize/:key/commit` | 200 + 账号视图（同 `GET /accounts/:id`） |
 
 `reauthorize`：
-- 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号没有代理 → 400 `no_proxy`；代理已停用 → 400 `proxy_disabled`。
+- 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号已删除 → 400 `account_deleted`；绑定的代理不可用 → 400 `proxy_unavailable`。账号停用、代理停用都不影响重新授权（§49.22）。
 - 草稿 key 同 §49.9（`d` + 16 hex），`proxy_id` = 账号当前代理，`created_by` = 调用者，`for_account` = 账号 id；建好立即 Kick。审计 `account.ccgateway_reauthorize_start`（只在新建时）。
 - 每个账号最多一个未过期的重新授权草稿（按账号的 PG advisory 锁串行）。已有时返回它，并刷新 `last_seen_at`、把 `proxy_id` 改成账号当前代理。**调用者看不到它时（不是创建者、也没有 `settings:manage`）把 `created_by` 改成调用者（接管）**：能更新这个账号的人总能继续流程，原创建者之后对该草稿得到 `draft_not_found`（控制台按"重新开始"处理，再调 `reauthorize` 会接管回来）。闲置超过 15 分钟或存在超过 2 小时的草稿不再复用（留给清理任务），新建一个。
 - 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。按 key 的草稿接口为此另外接受 `account:update`、`account:own:update`。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
@@ -3305,13 +3307,13 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **空闲连接**保持 30 秒，比 Worker 的 60 秒空闲超时短。
 - **请求策略**（`X-CCGateway-Request-Policy`）仍随每个请求发送，Worker 保持无状态。
 - **定时扫描**：`Run` 改为每 60 秒一轮，只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
-- **停用账号不再反复写配置**：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
+- **已阻断的运行环境不再反复写配置**（2026-10-21 起只有已删除账号会被阻断，§49.22）：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
 
 ### 49.20 不绑代理即直连（2026-10-14，用户要求）
 
 起因：#21（API Key 账号）绑定的代理凭据失效（上游代理 407），控制器连通性检查失败，运行环境一直 pending，模型请求回 409 `not_synchronized`。用户决定代理可以为空，为空时直连。
 
-- **核心**：账号或草稿没有绑定代理（含代理被删除）时不再阻断，期望配置为 `{"proxy": null, "direct": true, ...}`；不再产生 `no_proxy`（错误码保留，兼容旧前端）。绑定的代理被停用仍阻断（`proxy_disabled`），**不回退直连**；账号停用仍为 `account_disabled`。修订号含 `proxy_id`，切换代理或改直连都会重新同步。
+- **核心**：账号或草稿没有绑定代理（含代理被删除）时不再阻断，期望配置为 `{"proxy": null, "direct": true, ...}`；不再产生 `no_proxy`（错误码保留，兼容旧前端）。代理停用与账号停用的处理见 §49.22（2026-10-21 起都不再阻断），**任何情况都不回退直连**。修订号含 `proxy_id`，切换代理或改直连都会重新同步。
 - **草稿与重新授权**：`POST/PUT /system/ccgateway/drafts` 的 `proxy_id` 可省略或为 null，`proxy_id <= 0` 为 `proxy_not_found`。重新授权沿用账号当前的代理，账号没有代理时草稿也直连。账号准备按 `proxy_id IS NOT DISTINCT FROM` 比对；插件 `prepare` 阶段不再要求代理。
 - **控制器**：只有 `direct` 为 `true` 且没有 `proxy` 时才直连；不带 `direct` 的旧核心发来空代理仍阻断。直连时 sing-box 出站为 `direct`（DNS 仍走 DoH 1.1.1.1，但不写 `detour`：sing-box 拒绝 detour 到空的 direct 出站而启动失败，`sing-box check` 却不报错；0.1.46 因此直连失败，0.1.47 修复），egress 的 output 链丢弃私有、回环、链路本地、组播与保留地址，只放行公网 IPv4 TCP；业务容器规则不变。连通性检查照常要求能访问探测地址。
 - **兼容顺序**：新核心 + 旧控制器时，无代理账号保持阻断（与以前一致）；先升控制器再依赖直连。
@@ -3327,6 +3329,17 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **核心**：manifest `lifecycle.actions` 增加 `refresh_token`（"刷新令牌"，排在 `refresh_auth` "重新授权"之前），经 `POST /accounts/:id/actions/ccgateway/refresh_token` 调用（权限 `account:update`，审计 `account.action`），只支持一账号一容器模式；结果原样为 `{refreshed, expires_at}`，容器错误码放在 `details.reason`。
 - **控制台**：账号列表的行菜单列出插件声明的全部动作（读取账号 JSON 的 `actions`）；返回 `key` 的动作（重新授权草稿）打开编辑器继续，返回 `refreshed` 的动作提示新的到期时间并刷新额度，已知错误码显示中文说明。
 
+### 49.22 只有删除账号才停止运行环境（2026-10-21，用户要求）
+
+起因：账号 #33 停用后控制台测试一律失败（`account_disabled`，请求没有发出），而其他平台的账号停用后照样能测试。用户决定：停用只影响调度，运行环境照常；代理停用、不可用也不停止；只有删除账号才删除容器。
+
+- **期望状态**（`desired` / `draftDesired`）：`enabled` = 账号未删除（草稿恒为 true）。账号 `status`、代理 `status` 不再参与 `enabled`，也不再参与修订号，所以停用、启用账号或代理不会重写或重启容器。
+- **停用的代理**：照常作为出口写入期望配置，容器继续经它出网。只有新选择代理（草稿 POST/PUT）时仍拒绝已停用的代理（`proxy_disabled`）。
+- **不可用的代理**（绑定的记录不存在——草稿没有外键——或协议不是 http/https/socks5）：不重写配置，容器保持原样；需要运行环境的操作（模型请求与测试、授权、重新授权、刷新令牌、额度、请求日志、CLI 管理）回 `proxy_unavailable`。**任何情况都不回退直连**。
+- **删除的账号**：运行环境停止（有清理意图时清除，§49.13），原因 `account_deleted`；`status` 为 `blocked`。
+- 原因码 `account_disabled` 取消；`no_proxy` 早已不再产生，控制台一并删除。
+- 调度与额度查询不变：仍只使用 `status='active'` 的账号。
+
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 
 new-api 的渠道测试（`controller/channel-test.go`）每次测试后写渠道的 `test_time` / `response_time`，列表里显示"上次测试时间、响应时间"。这里同样记录，另外记成功与否、模型和失败原因。
@@ -3338,7 +3351,7 @@ new-api 的渠道测试（`controller/channel-test.go`）每次测试后写渠�
   - 写入不改 `updated_at`、不发 `account:changed` / 事件、不影响调度；写入失败只记日志，不影响测试响应。
 - 账号 JSON（`GET /accounts` 列表与 `GET /accounts/:id`、创建/修改的响应）新增 `last_test`：从未测试时为 `null`，否则 `{at, ok, latency_ms, model, message}`（`at` 为 RFC 3339）。
 - TestResult 新增 `requested_model`（映射前用户选的模型；未给时为空串，字段总在），`model` 仍为实际请求的模型。
-- 2026-10-11 错误诊断：TestResult 返回 `error_code` 与 `error_source`（`gateway` 网关/运行环境、`transport` 传输失败、`response` 实际 HTTP 响应、`plugin` 插件构建失败）。`status` 始终保留实际收到的 HTTP 状态，未收到响应为 0，不把本地拒绝伪造为上游 401。响应体的 `error.code` 优先，其次 `error.type` / `code`，没有机器码时用 `http_<status>`；CCGateway 账号禁用、无代理、代理停用等保留 `account_disabled/no_proxy/proxy_disabled`，不再合并成 `account egress unavailable`。
+- 2026-10-11 错误诊断：TestResult 返回 `error_code` 与 `error_source`（`gateway` 网关/运行环境、`transport` 传输失败、`response` 实际 HTTP 响应、`plugin` 插件构建失败）。`status` 始终保留实际收到的 HTTP 状态，未收到响应为 0，不把本地拒绝伪造为上游 401。响应体的 `error.code` 优先，其次 `error.type` / `code`，没有机器码时用 `http_<status>`；CCGateway 运行环境的本地拒绝保留各自的原因码（现为 `account_deleted` / `proxy_unavailable`，§49.22），不再合并成 `account egress unavailable`。
 - 迁移 `0050_account_test_diagnostics.sql` 新增可空的 `last_test_status/last_test_error_code/last_test_error_source`，新测试保存上述诊断并通过 `last_test` 返回。旧记录不猜测 HTTP 状态；完整原因已包含返回消息时不重复拼接。界面直接显示错误代码与来源，HTTP 0 显示无响应提示，重新授权清空整组最近测试字段。
 - "测试全部模型""批量测试账号"由控制台并发调用单模型测试实现，后端不提供批量接口；同一账号并发测试时 `last_test` 为最后写入的那次。
 - 控制台（前端实现）：账号的"测试"打开模型测试弹窗，可选一个模型测试，也可"测试全部 / 所选"模型（逐个模型并发调用本接口，显示每个模型的结果、延迟与失败原因）；账号列表可勾选多个账号"批量测试"（每个账号测默认模型）。列表显示 `last_test`（上次测试时间、结果、延迟）。测试不改变账号状态。
@@ -4036,11 +4049,11 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 控制器能力 `shared-egress-v1`，与现有核心配置下发、账号生命周期、Worker 协议兼容。既有账号默认 `per_account_singbox`，只有显式迁移才采用 `shared_xray`；普通 `PUT /accounts/<key>/config` 不得覆盖本地 backend。
 - 控制器私有 `GET /accounts/<key>/egress` 返回 backend、migration、ready；`POST` 接收且仅接收 `{"backend":"shared_xray"}` 或 `{"backend":"per_account_singbox"}`。沿用控制器 Bearer 鉴权，不向业务网络开放。繁忙返回 `status: busy`，调用者限时重试；新后端必须通过探测后才能 ready。
 - 每宿主机共享服务接入各账号独立内部网及一张共享 uplink，源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
-- 核心 0.1.142 起，已绑定代理的记录缺失或协议异常必须返回 `proxy_unavailable` 并阻断，不得把 LEFT JOIN 的空字段视为显式直连。共享网关防火墙表缺失时仍关闭普通转发，控制器须能重新创建该表。
+- 核心 0.1.142 起，已绑定代理的记录缺失或协议异常必须返回 `proxy_unavailable`，不得把 LEFT JOIN 的空字段视为显式直连（2026-10-21 起不再停止容器，只让请求失败，§49.22）。共享网关防火墙表缺失时仍关闭普通转发，控制器须能重新创建该表。
 - 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
 - DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。无缓存替代了设计中的按代理版本隔离缓存。
 - 控制器在私有目录保存共享状态及迁移日志；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
-- 首次迁移等待 CLI/网络空闲，停止并启动原 app，保持 ID 和数据卷；不是零中断迁移。成功后停止但保留旧 egress 供回滚。失败尝试恢复旧路径，未完成日志在恢复时回退到来源后端。被停用账号可离线回迁，不因此启动容器。
+- 首次迁移等待 CLI/网络空闲，停止并启动原 app，保持 ID 和数据卷；不是零中断迁移。成功后停止但保留旧 egress 供回滚。失败尝试恢复旧路径，未完成日志在恢复时回退到来源后端。被停用账号可离线回迁，不因此启动容器（2026-10-21 起停用账号的容器照常运行，§49.22；离线回迁仍适用于已停止的容器）。
 - 单账号删除只撤销自己的共享绑定。无引用旧出站在整个共享出口无 established TCP 时保守回收；至多保留 256 个出站，达到上限拒绝继续增加而非无限增长。共享服务及旧 egress 容器的最终删除属于维护操作。
 - 已迁移账号要修改网络池时先回迁旧后端；账号代理和授权变更仍走现有入口。控制器自升级拒绝降级到不声明共享状态兼容的镜像；手动替换或外部安装器也必须先回迁全部共享账号。
 - 操作步骤、维护边界见 [迁移方案](CCGATEWAY-XRAY-MIGRATION.md)。部署是否完成以环境运行记录为准。

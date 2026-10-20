@@ -375,9 +375,6 @@ func (s *Service) checkDraftLogin(ctx context.Context, key string, scope *int64,
 	if e != nil {
 		return facts, e
 	}
-	if !d.Enabled {
-		return facts, notAuthorized
-	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "admin/status", nil, d.Revision)

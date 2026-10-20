@@ -55,8 +55,8 @@ func (s *Service) QueryAccountQuota(ctx context.Context, accountID int64, operat
 		if e != nil {
 			return nil, usageFail("not_found", "The account is not a CCGateway account.")
 		}
-		if !d.Enabled {
-			return nil, usageFail(d.Blocked, reasonMessages[d.Blocked])
+		if reason := d.unavailable(); reason != "" {
+			return nil, usageFail(reason, reasonMessages[reason])
 		}
 		res, closeConn, e = s.runtimeRequest(ctx, d.Key, http.MethodGet, "admin/usage", nil, d.Revision)
 		if e != nil {

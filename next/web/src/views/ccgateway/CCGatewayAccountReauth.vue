@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
           <SButton size="sm" icon="refresh" :loading="syncing" @click="canManage ? sync() : load()">{{ t('ccgateway.accountAuth.retry') }}</SButton>
         </template>
       </CcgErrorAlert>
-      <CcgBlockedAlert v-else-if="summary.container === 'blocked'" class="mt-1.5" :reason="status?.reason" mode="saved" :can-manage="canManage" :syncing="syncing" @fix-proxy="emit('fix-proxy')" @sync="sync" />
+      <CcgBlockedAlert v-else-if="summary.container === 'blocked'" class="mt-1.5" :reason="status?.reason" :can-manage="canManage" :syncing="syncing" @sync="sync" />
       <SAlert v-else-if="summary.container === 'error'" tone="danger" dense class="mt-1.5">
         {{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}
         <template v-if="canManage" #actions>

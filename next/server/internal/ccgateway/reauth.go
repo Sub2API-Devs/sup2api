@@ -29,8 +29,8 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, _ int64, _ *int64)
 	if d.Kind != "managed" {
 		return "", false, reasonError(core.ErrInvalidArgument, "api_key_account")
 	}
-	if !d.Enabled {
-		return "", false, reasonError(core.ErrInvalidArgument, d.Blocked)
+	if reason := d.unavailable(); reason != "" {
+		return "", false, reasonError(core.ErrInvalidArgument, reason)
 	}
 	res, close, err := s.runtimeRequest(ctx, d.Key, http.MethodGet, "status", nil, "")
 	if err != nil {
@@ -75,8 +75,8 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		if err != nil {
 			return err
 		}
-		if !d.Enabled {
-			return reasonError(core.ErrInvalidArgument, d.Blocked)
+		if reason := d.unavailable(); reason != "" {
+			return reasonError(core.ErrInvalidArgument, reason)
 		}
 		res, close, err := s.runtimeRequest(ctx, key, http.MethodGet, "admin/status", nil, d.Revision)
 		if err != nil {

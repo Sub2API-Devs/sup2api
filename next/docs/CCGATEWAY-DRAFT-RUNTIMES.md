@@ -118,8 +118,11 @@ Errors returned by the ccgateway endpoints: English messages, the cause in
 `details.reason`: the container codes of §2, plus `not_configured` (account
 runtimes off / no Docker connection), `not_synchronized` (runtime not ready
 yet), `sync_failed` (container creation or proxy check failed),
-`no_proxy`, `proxy_disabled`, `account_disabled`, `draft_not_found`,
-`draft_not_authorized`. Blocked status reasons use the same codes.
+`proxy_disabled` (a newly chosen draft proxy is disabled), `proxy_unavailable`
+(the bound proxy is gone; the runtime is left as it is), `account_deleted`,
+`draft_not_found`,
+`draft_not_authorized`. Only a deleted account's runtime is blocked
+(`account_deleted`, CONTRACTS §49.22).
 
 The core no longer stores login sessions in Redis and no longer matches
 message text.

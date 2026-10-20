@@ -235,7 +235,7 @@ describe('account status recovery', () => {
   })
 
   it.each([
-    { status: 0, error_code: 'account_disabled', error_source: 'gateway' },
+    { status: 0, error_code: 'proxy_unavailable', error_source: 'gateway' },
     { status: 401, error_code: 'token_revoked', error_source: 'response' },
     { status: 502, error_code: 'ECONNRESET', error_source: 'transport', message: '{"error":{"code":"ECONNRESET","message":"read ECONNRESET"}}' },
     { status: 504, error_code: 'cli_timeout', error_source: 'timeout', message: '{"error":{"code":"cli_timeout","message":"CC request timed out"}}' },

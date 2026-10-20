@@ -86,7 +86,7 @@ func (s *Service) serveFeatures(c *gin.Context, ctx context.Context, d accountDe
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if !d.Enabled {
+	if d.unavailable() != "" {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
 	}

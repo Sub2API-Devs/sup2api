@@ -135,27 +135,8 @@ export default {
     readOnly: '需要编辑该账号的权限（或 settings:manage）才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
     saveBlocked: '完成 Claude 授权后才能保存账号', saveBlockedFix: '查看授权步骤',
     blockedTitle: '账号容器已停止：{reason}', blockedUnknown: '核心停止了该容器',
-    blocked: {
-      fix: {
-        no_proxy: 'Claude Code 账号必须通过代理出网（容器没有直连出口）。请在上方「代理」选择或粘贴一个代理并保存，容器会自动重新启动。',
-        proxy_disabled: '请在上方「代理」换一个可用的代理并保存，或到代理页重新启用该代理，然后重新同步。',
-        account_disabled: '账号处于停用状态时不运行容器。请先在账号列表重置或启用该账号，再回来授权。',
-        unknown: '请检查账号状态与代理设置后重新同步。'
-      },
-      fixDraft: {
-        no_proxy: '请在上方「代理」选择一个代理，容器会按新代理重新启动。',
-        proxy_disabled: '请在上方「代理」换一个可用的代理（容器会自动按新代理重建），或到代理页重新启用该代理后重新同步。',
-        unknown: '请检查代理设置后重新同步，或删除容器重新开始。'
-      },
-      fixReauth: {
-        no_proxy: '重新授权的容器使用账号已保存的代理。请在上方「代理」选择一个代理并保存，然后删除容器重新开始。',
-        proxy_disabled: '账号已保存的代理已停用。请在上方「代理」换一个可用代理并保存后删除容器重新开始，或到代理页重新启用该代理后重新同步。',
-        account_disabled: '账号已停用，当前容器不运行。请先启用账号，再在原容器中重新授权。',
-        unknown: '请检查账号状态与代理设置后重新同步，或删除容器重新开始。'
-      },
-      pickProxy: '去选择代理', openProxies: '打开代理页'
-    },
-    proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: '不选代理时容器直连出网，使用服务器自身的 IP；选了代理但代理被停用时容器会停止，不会改为直连。', proxyDirect: '直连（不使用代理）'
+    blocked: { pickProxy: '去选择代理' },
+    proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: '不选代理时容器直连出网，使用服务器自身的 IP。代理被停用时容器照常经它出网；代理被删除或不可用时请求失败，不会改为直连。', proxyDirect: '直连（不使用代理）'
   },
   reauth: {
     replaceTitle: "原地重新授权", prepare: "开始授权", migrate: '迁移授权文件', switchNow: "确认授权结果",
@@ -344,10 +325,10 @@ export default {
     not_configured: '账号容器运行环境未就绪：未启用一账号一容器、Docker 连接未配置或运行环境未安装',
     not_synchronized: '容器尚未就绪，请稍候',
     sync_failed: '容器创建或代理连通性检查未通过，请检查代理后重试',
-    no_proxy: '未绑定代理',
-    proxy_disabled: '绑定的代理已停用',
+    proxy_disabled: '选择的代理已停用，请换一个代理',
     proxy_not_found: '选择的代理不存在或你无权使用，请换一个代理',
-    account_disabled: '账号已停用',
+    proxy_unavailable: '绑定的代理已不存在或协议不受支持，请换一个代理',
+    account_deleted: '账号已删除',
     draft_not_found: '这个容器已不存在（可能因长时间未操作被自动清理），请重新启动容器',
     runtime_not_ready: '原账号容器尚未就绪，请先同步运行环境再重新授权',
     runtime_cleanup_failed: '运行环境清理失败，可重试',
@@ -356,6 +337,7 @@ export default {
     not_found: '容器不存在',
     api_key_account: 'API Key 账号不需要 Claude 授权',
     runtime_unavailable: '容器运行环境不可用',
+    disk_quota_unavailable: '账号数据卷的磁盘配额不可用，请先准备支持配额的存储，并迁移旧数据卷',
     method_not_allowed: '容器控制器不允许该操作',
     authentication_error: 'Claude Code 认证失败，请重新授权',
     not_found_error: 'Claude Code 找不到请求的资源',

@@ -208,8 +208,9 @@ func TestCCGatewayReauthorize(t *testing.T) {
 		if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled' WHERE id=$1`, id); err != nil {
 			t.Fatal(err)
 		}
-		if code, out := e.doAs(owner, "POST", path, nil); code != 400 || ccgReason(out) != "account_disabled" {
-			t.Fatalf("disabled runtime silently started: %d %v", code, out)
+		// A disabled account keeps its runtime: re-authorization still works.
+		if code, out := e.doAs(owner, "POST", path, nil); code != 200 {
+			t.Fatalf("disabled account cannot re-authorize: %d %v", code, out)
 		}
 		if code, out := e.doAs(owner, "DELETE", "/accounts/"+itoa(id), nil); code != 204 {
 			t.Fatalf("delete: %d %v", code, out)

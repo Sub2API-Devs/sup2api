@@ -54,13 +54,28 @@ type accountDesired struct {
 	Locale   string            `json:"locale,omitempty"`
 	Timezone string            `json:"timezone,omitempty"`
 	Kind     string            `json:"-"`
-	// A missing, invalid or disabled bound proxy blocks the runtime. Only an
-	// explicitly unbound account may use direct egress.
-	Blocked string `json:"-"`
+	// ProxyUnusable: the bound proxy is gone or has no supported protocol
+	// (drafts hold no foreign key; the schema permits any protocol). The
+	// runtime keeps the egress it has: it is neither stopped nor switched to
+	// direct egress.
+	ProxyUnusable bool `json:"-"`
 	// Key is the runtime key: the adopted draft key or the account id.
 	Key string `json:"-"`
 	// AccountID is 0 for a draft that is not adopted yet.
 	AccountID int64 `json:"-"`
+}
+
+// unavailable is why the runtime cannot serve: its account was deleted, or
+// its bound proxy is unusable (the runtime keeps running as it was). "" when
+// it can.
+func (d *accountDesired) unavailable() string {
+	switch {
+	case d.Deleted:
+		return reasonAccountDeleted
+	case d.ProxyUnusable:
+		return reasonProxyUnavailable
+	}
+	return ""
 }
 
 func (d *accountDesired) applyEnvironment() error {
@@ -116,21 +131,18 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	err := q.QueryRow(ctx, `SELECT
   a.deleted_at IS NOT NULL,
   r.retired_at IS NOT NULL,
-  a.deleted_at IS NULL AND a.status <> 'disabled' AND
-    (a.proxy_id IS NULL OR (p.id IS NOT NULL AND p.status <> 'disabled' AND p.protocol IN ('http','https','socks5'))),
-  CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
-       WHEN a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')) THEN 'proxy_unavailable'
-       WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
-  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text,r.retired_at),
+  a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')),
+  concat_ws('|',a.id,a.type,a.proxy_id,a.deleted_at,p.updated_at,encode(a.credentials_enc,'hex'),a.settings::text,r.retired_at),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
   COALESCE(r.key, a.id::text), a.settings
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
-		Scan(&d.Deleted, &d.PurgeRequested, &d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
+		Scan(&d.Deleted, &d.PurgeRequested, &d.ProxyUnusable, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
 	if err != nil {
 		return d, err
 	}
 	d.AccountID = id
+	d.Enabled = !d.Deleted
 	d.Revision = revisionOf(version)
 
 	// Parse settings for locale and timezone
@@ -146,7 +158,7 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 		}
 	}
 
-	if d.Enabled && credentials {
+	if d.Enabled && credentials && !d.ProxyUnusable {
 		d.Auth = map[string]string{"mode": "oauth"}
 		if d.Kind == "apikey" {
 			plain, err := s.Cipher.Decrypt(accountCredentials, []byte("account:ccgateway"))
@@ -180,24 +192,23 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 	var spec core.ProxySpec
 	var password, settings []byte
 	err := s.DB.Pool.QueryRow(ctx, `SELECT
-  r.proxy_id IS NULL OR (p.id IS NOT NULL AND p.status <> 'disabled' AND p.protocol IN ('http','https','socks5')),
-  CASE WHEN r.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')) THEN 'proxy_unavailable'
-       WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
-  concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
+  r.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')),
+  concat_ws('|','draft',r.key,r.proxy_id,p.updated_at),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,r.initial_settings
   FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
   WHERE r.key=$1 AND r.account_id IS NULL AND r.retired_at IS NULL`, key).
-		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &settings)
+		Scan(&d.ProxyUnusable, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &settings)
 	if err != nil {
 		return d, err
 	}
+	d.Enabled = true
 	d.Revision = revisionOf(version)
 	values, err := environment.Normalize(settings)
 	if err != nil {
 		return d, err
 	}
 	d.Locale, d.Timezone = values["locale"], values["timezone"]
-	if d.Enabled && credentials {
+	if credentials && !d.ProxyUnusable {
 		d.Auth = map[string]string{"mode": "oauth"}
 		if err := d.applyEnvironment(); err != nil {
 			return d, err
@@ -325,7 +336,10 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 	if e != nil {
 		return e
 	}
-	if !d.Enabled && s.blockedRecently(key, d.Revision) {
+	if d.Deleted && s.blockedRecently(key, d.Revision) {
+		return nil
+	}
+	if d.ProxyUnusable {
 		return nil
 	}
 	if d.Deleted && d.PurgeRequested {
@@ -348,7 +362,7 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 			return nil
 		}
 	}
-	if e = s.putConfig(ctx, key, d); e == nil && !d.Enabled {
+	if e = s.putConfig(ctx, key, d); e == nil && d.Deleted {
 		s.markBlocked(key, d.Revision)
 	}
 	return e
@@ -639,10 +653,10 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 			httpapi.Fail(c, reasonError(core.ErrUnavailable, reason))
 			return
 		}
-		if !d.Enabled {
+		if d.Deleted {
 			// The controller stopped the runtime; polling status would
 			// otherwise show "pending" forever.
-			httpapi.OK(c, map[string]any{"synced": true, "status": "blocked", "reason": d.Blocked})
+			httpapi.OK(c, map[string]any{"synced": true, "status": "blocked", "reason": reasonAccountDeleted})
 			return
 		}
 		httpapi.OK(c, map[string]any{"synced": true})
@@ -668,9 +682,9 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if !d.Enabled {
-		// The controller stopped the runtime: say why instead of a 409.
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, d.Blocked))
+	if reason := d.unavailable(); reason != "" {
+		// Say why instead of a 409 from a runtime that cannot follow.
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
 		return
 	}
 	var raw []byte
@@ -787,12 +801,8 @@ func (s *Service) runtimeActionRequest(ctx context.Context, key, method, path st
 // status: creating|ready|blocked, reason?}.
 func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesired, draft bool) {
 	accountID := strconv.FormatInt(d.AccountID, 10)
-	if !d.Enabled {
-		if draft {
-			httpapi.OK(c, map[string]string{"key": d.Key, "container": "", "status": "blocked", "reason": d.Blocked})
-			return
-		}
-		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": d.Blocked})
+	if d.Deleted {
+		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": reasonAccountDeleted})
 		return
 	}
 	res, close, e := s.runtimeRequest(ctx, d.Key, "GET", "status", nil, d.Revision)

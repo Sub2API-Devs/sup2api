@@ -384,7 +384,7 @@ export interface CcgRuntimeStatus {
 	image_update_available?: boolean
 	target_image_available?: boolean
   status: 'creating' | 'ready' | 'blocked' | 'pending' | (string & {})
-  /** Why a blocked runtime is stopped (no_proxy, proxy_disabled, account_disabled, ...). */
+  /** Why a blocked runtime is stopped (account_deleted: only a deleted account's runtime stops). */
   reason?: string
   container?: string
 }

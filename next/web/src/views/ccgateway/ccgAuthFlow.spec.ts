@@ -4,7 +4,7 @@ import en from '@/i18n/locales/en/ccgateway'
 import {
   CCG_REASONS,
   CCG_STATUSES,
-  blockReason,
+  isProxyReason,
   containerPhase,
   currentStep,
   isDraftKey,
@@ -36,11 +36,8 @@ describe('CCGateway authorization flow', () => {
   })
 
   it('names the block reasons it knows', () => {
-    expect(blockReason('no_proxy')).toBe('no_proxy')
-    expect(blockReason('proxy_disabled')).toBe('proxy_disabled')
-    expect(blockReason('account_disabled')).toBe('account_disabled')
-    expect(blockReason('sync_failed')).toBe('unknown')
-    expect(blockReason(undefined)).toBe('unknown')
+    for (const r of ['proxy_disabled', 'proxy_not_found', 'proxy_unavailable']) expect(isProxyReason(r), r).toBe(true)
+    for (const r of ['account_deleted', 'sync_failed', undefined]) expect(isProxyReason(r), String(r)).toBe(false)
   })
 
   it('has a step list per target', () => {

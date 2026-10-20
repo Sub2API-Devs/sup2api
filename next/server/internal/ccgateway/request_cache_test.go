@@ -246,17 +246,17 @@ func TestConfigChangedReachesOtherNodes(t *testing.T) {
 	}
 }
 
-// TestDisabledRuntimeIsNotRewrittenEveryPass: the controller reports a
-// blocked runtime as pending, so a disabled account's runtime was blocked
-// again by every node at every pass. It is now blocked once, and again after
-// a change (Kick).
-func TestDisabledRuntimeIsNotRewrittenEveryPass(t *testing.T) {
+// TestBlockedRuntimeIsNotRewrittenEveryPass: the controller reports a
+// blocked runtime as pending, so a blocked runtime (a deleted account without
+// a purge request) was blocked again by every node at every pass. It is now
+// blocked once, and again after a change (Kick).
+func TestBlockedRuntimeIsNotRewrittenEveryPass(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
 	cipher, _ := secret.New(make([]byte, 32))
 	s := New(db, cipher)
 	var id int64
-	if e := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc,status) VALUES('off','ccgateway','managed',''::bytea,'disabled') RETURNING id`).Scan(&id); e != nil {
+	if e := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc,deleted_at) VALUES('off','ccgateway','managed',''::bytea,now()) RETURNING id`).Scan(&id); e != nil {
 		t.Fatal(e)
 	}
 	var mu sync.Mutex
@@ -291,7 +291,7 @@ func TestDisabledRuntimeIsNotRewrittenEveryPass(t *testing.T) {
 	}
 	count := func() int { mu.Lock(); defer mu.Unlock(); return puts }
 	if count() != 1 {
-		t.Fatalf("disabled runtime blocked %d times in three passes", count())
+		t.Fatalf("deleted runtime blocked %d times in three passes", count())
 	}
 	s.Kick(key)
 	if e := s.Reconcile(ctx, key); e != nil || count() != 2 {

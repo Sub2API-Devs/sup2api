@@ -40,7 +40,7 @@ describe('CCGateway re-authorization', () => {
   it('recovers from a refused commit by its reason', () => {
     expect(commitRecovery('draft_not_found')).toBe('restart')
     expect(commitRecovery('draft_not_authorized')).toBe('recheck')
-    for (const r of ['no_proxy', 'not_configured', 'sync_failed', '']) expect(commitRecovery(r), r).toBe('retry')
+    for (const r of ['proxy_unavailable', 'not_configured', 'sync_failed', '']) expect(commitRecovery(r), r).toBe('retry')
   })
 
   it('summarizes the current runtime', () => {
@@ -72,10 +72,9 @@ describe('CCGateway re-authorization', () => {
     expect(() => rememberReauth(broken, 25, KEY)).not.toThrow()
   })
 
-  it('translates the re-authorization texts and the reauth block fixes in zh and en', () => {
-    for (const loc of [zh, en] as unknown as Array<{ reauth: Record<string, unknown>; accountAuth: { blocked: { fixReauth: Record<string, string> } } }>) {
+  it('translates the re-authorization texts in zh and en', () => {
+    for (const loc of [zh, en] as unknown as Array<{ reauth: Record<string, unknown> }>) {
       for (const k of ['hint', 'hintLoggedOut', 'confirmTitle', 'confirmMessage', 'confirmButton', 'startFailed', 'flowTitle', 'inProgress', 'cancel', 'signedIn', 'committing', 'commitFailed', 'commitRetry', 'done']) expect(loc.reauth[k], k).toBeTruthy()
-      for (const r of ['no_proxy', 'proxy_disabled', 'account_disabled', 'unknown']) expect(loc.accountAuth.blocked.fixReauth[r], r).toBeTruthy()
     }
     expect(Object.keys(zh.reauth).sort()).toEqual(Object.keys(en.reauth).sort())
   })

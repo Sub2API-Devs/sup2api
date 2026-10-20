@@ -35,10 +35,10 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
 
   // Per-account containers and drafts (docs/CCGATEWAY-DRAFT-RUNTIMES.md). Runtimes are keyed like
   // the core: an account id, or a draft key (d + 16 hex) that a new account adopts on save.
-  // CCGateway accounts of mock/accounts.ts: #25 authorized, #26 not yet, #27 has no proxy → blocked.
+  // CCGateway accounts of mock/accounts.ts: #25 authorized, #26 not yet, #27 has no proxy (direct egress).
   // Like the core:
   // - errors carry an English message and the cause code in details.reason;
-  // - a disabled account / a missing or disabled proxy is "blocked" with that reason (status and sync);
+  // - account and proxy status never stop a runtime (only a deleted account's, which the mock has none of);
   // - a runtime is ready ~4 s after it was created, synced or switched to another proxy;
   // - start returns the pending session if there is one; GET session resumes it;
   // - a code without '#' is invalid_code (session kept), one starting with "reject" is auth_rejected
@@ -65,12 +65,6 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const notConfigured = () => fault(503, 'not_configured', 'Per-account runtimes are disabled or no Docker connection is configured')
   const notSynchronized = () => fault(503, 'not_synchronized', 'The runtime is not ready yet')
   const ready = (key: string) => { if (!born.has(key)) born.set(key, Date.now()); return Date.now() - born.get(key)! >= READY_MS }
-  const proxyBlock = (id: number | null | undefined): string => {
-    if (id == null) return 'no_proxy'
-    const s = mockProxyStatus(id)
-    if (!s) return 'no_proxy'
-    return s === 'disabled' ? 'proxy_disabled' : ''
-  }
   const pending = (key: string) => {
     const s = sessions.get(key)
     if (s && Date.parse(s.expires_at) <= Date.now()) sessions.delete(key)
@@ -89,15 +83,14 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     }
   }
 
-  /** A resolved runtime: its key and why it is blocked ('' when it may run), or an error response. */
-  type Runtime = { key: string; blocked: string }
+  /** A resolved runtime (its key), or an error response. */
+  type Runtime = { key: string }
   type Resolve = (req: MockRequest) => Runtime | { __status: number; body: unknown }
   const accountRuntime: Resolve = ({ params }) => {
     if (!configured()) return notConfigured()
     const a = mockAccount(Number(params.id))
     if (!a) return fault(404, 'not_found', 'account not found')
-    const blocked = a.status === 'disabled' ? 'account_disabled' : proxyBlock(a.proxy_id)
-    return { key: adoptedBy.get(params.id) || params.id, blocked }
+    return { key: adoptedBy.get(params.id) || params.id }
   }
   const draftRuntime: Resolve = (req) => {
     sweep()
@@ -106,7 +99,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     if (!d || d.account_id != null || (d.created_by !== who.id && !hasPerm(who, 'settings:manage'))) return fault(404, 'draft_not_found', 'The draft runtime does not exist')
     if (!configured()) return notConfigured()
     d.last_seen = Date.now()
-    return { key: req.params.key, blocked: proxyBlock(d.proxy_id) }
+    return { key: req.params.key }
   }
   const isRuntime = (r: Runtime | { __status: number; body: unknown }): r is Runtime => !('__status' in r)
 
@@ -115,13 +108,12 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     on('GET', `${prefix}/status`, (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
-      if (r.blocked) { born.delete(r.key); return { container: '', status: 'blocked', reason: r.blocked } }
       return { status: ready(r.key) ? 'ready' : converging.get(r.key) || 'creating', container: `ccg-${r.key}-app` }
     })
     on('GET', `${prefix}/health`, (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
-      if (r.blocked || !ready(r.key)) return notSynchronized()
+      if (!ready(r.key)) return notSynchronized()
       // Accounts also name the Claude Code version their Worker observed (drafts do not, like the core).
       return { healthy: true, logged_in: authed.has(r.key), ...(prefix.endsWith(':id') ? { cli_version: CLI_VERSION } : {}) }
     })
@@ -133,14 +125,13 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       const r = resolve(req)
       if (!isRuntime(r)) return r
       await sleep(600)
-      if (r.blocked) return { synced: true, status: 'blocked', reason: r.blocked }
       ready(r.key)
       return { synced: true }
     })
     on('POST', `${prefix}/start`, async (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
-      if (r.blocked || !ready(r.key)) return notSynchronized()
+      if (!ready(r.key)) return notSynchronized()
       await sleep(500)
       const open = pending(r.key)
       if (open) return open
@@ -184,20 +175,20 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   on('GET', `${base}/accounts/:id/request-logs`, (req) => {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
-    return r.blocked || !ready(r.key) ? notSynchronized() : requestLogState(r.key)
+    return !ready(r.key) ? notSynchronized() : requestLogState(r.key)
   })
   on('PUT', `${base}/accounts/:id/request-logs`, (req) => {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
-    if (r.blocked || !ready(r.key)) return notSynchronized()
+    if (!ready(r.key)) return notSynchronized()
     if (typeof req.body?.enabled !== 'boolean') return fail(400, 'invalid_argument', 'enabled must be a boolean.')
     requestLogs.set(r.key, req.body.enabled)
     return requestLogState(r.key)
   })
 
-  /** Proxy check of POST / PUT drafts, like the core: missing → no_proxy, unknown → proxy_not_found, disabled → proxy_disabled. */
+  /** Proxy check of POST / PUT drafts, like the core: none → direct egress, unknown → proxy_not_found, disabled → proxy_disabled. */
   const draftProxyError = (id: unknown) => {
-    if (id == null) return fault(400, 'no_proxy', 'A proxy is required')
+    if (id == null) return null
     const s = typeof id === 'number' ? mockProxyStatus(id) : undefined
     if (!s) return fault(400, 'proxy_not_found', 'The proxy does not exist')
     return s === 'disabled' ? fault(400, 'proxy_disabled', 'The proxy is disabled') : null
@@ -362,7 +353,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       sweep()
       const d = drafts.get(key)
       if (!d || d.account_id != null || d.for_account != null || (d.created_by !== who.id && !hasPerm(who, 'settings:manage'))) return 'draft_not_found'
-      return authed.has(key) && ready(key) && !proxyBlock(d.proxy_id) ? '' : 'draft_not_authorized'
+      return authed.has(key) && ready(key) ? '' : 'draft_not_authorized'
     },
     adopt(key, accountId) {
       const d = drafts.get(key)

@@ -128,8 +128,8 @@ func (s *Service) cliManagementResponse(c *gin.Context, path string, limit int64
 		httpapi.Fail(c, core.ErrNotFound)
 		return nil, 0, false
 	}
-	if !d.Enabled {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, d.Blocked))
+	if reason := d.unavailable(); reason != "" {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
 		return nil, 0, false
 	}
 	var body []byte

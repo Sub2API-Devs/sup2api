@@ -182,16 +182,23 @@ func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
 		var calls atomic.Int32
 		e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { calls.Add(1); w.WriteHeader(500) })
 		e.plat.testURL = ccgateway.VirtualURL
-		e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "transport error: The account is disabled or deleted."}
+		const reason = "The bound proxy no longer exists or has an unsupported protocol; choose another proxy."
+		e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "transport error: " + reason}
+		// A disabled account is still tested; an unusable proxy is blocked
+		// before the runtime (the schema permits any protocol).
 		id := e.mkRawAccount("ccgateway", "managed", "disabled", "unused", false)
+		pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('bad','','proxy.example',3128) RETURNING id`)
+		if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET proxy_id=$2 WHERE id=$1`, id, pid); err != nil {
+			t.Fatal(err)
+		}
 		_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
 		d := gjson.GetBytes(raw, "data")
-		if d.Get("ok").Bool() || d.Get("status").Int() != 0 || d.Get("error_code").String() != "account_disabled" || d.Get("error_source").String() != "gateway" || calls.Load() != 0 {
+		if d.Get("ok").Bool() || d.Get("status").Int() != 0 || d.Get("error_code").String() != "proxy_unavailable" || d.Get("error_source").String() != "gateway" || calls.Load() != 0 {
 			t.Fatalf("blocked diagnostic: %s calls=%d", raw, calls.Load())
 		}
 		_, raw = e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
 		last := gjson.GetBytes(raw, "data.last_test")
-		if !last.Get("status").Exists() || last.Get("status").Int() != 0 || last.Get("error_code").String() != "account_disabled" || last.Get("error_source").String() != "gateway" || strings.Count(last.Get("message").String(), "The account is disabled or deleted.") != 1 {
+		if !last.Get("status").Exists() || last.Get("status").Int() != 0 || last.Get("error_code").String() != "proxy_unavailable" || last.Get("error_source").String() != "gateway" || strings.Count(last.Get("message").String(), reason) != 1 {
 			t.Fatalf("persisted diagnostic: %s", raw)
 		}
 	})

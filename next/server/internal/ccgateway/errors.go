@@ -11,21 +11,30 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
+// Only a deleted account stops its runtime (then purges it). Account status
+// (enabled or disabled) and proxy status never stop it; an unusable bound
+// proxy leaves it as it is and fails its requests instead of going direct.
+const (
+	reasonAccountDeleted   = "account_deleted"
+	reasonProxyUnavailable = "proxy_unavailable"
+)
+
 // reasonMessages are the English messages of the details.reason codes the
 // core produces itself (CONTRACTS §49.12). The console translates the code;
 // the message is the fallback for codes it does not know.
 var reasonMessages = map[string]string{
-	"not_configured":       "Account runtimes are not configured or the Docker host cannot be reached.",
-	"not_synchronized":     "The account runtime is not ready yet; try again shortly.",
-	"sync_failed":          "The account runtime could not be synchronized (container creation or the proxy check failed).",
-	"runtime_unavailable":  "The account runtime is unavailable.",
-	"no_proxy":             "The runtime has no proxy; choose a proxy first.",
-	"proxy_disabled":       "The runtime's proxy is disabled.",
-	"proxy_not_found":      "The proxy does not exist or is not visible to you.",
-	"account_disabled":     "The account is disabled or deleted.",
-	"api_key_account":      "API key accounts do not use OAuth authorization.",
-	"draft_not_found":      "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
-	"draft_not_authorized": "Claude Code is not signed in in this runtime yet.",
+	"not_configured":         "Account runtimes are not configured or the Docker host cannot be reached.",
+	"not_synchronized":       "The account runtime is not ready yet; try again shortly.",
+	"sync_failed":            "The account runtime could not be synchronized (container creation or the proxy check failed).",
+	"runtime_unavailable":    "The account runtime is unavailable.",
+	"disk_quota_unavailable": "The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.",
+	"proxy_disabled":         "The runtime's proxy is disabled.",
+	"proxy_not_found":        "The proxy does not exist or is not visible to you.",
+	reasonAccountDeleted:     "The account has been deleted.",
+	reasonProxyUnavailable:   "The bound proxy no longer exists or has an unsupported protocol; choose another proxy.",
+	"api_key_account":        "API key accounts do not use OAuth authorization.",
+	"draft_not_found":        "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
+	"draft_not_authorized":   "Claude Code is not signed in in this runtime yet.",
 	// Runtime installation (§49.16).
 	"ssh_not_configured":   "Save an SSH connection to the Docker host first.",
 	"ssh_failed":           "The Docker host could not be reached over SSH, or the remote command failed.",

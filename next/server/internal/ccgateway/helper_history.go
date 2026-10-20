@@ -46,7 +46,7 @@ func (s *Service) WorkerCapabilities(ctx context.Context, accountID int64) (feat
 	if err != nil {
 		return zero, err
 	}
-	if !d.Enabled {
+	if d.unavailable() != "" {
 		return zero, fmt.Errorf("Worker is unavailable")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

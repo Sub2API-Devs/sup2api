@@ -51,10 +51,10 @@ export const CCG_REASONS = [
   'not_configured',
   'not_synchronized',
   'sync_failed',
-  'no_proxy',
   'proxy_disabled',
   'proxy_not_found',
-  'account_disabled',
+  'proxy_unavailable',
+  'account_deleted',
   'draft_not_found',
   'draft_not_authorized',
   // §3 controller
@@ -62,6 +62,7 @@ export const CCG_REASONS = [
   'not_found',
   'api_key_account',
   'runtime_unavailable',
+  'disk_quota_unavailable',
   'method_not_allowed',
   // business container, passed through from Claude Code's own API errors
   'authentication_error',
@@ -110,15 +111,9 @@ export function knownReason(code: unknown): CcgReason | null {
   return (CCG_REASONS as readonly unknown[]).includes(code) ? (code as CcgReason) : null
 }
 
-/** Reasons of a blocked container the user fixes in the editor (proxy or account state). */
-export type CcgBlockReason = 'no_proxy' | 'proxy_disabled' | 'account_disabled'
-export function blockReason(reason: unknown): CcgBlockReason | 'unknown' {
-  return reason === 'no_proxy' || reason === 'proxy_disabled' || reason === 'account_disabled' ? reason : 'unknown'
-}
-
 /** Reasons fixed by picking another proxy in the editor. */
 export function isProxyReason(reason: unknown): boolean {
-  return reason === 'no_proxy' || reason === 'proxy_disabled' || reason === 'proxy_not_found'
+  return reason === 'proxy_disabled' || reason === 'proxy_not_found' || reason === 'proxy_unavailable'
 }
 
 /** After these reasons the container no longer holds the login session (§2): a new link is needed. */

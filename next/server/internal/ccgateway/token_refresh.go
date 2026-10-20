@@ -25,8 +25,8 @@ func (s *Service) RefreshToken(ctx context.Context, accountID int64) (map[string
 	if d.Kind != "managed" {
 		return nil, reasonError(core.ErrInvalidArgument, "api_key_account")
 	}
-	if !d.Enabled {
-		return nil, reasonError(core.ErrInvalidArgument, d.Blocked)
+	if reason := d.unavailable(); reason != "" {
+		return nil, reasonError(core.ErrInvalidArgument, reason)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

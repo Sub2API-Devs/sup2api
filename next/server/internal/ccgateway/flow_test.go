@@ -639,6 +639,7 @@ func TestRuntimeErrorMapping(t *testing.T) {
 		{409, `{"error":"account proxy not synchronized"}`, "unavailable", "not_synchronized"},
 		{409, `{"error":"api_key_account"}`, "invalid_argument", "api_key_account"},
 		{503, `{"error":"image_pull_failed"}`, "unavailable", "image_pull_failed"},
+		{503, `{"error":"disk_quota_unavailable"}`, "unavailable", "disk_quota_unavailable"},
 		{503, `{"error":"account runtime unavailable"}`, "unavailable", "runtime_unavailable"},
 		{502, `garbage`, "unavailable", "runtime_unavailable"},
 	} {
