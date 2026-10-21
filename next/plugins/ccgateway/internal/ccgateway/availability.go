@@ -120,12 +120,13 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 		out.Reason = "authorization_required"
 		return
 	}
-	if snapshot.GetError() != "" {
-		out.Reason = "quota_refresh_failed"
-		return
-	}
-	if now-snapshot.GetUpdatedAtUnix() >= int64(quotaRefresh.Seconds()) {
+	// A failed query keeps the windows of the last successful one; they
+	// decide until they are too old.
+	if now-snapshot.GetUpdatedAtUnix() >= int64(quotaValid.Seconds()) {
 		out.Reason = "quota_stale"
+		if snapshot.GetError() != "" {
+			out.Reason = "quota_refresh_failed"
+		}
 		return
 	}
 	if windows["5h"] == nil {
@@ -136,12 +137,10 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 		if window == nil || !quotaApplies(key, out.Model) {
 			continue
 		}
+		// An allowed window whose reset passed only got more room. A known
+		// exhaustion (above) still waits for a query after its reset.
 		if window.GetUtilizationUnknown() || (window.GetStatus() != "allowed" && window.GetStatus() != "allowed_warning") {
 			out.Reason = "quota_unknown:" + key
-			return
-		}
-		if reset := window.GetResetsAtUnix(); reset != 0 && reset <= now {
-			out.Reason = "quota_reset_unconfirmed:" + key
 			return
 		}
 	}

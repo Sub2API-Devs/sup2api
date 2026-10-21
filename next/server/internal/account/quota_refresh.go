@@ -82,7 +82,8 @@ func (s *Service) quotaNotReady(ctx context.Context, id int64, manual bool, reas
 
 func quotaNextCheck(now time.Time, res *pluginv1.QuotaResult, failures int, failed bool) time.Time {
 	if failed {
-		return now.Add(min(quotaErrorTTL*time.Duration(1<<min(failures, 6)), 30*time.Minute))
+		// failures counts the failed queries before this one.
+		return now.Add(min(quotaRetryFirst<<min(failures, 6), quotaErrorTTL))
 	}
 	next := now.Add(quotaFresh)
 	if value := res.GetNextCheckAtUnix(); value > 0 {

@@ -164,12 +164,12 @@ func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 1, up.calls.Load())
 	// Existing schedules (including plugin hints) cannot pull an automatic
-	// query forward into the 30-minute interval.
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '29 minutes' WHERE account_id=$1`, id)
+	// query forward into the floor.
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '50 seconds' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 1, up.calls.Load())
-	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '31 minutes' WHERE account_id=$1`, id)
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET last_active_at=now()-interval '61 seconds' WHERE account_id=$1`, id)
 	require.NoError(t, err)
 	up.failStatus.Store(503)
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
@@ -179,7 +179,8 @@ func TestQuotaAutomaticRecordingLifecycleAndRenewal(t *testing.T) {
 	require.Equal(t, "error", snap.RefreshStatus)
 	require.NotEmpty(t, snap.Error)
 	require.Equal(t, float64(100), snap.Windows["5h"].Utilization)
-	require.WithinDuration(t, time.Now().Add(30*time.Minute), *snap.NextCheckAt, 5*time.Second)
+	// The first failure is retried after a minute.
+	require.WithinDuration(t, time.Now().Add(time.Minute), *snap.NextCheckAt, 5*time.Second)
 	require.True(t, e.mr.Exists(cooldownKey(id)))
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
 	require.EqualValues(t, 2, up.calls.Load())
@@ -645,14 +646,17 @@ func TestQuotaSweepCancellation(t *testing.T) {
 }
 
 func TestQuotaNextCheckBounds(t *testing.T) {
-	now := time.Now()
+	now := time.Unix(time.Now().Unix(), 0)
 	require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, nil, 0, false))
-	for _, hint := range []time.Duration{-time.Hour, time.Minute, 3 * time.Minute, 29 * time.Minute} {
-		require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(hint).Unix()}, 0, false))
+	// A plugin hint (a window resets) may come before the regular check, not
+	// before the floor.
+	for hint, want := range map[time.Duration]time.Duration{-time.Hour: time.Minute, 30 * time.Second: time.Minute, 3 * time.Minute: 3 * time.Minute, 29 * time.Minute: 29 * time.Minute, 2 * time.Hour: 2 * time.Hour} {
+		require.Equal(t, now.Add(want), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(hint).Unix()}, 0, false), hint)
 	}
 	require.Equal(t, now.Add(24*time.Hour), quotaNextCheck(now, &pluginv1.QuotaResult{NextCheckAtUnix: now.Add(48 * time.Hour).Unix()}, 0, false))
-	for _, failures := range []int{0, 1, 6, 100} {
-		require.Equal(t, now.Add(30*time.Minute), quotaNextCheck(now, nil, failures, true))
+	// Failed queries back off from one minute to the regular interval.
+	for failures, want := range map[int]time.Duration{0: time.Minute, 1: 2 * time.Minute, 2: 4 * time.Minute, 4: 16 * time.Minute, 5: 30 * time.Minute, 6: 30 * time.Minute, 100: 30 * time.Minute} {
+		require.Equal(t, now.Add(want), quotaNextCheck(now, nil, failures, true), failures)
 	}
 }
 

@@ -17,9 +17,14 @@ import (
 )
 
 const (
-	// Keep model-admission freshness aligned with the core's query interval.
+	// quotaRefresh is the core's regular query interval.
 	quotaRefresh = 30 * time.Minute
 	quotaRetry   = quotaRefresh
+	// quotaValid is how long the last successful query decides model
+	// admission: longer than two intervals, so one late or failed query (the
+	// core retries it within minutes) does not hold the account back. At one
+	// interval every query that came a little late blocked it (2026-10-21).
+	quotaValid   = 2*quotaRefresh + 5*time.Minute
 	maxQuotaBody = 64 << 10
 )
 

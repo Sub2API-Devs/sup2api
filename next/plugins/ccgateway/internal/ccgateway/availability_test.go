@@ -89,7 +89,16 @@ func TestModelAvailabilitySnapshots(t *testing.T) {
 		{"no observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix = 0 }, pluginv1.ModelAvailability_UNKNOWN},
 		{"future observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix++ }, pluginv1.ModelAvailability_UNKNOWN},
 		{"empty windows", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows = nil }, pluginv1.ModelAvailability_UNKNOWN},
-		{"failed refresh", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient" }, pluginv1.ModelAvailability_UNKNOWN},
+		// A failed query leaves the last successful windows in charge.
+		{"failed refresh keeps a valid snapshot", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient" }, pluginv1.ModelAvailability_AVAILABLE},
+		{"failed refresh past validity", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "transient"
+			q.UpdatedAtUnix -= int64(quotaValid.Seconds())
+		}, pluginv1.ModelAvailability_UNKNOWN},
+		{"failed refresh keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "transient"
+			q.Windows[0].Status = "rejected"
+		}, pluginv1.ModelAvailability_UNAVAILABLE},
 		// The container refreshes an expired OAuth token only on a model request.
 		{"expired token lets the request refresh it", func(q *pluginv1.AccountQuotaSnapshot) {
 			q.Error = expiredTokenError
@@ -119,10 +128,21 @@ func TestModelAvailabilitySnapshots(t *testing.T) {
 			q.Windows = nil
 		}, pluginv1.ModelAvailability_UNKNOWN},
 		{"core without the reason", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: quota query failed" }, pluginv1.ModelAvailability_UNKNOWN},
-		{"other transient failure", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient: usage runtime returned 502" }, pluginv1.ModelAvailability_UNKNOWN},
-		{"available until the next periodic query", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64((29 * time.Minute).Seconds()) }, pluginv1.ModelAvailability_AVAILABLE},
-		{"stale after 30 minutes", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64((30 * time.Minute).Seconds()) }, pluginv1.ModelAvailability_UNKNOWN},
-		{"allowed reset elapsed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = now.Unix() }, pluginv1.ModelAvailability_UNKNOWN},
+		{"other transient failure", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "transient: usage runtime returned 502"
+			q.UpdatedAtUnix -= int64((40 * time.Minute).Seconds())
+		}, pluginv1.ModelAvailability_AVAILABLE},
+		{"available past a late periodic query", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.UpdatedAtUnix -= int64((quotaValid - time.Second).Seconds())
+		}, pluginv1.ModelAvailability_AVAILABLE},
+		{"stale after two missed queries", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64(quotaValid.Seconds()) }, pluginv1.ModelAvailability_UNKNOWN},
+		// Usage only drops at a reset.
+		{"allowed reset elapsed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = now.Unix() }, pluginv1.ModelAvailability_AVAILABLE},
+		// A known exhaustion waits for a query after its reset (CONTRACTS §44.7).
+		{"rejection past its reset", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Windows[0].Status = "rejected"
+			q.Windows[0].ResetsAtUnix = now.Add(-time.Minute).Unix()
+		}, pluginv1.ModelAvailability_UNAVAILABLE},
 		{"unknown status", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = "" }, pluginv1.ModelAvailability_UNKNOWN},
 		{"old utilization alone", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = ""; q.Windows[0].Utilization = 100 }, pluginv1.ModelAvailability_UNKNOWN},
 		{"extra usage allowed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Utilization = 125 }, pluginv1.ModelAvailability_AVAILABLE},
