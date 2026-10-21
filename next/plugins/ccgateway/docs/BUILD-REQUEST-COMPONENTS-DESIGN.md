@@ -208,6 +208,8 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 为什么总要补（2026-10-21 实测）：上游要求计费头同时含 `cc_version` 与 `cc_entrypoint`，缺任一个都返回 400 `x-anthropic-billing-header is a reserved keyword and may not be used in the system prompt.`，`cch` 可有可无；OAuth 的 Sonnet/Opus 请求首块没有计费头也没有开头行时返回 429。v15 及以前只在选 `worker` 时才动计费头，客户端没有计费头、且只有一个字段选 `worker` 时会插入单字段头被拒；v16 起插入的总是原生整行。
 
+计费头不在首块（2026-10-22，30 号实测，Opus/Sonnet 相同）：build 发出 `[开头行, 提示, 补齐的计费头]`，上游 200。上游只检查首块的计费头：放在后面的头缺字段或指纹不对都是 200，首尾两个头也是 200；`[提示, 计费头]` 没有开头行仍是 429。
+
 ### 5.6 识别用的文字全部取自原生 CC
 
 `content-policy.js` 里没有 CC 的措辞，只导出 `createContentPolicy(vocabulary)`。词表由 `request-build-2.1.304.js` 在运行时从打过补丁的 CLI 取得（2026-10-21 起）：
