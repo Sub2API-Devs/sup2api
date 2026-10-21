@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1155,6 +1156,12 @@ func (s *Service) update(c *gin.Context) {
 		if p, err = s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx)); err != nil {
 			httpapi.Fail(c, err)
 			return
+		}
+		// Unchanged credentials keep their ciphertext: a fresh nonce would
+		// look like a credential change to whatever compares the stored bytes
+		// (CCGateway reapplies the account runtime on it).
+		if stored, err := parseObject(plain); err == nil && bytes.Equal(mustJSON(stored), p.secret) {
+			p.enc = cur.CredEnc
 		}
 	}
 	bt, _ := s.accountType(cur.PluginKey, cur.Type)

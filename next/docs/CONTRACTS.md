@@ -3301,8 +3301,9 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
   - 清掉的路由会关闭空闲隧道；请求还在用的连接在请求结束时关闭。
 - **一致性**：
   - 连接只按核心期望的修订号向控制器要；每条新隧道握手时控制器都会核对修订号，不一致回 409。
-  - 来自缓存的修订号被拒（409）时，清掉该账号后用新读的修订号重试一次；请求体能重放时重试，不能重放则回 409 `not_synchronized`。
-  - 新读的修订号仍被拒，就是运行环境确实没同步，照旧回 409，并立即 kick 该运行环境。
+  - 来自缓存的修订号被拒（409）时，清掉该账号后用新读的修订号重试一次；请求体能重放时重试，不能重放则按未同步回答。
+  - 新读的修订号仍被拒，就是运行环境确实没同步，立即 kick 该运行环境。
+  - 未同步对模型请求的回答（2026-10-21 起）：503 Anthropic 错误 `{"type":"error","error":{"type":"api_error","message":"The account runtime is not ready yet; try again shortly."}}`。插件按 5xx 切换到其他账号并对本账号短冷却（10 秒）；没有其他账号时客户端收到这个官方格式的错误。此前是 409 `{"error":"not_synchronized"}`，没有 `error.type`，插件按客户端错误原样返回，不切换账号。
   - Worker 回 401 或连接失败时清掉该账号的路由，下一个请求重新问控制器。
 - **空闲连接**保持 30 秒，比 Worker 的 60 秒空闲超时短。
 - **请求策略**（`X-CCGateway-Request-Policy`）仍随每个请求发送，Worker 保持无状态。

@@ -1,6 +1,7 @@
 package ccgateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -138,7 +139,7 @@ func (t modelTransport) forwardManaged(req *http.Request, path string, resource 
 
 // forwardAttempt sends req once. stale reports a refusal of the runtime
 // revision that came from the request cache; the caller may retry, and the
-// answer is a 409 not_synchronized otherwise.
+// answer is notSynchronizedResponse otherwise.
 func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.CancelFunc, req *http.Request, body io.ReadCloser, path string, resource bool) (*http.Response, bool, error) {
 	fail := func(e error) (*http.Response, bool, error) {
 		cancel()
@@ -258,8 +259,12 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 	return res, false, nil
 }
 
+// notSynchronizedResponse is an Anthropic 503 api_error, like the Worker's
+// own unavailability answers: the plugin fails over to another account and
+// cools this one down briefly while its runtime is reconciled.
 func notSynchronizedResponse(req *http.Request) *http.Response {
-	return &http.Response{StatusCode: 409, Status: "409 Conflict", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":"not_synchronized"}`)), Request: req}
+	body, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]string{"type": "api_error", "message": reasonMessages["not_synchronized"]}})
+	return &http.Response{StatusCode: http.StatusServiceUnavailable, Status: "503 Service Unavailable", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(body)), Request: req}
 }
 
 type modelBody struct {

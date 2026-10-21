@@ -942,6 +942,26 @@ func TestAccountLifecycle(t *testing.T) {
 	if audits != 1 {
 		t.Fatal("reveal not audited")
 	}
+	// Resubmitting the same credentials keeps the stored ciphertext; a real
+	// change re-encrypts it.
+	_ = e.db.Pool.QueryRow(ctx, `SELECT credentials_enc FROM accounts WHERE id = $1`, id).Scan(&enc)
+	same := map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": "https://b.example.com", "org": "acme2"}, "name": "same credentials"}
+	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), same); code != 200 {
+		t.Fatalf("patch same credentials: %d %v", code, out)
+	}
+	var after []byte
+	_ = e.db.Pool.QueryRow(ctx, `SELECT credentials_enc FROM accounts WHERE id = $1`, id).Scan(&after)
+	if !bytes.Equal(enc, after) {
+		t.Fatal("unchanged credentials were re-encrypted")
+	}
+	same["credentials"].(map[string]any)["org"] = "acme3"
+	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), same); code != 200 {
+		t.Fatalf("patch changed credentials: %d %v", code, out)
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT credentials_enc FROM accounts WHERE id = $1`, id).Scan(&after)
+	if bytes.Equal(enc, after) {
+		t.Fatal("changed credentials kept the old ciphertext")
+	}
 	// PATCH other fields only; proxy null clears; unknown proxy rejected.
 	if code, _ = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"proxy_id": 12345}); code != 400 {
 		t.Fatalf("unknown proxy: %d", code)
@@ -1011,7 +1031,7 @@ func TestAccountLifecycle(t *testing.T) {
 	if e.mr.Exists(cooldownKey(id)) {
 		t.Fatal("cooldown kept after delete")
 	}
-	want := "[account.created account.updated account.status_changed account.updated account.status_changed account.status_changed account.deleted]"
+	want := "[account.created account.updated account.status_changed account.updated account.updated account.updated account.status_changed account.status_changed account.deleted]"
 	if got := fmt.Sprint(e.eventTypes()); got != want {
 		t.Fatalf("events:\n got %s\nwant %s", got, want)
 	}

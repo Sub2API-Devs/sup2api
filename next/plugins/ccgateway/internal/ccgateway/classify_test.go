@@ -66,6 +66,21 @@ func TestLegacyBillingClassification(t *testing.T) {
 	require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect())
 }
 
+// The core answers an unsynchronized account runtime with this body
+// (server/internal/ccgateway notSynchronizedResponse): another account takes
+// the request and the body stays the client's error if none can.
+func TestRuntimeNotSynchronizedFailsOver(t *testing.T) {
+	out, err := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{
+		Status:     http.StatusServiceUnavailable,
+		BodyPrefix: []byte(`{"error":{"message":"The account runtime is not ready yet; try again shortly.","type":"api_error"},"type":"error"}`),
+	})
+	require.NoError(t, err)
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, out.GetAccountEffect())
+	require.Empty(t, out.GetClientErrorType())
+	require.Empty(t, out.GetClientMessage())
+}
+
 func TestNativeQuotaRetryAfterClassification(t *testing.T) {
 	now := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	reset := now.Add(5 * time.Hour)

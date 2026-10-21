@@ -83,7 +83,8 @@ func (p *cachePanel) apply(revision string) {
 // TestRequestCacheControllerMode: requests reuse the account's revision, its
 // connection and its tunnel (2026-10-11); a revision the controller no longer
 // has is retried once with the account read again, a change published on the
-// bus drops the route, and a runtime that is really behind is still a 409.
+// bus drops the route, and a runtime that is really behind is still refused
+// (503 not synchronized).
 func TestRequestCacheControllerMode(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
@@ -197,7 +198,7 @@ func TestRequestCacheControllerMode(t *testing.T) {
 	// A runtime that is really behind is still refused.
 	panel.apply(strings.Repeat("b", 64))
 	s.onAccountChanged([]byte(`{"account_id":` + strconv.FormatInt(id, 10) + `}`))
-	if code := call(`{}`); code != 409 {
+	if code := call(`{}`); code != 503 {
 		t.Fatal("unsynchronized runtime accepted", code)
 	}
 }

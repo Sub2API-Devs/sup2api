@@ -119,8 +119,21 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 	}
 	// The proxy service publishes the change; the account is read again.
 	s.onConfigChanged([]byte(`{"type":"proxy","id":1}`))
-	if call() != 409 {
-		t.Fatal("unsynchronized proxy accepted")
+	// An unsynchronized runtime answers in the Anthropic error format, as a
+	// 5xx the plugin fails over on (not a client error returned as is).
+	req, _ := http.NewRequest("POST", VirtualURL, strings.NewReader(`{}`))
+	res, e := s.ModelClient(id).Do(req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	var answer struct {
+		Type  string `json:"type"`
+		Error struct{ Type, Message string }
+	}
+	if res.StatusCode != 503 || json.Unmarshal(body, &answer) != nil || answer.Type != "error" || answer.Error.Type != "api_error" || answer.Error.Message == "" {
+		t.Fatalf("unsynchronized proxy: %d %s", res.StatusCode, body)
 	}
 	if e := s.Reconcile(ctx, strconv.FormatInt(id, 10)); e != nil {
 		t.Fatal(e)
