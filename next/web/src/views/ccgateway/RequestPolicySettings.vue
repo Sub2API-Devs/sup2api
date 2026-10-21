@@ -47,7 +47,7 @@ function applySources(patch: Record<string, unknown>) {
     next = { ...next, [section]: fields }
   }
   if (layered.value) overrides.value = next as FeatureOverrides
-  else policy.value = { ...(next as RequestPolicy), schema_version: 2 }
+  else policy.value = next as RequestPolicy
 }
 function setMode(mode: unknown) {
   if (layered.value) {
@@ -55,7 +55,7 @@ function setMode(mode: unknown) {
     if (mode === 'follow') delete next.relay_mode
     else next.relay_mode = mode as 'direct' | 'build'
     overrides.value = next
-  } else policy.value = { ...policy.value, schema_version: 2, relay_mode: mode as 'direct' | 'build' }
+  } else policy.value = { ...policy.value, relay_mode: mode as 'direct' | 'build' }
 }
 function differs(section: Section, field: string) {
   if (showEffective.value || !layered.value) return false

@@ -21,7 +21,7 @@ describe('CC feature layer contract', () => {
     for (const overrides of [{ build_billing_sources: { cc_version: 'erase' } }, { build_attachment_sources: { user_email: 'erase' } }, { build_attachment_sources: null }, { relay_mode: null }, { cli_version: '2.1.304' }]) {
       expect(validFeatureOverrides(overrides as never)).toBe(false)
     }
-    expect(validRequestPolicy({ ...defaultRequestPolicy(), schema_version: 2, build_attachment_sources: { worktree: 'erase', agent_proxy: 'worker' } })).toBe(true)
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), schema_version: 1, build_attachment_sources: { worktree: 'erase', agent_proxy: 'worker' } })).toBe(true)
   })
   it('offers twelve fields, forbids billing erase and shows the pinned version', () => {
     const w = mount(RequestPolicySettings, { props: { modelValue: defaultRequestPolicy() }, global: { plugins: [i18n] } })

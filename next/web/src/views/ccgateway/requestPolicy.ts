@@ -144,7 +144,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
 }
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
-    (p.schema_version === undefined || p.schema_version === 1 || p.schema_version === 2) &&
+    (p.schema_version === undefined || p.schema_version === 1) &&
     Object.entries(p.build_attachment_sources ?? {}).every(([field, source]) =>
       (buildAttachmentFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker' || source === 'erase')) &&
     Object.entries(p.build_billing_sources ?? {}).every(([field, source]) =>
@@ -175,7 +175,7 @@ export interface FeaturePreview {
   policy_revision: string
 }
 export function newRequestPolicy(): RequestPolicy {
-  return { ...defaultRequestPolicy(), schema_version: 2, build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
+  return { ...defaultRequestPolicy(), build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
 }
 export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOverrides): RequestPolicy {
   return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }

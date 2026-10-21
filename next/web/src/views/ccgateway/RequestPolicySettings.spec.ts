@@ -70,6 +70,19 @@ describe('CCGateway single-request modes', () => {
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.304'})}),expect.anything())
     w.unmount()
   })
+  // The core accepts request policy schema 1 only (contracts/features
+  // PolicySchemaVersion); an edited global policy must still decode there.
+  it('never sends a request policy schema the core rejects', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), schema_version: 1 }))
+    const w = await render()
+    await pick(w, '[data-testid="identity-user_id"]', 0)
+    await w.get('[data-testid="relay-mode"]').setValue('0')
+    mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
+    await w.get('form').trigger('submit'); await flushPromises()
+    const sent = mocks.put.mock.calls[0]![1].request_policy
+    expect([undefined, 1]).toContain(sent.schema_version)
+    w.unmount()
+  })
   // Identity is applied in direct as well, so it stays editable there; only the
   // content sources are build-only.
   it('keeps the identity source editable in direct mode', async () => {
