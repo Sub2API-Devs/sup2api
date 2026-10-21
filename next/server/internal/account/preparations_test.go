@@ -208,6 +208,81 @@ func TestLifecycleSynchronizationCannotOverwriteNewerGeneration(t *testing.T) {
 	}
 }
 
+type synchronizationReader struct {
+	*preparationResource
+	state core.AccountSynchronization
+	err   error
+	reads int
+	// during runs inside the read.
+	during func()
+}
+
+func (r *synchronizationReader) AccountSynchronization(context.Context, int64) (core.AccountSynchronization, error) {
+	r.reads++
+	if r.during != nil {
+		r.during()
+	}
+	return r.state, r.err
+}
+
+// A state that event delivery left behind is read again once it settled:
+// read failures and fresh rows are left alone, applied rows are never read.
+func TestLifecycleStatusSweepRereadsStaleStates(t *testing.T) {
+	e, resource, _ := preparationFixture(t)
+	ctx := t.Context()
+	reader := &synchronizationReader{preparationResource: resource, err: core.ErrUnavailable}
+	e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"fixture": reader}
+	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('stale','fixture','managed',''::bytea) RETURNING id`)
+	e.exec1(`INSERT INTO account_lifecycle_sync(account_id,status,code,updated_at) VALUES($1,'failed','runtime_sync_failed',now()-interval '1 minute') RETURNING account_id`, id)
+	backdate := func() {
+		if _, err := e.db.Pool.Exec(ctx, `UPDATE account_lifecycle_sync SET updated_at=now()-interval '1 minute' WHERE account_id=$1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sweep := func(want int, status, code string) {
+		t.Helper()
+		got, err := e.svc.sweepLifecycleStatus(ctx)
+		var state core.AccountSynchronization
+		if err == nil {
+			err = e.db.Pool.QueryRow(ctx, `SELECT status,code FROM account_lifecycle_sync WHERE account_id=$1`, id).Scan(&state.Status, &state.Code)
+		}
+		if err != nil || got != want || state.Status != status || state.Code != code {
+			t.Fatalf("sweep: %d %+v %v, want %d %s/%s", got, state, err, want, status, code)
+		}
+	}
+	sweep(0, "failed", "runtime_sync_failed")
+	reader.err, reader.state = nil, core.AccountSynchronization{Status: "pending", Code: "runtime_pending"}
+	sweep(1, "pending", "runtime_pending")
+	// Just written: left to settle.
+	reader.state = core.AccountSynchronization{Status: "applied"}
+	reads := reader.reads
+	sweep(0, "pending", "runtime_pending")
+	if reader.reads != reads {
+		t.Fatal("a fresh state was read again")
+	}
+	backdate()
+	sweep(1, "applied", "")
+	backdate()
+	sweep(0, "applied", "")
+	if reader.reads != reads+1 {
+		t.Fatalf("applied state read again: %d", reader.reads-reads)
+	}
+	// A change while the state is read keeps its own state.
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_lifecycle_sync SET status='failed',code='runtime_sync_failed',updated_at=now()-interval '1 minute' WHERE account_id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	reader.during = func() {
+		if err := markLifecyclePending(ctx, e.db.Pool, id); err != nil {
+			t.Error(err)
+		}
+	}
+	if _, err := e.svc.sweepLifecycleStatus(ctx); err != nil {
+		t.Fatal(err)
+	}
+	reader.during = nil
+	sweep(0, "pending", "")
+}
+
 func TestAccountPreparationRejectsConfigurationMismatch(t *testing.T) {
 	e, resource, proxy := preparationFixture(t)
 	request := map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}, "idempotency_key": "attempt-1"}

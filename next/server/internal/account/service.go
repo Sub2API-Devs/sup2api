@@ -174,6 +174,7 @@ func (s *Service) Run(ctx context.Context) {
 	go s.runRefreshSweep(ctx)
 	go s.runAutomaticStateSweep(ctx)
 	go s.runPreparationSweep(ctx)
+	go s.runLifecycleStatusSweep(ctx)
 	if s.d.Bus != nil {
 		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
 		defer cancel()
