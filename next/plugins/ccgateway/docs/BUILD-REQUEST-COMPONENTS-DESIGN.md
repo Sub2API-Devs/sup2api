@@ -255,7 +255,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 原生 CC 的 system 总是 `[计费头, 开头行, ...提示]`（2.1.304 `PAs`；开头行由 `n1n` 从三句里选：交互式 `You are Claude Code, Anthropic's official CLI for Claude.`、SDK 带追加提示的一句、SDK 的 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`）。build 保留客户端 system，原生开头行不会出现。
 
-上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
+上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行，没有也行（2026-10-22 在 30 号复测：`[计费头, 提示]`、只有计费头、计费头与提示同一块都是 200，计费头只需在首块开头）。build 总带计费头，补开头行是为了与原生形状一致，不是上游的要求。
 
 因此 OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；插入的是 `n1n({isNonInteractive:true, hasAppendSystemPrompt:false})`，即 SDK 那句 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`，与 Worker 设置的 `cc_entrypoint=sdk-cli` 一致，正是 `claude -p` 发出的组合（2026-10-22 用户选定；v15 用的是终端交互那句）。
 
