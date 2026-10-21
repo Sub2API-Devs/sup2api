@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -34,7 +35,16 @@ func matrixFields() []matrixField {
 	for _, key := range []string{"cc_version", "cc_entrypoint"} {
 		fields = append(fields, matrixField{"build_billing_sources." + key, []string{"client", "worker"}})
 	}
+	fields = append(fields, matrixField{"request_identity_sources.user_id", []string{"client", "worker", "replace"}})
 	return fields
+}
+
+// matrixDefault is what a field resolves to when no layer sets it.
+func matrixDefault(field string) string {
+	if strings.HasPrefix(field, "request_identity_sources.") {
+		return features.RequestIdentityDefault
+	}
+	return "client"
 }
 
 func matrixOverride(field, value string) FeatureOverrides {
@@ -43,22 +53,34 @@ func matrixOverride(field, value string) FeatureOverrides {
 		return o
 	}
 	section, key, _ := strings.Cut(field, ".")
-	if section == "build_attachment_sources" {
+	switch section {
+	case "build_attachment_sources":
 		o.BuildAttachmentSources = features.BuildAttachmentSources{key: value}
-	} else {
+	case "build_billing_sources":
 		o.BuildBillingSources = features.BuildBillingSources{key: value}
+	case "request_identity_sources":
+		o.RequestIdentitySources = features.RequestIdentitySources{key: value}
+	default:
+		panic("matrix field without a section: " + field)
 	}
 	return o
 }
 
 func matrixValue(p RequestPolicy, field string) string {
 	section, key, _ := strings.Cut(field, ".")
-	value := p.BuildAttachmentSources[key]
-	if section == "build_billing_sources" {
+	var value string
+	switch section {
+	case "build_attachment_sources":
+		value = p.BuildAttachmentSources[key]
+	case "build_billing_sources":
 		value = p.BuildBillingSources[key]
+	case "request_identity_sources":
+		value = p.RequestIdentitySources[key]
+	default:
+		panic("matrix field without a section: " + field)
 	}
 	if value == "" {
-		return "client"
+		return matrixDefault(field)
 	}
 	return value
 }
@@ -68,11 +90,13 @@ func matrixGlobal(field, value string) RequestPolicy {
 	o := matrixOverride(field, value)
 	p.BuildAttachmentSources = o.BuildAttachmentSources
 	p.BuildBillingSources = o.BuildBillingSources
+	p.RequestIdentitySources = o.RequestIdentitySources
 	return p
 }
 
-// 10 * 3 * 4 * 4 * 4 * 2 + 2 * 2 * 3 * 3 * 4 * 2 = 4,128 cases:
-// every global source, sparse group/account value, both group gates and modes.
+// 10 * 3 * 4 * 4 * 4 * 2 + 2 * 2 * 3 * 3 * 4 * 2 + 3 * 4 * 4 * 4 * 2 = 4,512
+// cases: every global source, sparse group/account value, both group gates and
+// modes, for the attachment, billing and identity sources.
 func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 	cases := 0
 	for _, field := range matrixFields() {
@@ -106,7 +130,7 @@ func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 									require.NoError(t, validateRequestPolicy(r.Effective))
 									for _, other := range matrixFields() {
 										if other.path != field.path {
-											require.Equal(t, "client", matrixValue(r.Effective, other.path), other.path)
+											require.Equal(t, matrixDefault(other.path), matrixValue(r.Effective, other.path), other.path)
 											require.Equal(t, "global", r.Sources[other.path], other.path)
 										}
 									}
@@ -121,7 +145,7 @@ func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 4128, cases)
+	require.Equal(t, 4512, cases)
 }
 
 func TestFeatureMissingGroupPolicyAllowsAccountsButNoRequestGroupStaysGlobal(t *testing.T) {
@@ -148,7 +172,7 @@ func TestFeatureMissingGroupPolicyAllowsAccountsButNoRequestGroupStaysGlobal(t *
 			}
 		}
 	}
-	require.Equal(t, 196, cases)
+	require.Equal(t, 214, cases)
 }
 
 func TestFeatureMixedFieldsHaveIndependentInheritance(t *testing.T) {
@@ -376,11 +400,57 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 			evidence = append(evidence, evidenceCase{tc.Name, tc.Field, tc.ExpectedSource, tc.ExpectedSources, tc.ExpectedOrigin, tc.ExpectedMode, wire, r.Effective, r.Sources})
 		})
 	}
-	require.Len(t, evidence, 55)
+	require.Len(t, evidence, 58)
 	if output := os.Getenv("CCG_POLICY_MATRIX_OUTPUT"); output != "" {
 		require.True(t, filepath.IsAbs(output), "matrix output must be an explicit absolute artifact path")
 		data, err := json.MarshalIndent(map[string]any{"schema_version": 1, "cli_version": "2.1.304", "cases": evidence}, "", "  ")
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(output, append(data, '\n'), 0600))
 	}
+}
+
+// The identity source applies in direct as well as build: whatever layer sets
+// it, the Worker receives it in both modes, except the default (replace),
+// which is never sent; only worker needs the identity capability.
+func TestIdentitySourceReachesTheWorkerInBothModes(t *testing.T) {
+	field := "request_identity_sources.user_id"
+	cases := 0
+	for _, mode := range []string{"build", "direct"} {
+		for _, origin := range []string{"global", "group", "account"} {
+			for _, source := range []string{"client", "worker", "replace"} {
+				t.Run(mode+"/"+origin+"/"+source, func(t *testing.T) {
+					p := defaultRequestPolicy()
+					p.RelayMode = mode
+					group, account := GroupFeaturePolicy{Enabled: true, AllowAccountOverride: true}, AccountFeaturePolicy{Mode: "custom"}
+					switch origin {
+					case "global":
+						p.RequestIdentitySources = matrixOverride(field, source).RequestIdentitySources
+					case "group":
+						group.Overrides = matrixOverride(field, source)
+					case "account":
+						account.Overrides = matrixOverride(field, source)
+					}
+					cfg := Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": group}}
+					before, _ := json.Marshal([]any{cfg, account})
+					r := cfg.ResolveFeaturePolicy(7, account)
+					require.Equal(t, source, matrixValue(r.Effective, field))
+					require.Equal(t, origin, r.Sources[field])
+					require.Equal(t, mode, r.Effective.RelayMode)
+					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
+					require.NoError(t, err)
+					require.NoError(t, validateRequestPolicy(wire))
+					if source == features.RequestIdentityDefault {
+						require.Empty(t, wire.RequestIdentitySources)
+					} else {
+						require.Equal(t, features.RequestIdentitySources{"user_id": source}, wire.RequestIdentitySources)
+					}
+					require.Equal(t, source == "worker", slices.Contains(requestPolicyCapabilities(wire), features.RequestIdentityCapability))
+					after, _ := json.Marshal([]any{cfg, account})
+					require.JSONEq(t, string(before), string(after), "resolving must not mutate stored policies")
+				})
+				cases++
+			}
+		}
+	}
+	require.Equal(t, 18, cases)
 }
