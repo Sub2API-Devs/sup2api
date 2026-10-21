@@ -248,14 +248,47 @@ class DiskQuotaTests(Base):
                      'ENABLE_CLAUDEAI_MCP_SERVERS', 'CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL'):
             self.assertNotIn(name, environment)
 
-    def test_unsupported_storage_never_creates_an_unlimited_fallback(self):
-        with patch.object(self.fake.volumes, 'create', side_effect=docker.errors.APIError('quota size requested but no quota support')):
+    def no_quota_support(self):
+        """Storage without project quotas refuses only the size option."""
+        create = self.fake.volumes.create
+
+        def refuse_size(name, **kwargs):
+            if kwargs.get('driver_opts', {}).get('size'):
+                raise docker.errors.APIError('quota size requested but no quota support')
+            return create(name, **kwargs)
+        return patch.object(self.fake.volumes, 'create', side_effect=refuse_size)
+
+    def test_unsupported_storage_creates_an_unbounded_volume_and_reports_it(self):
+        with self.no_quota_support():
+            state = self.m.provision('7')
+        volume = self.fake.volumes.get('ccg-7-data')
+        self.assertNotIn('size', volume.attrs.get('Options') or {})
+        self.assertNotIn(manager.DISK_QUOTA_LABEL, volume.attrs['Labels'])
+        self.assertEqual(state['disk_quota'], {'limit_bytes': 0, 'status': 'unbounded'})
+        self.assertNotIn('CCG_ACCOUNT_DISK_QUOTA_BYTES', self.app('7').kwargs['environment'])
+        self.assertEqual(self.m.health()['disk_quota']['support'], 'unavailable')
+        # The unbounded volume is kept as it is on the next configuration.
+        state = self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
+        self.assertIs(self.fake.volumes.get('ccg-7-data'), volume)
+        self.assertEqual(state['disk_quota']['status'], 'unbounded')
+
+    def test_required_quota_never_creates_an_unlimited_fallback(self):
+        self.m.lockfile.close()
+        with patch.dict(os.environ, {'CCG_ACCOUNT_DISK_QUOTA_REQUIRED': '1'}):
+            self.m = self.make('app:test', 'egress:test')
+        with self.no_quota_support():
             with self.assertRaises(manager.DiskQuotaUnavailable):
                 self.m.provision('7')
         self.assertIsNone(self.app('7'))
         self.assertEqual(self.fake.volumes.items, {})
         self.assertEqual(self.fake.networks.items, {})
         self.assertEqual(self.m.health()['disk_quota']['support'], 'unavailable')
+
+    def test_invalid_quota_requirement_is_rejected(self):
+        for value in ('2', 'yes', 'true', ''):
+            with patch.dict(os.environ, {'CCG_ACCOUNT_DISK_QUOTA_REQUIRED': value}):
+                with self.assertRaisesRegex(ValueError, 'CCG_ACCOUNT_DISK_QUOTA_REQUIRED'):
+                    self.make('app:test', 'egress:test')
 
     def test_failed_mount_verification_keeps_the_working_runtime(self):
         self.m.provision('7')
@@ -293,11 +326,11 @@ class DiskQuotaTests(Base):
     def test_unowned_or_inconsistent_volumes_cannot_be_adopted(self):
         volume = self.fake.volumes.create('ccg-7-data', labels={LABEL: 'other'})
         with self.assertRaisesRegex(ValueError, 'ownership'):
-            self.m.account_volume('7', allow_legacy=True)
+            self.m.account_volume('7', allow_unbounded=True)
         volume.attrs['Labels'] = {LABEL: '7', manager.DISK_QUOTA_LABEL: str(10 << 30)}
         volume.attrs['Options'] = {'size': str(20 << 30)}
         with self.assertRaises(manager.DiskQuotaUnavailable):
-            self.m.account_volume('7', allow_legacy=True)
+            self.m.account_volume('7', allow_unbounded=True)
         self.assertFalse(volume.removed)
 
     def test_a_previously_enforced_volume_cannot_silently_become_legacy(self):
@@ -310,6 +343,16 @@ class DiskQuotaTests(Base):
             self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
         self.assertIs(self.app('7'), old)
         self.assertFalse(old.removed)
+
+    def test_an_enforced_account_never_falls_back_to_an_unbounded_volume(self):
+        self.m.provision('7')
+        old = self.app('7')
+        del self.fake.volumes.items['ccg-7-data']
+        with self.no_quota_support():
+            with self.assertRaises(manager.DiskQuotaUnavailable):
+                self.m.provision('7', {'mode': 'api_key', 'api_key': 'fixture-key', 'base_url': 'https://api.example.test'})
+        self.assertIs(self.app('7'), old)
+        self.assertNotIn('ccg-7-data', self.fake.volumes.items)
 
 
 class KeyTests(unittest.TestCase):
@@ -826,6 +869,7 @@ class HandlerTests(Base):
                             'disk_quota': {'default_bytes': 10 << 30, 'support': 'unknown'}}))
 
     def test_unsupported_disk_quota_has_a_specific_error(self):
+        self.m.require_disk_quota = True
         with patch.object(self.fake.volumes, 'create', side_effect=docker.errors.APIError('quota size requested but no quota support')):
             self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
                              (503, {'error': 'disk_quota_unavailable'}))

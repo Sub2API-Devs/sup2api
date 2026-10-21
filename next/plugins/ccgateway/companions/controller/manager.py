@@ -315,6 +315,12 @@ class Manager:
         if not re.fullmatch(r'[1-9][0-9]{0,3}', disk_gib) or not 1 <= int(disk_gib) <= 1024:
             raise ValueError('CCG_ACCOUNT_DISK_GIB must be an integer between 1 and 1024')
         self.account_disk_bytes = int(disk_gib) << 30
+        # Storage without project quotas gets unbounded volumes, reported as
+        # such, unless the operator requires every new volume to be limited.
+        required = os.getenv('CCG_ACCOUNT_DISK_QUOTA_REQUIRED', '0')
+        if required not in ('0', '1'):
+            raise ValueError('CCG_ACCOUNT_DISK_QUOTA_REQUIRED must be 0 or 1')
+        self.require_disk_quota = required == '1'
         self.disk_quota_support = 'unknown'
         # Name and port of this controller's own container (an isolated test
         # instance on the same host uses others; self-upgrade must not touch
@@ -375,7 +381,7 @@ class Manager:
                 'features': list(FEATURES),
                 'disk_quota': {'default_bytes': self.account_disk_bytes, 'support': self.disk_quota_support}}
 
-    def account_volume(self, aid, allow_legacy=False):
+    def account_volume(self, aid, allow_unbounded=False):
         """Native Docker local-volume project quota. Never replace saved data."""
         name = self.name(aid, 'data')
         try:
@@ -386,15 +392,17 @@ class Manager:
                     driver_opts={'size': str(self.account_disk_bytes)},
                     labels={LABEL: aid, DISK_QUOTA_LABEL: str(self.account_disk_bytes)})
             except docker.errors.APIError as error:
-                if 'no quota support' in str(error).lower():
-                    self.disk_quota_support = 'unavailable'
+                if 'no quota support' not in str(error).lower():
+                    raise
+                self.disk_quota_support = 'unavailable'
+                if self.require_disk_quota or not allow_unbounded:
                     raise DiskQuotaUnavailable('Docker data volumes do not support disk quotas') from error
-                raise
+                volume = self.docker.volumes.create(name, driver='local', labels={LABEL: aid})
         labels = volume.attrs.get('Labels') or {}
         if labels.get(LABEL) != aid:
             raise ValueError('volume ownership mismatch')
         size = (volume.attrs.get('Options') or {}).get('size')
-        if not size and allow_legacy and DISK_QUOTA_LABEL not in labels:
+        if not size and DISK_QUOTA_LABEL not in labels and allow_unbounded:
             return volume, 0
         if (volume.attrs.get('Driver') != 'local' or not isinstance(size, str) or
                 not re.fullmatch(r'[1-9][0-9]{0,14}', size) or
@@ -677,8 +685,12 @@ class Manager:
         except (ValueError, docker.errors.DockerException) as e:
             raise InvalidCLIProfile('requested CLI version/mode is unavailable or invalid in the selected image') from e
         # Fail unsupported storage BEFORE removing a working container/network.
-        legacy = state is not None and state.get('disk_quota', {}).get('status', 'legacy_unbounded') == 'legacy_unbounded'
-        volume, disk_bytes = self.account_volume(aid, allow_legacy=legacy)
+        # An enforced quota never silently becomes unbounded; legacy data
+        # always stays usable, and unbounded storage only while not required.
+        recorded = state.get('disk_quota', {}).get('status', 'legacy_unbounded') if state else None
+        legacy = recorded == 'legacy_unbounded'
+        unbounded = legacy or recorded in (None, 'unbounded') and not self.require_disk_quota
+        volume, disk_bytes = self.account_volume(aid, allow_unbounded=unbounded)
         self.verify_disk_quota(image_ref, volume, disk_bytes)
         if not state or state.get('network') != policy:
             old_subnets, occupied = [], []
@@ -727,7 +739,8 @@ class Manager:
         state.update(network=policy, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip,
                      revision='', status='pending')
         self.save(aid, state)
-        state['disk_quota'] = {'limit_bytes': disk_bytes, 'status': 'enforced' if disk_bytes else 'legacy_unbounded'}
+        state['disk_quota'] = {'limit_bytes': disk_bytes,
+                               'status': 'enforced' if disk_bytes else 'legacy_unbounded' if legacy else 'unbounded'}
         self.save(aid, state)
         # A new container gets locale/timezone from its environment below; drop
         # the in-place values an earlier container's Worker kept in the volume.

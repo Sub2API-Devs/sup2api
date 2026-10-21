@@ -27,8 +27,12 @@ account container or volume.
 The implementation uses Docker's native local-volume `size` option. Docker's
 volume storage must support project quotas (normally XFS with `prjquota` /
 `pquota`). It does not enable quotas on the host, format disks or relocate
-Docker data. Unsupported storage returns `disk_quota_unavailable` (503);
-there is no unlimited fallback for a new volume.
+Docker data. On storage without quota support a new volume is created
+unbounded and reported as `unbounded`, so accounts stay usable before the
+storage is migrated. Set `CCG_ACCOUNT_DISK_QUOTA_REQUIRED=1` to refuse that
+instead: unsupported storage then returns `disk_quota_unavailable` (503) with
+no unlimited fallback. A volume recorded as `enforced` never falls back to an
+unbounded one, whatever this setting.
 
 Before replacing a container, the controller verifies volume ownership,
 stored quota options and the bounded `statfs` view using a read-only,
@@ -44,14 +48,16 @@ it does not reserve that much space in the shared storage pool.
 `GET /health` includes `disk_quota.default_bytes` and `support`
 (`unknown`, `available`, `unavailable`). This is backend/configuration
 information; `GET /accounts/<key>/status` reports the individual
-`disk_quota.limit_bytes` and status (`enforced` or `legacy_unbounded`).
+`disk_quota.limit_bytes` and status (`enforced`, `unbounded` or
+`legacy_unbounded`).
 Existing unbounded data volumes are preserved and explicitly marked as
 legacy. They are never relabeled as enforced or automatically deleted.
 
 **Deployment prerequisite on the currently inspected host:** the Docker
 volume directory is on ext4, and a real Docker size-option probe returned
-`quota size requested but no quota support`. Prepare quota-capable storage
-before deploying this controller for new account creation. Migrating the
+`quota size requested but no quota support`. Until quota-capable storage is
+prepared, new accounts there get unbounded volumes (status `unbounded`); they
+keep that status after a later storage migration and are not resized. Migrating the
 Docker volume directory can affect other services using Docker volumes and
 needs a maintenance window and verified backups.
 
