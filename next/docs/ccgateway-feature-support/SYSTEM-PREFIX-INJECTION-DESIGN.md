@@ -102,6 +102,10 @@
   - 结果：`claude -p` 简单问答（`claude-opus-4-8`）返回 `DIRECT-OK`；Opus 与 Sonnet（`claude-sonnet-4-6`）各做一轮 Read 工具往返（客户端本地读文件，再把 tool_result 发回），都拿到文件里的暗号，`is_error=false`。
   - 30 号 Worker 日志：这 5 次请求全是 `mode=direct`、HTTP 200，入站 body 首块就是客户端自带的计费头、第二块是 SDK 那句。同一时段经其他分组到 30 号的请求仍是 build。
   - 测完删除 Key、分组覆盖和分组，30 号的分组恢复为 6/9/10，管理员的受限分组恢复为 4，关闭隧道。
+- 真实客户端走 build（2026-10-22，30 号，做法同上，临时分组覆盖 `relay_mode=build`）：
+  - 结果：简单问答（`claude-opus-4-8`）返回 `BUILD-OK`；Opus、Sonnet 各一轮 Read 工具往返都答对，`is_error=false`。
+  - 30 号 Worker 日志：5 次请求都是 `mode=build`、HTTP 200。客户端自带的计费头是 `cc_version=2.1.304.<指纹>; cc_entrypoint=claude-desktop-3p;`（本机 `claude` 从桌面版会话继承了 `CLAUDE_CODE_ENTRYPOINT`），第二块是 SDK 开头行。默认来源“客户端，没有用服务端”下两个字段原样保留，没有补齐和诊断事件，开头行也不重复插入。
+  - 清理同上，已全部恢复。
 - `cch`（2026-10-22，30 号，线上 v16 CLI）：线上 build 发出 `cch=00000;`。
   - 条件：原生 `kLo` 在 `Pe()==="firstParty" && Ri()` 时写 `cch=00000;`。`Ri()` 要求 `ANTHROPIC_BASE_URL` 未设置或是官方地址（或设了 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`）。之前一次性容器抓包把 base URL 指向本地，所以不带。30 号容器和 Worker 环境里没有 `ANTHROPIC_BASE_URL` 和 Bedrock/Vertex 变量，request 命令也不设，所以条件成立。
   - 实抓：在 30 号容器里用 `ANTHROPIC_UNIX_SOCKET`（请求地址仍是 `api.anthropic.com`，连接走 unix socket 上的 TLS）、占位令牌 `CLAUDE_CODE_OAUTH_TOKEN=ssh-placeholder` 和临时自签证书起假上游，build 发出的首块是 `x-anthropic-billing-header: cc_version=2.1.304.8f6; cc_entrypoint=sdk-cli; cch=00000;`，第二块是 SDK 那句。假上游返回 400，没有请求到达上游。
