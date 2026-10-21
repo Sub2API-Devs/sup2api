@@ -1,6 +1,6 @@
 # Claude Code mods 工具注入扩展
 
-当前目标为 **2.1.304 / `ccgateway-v16-build-prefix`**（工作树，未发布；线上仍为 v15 / 插件 0.1.72）。v16 在 v15 之上（2026-10-22 用户决定）：
+当前目标为 **2.1.304 / `ccgateway-v16-build-prefix`**（插件 0.1.73，2026-10-22 已部署 ovh）。v16 在 v15 之上（2026-10-22 用户决定）：
 
 - **direct 为纯透传**：不补计费头、不补开头行、不改 `metadata.user_id`，body 逐字节转发；Worker 不再给 direct 解析身份。
 - **build 总带计费头和开头行**：没有计费头就插入 CLI 原生整行，缺字段补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。OAuth 首块不是开头行或计费头时，补 SDK 那句（`n1n({isNonInteractive:true,hasAppendSystemPrompt:false})`），与 `cc_entrypoint=sdk-cli` 一致。

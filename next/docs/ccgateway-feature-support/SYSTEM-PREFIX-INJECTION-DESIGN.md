@@ -1,6 +1,6 @@
 # system 开头注入（计费头 / 默认开头行）设计与核对
 
-2026-10-21 设计，2026-10-22 实施为 CLI v16（`ccgateway-v16-build-prefix`，工作树，未发布），实施结果见第 6 节。UI 设计稿：[system-prefix-injection-mockup.html](system-prefix-injection-mockup.html)（可用 `#direct`、`#raw`、`#account` 直接打开对应场景）。第 4 节是实施前对照 v15（`ccgateway-v15-cli-prefix`，线上 0.1.72）的核对，保留作依据。
+2026-10-21 设计，2026-10-22 实施为 CLI v16（`ccgateway-v16-build-prefix`），随 Core 0.1.175 / 插件 0.1.73 部署 ovh，实施结果见第 6 节。UI 设计稿：[system-prefix-injection-mockup.html](system-prefix-injection-mockup.html)（可用 `#direct`、`#raw`、`#account` 直接打开对应场景）。第 4 节是实施前对照 v15（`ccgateway-v15-cli-prefix`，线上 0.1.72）的核对，保留作依据。
 
 ## 1. 要做什么（2026-10-21 用户定稿）
 
@@ -80,7 +80,7 @@
 2. 客户端计费头不在首块（4.4）：未答复，按建议实施——不再插第二个计费头，就地补字段，开头行补在最前；没有加 `billing_not_first` 诊断。
 3. `cc_version` 后缀（4.2）：一起修。
 
-## 6. 实施结果（2026-10-22，未发布）
+## 6. 实施结果（2026-10-22）
 
 - 代码：CLI `content-policy.js`（计费补齐）、`request-input.js` `fingerprintMessages` 与补丁中 `RIs` 的改动（指纹）、`request-identity.js` / `request-command.js`（去掉 direct 改写，开头行改 SDK 那句）；Worker `engine/request_command.go`（direct 不解析身份）；核心 `feature_policy.go`（不下发身份来源）；前端 `RequestPolicySettings.vue`（删身份卡，模式下写固定说明，计费头两列）。规则细节见 [build 组件设计](../../plugins/ccgateway/docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.2、§7。
 - 本地：cli-mods 131 项、engine、核心 ccgateway（含 PG）、前端 622 项与类型检查通过。指纹用官方 `claude -p` 抓到的请求核对：新取法得 `b17`，与其自带的 `cc_version=2.1.304.b17` 相同，旧取法得 `159`。
@@ -91,6 +91,7 @@
   - 客户端头只有 `cc_version=2.1.304.zzz;` 时保留 `zzz`、补上 `cc_entrypoint=sdk-cli;`，开头行放在其后。
   - 客户端没有 metadata 时 build 不加；API Key 不插开头行。
 - 30 号真实上游（v16 ELF 临时放进容器，测完删除）：build `claude-opus-4-8`、`claude-sonnet-4-6`、首块为 reminder 的 Opus 请求都是 200。direct 下 CC 形状的请求（计费头 + SDK 那句）200；不带二者的简化请求 429，这正是纯透传的预期。
+- 发布后（Core 0.1.175 / 插件 0.1.73）：30/31/32/33 控制台 claude-opus-4-8、claude-sonnet-4-6 均 200，30/31/32 Haiku 200。
 - 仍未核实：
   - 4.5 的 `cch`：抓包环境（假令牌、`ANTHROPIC_BASE_URL` 指向本地）发出的行不带 `cch`；30 号真实请求里带不带没有抓到，因为该容器的出站被透明接管，连容器内的回环地址也连不上，没法在里面抓包。
   - 计费头不在首块时的真实上游结果。
