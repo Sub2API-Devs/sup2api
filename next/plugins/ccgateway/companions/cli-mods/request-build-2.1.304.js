@@ -28,7 +28,7 @@ export async function buildRequest(components, headers, signal) {
   }, contentDiagnostic);
   const input = prepareBuildInput({ ...external, systemPrompt: transformed.system, messages: transformed.messages, attachments: [] }, MDe, { preserveContent: true });
   const body = input.request, session = getRootSession();
-  let nativeBilling, nativePrefix;
+  let nativeBilling;
   const clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   if (clientBetas.length && !YEr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');
   // Resolve typed payloads using CC's own renderer, and preserve the caller's
@@ -68,7 +68,6 @@ export async function buildRequest(components, headers, signal) {
     ccgatewayWireMessages: transformed.messages,
     ccgatewayWireTools: wireToolDefinitions(external.tools),
     ccgatewayCaptureBilling: value => { nativeBilling = value; },
-    ccgatewayCapturePrefix: value => { nativePrefix = value; },
   };
   let built;
   for await (const event of Kvt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options })) {
@@ -87,7 +86,5 @@ export async function buildRequest(components, headers, signal) {
   delete built.betas;
   if (betas.length) outgoingHeaders.set('anthropic-beta', betas.join(','));
   else outgoingHeaders.delete('anthropic-beta');
-  // The Claude Code line this builder made for the request (PAs); OAuth
-  // requests need it where the client did not send one (request-identity.js).
-  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders), cliPrefix: nativePrefix };
+  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders) };
 }

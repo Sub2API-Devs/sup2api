@@ -81,7 +81,7 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
       'chunk-gr4a0fky.js': 'export class rbe {} export const eF=async()=>new rbe(); export const Zre=()=>{};',
       'chunk-0ycjphb5.js': 'export const El=()=>({});',
       'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
-      'ccgateway-request-build.js': `export const buildRequest=async body=>({body:{model:body.model,system:[{type:"text",text:"built"}]},headers:{},cliPrefix:${JSON.stringify(lines[1])}});`,
+      'ccgateway-request-build.js': 'export const buildRequest=async body=>({body:{model:body.model,system:[{type:"text",text:"built"}]},headers:{}});',
       // Records exactly what would be sent, then answers with an HTTP error.
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         export const checkModelRequest=()=>null;
@@ -92,7 +92,7 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
         import {directCliPrefix,applyBuildCliPrefix} from './ccgateway-request-identity.js';
         const line=${JSON.stringify(cliPrefix)},isPrefix=v=>${JSON.stringify(lines)}.includes(v);
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBody:raw=>directCliPrefix(raw,line,isPrefix),prefixBuild:(b,p)=>applyBuildCliPrefix(b,p,isPrefix)});`,
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBody:raw=>directCliPrefix(raw,line,isPrefix),prefixBuild:b=>applyBuildCliPrefix(b,line,isPrefix)});`,
     })) await fsp.writeFile(path.join(dir, name), code);
     const input = '{"model":"fixture","system":"Be brief.","messages":[{"role":"user","content":"hi"}]}';
     const run = (mode, apiKey) => new Promise((resolve, reject) => {
@@ -104,8 +104,7 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
       child.stdin.end(input);
     });
     assert.deepEqual(JSON.parse(await run('--direct', false)).system, [prefix, t('Be brief.')]);
-    // Build inserts the line its native builder made, not the selector's.
-    assert.deepEqual(JSON.parse(await run('--build', false)).system, [t(lines[1]), t('built')]);
+    assert.deepEqual(JSON.parse(await run('--build', false)).system, [prefix, t('built')]);
     assert.equal(await run('--direct', true), input);
     assert.deepEqual(JSON.parse(await run('--build', true)).system, [t('built')]);
   } finally {
@@ -117,12 +116,14 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
 // chunk-t61vswm2.js: the le/ke/De declaration, t1n and n1n). The recovered
 // source is not in Git, so this is skipped, visibly, where it is absent.
 const restored = new URL('../../../../../../artifacts/claude-2.1.304/linux-restored/chunk-t61vswm2.js', import.meta.url);
-test('the CLI recognizes its own lines and the build/direct line', { skip: fs.existsSync(restored) ? false : 'Recovered CLI 2.1.304 source unavailable: native t1n/n1n were not executed.' }, () => {
+test('the CLI recognizes its own lines and gives the terminal line', { skip: fs.existsSync(restored) ? false : 'Recovered CLI 2.1.304 source unavailable: native t1n/n1n were not executed.' }, () => {
   const chunk = fs.readFileSync(restored, 'utf8');
   const piece = pattern => { const m = chunk.match(pattern); assert(m, String(pattern)); return m[0]; };
   const native = vm.runInNewContext(piece(/var le="You are Claude Code[^;]*;/) + piece(/function t1n\(e\)\{[^}]*\}/) +
     piece(/function n1n\(e\)\{.*?return le\}/) + ';({t1n,n1n,lines:vt})', { Pe: () => 'firstParty' });
-  const line = native.n1n({ isNonInteractive: true, hasAppendSystemPrompt: false });
+  // The terminal CLI's line, as the patched request command asks for it.
+  const line = native.n1n({ isNonInteractive: false, hasAppendSystemPrompt: false });
+  assert.equal(line, native.lines[0]);
   assert.equal(native.lines.length, 3);
   assert(native.lines.every(native.t1n) && native.t1n(line) && !native.t1n(line + ' '));
   // Upstream counts the first block only as the whole line (2026-10-21).

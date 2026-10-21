@@ -129,7 +129,8 @@ function property(raw, start, name) {
 // (verified 2026-10-21 in build and direct; a line merged into a longer block
 // or placed after the prompt does not count). An OAuth request without the
 // line where Claude Code puts it gets the CLI's own line inserted there; both
-// the line and the check are the CLI's (isPrefix = t1n), never a copy.
+// the line and the check are the CLI's, never a copy: isPrefix is t1n, and
+// prefix is n1n for the interactive terminal CLI (patch-cli-2.1.304.cjs).
 const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
 
 function checkedPrefix(prefix, isPrefix) {
@@ -145,8 +146,8 @@ function prefixPosition(blocks, isPrefix) {
   return isPrefix(first) ? -1 : 0;
 }
 
-// applyBuildCliPrefix puts the line the native builder made for this request
-// into the built request, whose system is the client's.
+// applyBuildCliPrefix puts the line into the built request, whose system is
+// the client's.
 export function applyBuildCliPrefix(built, prefix, isPrefix) {
   const block = { type: 'text', text: checkedPrefix(prefix, isPrefix) };
   if (built.system === undefined) built.system = [block];
