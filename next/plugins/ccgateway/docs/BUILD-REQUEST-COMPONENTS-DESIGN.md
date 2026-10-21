@@ -234,12 +234,12 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测，build 与 direct 相同）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
 
-因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）：
+因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句）；build 插入原生构造器本次在 `PAs` 里生成的开头行（补丁截取 `PAs` 的第二个参数，与截取计费头相同）；direct 不经原生构造器，调用 `n1n`，参数与 build 相同（非交互、无追加提示），即 SDK 那一句。
 
 | system | 处理 |
 |---|---|
 | 首块是三句之一；或首块是计费头且任一块是三句之一 | 不改 |
-| 首块是计费头、没有开头行 | 在计费头后插入交互式开头行 |
+| 首块是计费头、没有开头行 | 在计费头后插入 CLI 的开头行 |
 | 其他数组（含空数组） | 在最前插入 |
 | 缺省 | `[开头行]` |
 | 字符串（仅 direct） | `[开头行, {text: 原字符串}]`；空串只留开头行 |

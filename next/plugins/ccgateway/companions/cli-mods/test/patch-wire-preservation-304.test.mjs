@@ -212,6 +212,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
   assert.equal(patchManifest.extension, 'ccgateway-v15-cli-prefix');
   assert(patchManifest.capabilities.includes('request_identity_v1'));
+  // The Claude Code line is the CLI's own: build captures what PAs prepends,
+  // and the request command gets the native selector and recognizer.
+  assert.match(nativeFunction(output, 'chunk-t61vswm2.js', 'PAs'), /r\.ccgatewayCapturePrefix\?\.\(n\)/);
+  assert.match(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'), /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\)/);
 });
 
 test('container reporting patches preserve resource admission, Git concurrency and native identity generators', () => {

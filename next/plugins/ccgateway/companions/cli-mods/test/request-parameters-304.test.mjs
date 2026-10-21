@@ -58,7 +58,7 @@ test('304 extension keys use own properties and cannot mutate object prototypes'
 });
 
 test('304 internal controls and component slots cannot be supplied as generation parameters', () => {
-  for (const key of ['model','system','messages','tools','stream','systemPrompt','attachments','requestPolicy','runtimeContext','ccgatewayWireTools','ccgatewayBuildOnly','ccgatewayCaptureBilling','ccgatewayUnknownPrivate']) {
+  for (const key of ['model','system','messages','tools','stream','systemPrompt','attachments','requestPolicy','runtimeContext','ccgatewayWireTools','ccgatewayBuildOnly','ccgatewayCaptureBilling','ccgatewayCapturePrefix','ccgatewayUnknownPrivate']) {
     assert.throws(() => validateBuildParameters({ [key]: 'injected' }), e => e.status === 400 && e.field === `parameters.${key}`);
   }
 });

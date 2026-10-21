@@ -81,7 +81,8 @@ export async function runRequestCommand(args, { oauthBeta, identityBody, identit
       // upstream request really carries, and a client that sent none gets none.
       if (identityBuild) outgoing.body = identityBuild(outgoing.body, body.parameters?.metadata);
       // OAuth only: upstream requires Claude Code's system line there.
-      if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body);
+      if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body, outgoing.cliPrefix);
+      delete outgoing.cliPrefix;
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');

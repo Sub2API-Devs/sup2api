@@ -46,7 +46,7 @@ edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchem
 edit('cli.js', 'Ve', t => {
   t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
   t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
-    'let{rewriteDirectIdentity:ccgRewriteIdentity,applyBuildMetadata:ccgBuildMetadata,directCliPrefix:ccgPrefixBody,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata}=await import("./chunk-t61vswm2.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBody:raw=>ccgRewriteIdentity(raw,ccgNativeMetadata),identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBody:ccgPrefixBody,prefixBuild:ccgPrefixBuild}))');
+    'let{rewriteDirectIdentity:ccgRewriteIdentity,applyBuildMetadata:ccgBuildMetadata,directCliPrefix:ccgPrefixBody,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix}=await import("./chunk-t61vswm2.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBody:raw=>ccgRewriteIdentity(raw,ccgNativeMetadata),identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBody:raw=>ccgPrefixBody(raw,ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1}),ccgIsPrefix),prefixBuild:(b,p)=>ccgPrefixBuild(b,p,ccgIsPrefix)}))');
   return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1"]');
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
@@ -103,7 +103,7 @@ edit(core, 'qmn', t => {
   t = once(t, 'messages:Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,', 'messages:J.ccgatewayBuildOnly===true?structuredClone(J.ccgatewayWireMessages):Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,');
   t = once(t, 'Gf=sb=Xfr(', 'Gf=sb=J.ccgatewayBuildOnly===true?structuredClone(J.ccgatewayWireMessages):Xfr(');
   t = once(t, 'fi={model:J.model,', 'fi={ccgatewayInput:J.ccgatewayBuildOnly===true,model:J.model,');
-  t = once(t, 'fingerprint:tF,agentContext:J.agentContext,', 'fingerprint:tF,ccgatewayCaptureBilling:J.ccgatewayBuildOnly===true?J.ccgatewayCaptureBilling:void 0,agentContext:J.agentContext,');
+  t = once(t, 'fingerprint:tF,agentContext:J.agentContext,', 'fingerprint:tF,ccgatewayCaptureBilling:J.ccgatewayBuildOnly===true?J.ccgatewayCaptureBilling:void 0,ccgatewayCapturePrefix:J.ccgatewayBuildOnly===true?J.ccgatewayCapturePrefix:void 0,agentContext:J.agentContext,');
   return once(t, 'let eo=HTe(()=>sF({maxRetries:0,', 'if(J.ccgatewayBuildOnly===true){yield{type:"ccgateway_request",body:uXn({model:J.model,fastMode:false})};return}let eo=HTe(()=>sF({maxRetries:0,');
 });
 // External wire history has already been validated. Native repair, reminder
@@ -120,7 +120,7 @@ edit('chunk-38xgev2z.js', 'sF', t => {
 });
 // Capture the generated attribution BEFORE system grouping can replace it with
 // the client's billing block. The native function retains its opt-out rules.
-edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);'));
+edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);r.ccgatewayCapturePrefix?.(n);'));
 edit(core, '_oo', t => once(t, 'l1(e)?ule(e):foo()', 'Object.hasOwn(e,"ccgatewayProxyText")?e.ccgatewayProxyText:l1(e)?ule(e):foo()'));
 edit(terminal, 'computeToolPool', t => {
   t = once(t, "Z!==null&&ZMt(Z.key,H)", "Z!==null&&Z.ccgRevision===ccgRevision(this.session)&&ZMt(Z.key,H)");
