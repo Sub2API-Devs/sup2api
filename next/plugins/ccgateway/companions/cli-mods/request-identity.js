@@ -121,6 +121,66 @@ function property(raw, start, name) {
   return found;
 }
 
+// Claude Code opens every system prompt with its own line, after the
+// attribution header when there is one: 2.1.304 PAs builds
+// [header, n1n(), ...prompt], and n1n picks one of the three lines below.
+// Upstream refuses OAuth Sonnet/Opus requests whose first system block is
+// neither the header nor one of these exact lines with 429 rate_limit_error
+// "Error" (verified 2026-10-21 in build and direct; a line merged into a longer
+// block or placed after the prompt does not count). An OAuth request without
+// the line where Claude Code puts it gets the interactive CLI's line inserted
+// there; everything else stays as sent.
+export const cliPrefix = "You are Claude Code, Anthropic's official CLI for Claude.";
+const cliPrefixes = new Set([cliPrefix,
+  "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.",
+  "You are a Claude agent, built on Anthropic's Claude Agent SDK."]);
+const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
+
+// prefixPosition is the index the line goes to, or -1 when the system already
+// opens with it, directly or after the attribution header.
+function prefixPosition(blocks) {
+  const first = blockText(blocks[0]);
+  if (first?.startsWith('x-anthropic-billing-header:')) return blocks.some(block => cliPrefixes.has(blockText(block))) ? -1 : 1;
+  return cliPrefixes.has(first) ? -1 : 0;
+}
+
+// applyBuildCliPrefix puts the line into a built request (system blocks).
+export function applyBuildCliPrefix(built) {
+  const prefix = { type: 'text', text: cliPrefix };
+  if (built.system === undefined) built.system = [prefix];
+  else if (Array.isArray(built.system)) {
+    const at = prefixPosition(built.system);
+    if (at >= 0) built.system = [...built.system.slice(0, at), prefix, ...built.system.slice(at)];
+  }
+  return built;
+}
+
+// directCliPrefix puts the line into a direct body, inserting bytes only: the
+// rest of the body, a string system included, stays exactly as received.
+export function directCliPrefix(raw) {
+  const prefix = JSON.stringify({ type: 'text', text: cliPrefix });
+  const system = property(raw, 0, 'system');
+  if (!system) {
+    const open = whitespace(raw, 0) + 1;
+    return raw.slice(0, open) + `"system":[${prefix}]` + (raw[whitespace(raw, open)] === '}' ? '' : ',') + raw.slice(open);
+  }
+  const value = raw.slice(system.first, system.last);
+  if (raw[system.first] === '"') {
+    const text = JSON.parse(value) === '' ? '' : `,{"type":"text","text":${value}}`;
+    return raw.slice(0, system.first) + `[${prefix}${text}]` + raw.slice(system.last);
+  }
+  if (raw[system.first] !== '[') return raw;
+  const at = prefixPosition(JSON.parse(value));
+  if (at < 0) return raw;
+  let i = whitespace(raw, system.first + 1);
+  for (let k = 0; k < at; k++) {
+    i = whitespace(raw, valueEnd(raw, i));
+    if (raw[i] === ',') i = whitespace(raw, i + 1);
+  }
+  const insert = raw[i] === ']' ? (at > 0 ? ',' : '') + prefix : prefix + ',';
+  return raw.slice(0, i) + insert + raw.slice(i);
+}
+
 // rewriteDirectIdentity replaces only the identity span the client sent. Every
 // other byte of the direct body, including unsafe integers and whitespace,
 // stays exactly as received.

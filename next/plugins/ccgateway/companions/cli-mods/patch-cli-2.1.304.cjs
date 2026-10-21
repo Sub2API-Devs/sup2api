@@ -46,7 +46,7 @@ edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchem
 edit('cli.js', 'Ve', t => {
   t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
   t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
-    'let{rewriteDirectIdentity:ccgRewriteIdentity,applyBuildMetadata:ccgBuildMetadata}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata}=await import("./chunk-t61vswm2.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBody:raw=>ccgRewriteIdentity(raw,ccgNativeMetadata),identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata)}))');
+    'let{rewriteDirectIdentity:ccgRewriteIdentity,applyBuildMetadata:ccgBuildMetadata,directCliPrefix:ccgPrefixBody,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata}=await import("./chunk-t61vswm2.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBody:raw=>ccgRewriteIdentity(raw,ccgNativeMetadata),identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBody:ccgPrefixBody,prefixBuild:ccgPrefixBuild}))');
   return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1"]');
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));

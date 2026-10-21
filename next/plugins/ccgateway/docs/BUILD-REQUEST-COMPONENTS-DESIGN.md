@@ -228,6 +228,25 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 最后 `request-command.js:76` 在 build 之后才应用身份策略——因为 build 会自行生成 `metadata`，身份来源必须覆盖它。
 
+### 6.1 Claude Code 开头行（OAuth，build 与 direct）
+
+原生 CC 的 system 总是 `[计费头, 开头行, ...提示]`（2.1.304 `PAs`；开头行由 `n1n` 从三句里选：交互式 `You are Claude Code, Anthropic's official CLI for Claude.`、SDK 带追加提示的一句、SDK 的 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`）。build 保留客户端 system，原生开头行不会出现。
+
+上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测，build 与 direct 相同）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
+
+因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）：
+
+| system | 处理 |
+|---|---|
+| 首块是三句之一；或首块是计费头且任一块是三句之一 | 不改 |
+| 首块是计费头、没有开头行 | 在计费头后插入交互式开头行 |
+| 其他数组（含空数组） | 在最前插入 |
+| 缺省 | `[开头行]` |
+| 字符串（仅 direct） | `[开头行, {text: 原字符串}]`；空串只留开头行 |
+| `null` 等其他类型 | 不改，由上游报错 |
+
+direct 只插入字节，其余字节不变（大整数、空白都保留）。API Key 账号不插入。build 在计费合并与身份改写之后执行。补丁标签随之改为 `ccgateway-v15-cli-prefix`。
+
 ## 7. 身份边界
 
 `metadata.user_id` 由身份来源（`request_identity_sources.user_id`：`client` / `worker` / `replace`，默认 `replace`）决定，与内容策略分开：
