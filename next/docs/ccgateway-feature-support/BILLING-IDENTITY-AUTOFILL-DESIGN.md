@@ -24,7 +24,12 @@
 
 “非交互”的判定（`chunk-bdj2znsb.js` `Jet`）：`-p`/`--print`、`--init-only`、`--sdk-url`，**或 stdout 不是终端**。桌面版、VS Code 扩展、TS/Python SDK 都用管道启动 CLI，所以都是非交互，主对话发 `De` 或 `ke`。源码里 `!e.isNonInteractiveSession||n==="claude-vscode"||Lu()`（`chunk-b3e25bn6.js` 等多处）专门把 VS Code 与桌面版“当作交互式”处理界面，这也说明它们的会话标志是非交互。
 
-- **`claude-vscode` → `le`（表里写的实测）与源码推断不符**：按源码应该是 `ke`（扩展带追加提示）或 `De`。如果当时是在 VS Code 集成终端里直接运行 `claude`，那是交互式，发 `le`；但这种情况入口通常是 `cli`，除非终端继承了 `CLAUDE_CODE_ENTRYPOINT=claude-vscode`。需要确认当时怎么测的。
+- **`claude-vscode` 的主对话是 `ke`**：核对了 Marketplace 上的扩展 2.1.306（`extension/extension.js`）。
+  - 扩展给 CLI 进程设 `CLAUDE_CODE_ENTRYPOINT="claude-vscode"`，用内置的 Agent SDK 以 `--output-format stream-json --input-format stream-json` 启动，属于非交互。
+  - 提示词是 `systemPrompt:{type:"preset",preset:"claude_code",append:Q04,snapshot:!0}`，`Q04` 以 `# VSCode Extension Context` 开头，非空。
+  - CLI 在 initialize 里把 `appendSystemPrompt` 存进 options（`chunk-8w3jrzn0.js`），主循环取 `hasAppendSystemPrompt:!!s.options.appendSystemPrompt`（`chunk-rncrmfyt.js`），所以 `n1n` 给出 `ke`。
+  - 扩展的“在终端中使用”模式只给终端设 `CLAUDE_CONFIG_DIR`，不设入口，那时是交互式的 `cli` + `le`。
+  - 用户表中 `claude-vscode`→`le`、`claude-desktop`→`De` 的结果，符合“手动设 `CLAUDE_CODE_ENTRYPOINT` 再交互运行或用 `-p` 运行”的情形：那测的是 CLI 按交互与否选行，不是扩展和桌面版实际发的。
 - **桌面版是 `ke`，不是 `De`**：30 号日志里 `claude-desktop-3p` 的主对话请求（带 tools）有 47 次是 `[计费头, ke, …]`。另外 10 次 `De` 是本机 `claude -p` 继承了桌面版的环境变量（我前两次的真实客户端测试），不是桌面版自己发的。
 
 ### 1.2 辅助请求不按这张表
@@ -58,7 +63,7 @@
 | `sdk-ts` | TypeScript Agent SDK | `De`；preset + append 时 `ke` | `De`、`ke` | `De` |
 | `sdk-py` | Python Agent SDK | 同上 | `De`、`ke` | `De` |
 | `claude-desktop` | 桌面版 | `ke`（`-3p` 实测） | `ke`、`De` | `ke` |
-| `claude-vscode` | VS Code 扩展 | 源码推断 `ke`/`De`；用户实测 `le` | 待定（见 5.1） | 待定 |
+| `claude-vscode` | VS Code 扩展 | `ke`（扩展 2.1.306 源码） | `ke`、`De` | `ke` |
 
 每个入口另有“不补”。身份行文字仍由 CLI 的 `n1n` 生成（`{isNonInteractive, hasAppendSystemPrompt}` 两个开关就能得到三句），代码里不抄写。
 
@@ -82,7 +87,7 @@
 
 ## 5. 待确认
 
-1. **`claude-vscode` 的可选范围**：按源码给 `ke`/`De`（默认 `ke`），还是按你的实测给 `le`？或者三句都允许？
+1. **默认值按哪一版**：按真实宿主（桌面版、VS Code 默认 `ke`），还是按用户表（桌面版 `De`、VS Code `le`）？`le` 目前只给 `cli`。上游三句都接受，差别只在与真实客户端是否一致。
 2. **实际入口不在六项内时**（客户端自带 `claude-desktop-3p`、`unknown` 等）：建议 `claude-desktop-3p` 按 `claude-desktop` 处理，其余按配置的服务端入口那一行处理。
 3. **`cch`**：经网关的真实客户端都不带，build 补的整行带 `cch=00000`。要不要在客户端入口是这六项之一时也去掉 `cch`，和真实客户端经网关时一致？上游两种都接受。
 4. **`sdk-ts`/`sdk-py` 默认**：`De` 还是 `ke`？官方 SDK 用 preset 并追加提示时是 `ke`。
