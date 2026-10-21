@@ -239,6 +239,15 @@ class DiskQuotaTests(Base):
         self.assertEqual(self.app('7').kwargs['mem_limit'], '1g')
         self.assertEqual(self.app('7').kwargs['nano_cpus'], 2000000000)
 
+    def test_new_account_container_carries_the_telemetry_switches(self):
+        self.m.provision('7')
+        environment = self.app('7').kwargs['environment']
+        for name, value in manager.TELEMETRY_ENV.items():
+            self.assertEqual(environment[name], value, name)
+        for name in ('CLAUDE_CODE_DISABLE_WEB_FETCH', 'CLAUDE_CODE_DISABLE_ARTIFACT',
+                     'ENABLE_CLAUDEAI_MCP_SERVERS', 'CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL'):
+            self.assertNotIn(name, environment)
+
     def test_unsupported_storage_never_creates_an_unlimited_fallback(self):
         with patch.object(self.fake.volumes, 'create', side_effect=docker.errors.APIError('quota size requested but no quota support')):
             with self.assertRaises(manager.DiskQuotaUnavailable):

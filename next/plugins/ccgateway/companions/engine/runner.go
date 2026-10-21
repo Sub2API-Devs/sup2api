@@ -123,6 +123,37 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	return out
 }
 
+// telemetryDefaults are the switches that stop Claude Code's telemetry without
+// changing what it does: none of them removes a tool, a connector or a model
+// capability, so every CLI process can carry them.
+//
+// Each value is a non-empty switch on purpose. DISABLE_TELEMETRY, DO_NOT_TRACK,
+// DISABLE_ERROR_REPORTING and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC treat an
+// empty string as unset, so an inherited "" would silently re-enable a channel.
+//
+// Deliberately absent, because they remove features:
+//   - CLAUDE_CODE_DISABLE_WEB_FETCH: disables the WebFetch tool itself.
+//   - CLAUDE_CODE_DISABLE_ARTIFACT: disables the Artifact tool.
+//   - ENABLE_CLAUDEAI_MCP_SERVERS: disables the claude.ai MCP connectors.
+//   - CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: skips marketplace
+//     registration, which a plugin install may depend on.
+//
+// The WebFetch domain check has no environment switch at all; only the
+// skipWebFetchPreflight settings key turns it off, so it keeps its normal
+// behaviour.
+func telemetryDefaults() map[string]string {
+	return map[string]string{
+		"DISABLE_AUTOUPDATER":                 "1",
+		"DISABLE_TELEMETRY":                   "1",
+		"DO_NOT_TRACK":                        "1",
+		"DISABLE_ERROR_REPORTING":             "1",
+		"DISABLE_GROWTHBOOK":                  "1",
+		"CLAUDE_CODE_ENABLE_TELEMETRY":        "0",
+		"DISABLE_FEEDBACK_COMMAND":            "1",
+		"CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+	}
+}
+
 // baseEnv applies account settings and the managed request privacy defaults.
 // This is also the direct/build entrypoint; it does not use cliEnv.
 func (r *Runner) baseEnv() []string {
@@ -130,14 +161,12 @@ func (r *Runner) baseEnv() []string {
 	if env == nil {
 		env = os.Environ()
 	}
-	values := map[string]string{
-		"DISABLE_AUTOUPDATER":                      "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"DISABLE_TELEMETRY":                        "1",
-		"DO_NOT_TRACK":                             "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_ENABLE_TELEMETRY":             "0",
-	}
+	values := telemetryDefaults()
+	// Broader than the telemetry switches: this also drops auto-update,
+	// release notes, PR badges and availability checks. Request processes have
+	// carried it in production, so it stays here and is not applied to the
+	// login processes.
+	values["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
 	if r.ReportContainerResources {
 		values["CCG_REPORT_CONTAINER_RESOURCES"] = "1"
 	}

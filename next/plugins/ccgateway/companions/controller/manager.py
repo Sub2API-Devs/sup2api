@@ -47,6 +47,26 @@ AUTH_LABEL = 'io.sup2api.ccgateway.auth'
 IMAGE_LABEL = 'io.sup2api.ccgateway.image'
 NETWORK_LABEL = 'io.sup2api.ccgateway.network'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
+# Every operational telemetry channel Claude Code exposes through an environment
+# variable, and nothing that removes a capability: CLAUDE_CODE_DISABLE_WEB_FETCH,
+# CLAUDE_CODE_DISABLE_ARTIFACT, ENABLE_CLAUDEAI_MCP_SERVERS and
+# CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL stay out because they turn
+# a tool, a connector or a marketplace install off. The WebFetch domain check has
+# no environment switch at all; only the skipWebFetchPreflight settings key stops
+# it, so it keeps its normal behaviour.
+# The Worker sets the same values in engine.telemetryDefaults: that copy reaches
+# every CLI process on a Worker restart, this one survives a Worker image that
+# predates it.
+TELEMETRY_ENV = {
+    'DISABLE_AUTOUPDATER': '1',
+    'DISABLE_TELEMETRY': '1',
+    'DO_NOT_TRACK': '1',
+    'DISABLE_ERROR_REPORTING': '1',
+    'DISABLE_GROWTHBOOK': '1',
+    'CLAUDE_CODE_ENABLE_TELEMETRY': '0',
+    'DISABLE_FEEDBACK_COMMAND': '1',
+    'CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY': '1',
+}
 IMAGE_CACHE_SECONDS = 30
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
 TUNNEL_IDLE_SECONDS = 3700
@@ -714,7 +734,7 @@ class Manager:
         self.oneshot(image_ref, entrypoint=['sh', '-ec'],
             command=['mkdir -p /work/config /work/data; rm -f /work/data/environment.json; printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; chown -R 1000:1000 /work'],
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
-        env = {'DISABLE_AUTOUPDATER': '1', **cli_env}
+        env = {**cli_env, **TELEMETRY_ENV}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
         if disk_bytes:
             env['CCG_ACCOUNT_DISK_QUOTA_BYTES'] = str(disk_bytes)

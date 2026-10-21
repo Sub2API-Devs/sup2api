@@ -109,9 +109,11 @@ func (s *authSession) call(ctx context.Context, request Object) (Object, error) 
 }
 
 // environment is the base of every CLI process the management API starts
-// (login, refresh, logout): account locale/timezone, then egress.
+// (login, refresh, logout): account locale/timezone, then egress, then the
+// telemetry switches. Only the switches that cannot change behaviour are
+// applied here, because a login that fails is worse than a login that reports.
 func (a *authManager) environment() []string {
-	return a.overrides.Apply(a.inherited())
+	return envWith(a.overrides.Apply(a.inherited()), telemetryDefaults())
 }
 
 // inherited is the container environment with egress, before locale/timezone.
