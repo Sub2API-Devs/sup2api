@@ -85,7 +85,7 @@
 ### P3（摘要）
 
 **A 提出、核验后降级：**
-- C3 billing 歧义放行：设计如此，后果等同 client 来源。
+- C3 billing 歧义放行：~~设计如此，后果等同 client 来源~~。**此结论已改正**：选 `worker` 的含义是“要么原生值、要么拒绝”，放行会让客户端的计费值以 Worker 名义上行；已改为 400（见第 7 节）。
 - C4 save 重入：按钮已禁用，真实浏览器里点击和回车都提交不了。
 - C5 egress 无 CPU 限制。
 - C6 models/fetch 不查代理权限：CONTRACTS 明文允许。
@@ -123,6 +123,15 @@
 | B | 核心 4465 项"不包含审计用例" | 多出的 5 个是其他审核员临时放进去的 `TestZZAudit*` |
 | M | 若干严重度偏高 | R6、本地 503→400、分组孤立键、haiku、Fable、日志锁各降一档；P1-3 的后果反而被低估 |
 | M | contracts 的 gofmt 也不检查 | 小错：递归的 `gofmt -l .` 能覆盖到 |
+| 主控 | C3 计费歧义放行“设计如此”（第 2 节 P3） | **错**：见第 7 节，已改为拒绝 |
+| 主控 | R6 修复后 build 与 direct 身份一致 | **不完整**：a9aaa6145 让 build 总能拿到上下文，但 build 不看 `rewrite`，客户端身份无可映射字段（如 `{"foo":"x"}`）时仍被换成 CLI 自己的身份，扁平字符串载体也被改成 JSON；ae97bd868 补上 |
+
+补充核实（与上表无关的事实，供后续引用；仓库中未找到与之相反的书面结论）：
+
+- WebFetch 的 URL 结果缓存默认 15 分钟（`CLAUDE_CODE_WEBFETCH_CACHE_TTL_MS`，缺省 900000 ms），域名检查与失败缓存 5 分钟（300000 ms）；域名预检 `api.anthropic.com/api/web/domain_info` 默认开启，只能用设置项 `skipWebFetchPreflight` 关，没有环境变量开关，Worker 不设置它。只在 Worker 自己执行该工具时才会发生；build/direct 把 `tool_use` 交回客户端，不在 Worker 内执行。
+- 能力目录探测（`engine/cli_catalog_verify.go`）不继承 Worker 进程环境：只透传 PATH、SystemRoot、WINDIR、COMSPEC、TEMP、TMP、PATHEXT、APPDATA、LOCALAPPDATA，另设隔离的 HOME / USERPROFILE / CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR、探测用 API Key、本地 ANTHROPIC_BASE_URL、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`、`DISABLE_AUTOUPDATER=1`；不带账号代理和覆盖项，运行时再叠加统一的遥测关闭开关。
+- `erase` 只删除识别出的受支持环境条目；围栏内、格式未识别、歧义的内容保留并记诊断，不是“清除所有环境信息”。
+- `schema_version`（存储的策略格式，=1）与 `contract_version`（Worker→CLI 信封，=2）是两回事，见 `plugins/ccgateway/docs/BUILD-REQUEST-COMPONENTS-DESIGN.md` 第 2.2 节。
 
 ## 4. 统一后的测试数字
 
@@ -172,3 +181,22 @@
    - 跨层契约测试。
    - 删除 native exchange 链（约 274 个不可达函数）和旧入口、旧中继。
    - 契约统一到 `contracts/features`，`"2.1.304"` 改为按能力判断。
+
+## 7. 修复状态（2026-10-21 更新）
+
+| 条目 | 提交 | 说明 |
+|---|---|---|
+| R1、R2、R5、R6、R7 | a9aaa6145 | identity 默认值不下发、Worker 剥离出信封、按能力判断；映射密钥改为账号卷内的随机密钥 HMAC；全局保存省略 identity 时保留；direct 下显示身份来源 |
+| R6 补充 | ae97bd868 | build 遵守 Worker 的 `rewrite` 决定并保留载体，与 direct 一致 |
+| R4 | 3eb699ef1 | 补丁标签来自版本 profile；镜像构建校验 CLI 校验和与标签 |
+| R3 | 0a8521a42 | 不支持配额的存储上建无限制卷并记 `unbounded`；`CCG_ACCOUNT_DISK_QUOTA_REQUIRED=1` 恢复严格拒绝 |
+| P1-1 | bb70dbe83 | 前端只写 `schema_version:1` |
+| P1-2 | 11dc44a0e | 凭据不变不重新加密；`not_synchronized` 改为 503 `api_error`，可换账号 |
+| P1-3 | 225643d38 | 对账时回读投递遗留的同步状态 |
+| P1-4、P1-5 | e397ed833 | 窗口重置时复查；失败短退避；快照有效期大于查询周期 |
+| P1-6 | 08035b19c、a9aaa6145 | v14 身份映射：Worker 下发会话 ID，传输头与 metadata 一致；待 07 方法复测 |
+| P1-7 | d34e9ed78 | build 只发送客户端自己的 diagnostics |
+| C3（计费歧义） | 5f2246442 | 选 `worker` 时多个计费头、重复或格式不对 → 400；引用、围栏里的同名文字按内容处理；原生值缺失的 503 真正以 503 返回（此前 build 阶段错误一律报成 400，即 P3“本地 503 被报成 400”在 build 路径上的表现） |
+| 跨层合同测试 | 8d27a5730、bcbe74e60 | 前端→核心、Worker→CLI 两组契约夹具（`plugins/ccgateway/companions/contracts/testdata/`），生产方与消费方各一个测试，CI 运行；继承矩阵加入身份来源 |
+
+仍未做：用 07 的隔离容器方法对 v14 复测；第 2 节其余 P2/P3。上述 CLI 侧修复需要重新编译 v14 CLI 才生效。
