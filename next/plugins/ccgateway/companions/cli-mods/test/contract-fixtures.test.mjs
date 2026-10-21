@@ -12,7 +12,7 @@ import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
 import { createContentPolicy } from '../content-policy.js';
 import { vocabulary } from './vocabulary.mjs';
-import { applyBuildMetadata, rewriteDirectIdentity } from '../request-identity.js';
+import { applyBuildMetadata } from '../request-identity.js';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../contracts/testdata/worker-cli-requests.json', import.meta.url), 'utf8'));
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
@@ -42,10 +42,9 @@ for (const c of fixture.cases) {
     const body = parseRequestJSON(stdin, c.mode);
     await withIdentity(c.identity, async () => {
       if (c.mode === 'direct') {
-        const out = rewriteDirectIdentity(stdin, nativeIdentity);
-        const identity = c.identity && JSON.parse(c.identity);
-        if (identity?.rewrite) assert.notDeepEqual(JSON.parse(out).metadata.user_id, body.metadata.user_id);
-        else assert.equal(out, stdin);
+        // Direct is a pure passthrough: the Worker gives the CLI no identity
+        // context and the body is forwarded as it is.
+        assert.equal(c.identity, undefined);
         return;
       }
       // The identity context never travels in the envelope: the CLI's policy

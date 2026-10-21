@@ -15,15 +15,13 @@ export default {
     noGroupPolicies: 'No group policies yet; every group inherits the global defaults.',
     removeGroupConfirm: 'Removes this group policy so the group inherits the global defaults again; unsaved drafts are discarded.',
     draftHint: 'Changes are submitted with the save button at the bottom of the page.', resetToGlobal: 'Reset to global',
-    billing: 'Billing attribution', billingHint: 'Only cc_version and cc_entrypoint are changed. Server values use native CLI generation for this request.',
-    identity: 'Identity', identityHint: 'Affects metadata.user_id only, in both build and direct. Replace (default) maps the value one way with the account private key and its login email: stable per account and conversation, different across accounts, and not derivable from the email alone. API-key accounts keep the client value. Nothing is generated when the client sends none.',
-    identitySources: { client: 'Client value', worker: 'Server', replace: 'Replace' },
+    billing: 'Billing header', billingSources: { client: 'Client, else server', worker: 'Server' },
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
     environmentHint: 'Only recognized full environment or update fields are changed. Missing client environment fields are not added.',
     executionHint: 'Server sources change descriptions visible to the model, not where tools execute. Other prompt content is retained.',
     rules: 'Processing rules',
-    rulesHint: 'Dynamic sections moved from system to user stay in place. Continuous conversations process only the supplied environment and updates. Missing environment is skipped; server billing fields may be inserted. Unsupported or ambiguous content is preserved and diagnosed. Required server-source failures return an error.',
+    rulesHint: 'Dynamic sections moved from system to user stay in place. Continuous conversations process only the supplied environment and updates. Missing environment is skipped; a missing billing header is filled from the server. Unsupported or ambiguous content is preserved and diagnosed. Required server-source failures return an error.',
     previewFailed: 'Could not read effective settings. Retry; your draft is retained.', retry: 'Reload', loading: 'Loading effective settings…',
     conflict: 'Settings changed elsewhere. Your draft is retained. Reload and review before saving.',
     latestSaved: 'Current saved settings for comparison', reviewLatest: 'Latest revision loaded. Your draft remains below. Compare it with the current saved settings before saving.',
@@ -34,11 +32,12 @@ export default {
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Passthrough / forwarding', version: 'Pinned version',
-    direct: 'Zero-injection forwarding (direct)', build: 'Component assembly (build)',
+    direct: 'Pure passthrough (direct)', build: 'Component assembly (build)',
+    request: 'Request', prefixLine: 'Opening line', autoUserId: 'Replaced when present, never added', autoPrefix: 'Added when missing',
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
   buildAttachments: {
-    directHint: 'Direct mode forwards the body unchanged except for the identity. Saved choices apply when you switch back to build.',
+    directHint: 'Forwarded unchanged',
     client: 'Keep client',
     worker: 'Use server',
     erase: 'Erase'

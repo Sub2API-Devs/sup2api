@@ -90,46 +90,42 @@ describe('editor payloads for the core contract', () => {
     // Global, untouched: the default policy as the editor sends it back.
     let w = await remote('global')
     cases.push({ name: 'global-default', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { relay_mode: 'build', 'request_identity_sources.user_id': 'replace', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client' } })
+      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client' } })
     w.unmount()
 
     // Global, every kind of source changed.
     w = await remote('global')
-    await pick(w, 'identity-user_id', 0)
     await pick(w, 'billing-cc_version', 1)
     await pick(w, 'build-attachment-platform_name', 1)
     await pick(w, 'build-attachment-os_version', 2)
     cases.push({ name: 'global-sources', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { relay_mode: 'build', 'request_identity_sources.user_id': 'client', 'build_billing_sources.cc_version': 'worker', 'build_attachment_sources.platform_name': 'worker', 'build_attachment_sources.os_version': 'erase' } })
+      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'worker', 'build_attachment_sources.platform_name': 'worker', 'build_attachment_sources.os_version': 'erase' } })
     w.unmount()
 
-    // Global, switched to direct: identity still applies.
+    // Global, switched to direct: a pure passthrough with nothing to set.
     w = await remote('global')
     await w.get('[data-testid="relay-mode"]').setValue('0')
-    await pick(w, 'identity-user_id', 1)
     cases.push({ name: 'global-direct', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { relay_mode: 'direct', 'request_identity_sources.user_id': 'worker' } })
+      expect: { relay_mode: 'direct' } })
     w.unmount()
 
-    // Group 3 overrides identity and billing over the default global policy.
+    // Group 3 overrides billing over the default global policy.
     saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: {} } })
     w = await remote('group')
-    await pick(w, 'identity-user_id', 2)
     await pick(w, 'billing-cc_entrypoint', 2)
     cases.push({ name: 'group-sources', layer: 'group', group_id: 3, saved: jsonCopy(saved), body: await submit(w),
-      expect: { 'request_identity_sources.user_id': 'worker', 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client' } })
+      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client' } })
     w.unmount()
 
-    // Account 9 (in group 3) customizes identity and billing.
-    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: { request_identity_sources: { user_id: 'worker' } } } })
+    // Account 9 (in group 3) customizes billing over the group's.
+    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: { build_billing_sources: { cc_entrypoint: 'worker' } } } })
     const editor = await accountEditor()
-    await pick(editor, 'identity-user_id', 1); await settle()
     await pick(editor, 'billing-cc_version', 2); await settle()
     const body = await submit(editor)
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/9', expect.anything())
     expect(body.cc_feature_policy).toBeDefined()
     cases.push({ name: 'account-sources', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
-      expect: { 'request_identity_sources.user_id': 'client', 'build_billing_sources.cc_version': 'worker' } })
+      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'worker' } })
 
     const generated = JSON.stringify({ cases }, null, 2) + '\n'
     if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) writeFileSync(fixturePath, generated)

@@ -3,7 +3,7 @@ import { oJe } from './chunk-7y2kvacy.js';
 import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { El } from './chunk-0ycjphb5.js';
 import { registerNative, findNative } from './ccgateway-native-tools.js';
-import { prepareBuildInput } from './ccgateway-request-input.js';
+import { prepareBuildInput, fingerprintMessages } from './ccgateway-request-input.js';
 import { normalizeBetas } from './ccgateway-request-options.js';
 import { getRootSession } from './chunk-q61sszgr.js';
 import { YEr } from './chunk-6dwnw6av.js';
@@ -76,6 +76,7 @@ export async function buildRequest(components, headers, signal) {
     ccgatewayWireMessages: transformed.messages,
     ccgatewayWireTools: wireToolDefinitions(external.tools),
     ccgatewayCaptureBilling: value => { nativeBilling = value; },
+    ccgatewayFingerprintMessages: fingerprintMessages(transformed.messages, KF),
   };
   let built;
   for await (const event of Kvt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options })) {

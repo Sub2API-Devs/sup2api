@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyBuildMetadata, rewriteDirectIdentity, requestSessionID } from '../request-identity.js';
-import { openModelRequest, readModelResponse } from '../model-request.js';
-import comparisons from './replay-helpers.cjs';
+import { applyBuildMetadata, requestSessionID } from '../request-identity.js';
 
 const device = 'a'.repeat(64);
 const session = '12345678-1234-4123-8123-123456789012';
@@ -40,7 +38,6 @@ test('build metadata follows the configured identity source', async () => {
   // A forwarded client value is never rewritten with this CLI's identity.
   await context(payload({ mode: 'client', rewrite: true }), () => {
     assert.throws(() => applyBuildMetadata(built(), client, native), /Invalid Worker request identity/);
-    assert.throws(() => rewriteDirectIdentity('{"metadata":{"user_id":"x"}}', native), /Invalid Worker request identity/);
   });
   // A client that sent no identity gets none: the native value is discarded.
   await context(payload(), () => {
@@ -66,18 +63,16 @@ test('build metadata follows the configured identity source', async () => {
   });
 });
 
-// The Worker decides whether the client value is replaced; build and direct
-// must reach the same metadata.user_id for the same decision.
-test('build and direct follow the same rewrite decision', async () => {
+// The Worker decides whether the client value is replaced. Direct never
+// reaches the CLI with an identity context: it is a pure passthrough.
+test('build follows the Worker rewrite decision in every carrier', async () => {
   const built = () => ({ model: 'fixture', metadata: { user_id: native().user_id } });
-  const direct = userID => JSON.parse(rewriteDirectIdentity(JSON.stringify({ metadata: { user_id: userID } }), native)).metadata.user_id;
   // What the Worker sends without a usable field: rewrite false, no carrier.
   const unusable = [{ foo: 'x' }, { device_id: '', session_id: null }, { device_id: null }, '{"device_id":""}', '{"session_id":null}'];
   for (const mode of ['worker', 'replace']) {
     await context({ version: 2, mode, rewrite: false }, () => {
       for (const userID of unusable) {
         assert.deepEqual(applyBuildMetadata(built(), { user_id: userID }, native).metadata, { user_id: userID }, `${mode} build ${JSON.stringify(userID)}`);
-        assert.deepEqual(direct(userID), userID, `${mode} direct ${JSON.stringify(userID)}`);
       }
       // Missing, null, empty string and empty object: nothing to replace.
       assert.ok(!Object.hasOwn(applyBuildMetadata(built(), undefined, native), 'metadata'));
@@ -85,7 +80,6 @@ test('build and direct follow the same rewrite decision', async () => {
       assert.deepEqual(applyBuildMetadata(built(), { other: 1 }, native).metadata, { other: 1 });
     });
   }
-  // The three carriers, replaced the same way on both paths.
   const carriers = [
     ['object', { device_id: 'c'.repeat(64), session_id: session }],
     ['json', JSON.stringify({ device_id: 'c'.repeat(64), session_id: session })],
@@ -95,72 +89,9 @@ test('build and direct follow the same rewrite decision', async () => {
     for (const [carrier, userID] of carriers) {
       await context(mode === 'replace' ? payload({ carrier }) : { version: 2, mode, rewrite: true, carrier }, () => {
         const fromBuild = applyBuildMetadata(built(), { user_id: userID }, native).metadata.user_id;
-        assert.deepEqual(fromBuild, direct(userID), `${mode}/${carrier}`);
         assert.equal(typeof fromBuild, carrier === 'object' ? 'object' : 'string', `${mode}/${carrier}`);
         assert.notDeepEqual(fromBuild, userID, `${mode}/${carrier} was replaced`);
       });
     }
   }
-});
-
-test('direct replaces only the identity span, keeping the client carrier', async () => {
-  await context(payload(), () => {
-    const before = '{\r\n"model":"fixture","n":9007199254740993,"tool":{"metadata":{"user_id":"untouched"}},' +
-      '"messages":[{"role":"user","content":"quote \\"user_id\\"; 中文🙂"}], "meta\\u0064ata": { "other":1e999, "user_\\u0069d" : ';
-    const after = ', "suffix": [null, {"deep":[1,2]}] } }\n';
-    const source = before + JSON.stringify('{"device_id":"client","account_uuid":"client-account","session_id":"client-session"}') + after;
-    const result = rewriteDirectIdentity(source, native);
-    const value = JSON.parse(result.slice(before.length, result.length - after.length));
-    assert.deepEqual(JSON.parse(value), { device_id: device, account_uuid: 'worker-account',
-      session_id: session, native_extra: 'kept', parent_session_id: parent });
-    assert(!result.includes('client-account'));
-    assert(comparisons.onlyUserIDChanged(source, result));
-    assert(!comparisons.onlyUserIDChanged(source, result.replace('9007199254740993', '9007199254740992')));
-  });
-  await context(payload({ carrier: 'object' }), () => {
-    const raw = '{ "metadata": { "user_id": {"device_id":"client","session_id":"s"} }, "n": 1 }';
-    const result = rewriteDirectIdentity(raw, native);
-    assert.deepEqual(JSON.parse(result), { metadata: { user_id: { device_id: device, account_uuid: 'worker-account',
-      session_id: session, native_extra: 'kept', parent_session_id: parent } }, n: 1 });
-  });
-  await context(payload({ carrier: 'flat' }), () => {
-    const raw = `{"metadata":{"user_id":"user_${'ab'.repeat(32)}_account__session_${session}"}}`;
-    assert.match(JSON.parse(rewriteDirectIdentity(raw, native)).metadata.user_id,
-      /^user_[a-f0-9]{64}_account_worker-account_session_[a-f0-9-]{36}$/);
-  });
-  // Nothing to replace, or the source is the client's own: exact bytes.
-  await context(payload({ mode: 'client', rewrite: false }), () => {
-    const raw = '{ "metadata": {"user_id":"client"}, "n": 1 }';
-    assert.equal(rewriteDirectIdentity(raw, () => assert.fail('unexpected native read')), raw);
-  });
-  await context(payload(), () => {
-    for (const raw of ['{ "model":"fixture", "messages":[] }',
-      '{ "model":"fixture", "metadata": null }',
-      '{ "model":"fixture", "metadata": {} }']) {
-      assert.equal(rewriteDirectIdentity(raw, () => assert.fail('unexpected native read')), raw, raw);
-    }
-  });
-});
-
-test('identity replacement is resolved after native authentication and sends exactly once', async () => {
-  await context(payload(), async () => {
-    let authenticated = false, calls = 0;
-    const raw = '{ "model":"fixture", "metadata":{"user_id":"client"}, "n":9007199254740993 }';
-    const response = await openModelRequest({
-      body: { model: 'fixture' }, rawBody: raw,
-      transformBody: value => rewriteDirectIdentity(value, () => { assert(authenticated); return native(); }),
-    }, 'identity-test', undefined, async () => {
-      authenticated = true;
-      return { post: (url, request) => ({ asResponse: async () => {
-        calls++;
-        assert(request.body.includes('worker-account'));
-        assert(request.body.includes('9007199254740993'));
-        assert(!request.body.includes('client'));
-        return new Response('ok');
-      } }) };
-    }, () => assert.fail('unexpected network'));
-    assert.equal((await readModelResponse(response.id, 'identity-test')).text, 'ok');
-    assert.equal((await readModelResponse(response.id, 'identity-test')).done, true);
-    assert.equal(calls, 1);
-  });
 });

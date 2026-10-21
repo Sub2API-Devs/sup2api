@@ -215,7 +215,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		identityMode = "client"
 	}
 	var identity *requestIdentity
-	if g.requestIdentityEnabled {
+	// Direct is a pure passthrough (2026-10-21 decision): the identity, like the
+	// rest of the body, goes upstream exactly as the client sent it.
+	if g.requestIdentityEnabled && requestMode == "build" {
 		mapped, mapErr := g.resolveRequestIdentity(g.runner(r.Context()).baseEnv(), raw, identityMode)
 		if mapErr != nil {
 			fail(400, "invalid_request_error", mapErr.Error())
@@ -328,11 +330,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	cmd := exec.CommandContext(ctx, runner.CLI, args...)
 	cmd.Env, cmd.Dir, cmd.Stdin = runner.baseEnv(), dir, bytes.NewReader(input)
-	// The CLI needs the context whenever it must produce a value: a replaced
-	// client identity, or the client's own session for a forwarded request.
-	// Build always needs it: the native builder invents metadata, and only the
-	// context makes the CLI keep the client's own value, or none.
-	if identity != nil && (requestMode == "build" || identity.Rewrite || identity.Session != "") {
+	// Build always needs the identity context: the native builder invents
+	// metadata, and only the context makes the CLI keep the client's own value,
+	// a mapped one, or none.
+	if identity != nil {
 		mapped, _ := json.Marshal(identity)
 		cmd.Env = envWith(cmd.Env, map[string]string{
 			requestIdentityEnv: string(mapped),

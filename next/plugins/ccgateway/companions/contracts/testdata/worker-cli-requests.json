@@ -31,10 +31,9 @@
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
-      "name": "direct-replace",
+      "name": "direct-passthrough",
       "mode": "direct",
-      "stdin": "{\"model\":\"fixture\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}}",
-      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"9c1c2cbe-7392-42f9-a262-bfc1f4115e14\",\"device_id\":\"b864f8530fa81965e318cd80b90addd91043fe4536677fd86222d68198f72548\",\"carrier\":\"json\"}"
+      "stdin": "{\"model\":\"fixture\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}}"
     }
   ]
 }

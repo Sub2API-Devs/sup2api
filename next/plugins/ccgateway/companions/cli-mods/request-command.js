@@ -15,7 +15,7 @@ Successful responses (including SSE) use stdout. Errors use a structured stderr 
 HTTP error bytes are stored beside --response-meta as <file>.error-body, or in
 the stderr frame as bodyBase64 when no metadata path is supplied.
 
-  --direct                 Forward the original JSON body (default)
+  --direct                 Forward the original JSON body unchanged (default)
   --build                  Assemble components through CC, then send once
   --input <file|->          Read JSON from a file; default: stdin
   --betas <a,b,...>         API beta features (repeatable; comma separated)
@@ -32,7 +32,7 @@ references to preserve message/block positions. Generation fields go in paramete
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-export async function runRequestCommand(args, { oauthBeta, identityBody, identityBuild, prefixBody, prefixBuild } = {}) {
+export async function runRequestCommand(args, { oauthBeta, identityBuild, prefixBuild } = {}) {
   const controller = new AbortController();
   let response, interrupted = false, timedOut = false, outputError, deadline;
   let phase = 'input', responseStarted = false;
@@ -80,16 +80,13 @@ export async function runRequestCommand(args, { oauthBeta, identityBody, identit
       // Build always invents metadata; the identity source decides what the
       // upstream request really carries, and a client that sent none gets none.
       if (identityBuild) outgoing.body = identityBuild(outgoing.body, body.parameters?.metadata);
-      // OAuth only: upstream requires Claude Code's system line there.
+      // OAuth only: upstream requires Claude Code's system line there. Direct
+      // is a pure passthrough and changes nothing (2026-10-21 decision).
       if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body);
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
-    if (options.mode === 'direct') {
-      const steps = [identityBody, !apiKey && prefixBody].filter(Boolean);
-      if (steps.length) outgoing.transformBody = raw => steps.reduce((value, step) => step(value), raw);
-    }
     phase = 'transport';
     response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
       const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });

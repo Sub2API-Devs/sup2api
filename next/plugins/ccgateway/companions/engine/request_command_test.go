@@ -49,8 +49,9 @@ func TestRequestCommandReportsContainerResourcesAndDisablesTelemetry(t *testing.
 	}
 }
 
-// Only an OAuth account maps the client's identity. Build always tells the CLI
-// which metadata to keep, because its native builder would otherwise invent one.
+// Only an OAuth build request maps the client's identity; direct is a pure
+// passthrough. Build always tells the CLI which metadata to keep, because its
+// native builder would otherwise invent one.
 func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -92,14 +93,15 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				require.NoError(t, err)
 				var env map[string]string
 				require.NoError(t, json.Unmarshal(data, &env))
+				if mode == "direct" {
+					// Direct is a pure passthrough: no identity context, so the CLI
+					// forwards the client's identifiers byte for byte.
+					require.Empty(t, env[requestIdentityEnv], "direct keeps the client's identifiers")
+					return
+				}
 				if apiKey {
-					// An API-key account forwards the client's value: direct needs
-					// no context, build is told to keep the client's metadata.
-					if mode == "direct" {
-						require.Empty(t, env[requestIdentityEnv], "an API-key account keeps the client's identifiers")
-						require.Equal(t, "untrusted", env["CLAUDE_CODE_REMOTE_SESSION_ID"])
-						return
-					}
+					// An API-key account forwards the client's value: build is told
+					// to keep the client's metadata.
 					var identity requestIdentity
 					require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity))
 					require.Equal(t, requestIdentity{Version: 2, Mode: "client", Carrier: "json"}, identity)
@@ -122,10 +124,6 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				require.NoError(t, err)
 				env = nil
 				require.NoError(t, json.Unmarshal(data, &env))
-				if mode == "direct" {
-					require.Empty(t, env[requestIdentityEnv], "no client identity: direct forwards the bytes natively")
-					return
-				}
 				// Build carries no rewrite: the CLI drops the metadata its native
 				// builder would invent instead of giving the request an identity.
 				identity = requestIdentity{}

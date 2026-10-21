@@ -15,15 +15,13 @@ export default {
     noGroupPolicies: '暂无分组专门配置，全部分组继承全局默认。',
     removeGroupConfirm: '将删除该分组的专门配置，分组回归继承全局默认；未保存的草稿一并丢弃。',
     draftHint: '改动随页面底部的保存一起提交。', resetToGlobal: '恢复为继承全局',
-    billing: '计费归属', billingHint: '仅调整 cc_version 与 cc_entrypoint；服务端使用本次请求的 CLI 原生生成值。',
-    identity: '身份标识', identityHint: '只影响 metadata.user_id，build 与 direct 都生效。替换（默认）用该账号的私有密钥按登录邮箱做单向映射：同一账号同一会话结果稳定，不同账号不同，仅凭邮箱无法推算；API Key 账号保留客户端原值。客户端未发送时不生成。',
-    identitySources: { client: '客户端原始', worker: '服务端', replace: '替换' },
+    billing: '计费头', billingSources: { client: '客户端，没有用服务端', worker: '服务端' },
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
     environmentHint: '只修改已识别的完整环境或环境更新字段。客户端没有发送的环境字段不补齐。',
     executionHint: '服务端来源只改变模型看到的说明，不改变工具执行位置。其他提示内容保持原样。',
     rules: '处理规则',
-    rulesHint: '兼容动态上下文从 system 移到 user；保留原位置。连续会话只处理本次携带的环境及更新。环境缺失时跳过；计费字段选择服务端时允许补齐。格式不支持或存在歧义时保留原文并记录原因；必要服务端值获取失败时明确报错。',
+    rulesHint: '兼容动态上下文从 system 移到 user；保留原位置。连续会话只处理本次携带的环境及更新。环境缺失时跳过；缺少计费头时用服务端补齐。格式不支持或存在歧义时保留原文并记录原因；必要服务端值获取失败时明确报错。',
     previewFailed: '无法读取生效配置，请重试；草稿已保留。', retry: '重新读取', loading: '正在读取生效配置…',
     conflict: '配置已被其他操作更新。草稿已保留，请重新读取后核对再保存。',
     latestSaved: '当前已保存的配置（供核对）', reviewLatest: '已读取最新版本；下方保留你的草稿。请与当前已保存配置核对后再保存。',
@@ -34,11 +32,12 @@ export default {
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {
     title: 'Claude Code 版本与请求模式', mode: '透传/转发', version: '版本指定',
-    direct: '零注入透传（direct）', build: '组件构建（build）',
+    direct: '纯透传（direct）', build: '组件构建（build）',
+    request: '请求', prefixLine: '开头行', autoUserId: '有就自动替换，没有不加', autoPrefix: '没有就补上',
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   buildAttachments: {
-    directHint: 'direct 模式除身份标识外原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
+    directHint: '原样转发，不做任何改动',
     client: '保留客户端',
     worker: '使用服务端',
     erase: '擦除'

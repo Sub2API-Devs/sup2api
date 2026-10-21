@@ -288,13 +288,10 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 			delete(p.BuildBillingSources, k)
 		}
 	}
-	// The identity default is the Worker's own default as well, so only another
-	// source is sent; a CLI that cannot honour "worker" refuses the request.
-	for k, v := range p.RequestIdentitySources {
-		if v == features.RequestIdentityDefault {
-			delete(p.RequestIdentitySources, k)
-		}
-	}
+	// The identity is not configurable (2026-10-21 decision): build replaces a
+	// client metadata.user_id and adds none, which is the Worker's own default,
+	// and direct forwards it untouched. A source stored earlier is not sent.
+	p.RequestIdentitySources = nil
 	if p.RelayMode == "direct" {
 		p.BuildAttachmentSources = nil
 		p.BuildBillingSources = nil

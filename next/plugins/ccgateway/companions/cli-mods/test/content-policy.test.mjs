@@ -123,16 +123,28 @@ test('billing replaces only selected values, preserves unknowns, whitespace and 
   assert.deepEqual(mergeBillingAttribution(output, { build_billing_sources: { cc_version: 'worker' } }, billing), output);
 });
 
-test('billing inserts only server-selected missing fields or a single block and never invents client fields', () => {
-  const policy = { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } };
-  const output = mergeBillingAttribution([{ type: 'text', text: 'custom prompt', cache_control: { type: 'ephemeral' } }], policy, billing);
-  assert.equal(output.length, 2); assert.equal(output[0].text, 'x-anthropic-billing-header: cc_version=2.1.304.abc;'); assert.ok(!output[0].cache_control);
-  const missing = mergeBillingAttribution('x-anthropic-billing-header: cc_workload=keep;', policy, billing);
-  assert.equal(missing[0].text, 'x-anthropic-billing-header: cc_workload=keep; cc_version=2.1.304.abc;');
+// Build requests carry the header the way CC sends it: one without a header
+// gets the native line whole, a header missing a field gets the native value,
+// and client keeps every value the client wrote (2026-10-21 decision).
+test('billing fills a missing header or field with native values and keeps client values', () => {
+  for (const policy of [{}, { build_billing_sources: { cc_version: 'client' } }, { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } }]) {
+    const diagnostics = [];
+    const output = mergeBillingAttribution([{ type: 'text', text: 'custom prompt', cache_control: { type: 'ephemeral' } }], policy, billing, d => diagnostics.push(d));
+    assert.deepEqual(output, [{ type: 'text', text: billing }, { type: 'text', text: 'custom prompt', cache_control: { type: 'ephemeral' } }], JSON.stringify(policy));
+    assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['cc_version', 'inserted'], ['cc_entrypoint', 'inserted']]);
+  }
+  const missing = mergeBillingAttribution('x-anthropic-billing-header: cc_workload=keep;', {}, billing);
+  assert.equal(missing[0].text, 'x-anthropic-billing-header: cc_workload=keep; cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;');
+  const partial = mergeBillingAttribution([{ type: 'text', text: 'x-anthropic-billing-header: cc_version=9.9.9.own;' }], {}, billing);
+  assert.equal(partial[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=sdk-cli;');
+  // A complete client header needs nothing native.
+  const complete = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=cli;' }, { type: 'text', text: 'prompt' }];
+  assert.deepEqual(mergeBillingAttribution(complete, {}, null), complete);
 });
 
 // worker is the Worker's native attribution or no request: a header it cannot
 // be placed in safely is refused, before the native value is even needed.
+// client leaves such a header exactly as the client wrote it.
 test('billing headers that cannot be edited safely are refused for worker', () => {
   const worker = { build_billing_sources: { cc_version: 'worker' } };
   for (const system of [
@@ -147,19 +159,19 @@ test('billing headers that cannot be edited safely are refused for worker', () =
       assert.throws(() => mergeBillingAttribution(system, worker, native, d => diagnostics.push(d)), e => e.status === 400 && e.code === 'invalid_request_error', JSON.stringify(system));
     }
     assert.ok(diagnostics.length && diagnostics.every(d => d.status === 'ambiguous'));
-    // client keeps whatever the client wrote.
-    assert.deepEqual(mergeBillingAttribution(system, { build_billing_sources: { cc_version: 'client' } }, null), system);
+    for (const native of [billing, null]) assert.deepEqual(mergeBillingAttribution(system, { build_billing_sources: { cc_version: 'client' } }, native), system);
   }
 });
 
 // A mention of the header in prose, an indented quote or a code fence is
-// client content: worker inserts its own header and leaves the mention alone.
+// client content: the native header goes in front and the mention stays.
 test('quoted or fenced billing headers are content, not headers', () => {
   const worker = { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } };
   for (const text of ['quoted x-anthropic-billing-header: cc_version=x;', '  x-anthropic-billing-header: cc_version=x;', '```\nx-anthropic-billing-header: cc_version=x;\n```', 'before\n~~~\nx-anthropic-billing-header: cc_version=x; cc_version=y;\n~~~\nafter']) {
     const system = [{ type: 'text', text }];
-    assert.deepEqual(mergeBillingAttribution(system, worker, billing), [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=2.1.304.abc;' }, ...system], text);
+    for (const policy of [worker, {}]) assert.deepEqual(mergeBillingAttribution(system, policy, billing), [{ type: 'text', text: billing }, ...system], text);
     assert.throws(() => mergeBillingAttribution(system, worker, null), e => e.status === 503, text);
+    assert.deepEqual(mergeBillingAttribution(system, {}, null), system, text);
   }
   // A real header next to a fenced mention is edited in place; unknown
   // fields and the client-sourced field stay.
@@ -167,10 +179,14 @@ test('quoted or fenced billing headers are content, not headers', () => {
   assert.equal(mergeBillingAttribution(mixed, worker, billing)[0].text, 'x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=client-entry; opaque=KEEP;\n```\nx-anthropic-billing-header: cc_version=quoted;\n```');
 });
 
-test('billing generation failure is explicit for worker but irrelevant for all-client policy', () => {
+// Without a native header the request still goes out: worker refuses, client
+// (the default) forwards the system as it is.
+test('billing generation failure is explicit for worker and tolerated for client', () => {
   const system = [{ type: 'text', text: 'custom system' }];
+  const diagnostics = [];
   assert.throws(() => mergeBillingAttribution(system, { build_billing_sources: { cc_entrypoint: 'worker' } }, ''), e => e.status === 503);
-  assert.deepEqual(mergeBillingAttribution(system, { build_billing_sources: { cc_entrypoint: 'client' } }, ''), system);
+  assert.deepEqual(mergeBillingAttribution(system, { build_billing_sources: { cc_entrypoint: 'client' } }, '', d => diagnostics.push(d)), system);
+  assert.deepEqual(diagnostics.map(d => d.status), ['source_unavailable', 'source_unavailable']);
 });
 
 // Fixture captured from the actual CLI 2.1.304 zkt/Kkt renderers with deterministic facts.
@@ -256,7 +272,7 @@ test('shorter or mismatched fence markers do not expose quoted environment or bi
     assert.deepEqual(await applyContentPolicy(input, policy({ platform_name: 'worker' }), server), expected);
     // The fenced header is content: the Worker's own header goes in front.
     const bill = [{ type: 'text', text: '````text\n' + middle + '\nx-anthropic-billing-header: cc_version=example;\n````' }];
-    assert.deepEqual(mergeBillingAttribution(bill, { build_billing_sources: { cc_version: 'worker' } }, billing), [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=2.1.304.abc;' }, ...bill]);
+    assert.deepEqual(mergeBillingAttribution(bill, { build_billing_sources: { cc_version: 'worker' } }, billing), [{ type: 'text', text: billing }, ...bill]);
   }
 });
 

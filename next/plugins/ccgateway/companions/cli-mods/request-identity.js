@@ -59,7 +59,7 @@ function hasUserID(metadata) {
 // applyBuildMetadata owns metadata for build mode: the native builder always
 // invents one, but a client that sent no identity must not get one, and a
 // client value must follow the configured source. Whether the client value is
-// replaced is the Worker's rewrite decision, exactly as in direct: a value with
+// replaced is the Worker's rewrite decision: a value with
 // nothing to map (only unknown or empty fields) stays the client's, in its own
 // carrier (2026-10-21; build used to replace it with this CLI's identity).
 export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
@@ -76,61 +76,18 @@ export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
   return built;
 }
 
-const whitespace = (raw, i) => {
-  while (i < raw.length && /[\t\n\r ]/.test(raw[i])) i++;
-  return i;
-};
-function stringEnd(raw, i) {
-  if (raw[i++] !== '"') throw Error('Invalid identity JSON string');
-  while (i < raw.length) {
-    if (raw[i] === '\\') { i += 2; continue; }
-    if (raw[i++] === '"') return i;
-  }
-  throw Error('Incomplete identity JSON string');
-}
-function valueEnd(raw, i) {
-  if (raw[i] === '"') return stringEnd(raw, i);
-  if (raw[i] === '{' || raw[i] === '[') {
-    let depth = 0;
-    for (; i < raw.length; i++) {
-      if (raw[i] === '"') { i = stringEnd(raw, i) - 1; continue; }
-      if (raw[i] === '{' || raw[i] === '[') depth++;
-      if ((raw[i] === '}' || raw[i] === ']') && --depth === 0) return i + 1;
-    }
-    throw Error('Incomplete identity JSON value');
-  }
-  while (i < raw.length && !/[\t\n\r ,}\]]/.test(raw[i])) i++;
-  return i;
-}
-function property(raw, start, name) {
-  let i = whitespace(raw, start), found;
-  if (raw[i++] !== '{') throw Error('Identity carrier must be an object');
-  while ((i = whitespace(raw, i)) < raw.length && raw[i] !== '}') {
-    const end = stringEnd(raw, i), key = JSON.parse(raw.slice(i, end));
-    i = whitespace(raw, end);
-    if (raw[i++] !== ':') throw Error('Invalid identity JSON property');
-    const first = whitespace(raw, i), last = valueEnd(raw, first);
-    if (key === name) {
-      if (found) throw Error('Duplicate request identity property');
-      found = { first, last };
-    }
-    i = whitespace(raw, last);
-    if (raw[i] === '}') return found;
-    if (raw[i++] !== ',') throw Error('Invalid identity JSON separator');
-  }
-  return found;
-}
-
 // Claude Code opens every system prompt with its own line, after the
 // attribution header when there is one: 2.1.304 PAs builds
 // [header, n1n(), ...prompt], n1n picks the line and t1n recognizes all of
 // them. Upstream refuses OAuth Sonnet/Opus requests whose first system block
 // is neither the header nor such a line with 429 rate_limit_error "Error"
-// (verified 2026-10-21 in build and direct; a line merged into a longer block
-// or placed after the prompt does not count). An OAuth request without the
-// line where Claude Code puts it gets the CLI's own line inserted there; both
-// the line and the checks are the CLI's, never a copy: isPrefix is t1n,
-// prefix is n1n for the interactive terminal CLI and isBilling is B1s, CC's
+// (verified 2026-10-21; a line merged into a longer block or placed after the
+// prompt does not count). An OAuth build request without the line where Claude
+// Code puts it gets the CLI's own line inserted there; direct forwards the
+// body unchanged. Both the line and the checks are the CLI's, never a copy:
+// isPrefix is t1n, prefix is n1n for a non-interactive session without an
+// appended prompt (the line `claude -p` sends, matching the request process's
+// sdk-cli entrypoint in the attribution header) and isBilling is B1s, CC's
 // test for its attribution header block (patch-cli-2.1.304.cjs).
 const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
 
@@ -157,45 +114,4 @@ export function applyBuildCliPrefix(built, prefix, isPrefix, isBilling) {
     if (at >= 0) built.system = [...built.system.slice(0, at), block, ...built.system.slice(at)];
   }
   return built;
-}
-
-// directCliPrefix puts the line into a direct body, inserting bytes only: the
-// rest of the body, a string system included, stays exactly as received.
-export function directCliPrefix(raw, prefix, isPrefix, isBilling) {
-  const block = JSON.stringify({ type: 'text', text: checkedPrefix(prefix, isPrefix) });
-  const system = property(raw, 0, 'system');
-  if (!system) {
-    const open = whitespace(raw, 0) + 1;
-    return raw.slice(0, open) + `"system":[${block}]` + (raw[whitespace(raw, open)] === '}' ? '' : ',') + raw.slice(open);
-  }
-  const value = raw.slice(system.first, system.last);
-  if (raw[system.first] === '"') {
-    const text = JSON.parse(value) === '' ? '' : `,{"type":"text","text":${value}}`;
-    return raw.slice(0, system.first) + `[${block}${text}]` + raw.slice(system.last);
-  }
-  if (raw[system.first] !== '[') return raw;
-  const at = prefixPosition(JSON.parse(value), isPrefix, isBilling);
-  if (at < 0) return raw;
-  let i = whitespace(raw, system.first + 1);
-  for (let k = 0; k < at; k++) {
-    i = whitespace(raw, valueEnd(raw, i));
-    if (raw[i] === ',') i = whitespace(raw, i + 1);
-  }
-  const insert = raw[i] === ']' ? (at > 0 ? ',' : '') + block : block + ',';
-  return raw.slice(0, i) + insert + raw.slice(i);
-}
-
-// rewriteDirectIdentity replaces only the identity span the client sent. Every
-// other byte of the direct body, including unsafe integers and whitespace,
-// stays exactly as received.
-export function rewriteDirectIdentity(raw, nativeIdentity) {
-  const mapped = identity();
-  if (!mapped?.rewrite) return raw;
-  const metadata = property(raw, 0, 'metadata');
-  const user = metadata && raw[metadata.first] === '{' && property(raw, metadata.first, 'user_id');
-  if (!user) return raw;
-  const carrier = raw[user.first];
-  if (carrier !== '"' && carrier !== '{') return raw;
-  const replacement = JSON.stringify(encode(target(nativeIdentity()), mapped.carrier ?? (carrier === '{' ? 'object' : 'json')));
-  return raw.slice(0, user.first) + replacement + raw.slice(user.last);
 }

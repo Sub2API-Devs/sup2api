@@ -118,10 +118,9 @@ func TestFeatureRequiredCapabilities(t *testing.T) {
 	}
 }
 
-// The identity default never reaches the wire: a Worker that cannot map
-// identities keeps serving instead of refusing every request. Another source is
-// sent in both relay modes, since identity applies to direct as well.
-func TestWirePolicyOmitsDefaultIdentity(t *testing.T) {
+// The identity is not configurable (2026-10-21 decision): no source reaches
+// the wire in either relay mode, including one stored before that decision.
+func TestWirePolicyNeverSendsIdentity(t *testing.T) {
 	svc := &Service{}
 	for _, mode := range []string{"build", "direct"} {
 		cfg := Config{RequestPolicy: ptrPolicy(defaultRequestPolicy())}
@@ -134,16 +133,11 @@ func TestWirePolicyOmitsDefaultIdentity(t *testing.T) {
 		require.NotContains(t, string(raw), "request_identity_sources", mode)
 		require.Equal(t, "replace", cfg.ResolveFeaturePolicy(0, AccountFeaturePolicy{}).Effective.RequestIdentitySources["user_id"], "the preview still shows the applied default")
 
-		explicit := features.RequestIdentityDefault
-		cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": explicit}
-		p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
-		require.NoError(t, err)
-		require.Empty(t, p.RequestIdentitySources, "an explicit default is still the default")
-		for _, source := range []string{"client", "worker"} {
+		for _, source := range []string{features.RequestIdentityDefault, "client", "worker"} {
 			cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
 			p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 			require.NoError(t, err)
-			require.Equal(t, features.RequestIdentitySources{"user_id": source}, p.RequestIdentitySources, mode)
+			require.Nil(t, p.RequestIdentitySources, mode+"/"+source)
 		}
 	}
 }

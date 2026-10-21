@@ -210,11 +210,17 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v15-cli-prefix');
+  assert.equal(patchManifest.extension, 'ccgateway-v16-build-prefix');
   assert(patchManifest.capabilities.includes('request_identity_v1'));
-  // The Claude Code line is the CLI's own: the request command gets the
-  // native selector (terminal arguments) and recognizer.
-  assert.match(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'), /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\).*let\{B1s:ccgIsBilling\}=await import\("\.\/chunk-7y2kvacy\.js"\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix,ccgIsBilling\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix,ccgIsBilling\)/);
+  // The Claude Code line is the CLI's own: the build request gets the native
+  // selector (the `claude -p` arguments) and recognizer. Direct gets nothing:
+  // it is a pure passthrough.
+  const cli = fs.readFileSync(path.join(output, 'cli.js'), 'utf8');
+  assert.match(cli, /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\).*let\{B1s:ccgIsBilling\}=await import\("\.\/chunk-7y2kvacy\.js"\).*prefixBuild:b=>ccgPrefixBuild\(b,ccgPrefix\(\{isNonInteractive:!0,hasAppendSystemPrompt:!1\}\),ccgIsPrefix,ccgIsBilling\)/);
+  assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);
+  // The attribution fingerprint hashes the first user prompt of the external
+  // messages, not their reminder blocks.
+  assert.match(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8'), /let tF=RIs\(J\.ccgatewayBuildOnly===true\?J\.ccgatewayFingerprintMessages:Aa\),/);
 });
 
 test('container reporting patches preserve resource admission, Git concurrency and native identity generators', () => {

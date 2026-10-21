@@ -50,7 +50,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":{"foo":"x"}}}`},
-		{"direct-replace", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
+		{"direct-passthrough", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`},
 	}
 	var cases []workerCLICase

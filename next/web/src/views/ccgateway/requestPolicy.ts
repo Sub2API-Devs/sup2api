@@ -183,9 +183,12 @@ export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOver
 export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
   let count = 0
   for (const [key, value] of Object.entries(overrides)) {
-    if (key === 'build_attachment_sources' || key === 'build_billing_sources' || key === 'request_identity_sources') {
+    // The identity is not configurable (2026-10-21): a value stored before is
+    // neither shown nor applied, so it is not a difference either.
+    if (key === 'request_identity_sources') continue
+    if (key === 'build_attachment_sources' || key === 'build_billing_sources') {
       for (const [field, source] of Object.entries(value as Record<string, string>)) {
-        if (((parent[key] as Record<string, string> | undefined)?.[field] ?? (key === 'request_identity_sources' ? 'replace' : 'client')) !== source) count++
+        if (((parent[key] as Record<string, string> | undefined)?.[field] ?? 'client') !== source) count++
       }
     } else if (parent[key as keyof RequestPolicy] !== value) count++
   }

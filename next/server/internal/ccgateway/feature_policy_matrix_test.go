@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -409,10 +408,10 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 	}
 }
 
-// The identity source applies in direct as well as build: whatever layer sets
-// it, the Worker receives it in both modes, except the default (replace),
-// which is never sent; only worker needs the identity capability.
-func TestIdentitySourceReachesTheWorkerInBothModes(t *testing.T) {
+// The identity is not configurable (2026-10-21 decision): a source stored in
+// any layer still resolves for the preview, but the Worker never receives it
+// and no request needs the identity capability.
+func TestIdentitySourceIsNeverSentToTheWorker(t *testing.T) {
 	field := "request_identity_sources.user_id"
 	cases := 0
 	for _, mode := range []string{"build", "direct"} {
@@ -439,12 +438,8 @@ func TestIdentitySourceReachesTheWorkerInBothModes(t *testing.T) {
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 					require.NoError(t, err)
 					require.NoError(t, validateRequestPolicy(wire))
-					if source == features.RequestIdentityDefault {
-						require.Empty(t, wire.RequestIdentitySources)
-					} else {
-						require.Equal(t, features.RequestIdentitySources{"user_id": source}, wire.RequestIdentitySources)
-					}
-					require.Equal(t, source == "worker", slices.Contains(requestPolicyCapabilities(wire), features.RequestIdentityCapability))
+					require.Nil(t, wire.RequestIdentitySources)
+					require.NotContains(t, requestPolicyCapabilities(wire), features.RequestIdentityCapability)
 					after, _ := json.Marshal([]any{cfg, account})
 					require.JSONEq(t, string(before), string(after), "resolving must not mutate stored policies")
 				})

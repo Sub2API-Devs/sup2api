@@ -194,3 +194,21 @@ export function prepareBuildInput(components, renderAttachment, { preserveConten
   const request = { ...parameters, model: components.model, stream: components.stream === true };
   return { request, messages, systemPrompt, systemBlocks, customTools, extraToolSchemas };
 }
+
+// fingerprintMessages gives CC's attribution fingerprint (RIs) the message it
+// reads in a native session: the first user prompt. Native attachments are
+// separate isMeta records there, so RIs never sees them; a wire user message
+// carries them as reminder blocks beside the prompt, so those blocks (opening
+// with the native reminder tag) and tool results are skipped here. Without
+// this every conversation hashed the same reminder characters.
+export function fingerprintMessages(messages, reminderOpen) {
+  let text = '';
+  find: for (const message of messages) {
+    if (message?.role !== 'user') continue;
+    const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
+    for (const block of Array.isArray(blocks) ? blocks : []) {
+      if (block?.type === 'text' && typeof block.text === 'string' && !block.text.trimStart().startsWith(reminderOpen)) { text = block.text; break find; }
+    }
+  }
+  return [{ type: 'user', message: { role: 'user', content: text } }];
+}

@@ -4,7 +4,7 @@
 const fs = require('node:fs'), http = require('node:http'), cp = require('node:child_process');
 const crypto = require('node:crypto'), assert = require('node:assert/strict'), os = require('node:os');
 const { startRuntime } = require('./assembly-runtime.cjs');
-const { sha, normalizeSystem, differences, same, onlyUserIDChanged } = require('./replay-helpers.cjs');
+const { sha, normalizeSystem, differences, same } = require('./replay-helpers.cjs');
 const official = process.env.PROBE_OFFICIAL || '/input/claude-official-304';
 const officialSHA = 'ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912';
 assert.equal(sha(fs.readFileSync(official)), officialSHA);
@@ -219,11 +219,8 @@ function nativeMetadata(value) {
         check('content.tools', row.diffs.tools.length === 0);
         check('billing.one-block', billingLines(wire).length === 1);
         if (scenario.mode === 'direct') {
-          const privacy = runtime.identity.worker_capabilities.includes('request_identity_v1') &&
-            typeof input.metadata?.user_id === 'string' && input.metadata.user_id !== '';
-          check(privacy ? 'direct.only-user-id-change' : 'direct.raw-bytes',
-            privacy ? onlyUserIDChanged(inbound.raw, outgoing.raw) : outgoing.raw === inbound.raw);
-          if (privacy) check('metadata.native-identity', nativeMetadata(wire.metadata));
+          // Direct is a pure passthrough (2026-10-21): its bytes never change.
+          check('direct.raw-bytes', outgoing.raw === inbound.raw);
         }
         else {
           check('metadata.native-identity', nativeMetadata(wire.metadata));

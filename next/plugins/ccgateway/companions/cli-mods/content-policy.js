@@ -319,15 +319,18 @@ function billingCandidate(c, text) {
   }
   return { candidates };
 }
+// Build requests carry Claude Code's attribution header the way CC sends it
+// (2026-10-21 decision): a request without one gets the native header line,
+// whole, and a header missing a field gets the native value. client (the
+// default) keeps every value the client wrote; worker replaces them with the
+// native ones. Upstream refuses a header without both cc_version and
+// cc_entrypoint (400 "reserved keyword", verified 2026-10-21).
 function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emitDiagnostic) {
   validatePolicy(policy);
-  const wanted = billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker');
-  if (!wanted.length || policy.relay_mode === 'direct') return structuredClone(system);
+  if (policy.relay_mode === 'direct') return structuredClone(system);
+  const replaced = new Set(billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker'));
   const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : structuredClone(system);
   if (!Array.isArray(blocks)) throw error('system must be text or blocks');
-  // worker means the Worker's native attribution, or no request: a header the
-  // value cannot be placed in safely is refused (400) instead of forwarding
-  // the client's value (2026-10-21; it used to pass through unchanged).
   const found = []; let conflict = '';
   blocks.forEach((block, index) => {
     if (block?.type !== 'text') return;
@@ -337,23 +340,29 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
     for (const candidate of result.candidates ?? []) found.push({ ...candidate, index });
   });
   if (!conflict && found.length > 1) conflict = 'the system prompt carries more than one billing header';
+  // A header that cannot be edited safely is refused when a value must be the
+  // Worker's; otherwise it stays the client's, unchanged.
   if (conflict) {
-    wanted.forEach(field => diagnostic(emitDiagnostic, field, 'ambiguous', 'system'));
-    throw error(`Worker billing attribution cannot be applied: ${conflict}`);
+    billingFields.forEach(field => diagnostic(emitDiagnostic, field, 'ambiguous', 'system'));
+    if (replaced.size) throw error(`Worker billing attribution cannot be applied: ${conflict}`);
+    return structuredClone(system);
   }
+  const target = found[0];
+  const needed = target ? billingFields.filter(field => replaced.has(field) || !target.keys.has(field)) : billingFields;
+  if (!needed.length) return structuredClone(system);
   const generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
-  if (generated.conflict || generated.candidates?.length !== 1 || wanted.some(field => !generated.candidates[0].keys.has(field))) {
-    wanted.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
-    throw error('Required native billing attribution is unavailable', 503);
+  if (generated.conflict || generated.candidates?.length !== 1 || needed.some(field => !generated.candidates[0].keys.has(field))) {
+    needed.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
+    if (replaced.size) throw error('Required native billing attribution is unavailable', 503);
+    return structuredClone(system);
   }
-  const values = generated.candidates[0].keys;
-  if (!found.length) {
-    blocks.unshift({ type: 'text', text: c.billingHeader + ' ' + wanted.map(field => `${field}=${values.get(field).value};`).join(' ') });
-    wanted.forEach(field => diagnostic(emitDiagnostic, field, 'inserted', 'system'));
+  if (!target) {
+    blocks.unshift({ type: 'text', text: nativeBilling });
+    billingFields.forEach(field => diagnostic(emitDiagnostic, field, 'inserted', 'system'));
     return blocks;
   }
-  const target = found[0], edits = [], missing = [];
-  for (const field of wanted) {
+  const values = generated.candidates[0].keys, edits = [], missing = [];
+  for (const field of needed) {
     const value = values.get(field).value, existing = target.keys.get(field);
     if (existing) { edits.push({ start: existing.start, end: existing.end, value }); diagnostic(emitDiagnostic, field, existing.value === value ? 'unchanged' : 'replaced', 'system'); }
     else { missing.push(`${field}=${value};`); diagnostic(emitDiagnostic, field, 'inserted', 'system'); }

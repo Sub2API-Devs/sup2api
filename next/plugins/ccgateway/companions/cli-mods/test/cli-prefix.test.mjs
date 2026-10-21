@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { applyBuildCliPrefix, directCliPrefix } from '../request-identity.js';
+import { applyBuildCliPrefix } from '../request-identity.js';
 import { vocabulary } from './vocabulary.mjs';
 
-// The functions take the CLI's recognizer (t1n) and line (n1n/PAs) as
-// arguments; these lines stand in for them, so nothing here depends on a copy
-// of the CLI's wording. The last test runs the real t1n/n1n.
+// The functions take the CLI's recognizer (t1n) and line (n1n) as arguments;
+// these lines stand in for them, so nothing here depends on a copy of the
+// CLI's wording. The last test runs the real t1n/n1n.
 const lines = ['CLI line A.', 'CLI line B.', 'CLI line C.'];
 const isPrefix = value => lines.includes(value);
 // Stands in for CC's B1s: a block whose text starts with the native header.
@@ -17,12 +17,11 @@ const cliPrefix = lines[2];
 const [interactive, sdk] = lines;
 const prefix = { type: 'text', text: cliPrefix };
 const t = text => ({ type: 'text', text });
-const header = vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=cli;';
+const header = vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;';
 const prompt = 'Answer the user concisely.';
 
 test('only a line the CLI recognizes is inserted', () => {
   assert.throws(() => applyBuildCliPrefix({}, 'not a CLI line', isPrefix, isBilling), /native Claude Code system line/);
-  assert.throws(() => directCliPrefix('{}', undefined, isPrefix, isBilling), /native Claude Code system line/);
 });
 
 // Where upstream accepts the line (2026-10-21): first block, or anywhere after
@@ -50,27 +49,9 @@ test('build requests open with Claude Code line where CC puts it', () => {
   }
 });
 
-test('direct bodies get the line by insertion only', () => {
-  for (const [name, system, expected] of cases) {
-    const raw = system === undefined ? '{ "model":"fixture", "n":9007199254740993 }'
-      : `{ "model":"fixture", "system" : ${JSON.stringify(system, null, 1)} , "n":9007199254740993 }`;
-    const out = directCliPrefix(raw, cliPrefix, isPrefix, isBilling);
-    assert.deepEqual(JSON.parse(out).system, expected ?? system, name);
-    assert(out.includes('9007199254740993'), name);
-    if (!expected) assert.equal(out, raw, name);
-    else assert.equal(out.length, raw.length + JSON.stringify(prefix).length + (system?.length ? 1 : (system ? 0 : '"system":[],'.length)), name);
-  }
-});
-
-test('direct string, empty and odd systems', () => {
-  const raw = '{"system":"Be brief.\\n","messages":[]}';
-  assert.equal(directCliPrefix(raw, cliPrefix, isPrefix, isBilling), `{"system":[${JSON.stringify(prefix)},{"type":"text","text":"Be brief.\\n"}],"messages":[]}`);
-  assert.deepEqual(JSON.parse(directCliPrefix('{"system":"","messages":[]}', cliPrefix, isPrefix, isBilling)).system, [prefix]);
-  assert.equal(directCliPrefix('{}', cliPrefix, isPrefix, isBilling), `{"system":[${JSON.stringify(prefix)}]}`);
-  for (const raw of ['{"system":null}', '{"system":7}', '{"system":{"type":"text"}}']) assert.equal(directCliPrefix(raw, cliPrefix, isPrefix, isBilling), raw);
-});
-
-test('claude request adds the line for OAuth only, in both modes', async () => {
+// Direct is a pure passthrough (2026-10-21 decision): the body goes out byte
+// for byte. Build adds the line for OAuth only.
+test('claude request adds the line to OAuth build only; direct is unchanged', async () => {
   const { default: fsp } = await import('node:fs/promises');
   const { default: os } = await import('node:os');
   const { spawn } = await import('node:child_process');
@@ -93,11 +74,11 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
         export const cancelModelResponse=async()=>{};
         export const readModelResponse=async()=>({done:true,bytes:new Uint8Array()});`,
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
-        import {directCliPrefix,applyBuildCliPrefix} from './ccgateway-request-identity.js';
+        import {applyBuildCliPrefix} from './ccgateway-request-identity.js';
         const line=${JSON.stringify(cliPrefix)},isPrefix=v=>${JSON.stringify(lines)}.includes(v),isBilling=b=>String(b.text).startsWith(${JSON.stringify(vocabulary.billingHeader)});
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBody:raw=>directCliPrefix(raw,line,isPrefix,isBilling),prefixBuild:b=>applyBuildCliPrefix(b,line,isPrefix,isBilling)});`,
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBuild:b=>applyBuildCliPrefix(b,line,isPrefix,isBilling)});`,
     })) await fsp.writeFile(path.join(dir, name), code);
-    const input = '{"model":"fixture","system":"Be brief.","messages":[{"role":"user","content":"hi"}]}';
+    const input = '{"model":"fixture","system":"Be brief.","metadata":{"user_id":"client"},"messages":[{"role":"user","content":"hi"}]}';
     const run = (mode, apiKey) => new Promise((resolve, reject) => {
       const env = { ...process.env };
       if (apiKey) env.ANTHROPIC_API_KEY = 'fixture'; else delete env.ANTHROPIC_API_KEY;
@@ -106,9 +87,9 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
       child.on('close', async () => resolve(await fsp.readFile(path.join(dir, 'sent.json'), 'utf8')));
       child.stdin.end(input);
     });
-    assert.deepEqual(JSON.parse(await run('--direct', false)).system, [prefix, t('Be brief.')]);
-    assert.deepEqual(JSON.parse(await run('--build', false)).system, [prefix, t('built')]);
+    assert.equal(await run('--direct', false), input);
     assert.equal(await run('--direct', true), input);
+    assert.deepEqual(JSON.parse(await run('--build', false)).system, [prefix, t('built')]);
     assert.deepEqual(JSON.parse(await run('--build', true)).system, [t('built')]);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
@@ -119,21 +100,22 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
 // chunk-t61vswm2.js: the le/ke/De declaration, t1n and n1n). The recovered
 // source is not in Git, so this is skipped, visibly, where it is absent.
 const restored = new URL('../../../../../../artifacts/claude-2.1.304/linux-restored/chunk-t61vswm2.js', import.meta.url);
-test('the CLI recognizes its own lines and gives the terminal line', { skip: fs.existsSync(restored) ? false : 'Recovered CLI 2.1.304 source unavailable: native t1n/n1n were not executed.' }, () => {
+test('the CLI recognizes its own lines and gives the claude -p line', { skip: fs.existsSync(restored) ? false : 'Recovered CLI 2.1.304 source unavailable: native t1n/n1n were not executed.' }, () => {
   const chunk = fs.readFileSync(restored, 'utf8');
   const piece = pattern => { const m = chunk.match(pattern); assert(m, String(pattern)); return m[0]; };
   const native = vm.runInNewContext(piece(/var le="You are Claude Code[^;]*;/) + piece(/function t1n\(e\)\{[^}]*\}/) +
     piece(/function n1n\(e\)\{.*?return le\}/) + ';({t1n,n1n,lines:vt})', { Pe: () => 'firstParty' });
-  // The terminal CLI's line, as the patched request command asks for it.
-  const line = native.n1n({ isNonInteractive: false, hasAppendSystemPrompt: false });
-  assert.equal(line, native.lines[0]);
+  // The line the patched request command asks for: a non-interactive session
+  // without an appended prompt, as `claude -p` with its sdk-cli entrypoint.
+  const line = native.n1n({ isNonInteractive: true, hasAppendSystemPrompt: false });
+  assert.equal(line, native.lines[2]);
   assert.equal(native.lines.length, 3);
   assert(native.lines.every(native.t1n) && native.t1n(line) && !native.t1n(line + ' '));
   // Upstream counts the first block only as the whole line (2026-10-21).
-  const merged = '{"system":[{"type":"text","text":' + JSON.stringify(native.lines[0] + '\n\nBe brief.') + '}]}';
-  assert.deepEqual(JSON.parse(directCliPrefix(merged, line, native.t1n, isBilling)).system[0], { type: 'text', text: line });
+  const merged = { system: [t(native.lines[0] + '\n\nBe brief.')] };
+  assert.deepEqual(applyBuildCliPrefix(merged, line, native.t1n, isBilling).system[0], t(line));
   for (const own of native.lines) {
-    const raw = '{"system":[{"type":"text","text":' + JSON.stringify(own) + '}]}';
-    assert.equal(directCliPrefix(raw, line, native.t1n, isBilling), raw);
+    const built = { system: [t(own)] };
+    assert.deepEqual(applyBuildCliPrefix(structuredClone(built), line, native.t1n, isBilling), built);
   }
 });

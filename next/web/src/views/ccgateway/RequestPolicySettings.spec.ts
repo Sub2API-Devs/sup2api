@@ -75,7 +75,7 @@ describe('CCGateway single-request modes', () => {
   it('never sends a request policy schema the core rejects', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), schema_version: 1 }))
     const w = await render()
-    await pick(w, '[data-testid="identity-user_id"]', 0)
+    await pick(w, '[data-testid="billing-cc_version"]', 1)
     await w.get('[data-testid="relay-mode"]').setValue('0')
     mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
     await w.get('form').trigger('submit'); await flushPromises()
@@ -83,19 +83,25 @@ describe('CCGateway single-request modes', () => {
     expect([undefined, 1]).toContain(sent.schema_version)
     w.unmount()
   })
-  // Identity is applied in direct as well, so it stays editable there; only the
-  // content sources are build-only.
-  it('keeps the identity source editable in direct mode', async () => {
+  // Direct is a pure passthrough with nothing to configure; build replaces the
+  // user_id and adds the opening line on its own, so the identity has no
+  // setting in either mode (2026-10-21 decision).
+  it('shows what each mode does on its own and offers no identity setting', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
     const w = await render()
-    expect(w.find('[data-testid="direct-hint"]').exists()).toBe(true)
-    expect(w.find('[data-testid="billing-sources"]').exists()).toBe(false)
-    expect(w.find('[data-testid="build-attachments"]').exists()).toBe(false)
-    expect(picked(w, '[data-testid="identity-user_id"]')).toBe(2)
-    await pick(w, '[data-testid="identity-user_id"]', 0)
-    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
-    await w.get('form').trigger('submit'); await flushPromises()
-    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ request_policy: expect.objectContaining({ relay_mode: 'direct', request_identity_sources: { user_id: 'client' } }) }), expect.anything())
+    expect(w.get('[data-testid="direct-hint"]').text()).toContain('原样转发，不做任何改动')
+    for (const id of ['billing-sources', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
+      expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    }
+    await w.get('[data-testid="relay-mode"]').setValue('1')
+    expect(w.find('[data-testid="direct-hint"]').exists()).toBe(false)
+    expect(w.get('[data-testid="auto-user-id"]').text()).toContain('有就自动替换，没有不加')
+    expect(w.get('[data-testid="auto-prefix"]').text()).toContain('没有就补上')
+    expect(w.find('[data-testid="identity-sources"]').exists()).toBe(false)
+    const billing = w.get('[data-testid="billing-sources"]').text()
+    expect(billing).toContain('计费头')
+    expect(billing).toContain('客户端，没有用服务端')
+    expect(picked(w, '[data-testid="billing-cc_version"]')).toBe(0)
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {
@@ -121,7 +127,7 @@ describe('CCGateway single-request modes', () => {
     await pick(w, os, 1)
     await w.get('[data-testid="relay-mode"]').setValue('0')
     expect(w.find(platform).exists()).toBe(false)
-    expect(w.text()).toContain('direct 模式除身份标识外原样转发')
+    expect(w.text()).toContain('原样转发，不做任何改动')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })

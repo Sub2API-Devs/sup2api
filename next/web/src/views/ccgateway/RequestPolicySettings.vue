@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SChip, SHint, SOptionMatrix, SSelect, SSettingRow, SSettingsGroup, SDisclosure } from '@sub2api/ui'
+import { SChip, SOptionMatrix, SSelect, SSettingRow, SSettingsGroup, SDisclosure } from '@sub2api/ui'
 import type { OptionMatrixGroup, OptionMatrixRow } from '@sub2api/ui'
-import { billingFields, identityFields, featureDifferenceCount, mergeFeaturePolicy, type BuildAttachmentField, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
+import { billingFields, featureDifferenceCount, mergeFeaturePolicy, type BuildAttachmentField, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const overrides = defineModel<FeatureOverrides>('overrides', { default: () => ({}) })
 const props = defineProps<{ inherited?: RequestPolicy; disabled?: boolean; sources?: Record<string, string>; effective?: RequestPolicy; showSavedWhenDisabled?: boolean }>()
 const { t } = useI18n()
-type Section = 'build_attachment_sources' | 'build_billing_sources' | 'request_identity_sources'
+type Section = 'build_attachment_sources' | 'build_billing_sources'
 const layered = computed(() => !!props.inherited)
 const resolved = computed(() => props.effective ?? (props.inherited ? mergeFeaturePolicy(props.inherited, overrides.value) : policy.value))
 // A read-only preview shows what applies rather than the stored draft.
@@ -21,18 +21,16 @@ const envGroups: Array<{ key: string; fields: BuildAttachmentField[] }> = [
   { key: 'tools', fields: ['github_cli', 'agent_proxy'] }
 ]
 const envFields = envGroups.flatMap(group => group.fields)
-function sourceOptions(erase: boolean) {
-  return [...(layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : []), ...['client', 'worker', ...(erase ? ['erase'] : [])].map(value => ({ value, label: t('ccgateway.buildAttachments.' + value) }))]
-}
+const envOptions = computed(() => [...(layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : []), ...['client', 'worker', 'erase'].map(value => ({ value, label: t('ccgateway.buildAttachments.' + value) }))])
+// Build fills a missing billing header either way; the choice is only whether
+// the client's own fields are kept.
+const billingOptions = computed(() => [...(layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : []),
+  ...(['client', 'worker'] as const).map(value => ({ value, label: t('ccgateway.layers.billingSources.' + value) }))])
 const requestModes = computed(() => [...(layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : []), ...(['direct', 'build'] as const).map(value => ({ value, label: t('ccgateway.cliProfile.' + value) }))])
 const sourcesOf = (policy: RequestPolicy | FeatureOverrides | undefined, section: Section) => (policy?.[section] ?? {}) as Record<string, string>
-// Identity defaults to replace; the other sections keep the client's text.
-const defaultOf = (section: Section) => section === 'request_identity_sources' ? 'replace' : 'client'
-const identityOptions = computed(() => [...(layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : []),
-  ...(['client', 'worker', 'replace'] as const).map(value => ({ value, label: t('ccgateway.layers.identitySources.' + value) }))])
 function value(section: Section, field: string) {
-  if (showEffective.value) return sourcesOf(resolved.value, section)[field] ?? defaultOf(section)
-  return sourcesOf(layered.value ? overrides.value : policy.value, section)[field] ?? (layered.value ? 'follow' : defaultOf(section))
+  if (showEffective.value) return sourcesOf(resolved.value, section)[field] ?? 'client'
+  return sourcesOf(layered.value ? overrides.value : policy.value, section)[field] ?? (layered.value ? 'follow' : 'client')
 }
 // `change` carries only the cells this interaction set, so an explicit choice is
 // stored even when it matches what the row already showed, and the untouched
@@ -60,7 +58,7 @@ function setMode(mode: unknown) {
 function differs(section: Section, field: string) {
   if (showEffective.value || !layered.value) return false
   const source = value(section, field)
-  return source !== 'follow' && source !== (sourcesOf(props.inherited, section)[field] ?? defaultOf(section))
+  return source !== 'follow' && source !== (sourcesOf(props.inherited, section)[field] ?? 'client')
 }
 // Which layer the applied value came from (account previews only).
 function origin(section: Section, field: string) {
@@ -78,14 +76,12 @@ function row(section: Section, field: string, label: string, testid: string): Op
     label: t(label),
     hint: origin(section, field),
     marked: differs(section, field),
-    effective: sourcesOf(resolved.value, section)[field] ?? defaultOf(section),
+    effective: sourcesOf(resolved.value, section)[field] ?? 'client',
     testid
   }
 }
 const matrixOf = (section: Section, fields: readonly string[]) => Object.fromEntries(fields.map(field => [section + '.' + field, value(section, field)]))
 const billingMatrix = computed(() => matrixOf('build_billing_sources', billingFields))
-const identityMatrix = computed(() => matrixOf('request_identity_sources', identityFields))
-const identityRows = computed(() => identityFields.map(field => row('request_identity_sources', field, 'ccgateway.layers.fields.' + field, 'identity-' + field)))
 const envMatrix = computed(() => matrixOf('build_attachment_sources', envFields))
 const billingRows = computed(() => billingFields.map(field => row('build_billing_sources', field, 'ccgateway.layers.' + field, 'billing-' + field)))
 // The global layer shows every group; a layer over a parent opens only the
@@ -151,47 +147,41 @@ const summary = computed(() => {
           @update:model-value="setMode"
         />
       </SSettingRow>
-    </SSettingsGroup>
-    <!-- Identity applies in both relay modes; only content sources are build-only. -->
-    <SSettingsGroup
-      :title="t('ccgateway.layers.identity')"
-      dense
-      data-testid="identity-sources"
-    >
-      <template #details>
-        {{ t('ccgateway.layers.identityHint') }}
-      </template>
-      <div class="py-2">
-        <SOptionMatrix
-          :model-value="identityMatrix"
-          :columns="identityOptions"
-          :rows="identityRows"
-          :disabled="disabled"
-          :aria-label="t('ccgateway.layers.identity')"
-          @change="applySources"
+      <!-- What each mode does on its own, with no setting (2026-10-21 decision). -->
+      <SSettingRow
+        v-if="resolved.relay_mode === 'direct'"
+        :label="t('ccgateway.cliProfile.request')"
+        :description="t('ccgateway.buildAttachments.directHint')"
+        size="sm"
+        data-testid="direct-hint"
+      />
+      <template v-else>
+        <SSettingRow
+          :label="t('ccgateway.layers.fields.user_id')"
+          :description="t('ccgateway.cliProfile.autoUserId')"
+          size="sm"
+          data-testid="auto-user-id"
         />
-      </div>
+        <SSettingRow
+          :label="t('ccgateway.cliProfile.prefixLine')"
+          :description="t('ccgateway.cliProfile.autoPrefix')"
+          size="sm"
+          data-testid="auto-prefix"
+        />
+      </template>
     </SSettingsGroup>
-    <SHint
-      v-if="resolved.relay_mode === 'direct'"
-      data-testid="direct-hint"
-    >
-      {{ t('ccgateway.buildAttachments.directHint') }}
-    </SHint>
-    <template v-else>
+    <template v-if="resolved.relay_mode !== 'direct'">
       <SSettingsGroup
         :title="t('ccgateway.layers.billing')"
         dense
         data-testid="billing-sources"
       >
-        <template #details>
-          {{ t('ccgateway.layers.billingHint') }}
-        </template>
         <div class="py-2">
           <SOptionMatrix
             :model-value="billingMatrix"
-            :columns="sourceOptions(false)"
+            :columns="billingOptions"
             :rows="billingRows"
+            column-width="8rem"
             :disabled="disabled"
             :aria-label="t('ccgateway.layers.billing')"
             @change="applySources"
@@ -210,7 +200,7 @@ const summary = computed(() => {
         <div class="py-2">
           <SOptionMatrix
             :model-value="envMatrix"
-            :columns="sourceOptions(true)"
+            :columns="envOptions"
             :groups="envSections"
             collapsible
             :disabled="disabled"

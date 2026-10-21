@@ -81,7 +81,8 @@ function evaluate(test, response) {
     check('content.messages', result.diffs.messages.length === 0);
     if (contract.tools === 'exact') check('content.tools-exact', result.diffs.tools.length === 0);
     if (test.mode === 'direct' || contract.whole_body === 'exact') {
-      const privacy = test.transport !== 'standalone-cli' && runtime.identity.worker_capabilities.includes('request_identity_v1') &&
+      // Direct is a pure passthrough (2026-10-21): its bytes never change.
+      const privacy = test.mode !== 'direct' && test.transport !== 'standalone-cli' && runtime.identity.worker_capabilities.includes('request_identity_v1') &&
         typeof test.body.metadata?.user_id === 'string' && test.body.metadata.user_id !== '';
       if (privacy) {
         check('send.direct-only-user-id-change', onlyUserIDChanged(response.sent_raw, capture.raw));

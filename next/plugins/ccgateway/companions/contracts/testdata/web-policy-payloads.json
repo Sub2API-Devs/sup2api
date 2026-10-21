@@ -119,7 +119,6 @@
       },
       "expect": {
         "relay_mode": "build",
-        "request_identity_sources.user_id": "replace",
         "build_billing_sources.cc_version": "client",
         "build_attachment_sources.platform_name": "client"
       }
@@ -200,9 +199,7 @@
           "build_billing_sources": {
             "cc_version": "worker"
           },
-          "request_identity_sources": {
-            "user_id": "client"
-          },
+          "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
           "betas": [
@@ -250,7 +247,6 @@
       },
       "expect": {
         "relay_mode": "build",
-        "request_identity_sources.user_id": "client",
         "build_billing_sources.cc_version": "worker",
         "build_attachment_sources.platform_name": "worker",
         "build_attachment_sources.os_version": "erase"
@@ -327,9 +323,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
-          "request_identity_sources": {
-            "user_id": "worker"
-          },
+          "request_identity_sources": {},
           "relay_mode": "direct",
           "cli_version": "2.1.304",
           "betas": [
@@ -376,8 +370,7 @@
         }
       },
       "expect": {
-        "relay_mode": "direct",
-        "request_identity_sources.user_id": "worker"
+        "relay_mode": "direct"
       }
     },
     {
@@ -496,9 +489,6 @@
             "enabled": true,
             "allow_account_override": true,
             "overrides": {
-              "request_identity_sources": {
-                "user_id": "worker"
-              },
               "build_billing_sources": {
                 "cc_entrypoint": "worker"
               }
@@ -517,7 +507,6 @@
         }
       },
       "expect": {
-        "request_identity_sources.user_id": "worker",
         "build_billing_sources.cc_entrypoint": "worker",
         "build_billing_sources.cc_version": "client"
       }
@@ -577,8 +566,8 @@
             "enabled": true,
             "allow_account_override": true,
             "overrides": {
-              "request_identity_sources": {
-                "user_id": "worker"
+              "build_billing_sources": {
+                "cc_entrypoint": "worker"
               }
             }
           }
@@ -588,9 +577,6 @@
       "body": {
         "mode": "custom",
         "overrides": {
-          "request_identity_sources": {
-            "user_id": "client"
-          },
           "build_billing_sources": {
             "cc_version": "worker"
           }
@@ -598,7 +584,7 @@
         "revision": 8
       },
       "expect": {
-        "request_identity_sources.user_id": "client",
+        "build_billing_sources.cc_entrypoint": "worker",
         "build_billing_sources.cc_version": "worker"
       }
     }
