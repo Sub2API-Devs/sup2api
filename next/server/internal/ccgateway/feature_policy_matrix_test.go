@@ -75,6 +75,11 @@ func matrixValue(p RequestPolicy, field string) string {
 		value = p.BuildBillingSources[key]
 	case "request_identity_sources":
 		value = p.RequestIdentitySources[key]
+	// Resolved policies carry every default of these two.
+	case "build_identity_lines":
+		return p.BuildIdentityLines[key]
+	case "build_billing_entrypoint":
+		return p.BuildBillingEntrypoint
 	default:
 		panic("matrix field without a section: " + field)
 	}

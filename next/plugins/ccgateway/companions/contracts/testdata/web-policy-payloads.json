@@ -16,6 +16,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -71,6 +72,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -120,7 +122,10 @@
       "expect": {
         "relay_mode": "build",
         "build_billing_sources.cc_version": "client",
-        "build_attachment_sources.platform_name": "client"
+        "build_attachment_sources.platform_name": "client",
+        "build_billing_entrypoint": "sdk-cli",
+        "build_identity_lines.cli": "official_cli",
+        "build_identity_lines.claude-desktop": "official_cli_sdk"
       }
     },
     {
@@ -139,6 +144,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -199,6 +205,10 @@
           "build_billing_sources": {
             "cc_version": "worker"
           },
+          "build_billing_entrypoint": "cli",
+          "build_identity_lines": {
+            "claude-desktop": "agent_sdk"
+          },
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -249,7 +259,10 @@
         "relay_mode": "build",
         "build_billing_sources.cc_version": "worker",
         "build_attachment_sources.platform_name": "worker",
-        "build_attachment_sources.os_version": "erase"
+        "build_attachment_sources.os_version": "erase",
+        "build_billing_entrypoint": "cli",
+        "build_identity_lines.claude-desktop": "agent_sdk",
+        "build_identity_lines.sdk-cli": "agent_sdk"
       }
     },
     {
@@ -268,6 +281,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -323,6 +337,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "direct",
           "cli_version": "2.1.304",
@@ -389,6 +404,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -450,6 +466,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -491,6 +508,9 @@
             "overrides": {
               "build_billing_sources": {
                 "cc_entrypoint": "worker"
+              },
+              "build_identity_lines": {
+                "cli": "none"
               }
             }
           }
@@ -508,7 +528,9 @@
       },
       "expect": {
         "build_billing_sources.cc_entrypoint": "worker",
-        "build_billing_sources.cc_version": "client"
+        "build_billing_sources.cc_version": "client",
+        "build_identity_lines.cli": "none",
+        "build_billing_entrypoint": "sdk-cli"
       }
     },
     {
@@ -527,6 +549,7 @@
           "replace_client_attachments": [],
           "build_attachment_sources": {},
           "build_billing_sources": {},
+          "build_identity_lines": {},
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -579,13 +602,15 @@
         "overrides": {
           "build_billing_sources": {
             "cc_version": "worker"
-          }
+          },
+          "build_billing_entrypoint": "claude-vscode"
         },
         "revision": 8
       },
       "expect": {
         "build_billing_sources.cc_entrypoint": "worker",
-        "build_billing_sources.cc_version": "worker"
+        "build_billing_sources.cc_version": "worker",
+        "build_billing_entrypoint": "claude-vscode"
       }
     }
   ]

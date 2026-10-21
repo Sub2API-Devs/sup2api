@@ -47,6 +47,7 @@ export function createContentPolicy(vocabulary) {
   return {
     applyContentPolicy: (input, policy, native, emitDiagnostic) => applyContentPolicy(c, input, policy, native, emitDiagnostic),
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
+    billingEntrypoint: system => billingEntrypoint(c, system),
   };
 }
 function error(message, status = 400) {
@@ -192,6 +193,8 @@ function validatePolicy(policy) {
     if (!policy[section] || typeof policy[section] !== 'object' || Array.isArray(policy[section])) throw error(`Invalid ${section}`);
     for (const [key, source] of Object.entries(policy[section])) if (!allowed.includes(key) || !values.includes(source)) throw error(`Invalid ${section}.${key}`);
   }
+  // Written into the header as a field value: one token, no separators.
+  if (policy.build_billing_entrypoint !== undefined && !/^[a-z][a-z0-9_-]{0,63}$/.test(policy.build_billing_entrypoint)) throw error('Invalid build_billing_entrypoint');
 }
 
 async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagnostic) {
@@ -324,7 +327,9 @@ function billingCandidate(c, text) {
 // whole, and a header missing a field gets the native value. client (the
 // default) keeps every value the client wrote; worker replaces them with the
 // native ones. Upstream refuses a header without both cc_version and
-// cc_entrypoint (400 "reserved keyword", verified 2026-10-21).
+// cc_entrypoint (400 "reserved keyword", verified 2026-10-21). The native
+// entrypoint is the request process's (sdk-cli); build_billing_entrypoint
+// replaces it in the native line, so it is the value filled or written.
 function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emitDiagnostic) {
   validatePolicy(policy);
   if (policy.relay_mode === 'direct') return structuredClone(system);
@@ -350,7 +355,12 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   const target = found[0];
   const needed = target ? billingFields.filter(field => replaced.has(field) || !target.keys.has(field)) : billingFields;
   if (!needed.length) return structuredClone(system);
-  const generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
+  let generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
+  const nativeEntrypoint = generated.candidates?.length === 1 ? generated.candidates[0].keys.get('cc_entrypoint') : undefined;
+  if (policy.build_billing_entrypoint !== undefined && nativeEntrypoint) {
+    nativeBilling = splice(nativeBilling, [{ start: nativeEntrypoint.start, end: nativeEntrypoint.end, value: policy.build_billing_entrypoint }]);
+    generated = billingCandidate(c, nativeBilling);
+  }
   if (generated.conflict || generated.candidates?.length !== 1 || needed.some(field => !generated.candidates[0].keys.has(field))) {
     needed.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
     if (replaced.size) throw error('Required native billing attribution is unavailable', 503);
@@ -373,4 +383,18 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   }
   blocks[target.index].text = splice(blocks[target.index].text, edits);
   return blocks;
+}
+
+// billingEntrypoint is the cc_entrypoint of the request's billing header, by
+// the same rules the merge uses; undefined without exactly one usable header.
+function billingEntrypoint(c, system) {
+  const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : Array.isArray(system) ? system : [];
+  const found = [];
+  for (const block of blocks) {
+    if (block?.type !== 'text' || typeof block.text !== 'string') continue;
+    const result = billingCandidate(c, block.text);
+    if (result.conflict) return undefined;
+    found.push(...result.candidates);
+  }
+  return found.length === 1 ? found[0].keys.get('cc_entrypoint')?.value : undefined;
 }

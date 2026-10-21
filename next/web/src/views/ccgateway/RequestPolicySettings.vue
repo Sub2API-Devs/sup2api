@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip, SOptionMatrix, SSelect, SSettingRow, SSettingsGroup, SDisclosure } from '@sub2api/ui'
 import type { OptionMatrixGroup, OptionMatrixRow } from '@sub2api/ui'
-import { billingFields, featureDifferenceCount, mergeFeaturePolicy, type BuildAttachmentField, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
+import { billingEntrypoints, billingFields, defaultBillingEntrypoint, defaultIdentityLine, featureDifferenceCount, identityLineChoices, mergeFeaturePolicy, type BillingEntrypoint, type BuildAttachmentField, type FeatureOverrides, type IdentityLineChoice, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const overrides = defineModel<FeatureOverrides>('overrides', { default: () => ({}) })
 const props = defineProps<{ inherited?: RequestPolicy; disabled?: boolean; sources?: Record<string, string>; effective?: RequestPolicy; showSavedWhenDisabled?: boolean }>()
@@ -61,9 +61,41 @@ function differs(section: Section, field: string) {
   return source !== 'follow' && source !== (sourcesOf(props.inherited, section)[field] ?? 'client')
 }
 // Which layer the applied value came from (account previews only).
-function origin(section: Section, field: string) {
-  const source = props.sources?.[section + '.' + field]
+function origin(section: string, field?: string) {
+  const source = props.sources?.[field ? section + '.' + field : section]
   return source ? t('ccgateway.layers.source', { source: t('ccgateway.layers.' + source) }) : undefined
+}
+// The entrypoint build writes and, per entrypoint, its identity line: one
+// value each, so plain selects; follow drops the key from the overrides.
+const followOption = computed(() => layered.value ? [{ value: 'follow', label: t('ccgateway.layers.follow') }] : [])
+const entrypointOptions = computed(() => [...followOption.value, ...billingEntrypoints.map(value => ({ value, label: value }))])
+const entrypointValue = computed(() => showEffective.value ? resolved.value.build_billing_entrypoint ?? defaultBillingEntrypoint
+  : layered.value ? overrides.value.build_billing_entrypoint ?? 'follow' : policy.value.build_billing_entrypoint ?? defaultBillingEntrypoint)
+function setEntrypoint(value: unknown) {
+  if (layered.value) {
+    const next = { ...overrides.value }
+    if (value === 'follow') delete next.build_billing_entrypoint
+    else next.build_billing_entrypoint = value as BillingEntrypoint
+    overrides.value = next
+  } else policy.value = { ...policy.value, build_billing_entrypoint: value as BillingEntrypoint }
+}
+const lineOptions = (entrypoint: BillingEntrypoint) => [...followOption.value,
+  ...[...identityLineChoices[entrypoint], 'none'].map(value => ({ value, label: t('ccgateway.layers.identityLines.' + value) }))]
+function lineValue(entrypoint: BillingEntrypoint) {
+  if (showEffective.value) return resolved.value.build_identity_lines?.[entrypoint] ?? defaultIdentityLine(entrypoint)
+  if (layered.value) return overrides.value.build_identity_lines?.[entrypoint] ?? 'follow'
+  return policy.value.build_identity_lines?.[entrypoint] ?? defaultIdentityLine(entrypoint)
+}
+function setLine(entrypoint: BillingEntrypoint, value: unknown) {
+  const lines = { ...(layered.value ? overrides.value : policy.value).build_identity_lines }
+  if (value === 'follow') delete lines[entrypoint]
+  else lines[entrypoint] = value as IdentityLineChoice
+  if (!layered.value) policy.value = { ...policy.value, build_identity_lines: lines }
+  else {
+    const next: FeatureOverrides = { ...overrides.value, build_identity_lines: lines }
+    if (!Object.keys(lines).length) delete next.build_identity_lines
+    overrides.value = next
+  }
 }
 function groupCount(fields: readonly string[]) {
   if (!props.inherited) return 0
@@ -187,6 +219,47 @@ const summary = computed(() => {
             @change="applySources"
           />
         </div>
+        <SSettingRow
+          :label="t('ccgateway.layers.entrypoint')"
+          :description="origin('build_billing_entrypoint') ?? t('ccgateway.layers.entrypointHint')"
+          size="sm"
+          data-testid="billing-entrypoint"
+        >
+          <SSelect
+            :model-value="entrypointValue"
+            :options="entrypointOptions"
+            :disabled="disabled"
+            data-testid="billing-entrypoint-select"
+            @update:model-value="setEntrypoint"
+          />
+        </SSettingRow>
+      </SSettingsGroup>
+      <SSettingsGroup
+        :title="t('ccgateway.layers.identity')"
+        dense
+        data-testid="identity-lines"
+      >
+        <template #details>
+          <p>{{ t('ccgateway.layers.identityHint') }}</p>
+        </template>
+        <SSettingRow
+          v-for="entrypoint in billingEntrypoints"
+          :key="entrypoint"
+          :description="origin('build_identity_lines', entrypoint)"
+          size="sm"
+          :data-testid="'identity-line-' + entrypoint"
+        >
+          <template #label>
+            <span class="font-mono">{{ entrypoint }}</span>
+          </template>
+          <SSelect
+            :model-value="lineValue(entrypoint)"
+            :options="lineOptions(entrypoint)"
+            :disabled="disabled"
+            :data-testid="'identity-line-select-' + entrypoint"
+            @update:model-value="value => setLine(entrypoint, value)"
+          />
+        </SSettingRow>
       </SSettingsGroup>
       <SSettingsGroup
         :title="t('ccgateway.layers.environment')"

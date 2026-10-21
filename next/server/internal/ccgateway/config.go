@@ -360,6 +360,10 @@ func mergeConfig(c, old Config) (Config, error) {
 		// Older clients do not know the new source maps. Omission preserves
 		// them, while an explicit {} remains an intentional reset.
 		c.RequestPolicy.BuildBillingSources = mergeSourceMap(c.RequestPolicy.BuildBillingSources, old.RequestPolicy.BuildBillingSources)
+		c.RequestPolicy.BuildIdentityLines = mergeSourceMap(c.RequestPolicy.BuildIdentityLines, old.RequestPolicy.BuildIdentityLines)
+		if c.RequestPolicy.BuildBillingEntrypoint == "" {
+			c.RequestPolicy.BuildBillingEntrypoint = old.RequestPolicy.BuildBillingEntrypoint
+		}
 		c.RequestPolicy.BuildAttachmentSources = mergeSourceMap(c.RequestPolicy.BuildAttachmentSources, old.RequestPolicy.BuildAttachmentSources)
 		c.RequestPolicy.RequestIdentitySources = mergeSourceMap(c.RequestPolicy.RequestIdentitySources, old.RequestPolicy.RequestIdentitySources)
 	}

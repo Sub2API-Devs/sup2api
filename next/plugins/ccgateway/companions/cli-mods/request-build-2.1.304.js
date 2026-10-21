@@ -8,7 +8,7 @@ import { normalizeBetas } from './ccgateway-request-options.js';
 import { getRootSession } from './chunk-q61sszgr.js';
 import { YEr } from './chunk-6dwnw6av.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
-import { validateRequestPolicy, runtimeContext, contentDiagnostic } from './ccgateway-request-policy.js';
+import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor } from './ccgateway-request-policy.js';
 import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters } from './ccgateway-request-parameters.js';
 
 // The content policy recognizes CC's own wording: the environment renderers'
@@ -17,7 +17,7 @@ let contentPolicy;
 const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] });
 
 export async function buildRequest(components, headers, signal) {
-  const { applyContentPolicy, mergeBillingAttribution } = nativeContentPolicy();
+  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint } = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
@@ -90,10 +90,12 @@ export async function buildRequest(components, headers, signal) {
   // remain authoritative, including intentional omission of those fields.
   built = mergeAdditionalParameters(built, external.parameters);
   built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
+  // The identity line follows the entrypoint the header now carries.
+  const identityLine = identityLineFor(policy, billingEntrypoint(built.system));
   const outgoingHeaders = new Headers(headers);
   const betas = normalizeBetas(clientBetas, built.betas);
   delete built.betas;
   if (betas.length) outgoingHeaders.set('anthropic-beta', betas.join(','));
   else outgoingHeaders.delete('anthropic-beta');
-  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders) };
+  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders), identityLine };
 }

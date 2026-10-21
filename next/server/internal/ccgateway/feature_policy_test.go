@@ -311,3 +311,72 @@ func TestNewConfigDefaultsDoNotChangeLegacyDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, old.EffectiveRequestPolicy().BuildAttachmentSources)
 }
+
+// The entrypoint and identity lines resolve per key through the layers, the
+// preview shows every default, and the wire carries only what differs from the
+// CLI's own defaults, so an unchanged policy needs no newer Worker (2026-10-22).
+func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
+	cfg := Config{RequestPolicy: ptrPolicy(defaultRequestPolicy()), CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, AllowAccountOverride: true,
+		Overrides: FeatureOverrides{BuildIdentityLines: features.BuildIdentityLines{"claude-desktop": "agent_sdk"}}}}}
+	got := cfg.ResolveFeaturePolicy(7, AccountFeaturePolicy{Mode: "custom", Overrides: FeatureOverrides{BuildBillingEntrypoint: ptr("cli"), BuildIdentityLines: features.BuildIdentityLines{"cli": "none"}}})
+	require.Equal(t, "cli", got.Effective.BuildBillingEntrypoint)
+	require.Equal(t, features.BuildIdentityLines{"cli": "none", "sdk-cli": "agent_sdk", "sdk-ts": "agent_sdk", "sdk-py": "agent_sdk", "claude-desktop": "agent_sdk", "claude-vscode": "official_cli_sdk"}, got.Effective.BuildIdentityLines)
+	require.Equal(t, "sdk-cli", got.Inherited.BuildBillingEntrypoint)
+	require.Equal(t, "account", got.Sources["build_billing_entrypoint"])
+	require.Equal(t, "account", got.Sources["build_identity_lines.cli"])
+	require.Equal(t, "group", got.Sources["build_identity_lines.claude-desktop"])
+	require.Equal(t, "global", got.Sources["build_identity_lines.sdk-ts"])
+
+	svc := &Service{}
+	p, err := svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	raw, err := json.Marshal(p)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "build_billing_entrypoint")
+	require.NotContains(t, string(raw), "build_identity_lines")
+	require.NotContains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
+
+	cfg.RequestPolicy.BuildBillingEntrypoint = "claude-vscode"
+	cfg.RequestPolicy.BuildIdentityLines = features.BuildIdentityLines{"cli": "official_cli", "sdk-cli": "official_cli_sdk", "claude-vscode": "none"}
+	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
+	require.Equal(t, features.BuildIdentityLines{"sdk-cli": "official_cli_sdk", "claude-vscode": "none"}, p.BuildIdentityLines)
+	require.Contains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
+	cfg.RequestPolicy.RelayMode = "direct"
+	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	require.Empty(t, p.BuildBillingEntrypoint)
+	require.Nil(t, p.BuildIdentityLines)
+	require.NotContains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
+}
+
+// Only the six entrypoints, and per entrypoint only its own lines or none.
+func TestIdentityLinesValidate(t *testing.T) {
+	for _, o := range []FeatureOverrides{
+		{BuildBillingEntrypoint: ptr("claude-desktop-3p")}, {BuildBillingEntrypoint: ptr("")},
+		{BuildIdentityLines: features.BuildIdentityLines{"cli": "agent_sdk"}},
+		{BuildIdentityLines: features.BuildIdentityLines{"claude-vscode": "official_cli"}},
+		{BuildIdentityLines: features.BuildIdentityLines{"remote": "none"}},
+	} {
+		require.Error(t, o.Validate(), "%+v", o)
+	}
+	require.NoError(t, FeatureOverrides{BuildBillingEntrypoint: ptr("sdk-py"), BuildIdentityLines: features.BuildIdentityLines{"cli": "none", "sdk-py": "official_cli_sdk", "claude-desktop": "agent_sdk"}}.Validate())
+	var o FeatureOverrides
+	require.Error(t, json.Unmarshal([]byte(`{"build_billing_entrypoint":null}`), &o))
+	require.NoError(t, json.Unmarshal([]byte(`{"build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`), &o))
+}
+
+// A global save from a client that does not know the fields keeps them.
+func TestGlobalSavePreservesOmittedIdentityLines(t *testing.T) {
+	stored := defaultRequestPolicy()
+	stored.BuildBillingEntrypoint = "claude-desktop"
+	stored.BuildIdentityLines = features.BuildIdentityLines{"claude-desktop": "agent_sdk"}
+	old := Config{Mode: "disabled", RequestPolicy: &stored, FeatureRevision: 3}
+	in := defaultRequestPolicy()
+	got, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &in, FeatureRevision: 3}, old)
+	require.NoError(t, err)
+	require.Equal(t, "claude-desktop", got.RequestPolicy.BuildBillingEntrypoint)
+	require.Equal(t, stored.BuildIdentityLines, got.RequestPolicy.BuildIdentityLines)
+}
+func ptr(v string) *string { return &v }

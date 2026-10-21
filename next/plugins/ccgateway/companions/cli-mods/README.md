@@ -1,6 +1,14 @@
 # Claude Code mods 工具注入扩展
 
-当前目标为 **2.1.304 / `ccgateway-v16-build-prefix`**（插件 0.1.73，2026-10-22 已部署 ovh）。v16 在 v15 之上（2026-10-22 用户决定）：
+当前目标为 **2.1.304 / `ccgateway-v17-identity-line`**（未部署；线上仍是 v16，插件 0.1.73）。v17 在 v16 之上（2026-10-22 用户决定）：
+
+- **服务端入口六选一**：`build_billing_entrypoint`（`cli`、`sdk-cli`、`sdk-ts`、`sdk-py`、`claude-desktop`、`claude-vscode`，默认 `sdk-cli`）替换原生整行里的 `cc_entrypoint`，补齐计费头或入口选 `worker` 时写入它。
+- **身份行按入口选**：`build_identity_lines` 给每个入口选一句（三句都由 `n1n` 生成，按名字 `official_cli`、`official_cli_sdk`、`agent_sdk` 取）或 `none`；默认与真实客户端一致（`cli` 终端那句，`sdk-*` SDK 那句，桌面版与 VS Code 带追加提示那句）。入口取自计费合并后的头，`claude-desktop-3p` 按 `claude-desktop`，其他按服务端入口。`none` 只在计费头为首块时生效，否则补默认句。
+- 新能力 `build_identity_line_v1`；Worker 只在策略带这两个键时要求它。
+
+详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1。
+
+v16 `ccgateway-v16-build-prefix`（插件 0.1.73，2026-10-22 已部署 ovh）在 v15 之上：
 
 - **direct 为纯透传**：不补计费头、不补开头行、不改 `metadata.user_id`，body 逐字节转发；Worker 不再给 direct 解析身份。
 - **build 总带计费头和开头行**：没有计费头就插入 CLI 原生整行，缺字段补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。OAuth 首块不是开头行或计费头时，补 SDK 那句（`n1n({isNonInteractive:true,hasAppendSystemPrompt:false})`），与 `cc_entrypoint=sdk-cli` 一致。

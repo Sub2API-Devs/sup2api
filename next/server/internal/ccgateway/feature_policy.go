@@ -24,6 +24,8 @@ type FeatureOverrides struct {
 	CustomToolPrefix       *string                         `json:"custom_tool_prefix,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	BuildBillingEntrypoint *string                         `json:"build_billing_entrypoint,omitempty"`
+	BuildIdentityLines     features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 }
 
@@ -56,7 +58,7 @@ func (p *FeatureOverrides) UnmarshalJSON(raw []byte) error {
 }
 
 func (p FeatureOverrides) Validate() error {
-	for _, v := range []*string{p.RelayMode, p.UnknownField, p.ToolSearch, p.ThinkingDisabledCompat, p.CustomToolPrefix} {
+	for _, v := range []*string{p.RelayMode, p.UnknownField, p.ToolSearch, p.ThinkingDisabledCompat, p.CustomToolPrefix, p.BuildBillingEntrypoint} {
 		if v != nil && *v == "" {
 			return errors.New("feature override cannot be empty")
 		}
@@ -91,6 +93,7 @@ func (p AccountFeaturePolicy) Validate() error {
 func copyPolicy(p RequestPolicy) RequestPolicy {
 	p.BuildAttachmentSources = cloneSourceMap(p.BuildAttachmentSources)
 	p.BuildBillingSources = cloneSourceMap(p.BuildBillingSources)
+	p.BuildIdentityLines = cloneSourceMap(p.BuildIdentityLines)
 	p.RequestIdentitySources = cloneSourceMap(p.RequestIdentitySources)
 	return p
 }
@@ -123,7 +126,7 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 	for key, pair := range map[string][2]*string{
 		"relay_mode": {o.RelayMode, &p.RelayMode}, "unknown_field": {o.UnknownField, &p.UnknownField},
 		"tool_search": {o.ToolSearch, &p.ToolSearch}, "thinking_disabled_compat": {o.ThinkingDisabledCompat, &p.ThinkingDisabledCompat},
-		"custom_tool_prefix": {o.CustomToolPrefix, &p.CustomToolPrefix},
+		"custom_tool_prefix": {o.CustomToolPrefix, &p.CustomToolPrefix}, "build_billing_entrypoint": {o.BuildBillingEntrypoint, &p.BuildBillingEntrypoint},
 	} {
 		if pair[0] != nil {
 			*pair[1] = *pair[0]
@@ -138,6 +141,9 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 	if p.BuildBillingSources == nil {
 		p.BuildBillingSources = features.BuildBillingSources{}
 	}
+	if p.BuildIdentityLines == nil {
+		p.BuildIdentityLines = features.BuildIdentityLines{}
+	}
 	if p.RequestIdentitySources == nil {
 		p.RequestIdentitySources = features.RequestIdentitySources{}
 	}
@@ -151,6 +157,12 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 		p.BuildBillingSources[k] = v
 		if sources != nil {
 			sources["build_billing_sources."+k] = layer
+		}
+	}
+	for k, v := range o.BuildIdentityLines {
+		p.BuildIdentityLines[k] = v
+		if sources != nil {
+			sources["build_identity_lines."+k] = layer
 		}
 	}
 	for k, v := range o.RequestIdentitySources {
@@ -186,8 +198,17 @@ func (c Config) allowsAccountFeatures(groupID int64) bool {
 func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy) FeatureResolution {
 	p := copyPolicy(c.EffectiveRequestPolicy())
 	sources := map[string]string{}
-	for _, k := range []string{"relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix"} {
+	for _, k := range []string{"relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix", "build_billing_entrypoint"} {
 		sources[k] = "global"
+	}
+	if p.BuildBillingEntrypoint == "" {
+		p.BuildBillingEntrypoint = features.DefaultBillingEntrypoint
+	}
+	for _, k := range features.BillingEntrypoints {
+		if p.BuildIdentityLines[k] == "" {
+			p.BuildIdentityLines[k] = features.DefaultIdentityLine(k)
+		}
+		sources["build_identity_lines."+k] = "global"
 	}
 	for _, k := range features.BuildAttachmentFields {
 		if p.BuildAttachmentSources[k] == "" {
@@ -288,6 +309,19 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 			delete(p.BuildBillingSources, k)
 		}
 	}
+	// Defaults are the CLI's own too, so a policy that changes nothing needs no
+	// Worker able to honour the entrypoint and identity line choices.
+	if p.BuildBillingEntrypoint == features.DefaultBillingEntrypoint {
+		p.BuildBillingEntrypoint = ""
+	}
+	for k, v := range p.BuildIdentityLines {
+		if v == features.DefaultIdentityLine(k) {
+			delete(p.BuildIdentityLines, k)
+		}
+	}
+	if len(p.BuildIdentityLines) == 0 {
+		p.BuildIdentityLines = nil
+	}
 	// The identity is not configurable (2026-10-21 decision): build replaces a
 	// client metadata.user_id and adds none, which is the Worker's own default,
 	// and direct forwards it untouched. A source stored earlier is not sent.
@@ -295,6 +329,8 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	if p.RelayMode == "direct" {
 		p.BuildAttachmentSources = nil
 		p.BuildBillingSources = nil
+		p.BuildBillingEntrypoint = ""
+		p.BuildIdentityLines = nil
 	}
 	return p, nil
 }

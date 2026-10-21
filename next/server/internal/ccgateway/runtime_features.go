@@ -44,6 +44,9 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	if p.BuildBillingSources.UsesWorker() {
 		required = append(required, features.BuildBillingCapability)
 	}
+	if p.BuildBillingEntrypoint != "" || len(p.BuildIdentityLines) > 0 {
+		required = append(required, features.BuildIdentityCapability)
+	}
 	return required
 }
 

@@ -39,6 +39,8 @@ type buildRequestPolicy struct {
 	ContractVersion int                             `json:"contract_version"`
 	Sources         features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	Billing         features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	Entrypoint      string                          `json:"build_billing_entrypoint,omitempty"`
+	IdentityLines   features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
 	Identity        features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	RelayMode       string                          `json:"relay_mode,omitempty"`
 	CLIVersion      string                          `json:"cli_version,omitempty"`
@@ -236,12 +238,22 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}
+		if err := features.ValidateBillingEntrypoint(policy.Entrypoint); err != nil {
+			fail(400, "invalid_request_error", err.Error())
+			return
+		}
+		if err := policy.IdentityLines.Validate(); err != nil {
+			fail(400, "invalid_request_error", err.Error())
+			return
+		}
 		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
-		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) {
+		identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
+		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
+			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
 			return
 		}
-		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker()) && !v2 {
+		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker() || identityLines) && !v2 {
 			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
 			return
 		}

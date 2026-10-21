@@ -76,13 +76,15 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     if (options.mode === 'build') {
       phase = 'build';
       const { buildRequest } = await import('./ccgateway-request-build.js');
-      outgoing = { ...await buildRequest(body, options.headers, controller.signal), timeoutMs: timeout };
+      const { identityLine, ...built } = await buildRequest(body, options.headers, controller.signal);
+      outgoing = { ...built, timeoutMs: timeout };
       // Build always invents metadata; the identity source decides what the
       // upstream request really carries, and a client that sent none gets none.
       if (identityBuild) outgoing.body = identityBuild(outgoing.body, body.parameters?.metadata);
-      // OAuth only: upstream requires Claude Code's system line there. Direct
-      // is a pure passthrough and changes nothing (2026-10-21 decision).
-      if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body);
+      // OAuth only: upstream requires the header or Claude Code's identity line
+      // first; the line follows the request's entrypoint. Direct is a pure
+      // passthrough and changes nothing (2026-10-21 decision).
+      if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body, identityLine);
     }
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');

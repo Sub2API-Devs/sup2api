@@ -7,12 +7,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseRequestJSON } from '../request-options.js';
-import { validateRequestPolicy, runtimeContext } from '../request-policy.js';
+import { validateRequestPolicy, runtimeContext, identityLineFor } from '../request-policy.js';
 import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
 import { createContentPolicy } from '../content-policy.js';
 import { vocabulary } from './vocabulary.mjs';
-import { applyBuildMetadata } from '../request-identity.js';
+import { applyBuildMetadata, applyBuildCliPrefix } from '../request-identity.js';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../contracts/testdata/worker-cli-requests.json', import.meta.url), 'utf8'));
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
@@ -48,7 +48,7 @@ for (const c of fixture.cases) {
         return;
       }
       // The identity context never travels in the envelope: the CLI's policy
-      // validator only knows the three content keys.
+      // validator only knows the content keys.
       const { requestPolicy, runtimeContext: context, ...external } = body;
       validateBuildParameters(external.parameters);
       const policy = validateRequestPolicy(requestPolicy);
@@ -57,7 +57,19 @@ for (const c of fixture.cases) {
       const messages = initial.messages.flatMap(row => row.type !== 'attachment'
         ? [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)]
         : render(row).messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: item.message.content })));
-      await createContentPolicy(vocabulary).applyContentPolicy({ system: initial.systemBlocks, messages }, policy, native);
+      const content = createContentPolicy(vocabulary);
+      const transformed = await content.applyContentPolicy({ system: initial.systemBlocks, messages }, policy, native);
+      // The header and the identity line it selects, as request-build and the
+      // request command apply them (lines stand in for CC's own n1n three).
+      const system = content.mergeBillingAttribution(transformed.system, policy, native.billing);
+      const lines = { official_cli: 'Interactive line.', official_cli_sdk: 'SDK appended line.', agent_sdk: 'SDK line.' };
+      const opened = applyBuildCliPrefix({ system }, identityLineFor(policy, content.billingEntrypoint(system)), lines,
+        value => Object.values(lines).includes(value), block => block.text.startsWith(vocabulary.billingHeader)).system;
+      if (c.name === 'build-identity-lines') {
+        // The client's cli header keeps its entrypoint, and cli's line is none.
+        assert.deepEqual(opened.map(block => block.text), ['x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;', 'plain system']);
+        assert.equal(policy.build_billing_entrypoint, 'claude-vscode');
+      }
       const client = external.parameters?.metadata;
       const built = applyBuildMetadata({ metadata: { user_id: nativeIdentity().user_id } }, client, nativeIdentity);
       const identity = JSON.parse(c.identity);

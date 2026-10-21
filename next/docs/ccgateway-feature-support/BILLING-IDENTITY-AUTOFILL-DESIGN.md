@@ -1,6 +1,6 @@
-# 计费头入口与身份行自动填充：源码核对与设计草案
+# 计费头入口与身份行自动填充：源码核对、设计与实施
 
-2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**草案，待用户确认第 5 节后实施**。
+2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`），未发布**，结果见第 6 节。
 
 ## 1. 源码核对
 
@@ -79,15 +79,39 @@
 
 ## 4. 配置与契约
 
-- 核心存储的请求策略新增两个字段（`schema_version` 不变，旧配置缺省即现有行为）：
+- 核心存储的请求策略新增两个字段（`schema_version` 不变，旧配置缺省即现有行为），全局→分组→账号逐项继承：
   - `build_billing_entrypoint`：`cli | sdk-cli | sdk-ts | sdk-py | claude-desktop | claude-vscode`，缺省 `sdk-cli`。
-  - `build_identity_lines`：`{ <入口>: "le" | "ke" | "De" | "none" }`，核心按第 2 节的可选范围校验，缺省取各入口默认值。
-- Worker → CLI 的 `requestPolicy` 现在只允许三个键，要加这两个，并新增能力 `build_identity_line_v1`。旧 Worker 没有这项能力时，按现有规则阻止发送，不静默忽略配置。
-- 需要发布 CLI v17 和插件新版本，核心也要发版（校验和下发）。
+  - `build_identity_lines`：`{ <入口>: "official_cli" | "official_cli_sdk" | "agent_sdk" | "none" }`（分别是 `le`、`ke`、`De`），核心按第 2 节的可选范围校验，缺省取各入口默认值。
+- 下发给 Worker 时去掉等于默认的值（与 CLI 自己的默认一致），所以没改过的配置不需要新 Worker；有偏离默认的值时要求能力 `build_identity_line_v1`，旧 Worker 没有就阻止发送，不静默忽略。direct 不下发。
+- Worker → CLI 的 `requestPolicy` 允许的键加上这两个。
+- 需要发布 CLI v17（`ccgateway-v17-identity-line`）和插件新版本，核心也要发版（校验和下发）。
 
-## 5. 待确认
+## 5. 用户决定（2026-10-22）
 
-1. **默认值按哪一版**：按真实宿主（桌面版、VS Code 默认 `ke`），还是按用户表（桌面版 `De`、VS Code `le`）？`le` 目前只给 `cli`。上游三句都接受，差别只在与真实客户端是否一致。
-2. **实际入口不在六项内时**（客户端自带 `claude-desktop-3p`、`unknown` 等）：建议 `claude-desktop-3p` 按 `claude-desktop` 处理，其余按配置的服务端入口那一行处理。
-3. **`cch`**：经网关的真实客户端都不带，build 补的整行带 `cch=00000`。要不要在客户端入口是这六项之一时也去掉 `cch`，和真实客户端经网关时一致？上游两种都接受。
-4. **`sdk-ts`/`sdk-py` 默认**：`De` 还是 `ke`？官方 SDK 用 preset 并追加提示时是 `ke`。
+1. 默认值按真实客户端（第 2 节的表）。
+2. 实际入口不在六项内时，`claude-desktop-3p` 按 `claude-desktop`，其余按配置的服务端入口那一行。
+3. `cch` 不变：客户端自带的计费头原样保留（经网关的真实客户端不带 `cch`）；build 补的整行仍是原生 `kLo` 的输出，Worker 直连官方地址，原生 CC 这时就带 `cch=00000`。
+4. `sdk-ts`/`sdk-py` 默认 `agent_sdk`（`De`）。
+
+## 6. 实施结果（2026-10-22，未发布）
+
+- 代码：
+  - 契约 `contracts/features/identity_line.go`（入口、可选范围、默认、能力）。
+  - 核心 `request_policy.go`、`feature_policy.go`（字段、继承、来源、稀疏下发）、`runtime_features.go`/`client.go`（能力）、`config.go`（全局保存时缺省保留）。
+  - Worker `engine/request_command.go`（校验、能力 409、写进 CLI 信封）、`cli_pinned.go`（声明能力）。
+  - CLI `request-policy.js`（键、范围、`identityLineFor`）、`content-policy.js`（服务端入口替换原生整行里的 `cc_entrypoint`，`billingEntrypoint` 读请求入口）、`request-build-2.1.304.js`、`request-command.js`、`request-identity.js`（按选择插入）、`patch-cli-2.1.304.cjs`（`n1n` 三组参数生成三句、能力、标签 v17）。
+  - 前端：计费头卡片加「服务端入口」下拉；新增「身份行」卡片，每个入口一个下拉，只列该入口的可选句和「不补」。
+- 本地：cli-mods 136 项、engine、核心 ccgateway 与 account（含 PG）、前端 623 项、类型检查都通过；两份跨层契约夹具已重新生成并加了这两个字段的用例。v17 ELF sha256 `7310508b…47233c4`。
+- 30 号实测（v17 ELF 一次性放进容器，测完删除）。先用 unix socket 假上游看发出的 system，再打真实上游：
+
+| 场景 | 发出的 system | Opus / Sonnet |
+|---|---|---|
+| 没有计费头，默认配置 | `[计费头 sdk-cli +cch, agent_sdk, 提示]` | 200 / 200 |
+| 没有计费头，服务端入口 `claude-vscode` | `[计费头 claude-vscode +cch, official_cli_sdk, 提示]` | 200 / 200 |
+| 客户端头 `cli` | `[计费头 cli, official_cli, 提示]` | 200 / 200 |
+| 客户端头 `claude-desktop-3p` | `[计费头 claude-desktop-3p, official_cli_sdk, 提示]` | 200 / 200 |
+| 客户端头 `sdk-ts`，选 `official_cli_sdk` | `[计费头 sdk-ts, official_cli_sdk, 提示]` | 200 / 200 |
+| 客户端头 `cli`，选「不补」 | `[计费头 cli, 提示]` | 200 / 200 |
+| 计费头不在首块，选「不补」 | `[official_cli, 提示, 计费头 cli]` | 200 / 200 |
+| 客户端头 `remote`（不在六项内），服务端入口 `cli` | `[计费头 remote, official_cli, 提示]` | 200 / 200 |
+| 客户端头 `cli`，入口标识选「服务端」，服务端入口 `sdk-py` | `[计费头 sdk-py, agent_sdk, 提示]` | 200 / 200 |

@@ -46,8 +46,8 @@ edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchem
 edit('cli.js', 'Ve', t => {
   t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
   t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
-    'let{applyBuildMetadata:ccgBuildMetadata,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix}=await import("./chunk-t61vswm2.js");let{B1s:ccgIsBilling}=await import("./chunk-7y2kvacy.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:b=>ccgPrefixBuild(b,ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1}),ccgIsPrefix,ccgIsBilling)}))');
-  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1"]');
+    'let{applyBuildMetadata:ccgBuildMetadata,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix}=await import("./chunk-t61vswm2.js");let{B1s:ccgIsBilling}=await import("./chunk-7y2kvacy.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,{official_cli:ccgPrefix({isNonInteractive:!1,hasAppendSystemPrompt:!1}),official_cli_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!0}),agent_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1})},ccgIsPrefix,ccgIsBilling)}))');
+  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1"]');
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
 files.set('chunk-dxktn51d.js', 'import {requestSessionID as ccgRequestSessionID} from "./ccgateway-request-identity.js";\n' + files.get('chunk-dxktn51d.js'));
@@ -135,7 +135,7 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8'));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

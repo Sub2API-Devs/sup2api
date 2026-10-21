@@ -10,7 +10,13 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
-	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
+	BuildBillingSources features.BuildBillingSources `json:"build_billing_sources,omitempty"`
+	// BuildBillingEntrypoint is the cc_entrypoint build writes when it fills
+	// the billing header or the source is worker; "" is the default (sdk-cli).
+	BuildBillingEntrypoint string `json:"build_billing_entrypoint,omitempty"`
+	// BuildIdentityLines picks Claude Code's identity line per entrypoint;
+	// omitted entrypoints use their default (features.IdentityLineChoices).
+	BuildIdentityLines     features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	SchemaVersion          int                             `json:"schema_version"`
@@ -104,6 +110,12 @@ func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
 
 func validateRequestPolicy(p RequestPolicy) error {
 	if err := p.BuildBillingSources.Validate(); err != nil {
+		return err
+	}
+	if err := features.ValidateBillingEntrypoint(p.BuildBillingEntrypoint); err != nil {
+		return err
+	}
+	if err := p.BuildIdentityLines.Validate(); err != nil {
 		return err
 	}
 	if err := p.BuildAttachmentSources.Validate(); err != nil {

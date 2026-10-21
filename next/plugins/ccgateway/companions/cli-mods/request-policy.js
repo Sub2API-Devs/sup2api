@@ -8,13 +8,48 @@ const environmentFields = [
 const billingFields = ['cc_version', 'cc_entrypoint'];
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+// The cc_entrypoint values build may write and, per entrypoint, the identity
+// lines real clients send with it, the default first (contracts
+// features/identity_line.go). The lines are names; CC renders the text (n1n).
+export const defaultEntrypoint = 'sdk-cli';
+export const identityLineChoices = {
+  cli: ['official_cli'],
+  'sdk-cli': ['agent_sdk', 'official_cli_sdk'],
+  'sdk-ts': ['agent_sdk', 'official_cli_sdk'],
+  'sdk-py': ['agent_sdk', 'official_cli_sdk'],
+  'claude-desktop': ['official_cli_sdk', 'agent_sdk'],
+  'claude-vscode': ['official_cli_sdk', 'agent_sdk'],
+};
+// Entrypoints a client may send that answer to a configured one.
+const entrypointAliases = { 'claude-desktop-3p': 'claude-desktop' };
+
+// identityLineFor picks the identity line for the request's entrypoint (the
+// one its billing header carries after build filled it): the configured line,
+// else the entrypoint's default. An entrypoint outside the table uses the
+// configured one's row. fallback is the line inserted when none is chosen but
+// the request still needs one (its first block is not the header).
+export function identityLineFor(policy = {}, entrypoint) {
+  const configured = policy.build_billing_entrypoint ?? defaultEntrypoint;
+  const row = Object.hasOwn(identityLineChoices, entrypoint) ? entrypoint
+    : Object.hasOwn(entrypointAliases, entrypoint ?? '') ? entrypointAliases[entrypoint] : configured;
+  const fallback = identityLineChoices[row][0];
+  return { entrypoint: row, line: policy.build_identity_lines?.[row] ?? fallback, fallback };
+}
+
 // This envelope is built by the trusted Worker. User Messages JSON cannot
 // supply it. Standalone request --build without a policy remains client-only.
 export function validateRequestPolicy(value) {
   if (value === undefined) return {};
   if (!object(value) || value.contract_version !== 2) throw Error('Unsupported request policy contract');
   for (const key of Object.keys(value)) {
-    if (!['contract_version', 'build_attachment_sources', 'build_billing_sources'].includes(key)) throw Error(`Unknown request policy key: ${key}`);
+    if (!['contract_version', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines'].includes(key)) throw Error(`Unknown request policy key: ${key}`);
+  }
+  if (value.build_billing_entrypoint !== undefined && !Object.hasOwn(identityLineChoices, value.build_billing_entrypoint)) throw Error('Unsupported build_billing_entrypoint');
+  if (value.build_identity_lines !== undefined) {
+    if (!object(value.build_identity_lines)) throw Error('build_identity_lines must be an object');
+    for (const [entrypoint, line] of Object.entries(value.build_identity_lines)) {
+      if (!Object.hasOwn(identityLineChoices, entrypoint) || line !== 'none' && !identityLineChoices[entrypoint].includes(line)) throw Error(`Unsupported build_identity_lines.${entrypoint}`);
+    }
   }
   for (const [name, fields, sources] of [
     ['build_attachment_sources', environmentFields, ['client', 'worker', 'erase']],

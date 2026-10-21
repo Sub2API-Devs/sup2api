@@ -107,3 +107,43 @@ func TestRequestCapabilitiesRequireCompatibleObservedCLI(t *testing.T) {
 	require.Contains(t, g.requestCapabilities(), features.BuildAttachmentCapabilityV2)
 	require.Contains(t, g.requestCapabilities(), features.BuildBillingCapability)
 }
+
+// The entrypoint and identity line choices reach the CLI envelope only on a
+// CLI that declares them; elsewhere the request is refused, not sent without them.
+func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	root := t.TempDir()
+	capture := filepath.Join(root, "requests.jsonl")
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability}
+	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
+		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
+		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
+	send := func(policy string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
+		req.Header.Set("x-api-key", "fixture")
+		req.Header.Set(policyHeader, policy)
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, req)
+		return out
+	}
+	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","sdk-cli":"official_cli_sdk"}}`
+	for _, p := range []string{policy, `{"build_billing_entrypoint":"cli"}`, `{"build_identity_lines":{"claude-desktop":"agent_sdk"}}`} {
+		require.Equal(t, 409, send(p).Code, p)
+	}
+	for _, p := range []string{`{"build_billing_entrypoint":"claude-desktop-3p"}`, `{"build_identity_lines":{"cli":"agent_sdk"}}`, `{"build_identity_lines":{"remote":"none"}}`} {
+		require.Equal(t, 400, send(p).Code, p)
+	}
+	g.CLIInfo.Capabilities = append(capabilities, features.BuildIdentityCapability)
+	require.Contains(t, g.requestCapabilities(), features.BuildIdentityCapability)
+	out := send(policy)
+	require.Equal(t, 200, out.Code, out.Body.String())
+	data, err := os.ReadFile(capture)
+	require.NoError(t, err)
+	var components struct {
+		RequestPolicy map[string]json.RawMessage `json:"requestPolicy"`
+	}
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
+	require.JSONEq(t, `"claude-vscode"`, string(components.RequestPolicy["build_billing_entrypoint"]))
+	require.JSONEq(t, `{"cli":"none","sdk-cli":"official_cli_sdk"}`, string(components.RequestPolicy["build_identity_lines"]))
+}

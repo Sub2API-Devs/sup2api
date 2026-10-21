@@ -16,6 +16,10 @@ export default {
     removeGroupConfirm: '将删除该分组的专门配置，分组回归继承全局默认；未保存的草稿一并丢弃。',
     draftHint: '改动随页面底部的保存一起提交。', resetToGlobal: '恢复为继承全局',
     billing: '计费头', billingSources: { client: '客户端，没有用服务端', worker: '服务端' },
+    entrypoint: '服务端入口', entrypointHint: '客户端没带入口，或入口标识选「服务端」时写入的值',
+    identity: '身份行',
+    identityHint: '按请求计费头里的入口，在计费头后补上 Claude Code 的身份行，文字由 Claude Code 生成；客户端已带身份行时不改。计费头不在首块时，选「不补」也会补该入口的默认行，否则上游拒绝。其他入口按「服务端入口」那一行处理，claude-desktop-3p 按 claude-desktop。',
+    identityLines: { official_cli: 'Claude Code CLI（终端）', official_cli_sdk: 'Claude Code + Agent SDK', agent_sdk: 'Claude Agent SDK', none: '不补' },
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
     environmentHint: '只修改已识别的完整环境或环境更新字段。客户端没有发送的环境字段不补齐。',
@@ -33,7 +37,7 @@ export default {
   cliProfile: {
     title: 'Claude Code 版本与请求模式', mode: '透传/转发', version: '版本指定',
     direct: '纯透传（direct）', build: '组件构建（build）',
-    request: '请求', prefixLine: '开头行', autoUserId: '有就自动替换，没有不加', autoPrefix: '没有就补上',
+    request: '请求', prefixLine: '身份行', autoUserId: '有就自动替换，没有不加', autoPrefix: '按计费头入口补上，见「身份行」',
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   buildAttachments: {

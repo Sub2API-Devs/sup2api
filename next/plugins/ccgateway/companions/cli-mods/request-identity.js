@@ -82,16 +82,21 @@ export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
 // them. Upstream refuses OAuth Sonnet/Opus requests whose first system block
 // is neither the header nor such a line with 429 rate_limit_error "Error"
 // (verified 2026-10-21; a line merged into a longer block or placed after the
-// prompt does not count). An OAuth build request without the line where Claude
-// Code puts it gets the CLI's own line inserted there; direct forwards the
-// body unchanged. Both the line and the checks are the CLI's, never a copy:
-// isPrefix is t1n, prefix is n1n for a non-interactive session without an
-// appended prompt (the line `claude -p` sends, matching the request process's
-// sdk-cli entrypoint in the attribution header) and isBilling is B1s, CC's
-// test for its attribution header block (patch-cli-2.1.304.cjs).
+// prompt does not count). The header alone is enough (2026-10-22), so the line
+// is for looking like the client the entrypoint names: build inserts the one
+// chosen for the request's entrypoint (request-policy.js identityLineFor) where
+// Claude Code puts it, or none, unless the first block is not the header, where
+// the entrypoint's default line keeps the request acceptable. Direct forwards
+// the body unchanged. The lines and the checks are the CLI's, never a copy:
+// lines are n1n's three (patch-cli-2.1.304.cjs), isPrefix is t1n and isBilling
+// is B1s, CC's test for its attribution header block.
 const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
+// Without a choice (no policy) the line is the one `claude -p` sends, matching
+// the request process's sdk-cli entrypoint.
+const defaultChoice = { line: 'agent_sdk', fallback: 'agent_sdk' };
 
-function checkedPrefix(prefix, isPrefix) {
+function checkedPrefix(lines, name, isPrefix) {
+  const prefix = lines?.[name];
   if (typeof prefix !== 'string' || !isPrefix(prefix)) throw Error('Missing native Claude Code system line');
   return prefix;
 }
@@ -104,14 +109,16 @@ function prefixPosition(blocks, isPrefix, isBilling) {
   return isPrefix(first) ? -1 : 0;
 }
 
-// applyBuildCliPrefix puts the line into the built request, whose system is
-// the client's.
-export function applyBuildCliPrefix(built, prefix, isPrefix, isBilling) {
-  const block = { type: 'text', text: checkedPrefix(prefix, isPrefix) };
-  if (built.system === undefined) built.system = [block];
+// applyBuildCliPrefix puts the chosen line into the built request, whose
+// system is the client's. A client line is never replaced.
+export function applyBuildCliPrefix(built, choice, lines, isPrefix, isBilling) {
+  const { line, fallback } = choice ?? defaultChoice;
+  if (built.system === undefined) built.system = [{ type: 'text', text: checkedPrefix(lines, fallback, isPrefix) }];
   else if (Array.isArray(built.system)) {
     const at = prefixPosition(built.system, isPrefix, isBilling);
-    if (at >= 0) built.system = [...built.system.slice(0, at), block, ...built.system.slice(at)];
+    // After the header the line is optional; anywhere else it is required.
+    const name = line === 'none' ? at === 0 ? fallback : undefined : line;
+    if (at >= 0 && name) built.system = [...built.system.slice(0, at), { type: 'text', text: checkedPrefix(lines, name, isPrefix) }, ...built.system.slice(at)];
   }
   return built;
 }

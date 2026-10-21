@@ -16,6 +16,10 @@ export default {
     removeGroupConfirm: 'Removes this group policy so the group inherits the global defaults again; unsaved drafts are discarded.',
     draftHint: 'Changes are submitted with the save button at the bottom of the page.', resetToGlobal: 'Reset to global',
     billing: 'Billing header', billingSources: { client: 'Client, else server', worker: 'Server' },
+    entrypoint: 'Server entrypoint', entrypointHint: 'Written when the client sends no entrypoint, or the entrypoint identifier uses Server',
+    identity: 'Identity line',
+    identityHint: "Adds Claude Code's identity line after the billing header, chosen by the entrypoint in the request's billing header; Claude Code renders the text. A client identity line is never changed. When the billing header is not the first block, None still adds the entrypoint's default line, or upstream refuses the request. Other entrypoints use the Server entrypoint row; claude-desktop-3p uses claude-desktop.",
+    identityLines: { official_cli: 'Claude Code CLI (terminal)', official_cli_sdk: 'Claude Code + Agent SDK', agent_sdk: 'Claude Agent SDK', none: 'None' },
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
     environmentHint: 'Only recognized full environment or update fields are changed. Missing client environment fields are not added.',
@@ -33,7 +37,7 @@ export default {
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Passthrough / forwarding', version: 'Pinned version',
     direct: 'Pure passthrough (direct)', build: 'Component assembly (build)',
-    request: 'Request', prefixLine: 'Opening line', autoUserId: 'Replaced when present, never added', autoPrefix: 'Added when missing',
+    request: 'Request', prefixLine: 'Identity line', autoUserId: 'Replaced when present, never added', autoPrefix: 'Added by billing entrypoint; see Identity line',
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
   buildAttachments: {

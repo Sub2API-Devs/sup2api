@@ -90,7 +90,8 @@ describe('editor payloads for the core contract', () => {
     // Global, untouched: the default policy as the editor sends it back.
     let w = await remote('global')
     cases.push({ name: 'global-default', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client' } })
+      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client',
+        build_billing_entrypoint: 'sdk-cli', 'build_identity_lines.cli': 'official_cli', 'build_identity_lines.claude-desktop': 'official_cli_sdk' } })
     w.unmount()
 
     // Global, every kind of source changed.
@@ -98,8 +99,12 @@ describe('editor payloads for the core contract', () => {
     await pick(w, 'billing-cc_version', 1)
     await pick(w, 'build-attachment-platform_name', 1)
     await pick(w, 'build-attachment-os_version', 2)
+    // Selects: an option's value is its index (cli; claude-desktop: agent_sdk).
+    await w.get('[data-testid="billing-entrypoint-select"]').setValue('0')
+    await w.get('[data-testid="identity-line-select-claude-desktop"]').setValue('1')
     cases.push({ name: 'global-sources', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'worker', 'build_attachment_sources.platform_name': 'worker', 'build_attachment_sources.os_version': 'erase' } })
+      expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'worker', 'build_attachment_sources.platform_name': 'worker', 'build_attachment_sources.os_version': 'erase',
+        build_billing_entrypoint: 'cli', 'build_identity_lines.claude-desktop': 'agent_sdk', 'build_identity_lines.sdk-cli': 'agent_sdk' } })
     w.unmount()
 
     // Global, switched to direct: a pure passthrough with nothing to set.
@@ -113,19 +118,22 @@ describe('editor payloads for the core contract', () => {
     saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: {} } })
     w = await remote('group')
     await pick(w, 'billing-cc_entrypoint', 2)
+    // Layered selects start with follow: cli's none is index 2.
+    await w.get('[data-testid="identity-line-select-cli"]').setValue('2')
     cases.push({ name: 'group-sources', layer: 'group', group_id: 3, saved: jsonCopy(saved), body: await submit(w),
-      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client' } })
+      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client', 'build_identity_lines.cli': 'none', build_billing_entrypoint: 'sdk-cli' } })
     w.unmount()
 
     // Account 9 (in group 3) customizes billing over the group's.
     saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: { build_billing_sources: { cc_entrypoint: 'worker' } } } })
     const editor = await accountEditor()
     await pick(editor, 'billing-cc_version', 2); await settle()
+    await editor.get('[data-testid="billing-entrypoint-select"]').setValue('6'); await settle()
     const body = await submit(editor)
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/9', expect.anything())
     expect(body.cc_feature_policy).toBeDefined()
     cases.push({ name: 'account-sources', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
-      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'worker' } })
+      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'worker', build_billing_entrypoint: 'claude-vscode' } })
 
     const generated = JSON.stringify({ cases }, null, 2) + '\n'
     if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) writeFileSync(fixturePath, generated)

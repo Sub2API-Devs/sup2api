@@ -53,7 +53,7 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.MaintenanceOnly || !g.CLIInfo.supports("request_build") {
 		return out
 	}
-	for _, capability := range []string{features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildContentPreservationCapability} {
+	for _, capability := range []string{features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildContentPreservationCapability} {
 		if g.CLIInfo.supports(capability) {
 			out = append(out, capability)
 		}

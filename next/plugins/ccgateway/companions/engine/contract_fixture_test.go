@@ -46,6 +46,8 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 				"metadata": Object{"user_id": Object{"device_id": strings.Repeat("d", 64), "session_id": session}}})},
 		{"build-identity-worker", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","request_identity_sources":{"user_id":"worker"}}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"user_` + strings.Repeat("e", 64) + `_account__session_` + session + `"}}`},
+		{"build-identity-lines", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","claude-vscode":"agent_sdk"}}`,
+			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`},
 		{"build-no-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
@@ -63,7 +65,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			envCapture := filepath.Join(root, "identity-env.json")
 			g := &Gateway{RequestMode: sc.mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
-					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestIdentityCapability}},
+					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.RequestIdentityCapability}},
 				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 					"HOME": config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,

@@ -69,7 +69,7 @@ v2 下 `policy.ContractVersion` 置为 2，并清空 `RelayMode` / `CLIVersion` 
 | 字段 | 值 | 层 | 含义 |
 |---|---|---|---|
 | `schema_version` | 1 | 核心存储的请求策略（`contracts/features/catalog.go` `PolicySchemaVersion`） | 配置格式；前端、核心按它读写。前端曾写 2 导致核心拒收（已由 bb70dbe83 修复） |
-| `contract_version` | 2 | Worker → CLI 的 build 信封 `requestPolicy`（`engine/request_command.go`） | CLI 组件契约；CLI 只接受 2，且 `requestPolicy` 只允许 `contract_version`、`build_attachment_sources`、`build_billing_sources` 三个键 |
+| `contract_version` | 2 | Worker → CLI 的 build 信封 `requestPolicy`（`engine/request_command.go`） | CLI 组件契约；CLI 只接受 2，且 `requestPolicy` 只允许 `contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_identity_lines` 五个键（后两个自 v17） |
 
 两者独立演进：改配置格式不改 `contract_version`，反之亦然。
 
@@ -195,7 +195,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 ### 5.5 计费归属
 
-`mergeBillingAttribution`（`content-policy.js`）。**计费头**指 system text 块中以 `x-anthropic-billing-header:` 开头、且不在代码围栏内的行；出现在句中、缩进引用或围栏里的同名文字是客户端内容，不算计费头，也不改。原生值是 CLI 本次生成的整行（`kLo`：`cc_version=2.1.304.<指纹>; cc_entrypoint=sdk-cli;`，OAuth 另有 `cch`）。
+`mergeBillingAttribution`（`content-policy.js`）。**计费头**指 system text 块中以 `x-anthropic-billing-header:` 开头、且不在代码围栏内的行；出现在句中、缩进引用或围栏里的同名文字是客户端内容，不算计费头，也不改。原生值是 CLI 本次生成的整行（`kLo`：`cc_version=2.1.304.<指纹>; cc_entrypoint=sdk-cli;`，OAuth 另有 `cch`）。配置了服务端入口（`build_billing_entrypoint`，六选一：`cli`、`sdk-cli`、`sdk-ts`、`sdk-py`、`claude-desktop`、`claude-vscode`，默认 `sdk-cli`）时，原生整行里的 `cc_entrypoint` 换成它，补齐和 `worker` 写入的都是这个值（v17）。
 
 两个字段的来源：`client`（默认，界面写作“客户端，没有用服务端”）保留客户端的值，客户端没有时用原生值；`worker`（“服务端”）总用原生值。
 
@@ -251,22 +251,34 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 最后 `request-command.js` 在 build 之后才处理身份——因为 build 会自行生成 `metadata`，必须按客户端原有的决定覆盖它。
 
-### 6.1 Claude Code 开头行（OAuth，build）
+### 6.1 Claude Code 身份行（开头行，OAuth，build）
 
-原生 CC 的 system 总是 `[计费头, 开头行, ...提示]`（2.1.304 `PAs`；开头行由 `n1n` 从三句里选：交互式 `You are Claude Code, Anthropic's official CLI for Claude.`、SDK 带追加提示的一句、SDK 的 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`）。build 保留客户端 system，原生开头行不会出现。
+原生 CC 的 system 总是 `[计费头, 身份行, ...提示]`（2.1.304 `PAs`；身份行由 `n1n` 从三句里选：交互式 `You are Claude Code, Anthropic's official CLI for Claude.`（`official_cli`）、非交互且有追加提示的 `..., running within the Claude Agent SDK.`（`official_cli_sdk`）、非交互的 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`（`agent_sdk`））。build 保留客户端 system，原生身份行不会出现。
 
-上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行，没有也行（2026-10-22 在 30 号复测：`[计费头, 提示]`、只有计费头、计费头与提示同一块都是 200，计费头只需在首块开头）。build 总带计费头，补开头行是为了与原生形状一致，不是上游的要求（同日用跳过开头行的临时 CLI 实测，build 发出 `[计费头, 提示]` 在 Opus/Sonnet 上简单、工具往返、流式都是 200）。
+上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。身份行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时身份行在哪都行，没有也行（2026-10-22 在 30 号复测：`[计费头, 提示]`、只有计费头、计费头与提示同一块都是 200，计费头只需在首块开头）。build 总带计费头，补身份行是为了像入口所代表的客户端，不是上游的要求（同日用跳过身份行的临时 CLI 实测，build 发出 `[计费头, 提示]` 在 Opus/Sonnet 上简单、工具往返、流式都是 200）。
 
-因此 OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；插入的是 `n1n({isNonInteractive:true, hasAppendSystemPrompt:false})`，即 SDK 那句 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`，与 Worker 设置的 `cc_entrypoint=sdk-cli` 一致，正是 `claude -p` 发出的组合（2026-10-22 用户选定；v15 用的是终端交互那句）。
+**按入口选身份行（v17，2026-10-22）**：身份行由计费合并后请求的入口（计费头里的 `cc_entrypoint`）决定，配置 `build_identity_lines` 给每个入口选一句或 `none`，没配的用默认（与真实客户端一致，依据见 [BILLING-IDENTITY-AUTOFILL-DESIGN](../../../docs/ccgateway-feature-support/BILLING-IDENTITY-AUTOFILL-DESIGN.md)）：
+
+| 入口 | 可选 | 默认 |
+|---|---|---|
+| `cli` | `official_cli` | `official_cli` |
+| `sdk-cli`、`sdk-ts`、`sdk-py` | `agent_sdk`、`official_cli_sdk` | `agent_sdk` |
+| `claude-desktop`、`claude-vscode` | `official_cli_sdk`、`agent_sdk` | `official_cli_sdk` |
+
+`claude-desktop-3p` 按 `claude-desktop`；其他入口、或没有可用的计费头，按配置的服务端入口那一行（`request-policy.js` `identityLineFor`）。
+
+OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；三句由补丁用 `n1n` 的三组参数生成（`{isNonInteractive:false}`、`{isNonInteractive:true, hasAppendSystemPrompt:true}`、`{isNonInteractive:true, hasAppendSystemPrompt:false}`），按名字取。
 
 | system | 处理 |
 |---|---|
-| 首块是三句之一；或首块是计费头且任一块是三句之一 | 不改 |
-| 首块是计费头、没有开头行 | 在计费头后插入 CLI 的开头行 |
-| 其他数组（含空数组） | 在最前插入 |
-| 缺省 | `[开头行]` |
+| 首块是三句之一；或首块是计费头且任一块是三句之一 | 不改（客户端的身份行不替换） |
+| 首块是计费头、没有身份行 | 在计费头后插入所选的一句；选 `none` 不插 |
+| 其他数组（含空数组） | 在最前插入所选的一句；选 `none` 时插入该入口的默认句，否则上游 429 |
+| 缺省 | `[所选或默认的一句]` |
 
-API Key 账号不插入。在计费合并与身份改写之后执行，所以客户端没有计费头时结果是 `[原生计费头, 开头行, ...客户端 system]`，与原生 CC 相同。direct 不插入（v15 曾在 direct 也插入，v16 去掉）。补丁标签为 `ccgateway-v16-build-prefix`。
+API Key 账号不插入。在计费合并与身份改写之后执行，所以客户端没有计费头时结果是 `[原生计费头, 身份行, ...客户端 system]`，与原生 CC 相同。direct 不插入（v15 曾在 direct 也插入，v16 去掉）。补丁标签为 `ccgateway-v17-identity-line`（v16 `ccgateway-v16-build-prefix` 固定插 `agent_sdk`）。
+
+2026-10-22 在 30 号用 v17 ELF 实测（一次性放进容器，测完删除）：九种入口与选择的组合抓包都符合上表，Opus 与 Sonnet 真实上游全部 200，详见设计文档第 6 节。
 
 ### 6.2 计费头里的指纹
 
@@ -323,6 +335,7 @@ v1 路径另有 `build_attachment_transform` 诊断事件，记录来源、改�
 | `BuildAttachmentCapabilityV2` | `build_attachment_sources_v2` |
 | `BuildBillingCapability` | `build_billing_sources_v1` |
 | `BuildContentPreservationCapability` | `build_content_preservation_v1` |
+| `BuildIdentityCapability` | `build_identity_line_v1`（服务端入口与身份行；核心只在配置偏离默认时要求） |
 
 Worker 在 `/healthz` 声明能力；核心在发送模型正文前通过**同一账号路由**读取并核对能力与 CLI 版本。旧 Worker、未知能力、版本不符或探测失败都阻止模型发送，不跨原地更新缓存能力，避免降级后静默忽略配置。该探测是本地 Worker 查询，不是上游模型请求。
 

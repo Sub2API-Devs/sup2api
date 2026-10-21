@@ -8,6 +8,27 @@ export type IdentitySource = 'client' | 'worker' | 'replace'
 export const billingFields = ['cc_version', 'cc_entrypoint'] as const
 export type BillingField = (typeof billingFields)[number]
 export type BillingSource = 'client' | 'worker'
+// The cc_entrypoint values build may write, and per entrypoint the identity
+// lines real clients send with it, the default first (contracts
+// features/identity_line.go). Lines are names; Claude Code renders the text.
+export const billingEntrypoints = ['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'] as const
+export type BillingEntrypoint = (typeof billingEntrypoints)[number]
+export const defaultBillingEntrypoint: BillingEntrypoint = 'sdk-cli'
+export type IdentityLine = 'official_cli' | 'official_cli_sdk' | 'agent_sdk'
+export type IdentityLineChoice = IdentityLine | 'none'
+export const identityLineChoices: Record<BillingEntrypoint, readonly IdentityLine[]> = {
+  cli: ['official_cli'],
+  'sdk-cli': ['agent_sdk', 'official_cli_sdk'],
+  'sdk-ts': ['agent_sdk', 'official_cli_sdk'],
+  'sdk-py': ['agent_sdk', 'official_cli_sdk'],
+  'claude-desktop': ['official_cli_sdk', 'agent_sdk'],
+  'claude-vscode': ['official_cli_sdk', 'agent_sdk']
+}
+export const defaultIdentityLine = (entrypoint: BillingEntrypoint): IdentityLine => identityLineChoices[entrypoint][0]!
+function validIdentityLines(lines: Record<string, string> | undefined): boolean {
+  return Object.entries(lines ?? {}).every(([entrypoint, line]) =>
+    entrypoint in identityLineChoices && (line === 'none' || (identityLineChoices[entrypoint as BillingEntrypoint] as readonly string[]).includes(line)))
+}
 // Independently editable types; the core also accepts the former whole environment type.
 export const attachmentGroups = {
   working_directory: ['primary_directory', 'additional_directories', 'git_repository'],
@@ -67,6 +88,10 @@ export function setAttachmentAction(policy: RequestPolicy, type: ErasableAttachm
 export interface RequestPolicy {
   build_attachment_sources?: Partial<Record<BuildAttachmentField, BuildAttachmentSource>>
   build_billing_sources?: Partial<Record<BillingField, BillingSource>>
+  // Absent is the default, sdk-cli.
+  build_billing_entrypoint?: BillingEntrypoint
+  // Absent entrypoints use their default line.
+  build_identity_lines?: Partial<Record<BillingEntrypoint, IdentityLineChoice>>
   request_identity_sources?: Partial<Record<IdentityField, IdentitySource>>
   schema_version?: number
   unknown_field: 'reject' | 'ignore'
@@ -97,6 +122,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     replace_client_attachments: [],
     build_attachment_sources: {},
     build_billing_sources: {},
+    build_identity_lines: {},
     request_identity_sources: {},
     relay_mode: 'build',
     cli_version: '2.1.304',
@@ -136,6 +162,8 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     replace_client_attachments: expandEnvironment(policy?.replace_client_attachments),
     build_attachment_sources: { ...policy?.build_attachment_sources },
     build_billing_sources: { ...policy?.build_billing_sources },
+    ...(policy?.build_billing_entrypoint === undefined ? {} : { build_billing_entrypoint: policy.build_billing_entrypoint }),
+    build_identity_lines: { ...policy?.build_identity_lines },
     request_identity_sources: { ...policy?.request_identity_sources },
     relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
     cli_version: defaults.cli_version,
@@ -149,6 +177,8 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
       (buildAttachmentFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker' || source === 'erase')) &&
     Object.entries(p.build_billing_sources ?? {}).every(([field, source]) =>
       (billingFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
+    (p.build_billing_entrypoint === undefined || (billingEntrypoints as readonly string[]).includes(p.build_billing_entrypoint)) &&
+    validIdentityLines(p.build_identity_lines) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
@@ -161,7 +191,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
 }
 
 // An absent key follows its parent; this also applies independently to nested fields.
-export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'request_identity_sources'>>
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_identity_lines' | 'request_identity_sources'>>
 export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
 export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
 export interface FeaturePreview {
@@ -178,7 +208,7 @@ export function newRequestPolicy(): RequestPolicy {
   return { ...defaultRequestPolicy(), build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
 }
 export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOverrides): RequestPolicy {
-  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
+  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_identity_lines: { ...parent.build_identity_lines, ...overrides.build_identity_lines }, request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
 }
 export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
   let count = 0
@@ -190,15 +220,21 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
       for (const [field, source] of Object.entries(value as Record<string, string>)) {
         if (((parent[key] as Record<string, string> | undefined)?.[field] ?? 'client') !== source) count++
       }
+    } else if (key === 'build_identity_lines') {
+      for (const [entrypoint, line] of Object.entries(value as Record<string, string>)) {
+        if ((parent.build_identity_lines?.[entrypoint as BillingEntrypoint] ?? defaultIdentityLine(entrypoint as BillingEntrypoint)) !== line) count++
+      }
+    } else if (key === 'build_billing_entrypoint') {
+      if ((parent.build_billing_entrypoint ?? defaultBillingEntrypoint) !== value) count++
     } else if (parent[key as keyof RequestPolicy] !== value) count++
   }
   return count
 }
 export function validFeatureOverrides(value: FeatureOverrides): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'request_identity_sources']
+  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines', 'request_identity_sources']
   if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
-  for (const key of ['build_attachment_sources', 'build_billing_sources', 'request_identity_sources'] as const) {
+  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_identity_lines', 'request_identity_sources'] as const) {
     if (value[key] !== undefined && (typeof value[key] !== 'object' || Array.isArray(value[key]))) return false
   }
   return validRequestPolicy(mergeFeaturePolicy(defaultRequestPolicy(), value))

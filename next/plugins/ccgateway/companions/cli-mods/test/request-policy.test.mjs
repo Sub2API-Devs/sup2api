@@ -11,8 +11,16 @@ test('304 policy rejects unknown fields, contract, and manual billing values', (
     { contract_version: 2, build_billing_sources: { cc_entrypoint: 'erase' } },
     { contract_version: 2, build_attachment_sources: { unrelated: 'worker' } },
     { contract_version: 2, arbitrary: true },
+    // The entrypoint is one of the six, and each takes only its own lines.
+    { contract_version: 2, build_billing_entrypoint: 'claude-desktop-3p' },
+    { contract_version: 2, build_billing_entrypoint: 'sdk-cli; cch=1' },
+    { contract_version: 2, build_identity_lines: { cli: 'agent_sdk' } },
+    { contract_version: 2, build_identity_lines: { 'claude-vscode': 'official_cli' } },
+    { contract_version: 2, build_identity_lines: { remote: 'none' } },
+    { contract_version: 2, build_identity_lines: [] },
   ]) assert.throws(() => validateRequestPolicy(value));
-  const value = { contract_version: 2, build_attachment_sources: { platform_name: 'erase', shell: 'worker' }, build_billing_sources: { cc_version: 'client' } };
+  const value = { contract_version: 2, build_attachment_sources: { platform_name: 'erase', shell: 'worker' }, build_billing_sources: { cc_version: 'client' },
+    build_billing_entrypoint: 'claude-vscode', build_identity_lines: { cli: 'none', 'sdk-ts': 'official_cli_sdk', 'claude-desktop': 'agent_sdk' } };
   const copy = validateRequestPolicy(value);
   assert.deepEqual(copy, value);
   copy.build_attachment_sources.shell = 'client';

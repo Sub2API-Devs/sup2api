@@ -84,24 +84,60 @@ describe('CCGateway single-request modes', () => {
     w.unmount()
   })
   // Direct is a pure passthrough with nothing to configure; build replaces the
-  // user_id and adds the opening line on its own, so the identity has no
-  // setting in either mode (2026-10-21 decision).
+  // user_id on its own, so the identity has no setting in either mode
+  // (2026-10-21 decision). The identity line follows the billing entrypoint.
   it('shows what each mode does on its own and offers no identity setting', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
     const w = await render()
     expect(w.get('[data-testid="direct-hint"]').text()).toContain('原样转发，不做任何改动')
-    for (const id of ['billing-sources', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
+    for (const id of ['billing-sources', 'billing-entrypoint', 'identity-lines', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
     await w.get('[data-testid="relay-mode"]').setValue('1')
     expect(w.find('[data-testid="direct-hint"]').exists()).toBe(false)
     expect(w.get('[data-testid="auto-user-id"]').text()).toContain('有就自动替换，没有不加')
-    expect(w.get('[data-testid="auto-prefix"]').text()).toContain('没有就补上')
+    expect(w.get('[data-testid="auto-prefix"]').text()).toContain('按计费头入口补上')
     expect(w.find('[data-testid="identity-sources"]').exists()).toBe(false)
     const billing = w.get('[data-testid="billing-sources"]').text()
     expect(billing).toContain('计费头')
     expect(billing).toContain('客户端，没有用服务端')
     expect(picked(w, '[data-testid="billing-cc_version"]')).toBe(0)
+    w.unmount()
+  })
+  // Each entrypoint offers only the lines real clients send with it, plus
+  // none; defaults are what those clients send (2026-10-22).
+  it('picks the server entrypoint and each entrypoint identity line from its own choices', async () => {
+    let stored = config(defaultRequestPolicy())
+    mocks.get.mockImplementation(async () => structuredClone(stored))
+    mocks.put.mockImplementation(async (_url, body) => {
+      stored = config(JSON.parse(JSON.stringify(body.request_policy)))
+      return structuredClone(stored)
+    })
+    let w = await render()
+    const select = (id: string) => w.get<HTMLSelectElement>(`[data-testid="${id}"]`).element
+    const options = (id: string) => Array.from(select(id).options).filter(o => !o.disabled).map(o => o.textContent?.trim())
+    const chosen = (id: string) => select(id).options[select(id).selectedIndex]?.textContent?.trim()
+    expect(options('billing-entrypoint-select')).toEqual(['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'])
+    expect(chosen('billing-entrypoint-select')).toBe('sdk-cli')
+    expect(options('identity-line-select-cli')).toEqual(['Claude Code CLI（终端）', '不补'])
+    expect(options('identity-line-select-sdk-ts')).toEqual(['Claude Agent SDK', 'Claude Code + Agent SDK', '不补'])
+    expect(options('identity-line-select-claude-vscode')).toEqual(['Claude Code + Agent SDK', 'Claude Agent SDK', '不补'])
+    expect(chosen('identity-line-select-cli')).toBe('Claude Code CLI（终端）')
+    expect(chosen('identity-line-select-sdk-cli')).toBe('Claude Agent SDK')
+    expect(chosen('identity-line-select-claude-desktop')).toBe('Claude Code + Agent SDK')
+    await w.get('[data-testid="billing-entrypoint-select"]').setValue('5')
+    await w.get('[data-testid="identity-line-select-cli"]').setValue('1')
+    await w.get('[data-testid="identity-line-select-claude-desktop"]').setValue('1')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(stored.request_policy?.build_billing_entrypoint).toBe('claude-vscode')
+    expect(stored.request_policy?.build_identity_lines).toEqual({ cli: 'none', 'claude-desktop': 'agent_sdk' })
+    w.unmount()
+    w = await render()
+    expect(chosen('billing-entrypoint-select')).toBe('claude-vscode')
+    expect(chosen('identity-line-select-cli')).toBe('不补')
+    expect(chosen('identity-line-select-claude-desktop')).toBe('Claude Agent SDK')
+    expect(chosen('identity-line-select-claude-vscode')).toBe('Claude Code + Agent SDK')
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {
