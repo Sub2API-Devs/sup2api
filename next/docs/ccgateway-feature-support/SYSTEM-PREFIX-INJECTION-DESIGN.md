@@ -97,6 +97,11 @@
   - direct 直接发各种排列：`[提示, 计费头]` 没有开头行 429；`[开头行, 提示, 计费头]`、`[开头行, 计费头, 提示]`、首尾两个计费头 `[计费头, 提示, 计费头]` 都是 200。
   - 不在首块的计费头上游不检查：只有 `cc_version` 的头、指纹为 `zzz` 的头放在后面都是 200。缺字段 400 只发生在首块。
   - 结论：4.4 的做法（不插第二个头、开头行补在最前）可用；插第二个头上游也接受，但没有必要。
+- 真实客户端走 direct（2026-10-22，30 号）：
+  - 做法：临时受限分组 `ccg-audit-direct` 只含 30 号，分组覆盖 `relay_mode=direct`，再建一个绑定该分组的临时 Key。本机官方 Claude Code 2.1.304 用临时配置目录，经 SSH 隧道连 ovh 核心。生产分组 10 同时仍解析为 build。
+  - 结果：`claude -p` 简单问答（`claude-opus-4-8`）返回 `DIRECT-OK`；Opus 与 Sonnet（`claude-sonnet-4-6`）各做一轮 Read 工具往返（客户端本地读文件，再把 tool_result 发回），都拿到文件里的暗号，`is_error=false`。
+  - 30 号 Worker 日志：这 5 次请求全是 `mode=direct`、HTTP 200，入站 body 首块就是客户端自带的计费头、第二块是 SDK 那句。同一时段经其他分组到 30 号的请求仍是 build。
+  - 测完删除 Key、分组覆盖和分组，30 号的分组恢复为 6/9/10，管理员的受限分组恢复为 4，关闭隧道。
 - `cch`（2026-10-22，30 号，线上 v16 CLI）：线上 build 发出 `cch=00000;`。
   - 条件：原生 `kLo` 在 `Pe()==="firstParty" && Ri()` 时写 `cch=00000;`。`Ri()` 要求 `ANTHROPIC_BASE_URL` 未设置或是官方地址（或设了 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`）。之前一次性容器抓包把 base URL 指向本地，所以不带。30 号容器和 Worker 环境里没有 `ANTHROPIC_BASE_URL` 和 Bedrock/Vertex 变量，request 命令也不设，所以条件成立。
   - 实抓：在 30 号容器里用 `ANTHROPIC_UNIX_SOCKET`（请求地址仍是 `api.anthropic.com`，连接走 unix socket 上的 TLS）、占位令牌 `CLAUDE_CODE_OAUTH_TOKEN=ssh-placeholder` 和临时自签证书起假上游，build 发出的首块是 `x-anthropic-billing-header: cc_version=2.1.304.8f6; cc_entrypoint=sdk-cli; cch=00000;`，第二块是 SDK 那句。假上游返回 400，没有请求到达上游。
