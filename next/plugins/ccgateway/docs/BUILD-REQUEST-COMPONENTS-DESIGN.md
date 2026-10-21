@@ -9,9 +9,10 @@
 - build 模式**不重新实现协议**。最终 body 由 CC 自己的请求构造器（`Kvt`）产出，Go 与 CLI 只提供组件和精确的文本改写。
 - 内容改写**只作用于已识别的环境行与计费行**。环境段里未识别格式、代码围栏内、歧义和重复的内容一律不改，并留诊断；`erase` 也只删除识别出的、受支持的条目，不是“删掉所有像环境信息的文字”。
 - 内容来源有三种：`client`（原样）、`worker`（用 CLI 自己的原生环境渲染）、`erase`（删除）。
-- 计费选 `worker` 时**要么用原生值，要么拒绝**：系统提示里的计费头无法安全改写（多个头、重复字段、格式不对）时 400；原生计费值拿不到时 503（2026-10-21 起，此前前一种情况原样放行）。
+- build 的请求总带计费头（2026-10-22 起）：客户端没有就补上 CLI 原生的整行，缺字段就补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。选 `worker` 时**要么用原生值，要么拒绝**：计费头无法安全改写（多个头、重复字段、格式不对）时 400；原生计费值拿不到时 503。
 - 原生环境拿不到时同样**拒绝请求（503）**，不使用猜测值。
-- 身份（`metadata.user_id`）不属于内容策略：由 Worker 决定是否改写，经独立环境变量交给 CLI，direct 与 build 遵守同一决定（见第 7 节）。
+- 身份（`metadata.user_id`）不属于内容策略，也不可配置（2026-10-22 起）：build 有就替换、没有不加；direct 原样转发（见第 7 节）。
+- direct 是纯透传：不补计费头、不补开头行、不改身份，body 逐字节转发。
 - v2 与 v1 的差别是**改写发生在 CLI 而不是 Go**：v1 由 Worker 预先改写 body，v2 把原始 wire 形态交给 CLI，由 CLI 在保留原始记录的前提下改写。
 
 ## 1. 总体链路
@@ -141,7 +142,7 @@ CLI 侧 `prepareBuildInput`（`cli-mods/request-input.js:35`）是唯一解析�
 | `build_attachment_sources` | `platform_name`、`os_version`、`shell`、`primary_directory`、`additional_directories`、`git_repository`、`worktree`、`scratchpad_directory`、`github_cli`、`agent_proxy` | `client` / `worker` / `erase` |
 | `build_billing_sources` | `cc_version`、`cc_entrypoint` | `client` / `worker` |
 
-缺省或 `client` 表示保留客户端内容。
+缺省或 `client` 表示保留客户端内容；计费头缺少的部分 build 总会补上（5.5）。
 
 ### 5.2 识别：只认精确格式
 
@@ -194,18 +195,18 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 ### 5.5 计费归属
 
-`mergeBillingAttribution`（`content-policy.js`）只在某个字段选 `worker` 时工作。**计费头**指 system text 块中以 `x-anthropic-billing-header:` 开头、且不在代码围栏内的行；出现在句中、缩进引用或围栏里的同名文字是客户端内容，不算计费头，也不改。
+`mergeBillingAttribution`（`content-policy.js`）。**计费头**指 system text 块中以 `x-anthropic-billing-header:` 开头、且不在代码围栏内的行；出现在句中、缩进引用或围栏里的同名文字是客户端内容，不算计费头，也不改。原生值是 CLI 本次生成的整行（`kLo`：`cc_version=2.1.304.<指纹>; cc_entrypoint=sdk-cli;`，OAuth 另有 `cch`）。
+
+两个字段的来源：`client`（默认，界面写作“客户端，没有用服务端”）保留客户端的值，客户端没有时用原生值；`worker`（“服务端”）总用原生值。
 
 | 情况 | 行为 |
 |---|---|
-| 恰好一个计费头且格式合法 | 替换选中的字段，缺的字段追加；未知字段与选 `client` 的字段原样保留 |
-| 没有计费头（包括只在引用或围栏里出现） | 在 system 首部插入一行，只含选 `worker` 的字段 |
-| 多个计费头（同一块或跨块）/ 同一行重复出现头部 / 字段重复 / 字段格式不合法 | **400 拒绝**，诊断 `ambiguous`（先于原生值检查） |
-| 原生值不可用 | 503（CLI 以 `source: internal` 报告，网关换账号重试） |
+| 没有计费头（包括只在引用或围栏里出现） | 在 system 首部插入原生整行 |
+| 恰好一个计费头且格式合法 | 选 `worker` 的字段换成原生值；缺的字段追加原生值；未知字段与客户端已有的 `client` 字段原样保留。头不在首块时留在原处，开头行由 6.1 补在最前 |
+| 多个计费头（同一块或跨块）/ 同一行重复出现头部 / 字段重复 / 字段格式不合法 | 有字段选 `worker`：**400 拒绝**；全是 `client`：原样放行。都记诊断 `ambiguous` |
+| 原生值不可用 | 有字段选 `worker`：503（CLI 以 `source: internal` 报告，网关换账号重试）；全是 `client`：原样放行，记 `source_unavailable` |
 
-所有字段都是 `client` 时不检查、不修改。2026-10-21 前，“多个头/重复/格式不合法/引用或围栏”都只记诊断并原样放行，客户端的计费值会上行；同时 CLI 把 build 阶段的所有错误都报成 400，原生值缺失的 503 实际也以 400 返回。两处已一并修正（5f2246442）。
-
-**已知问题（2026-10-21 实测，未改）**：上游要求计费头同时含 `cc_version` 与 `cc_entrypoint`，缺任一个（或只有未知字段）都返回 400 `x-anthropic-billing-header is a reserved keyword and may not be used in the system prompt.`；`cch` 可有可无。因此客户端没有计费头、且两个字段只有一个选 `worker` 时，插入的单字段头必然被拒（线上 v14 同样如此）。是否改为插入时补齐另一字段的原生值，待定。
+为什么总要补（2026-10-21 实测）：上游要求计费头同时含 `cc_version` 与 `cc_entrypoint`，缺任一个都返回 400 `x-anthropic-billing-header is a reserved keyword and may not be used in the system prompt.`，`cch` 可有可无；OAuth 的 Sonnet/Opus 请求首块没有计费头也没有开头行时返回 429。v15 及以前只在选 `worker` 时才动计费头，客户端没有计费头、且只有一个字段选 `worker` 时会插入单字段头被拒；v16 起插入的总是原生整行。
 
 ### 5.6 识别用的文字全部取自原生 CC
 
@@ -246,15 +247,15 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 生成参数由 CC 自己的模型规则决定，组件只补充它不管的部分。
 
-最后 `request-command.js:82` 在 build 之后才应用身份策略——因为 build 会自行生成 `metadata`，身份来源必须覆盖它。
+最后 `request-command.js` 在 build 之后才处理身份——因为 build 会自行生成 `metadata`，必须按客户端原有的决定覆盖它。
 
-### 6.1 Claude Code 开头行（OAuth，build 与 direct）
+### 6.1 Claude Code 开头行（OAuth，build）
 
 原生 CC 的 system 总是 `[计费头, 开头行, ...提示]`（2.1.304 `PAs`；开头行由 `n1n` 从三句里选：交互式 `You are Claude Code, Anthropic's official CLI for Claude.`、SDK 带追加提示的一句、SDK 的 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`）。build 保留客户端 system，原生开头行不会出现。
 
-上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测，build 与 direct 相同）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
+上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
 
-因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；插入的是 `n1n` 按终端交互式 CLI 选出的那一句（`isNonInteractive:false`，即 `You are Claude Code, Anthropic's official CLI for Claude.`），build 与 direct 相同。`claude request` 本身是非交互运行，若用 `PAs` 本次生成的行会得到 SDK 那一句，按用户要求（2026-10-21）改用终端那句。
+因此 OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；插入的是 `n1n({isNonInteractive:true, hasAppendSystemPrompt:false})`，即 SDK 那句 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`，与 Worker 设置的 `cc_entrypoint=sdk-cli` 一致，正是 `claude -p` 发出的组合（2026-10-22 用户选定；v15 用的是终端交互那句）。
 
 | system | 处理 |
 |---|---|
@@ -262,17 +263,21 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 | 首块是计费头、没有开头行 | 在计费头后插入 CLI 的开头行 |
 | 其他数组（含空数组） | 在最前插入 |
 | 缺省 | `[开头行]` |
-| 字符串（仅 direct） | `[开头行, {text: 原字符串}]`；空串只留开头行 |
-| `null` 等其他类型 | 不改，由上游报错 |
 
-direct 只插入字节，其余字节不变（大整数、空白都保留）。API Key 账号不插入。build 在计费合并与身份改写之后执行。补丁标签随之改为 `ccgateway-v15-cli-prefix`。
+API Key 账号不插入。在计费合并与身份改写之后执行，所以客户端没有计费头时结果是 `[原生计费头, 开头行, ...客户端 system]`，与原生 CC 相同。direct 不插入（v15 曾在 direct 也插入，v16 去掉）。补丁标签为 `ccgateway-v16-build-prefix`。
+
+### 6.2 计费头里的指纹
+
+`cc_version` 末尾三位是指纹：CC 取第一条非 meta 用户记录的文本（字符串内容或第一个 text 块）的第 4、7、20 个字符，加盐和版本做 sha256（`RIs` → `aW` + `Eg`，chunk-2gh4h0fv.js）。原生 CC 算指纹时 reminder 还是独立的 meta 记录，取到的是用户真正输入的文字；它们并进同一条 wire 消息、排在前面，是之后的事。
+
+build 把客户端的 wire 消息还原成记录时，reminder 已经是第一个 text 块，v15 及以前因此对 `<system-reminder>` 开头的文字算指纹，值与真 CC 不同。v16 由 `fingerprintMessages`（`request-input.js`）取第一条用户消息中第一个不以 reminder 标签开头的 text 块，补丁把 `qmn` 里的 `RIs(Aa)` 换成对它求值（只在 build 下）。用官方 `claude -p` 抓到的请求验证：按新取法算出 `b17`，与它自带的 `cc_version=2.1.304.b17` 相同；旧取法得 `159`（`test/billing-fingerprint-oracle.test.mjs`）。
 
 ## 7. 身份边界
 
-`metadata.user_id` 由身份来源（`request_identity_sources.user_id`：`client` / `worker` / `replace`，默认 `replace`）决定，与内容策略分开：
+`metadata.user_id` 不可配置（2026-10-22 用户决定）：build 有就替换，没有不加；direct 原样转发。核心不再下发 `request_identity_sources`（早先保存的值也不下发），Worker 按自己的默认 `replace` 处理；界面去掉身份卡片，只在请求模式下写一行说明。
 
-- **只经环境变量传递**：Worker 把解析结果写入 `CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?}`），不进 build 信封；核心只下发非默认来源。
-- **是否改写只由 Worker 的 `rewrite` 决定**，direct（`rewriteDirectIdentity`）与 build（`applyBuildMetadata`）相同。客户端没发身份、或身份里没有可映射字段（只有未知字段、已知字段全为空或 null）时 `rewrite=false`，两条路径都保留客户端原值及其载体（对象 / JSON 字符串 / 扁平字符串）。2026-10-21 前 build 不看 `rewrite`，会把这类值换成 CLI 自己的身份并改成 JSON 字符串（ae97bd868 修复）。
+- **只经环境变量传递，只在 build**：Worker 把解析结果写入 `CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?}`），不进 build 信封。direct 不解析身份、不设这个变量。
+- **是否改写只由 Worker 的 `rewrite` 决定**（`applyBuildMetadata`）。客户端没发身份、或身份里没有可映射字段（只有未知字段、已知字段全为空或 null）时 `rewrite=false`，保留客户端原值及其载体（对象 / JSON 字符串 / 扁平字符串）。
 - **build 不凭空生成身份**：客户端没发 metadata 时删掉原生构造器生成的 metadata；客户端 metadata 没有 `user_id` 时按客户端原样发送。
 - **账号类型**：API Key 账号 `replace` 按 `client` 处理；OAuth 账号读不到邮箱时 `replace` 退为 `worker`。
 - **会话头一致**：Worker 给出 `session_id` 时 CLI 以它作为根会话，传输头与 metadata 一致。
@@ -288,7 +293,7 @@ direct 只插入字节，其余字节不变（大整数、空白都保留）。A
 | 工具配对不完整 | 拒绝 |
 | `runtimeContext` 与启动目录不一致 | 拒绝 |
 | 原生环境不可用 | 503 |
-| 计费选 `worker` 但计费头无法安全改写 | 400 |
+| 计费选 `worker` 但计费头无法安全改写 | 400（全是 `client` 时原样放行） |
 | 原生计费值不可用 | 503（换账号重试） |
 | 能力不匹配 | 409（见第 10 节） |
 
@@ -319,7 +324,7 @@ v1 路径另有 `build_attachment_transform` 诊断事件，记录来源、改�
 
 Worker 在 `/healthz` 声明能力；核心在发送模型正文前通过**同一账号路由**读取并核对能力与 CLI 版本。旧 Worker、未知能力、版本不符或探测失败都阻止模型发送，不跨原地更新缓存能力，避免降级后静默忽略配置。该探测是本地 Worker 查询，不是上游模型请求。
 
-`relay_mode` 为 `direct` 时不探测、不改写；配置保留但控件禁用，切回 build 后生效。
+`relay_mode` 为 `direct` 时不探测、不改写（纯透传）；内容配置保留但不显示，切回 build 后生效。
 
 ## 11. 已知缺口
 
@@ -332,10 +337,10 @@ Worker 在 `/healthz` 声明能力；核心在发送模型正文前通过**同�
 已完成的本地验证（不代表上游验收）：
 
 - Go：`go test ./engine/`，含组件拆分、内容校验、能力拒绝与诊断解析用例。
-- JS：`node --test cli-mods/test/*.test.mjs`，含组件组合矩阵与 v1/v2 改写用例；计费拒绝路径（多头、重复字段、格式不对、引用与围栏）与 direct/build 身份改写一致性用例。
+- JS：`node --test cli-mods/test/*.test.mjs`，含组件组合矩阵与 v1/v2 改写用例；计费补齐与拒绝路径（缺头、缺字段、多头、重复字段、格式不对、引用与围栏）、direct 逐字节不变、build 身份按 Worker 决定改写、指纹按官方样本复现。
 - 组装回放：`cli-mods/test/fixtures/build-assembly-manifest.cjs` 覆盖 `billing_env.*`、`content.*` 等组合，并校验 `source_symbols`（`applyContentPolicy`、`mergeBillingAttribution`、`ccgatewayEnvironment`）。
 - 跨层契约夹具（`contracts/testdata/`，CI 运行）：前端编辑器实际发送的策略经核心的合并与校验；Worker 实际写给 CLI 的 stdin 与身份上下文经 CLI 的解析、策略、参数、输入、内容策略与身份函数。生产方输出变化时测试失败，需重新生成夹具并通过消费方。
-- 继承矩阵：附件、计费、身份三类来源 × 全局/分组/账号 × 分组开关 × 账号模式；身份来源另测 direct/build 两种模式下发。
+- 继承矩阵：附件、计费、身份三类来源 × 全局/分组/账号 × 分组开关 × 账号模式；身份来源另测在哪一层、哪种模式都不下发。
 
 未完成：
 

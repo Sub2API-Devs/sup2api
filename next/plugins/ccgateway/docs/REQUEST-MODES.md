@@ -15,11 +15,11 @@
 2026-10-19：请求模式只保留 `build` 和 `direct`，默认 `build`。定制 CLI 仍为 2.1.302。
 
 - `build`：Worker 提取消息组件，调用 `claude request --build` 构建并发送一次模型请求。
-- `direct`：完整 Messages body 交给 `claude request --direct` 转发。
+- `direct`：完整 Messages body 交给 `claude request --direct` 原样转发（2026-10-22 起为纯透传，不做任何改动）。
 
 两种模式都将工具调用返回调用方执行，不由网关运行 Agent 工具循环。原 native 选项和仅适用于 Agent 的设置控件移除。2026-10-19 的 0.1.61 / CLI v8 更新已移除 request 的 API Key-only 限制：显式 API Key 保留原隔离路线，没有 API Key 时复用 CC 原生 OAuth 读取、发送前刷新及 Bearer 认证。详见 [302 OAuth 实现与验证](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
 
-认证支持不意味着上游接受任意 Messages 形状。30 号完整 CC 客户端经 build、其完整请求经 direct，均成功调用 `claude-opus-5-5`；简化空 system 的 OAuth 请求实测返回上游 429。2026-10-21 查明原因：OAuth 请求的第一个 system 块必须是计费头或 Claude Code 开头行，否则 Sonnet/Opus 返回 429；自 CLI v15 起 OAuth 的 build 与 direct 在缺少时补上开头行（规则见 [build 组件设计第 6.1 节](BUILD-REQUEST-COMPONENTS-DESIGN.md#61-claude-code-开头行oauthbuild-与-direct)）。request 不伪造成功、不自动换模型。
+认证支持不意味着上游接受任意 Messages 形状。30 号完整 CC 客户端经 build、其完整请求经 direct，均成功调用 `claude-opus-5-5`；简化空 system 的 OAuth 请求实测返回上游 429。2026-10-21 查明原因：OAuth 请求的第一个 system 块必须是计费头或 Claude Code 开头行，否则 Sonnet/Opus 返回 429。真实 CC 客户端自带二者，所以 direct 一直可用，只有账号测试这类简化请求触发 429。CLI v16 起 direct 为纯透传：不补计费头、不补开头行、不改 metadata.user_id；build 在缺少时补计费头和开头行（规则见 [build 组件设计第 6.1 节](BUILD-REQUEST-COMPONENTS-DESIGN.md#61-claude-code-开头行oauthbuild)）。账号测试固定走 build，因此也能通过。request 不伪造成功、不自动换模型。
 
 0.1.63 的账号测试使用内部 `/v1/ccgateway/probe`，传入所选模型、普通字符串 system 和一个简短问题，由 CC 的 `request --build` 内建函数构建并发送一次请求。该测试测账号连通性，结果明确标注 `test_mode: native_build`；即使业务配置为 direct，测试也走此构建路径。正常 `/v1/messages` 仍严格使用配置的 build/direct 模式。
 

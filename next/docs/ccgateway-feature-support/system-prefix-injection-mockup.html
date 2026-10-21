@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CC 特性 · 设计稿</title>
+<style>
+:root{--bg:#f9fafb;--line:#f3f4f6;--line2:#e5e7eb;--fg:#111827;--muted:#6b7280;--faint:#9ca3af;--primary:#14b8a6;--primary-ink:#0d9488;--soft:#f0fdfa;--mark:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+button,select{font:inherit}
+.page{max-width:760px;margin:0 auto;padding:24px 24px 64px}
+.scenes{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}
+.scenes button{border:1px solid var(--line2);border-radius:99px;background:#fff;padding:5px 12px;color:var(--muted);cursor:pointer}
+.scenes button[aria-pressed=true]{background:#111827;border-color:#111827;color:#fff}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--line2);border-radius:10px;background:#fff;margin-bottom:12px}
+.seg span{padding:4px 14px;border-radius:7px;font-size:13px;color:var(--muted)}
+.seg .on{background:var(--soft);color:var(--primary-ink)}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.06);margin-bottom:12px}
+.card>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 16px;border-bottom:1px solid var(--line2);background:rgba(249,250,251,.6);border-radius:16px 16px 0 0}
+.card h5{margin:0;font-size:14px;font-weight:600}
+.chips{display:flex;gap:6px}
+.chip{font-size:11px;padding:1px 8px;border-radius:99px;background:#f3f4f6;color:#4b5563;white-space:nowrap}
+.body{padding:0 16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0}
+.label{font-size:13px;font-weight:500}
+.desc{font-size:12px;color:var(--muted)}
+.mono{font-family:ui-monospace,Consolas,monospace}
+select{height:32px;border:1px solid var(--line2);border-radius:8px;padding:0 28px 0 10px;font-size:12px;background:#fff}
+.auto{border-top:1px solid var(--line2);padding:8px 0 10px}
+.auto div{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--muted);padding:2px 0}
+.auto b{color:var(--fg);font-weight:500;min-width:120px}
+.matrix{padding:8px 0}
+.mhead,.mrow{display:grid;align-items:center}
+.mhead{border-bottom:1px solid var(--line2);padding-bottom:6px}
+.mhead span{font-size:12px;color:var(--muted);text-align:center;font-weight:500;line-height:1.25}
+.mrow{padding:6px 0}
+.mrow+.mrow{border-top:1px solid var(--line)}
+.mrow.marked{box-shadow:inset 3px 0 var(--mark)}
+.mrow.group{border-top:1px solid var(--line2);font-size:13px}
+.mrow.group .rl span::before{content:"⌄ ";color:var(--muted)}
+.rl{font-size:13px;padding-left:6px;display:flex;flex-direction:column}
+.rl small{font-size:11px;color:var(--faint)}
+.mrow.child .rl{padding-left:22px}
+.cell{display:flex;justify-content:center}
+.radio{width:16px;height:16px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;cursor:pointer;display:inline-block;position:relative}
+.radio.on{border-color:var(--primary);background:var(--primary)}
+.radio.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#fff}
+.radio.eff{border-color:var(--primary)}
+.foot{display:flex;justify-content:flex-end;padding:10px 0}
+.save{background:var(--primary);color:#fff;border:0;border-radius:8px;padding:6px 14px;font-size:13px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="scenes" role="group" aria-label="场景">
+    <button data-scene="build" aria-pressed="true">build</button>
+    <button data-scene="direct" aria-pressed="false">direct</button>
+    <button data-scene="account" aria-pressed="false">账号覆盖</button>
+  </div>
+
+  <div class="seg"><span id="segGlobal" class="on">全局默认</span><span id="segGroup">分组默认</span><span id="segAccount" class="hidden on">账号 #30</span></div>
+
+  <section class="card">
+    <header><h5>Claude Code 版本与请求模式</h5><div class="chips" id="summary"></div></header>
+    <div class="body">
+      <div class="row">
+        <div><div class="label">透传/转发</div><div class="desc">CLI <span class="mono">2.1.304</span><span id="effMode" class="hidden"></span></div></div>
+        <select id="mode" aria-label="透传/转发">
+          <option value="follow" class="layered-only">跟随默认</option>
+          <option value="direct">纯透传（direct）</option>
+          <option value="build" selected>组件构建（build）</option>
+        </select>
+      </div>
+      <div class="auto direct-only hidden">
+        <div><b>请求</b>原样转发，不做任何改动</div>
+      </div>
+      <div class="auto build-only">
+        <div><b>metadata.user_id</b>有就自动替换，没有不加</div>
+        <div><b>开头行</b>没有就补上</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card build-only">
+    <header><h5>计费头</h5></header>
+    <div class="body"><div class="matrix"><div class="mhead" id="billHead"></div><div id="billRows"></div></div></div>
+  </section>
+
+  <section class="card build-only">
+    <header><h5>附件转换</h5></header>
+    <div class="body"><div class="matrix"><div class="mhead" id="envHead"></div><div id="envRows"></div></div></div>
+  </section>
+
+  <div class="foot"><button class="save">保存全部配置</button></div>
+</div>
+
+<script>
+const ENV = [
+  ['运行环境', [['platform_name', '平台名称'], ['os_version', '系统版本'], ['shell', 'Shell']]],
+  ['目录与仓库', [['primary_directory', '工作目录'], ['additional_directories', '额外工作目录'], ['git_repository', 'Git 仓库状态'], ['worktree', 'Worktree 状态与说明'], ['scratchpad_directory', '临时目录']]],
+  ['工具与代理说明', [['github_cli', 'GitHub 工具说明'], ['agent_proxy', 'Agent 代理说明']]],
+];
+const globalValues = () => ({
+  mode: 'build', cc_version: 'client', cc_entrypoint: 'client',
+  platform_name: 'worker', os_version: 'worker', shell: 'client', primary_directory: 'client', additional_directories: 'client',
+  git_repository: 'client', worktree: 'client', scratchpad_directory: 'client', github_cli: 'client', agent_proxy: 'client',
+});
+const state = { scene: 'build', layered: false, v: globalValues(), inherited: globalValues() };
+const SCENES = {
+  build:   () => Object.assign(state, { layered: false, v: globalValues() }),
+  direct:  () => Object.assign(state, { layered: false, v: { ...globalValues(), mode: 'direct' } }),
+  account: () => Object.assign(state, { layered: true, v: { ...Object.fromEntries(Object.keys(globalValues()).map(k => [k, 'follow'])), cc_entrypoint: 'worker', shell: 'erase' } }),
+};
+const eff = k => state.v[k] === 'follow' ? state.inherited[k] : state.v[k];
+const withFollow = list => state.layered ? [['follow', '跟随<br>默认'], ...list] : list;
+const grid = n => `minmax(0,1fr) repeat(${n}, 5rem)`;
+
+function radio(on, effOn, onclick) {
+  const el = document.createElement('span');
+  el.className = 'radio' + (on ? ' on' : '') + (!on && effOn ? ' eff' : '');
+  el.setAttribute('role', 'radio'); el.setAttribute('aria-checked', on); el.tabIndex = 0;
+  el.onclick = onclick;
+  return el;
+}
+function matrix(prefix, columns, entries) {
+  const cols = withFollow(columns);
+  const head = document.getElementById(prefix + 'Head'), body = document.getElementById(prefix + 'Rows');
+  head.style.gridTemplateColumns = grid(cols.length);
+  head.innerHTML = '<span></span>' + cols.map(([, l]) => `<span>${l}</span>`).join('');
+  body.innerHTML = '';
+  for (const e of entries) {
+    const row = document.createElement('div');
+    row.style.gridTemplateColumns = grid(cols.length);
+    if (e.group) { row.className = 'mrow group'; row.innerHTML = `<div class="rl"><span>${e.group}</span></div>`; body.appendChild(row); continue; }
+    const marked = state.layered && state.v[e.key] !== 'follow' && state.v[e.key] !== state.inherited[e.key];
+    row.className = 'mrow' + (e.child ? ' child' : '') + (marked ? ' marked' : '');
+    const src = state.layered ? (state.v[e.key] === 'follow' ? '来源：全局' : '来源：账号') : '';
+    row.innerHTML = `<div class="rl"><span>${e.label}</span>${src ? `<small>${src}</small>` : ''}</div>`;
+    for (const [v] of cols) {
+      const c = document.createElement('div'); c.className = 'cell';
+      c.appendChild(radio(state.v[e.key] === v, eff(e.key) === v, () => { state.v[e.key] = v; render(); }));
+      row.appendChild(c);
+    }
+    body.appendChild(row);
+  }
+}
+
+function render() {
+  const mode = eff('mode');
+  document.querySelectorAll('.scenes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.scene === state.scene));
+  document.querySelectorAll('.layered-only').forEach(o => o.hidden = !state.layered);
+  document.getElementById('mode').value = state.v.mode;
+  const em = document.getElementById('effMode');
+  em.classList.toggle('hidden', !state.layered); em.textContent = ` · 生效：${mode}`;
+  for (const [id, show] of [['segGlobal', !state.layered], ['segGroup', !state.layered], ['segAccount', state.layered]]) document.getElementById(id).classList.toggle('hidden', !show);
+
+  matrix('bill', [['client', '客户端，<br>没有用服务端'], ['worker', '服务端']], [
+    { key: 'cc_version', label: '版本标识' },
+    { key: 'cc_entrypoint', label: '入口标识' },
+  ]);
+  matrix('env', [['client', '保留客户端'], ['worker', '使用服务端'], ['erase', '擦除']],
+    ENV.flatMap(([group, fields]) => [{ group }, ...fields.map(([key, label]) => ({ key, label, child: true }))]));
+
+  const isBuild = mode === 'build';
+  document.querySelectorAll('.build-only').forEach(e => e.classList.toggle('hidden', !isBuild));
+  document.querySelectorAll('.direct-only').forEach(e => e.classList.toggle('hidden', isBuild));
+  const chips = [];
+  if (isBuild) {
+    const bill = ['cc_version', 'cc_entrypoint'].filter(k => eff(k) === 'worker').length;
+    const envKeys = ENV.flatMap(([, f]) => f.map(([k]) => k));
+    const worker = envKeys.filter(k => eff(k) === 'worker').length, erase = envKeys.filter(k => eff(k) === 'erase').length;
+    if (bill) chips.push(`计费 ${bill} 项服务端`);
+    if (worker) chips.push(`环境 ${worker} 项服务端`);
+    if (erase) chips.push(`擦除 ${erase} 项`);
+  }
+  document.getElementById('summary').innerHTML = chips.map(c => `<span class="chip">${c}</span>`).join('');
+}
+
+document.querySelectorAll('.scenes button').forEach(b => b.onclick = () => { state.scene = b.dataset.scene; SCENES[b.dataset.scene](); render(); });
+document.getElementById('mode').onchange = e => { state.v.mode = e.target.value; render(); };
+const initial = location.hash.slice(1);
+state.scene = SCENES[initial] ? initial : 'build';
+SCENES[state.scene]();
+render();
+</script>
+</body>
+</html>

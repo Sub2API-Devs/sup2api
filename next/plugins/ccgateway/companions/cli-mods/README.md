@@ -1,6 +1,15 @@
 # Claude Code mods 工具注入扩展
 
-当前目标为 **2.1.304 / `ccgateway-v15-cli-prefix`**（插件 0.1.72）。v15 在 v14 之上：OAuth 请求（build 与 direct）首块不是 CC 开头行或计费头时，补上 CLI 自己的终端开头行（`n1n`，判断用 `t1n`、计费块用 `B1s`），否则上游对 Sonnet/Opus 返回 429；内容策略识别用的全部 CC 文字（环境段词表、计费头、reminder 标签）改为运行时从原生 CLI 取得，不再在代码里抄写。详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.6、§6.1。
+当前目标为 **2.1.304 / `ccgateway-v16-build-prefix`**（工作树，未发布；线上仍为 v15 / 插件 0.1.72）。v16 在 v15 之上（2026-10-22 用户决定）：
+
+- **direct 为纯透传**：不补计费头、不补开头行、不改 `metadata.user_id`，body 逐字节转发；Worker 不再给 direct 解析身份。
+- **build 总带计费头和开头行**：没有计费头就插入 CLI 原生整行，缺字段补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。OAuth 首块不是开头行或计费头时，补 SDK 那句（`n1n({isNonInteractive:true,hasAppendSystemPrompt:false})`），与 `cc_entrypoint=sdk-cli` 一致。
+- **身份不可配置**：build 有 `metadata.user_id` 就替换，没有不加；核心不再下发身份来源。
+- **指纹修正**：`cc_version` 的三位指纹改为对第一条用户消息里第一个非 reminder 的 text 块计算（与原生 CC 一致），官方 `claude -p` 样本复现 `b17`。
+
+详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.2、§7。
+
+v15 `ccgateway-v15-cli-prefix`（插件 0.1.72）：OAuth 请求（build 与 direct）首块不是 CC 开头行或计费头时，补上 CLI 自己的终端开头行（`n1n`，判断用 `t1n`、计费块用 `B1s`），否则上游对 Sonnet/Opus 返回 429；内容策略识别用的全部 CC 文字（环境段词表、计费头、reminder 标签）改为运行时从原生 CLI 取得，不再在代码里抄写。详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.6。
 
 v14 `ccgateway-v14-account-identity` 新增 `request_identity_v1`：**只有 OAuth（Claude 账号）**才映射，映射密钥由账号数据卷中的**私有随机密钥**按该账号的 **Claude 邮箱**派生（`CLAUDE_CODE_USER_EMAIL`，否则 `.claude.json` 的 `oauthAccount.emailAddress`），只凭邮箱无法推算。同一账号在重启、原地更新和重新授权后映射不变，不同账号不同。Worker 对客户端用户／会话 ID 做 HMAC-SHA256，输出 64 位 hex 设备 ID 和 UUIDv4 格式会话 ID；父会话使用同一会话映射。原生会话初始化使用该结果，metadata 与原生会话头保持一致，`account_uuid` 保留 Worker 原生账号上下文。direct 只替换 `metadata.user_id` 字符串，其余字节不变；build 在原生 metadata 组装及大小预算内映射。身份来源在插件设置中配置：**客户端原始／服务端／替换（默认）**，按全局→分组→账号继承；客户端没发 `metadata.user_id` 时不生成身份，build 也会删掉 CLI 自带的 metadata；选“客户端原始”时 build 保留客户端的 metadata。**API Key 账号不做映射**：替换来源按客户端原值处理。默认来源不随请求策略下发，身份上下文只经 `CCG_REQUEST_IDENTITY` 传给 CLI，不进入 build 信封。详见 [实现与验证](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#按账号邮箱的身份映射-v14未部署)。
 
