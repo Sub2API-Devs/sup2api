@@ -27,6 +27,9 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	if p.CLIVersion == "2.1.304" || p.RelayMode == "direct" {
 		required = append(required, features.RequestPolicyModeCapability)
 	}
+	if p.RequestIdentitySources.Explicit() {
+		required = append(required, features.RequestIdentityCapability)
+	}
 	if p.RelayMode == "direct" {
 		return required
 	}

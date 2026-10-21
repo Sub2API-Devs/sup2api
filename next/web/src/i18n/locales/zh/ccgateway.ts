@@ -16,7 +16,7 @@ export default {
     removeGroupConfirm: '将删除该分组的专门配置，分组回归继承全局默认；未保存的草稿一并丢弃。',
     draftHint: '改动随页面底部的保存一起提交。', resetToGlobal: '恢复为继承全局',
     billing: '计费归属', billingHint: '仅调整 cc_version 与 cc_entrypoint；服务端使用本次请求的 CLI 原生生成值。',
-    identity: '身份标识', identityHint: '只影响 metadata.user_id。替换（默认）用该账号邮箱派生的密钥做单向映射：同一账号同一会话结果稳定，不同账号不同。客户端未发送时不生成，上游请求不带 metadata。',
+    identity: '身份标识', identityHint: '只影响 metadata.user_id，build 与 direct 都生效。替换（默认）用该账号的私有密钥按登录邮箱做单向映射：同一账号同一会话结果稳定，不同账号不同，仅凭邮箱无法推算；API Key 账号保留客户端原值。客户端未发送时不生成。',
     identitySources: { client: '客户端原始', worker: '服务端', replace: '替换' },
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
@@ -38,7 +38,7 @@ export default {
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   buildAttachments: {
-    directHint: 'direct 模式原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
+    directHint: 'direct 模式除身份标识外原样转发，不执行附件转换。已保存的选择在切回 build 后生效。',
     client: '保留客户端',
     worker: '使用服务端',
     erase: '擦除'

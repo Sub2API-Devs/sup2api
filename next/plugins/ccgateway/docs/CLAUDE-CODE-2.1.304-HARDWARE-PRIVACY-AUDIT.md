@@ -371,17 +371,20 @@ direct 如需改写 metadata，必须明确改变其当前原字节透传契约�
 
 补丁 `ccgateway-v14-account-identity` 与 `request_identity_v1` 能力。只有配对 Worker／CLI 支持时才启用，并通过 Worker 实际 capabilities 报告；旧 CLI 和 maintenance／旧 native agent 模式不启用。
 
-**只有 OAuth（Claude 账号）才映射。** API Key 账号不做任何替换：direct 原样转发，build 保持 CLI 原生 metadata。判定与 CLI 自身一致——环境里有 `ANTHROPIC_API_KEY` 即视为 API Key 账号；否则必须存在已保存的 OAuth access token（`.credentials.json` 的 `claudeAiOauth.accessToken`）。
+**只有 OAuth（Claude 账号）才映射。** API Key 账号没有可映射的 Claude 账号，替换来源按客户端原值处理：direct 原样转发，build 保留客户端的 metadata（不使用 CLI 原生值）。判定与 CLI 自身一致——环境里有 `ANTHROPIC_API_KEY` 即视为 API Key 账号；否则必须存在已保存的 OAuth access token（`.credentials.json` 的 `claudeAiOauth.accessToken`）。
 
-**映射密钥来自该账号的 Claude 邮箱**，不保存任何密钥文件，也不由账号编号、API Key 或 OAuth token 派生：
+**映射密钥 = 账号私有密钥 × Claude 邮箱**。私有密钥是 Worker 首次启用该能力时在账号数据卷（`$CCG_DATA_DIR/request-identity.key`，32 字节随机，0600）生成的，不由账号编号、API Key 或 OAuth token 派生：
 
 ```text
-email = CLAUDE_CODE_USER_EMAIL 或 .claude.json 的 oauthAccount.emailAddress
-key   = SHA-256("ccgateway-request-identity-key-v1\0" + lowercase(trim(email)))
+email  = CLAUDE_CODE_USER_EMAIL 或 .claude.json 的 oauthAccount.emailAddress
+secret = 账号数据卷中的 32 字节随机值（硬链接发布，同卷并发启动只保留一个）
+key    = HMAC-SHA256(secret, "ccgateway-request-identity-key-v2\0" + lowercase(trim(email)))
 ```
 
-- 同一邮箱在任意 Worker、任意重启后得到同一映射，因此同账号多 Worker 不会产生两套 ID；不同账号必然不同。
-- 邮箱缺失（OAuth 但读不到邮箱）或账号文件损坏时不映射，也不阻断请求：宁可不改写，也不伪造身份。
+- 只凭邮箱无法推算密钥：上游即使知道账号邮箱，也无法反查或跨账号关联映射值（v1 仅用邮箱派生，已废弃）。
+- 数据卷随账号存在：重启、原地更新、原地重新授权都保持同一映射；换成另一个 Claude 登录则映射不同；删除账号或更换数据卷后映射重新生成。
+- 密钥文件损坏时 Worker 拒绝启动，而不是悄悄换一套映射。
+- 邮箱缺失（OAuth 但读不到邮箱）或账号文件损坏时，替换来源退为“服务端”（Worker 自己的身份），不转发客户端原值。
 - 邮箱按 trim + 小写归一，避免同一账号因存储大小写不同而分叉。
 
 **`metadata.user_id` 的三种载体都要能拆。** 已核实（QNTX wire-format 文档、CLIProxyAPI #1750 与 `cloak_utils.go`、AgenticLedger 测试、coder/aibridge）：
@@ -410,11 +413,11 @@ key   = SHA-256("ccgateway-request-identity-key-v1\0" + lowercase(trim(email)))
 |---|---|
 | 客户端原始 | 客户端发什么就转发什么，不做替换 |
 | 服务端 | 用该 Worker CLI 自己的身份（设备、账号、原生会话）替换客户端值 |
-| 替换（默认） | 用客户端值做单向映射，密钥来自该账号邮箱 |
+| 替换（默认） | 用客户端值做单向映射，密钥来自账号私有密钥与登录邮箱 |
 
-客户端没发 `metadata.user_id` 时，三种来源都不生成身份：上游请求不带 metadata。build 模式因此也会删掉 CLI 自己生成的 metadata，而不是把服务端的身份塞进去。API Key 账号不参与替换，build 仍保留 CLI 原生 metadata。
+客户端没发 `metadata.user_id` 时，三种来源都不生成身份。build 模式下 Worker 总会把身份上下文交给 CLI（包括“客户端原始”和客户端没发身份的情况），CLI 据此保留客户端自己的 metadata（没有就删掉），而不是使用原生构建器生成的服务端 metadata。API Key 账号的替换来源按客户端原值处理。
 
-未显式配置来源、而 CLI 又不支持该能力时，Worker 不替换也不报错（旧运行时继续正常服务）；只有显式配置了来源却不被支持才返回 409。
+默认来源（替换）不随请求策略下发，核心只发送非默认来源。CLI 不支持该能力时，未下发来源的请求不替换也不报错（旧运行时继续正常服务）；显式配置“服务端”却不被支持才返回 409，核心的能力预检也会提前要求 `request_identity_v1`。身份上下文只经 `CCG_REQUEST_IDENTITY` 环境变量交给 CLI，从不进入 build 信封（CLI 信封只接受 `contract_version`、`build_attachment_sources`、`build_billing_sources`）。
 
 映射本身：
 
@@ -429,6 +432,8 @@ CLI 环境只收到映射后的 ID，邮箱和密钥都不进入 CLI 环境，�
 direct 的唯一原字节例外是已有非空 `metadata.user_id` 字符串：CC 完成原生认证工厂初始化后，用原生 metadata 生成器的结果替换该字符串。定位只处理顶层 metadata，不会改消息／工具里的同名字段，也不重序列化其余数字、空白、未知字段。无 user_id、null 或空串不注入；build 保持原生 metadata 组装。身份字段重复或类型错误在 Worker 发送模型请求前拒绝。
 
 验证已完成：
+
+> 以下是 v1（只用邮箱派生密钥、默认来源随策略下发）的验证记录。2026-10-21 审核修复（私有密钥 v2、默认来源不下发、身份不进 build 信封、build 总传身份上下文、API Key 账号替换按客户端原值）后，Go 与 JS 单元测试已按新语义更新；Linux 编译 CLI 的端到端验证需重跑。
 
 - 三种来源（客户端／服务端／替换）与默认值、来源不合法拒绝、CLI 不支持时默认来源静默不生效；前端 50 项相关测试与类型检查通过。
 - Go 测试：字段缺失全部跳过（无 metadata／null／空串／空对象／全 null 字段）、三种载体拆分（对象、JSON 字符串、扁平三段，含空 account 与缺 account）、邮箱派生（同邮箱稳定、大小写归一、跨邮箱不同、`CLAUDE_CODE_USER_EMAIL` 优先）、API Key／无 OAuth／无邮箱／坏文件不启用、父子映射、设备变化不改会话、两个模式的子进程环境。

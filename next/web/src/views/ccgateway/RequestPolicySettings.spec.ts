@@ -70,6 +70,21 @@ describe('CCGateway single-request modes', () => {
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.304'})}),expect.anything())
     w.unmount()
   })
+  // Identity is applied in direct as well, so it stays editable there; only the
+  // content sources are build-only.
+  it('keeps the identity source editable in direct mode', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
+    const w = await render()
+    expect(w.find('[data-testid="direct-hint"]').exists()).toBe(true)
+    expect(w.find('[data-testid="billing-sources"]').exists()).toBe(false)
+    expect(w.find('[data-testid="build-attachments"]').exists()).toBe(false)
+    expect(picked(w, '[data-testid="identity-user_id"]')).toBe(2)
+    await pick(w, '[data-testid="identity-user_id"]', 0)
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ request_policy: expect.objectContaining({ relay_mode: 'direct', request_identity_sources: { user_id: 'client' } }) }), expect.anything())
+    w.unmount()
+  })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {
     let stored = config(defaultRequestPolicy())
     mocks.get.mockImplementation(async () => structuredClone(stored))
@@ -93,7 +108,7 @@ describe('CCGateway single-request modes', () => {
     await pick(w, os, 1)
     await w.get('[data-testid="relay-mode"]').setValue('0')
     expect(w.find(platform).exists()).toBe(false)
-    expect(w.text()).toContain('direct 模式原样转发')
+    expect(w.text()).toContain('direct 模式除身份标识外原样转发')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })

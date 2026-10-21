@@ -203,27 +203,25 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(400, "invalid_request_error", err.Error())
 		return
 	}
-	// An explicitly configured source must be honoured or refused; the default
-	// source simply stays unapplied on a CLI that cannot express it, so an old
-	// runtime keeps serving requests.
+	// An explicitly configured source must be honoured or refused. The default
+	// is never sent by the host, so it simply stays unapplied on a CLI that
+	// cannot express it and an old runtime keeps serving requests.
 	identityMode := policy.Identity.Mode()
 	if identityMode != "client" && !g.CLIInfo.supports(features.RequestIdentityCapability) {
-		if policy.Identity["user_id"] != "" {
+		if policy.Identity.Explicit() {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested identity source")
 			return
 		}
 		identityMode = "client"
 	}
 	var identity *requestIdentity
-	if g.requestIdentityEnabled && identityMode != "client" {
-		if key, oauth := accountIdentityKey(g.runner(r.Context()).baseEnv()); oauth {
-			mapped, mapErr := mapRequestIdentity(key, raw, identityMode)
-			if mapErr != nil {
-				fail(400, "invalid_request_error", mapErr.Error())
-				return
-			}
-			identity = &mapped
+	if g.requestIdentityEnabled {
+		mapped, mapErr := g.resolveRequestIdentity(g.runner(r.Context()).baseEnv(), raw, identityMode)
+		if mapErr != nil {
+			fail(400, "invalid_request_error", mapErr.Error())
+			return
 		}
+		identity = &mapped
 	}
 	d.request(raw, r.Header)
 	input := raw
@@ -269,8 +267,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		}
 		if err == nil {
 			if v2 {
+				// The CLI envelope carries content sources only: the identity
+				// context travels in its own environment variable.
 				policy.ContractVersion = 2
-				policy.RelayMode, policy.CLIVersion = "", ""
+				policy.RelayMode, policy.CLIVersion, policy.Identity = "", "", nil
 				input, err = messagesBuildComponentsPolicy(input, &policy, g.Runner.WorkingDirectory)
 			} else {
 				input, err = messagesBuildComponents(input)
@@ -330,7 +330,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	cmd.Env, cmd.Dir, cmd.Stdin = runner.baseEnv(), dir, bytes.NewReader(input)
 	// The CLI needs the context whenever it must produce a value: a replaced
 	// client identity, or the client's own session for a forwarded request.
-	if identity != nil && (identity.Rewrite || identity.Session != "") {
+	// Build always needs it: the native builder invents metadata, and only the
+	// context makes the CLI keep the client's own value, or none.
+	if identity != nil && (requestMode == "build" || identity.Rewrite || identity.Session != "") {
 		mapped, _ := json.Marshal(identity)
 		cmd.Env = envWith(cmd.Env, map[string]string{
 			requestIdentityEnv: string(mapped),

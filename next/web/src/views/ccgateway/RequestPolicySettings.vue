@@ -152,6 +152,26 @@ const summary = computed(() => {
         />
       </SSettingRow>
     </SSettingsGroup>
+    <!-- Identity applies in both relay modes; only content sources are build-only. -->
+    <SSettingsGroup
+      :title="t('ccgateway.layers.identity')"
+      dense
+      data-testid="identity-sources"
+    >
+      <template #details>
+        {{ t('ccgateway.layers.identityHint') }}
+      </template>
+      <div class="py-2">
+        <SOptionMatrix
+          :model-value="identityMatrix"
+          :columns="identityOptions"
+          :rows="identityRows"
+          :disabled="disabled"
+          :aria-label="t('ccgateway.layers.identity')"
+          @change="applySources"
+        />
+      </div>
+    </SSettingsGroup>
     <SHint
       v-if="resolved.relay_mode === 'direct'"
       data-testid="direct-hint"
@@ -174,25 +194,6 @@ const summary = computed(() => {
             :rows="billingRows"
             :disabled="disabled"
             :aria-label="t('ccgateway.layers.billing')"
-            @change="applySources"
-          />
-        </div>
-      </SSettingsGroup>
-      <SSettingsGroup
-        :title="t('ccgateway.layers.identity')"
-        dense
-        data-testid="identity-sources"
-      >
-        <template #details>
-          {{ t('ccgateway.layers.identityHint') }}
-        </template>
-        <div class="py-2">
-          <SOptionMatrix
-            :model-value="identityMatrix"
-            :columns="identityOptions"
-            :rows="identityRows"
-            :disabled="disabled"
-            :aria-label="t('ccgateway.layers.identity')"
             @change="applySources"
           />
         </div>

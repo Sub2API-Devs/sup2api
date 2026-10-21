@@ -11,6 +11,8 @@ function identity() {
   try { value = JSON.parse(raw); } catch { throw Error('Invalid Worker request identity'); }
   if (!value || value.version !== 2 || !modes.has(value.mode) ||
       typeof value.rewrite !== 'boolean' ||
+      // A forwarded client value is never rewritten with this CLI's identity.
+      value.mode === 'client' && value.rewrite ||
       value.session_id !== undefined && !uuid.test(value.session_id) ||
       value.device_id !== undefined && !/^[0-9a-f]{64}$/.test(value.device_id) ||
       value.parent_session_id !== undefined && !uuid.test(value.parent_session_id) ||

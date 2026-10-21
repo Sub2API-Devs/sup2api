@@ -103,6 +103,22 @@ func cloneSourceMap[M ~map[string]string](m M) M {
 	return out
 }
 
+// mergeSourceMap applies a saved source map onto the stored one: nil keeps the
+// stored map, empty resets it, and entries override key by key.
+func mergeSourceMap[M ~map[string]string](in, stored M) M {
+	if in == nil {
+		return stored
+	}
+	if len(in) == 0 {
+		return in
+	}
+	merged := cloneSourceMap(stored)
+	for k, v := range in {
+		merged[k] = v
+	}
+	return merged
+}
+
 func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[string]string, layer string) {
 	for key, pair := range map[string][2]*string{
 		"relay_mode": {o.RelayMode, &p.RelayMode}, "unknown_field": {o.UnknownField, &p.UnknownField},
@@ -187,7 +203,7 @@ func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy
 	}
 	for _, k := range features.RequestIdentityFields {
 		if p.RequestIdentitySources[k] == "" {
-			p.RequestIdentitySources[k] = "replace"
+			p.RequestIdentitySources[k] = features.RequestIdentityDefault
 		}
 		sources["request_identity_sources."+k] = "global"
 	}
@@ -270,6 +286,13 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	for k, v := range p.BuildBillingSources {
 		if v == "client" {
 			delete(p.BuildBillingSources, k)
+		}
+	}
+	// The identity default is the Worker's own default as well, so only another
+	// source is sent; a CLI that cannot honour "worker" refuses the request.
+	for k, v := range p.RequestIdentitySources {
+		if v == features.RequestIdentityDefault {
+			delete(p.RequestIdentitySources, k)
 		}
 	}
 	if p.RelayMode == "direct" {

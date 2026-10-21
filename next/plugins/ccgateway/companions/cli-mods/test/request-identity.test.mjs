@@ -33,6 +33,14 @@ test('build metadata follows the configured identity source', async () => {
   });
   await context(payload({ mode: 'client', rewrite: false }), () => {
     assert.deepEqual(applyBuildMetadata(built(), client, native).metadata, client);
+    // The client's own source never invents one either.
+    assert.ok(!Object.hasOwn(applyBuildMetadata(built(), undefined, native), 'metadata'));
+    assert.deepEqual(applyBuildMetadata(built(), { other: 1 }, native).metadata, { other: 1 });
+  });
+  // A forwarded client value is never rewritten with this CLI's identity.
+  await context(payload({ mode: 'client', rewrite: true }), () => {
+    assert.throws(() => applyBuildMetadata(built(), client, native), /Invalid Worker request identity/);
+    assert.throws(() => rewriteDirectIdentity('{"metadata":{"user_id":"x"}}', native), /Invalid Worker request identity/);
   });
   // A client that sent no identity gets none: the native value is discarded.
   await context(payload(), () => {

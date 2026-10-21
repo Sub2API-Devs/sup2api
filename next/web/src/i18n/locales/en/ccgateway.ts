@@ -16,7 +16,7 @@ export default {
     removeGroupConfirm: 'Removes this group policy so the group inherits the global defaults again; unsaved drafts are discarded.',
     draftHint: 'Changes are submitted with the save button at the bottom of the page.', resetToGlobal: 'Reset to global',
     billing: 'Billing attribution', billingHint: 'Only cc_version and cc_entrypoint are changed. Server values use native CLI generation for this request.',
-    identity: 'Identity', identityHint: 'Affects metadata.user_id only. Replace (default) maps the value one way with a key derived from the account email: stable per account and conversation, different across accounts. Nothing is generated when the client sends none, so the request carries no metadata.',
+    identity: 'Identity', identityHint: 'Affects metadata.user_id only, in both build and direct. Replace (default) maps the value one way with the account private key and its login email: stable per account and conversation, different across accounts, and not derivable from the email alone. API-key accounts keep the client value. Nothing is generated when the client sends none.',
     identitySources: { client: 'Client value', worker: 'Server', replace: 'Replace' },
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
@@ -38,7 +38,7 @@ export default {
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
   buildAttachments: {
-    directHint: 'Direct mode forwards the body unchanged. Saved choices apply when you switch back to build.',
+    directHint: 'Direct mode forwards the body unchanged except for the identity. Saved choices apply when you switch back to build.',
     client: 'Keep client',
     worker: 'Use server',
     erase: 'Erase'

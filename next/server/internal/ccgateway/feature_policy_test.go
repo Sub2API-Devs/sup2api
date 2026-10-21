@@ -107,6 +107,64 @@ func TestFeatureRequiredCapabilities(t *testing.T) {
 	require.Contains(t, required, features.BuildBillingCapability)
 	p.RelayMode = "direct"
 	require.Equal(t, []string{features.RequestPolicyModeCapability}, requestPolicyCapabilities(p))
+	// Only an identity source other than the default needs the identity CLI.
+	p.RequestIdentitySources = features.RequestIdentitySources{"user_id": "worker"}
+	require.Contains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
+	p.RelayMode = ""
+	require.Contains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
+	for _, source := range []string{"client", ""} {
+		p.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
+		require.NotContains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability, source)
+	}
+}
+
+// The identity default never reaches the wire: a Worker that cannot map
+// identities keeps serving instead of refusing every request. Another source is
+// sent in both relay modes, since identity applies to direct as well.
+func TestWirePolicyOmitsDefaultIdentity(t *testing.T) {
+	svc := &Service{}
+	for _, mode := range []string{"build", "direct"} {
+		cfg := Config{RequestPolicy: ptrPolicy(defaultRequestPolicy())}
+		cfg.RequestPolicy.RelayMode = mode
+		p, err := svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+		require.NoError(t, err)
+		require.Empty(t, p.RequestIdentitySources, mode)
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), "request_identity_sources", mode)
+		require.Equal(t, "replace", cfg.ResolveFeaturePolicy(0, AccountFeaturePolicy{}).Effective.RequestIdentitySources["user_id"], "the preview still shows the applied default")
+
+		explicit := features.RequestIdentityDefault
+		cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": explicit}
+		p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+		require.NoError(t, err)
+		require.Empty(t, p.RequestIdentitySources, "an explicit default is still the default")
+		for _, source := range []string{"client", "worker"} {
+			cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
+			p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+			require.NoError(t, err)
+			require.Equal(t, features.RequestIdentitySources{"user_id": source}, p.RequestIdentitySources, mode)
+		}
+	}
+}
+
+// A global save that omits a source map keeps the stored one; {} resets it.
+func TestGlobalSavePreservesOmittedIdentitySources(t *testing.T) {
+	stored := defaultRequestPolicy()
+	stored.RequestIdentitySources = features.RequestIdentitySources{"user_id": "client"}
+	stored.BuildBillingSources = features.BuildBillingSources{"cc_version": "worker"}
+	old := Config{Mode: "disabled", RequestPolicy: &stored, FeatureRevision: 3}
+	in := defaultRequestPolicy()
+	in.RequestIdentitySources, in.BuildBillingSources = nil, nil
+	got, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &in, FeatureRevision: 3}, old)
+	require.NoError(t, err)
+	require.Equal(t, stored.RequestIdentitySources, got.RequestPolicy.RequestIdentitySources)
+	require.Equal(t, stored.BuildBillingSources, got.RequestPolicy.BuildBillingSources)
+	reset := defaultRequestPolicy()
+	reset.RequestIdentitySources = features.RequestIdentitySources{}
+	got, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &reset, FeatureRevision: 3}, old)
+	require.NoError(t, err)
+	require.Empty(t, got.RequestPolicy.RequestIdentitySources)
 }
 
 func TestAccountFeaturePolicyRevisionAndClear(t *testing.T) {

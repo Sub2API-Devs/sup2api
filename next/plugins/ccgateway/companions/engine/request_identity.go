@@ -3,11 +3,15 @@ package engine
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -15,38 +19,108 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
-const requestIdentityEnv = "CCG_REQUEST_IDENTITY"
+const (
+	requestIdentityEnv        = "CCG_REQUEST_IDENTITY"
+	requestIdentitySecretFile = "request-identity.key"
+)
 
 // configureRequestIdentity enables the mapping only for a request-mode runtime
 // whose CLI declares it: the native session factory is what carries the mapped
-// session into the metadata and the transport headers.
-func (g *Gateway) configureRequestIdentity() {
+// session into the metadata and the transport headers. The account's mapping
+// secret lives in the persistent data directory, so restarts and in-place
+// updates keep every mapping.
+func (g *Gateway) configureRequestIdentity(root string) error {
 	g.requestIdentityEnabled = !g.MaintenanceOnly && g.RequestMode != "" && g.CLIInfo.supports(features.RequestIdentityCapability)
+	if !g.requestIdentityEnabled {
+		return nil
+	}
+	secret, err := loadRequestIdentitySecret(filepath.Join(root, requestIdentitySecretFile))
+	if err != nil {
+		return fmt.Errorf("request identity secret: %w", err)
+	}
+	g.requestIdentitySecret = secret
+	return nil
 }
 
-// accountIdentityKey derives the mapping key from the account's Claude email.
-// An API-key account keeps its identifiers untouched: there is no Claude
-// account behind it, so nothing would be gained by rewriting them. The same
-// email always yields the same key, so every Worker of one account maps a
-// client identifier to one value and two accounts never share a mapping.
-func accountIdentityKey(env []string) ([]byte, bool) {
+// loadRequestIdentitySecret reads the account secret, creating it once. The
+// secret is published with a hard link so that of two processes starting on
+// one volume, exactly one complete secret survives.
+func loadRequestIdentitySecret(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path)
+	if err == nil {
+		if len(raw) != 32 {
+			return nil, errors.New("stored secret is invalid")
+		}
+		return raw, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	secret := make([]byte, 32)
+	if _, err = rand.Read(secret); err != nil {
+		return nil, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".request-identity-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmp.Name())
+	_, err = tmp.Write(secret)
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), 0600)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err = os.Link(tmp.Name(), path); os.IsExist(err) {
+		return loadRequestIdentitySecret(path)
+	}
+	return secret, err
+}
+
+// requestIdentityKey derives the mapping key of the account's Claude login:
+// the Worker's private secret, keyed by the login's email. The secret makes the
+// mapping unlinkable for anyone who knows the email; the email gives an account
+// re-authorised with another Claude login a mapping of its own. oauth is false
+// for an API-key account, which has no Claude account to map for; the key is
+// nil when the login's email is unknown.
+func requestIdentityKey(secret []byte, env []string) (key []byte, oauth bool) {
 	if environmentValue(env, "ANTHROPIC_API_KEY") != "" || storedOAuthIn(env).access == "" {
 		return nil, false
 	}
 	email := strings.TrimSpace(environmentValue(env, "CLAUDE_CODE_USER_EMAIL"))
 	if email == "" {
-		config, err := readSnapshotObject(snapshotGlobalConfigPath(env))
-		if err != nil || config == nil {
-			return nil, false
+		if config, err := readSnapshotObject(snapshotGlobalConfigPath(env)); err == nil && config != nil {
+			account, _ := config["oauthAccount"].(map[string]any)
+			email = strings.TrimSpace(str(account, "emailAddress"))
 		}
-		account, _ := config["oauthAccount"].(map[string]any)
-		email = strings.TrimSpace(str(account, "emailAddress"))
 	}
-	if email == "" {
-		return nil, false
+	if email == "" || len(secret) == 0 {
+		return nil, true
 	}
-	sum := sha256.Sum256([]byte("ccgateway-request-identity-key-v1\x00" + strings.ToLower(email)))
-	return sum[:], true
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte("ccgateway-request-identity-key-v2\x00" + strings.ToLower(email)))
+	return mac.Sum(nil), true
+}
+
+// resolveRequestIdentity is the identity context of one request. Replace needs
+// a key: an API-key account keeps the client's value, and a login whose email
+// is unknown falls back to the Worker's own identity rather than forwarding the
+// client's.
+func (g *Gateway) resolveRequestIdentity(env []string, raw []byte, mode string) (requestIdentity, error) {
+	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
+	if mode == "replace" && !oauth {
+		mode = "client"
+	} else if mode == "replace" && key == nil {
+		mode = "worker"
+	}
+	return mapRequestIdentity(key, raw, mode)
 }
 
 // legacyUserID is the flat form older clients put in metadata.user_id:

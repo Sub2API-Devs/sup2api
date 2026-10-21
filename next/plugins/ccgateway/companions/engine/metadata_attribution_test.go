@@ -68,40 +68,97 @@ func accountEnv(t *testing.T, email string, oauth bool) []string {
 	return []string{"HOME=" + config, "CLAUDE_CONFIG_DIR=" + config, "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + config}
 }
 
-func TestAccountIdentityKeyFollowsTheClaudeEmail(t *testing.T) {
-	key := func(t *testing.T, env ...string) []byte {
+func TestRequestIdentityKeyFollowsTheSecretAndClaudeEmail(t *testing.T) {
+	secret := bytes.Repeat([]byte{0x24}, 32)
+	key := func(t *testing.T, secret []byte, env ...string) []byte {
 		t.Helper()
-		value, ok := accountIdentityKey(env)
-		require.True(t, ok, env)
+		value, oauth := requestIdentityKey(secret, env)
+		require.True(t, oauth, env)
 		require.Len(t, value, 32)
 		return value
 	}
-	// The same account maps identically on every Worker; case differences in
-	// the stored address do not fork it.
-	first := key(t, accountEnv(t, "ops@example.invalid", true)...)
-	require.Equal(t, first, key(t, accountEnv(t, "ops@example.invalid", true)...))
-	require.Equal(t, first, key(t, accountEnv(t, "OPS@Example.Invalid", true)...))
-	require.NotEqual(t, first, key(t, accountEnv(t, "other@example.invalid", true)...))
+	// One account maps identically across restarts; case differences in the
+	// stored address do not fork it.
+	first := key(t, secret, accountEnv(t, "ops@example.invalid", true)...)
+	require.Equal(t, first, key(t, secret, accountEnv(t, "ops@example.invalid", true)...))
+	require.Equal(t, first, key(t, secret, accountEnv(t, "OPS@Example.Invalid", true)...))
+	// Another Claude login, even on the same account volume, maps on its own.
+	require.NotEqual(t, first, key(t, secret, accountEnv(t, "other@example.invalid", true)...))
+	// Knowing the email is not enough: without the account secret the key, and
+	// so every mapped identifier, cannot be recomputed.
+	require.NotEqual(t, first, key(t, bytes.Repeat([]byte{0x25}, 32), accountEnv(t, "ops@example.invalid", true)...))
 	// An explicit address wins over the stored account.
 	env := append(accountEnv(t, "ops@example.invalid", true), "CLAUDE_CODE_USER_EMAIL=override@example.invalid")
-	require.NotEqual(t, first, key(t, env...))
-	require.Equal(t, key(t, env...), key(t, env...))
+	require.NotEqual(t, first, key(t, secret, env...))
+	require.Equal(t, key(t, secret, env...), key(t, secret, env...))
 
 	for name, env := range map[string][]string{
-		"api key account":         append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"),
-		"no stored claude login":  accountEnv(t, "ops@example.invalid", false),
-		"no email in the account": accountEnv(t, "", true),
+		"api key account":        append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"),
+		"no stored claude login": accountEnv(t, "ops@example.invalid", false),
 	} {
-		value, ok := accountIdentityKey(env)
-		require.False(t, ok, name)
+		value, oauth := requestIdentityKey(secret, env)
+		require.False(t, oauth, name)
 		require.Nil(t, value, name)
 	}
-	// A corrupt account file is not an identity: it neither maps nor blocks.
+	// A Claude login whose email is unknown (absent or a corrupt account file)
+	// is still an OAuth account, just one without a mapping key.
 	config := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(config, ".claude.json"), []byte("{"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0600))
-	_, ok := accountIdentityKey([]string{"CLAUDE_CONFIG_DIR=" + config, "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + config})
-	require.False(t, ok)
+	for name, env := range map[string][]string{
+		"no email in the account": accountEnv(t, "", true),
+		"corrupt account file":    {"CLAUDE_CONFIG_DIR=" + config, "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + config},
+	} {
+		value, oauth := requestIdentityKey(secret, env)
+		require.True(t, oauth, name)
+		require.Nil(t, value, name)
+	}
+}
+
+// Replace needs a key. Without one the request keeps a safe identity instead of
+// failing: an API-key account forwards the client's value, an OAuth login with
+// no known email uses the Worker's own.
+func TestResolveRequestIdentityFallbacks(t *testing.T) {
+	g := &Gateway{requestIdentitySecret: bytes.Repeat([]byte{0x24}, 32)}
+	raw := []byte(`{"metadata":{"user_id":"{\"device_id\":\"client-device\",\"session_id\":\"3f2a1b0c-4d5e-4f70-8192-a3b4c5d6e7f8\"}"}}`)
+	for name, tc := range map[string]struct {
+		env      []string
+		mode     string
+		want     string
+		rewrite  bool
+		mapsUser bool
+	}{
+		"oauth replace":    {accountEnv(t, "ops@example.invalid", true), "replace", "replace", true, true},
+		"api key replace":  {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "replace", "client", false, false},
+		"no email replace": {accountEnv(t, "", true), "replace", "worker", true, false},
+		"api key worker":   {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "worker", "worker", true, false},
+		"oauth client":     {accountEnv(t, "ops@example.invalid", true), "client", "client", false, false},
+	} {
+		value, err := g.resolveRequestIdentity(tc.env, raw, tc.mode)
+		require.NoError(t, err, name)
+		require.Equal(t, tc.want, value.Mode, name)
+		require.Equal(t, tc.rewrite, value.Rewrite, name)
+		require.Equal(t, tc.mapsUser, value.Device != "", name)
+	}
+}
+
+// The account secret is created once in the data directory and reused; a
+// damaged secret stops the Worker rather than silently changing every mapping.
+func TestRequestIdentitySecretPersists(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, requestIdentitySecretFile)
+	first, err := loadRequestIdentitySecret(path)
+	require.NoError(t, err)
+	require.Len(t, first, 32)
+	again, err := loadRequestIdentitySecret(path)
+	require.NoError(t, err)
+	require.Equal(t, first, again)
+	entries, err := os.ReadDir(root)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "the temporary secret file is removed")
+	require.NoError(t, os.WriteFile(path, []byte("short"), 0600))
+	_, err = loadRequestIdentitySecret(path)
+	require.Error(t, err)
 }
 
 func TestAccountRequestIdentitySemantics(t *testing.T) {
@@ -288,8 +345,12 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 		require.False(t, absent.Rewrite, mode)
 		require.Empty(t, absent.Session, mode)
 	}
-	// Sources are a closed vocabulary; the empty set is the default replace.
+	// Sources are a closed vocabulary; the empty set is the default replace,
+	// which is never explicit: only another source must be honoured or refused.
 	require.Equal(t, "replace", features.RequestIdentitySources{}.Mode())
+	require.False(t, features.RequestIdentitySources{}.Explicit())
+	require.False(t, features.RequestIdentitySources{"user_id": "client"}.Explicit())
+	require.True(t, features.RequestIdentitySources{"user_id": "worker"}.Explicit())
 	require.Equal(t, "client", features.RequestIdentitySources{"user_id": "client"}.Mode())
 	require.Equal(t, "worker", features.RequestIdentitySources{"user_id": "worker"}.Mode())
 	require.NoError(t, features.RequestIdentitySources{"user_id": "replace"}.Validate())
@@ -299,20 +360,23 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 }
 
 func TestRequestIdentityCapabilityIsNotInferred(t *testing.T) {
+	root := t.TempDir()
 	g := &Gateway{RequestMode: "build"}
-	g.configureRequestIdentity()
+	require.NoError(t, g.configureRequestIdentity(root))
 	require.False(t, g.requestIdentityEnabled)
+	require.NoFileExists(t, filepath.Join(root, requestIdentitySecretFile), "no secret without the capability")
 	g.CLIInfo.Capabilities = []string{"request_build", features.RequestIdentityCapability}
-	g.configureRequestIdentity()
+	require.NoError(t, g.configureRequestIdentity(root))
 	require.True(t, g.requestIdentityEnabled)
+	require.Len(t, g.requestIdentitySecret, 32)
 	require.Contains(t, g.requestCapabilities(), features.RequestIdentityCapability)
 	g.MaintenanceOnly = true
-	g.configureRequestIdentity()
+	require.NoError(t, g.configureRequestIdentity(root))
 	require.False(t, g.requestIdentityEnabled)
 	require.NotContains(t, g.requestCapabilities(), features.RequestIdentityCapability)
 	// The legacy native agent loop keeps its own session handling.
 	g.MaintenanceOnly, g.RequestMode = false, ""
-	g.configureRequestIdentity()
+	require.NoError(t, g.configureRequestIdentity(root))
 	require.False(t, g.requestIdentityEnabled)
 	require.True(t, regexp.MustCompile(`^[a-f0-9-]{36}$`).MatchString(uuid()))
 }

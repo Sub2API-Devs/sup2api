@@ -13,7 +13,8 @@ var RequestIdentityFields = []string{"user_id"}
 //	replace - the client's value, mapped one-way with the account key (default)
 //
 // A client that sends no user_id never gets one: the request is forwarded
-// without metadata instead of being given an identity.
+// without metadata instead of being given an identity. An API-key account has
+// no Claude account to map for, so replace forwards the client's value there.
 type RequestIdentitySources map[string]string
 
 func (p RequestIdentitySources) Validate() error {
@@ -25,13 +26,23 @@ func (p RequestIdentitySources) Validate() error {
 	return nil
 }
 
-// Mode is the effective source: the configured one, or the default replace.
+// RequestIdentityDefault applies when no layer configures the source. It is
+// also the wire default: the host omits it, so a Worker whose CLI cannot map
+// identities keeps forwarding the client's value instead of refusing requests.
+const RequestIdentityDefault = "replace"
+
+// Mode is the effective source: the configured one, or the default.
 func (p RequestIdentitySources) Mode() string {
 	if source := p["user_id"]; source == "client" || source == "worker" {
 		return source
 	}
-	return "replace"
+	return RequestIdentityDefault
 }
 
-// UsesWorker reports whether the Worker rewrites the client's value at all.
-func (p RequestIdentitySources) UsesWorker() bool { return p.Mode() != "client" }
+// Explicit reports whether the policy names a source that only a CLI with
+// RequestIdentityCapability can honour; such a request is refused rather than
+// silently forwarded with the client's identity.
+func (p RequestIdentitySources) Explicit() bool {
+	source := p["user_id"]
+	return source != "" && source != "client"
+}

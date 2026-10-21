@@ -49,6 +49,8 @@ func TestRequestCommandReportsContainerResourcesAndDisablesTelemetry(t *testing.
 	}
 }
 
+// Only an OAuth account maps the client's identity. Build always tells the CLI
+// which metadata to keep, because its native builder would otherwise invent one.
 func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -79,7 +81,7 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 					CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestIdentityCapability}},
 					Runner:  &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), account, remove...)}}
-				g.configureRequestIdentity()
+				require.NoError(t, g.configureRequestIdentity(root))
 				body := `{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"source-device\",\"session_id\":\"source-session\"}"}}`
 				request := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
 				request.Header.Set("x-api-key", "fixture")
@@ -91,8 +93,16 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				var env map[string]string
 				require.NoError(t, json.Unmarshal(data, &env))
 				if apiKey {
-					require.Empty(t, env[requestIdentityEnv], "an API-key account keeps its own identifiers")
-					require.Equal(t, "untrusted", env["CLAUDE_CODE_REMOTE_SESSION_ID"])
+					// An API-key account forwards the client's value: direct needs
+					// no context, build is told to keep the client's metadata.
+					if mode == "direct" {
+						require.Empty(t, env[requestIdentityEnv], "an API-key account keeps the client's identifiers")
+						require.Equal(t, "untrusted", env["CLAUDE_CODE_REMOTE_SESSION_ID"])
+						return
+					}
+					var identity requestIdentity
+					require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity))
+					require.Equal(t, requestIdentity{Version: 2, Mode: "client", Carrier: "json"}, identity)
 					return
 				}
 				var identity requestIdentity
@@ -110,9 +120,59 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				require.Equal(t, 200, response.Code, response.Body.String())
 				data, err = os.ReadFile(target)
 				require.NoError(t, err)
+				env = nil
 				require.NoError(t, json.Unmarshal(data, &env))
-				require.Empty(t, env[requestIdentityEnv], "no client identity: the CLI runs natively")
+				if mode == "direct" {
+					require.Empty(t, env[requestIdentityEnv], "no client identity: direct forwards the bytes natively")
+					return
+				}
+				// Build carries no rewrite: the CLI drops the metadata its native
+				// builder would invent instead of giving the request an identity.
+				identity = requestIdentity{}
+				require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity))
+				require.Equal(t, requestIdentity{Version: 2, Mode: "replace"}, identity)
 			})
+		}
+	}
+}
+
+// The CLI envelope accepts exactly the keys of validateRequestPolicy in
+// cli-mods/request-policy.js. Host-only fields (mode, version, identity) must be
+// removed first, or the CLI refuses every build request.
+func TestBuildEnvelopeCarriesOnlyCLIPolicyKeys(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	root := t.TempDir()
+	capture := filepath.Join(root, "requests.jsonl")
+	g := &Gateway{RequestMode: "build", Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
+		CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", features.BuildContentPreservationCapability,
+			features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestIdentityCapability}},
+		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
+			"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture,
+		})}}
+	require.NoError(t, g.configureRequestIdentity(root))
+	for i, policy := range []string{
+		`{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","request_identity_sources":{"user_id":"worker"},"build_billing_sources":{"cc_version":"worker"}}`,
+		`{"relay_mode":"build","request_identity_sources":{"user_id":"client"}}`,
+		`{"relay_mode":"build"}`,
+	} {
+		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"opaque"}}`))
+		req.Header.Set("x-api-key", "fixture")
+		req.Header.Set(policyHeader, policy)
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, req)
+		require.Equal(t, 200, out.Code, out.Body.String())
+		captured, err := os.ReadFile(capture)
+		require.NoError(t, err)
+		lines := bytes.Split(bytes.TrimSpace(captured), []byte("\n"))
+		require.Len(t, lines, i+1)
+		var envelope struct {
+			RequestPolicy map[string]json.RawMessage `json:"requestPolicy"`
+		}
+		require.NoError(t, json.Unmarshal(lines[i], &envelope))
+		require.Equal(t, json.RawMessage("2"), envelope.RequestPolicy["contract_version"], policy)
+		for key := range envelope.RequestPolicy {
+			require.Contains(t, []string{"contract_version", "build_attachment_sources", "build_billing_sources"}, key, policy)
 		}
 	}
 }

@@ -359,24 +359,9 @@ func mergeConfig(c, old Config) (Config, error) {
 	} else if old.RequestPolicy != nil {
 		// Older clients do not know the new source maps. Omission preserves
 		// them, while an explicit {} remains an intentional reset.
-		if c.RequestPolicy.BuildBillingSources == nil {
-			c.RequestPolicy.BuildBillingSources = old.RequestPolicy.BuildBillingSources
-		} else if len(c.RequestPolicy.BuildBillingSources) > 0 {
-			merged := cloneSourceMap(old.RequestPolicy.BuildBillingSources)
-			for k, v := range c.RequestPolicy.BuildBillingSources {
-				merged[k] = v
-			}
-			c.RequestPolicy.BuildBillingSources = merged
-		}
-		if c.RequestPolicy.BuildAttachmentSources == nil {
-			c.RequestPolicy.BuildAttachmentSources = old.RequestPolicy.BuildAttachmentSources
-		} else if len(c.RequestPolicy.BuildAttachmentSources) > 0 {
-			merged := cloneSourceMap(old.RequestPolicy.BuildAttachmentSources)
-			for k, v := range c.RequestPolicy.BuildAttachmentSources {
-				merged[k] = v
-			}
-			c.RequestPolicy.BuildAttachmentSources = merged
-		}
+		c.RequestPolicy.BuildBillingSources = mergeSourceMap(c.RequestPolicy.BuildBillingSources, old.RequestPolicy.BuildBillingSources)
+		c.RequestPolicy.BuildAttachmentSources = mergeSourceMap(c.RequestPolicy.BuildAttachmentSources, old.RequestPolicy.BuildAttachmentSources)
+		c.RequestPolicy.RequestIdentitySources = mergeSourceMap(c.RequestPolicy.RequestIdentitySources, old.RequestPolicy.RequestIdentitySources)
 	}
 	policy := c.EffectiveRequestPolicy()
 	if err := validateRequestPolicy(policy); err != nil {
