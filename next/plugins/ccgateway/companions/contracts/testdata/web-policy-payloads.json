@@ -1,0 +1,606 @@
+{
+  "cases": [
+    {
+      "name": "global-default",
+      "layer": "global",
+      "group_id": 0,
+      "saved": {
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5
+      },
+      "body": {
+        "account_runtimes": true,
+        "mode": "controller",
+        "scheme": "https",
+        "host": "ccg.example.com",
+        "port": 443,
+        "base_path": "",
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5,
+        "images": {
+          "app": "",
+          "egress": "",
+          "controller": ""
+        },
+        "network": {
+          "pool": "10.0.0.0/8",
+          "allocation": "random"
+        }
+      },
+      "expect": {
+        "relay_mode": "build",
+        "request_identity_sources.user_id": "replace",
+        "build_billing_sources.cc_version": "client",
+        "build_attachment_sources.platform_name": "client"
+      }
+    },
+    {
+      "name": "global-sources",
+      "layer": "global",
+      "group_id": 0,
+      "saved": {
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5
+      },
+      "body": {
+        "account_runtimes": true,
+        "mode": "controller",
+        "scheme": "https",
+        "host": "ccg.example.com",
+        "port": 443,
+        "base_path": "",
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {
+            "platform_name": "worker",
+            "os_version": "erase"
+          },
+          "build_billing_sources": {
+            "cc_version": "worker"
+          },
+          "request_identity_sources": {
+            "user_id": "client"
+          },
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5,
+        "images": {
+          "app": "",
+          "egress": "",
+          "controller": ""
+        },
+        "network": {
+          "pool": "10.0.0.0/8",
+          "allocation": "random"
+        }
+      },
+      "expect": {
+        "relay_mode": "build",
+        "request_identity_sources.user_id": "client",
+        "build_billing_sources.cc_version": "worker",
+        "build_attachment_sources.platform_name": "worker",
+        "build_attachment_sources.os_version": "erase"
+      }
+    },
+    {
+      "name": "global-direct",
+      "layer": "global",
+      "group_id": 0,
+      "saved": {
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5
+      },
+      "body": {
+        "account_runtimes": true,
+        "mode": "controller",
+        "scheme": "https",
+        "host": "ccg.example.com",
+        "port": 443,
+        "base_path": "",
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {
+            "user_id": "worker"
+          },
+          "relay_mode": "direct",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {},
+        "feature_revision": 5,
+        "images": {
+          "app": "",
+          "egress": "",
+          "controller": ""
+        },
+        "network": {
+          "pool": "10.0.0.0/8",
+          "allocation": "random"
+        }
+      },
+      "expect": {
+        "relay_mode": "direct",
+        "request_identity_sources.user_id": "worker"
+      }
+    },
+    {
+      "name": "group-sources",
+      "layer": "group",
+      "group_id": 3,
+      "saved": {
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {
+          "3": {
+            "enabled": true,
+            "allow_account_override": true,
+            "overrides": {}
+          }
+        },
+        "feature_revision": 5
+      },
+      "body": {
+        "account_runtimes": true,
+        "mode": "controller",
+        "scheme": "https",
+        "host": "ccg.example.com",
+        "port": 443,
+        "base_path": "",
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {
+          "3": {
+            "enabled": true,
+            "allow_account_override": true,
+            "overrides": {
+              "request_identity_sources": {
+                "user_id": "worker"
+              },
+              "build_billing_sources": {
+                "cc_entrypoint": "worker"
+              }
+            }
+          }
+        },
+        "feature_revision": 5,
+        "images": {
+          "app": "",
+          "egress": "",
+          "controller": ""
+        },
+        "network": {
+          "pool": "10.0.0.0/8",
+          "allocation": "random"
+        }
+      },
+      "expect": {
+        "request_identity_sources.user_id": "worker",
+        "build_billing_sources.cc_entrypoint": "worker",
+        "build_billing_sources.cc_version": "client"
+      }
+    },
+    {
+      "name": "account-sources",
+      "layer": "account",
+      "group_id": 3,
+      "saved": {
+        "request_policy": {
+          "unknown_field": "reject",
+          "allow_fast": true,
+          "allow_effort": true,
+          "custom_tool_prefix": "ccgateway",
+          "tool_search": "request",
+          "thinking_disabled_compat": "pass",
+          "erase_client_attachments": [],
+          "replace_client_attachments": [],
+          "build_attachment_sources": {},
+          "build_billing_sources": {},
+          "request_identity_sources": {},
+          "relay_mode": "build",
+          "cli_version": "2.1.304",
+          "betas": [
+            {
+              "name": "interleaved-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "fine-grained-tool-streaming-2025-05-14",
+              "mapping": "fine_grained_tools"
+            },
+            {
+              "name": "context-1m-2025-08-07",
+              "mapping": "forward"
+            },
+            {
+              "name": "fast-mode-2026-02-01",
+              "mapping": "fast"
+            },
+            {
+              "name": "advanced-tool-use-2025-11-20",
+              "mapping": "tool_search"
+            },
+            {
+              "name": "dev-full-thinking-2025-05-14",
+              "mapping": "forward"
+            },
+            {
+              "name": "model-context-window-exceeded-2025-08-26",
+              "mapping": "forward"
+            }
+          ]
+        },
+        "cc_feature_groups": {
+          "3": {
+            "enabled": true,
+            "allow_account_override": true,
+            "overrides": {
+              "request_identity_sources": {
+                "user_id": "worker"
+              }
+            }
+          }
+        },
+        "feature_revision": 5
+      },
+      "body": {
+        "mode": "custom",
+        "overrides": {
+          "request_identity_sources": {
+            "user_id": "client"
+          },
+          "build_billing_sources": {
+            "cc_version": "worker"
+          }
+        },
+        "revision": 8
+      },
+      "expect": {
+        "request_identity_sources.user_id": "client",
+        "build_billing_sources.cc_version": "worker"
+      }
+    }
+  ]
+}

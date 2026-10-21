@@ -21,6 +21,14 @@ on:
       - 'next/deploy/docker/build-ccgateway-images.sh'
       - 'next/tools/sub2api-plugin/**'
       - '.github/workflows/ccgateway-images.yml'
+  # Pull requests run the tests only; images are built and published on push.
+  pull_request:
+    paths:
+      - 'next/plugins/ccgateway/companions/**'
+      - 'next/plugins/ccgateway/manifest.json'
+      - 'next/deploy/docker/build-ccgateway-images.sh'
+      - 'next/tools/sub2api-plugin/**'
+      - '.github/workflows/ccgateway-images.yml'
   workflow_dispatch:
 
 concurrency:
@@ -50,11 +58,20 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+      # Shared vocabulary and the cross-layer contract fixtures (testdata/).
+      - name: contracts (Go)
+        run: sh .github/next-ci/next-check-module.sh next/plugins/ccgateway/companions/contracts
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
       - name: Mod attachment policy
         run: node --test next/plugins/ccgateway/companions/engine/attachment_policy_mod_test.mjs
+      # The CLI support modules, including the Worker → CLI contract fixture.
+      - name: CLI mods
+        working-directory: next/plugins/ccgateway/companions/cli-mods
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm test
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -69,6 +86,7 @@ jobs:
   # does with REQUIRE_CCGATEWAY_IMAGES=1. Nothing is published.
   bundle:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       GOFLAGS: -buildvcs=false
@@ -110,6 +128,7 @@ jobs:
 
   images:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

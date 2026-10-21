@@ -218,3 +218,28 @@ jobs:
           done
       - name: go.sum / go.work.sum unchanged
         run: sh .github/next-ci/next-sums-clean.sh
+
+  # -------------------------------------------------------------------- web
+  # The console: types and unit tests, including the editor half of the
+  # editor → core contract fixture (plugins/ccgateway/companions/contracts/
+  # testdata), whose core half runs in the server job.
+  web:
+    name: web console
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          # The image builds the console with node:24 (next/Dockerfile NODE_IMAGE).
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: next/web/package-lock.json
+      - name: Install
+        working-directory: next/web
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: next/web
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: next/web
+        run: npm test
