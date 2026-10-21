@@ -8,7 +8,7 @@ const [sourceArg, outputArg] = process.argv.slice(2);
 if (!sourceArg || !outputArg) throw Error('Usage: node patch-cli-2.1.304.cjs restored-source new-output-directory');
 const source = path.resolve(sourceArg), output = path.resolve(outputArg);
 if (source === output || output.startsWith(source + path.sep) || fs.existsSync(output)) throw Error('Output must be a new separate directory');
-const expected = require('./profiles/linux-x64-2.1.304.json').modules;
+const profile = require('./profiles/linux-x64-2.1.304.json'), expected = profile.modules;
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const files = new Map();
 for (const [file, sha] of Object.entries(expected)) {
@@ -44,7 +44,7 @@ const core = 'chunk-rncrmfyt.js', guest = 'chunk-0q47gehe.js', headless = 'chunk
 edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.304",patch:"ccgateway-v12-feature-policy",capabilities:["request_direct","request_build","request_oauth","request_error_stderr","request_raw_http_errors","native_tools","mods_dispatch","request_policy_mode_v1","build_attachment_sources_v2","build_billing_sources_v1","build_content_preservation_v1"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-3nrrbnwj.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{gTe:oauthAuth}=await import("./chunk-4qs43hr1.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
 edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchema:", "name:r.name,description:r.description,...r.kind===\"native\"?{kind:\"native\"}:{},inputSchema:"));
 edit('cli.js', 'Ve', t => {
-  t = once(t, 'patch:"ccgateway-v12-feature-policy"', 'patch:"ccgateway-v14-account-identity"');
+  t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
   t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
     'let{rewriteDirectIdentity:ccgRewriteIdentity,applyBuildMetadata:ccgBuildMetadata}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata}=await import("./chunk-t61vswm2.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBody:raw=>ccgRewriteIdentity(raw,ccgNativeMetadata),identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata)}))');
   return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1"]');
@@ -132,7 +132,7 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8'));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: 'ccgateway-v14-account-identity', capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

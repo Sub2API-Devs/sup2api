@@ -1,6 +1,6 @@
 # Claude Code mods 工具注入扩展
 
-当前本地开发目标为 **2.1.304 / `ccgateway-v14-account-identity`**，新增 `request_identity_v1`：**只有 OAuth（Claude 账号）**才映射，映射密钥由该账号的 **Claude 邮箱**派生（`CLAUDE_CODE_USER_EMAIL`，否则 `.claude.json` 的 `oauthAccount.emailAddress`），不保存任何密钥文件。同一邮箱在任意 Worker 上得到同一映射，不同账号不同。Worker 对客户端用户／会话 ID 做 HMAC-SHA256，输出 64 位 hex 设备 ID 和 UUIDv4 格式会话 ID；父会话使用同一会话映射。原生会话初始化使用该结果，metadata 与原生会话头保持一致，`account_uuid` 保留 Worker 原生账号上下文。direct 只替换 `metadata.user_id` 字符串，其余字节不变；build 在原生 metadata 组装及大小预算内映射。身份来源在插件设置中配置：**客户端原始／服务端／替换（默认）**，按全局→分组→账号继承；客户端没发 `metadata.user_id` 时不生成身份，build 也会删掉 CLI 自带的 metadata。**API Key 账号不做任何替换**：direct 原样转发，build 保持 CLI 原生 metadata。详见 [实现与验证](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#按账号邮箱的身份映射-v14未部署)。
+当前本地开发目标为 **2.1.304 / `ccgateway-v14-account-identity`**，新增 `request_identity_v1`：**只有 OAuth（Claude 账号）**才映射，映射密钥由账号数据卷中的**私有随机密钥**按该账号的 **Claude 邮箱**派生（`CLAUDE_CODE_USER_EMAIL`，否则 `.claude.json` 的 `oauthAccount.emailAddress`），只凭邮箱无法推算。同一账号在重启、原地更新和重新授权后映射不变，不同账号不同。Worker 对客户端用户／会话 ID 做 HMAC-SHA256，输出 64 位 hex 设备 ID 和 UUIDv4 格式会话 ID；父会话使用同一会话映射。原生会话初始化使用该结果，metadata 与原生会话头保持一致，`account_uuid` 保留 Worker 原生账号上下文。direct 只替换 `metadata.user_id` 字符串，其余字节不变；build 在原生 metadata 组装及大小预算内映射。身份来源在插件设置中配置：**客户端原始／服务端／替换（默认）**，按全局→分组→账号继承；客户端没发 `metadata.user_id` 时不生成身份，build 也会删掉 CLI 自带的 metadata；选“客户端原始”时 build 保留客户端的 metadata。**API Key 账号不做映射**：替换来源按客户端原值处理。默认来源不随请求策略下发，身份上下文只经 `CCG_REQUEST_IDENTITY` 传给 CLI，不进入 build 信封。详见 [实现与验证](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#按账号邮箱的身份映射-v14未部署)。
 
 v14 同时保留 v13 的容器资源报告：新 Worker 为支持 `container_resource_reporting_v1` 的 CLI 设置可信 `CCG_REPORT_CONTAINER_RESOURCES=1`，采集时读取当前 cgroup v2 配额和使用量；不随机、不保存硬件 profile。Controller 验证数据卷硬配额后传入 `CCG_ACCOUNT_DISK_QUOTA_BYTES`，CLI 才会读取 `/work` 的实际剩余空间；旧无限额卷和宿主机 loadavg 不报告。实际资源控制、系统调用及原生设备 ID 的生成／存储保持原实现，非必要遥测及显式第三方 OTEL 在 Worker 请求进程入口关闭。账号身份映射不依赖 XFS 或磁盘迁移；磁盘配额的部署前提另见 [Controller 说明](../controller/README.md#account-data-volume-quotas)。
 
@@ -15,7 +15,7 @@ v14 同时保留 v13 的容器资源报告：新 Worker 为支持 `container_res
 
 **此前发布基线为 2.1.302 / `ccgateway-v9-stderr-errors`，完整说明见 [302 独立文档](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v9 新增 `request_error_stderr` 能力：错误通过带版本的 stderr JSON 行交给 Worker，正常 JSON/SSE 继续走 stdout。延续 v8 的显式 API Key / 原生 OAuth 支持；没有 API Key 时使用 CC 读取/刷新凭证及生成 Bearer，并合并原生 OAuth beta。`patch-cli.cjs` 按恢复目录 package.json 选择独立的 `patch-cli-2.1.296.cjs` 或 `patch-cli-2.1.302.cjs`，每个版本仍做自己的哈希和唯一锚点检查。302 基线映射在 `profiles/linux-x64-2.1.302.json`；`--ccgateway-info` 报告补丁能力，Worker 启动还需匹配二进制 SHA-256。296 未在本次重新发布或验证，下面的 v6 限制是历史记录。
 
-302 构建原生 ELF 后，用 `node package-release.cjs <ELF> <ccgateway-patch.json> <新 release 目录>` 生成 Worker 的 `cli-mods/release/` 输入。Worker 与兼容入口 Dockerfile 从此目录安装指定版本，不再在构建时下载官方 CLI。镜像内目录会去掉组/其他用户写权限；Controller 创建账号时验证 manifest、版本与哈希，然后设置禁更和版本环境。管理更新不能把已固定的定制 CLI 替换成官方渠道包。
+302 构建原生 ELF 后，用 `node package-release.cjs <ELF> <ccgateway-patch.json> <新 release 目录>` 生成 Worker 的 `cli-mods/release/` 输入。Worker 与兼容入口 Dockerfile 从此目录安装指定版本，不再在构建时下载官方 CLI。镜像内目录会去掉组/其他用户写权限；Controller 创建账号时验证 manifest、版本与哈希，然后设置禁更和版本环境。管理更新不能把已固定的定制 CLI 替换成官方渠道包。`package-release.cjs` 只接受 `profiles/linux-x64-<版本>.json` 的 `extension` 所写的当前补丁标签；Worker Dockerfile 构建时核对 release 中该版本的 SHA-256 与 manifest 一致、补丁标签与该 profile 一致，旧补丁产物会让镜像构建失败。
 
 下面保留的是 2.1.296/v6 的使用背景；**302 的函数名、产物身份和测试以新文档为准**，旧版本文档不覆盖。
 

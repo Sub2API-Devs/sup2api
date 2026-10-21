@@ -1,6 +1,7 @@
 {
   "binarySHA256": "60d7eb7f12fbb28a52533fe8be5884097403562aa02dc73991a021c7067e29a5",
   "version": "2.1.302",
+  "extension": "ccgateway-v11-native-build-parameters",
   "modules": {
     "cli.js": "1b145961aed572ec8f45fd311f00c2d79b39766ca2de5685f3decf2888a65311",
     "chunk-8242685m.js": "91c62b6b31e5c5cb52418ee9007dbcbdc26bacc5346fdf65f241b70a5fb4f6c8",

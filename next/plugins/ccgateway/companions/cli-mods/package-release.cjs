@@ -4,8 +4,11 @@ const [binary,patchFile,outputArg]=process.argv.slice(2);
 if(!binary||!patchFile||!outputArg)throw Error('Usage: node package-release.cjs native-ELF ccgateway-patch.json new-release-directory');
 const output=path.resolve(outputArg);if(fs.existsSync(output))throw Error('Release output already exists');
 const patch=JSON.parse(fs.readFileSync(patchFile,'utf8')),version=patch.baseline?.split('/').at(-1);
-const releases={'2.1.302':'ccgateway-v11-native-build-parameters','2.1.304':'ccgateway-v12-feature-policy'};
-if(!Object.hasOwn(releases,version)||releases[version]!==patch.extension)throw Error('Unsupported patch release');
+// The version profile names the patch its patcher produces, so a manifest from
+// an older patcher run cannot be packaged under the current source.
+const profileFile=/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version??'')&&path.join(__dirname,'profiles','linux-x64-'+version+'.json');
+const profile=profileFile&&fs.existsSync(profileFile)?JSON.parse(fs.readFileSync(profileFile,'utf8')):null;
+if(!profile||profile.version!==version||!profile.extension||profile.extension!==patch.extension)throw Error('Unsupported patch release: '+patch.extension+' is not the current patch of '+version);
 const bytes=fs.readFileSync(binary);if(bytes.subarray(0,4).toString('hex')!=='7f454c46')throw Error('Expected native Linux ELF');
 const sha256=crypto.createHash('sha256').update(bytes).digest('hex');
 fs.mkdirSync(path.join(output,version),{recursive:true});
