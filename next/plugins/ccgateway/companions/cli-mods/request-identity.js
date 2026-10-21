@@ -58,7 +58,10 @@ function hasUserID(metadata) {
 
 // applyBuildMetadata owns metadata for build mode: the native builder always
 // invents one, but a client that sent no identity must not get one, and a
-// client value must follow the configured source.
+// client value must follow the configured source. Whether the client value is
+// replaced is the Worker's rewrite decision, exactly as in direct: a value with
+// nothing to map (only unknown or empty fields) stays the client's, in its own
+// carrier (2026-10-21; build used to replace it with this CLI's identity).
 export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
   const mapped = identity();
   // Without a Worker context (API-key accounts, older Workers) the native
@@ -66,8 +69,8 @@ export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
   if (!mapped) return built;
   const metadata = clientMetadata && typeof clientMetadata === 'object' && !Array.isArray(clientMetadata)
     ? structuredClone(clientMetadata) : undefined;
-  if (metadata && hasUserID(metadata) && mapped && mapped.mode !== 'client')
-    metadata.user_id = encode(target(nativeIdentity()), mapped.carrier ?? 'json');
+  if (metadata && mapped.rewrite && hasUserID(metadata))
+    metadata.user_id = encode(target(nativeIdentity()), mapped.carrier ?? (typeof metadata.user_id === 'string' ? 'json' : 'object'));
   if (!metadata || Object.keys(metadata).length === 0) delete built.metadata;
   else built.metadata = metadata;
   return built;

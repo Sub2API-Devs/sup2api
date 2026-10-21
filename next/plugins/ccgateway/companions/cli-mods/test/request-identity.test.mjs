@@ -66,6 +66,43 @@ test('build metadata follows the configured identity source', async () => {
   });
 });
 
+// The Worker decides whether the client value is replaced; build and direct
+// must reach the same metadata.user_id for the same decision.
+test('build and direct follow the same rewrite decision', async () => {
+  const built = () => ({ model: 'fixture', metadata: { user_id: native().user_id } });
+  const direct = userID => JSON.parse(rewriteDirectIdentity(JSON.stringify({ metadata: { user_id: userID } }), native)).metadata.user_id;
+  // What the Worker sends without a usable field: rewrite false, no carrier.
+  const unusable = [{ foo: 'x' }, { device_id: '', session_id: null }, { device_id: null }, '{"device_id":""}', '{"session_id":null}'];
+  for (const mode of ['worker', 'replace']) {
+    await context({ version: 2, mode, rewrite: false }, () => {
+      for (const userID of unusable) {
+        assert.deepEqual(applyBuildMetadata(built(), { user_id: userID }, native).metadata, { user_id: userID }, `${mode} build ${JSON.stringify(userID)}`);
+        assert.deepEqual(direct(userID), userID, `${mode} direct ${JSON.stringify(userID)}`);
+      }
+      // Missing, null, empty string and empty object: nothing to replace.
+      assert.ok(!Object.hasOwn(applyBuildMetadata(built(), undefined, native), 'metadata'));
+      for (const userID of [null, '', {}]) assert.deepEqual(applyBuildMetadata(built(), { user_id: userID }, native).metadata, { user_id: userID });
+      assert.deepEqual(applyBuildMetadata(built(), { other: 1 }, native).metadata, { other: 1 });
+    });
+  }
+  // The three carriers, replaced the same way on both paths.
+  const carriers = [
+    ['object', { device_id: 'c'.repeat(64), session_id: session }],
+    ['json', JSON.stringify({ device_id: 'c'.repeat(64), session_id: session })],
+    ['flat', `user_${'c'.repeat(64)}_account__session_${session}`],
+  ];
+  for (const mode of ['worker', 'replace']) {
+    for (const [carrier, userID] of carriers) {
+      await context(mode === 'replace' ? payload({ carrier }) : { version: 2, mode, rewrite: true, carrier }, () => {
+        const fromBuild = applyBuildMetadata(built(), { user_id: userID }, native).metadata.user_id;
+        assert.deepEqual(fromBuild, direct(userID), `${mode}/${carrier}`);
+        assert.equal(typeof fromBuild, carrier === 'object' ? 'object' : 'string', `${mode}/${carrier}`);
+        assert.notDeepEqual(fromBuild, userID, `${mode}/${carrier} was replaced`);
+      });
+    }
+  }
+});
+
 test('direct replaces only the identity span, keeping the client carrier', async () => {
   await context(payload(), () => {
     const before = '{\r\n"model":"fixture","n":9007199254740993,"tool":{"metadata":{"user_id":"untouched"}},' +
