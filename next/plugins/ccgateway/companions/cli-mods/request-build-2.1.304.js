@@ -1,15 +1,23 @@
-import { Kvt, MDe, ccgatewayEnvironment } from './chunk-kasbfbhj.js';
+import { Kvt, MDe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary } from './chunk-kasbfbhj.js';
+import { oJe } from './chunk-7y2kvacy.js';
+import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { El } from './chunk-0ycjphb5.js';
 import { registerNative, findNative } from './ccgateway-native-tools.js';
 import { prepareBuildInput } from './ccgateway-request-input.js';
 import { normalizeBetas } from './ccgateway-request-options.js';
 import { getRootSession } from './chunk-q61sszgr.js';
 import { YEr } from './chunk-6dwnw6av.js';
-import { applyContentPolicy, mergeBillingAttribution } from './ccgateway-content-policy.js';
+import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic } from './ccgateway-request-policy.js';
 import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters } from './ccgateway-request-parameters.js';
 
+// The content policy recognizes CC's own wording: the environment renderers'
+// vocabulary, the billing header (oJe) and the reminder tags (KF, lKe), all native.
+let contentPolicy;
+const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] });
+
 export async function buildRequest(components, headers, signal) {
+  const { applyContentPolicy, mergeBillingAttribution } = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);

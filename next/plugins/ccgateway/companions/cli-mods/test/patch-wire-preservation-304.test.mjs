@@ -214,7 +214,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   // The Claude Code line is the CLI's own: the request command gets the
   // native selector (terminal arguments) and recognizer.
-  assert.match(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'), /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix\)/);
+  assert.match(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'), /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\).*let\{B1s:ccgIsBilling\}=await import\("\.\/chunk-7y2kvacy\.js"\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix,ccgIsBilling\).*ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),ccgIsPrefix,ccgIsBilling\)/);
 });
 
 test('container reporting patches preserve resource admission, Git concurrency and native identity generators', () => {

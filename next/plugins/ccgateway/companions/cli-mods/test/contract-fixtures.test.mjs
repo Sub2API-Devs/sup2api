@@ -10,7 +10,8 @@ import { parseRequestJSON } from '../request-options.js';
 import { validateRequestPolicy, runtimeContext } from '../request-policy.js';
 import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
-import { applyContentPolicy } from '../content-policy.js';
+import { createContentPolicy } from '../content-policy.js';
+import { vocabulary } from './vocabulary.mjs';
 import { applyBuildMetadata, rewriteDirectIdentity } from '../request-identity.js';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../contracts/testdata/worker-cli-requests.json', import.meta.url), 'utf8'));
@@ -57,7 +58,7 @@ for (const c of fixture.cases) {
       const messages = initial.messages.flatMap(row => row.type !== 'attachment'
         ? [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)]
         : render(row).messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: item.message.content })));
-      await applyContentPolicy({ system: initial.systemBlocks, messages }, policy, native);
+      await createContentPolicy(vocabulary).applyContentPolicy({ system: initial.systemBlocks, messages }, policy, native);
       const client = external.parameters?.metadata;
       const built = applyBuildMetadata({ metadata: { user_id: nativeIdentity().user_id } }, client, nativeIdentity);
       const identity = JSON.parse(c.identity);

@@ -129,8 +129,9 @@ function property(raw, start, name) {
 // (verified 2026-10-21 in build and direct; a line merged into a longer block
 // or placed after the prompt does not count). An OAuth request without the
 // line where Claude Code puts it gets the CLI's own line inserted there; both
-// the line and the check are the CLI's, never a copy: isPrefix is t1n, and
-// prefix is n1n for the interactive terminal CLI (patch-cli-2.1.304.cjs).
+// the line and the checks are the CLI's, never a copy: isPrefix is t1n,
+// prefix is n1n for the interactive terminal CLI and isBilling is B1s, CC's
+// test for its attribution header block (patch-cli-2.1.304.cjs).
 const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
 
 function checkedPrefix(prefix, isPrefix) {
@@ -140,19 +141,19 @@ function checkedPrefix(prefix, isPrefix) {
 
 // prefixPosition is the index the line goes to, or -1 when the system already
 // opens with it, directly or after the attribution header.
-function prefixPosition(blocks, isPrefix) {
+function prefixPosition(blocks, isPrefix, isBilling) {
   const first = blockText(blocks[0]);
-  if (first?.startsWith('x-anthropic-billing-header:')) return blocks.some(block => isPrefix(blockText(block))) ? -1 : 1;
+  if (first !== undefined && isBilling(blocks[0])) return blocks.some(block => isPrefix(blockText(block))) ? -1 : 1;
   return isPrefix(first) ? -1 : 0;
 }
 
 // applyBuildCliPrefix puts the line into the built request, whose system is
 // the client's.
-export function applyBuildCliPrefix(built, prefix, isPrefix) {
+export function applyBuildCliPrefix(built, prefix, isPrefix, isBilling) {
   const block = { type: 'text', text: checkedPrefix(prefix, isPrefix) };
   if (built.system === undefined) built.system = [block];
   else if (Array.isArray(built.system)) {
-    const at = prefixPosition(built.system, isPrefix);
+    const at = prefixPosition(built.system, isPrefix, isBilling);
     if (at >= 0) built.system = [...built.system.slice(0, at), block, ...built.system.slice(at)];
   }
   return built;
@@ -160,7 +161,7 @@ export function applyBuildCliPrefix(built, prefix, isPrefix) {
 
 // directCliPrefix puts the line into a direct body, inserting bytes only: the
 // rest of the body, a string system included, stays exactly as received.
-export function directCliPrefix(raw, prefix, isPrefix) {
+export function directCliPrefix(raw, prefix, isPrefix, isBilling) {
   const block = JSON.stringify({ type: 'text', text: checkedPrefix(prefix, isPrefix) });
   const system = property(raw, 0, 'system');
   if (!system) {
@@ -173,7 +174,7 @@ export function directCliPrefix(raw, prefix, isPrefix) {
     return raw.slice(0, system.first) + `[${block}${text}]` + raw.slice(system.last);
   }
   if (raw[system.first] !== '[') return raw;
-  const at = prefixPosition(JSON.parse(value), isPrefix);
+  const at = prefixPosition(JSON.parse(value), isPrefix, isBilling);
   if (at < 0) return raw;
   let i = whitespace(raw, system.first + 1);
   for (let k = 0; k < at; k++) {

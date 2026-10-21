@@ -4,22 +4,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { applyBuildCliPrefix, directCliPrefix } from '../request-identity.js';
+import { vocabulary } from './vocabulary.mjs';
 
 // The functions take the CLI's recognizer (t1n) and line (n1n/PAs) as
 // arguments; these lines stand in for them, so nothing here depends on a copy
 // of the CLI's wording. The last test runs the real t1n/n1n.
 const lines = ['CLI line A.', 'CLI line B.', 'CLI line C.'];
 const isPrefix = value => lines.includes(value);
+// Stands in for CC's B1s: a block whose text starts with the native header.
+const isBilling = block => typeof block.text === 'string' && block.text.startsWith(vocabulary.billingHeader);
 const cliPrefix = lines[2];
 const [interactive, sdk] = lines;
 const prefix = { type: 'text', text: cliPrefix };
 const t = text => ({ type: 'text', text });
-const header = 'x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;';
+const header = vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=cli;';
 const prompt = 'Answer the user concisely.';
 
 test('only a line the CLI recognizes is inserted', () => {
-  assert.throws(() => applyBuildCliPrefix({}, 'not a CLI line', isPrefix), /native Claude Code system line/);
-  assert.throws(() => directCliPrefix('{}', undefined, isPrefix), /native Claude Code system line/);
+  assert.throws(() => applyBuildCliPrefix({}, 'not a CLI line', isPrefix, isBilling), /native Claude Code system line/);
+  assert.throws(() => directCliPrefix('{}', undefined, isPrefix, isBilling), /native Claude Code system line/);
 });
 
 // Where upstream accepts the line (2026-10-21): first block, or anywhere after
@@ -43,7 +46,7 @@ const cases = [
 test('build requests open with Claude Code line where CC puts it', () => {
   for (const [name, system, expected] of cases) {
     const built = system === undefined ? { model: 'fixture' } : { model: 'fixture', system: structuredClone(system) };
-    assert.deepEqual(applyBuildCliPrefix(built, cliPrefix, isPrefix).system, expected ?? system, name);
+    assert.deepEqual(applyBuildCliPrefix(built, cliPrefix, isPrefix, isBilling).system, expected ?? system, name);
   }
 });
 
@@ -51,7 +54,7 @@ test('direct bodies get the line by insertion only', () => {
   for (const [name, system, expected] of cases) {
     const raw = system === undefined ? '{ "model":"fixture", "n":9007199254740993 }'
       : `{ "model":"fixture", "system" : ${JSON.stringify(system, null, 1)} , "n":9007199254740993 }`;
-    const out = directCliPrefix(raw, cliPrefix, isPrefix);
+    const out = directCliPrefix(raw, cliPrefix, isPrefix, isBilling);
     assert.deepEqual(JSON.parse(out).system, expected ?? system, name);
     assert(out.includes('9007199254740993'), name);
     if (!expected) assert.equal(out, raw, name);
@@ -61,10 +64,10 @@ test('direct bodies get the line by insertion only', () => {
 
 test('direct string, empty and odd systems', () => {
   const raw = '{"system":"Be brief.\\n","messages":[]}';
-  assert.equal(directCliPrefix(raw, cliPrefix, isPrefix), `{"system":[${JSON.stringify(prefix)},{"type":"text","text":"Be brief.\\n"}],"messages":[]}`);
-  assert.deepEqual(JSON.parse(directCliPrefix('{"system":"","messages":[]}', cliPrefix, isPrefix)).system, [prefix]);
-  assert.equal(directCliPrefix('{}', cliPrefix, isPrefix), `{"system":[${JSON.stringify(prefix)}]}`);
-  for (const raw of ['{"system":null}', '{"system":7}', '{"system":{"type":"text"}}']) assert.equal(directCliPrefix(raw, cliPrefix, isPrefix), raw);
+  assert.equal(directCliPrefix(raw, cliPrefix, isPrefix, isBilling), `{"system":[${JSON.stringify(prefix)},{"type":"text","text":"Be brief.\\n"}],"messages":[]}`);
+  assert.deepEqual(JSON.parse(directCliPrefix('{"system":"","messages":[]}', cliPrefix, isPrefix, isBilling)).system, [prefix]);
+  assert.equal(directCliPrefix('{}', cliPrefix, isPrefix, isBilling), `{"system":[${JSON.stringify(prefix)}]}`);
+  for (const raw of ['{"system":null}', '{"system":7}', '{"system":{"type":"text"}}']) assert.equal(directCliPrefix(raw, cliPrefix, isPrefix, isBilling), raw);
 });
 
 test('claude request adds the line for OAuth only, in both modes', async () => {
@@ -91,8 +94,8 @@ test('claude request adds the line for OAuth only, in both modes', async () => {
         export const readModelResponse=async()=>({done:true,bytes:new Uint8Array()});`,
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
         import {directCliPrefix,applyBuildCliPrefix} from './ccgateway-request-identity.js';
-        const line=${JSON.stringify(cliPrefix)},isPrefix=v=>${JSON.stringify(lines)}.includes(v);
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBody:raw=>directCliPrefix(raw,line,isPrefix),prefixBuild:b=>applyBuildCliPrefix(b,line,isPrefix)});`,
+        const line=${JSON.stringify(cliPrefix)},isPrefix=v=>${JSON.stringify(lines)}.includes(v),isBilling=b=>String(b.text).startsWith(${JSON.stringify(vocabulary.billingHeader)});
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBody:raw=>directCliPrefix(raw,line,isPrefix,isBilling),prefixBuild:b=>applyBuildCliPrefix(b,line,isPrefix,isBilling)});`,
     })) await fsp.writeFile(path.join(dir, name), code);
     const input = '{"model":"fixture","system":"Be brief.","messages":[{"role":"user","content":"hi"}]}';
     const run = (mode, apiKey) => new Promise((resolve, reject) => {
@@ -128,9 +131,9 @@ test('the CLI recognizes its own lines and gives the terminal line', { skip: fs.
   assert(native.lines.every(native.t1n) && native.t1n(line) && !native.t1n(line + ' '));
   // Upstream counts the first block only as the whole line (2026-10-21).
   const merged = '{"system":[{"type":"text","text":' + JSON.stringify(native.lines[0] + '\n\nBe brief.') + '}]}';
-  assert.deepEqual(JSON.parse(directCliPrefix(merged, line, native.t1n)).system[0], { type: 'text', text: line });
+  assert.deepEqual(JSON.parse(directCliPrefix(merged, line, native.t1n, isBilling)).system[0], { type: 'text', text: line });
   for (const own of native.lines) {
     const raw = '{"system":[{"type":"text","text":' + JSON.stringify(own) + '}]}';
-    assert.equal(directCliPrefix(raw, line, native.t1n), raw);
+    assert.equal(directCliPrefix(raw, line, native.t1n, isBilling), raw);
   }
 });

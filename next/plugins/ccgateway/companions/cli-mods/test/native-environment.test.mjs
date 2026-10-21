@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source = fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace('export async function', 'async function');
+const source = fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace(/^export /gm, '');
 function adapter(overrides = {}) {
   const calls = [], ctx = {
     Set, Object, a: { platform: 'linux' }, cle: () => undefined,

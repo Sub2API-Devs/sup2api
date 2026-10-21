@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyContentPolicy, mergeBillingAttribution } from '../content-policy.js';
+import { createContentPolicy } from '../content-policy.js';
+import { vocabulary } from './vocabulary.mjs';
+const { applyContentPolicy, mergeBillingAttribution } = createContentPolicy(vocabulary);
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
 const reminder = body => '<system-reminder>\n' + body + '</system-reminder>';
 const request = text => ({ system: [{ type: 'text', text: 'unchanged system', cache_control: { type: 'ephemeral' } }], messages: [{ role: 'user', content: [{ type: 'text', text, cache_control: { type: 'ephemeral' } }] }] });

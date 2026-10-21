@@ -132,7 +132,7 @@ CLI 侧 `prepareBuildInput`（`cli-mods/request-input.js:35`）是唯一解析�
 
 ## 5. 内容策略：识别 → 决策 → 写回
 
-`applyContentPolicy`（`cli-mods/content-policy.js:186`）。`relay_mode === 'direct'` 时直接返回副本，不做任何改写。
+`applyContentPolicy`（`cli-mods/content-policy.js:197`）。`relay_mode === 'direct'` 时直接返回副本，不做任何改写。
 
 ### 5.1 可配置字段与来源
 
@@ -145,12 +145,12 @@ CLI 侧 `prepareBuildInput`（`cli-mods/request-input.js:35`）是唯一解析�
 
 ### 5.2 识别：只认精确格式
 
-`environmentRegions`（`content-policy.js:84`）：
+`environmentRegions`（`content-policy.js:95`）：
 
 1. 逐行扫描并跟踪代码围栏（`fenceAfter`）；**围栏内一律不识别**，避免改写示例或被引用的内容。
-2. 定位 `# Environment` / `# Environment update` 标题；普通段还要求下一行是固定引导语。
-3. 段落延续到下一个标题或 `</system-reminder>`。
-4. `identify`（`:53`）按精确前缀匹配十个字段；`github_cli` 与 `agent_proxy` 用整段正则全匹配。
+2. 定位 `# Environment` / `# Environment update` 标题；普通段还要求下一行是原生引导语。
+3. 段落延续到下一个标题或 reminder 标签（`KF` / `lKe`）。
+4. `identify`（`:71`）按精确前缀匹配十个字段；`github_cli` 与 `agent_proxy` 用整段正则全匹配。
 
 **不认识就不改**：
 
@@ -179,7 +179,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 ### 5.4 写回与清理
 
-`splice`（`content-policy.js:174`）按 `start` 降序替换，避免偏移错乱；换行风格跟随原文（`\r\n` vs `\n`）。
+`splice`（`content-policy.js:185`）按 `start` 降序替换，避免偏移错乱；换行风格跟随原文（`\r\n` vs `\n`）。
 
 清理规则：
 
@@ -205,9 +205,29 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 所有字段都是 `client` 时不检查、不修改。2026-10-21 前，“多个头/重复/格式不合法/引用或围栏”都只记诊断并原样放行，客户端的计费值会上行；同时 CLI 把 build 阶段的所有错误都报成 400，原生值缺失的 503 实际也以 400 返回。两处已一并修正（5f2246442）。
 
+**已知问题（2026-10-21 实测，未改）**：上游要求计费头同时含 `cc_version` 与 `cc_entrypoint`，缺任一个（或只有未知字段）都返回 400 `x-anthropic-billing-header is a reserved keyword and may not be used in the system prompt.`；`cch` 可有可无。因此客户端没有计费头、且两个字段只有一个选 `worker` 时，插入的单字段头必然被拒（线上 v14 同样如此）。是否改为插入时补齐另一字段的原生值，待定。
+
+### 5.6 识别用的文字全部取自原生 CC
+
+`content-policy.js` 里没有 CC 的措辞，只导出 `createContentPolicy(vocabulary)`。词表由 `request-build-2.1.304.js` 在运行时从打过补丁的 CLI 取得（2026-10-21 起）：
+
+| 词表项 | 原生来源（2.1.304） |
+|---|---|
+| 标题、引导语、update 标题、worktree / stash 句 | 环境模块常量 `PNe`、`ooo`、`roo`、`jkt`、`Ukt` |
+| 六个字段的行首标签、`(was …)`、additional 变更行、五个撤回句 | 用原生 `_oo`（完整段）与 `Kkt`（update 段）渲染带标记的快照，再把标记切掉 |
+| scratchpad 前后缀 | 原生 `Gkt` 渲染标记路径 |
+| `github_cli` 全部句子 | 原生 `iys` + `ANe` 遍历 16 种输入组合（12 句不同文本），外加 `aoo` |
+| `agent_proxy` 的固定片段 | 原生 `xNe` 多种输入渲染后取公共部分 |
+| 计费头 | `oJe`（chunk-7y2kvacy.js） |
+| reminder 标签 | `KF` / `lKe`（chunk-jkcb7qdd.js） |
+
+取词函数 `ccgatewayEnvironmentVocabulary` 在 `native-environment-2.1.304.inc.js`，与原生环境模块同作用域。`compile` 校验词表完整，缺任何一项启动 build 时报错。`test/native-vocabulary.test.mjs` 在恢复的 2.1.304 源码上执行这些原生函数，与 `test/fixtures/native-vocabulary-2.1.304.json` 比较（`CCG_UPDATE_CONTRACT_FIXTURES=1` 重新生成）；其余测试读这份 fixture，不再各自抄写。生成结果与此前手写的常量和正则逐字一致。
+
+仍不是从 CLI 取的只有两处：`metadata.user_id` 的扁平载体 `user_<device>_account_<uuid>_session_<sid>`（旧版客户端格式，2.1.304 里已不存在，只为保留客户端原载体）；以及 6.1 的上游首块规则（实测结论，CLI 里没有对应代码）。
+
 ## 6. 原生构造器与最终 body
 
-`buildRequest`（`cli-mods/request-build-2.1.304.js:12`）流程：
+`buildRequest`（`cli-mods/request-build-2.1.304.js:19`）流程：
 
 1. `prepareBuildInput(external, MDe, {preserveContent: true})` 得到 `initial`，供策略读取。
 2. `applyContentPolicy` 改写 system 与 messages。
@@ -226,7 +246,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 生成参数由 CC 自己的模型规则决定，组件只补充它不管的部分。
 
-最后 `request-command.js:76` 在 build 之后才应用身份策略——因为 build 会自行生成 `metadata`，身份来源必须覆盖它。
+最后 `request-command.js:82` 在 build 之后才应用身份策略——因为 build 会自行生成 `metadata`，身份来源必须覆盖它。
 
 ### 6.1 Claude Code 开头行（OAuth，build 与 direct）
 
@@ -234,7 +254,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 上游规则（2026-10-21 用 Max、Pro 账号，claude-opus-4-8 实测，build 与 direct 相同）：OAuth 请求的**第一个 system 块**必须是计费头，或是上面三句之一（整块完全相等）；否则 Sonnet/Opus 返回 429 `rate_limit_error`、消息 `Error`，Haiku 不受影响。开头行并进长块、放在提示之后、字符串 system 以它开头，都不算；计费头在首块时开头行在哪都行。
 
-因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句）；插入的是 `n1n` 按终端交互式 CLI 选出的那一句（`isNonInteractive:false`，即 `You are Claude Code, Anthropic's official CLI for Claude.`），build 与 direct 相同。`claude request` 本身是非交互运行，若用 `PAs` 本次生成的行会得到 SDK 那一句，按用户要求（2026-10-21）改用终端那句。
+因此 OAuth 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次（`request-identity.js` `applyBuildCliPrefix` / `directCliPrefix`）。判断和插入的内容都来自 CLI 本身，代码里不抄写这几句：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；插入的是 `n1n` 按终端交互式 CLI 选出的那一句（`isNonInteractive:false`，即 `You are Claude Code, Anthropic's official CLI for Claude.`），build 与 direct 相同。`claude request` 本身是非交互运行，若用 `PAs` 本次生成的行会得到 SDK 那一句，按用户要求（2026-10-21）改用终端那句。
 
 | system | 处理 |
 |---|---|

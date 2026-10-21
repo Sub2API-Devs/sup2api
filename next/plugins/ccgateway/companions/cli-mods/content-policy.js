@@ -1,36 +1,54 @@
 // Content policy for the hash-bound Claude CLI 2.1.304 adapter. Native code
-// supplies server facts and billing values; this module only edits recognized spans.
+// supplies server facts, billing values and all CC wording this module
+// recognizes (the vocabulary: ccgatewayEnvironmentVocabulary in
+// native-environment-2.1.304.inc.js plus the native billing header); this
+// module only edits recognized spans.
 const fields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'];
 const billingFields = ['cc_version', 'cc_entrypoint'];
-const intro = 'You have been invoked in the following environment: ';
-const worktree = 'This is a git worktree — an isolated copy of the repository. Run all commands from this directory. Do NOT `cd` to the original repository root.';
-const stash = 'The git stash stack is shared with the main checkout and all other worktrees, and other Claude sessions may push or pop it concurrently. Never use bare `git stash` / `git stash pop` — you could pop another session\'s changes. Prefer a temporary WIP commit to set work aside; if you must stash, use `git stash push -u -m "<unique-tag>"`, immediately capture your entry\'s SHA via `git stash list --format=\'%H %gs\'`, restore with `git stash apply <sha>` (not pop), and afterwards drop the entry, re-finding its current `stash@{n}` by tag first.';
-const scratchSuffix = ' — always use it for temporary files (intermediate results, scripts, outputs that don\'t belong in the project) instead of `/tmp` or other system temp directories; it is session-specific, isolated from the project, and can generally be used without permission prompts. Only use `/tmp` if the user explicitly asks. Whenever you name a file in it to the user, write the file\'s complete absolute path in one piece, not a bare filename, a path that starts at the scratchpad folder, or the directory followed by filenames: a shortened path is read against the working directory and leads nowhere.';
-const withdrawal = new Map([
-  ['The primary working directory announced earlier no longer applies.', 'primary_directory'],
-  ['The primary working directory is no longer a git worktree.', 'worktree'],
-  ['The scratchpad directory announced earlier is no longer available; use it no further.', 'scratchpad_directory'],
-  ['The built-in `gh api` announced earlier is not active in this run; check `command -v gh`.', 'github_cli'],
-  ['The agent proxy announced earlier is not active now.', 'agent_proxy'],
-]);
 const escapeRE = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const githubStart = "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com";
-const githubEnterprise = ' and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session\'s GitHub proxy serves';
-const githubProxy = [
-  ', or against the GitHub Enterprise host of this checkout\'s remote (or `--hostname <host>`), through this session\'s GitHub proxy, which supplies the credential for the hosts and repositories this session is connected to',
-  ', through that proxy, which supplies the credential for the repositories this session can reach',
-  ' through this session\'s GitHub proxy, which supplies the credential for the repositories this session can reach',
-];
-const githubProxyEnd = ' (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it.';
-const githubAuth = ', already authenticated through this session\'s GitHub proxy (run `gh api --help` for its flags).';
-const githubCommands = ' Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form).';
-const githubJq = ' `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed.';
-const githubInstall = ' Do not install a GitHub CLI to get other gh commands: one installed during the session is not routed through this proxy and has no GitHub credentials unless the runner\'s operator provides them.';
-const githubPattern = new RegExp('^' + escapeRE(githubStart) + '(?:' + escapeRE(githubEnterprise) + ')?(?:' + [githubAuth, ...githubProxy.map(text => text + githubProxyEnd)].map(escapeRE).join('|') + ')' + escapeRE(githubCommands) + '(?:' + escapeRE(githubJq) + ')?(?:' + escapeRE(githubInstall) + ')?(?:' + escapeRE(' This replaces what this session was told of `gh` earlier.') + ')?$');
-const proxyStart = 'Outbound HTTPS goes through a pre-configured agent proxy (CA bundle: ';
-const proxyMiddle = '). If a tool fails TLS verification, gets 403/405/407 from the proxy, or a transfer is cut off (connection reset, unexpected disconnect, RPC failed), ';
-const proxyEnd = 'run curl -sS "$HTTPS_PROXY/__agentproxy/status" for per-tool fixes and proxy state; never disable TLS verification or unset HTTPS_PROXY.';
-const proxyPattern = new RegExp('^' + escapeRE(proxyStart) + '[^\\r\\n]+' + escapeRE(proxyMiddle) + '(?:see [^\\r\\n]+ and )?' + escapeRE(proxyEnd) + '(?:' + escapeRE(' Installed CLIs preconfigured for the proxy: ') + '[^\\r\\n]+' + escapeRE(' — prefer a skill/MCP tool, then these, over raw curl.') + ')?$');
+const words = (text, count) => text.split(' ').slice(0, count).join(' ');
+
+// compile turns the native vocabulary into the recognizers below.
+function compile(v) {
+  const invalid = () => { throw Error('Invalid native CC vocabulary'); };
+  const text = value => typeof value === 'string' && value ? value : invalid();
+  const pair = value => Array.isArray(value) && value.length === 2 ? value.map(text) : invalid();
+  const labels = Object.fromEntries(['platform_name', 'os_version', 'shell', 'primary_directory', 'git_repository', 'additional_directories'].map(field => [field, text(v?.labels?.[field])]));
+  const withdrawal = new Map(Object.entries(v.withdrawal ?? {}).map(([field, value]) => [text(value), field]));
+  if (withdrawal.size !== 5 || ![...withdrawal.values()].every(field => fields.includes(field))) invalid();
+  const was = pair(v.was), scratchpad = pair(v.scratchpad), reminder = pair(v.reminder), proxy = v.proxy ?? {};
+  const readme = pair(proxy.readme), clis = pair(proxy.clis);
+  if (!Array.isArray(v.github) || !v.github.length || !Array.isArray(v.additionalChanged) || v.additionalChanged.length !== 2) invalid();
+  const github = new Set(v.github.map(text).flatMap(value => [value, value + text(v.githubReplaces)]));
+  return {
+    heading: text(v.heading), updateHeading: text(v.updateHeading), intro: text(v.intro),
+    worktree: text(v.worktree), stash: text(v.stash), billingHeader: text(v.billingHeader), reminder,
+    reminderPattern: new RegExp('^\\s*' + escapeRE(reminder[0]) + '([\\s\\S]*?)' + escapeRE(reminder[1])),
+    boundary: new RegExp('^(?:#{1,6} |' + reminder.map(escapeRE).join('|') + ')'),
+    labels, withdrawal, scratchpad, github, additionalChanged: v.additionalChanged.map(text),
+    wasAtEnd: new RegExp(escapeRE(was[0]) + '.+' + escapeRE(was[1]) + '$'),
+    git: new RegExp('^' + escapeRE(labels.git_repository) + '(true|false)$'),
+    gitUpdate: new RegExp('^' + escapeRE(labels.git_repository) + '(true|false)(?:' + escapeRE(was[0]) + '(true|false)' + escapeRE(was[1]) + ')?$'),
+    proxy: new RegExp('^' + escapeRE(text(proxy.start)) + '[^\\r\\n]+' + escapeRE(text(proxy.middle)) + '(?:' + escapeRE(readme[0]) + '[^\\r\\n]+' + escapeRE(readme[1]) + ')?' + escapeRE(text(proxy.end)) + '(?:' + escapeRE(clis[0]) + '[^\\r\\n]+' + escapeRE(clis[1]) + ')?$'),
+    // Lines that start like a native line but are not one: the label, or the
+    // first words of each native sentence.
+    suspects: [
+      ...Object.entries(labels).map(([field, label]) => [field === 'additional_directories' ? label.replace(/:$/, '') : label.trimEnd(), field]),
+      [scratchpad[0].trimEnd(), 'scratchpad_directory'], [words(v.worktree, 5), 'worktree'], [words(v.stash, 5), 'worktree'],
+      ...[...withdrawal].map(([value, field]) => [words(value, 5), field]),
+      ...v.github.map(value => [words(value, 5), 'github_cli']), [words(proxy.start, 5), 'agent_proxy'],
+    ],
+  };
+}
+
+// createContentPolicy binds the policy to the native vocabulary.
+export function createContentPolicy(vocabulary) {
+  const c = compile(vocabulary);
+  return {
+    applyContentPolicy: (input, policy, native, emitDiagnostic) => applyContentPolicy(c, input, policy, native, emitDiagnostic),
+    mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
+  };
+}
 function error(message, status = 400) {
   return Object.assign(new Error(message), { status, code: status === 503 ? 'configuration_error' : 'invalid_request_error' });
 }
@@ -50,53 +68,46 @@ function fenceAfter(line, current) {
   if (!current) return { marker: match[1][0], length: match[1].length };
   return match[1][0] === current.marker && match[1].length >= current.length && !match[2].trim() ? null : current;
 }
-function identify(body, update) {
+function identify(c, body, update) {
   if (!body.startsWith(' - ')) return null;
   const text = body.slice(3);
-  if (update && withdrawal.has(text)) return { field: withdrawal.get(text), delta: true };
-  for (const [prefix, field] of [['Platform: ', 'platform_name'], ['OS Version: ', 'os_version'], ['Shell: ', 'shell'], ['Primary working directory: ', 'primary_directory']]) {
-    if (text.startsWith(prefix) && text.length > prefix.length && (!update || field === 'primary_directory')) return { field, delta: update && / \(was .+\)$/.test(text) };
+  if (update && c.withdrawal.has(text)) return { field: c.withdrawal.get(text), delta: true };
+  for (const field of ['platform_name', 'os_version', 'shell', 'primary_directory']) {
+    const prefix = c.labels[field];
+    if (text.startsWith(prefix) && text.length > prefix.length && (!update || field === 'primary_directory')) return { field, delta: update && c.wasAtEnd.test(text) };
   }
-  if ((update ? /^Is a git repository: (true|false)(?: \(was (true|false)\))?$/ : /^Is a git repository: (true|false)$/).test(text)) return { field: 'git_repository', delta: update && text.includes(' (was ') };
-  if (text === 'Additional working directories:' && !update || update && /^Additional working directories (added|removed):$/.test(text)) return { field: 'additional_directories', list: true, delta: update };
-  if (text === worktree) return { field: 'worktree', pair: true, delta: update };
-  if (text.startsWith('Scratchpad directory: ') && text.endsWith(scratchSuffix) && text.length > 22 + scratchSuffix.length) return { field: 'scratchpad_directory' };
+  if ((update ? c.gitUpdate : c.git).test(text)) return { field: 'git_repository', delta: update && c.wasAtEnd.test(text) };
+  if (text === c.labels.additional_directories && !update || update && c.additionalChanged.includes(text)) return { field: 'additional_directories', list: true, delta: update };
+  if (text === c.worktree) return { field: 'worktree', pair: true, delta: update };
+  if (text.startsWith(c.scratchpad[0]) && text.endsWith(c.scratchpad[1]) && text.length > c.scratchpad[0].length + c.scratchpad[1].length) return { field: 'scratchpad_directory' };
   // Both renderers emit one complete bullet. Boundaries are the original native
   // line, never arbitrary text beyond it or a nested child of an unknown field.
-  if (githubPattern.test(text)) return { field: 'github_cli' };
-  if (proxyPattern.test(text)) return { field: 'agent_proxy' };
+  if (c.github.has(text)) return { field: 'github_cli' };
+  if (c.proxy.test(text)) return { field: 'agent_proxy' };
   return null;
 }
-function suspectedField(body) {
+function suspectedField(c, body) {
   if (!body.startsWith(' - ')) return null;
   const text = body.slice(3);
-  for (const [prefix, field] of [
-    ['Platform:', 'platform_name'], ['OS Version:', 'os_version'], ['Shell:', 'shell'],
-    ['Primary working directory:', 'primary_directory'], ['The primary working directory announced', 'primary_directory'],
-    ['Additional working directories', 'additional_directories'], ['Is a git repository:', 'git_repository'],
-    ['This is a git worktree', 'worktree'], ['The git stash stack', 'worktree'], ['The primary working directory is no longer a git worktree', 'worktree'],
-    ['Scratchpad directory:', 'scratchpad_directory'], ['The scratchpad directory announced', 'scratchpad_directory'],
-    ['`gh` here is', 'github_cli'], ['The built-in `gh api` announced', 'github_cli'],
-    ['Outbound HTTPS goes through', 'agent_proxy'], ['The agent proxy announced', 'agent_proxy'],
-  ]) if (text.startsWith(prefix)) return field;
+  for (const [prefix, field] of c.suspects) if (text.startsWith(prefix)) return field;
   return null;
 }
-function environmentRegions(text, carrier) {
+function environmentRegions(c, text, carrier) {
   const ls = lines(text), result = []; let fence = null;
   for (let i = 0; i < ls.length; i++) {
     const line = ls[i];
     const nextFence = fenceAfter(line.body, fence);
     if (nextFence !== fence) { fence = nextFence; continue; }
-    if (fence || !/^# Environment(?: update)?$/.test(line.body)) continue;
-    const update = line.body.endsWith(' update');
-    if (!update && ls[i + 1]?.body !== intro && ls[i + 1]?.body !== intro.trimEnd()) continue;
+    if (fence || line.body !== c.heading && line.body !== c.updateHeading) continue;
+    const update = line.body === c.updateHeading;
+    if (!update && ls[i + 1]?.body !== c.intro && ls[i + 1]?.body !== c.intro.trimEnd()) continue;
     const first = i + (update ? 1 : 2); let stop = first, boundaryFence = null;
     // A heading in an example is not a new environment carrier. Otherwise
     // splitting here would discard fence state and re-enter quoted content.
     while (stop < ls.length) {
       const next = fenceAfter(ls[stop].body, boundaryFence);
       if (next !== boundaryFence) { boundaryFence = next; stop++; continue; }
-      if (!boundaryFence && /^(?:#{1,6} |<\/?system-reminder>)/.test(ls[stop].body)) break;
+      if (!boundaryFence && c.boundary.test(ls[stop].body)) break;
       stop++;
     }
     const entries = [], seen = new Set(), blocked = new Map(); let innerFence = null;
@@ -104,19 +115,19 @@ function environmentRegions(text, carrier) {
       const next = fenceAfter(ls[j].body, innerFence);
       if (next !== innerFence) { innerFence = next; continue; }
       if (innerFence) {
-        const suspected = suspectedField(ls[j].body);
+        const suspected = suspectedField(c, ls[j].body);
         if (suspected) blocked.set(suspected, 'ambiguous');
         continue;
       }
-      const found = identify(ls[j].body, update);
+      const found = identify(c, ls[j].body, update);
       if (!found) {
-        const suspected = suspectedField(ls[j].body);
+        const suspected = suspectedField(c, ls[j].body);
         if (suspected) blocked.set(suspected, 'unsupported_format');
         continue;
       }
       let end = j;
       if (found.pair) {
-        if (ls[j + 1]?.body !== ' - ' + stash) { blocked.set(found.field, 'unsupported_format'); continue; }
+        if (ls[j + 1]?.body !== ' - ' + c.stash) { blocked.set(found.field, 'unsupported_format'); continue; }
         end++;
       }
       if (found.list) {
@@ -135,17 +146,17 @@ function environmentRegions(text, carrier) {
   }
   return result;
 }
-function recognizedUser(text) {
+function recognizedUser(c, text) {
   // A user text must consist solely of flat reminder blocks. Prose, quotation,
   // code fences and tool-result content are deliberately not parsed.
   let rest = text, offset = 0; const ranges = [];
   while (rest.trim()) {
-    const match = /^\s*<system-reminder>([\s\S]*?)<\/system-reminder>/.exec(rest);
-    if (!match || match[1].includes('<system-reminder>') || match[1].includes('</system-reminder>')) return [];
-    const inner = match[0].indexOf('>') + 1;
+    const match = c.reminderPattern.exec(rest);
+    if (!match || c.reminder.some(tag => match[1].includes(tag))) return [];
+    const open = match[0].indexOf(c.reminder[0]);
     ranges.push({
-      start: offset + inner, text: match[1],
-      wrapperStart: offset + match[0].indexOf('<system-reminder>'),
+      start: offset + open + c.reminder[0].length, text: match[1],
+      wrapperStart: offset + open,
       wrapperEnd: offset + match[0].length,
     });
     offset += match[0].length; rest = rest.slice(match[0].length);
@@ -183,14 +194,14 @@ function validatePolicy(policy) {
   }
 }
 
-export async function applyContentPolicy(input, policy = {}, native = {}, emitDiagnostic) {
+async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagnostic) {
   validatePolicy(policy);
   const output = structuredClone(input);
   if (policy.relay_mode === 'direct') return output;
   const sources = policy.build_attachment_sources ?? {}, slots = textSlots(output), plans = [], regionsBySlot = new Map(), blocked = new Set(), baseline = new Set();
   for (const slot of slots) {
-    const ranges = slot.role === 'user' ? recognizedUser(slot.text) : [{ text: slot.text, start: 0 }];
-    for (const range of ranges) for (const region of environmentRegions(range.text, slot.path)) {
+    const ranges = slot.role === 'user' ? recognizedUser(c, slot.text) : [{ text: slot.text, start: 0 }];
+    for (const range of ranges) for (const region of environmentRegions(c, range.text, slot.path)) {
       if (!regionsBySlot.has(slot)) regionsBySlot.set(slot, []);
       regionsBySlot.get(slot).push({ ...region, start: region.start + range.start, end: region.end + range.start, headerEnd: region.headerEnd + range.start });
       for (const [field, status] of region.blocked) {
@@ -215,7 +226,7 @@ export async function applyContentPolicy(input, policy = {}, native = {}, emitDi
       const snapshot = await native.readEnvironment?.(neededFields);
       const text = typeof snapshot === 'string' ? snapshot : snapshot?.text;
       if (typeof text !== 'string') throw Error('Missing native environment');
-      const regions = environmentRegions(text, 'native');
+      const regions = environmentRegions(c, text, 'native');
       if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || !regions[0].entries.some(e => e.field === 'platform_name')) throw Error('Invalid native environment');
       server = new Map(regions[0].entries.map(entry => [entry.field, entry.raw]));
       if (active.some(plan => plan.source === 'worker' && snapshot?.unavailableFields?.includes(plan.entry.field))) throw Error('Unavailable native field');
@@ -259,7 +270,7 @@ export async function applyContentPolicy(input, policy = {}, native = {}, emitDi
     if (slot.role === 'user') {
       // Only this conversion can own removal of a wrapper. Empty reminders
       // that were already present are unrelated client content, not cleanup.
-      for (const range of recognizedUser(slot.text)) {
+      for (const range of recognizedUser(c, slot.text)) {
         const local = finalEdits.filter(edit => edit.start >= range.start && edit.end <= range.start + range.text.length);
         if (!local.length || !range.text.trim()) continue;
         if (!splice(range.text, local.map(edit => ({ ...edit, start: edit.start - range.start, end: edit.end - range.start }))).trim()) {
@@ -279,7 +290,7 @@ export async function applyContentPolicy(input, policy = {}, native = {}, emitDi
     }
   }
   for (const field of fields) if (sources[field] && sources[field] !== 'client' && !plans.some(p => p.entry.field === field) && !blocked.has(field)) diagnostic(emitDiagnostic, field, 'not_found', 'request');
-  if (native.billing !== undefined) output.system = mergeBillingAttribution(output.system, policy, native.billing, emitDiagnostic);
+  if (native.billing !== undefined) output.system = mergeBillingAttribution(c, output.system, policy, native.billing, emitDiagnostic);
   return output;
 }
 
@@ -287,8 +298,8 @@ export async function applyContentPolicy(input, policy = {}, native = {}, emitDi
 // with the header outside a code fence. A mention elsewhere (inside prose, an
 // indented quote, a fence) is client content and not a header. A header line
 // that cannot be edited safely is a conflict.
-function billingCandidate(text) {
-  const prefix = 'x-anthropic-billing-header:';
+function billingCandidate(c, text) {
+  const prefix = c.billingHeader;
   const candidates = []; let fenced = null;
   for (const line of lines(text)) {
     fenced = fenceAfter(line.body, fenced);
@@ -308,7 +319,7 @@ function billingCandidate(text) {
   }
   return { candidates };
 }
-export function mergeBillingAttribution(system = [], policy = {}, nativeBilling, emitDiagnostic) {
+function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emitDiagnostic) {
   validatePolicy(policy);
   const wanted = billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker');
   if (!wanted.length || policy.relay_mode === 'direct') return structuredClone(system);
@@ -321,7 +332,7 @@ export function mergeBillingAttribution(system = [], policy = {}, nativeBilling,
   blocks.forEach((block, index) => {
     if (block?.type !== 'text') return;
     if (typeof block.text !== 'string') throw error('system text must be a string');
-    const result = billingCandidate(block.text);
+    const result = billingCandidate(c, block.text);
     conflict ||= result.conflict ?? '';
     for (const candidate of result.candidates ?? []) found.push({ ...candidate, index });
   });
@@ -330,14 +341,14 @@ export function mergeBillingAttribution(system = [], policy = {}, nativeBilling,
     wanted.forEach(field => diagnostic(emitDiagnostic, field, 'ambiguous', 'system'));
     throw error(`Worker billing attribution cannot be applied: ${conflict}`);
   }
-  const generated = typeof nativeBilling === 'string' ? billingCandidate(nativeBilling) : {};
+  const generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
   if (generated.conflict || generated.candidates?.length !== 1 || wanted.some(field => !generated.candidates[0].keys.has(field))) {
     wanted.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
     throw error('Required native billing attribution is unavailable', 503);
   }
   const values = generated.candidates[0].keys;
   if (!found.length) {
-    blocks.unshift({ type: 'text', text: 'x-anthropic-billing-header: ' + wanted.map(field => `${field}=${values.get(field).value};`).join(' ') });
+    blocks.unshift({ type: 'text', text: c.billingHeader + ' ' + wanted.map(field => `${field}=${values.get(field).value};`).join(' ') });
     wanted.forEach(field => diagnostic(emitDiagnostic, field, 'inserted', 'system'));
     return blocks;
   }

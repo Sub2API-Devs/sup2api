@@ -6,7 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
-import { applyContentPolicy } from '../../content-policy.js';
+import { createContentPolicy } from '../../content-policy.js';
+import { vocabulary } from '../vocabulary.mjs';
+const { applyContentPolicy } = createContentPolicy(vocabulary);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../../../../..');
