@@ -12,6 +12,11 @@ const envelopeKeys = new Set(['requestPolicy', 'runtimeContext']);
 // model aliases, forced tool choice, token limits, or beta bodies afterward.
 const nativeFields = new Set([...componentKeys, ...envelopeKeys, 'max_tokens', 'thinking', 'tool_choice', 'metadata', 'temperature', 'betas', 'output_config']);
 const nativeOutputFields = new Set(['effort', 'format']);
+// The native builder fills these from the history it rebuilt, and build
+// history comes from the client without upstream message ids: native
+// diagnostics.previous_message_id was an id it made up (msg_<uuid>, 2026-10-21
+// audit). They are sent only as the client sent them, or not at all.
+const clientOnlyFields = new Set(['diagnostics']);
 
 export function validateBuildParameters(value) {
   if (value === undefined) return;
@@ -53,6 +58,7 @@ export function mergeAdditionalParameters(built, parameters) {
   // as __proto__; property assignment would invoke Object.prototype's setter.
   const additional = Object.fromEntries(Object.entries(supplied).filter(([key]) => !nativeFields.has(key)));
   const result = { ...structuredClone(built), ...structuredClone(additional) };
+  for (const key of clientOnlyFields) if (!has(supplied, key)) delete result[key];
   if (has(supplied, 'output_config')) {
     const extraOutput = Object.fromEntries(Object.entries(supplied.output_config).filter(([key]) => !nativeOutputFields.has(key)));
     if (Object.keys(extraOutput).length) {

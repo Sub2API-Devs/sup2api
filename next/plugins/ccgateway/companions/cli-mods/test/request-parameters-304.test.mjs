@@ -37,6 +37,15 @@ test('304 output_config extensions survive even when native drops all managed ou
   assert.deepEqual(mergeAdditionalParameters({}, { output_config: {} }), { output_config: {} });
 });
 
+test('304 native diagnostics never replace or invent the client value', () => {
+  const native = { diagnostics: { previous_message_id: 'msg_8df8efa6-7b32-4c15-955d-2357bb024089' } };
+  assert.deepEqual(mergeAdditionalParameters(native, {}), {});
+  assert.deepEqual(mergeAdditionalParameters(native, undefined), {});
+  assert.deepEqual(mergeAdditionalParameters(native, { diagnostics: { previous_message_id: 'msg_01client' } }), { diagnostics: { previous_message_id: 'msg_01client' } });
+  assert.deepEqual(mergeAdditionalParameters(native, { diagnostics: { previous_message_id: null } }), { diagnostics: { previous_message_id: null } });
+  assert.deepEqual(mergeAdditionalParameters({}, { diagnostics: {} }), { diagnostics: {} });
+});
+
 test('304 extension keys use own properties and cannot mutate object prototypes', () => {
   const params = JSON.parse('{"__proto__":{"polluted":"caller"},"constructor":{"x":1},"output_config":{"__proto__":{"nested":true},"effort":"high"}}');
   const native = { metadata: { user_id: 'native' } }, result = mergeAdditionalParameters(native, params);
