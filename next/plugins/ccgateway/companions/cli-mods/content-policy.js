@@ -283,18 +283,24 @@ export async function applyContentPolicy(input, policy = {}, native = {}, emitDi
   return output;
 }
 
+// billingCandidate finds the billing header lines of text: a line that starts
+// with the header outside a code fence. A mention elsewhere (inside prose, an
+// indented quote, a fence) is client content and not a header. A header line
+// that cannot be edited safely is a conflict.
 function billingCandidate(text) {
+  const prefix = 'x-anthropic-billing-header:';
   const candidates = []; let fenced = null;
   for (const line of lines(text)) {
     fenced = fenceAfter(line.body, fenced);
-    if (!line.body.includes('x-anthropic-billing-header:')) continue;
-    if (fenced || !line.body.startsWith('x-anthropic-billing-header:') || line.body.split('x-anthropic-billing-header:').length !== 2) return { ambiguous: true };
-    const prefix = 'x-anthropic-billing-header:', payload = line.body.slice(prefix.length), keys = new Map();
+    if (fenced || !line.body.startsWith(prefix)) continue;
+    if (line.body.split(prefix).length !== 2) return { conflict: 'a billing header line repeats the header' };
+    const payload = line.body.slice(prefix.length), keys = new Map();
     let cursor = prefix.length;
     for (const part of payload.split(';')) {
       if (!part.trim()) { cursor += part.length + 1; continue; }
       const match = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)([^;\s]+)(\s*)$/.exec(part);
-      if (!match || keys.has(match[2])) return { ambiguous: true };
+      if (!match) return { conflict: 'a billing header field is malformed' };
+      if (keys.has(match[2])) return { conflict: `the billing header repeats ${match[2]}` };
       const start = line.start + cursor + match[1].length + match[2].length + match[3].length;
       keys.set(match[2], { start, end: start + match[4].length, value: match[4] }); cursor += part.length + 1;
     }
@@ -308,20 +314,24 @@ export function mergeBillingAttribution(system = [], policy = {}, nativeBilling,
   if (!wanted.length || policy.relay_mode === 'direct') return structuredClone(system);
   const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : structuredClone(system);
   if (!Array.isArray(blocks)) throw error('system must be text or blocks');
-  const found = []; let ambiguous = false;
+  // worker means the Worker's native attribution, or no request: a header the
+  // value cannot be placed in safely is refused (400) instead of forwarding
+  // the client's value (2026-10-21; it used to pass through unchanged).
+  const found = []; let conflict = '';
   blocks.forEach((block, index) => {
     if (block?.type !== 'text') return;
     if (typeof block.text !== 'string') throw error('system text must be a string');
     const result = billingCandidate(block.text);
-    if (result.ambiguous) ambiguous = true;
-    else for (const candidate of result.candidates) found.push({ ...candidate, index });
+    conflict ||= result.conflict ?? '';
+    for (const candidate of result.candidates ?? []) found.push({ ...candidate, index });
   });
-  if (ambiguous || found.length > 1) {
+  if (!conflict && found.length > 1) conflict = 'the system prompt carries more than one billing header';
+  if (conflict) {
     wanted.forEach(field => diagnostic(emitDiagnostic, field, 'ambiguous', 'system'));
-    return blocks;
+    throw error(`Worker billing attribution cannot be applied: ${conflict}`);
   }
   const generated = typeof nativeBilling === 'string' ? billingCandidate(nativeBilling) : {};
-  if (generated.ambiguous || generated.candidates?.length !== 1 || wanted.some(field => !generated.candidates[0].keys.has(field))) {
+  if (generated.conflict || generated.candidates?.length !== 1 || wanted.some(field => !generated.candidates[0].keys.has(field))) {
     wanted.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
     throw error('Required native billing attribution is unavailable', 503);
   }

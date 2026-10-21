@@ -39,6 +39,10 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
   if (phase === 'input' || phase === 'build') {
     source = 'input'; status = 400; type = 'invalid_request_error'; code = 'cli_invalid_request';
     message = phase === 'build' ? 'CC could not build the request components' : 'Invalid CLI request input or options';
+    // A Worker-side value the build needs but cannot get (native billing
+    // attribution) is this Worker's failure, not the request's: answer 503 so
+    // another account can take it. It used to leave as a 400.
+    if (error?.status === 503) { source = 'internal'; status = 503; type = 'api_error'; code = 'cli_source_unavailable'; }
   }
   if (timedOut) {
     source = 'timeout'; status = 504; type = 'timeout_error'; code = 'cli_timeout'; message = 'CC request timed out';

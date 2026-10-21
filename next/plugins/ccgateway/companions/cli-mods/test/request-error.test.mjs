@@ -30,6 +30,13 @@ test('local exceptions preserve codes and exact messages including URLs', () => 
   assert.equal(frame.error.code, 'ECONNRESET');
   assert.equal(frame.error.message, error.message);
   assert.equal(localErrorFrame(error, { phase: 'input' }).status, 400);
+  // Content policy: a refused request stays a 400, an unavailable Worker
+  // source is a 503 the gateway fails over on.
+  const refused = Object.assign(new Error('Worker billing attribution cannot be applied: x'), { status: 400 });
+  assert.deepEqual([localErrorFrame(refused, { phase: 'build' }).status, localErrorFrame(refused, { phase: 'build' }).source], [400, 'input']);
+  const unavailable = Object.assign(new Error('Required native billing attribution is unavailable'), { status: 503, code: 'configuration_error' });
+  const frame503 = localErrorFrame(unavailable, { phase: 'build' });
+  assert.deepEqual([frame503.status, frame503.source, frame503.error.type, frame503.error.message], [503, 'internal', 'api_error', 'Required native billing attribution is unavailable']);
   assert.equal(localErrorFrame(error, { timedOut: true }).status, 504);
   assert.equal(localErrorFrame(error, { responseStarted: true }).responseStarted, true);
 });
