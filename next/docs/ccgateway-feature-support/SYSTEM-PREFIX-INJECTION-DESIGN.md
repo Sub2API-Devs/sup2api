@@ -111,6 +111,11 @@
   - 没有计费头时首块是开头行即可，终端那句和 SDK 那句都是 200。
   - 二者都没有（`[提示]`、不带 system）429；Haiku 都是 200。
   - 结论：上游要的是首块以计费头开头或首块是开头行，二者有一个就行。计费头可以和提示在同一块，开头行必须单独成块（10-21 实测）。build 总补计费头，所以开头行对上游不是必需的；仍然补上是为了和原生 CC 的形状一致。
+- build 不补开头行（2026-10-22，30 号）：用临时 CLI（v16 加一个只在测试里用的环境变量开关，跳过补开头行，测完删除）在 30 号容器里直接跑 `claude request --build`。
+  - 抓包确认：关掉后发出的 system 是 `[计费头, 客户端提示]`，没有开头行；开着时是 `[计费头, SDK 开头行, 客户端提示]`。
+  - 真实上游，`claude-opus-4-8` 和 `claude-sonnet-4-6` 结果相同：简单问答、首块为 reminder 的一轮工具往返（答出 tool_result 里的暗号）、流式都是 200。
+  - direct 同一天补测更接近真实的请求：`[计费头, 提示]` 的工具往返、流式，以及计费头与提示同块的工具往返都是 200；对照 `[提示]` 仍是 429。
+  - 结论：build 去掉补开头行也能成功。
 - `cch`（2026-10-22，30 号，线上 v16 CLI）：线上 build 发出 `cch=00000;`。
   - 条件：原生 `kLo` 在 `Pe()==="firstParty" && Ri()` 时写 `cch=00000;`。`Ri()` 要求 `ANTHROPIC_BASE_URL` 未设置或是官方地址（或设了 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`）。之前一次性容器抓包把 base URL 指向本地，所以不带。30 号容器和 Worker 环境里没有 `ANTHROPIC_BASE_URL` 和 Bedrock/Vertex 变量，request 命令也不设，所以条件成立。
   - 实抓：在 30 号容器里用 `ANTHROPIC_UNIX_SOCKET`（请求地址仍是 `api.anthropic.com`，连接走 unix socket 上的 TLS）、占位令牌 `CLAUDE_CODE_OAUTH_TOKEN=ssh-placeholder` 和临时自签证书起假上游，build 发出的首块是 `x-anthropic-billing-header: cc_version=2.1.304.8f6; cc_entrypoint=sdk-cli; cch=00000;`，第二块是 SDK 那句。假上游返回 400，没有请求到达上游。
