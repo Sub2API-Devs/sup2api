@@ -67,11 +67,14 @@ jobs:
       - name: Mod attachment policy
         run: node --test next/plugins/ccgateway/companions/engine/attachment_policy_mod_test.mjs
       # The CLI support modules, including the Worker → CLI contract fixture.
+      # patch-wire-preservation-304 patches the recovered CLI, which is not in
+      # Git; it runs where that source is (tests needing it otherwise skip,
+      # visibly).
       - name: CLI mods
         working-directory: next/plugins/ccgateway/companions/cli-mods
         run: |
           npm install --ignore-scripts --no-audit --no-fund
-          npm test
+          node --test $(ls test/*.test.mjs | grep -v patch-wire-preservation-304)
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
