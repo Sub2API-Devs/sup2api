@@ -128,3 +128,12 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 修复后（v18 ELF sha256 `64c3759c…`）重跑：上表三项消失；默认客户端、设开关的 OAuth 客户端、设开关的 API Key 客户端都跑通（API Key 客户端本身就按 5 分钟缓存、个别工具说明不同，见 [接入说明](CLIENT-SETUP.md)）。
 
 **新发现的关联问题（待定）**：子代理结束后，父线程收到的 tool_result 正文里写着子代理的 agentId（`agentId: a… (use SendMessage with to: 'a…', …)`），这是客户端的原值。build 映射 agent-id 后，上游看到的子代理请求头是映射值，父线程正文里却是原值，两者对不上；官方请求里两者相同。agent-id 本来就以原值出现在正文里，映射它并不能隐藏什么。
+
+## 11. #21 真实上游端到端（2026-10-22）
+
+#21（CCGateway API Key 联调测）的 app 容器里另起一个私有 Worker（当前源码 + v18 CLI，独立数据和配置目录，线上 Worker 不受影响），官方 2.1.304 客户端（`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`，API Key 方式）经它访问账号的真实上游；对照组是同一客户端直连该上游。所有上游请求都过一个只记录不改动的转发器。场景：子代理（general-purpose）、`--continue` 续问、`/compact`、Explore、项目自定义代理、Read 工具，`claude-sonnet-4-6`。容器内除 8787 外的回环 TCP 会被出口接管，客户端改经 unix socket 连这个 Worker（测试用 Worker 临时加了 unix 监听，未提交）。
+
+- 结果：对照 14 个、build 15 个、direct 16 个上游请求全部 200，六个场景两种模式都完成。
+- body：按场景、请求类型、轮次配对的 12 个请求，body 键、system、tools、metadata、thinking、context_management、output_config、首条 user 消息和消息形状全部与对照一致（模型自己的回答、ID 除外）。
+- 请求头：API Key 账号的出口只剩最小集合（`apiKeyRequestHeaders`：x-api-key、version、content-type、`user-agent: ccgateway-request`、accept、beta），官方客户端发的 `user-agent: claude-cli/…`、`x-app`、`x-stainless-*`、`anthropic-dangerous-direct-browser-access` 和全部 `x-claude-code-*` 都没有。这是 API Key 路径原有的做法，与 v18 无关。
+- 新发现：客户端在压缩请求上带 `x-cc-compaction-request: manual` 和 `x-claude-code-compaction: manual`，压缩后的下一个请求带 `x-cc-context-compacted`、`x-claude-code-context-compacted`（CC `Zmn2`，按 `compactionRequestKind` / `contextCompactedKindForWire`）。网关目前不转发、请求命令也不设，OAuth 和 API Key 两条路径都缺。
