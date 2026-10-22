@@ -1,9 +1,10 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v18-agent-context`**（未发布；线上仍是 v17）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
+当前代码为 **2.1.304 / `ccgateway-v18-agent-context`**（插件 0.1.75）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
 
 - Worker 经 `CCG_REQUEST_AGENT` 给出客户端的 `x-claude-code-*` 请求头和会话范围的映射密钥；`request-agent.js` 判断主线程、子代理、压缩（没有请求头时看客户端首块计费头的 `cc_is_subagent`，不是 CC 的请求按自定义子代理），把 `querySource`、子代理上下文、`promptId` 交给 CC 自己的代码，由它写出 request-class、agent-type、agent-id、parent-agent-id、prompt-id 请求头、缓存时长和计费头的子代理字段。
-- build 在 OAuth 账号上映射 agent-id、parent-agent-id、prompt-id（同时改写计费头 `cc_prompt_id`）；direct 用客户端原值。
+- build 在 OAuth 账号上映射 prompt-id（同时改写计费头 `cc_prompt_id`）；agent-id、parent-agent-id 两种模式都用客户端原值（父线程正文里写着它们），客户端没有时才派生。direct 全用客户端原值。
+- prev-tool-durations 和四个压缩头原样发出；带上下文的请求按发往 Anthropic 的样子发（`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`），API Key 路径保留 CC 构建的全部请求头。
 - 新能力 `request_agent_context_v1`。
 
 v17 `ccgateway-v17-identity-line`（插件 0.1.74，2026-10-22 已部署 ovh）在 v16 之上（2026-10-22 用户决定）：
