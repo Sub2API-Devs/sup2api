@@ -161,3 +161,9 @@
 - 30 号 Worker 日志：7 次请求都是 `mode=direct`、HTTP 200。正常客户端入站为 `[计费头 claude-desktop-3p, agent_sdk, 提示]`；关掉计费头的入站为 `[agent_sdk, 提示]`。
 - 把这两种入站 body 交给线上 v17 CLI 按 Worker 的方式重放到假上游：带计费头的发出内容与入站逐字节相同；不带的发出 `[计费头 sdk-cli +cch, agent_sdk, 提示]`，system 之外的部分不变。
 - 同一时段日志里还有一个真实 VS Code 客户端的 build 请求：入站 `[计费头 claude-vscode, official_cli_sdk, …]`，与第 1.1 节按扩展源码得出的结论一致。
+
+真实客户端走 build（2026-10-22，发布后，30 号，做法同上，分组覆盖 `relay_mode=build`）：
+
+- 简单问答（`claude-opus-4-8`）返回 `BUILD-OK`；Opus、Sonnet 各一轮 Read 工具往返都答对；客户端关掉计费头后 Opus 简单问答、Sonnet 工具往返也都成功。8 次请求都是 `mode=build`、HTTP 200。
+- 把日志里的 build 组件输入交给线上 v17 CLI 重放到假上游（线上全局策略 `cc_version=worker`，入口与身份行为默认）：带计费头的客户端发出 `[计费头 claude-desktop-3p, agent_sdk, 提示]`，入口与客户端的 SDK 那句保留，`cc_version` 按策略换成原生值；不带计费头的发出 `[计费头 sdk-cli +cch, agent_sdk, 提示]`，补了原生整行，客户端已有的身份行不重复插入。
+- 清理同上，已全部恢复。
