@@ -166,4 +166,4 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 - **客户端设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`：全部失败**。请求带 `diagnostics`，核心先向 Worker 要资源身份（`message_diagnostics.go` → `resources.go` `Identity`），#21 是 API Key + 自定义上游地址，Worker 的 `resourceAuthorizationSource` 判为不支持，回 503 `api_error`（不是 `resource_identity_unsupported`），核心报 “account does not provide a verified resource issuer”，客户端反复重试约 18 分钟。消息请求一次也没到 Worker。这是 0.1.75 之前就有的行为，与 v18 无关；接入说明已注明。
 - **客户端不设开关：六个场景全部完成**，14 个消息请求全部 200（build）。核心 → 插件把客户端的 `x-claude-code-agent-id` 转到了 Worker（子代理的 4 个请求），Worker 记录 `request_agent`；不设开关的客户端本来就不发 request-class、prompt-id 等头，类别由计费头的 `cc_is_subagent` 判断。
 
-待定：带 `diagnostics` 的请求遇到没有资源身份的账号时怎么处理（换账号、明确的不支持错误，还是别的），需要另行决定。
+**决定（2026-10-22 用户）**：API Key 账号不处理 `diagnostics`，直接转发。核心 `message_diagnostics.go`：CCGateway 的 `apikey` 账号不要资源身份、不加跟踪头、不登记响应 ID，body 里的 `diagnostics` 原样到 Worker；平台没登记过的 `previous_message_id` 也可以发给 API Key 账号；登记在 OAuth 账号上的 ID 仍只发回那个账号。新测试 `TestDiagnosticsForwardedUntrackedOnCCGatewayAPIKey`；资源与诊断的测试夹具改为 `managed` 类型（原来是 `apikey`，与真实情况不符）。Worker 的请求命令路径本来就原样带 `diagnostics`，不用改。代价：API Key 账号上 `previous_message_id` 不再按用户隔离（同一上游 Key 本来就是共用的）。

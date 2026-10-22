@@ -17,8 +17,8 @@ func TestHelperCustodyFirstIneligibleIssuerSkipsOnlyBeforeReserve(t *testing.T) 
 			e.accounts.mu.Lock()
 			e.accounts.groups[testGroup] = nil
 			e.accounts.mu.Unlock()
-			e.accounts.addTyped(testGroup, 21, 1, "acc-21", "ccgateway", "apikey")
-			e.accounts.addTyped(testGroup, 22, 2, "acc-22", "ccgateway", "apikey")
+			e.accounts.addTyped(testGroup, 21, 1, "acc-21", "ccgateway", "managed")
+			e.accounts.addTyped(testGroup, 22, 2, "acc-22", "ccgateway", "managed")
 			var selected []int64
 			e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (helperRuntimeInfo, error) {
 				selected = append(selected, id)

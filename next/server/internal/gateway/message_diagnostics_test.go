@@ -9,6 +9,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -99,6 +100,70 @@ func TestDiagnosticsHTTPColdBindingJSONAndSSE(t *testing.T) {
 			status, _ = fileRequest(t, e, "POST", "/v1/messages", testKey, "", raw, "application/json")
 			if status != 404 || calls != 2 {
 				t.Fatal("unknown ID bypassed registry")
+			}
+		})
+	}
+}
+
+// A CCGateway API-key account has no resource issuer: diagnostics go upstream
+// as the client sent them, without identity, tracking headers or registry
+// records, also for a previous ID the platform never tracked. An ID tracked on
+// an OAuth account still never goes to the API-key account.
+func TestDiagnosticsForwardedUntrackedOnCCGatewayAPIKey(t *testing.T) {
+	for _, mode := range []string{"new", "untracked-previous", "tracked-elsewhere"} {
+		t.Run(mode, func(t *testing.T) {
+			e, _, _ := resourceTestEnv(t)
+			e.gen.accountTypes[0].Type.ID = "apikey"
+			for _, a := range e.accounts.accounts {
+				a.Type = "apikey"
+			}
+			e.gw.d.ResourceTransport = forbiddenCreditIdentity{}
+			registry := &memoryDiagnostics{rows: map[string]core.DiagnosticMessage{}}
+			e.gw.d.Diagnostics = registry
+			sent := map[string]any{"previous_message_id": nil}
+			switch mode {
+			case "untracked-previous":
+				sent = map[string]any{"previous_message_id": "msg_from_this_key"}
+			case "tracked-elsewhere":
+				sent = map[string]any{"previous_message_id": "msg_on_oauth"}
+				h, _ := diag.Hash("msg_on_oauth")
+				p := e.auth.keys[testKey]
+				registry.rows[h] = core.DiagnosticMessage{IDHash: h, Owner: core.ResourceOwner{UserID: p.UserID, GroupID: p.Group.ID}, Binding: core.ResourceBinding{AccountID: 99, PrincipalID: "oauth_issuer", Generation: "v1"}, RetentionUntil: time.Now().Add(time.Hour)}
+			}
+			calls := 0
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				var got map[string]json.RawMessage
+				json.NewDecoder(r.Body).Decode(&got)
+				want, _ := json.Marshal(sent)
+				if string(got["diagnostics"]) != string(want) {
+					t.Errorf("diagnostics changed: %s", got["diagnostics"])
+				}
+				for name := range r.Header {
+					if strings.HasPrefix(strings.ToLower(name), "x-ccgateway-diagnostics-") {
+						t.Errorf("tracking header %s sent", name)
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"id":"msg_new","type":"message","role":"assistant","model":%q,"content":[],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":0}}`, testModel)
+			}))
+			defer up.Close()
+			e.plat.base = up.URL
+			request := body(testModel, false)
+			request["diagnostics"] = sent
+			raw, _ := json.Marshal(request)
+			status, response := fileRequest(t, e, "POST", "/v1/messages", testKey, "", raw, "application/json")
+			if mode == "tracked-elsewhere" {
+				if status < 400 || calls != 0 {
+					t.Fatalf("an ID tracked on another account reached the API-key account: %d", status)
+				}
+				return
+			}
+			if status != 200 || calls != 1 {
+				t.Fatalf("%d calls%d %s", status, calls, response)
+			}
+			if len(registry.rows) != 0 {
+				t.Fatal("untracked response recorded")
 			}
 		})
 	}

@@ -82,9 +82,17 @@ func (c *call) diagnosticAccountAllowed(a *core.AccountRef) bool {
 		return true
 	}
 	if r.lookupError != nil {
-		return a.PluginKey != "ccgateway"
+		return a.PluginKey != "ccgateway" || diagnosticsUntracked(a.PluginKey, a.Type)
 	}
 	return r.previous == nil || a.PluginKey == "ccgateway" && a.ID == r.previous.Binding.AccountID
+}
+
+// diagnosticsUntracked: a CCGateway API-key account has no resource issuer
+// to bind response IDs to, so its requests carry diagnostics upstream as the
+// client sent them, without platform ownership tracking (2026-10-22 user
+// decision). An ID tracked on another account still stays on that account.
+func diagnosticsUntracked(pluginKey, accountType string) bool {
+	return pluginKey == "ccgateway" && accountType == "apikey"
 }
 func (c *call) applyDiagnosticHeaders(ctx context.Context, req *http.Request, account *core.Account, body []byte) error {
 	c.diagnosticAccess = nil
@@ -94,7 +102,7 @@ func (c *call) applyDiagnosticHeaders(ctx context.Context, req *http.Request, ac
 		}
 	}
 	r := c.diagnosticRequest
-	if r == nil || account.PluginKey != "ccgateway" {
+	if r == nil || account.PluginKey != "ccgateway" || diagnosticsUntracked(account.PluginKey, account.Type) {
 		return nil
 	}
 	if c.g.d.Diagnostics == nil || c.g.d.ResourceTransport == nil {

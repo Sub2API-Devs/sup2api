@@ -142,9 +142,13 @@ func fileTestMetadata() string {
 }
 func resourceTestEnv(t *testing.T) (*env, *memoryResourceStore, *fakeResourceTransport) {
 	e := newEnv(t, func(e *env) {
+		// Provider resources and diagnostics are bound to an OAuth account's
+		// issuer; an API-key account has none.
 		e.gen.accountTypes[0].Plugin.Key = "ccgateway"
+		e.gen.accountTypes[0].Type.ID = "managed"
 		for _, a := range e.accounts.accounts {
 			a.PluginKey = "ccgateway"
+			a.Type = "managed"
 		}
 	})
 	s := &memoryResourceStore{rows: map[string]core.ProviderResource{}, dispatch: true}
