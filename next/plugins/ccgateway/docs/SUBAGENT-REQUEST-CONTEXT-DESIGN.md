@@ -105,3 +105,22 @@ direct 的 body 原样转发，客户端的 `metadata.session_id`、`cc_prompt_i
 第 4 节的关联逐条核对通过：子代理两轮 agent-id 相同；嵌套 parent 等于上层 agent-id；子代理、压缩与主线程 prompt-id 相同；每个请求的 prompt-id 头等于计费头 `cc_prompt_id`；同一会话 session-id 相同且等于 metadata；direct 全部是客户端原值。没有上下文时仍是原来的主线程行为。
 
 **未完成**：30 号的 OAuth 令牌在 2026-10-22 04:22–05:23（UTC）之间被上游吊销（此后所有请求 401 "OAuth access token has been revoked."，包括线上用户请求），真实上游测试没有做。需要 30 号重新授权后补测，再发布。
+
+## 10. 端到端：真实客户端 → 网关 → 出口（2026-10-22，离线）
+
+ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：官方 Claude Code 2.1.304 客户端用 `ANTHROPIC_BASE_URL` 指向本地 Worker（当前源码构建 + v18 CLI），假装已登录；Worker 的账号是假的 OAuth 凭证，出口走 unix socket 上的假上游，记录每个请求并让对话跑出主线程 → 子代理 → 嵌套子代理。同一对话另由客户端直连假上游作为对照（Anthropic 从真实客户端收到的样子）。没有任何请求出网。脚本在 `artifacts/claude-2.1.304/e2e/`。
+
+**客户端指向自定义地址时，客户端自己就少发很多东西**（对照 Worker 收到的请求）：CC 只在官方地址时写 `cch`、`cc_prompt_id`、`cc_turn_*`、`cc_prev_req`，发 request-class / agent-type / prompt-id / prev-tool-durations 请求头、`diagnostics`，system 分块和 `scope: global` 缓存也按官方地址才有。于是出口的 agent-type 只能是 custom、没有 prompt-id、计费头只有两个字段、system 3 块而不是 4 块。agent-id、parent-agent-id、session-id 头不受影响。
+
+客户端设 **`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`**（CC 自带开关，`Ri7()`）后，客户端按官方地址的形状发；经网关后出口与对照逐字段比较：
+
+| 差异 | build | direct | 来源 |
+|---|---|---|---|
+| ID 值（session、agent、parent、prompt） | 映射值 | 客户端原值 | 设计如此；对照是另一次会话 |
+| `cch` 值 | 客户端算的值，但 build 改了 `cc_prompt_id` 和 metadata，可能已不匹配 body | 客户端算的值，body 原样 | — |
+| `anthropic-beta` 少 `mid-conversation-system-clear-at-2026-08-21` | 是 | 是 | 客户端对自定义地址就不发 |
+| `x-stainless-timeout` 3600（官方 600） | 是 | 是 | 我们：请求命令按 Worker 超时建客户端 |
+| 缺 `x-claude-code-prev-tool-durations` | 是 | 是 | 我们：插件和 Worker 不转发 |
+| 工具定义键顺序（`description` 在 `name` 前） | 是 | 否 | build 既有差异 |
+
+其余全部一致：request-class、agent-type、parent 关系、计费头字段集合（含 `cc_is_subagent`、turn 字段、`cc_prev_req`）、system 文本与分块缓存、messages、tools 内容、metadata 结构、diagnostics、其余 beta。
