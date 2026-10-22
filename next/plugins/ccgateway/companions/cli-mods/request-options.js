@@ -82,8 +82,9 @@ export function parseRequestJSON(raw, mode) {
   return JSON.parse(raw);
 }
 
-// Runs at the final native fetch boundary. Explicit API keys retain their
-// isolated headers; OAuth keeps the identity/transport headers built by CC.
+// Runs at the final native fetch boundary. Both routes keep the identity and
+// transport headers CC built, as Claude Code itself sends them with an API key
+// or a login (2026-10-22); only the version and betas are the request's.
 export function authenticatedRequestHeaders(nativeHeaders, policy) {
   if (policy.apiKey) return apiKeyRequestHeaders(nativeHeaders, policy);
   const headers = new Headers(nativeHeaders);
@@ -97,19 +98,16 @@ export function authenticatedRequestHeaders(nativeHeaders, policy) {
   return headers;
 }
 
-export function apiKeyRequestHeaders(nativeHeaders, { apiKey, betas, version = '2023-06-01' }) {
-  const original = new Headers(nativeHeaders);
-  if (!apiKey || original.get('x-api-key') !== apiKey || original.has('authorization')) {
+// An API key is not a login: the login's beta goes only with a login, as
+// Claude Code itself never sends it with an API key.
+export function apiKeyRequestHeaders(nativeHeaders, { apiKey, betas, oauthBeta, version = '2023-06-01' }) {
+  const headers = new Headers(nativeHeaders);
+  if (!apiKey || headers.get('x-api-key') !== apiKey || headers.has('authorization')) {
     throw Error('Request requires the configured API-key authentication route');
   }
-  const headers = new Headers({
-    'x-api-key': original.get('x-api-key'),
-    'anthropic-version': version,
-    'content-type': 'application/json',
-    'user-agent': 'ccgateway-request',
-    accept: original.get('accept') ?? 'application/json',
-  });
-  const tokens = normalizeBetas(betas);
+  headers.set('anthropic-version', version);
+  const tokens = normalizeBetas(betas).filter(beta => beta !== oauthBeta);
   if (tokens.length) headers.set('anthropic-beta', tokens.join(','));
+  else headers.delete('anthropic-beta');
   return headers;
 }

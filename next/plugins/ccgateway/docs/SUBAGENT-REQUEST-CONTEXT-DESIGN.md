@@ -34,8 +34,8 @@
 | 上游值 | 客户端来源（优先级从高到低） | 派生 | 格式 |
 |---|---|---|---|
 | session-id（U） | `metadata.user_id` | 现有 `identityDigest(key, "session", S)` | UUID |
-| agent-id（A′） | 请求头 agent-id；没有请求头的 CC 子代理和非 CC 请求：第一条用户消息的文字 | `identityDigest(key, "agent", S, 来源)` | `a` + 16 位小写十六进制 |
-| parent-agent-id（B′） | 请求头 parent-agent-id | 与 A′ 同一个函数 | 同上 |
+| agent-id（A′） | 请求头 agent-id，**原值不映射**（2026-10-22 改，见第 12 节）；没有请求头的 CC 子代理和非 CC 请求：第一条用户消息的文字 | 有请求头时不派生；否则 HMAC(会话密钥, "agent-text", 来源) | `a` + 16 位小写十六进制 |
+| parent-agent-id（B′） | 请求头 parent-agent-id，原值不映射 | — | 同上 |
 | prompt-id（P′） | 请求头 prompt-id；否则计费头的 `cc_prompt_id`；非 CC：第一条用户消息的文字 | `identityDigest(key, "prompt", 来源)` | UUID v4 |
 
 - “一律优先请求头”：同一个子代理只要请求头里有 agent-id，就始终用它，避免一部分轮次用请求头、一部分用 body 而对不上。
@@ -127,7 +127,7 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 
 修复后（v18 ELF sha256 `64c3759c…`）重跑：上表三项消失；默认客户端、设开关的 OAuth 客户端、设开关的 API Key 客户端都跑通（API Key 客户端本身就按 5 分钟缓存、个别工具说明不同，见 [接入说明](CLIENT-SETUP.md)）。
 
-**新发现的关联问题（待定）**：子代理结束后，父线程收到的 tool_result 正文里写着子代理的 agentId（`agentId: a… (use SendMessage with to: 'a…', …)`），这是客户端的原值。build 映射 agent-id 后，上游看到的子代理请求头是映射值，父线程正文里却是原值，两者对不上；官方请求里两者相同。agent-id 本来就以原值出现在正文里，映射它并不能隐藏什么。
+**新发现的关联问题（已于第 12 节解决）**：子代理结束后，父线程收到的 tool_result 正文里写着子代理的 agentId（`agentId: a… (use SendMessage with to: 'a…', …)`），这是客户端的原值。build 映射 agent-id 后，上游看到的子代理请求头是映射值，父线程正文里却是原值，两者对不上；官方请求里两者相同。agent-id 本来就以原值出现在正文里，映射它并不能隐藏什么。
 
 ## 11. #21 真实上游端到端（2026-10-22）
 
@@ -137,3 +137,24 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 - body：按场景、请求类型、轮次配对的 12 个请求，body 键、system、tools、metadata、thinking、context_management、output_config、首条 user 消息和消息形状全部与对照一致（模型自己的回答、ID 除外）。
 - 请求头：API Key 账号的出口只剩最小集合（`apiKeyRequestHeaders`：x-api-key、version、content-type、`user-agent: ccgateway-request`、accept、beta），官方客户端发的 `user-agent: claude-cli/…`、`x-app`、`x-stainless-*`、`anthropic-dangerous-direct-browser-access` 和全部 `x-claude-code-*` 都没有。这是 API Key 路径原有的做法，与 v18 无关。
 - 新发现：客户端在压缩请求上带 `x-cc-compaction-request: manual` 和 `x-claude-code-compaction: manual`，压缩后的下一个请求带 `x-cc-context-compacted`、`x-claude-code-context-compacted`（CC `Zmn2`，按 `compactionRequestKind` / `contextCompactedKindForWire`）。网关目前不转发、请求命令也不设，OAuth 和 API Key 两条路径都缺。
+
+## 12. 补齐：API Key 原生头、压缩头、agent-id 原值（2026-10-22，未发布）
+
+用户要求三项都加上（“就算是 apikey，真实 cc 也会带上相关计费头”）。
+
+**改动**
+- API Key 路径保留 CC 构建的全部请求头（`request-options.js` `apiKeyRequestHeaders`），只核对认证是配置的 key、设 version 和请求的 beta；登录专用的 `oauth-2025-04-20` beta 不随 API Key 发（CC 自己用 API Key 时也不发）。
+- 四个压缩头 `x-cc-compaction-request`、`x-claude-code-compaction`、`x-cc-context-compacted`、`x-claude-code-context-compacted`：插件放行（`^[a-z][a-z_]{0,31}$`），Worker 经 `CCG_REQUEST_AGENT` 交给 CLI，CLI 原样发出（与 prev-tool-durations 同一处理）。
+- agent-id、parent-agent-id 在 build 也用客户端原值，只在客户端没有时派生；prompt-id 仍按第 3 节映射。第 4 节的关联不变（原值本身就满足），并且与父线程正文里的 agentId 一致。
+- Worker 给带上下文的请求命令设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`：账号上游不是官方地址时（#21 这种 API Key + 自定义 base URL），CC 原本不写 request-class、agent-type、prompt-id 头，上下文会丢；设了以后按发往 Anthropic 的样子发。账号上游本来就是官方地址时无变化。控制台测试和旧 CLI 不设。
+
+**测试**：插件、Worker 全包、companions、cli-mods 156 项全过。v18 ELF sha256 `8b6eb1e4…`。
+
+**离线端到端**（同第 10 节环境）：
+- OAuth 账号 + 设开关的 OAuth 客户端：与对照的差别只剩 ID / `cch` 值和客户端自己不发的 `mid-conversation-system-clear` beta。
+- API Key 账号 + 设开关的 API Key 客户端（对照：真实客户端用 API Key 直连）：请求头除上面那个 beta 外与对照一致（user-agent、x-app、x-stainless-*、全部 x-claude-code-*），body 除 ID、子代理耗时外一致。若客户端用 OAuth 方式接入而账号是 API Key，body 是客户端 OAuth 形状（1 小时缓存、ScheduleWakeup 说明），这是客户端决定的，网关原样转发。
+- 两种账号 build / direct 下，正文里的 agentId 全部与请求头 agent-id / parent-agent-id 对得上。
+
+**#21 真实上游重跑**（只跑 build、direct，对照沿用同日先跑的一组）：build、direct 各 16 个请求全部 200，六个场景完成。与对照相比请求头已无差别（request-class、agent-type、prompt-id、prev-tool-durations 都有；压缩请求带 `x-cc-compaction-request: manual`、`x-claude-code-compaction: manual`，与对照相同）；正文 agentId 与请求头一致。剩下的差别只有 Explore 场景里模型自己写的子代理任务文字（每次运行不同）。
+
+**已知**：没有密钥的 API Key 账号，非 CC 请求的 agent-id 由首条提示文字直接哈希，同样文字在不同 API Key 账号上得到同一个值。

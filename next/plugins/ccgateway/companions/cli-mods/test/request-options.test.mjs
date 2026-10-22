@@ -23,13 +23,18 @@ test('positional file, stdin and input conflicts are explicit', () => {
   }
 });
 
-test('API-key header policy excludes environment, CC and SDK header pollution', () => {
-  const native = new Headers({ 'x-api-key': 'fake', 'anthropic-beta': 'environment-beta,oauth-2025-04-20', 'x-app': 'cli', 'x-stainless-os': 'worker', 'x-client-request-id': 'worker-id', 'user-agent': 'sentinel', 'content-length': '99', 'x-is-refusal-fallback': '1' });
+// An API-key request carries the headers Claude Code built, as Claude Code sends
+// them itself with an API key; the version and betas are the request's, and
+// authentication must be exactly the configured key.
+test('API-key header policy keeps the CC headers and checks authentication', () => {
+  const native = new Headers({ 'x-api-key': 'fake', 'anthropic-beta': 'environment-beta,oauth-2025-04-20', 'x-app': 'cli', 'x-stainless-os': 'Linux', 'x-client-request-id': 'request-id', 'user-agent': 'claude-cli/2.1.304 (external, sdk-cli)', 'x-claude-code-request-class': 'subagent', 'anthropic-version': 'old' });
   const result = apiKeyRequestHeaders(native, { apiKey: 'fake', betas: ['client-beta'] });
-  assert.deepEqual([...result.keys()].sort(), ['accept', 'anthropic-beta', 'anthropic-version', 'content-type', 'user-agent', 'x-api-key']);
-  assert.equal(result.get('user-agent'), 'ccgateway-request');
+  assert.equal(result.get('user-agent'), 'claude-cli/2.1.304 (external, sdk-cli)');
+  for (const name of ['x-app', 'x-stainless-os', 'x-client-request-id', 'x-claude-code-request-class']) assert.equal(result.get(name), native.get(name), name);
   assert.equal(result.get('anthropic-beta'), 'client-beta');
+  assert.equal(result.get('anthropic-version'), '2023-06-01');
   assert.equal(apiKeyRequestHeaders(native, { apiKey: 'fake', betas: [] }).has('anthropic-beta'), false);
+  assert.equal(apiKeyRequestHeaders(native, { apiKey: 'fake', betas: ['client-beta', 'oauth-fixture'], oauthBeta: 'oauth-fixture' }).get('anthropic-beta'), 'client-beta', 'the login beta goes only with a login');
   assert.throws(() => apiKeyRequestHeaders(native, { apiKey: 'different' }), /authentication/);
   native.set('authorization', 'Bearer fake-subscription');
   assert.throws(() => apiKeyRequestHeaders(native, { apiKey: 'fake' }), /authentication/);

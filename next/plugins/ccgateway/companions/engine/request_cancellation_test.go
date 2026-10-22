@@ -28,7 +28,7 @@ func requestCancellationPeer() {
 		_ = file.Close()
 		if target := os.Getenv("CCG_TEST_REQUEST_ENV_CAPTURE"); target != "" {
 			values := map[string]string{}
-			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_ENABLE_TELEMETRY", "CCG_REPORT_CONTAINER_RESOURCES", "CCG_HARDWARE_PROFILE_PATH", requestIdentityEnv, directPolicyEnv, requestAgentEnv, "CLAUDE_CODE_REMOTE_SESSION_ID"} {
+			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_ENABLE_TELEMETRY", "CCG_REPORT_CONTAINER_RESOURCES", "CCG_HARDWARE_PROFILE_PATH", requestIdentityEnv, directPolicyEnv, requestAgentEnv, "CLAUDE_CODE_REMOTE_SESSION_ID", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"} {
 				values[name] = os.Getenv(name)
 			}
 			data, _ := json.Marshal(values)

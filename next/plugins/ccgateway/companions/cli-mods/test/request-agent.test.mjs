@@ -12,10 +12,10 @@ const subagentHeader = { cc_version: '2.1.304.9a4', cc_entrypoint: 'sdk-cli', cc
 const mainHeader = { cc_version: '2.1.304.1d1', cc_entrypoint: 'sdk-cli', cc_prompt_id: P };
 
 test('a mapped subagent keeps every equality the client requests had', () => {
+  // Agent IDs stay the client's: the parent thread's messages name them.
   const sub = resolve(mapped({ request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: P }), subagentHeader);
   assert.equal(sub.querySource, 'agent:builtin:general-purpose');
-  assert.match(sub.agentContext.agentId, /^a[0-9a-f]{16}$/);
-  assert.notEqual(sub.agentContext.agentId, 'a12268251d7ed891f');
+  assert.equal(sub.agentContext.agentId, 'a12268251d7ed891f');
   assert.match(sub.promptId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.notEqual(sub.promptId, P);
   // Header and billing header name one prompt.
@@ -23,7 +23,7 @@ test('a mapped subagent keeps every equality the client requests had', () => {
   assert.equal(sub.agentContext.parentPromptId, sub.promptId);
   // The same subagent on its next turn.
   assert.deepEqual(resolve(mapped({ request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: P }), subagentHeader, 'later turn'), sub);
-  // A nested subagent's parent is that agent's own mapped ID.
+  // A nested subagent's parent is that agent's own ID.
   const child = resolve(mapped({ request_class: 'subagent', agent_id: 'a99', parent_agent_id: 'a12268251d7ed891f', agent_type: 'Explore', prompt_id: P }), subagentHeader);
   assert.equal(child.agentContext.parentAgentId, sub.agentContext.agentId);
   assert.notEqual(child.agentContext.agentId, sub.agentContext.agentId);
@@ -32,9 +32,8 @@ test('a mapped subagent keeps every equality the client requests had', () => {
   assert.equal(main.promptId, sub.promptId);
   assert.equal(main.querySource, 'sdk');
   assert.equal(main.agentContext, undefined);
-  // Another session's key maps the same client IDs elsewhere.
+  // Another session's key maps the same prompt elsewhere.
   const elsewhere = resolve(mapped({ request_class: 'subagent', agent_id: 'a12268251d7ed891f', prompt_id: P }, otherKey), subagentHeader);
-  assert.notEqual(elsewhere.agentContext.agentId, sub.agentContext.agentId);
   assert.notEqual(elsewhere.promptId, sub.promptId);
 });
 
@@ -107,4 +106,13 @@ test('the previous turn tool timings go on unchanged', () => {
   for (const bad of ['Agent', 'Agent=x', 'A=1;', 'a b=1', 'A=1,B=2', 'x='.padEnd(5000, '1')]) {
     assert.throws(() => readRequestAgent(JSON.stringify({ version: 1, map: false, client: { prev_tool_durations: bad } })), /Invalid Worker agent context/, bad);
   }
+});
+
+test('the compaction kind headers go on unchanged', () => {
+  const compaction = resolve(mapped({ request_class: 'compaction', cc_compaction_request: 'manual', claude_code_compaction: 'manual' }), mainHeader);
+  assert.equal(compaction.querySource, 'compact');
+  assert.deepEqual(compaction.headers, { 'x-cc-compaction-request': 'manual', 'x-claude-code-compaction': 'manual' });
+  const after = resolve(mapped({ request_class: 'main', cc_context_compacted: 'manual', claude_code_context_compacted: 'manual', prev_tool_durations: 'Read=3' }), mainHeader);
+  assert.deepEqual(after.headers, { 'x-claude-code-prev-tool-durations': 'Read=3', 'x-cc-context-compacted': 'manual', 'x-claude-code-context-compacted': 'manual' });
+  assert.throws(() => readRequestAgent(JSON.stringify({ version: 1, map: false, client: { cc_compaction_request: 'Manual Kind' } })), /Invalid Worker agent context/);
 });

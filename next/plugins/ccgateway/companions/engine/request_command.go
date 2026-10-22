@@ -441,7 +441,11 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		cmd.Env = envWith(cmd.Env, map[string]string{directPolicyEnv: string(directPolicy)})
 	}
 	if agent != nil {
-		cmd.Env = envWith(cmd.Env, map[string]string{requestAgentEnv: agent.env()})
+		// Claude Code writes its request-class, agent-type and prompt-id
+		// headers only for Anthropic's own API; an account whose upstream is
+		// another base URL (an API key through a relay) would drop the agent
+		// context. The CLI sends them as Claude Code does to Anthropic.
+		cmd.Env = envWith(cmd.Env, map[string]string{requestAgentEnv: agent.env(), "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL": "1"})
 	}
 	// The patched request command runs before the interactive CLI initializer.
 	// Apply its non-interactive entrypoint default at process startup; an

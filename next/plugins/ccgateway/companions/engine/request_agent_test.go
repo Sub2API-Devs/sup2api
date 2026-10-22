@@ -76,10 +76,12 @@ func TestRequestAgentContext(t *testing.T) {
 					"X-Claude-Code-Request-Class": "subagent", "X-Claude-Code-Agent-Id": "a12268251d7ed891f",
 					"X-Claude-Code-Parent-Agent-Id": "ad870fd7d5b0b15e6", "X-Claude-Code-Agent-Type": "general-purpose",
 					"X-Claude-Code-Prompt-Id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d", "X-Claude-Code-Prev-Tool-Durations": "Agent=76",
+					"X-Cc-Context-Compacted": "auto", "X-Claude-Code-Context-Compacted": "auto",
 				}
 				first, env := send(sessionA, headers)
 				require.Equal(t, 1, first.Version)
-				require.Equal(t, map[string]string{"request_class": "subagent", "agent_id": "a12268251d7ed891f", "parent_agent_id": "ad870fd7d5b0b15e6", "agent_type": "general-purpose", "prompt_id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d", "prev_tool_durations": "Agent=76"}, first.Client)
+				require.Equal(t, "1", env["_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"], "CC writes the context headers as for Anthropic's API")
+				require.Equal(t, map[string]string{"request_class": "subagent", "agent_id": "a12268251d7ed891f", "parent_agent_id": "ad870fd7d5b0b15e6", "agent_type": "general-purpose", "prompt_id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d", "prev_tool_durations": "Agent=76", "cc_context_compacted": "auto", "claude_code_context_compacted": "auto"}, first.Client)
 				if apiKey {
 					// No Claude account to map for: the client's IDs go unchanged.
 					require.False(t, first.Map)
@@ -87,7 +89,7 @@ func TestRequestAgentContext(t *testing.T) {
 				} else {
 					require.Equal(t, mode == "build", first.Map)
 					require.Regexp(t, `^[0-9a-f]{64}$`, first.Key)
-					again, _ := send(sessionA, map[string]string{"X-Claude-Code-Agent-Type": "bad type", "X-Claude-Code-Prompt-Id": "not-a-uuid"})
+					again, _ := send(sessionA, map[string]string{"X-Claude-Code-Agent-Type": "bad type", "X-Claude-Code-Prompt-Id": "not-a-uuid", "X-Cc-Compaction-Request": "Auto Compact"})
 					require.Equal(t, first.Key, again.Key, "one session, one key")
 					require.Empty(t, again.Client, "malformed headers are ignored")
 					other, _ := send(sessionB, nil)
@@ -140,6 +142,7 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 			var env map[string]string
 			require.NoError(t, json.Unmarshal(data, &env))
 			require.Empty(t, env[requestAgentEnv])
+			require.Empty(t, env["_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"])
 		})
 	}
 }

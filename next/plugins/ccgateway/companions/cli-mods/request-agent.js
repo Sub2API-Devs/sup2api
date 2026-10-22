@@ -23,6 +23,20 @@ const clientFields = {
   prompt_id: uuid,
   // CC 2.1.304 g4t: up to 32 "tool=ms" entries joined by ";".
   prev_tool_durations: /^(?=.{1,4096}$)[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$/,
+  // CC 2.1.304 Zmn2: the compaction kind, on the compaction request and on
+  // the first request after one.
+  cc_compaction_request: /^[a-z][a-z_]{0,31}$/,
+  claude_code_compaction: /^[a-z][a-z_]{0,31}$/,
+  cc_context_compacted: /^[a-z][a-z_]{0,31}$/,
+  claude_code_context_compacted: /^[a-z][a-z_]{0,31}$/,
+};
+// Headers that are the client's own loop state: sent on as the client sent them.
+const passthrough = {
+  prev_tool_durations: 'x-claude-code-prev-tool-durations',
+  cc_compaction_request: 'x-cc-compaction-request',
+  claude_code_compaction: 'x-claude-code-compaction',
+  cc_context_compacted: 'x-cc-context-compacted',
+  claude_code_context_compacted: 'x-claude-code-context-compacted',
 };
 
 // readRequestAgent is the Worker's context, or null without one (an older
@@ -42,9 +56,8 @@ export function readRequestAgent(raw = process.env.CCG_REQUEST_AGENT) {
   return { map: value.map, key: value.key, client };
 }
 
-// derive maps one value. One label per kind of ID, and agent and parent IDs
-// share theirs, so a parent ID always equals that agent's own mapped ID. An
-// account without a key (API key) still gets stable IDs it never sent.
+// derive maps one value, one label per kind of ID. An account without a key
+// (API key) still gets stable IDs it never sent.
 function derive(key, label, value) {
   const input = JSON.stringify(['ccgateway-agent-context-v1', label, value]);
   return key ? createHmac('sha256', Buffer.from(key, 'hex')).update(input).digest() : createHash('sha256').update(input).digest();
@@ -72,16 +85,19 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
   const result = { requestClass, promptId };
-  // The previous turn's tool timings are the client's loop state; CC sends
-  // them as a header and so do we, unchanged.
-  if (client.prev_tool_durations !== undefined) result.headers = { 'x-claude-code-prev-tool-durations': client.prev_tool_durations };
+  // The previous turn's tool timings and the compaction kind are the client's
+  // loop state; CC sends them as headers and so do we, unchanged.
+  const headers = Object.fromEntries(Object.entries(passthrough).filter(([field]) => client[field] !== undefined).map(([field, header]) => [header, client[field]]));
+  if (Object.keys(headers).length) result.headers = headers;
   // The client's header says cc_prompt_id; the request header must agree.
   if (map && claudeCode && billing.cc_prompt_id !== undefined && promptId !== undefined) result.billingPromptId = promptId;
   if (requestClass === 'subagent' || requestClass === 'workflow') {
-    const agentId = client.agent_id !== undefined ? (map ? agentID(own('agent', client.agent_id)) : client.agent_id)
-      : agentID(derive(key, 'agent-text', prompt));
-    const parentAgentId = client.parent_agent_id === undefined ? undefined
-      : map ? agentID(own('agent', client.parent_agent_id)) : client.parent_agent_id;
+    // Agent IDs are the client's own in both modes (2026-10-22): the parent
+    // thread's messages name the subagent by its ID (the Agent tool result
+    // says agentId: ...), so a mapped header would no longer match them.
+    // Only a request without one gets a derived ID.
+    const agentId = client.agent_id ?? agentID(derive(key, 'agent-text', prompt));
+    const parentAgentId = client.parent_agent_id;
     // A custom agent's type is never sent (CC reports "custom"); a built-in
     // one's is its name, which CC reads back from the query source.
     result.querySource = client.agent_type !== undefined && client.agent_type !== 'custom' ? querySourceFor(client.agent_type, true) : querySourceFor(undefined, false);

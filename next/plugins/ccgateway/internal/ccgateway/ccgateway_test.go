@@ -110,6 +110,10 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 			"x-claude-code-agent-type":          "general-purpose",
 			"x-claude-code-prompt-id":           "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d",
 			"x-claude-code-prev-tool-durations": "Agent=76;Read=12",
+			"x-cc-compaction-request":           "auto",
+			"x-claude-code-compaction":          "auto",
+			"x-cc-context-compacted":            "manual",
+			"x-claude-code-context-compacted":   "manual",
 			"x-claude-code-session-id":          "475d3bc6-d49a-4c42-8d1a-f5d9ab945851",
 		},
 	}
@@ -134,6 +138,7 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 		"x-claude-code-agent-type":          "../x",
 		"x-claude-code-prompt-id":           "not-a-uuid",
 		"x-claude-code-prev-tool-durations": "Agent=76,Read=12",
+		"x-cc-compaction-request":           "Auto Compact",
 	} {
 		in.InboundHeaders = map[string]string{key: bad}
 		r, err = p.BuildUpstreamRequest(context.Background(), in)

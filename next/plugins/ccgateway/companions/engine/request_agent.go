@@ -30,13 +30,22 @@ var clientAgentHeaders = []struct {
 	{"prompt_id", "X-Claude-Code-Prompt-Id", regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)},
 	// The previous turn's tool timings, sent on as the client sent them.
 	{"prev_tool_durations", "X-Claude-Code-Prev-Tool-Durations", regexp.MustCompile(`^[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$`)},
+	// The compaction kind, on the compaction request and on the first request after one.
+	{"cc_compaction_request", "X-Cc-Compaction-Request", compactionKind},
+	{"claude_code_compaction", "X-Claude-Code-Compaction", compactionKind},
+	{"cc_context_compacted", "X-Cc-Context-Compacted", compactionKind},
+	{"claude_code_context_compacted", "X-Claude-Code-Context-Compacted", compactionKind},
 }
 
-// requestAgent is the CLI's agent context. Map says the IDs go upstream
-// mapped (build on an OAuth account); otherwise the client's own values go,
-// as direct forwards the body that carries them unchanged. Key is the
-// session's mapping key: it maps IDs, and in either mode derives an ID the
-// client never sent (a request that is not Claude Code's gets a subagent ID).
+var compactionKind = regexp.MustCompile(`^[a-z][a-z_]{0,31}$`)
+
+// requestAgent is the CLI's agent context. Map says the prompt ID goes
+// upstream mapped (build on an OAuth account); otherwise the client's own
+// value goes, as direct forwards the body that carries it unchanged. Agent IDs
+// are always the client's: the conversation names subagents by them. Key is
+// the session's mapping key: it maps the prompt ID, and in either mode derives
+// an ID the client never sent (a request that is not Claude Code's gets a
+// subagent ID).
 type requestAgent struct {
 	Version int               `json:"version"`
 	Map     bool              `json:"map"`

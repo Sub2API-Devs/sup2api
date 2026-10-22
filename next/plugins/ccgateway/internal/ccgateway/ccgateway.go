@@ -138,6 +138,11 @@ var agentContextHeaders = map[string]*regexp.Regexp{
 	"x-claude-code-prompt-id":       regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 	// CC 2.1.304 g4t: up to 32 "tool=ms" entries joined by ";", at most 4096 characters.
 	"x-claude-code-prev-tool-durations": regexp.MustCompile(`^[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$`),
+	// CC 2.1.304 Zmn2: the compaction kind, on the compaction request and on the first request after one.
+	"x-cc-compaction-request":         regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
+	"x-claude-code-compaction":        regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
+	"x-cc-context-compacted":          regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
+	"x-claude-code-context-compacted": regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
 }
 
 // The host resolves this exact virtual target for this plugin and account type,
