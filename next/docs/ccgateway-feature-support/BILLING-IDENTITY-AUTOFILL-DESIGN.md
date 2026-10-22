@@ -1,6 +1,6 @@
 # 计费头入口与身份行自动填充：源码核对、设计与实施
 
-2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`）**，结果见第 6 节；第 7 节起 direct 也补计费头与身份行。
+2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`），2026-10-22 随 Core 0.1.176 / 插件 0.1.74 部署 ovh**，结果见第 6 节；第 7 节起 direct 也补计费头与身份行。
 
 ## 1. 源码核对
 
@@ -93,7 +93,7 @@
 3. `cch` 不变：客户端自带的计费头原样保留（经网关的真实客户端不带 `cch`）；build 补的整行仍是原生 `kLo` 的输出，Worker 直连官方地址，原生 CC 这时就带 `cch=00000`。
 4. `sdk-ts`/`sdk-py` 默认 `agent_sdk`（`De`）。
 
-## 6. 实施结果（2026-10-22，未发布）
+## 6. 实施结果（2026-10-22）
 
 - 代码：
   - 契约 `contracts/features/identity_line.go`（入口、可选范围、默认、能力）。
@@ -151,3 +151,5 @@
 | build 头不在首块，`sdk-cli` 选「不补」 | `[计费头 sdk-cli +cch, 提示, 计费头 cli]` | 200 |
 
 另验证 direct 补头时 body 其他部分的原始字节保留：键顺序、多余空格、`12345678901234567890` 这样的超大整数都原样发出。
+
+发布后（Core 0.1.176 / 插件 0.1.74，rollout 159）：30/31/32/33 控制台 claude-opus-4-8、claude-sonnet-4-6 均 200，30/31/32 Haiku 200；运行中账号的 CLI 都是 `ccgateway-v17-identity-line`（sha `000a5382…`）。线上全局配置仍是默认的服务端入口与身份行，未改。

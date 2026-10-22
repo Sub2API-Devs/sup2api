@@ -1,6 +1,6 @@
 # CCGateway 当前文档
 
-2026-10-22 当前状态：Core **0.1.175**、CCGateway／Controller／Worker **0.1.73**、全局 **build＋CLI 2.1.304（ccgateway-v16-build-prefix）** 已部署（direct 纯透传、build 补计费头和开头行，见 [system 开头注入设计](SYSTEM-PREFIX-INJECTION-DESIGN.md)），部署记录见 [OVH 部署入口](../../deploy/gateway/ovh/README.md)顶部。停用账号的运行时现在保持运行（只退出调度）。以下为 0.1.173 时的说明：分组 CC 配置默认可选，账号可直接覆盖全局；只有已启用的分组限制才阻止账号覆盖。账号 30、31、32 在线升级并通过真实上游复测；账号 21 已离线升级，按用户要求保持停用。接手先读 [304 实施与部署记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12–13 节和 [环境指南](ENVIRONMENT-RUNBOOK.md)顶部状态。
+2026-10-22 当前状态：Core **0.1.176**、CCGateway／Controller／Worker **0.1.74**、全局 **build＋CLI 2.1.304（ccgateway-v17-identity-line）** 已部署（计费头 build 与 direct 都必传、服务端入口六选一、身份行按入口可选，见 [计费头入口与身份行设计](BILLING-IDENTITY-AUTOFILL-DESIGN.md)；v16 见 [system 开头注入设计](SYSTEM-PREFIX-INJECTION-DESIGN.md)），部署记录见 [OVH 部署入口](../../deploy/gateway/ovh/README.md)顶部。停用账号的运行时现在保持运行（只退出调度）。以下为 0.1.173 时的说明：分组 CC 配置默认可选，账号可直接覆盖全局；只有已启用的分组限制才阻止账号覆盖。账号 30、31、32 在线升级并通过真实上游复测；账号 21 已离线升级，按用户要求保持停用。接手先读 [304 实施与部署记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12–13 节和 [环境指南](ENVIRONMENT-RUNBOOK.md)顶部状态。
 
 专项设计：[CC 特性分层配置与请求内容转换设计](CC-FEATURE-LAYERS-DESIGN.md)，涵盖计费归属、10 个环境字段、连续会话与客户端动态 system 排除参数兼容。配套 [UI 设计稿](cc-feature-layers-mockup.html) 和 [讨论记录](CC-FEATURE-LAYERS-DISCUSSION.md)。实际实现、测试及限制以实施记录为准。
 
