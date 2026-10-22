@@ -153,3 +153,11 @@
 另验证 direct 补头时 body 其他部分的原始字节保留：键顺序、多余空格、`12345678901234567890` 这样的超大整数都原样发出。
 
 发布后（Core 0.1.176 / 插件 0.1.74，rollout 159）：30/31/32/33 控制台 claude-opus-4-8、claude-sonnet-4-6 均 200，30/31/32 Haiku 200；运行中账号的 CLI 都是 `ccgateway-v17-identity-line`（sha `000a5382…`）。线上全局配置仍是默认的服务端入口与身份行，未改。
+
+真实客户端走 direct（2026-10-22，发布后，30 号）：临时受限分组只含 30 号、分组覆盖 `relay_mode=direct`、临时 Key，本机官方 Claude Code 2.1.304 经 SSH 隧道连 ovh 核心，测完全部删除并恢复（30 号分组 6/9/10，管理员受限分组 4）。
+
+- 简单问答（`claude-opus-4-8`）返回 `DIRECT-OK`；Opus 与 Sonnet 各一轮 Read 工具往返都答对暗号，`is_error=false`。
+- 客户端关掉计费头（`CLAUDE_CODE_ATTRIBUTION_HEADER=0`）再跑：Opus 简单问答、Sonnet 工具往返也都成功。
+- 30 号 Worker 日志：7 次请求都是 `mode=direct`、HTTP 200。正常客户端入站为 `[计费头 claude-desktop-3p, agent_sdk, 提示]`；关掉计费头的入站为 `[agent_sdk, 提示]`。
+- 把这两种入站 body 交给线上 v17 CLI 按 Worker 的方式重放到假上游：带计费头的发出内容与入站逐字节相同；不带的发出 `[计费头 sdk-cli +cch, agent_sdk, 提示]`，system 之外的部分不变。
+- 同一时段日志里还有一个真实 VS Code 客户端的 build 请求：入站 `[计费头 claude-vscode, official_cli_sdk, …]`，与第 1.1 节按扩展源码得出的结论一致。
