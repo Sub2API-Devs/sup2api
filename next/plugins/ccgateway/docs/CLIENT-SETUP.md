@@ -41,6 +41,7 @@ Claude Code 只在地址是官方地址时才发这些内容（2.1.304 `Ri7()`�
 
 ## 已知差异与限制
 
-- 设了变量后仍有：`anthropic-beta` 少 `mid-conversation-system-clear-at-2026-08-21`（Claude Code 对自定义地址不发）；ID 的值（会话、agent、prompt）在 build 模式是平台映射后的值。
+- 设了变量后仍有：`anthropic-beta` 少 `mid-conversation-system-clear-at-2026-08-21`（Claude Code 对自定义地址不发）；prompt-id 的值在 build 模式是平台映射后的值（会话 ID 按身份映射规则，agent-id 用客户端原值）。
+- **只能路由到 OAuth 账号**：设了变量后请求带 `diagnostics`，平台要账号提供资源身份才转发。API Key 账号（尤其上游是自定义地址时）提供不了，请求返回 503 “account does not provide a verified resource issuer”，Claude Code 会一直重试（2026-10-22 在 #21 实测）。分组里只有 API Key 账号时不要设这个变量；不设时请求正常，平台仍按客户端的 agent-id 和计费头还原子代理。
 - 这是 Claude Code 的内部变量（下划线开头），换版本可能改名或失效，升级 Claude Code 后需要重新验证。
 - 只验证了 `claude -p` 非交互模式（主代理、子代理、嵌套子代理）。交互模式下 Claude Code 会把平台当作官方服务，账号信息、用量等界面功能可能显示异常，尚未验证。

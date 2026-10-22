@@ -158,3 +158,12 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 **#21 真实上游重跑**（只跑 build、direct，对照沿用同日先跑的一组）：build、direct 各 16 个请求全部 200，六个场景完成。与对照相比请求头已无差别（request-class、agent-type、prompt-id、prev-tool-durations 都有；压缩请求带 `x-cc-compaction-request: manual`、`x-claude-code-compaction: manual`，与对照相同）；正文 agentId 与请求头一致。剩下的差别只有 Explore 场景里模型自己写的子代理任务文字（每次运行不同）。
 
 **已知**：没有密钥的 API Key 账号，非 CC 请求的 agent-id 由首条提示文字直接哈希，同样文字在不同 API Key 账号上得到同一个值。
+
+## 13. 发布后经生产链路测 #21（2026-10-22，插件 0.1.75）
+
+临时启用 #21、在它的分组 6 建一个 `ccg-audit-21-e2e` 平台 Key（分组里其余账号都停用，只有这次的请求会到 #21），官方 2.1.304 客户端在 ovh 主机上经核心节点 `:3130` → 插件 → #21 Worker（生产配置 build）跑第 11 节的六个场景，测完停用 #21、删 Key、删测试目录。生产出口无法抓包，只看 Worker 收到的请求和它的记录。
+
+- **客户端设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`：全部失败**。请求带 `diagnostics`，核心先向 Worker 要资源身份（`message_diagnostics.go` → `resources.go` `Identity`），#21 是 API Key + 自定义上游地址，Worker 的 `resourceAuthorizationSource` 判为不支持，回 503 `api_error`（不是 `resource_identity_unsupported`），核心报 “account does not provide a verified resource issuer”，客户端反复重试约 18 分钟。消息请求一次也没到 Worker。这是 0.1.75 之前就有的行为，与 v18 无关；接入说明已注明。
+- **客户端不设开关：六个场景全部完成**，14 个消息请求全部 200（build）。核心 → 插件把客户端的 `x-claude-code-agent-id` 转到了 Worker（子代理的 4 个请求），Worker 记录 `request_agent`；不设开关的客户端本来就不发 request-class、prompt-id 等头，类别由计费头的 `cc_is_subagent` 判断。
+
+待定：带 `diagnostics` 的请求遇到没有资源身份的账号时怎么处理（换账号、明确的不支持错误，还是别的），需要另行决定。
