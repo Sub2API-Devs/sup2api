@@ -136,3 +136,25 @@ ds = [...rs, CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT 时的 appendSubagentSyst
   - Worker 的旧会话路径把派生的 A' 写进 `ANTHROPIC_CUSTOM_HEADERS`（`runner_config.go` `cliEnv`），但 2.1.304 走的请求命令（`request_command.go`）不设这个变量；即使设了，`request-command.js` 也会先删掉它。所以 A' 在请求命令路径上不会发出。
   - `request-class` 由 CLI 发请求时的 `agentContext: El()`（主线程）决定。
 - 重放时没有 Worker 的身份上下文，会话 ID 是随机的，这里不据此判断会话 ID 是否正确。
+
+## 10. 子代理相关字段在 CLI 里的来源
+
+请求头都在创建客户端的 `sF3`（原 `eF`）里生成，输入是 `source`（取 `querySource`）、`requestClass`、`agentContext`、`promptId`；计费头在 `kLo` 里生成。除 `request-class` 和 `cch` 外，都只在对应输入有值时才出现。
+
+| 字段 | 原生取值 | 输入从哪来 |
+|---|---|---|
+| `x-claude-code-request-class` | `PVs`：显式 `requestClass` 优先；`compact` → compaction；`rs8(querySource)`：`sdk`/`repl_main_thread*` → main，`agent:*`/`hook_agent` → subagent（上下文带 `workflowRunId` 时为 workflow），其他 → auxiliary | `querySource`；子代理由 Agent 工具（`xo36`）用 `Zoe2(类型, 是否内置)` 得到 `agent:builtin:<类型>` 或 `agent:custom` |
+| `x-claude-code-agent-type` | `IVs`：`agent:builtin:<类型>` 取类型，`agent:custom*` 为 `custom`，teammate 上下文为 `teammate` | 同上 |
+| `x-claude-code-agent-id` | `agentContext.agentId`（主线程上下文不发），经 `o1r` 转义 | Agent 工具里 `jy()` 生成：`a` + 16 位随机十六进制 |
+| `x-claude-code-parent-agent-id` | `agentContext.parentAgentId` | 发起者的 `agentId`；从主线程发起时为空，所以实抓没有 |
+| `x-claude-code-prompt-id` | 参数 `promptId`，须为 UUID | `OUe(messages, ctx)`：最后一条用户记录的内部字段 `promptId`；子代理没有时用上下文的 `parentPromptId`（发起时父线程的 prompt-id） |
+| `x-claude-code-session-id` | `q3()`，进程会话 ID | 进程级 |
+| 以上四个分类头的总开关 | `m6n()`：`CLAUDE_CODE_GATEWAY_HINT_HEADERS`，或 firstParty 且开关 `tengu_splendid_sutton` | 30 号上为开 |
+| 计费头 `cc_is_subagent=true` | `agentContext.agentType === "subagent" && !isMainSession` | 同 agent-id |
+| 计费头 `cc_prompt_id` | 同 `promptId`（firstParty 且官方地址） | 同 prompt-id |
+| `cc_turn_origin`、`cc_prompt_index`、`cc_turn_index` | 最后一条用户记录的内部字段 `turnOrigin`、`turnPosition` | 进程内的对话记录，wire 上没有 |
+| `cc_prev_req` | 最后一条 assistant 记录的 `requestId`（`req_…`） | 进程内的对话记录 |
+
+请求命令现在给的是 `source/querySource: 'sdk'`、主线程上下文 `Al3()`（`{agentType: "main", agentId: q3()}`）、不传 `promptId`。build 交给原生构建的也是 `querySource: 'sdk'` 和主线程上下文；而且 build 在 `qmn2` 创建客户端之前就把 body 交出来了，所以 build 的请求头同样由请求命令那次 `sF3` 决定。
+
+客户端能提供的：请求头里有 request-class、agent-type、agent-id、prompt-id、parent-agent-id（嵌套时）；body 里只有计费头的 `cc_is_subagent`、`cc_prompt_id`，以及 `metadata.user_id` 的 `session_id`。turn 和 prev_req 只在客户端自己的进程里，网关只能沿用客户端计费头里的值。
