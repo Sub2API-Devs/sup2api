@@ -158,3 +158,27 @@ ds = [...rs, CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT 时的 appendSubagentSyst
 请求命令现在给的是 `source/querySource: 'sdk'`、主线程上下文 `Al3()`（`{agentType: "main", agentId: q3()}`）、不传 `promptId`。build 交给原生构建的也是 `querySource: 'sdk'` 和主线程上下文；而且 build 在 `qmn2` 创建客户端之前就把 body 交出来了，所以 build 的请求头同样由请求命令那次 `sF3` 决定。
 
 客户端能提供的：请求头里有 request-class、agent-type、agent-id、prompt-id、parent-agent-id（嵌套时）；body 里只有计费头的 `cc_is_subagent`、`cc_prompt_id`，以及 `metadata.user_id` 的 `session_id`。turn 和 prev_req 只在客户端自己的进程里，网关只能沿用客户端计费头里的值。
+
+## 11. 主代理与子代理请求的差异，以及 build 缺什么（2026-10-22）
+
+两类差异（官方 2.1.304 实抓 Opus、Sonnet 两组，差异项相同；成因见 bundle）：
+
+- **由请求内容决定**，客户端发来时已经带着，build 原样保留就行：子代理提示词 + T7t 三段、没有分界（因此身份行带 ephemeral、其余块 5 分钟缓存）、子代理自己的附件集合与顺序（`QC5` 收集，没有可用代理列表）、少 ScheduleWakeup/Workflow（`tu14`）、计费头的 `cc_is_subagent` 与指纹。
+- **由 `querySource` / `agentContext` 决定**，网关重建时必须传对：
+  - `x-claude-code-request-class`、`agent-type`（`PVs`/`IVs`，来自 `agent:builtin:<类型>`/`agent:custom:<类型>`）；
+  - `agent-id`、`parent-agent-id`、`prompt-id` 回退到 `parentPromptId`（`sF3`、`OUe`）；
+  - 缓存 TTL：`zbe2` 的 1 小时名单默认只有 `repl_main_thread*`、`sdk`、`auto_mode`、`memdir_relevance`，子代理为 5 分钟，所以**不带 `extended-cache-ttl-2025-04-11`**（`qmn2` 只在 1 小时时加这个 beta）。
+
+build 实测（30 号线上 Worker + v17，官方主代理/子代理请求，重放到假上游逐字段对比）：
+
+| 字段 | 主代理 | 子代理 |
+|---|---|---|
+| system、messages、thinking、context_management、output_config、diagnostics、max_tokens | 与客户端相同 | 与客户端相同 |
+| 工具定义 | 内容相同，键顺序 `description, name, input_schema`（官方 `name` 在前） | 同左 |
+| `request-class` | main，一致 | **main**（官方 subagent） |
+| `agent-id`、`agent-type` | — | **缺** |
+| `prompt-id` | **缺** | **缺** |
+| `anthropic-beta` | 一致 | **多 `extended-cache-ttl-2025-04-11`**（按 `sdk` 算成 1 小时），而 system 缓存标记是客户端的 5 分钟 |
+| metadata | 身份映射，按设计 | 同左 |
+
+结论：子代理的提示词不需要 build 另外补，客户端已经带着，build 也没有加默认段。缺的是第二类：把 `querySource`、子代理 `agentContext`（派生的 agent ID）和 `promptId` 交给原生构建与请求命令，请求头和 beta 就由原生代码按子代理生成。
