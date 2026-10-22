@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
@@ -26,6 +27,8 @@ type resourceBroker struct {
 	limit        int64
 	budget       *resourceSpoolBudget
 	lease        *resourceLease
+	// verified is the last verified identity (cachedIdentity).
+	verified atomic.Pointer[verifiedResourceIdentity]
 }
 
 func newResourceBroker(g *Gateway, authority *authManager, root string) (*resourceBroker, error) {

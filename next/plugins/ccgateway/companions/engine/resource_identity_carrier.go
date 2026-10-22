@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -225,11 +226,17 @@ func (runner *Runner) verifyResourceInitializationVersion(ctx context.Context, e
 			return fmt.Errorf("resource CLI initialization version could not be verified")
 		}
 	}
-	if version != "2.1.292" && version != "2.1.296" {
-		return fmt.Errorf("resource stored OAuth requires verified Claude Code 2.1.292 or 2.1.296")
+	if !slices.Contains(verifiedResourceInitializationVersions, version) {
+		return fmt.Errorf("resource stored OAuth requires verified Claude Code %s", strings.Join(verifiedResourceInitializationVersions, " or "))
 	}
 	return nil
 }
+
+// verifiedResourceInitializationVersions are the Claude Code versions whose
+// stream-json initialization was verified to refresh and persist a stored
+// OAuth credential without a prompt or model request
+// (TestResourceManagementLinuxOfflineNetNone against each real CLI).
+var verifiedResourceInitializationVersions = []string{"2.1.292", "2.1.296", "2.1.304"}
 
 func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env []string, before *resourceAuthorization) (*resourceAuthorization, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

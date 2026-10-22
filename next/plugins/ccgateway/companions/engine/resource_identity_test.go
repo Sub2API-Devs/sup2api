@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -82,11 +83,11 @@ func resourceManagementTraceCLI(t *testing.T, runner *Runner, expected []string)
 }
 
 func TestResourceManagementInitializationVersionBoundary(t *testing.T) {
-	for _, version := range []string{"2.1.292", "2.1.296", "2.1.291", "2.1.293", "2.1.297", "3.0.0", "2.1.292-beta", "2.1.296 unexpected"} {
+	for _, version := range []string{"2.1.292", "2.1.296", "2.1.304", "2.1.302", "2.1.291", "2.1.293", "2.1.297", "2.1.303", "2.1.305", "3.0.0", "2.1.292-beta", "2.1.304 unexpected"} {
 		t.Run(version, func(t *testing.T) {
 			runner := &Runner{CLI: "must-not-execute", Version: version}
 			err := runner.verifyResourceInitializationVersion(context.Background(), nil)
-			if version == "2.1.292" || version == "2.1.296" {
+			if slices.Contains(verifiedResourceInitializationVersions, version) {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, "requires verified Claude Code")
@@ -787,15 +788,31 @@ func TestResourceManagementLinuxOfflineNetNone(t *testing.T) {
 	require.NoError(t, tarball.Close())
 	require.NoError(t, gz.Close())
 	name := "ccg-resource-lifecycle-" + uuid()
-	bootstrap := `set -eu; test "$(id -u)" = 1000; ls -ld /tmp; cat /proc/self/status | grep -E '^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):'; ls /sys/class/net; cat /proc/net/route; sha256sum /usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe; umask 077; work=$(mktemp -d /tmp/ccg-resource-current-XXXXXX); tar -xz -C "$work"; cd "$work"; exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$work" TMPDIR="$work" CCG_REAL_CLI=/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe CCG_OFFLINE_AUTHORIZE_PROBE=1 CCG_AUTHORIZE_MOCK_MODE=tls-refresh ./engine.test -test.run='^(TestResourceManagement(OfflineAuthorizeWithoutPrompt|RealCLISelectionWithoutModel|OAuthRefreshBoundary|RefreshReadiness|CandidateFailClosed|InitializationSelection|InitializationVersionBoundary|SelectionIsNotPresence|BindingRejectsIdentityDrift))$' -test.v -test.count=2 -test.timeout=8m`
-	command := "docker run --rm --pull never --name " + name + " --network none --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --no-healthcheck --entrypoint /bin/sh -i ccgateway-app:0.1.41 -c '" + strings.ReplaceAll(bootstrap, "'", "'\"'\"'") + "'"
+	// The image and CLI under test; the default is the original 2.1.292
+	// verification. Each version in verifiedResourceInitializationVersions is
+	// run here before it is added (e.g. CCG_LINUX_RESOURCE_IMAGE=ccgateway-app:0.1.75
+	// CCG_LINUX_RESOURCE_CLI=/opt/ccgateway/cli/2.1.304/claude CCG_LINUX_RESOURCE_VERSION=2.1.304).
+	image, cli, version, sum := os.Getenv("CCG_LINUX_RESOURCE_IMAGE"), os.Getenv("CCG_LINUX_RESOURCE_CLI"), os.Getenv("CCG_LINUX_RESOURCE_VERSION"), os.Getenv("CCG_LINUX_RESOURCE_SHA256")
+	if image == "" {
+		image, cli, version, sum = "ccgateway-app:0.1.41", "/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe", "2.1.292", "a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3"
+	}
+	bootstrap := `set -eu; test "$(id -u)" = 1000; ls -ld /tmp; cat /proc/self/status | grep -E '^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):'; ls /sys/class/net; cat /proc/net/route; sha256sum ` + cli + `; umask 077; work=$(mktemp -d /tmp/ccg-resource-current-XXXXXX); tar -xz -C "$work"; cd "$work"; exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$work" TMPDIR="$work" CCG_REAL_CLI=` + cli + ` CCG_OFFLINE_AUTHORIZE_PROBE=1 CCG_AUTHORIZE_MOCK_MODE=tls-refresh ./engine.test -test.run='^(TestResourceManagement(OfflineAuthorizeWithoutPrompt|RealCLISelectionWithoutModel|OAuthRefreshBoundary|RefreshReadiness|CandidateFailClosed|InitializationSelection|InitializationVersionBoundary|SelectionIsNotPresence|BindingRejectsIdentityDrift))$' -test.v -test.count=2 -test.timeout=8m`
+	// CCG_LINUX_RESOURCE_MOUNT=<host file> mounts a CLI that is not in the
+	// image (the official release, say) read-only at CCG_LINUX_RESOURCE_CLI.
+	mount := ""
+	if host := os.Getenv("CCG_LINUX_RESOURCE_MOUNT"); host != "" {
+		mount = "-v " + host + ":" + cli + ":ro "
+	}
+	command := "docker run --rm --pull never --name " + name + " --network none --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --no-healthcheck " + mount + "--entrypoint /bin/sh -i " + image + " -c '" + strings.ReplaceAll(bootstrap, "'", "'\"'\"'") + "'"
 	run := exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "ovh", command)
 	run.Stdin = &archive
 	output, err = run.CombinedOutput()
 	t.Logf("container=%s; current source cross-compiled GOOS=linux GOARCH=amd64 CGO_ENABLED=0\n%s", name, output)
 	require.NoError(t, err)
-	require.Contains(t, string(output), "2.1.292 (Claude Code); platform: linux")
-	require.Contains(t, string(output), "a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3")
+	require.Contains(t, string(output), version+" (Claude Code); platform: linux")
+	if sum != "" {
+		require.Contains(t, string(output), sum)
+	}
 }
 
 func TestResourceManagementOfflineAuthorizeWithoutPrompt(t *testing.T) {
@@ -923,7 +940,7 @@ func TestResourceManagementOfflineSelectionChild(t *testing.T) {
 	switch os.Getenv("CCG_RESOURCE_TEST_MODE") {
 	case "command-trace":
 		runner.Version = os.Getenv("CCG_RESOURCE_VERIFIED_VERSION")
-		require.Contains(t, []string{"2.1.292", "2.1.296"}, runner.Version)
+		require.Contains(t, verifiedResourceInitializationVersions, runner.Version)
 		resourceManagementTraceCLI(t, runner, []string{"initialize"})
 	case "unknown-version-cached":
 		runner.Version = "2.1.297"

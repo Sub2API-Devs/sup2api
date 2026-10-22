@@ -167,3 +167,10 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 - **客户端不设开关：六个场景全部完成**，14 个消息请求全部 200（build）。核心 → 插件把客户端的 `x-claude-code-agent-id` 转到了 Worker（子代理的 4 个请求），Worker 记录 `request_agent`；不设开关的客户端本来就不发 request-class、prompt-id 等头，类别由计费头的 `cc_is_subagent` 判断。
 
 **决定（2026-10-22 用户）**：API Key 账号不处理 `diagnostics`，直接转发。核心 `message_diagnostics.go`：CCGateway 的 `apikey` 账号不要资源身份、不加跟踪头、不登记响应 ID，body 里的 `diagnostics` 原样到 Worker；平台没登记过的 `previous_message_id` 也可以发给 API Key 账号；登记在 OAuth 账号上的 ID 仍只发回那个账号。新测试 `TestDiagnosticsForwardedUntrackedOnCCGatewayAPIKey`；资源与诊断的测试夹具改为 `managed` 类型（原来是 `apikey`，与真实情况不符）。Worker 的请求命令路径本来就原样带 `diagnostics`，不用改。代价：API Key 账号上 `previous_message_id` 不再按用户隔离（同一上游 Key 本来就是共用的）。
+
+**OAuth 账号也坏着（同日查生产日志发现）**：10-19 至 10-22 有约 200 个真实请求（Claude Desktop、CLI 2.1.284/2.1.306、Agent SDK）在 30/31/32 上同样 503。原因两层：Worker 的 stored OAuth 初始化只认 Claude Code 2.1.292/2.1.296（`verifyResourceInitializationVersion`），线上是 2.1.304，资源身份一律失败（刷新令牌动作也因此失败）；而且 build/direct 的请求命令不回核心要的 `X-CCGateway-Diagnostics-Ready` 与身份头，身份修好后也会在上游计费后 503。用户要求修复而不是跳过，修复（插件下一版）：
+- 版本表加入 2.1.304：官方 2.1.304 在断网容器里跑完原有 37 场景两轮全部通过；线上重建的 2.1.304 跑 stored OAuth 选择通过（它的 `auth status` 不退出，API key / env OAuth 的选择因此超时，2.1.302 v11 同样，线上没有账号走这两条）。
+- 身份按凭据指纹缓存 10 分钟，凭据一变就重新核验，diagnostics 不再每个请求启动 CLI、调 profile。
+- 请求命令收到核心的跟踪头时核验身份（与核心绑定的一致），回 Ready 与身份头；授权锁只在 CLI 运行前持有。
+- 只有 API key、没有托管 issuer 时立即回 `resource_identity_unsupported`（核心跳过该账号的资源功能），不再先跑 CLI 或报 “unverified”。API Key 账号没有托管 issuer（从未接通），diagnostics 维持上面的原样转发。
+测试：`TestRequestCommandDiagnosticsGrant`、`TestResourceIdentityCacheFollowsTheCredential`、`TestResourceIdentityAPIKeyWithoutIssuer`；`TestResourceManagementLinuxOfflineNetNone` 可按镜像、CLI 路径、版本参数化运行。

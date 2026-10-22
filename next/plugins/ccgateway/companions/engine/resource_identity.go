@@ -9,14 +9,53 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
 var errManagedResourceIssuerMissing = errors.New("API key resources require managed issuer ID and generation")
 
+// resourceIdentityTTL bounds how long a verified identity is reused while the
+// credential stays the same. A changed credential (a refresh, a
+// reauthorization, another source) always verifies again, so a model request
+// that needs the identity (diagnostics) does not start a CLI and call the
+// profile endpoint every time.
+const resourceIdentityTTL = 10 * time.Minute
+
+type verifiedResourceIdentity struct {
+	identity resources.Identity
+	auth     *resourceAuthorization
+	at       time.Time
+}
+
 func resourceEnv(env []string, key string) string {
 	return environmentValue(env, key)
+}
+
+// apiKeyOnly reports whether the account's only credential is an API key
+// from the environment.
+func apiKeyOnly(env []string) bool {
+	snapshot, err := localAuthSnapshot(env)
+	if err != nil {
+		return false
+	}
+	sources, _ := snapshot["credential_sources"].([]string)
+	return len(sources) == 1 && sources[0] == "api_key_env"
+}
+
+// cachedIdentity is the last verified identity when the credential it was
+// verified with is still the current one and it is recent.
+func (b *resourceBroker) cachedIdentity(env []string) *verifiedResourceIdentity {
+	cached := b.verified.Load()
+	if cached == nil || time.Since(cached.at) > resourceIdentityTTL {
+		return nil
+	}
+	auth, err := resourceAuthorizationCandidate(env)
+	if err != nil || auth.fingerprint != cached.auth.fingerprint {
+		return nil
+	}
+	return cached
 }
 
 func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, error) {
@@ -26,17 +65,29 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 		return resources.Identity{}, fmt.Errorf("resource authentication backend unsupported")
 	}
 	probe := &resourceIdentityProbe{issuer: resourceEnv(env, "CCG_RESOURCE_ISSUER_ID"), epoch: resourceEnv(env, "CCG_RESOURCE_ISSUER_GENERATION")}
+	// An API key without a managed issuer can never prove an identity; say so
+	// at once instead of after the CLI verification.
+	if (probe.issuer == "" || probe.epoch == "") && apiKeyOnly(env) {
+		return resources.Identity{}, errManagedResourceIssuerMissing
+	}
+	if cached := b.cachedIdentity(env); cached != nil {
+		bindResourceAuthorization(ctx, cached.auth)
+		return cached.identity, nil
+	}
+	remember := func(id resources.Identity, err error) (resources.Identity, error) {
+		if err == nil {
+			bindResourceAuthorization(ctx, probe.auth)
+			b.verified.Store(&verifiedResourceIdentity{identity: id, auth: probe.auth, at: time.Now()})
+		}
+		return id, err
+	}
 	op := &resourceExchange{route: resourceRoute{method: "GET", path: "/api/oauth/profile"}, dir: b.dir, limit: 1 << 20, budget: b.budget, identity: probe}
 	resp, err := b.g.runner(ctx).runResource(ctx, op)
 	if err != nil {
 		return resources.Identity{}, err
 	}
 	if probe.local != nil {
-		id, err := b.persistIdentity(*probe.local, probe.epoch)
-		if err == nil {
-			bindResourceAuthorization(ctx, probe.auth)
-		}
-		return id, err
+		return remember(b.persistIdentity(*probe.local, probe.epoch))
 	}
 	defer resp.body.Close()
 	if resp.status == http.StatusUnauthorized {
@@ -62,11 +113,7 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 	if err != nil || probe.auth == nil || after.fingerprint != probe.auth.fingerprint {
 		return resources.Identity{}, fmt.Errorf("resource authorization changed during profile verification; retry with a stable CLI identity")
 	}
-	id, err = b.persistIdentity(id, "")
-	if err == nil {
-		bindResourceAuthorization(ctx, probe.auth)
-	}
-	return id, err
+	return remember(b.persistIdentity(id, ""))
 }
 
 // Provider resource ownership survives refresh and verified reauthorization to
