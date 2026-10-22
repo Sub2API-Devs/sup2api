@@ -138,7 +138,7 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 - 请求头：API Key 账号的出口只剩最小集合（`apiKeyRequestHeaders`：x-api-key、version、content-type、`user-agent: ccgateway-request`、accept、beta），官方客户端发的 `user-agent: claude-cli/…`、`x-app`、`x-stainless-*`、`anthropic-dangerous-direct-browser-access` 和全部 `x-claude-code-*` 都没有。这是 API Key 路径原有的做法，与 v18 无关。
 - 新发现：客户端在压缩请求上带 `x-cc-compaction-request: manual` 和 `x-claude-code-compaction: manual`，压缩后的下一个请求带 `x-cc-context-compacted`、`x-claude-code-context-compacted`（CC `Zmn2`，按 `compactionRequestKind` / `contextCompactedKindForWire`）。网关目前不转发、请求命令也不设，OAuth 和 API Key 两条路径都缺。
 
-## 12. 补齐：API Key 原生头、压缩头、agent-id 原值（2026-10-22，未发布）
+## 12. 补齐：API Key 原生头、压缩头、agent-id 原值（2026-10-22，随插件 0.1.75 部署 ovh）
 
 用户要求三项都加上（“就算是 apikey，真实 cc 也会带上相关计费头”）。
 
