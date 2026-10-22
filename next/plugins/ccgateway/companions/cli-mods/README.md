@@ -1,6 +1,6 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v19-request-layers`**（未发布）。v19 在 v18 之上给 build 下没有计费头的请求（不是 Claude Code 发的）按配置补 CC 自己的内置提示词、首轮附件（环境、模型、剩余 token、日期）和工具（2026-10-23 用户决定：只有计费头必须），全部由一次原生探针构建生成，见 [请求分层设计](../../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节。新能力 `build_injection_v1`；策略键 `build_injection`。
+当前代码为 **2.1.304 / `ccgateway-v19-request-layers`**（插件 0.1.78 起，与核心 0.1.178 一起发布）。v19 在 v18 之上给 build 下没有计费头的请求（不是 Claude Code 发的）按配置补 CC 自己的内置提示词、首轮附件（环境、模型、剩余 token、日期）和工具（2026-10-23 用户决定：只有计费头必须），全部由一次原生探针构建生成，见 [请求分层设计](../../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节。新能力 `build_injection_v1`；策略键 `build_injection`。
 
 v18 `ccgateway-v18-agent-context`（插件 0.1.75 起；0.1.76 只换 Worker）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
 
