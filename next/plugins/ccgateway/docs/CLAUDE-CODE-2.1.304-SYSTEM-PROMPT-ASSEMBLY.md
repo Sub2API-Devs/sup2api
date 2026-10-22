@@ -125,3 +125,14 @@ ds = [...rs, CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT 时的 appendSubagentSyst
 - build：客户端的 system 代替默认提示词，所以第 3 节的默认段不会出现；第 2 节 `PAs` 的计费头和身份行仍由 CLI 在最前补上，这就是 v16/v17 计费头与身份行规则作用的位置。
 - direct：body 原样转发，CC 的组装流程都不经过；v17 只按策略补计费头和身份行。
 - 子代理请求在客户端本地生成，到达网关时已经是第 4 节的形状（代理提示词 + `cc_is_subagent`）。
+
+## 9. 子代理请求经过网关（2026-10-22，30 号，v17）
+
+把第 6 节抓到的官方主代理、子代理请求原样发给 30 号 Worker，build 用线上策略（`cc_version` 取服务端，平台和 OS 版本取服务端），direct 用线上 direct 策略；再把日志里的输入交给同一个 CLI，重放到假上游，看实际发出的内容。四次真实上游都是 200。
+
+- **计费头正确**：两种模式发出的计费头都和客户端逐字相同，包括 `cc_is_subagent=true`、`cch`、`cc_prompt_id`。build 下 `cc_version` 取服务端，算出的指纹和客户端相同（主代理 `1d1`、子代理 `9a4`），诊断为 `unchanged`。身份行、块数、缓存标记也和客户端相同。
+- **请求头不对**。官方子代理请求带 `x-claude-code-request-class: subagent`、`x-claude-code-agent-id`、`x-claude-code-agent-type`、`x-claude-code-prompt-id`；我们发出的只有 `request-class: main` 和会话 ID，主代理请求也少了 `prompt-id`。所以上游看到的是：body 写着子代理，请求头却是主线程。
+  - 插件只转发客户端的 `x-claude-code-agent-id`（`internal/ccgateway/ccgateway.go` `headers`），不转发 agent-type、request-class、prompt-id。
+  - Worker 的旧会话路径把派生的 A' 写进 `ANTHROPIC_CUSTOM_HEADERS`（`runner_config.go` `cliEnv`），但 2.1.304 走的请求命令（`request_command.go`）不设这个变量；即使设了，`request-command.js` 也会先删掉它。所以 A' 在请求命令路径上不会发出。
+  - `request-class` 由 CLI 发请求时的 `agentContext: El()`（主线程）决定。
+- 重放时没有 Worker 的身份上下文，会话 ID 是随机的，这里不据此判断会话 ID 是否正确。
