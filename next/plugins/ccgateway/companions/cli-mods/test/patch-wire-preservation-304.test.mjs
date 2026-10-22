@@ -213,12 +213,19 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.equal(patchManifest.extension, 'ccgateway-v17-identity-line');
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   assert(patchManifest.capabilities.includes('build_identity_line_v1'));
+  assert(patchManifest.capabilities.includes('direct_billing_v1'));
+  assert(patchManifest.supportFiles['ccgateway-direct-billing.js']);
   // The Claude Code lines are the CLI's own: the build request gets the native
   // selector's three lines (interactive; non-interactive with and without an
-  // appended prompt) and recognizer. Direct gets nothing: it is a pure passthrough.
+  // appended prompt) and recognizer. Direct gets the same lines plus the native
+  // header line (kLo over RIs of the first user prompt).
   const cli = fs.readFileSync(path.join(output, 'cli.js'), 'utf8');
-  assert.match(cli, /\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\}=await import\("\.\/chunk-t61vswm2\.js"\).*let\{B1s:ccgIsBilling\}=await import\("\.\/chunk-7y2kvacy\.js"\).*prefixBuild:\(b,c\)=>ccgPrefixBuild\(b,c,\{official_cli:ccgPrefix\(\{isNonInteractive:!1,hasAppendSystemPrompt:!1\}\),official_cli_sdk:ccgPrefix\(\{isNonInteractive:!0,hasAppendSystemPrompt:!0\}\),agent_sdk:ccgPrefix\(\{isNonInteractive:!0,hasAppendSystemPrompt:!1\}\)\},ccgIsPrefix,ccgIsBilling\)/);
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1"\]/);
+  const lines = '\\{official_cli:ccgPrefix\\(\\{isNonInteractive:!1,hasAppendSystemPrompt:!1\\}\\),official_cli_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!0\\}\\),agent_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!1\\}\\)\\}';
+  assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
+  assert.match(cli, new RegExp('nativeBilling:\\(\\)=>header\\(fingerprint\\(prompt\\(Array\\.isArray\\(body\\.messages\\)\\?body\\.messages:\\[\\],reminder\\)\\),agent\\(\\)\\),lines:' + lines));
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1"\]/);
+  // Installed support modules import each other by their installed names.
+  assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-content-policy\.js'/);
   assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);
   // The attribution fingerprint hashes the first user prompt of the external
   // messages, not their reminder blocks.

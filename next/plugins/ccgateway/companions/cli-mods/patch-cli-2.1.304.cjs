@@ -45,9 +45,15 @@ edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-inf
 edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchema:", "name:r.name,description:r.description,...r.kind===\"native\"?{kind:\"native\"}:{},inputSchema:"));
 edit('cli.js', 'Ve', t => {
   t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
+  // Direct's header is the native line (kLo) over the native fingerprint (RIs)
+  // of the first user prompt, as build computes it (fingerprintMessages).
+  const lines = '{official_cli:ccgPrefix({isNonInteractive:!1,hasAppendSystemPrompt:!1}),official_cli_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!0}),agent_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1})}';
   t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
-    'let{applyBuildMetadata:ccgBuildMetadata,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix}=await import("./chunk-t61vswm2.js");let{B1s:ccgIsBilling}=await import("./chunk-7y2kvacy.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,{official_cli:ccgPrefix({isNonInteractive:!1,hasAppendSystemPrompt:!1}),official_cli_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!0}),agent_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1})},ccgIsPrefix,ccgIsBilling)}))');
-  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1"]');
+    'let{applyBuildMetadata:ccgBuildMetadata,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix}=await import("./chunk-t61vswm2.js");let{B1s:ccgIsBilling,oJe:ccgHeader}=await import("./chunk-7y2kvacy.js");' +
+    'let ccgDirect=async(raw,body,o)=>{let{applyDirectBilling:apply}=await import("./ccgateway-direct-billing.js");let{fingerprintMessages:prompt}=await import("./ccgateway-request-input.js");let{kLo:header}=await import("./chunk-6qx5mjec.js");let{RIs:fingerprint}=await import("./chunk-2gh4h0fv.js");let{KF:reminder}=await import("./chunk-jkcb7qdd.js");let{Al:agent}=await import("./chunk-7p6jp6kj.js");' +
+    'return apply(raw,body,{...o,billingHeader:ccgHeader,nativeBilling:()=>header(fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agent()),lines:' + lines + ',isPrefix:ccgIsPrefix,isBilling:ccgIsBilling})};' +
+    'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling),directBuild:ccgDirect}))');
+  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1","direct_billing_v1"]');
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
 files.set('chunk-dxktn51d.js', 'import {requestSessionID as ccgRequestSessionID} from "./ccgateway-request-identity.js";\n' + files.get('chunk-dxktn51d.js'));
@@ -135,15 +141,18 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8'));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1','direct_billing_v1'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };
 }
 const importFiles = {'chunk-kasbfbhj.js':'chunk-rncrmfyt.js','chunk-gr4a0fky.js':'chunk-38xgev2z.js','chunk-0ycjphb5.js':'chunk-7p6jp6kj.js','chunk-6dwnw6av.js':'chunk-4qs43hr1.js','chunk-q61sszgr.js':'chunk-72vwyp9d.js'};
-for (const input of ['native-tools','model-request','request-command','request-input','request-build','request-parameters','request-output','request-options','request-error','request-policy','content-policy','container-resources','request-identity']) {
+const supportInputs = ['native-tools','model-request','request-command','request-input','request-build','request-parameters','request-output','request-options','request-error','request-policy','content-policy','container-resources','request-identity','direct-billing'];
+for (const input of supportInputs) {
   const supportSource = input === 'request-build' ? 'request-build-2.1.304.js' : input+'.js';
-  let text = fs.readFileSync(path.join(__dirname, supportSource), 'utf8').replaceAll("'./request-options.js'", "'./ccgateway-request-options.js'");
+  // Support modules import each other by source name; installed, they carry the ccgateway- prefix.
+  let text = fs.readFileSync(path.join(__dirname, supportSource), 'utf8');
+  for (const name of supportInputs) text = text.replaceAll(`'./${name}.js'`, `'./ccgateway-${name}.js'`);
   if (input === 'request-command' || input === 'request-build') {
     text = rename(text, {eF:'sF',rbe:'_ke',Zre:'mle',El:'Al',YEr:'mBr',Kvt:'jOt',MDe:'aBe'});
     for (const [a,b] of Object.entries(importFiles)) text = text.replaceAll(a,b);

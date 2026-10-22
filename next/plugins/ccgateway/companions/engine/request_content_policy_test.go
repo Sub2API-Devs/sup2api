@@ -147,3 +147,50 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	require.JSONEq(t, `"claude-vscode"`, string(components.RequestPolicy["build_billing_entrypoint"]))
 	require.JSONEq(t, `{"cli":"none","sdk-cli":"official_cli_sdk"}`, string(components.RequestPolicy["build_identity_lines"]))
 }
+
+// Direct hands the CLI its billing context only on a CLI that applies it; a
+// choice an older CLI cannot honour refuses the request, while the default
+// leaves that CLI a pure passthrough (2026-10-22).
+func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	root := t.TempDir()
+	envCapture := filepath.Join(root, "env.json")
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability}
+	g := &Gateway{RequestMode: "direct", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
+		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
+			"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "requests.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
+			directPolicyEnv: "inherited"})},
+		Slots: make(chan struct{}, 1), Timeout: 10 * time.Second}
+	send := func(policy string) (int, map[string]string) {
+		_ = os.Remove(envCapture)
+		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
+		req.Header.Set("x-api-key", "fixture")
+		req.Header.Set(policyHeader, policy)
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, req)
+		env := map[string]string{}
+		if raw, err := os.ReadFile(envCapture); err == nil {
+			require.NoError(t, json.Unmarshal(raw, &env))
+		}
+		return out.Code, env
+	}
+	choices := `{"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`
+	code, _ := send(choices)
+	require.Equal(t, 409, code)
+	code, env := send(`{"relay_mode":"direct","cli_version":"2.1.304"}`)
+	require.Equal(t, 200, code)
+	require.Empty(t, env[directPolicyEnv], "an inherited value never reaches the CLI")
+	require.NotContains(t, g.requestCapabilities(), features.DirectBillingCapability)
+
+	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability)
+	require.Contains(t, g.requestCapabilities(), features.DirectBillingCapability)
+	code, env = send(`{"relay_mode":"direct","cli_version":"2.1.304"}`)
+	require.Equal(t, 200, code)
+	require.JSONEq(t, `{}`, env[directPolicyEnv])
+	code, env = send(choices)
+	require.Equal(t, 200, code)
+	require.JSONEq(t, `{"build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`, env[directPolicyEnv])
+	code, _ = send(`{"relay_mode":"direct","build_identity_lines":{"cli":"agent_sdk"}}`)
+	require.Equal(t, 400, code)
+}

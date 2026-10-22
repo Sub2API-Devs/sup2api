@@ -65,6 +65,9 @@ func (g *Gateway) requestCapabilities() []string {
 	}
 	if g.CLIInfo.supports("request_direct") {
 		out = append(out, features.RequestPolicyModeCapability)
+		if g.CLIInfo.supports(features.DirectBillingCapability) {
+			out = append(out, features.DirectBillingCapability)
+		}
 	}
 	if g.Runner != nil && g.Runner.ReportContainerResources && g.CLIInfo.supports(features.ContainerResourceReportingCapability) {
 		out = append(out, features.ContainerResourceReportingCapability)

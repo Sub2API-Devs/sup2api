@@ -36,6 +36,29 @@ export function identityLineFor(policy = {}, entrypoint) {
   return { entrypoint: row, line: policy.build_identity_lines?.[row] ?? fallback, fallback };
 }
 
+// Entry point and identity line choices, shared by both envelopes.
+function validateIdentityChoices(value) {
+  if (value.build_billing_entrypoint !== undefined && !Object.hasOwn(identityLineChoices, value.build_billing_entrypoint)) throw Error('Unsupported build_billing_entrypoint');
+  if (value.build_identity_lines !== undefined) {
+    if (!object(value.build_identity_lines)) throw Error('build_identity_lines must be an object');
+    for (const [entrypoint, line] of Object.entries(value.build_identity_lines)) {
+      if (!Object.hasOwn(identityLineChoices, entrypoint) || line !== 'none' && !identityLineChoices[entrypoint].includes(line)) throw Error(`Unsupported build_identity_lines.${entrypoint}`);
+    }
+  }
+}
+
+// validateDirectPolicy reads the Worker's direct context (CCG_DIRECT_POLICY):
+// the only choices direct takes. Undefined means none was given, and direct
+// then forwards the body unchanged.
+export function validateDirectPolicy(raw) {
+  if (raw === undefined) return undefined;
+  let value;
+  try { value = JSON.parse(raw); } catch { throw Error('Invalid Worker direct policy'); }
+  if (!object(value) || Object.keys(value).some(key => !['build_billing_entrypoint', 'build_identity_lines'].includes(key))) throw Error('Invalid Worker direct policy');
+  validateIdentityChoices(value);
+  return value;
+}
+
 // This envelope is built by the trusted Worker. User Messages JSON cannot
 // supply it. Standalone request --build without a policy remains client-only.
 export function validateRequestPolicy(value) {
@@ -44,13 +67,7 @@ export function validateRequestPolicy(value) {
   for (const key of Object.keys(value)) {
     if (!['contract_version', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines'].includes(key)) throw Error(`Unknown request policy key: ${key}`);
   }
-  if (value.build_billing_entrypoint !== undefined && !Object.hasOwn(identityLineChoices, value.build_billing_entrypoint)) throw Error('Unsupported build_billing_entrypoint');
-  if (value.build_identity_lines !== undefined) {
-    if (!object(value.build_identity_lines)) throw Error('build_identity_lines must be an object');
-    for (const [entrypoint, line] of Object.entries(value.build_identity_lines)) {
-      if (!Object.hasOwn(identityLineChoices, entrypoint) || line !== 'none' && !identityLineChoices[entrypoint].includes(line)) throw Error(`Unsupported build_identity_lines.${entrypoint}`);
-    }
-  }
+  validateIdentityChoices(value);
   for (const [name, fields, sources] of [
     ['build_attachment_sources', environmentFields, ['client', 'worker', 'erase']],
     ['build_billing_sources', billingFields, ['client', 'worker']],

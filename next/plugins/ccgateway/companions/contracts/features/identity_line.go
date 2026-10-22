@@ -10,6 +10,12 @@ import (
 // line after the header) by the request's entrypoint.
 const BuildIdentityCapability = "build_identity_line_v1"
 
+// DirectBillingCapability: direct gets the billing header the way build does
+// (missing header or field filled, the rest of the body byte for byte) and the
+// identity line chosen for its entrypoint (2026-10-22: the header is required
+// in both modes, the identity line optional).
+const DirectBillingCapability = "direct_billing_v1"
+
 // BillingEntrypoints are the cc_entrypoint values build may write, in console
 // order. DefaultBillingEntrypoint is the request process's own (sdk-cli, the
 // value `claude -p` sends) and is also the wire default.

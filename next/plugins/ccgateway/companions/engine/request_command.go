@@ -229,6 +229,32 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	d.request(raw, r.Header)
 	input := raw
+	if err := features.ValidateBillingEntrypoint(policy.Entrypoint); err != nil {
+		fail(400, "invalid_request_error", err.Error())
+		return
+	}
+	if err := policy.IdentityLines.Validate(); err != nil {
+		fail(400, "invalid_request_error", err.Error())
+		return
+	}
+	identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
+	// Direct fills only a missing billing header or field and the identity
+	// line chosen for its entrypoint; the rest of the body goes byte for byte.
+	// The CLI does this only when the Worker hands it this context, so a CLI
+	// without the capability stays a pure passthrough unless a choice must be
+	// honoured.
+	var directPolicy []byte
+	if requestMode == "direct" {
+		if g.CLIInfo.supports(features.DirectBillingCapability) {
+			directPolicy, _ = json.Marshal(struct {
+				Entrypoint    string                      `json:"build_billing_entrypoint,omitempty"`
+				IdentityLines features.BuildIdentityLines `json:"build_identity_lines,omitempty"`
+			}{policy.Entrypoint, policy.IdentityLines})
+		} else if identityLines {
+			fail(409, "configuration_error", "Loaded CLI does not support the requested direct policy")
+			return
+		}
+	}
 	if requestMode == "build" {
 		if err := policy.Sources.Validate(); err != nil {
 			fail(400, "invalid_request_error", err.Error())
@@ -238,16 +264,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}
-		if err := features.ValidateBillingEntrypoint(policy.Entrypoint); err != nil {
-			fail(400, "invalid_request_error", err.Error())
-			return
-		}
-		if err := policy.IdentityLines.Validate(); err != nil {
-			fail(400, "invalid_request_error", err.Error())
-			return
-		}
 		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
-		identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
 		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
 			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
@@ -350,6 +367,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		cmd.Env = envWith(cmd.Env, map[string]string{
 			requestIdentityEnv: string(mapped),
 		}, "CLAUDE_CODE_REMOTE_SESSION_ID")
+	}
+	if directPolicy != nil {
+		cmd.Env = envWith(cmd.Env, map[string]string{directPolicyEnv: string(directPolicy)})
 	}
 	// The patched request command runs before the interactive CLI initializer.
 	// Apply its non-interactive entrypoint default at process startup; an

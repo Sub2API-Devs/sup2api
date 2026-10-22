@@ -20,7 +20,9 @@ import (
 )
 
 const (
-	requestIdentityEnv        = "CCG_REQUEST_IDENTITY"
+	requestIdentityEnv = "CCG_REQUEST_IDENTITY"
+	// directPolicyEnv carries the direct billing context (entrypoint, identity lines).
+	directPolicyEnv           = "CCG_DIRECT_POLICY"
 	requestIdentitySecretFile = "request-identity.key"
 )
 

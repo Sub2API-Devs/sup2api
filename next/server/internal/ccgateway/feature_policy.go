@@ -326,11 +326,11 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	// client metadata.user_id and adds none, which is the Worker's own default,
 	// and direct forwards it untouched. A source stored earlier is not sent.
 	p.RequestIdentitySources = nil
+	// Direct still fills the billing header and the identity line by
+	// entrypoint (2026-10-22); the content sources are build's only.
 	if p.RelayMode == "direct" {
 		p.BuildAttachmentSources = nil
 		p.BuildBillingSources = nil
-		p.BuildBillingEntrypoint = ""
-		p.BuildIdentityLines = nil
 	}
 	return p, nil
 }

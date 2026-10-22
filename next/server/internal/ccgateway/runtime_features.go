@@ -30,7 +30,11 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	if p.RequestIdentitySources.Explicit() {
 		required = append(required, features.RequestIdentityCapability)
 	}
+	identityLines := p.BuildBillingEntrypoint != "" || len(p.BuildIdentityLines) > 0
 	if p.RelayMode == "direct" {
+		if identityLines {
+			required = append(required, features.DirectBillingCapability)
+		}
 		return required
 	}
 	if p.CLIVersion == "2.1.304" {
@@ -44,7 +48,7 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	if p.BuildBillingSources.UsesWorker() {
 		required = append(required, features.BuildBillingCapability)
 	}
-	if p.BuildBillingEntrypoint != "" || len(p.BuildIdentityLines) > 0 {
+	if identityLines {
 		required = append(required, features.BuildIdentityCapability)
 	}
 	return required

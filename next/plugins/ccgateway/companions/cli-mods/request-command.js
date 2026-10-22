@@ -6,6 +6,7 @@ import { YEr } from './chunk-6dwnw6av.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
+import { validateDirectPolicy } from './ccgateway-request-policy.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
@@ -32,7 +33,7 @@ references to preserve message/block positions. Generation fields go in paramete
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-export async function runRequestCommand(args, { oauthBeta, identityBuild, prefixBuild } = {}) {
+export async function runRequestCommand(args, { oauthBeta, identityBuild, prefixBuild, directBuild } = {}) {
   const controller = new AbortController();
   let response, interrupted = false, timedOut = false, outputError, deadline;
   let phase = 'input', responseStarted = false;
@@ -73,6 +74,15 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     deadline = setTimeout(() => { timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
     deadline.unref?.();
     let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout };
+    // Direct fills only a missing billing header or field and the identity
+    // line chosen for its entrypoint (2026-10-22), and only with the Worker's
+    // context; without it, as when run by hand, it forwards the body unchanged.
+    const directPolicy = options.mode === 'direct' ? validateDirectPolicy(process.env.CCG_DIRECT_POLICY) : undefined;
+    if (directPolicy && directBuild) {
+      phase = 'build';
+      const sent = await directBuild(rawBody, body, { policy: directPolicy, oauth: !apiKey });
+      if (sent !== rawBody) outgoing = { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
+    }
     if (options.mode === 'build') {
       phase = 'build';
       const { buildRequest } = await import('./ccgateway-request-build.js');

@@ -37,9 +37,16 @@
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
+      "name": "direct-identity-lines",
+      "mode": "direct",
+      "stdin": "{\"model\":\"fixture\",\"system\":\"plain system\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}",
+      "direct": "{\"build_billing_entrypoint\":\"claude-desktop\",\"build_identity_lines\":{\"claude-desktop\":\"agent_sdk\"}}"
+    },
+    {
       "name": "direct-passthrough",
       "mode": "direct",
-      "stdin": "{\"model\":\"fixture\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}}"
+      "stdin": "{\"model\":\"fixture\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}}",
+      "direct": "{}"
     }
   ]
 }

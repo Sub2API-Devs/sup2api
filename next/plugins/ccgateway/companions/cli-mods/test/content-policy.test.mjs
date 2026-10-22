@@ -117,7 +117,7 @@ test('null and invalid text reject instead of duplicating the previous block', a
 });
 
 test('billing replaces only selected values, preserves unknowns, whitespace and cache attributes', () => {
-  const original = [{ type: 'text', text: 'before\r\nx-anthropic-billing-header: cc_version = 2.1.302.b50; cc_entrypoint=client; cc_workload=keep;\r\nafter', cache_control: { type: 'ephemeral' } }];
+  const original = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version = 2.1.302.b50; cc_entrypoint=client; cc_workload=keep;\r\nafter', cache_control: { type: 'ephemeral' } }];
   const output = mergeBillingAttribution(original, { build_billing_sources: { cc_version: 'worker' } }, billing);
   assert.deepEqual(output, [{ ...original[0], text: original[0].text.replace('2.1.302.b50', '2.1.304.abc') }]);
   assert.deepEqual(mergeBillingAttribution(output, { build_billing_sources: { cc_version: 'worker' } }, billing), output);
@@ -203,14 +203,30 @@ test('billing writes the configured entrypoint wherever the native one would go'
   assert.throws(() => mergeBillingAttribution(client, { build_billing_entrypoint: 'cli; cch=1' }, billing), e => e.status === 400);
 });
 
-test('the request entrypoint is read from its one usable header', () => {
+test('the request entrypoint is read from the header that opens the system', () => {
   const { billingEntrypoint } = createContentPolicy(vocabulary);
-  assert.equal(billingEntrypoint([{ type: 'text', text: 'prompt' }, { type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_entrypoint=cli;' }]), 'cli');
-  assert.equal(billingEntrypoint('x-anthropic-billing-header: cc_entrypoint=claude-desktop-3p; cc_version=1;'), 'claude-desktop-3p');
+  assert.equal(billingEntrypoint([{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_entrypoint=cli;' }, { type: 'text', text: 'prompt' }]), 'cli');
+  assert.equal(billingEntrypoint('x-anthropic-billing-header: cc_entrypoint=claude-desktop-3p; cc_version=1;\nprompt'), 'claude-desktop-3p');
+  // Two headers: the leading one is what upstream reads.
+  assert.equal(billingEntrypoint([{ type: 'text', text: 'x-anthropic-billing-header: cc_entrypoint=cli;' }, { type: 'text', text: 'x-anthropic-billing-header: cc_entrypoint=sdk-ts;' }]), 'cli');
   for (const system of [undefined, [], [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1;' }],
-    [{ type: 'text', text: '```\nx-anthropic-billing-header: cc_entrypoint=cli;\n```' }],
-    [{ type: 'text', text: 'x-anthropic-billing-header: cc_entrypoint=cli;' }, { type: 'text', text: 'x-anthropic-billing-header: cc_entrypoint=sdk-ts;' }]]) {
+    [{ type: 'text', text: 'prompt' }, { type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_entrypoint=cli;' }],
+    [{ type: 'text', text: 'before\nx-anthropic-billing-header: cc_entrypoint=cli;' }],
+    [{ type: 'text', text: '```\nx-anthropic-billing-header: cc_entrypoint=cli;\n```' }]]) {
     assert.equal(billingEntrypoint(system), undefined, JSON.stringify(system));
+  }
+});
+
+// Upstream reads only a header that opens the first block; one elsewhere is
+// left as the client wrote it and the native header goes in front (2026-10-22).
+test('a header that does not open the system gets the native one in front', () => {
+  for (const system of [
+    [{ type: 'text', text: 'prompt' }, { type: 'text', text: 'x-anthropic-billing-header: cc_version=9.9.9.own;' }],
+    [{ type: 'text', text: 'before\nx-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=cli;' }],
+  ]) {
+    for (const policy of [{}, { build_billing_sources: { cc_version: 'worker' } }]) {
+      assert.deepEqual(mergeBillingAttribution(system, policy, billing), [{ type: 'text', text: billing }, ...system], JSON.stringify([system, policy]));
+    }
   }
 });
 

@@ -1,5 +1,7 @@
 # system 开头注入（计费头 / 默认开头行）设计与核对
 
+> 2026-10-22 后续：direct 不再是纯透传，build 与 direct 都必须带计费头，身份行按入口可选，见 [BILLING-IDENTITY-AUTOFILL-DESIGN.md](BILLING-IDENTITY-AUTOFILL-DESIGN.md) 第 7 节。本文保留 v16 的设计与实测。
+
 2026-10-21 设计，2026-10-22 实施为 CLI v16（`ccgateway-v16-build-prefix`），随 Core 0.1.175 / 插件 0.1.73 部署 ovh，实施结果见第 6 节。UI 设计稿：[system-prefix-injection-mockup.html](system-prefix-injection-mockup.html)（可用 `#direct`、`#raw`、`#account` 直接打开对应场景）。第 4 节是实施前对照 v15（`ccgateway-v15-cli-prefix`，线上 0.1.72）的核对，保留作依据。
 
 ## 1. 要做什么（2026-10-21 用户定稿）

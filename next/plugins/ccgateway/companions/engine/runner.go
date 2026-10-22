@@ -170,7 +170,7 @@ func (r *Runner) baseEnv() []string {
 	if r.ReportContainerResources {
 		values["CCG_REPORT_CONTAINER_RESOURCES"] = "1"
 	}
-	return envWith(r.Proxy.Environment(r.Overrides.Apply(env)), values, "CCG_HARDWARE_PROFILE_PATH", "CCG_REPORT_CONTAINER_RESOURCES", requestIdentityEnv)
+	return envWith(r.Proxy.Environment(r.Overrides.Apply(env)), values, "CCG_HARDWARE_PROFILE_PATH", "CCG_REPORT_CONTAINER_RESOURCES", requestIdentityEnv, directPolicyEnv)
 }
 
 // run owns one native request lifecycle. Usually it uses one CLI process;

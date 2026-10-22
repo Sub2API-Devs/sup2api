@@ -1,6 +1,6 @@
 # 计费头入口与身份行自动填充：源码核对、设计与实施
 
-2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`），未发布**，结果见第 6 节。
+2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`）**，结果见第 6 节；第 7 节起 direct 也补计费头与身份行。
 
 ## 1. 源码核对
 
@@ -67,13 +67,13 @@
 
 每个入口另有“不补”。身份行文字仍由 CLI 的 `n1n` 生成（`{isNonInteractive, hasAppendSystemPrompt}` 两个开关就能得到三句），代码里不抄写。
 
-## 3. 行为（只在 build；direct 仍是纯透传）
+## 3. 行为（build 与 direct，第 7 节起 direct 也适用）
 
 1. **计费头**（必须）：沿用现有规则，客户端没有就补、缺字段就补。「入口标识＝服务端」以及客户端缺入口时补的值，改为配置的入口（六选一，默认 `sdk-cli`，与现在一致）。`cc_version` 与指纹不变。
 2. **身份行**（可选）：取计费合并后的**实际入口**，在表里查它的选择：
    - 客户端已有三句之一：不动（现有规则）。
    - 选了某句：按现有位置规则插入（首块是计费头就插在其后）。
-   - 选了“不补”：不插。但计费头不在首块时仍必须插入该入口的默认行，否则上游 429（2026-10-22 实测）。
+   - 选了“不补”：不插。计费头不在首块时，第 7 节起改为在最前补原生计费头，所以「不补」总能生效；只有拿不到原生计费头时才补该入口的默认行，否则上游 429。
    - 实际入口不在六项内（如 `claude-desktop-3p`、`unknown`）：见 5.2。
 3. 只改计费头文字，不改 CLI 进程的 `CLAUDE_CODE_ENTRYPOINT`，它还影响其他原生行为。
 
@@ -82,7 +82,7 @@
 - 核心存储的请求策略新增两个字段（`schema_version` 不变，旧配置缺省即现有行为），全局→分组→账号逐项继承：
   - `build_billing_entrypoint`：`cli | sdk-cli | sdk-ts | sdk-py | claude-desktop | claude-vscode`，缺省 `sdk-cli`。
   - `build_identity_lines`：`{ <入口>: "official_cli" | "official_cli_sdk" | "agent_sdk" | "none" }`（分别是 `le`、`ke`、`De`），核心按第 2 节的可选范围校验，缺省取各入口默认值。
-- 下发给 Worker 时去掉等于默认的值（与 CLI 自己的默认一致），所以没改过的配置不需要新 Worker；有偏离默认的值时要求能力 `build_identity_line_v1`，旧 Worker 没有就阻止发送，不静默忽略。direct 不下发。
+- 下发给 Worker 时去掉等于默认的值（与 CLI 自己的默认一致），所以没改过的配置不需要新 Worker；有偏离默认的值时要求能力 `build_identity_line_v1`（direct 为 `direct_billing_v1`，见第 7 节），旧 Worker 没有就阻止发送，不静默忽略。
 - Worker → CLI 的 `requestPolicy` 允许的键加上这两个。
 - 需要发布 CLI v17（`ccgateway-v17-identity-line`）和插件新版本，核心也要发版（校验和下发）。
 
@@ -112,6 +112,42 @@
 | 客户端头 `claude-desktop-3p` | `[计费头 claude-desktop-3p, official_cli_sdk, 提示]` | 200 / 200 |
 | 客户端头 `sdk-ts`，选 `official_cli_sdk` | `[计费头 sdk-ts, official_cli_sdk, 提示]` | 200 / 200 |
 | 客户端头 `cli`，选「不补」 | `[计费头 cli, 提示]` | 200 / 200 |
-| 计费头不在首块，选「不补」 | `[official_cli, 提示, 计费头 cli]` | 200 / 200 |
+| 计费头不在首块，选「不补」 | `[official_cli, 提示, 计费头 cli]`（第 7 节起改为在最前补原生计费头） | 200 / 200 |
 | 客户端头 `remote`（不在六项内），服务端入口 `cli` | `[计费头 remote, official_cli, 提示]` | 200 / 200 |
 | 客户端头 `cli`，入口标识选「服务端」，服务端入口 `sdk-py` | `[计费头 sdk-py, agent_sdk, 提示]` | 200 / 200 |
+
+## 7. direct 也补计费头（2026-10-22 用户决定）
+
+用户：“现在只要求计费头必传，身份头可选，就算是 direct 计费头也是如此。”决定：
+
+1. **计费头两种模式都必传**：缺整行就插原生整行，缺字段就补原生值，客户端已有的值保留；direct 不使用两个字段的来源设置（总是“客户端，没有用服务端”）。
+2. **身份行 direct 与 build 一样**按入口配置补（只对 OAuth），客户端已有的不改。
+3. **计费头在、但不在首块**（上游只读首块开头的计费头）：两种模式都在最前再插一个原生计费头，客户端那个原样留在原处（30 号实测两个计费头上游接受）。身份行跟着最前的计费头的入口选。
+4. **字符串 system**（direct）：在字符串开头加“计费头 + 换行”，保持字符串类型；字符串里放不下单独的身份行，不补。
+
+实现：
+
+- 只有 Worker 交给 CLI 环境变量 `CCG_DIRECT_POLICY`（`{build_billing_entrypoint?, build_identity_lines?}`，默认为 `{}`）时，`claude request --direct` 才补；手动运行、没有这个变量时仍原样转发。Worker 只在 CLI 声明 `direct_billing_v1` 时给出；有偏离默认的选择而 CLI 不支持时 409。核心对 direct 也下发这两个字段（稀疏），有值时要求 `direct_billing_v1`；默认配置不要求，旧 Worker 照旧透传。
+- CLI `direct-billing.js` 在原始 JSON 文本上定位 `system`，只拼接新增的块或改写的那一个字符串，body 其余字节（键顺序、空白、超大整数）不变。计费头是原生 `kLo` 对原生指纹 `RIs`（`fingerprintMessages` 取第一条用户文字）的输出，服务端入口替换其中的 `cc_entrypoint`；合并规则与 build 共用 `content-policy.js`。
+- build 的 `mergeBillingAttribution` 同步改为：计费头不在首块开头时按缺失处理，在最前插原生整行（原来是就地补字段、再在最前补身份行）。
+- 前端：direct 下也显示「服务端入口」与「身份行」，字段来源和附件转换仍只在 build 显示；direct 的说明改为“原样转发；只补缺的计费头（或缺的字段），身份行按入口配置补”。
+
+本地：cli-mods 145 项（新增 `direct-billing.test.mjs`）、engine（含 `TestDirectPolicyReachesOnlyACapableCLI`）、核心 ccgateway 与 account（含 PG）、前端 623 项与类型检查通过；Worker → CLI 契约夹具加了 direct 用例。v17 ELF sha256 `000a5382…c5ba83`。
+
+30 号实测（v17 ELF 一次性放进容器，测完删除），Opus 4.8 与 Sonnet 4.6 结果相同：
+
+| 场景 | 发出的 system | 真实上游 |
+|---|---|---|
+| direct `[提示]`，默认 | `[计费头 sdk-cli +cch, agent_sdk, 提示]`，其余字节不变 | 200 |
+| direct 不带 system | `[计费头 sdk-cli +cch, agent_sdk]` | 200 |
+| direct 字符串 system | `"计费头
+提示"` | 200 |
+| direct 头只有 `cc_version`，服务端入口 `cli` | `[计费头 cli, official_cli, 提示]` | 200 |
+| direct 头不在首块 | `[计费头 sdk-cli +cch, agent_sdk, 提示, 计费头 cli]` | 200 |
+| direct 完整 `cli` 头，`cli` 选「不补」 | 与输入逐字节相同 | 200 |
+| direct 完整 `claude-desktop-3p` 头 | `[计费头 claude-desktop-3p, official_cli_sdk, 提示]` | 200 |
+| direct 没有 Worker 上下文（手动运行） | 与输入逐字节相同 | 429（预期） |
+| build 头不在首块 | `[计费头 sdk-cli +cch, agent_sdk, 提示, 计费头 cli]` | 200 |
+| build 头不在首块，`sdk-cli` 选「不补」 | `[计费头 sdk-cli +cch, 提示, 计费头 cli]` | 200 |
+
+另验证 direct 补头时 body 其他部分的原始字节保留：键顺序、多余空格、`12345678901234567890` 这样的超大整数都原样发出。

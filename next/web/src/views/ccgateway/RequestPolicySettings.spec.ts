@@ -83,16 +83,17 @@ describe('CCGateway single-request modes', () => {
     expect([undefined, 1]).toContain(sent.schema_version)
     w.unmount()
   })
-  // Direct is a pure passthrough with nothing to configure; build replaces the
-  // user_id on its own, so the identity has no setting in either mode
-  // (2026-10-21 decision). The identity line follows the billing entrypoint.
+  // Direct fills only the billing header and the identity line by entrypoint;
+  // build also replaces the user_id on its own, so the identity has no setting
+  // in either mode (2026-10-21/22 decisions).
   it('shows what each mode does on its own and offers no identity setting', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
     const w = await render()
-    expect(w.get('[data-testid="direct-hint"]').text()).toContain('原样转发，不做任何改动')
-    for (const id of ['billing-sources', 'billing-entrypoint', 'identity-lines', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
+    expect(w.get('[data-testid="direct-hint"]').text()).toContain('只补缺的计费头')
+    for (const id of ['billing-cc_version', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
+    for (const id of ['billing-entrypoint', 'identity-lines']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(true)
     await w.get('[data-testid="relay-mode"]').setValue('1')
     expect(w.find('[data-testid="direct-hint"]').exists()).toBe(false)
     expect(w.get('[data-testid="auto-user-id"]').text()).toContain('有就自动替换，没有不加')
@@ -163,7 +164,7 @@ describe('CCGateway single-request modes', () => {
     await pick(w, os, 1)
     await w.get('[data-testid="relay-mode"]').setValue('0')
     expect(w.find(platform).exists()).toBe(false)
-    expect(w.text()).toContain('原样转发，不做任何改动')
+    expect(w.text()).toContain('只补缺的计费头')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })

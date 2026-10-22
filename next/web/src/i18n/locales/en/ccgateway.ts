@@ -18,7 +18,7 @@ export default {
     billing: 'Billing header', billingSources: { client: 'Client, else server', worker: 'Server' },
     entrypoint: 'Server entrypoint', entrypointHint: 'Written when the client sends no entrypoint, or the entrypoint identifier uses Server',
     identity: 'Identity line',
-    identityHint: "Adds Claude Code's identity line after the billing header, chosen by the entrypoint in the request's billing header; Claude Code renders the text. A client identity line is never changed. When the billing header is not the first block, None still adds the entrypoint's default line, or upstream refuses the request. Other entrypoints use the Server entrypoint row; claude-desktop-3p uses claude-desktop.",
+    identityHint: "Adds Claude Code's identity line after the billing header, chosen by the entrypoint in the request's billing header; Claude Code renders the text. A client identity line is never changed. Other entrypoints use the Server entrypoint row; claude-desktop-3p uses claude-desktop.",
     identityLines: { official_cli: 'Claude Code CLI (terminal)', official_cli_sdk: 'Claude Code + Agent SDK', agent_sdk: 'Claude Agent SDK', none: 'None' },
     cc_version: 'Version identifier', cc_entrypoint: 'Entrypoint identifier',
     runtime: 'Runtime environment', directories: 'Directories and repository', tools: 'Tools and agent instructions',
@@ -41,7 +41,7 @@ export default {
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
   },
   buildAttachments: {
-    directHint: 'Forwarded unchanged',
+    directHint: 'Forwarded as sent; only a missing billing header (or field) is filled, and the identity line is added by entrypoint',
     client: 'Keep client',
     worker: 'Use server',
     erase: 'Erase'

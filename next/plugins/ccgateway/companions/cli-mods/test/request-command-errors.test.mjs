@@ -9,7 +9,7 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-http-errors-'));
   try {
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error']) {
+    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy']) {
       await fs.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
     }
     for (const [name, code] of Object.entries({

@@ -50,6 +50,17 @@ export function createContentPolicy(vocabulary) {
     billingEntrypoint: system => billingEntrypoint(c, system),
   };
 }
+
+// createBillingPolicy is the billing half alone, for direct: it needs only the
+// native header, not the environment vocabulary.
+export function createBillingPolicy(billingHeader) {
+  if (typeof billingHeader !== 'string' || !billingHeader) throw Error('Invalid native CC vocabulary');
+  const c = { billingHeader };
+  return {
+    mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
+    billingEntrypoint: system => billingEntrypoint(c, system),
+  };
+}
 function error(message, status = 400) {
   return Object.assign(new Error(message), { status, code: status === 503 ? 'configuration_error' : 'invalid_request_error' });
 }
@@ -352,7 +363,10 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
     if (replaced.size) throw error(`Worker billing attribution cannot be applied: ${conflict}`);
     return structuredClone(system);
   }
-  const target = found[0];
+  // Upstream reads only a header that opens the first block (2026-10-22): one
+  // anywhere else counts as missing, so the native header goes in front and
+  // the client's stays where it is, unchanged (two headers are accepted).
+  const target = found[0]?.index === 0 && found[0].line.start === 0 ? found[0] : undefined;
   const needed = target ? billingFields.filter(field => replaced.has(field) || !target.keys.has(field)) : billingFields;
   if (!needed.length) return structuredClone(system);
   let generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
@@ -385,16 +399,11 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   return blocks;
 }
 
-// billingEntrypoint is the cc_entrypoint of the request's billing header, by
-// the same rules the merge uses; undefined without exactly one usable header.
+// billingEntrypoint is the cc_entrypoint of the header that opens the first
+// block, the one upstream reads; undefined without a usable one.
 function billingEntrypoint(c, system) {
-  const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : Array.isArray(system) ? system : [];
-  const found = [];
-  for (const block of blocks) {
-    if (block?.type !== 'text' || typeof block.text !== 'string') continue;
-    const result = billingCandidate(c, block.text);
-    if (result.conflict) return undefined;
-    found.push(...result.candidates);
-  }
-  return found.length === 1 ? found[0].keys.get('cc_entrypoint')?.value : undefined;
+  const first = typeof system === 'string' ? system : Array.isArray(system) && system[0]?.type === 'text' ? system[0].text : undefined;
+  if (typeof first !== 'string') return undefined;
+  const result = billingCandidate(c, first);
+  return result.conflict ? undefined : result.candidates.find(candidate => candidate.line.start === 0)?.keys.get('cc_entrypoint')?.value;
 }

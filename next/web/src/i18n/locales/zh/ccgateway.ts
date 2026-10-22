@@ -18,7 +18,7 @@ export default {
     billing: '计费头', billingSources: { client: '客户端，没有用服务端', worker: '服务端' },
     entrypoint: '服务端入口', entrypointHint: '客户端没带入口，或入口标识选「服务端」时写入的值',
     identity: '身份行',
-    identityHint: '按请求计费头里的入口，在计费头后补上 Claude Code 的身份行，文字由 Claude Code 生成；客户端已带身份行时不改。计费头不在首块时，选「不补」也会补该入口的默认行，否则上游拒绝。其他入口按「服务端入口」那一行处理，claude-desktop-3p 按 claude-desktop。',
+    identityHint: '按请求计费头里的入口，在计费头后补上 Claude Code 的身份行，文字由 Claude Code 生成；客户端已带身份行时不改。其他入口按「服务端入口」那一行处理，claude-desktop-3p 按 claude-desktop。',
     identityLines: { official_cli: 'Claude Code CLI（终端）', official_cli_sdk: 'Claude Code + Agent SDK', agent_sdk: 'Claude Agent SDK', none: '不补' },
     cc_version: '版本标识', cc_entrypoint: '入口标识',
     runtime: '运行环境', directories: '目录与仓库', tools: '工具与代理说明',
@@ -41,7 +41,7 @@ export default {
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
   },
   buildAttachments: {
-    directHint: '原样转发，不做任何改动',
+    directHint: '原样转发；只补缺的计费头（或缺的字段），身份行按入口配置补',
     client: '保留客户端',
     worker: '使用服务端',
     erase: '擦除'

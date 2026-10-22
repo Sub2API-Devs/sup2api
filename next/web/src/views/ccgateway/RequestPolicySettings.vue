@@ -202,87 +202,91 @@ const summary = computed(() => {
         />
       </template>
     </SSettingsGroup>
-    <template v-if="resolved.relay_mode !== 'direct'">
-      <SSettingsGroup
-        :title="t('ccgateway.layers.billing')"
-        dense
-        data-testid="billing-sources"
+    <!-- The billing header is required in both modes and the identity line is
+    chosen per entrypoint in both (2026-10-22); the field sources are build's. -->
+    <SSettingsGroup
+      :title="t('ccgateway.layers.billing')"
+      dense
+      data-testid="billing-sources"
+    >
+      <div
+        v-if="resolved.relay_mode !== 'direct'"
+        class="py-2"
       >
-        <div class="py-2">
-          <SOptionMatrix
-            :model-value="billingMatrix"
-            :columns="billingOptions"
-            :rows="billingRows"
-            column-width="8rem"
-            :disabled="disabled"
-            :aria-label="t('ccgateway.layers.billing')"
-            @change="applySources"
-          />
-        </div>
-        <SSettingRow
-          :label="t('ccgateway.layers.entrypoint')"
-          :description="origin('build_billing_entrypoint') ?? t('ccgateway.layers.entrypointHint')"
-          size="sm"
-          data-testid="billing-entrypoint"
-        >
-          <SSelect
-            :model-value="entrypointValue"
-            :options="entrypointOptions"
-            :disabled="disabled"
-            data-testid="billing-entrypoint-select"
-            @update:model-value="setEntrypoint"
-          />
-        </SSettingRow>
-      </SSettingsGroup>
-      <SSettingsGroup
-        :title="t('ccgateway.layers.identity')"
-        dense
-        data-testid="identity-lines"
+        <SOptionMatrix
+          :model-value="billingMatrix"
+          :columns="billingOptions"
+          :rows="billingRows"
+          column-width="8rem"
+          :disabled="disabled"
+          :aria-label="t('ccgateway.layers.billing')"
+          @change="applySources"
+        />
+      </div>
+      <SSettingRow
+        :label="t('ccgateway.layers.entrypoint')"
+        :description="origin('build_billing_entrypoint') ?? t('ccgateway.layers.entrypointHint')"
+        size="sm"
+        data-testid="billing-entrypoint"
       >
-        <template #details>
-          <p>{{ t('ccgateway.layers.identityHint') }}</p>
+        <SSelect
+          :model-value="entrypointValue"
+          :options="entrypointOptions"
+          :disabled="disabled"
+          data-testid="billing-entrypoint-select"
+          @update:model-value="setEntrypoint"
+        />
+      </SSettingRow>
+    </SSettingsGroup>
+    <SSettingsGroup
+      :title="t('ccgateway.layers.identity')"
+      dense
+      data-testid="identity-lines"
+    >
+      <template #details>
+        <p>{{ t('ccgateway.layers.identityHint') }}</p>
+      </template>
+      <SSettingRow
+        v-for="entrypoint in billingEntrypoints"
+        :key="entrypoint"
+        :description="origin('build_identity_lines', entrypoint)"
+        size="sm"
+        :data-testid="'identity-line-' + entrypoint"
+      >
+        <template #label>
+          <span class="font-mono">{{ entrypoint }}</span>
         </template>
-        <SSettingRow
-          v-for="entrypoint in billingEntrypoints"
-          :key="entrypoint"
-          :description="origin('build_identity_lines', entrypoint)"
-          size="sm"
-          :data-testid="'identity-line-' + entrypoint"
-        >
-          <template #label>
-            <span class="font-mono">{{ entrypoint }}</span>
-          </template>
-          <SSelect
-            :model-value="lineValue(entrypoint)"
-            :options="lineOptions(entrypoint)"
-            :disabled="disabled"
-            :data-testid="'identity-line-select-' + entrypoint"
-            @update:model-value="value => setLine(entrypoint, value)"
-          />
-        </SSettingRow>
-      </SSettingsGroup>
-      <SSettingsGroup
-        :title="t('ccgateway.layers.environment')"
-        dense
-        data-testid="build-attachments"
-      >
-        <template #details>
-          <p>{{ t('ccgateway.layers.environmentHint') }}</p>
-          <p>{{ t('ccgateway.layers.executionHint') }}</p>
-        </template>
-        <div class="py-2">
-          <SOptionMatrix
-            :model-value="envMatrix"
-            :columns="envOptions"
-            :groups="envSections"
-            collapsible
-            :disabled="disabled"
-            :aria-label="t('ccgateway.layers.environment')"
-            @change="applySources"
-          />
-        </div>
-      </SSettingsGroup>
-    </template>
+        <SSelect
+          :model-value="lineValue(entrypoint)"
+          :options="lineOptions(entrypoint)"
+          :disabled="disabled"
+          :data-testid="'identity-line-select-' + entrypoint"
+          @update:model-value="value => setLine(entrypoint, value)"
+        />
+      </SSettingRow>
+    </SSettingsGroup>
+    <SSettingsGroup
+      v-if="resolved.relay_mode !== 'direct'"
+      :title="t('ccgateway.layers.environment')"
+      dense
+      data-testid="build-attachments"
+    >
+      <template #details>
+        <p>{{ t('ccgateway.layers.environmentHint') }}</p>
+        <p>{{ t('ccgateway.layers.executionHint') }}</p>
+      </template>
+      <div class="py-2">
+        <SOptionMatrix
+          :model-value="envMatrix"
+          :columns="envOptions"
+          :groups="envSections"
+          collapsible
+          :disabled="disabled"
+          :aria-label="t('ccgateway.layers.environment')"
+          @change="applySources"
+        />
+      </div>
+    </SSettingsGroup>
     <SDisclosure :label="t('ccgateway.layers.rules')">
       <p>{{ t('ccgateway.layers.rulesHint') }}</p>
     </SDisclosure>

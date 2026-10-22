@@ -3,10 +3,12 @@
 当前目标为 **2.1.304 / `ccgateway-v17-identity-line`**（未部署；线上仍是 v16，插件 0.1.73）。v17 在 v16 之上（2026-10-22 用户决定）：
 
 - **服务端入口六选一**：`build_billing_entrypoint`（`cli`、`sdk-cli`、`sdk-ts`、`sdk-py`、`claude-desktop`、`claude-vscode`，默认 `sdk-cli`）替换原生整行里的 `cc_entrypoint`，补齐计费头或入口选 `worker` 时写入它。
-- **身份行按入口选**：`build_identity_lines` 给每个入口选一句（三句都由 `n1n` 生成，按名字 `official_cli`、`official_cli_sdk`、`agent_sdk` 取）或 `none`；默认与真实客户端一致（`cli` 终端那句，`sdk-*` SDK 那句，桌面版与 VS Code 带追加提示那句）。入口取自计费合并后的头，`claude-desktop-3p` 按 `claude-desktop`，其他按服务端入口。`none` 只在计费头为首块时生效，否则补默认句。
-- 新能力 `build_identity_line_v1`；Worker 只在策略带这两个键时要求它。
+- **身份行按入口选**：`build_identity_lines` 给每个入口选一句（三句都由 `n1n` 生成，按名字 `official_cli`、`official_cli_sdk`、`agent_sdk` 取）或 `none`；默认与真实客户端一致（`cli` 终端那句，`sdk-*` SDK 那句，桌面版与 VS Code 带追加提示那句）。入口取自首块开头的计费头，`claude-desktop-3p` 按 `claude-desktop`，其他按服务端入口。
+- **计费头不在首块开头时**按缺失处理：在最前插原生整行，客户端那个原样留下。
+- **direct 也补**（`direct-billing.js`）：Worker 给出 `CCG_DIRECT_POLICY` 时，缺计费头或缺字段就补，身份行按入口配置补，只在原始 JSON 上拼接改动，其余字节不变；没有这个变量时仍原样转发。
+- 新能力 `build_identity_line_v1`、`direct_billing_v1`；核心只在服务端入口或身份行偏离默认时要求。
 
-详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1。
+详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.3。
 
 v16 `ccgateway-v16-build-prefix`（插件 0.1.73，2026-10-22 已部署 ovh）在 v15 之上：
 

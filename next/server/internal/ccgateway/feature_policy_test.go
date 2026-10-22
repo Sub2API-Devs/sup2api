@@ -343,12 +343,20 @@ func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
 	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
 	require.Equal(t, features.BuildIdentityLines{"sdk-cli": "official_cli_sdk", "claude-vscode": "none"}, p.BuildIdentityLines)
 	require.Contains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
+	// Direct fills the header and the identity line too (2026-10-22), so the
+	// choices reach the Worker, which must be able to apply them there.
 	cfg.RequestPolicy.RelayMode = "direct"
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 	require.NoError(t, err)
-	require.Empty(t, p.BuildBillingEntrypoint)
-	require.Nil(t, p.BuildIdentityLines)
+	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
+	require.Equal(t, features.BuildIdentityLines{"sdk-cli": "official_cli_sdk", "claude-vscode": "none"}, p.BuildIdentityLines)
+	require.Nil(t, p.BuildBillingSources)
+	require.Contains(t, requestPolicyCapabilities(p), features.DirectBillingCapability)
 	require.NotContains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
+	cfg.RequestPolicy.BuildBillingEntrypoint, cfg.RequestPolicy.BuildIdentityLines = "", nil
+	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	require.NotContains(t, requestPolicyCapabilities(p), features.DirectBillingCapability, "the default needs no newer Worker")
 }
 
 // Only the six entrypoints, and per entrypoint only its own lines or none.

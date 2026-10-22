@@ -15,7 +15,7 @@
 2026-10-19：请求模式只保留 `build` 和 `direct`，默认 `build`。定制 CLI 仍为 2.1.302。
 
 - `build`：Worker 提取消息组件，调用 `claude request --build` 构建并发送一次模型请求。
-- `direct`：完整 Messages body 交给 `claude request --direct` 原样转发（2026-10-22 起为纯透传，不做任何改动）。
+- `direct`：完整 Messages body 交给 `claude request --direct` 原样转发；v17 起只补缺的计费头（或缺的字段）和按入口配置的身份行，其余字节不变（[build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) §6.3）。
 
 两种模式都将工具调用返回调用方执行，不由网关运行 Agent 工具循环。原 native 选项和仅适用于 Agent 的设置控件移除。2026-10-19 的 0.1.61 / CLI v8 更新已移除 request 的 API Key-only 限制：显式 API Key 保留原隔离路线，没有 API Key 时复用 CC 原生 OAuth 读取、发送前刷新及 Bearer 认证。详见 [302 OAuth 实现与验证](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#10-request-oauth-支持2026-10-19)。
 

@@ -98,14 +98,14 @@ test('the line is chosen by the request entrypoint', () => {
 
 // Direct is a pure passthrough (2026-10-21 decision): the body goes out byte
 // for byte. Build adds the chosen line for OAuth only.
-test('claude request adds the line to OAuth build only; direct is unchanged', async () => {
+test('claude request adds the line to OAuth build; direct changes only with the Worker context', async () => {
   const { default: fsp } = await import('node:fs/promises');
   const { default: os } = await import('node:os');
   const { spawn } = await import('node:child_process');
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ccg-cli-prefix-'));
   try {
     await fsp.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity']) {
+    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy']) {
       await fsp.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
     }
     for (const [name, code] of Object.entries({
@@ -125,19 +125,28 @@ test('claude request adds the line to OAuth build only; direct is unchanged', as
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
         import {applyBuildCliPrefix} from './ccgateway-request-identity.js';
         const lines=${JSON.stringify(named)},isPrefix=v=>Object.values(lines).includes(v),isBilling=b=>String(b.text).startsWith(${JSON.stringify(vocabulary.billingHeader)});
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBuild:(b,c)=>applyBuildCliPrefix(b,c,lines,isPrefix,isBilling)});`,
+        // Direct's billing stand-in records what it was given.
+        const directBuild=async(raw,body,o)=>raw.replace('"system":','"direct":'+JSON.stringify(o)+',"system":');
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBuild:(b,c)=>applyBuildCliPrefix(b,c,lines,isPrefix,isBilling),directBuild});`,
     })) await fsp.writeFile(path.join(dir, name), code);
     const input = '{"model":"fixture","system":"Be brief.","metadata":{"user_id":"client"},"messages":[{"role":"user","content":"hi"}]}';
-    const run = (mode, apiKey) => new Promise((resolve, reject) => {
+    const run = (mode, apiKey, directPolicy) => new Promise((resolve, reject) => {
       const env = { ...process.env };
       if (apiKey) env.ANTHROPIC_API_KEY = 'fixture'; else delete env.ANTHROPIC_API_KEY;
+      if (directPolicy !== undefined) env.CCG_DIRECT_POLICY = directPolicy; else delete env.CCG_DIRECT_POLICY;
       const child = spawn(process.execPath, ['run.mjs', mode], { cwd: dir, env });
       child.on('error', reject);
-      child.on('close', async () => resolve(await fsp.readFile(path.join(dir, 'sent.json'), 'utf8')));
+      child.on('close', async () => resolve(await fsp.readFile(path.join(dir, 'sent.json'), 'utf8').catch(() => null)));
       child.stdin.end(input);
     });
     assert.equal(await run('--direct', false), input);
     assert.equal(await run('--direct', true), input);
+    // With the Worker's direct context, direct fills the header (2026-10-22):
+    // the policy and the account kind reach it, the rest stays the client's.
+    assert.equal(await run('--direct', false, '{"build_billing_entrypoint":"cli"}'), input.replace('"system":', '"direct":{"policy":{"build_billing_entrypoint":"cli"},"oauth":true},"system":'));
+    assert.equal(await run('--direct', true, '{}'), input.replace('"system":', '"direct":{"policy":{},"oauth":false},"system":'));
+    await fsp.rm(path.join(dir, 'sent.json'));
+    assert.equal(await run('--direct', false, '{"cch":1}'), null, 'an invalid context is refused before sending');
     assert.deepEqual(JSON.parse(await run('--build', false)).system, [t(interactive), t('built')]);
     // The choice is the CLI's own; it never reaches the transport.
     assert(!JSON.parse(await fsp.readFile(path.join(dir, 'keys.json'), 'utf8')).includes('identityLine'));

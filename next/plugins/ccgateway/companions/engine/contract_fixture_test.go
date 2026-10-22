@@ -26,6 +26,7 @@ type workerCLICase struct {
 	Mode     string `json:"mode"`
 	Stdin    string `json:"stdin"`
 	Identity string `json:"identity,omitempty"`
+	Direct   string `json:"direct,omitempty"`
 }
 
 func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
@@ -52,6 +53,8 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":{"foo":"x"}}}`},
+		{"direct-identity-lines", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_identity_lines":{"claude-desktop":"agent_sdk"}}`,
+			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`},
 		{"direct-passthrough", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`},
 	}
@@ -65,7 +68,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			envCapture := filepath.Join(root, "identity-env.json")
 			g := &Gateway{RequestMode: sc.mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
-					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.RequestIdentityCapability}},
+					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.RequestIdentityCapability, features.DirectBillingCapability}},
 				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 					"HOME": config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,
@@ -90,7 +93,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			escaped, _ := json.Marshal(root)
 			cases = append(cases, workerCLICase{Name: sc.name, Mode: sc.mode,
 				Stdin:    strings.ReplaceAll(strings.TrimRight(string(stdin), "\n"), string(escaped[1:len(escaped)-1]), "{{cwd}}"),
-				Identity: env[requestIdentityEnv]})
+				Identity: env[requestIdentityEnv], Direct: env[directPolicyEnv]})
 		})
 	}
 	generated, err := json.MarshalIndent(map[string]any{"cases": cases}, "", "  ")

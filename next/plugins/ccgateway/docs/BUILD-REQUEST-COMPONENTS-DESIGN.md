@@ -12,7 +12,7 @@
 - build 的请求总带计费头（2026-10-22 起）：客户端没有就补上 CLI 原生的整行，缺字段就补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。选 `worker` 时**要么用原生值，要么拒绝**：计费头无法安全改写（多个头、重复字段、格式不对）时 400；原生计费值拿不到时 503。
 - 原生环境拿不到时同样**拒绝请求（503）**，不使用猜测值。
 - 身份（`metadata.user_id`）不属于内容策略，也不可配置（2026-10-22 起）：build 有就替换、没有不加；direct 原样转发（见第 7 节）。
-- direct 是纯透传：不补计费头、不补开头行、不改身份，body 逐字节转发。
+- direct 只补计费头与身份行（2026-10-22 起，计费头两种模式都必传）：缺计费头或缺字段时补原生值，身份行按入口配置补，不改身份，其余字节原样转发（第 6.3 节）。
 - v2 与 v1 的差别是**改写发生在 CLI 而不是 Go**：v1 由 Worker 预先改写 body，v2 把原始 wire 形态交给 CLI，由 CLI 在保留原始记录的前提下改写。
 
 ## 1. 总体链路
@@ -201,14 +201,14 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 | 情况 | 行为 |
 |---|---|
-| 没有计费头（包括只在引用或围栏里出现） | 在 system 首部插入原生整行 |
-| 恰好一个计费头且格式合法 | 选 `worker` 的字段换成原生值；缺的字段追加原生值；未知字段与客户端已有的 `client` 字段原样保留。头不在首块时留在原处，开头行由 6.1 补在最前 |
+| 没有计费头（包括只在引用或围栏里出现），或计费头不在首块开头 | 在 system 首部插入原生整行；不在首块的客户端头原样留下（上游只读首块开头的头，两个头上游接受） |
+| 恰好一个计费头且格式合法 | 选 `worker` 的字段换成原生值；缺的字段追加原生值；未知字段与客户端已有的 `client` 字段原样保留（只对首块开头的头） |
 | 多个计费头（同一块或跨块）/ 同一行重复出现头部 / 字段重复 / 字段格式不合法 | 有字段选 `worker`：**400 拒绝**；全是 `client`：原样放行。都记诊断 `ambiguous` |
 | 原生值不可用 | 有字段选 `worker`：503（CLI 以 `source: internal` 报告，网关换账号重试）；全是 `client`：原样放行，记 `source_unavailable` |
 
 为什么总要补（2026-10-21 实测）：上游要求计费头同时含 `cc_version` 与 `cc_entrypoint`，缺任一个都返回 400 `x-anthropic-billing-header is a reserved keyword and may not be used in the system prompt.`，`cch` 可有可无；OAuth 的 Sonnet/Opus 请求首块没有计费头也没有开头行时返回 429。v15 及以前只在选 `worker` 时才动计费头，客户端没有计费头、且只有一个字段选 `worker` 时会插入单字段头被拒；v16 起插入的总是原生整行。
 
-计费头不在首块（2026-10-22，30 号实测，Opus/Sonnet 相同）：build 发出 `[开头行, 提示, 补齐的计费头]`，上游 200。上游只检查首块的计费头：放在后面的头缺字段或指纹不对都是 200，首尾两个头也是 200；`[提示, 计费头]` 没有开头行仍是 429。
+计费头不在首块（2026-10-22，30 号实测，Opus/Sonnet 相同）：v16 发出 `[开头行, 提示, 补齐的计费头]`，上游 200；v17 起改为在最前插原生整行，发出 `[原生计费头, 身份行, 提示, 客户端计费头]`（选「不补」时没有身份行），同样 200。上游只检查首块的计费头：放在后面的头缺字段或指纹不对都是 200，首尾两个头也是 200；`[提示, 计费头]` 没有开头行仍是 429。
 
 ### 5.6 识别用的文字全部取自原生 CC
 
@@ -273,10 +273,10 @@ OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前检查一次�
 |---|---|
 | 首块是三句之一；或首块是计费头且任一块是三句之一 | 不改（客户端的身份行不替换） |
 | 首块是计费头、没有身份行 | 在计费头后插入所选的一句；选 `none` 不插 |
-| 其他数组（含空数组） | 在最前插入所选的一句；选 `none` 时插入该入口的默认句，否则上游 429 |
+| 其他数组（含空数组；只在拿不到原生计费头时出现） | 在最前插入所选的一句；选 `none` 时插入该入口的默认句，否则上游 429 |
 | 缺省 | `[所选或默认的一句]` |
 
-API Key 账号不插入。在计费合并与身份改写之后执行，所以客户端没有计费头时结果是 `[原生计费头, 身份行, ...客户端 system]`，与原生 CC 相同。direct 不插入（v15 曾在 direct 也插入，v16 去掉）。补丁标签为 `ccgateway-v17-identity-line`（v16 `ccgateway-v16-build-prefix` 固定插 `agent_sdk`）。
+API Key 账号不插入。在计费合并与身份改写之后执行，所以客户端没有计费头时结果是 `[原生计费头, 身份行, ...客户端 system]`，与原生 CC 相同。v15 曾在 direct 也插入，v16 去掉，v17 起 direct 按同样规则插入（6.3）。补丁标签为 `ccgateway-v17-identity-line`（v16 `ccgateway-v16-build-prefix` 固定插 `agent_sdk`）。
 
 2026-10-22 在 30 号用 v17 ELF 实测（一次性放进容器，测完删除）：九种入口与选择的组合抓包都符合上表，Opus 与 Sonnet 真实上游全部 200，详见设计文档第 6 节。
 
@@ -285,6 +285,14 @@ API Key 账号不插入。在计费合并与身份改写之后执行，所以客
 `cc_version` 末尾三位是指纹：CC 取第一条非 meta 用户记录的文本（字符串内容或第一个 text 块）的第 4、7、20 个字符，加盐和版本做 sha256（`RIs` → `aW` + `Eg`，chunk-2gh4h0fv.js）。原生 CC 算指纹时 reminder 还是独立的 meta 记录，取到的是用户真正输入的文字；它们并进同一条 wire 消息、排在前面，是之后的事。
 
 build 把客户端的 wire 消息还原成记录时，reminder 已经是第一个 text 块，v15 及以前因此对 `<system-reminder>` 开头的文字算指纹，值与真 CC 不同。v16 由 `fingerprintMessages`（`request-input.js`）取第一条用户消息中第一个不以 reminder 标签开头的 text 块，补丁把 `qmn` 里的 `RIs(Aa)` 换成对它求值（只在 build 下）。用官方 `claude -p` 抓到的请求验证：按新取法算出 `b17`，与它自带的 `cc_version=2.1.304.b17` 相同；旧取法得 `159`（`test/billing-fingerprint-oracle.test.mjs`）。
+
+### 6.3 direct 的计费头与身份行（v17）
+
+direct 不经原生构造器，只在 Worker 给出 `CCG_DIRECT_POLICY`（服务端入口与身份行的选择，默认 `{}`）时由 `direct-billing.js` 处理，规则与 build 相同：
+
+- 首块开头是完整计费头：不动；缺字段：就地补原生值；没有、或不在首块开头：在最前插原生整行（`kLo` 对 `RIs` 指纹，服务端入口替换 `cc_entrypoint`）。两个字段总是“客户端，没有用服务端”。
+- 身份行（OAuth）：按最前计费头的入口选，客户端已有的不改；字符串 system 只在开头加“计费头 + 换行”，不补身份行。
+- 只在原始 JSON 文本上拼接新增的块或改写的那一个字符串，body 其余字节不变；没有 `CCG_DIRECT_POLICY`（手动运行）时原样转发。
 
 ## 7. 身份边界
 
@@ -336,10 +344,11 @@ v1 路径另有 `build_attachment_transform` 诊断事件，记录来源、改�
 | `BuildBillingCapability` | `build_billing_sources_v1` |
 | `BuildContentPreservationCapability` | `build_content_preservation_v1` |
 | `BuildIdentityCapability` | `build_identity_line_v1`（服务端入口与身份行；核心只在配置偏离默认时要求） |
+| `DirectBillingCapability` | `direct_billing_v1`（direct 补计费头与身份行；同样只在偏离默认时要求） |
 
 Worker 在 `/healthz` 声明能力；核心在发送模型正文前通过**同一账号路由**读取并核对能力与 CLI 版本。旧 Worker、未知能力、版本不符或探测失败都阻止模型发送，不跨原地更新缓存能力，避免降级后静默忽略配置。该探测是本地 Worker 查询，不是上游模型请求。
 
-`relay_mode` 为 `direct` 时不探测、不改写（纯透传）；内容配置保留但不显示，切回 build 后生效。
+`relay_mode` 为 `direct` 时只在服务端入口或身份行偏离默认时要求 `direct_billing_v1`；字段来源与附件转换保留但不显示，切回 build 后生效。
 
 ## 11. 已知缺口
 

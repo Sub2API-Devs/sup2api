@@ -7,7 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseRequestJSON } from '../request-options.js';
-import { validateRequestPolicy, runtimeContext, identityLineFor } from '../request-policy.js';
+import { validateRequestPolicy, validateDirectPolicy, runtimeContext, identityLineFor } from '../request-policy.js';
+import { applyDirectBilling } from '../direct-billing.js';
 import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
 import { createContentPolicy } from '../content-policy.js';
@@ -42,9 +43,17 @@ for (const c of fixture.cases) {
     const body = parseRequestJSON(stdin, c.mode);
     await withIdentity(c.identity, async () => {
       if (c.mode === 'direct') {
-        // Direct is a pure passthrough: the Worker gives the CLI no identity
-        // context and the body is forwarded as it is.
+        // Direct gets no identity context, only its billing context: the
+        // header and the identity line it selects are added, the rest of the
+        // body goes as the client wrote it (2026-10-22).
         assert.equal(c.identity, undefined);
+        const policy = validateDirectPolicy(c.direct);
+        assert.ok(policy);
+        const lines = { official_cli: 'Interactive line.', official_cli_sdk: 'SDK appended line.', agent_sdk: 'SDK line.' };
+        const sent = applyDirectBilling(stdin, body, { policy, oauth: true, billingHeader: vocabulary.billingHeader, nativeBilling: () => native.billing, lines,
+          isPrefix: value => Object.values(lines).includes(value), isBilling: block => block.text.startsWith(vocabulary.billingHeader) });
+        assert.deepEqual({ ...JSON.parse(sent), system: undefined }, { ...body, system: undefined });
+        if (c.name === 'direct-identity-lines') assert.equal(JSON.parse(sent).system, native.billing.replace('sdk-cli', 'claude-desktop') + '\nplain system');
         return;
       }
       // The identity context never travels in the envelope: the CLI's policy
