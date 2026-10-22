@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -111,14 +112,30 @@ func validateAccount(acc *pluginv1.Account) error {
 }
 func headers(in map[string]string) map[string]string {
 	out := map[string]string{"content-type": "application/json", "anthropic-version": "2023-06-01"}
-	// The session comes from the body's metadata.user_id (CONTRACTS §53.12);
-	// x-claude-code-agent-id is CC's own subagent header.
-	for _, key := range []string{"anthropic-version", "anthropic-beta", "x-claude-code-agent-id"} {
+	// The session comes from the body's metadata.user_id (CONTRACTS §53.12).
+	// The x-claude-code-* headers are CC's own request context (request class,
+	// subagent and prompt IDs); the Worker maps the IDs before they go upstream.
+	for _, key := range []string{"anthropic-version", "anthropic-beta"} {
 		if value := strings.TrimSpace(in[key]); value != "" {
 			out[key] = value
 		}
 	}
+	for key, valid := range agentContextHeaders {
+		if value := strings.TrimSpace(in[key]); value != "" && valid.MatchString(value) {
+			out[key] = value
+		}
+	}
 	return out
+}
+
+// agentContextHeaders are the forwarded CC context headers and the shape each
+// must have; a value of any other shape is dropped, not forwarded.
+var agentContextHeaders = map[string]*regexp.Regexp{
+	"x-claude-code-request-class":   regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
+	"x-claude-code-agent-id":        regexp.MustCompile(`^[!-~]{1,256}$`),
+	"x-claude-code-parent-agent-id": regexp.MustCompile(`^[!-~]{1,256}$`),
+	"x-claude-code-agent-type":      regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`),
+	"x-claude-code-prompt-id":       regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 }
 
 // The host resolves this exact virtual target for this plugin and account type,

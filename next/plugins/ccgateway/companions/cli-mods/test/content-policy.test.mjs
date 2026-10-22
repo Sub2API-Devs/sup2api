@@ -217,6 +217,27 @@ test('the request entrypoint is read from the header that opens the system', () 
   }
 });
 
+// The leading header says whether the request is Claude Code's and which
+// prompt it belongs to; only its cc_prompt_id value is ever rewritten.
+test('the leading header is read by field and one field is rewritten in place', () => {
+  const { leadingBilling, setLeadingBillingField } = createContentPolicy(vocabulary);
+  const header = 'x-anthropic-billing-header: cc_version=2.1.304.9a4; cc_entrypoint=sdk-cli; cch=10dd7; cc_is_subagent=true; cc_prompt_id=a606b757-b9e1-4f6f-8eb0-88ffd9569a8d;';
+  const system = [{ type: 'text', text: header }, { type: 'text', text: 'prompt', cache_control: { type: 'ephemeral' } }];
+  assert.deepEqual(leadingBilling(system), { cc_version: '2.1.304.9a4', cc_entrypoint: 'sdk-cli', cch: '10dd7', cc_is_subagent: 'true', cc_prompt_id: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d' });
+  assert.deepEqual(leadingBilling(header + '\nprompt'), leadingBilling(system));
+  assert.deepEqual(leadingBilling([{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_version=2;' }]), {}, 'a header, though unreadable');
+  for (const other of [undefined, [], 'prompt', [{ type: 'text', text: 'prompt' }, { type: 'text', text: header }], [{ type: 'text', text: 'before\n' + header }]]) {
+    assert.equal(leadingBilling(other), null, JSON.stringify(other));
+  }
+  const copy = structuredClone(system);
+  const rewritten = setLeadingBillingField(system, 'cc_prompt_id', '11111111-2222-4333-8444-555555555555');
+  assert.deepEqual(system, copy);
+  assert.equal(rewritten[0].text, header.replace('a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', '11111111-2222-4333-8444-555555555555'));
+  assert.deepEqual(rewritten.slice(1), system.slice(1));
+  assert.deepEqual(setLeadingBillingField(system, 'cc_prev_req', 'req_x'), system, 'a missing field is not added');
+  assert.deepEqual(setLeadingBillingField([{ type: 'text', text: 'prompt' }], 'cc_prompt_id', 'x'), [{ type: 'text', text: 'prompt' }]);
+});
+
 // Upstream reads only a header that opens the first block; one elsewhere is
 // left as the client wrote it and the native header goes in front (2026-10-22).
 test('a header that does not open the system gets the native one in front', () => {

@@ -215,64 +215,73 @@ func identityDigest(key []byte, values ...string) [32]byte {
 	return sum
 }
 
+// clientIdentityFields splits the client's metadata.user_id into its fields
+// and names its carrier; nil fields mean the request carries none.
+// metadata.user_id reaches us in three carriers: the identity object, a string
+// holding that object, and the legacy flat
+// user_<hex>_account_<uuid>_session_<uuid> string. Each is split into its own
+// fields, and the reply keeps the carrier's shape.
+func clientIdentityFields(raw []byte) (map[string]string, string, error) {
+	metadata, err := identityProperty(raw, "metadata")
+	if err != nil || len(metadata) == 0 || bytes.Equal(bytes.TrimSpace(metadata), []byte("null")) {
+		return nil, "", err
+	}
+	value, err := identityProperty(metadata, "user_id")
+	if err != nil || len(value) == 0 || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return nil, "", err
+	}
+	carrier := bytes.TrimSpace(value)
+	switch {
+	case len(carrier) > 0 && carrier[0] == '{':
+		fields, _, err := identityFields(carrier)
+		if err != nil {
+			return nil, "", err
+		}
+		return fields, "object", nil
+	case len(carrier) > 0 && carrier[0] == '"':
+		var userID string
+		if json.Unmarshal(carrier, &userID) != nil || utf8.RuneCountInString(userID) > 512 {
+			return nil, "", errors.New("metadata.user_id must be a string of at most 512 characters")
+		}
+		if userID == "" {
+			return nil, "", nil
+		}
+		inner := bytes.TrimSpace([]byte(userID))
+		switch match := legacyUserID.FindStringSubmatch(userID); {
+		case len(inner) > 0 && inner[0] == '{':
+			fields, present, err := identityFields(inner)
+			if err != nil {
+				return nil, "", err
+			}
+			if !present {
+				fields = map[string]string{"device_id": userID}
+			}
+			return fields, "json", nil
+		case match != nil:
+			fields := map[string]string{"device_id": match[1], "session_id": match[3]}
+			if match[2] != "" {
+				fields["account_uuid"] = match[2]
+			}
+			return fields, "flat", nil
+		default:
+			// An opaque user identifier is the whole mapping input.
+			return map[string]string{"device_id": userID}, "json", nil
+		}
+	default:
+		return nil, "", errors.New("metadata.user_id must be an object or a string")
+	}
+}
+
 // mapRequestIdentity resolves what the upstream request must carry. The client
 // value is only ever replaced when it exists: a request without an identity is
 // forwarded without metadata instead of being given one.
 func mapRequestIdentity(key, raw []byte, mode string) (requestIdentity, error) {
 	result := requestIdentity{Version: 2, Mode: mode}
-	metadata, err := identityProperty(raw, "metadata")
-	if err != nil || len(metadata) == 0 || bytes.Equal(bytes.TrimSpace(metadata), []byte("null")) {
+	fields, carrier, err := clientIdentityFields(raw)
+	if err != nil || fields == nil {
 		return result, err
 	}
-	value, err := identityProperty(metadata, "user_id")
-	if err != nil || len(value) == 0 || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-		return result, err
-	}
-	// metadata.user_id reaches us in three carriers: the identity object, a
-	// string holding that object, and the legacy flat
-	// user_<hex>_account_<uuid>_session_<uuid> string. Each is split into its
-	// own fields, and the reply keeps the carrier's shape.
-	var fields map[string]string
-	carrier := bytes.TrimSpace(value)
-	switch {
-	case len(carrier) > 0 && carrier[0] == '{':
-		if fields, _, err = identityFields(carrier); err != nil {
-			return result, err
-		}
-		result.Carrier = "object"
-	case len(carrier) > 0 && carrier[0] == '"':
-		var userID string
-		if json.Unmarshal(carrier, &userID) != nil || utf8.RuneCountInString(userID) > 512 {
-			return result, errors.New("metadata.user_id must be a string of at most 512 characters")
-		}
-		if userID == "" {
-			return result, nil
-		}
-		inner := bytes.TrimSpace([]byte(userID))
-		switch match := legacyUserID.FindStringSubmatch(userID); {
-		case len(inner) > 0 && inner[0] == '{':
-			var present bool
-			if fields, present, err = identityFields(inner); err != nil {
-				return result, err
-			}
-			if !present {
-				fields = map[string]string{"device_id": userID}
-			}
-			result.Carrier = "json"
-		case match != nil:
-			fields = map[string]string{"device_id": match[1], "session_id": match[3]}
-			if match[2] != "" {
-				fields["account_uuid"] = match[2]
-			}
-			result.Carrier = "flat"
-		default:
-			// An opaque user identifier is the whole mapping input.
-			fields = map[string]string{"device_id": userID}
-			result.Carrier = "json"
-		}
-	default:
-		return result, errors.New("metadata.user_id must be an object or a string")
-	}
+	result.Carrier = carrier
 	user, session, parent := fields["device_id"], fields["session_id"], fields["parent_session_id"]
 	if user == "" {
 		user = fields["account_uuid"]

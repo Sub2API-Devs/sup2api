@@ -16,8 +16,11 @@ import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters
 let contentPolicy;
 const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] });
 
-export async function buildRequest(components, headers, signal) {
-  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint } = nativeContentPolicy();
+// resolveAgent (request-agent.js, bound to the Worker context) picks the kind of
+// request CC builds from the client's leading billing header and first prompt;
+// without it the request is CC's native main thread.
+export async function buildRequest(components, headers, signal, resolveAgent) {
+  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint, leadingBilling, setLeadingBillingField } = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
@@ -36,6 +39,8 @@ export async function buildRequest(components, headers, signal) {
   }, contentDiagnostic);
   const input = prepareBuildInput({ ...external, systemPrompt: transformed.system, messages: transformed.messages, attachments: [] }, MDe, { preserveContent: true });
   const body = input.request, session = getRootSession();
+  const fingerprint = fingerprintMessages(transformed.messages, KF);
+  const agent = resolveAgent?.({ billing: leadingBilling(initial.systemBlocks), prompt: fingerprint[0].message.content });
   let nativeBilling;
   const clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   if (clientBetas.length && !YEr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');
@@ -61,7 +66,7 @@ export async function buildRequest(components, headers, signal) {
     : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
       : { type: 'disabled', mechanical: true };
   const options = {
-    model: body.model, querySource: 'sdk', agentContext: El(),
+    model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? El(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
     getToolPermissionContext: async () => ({ mode: 'default', alwaysAllowRules: {}, alwaysDenyRules: {}, alwaysAskRules: {}, additionalWorkingDirectories: new Map() }),
     agents: [], allowedAgentTypes: [], mcpClients: [],
@@ -76,7 +81,7 @@ export async function buildRequest(components, headers, signal) {
     ccgatewayWireMessages: transformed.messages,
     ccgatewayWireTools: wireToolDefinitions(external.tools),
     ccgatewayCaptureBilling: value => { nativeBilling = value; },
-    ccgatewayFingerprintMessages: fingerprintMessages(transformed.messages, KF),
+    ccgatewayFingerprintMessages: fingerprint,
   };
   let built;
   for await (const event of Kvt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options })) {
@@ -90,6 +95,8 @@ export async function buildRequest(components, headers, signal) {
   // remain authoritative, including intentional omission of those fields.
   built = mergeAdditionalParameters(built, external.parameters);
   built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
+  // The client's header names its prompt; it must match the mapped prompt header.
+  if (agent?.billingPromptId) built.system = setLeadingBillingField(built.system, 'cc_prompt_id', agent.billingPromptId);
   // The identity line follows the entrypoint the header now carries.
   const identityLine = identityLineFor(policy, billingEntrypoint(built.system));
   const outgoingHeaders = new Headers(headers);
@@ -97,5 +104,5 @@ export async function buildRequest(components, headers, signal) {
   delete built.betas;
   if (betas.length) outgoingHeaders.set('anthropic-beta', betas.join(','));
   else outgoingHeaders.delete('anthropic-beta');
-  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders), identityLine };
+  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
 }

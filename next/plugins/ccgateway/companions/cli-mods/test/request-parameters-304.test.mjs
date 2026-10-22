@@ -143,3 +143,30 @@ test('304 adapter rejects invalid generation input before any native build invoc
     assert.equal(fixture.native.calls,0,'invalid input cannot invoke the native builder or transport');
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });
+
+// The agent context decides the kind of request CC builds: it sees the client's
+// leading header and first prompt (not its reminders), its query source and
+// agent context reach the native builder, and the client's cc_prompt_id is
+// rewritten to the mapped prompt ID the request header will carry.
+test('304 adapter builds the client kind of request from the agent context', async () => {
+  const fixture=await adapterFixture();
+  try {
+    const header='x-anthropic-billing-header: cc_version=2.1.304.9a4; cc_entrypoint=sdk-cli; cch=10dd7; cc_is_subagent=true; cc_prompt_id=a606b757-b9e1-4f6f-8eb0-88ffd9569a8d;';
+    const reminderOpen=vocabulary.reminder[0];
+    const components={model:'m',systemPrompt:[{type:'text',text:header},{type:'text',text:'agent prompt'}],messages:[{role:'user',content:[{type:'text',text:reminderOpen+'\nctx\n'+vocabulary.reminder[1]},{type:'text',text:'Reply with OK.'}]}],parameters:{max_tokens:16},stream:false};
+    let seen;
+    const agentContext={agentType:'subagent',agentId:'a0123456789abcdef'};
+    const result=await fixture.adapter.buildRequest(components,{},new AbortController().signal,facts=>{seen=facts;return {querySource:'agent:builtin:general-purpose',agentContext,promptId:'11111111-2222-4333-8444-555555555555',billingPromptId:'11111111-2222-4333-8444-555555555555'};});
+    assert.equal(seen.billing.cc_is_subagent,'true');
+    assert.equal(seen.prompt,'Reply with OK.');
+    assert.equal(fixture.native.captured.options.querySource,'agent:builtin:general-purpose');
+    assert.equal(fixture.native.captured.options.agentContext,agentContext);
+    assert.equal(result.body.system[0].text,header.replace('a606b757-b9e1-4f6f-8eb0-88ffd9569a8d','11111111-2222-4333-8444-555555555555'));
+    assert.equal(result.agent.querySource,'agent:builtin:general-purpose');
+    // Without a context the request stays CC's native main thread.
+    const plain=await fixture.adapter.buildRequest(components,{},new AbortController().signal);
+    assert.equal(fixture.native.captured.options.querySource,'sdk');
+    assert.equal(plain.body.system[0].text,header);
+    assert.equal(plain.agent,undefined);
+  } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
+});

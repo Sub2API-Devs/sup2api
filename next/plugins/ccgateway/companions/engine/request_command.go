@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -227,6 +228,31 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		}
 		identity = &mapped
 	}
+	// A CLI that rebuilds the client's kind of request (main thread, subagent,
+	// compaction) gets the client's agent context. Direct then also adopts the
+	// client's session, so the session header agrees with the metadata the body
+	// carries unchanged. Console tests are the gateway's own requests and keep
+	// the CLI's native context.
+	var agent *requestAgent
+	if !probe && g.CLIInfo.supports(features.RequestAgentContextCapability) {
+		resolved, agentErr := g.resolveRequestAgent(g.runner(r.Context()).baseEnv(), raw, r.Header, requestMode)
+		if agentErr != nil {
+			fail(400, "invalid_request_error", agentErr.Error())
+			return
+		}
+		agent = &resolved
+		headers := make([]string, 0, len(resolved.Client))
+		for name := range resolved.Client {
+			headers = append(headers, name)
+		}
+		slices.Sort(headers)
+		d.trace("request_agent", Object{"client_headers": headers, "map": resolved.Map, "keyed": resolved.Key != ""})
+		if requestMode == "direct" && g.requestIdentityEnabled {
+			if mapped, _ := mapRequestIdentity(nil, raw, "client"); mapped.Session != "" {
+				identity = &mapped
+			}
+		}
+	}
 	d.request(raw, r.Header)
 	input := raw
 	if err := features.ValidateBillingEntrypoint(policy.Entrypoint); err != nil {
@@ -370,6 +396,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	if directPolicy != nil {
 		cmd.Env = envWith(cmd.Env, map[string]string{directPolicyEnv: string(directPolicy)})
+	}
+	if agent != nil {
+		cmd.Env = envWith(cmd.Env, map[string]string{requestAgentEnv: agent.env()})
 	}
 	// The patched request command runs before the interactive CLI initializer.
 	// Apply its non-interactive entrypoint default at process startup; an

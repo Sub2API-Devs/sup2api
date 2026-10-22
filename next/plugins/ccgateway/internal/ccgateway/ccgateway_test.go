@@ -96,6 +96,53 @@ func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 		t.Fatal("API keys share session scope")
 	}
 }
+
+// CC's request context headers reach the Worker; a malformed value is dropped.
+func TestAgentContextHeadersForwarded(t *testing.T) {
+	p := New()
+	in := &pluginv1.BuildUpstreamRequestRequest{
+		Account: &pluginv1.Account{Platform: PlatformID, Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: "{}"},
+		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolMessages, UserId: 1, ApiKeyId: 2},
+		InboundHeaders: map[string]string{
+			"x-claude-code-request-class":   "subagent",
+			"x-claude-code-agent-id":        "a12268251d7ed891f",
+			"x-claude-code-parent-agent-id": "ad870fd7d5b0b15e6",
+			"x-claude-code-agent-type":      "general-purpose",
+			"x-claude-code-prompt-id":       "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d",
+			"x-claude-code-session-id":      "475d3bc6-d49a-4c42-8d1a-f5d9ab945851",
+		},
+	}
+	r, err := p.BuildUpstreamRequest(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range in.InboundHeaders {
+		if key == "x-claude-code-session-id" {
+			if _, ok := r.Headers[key]; ok {
+				t.Fatal("the session comes from the body, not the header")
+			}
+			continue
+		}
+		if r.Headers[key] != value {
+			t.Fatalf("%s = %q, want %q", key, r.Headers[key], value)
+		}
+	}
+	for key, bad := range map[string]string{
+		"x-claude-code-request-class": "Main Thread",
+		"x-claude-code-agent-id":      "a b",
+		"x-claude-code-agent-type":    "../x",
+		"x-claude-code-prompt-id":     "not-a-uuid",
+	} {
+		in.InboundHeaders = map[string]string{key: bad}
+		r, err = p.BuildUpstreamRequest(context.Background(), in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := r.Headers[key]; ok {
+			t.Fatalf("malformed %s forwarded", key)
+		}
+	}
+}
 func TestManagedRejectsCredentialOrTargetOverrides(t *testing.T) {
 	p := New()
 	ctx := context.Background()

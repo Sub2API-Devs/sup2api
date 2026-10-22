@@ -1,6 +1,12 @@
 # Claude Code mods 工具注入扩展
 
-当前目标为 **2.1.304 / `ccgateway-v17-identity-line`**（插件 0.1.74，2026-10-22 已部署 ovh）。v17 在 v16 之上（2026-10-22 用户决定）：
+当前代码为 **2.1.304 / `ccgateway-v18-agent-context`**（未发布；线上仍是 v17）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
+
+- Worker 经 `CCG_REQUEST_AGENT` 给出客户端的 `x-claude-code-*` 请求头和会话范围的映射密钥；`request-agent.js` 判断主线程、子代理、压缩（没有请求头时看客户端首块计费头的 `cc_is_subagent`，不是 CC 的请求按自定义子代理），把 `querySource`、子代理上下文、`promptId` 交给 CC 自己的代码，由它写出 request-class、agent-type、agent-id、parent-agent-id、prompt-id 请求头、缓存时长和计费头的子代理字段。
+- build 在 OAuth 账号上映射 agent-id、parent-agent-id、prompt-id（同时改写计费头 `cc_prompt_id`）；direct 用客户端原值。
+- 新能力 `request_agent_context_v1`。
+
+v17 `ccgateway-v17-identity-line`（插件 0.1.74，2026-10-22 已部署 ovh）在 v16 之上（2026-10-22 用户决定）：
 
 - **服务端入口六选一**：`build_billing_entrypoint`（`cli`、`sdk-cli`、`sdk-ts`、`sdk-py`、`claude-desktop`、`claude-vscode`，默认 `sdk-cli`）替换原生整行里的 `cc_entrypoint`，补齐计费头或入口选 `worker` 时写入它。
 - **身份行按入口选**：`build_identity_lines` 给每个入口选一句（三句都由 `n1n` 生成，按名字 `official_cli`、`official_cli_sdk`、`agent_sdk` 取）或 `none`；默认与真实客户端一致（`cli` 终端那句，`sdk-*` SDK 那句，桌面版与 VS Code 带追加提示那句）。入口取自首块开头的计费头，`claude-desktop-3p` 按 `claude-desktop`，其他按服务端入口。

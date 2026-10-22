@@ -75,6 +75,9 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.requestIdentityEnabled {
 		out = append(out, features.RequestIdentityCapability)
 	}
+	if g.CLIInfo.supports(features.RequestAgentContextCapability) {
+		out = append(out, features.RequestAgentContextCapability)
+	}
 	return out
 }
 

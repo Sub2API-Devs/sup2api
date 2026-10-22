@@ -210,7 +210,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v17-identity-line');
+  assert.equal(patchManifest.extension, 'ccgateway-v18-agent-context');
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   assert(patchManifest.capabilities.includes('build_identity_line_v1'));
   assert(patchManifest.capabilities.includes('direct_billing_v1'));
@@ -222,8 +222,13 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   const cli = fs.readFileSync(path.join(output, 'cli.js'), 'utf8');
   const lines = '\\{official_cli:ccgPrefix\\(\\{isNonInteractive:!1,hasAppendSystemPrompt:!1\\}\\),official_cli_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!0\\}\\),agent_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!1\\}\\)\\}';
   assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
-  assert.match(cli, new RegExp('nativeBilling:\\(\\)=>header\\(fingerprint\\(prompt\\(Array\\.isArray\\(body\\.messages\\)\\?body\\.messages:\\[\\],reminder\\)\\),agent\\(\\)\\),lines:' + lines));
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1"\]/);
+  assert.match(cli, new RegExp('nativeBilling:\\(\\)=>header\\(fingerprint\\(prompt\\(Array\\.isArray\\(body\\.messages\\)\\?body\\.messages:\\[\\],reminder\\)\\),o\\.agentContext\\?\\?agent\\(\\),void 0,o\\.promptId\\),lines:' + lines));
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1"\]/);
+  assert(patchManifest.capabilities.includes('request_agent_context_v1'));
+  assert(patchManifest.supportFiles['ccgateway-request-agent.js']);
+  // The client's kind of request is chosen with CC's own query source naming,
+  // billing header and prompt fingerprint text.
+  assert.match(cli, /let\{Zoe:ccgQuerySource\}=await import\("\.\/chunk-m5q1b1c4\.js"\).*let ccgBilling=ccgBillingFor\(ccgHeader\);.*directBuild:ccgDirect,agentNative:ccgAgent\}\)\)/);
   // Installed support modules import each other by their installed names.
   assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-content-policy\.js'/);
   assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);

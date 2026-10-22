@@ -1,6 +1,6 @@
-# 子代理请求上下文设计（草案）
+# 子代理请求上下文设计
 
-2026-10-22。依据见 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md](CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) 第 9–11 节：build 原样保留子代理的提示词、消息和计费头，但请求头按主线程生成（`request-class: main`，没有 agent-id、agent-type、prompt-id），还多带了 1 小时缓存的 beta。原因是请求命令和原生构建都写死了 `querySource: 'sdk'` 和主线程上下文。
+2026-10-22。已实现为 CLI v18（`ccgateway-v18-agent-context`，能力 `request_agent_context_v1`），未发布，实施结果见第 9 节。依据见 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md](CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) 第 9–11 节：build 原样保留子代理的提示词、消息和计费头，但请求头按主线程生成（`request-class: main`，没有 agent-id、agent-type、prompt-id），还多带了 1 小时缓存的 beta。原因是请求命令和原生构建都写死了 `querySource: 'sdk'` 和主线程上下文。
 
 ## 1. 已定的规则（2026-10-22 用户决定）
 
@@ -78,3 +78,30 @@ direct 的 body 原样转发，客户端的 `metadata.session_id`、`cc_prompt_i
 
 1. CC 请求的 compaction / auxiliary：querySource 的取法未实测，第一版按第 2 节，测完再定。
 2. agent-type 缺失时是否做内置提示词匹配：第一版不做。
+
+## 9. 实施结果（2026-10-22，未发布）
+
+**实现**
+- 插件 `internal/ccgateway/ccgateway.go`：放行 `x-claude-code-request-class`、`agent-id`、`parent-agent-id`、`agent-type`、`prompt-id`，格式不对的丢掉。
+- Worker `engine/request_agent.go`：读这些头，算出会话范围的映射密钥 `identityDigest(账号密钥, "agent-context", S)`，经 `CCG_REQUEST_AGENT` 交给 CLI（build 且 OAuth 时 `map: true`）；API Key 账号不给密钥；登录邮箱未知时用 Worker 私钥派生。direct 另给客户端模式的身份上下文，让 CLI 采用客户端会话。控制台测试不给。
+- CLI `request-agent.js`：判断请求类别、派生 ID（账号映射在 CLI 内用会话密钥做 HMAC，标签 agent/prompt 分开，agent 与 parent 同一标签），选出 `querySource`（CC 自己的 `Zoe`）、子代理上下文和 `promptId`。请求命令把它们交给 CC 创建客户端的 `sF`，build 交给原生构建，direct 交给补计费头的 `kLo`；build 改写客户端计费头的 `cc_prompt_id`。判断用的计费头前缀、首条提示文字都取自原生（`oJe`、`KF` + `fingerprintMessages`）。
+- 第 3 节与设计的差别：会话密钥由 Worker 算好交给 CLI，账号密钥不出 Worker；派生在 CLI 里做，因为判断 CC 请求要用 CLI 的原生词表。
+
+**测试**：插件、Worker（含新测试 `TestRequestAgentContext`）、contracts、cli-mods 152 项全过。
+
+**30 号抓包**（v18 ELF sha256 `eb151345…`，线上 v17 Worker 生成 build 输入，v18 CLI 按 v18 Worker 的方式带上下文发到假上游）：
+
+| 请求 | request-class | agent-type | agent-id / parent | prompt-id | 1 小时 beta | 计费头 |
+|---|---|---|---|---|---|---|
+| build 主线程 | main | — | — | 映射值 | 有 | `cc_prompt_id` 改为映射值，turn 字段保留 |
+| build 子代理 | subagent | general-purpose | 映射值 | 同主线程 | **无** | `cc_is_subagent=true`，`cc_prompt_id` 映射值 |
+| build 嵌套子代理 | subagent | Explore | 新值 / parent = 上一行的 agent-id | 同上 | 无 | 同上 |
+| build 子代理，无请求头 | subagent | custom | 由首条提示派生 | 由 `cc_prompt_id` 映射 | 无 | 同上 |
+| build 压缩 | compaction | — | — | 同主线程 | 有（原生按 `compact` 判断） | 同主线程 |
+| build 非 CC | subagent | custom | 派生 | 派生 | 无 | 原生补的整行带 `cc_is_subagent=true` 和同一 `cc_prompt_id` |
+| direct 子代理 | subagent | general-purpose | 客户端原值 | 客户端原值 | 无 | 原样 |
+| direct 非 CC | subagent | custom | 派生 | 派生 | 无 | 补的头带 `cc_is_subagent=true` 和同一 `cc_prompt_id` |
+
+第 4 节的关联逐条核对通过：子代理两轮 agent-id 相同；嵌套 parent 等于上层 agent-id；子代理、压缩与主线程 prompt-id 相同；每个请求的 prompt-id 头等于计费头 `cc_prompt_id`；同一会话 session-id 相同且等于 metadata；direct 全部是客户端原值。没有上下文时仍是原来的主线程行为。
+
+**未完成**：30 号的 OAuth 令牌在 2026-10-22 04:22–05:23（UTC）之间被上游吊销（此后所有请求 401 "OAuth access token has been revoked."，包括线上用户请求），真实上游测试没有做。需要 30 号重新授权后补测，再发布。

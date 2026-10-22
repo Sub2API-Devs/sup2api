@@ -33,7 +33,7 @@ references to preserve message/block positions. Generation fields go in paramete
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-export async function runRequestCommand(args, { oauthBeta, identityBuild, prefixBuild, directBuild } = {}) {
+export async function runRequestCommand(args, { oauthBeta, identityBuild, prefixBuild, directBuild, agentNative } = {}) {
   const controller = new AbortController();
   let response, interrupted = false, timedOut = false, outputError, deadline;
   let phase = 'input', responseStarted = false;
@@ -74,19 +74,31 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     deadline = setTimeout(() => { timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
     deadline.unref?.();
     let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout };
+    // The Worker's agent context makes CC build the client's kind of request
+    // (request-agent.js); without it the request is CC's native main thread.
+    let resolveAgent, agent;
+    if (process.env.CCG_REQUEST_AGENT && agentNative) {
+      const { readRequestAgent, resolveAgentContext } = await import('./ccgateway-request-agent.js');
+      const context = readRequestAgent();
+      resolveAgent = facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor });
+    }
+    if (resolveAgent && options.mode === 'direct') {
+      agent = resolveAgent({ billing: agentNative.leadingBilling(body.system), prompt: agentNative.prompt(Array.isArray(body.messages) ? body.messages : []) });
+    }
     // Direct fills only a missing billing header or field and the identity
     // line chosen for its entrypoint (2026-10-22), and only with the Worker's
     // context; without it, as when run by hand, it forwards the body unchanged.
     const directPolicy = options.mode === 'direct' ? validateDirectPolicy(process.env.CCG_DIRECT_POLICY) : undefined;
     if (directPolicy && directBuild) {
       phase = 'build';
-      const sent = await directBuild(rawBody, body, { policy: directPolicy, oauth: !apiKey });
+      const sent = await directBuild(rawBody, body, { policy: directPolicy, oauth: !apiKey, agentContext: agent?.agentContext, promptId: agent?.promptId });
       if (sent !== rawBody) outgoing = { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
     }
     if (options.mode === 'build') {
       phase = 'build';
       const { buildRequest } = await import('./ccgateway-request-build.js');
-      const { identityLine, ...built } = await buildRequest(body, options.headers, controller.signal);
+      const { identityLine, agent: builtAgent, ...built } = await buildRequest(body, options.headers, controller.signal, resolveAgent);
+      agent = builtAgent;
       outgoing = { ...built, timeoutMs: timeout };
       // Build always invents metadata; the identity source decides what the
       // upstream request really carries, and a client that sent none gets none.
@@ -101,7 +113,10 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
     phase = 'transport';
     response = await openModelRequest(outgoing, 'cli-request', controller.signal, async init => {
-      const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: 'sdk', querySource: 'sdk', agentContext: El() });
+      const querySource = agent?.querySource ?? 'sdk';
+      const client = await eF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: querySource, querySource,
+        ...agent?.explicitClass !== undefined && { requestClass: agent.explicitClass }, agentContext: agent?.agentContext ?? El(),
+        ...agent?.promptId !== undefined && { promptId: agent.promptId } });
       if (!(client instanceof rbe)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
       return client;
     }, Zre);

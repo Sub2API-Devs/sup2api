@@ -22,6 +22,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 		{"F-BUILD-BILLING", "build 计费归属来源", BuildBillingCapability},
 		{"F-BUILD-IDENTITY-LINE", "build 计费头入口与身份行", BuildIdentityCapability},
 		{"F-DIRECT-BILLING", "direct 补计费头与身份行", DirectBillingCapability},
+		{"F-REQUEST-AGENT-CONTEXT", "按客户端还原主代理/子代理请求", RequestAgentContextCapability},
 		{"F-BUILD-PRESERVATION", "build 内容保真", BuildContentPreservationCapability},
 		{"F-REQUEST-POLICY-MODE", "按请求选择 direct/build", RequestPolicyModeCapability},
 	} {

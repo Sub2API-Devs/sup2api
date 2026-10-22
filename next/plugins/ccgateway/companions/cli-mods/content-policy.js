@@ -48,6 +48,8 @@ export function createContentPolicy(vocabulary) {
     applyContentPolicy: (input, policy, native, emitDiagnostic) => applyContentPolicy(c, input, policy, native, emitDiagnostic),
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
+    leadingBilling: system => leadingBilling(c, system),
+    setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
   };
 }
 
@@ -59,6 +61,8 @@ export function createBillingPolicy(billingHeader) {
   return {
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
+    leadingBilling: system => leadingBilling(c, system),
+    setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
   };
 }
 function error(message, status = 400) {
@@ -402,8 +406,28 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
 // billingEntrypoint is the cc_entrypoint of the header that opens the first
 // block, the one upstream reads; undefined without a usable one.
 function billingEntrypoint(c, system) {
+  return leadingBilling(c, system)?.cc_entrypoint;
+}
+
+// leadingBilling is the fields of the header that opens the first block, by
+// name: Claude Code puts its header there (the request is CC's). null when the
+// first block does not open with the header; an unreadable header has no fields.
+function leadingBilling(c, system) {
   const first = typeof system === 'string' ? system : Array.isArray(system) && system[0]?.type === 'text' ? system[0].text : undefined;
-  if (typeof first !== 'string') return undefined;
+  if (typeof first !== 'string' || !first.startsWith(c.billingHeader)) return null;
   const result = billingCandidate(c, first);
-  return result.conflict ? undefined : result.candidates.find(candidate => candidate.line.start === 0)?.keys.get('cc_entrypoint')?.value;
+  const header = result.conflict ? undefined : result.candidates.find(candidate => candidate.line.start === 0);
+  return Object.fromEntries([...header?.keys ?? []].map(([field, { value }]) => [field, value]));
+}
+
+// setLeadingBillingField replaces one existing field value of that header and
+// nothing else; a header without the field is left as it is.
+function setLeadingBillingField(c, system, field, value) {
+  if (!Array.isArray(system) || system[0]?.type !== 'text' || typeof system[0].text !== 'string') return system;
+  const result = billingCandidate(c, system[0].text);
+  const existing = result.conflict ? undefined : result.candidates.find(candidate => candidate.line.start === 0)?.keys.get(field);
+  if (!existing) return system;
+  const blocks = structuredClone(system);
+  blocks[0].text = splice(blocks[0].text, [{ start: existing.start, end: existing.end, value }]);
+  return blocks;
 }
