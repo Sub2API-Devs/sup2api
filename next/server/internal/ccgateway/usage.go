@@ -40,8 +40,9 @@ func (s *Service) QueryAccountQuota(ctx context.Context, accountID int64, operat
 	if operation != "usage" {
 		return nil, usageFail("unsupported", "Unsupported quota operation.")
 	}
-	var active bool
-	if err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1 AND plugin_key='ccgateway' AND type='managed' AND status='active' AND deleted_at IS NULL)`, accountID).Scan(&active); err != nil || !active {
+	// A disabled account is only kept out of scheduling; its usage is queried.
+	var exists bool
+	if err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1 AND plugin_key='ccgateway' AND type='managed' AND deleted_at IS NULL)`, accountID).Scan(&exists); err != nil || !exists {
 		return nil, usageFail("account_unavailable", "The account is not available for quota queries.")
 	}
 	cfg, e := s.Load(ctx)

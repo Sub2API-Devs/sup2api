@@ -63,11 +63,13 @@ func TestQueryAccountQuotaRawRuntime(t *testing.T) {
 			}
 			_, err = f.s.QueryAccountQuota(t.Context(), id+100000, "usage")
 			require.Error(t, err)
+			require.Equal(t, before, calls.Load())
+			// A disabled account is only kept out of scheduling; its usage is queried.
 			_, err = f.db.Pool.Exec(t.Context(), `UPDATE accounts SET status='disabled' WHERE id=$1`, id)
 			require.NoError(t, err)
 			_, err = f.s.QueryAccountQuota(t.Context(), id, "usage")
-			require.Error(t, err)
-			require.Equal(t, before, calls.Load())
+			require.NoError(t, err)
+			require.Equal(t, before+1, calls.Load())
 		})
 	}
 }

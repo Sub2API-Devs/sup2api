@@ -471,7 +471,7 @@ async function runPluginAction(a: Account, action: AccountAction) {
     } else if (typeof out?.refreshed === 'boolean') {
       const time = typeof out.expires_at === 'string' ? formatDateTime(out.expires_at) : ''
       toast(t(out.refreshed ? 'accounts.pluginActions.tokenRefreshed' : 'accounts.pluginActions.tokenValid', { time }), 'success')
-      if (hasQuota(a.quota) && a.status === 'active') void quotaRefresh.refresh(a.id)
+      if (hasQuota(a.quota)) void quotaRefresh.refresh(a.id)
     } else {
       toast(t('accounts.pluginActions.done', { name }), 'success')
     }

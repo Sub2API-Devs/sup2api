@@ -60,7 +60,6 @@ const (
 	refreshInProgress = "in_progress" // another node or request holds the lock
 	refreshRejected   = "rejected"    // these exact credentials were refused for good
 	refreshChanged    = "changed"     // the account changed while renewing; nothing saved
-	refreshInactive   = "inactive"    // the sweep only renews active accounts
 )
 
 // RefreshView is the credential refresh state of an account in the API.
@@ -152,9 +151,9 @@ func (s *Service) refreshCredentials(c *gin.Context) {
 	httpapi.OK(c, out)
 }
 
-// refreshAccount renews the credentials of one account. force skips the
-// expiry, rejected-credentials and active-status checks (an administrator
-// asked). Upstream and plugin failures are recorded and reported in the
+// refreshAccount renews the credentials of one account, enabled or not (a
+// disabled account is only kept out of scheduling). force skips the expiry
+// and rejected-credentials checks (an administrator asked). Upstream and plugin failures are recorded and reported in the
 // outcome; only database and lock errors are returned.
 func (s *Service) refreshAccount(ctx context.Context, id int64, force bool) (*RefreshOutcome, error) {
 	release, held, err := s.lockRefresh(ctx, id)
@@ -180,9 +179,6 @@ func (s *Service) refreshAccount(ctx context.Context, id int64, force bool) (*Re
 	decl, bt := s.refreshDecl(a.PluginKey, a.Type)
 	if decl == nil {
 		return &RefreshOutcome{Skipped: refreshNotDue}, nil
-	}
-	if !force && a.Status != "active" {
-		return s.refreshOutcome(ctx, id, &RefreshOutcome{Skipped: refreshInactive})
 	}
 	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
@@ -467,13 +463,13 @@ func (s *Service) SweepRefresh(ctx context.Context) (int, error) {
 	return renewed, ctx.Err()
 }
 
-// dueAccounts reads one page of active accounts of the refreshing types
+// dueAccounts reads one page of accounts of the refreshing types
 // after id `after` and returns those that look due on this reading
 // (refreshAccount checks again under the lock), the last id read and how
 // many rows were read.
 func (s *Service) dueAccounts(ctx context.Context, keys []string, after int64) (due []int64, last int64, n int, err error) {
 	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.plugin_key, a.type, a.credentials_enc FROM accounts a
-		WHERE a.deleted_at IS NULL AND a.status = 'active' AND a.plugin_key || '/' || a.type = ANY($1) AND a.id > $2
+		WHERE a.deleted_at IS NULL AND a.plugin_key || '/' || a.type = ANY($1) AND a.id > $2
 		ORDER BY a.id LIMIT $3`, keys, after, refreshPage)
 	if err != nil {
 		return nil, 0, 0, err

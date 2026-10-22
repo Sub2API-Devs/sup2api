@@ -256,12 +256,12 @@ func TestQuotaLifecycleEnvironmentPendingIsReady(t *testing.T) {
 	require.Equal(t, 200, code, fmt.Sprint(out))
 	require.EqualValues(t, 2, up.calls.Load())
 
+	// A disabled account is only kept out of scheduling; its quota is queried.
 	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled' WHERE id=$1`, id)
 	require.NoError(t, err)
 	code, out = e.do("GET", path, nil)
-	require.Equal(t, 409, code, fmt.Sprint(out))
-	require.Equal(t, "account_not_active", reasonOf(out))
-	require.EqualValues(t, 2, up.calls.Load())
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.EqualValues(t, 3, up.calls.Load())
 }
 
 func TestQuotaInitialRecordingWithSchedulingOff(t *testing.T) {
@@ -317,12 +317,18 @@ func TestQuotaAutomaticInactiveAndAdmission(t *testing.T) {
 	require.Zero(t, up.calls.Load())
 	e.svc.d.CanWork = func() bool { return true }
 	require.NoError(t, e.svc.sweepQuotas(t.Context()))
-	require.EqualValues(t, 1, up.calls.Load())
+	// A disabled account is only kept out of scheduling: like any account
+	// with scheduling off, it gets its initial recording, then no automatic
+	// refresh.
+	require.EqualValues(t, 2, up.calls.Load())
 	snapshots, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id, off})
 	require.NoError(t, err)
 	require.NotNil(t, snapshots[id])
-	require.Nil(t, snapshots[off])
-	require.EqualValues(t, 1, up.calls.Load())
+	require.NotNil(t, snapshots[off])
+	_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET next_check_at=now()-interval '1 second',last_active_at=now()-interval '31 minutes'`)
+	require.NoError(t, err)
+	require.NoError(t, e.svc.sweepQuotas(t.Context()))
+	require.EqualValues(t, 3, up.calls.Load(), "only the schedulable account is refreshed again")
 }
 
 type heldQuotaPlugin struct {

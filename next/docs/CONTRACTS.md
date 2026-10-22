@@ -2626,7 +2626,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 - 类型不支持额度：`{supported: false, source: "", updated_at: null, error: "", windows: []}`，不访问上游。
 - 是否主动查询（仅 `quota.query` 类型）：非强制请求距 `last_active_at` 不足 30 分钟时直接返回快照；有 `next_check_at` 则在满足该下限后按调度时间决定。没有调度时间时，快照 `updated_at` 不足 30 分钟（被动或主动都算）也直接返回；失败重试同样等待 30 分钟。手动 `force=true` 跳过这些新鲜度、负缓存、调度时间与时间间隔限制，完成后可立即再次刷新；前端同样没有刷新冷却。同一节点同一账号正在进行的查询经 singleflight 合并；跨节点由 `LeaseAccountQuota` 的有效租约阻止并发查询，抢不到的直接返回当前快照。后台候选筛选和实际领取租约使用相同的 30 分钟下限，旧的提前调度记录也不能绕过；强制刷新仍不绕过有效租约。
-- 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。账号此刻不能查询时（2026-10-20）不再静默返回旧快照，而是 409 `conflict`，`details.reason` 为 `runtime_not_ready`（生命周期运行环境未同步，见 §44.7）或 `account_not_active`（账号非 `active`），控制台按原因码提示。
+- 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。账号此刻不能查询时（2026-10-20）不再静默返回旧快照，而是 409 `conflict`，`details.reason` 为 `runtime_not_ready`（生命周期运行环境未同步，见 §44.7），控制台按原因码提示。原因码 `account_not_active` 于 2026-10-22 取消：停用的账号照常查询额度（见 §49 末条）。
 - 窗口顺序、名称与短标签由插件的 `quota.windows` 声明；未声明的窗口按通用回退规则展示 key。`resets_at` 已过仅表示等待核验，返回 `expired: true`，保留上次实际观测的使用率、重置时间和状态；不得把时间经过伪装成上游已确认恢复。窗口可附 `label`、`short_label` 本地化文本，快照附 `next_check_at` 与 `refresh_status`（`pending` / `ready` / `error`）。
 - 控制台配额窗口始终竖排（包括紧凑列表），显示最近观测时间，不显示下次查询时间或独立刷新按钮。点击配额区域立即强制刷新；键盘 Enter/空格同样可用，进行中显示状态并阻止重复点击。列表和账号详情复用同一组件。
 
@@ -3340,7 +3340,8 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **不可用的代理**（绑定的记录不存在——草稿没有外键——或协议不是 http/https/socks5）：不重写配置，容器保持原样；需要运行环境的操作（模型请求与测试、授权、重新授权、刷新令牌、额度、请求日志、CLI 管理）回 `proxy_unavailable`。**任何情况都不回退直连**。
 - **删除的账号**：运行环境停止（有清理意图时清除，§49.13），原因 `account_deleted`；`status` 为 `blocked`。
 - 原因码 `account_disabled` 取消；`no_proxy` 早已不再产生，控制台一并删除。
-- 调度与额度查询不变：仍只使用 `status='active'` 的账号。
+- 调度不变：只使用 `status='active'` 且可调度的账号。
+- 2026-10-22 用户决定：**账号停用只限制调度，其他全部不限制**。停用的账号照常：手动与后台额度查询（后台刷新仍按“可调度或从未查询过”）、被动额度采样、CCGateway 用量查询、凭证刷新（含后台）、异步任务结算。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 

@@ -126,12 +126,20 @@ func TestCredentialRefresh(t *testing.T) {
 		t.Fatalf("sweep without declaration: %d %v", n, err)
 	}
 	e.gen.types[0].Type.Refresh = &manifest.AccountRefresh{} // 30 minutes ahead
+	// A disabled account is only kept out of scheduling: its credentials are
+	// renewed like any other's.
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'disabled', schedulable = false WHERE id = $1`, due); err != nil {
+		t.Fatal(err)
+	}
 
 	// The sweep renews only the account inside the window, merging the
 	// patch: renewed fields replaced, null removed, the rest kept.
 	n, err := e.svc.SweepRefresh(ctx)
 	if err != nil || n != 1 || up.calls.Load() != 1 {
 		t.Fatalf("sweep: renewed %d, err %v, upstream calls %d", n, err, up.calls.Load())
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'active', schedulable = true WHERE id = $1`, due); err != nil {
+		t.Fatal(err)
 	}
 	c := e.creds(due)
 	if c["access_token"] != "at-2" || c["refresh_token"] != "rt-2" || c["api_key"] != "sk-good-key-123" {

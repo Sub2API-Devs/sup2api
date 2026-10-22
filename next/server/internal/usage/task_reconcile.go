@@ -52,7 +52,8 @@ func (s *Service) acquireTaskAccount(ctx context.Context, e *settleEntry) (conte
 		return ctx, nil, nil, nil, errTaskDeferred
 	}
 	a, err := s.rec.Accounts.Load(ctx, *e.accountID)
-	if err != nil || a == nil || a.PluginKey != e.pluginKey || a.Status != "active" {
+	// A disabled account is only kept out of scheduling: its tasks still settle.
+	if err != nil || a == nil || a.PluginKey != e.pluginKey {
 		return ctx, nil, nil, nil, errTaskDeferred
 	}
 	cooling, err := s.rec.Accounts.IsCoolingDown(ctx, a.ID)

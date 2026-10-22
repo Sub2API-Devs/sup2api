@@ -175,7 +175,7 @@ func (d *DB) ApplyAccountQuotaObservation(ctx context.Context, accountID, expect
 		next_check_at=CASE WHEN q.auto_refresh AND $7::timestamptz IS NOT NULL THEN LEAST(q.next_check_at,$7::timestamptz) ELSE q.next_check_at END
 		WHERE q.account_id=$1 AND q.generation=$2 AND EXISTS(
 			SELECT 1 FROM accounts a JOIN plugins p ON p.key=a.plugin_key
-			WHERE a.id=q.account_id AND a.plugin_key=$3 AND a.type=$4 AND a.deleted_at IS NULL AND a.status='active'
+			WHERE a.id=q.account_id AND a.plugin_key=$3 AND a.type=$4 AND a.deleted_at IS NULL
 			AND p.status IN ('enabled','upgrading') AND p.active_version=$5)`, accountID, expectedGeneration, pluginKey, accountType, pluginVersion, string(raw), next)
 	return err == nil && tag.RowsAffected() == 1, err
 }
@@ -238,7 +238,7 @@ func (d *DB) LeaseAccountQuota(ctx context.Context, id int64, pluginRevision str
 		AND (lease_until IS NULL OR lease_until<=clock_timestamp())
 		AND ($3::float8<=0 OR last_active_at IS NULL OR last_active_at<=clock_timestamp()-make_interval(secs=>$3::float8))
 		AND ($5 OR next_check_at IS NULL OR next_check_at<=clock_timestamp())
-		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL AND a.status='active'
+		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL
 		AND ($5 OR a.schedulable OR q.updated_at IS NULL)
 		AND NOT EXISTS(SELECT 1 FROM plugins p WHERE p.key=a.plugin_key AND p.status NOT IN ('enabled','upgrading')))
 		RETURNING account_id,generation,lease_token,revision,failures,plugin_revision,updated_at IS NULL`, id, pluginRevision, floor.Seconds(), lease.Seconds(), force).
@@ -253,7 +253,7 @@ func (d *DB) AccountQuotaClaimValid(ctx context.Context, c *QuotaClaim) (bool, e
 	var ok bool
 	err := d.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM account_quota_snapshots q JOIN accounts a ON a.id=q.account_id
 		WHERE q.account_id=$1 AND q.generation=$2 AND q.lease_token=$3 AND q.lease_until>clock_timestamp()
-		AND a.deleted_at IS NULL AND a.status='active'
+		AND a.deleted_at IS NULL
 		AND NOT EXISTS(SELECT 1 FROM plugins p WHERE p.key=a.plugin_key AND p.status NOT IN ('enabled','upgrading')))`, c.AccountID, c.Generation, c.Token).Scan(&ok)
 	return ok, err
 }
@@ -262,7 +262,7 @@ func (d *DB) ReleaseAccountQuotaQuery(ctx context.Context, c *QuotaClaim, next t
 	tag, err := d.Pool.Exec(ctx, `UPDATE account_quota_snapshots q SET lease_until=NULL,
 		next_check_at=CASE WHEN revision<>$5 THEN next_check_at ELSE GREATEST($4::timestamptz,clock_timestamp()+interval '30 seconds') END
 		WHERE account_id=$1 AND generation=$2 AND lease_token=$3 AND lease_until>clock_timestamp()
-		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL AND a.status='active'
+		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL
 		AND NOT EXISTS(SELECT 1 FROM plugins p WHERE p.key=a.plugin_key AND p.status NOT IN ('enabled','upgrading')))`, c.AccountID, c.Generation, c.Token, next, c.Revision)
 	return err == nil && tag.RowsAffected() == 1, err
 }
@@ -284,7 +284,7 @@ func (d *DB) CompleteAccountQuota(ctx context.Context, c *QuotaClaim, windows ma
 		failures=CASE WHEN revision<>$7 THEN failures WHEN $5='' THEN 0 ELSE LEAST(failures+1,10) END,
 		next_check_at=CASE WHEN revision<>$7 THEN next_check_at ELSE $6::timestamptz END,lease_until=NULL,revision=revision+1
 		WHERE account_id=$1 AND generation=$2 AND lease_token=$3 AND lease_until>clock_timestamp()
-		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL AND a.status='active'
+		AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=q.account_id AND a.deleted_at IS NULL
 		AND NOT EXISTS(SELECT 1 FROM plugins p WHERE p.key=a.plugin_key AND p.status NOT IN ('enabled','upgrading')))`, c.AccountID, c.Generation, c.Token, string(raw), msg, next, c.Revision)
 	return err == nil && tag.RowsAffected() == 1, err
 }

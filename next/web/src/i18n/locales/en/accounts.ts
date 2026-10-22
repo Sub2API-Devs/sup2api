@@ -223,8 +223,7 @@ export default {
     refreshHint: 'Click quota to refresh usage now',
     refreshed: 'Usage updated',
     refreshBlocked: {
-      runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.',
-      account_not_active: 'The account is not active, so its quota cannot be queried. Restore the account status first.'
+      runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.'
     }
   },
   autoReleaseAt: 'Automatically re-enable at {time}',

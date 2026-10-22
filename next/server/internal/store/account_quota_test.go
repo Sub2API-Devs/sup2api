@@ -281,6 +281,8 @@ func TestQuotaObservationGenerationAndFreshness(t *testing.T) {
 }
 
 func TestQuotaObservationRequiresCurrentIdentityAndEligibility(t *testing.T) {
+	// A disabled account still takes observations: it is only kept out of
+	// scheduling (2026-10-22 user decision).
 	for _, change := range []string{"account_disabled", "deleted", "plugin_disabled", "plugin_version", "account_type", "plugin_missing"} {
 		t.Run(change, func(t *testing.T) {
 			db := testutil.DB(t)
@@ -308,6 +310,10 @@ func TestQuotaObservationRequiresCurrentIdentityAndEligibility(t *testing.T) {
 			require.NoError(t, err)
 			applied, err := db.ApplyAccountQuotaObservation(ctx, id, before.Generation, "test", "test_type", "v1", map[string]store.QuotaWindow{"daily": {Utilization: 100}}, nil)
 			require.NoError(t, err)
+			if change == "account_disabled" {
+				require.True(t, applied)
+				return
+			}
 			require.False(t, applied)
 			after, err := db.AccountQuota(ctx, id)
 			require.NoError(t, err)

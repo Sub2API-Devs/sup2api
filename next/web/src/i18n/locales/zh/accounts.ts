@@ -216,8 +216,7 @@ export default {
     refreshHint: '点击配额立即刷新用量',
     refreshed: '用量已更新',
     refreshBlocked: {
-      runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试',
-      account_not_active: '账号未启用，无法查询额度；请先恢复账号状态'
+      runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试'
     }
   },
   autoReleaseAt: '{time} 自动解除禁用',

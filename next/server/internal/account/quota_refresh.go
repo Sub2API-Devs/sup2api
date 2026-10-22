@@ -43,12 +43,10 @@ func (s *Service) initializeQuota(ctx context.Context, q store.Querier, id int64
 const lifecycleQuotaReady = `(l.status='applied' OR (l.status='pending' AND l.code='environment_requires_new_runtime'))`
 
 // quotaBlocked is why an active quota query of the account cannot run now
-// ("" when it can): account_not_active, or runtime_not_ready while the
-// lifecycle plugin has not synchronized the account's runtime.
+// ("" when it can): runtime_not_ready while the lifecycle plugin has not
+// synchronized the account's runtime. A disabled account is only kept out of
+// scheduling (2026-10-22 user decision); its quota is queried like any other.
 func (s *Service) quotaBlocked(ctx context.Context, a *row, bt core.AccountTypeBinding) (string, error) {
-	if a.Status != "active" {
-		return "account_not_active", nil
-	}
 	if bt.Type.Lifecycle == nil {
 		return "", nil
 	}
@@ -63,8 +61,7 @@ func (s *Service) quotaBlocked(ctx context.Context, a *row, bt core.AccountTypeB
 }
 
 var quotaBlockedMessages = map[string]string{
-	"account_not_active": "The account is not active; enable it before refreshing its quota.",
-	"runtime_not_ready":  "The account runtime is not synchronized yet; the quota can be refreshed once it is.",
+	"runtime_not_ready": "The account runtime is not synchronized yet; the quota can be refreshed once it is.",
 }
 
 // quotaNotReady answers a query the account cannot take now: the background
@@ -225,7 +222,7 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id,a.plugin_key,a.type FROM accounts a WHERE a.deleted_at IS NULL AND a.status='active'
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id,a.plugin_key,a.type FROM accounts a WHERE a.deleted_at IS NULL
   AND a.plugin_key||'/'||a.type=ANY($1) AND a.id>$2 ORDER BY a.id LIMIT $3`, keys, s.quotaSweepAfter, quotaSweepPage)
 	if err != nil {
 		return err
@@ -262,7 +259,7 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 	rows, err = s.d.DB.Pool.Query(ctx, `SELECT q.account_id FROM account_quota_snapshots q JOIN accounts a ON a.id=q.account_id
   WHERE q.auto_refresh AND q.next_check_at<=now() AND (q.lease_until IS NULL OR q.lease_until<=now())
   AND (q.last_active_at IS NULL OR q.last_active_at<=now()-make_interval(secs=>$3::float8))
-  AND a.status='active' AND (a.schedulable OR q.updated_at IS NULL) AND a.deleted_at IS NULL AND a.plugin_key||'/'||a.type=ANY($1)
+  AND (a.schedulable OR q.updated_at IS NULL) AND a.deleted_at IS NULL AND a.plugin_key||'/'||a.type=ANY($1)
   AND NOT EXISTS(SELECT 1 FROM account_lifecycle_sync l WHERE l.account_id=a.id AND NOT `+lifecycleQuotaReady+`)
   ORDER BY q.next_check_at,q.account_id LIMIT $2`, keys, quotaSweepPage, quotaQueryFloor.Seconds())
 	if err != nil {
@@ -353,7 +350,7 @@ func (s *Service) ApplyAccountQuotaObservation(ctx context.Context, id, expected
 		return err
 	}
 	var pluginKey, accountType string
-	err = s.d.DB.Pool.QueryRow(ctx, `SELECT plugin_key,type FROM accounts WHERE id=$1 AND deleted_at IS NULL AND status='active'`, id).Scan(&pluginKey, &accountType)
+	err = s.d.DB.Pool.QueryRow(ctx, `SELECT plugin_key,type FROM accounts WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&pluginKey, &accountType)
 	if store.IsNoRows(err) {
 		return nil
 	}
