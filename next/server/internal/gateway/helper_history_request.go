@@ -169,7 +169,7 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 			return core.ErrUnavailable.WithMessage("Worker requirement probe invalid")
 		}
 	}
-	if rt.conv != nil || rt.pluginUsage || rt.upstream != "anthropic.messages" || c.resourceAccess != nil || c.creditAccess != nil || c.diagnosticAccess != nil {
+	if rt.conv != nil || rt.pluginUsage || rt.upstream != "anthropic.messages" || c.resourceAccess != nil || c.creditAccess != nil {
 		return fmt.Errorf("helper history does not support this protocol or resource combination")
 	}
 	if h.lookup.State == core.HelperHistoryUnknown && len(h.prefixes) > 0 {

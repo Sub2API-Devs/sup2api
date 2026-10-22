@@ -95,10 +95,6 @@ func (c *call) decideFailure(ctx context.Context, accountID int64, f FailureFact
 	s := &c.failureState
 	s.facts, s.decision = &f, c.failurePolicy.decide(f)
 	s.accountResult = "unchanged"
-	if c.diagnosticRequest != nil {
-		s.accountResult = "diagnostic_request"
-		return
-	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	reason := "failure policy " + s.decision.AccountRule + ": " + f.Source + " HTTP " + strconv.Itoa(f.Status)
@@ -168,7 +164,7 @@ func (c *call) policyCandidates(ctx context.Context, original []core.AccountRef)
 	s := &c.failureState
 	var out []core.AccountRef
 	for _, ref := range refs {
-		if !c.candidateEligible(&ref) || !c.diagnosticAccountAllowed(&ref) || !c.creditAccountAllowed(&ref) {
+		if !c.candidateEligible(&ref) || !c.creditAccountAllowed(&ref) {
 			continue
 		}
 		if !allowed[ref.ID] || s.sameID != 0 && ref.ID != s.sameID {
@@ -278,9 +274,6 @@ func (c *call) retryBlocked(ctx context.Context, res attemptResult, attempts int
 	}
 	if c.creditDispatched || c.helperWasDispatched() || c.task != nil || c.failureState.unsafeTransport {
 		return "outcome_uncertain"
-	}
-	if c.diagnosticRequest != nil {
-		return "diagnostic_request"
 	}
 	if c.failureState.decision.Action == failureReturn {
 		return "return"

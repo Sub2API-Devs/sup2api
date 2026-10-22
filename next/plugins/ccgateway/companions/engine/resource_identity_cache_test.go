@@ -6,18 +6,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	diag "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/diagnostics"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 	"github.com/stretchr/testify/require"
 )
 
-// diagnosticsTestGateway is a request-mode Worker whose resource identity was
+// identityTestGateway is a request-mode Worker whose resource identity was
 // verified a moment ago, so the identity comes from the cache without a CLI.
-func diagnosticsTestGateway(t *testing.T) (*Gateway, resources.Identity) {
+func identityTestGateway(t *testing.T) (*Gateway, resources.Identity) {
 	t.Helper()
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -43,65 +41,10 @@ func diagnosticsTestGateway(t *testing.T) (*Gateway, resources.Identity) {
 	return g, identity
 }
 
-// The request command answers the host's diagnostics tracking with the
-// account's identity and the ready header, so the host can record the
-// response's message ID; it refuses a grant or identity that does not match,
-// and leaves an untracked request alone.
-func TestRequestCommandDiagnosticsGrant(t *testing.T) {
-	hash, err := diag.Hash("msg_previous")
-	require.NoError(t, err)
-	for _, tc := range []struct {
-		name, diagnostics, grant, principal string
-		track                               bool
-		want                                int
-	}{
-		{name: "untracked", diagnostics: `{"previous_message_id":"msg_previous"}`, want: 200},
-		{name: "first turn", diagnostics: `{"previous_message_id":null}`, track: true, want: 200},
-		{name: "granted", diagnostics: `{"previous_message_id":"msg_previous"}`, grant: hash, track: true, want: 200},
-		{name: "grant for another message", diagnostics: `{"previous_message_id":"msg_other"}`, grant: hash, track: true, want: 400},
-		{name: "grant without previous", diagnostics: `{"previous_message_id":null}`, grant: hash, track: true, want: 400},
-		{name: "tracking without diagnostics", track: true, want: 400},
-		{name: "another identity", diagnostics: `{"previous_message_id":null}`, principal: "another-principal", track: true, want: 409},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			g, identity := diagnosticsTestGateway(t)
-			body := `{"model":"fixture","max_tokens":16,"messages":[{"role":"user","content":"hello"}]`
-			if tc.diagnostics != "" {
-				body += `,"diagnostics":` + tc.diagnostics
-			}
-			request := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body+"}"))
-			request.Header.Set("x-api-key", "fixture")
-			if tc.track {
-				request.Header.Set(diag.TrackingHeader, "1")
-				principal := identity.PrincipalID
-				if tc.principal != "" {
-					principal = tc.principal
-				}
-				request.Header.Set(resources.PrincipalHeader, principal)
-				request.Header.Set(resources.GenerationHeader, identity.Generation)
-			}
-			if tc.grant != "" {
-				request.Header.Set(diag.GrantHeader, tc.grant)
-			}
-			response := httptest.NewRecorder()
-			g.ServeHTTP(response, request)
-			require.Equal(t, tc.want, response.Code, response.Body.String())
-			ready := response.Header().Get(diag.ReadyHeader)
-			if tc.track && tc.want == 200 {
-				require.Equal(t, "1", ready)
-				require.Equal(t, identity.PrincipalID, response.Header().Get(resources.PrincipalHeader))
-				require.Equal(t, identity.Generation, response.Header().Get(resources.GenerationHeader))
-			} else {
-				require.Empty(t, ready)
-			}
-		})
-	}
-}
-
 // A verified identity is reused only for the same credential and only for a
 // while; any other credential verifies again.
 func TestResourceIdentityCacheFollowsTheCredential(t *testing.T) {
-	g, identity := diagnosticsTestGateway(t)
+	g, identity := identityTestGateway(t)
 	broker, env := g.resources, g.Runner.baseEnv()
 	cached := broker.cachedIdentity(env)
 	require.NotNil(t, cached)
@@ -121,7 +64,7 @@ func TestResourceIdentityCacheFollowsTheCredential(t *testing.T) {
 // An API key without a managed issuer is told so at once, as the host's
 // "no managed resource issuer" (the account is skipped for resources).
 func TestResourceIdentityAPIKeyWithoutIssuer(t *testing.T) {
-	g, _ := diagnosticsTestGateway(t)
+	g, _ := identityTestGateway(t)
 	g.resources.verified.Store(nil)
 	g.Runner.Env = envWith(g.Runner.Env, nil, "CCG_RESOURCE_ISSUER_ID", "CCG_RESOURCE_ISSUER_GENERATION")
 	g.Runner.CLI = "must-not-execute"

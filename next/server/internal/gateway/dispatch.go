@@ -56,13 +56,8 @@ func (c *call) dispatch(ctx context.Context) {
 	}
 	cands := make([]core.AccountRef, 0, len(all))
 	creditExcluded := false
-	diagnosticExcluded := false
 	for i := range all {
 		if !c.candidateEligible(&all[i]) {
-			continue
-		}
-		if !c.diagnosticAccountAllowed(&all[i]) {
-			diagnosticExcluded = true
 			continue
 		}
 		if !c.creditAccountAllowed(&all[i]) {
@@ -70,10 +65,6 @@ func (c *call) dispatch(ctx context.Context) {
 			continue
 		}
 		cands = append(cands, all[i])
-	}
-	if len(cands) == 0 && diagnosticExcluded && c.diagnosticRequest != nil && c.diagnosticRequest.lookupError != nil {
-		c.fail(c.diagnosticRequest.lookupError)
-		return
 	}
 	if len(cands) == 0 && creditExcluded && c.creditRequest != nil && c.creditRequest.lookupError != nil {
 		c.fail(c.creditRequest.lookupError)
@@ -526,9 +517,6 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.resourcePreparationFailure(err)
 	}
 	if err := c.applyCreditHeaders(prepareCtx, req, acc, body); err != nil {
-		return c.resourcePreparationFailure(err)
-	}
-	if err := c.applyDiagnosticHeaders(prepareCtx, req, acc, body); err != nil {
 		return c.resourcePreparationFailure(err)
 	}
 	if err := c.wrapHelperHistoryRequest(prepareCtx, req, acc, rt, body); err != nil {

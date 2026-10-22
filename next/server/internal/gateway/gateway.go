@@ -46,7 +46,6 @@ type Deps struct {
 	Tasks         core.AsyncTasks
 	Resources     core.ProviderResources
 	Skills        core.SkillResources
-	Diagnostics   core.MessageDiagnostics
 	Credits       core.FallbackCredits
 	HelperHistory core.HelperHistory
 	// Candidate gate remains off in production until the complete custody path

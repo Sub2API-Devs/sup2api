@@ -102,9 +102,6 @@ func TestResourceIdentityPersistsAndRotates(t *testing.T) {
 	b := &resourceBroker{g: &Gateway{Cache: cache}, identityPath: filepath.Join(t.TempDir(), "identity-v1.json")}
 	first, err := b.persistIdentity(resources.Identity{PrincipalID: "issuer"}, "")
 	require.NoError(t, err)
-	if err := b.g.ownershipIndex().rotateAuthorization(); err != nil {
-		t.Fatal(err)
-	}
 	second, err := b.persistIdentity(resources.Identity{PrincipalID: "issuer"}, "")
 	if err != nil || first.Generation != second.Generation {
 		t.Fatal("same issuer resource epoch changed after reauthorization", err)
@@ -249,23 +246,6 @@ func TestRealCLIResourceCancellationReleasesSpool(t *testing.T) {
 		require.FailNow(t, "resource cancellation blocked")
 	}
 	assert.Zero(t, op.budget.used)
-}
-
-func TestRealCLIResourceRuntimeAuthorizationCallback(t *testing.T) {
-	runner := resourceTestRunner(t, func(w http.ResponseWriter, r *http.Request) { t.Error("unexpected provider request") })
-	runtime, err := NewRuntime(Options{CLI: runner.CLI, Plugin: runner.Plugin, DataDir: t.TempDir(), Key: "worker-fixture", AdminKey: "admin-fixture", Env: runner.Env})
-	require.NoError(t, err)
-	defer runtime.Close()
-	before := runtime.gateway.ownershipIndex().issuerGeneration()
-	if runtime.admin.authorizationChanged == nil {
-		t.Fatal("worker runtime lacks authorization generation callback")
-	}
-	if err := runtime.admin.authorizationChanged(); err != nil {
-		t.Fatal(err)
-	}
-	if runtime.gateway.ownershipIndex().issuerGeneration() == before {
-		t.Fatal("authorization callback kept old generation")
-	}
 }
 
 func resourceManagementFixtureEnv(t *testing.T) []string {

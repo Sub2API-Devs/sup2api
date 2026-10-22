@@ -61,9 +61,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	var err error
 	sse := isSSE(resp.Header.Get("Content-Type"))
 	c.checkResponseShape(ctx, rt, resp, sse)
-	err = c.prepareDiagnosticResponse(ctx, resp, u, cap)
 	switch {
-	case err != nil:
 	case c.resourceAccess != nil && c.resourceAccess.outputs || c.creditAccess != nil:
 		err = c.forwardResourceResponse(ctx, rt, resp, u, cap)
 	case sse:
@@ -84,7 +82,6 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	}
 	var cerr *convertError
 	var creditErr *creditStorageError
-	var diagnosticErr *diagnosticStorageError
 	responseCommitted := c.c.Writer.Written()
 	switch {
 	case err == nil:
@@ -92,14 +89,6 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 			c.rec.Success = false
 			c.rec.ErrorType = errTypeUpstream
 			c.rec.ErrorMessage = truncateUTF8(u.StreamError, 1000)
-		}
-	case errors.As(err, &diagnosticErr):
-		c.rec.Success = false
-		c.rec.ErrorType = "gateway_diagnostics_storage"
-		c.rec.ErrorMessage = diagnosticErr.Error()
-		if !c.c.Writer.Written() {
-			c.rec.StatusCode = http.StatusServiceUnavailable
-			writeError(c.c, c.format, &gwError{Status: http.StatusServiceUnavailable, Code: "gateway_diagnostics_storage", Message: diagnosticErr.Error()})
 		}
 	case errors.As(err, &creditErr):
 		c.rec.Success = false

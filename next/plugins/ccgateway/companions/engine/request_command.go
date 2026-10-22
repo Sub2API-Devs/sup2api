@@ -393,20 +393,6 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(400, "invalid_request_error", err.Error())
 		return
 	}
-	// The host tracks the response's message ID for diagnostics only when this
-	// account's identity is the one it bound (before the request slot: the
-	// verification takes a slot of its own).
-	if !probe {
-		if status, grantErr := g.requestDiagnosticsGrant(r.Context(), w, r.Header, raw); grantErr != nil {
-			kind := "invalid_request_error"
-			if status >= 500 {
-				kind = "api_error"
-			}
-			d.trace("diagnostics_grant_failed", Object{"status": status})
-			fail(status, kind, grantErr.Error())
-			return
-		}
-	}
 	select {
 	case g.Slots <- struct{}{}:
 		defer func() { <-g.Slots }()

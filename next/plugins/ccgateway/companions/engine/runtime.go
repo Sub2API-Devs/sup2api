@@ -171,7 +171,6 @@ func NewRuntime(o Options) (*Runtime, error) {
 		g.Runner.WorkingDirectory = root
 	}
 	admin := &authManager{cli: cli, key: o.AdminKey, work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: g.RequestLogs, env: o.Env}
-	admin.authorizationChanged = func() error { return g.ownershipIndex().rotateAuthorization() }
 	resources, err := newResourceBroker(g, admin, root)
 	if err != nil {
 		return nil, err

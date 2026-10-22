@@ -413,7 +413,6 @@ func (x *exchange) serveWebSearchFast(ctx context.Context, dir, query string) {
 	answer := webSearchAnswer(req, record, query)
 	x.diagnostic.setStage("completed")
 	if !req.Stream {
-		x.rememberMessageID(answer)
 		x.w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(x.w).Encode(answer)
 		return

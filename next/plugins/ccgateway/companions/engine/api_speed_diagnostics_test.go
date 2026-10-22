@@ -2,12 +2,7 @@ package engine
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,68 +81,4 @@ func TestNativeDiagnosticsRawControlsAndObservedEvents(t *testing.T) {
 			assert.NotContains(t, s.acc.Message["usage"], "speed")
 		}
 	}
-}
-
-func TestMessageOwnershipPersistenceIsolationAndBounds(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "message-ownership-v1.json")
-	s := openMessageOwnership(path)
-	now := time.Now().UTC()
-	require.NoError(t, s.remember("msg_private", "scope-A", now))
-	s = openMessageOwnership(path)
-	assert.True(t, s.owns("msg_private", "scope-A", now))
-	assert.False(t, s.owns("msg_private", "scope-B", now))
-	assert.False(t, s.owns("msg_unknown", "scope-A", now))
-	assert.False(t, s.owns("msg_private", "scope-A", now.Add(messageOwnershipTTL)))
-	require.Error(t, s.remember("msg_private", "scope-B", now))
-	raw, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.NotContains(t, string(raw), "msg_private")
-	for i := 0; i < messageOwnershipLimit; i++ {
-		s.entries[digest(i)] = ownedMessage{Scope: "scope-A", Created: now.Add(-time.Minute)}
-	}
-	// Existing entry plus the seeded full index must shrink to the fixed quota.
-	delete(s.entries, digest("msg_private"))
-	require.NoError(t, s.remember("new", "scope-A", now))
-	assert.Len(t, s.entries, messageOwnershipLimit)
-	assert.False(t, openMessageOwnership(filepath.Join(t.TempDir(), "other-account.json")).owns("msg_private", "scope-A", now))
-}
-
-func TestNativeDiagnosticsOwnershipAdmission(t *testing.T) {
-	cache, err := newCache(t.TempDir(), 1<<20)
-	require.NoError(t, err)
-	g := &Gateway{Cache: cache, Key: "worker-key"}
-	request := func(scope, id string) *exchange {
-		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-		httpReq.Header.Set("X-CCGateway-Session-Scope", scope)
-		return &exchange{g: g, r: httpReq, req: plannedRequest(t, Object{"diagnostics": Object{"previous_message_id": id}})}
-	}
-	owner := request("A", "msg_owned")
-	require.NoError(t, g.ownershipIndex().remember("msg_owned", owner.ownershipScope(), time.Now()))
-	require.NoError(t, owner.validateDiagnosticsOwnership())
-	require.Error(t, request("B", "msg_owned").validateDiagnosticsOwnership())
-	require.Error(t, request("A", "msg_unknown").validateDiagnosticsOwnership())
-}
-
-func TestOwnershipAuthorizationRotationDoesNotReviveOldExchange(t *testing.T) {
-	cache, err := newCache(t.TempDir(), 1<<20)
-	require.NoError(t, err)
-	g := &Gateway{Cache: cache, Key: "worker-key"}
-	old := &exchange{g: g, r: httptest.NewRequest("POST", "/v1/messages", nil)}
-	oldScope := old.ownershipScope()
-	store := g.ownershipIndex()
-	now := time.Now()
-	require.NoError(t, store.remember("old", oldScope, now))
-	require.NoError(t, store.rotateAuthorization())
-	current := &exchange{g: g, r: httptest.NewRequest("POST", "/v1/messages", nil)}
-	currentScope := current.ownershipScope()
-	assert.NotEqual(t, oldScope, currentScope)
-	assert.Equal(t, oldScope, old.ownershipScope())
-	// A request admitted before rotation can finish afterwards; it remains
-	// under the old captured issuer domain, including after a Worker restart.
-	require.NoError(t, store.remember("late-old-response", old.ownershipScope(), now))
-	reloaded := openMessageOwnership(store.path)
-	assert.False(t, reloaded.owns("old", currentScope, now))
-	assert.False(t, reloaded.owns("late-old-response", currentScope, now))
-	require.NoError(t, store.remember("new", currentScope, now))
-	assert.True(t, store.owns("new", currentScope, now))
 }
