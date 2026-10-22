@@ -176,3 +176,5 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 测试：`TestRequestCommandDiagnosticsGrant`、`TestResourceIdentityCacheFollowsTheCredential`、`TestResourceIdentityAPIKeyWithoutIssuer`；`TestResourceManagementLinuxOfflineNetNone` 可按镜像、CLI 路径、版本参数化运行。
 
 **最终决定（2026-10-22 用户）：去掉整套诊断归属机制，`diagnostics` 原样转发。** 讨论结论：`diagnostics` 只是 Claude Code 每轮问上游“缓存为什么没命中”，不影响回答与计费；换了账号缓存本就不共享，上游回“找不到上一条”即可，平台没有理由登记消息 ID、钉账号或核验身份。这套机制是 10-08 native 模式时代加的（`b52f5fc1c`、`cd4d5e40b`），代价是对话不能换号、上游计费后仍可能 503、失败时不记账号状态、每个请求要核验身份。删除：核心 `message_diagnostics*.go`、`messagediagnostics` 包、钉账号与“diagnostic_request”失败分支（`provider_diagnostic_messages` 表留着不用）；Worker 的跟踪核验（含上面刚补的请求命令回执）、本地消息归属索引、`contracts/diagnostics`。上面 API Key 的特殊处理随之作废。保留：资源身份的 2.1.304 修复与身份缓存（文件引用、刷新令牌仍需要）。测试 `TestDiagnosticsForwardedAsSent`（OAuth、API Key 两种账号，字段原样、无跟踪头）。
+
+**版本表删除（2026-10-22 用户决定）**：stored OAuth 初始化不再按 Claude Code 版本放行，能用就用、不行就失败——握手本身已检查成功回应、claude.ai 来源、配置目录和凭据前后指纹。去掉后官方 2.1.304 断网 35 场景两轮通过。API Key 账号维持不支持文件等资源功能（没有托管 issuer，立即答不支持），`diagnostics` 原样转发。

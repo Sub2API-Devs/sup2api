@@ -329,7 +329,6 @@ func (a *authManager) refreshToken(ctx context.Context) (Object, error) {
 	if err != nil || before.source != "stored_oauth" {
 		return nil, authFail(codeRefreshFailed, "The stored Claude Code authorization could not be verified.")
 	}
-	// Version is left empty: the CLI may have been updated since start-up.
 	runner := &Runner{CLI: a.cli, Work: a.work}
 	after, err := runner.initializeResourceAuthorization(ctx, env, before)
 	if err != nil {

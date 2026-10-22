@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 
@@ -208,42 +207,12 @@ func (runner *Runner) selectResourceAuthorization(ctx context.Context, env []str
 	return after, nil
 }
 
-func (runner *Runner) verifyResourceInitializationVersion(ctx context.Context, env []string) error {
-	version := runner.Version
-	if version == "" {
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, runner.CLI, "--version")
-		cmd.Env, cmd.Dir, cmd.WaitDelay = env, runner.Work, time.Second
-		output := &resourceStatusOutput{}
-		cmd.Stdout = output
-		if cmd.Run() != nil || ctx.Err() != nil {
-			return fmt.Errorf("resource CLI initialization version could not be verified")
-		}
-		var ok bool
-		version, ok = strings.CutSuffix(strings.TrimSpace(string(output.Bytes())), " (Claude Code)")
-		if !ok {
-			return fmt.Errorf("resource CLI initialization version could not be verified")
-		}
-	}
-	if !slices.Contains(verifiedResourceInitializationVersions, version) {
-		return fmt.Errorf("resource stored OAuth requires verified Claude Code %s", strings.Join(verifiedResourceInitializationVersions, " or "))
-	}
-	return nil
-}
-
-// verifiedResourceInitializationVersions are the Claude Code versions whose
-// stream-json initialization was verified to refresh and persist a stored
-// OAuth credential without a prompt or model request
-// (TestResourceManagementLinuxOfflineNetNone against each real CLI).
-var verifiedResourceInitializationVersions = []string{"2.1.292", "2.1.296", "2.1.304"}
-
 func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env []string, before *resourceAuthorization) (*resourceAuthorization, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := runner.verifyResourceInitializationVersion(ctx, env); err != nil {
-		return nil, err
-	}
+	// No version gate: the initialization below accepts only a successful
+	// handshake from a claude.ai source and a stable or properly rotated
+	// credential, whatever the Claude Code version (2026-10-22 user decision).
 	stage := "process"
 	failure := func() (*resourceAuthorization, error) {
 		return nil, fmt.Errorf("resource CLI initialization did not establish a ready, persistent credential (%s)", stage)
