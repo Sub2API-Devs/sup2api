@@ -57,7 +57,7 @@ edit('cli.js', 'Ve', t => {
     'let{Zoe:ccgQuerySource}=await import("./chunk-m5q1b1c4.js");let{createBillingPolicy:ccgBillingFor}=await import("./ccgateway-content-policy.js");let{fingerprintMessages:ccgPromptOf}=await import("./ccgateway-request-input.js");let{KF:ccgReminder}=await import("./chunk-jkcb7qdd.js");let ccgBilling=ccgBillingFor(ccgHeader);' +
     'let ccgAgent={querySourceFor:ccgQuerySource,leadingBilling:s=>ccgBilling.leadingBilling(s),prompt:m=>ccgPromptOf(m,ccgReminder)[0].message.content};' +
     'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling),directBuild:ccgDirect,agentNative:ccgAgent}))');
-  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1"]');
+  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1"]');
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
 files.set('chunk-dxktn51d.js', 'import {requestSessionID as ccgRequestSessionID} from "./ccgateway-request-identity.js";\n' + files.get('chunk-dxktn51d.js'));
@@ -100,19 +100,23 @@ const dispatchNames = { Xj: 'bz', i5t: 'ePn', Zt: 'en', bY: 'j8', xHe: 'CNr', fk
 function rename(text, names) { return text.replace(/[$A-Z_a-z][$\w]*/g, word => Object.hasOwn(names, word) ? names[word] : word); }
 edit(core, 'bz', () => rename(fs.readFileSync(path.join(__dirname, "tool-dispatch.inc.js"), "utf8").trim(), dispatchNames));
 edit(core, 'qmn', t => {
+  // A probe run (request-build injectLayers) is CC's native request for the
+  // layers given to a request that is not CC's: it keeps the native system,
+  // tools and message pipeline, with the client's betas, and is never sent.
+  const wire = '(J.ccgatewayBuildOnly===true&&J.ccgatewayNativeProbe!==true)';
   // External requests own their wire tools, including declaration order and
   // omitted fields. Native tool discovery still runs for native policy, but
   // its filtered/reordered catalogue is not the external request's payload.
-  t = once(t, '...jh.tools!==void 0&&{tools:jh.tools},', '...(J.ccgatewayBuildOnly===true?J.ccgatewayWireTools!==void 0&&{tools:structuredClone(J.ccgatewayWireTools)}:jh.tools!==void 0&&{tools:jh.tools}),');
+  t = once(t, '...jh.tools!==void 0&&{tools:jh.tools},', '...('+wire+'?J.ccgatewayWireTools!==void 0&&{tools:structuredClone(J.ccgatewayWireTools)}:jh.tools!==void 0&&{tools:jh.tools}),');
   // z2 reads CLAUDE_CODE_EXTRA_BODY. Do not let process-wide extra data replace
   // an external request after validation. Keep ordinary CLI behavior intact;
   // native parameter derivation below still operates on this fresh object.
   t = once(t, 'Xa=z2(yl);', 'Xa=J.ccgatewayBuildOnly===true?{}:z2(yl);');
   t = once(t, 'let mt=ke(()=>S8n(J.model,{isAgenticQuery:wt})),', 'let mt=J.ccgatewayBuildOnly===true?(J.ccgatewayRequestBetas??[]).map(ccgBeta):ke(()=>S8n(J.model,{isAgenticQuery:wt})),');
-  t = once(t, 'system:jh.system,', 'system:J.ccgatewayBuildOnly===true?J.ccgatewaySystemBlocks:jh.system,');
-  t = once(t, 'messages:Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,', 'messages:J.ccgatewayBuildOnly===true?structuredClone(J.ccgatewayWireMessages):Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,');
-  t = once(t, 'Gf=sb=Xfr(', 'Gf=sb=J.ccgatewayBuildOnly===true?structuredClone(J.ccgatewayWireMessages):Xfr(');
-  t = once(t, 'fi={model:J.model,', 'fi={ccgatewayInput:J.ccgatewayBuildOnly===true,model:J.model,');
+  t = once(t, 'system:jh.system,', 'system:'+wire+'?J.ccgatewaySystemBlocks:jh.system,');
+  t = once(t, 'messages:Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,', 'messages:'+wire+'?structuredClone(J.ccgatewayWireMessages):Rk!==null&&Rk.sliceFrom>0?Gf.slice(_i[Rk.sliceFrom]):Gf,');
+  t = once(t, 'Gf=sb=Xfr(', 'Gf=sb='+wire+'?structuredClone(J.ccgatewayWireMessages):Xfr(');
+  t = once(t, 'fi={model:J.model,', 'fi={ccgatewayInput:'+wire+',model:J.model,');
   // RIs hashes the first user prompt; external wire messages carry native
   // attachments as reminder blocks, which request-build skips (fingerprintMessages).
   t = once(t, 'let tF=RIs(Aa),', 'let tF=RIs(J.ccgatewayBuildOnly===true?J.ccgatewayFingerprintMessages:Aa),');
@@ -145,7 +149,7 @@ for (const file of [core, headless, terminal]) files.set(file, imports + files.g
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8'));
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1','direct_billing_v1','request_agent_context_v1'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1','direct_billing_v1','request_agent_context_v1','build_injection_v1'], files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

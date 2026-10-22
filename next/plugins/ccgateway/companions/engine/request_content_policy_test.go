@@ -148,6 +148,47 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	require.JSONEq(t, `{"cli":"none","sdk-cli":"official_cli_sdk"}`, string(components.RequestPolicy["build_identity_lines"]))
 }
 
+// The layers a request without a billing header is given reach the CLI only
+// on a CLI that injects them, in canonical form; adding nothing needs no such
+// CLI, and an unknown layer is refused (2026-10-23).
+func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	root := t.TempDir()
+	capture := filepath.Join(root, "requests.jsonl")
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability}
+	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
+		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
+		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
+	send := func(policy string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
+		req.Header.Set("x-api-key", "fixture")
+		req.Header.Set(policyHeader, policy)
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, req)
+		return out
+	}
+	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"date":true,"environment":true,"model":false},"tools":{"Read":true,"Bash":true}}}`
+	require.Equal(t, 409, send(policy).Code)
+	for _, p := range []string{`{"build_injection":{"attachments":{"skills":true}}}`, `{"build_injection":{"tools":{"Glob":true}}}`} {
+		require.Equal(t, 400, send(p).Code, p)
+	}
+	out := send(`{"relay_mode":"build","build_injection":{"system_prompt":false,"attachments":{"date":false},"tools":{}}}`)
+	require.Equal(t, 200, out.Code, out.Body.String())
+	g.CLIInfo.Capabilities = append(capabilities, features.BuildInjectionCapability)
+	require.Contains(t, g.requestCapabilities(), features.BuildInjectionCapability)
+	require.NoError(t, os.Remove(capture))
+	out = send(policy)
+	require.Equal(t, 200, out.Code, out.Body.String())
+	data, err := os.ReadFile(capture)
+	require.NoError(t, err)
+	var components struct {
+		RequestPolicy map[string]json.RawMessage `json:"requestPolicy"`
+	}
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
+	require.JSONEq(t, `{"system_prompt":true,"attachments":{"environment":true,"date":true},"tools":{"Read":true,"Bash":true}}`, string(components.RequestPolicy["build_injection"]))
+}
+
 // Direct hands the CLI its billing context only on a CLI that applies it; a
 // choice an older CLI cannot honour refuses the request, while the default
 // leaves that CLI a pure passthrough (2026-10-22).

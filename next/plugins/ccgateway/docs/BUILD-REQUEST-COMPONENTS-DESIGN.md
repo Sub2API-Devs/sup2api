@@ -69,7 +69,7 @@ v2 下 `policy.ContractVersion` 置为 2，并清空 `RelayMode` / `CLIVersion` 
 | 字段 | 值 | 层 | 含义 |
 |---|---|---|---|
 | `schema_version` | 1 | 核心存储的请求策略（`contracts/features/catalog.go` `PolicySchemaVersion`） | 配置格式；前端、核心按它读写。前端曾写 2 导致核心拒收（已由 bb70dbe83 修复） |
-| `contract_version` | 2 | Worker → CLI 的 build 信封 `requestPolicy`（`engine/request_command.go`） | CLI 组件契约；CLI 只接受 2，且 `requestPolicy` 只允许 `contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_identity_lines` 五个键（后两个自 v17） |
+| `contract_version` | 2 | Worker → CLI 的 build 信封 `requestPolicy`（`engine/request_command.go`） | CLI 组件契约；CLI 只接受 2，且 `requestPolicy` 只允许 `contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_identity_lines`、`build_injection` 六个键（`build_billing_entrypoint`、`build_identity_lines` 自 v17，`build_injection` 自 v19） |
 
 两者独立演进：改配置格式不改 `contract_version`，反之亦然。
 
@@ -345,6 +345,7 @@ v1 路径另有 `build_attachment_transform` 诊断事件，记录来源、改�
 | `BuildContentPreservationCapability` | `build_content_preservation_v1` |
 | `BuildIdentityCapability` | `build_identity_line_v1`（服务端入口与身份行；核心只在配置偏离默认时要求） |
 | `DirectBillingCapability` | `direct_billing_v1`（direct 补计费头与身份行；同样只在偏离默认时要求） |
+| `BuildInjectionCapability` | `build_injection_v1`（build 给没有计费头的请求补 CC 的内置提示词、首轮附件和工具；只在有补充时要求，见 [请求分层设计](../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节） |
 
 Worker 在 `/healthz` 声明能力；核心在发送模型正文前通过**同一账号路由**读取并核对能力与 CLI 版本。旧 Worker、未知能力、版本不符或探测失败都阻止模型发送，不跨原地更新缓存能力，避免降级后静默忽略配置。该探测是本地 Worker 查询，不是上游模型请求。
 

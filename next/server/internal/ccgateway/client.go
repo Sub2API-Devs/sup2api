@@ -225,7 +225,7 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 			finish()
 			return nil, false, err
 		}
-		if (path == "/v1/messages" || path == "/v1/ccgateway/probe") && (policy.RelayMode == "direct" || policy.CLIVersion == "2.1.304" || policy.BuildAttachmentSources.UsesWorker() || policy.BuildAttachmentSources.RequiresV2() || policy.BuildBillingSources.UsesWorker() || policy.BuildBillingEntrypoint != "" || len(policy.BuildIdentityLines) > 0 || policy.RequestIdentitySources.Explicit() || policy.RelayMode != cfg.EffectiveRequestPolicy().RelayMode) {
+		if (path == "/v1/messages" || path == "/v1/ccgateway/probe") && (policy.RelayMode == "direct" || policy.CLIVersion == "2.1.304" || policy.BuildAttachmentSources.UsesWorker() || policy.BuildAttachmentSources.RequiresV2() || policy.BuildBillingSources.UsesWorker() || policy.BuildBillingEntrypoint != "" || len(policy.BuildIdentityLines) > 0 || policy.BuildInjection != nil || policy.RequestIdentitySources.Explicit() || policy.RelayMode != cfg.EffectiveRequestPolicy().RelayMode) {
 			if err := requireRequestPolicyCapabilities(ctx, client, base, modelKey, policy); err != nil {
 				finish()
 				return nil, false, err

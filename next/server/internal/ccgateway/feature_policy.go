@@ -26,6 +26,7 @@ type FeatureOverrides struct {
 	BuildBillingSources    features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
 	BuildBillingEntrypoint *string                         `json:"build_billing_entrypoint,omitempty"`
 	BuildIdentityLines     features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
+	BuildInjection         *features.BuildInjection        `json:"build_injection,omitempty"`
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 }
 
@@ -94,6 +95,7 @@ func copyPolicy(p RequestPolicy) RequestPolicy {
 	p.BuildAttachmentSources = cloneSourceMap(p.BuildAttachmentSources)
 	p.BuildBillingSources = cloneSourceMap(p.BuildBillingSources)
 	p.BuildIdentityLines = cloneSourceMap(p.BuildIdentityLines)
+	p.BuildInjection = p.BuildInjection.Merge(nil)
 	p.RequestIdentitySources = cloneSourceMap(p.RequestIdentitySources)
 	return p
 }
@@ -165,6 +167,22 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 			sources["build_identity_lines."+k] = layer
 		}
 	}
+	// The system prompt and each attachment and tool override on their own;
+	// an omitted one inherits.
+	if o.BuildInjection != nil {
+		p.BuildInjection = p.BuildInjection.Merge(o.BuildInjection)
+		if sources != nil {
+			if o.BuildInjection.SystemPrompt != nil {
+				sources["build_injection.system_prompt"] = layer
+			}
+			for k := range o.BuildInjection.Attachments {
+				sources["build_injection.attachments."+k] = layer
+			}
+			for k := range o.BuildInjection.Tools {
+				sources["build_injection.tools."+k] = layer
+			}
+		}
+	}
 	for k, v := range o.RequestIdentitySources {
 		p.RequestIdentitySources[k] = v
 		if sources != nil {
@@ -209,6 +227,13 @@ func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy
 			p.BuildIdentityLines[k] = features.DefaultIdentityLine(k)
 		}
 		sources["build_identity_lines."+k] = "global"
+	}
+	sources["build_injection.system_prompt"] = "global"
+	for _, k := range features.InjectionAttachments {
+		sources["build_injection.attachments."+k] = "global"
+	}
+	for _, k := range features.InjectionTools {
+		sources["build_injection.tools."+k] = "global"
 	}
 	for _, k := range features.BuildAttachmentFields {
 		if p.BuildAttachmentSources[k] == "" {
@@ -314,6 +339,9 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	if p.BuildBillingEntrypoint == features.DefaultBillingEntrypoint {
 		p.BuildBillingEntrypoint = ""
 	}
+	// Only what is added goes to the Worker; adding nothing needs no Worker
+	// able to inject.
+	p.BuildInjection = p.BuildInjection.Effective()
 	for k, v := range p.BuildIdentityLines {
 		if v == features.DefaultIdentityLine(k) {
 			delete(p.BuildIdentityLines, k)
@@ -331,6 +359,7 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	if p.RelayMode == "direct" {
 		p.BuildAttachmentSources = nil
 		p.BuildBillingSources = nil
+		p.BuildInjection = nil
 	}
 	return p, nil
 }

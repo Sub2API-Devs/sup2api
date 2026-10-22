@@ -16,7 +16,11 @@ type RequestPolicy struct {
 	BuildBillingEntrypoint string `json:"build_billing_entrypoint,omitempty"`
 	// BuildIdentityLines picks Claude Code's identity line per entrypoint;
 	// omitted entrypoints use their default (features.IdentityLineChoices).
-	BuildIdentityLines     features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
+	BuildIdentityLines features.BuildIdentityLines `json:"build_identity_lines,omitempty"`
+	// BuildInjection is what build gives a request without a billing header
+	// (one that is not Claude Code's): CC's system prompt, first-turn
+	// attachments and tools, each optional; nil adds nothing.
+	BuildInjection         *features.BuildInjection        `json:"build_injection,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	SchemaVersion          int                             `json:"schema_version"`
@@ -116,6 +120,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 		return err
 	}
 	if err := p.BuildIdentityLines.Validate(); err != nil {
+		return err
+	}
+	if err := p.BuildInjection.Validate(); err != nil {
 		return err
 	}
 	if err := p.BuildAttachmentSources.Validate(); err != nil {

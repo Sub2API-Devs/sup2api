@@ -42,6 +42,7 @@ type buildRequestPolicy struct {
 	Billing         features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
 	Entrypoint      string                          `json:"build_billing_entrypoint,omitempty"`
 	IdentityLines   features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
+	Injection       *features.BuildInjection        `json:"build_injection,omitempty"`
 	Identity        features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	RelayMode       string                          `json:"relay_mode,omitempty"`
 	CLIVersion      string                          `json:"cli_version,omitempty"`
@@ -333,13 +334,18 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}
+		if err := policy.Injection.Validate(); err != nil {
+			fail(400, "invalid_request_error", err.Error())
+			return
+		}
+		policy.Injection = policy.Injection.Effective()
 		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
 		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
-			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) {
+			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) || policy.Injection != nil && !g.CLIInfo.supports(features.BuildInjectionCapability) {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
 			return
 		}
-		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker() || identityLines) && !v2 {
+		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker() || identityLines || policy.Injection != nil) && !v2 {
 			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
 			return
 		}

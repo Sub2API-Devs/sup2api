@@ -31,14 +31,24 @@ export default {
     latestSaved: '当前已保存的配置（供核对）', reviewLatest: '已读取最新版本；下方保留你的草稿。请与当前已保存配置核对后再保存。',
     invalid: 'CC 特性配置不合法，请检查来源选项。',
     disabledReasons: { no_group: '请选择账号所属分组查看生效配置。', group_unconfigured: '该分组尚未允许账号覆盖。', group_disabled: '该分组未启用覆盖，使用全局配置。', account_override_disabled: '该分组不允许账号覆盖。' },
-    fields: { user_id: 'metadata.user_id', platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
+    fields: { platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
   },
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
   cliProfile: {
     title: 'Claude Code 版本与请求模式', mode: '透传/转发', version: '版本指定',
     direct: '纯透传（direct）', build: '组件构建（build）',
-    request: '请求', prefixLine: '身份行', autoUserId: '有就自动替换，没有不加', autoPrefix: '按计费头入口补上，见「身份行」',
+    request: '请求',
     pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
+  },
+  injection: {
+    title: '非 CC 请求补充',
+    hint: '只用于 build 模式下没有计费头的请求（不是 Claude Code 发的）：计费头总会补上，这里选是否再补 Claude Code 的内置提示词、首轮附件和工具。内容都由 Worker 上的 Claude Code 生成，附件放在 Claude Code 放的位置（按模型用系统轮或提醒）。有计费头的请求只做计费头和附件转换，不受这里影响。',
+    toolsHint: '补上的工具由 Claude Code 生成定义，模型调用后与客户端自己的工具一样交回客户端执行；客户端没有对应实现时会收到它处理不了的工具调用。选了 ToolSearch 时，Claude Code 会把部分工具改成延迟加载，只能经 ToolSearch 找到；延迟工具清单附件不补。',
+    on: '补上', off: '不补',
+    prompt: '提示词', systemPrompt: '内置提示词',
+    attachments: '首轮附件', attachment: { environment: '运行环境', model: '模型说明', total_tokens: '剩余 token', date: '当前日期' },
+    tools: 'Claude Code 工具',
+    summary: '非 CC 补 {n} 项'
   },
   buildAttachments: {
     directHint: '原样转发；只补缺的计费头（或缺的字段），身份行按入口配置补',

@@ -29,6 +29,34 @@ function validIdentityLines(lines: Record<string, string> | undefined): boolean 
   return Object.entries(lines ?? {}).every(([entrypoint, line]) =>
     entrypoint in identityLineChoices && (line === 'none' || (identityLineChoices[entrypoint as BillingEntrypoint] as readonly string[]).includes(line)))
 }
+// What build adds to a request without a billing header (one that is not
+// Claude Code's), each optional and inherited on its own (contracts
+// features/injection.go, 2026-10-23): CC's system prompt, its first-turn
+// attachments in CC's order and its own tools. The CLI renders all of it.
+export const injectionAttachments = ['environment', 'model', 'total_tokens', 'date'] as const
+export type InjectionAttachment = (typeof injectionAttachments)[number]
+export const injectionTools = ['Agent', 'Bash', 'Read', 'Edit', 'Write', 'NotebookEdit', 'ReportFindings', 'WebSearch', 'TaskStop', 'Skill',
+  'EnterWorktree', 'ExitWorktree', 'SendMessage', 'ListAgents', 'Workflow', 'CronCreate', 'CronDelete', 'CronList', 'ScheduleWakeup', 'ToolSearch'] as const
+export type InjectionTool = (typeof injectionTools)[number]
+export interface BuildInjection {
+  system_prompt?: boolean
+  attachments?: Partial<Record<InjectionAttachment, boolean>>
+  tools?: Partial<Record<InjectionTool, boolean>>
+}
+function validInjection(value: BuildInjection | undefined): boolean {
+  if (value === undefined) return true
+  if (typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['system_prompt', 'attachments', 'tools'].includes(key))) return false
+  if (value.system_prompt !== undefined && typeof value.system_prompt !== 'boolean') return false
+  return Object.entries(value.attachments ?? {}).every(([k, v]) => (injectionAttachments as readonly string[]).includes(k) && typeof v === 'boolean') &&
+    Object.entries(value.tools ?? {}).every(([k, v]) => (injectionTools as readonly string[]).includes(k) && typeof v === 'boolean')
+}
+export function mergeInjection(parent?: BuildInjection, child?: BuildInjection): BuildInjection | undefined {
+  if (!parent && !child) return undefined
+  const out: BuildInjection = { ...parent, ...child?.system_prompt !== undefined && { system_prompt: child.system_prompt } }
+  if (parent?.attachments || child?.attachments) out.attachments = { ...parent?.attachments, ...child?.attachments }
+  if (parent?.tools || child?.tools) out.tools = { ...parent?.tools, ...child?.tools }
+  return out
+}
 // Independently editable types; the core also accepts the former whole environment type.
 export const attachmentGroups = {
   working_directory: ['primary_directory', 'additional_directories', 'git_repository'],
@@ -92,6 +120,8 @@ export interface RequestPolicy {
   build_billing_entrypoint?: BillingEntrypoint
   // Absent entrypoints use their default line.
   build_identity_lines?: Partial<Record<BillingEntrypoint, IdentityLineChoice>>
+  // Absent adds nothing.
+  build_injection?: BuildInjection
   request_identity_sources?: Partial<Record<IdentityField, IdentitySource>>
   schema_version?: number
   unknown_field: 'reject' | 'ignore'
@@ -164,6 +194,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     build_billing_sources: { ...policy?.build_billing_sources },
     ...(policy?.build_billing_entrypoint === undefined ? {} : { build_billing_entrypoint: policy.build_billing_entrypoint }),
     build_identity_lines: { ...policy?.build_identity_lines },
+    ...(policy?.build_injection === undefined ? {} : { build_injection: mergeInjection(policy.build_injection) }),
     request_identity_sources: { ...policy?.request_identity_sources },
     relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
     cli_version: defaults.cli_version,
@@ -179,6 +210,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
       (billingFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
     (p.build_billing_entrypoint === undefined || (billingEntrypoints as readonly string[]).includes(p.build_billing_entrypoint)) &&
     validIdentityLines(p.build_identity_lines) &&
+    validInjection(p.build_injection) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
@@ -191,7 +223,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
 }
 
 // An absent key follows its parent; this also applies independently to nested fields.
-export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_identity_lines' | 'request_identity_sources'>>
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_identity_lines' | 'build_injection' | 'request_identity_sources'>>
 export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
 export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
 export interface FeaturePreview {
@@ -208,7 +240,7 @@ export function newRequestPolicy(): RequestPolicy {
   return { ...defaultRequestPolicy(), build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
 }
 export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOverrides): RequestPolicy {
-  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_identity_lines: { ...parent.build_identity_lines, ...overrides.build_identity_lines }, request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
+  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_identity_lines: { ...parent.build_identity_lines, ...overrides.build_identity_lines }, build_injection: mergeInjection(parent.build_injection, overrides.build_injection), request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
 }
 export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
   let count = 0
@@ -224,6 +256,14 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
       for (const [entrypoint, line] of Object.entries(value as Record<string, string>)) {
         if ((parent.build_identity_lines?.[entrypoint as BillingEntrypoint] ?? defaultIdentityLine(entrypoint as BillingEntrypoint)) !== line) count++
       }
+    } else if (key === 'build_injection') {
+      const own = value as BuildInjection
+      if (own.system_prompt !== undefined && (parent.build_injection?.system_prompt ?? false) !== own.system_prompt) count++
+      for (const field of ['attachments', 'tools'] as const) {
+        for (const [name, on] of Object.entries(own[field] ?? {})) {
+          if (((parent.build_injection?.[field] as Record<string, boolean> | undefined)?.[name] ?? false) !== on) count++
+        }
+      }
     } else if (key === 'build_billing_entrypoint') {
       if ((parent.build_billing_entrypoint ?? defaultBillingEntrypoint) !== value) count++
     } else if (parent[key as keyof RequestPolicy] !== value) count++
@@ -232,9 +272,9 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
 }
 export function validFeatureOverrides(value: FeatureOverrides): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines', 'request_identity_sources']
+  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines', 'build_injection', 'request_identity_sources']
   if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
-  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_identity_lines', 'request_identity_sources'] as const) {
+  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_identity_lines', 'build_injection', 'request_identity_sources'] as const) {
     if (value[key] !== undefined && (typeof value[key] !== 'object' || Array.isArray(value[key]))) return false
   }
   return validRequestPolicy(mergeFeaturePolicy(defaultRequestPolicy(), value))

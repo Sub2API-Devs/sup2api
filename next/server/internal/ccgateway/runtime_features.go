@@ -51,6 +51,9 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	if identityLines {
 		required = append(required, features.BuildIdentityCapability)
 	}
+	if p.BuildInjection != nil {
+		required = append(required, features.BuildInjectionCapability)
+	}
 	return required
 }
 

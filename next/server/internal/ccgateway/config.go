@@ -361,6 +361,9 @@ func mergeConfig(c, old Config) (Config, error) {
 		// them, while an explicit {} remains an intentional reset.
 		c.RequestPolicy.BuildBillingSources = mergeSourceMap(c.RequestPolicy.BuildBillingSources, old.RequestPolicy.BuildBillingSources)
 		c.RequestPolicy.BuildIdentityLines = mergeSourceMap(c.RequestPolicy.BuildIdentityLines, old.RequestPolicy.BuildIdentityLines)
+		if c.RequestPolicy.BuildInjection == nil {
+			c.RequestPolicy.BuildInjection = old.RequestPolicy.BuildInjection
+		}
 		if c.RequestPolicy.BuildBillingEntrypoint == "" {
 			c.RequestPolicy.BuildBillingEntrypoint = old.RequestPolicy.BuildBillingEntrypoint
 		}

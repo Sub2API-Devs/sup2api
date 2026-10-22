@@ -59,15 +59,42 @@ export function validateDirectPolicy(raw) {
   return value;
 }
 
+// What build adds to a request without a billing header (a request that is not
+// Claude Code's), each optional (2026-10-23 decision; contracts
+// features/injection.go): Claude Code's own system prompt, the attachments CC
+// sends on a session's first turn, and CC's own tools by name, each a key set
+// to true. The text and the tool definitions are the CLI's, never sent in.
+export const injectionAttachments = ['environment', 'model', 'total_tokens', 'date'];
+const toolName = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+function validateInjection(value) {
+  if (value === undefined) return;
+  if (!object(value) || Object.keys(value).some(key => !['system_prompt', 'attachments', 'tools'].includes(key))) throw Error('Invalid build_injection');
+  if (value.system_prompt !== undefined && typeof value.system_prompt !== 'boolean') throw Error('Invalid build_injection.system_prompt');
+  for (const [name, valid] of [['attachments', key => injectionAttachments.includes(key)], ['tools', key => toolName.test(key)]]) {
+    const set = value[name];
+    if (set === undefined) continue;
+    if (!object(set) || Object.keys(set).length > 64 || !Object.entries(set).every(([key, on]) => valid(key) && typeof on === 'boolean')) throw Error(`Invalid build_injection.${name}`);
+  }
+}
+
+// injectionChoices reads what is added: the system prompt, the attachments in
+// CC's order and the tool names.
+export function injectionChoices(value) {
+  const on = set => Object.entries(set ?? {}).filter(([, chosen]) => chosen).map(([key]) => key);
+  return { systemPrompt: value?.system_prompt === true, attachments: injectionAttachments.filter(kind => value?.attachments?.[kind] === true), tools: on(value?.tools) };
+}
+
 // This envelope is built by the trusted Worker. User Messages JSON cannot
 // supply it. Standalone request --build without a policy remains client-only.
 export function validateRequestPolicy(value) {
   if (value === undefined) return {};
   if (!object(value) || value.contract_version !== 2) throw Error('Unsupported request policy contract');
   for (const key of Object.keys(value)) {
-    if (!['contract_version', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines'].includes(key)) throw Error(`Unknown request policy key: ${key}`);
+    if (!['contract_version', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines', 'build_injection'].includes(key)) throw Error(`Unknown request policy key: ${key}`);
   }
   validateIdentityChoices(value);
+  validateInjection(value.build_injection);
   for (const [name, fields, sources] of [
     ['build_attachment_sources', environmentFields, ['client', 'worker', 'erase']],
     ['build_billing_sources', billingFields, ['client', 'worker']],

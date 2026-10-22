@@ -21,6 +21,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 	for _, feature := range []struct{ id, title, capability string }{
 		{"F-BUILD-BILLING", "build 计费归属来源", BuildBillingCapability},
 		{"F-BUILD-IDENTITY-LINE", "build 计费头入口与身份行", BuildIdentityCapability},
+		{"F-BUILD-INJECTION", "build 给非 CC 请求补提示词、附件与工具", BuildInjectionCapability},
 		{"F-DIRECT-BILLING", "direct 补计费头与身份行", DirectBillingCapability},
 		{"F-REQUEST-AGENT-CONTEXT", "按客户端还原主代理/子代理请求", RequestAgentContextCapability},
 		{"F-BUILD-PRESERVATION", "build 内容保真", BuildContentPreservationCapability},

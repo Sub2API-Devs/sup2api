@@ -387,4 +387,53 @@ func TestGlobalSavePreservesOmittedIdentityLines(t *testing.T) {
 	require.Equal(t, "claude-desktop", got.RequestPolicy.BuildBillingEntrypoint)
 	require.Equal(t, stored.BuildIdentityLines, got.RequestPolicy.BuildIdentityLines)
 }
+
+// The layers a request without a billing header is given resolve per field
+// through the layers; the Worker gets only what is added, never for direct,
+// and needs the capability only then (2026-10-23).
+func TestInjectionResolvesPerFieldAndNeedsTheCapability(t *testing.T) {
+	inj := func(raw string) *features.BuildInjection {
+		var p *features.BuildInjection
+		require.NoError(t, json.Unmarshal([]byte(raw), &p))
+		return p
+	}
+	global := defaultRequestPolicy()
+	global.BuildInjection = inj(`{"system_prompt":true,"attachments":{"environment":true,"date":true}}`)
+	cfg := Config{RequestPolicy: &global, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, AllowAccountOverride: true,
+		Overrides: FeatureOverrides{BuildInjection: inj(`{"tools":{"Read":true,"Bash":true}}`)}}}}
+	got := cfg.ResolveFeaturePolicy(7, AccountFeaturePolicy{Mode: "custom", Overrides: FeatureOverrides{BuildInjection: inj(`{"system_prompt":false,"attachments":{"date":false}}`)}})
+	raw, _ := json.Marshal(got.Effective.BuildInjection)
+	require.JSONEq(t, `{"system_prompt":false,"attachments":{"environment":true,"date":false},"tools":{"Read":true,"Bash":true}}`, string(raw))
+	require.Equal(t, "account", got.Sources["build_injection.system_prompt"])
+	require.Equal(t, "global", got.Sources["build_injection.attachments.environment"])
+	require.Equal(t, "account", got.Sources["build_injection.attachments.date"])
+	require.Equal(t, "group", got.Sources["build_injection.tools.Read"])
+	require.True(t, *got.Inherited.BuildInjection.SystemPrompt)
+
+	svc := &Service{}
+	p, err := svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	raw, _ = json.Marshal(p.BuildInjection)
+	require.JSONEq(t, `{"system_prompt":true,"attachments":{"environment":true,"date":true}}`, string(raw))
+	require.Contains(t, requestPolicyCapabilities(p), features.BuildInjectionCapability)
+	global.BuildInjection = inj(`{"system_prompt":false,"attachments":{"environment":false}}`)
+	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	require.Nil(t, p.BuildInjection)
+	require.NotContains(t, requestPolicyCapabilities(p), features.BuildInjectionCapability, "adding nothing needs no newer Worker")
+	global.BuildInjection, global.RelayMode = inj(`{"tools":{"Read":true}}`), "direct"
+	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
+	require.NoError(t, err)
+	require.Nil(t, p.BuildInjection, "direct adds nothing")
+
+	require.Error(t, FeatureOverrides{BuildInjection: inj(`{"tools":{"Glob":true}}`)}.Validate())
+	require.Error(t, FeatureOverrides{BuildInjection: inj(`{"attachments":{"skills":true}}`)}.Validate())
+	// A save from a client that does not know the field keeps it.
+	stored := defaultRequestPolicy()
+	stored.BuildInjection = inj(`{"tools":{"Read":true}}`)
+	in := defaultRequestPolicy()
+	merged, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &in, FeatureRevision: 3}, Config{Mode: "disabled", RequestPolicy: &stored, FeatureRevision: 3})
+	require.NoError(t, err)
+	require.Equal(t, stored.BuildInjection, merged.RequestPolicy.BuildInjection)
+}
 func ptr(v string) *string { return &v }

@@ -17,6 +17,18 @@ describe('CC feature layer contract', () => {
     expect(mergeFeaturePolicy(parent, override).build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker', shell: 'erase' })
     expect(parent.build_attachment_sources).not.toHaveProperty('shell')
   })
+  // The system prompt and each attachment and tool inherit on their own.
+  it('merges what a request without a billing header is given choice by choice', () => {
+    const parent = { ...newRequestPolicy(), build_injection: { system_prompt: true, attachments: { environment: true, date: true } } }
+    const override = { build_injection: { attachments: { date: false }, tools: { Read: true } } }
+    expect(mergeFeaturePolicy(parent, override).build_injection).toEqual({ system_prompt: true, attachments: { environment: true, date: false }, tools: { Read: true } })
+    expect(featureDifferenceCount(parent, override)).toBe(2)
+    expect(parent.build_injection.attachments).toEqual({ environment: true, date: true })
+    expect(validFeatureOverrides(override)).toBe(true)
+    for (const bad of [{ build_injection: { tools: { Glob: true } } }, { build_injection: { attachments: { skills: true } } }, { build_injection: { system_prompt: 'yes' } }]) {
+      expect(validFeatureOverrides(bad as never)).toBe(false)
+    }
+  })
   it('rejects invalid and unknown source fields, billing erase and null overrides', () => {
     for (const overrides of [{ build_billing_sources: { cc_version: 'erase' } }, { build_attachment_sources: { user_email: 'erase' } }, { build_attachment_sources: null }, { relay_mode: null }, { cli_version: '2.1.304' }]) {
       expect(validFeatureOverrides(overrides as never)).toBe(false)

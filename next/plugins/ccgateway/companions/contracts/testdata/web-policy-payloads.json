@@ -209,6 +209,12 @@
           "build_identity_lines": {
             "claude-desktop": "agent_sdk"
           },
+          "build_injection": {
+            "system_prompt": true,
+            "attachments": {
+              "environment": true
+            }
+          },
           "request_identity_sources": {},
           "relay_mode": "build",
           "cli_version": "2.1.304",
@@ -262,7 +268,10 @@
         "build_attachment_sources.os_version": "erase",
         "build_billing_entrypoint": "cli",
         "build_identity_lines.claude-desktop": "agent_sdk",
-        "build_identity_lines.sdk-cli": "agent_sdk"
+        "build_identity_lines.sdk-cli": "agent_sdk",
+        "build_injection.system_prompt": "true",
+        "build_injection.attachments.environment": "true",
+        "build_injection.attachments.date": "false"
       }
     },
     {
@@ -511,6 +520,11 @@
               },
               "build_identity_lines": {
                 "cli": "none"
+              },
+              "build_injection": {
+                "attachments": {
+                  "date": true
+                }
               }
             }
           }
@@ -530,7 +544,9 @@
         "build_billing_sources.cc_entrypoint": "worker",
         "build_billing_sources.cc_version": "client",
         "build_identity_lines.cli": "none",
-        "build_billing_entrypoint": "sdk-cli"
+        "build_billing_entrypoint": "sdk-cli",
+        "build_injection.attachments.date": "true",
+        "build_injection.system_prompt": "false"
       }
     },
     {

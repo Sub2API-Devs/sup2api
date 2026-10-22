@@ -31,14 +31,24 @@ export default {
     latestSaved: 'Current saved settings for comparison', reviewLatest: 'Latest revision loaded. Your draft remains below. Compare it with the current saved settings before saving.',
     invalid: 'Invalid CC feature settings. Check source options.',
     disabledReasons: { no_group: 'Select an account group to preview its settings.', group_unconfigured: 'This group has not enabled account overrides.', group_disabled: 'This group uses global settings.', account_override_disabled: 'This group does not allow account overrides.' },
-    fields: { user_id: 'metadata.user_id', platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
+    fields: { platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
   },
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
   cliProfile: {
     title: 'Claude Code version and request mode', mode: 'Passthrough / forwarding', version: 'Pinned version',
     direct: 'Pure passthrough (direct)', build: 'Component assembly (build)',
-    request: 'Request', prefixLine: 'Identity line', autoUserId: 'Replaced when present, never added', autoPrefix: 'Added by billing entrypoint; see Identity line',
+    request: 'Request',
     pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
+  },
+  injection: {
+    title: 'Requests not from Claude Code',
+    hint: 'Applies in build mode to requests without a billing header (not sent by Claude Code): the billing header is always added; choose here whether Claude Code\x27s system prompt, first-turn attachments and tools are added too. Claude Code on the Worker renders all of it and places attachments where it would (a system turn or reminders, per model). Requests with a billing header only get the billing header and attachment conversion.',
+    toolsHint: 'Claude Code defines the added tools; a call the model makes goes back to the client like its own tools, so a client without an implementation receives a call it cannot handle. With ToolSearch, Claude Code defers some tools, which are then found only through ToolSearch; the deferred tool list attachment is not added.',
+    on: 'Add', off: 'Don\x27t add',
+    prompt: 'Prompt', systemPrompt: 'System prompt',
+    attachments: 'First-turn attachments', attachment: { environment: 'Environment', model: 'Model', total_tokens: 'Tokens left', date: 'Date' },
+    tools: 'Claude Code tools',
+    summary: '{n} added for non-CC'
   },
   buildAttachments: {
     directHint: 'Forwarded as sent; only a missing billing header (or field) is filled, and the identity line is added by entrypoint',

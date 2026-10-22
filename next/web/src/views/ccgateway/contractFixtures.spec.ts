@@ -102,9 +102,13 @@ describe('editor payloads for the core contract', () => {
     // Selects: an option's value is its index (cli; claude-desktop: agent_sdk).
     await w.get('[data-testid="billing-entrypoint-select"]').setValue('0')
     await w.get('[data-testid="identity-line-select-claude-desktop"]').setValue('1')
+    // What a request without a billing header is given: on is the first column.
+    await pick(w, 'injection-system_prompt', 0)
+    await pick(w, 'injection-attachments-environment', 0)
     cases.push({ name: 'global-sources', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
       expect: { relay_mode: 'build', 'build_billing_sources.cc_version': 'worker', 'build_attachment_sources.platform_name': 'worker', 'build_attachment_sources.os_version': 'erase',
-        build_billing_entrypoint: 'cli', 'build_identity_lines.claude-desktop': 'agent_sdk', 'build_identity_lines.sdk-cli': 'agent_sdk' } })
+        build_billing_entrypoint: 'cli', 'build_identity_lines.claude-desktop': 'agent_sdk', 'build_identity_lines.sdk-cli': 'agent_sdk',
+        'build_injection.system_prompt': 'true', 'build_injection.attachments.environment': 'true', 'build_injection.attachments.date': 'false' } })
     w.unmount()
 
     // Global, switched to direct: a pure passthrough with nothing to set.
@@ -120,8 +124,11 @@ describe('editor payloads for the core contract', () => {
     await pick(w, 'billing-cc_entrypoint', 2)
     // Layered selects start with follow: cli's none is index 2.
     await w.get('[data-testid="identity-line-select-cli"]').setValue('2')
+    // Layered injection columns start with follow: add is index 1.
+    await pick(w, 'injection-attachments-date', 1)
     cases.push({ name: 'group-sources', layer: 'group', group_id: 3, saved: jsonCopy(saved), body: await submit(w),
-      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client', 'build_identity_lines.cli': 'none', build_billing_entrypoint: 'sdk-cli' } })
+      expect: { 'build_billing_sources.cc_entrypoint': 'worker', 'build_billing_sources.cc_version': 'client', 'build_identity_lines.cli': 'none', build_billing_entrypoint: 'sdk-cli',
+        'build_injection.attachments.date': 'true', 'build_injection.system_prompt': 'false' } })
     w.unmount()
 
     // Account 9 (in group 3) customizes billing over the group's.

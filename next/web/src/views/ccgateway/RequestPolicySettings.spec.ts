@@ -85,7 +85,7 @@ describe('CCGateway single-request modes', () => {
   })
   // Direct fills only the billing header and the identity line by entrypoint;
   // build also replaces the user_id on its own, so the identity has no setting
-  // in either mode (2026-10-21/22 decisions).
+  // and no row in either mode (2026-10-21/22 decisions).
   it('shows what each mode does on its own and offers no identity setting', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
     const w = await render()
@@ -95,10 +95,9 @@ describe('CCGateway single-request modes', () => {
     }
     for (const id of ['billing-entrypoint', 'identity-lines']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(true)
     await w.get('[data-testid="relay-mode"]').setValue('1')
-    expect(w.find('[data-testid="direct-hint"]').exists()).toBe(false)
-    expect(w.get('[data-testid="auto-user-id"]').text()).toContain('有就自动替换，没有不加')
-    expect(w.get('[data-testid="auto-prefix"]').text()).toContain('按计费头入口补上')
-    expect(w.find('[data-testid="identity-sources"]').exists()).toBe(false)
+    for (const id of ['direct-hint', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
+      expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    }
     const billing = w.get('[data-testid="billing-sources"]').text()
     expect(billing).toContain('计费头')
     expect(billing).toContain('客户端，没有用服务端')
@@ -139,6 +138,35 @@ describe('CCGateway single-request modes', () => {
     expect(chosen('identity-line-select-cli')).toBe('不补')
     expect(chosen('identity-line-select-claude-desktop')).toBe('Claude Agent SDK')
     expect(chosen('identity-line-select-claude-vscode')).toBe('Claude Code + Agent SDK')
+    w.unmount()
+  })
+  // A request without a billing header gets, per choice, Claude Code's system
+  // prompt, attachments and tools; only build shows the choices (2026-10-23).
+  it('saves what a request without a billing header is given and restores it', async () => {
+    let stored = config(defaultRequestPolicy())
+    mocks.get.mockImplementation(async () => structuredClone(stored))
+    mocks.put.mockImplementation(async (_url, body) => {
+      stored = config(JSON.parse(JSON.stringify(body.request_policy)))
+      return structuredClone(stored)
+    })
+    let w = await render()
+    const prompt = '[data-testid="injection-system_prompt"]', env = '[data-testid="injection-attachments-environment"]', date = '[data-testid="injection-attachments-date"]'
+    expect(picked(w, prompt)).toBe(1)
+    expect(picked(w, env)).toBe(1)
+    await pick(w, prompt, 0)
+    await pick(w, env, 0)
+    await w.get('[data-testid="build-injection"]').findAll('button').find(b => b.text().includes('Claude Code 工具'))!.trigger('click')
+    await pick(w, '[data-testid="injection-tools-Read"]', 0)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored.request_policy?.build_injection).toEqual({ system_prompt: true, attachments: { environment: true }, tools: { Read: true } })
+    w.unmount()
+    w = await render()
+    expect(picked(w, prompt)).toBe(0)
+    expect(picked(w, env)).toBe(0)
+    expect(picked(w, date)).toBe(1)
+    expect(w.get('[data-testid="cli-request-mode"]').text()).toContain('非 CC 补 3 项')
+    await w.get('[data-testid="relay-mode"]').setValue('0')
+    expect(w.find('[data-testid="build-injection"]').exists()).toBe(false)
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {

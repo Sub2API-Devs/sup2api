@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip, SOptionMatrix, SSelect, SSettingRow, SSettingsGroup, SDisclosure } from '@sub2api/ui'
 import type { OptionMatrixGroup, OptionMatrixRow } from '@sub2api/ui'
-import { billingEntrypoints, billingFields, defaultBillingEntrypoint, defaultIdentityLine, featureDifferenceCount, identityLineChoices, mergeFeaturePolicy, type BillingEntrypoint, type BuildAttachmentField, type FeatureOverrides, type IdentityLineChoice, type RequestPolicy } from './requestPolicy'
+import { billingEntrypoints, billingFields, defaultBillingEntrypoint, defaultIdentityLine, featureDifferenceCount, identityLineChoices, injectionAttachments, injectionTools, mergeFeaturePolicy, type BillingEntrypoint, type BuildAttachmentField, type BuildInjection, type FeatureOverrides, type IdentityLineChoice, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const overrides = defineModel<FeatureOverrides>('overrides', { default: () => ({}) })
 const props = defineProps<{ inherited?: RequestPolicy; disabled?: boolean; sources?: Record<string, string>; effective?: RequestPolicy; showSavedWhenDisabled?: boolean }>()
@@ -128,15 +128,70 @@ const envSections = computed<OptionMatrixGroup[]>(() => envGroups.map(group => {
     rows: group.fields.map(field => row('build_attachment_sources', field, 'ccgateway.layers.fields.' + field, 'build-attachment-' + field))
   }
 }))
+// A request without a billing header is given, per choice, Claude Code's
+// system prompt, attachments and tools (2026-10-23). Row keys are paths in
+// build_injection; on/off maps to true/false, follow drops the key.
+type InjectionPart = 'attachments' | 'tools'
+const injectionOptions = computed(() => [...followOption.value, { value: 'on', label: t('ccgateway.injection.on') }, { value: 'off', label: t('ccgateway.injection.off') }])
+const injectionOf = (p: RequestPolicy | FeatureOverrides | undefined): BuildInjection => p?.build_injection ?? {}
+function injectionChoice(path: string, from: BuildInjection): boolean | undefined {
+  const [part, name] = path.split('.') as [string, string | undefined]
+  return part === 'system_prompt' ? from.system_prompt : (from[part as InjectionPart] as Record<string, boolean> | undefined)?.[name!]
+}
+function injectionValue(path: string) {
+  const own = injectionChoice(path, injectionOf(showEffective.value ? resolved.value : layered.value ? overrides.value : policy.value))
+  if (own === undefined) return layered.value && !showEffective.value ? 'follow' : 'off'
+  return own ? 'on' : 'off'
+}
+function applyInjection(patch: Record<string, unknown>) {
+  const next: BuildInjection = JSON.parse(JSON.stringify(injectionOf(layered.value ? overrides.value : policy.value)))
+  for (const [key, value] of Object.entries(patch)) {
+    const [part, name] = key.replace(/^build_injection./, '').split('.') as [string, string | undefined]
+    const on = value === 'follow' ? undefined : value === 'on'
+    if (part === 'system_prompt') {
+      if (on === undefined) delete next.system_prompt
+      else next.system_prompt = on
+      continue
+    }
+    const set = { ...(next[part as InjectionPart] as Record<string, boolean> | undefined) }
+    if (on === undefined) delete set[name!]
+    else set[name!] = on
+    if (Object.keys(set).length) (next as Record<string, unknown>)[part] = set
+    else delete next[part as InjectionPart]
+  }
+  const empty = !Object.keys(next).length
+  if (layered.value) {
+    const value = { ...overrides.value }
+    if (empty) delete value.build_injection
+    else value.build_injection = next
+    overrides.value = value
+  } else policy.value = { ...policy.value, build_injection: next }
+}
+const injectionMatrix = computed(() => Object.fromEntries(['system_prompt', ...injectionAttachments.map(k => 'attachments.' + k), ...injectionTools.map(k => 'tools.' + k)]
+  .map(path => ['build_injection.' + path, injectionValue(path)])))
+function injectionRow(path: string, label: string): OptionMatrixRow {
+  const own = injectionChoice(path, injectionOf(layered.value ? overrides.value : undefined))
+  const inherited = injectionChoice(path, injectionOf(props.inherited)) ?? false
+  return { key: 'build_injection.' + path, label, hint: origin('build_injection.' + path),
+    marked: layered.value && !showEffective.value && own !== undefined && own !== inherited,
+    effective: injectionChoice(path, injectionOf(resolved.value)) ? 'on' : 'off', testid: 'injection-' + path.replace('.', '-') }
+}
+const injectionSections = computed<OptionMatrixGroup[]>(() => [
+  { key: 'prompt', label: t('ccgateway.injection.prompt'), rows: [injectionRow('system_prompt', t('ccgateway.injection.systemPrompt'))] },
+  { key: 'attachments', label: t('ccgateway.injection.attachments'), rows: injectionAttachments.map(k => injectionRow('attachments.' + k, t('ccgateway.injection.attachment.' + k))) },
+  { key: 'tools', label: t('ccgateway.injection.tools'), defaultOpen: false, rows: injectionTools.map(k => injectionRow('tools.' + k, k)) }
+])
 // What the effective policy adds up to, so the header says what the form does.
 const summary = computed(() => {
   if (resolved.value.relay_mode !== 'build') return []
   const count = (section: Section, fields: readonly string[], source: string) => fields.filter(field => sourcesOf(resolved.value, section)[field] === source).length
-  return [
+  const chips = [
     ['summaryBilling', count('build_billing_sources', billingFields, 'worker')],
     ['summaryEnv', count('build_attachment_sources', envFields, 'worker')],
     ['summaryErase', count('build_attachment_sources', envFields, 'erase')]
   ].filter(([, n]) => n).map(([key, n]) => t('ccgateway.layers.' + key, { n }))
+  const added = Object.entries(injectionMatrix.value).filter(([key]) => injectionChoice(key.replace(/^build_injection./, ''), injectionOf(resolved.value))).length
+  return added ? [...chips, t('ccgateway.injection.summary', { n: added })] : chips
 })
 </script>
 <template>
@@ -179,7 +234,8 @@ const summary = computed(() => {
           @update:model-value="setMode"
         />
       </SSettingRow>
-      <!-- What each mode does on its own, with no setting (2026-10-21 decision). -->
+      <!-- What direct does on its own, with no setting (2026-10-21 decision);
+      build's user_id and identity line need no row (2026-10-22). -->
       <SSettingRow
         v-if="resolved.relay_mode === 'direct'"
         :label="t('ccgateway.cliProfile.request')"
@@ -187,20 +243,6 @@ const summary = computed(() => {
         size="sm"
         data-testid="direct-hint"
       />
-      <template v-else>
-        <SSettingRow
-          :label="t('ccgateway.layers.fields.user_id')"
-          :description="t('ccgateway.cliProfile.autoUserId')"
-          size="sm"
-          data-testid="auto-user-id"
-        />
-        <SSettingRow
-          :label="t('ccgateway.cliProfile.prefixLine')"
-          :description="t('ccgateway.cliProfile.autoPrefix')"
-          size="sm"
-          data-testid="auto-prefix"
-        />
-      </template>
     </SSettingsGroup>
     <!-- The billing header is required in both modes and the identity line is
     chosen per entrypoint in both (2026-10-22); the field sources are build's. -->
@@ -284,6 +326,28 @@ const summary = computed(() => {
           :disabled="disabled"
           :aria-label="t('ccgateway.layers.environment')"
           @change="applySources"
+        />
+      </div>
+    </SSettingsGroup>
+    <SSettingsGroup
+      v-if="resolved.relay_mode !== 'direct'"
+      :title="t('ccgateway.injection.title')"
+      dense
+      data-testid="build-injection"
+    >
+      <template #details>
+        <p>{{ t('ccgateway.injection.hint') }}</p>
+        <p>{{ t('ccgateway.injection.toolsHint') }}</p>
+      </template>
+      <div class="py-2">
+        <SOptionMatrix
+          :model-value="injectionMatrix"
+          :columns="injectionOptions"
+          :groups="injectionSections"
+          collapsible
+          :disabled="disabled"
+          :aria-label="t('ccgateway.injection.title')"
+          @change="applyInjection"
         />
       </div>
     </SSettingsGroup>

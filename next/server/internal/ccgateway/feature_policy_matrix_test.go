@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -80,6 +81,26 @@ func matrixValue(p RequestPolicy, field string) string {
 		return p.BuildIdentityLines[key]
 	case "build_billing_entrypoint":
 		return p.BuildBillingEntrypoint
+	// build_injection.system_prompt, build_injection.attachments.<name> and
+	// build_injection.tools.<name> read "true" or "false" (unset adds nothing).
+	case "build_injection":
+		inj := p.BuildInjection.Merge(nil)
+		if inj == nil {
+			inj = &features.BuildInjection{}
+		}
+		part, name, _ := strings.Cut(key, ".")
+		on := false
+		switch part {
+		case "system_prompt":
+			on = inj.SystemPrompt != nil && *inj.SystemPrompt
+		case "attachments":
+			on = inj.Attachments[name]
+		case "tools":
+			on = inj.Tools[name]
+		default:
+			panic("unknown injection field: " + field)
+		}
+		return strconv.FormatBool(on)
 	default:
 		panic("matrix field without a section: " + field)
 	}

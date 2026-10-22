@@ -49,6 +49,7 @@ export function createContentPolicy(vocabulary) {
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
     leadingBilling: system => leadingBilling(c, system),
+    hasBilling: system => hasBilling(c, system),
     setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
   };
 }
@@ -412,6 +413,17 @@ function billingEntrypoint(c, system) {
 // leadingBilling is the fields of the header that opens the first block, by
 // name: Claude Code puts its header there (the request is CC's). null when the
 // first block does not open with the header; an unreadable header has no fields.
+// hasBilling says whether the system carries a billing header line anywhere,
+// even one that cannot be edited: such a request is Claude Code's own.
+function hasBilling(c, system) {
+  const texts = typeof system === 'string' ? [system] : Array.isArray(system) ? system.map(block => block?.text) : [];
+  return texts.some(text => {
+    if (typeof text !== 'string') return false;
+    const result = billingCandidate(c, text);
+    return Boolean(result.conflict) || result.candidates.length > 0;
+  });
+}
+
 function leadingBilling(c, system) {
   const first = typeof system === 'string' ? system : Array.isArray(system) && system[0]?.type === 'text' ? system[0].text : undefined;
   if (typeof first !== 'string' || !first.startsWith(c.billingHeader)) return null;

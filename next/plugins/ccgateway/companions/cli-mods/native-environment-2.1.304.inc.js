@@ -103,3 +103,25 @@ export function ccgatewayEnvironmentVocabulary() {
     },
   };
 }
+
+// The pieces build adds to a request that is not Claude Code's
+// (request-build-2.1.304.js injectLayers): CC's default system prompt for the
+// tools it will carry (wx), and the attachments CC sends on a session's first
+// turn, made by the same native producers as eIr: the environment snapshot
+// (Wkt, as Dvn), the model identity (eSt, as Lvn), the token budget (u7t, as
+// JDr) and the date (FUs). They are rendered and placed by the native message
+// pipeline, never here.
+export const ccgatewayDefaultPrompt = (tools, model) => wx(tools, model);
+export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records }) {
+  const wanted = new Set(kinds), out = [];
+  if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await Wkt({ cwd: workingDirectory, additionalWorkingDirectories }) });
+  if (wanted.has('model')) out.push(await eSt(Jkt(ah({ permissionMode: 'default', mainLoopModel: model, exceeds200kTokens: false }))));
+  if (wanted.has('total_tokens')) {
+    const mode = DJ(model, void 0);
+    // A new session's countdown: the context window (countdown) or the
+    // session budget (padded-countdown) less what the records already used.
+    if (mode !== 'off') out.push({ type: 'total_tokens_reminder', text: u7t(mode, (mode === 'countdown' ? bm(model, Of()) : mode === 'padded-countdown' ? NJ() : 0) - DZ(records)) });
+  }
+  if (wanted.has('date')) out.push({ type: 'date', date: FUs() });
+  return out;
+}
