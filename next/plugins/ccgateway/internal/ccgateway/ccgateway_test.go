@@ -104,12 +104,13 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 		Account: &pluginv1.Account{Platform: PlatformID, Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: "{}"},
 		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolMessages, UserId: 1, ApiKeyId: 2},
 		InboundHeaders: map[string]string{
-			"x-claude-code-request-class":   "subagent",
-			"x-claude-code-agent-id":        "a12268251d7ed891f",
-			"x-claude-code-parent-agent-id": "ad870fd7d5b0b15e6",
-			"x-claude-code-agent-type":      "general-purpose",
-			"x-claude-code-prompt-id":       "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d",
-			"x-claude-code-session-id":      "475d3bc6-d49a-4c42-8d1a-f5d9ab945851",
+			"x-claude-code-request-class":       "subagent",
+			"x-claude-code-agent-id":            "a12268251d7ed891f",
+			"x-claude-code-parent-agent-id":     "ad870fd7d5b0b15e6",
+			"x-claude-code-agent-type":          "general-purpose",
+			"x-claude-code-prompt-id":           "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d",
+			"x-claude-code-prev-tool-durations": "Agent=76;Read=12",
+			"x-claude-code-session-id":          "475d3bc6-d49a-4c42-8d1a-f5d9ab945851",
 		},
 	}
 	r, err := p.BuildUpstreamRequest(context.Background(), in)
@@ -128,10 +129,11 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 		}
 	}
 	for key, bad := range map[string]string{
-		"x-claude-code-request-class": "Main Thread",
-		"x-claude-code-agent-id":      "a b",
-		"x-claude-code-agent-type":    "../x",
-		"x-claude-code-prompt-id":     "not-a-uuid",
+		"x-claude-code-request-class":       "Main Thread",
+		"x-claude-code-agent-id":            "a b",
+		"x-claude-code-agent-type":          "../x",
+		"x-claude-code-prompt-id":           "not-a-uuid",
+		"x-claude-code-prev-tool-durations": "Agent=76,Read=12",
 	} {
 		in.InboundHeaders = map[string]string{key: bad}
 		r, err = p.BuildUpstreamRequest(context.Background(), in)

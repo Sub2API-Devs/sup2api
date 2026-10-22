@@ -26,7 +26,7 @@ test('the client factory and direct billing get the client kind of request', asy
       'ccgateway-request-build.js': 'export const buildRequest=async()=>{throw Error("build is not under test")};',
       'ccgateway-model-request.js': `
         export const checkModelRequest=()=>null;
-        export const openModelRequest=async(outgoing,owner,signal,factory)=>{await factory({});return {id:'x',ok:true,status:200,headers:{}}};
+        export const openModelRequest=async(outgoing,owner,signal,factory)=>{(await import('node:fs')).writeFileSync('outgoing.json',JSON.stringify(outgoing.headers??{}));await factory({});return {id:'x',ok:true,status:200,headers:{}}};
         export const cancelModelResponse=async()=>{};
         export const readModelResponse=async()=>({done:true,text:''});`,
       'run.mjs': `import fs from 'node:fs';
@@ -48,7 +48,7 @@ test('the client factory and direct billing get the client kind of request', asy
     const read = async name => JSON.parse(await fs.readFile(path.join(dir, name), 'utf8'));
     const header = 'x-anthropic-billing-header: cc_version=2.1.304.9a4; cc_entrypoint=sdk-cli; cc_is_subagent=true; cc_prompt_id=a606b757-b9e1-4f6f-8eb0-88ffd9569a8d;';
     const subagent = { model: 'm', system: [{ type: 'text', text: header }], messages: [{ role: 'user', content: 'Reply with OK.' }] };
-    const context = { version: 1, map: false, key: 'ab'.repeat(32), client: { request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d' } };
+    const context = { version: 1, map: false, key: 'ab'.repeat(32), client: { request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', prev_tool_durations: 'Agent=76' } };
 
     let result = await run(subagent, { CCG_REQUEST_AGENT: JSON.stringify(context) });
     assert.equal(result.code, 0, result.stderr);
@@ -57,6 +57,7 @@ test('the client factory and direct billing get the client kind of request', asy
     assert.equal(factory.querySource, 'agent:builtin:general-purpose');
     assert.deepEqual(factory.agentContext, { agentType: 'subagent', agentId: 'a12268251d7ed891f', parentPromptId: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', invocationKind: 'spawn' });
     assert.equal(factory.promptId, 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', 'direct sends the ID its body carries');
+    assert.equal((await read('outgoing.json'))['x-claude-code-prev-tool-durations'], 'Agent=76');
     let direct = await read('direct.json');
     assert.deepEqual(direct.agentContext, factory.agentContext);
     assert.equal(direct.promptId, factory.promptId);

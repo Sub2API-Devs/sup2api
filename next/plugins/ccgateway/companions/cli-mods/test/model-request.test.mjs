@@ -81,3 +81,15 @@ test('OAuth direct fetch preserves body bytes and exposes only safe authenticati
   assert.equal(JSON.stringify(response).includes('native-secret'), false);
   await cancelModelResponse(response.id, 'owner');
 });
+
+// x-stainless-timeout comes from the client's own timeout: Claude Code's
+// default 600 s, not the gateway's longer deadline, which bounds the exchange
+// separately. A shorter deadline still wins.
+test('the client timeout stays Claude Code default unless the deadline is shorter', async () => {
+  for (const [timeoutMs, expected] of [[undefined, 600000], [3600000, 600000], [120000, 120000]]) {
+    let seen;
+    const response = await openModelRequest({ ...options, timeoutMs }, 'owner', undefined, async () => ({ post: (path, request) => { seen = request.timeout; return { asResponse: async () => new Response('ok') }; } }), unusedFetch);
+    await cancelModelResponse(response.id, 'owner');
+    assert.equal(seen, expected, String(timeoutMs));
+  }
+});

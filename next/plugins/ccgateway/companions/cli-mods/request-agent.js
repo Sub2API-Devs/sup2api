@@ -21,6 +21,8 @@ const clientFields = {
   parent_agent_id: /^[!-~]{1,256}$/,
   agent_type: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/,
   prompt_id: uuid,
+  // CC 2.1.304 g4t: up to 32 "tool=ms" entries joined by ";".
+  prev_tool_durations: /^(?=.{1,4096}$)[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$/,
 };
 
 // readRequestAgent is the Worker's context, or null without one (an older
@@ -70,6 +72,9 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
   const result = { requestClass, promptId };
+  // The previous turn's tool timings are the client's loop state; CC sends
+  // them as a header and so do we, unchanged.
+  if (client.prev_tool_durations !== undefined) result.headers = { 'x-claude-code-prev-tool-durations': client.prev_tool_durations };
   // The client's header says cc_prompt_id; the request header must agree.
   if (map && claudeCode && billing.cc_prompt_id !== undefined && promptId !== undefined) result.billingPromptId = promptId;
   if (requestClass === 'subagent' || requestClass === 'workflow') {

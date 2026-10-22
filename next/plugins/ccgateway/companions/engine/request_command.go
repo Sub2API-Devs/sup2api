@@ -94,12 +94,15 @@ func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, worki
 		}
 	}
 	tools := []map[string]json.RawMessage{}
+	// The CLI receives each tool with its keys in the client's order (only
+	// input_schema renamed in place): the wire tools it sends are the client's.
+	wireTools := []json.RawMessage{}
 	rawTools, hasTools := body["tools"]
 	if hasTools {
-		if json.Unmarshal(rawTools, &tools) != nil || tools == nil {
+		if json.Unmarshal(rawTools, &tools) != nil || tools == nil || json.Unmarshal(rawTools, &wireTools) != nil {
 			return nil, fmt.Errorf("tools must be an array")
 		}
-		for _, tool := range tools {
+		for index, tool := range tools {
 			var name string
 			if tool == nil || json.Unmarshal(tool["name"], &name) != nil || strings.TrimSpace(name) == "" {
 				return nil, fmt.Errorf("tool definition requires a name")
@@ -116,8 +119,11 @@ func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, worki
 				if json.Unmarshal(tool["input_schema"], &schema) != nil || schema == nil {
 					return nil, fmt.Errorf("custom tool requires input_schema object")
 				}
-				tool["inputSchema"] = tool["input_schema"]
-				delete(tool, "input_schema")
+				renamed, err := renameJSONKey(wireTools[index], "input_schema", "inputSchema")
+				if err != nil {
+					return nil, fmt.Errorf("tool definition must be a JSON object")
+				}
+				wireTools[index] = renamed
 			}
 		}
 	}
@@ -134,7 +140,7 @@ func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, worki
 	// An absent tool catalog differs from an explicit empty catalog. Retain
 	// that distinction through both legacy and preserving CLI build paths.
 	if hasTools {
-		components["tools"] = tools
+		components["tools"] = wireTools
 	}
 	if policy != nil {
 		components["requestPolicy"] = policy
@@ -147,6 +153,43 @@ func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, worki
 	}
 	components["messages"], components["attachments"] = extracted, attachments
 	return json.Marshal(components)
+}
+
+// renameJSONKey renames one key of a JSON object in place: every other key,
+// the order and each value's bytes stay as they were.
+func renameJSONKey(raw json.RawMessage, from, to string) (json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, errors.New("expected a JSON object")
+	}
+	var out bytes.Buffer
+	out.WriteByte('{')
+	for first := true; decoder.More(); first = false {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, _ := token.(string)
+		var value json.RawMessage
+		if err = decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		if key == from {
+			key = to
+		}
+		encoded, _ := json.Marshal(key)
+		if !first {
+			out.WriteByte(',')
+		}
+		out.Write(encoded)
+		out.WriteByte(':')
+		out.Write(value)
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	out.WriteByte('}')
+	return out.Bytes(), nil
 }
 
 func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d *requestDiagnostic) {

@@ -45,8 +45,8 @@ export function wireToolDefinitions(tools) {
     const tool = structuredClone(source);
     if (tool.type && tool.type !== 'custom') return tool;
     if (!object(tool.inputSchema)) fail(`tools[${index}].inputSchema`, 'must be an object');
-    const { inputSchema, ...rest } = tool;
-    return { ...rest, input_schema: inputSchema };
+    // Renamed in place: the client's key order is the wire order.
+    return Object.fromEntries(Object.entries(tool).map(([key, value]) => [key === 'inputSchema' ? 'input_schema' : key, value]));
   });
 }
 

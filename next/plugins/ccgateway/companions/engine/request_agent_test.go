@@ -75,11 +75,11 @@ func TestRequestAgentContext(t *testing.T) {
 				headers := map[string]string{
 					"X-Claude-Code-Request-Class": "subagent", "X-Claude-Code-Agent-Id": "a12268251d7ed891f",
 					"X-Claude-Code-Parent-Agent-Id": "ad870fd7d5b0b15e6", "X-Claude-Code-Agent-Type": "general-purpose",
-					"X-Claude-Code-Prompt-Id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d",
+					"X-Claude-Code-Prompt-Id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d", "X-Claude-Code-Prev-Tool-Durations": "Agent=76",
 				}
 				first, env := send(sessionA, headers)
 				require.Equal(t, 1, first.Version)
-				require.Equal(t, map[string]string{"request_class": "subagent", "agent_id": "a12268251d7ed891f", "parent_agent_id": "ad870fd7d5b0b15e6", "agent_type": "general-purpose", "prompt_id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d"}, first.Client)
+				require.Equal(t, map[string]string{"request_class": "subagent", "agent_id": "a12268251d7ed891f", "parent_agent_id": "ad870fd7d5b0b15e6", "agent_type": "general-purpose", "prompt_id": "a606b757-b9e1-4f6f-8eb0-88ffd9569a8d", "prev_tool_durations": "Agent=76"}, first.Client)
 				if apiKey {
 					// No Claude account to map for: the client's IDs go unchanged.
 					require.False(t, first.Map)
@@ -142,4 +142,18 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 			require.Empty(t, env[requestAgentEnv])
 		})
 	}
+}
+
+// The CLI gets every tool with the client's key order; only input_schema is
+// renamed, in place.
+func TestBuildInputKeepsToolKeyOrder(t *testing.T) {
+	body := `{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"name":"Read","description":"d","input_schema":{"type":"object","z":1,"a":2},"cache_control":{"type":"ephemeral"}},{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`
+	out, err := messagesBuildComponentsPolicy([]byte(body), &buildRequestPolicy{}, "/w")
+	require.NoError(t, err)
+	var components struct {
+		Tools []json.RawMessage `json:"tools"`
+	}
+	require.NoError(t, json.Unmarshal(out, &components))
+	require.Equal(t, `{"name":"Read","description":"d","inputSchema":{"type":"object","z":1,"a":2},"cache_control":{"type":"ephemeral"}}`, string(components.Tools[0]))
+	require.Equal(t, `{"type":"web_search_20250305","name":"web_search","max_uses":1}`, string(components.Tools[1]))
 }

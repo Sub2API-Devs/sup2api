@@ -121,7 +121,7 @@ func headers(in map[string]string) map[string]string {
 		}
 	}
 	for key, valid := range agentContextHeaders {
-		if value := strings.TrimSpace(in[key]); value != "" && valid.MatchString(value) {
+		if value := strings.TrimSpace(in[key]); value != "" && len(value) <= 4096 && valid.MatchString(value) {
 			out[key] = value
 		}
 	}
@@ -136,6 +136,8 @@ var agentContextHeaders = map[string]*regexp.Regexp{
 	"x-claude-code-parent-agent-id": regexp.MustCompile(`^[!-~]{1,256}$`),
 	"x-claude-code-agent-type":      regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`),
 	"x-claude-code-prompt-id":       regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+	// CC 2.1.304 g4t: up to 32 "tool=ms" entries joined by ";", at most 4096 characters.
+	"x-claude-code-prev-tool-durations": regexp.MustCompile(`^[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$`),
 }
 
 // The host resolves this exact virtual target for this plugin and account type,

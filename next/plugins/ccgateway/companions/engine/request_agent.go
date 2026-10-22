@@ -28,6 +28,8 @@ var clientAgentHeaders = []struct {
 	{"parent_agent_id", "X-Claude-Code-Parent-Agent-Id", regexp.MustCompile(`^[!-~]{1,256}$`)},
 	{"agent_type", "X-Claude-Code-Agent-Type", regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`)},
 	{"prompt_id", "X-Claude-Code-Prompt-Id", regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)},
+	// The previous turn's tool timings, sent on as the client sent them.
+	{"prev_tool_durations", "X-Claude-Code-Prev-Tool-Durations", regexp.MustCompile(`^[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$`)},
 }
 
 // requestAgent is the CLI's agent context. Map says the IDs go upstream
@@ -46,7 +48,7 @@ type requestAgent struct {
 func readClientAgentHeaders(h http.Header) map[string]string {
 	out := map[string]string{}
 	for _, field := range clientAgentHeaders {
-		if value := h.Get(field.header); field.valid.MatchString(value) {
+		if value := h.Get(field.header); len(value) <= 4096 && field.valid.MatchString(value) {
 			out[field.name] = value
 		}
 	}

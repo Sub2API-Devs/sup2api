@@ -99,3 +99,12 @@ test('the Worker context is validated', () => {
     assert.throws(() => readRequestAgent(bad), /Invalid Worker agent context/, bad);
   }
 });
+
+test('the previous turn tool timings go on unchanged', () => {
+  const timed = resolve(mapped({ request_class: 'main', prompt_id: P, prev_tool_durations: 'Agent=76;Read=12' }), mainHeader);
+  assert.deepEqual(timed.headers, { 'x-claude-code-prev-tool-durations': 'Agent=76;Read=12' });
+  assert.equal(resolve(mapped({ request_class: 'main' }), mainHeader).headers, undefined);
+  for (const bad of ['Agent', 'Agent=x', 'A=1;', 'a b=1', 'A=1,B=2', 'x='.padEnd(5000, '1')]) {
+    assert.throws(() => readRequestAgent(JSON.stringify({ version: 1, map: false, client: { prev_tool_durations: bad } })), /Invalid Worker agent context/, bad);
+  }
+});

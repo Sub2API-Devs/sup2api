@@ -108,6 +108,7 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
       // passthrough and changes nothing (2026-10-21 decision).
       if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body, identityLine);
     }
+    if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };

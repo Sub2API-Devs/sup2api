@@ -98,6 +98,8 @@ test('304 wire tools retain order, missing description, attributes and absent ve
   assert.deepEqual(wire[0].input_schema, { type: 'object' }); assert.equal(wire[0].strict, true); assert.equal(wire[0].defer_loading, true);
   assert.deepEqual(wire[1], original[1]);
   wire[0].x_extra.retain = false; assert.deepEqual(tools, original);
+  // The client's key order is kept: input_schema is renamed where inputSchema was.
+  assert.deepEqual(Object.keys(wireToolDefinitions([{ name: 'n', inputSchema: { type: 'object' }, description: 'd', cache_control: { type: 'ephemeral' } }])[0]), ['name', 'input_schema', 'description', 'cache_control']);
   assert.equal(wireToolDefinitions(undefined), undefined); assert.deepEqual(wireToolDefinitions([]), []);
 });
 

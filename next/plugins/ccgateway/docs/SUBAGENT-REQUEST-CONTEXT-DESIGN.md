@@ -119,8 +119,12 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 | ID 值（session、agent、parent、prompt） | 映射值 | 客户端原值 | 设计如此；对照是另一次会话 |
 | `cch` 值 | 客户端算的值，但 build 改了 `cc_prompt_id` 和 metadata，可能已不匹配 body | 客户端算的值，body 原样 | — |
 | `anthropic-beta` 少 `mid-conversation-system-clear-at-2026-08-21` | 是 | 是 | 客户端对自定义地址就不发 |
-| `x-stainless-timeout` 3600（官方 600） | 是 | 是 | 我们：请求命令按 Worker 超时建客户端 |
-| 缺 `x-claude-code-prev-tool-durations` | 是 | 是 | 我们：插件和 Worker 不转发 |
-| 工具定义键顺序（`description` 在 `name` 前） | 是 | 否 | build 既有差异 |
+| `x-stainless-timeout` 3600（官方 600） | 已修 | 已修 | 客户端超时保持 600 秒，Worker 的期限另行生效（`model-request.js`） |
+| 缺 `x-claude-code-prev-tool-durations` | 已修 | 已修 | 插件、Worker 转发，CLI 原样发出 |
+| 工具定义键顺序（`description` 在 `name` 前） | 已修 | — | Worker 按客户端键顺序传工具，CLI 原位改名 `input_schema` |
 
 其余全部一致：request-class、agent-type、parent 关系、计费头字段集合（含 `cc_is_subagent`、turn 字段、`cc_prev_req`）、system 文本与分块缓存、messages、tools 内容、metadata 结构、diagnostics、其余 beta。
+
+修复后（v18 ELF sha256 `64c3759c…`）重跑：上表三项消失；默认客户端、设开关的 OAuth 客户端、设开关的 API Key 客户端都跑通（API Key 客户端本身就按 5 分钟缓存、个别工具说明不同，见 [接入说明](CLIENT-SETUP.md)）。
+
+**新发现的关联问题（待定）**：子代理结束后，父线程收到的 tool_result 正文里写着子代理的 agentId（`agentId: a… (use SendMessage with to: 'a…', …)`），这是客户端的原值。build 映射 agent-id 后，上游看到的子代理请求头是映射值，父线程正文里却是原值，两者对不上；官方请求里两者相同。agent-id 本来就以原值出现在正文里，映射它并不能隐藏什么。
