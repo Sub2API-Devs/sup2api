@@ -1,17 +1,18 @@
-import { Kvt, MDe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext } from './chunk-kasbfbhj.js';
+import { jOt, aBe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext } from './chunk-rncrmfyt.js';
 import { oJe } from './chunk-7y2kvacy.js';
 import { KF, lKe } from './chunk-jkcb7qdd.js';
-import { El } from './chunk-0ycjphb5.js';
+import { Al } from './chunk-7p6jp6kj.js';
 import { m4t as nativeToolPool } from './chunk-eanw7pgv.js';
 import { t1n as isIdentityLine } from './chunk-t61vswm2.js';
 import { registerNative, findNative } from './ccgateway-native-tools.js';
 import { prepareBuildInput, fingerprintMessages } from './ccgateway-request-input.js';
 import { normalizeBetas } from './ccgateway-request-options.js';
-import { getRootSession, setEntrypointOnRequests } from './chunk-q61sszgr.js';
-import { YEr } from './chunk-6dwnw6av.js';
+import { getRootSession, setEntrypointOnRequests } from './chunk-72vwyp9d.js';
+import { mBr } from './chunk-4qs43hr1.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices, defaultEntrypoint } from './ccgateway-request-policy.js';
 import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters } from './ccgateway-request-parameters.js';
+import { toBlocks } from './ccgateway-shared.js';
 
 // The content policy recognizes CC's own wording: the environment renderers'
 // vocabulary, the billing header (oJe) and the reminder tags (KF, lKe), all native.
@@ -20,7 +21,17 @@ const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccg
 const nativeLayers = () => layerVocabulary ??= ccgatewayLayerVocabulary();
 
 const firstPrompt = 'CCGATEWAY_FIRST_PROMPT_7d3c1a';
-const toBlocks = content => typeof content === 'string' ? [{ type: 'text', text: content }] : content;
+
+// collectBuilt runs CC's request builder (jOt, patched to yield the request
+// instead of sending it) and returns the request body.
+async function collectBuilt(input, signal, missing) {
+  for await (const event of jOt(input)) {
+    if (signal.aborted) throw signal.reason;
+    if (event.type === 'ccgateway_request') { if (!event.body) break; return event.body; }
+    if (event.type === 'assistant' && event.isApiErrorMessage) throw new Error(`CC request builder: ${JSON.stringify(event.message?.content)}`);
+  }
+  throw new Error(missing);
+}
 
 // The texts a request carries CC's attachments in: system turns, and user
 // blocks that are reminders (CC's own carriers; a prompt is never read).
@@ -61,18 +72,13 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const lines = prompt ? clientSystem.filter(block => isIdentityLine(block.text)) : [];
   const own = prompt ? clientSystem.filter(block => !isIdentityLine(block.text)).map(block => block.text) : [];
   const systemPrompt = prompt ? await ccgatewayDefaultPrompt([...tools, ...clientTools], model, own) : [];
-  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, MDe);
+  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, aBe);
   const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: clientRecords, session });
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
-  let built;
-  for await (const event of Kvt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
+  const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
     // CC's cache markers on its prompt, as CC decides them.
-    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined } })) {
-    if (signal.aborted) throw signal.reason;
-    if (event.type === 'ccgateway_request') { built = event.body; break; }
-    if (event.type === 'assistant' && event.isApiErrorMessage) throw new Error(`CC request builder: ${JSON.stringify(event.message?.content)}`);
-  }
-  if (!built) throw new Error('CC request builder did not produce the injected layers');
+    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined } },
+  signal, 'CC request builder did not produce the injected layers');
   // The billing header and the identity line are the other layers' (merged
   // after build), so only the prompt blocks are taken.
   const system = prompt ? (Array.isArray(built.system) ? built.system : []).filter(block => !block.text.startsWith(oJe) && !isIdentityLine(block.text)) : [];
@@ -126,6 +132,37 @@ function placeLayers(messages, layers) {
   return [...messages.slice(0, at), ...structuredClone(layers.before), first, ...structuredClone(layers.after), ...messages.slice(at + 1)];
 }
 
+// snapshotAttachments resolves typed payloads using CC's own renderer, and
+// preserves the caller's explicit role on the resulting text snapshot. This is
+// not type inference.
+function snapshotAttachments(records) {
+  for (const row of records) {
+    if (row.type !== 'attachment' || row.rendered !== undefined) continue;
+    const rendered = aBe(row);
+    if (!rendered.isKnownType) throw new Error(`Unknown CC attachment type: ${row.attachment.type}`);
+    const text = rendered.messages.every(m => typeof m.message.content === 'string' || m.message.content.every(b => b.type === 'text'));
+    if (rendered.messages.length && text) row.rendered = rendered.messages.map(m => ({ content: m.message.content }));
+  }
+}
+
+// The client's custom tools, registered as native tools for CC's own policy;
+// the wire keeps the client's definitions (ccgatewayRequestDefinition).
+function registerClientTools(session, customTools) {
+  return customTools.map(tool => {
+    registerNative(session, 'ccgateway-request', { name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading });
+    const registered = findNative(session, tool.name);
+    registered.ccgatewayRequestDefinition = tool;
+    return registered;
+  });
+}
+
+// The client's thinking as CC's thinking configuration, which CC's model rules
+// turn back into the request's.
+const thinkingConfigFor = thinking => thinking?.type === 'enabled'
+  ? { type: 'enabled', budgetTokens: thinking.budget_tokens, display: thinking.display }
+  : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
+    : { type: 'disabled', mechanical: true };
+
 // resolveAgent (request-agent.js, bound to the Worker context) picks the kind of
 // request CC builds from the client's leading billing header and first prompt;
 // without it the request is CC's native main thread.
@@ -135,7 +172,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
   const context = runtimeContext(suppliedContext);
-  const initial = prepareBuildInput(external, MDe, { preserveContent: true });
+  const initial = prepareBuildInput(external, aBe, { preserveContent: true });
   // The request's entrypoint, the one its header will carry (the client's own
   // or the configured one), is set the way CC sets it for a request
   // (setEntrypointOnRequests): the native header (PAs) and the User-Agent
@@ -146,14 +183,14 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   // the fingerprint. It never receives or overlays generation parameters.
   const rawMessages = initial.messages.flatMap(row => {
     if (row.type !== 'attachment') return [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)];
-    const rendered = MDe(row);
+    const rendered = aBe(row);
     if (!rendered.isKnownType) throw Error('Unknown CC attachment type');
     return rendered.messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: structuredClone(item.message.content) }));
   });
   const transformed = await applyContentPolicy({ system: initial.systemBlocks, messages: rawMessages }, policy, {
     readEnvironment: fields => ccgatewayEnvironment(context, fields),
   }, contentDiagnostic);
-  const input = prepareBuildInput({ ...external, systemPrompt: transformed.system, messages: transformed.messages, attachments: [] }, MDe, { preserveContent: true });
+  const input = prepareBuildInput({ ...external, systemPrompt: transformed.system, messages: transformed.messages, attachments: [] }, aBe, { preserveContent: true });
   const body = input.request, session = getRootSession();
   const fingerprint = fingerprintMessages(transformed.messages, KF);
   // The client's own header, wherever it is, makes the request Claude Code's
@@ -163,30 +200,12 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   if (!agent || agent.requestClass === 'main') markPrompt(input.messages, agent?.promptId, entrypoint);
   let nativeBilling;
   const clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
-  if (clientBetas.length && !YEr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');
-  // Resolve typed payloads using CC's own renderer, and preserve the caller's
-  // explicit role on the resulting text snapshot. This is not type inference.
-  for (const row of input.messages) {
-    if (row.type !== 'attachment' || row.rendered !== undefined) continue;
-    const rendered = MDe(row);
-    if (!rendered.isKnownType) throw new Error(`Unknown CC attachment type: ${row.attachment.type}`);
-    if (rendered.messages.length && rendered.messages.every(m => typeof m.message.content === 'string' || m.message.content.every(b => b.type === 'text'))) {
-      row.rendered = rendered.messages.map(m => ({ content: m.message.content }));
-    }
-  }
-  const tools = input.customTools.map(tool => {
-    registerNative(session, 'ccgateway-request', { name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading });
-    const registered = findNative(session, tool.name);
-    registered.ccgatewayRequestDefinition = tool;
-    return registered;
-  });
-  const thinking = body.thinking;
-  const thinkingConfig = thinking?.type === 'enabled'
-    ? { type: 'enabled', budgetTokens: thinking.budget_tokens, display: thinking.display }
-    : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
-      : { type: 'disabled', mechanical: true };
+  if (clientBetas.length && !mBr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');
+  snapshotAttachments(input.messages);
+  const tools = registerClientTools(session, input.customTools);
+  const thinkingConfig = thinkingConfigFor(body.thinking);
   const options = {
-    model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? El(),
+    model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? Al(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
     getToolPermissionContext: async () => ccgatewayPermissionContext(),
     agents: [], allowedAgentTypes: [], mcpClients: [],
@@ -213,13 +232,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
     options.ccgatewayWireMessages = placeLayers(transformed.messages, layers);
     if (layers.tools.length) options.ccgatewayWireTools = [...layers.tools, ...options.ccgatewayWireTools ?? []];
   }
-  let built;
-  for await (const event of Kvt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options })) {
-    if (signal.aborted) throw signal.reason;
-    if (event.type === 'ccgateway_request') { built = event.body; break; }
-    if (event.type === 'assistant' && event.isApiErrorMessage) throw new Error(`CC request builder: ${JSON.stringify(event.message?.content)}`);
-  }
-  if (!built) throw new Error('CC request builder did not produce a request');
+  let built = await collectBuilt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options }, signal, 'CC request builder did not produce a request');
   // Preserve only parameters which the native builder does not own. Its
   // normalized model/thinking/tool choice/metadata and output effort/format
   // remain authoritative, including intentional omission of those fields.
@@ -239,5 +252,8 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   delete built.betas;
   if (betas.length) outgoingHeaders.set('anthropic-beta', betas.join(','));
   else outgoingHeaders.delete('anthropic-beta');
-  return { body: { ...built, stream: body.stream === true }, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
+  // The client's stream keeps the native builder's key position; a client
+  // that sent none gets none (absent means false upstream).
+  const outgoing = 'stream' in body ? { ...built, stream: body.stream } : (({ stream: _native, ...rest }) => rest)(built);
+  return { body: outgoing, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
 }

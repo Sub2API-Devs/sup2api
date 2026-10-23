@@ -21,13 +21,12 @@ test('only chosen environment fields change; complete carrier and non-target JSO
   assert.deepEqual(await applyContentPolicy(output, policy({ platform_name: 'worker', os_version: 'worker' }), server), output);
 });
 
-test('no matches, all client fields and direct mode never collect server facts', async () => {
+test('no matches and all client fields never collect server facts', async () => {
   for (const input of [request('plain user text'), request(reminder(environment(['Shell: bash']))), request('prefix ' + reminder(environment(['Platform: win32'])))]) {
     assert.deepEqual(await applyContentPolicy(input, policy({ platform_name: 'worker' }), { readEnvironment() { assert.fail('unexpected collection'); } }), input);
   }
   const input = request(reminder(environment(['Platform: win32'])));
   assert.deepEqual(await applyContentPolicy(input, policy({ platform_name: 'client' }), {}), input);
-  assert.deepEqual(await applyContentPolicy(input, { relay_mode: 'direct', ...policy({ platform_name: 'worker' }) }, {}), input);
 });
 
 test('native collector receives only matched worker fields and excludes erase and absent targets', async () => {
@@ -430,10 +429,6 @@ test('matrix: every environment field pair × 9 source pairs × 4 billing polici
         assert.deepEqual(actual, matrixRequest(goldenEnvironment(selected), 'user_blocks', expectedBilling), JSON.stringify(selectedPolicy));
         assert.equal(reads, first === 'worker' || second === 'worker' ? 1 : 0);
         assert.deepEqual(await applyContentPolicy(actual, selectedPolicy, native), actual, 'same snapshot must be idempotent');
-        assert.deepEqual(await applyContentPolicy(input, { ...selectedPolicy, relay_mode: 'direct' }, {
-          readEnvironment() { assert.fail('direct must not collect facts'); },
-          billing: null,
-        }), input);
         cases++;
       }
     }

@@ -1,85 +1,103 @@
-# Claude Code mods 工具注入扩展
+# CCGateway 定制 Claude Code CLI（cli-mods）
 
-当前代码为 **2.1.304 / `ccgateway-v22-client-entrypoint`**（插件 0.1.83 起）。v22 修 2026-10-23 审核的唯一 P1（D1）：此前 Worker 把 `CLAUDE_CODE_ENTRYPOINT` 钉成 `sdk-cli`，原生 `dN()` 据此写出 UA `claude-cli/2.1.304 (external, sdk-cli)`，而计费头的 `cc_entrypoint` 保留客户端值，交互式 CC 经网关会发出官方不可能出现的组合。现在：
+本目录维护账号 Worker 里运行的定制 Claude Code：对官方 Linux x64/glibc 版本的源码补丁、补丁加进去的 `claude request` 命令及其支持模块，以及打包脚本。Worker 对每个模型请求运行一次 `claude request --build|--direct`（CONTRACTS §53.21），工具调用交回客户端。
 
-- **请求入口由 CLI 按请求设置**：`requestEntrypoint`（content-policy.js）取首块计费头的 `cc_entrypoint`（`build_billing_sources.cc_entrypoint` 为 worker 时改取 `build_billing_entrypoint`，没有则 `sdk-cli`），在原生构建前调原生 `setEntrypointOnRequests`（`H2r`，CC 自己给请求改入口用的那个），于是原生计费头 `kLo` 和 UA `dN` 读到同一个值；build 的 turn 判断也用它。Worker 仍设进程默认 `sdk-cli`，但不再决定请求的入口。
-- **客户端自己的 UA 跟着自己的计费头走**：插件 `passHeaders` 和 Worker 的 `CCG_REQUEST_AGENT.client` 新增 `user_agent`（只收 CC 形状 `claude-cli/x.y.z (external, <入口>[, agent-sdk/…][, client-app/…][, workload/…])`）。请求发出时若首块计费头的 `cc_version`、`cc_entrypoint` 都还是客户端的（没补、没换），UA 原样用客户端的（`keepClientUserAgent`，补丁让 `nl()` 先读它），这样 2.1.310 的客户端经网关仍是 `claude-cli/2.1.310 (…)`，SDK 的 `agent-sdk/x` 段也保留；否则用原生 `dN()` 按已设入口生成。
-- 新能力 `client_user_agent_v1`；Worker 只对声明它的 CLI 转发 `user_agent`（旧 CLI 的 `readRequestAgent` 会拒绝未知字段）。补丁器的能力列表与标签只剩一处（审核 D7）。
+## 当前版本
 
-v21 `ccgateway-v21-native-layers`（插件 0.1.80 起）在 v20 之上把审核列出的写死改成原生提取：权限上下文用原生 `gd()`；内置提示词按非交互主线程（`xh`）组装，客户端 system 用 CLI 自己拼接追加提示词的函数（主模块的 `pr`，补丁按 AST 原样复制）拼接后放在 `r1e` 结果之后；剩余 token 附件直接调原生 `JDr`（用客户端的记录）；环境附件的开头由 `zkt` 渲染结果截取，剩余 token 的开头取两次渲染的公共前缀。
+**Claude Code 2.1.304 / `ccgateway-v23-bound-imports`**（2026-10-24 工作树，未编译未发布；上一版 `ccgateway-v22-client-entrypoint` 随插件 0.1.83 起；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
 
-v20 `ccgateway-v20-request-levels`（插件 0.1.79 起，与核心 0.1.179 一起发布）按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
+CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——`profiles/linux-x64-2.1.304.json` 的 `capabilities`（2026-10-24 工作树；之前是 `patch-cli-2.1.304.cjs` 里的常量）：
 
-- **direct（0 注入）**：只处理开头的计费头，可按 `build_billing_sources` 换字段，不再补身份行。
-- **非 CC 请求按主线程处理**：不再当作自定义子代理。最后一条提示带上 prompt ID 和 turn，原生 `PAs` 据此写出完整的主线程计费头（`cc_prompt_id; cc_turn_origin=sdk; cc_prompt_index; cc_turn_index`）。
-- **请求里已有的层不再重复补**：同名工具、安全段 `p4n`、消息载体里的附件开头都算已有。
-- **内置提示词走原生 `r1e`**：客户端 system 作为追加提示词并入动态块，提示词带原生缓存标记和对应 beta，断点超过 4 个时先去掉注入的标记。
-- **工具和日期**：工具按原生 `assembleToolPool` 排序；日期改用 `POo`。
-- **检测文字取自原生**：附件开头、安全段、5 个循环请求头名都由 `ccgatewayLayerVocabulary()` 从原生渲染，夹具是 `test/fixtures/native-layers-2.1.304.json`。
-- **新能力**：`request_levels_v1`。
+`request_direct`、`request_build`、`request_oauth`、`request_error_stderr`、`request_raw_http_errors`、`native_tools`、`mods_dispatch`、`request_policy_mode_v1`、`build_attachment_sources_v2`、`build_billing_sources_v1`、`build_content_preservation_v1`、`container_resource_reporting_v1`、`request_identity_v1`、`build_identity_line_v1`、`direct_billing_v1`、`request_agent_context_v1`、`build_injection_v1`、`request_levels_v1`、`client_user_agent_v1`。
 
-v19 `ccgateway-v19-request-layers`（插件 0.1.78 起，与核心 0.1.178 一起发布）。v19 在 v18 之上给 build 下没有计费头的请求（不是 Claude Code 发的）按配置补 CC 自己的内置提示词、首轮附件（环境、模型、剩余 token、日期）和工具（2026-10-23 用户决定：只有计费头必须），全部由一次原生探针构建生成，见 [请求分层设计](../../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节。新能力 `build_injection_v1`；策略键 `build_injection`。
+各能力的含义与核心、Worker 怎样要求它们，见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §10。`native_tools`、`mods_dispatch` 是 2.1.296 时期 mods 工具扩展留下的声明，Worker 已不使用（见文末历史）。
 
-v18 `ccgateway-v18-agent-context`（插件 0.1.75 起；0.1.76 只换 Worker）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
+现行行为的事实源：
 
-- Worker 经 `CCG_REQUEST_AGENT` 给出客户端的 `x-claude-code-*` 请求头和会话范围的映射密钥；`request-agent.js` 判断主线程、子代理、压缩（没有请求头时看客户端首块计费头的 `cc_is_subagent`，不是 CC 的请求按自定义子代理），把 `querySource`、子代理上下文、`promptId` 交给 CC 自己的代码，由它写出 request-class、agent-type、agent-id、parent-agent-id、prompt-id 请求头、缓存时长和计费头的子代理字段。
-- build 在 OAuth 账号上映射 prompt-id（同时改写计费头 `cc_prompt_id`）；agent-id、parent-agent-id 两种模式都用客户端原值（父线程正文里写着它们），客户端没有时才派生。direct 全用客户端原值。
-- prev-tool-durations 和四个压缩头原样发出；带上下文的请求按发往 Anthropic 的样子发（`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`），API Key 路径保留 CC 构建的全部请求头。
-- 新能力 `request_agent_context_v1`。
+| 主题 | 文档 |
+|---|---|
+| build 组件、内容改写、计费头、身份 | [BUILD-REQUEST-COMPONENTS-DESIGN](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) |
+| 注入等级（0/微/低/高）、身份行自适应、各层注入 | [CC-INJECTION-LEVELS-DESIGN](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) |
+| 请求类别（主线程/子代理/压缩）、prompt ID | [SUBAGENT-REQUEST-CONTEXT-DESIGN](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md) |
+| 请求头的去向、请求入口与 UA | [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md) |
+| 模式、策略头、能力门、错误来源 | [REQUEST-MODES](../../docs/REQUEST-MODES.md) |
 
-v17 `ccgateway-v17-identity-line`（插件 0.1.74，2026-10-22 已部署 ovh）在 v16 之上（2026-10-22 用户决定）：
+## 文件
 
-- **服务端入口六选一**：`build_billing_entrypoint`（`cli`、`sdk-cli`、`sdk-ts`、`sdk-py`、`claude-desktop`、`claude-vscode`，默认 `sdk-cli`）替换原生整行里的 `cc_entrypoint`，补齐计费头或入口选 `worker` 时写入它。
-- **身份行按入口选**：`build_identity_lines` 给每个入口选一句（三句都由 `n1n` 生成，按名字 `official_cli`、`official_cli_sdk`、`agent_sdk` 取）或 `none`；默认与真实客户端一致（`cli` 终端那句，`sdk-*` SDK 那句，桌面版与 VS Code 带追加提示那句）。入口取自首块开头的计费头，`claude-desktop-3p` 按 `claude-desktop`，其他按服务端入口。
-- **计费头不在首块开头时**按缺失处理：在最前插原生整行，客户端那个原样留下。
-- **direct 也补**（`direct-billing.js`）：Worker 给出 `CCG_DIRECT_POLICY` 时，缺计费头或缺字段就补，身份行按入口配置补，只在原始 JSON 上拼接改动，其余字节不变；没有这个变量时仍原样转发。
-- 新能力 `build_identity_line_v1`、`direct_billing_v1`；核心只在服务端入口或身份行偏离默认时要求。
+| 文件 | 作用 |
+|---|---|
+| `patch-cli.cjs` | 读恢复目录 `package.json` 的版本，只接受 2.1.304，转给 `patch-cli-2.1.304.cjs`（2.1.296、2.1.302 的补丁器与 302 profile 已删除，2026-10-24 工作树，审核 D6） |
+| `patch-cli-2.1.304.cjs` | 校验 profile 里每个模块的 SHA-256（被改写的模块与补丁导入的原生模块），按 AST 定位唯一锚点改写，校验补丁新增的每个导入名确由对应模块导出（`checkImports`，审核 D3），复制支持模块（加 `ccgateway-` 前缀），写出 `ccgateway-patch.json`（补丁标签、能力、改前改后哈希） |
+| `profiles/linux-x64-2.1.304.json` | 官方 ELF 的 SHA-256、补丁标签 `extension`、能力 `capabilities`、模块哈希 `modules` |
+| `request-entry.inc.js` | 插进入口函数（`cli.js` 的 `Ve`）的 `--ccgateway-info` 与 `request` 分支 |
+| `request-command.js` | `claude request` 入口：读输入、direct 计费头、调 build、身份与身份行、发送、错误帧 |
+| `request-build-2.1.304.js` | build：内容策略、注入层探针、原生构造器、参数并回、计费合并 |
+| `shared.js` | 支持模块共用的小函数（`object`、`toBlocks`、`systemTexts`、UUID 正则、`splice`），装成 `ccgateway-shared.js` |
+| `request-input.js`、`request-parameters.js`、`request-policy.js`、`content-policy.js`、`direct-billing.js`、`request-identity.js`、`request-agent.js`、`request-options.js`、`request-output.js`、`request-error.js`、`model-request.js`、`container-resources.js`、`native-tools.js` | 支持模块 |
+| `native-environment-2.1.304.inc.js`、`tool-dispatch.inc.js` | 拼进原生模块作用域的代码（原生环境读取与词表、工具分发） |
+| `build.sh` | 用 Bun 编译 ELF |
+| `package-release.cjs` | 把 ELF 和补丁清单打成 Worker 镜像用的 `release/` 目录 |
 
-详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.3。
+## 打包步骤（2.1.304）
 
-v16 `ccgateway-v16-build-prefix`（插件 0.1.73）在 v15 之上：
+1. **准备恢复的源码目录**：官方 2.1.304 ELF（SHA-256 等于 profile 的 `binarySHA256`）解包出的模块目录，如 `artifacts/claude-2.1.304/linux-restored`。补丁器只认 profile 里的模块哈希，其他版本或改过的模块直接失败。
+2. **改代码时先升补丁标签**：任何补丁或支持模块的变化都要改 `profiles/linux-x64-2.1.304.json` 的 `extension`（`ccgateway-vNN-<名字>`）；Worker 镜像构建按它核对 release，旧标签的产物会让镜像构建失败。
+3. **补丁**（输出目录必须不存在，原目录不改）：
 
-- **direct 为纯透传**：不补计费头、不补开头行、不改 `metadata.user_id`，body 逐字节转发；Worker 不再给 direct 解析身份。
-- **build 总带计费头和开头行**：没有计费头就插入 CLI 原生整行，缺字段补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。OAuth 首块不是开头行或计费头时，补 SDK 那句（`n1n({isNonInteractive:true,hasAppendSystemPrompt:false})`），与 `cc_entrypoint=sdk-cli` 一致。
-- **身份不可配置**：build 有 `metadata.user_id` 就替换，没有不加；核心不再下发身份来源。
-- **指纹修正**：`cc_version` 的三位指纹改为对第一条用户消息里第一个非 reminder 的 text 块计算（与原生 CC 一致），官方 `claude -p` 样本复现 `b17`。
+   ```sh
+   cd next/plugins/ccgateway/companions/cli-mods
+   npm install --ignore-scripts
+   node patch-cli.cjs /absolute/path/restored /absolute/path/patched
+   ```
 
-详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.2、§7。
+   复用已有 Babel 时可设 `CCG_BABEL_PACKAGE` 为该安装的 `package.json` 绝对路径。
+4. **编译**（Bun 1.4.3）：在 Linux x64/glibc 上 `sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`；在其他系统上交叉编译用同样两个入口加目标：
 
-v15 `ccgateway-v15-cli-prefix`（插件 0.1.72）：OAuth 请求（build 与 direct）首块不是 CC 开头行或计费头时，补上 CLI 自己的终端开头行（`n1n`，判断用 `t1n`、计费块用 `B1s`），否则上游对 Sonnet/Opus 返回 429；内容策略识别用的全部 CC 文字（环境段词表、计费头、reminder 标签）改为运行时从原生 CLI 取得，不再在代码里抄写。详见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.6。
+   ```sh
+   cd /absolute/path/patched
+   bun build cli.js src/plugins/functionHooks/hooks-worker/hooks-worker.js --compile --target=bun-linux-x64 --outfile /absolute/path/claude-linux-native
+   ```
 
-v14 `ccgateway-v14-account-identity` 新增 `request_identity_v1`：**只有 OAuth（Claude 账号）**才映射，映射密钥由账号数据卷中的**私有随机密钥**按该账号的 **Claude 邮箱**派生（`CLAUDE_CODE_USER_EMAIL`，否则 `.claude.json` 的 `oauthAccount.emailAddress`），只凭邮箱无法推算。同一账号在重启、原地更新和重新授权后映射不变，不同账号不同。Worker 对客户端用户／会话 ID 做 HMAC-SHA256，输出 64 位 hex 设备 ID 和 UUIDv4 格式会话 ID；父会话使用同一会话映射。原生会话初始化使用该结果，metadata 与原生会话头保持一致，`account_uuid` 保留 Worker 原生账号上下文。direct 只替换 `metadata.user_id` 字符串，其余字节不变；build 在原生 metadata 组装及大小预算内映射。身份来源在插件设置中配置：**客户端原始／服务端／替换（默认）**，按全局→分组→账号继承；客户端没发 `metadata.user_id` 时不生成身份，build 也会删掉 CLI 自带的 metadata；选“客户端原始”时 build 保留客户端的 metadata。**API Key 账号不做映射**：替换来源按客户端原值处理。默认来源不随请求策略下发，身份上下文只经 `CCG_REQUEST_IDENTITY` 传给 CLI，不进入 build 信封。详见 [实现与验证](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#按账号邮箱的身份映射-v14未部署)。
+   两个入口都必须给：只编 `cli.js` 会漏掉 hooks worker。
+5. **打包**：
 
-v14 的 build 也不再发送 CLI 原生追加的 `diagnostics`：它的 `previous_message_id` 取自重建的历史，而客户端历史不带上游消息 ID，原生值是 CLI 自己编的 `msg_<uuid>`（2026-10-21 审核 P1-7）。客户端自己带了 `diagnostics` 时照原样发送，没带就不发。
+   ```sh
+   node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release
+   ```
 
-v14 同时保留 v13 的容器资源报告：新 Worker 为支持 `container_resource_reporting_v1` 的 CLI 设置可信 `CCG_REPORT_CONTAINER_RESOURCES=1`，采集时读取当前 cgroup v2 配额和使用量；不随机、不保存硬件 profile。Controller 验证数据卷硬配额后传入 `CCG_ACCOUNT_DISK_QUOTA_BYTES`，CLI 才会读取 `/work` 的实际剩余空间；旧无限额卷和宿主机 loadavg 不报告。实际资源控制、系统调用及原生设备 ID 的生成／存储保持原实现，非必要遥测及显式第三方 OTEL 在 Worker 请求进程入口关闭。账号身份映射不依赖 XFS 或磁盘迁移；磁盘配额的部署前提另见 [Controller 说明](../controller/README.md#account-data-volume-quotas)。
+   脚本只接受补丁标签等于 profile `extension` 的清单，输出目录必须不存在；产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`（版本、SHA-256、补丁标签、`modes: ["build","direct"]`）。
+6. **放进 Worker 构建上下文**：用新目录替换 `cli-mods/release/`（不进 Git）。`companions/worker/Dockerfile` 把它装到 `/opt/ccgateway/cli/`，构建时核对 ELF 的 SHA-256 与 manifest 一致、manifest 的补丁标签与 profile 一致；控制器创建或配对更新账号容器时再按 manifest 校验版本与哈希，Worker 启动时校验固定版本、补丁标签与哈希。
+7. **测试**：`npm test`（`node --test test/*.test.mjs`）。原生词表与层词表夹具在恢复源码上执行原生函数生成，变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成；跨层夹具在 `companions/contracts/testdata/`。与原生对账的测试（`native-vocabulary`、`cli-prefix` 末项、`billing-fingerprint-oracle`、`patch-imports-304`）在恢复源码目录存在时必须真跑；目录不存在时跳过并在 stderr 打印 `CCG_NATIVE_TEST_SKIPPED <原因>`，设 `CCG_REQUIRE_ARTIFACTS=1` 时改为失败（`test/artifacts.mjs`）。`patch-wire-preservation-304` 缺恢复源码时直接失败。
 
-此前 v12 提供独立 SHA 绑定补丁、12 字段来源策略、外部历史保真以及原生归属捕获。旧 296/302 patcher 保留；下方 302 上线记录属于历史状态。本次没有自动部署。已发布的 304 基线见 [304 实现与验证记录](../../../../docs/CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)。
+## 版本记录（2.1.304）
 
+只列每版留下的现行规则；被后续版本推翻的写明。细节见各设计文档。
 
-工作树中的错误透传修复（尚未发布）：HTTP 错误继续保留原状态码和正文；本地异常的 message 按 CC 实际返回值传递，不脱敏、不改写、不添加消息截断，不增加代理原因推断或额外探测。Worker 通过内部 `X-CCGateway-Error-Source` 传递已有错误来源，核心账号测试保留该来源，不再附加插件分类解释。既有 stderr 协议帧总大小限制、控制台错误正文预览及最近测试记录长度限制仍保留。普通上游响应不能设置这个内部来源；旧 Worker 未提供来源时沿用原行为。生效需同时发布 CLI 支持模块、Worker 和核心／前端。
+| 版本 | 插件 | 内容 | 现状 |
+|---|---|---|---|
+| v23 `bound-imports` | 未发布 | 补丁导入的 5 个原生模块（`chunk-7y2kvacy/jkcb7qdd/m5q1b1c4/eanw7pgv/t2p0d04m`）加入 profile 哈希绑定，补丁期校验新增导入名确由目标模块导出（D3）；能力列表只在 profile、入口代码移到 `request-entry.inc.js`（D7）；删 296/302 补丁器与死代码（D6）；支持模块重构（`shared.js`）。原生模块字节与 v22 相同，`cli.js` 只差标签与入口代码的排版/注释（词法记号相同），出口字节不变 | 待编译 |
+| v22 `client-entrypoint` | 0.1.83 | 请求入口由 CLI 按请求设置（`requestEntrypoint` → 原生 `setEntrypointOnRequests`），计费头与 UA 读同一个值；CC 形状的客户端 UA 在计费头的 `cc_version`/`cc_entrypoint` 仍是客户端的时原样保留（`keepClientUserAgent`）；能力 `client_user_agent_v1` | 现行 |
+| v21 `native-layers` | 0.1.80 | 注入层的写死项改成原生提取：权限上下文 `gd()`、按非交互主线程 `xh` 组装提示词、追加提示词用原生 `pr`、剩余 token 用 `JDr` | 现行 |
+| v20 `request-levels` | 0.1.79 | 注入等级：direct 只处理计费头、不补身份行；非 CC 请求按主线程；已有的层不重复补；身份行自适应（不再按入口配置）；system 统一为块数组；能力 `request_levels_v1` | 现行 |
+| v19 `request-layers` | 0.1.78 | 非 CC 请求按配置注入提示词、首轮附件、工具（探针构建）；能力 `build_injection_v1` | 配置模型被 v20 取代 |
+| v18 `agent-context` | 0.1.75 | 按客户端还原请求类别（`CCG_REQUEST_AGENT`）；能力 `request_agent_context_v1` | 现行；"非 CC 请求当子代理"被 v20 改为主线程 |
+| v17 `identity-line` | 0.1.74 | 服务端入口六选一；计费头不在首块开头按缺失处理；能力 `build_identity_line_v1`、`direct_billing_v1` | 入口现行；"身份行按入口配置"与"direct 补身份行"被 v20 取代 |
+| v16 `build-prefix` | 0.1.73 | build 总带计费头；指纹改为取第一个非 reminder 的 text 块 | 现行；"direct 纯透传"被 v17 取代 |
+| v15 `cli-prefix` | 0.1.72 | 内容策略的识别文字改为运行时从原生 CLI 取得 | 现行；"build 与 direct 都补开头行"被 v16/v20 取代 |
+| v14 `account-identity` | — | 按账号邮箱派生密钥映射 `metadata.user_id`（只 OAuth）；build 不发自己编的 `diagnostics`；容器资源报告 | 映射现行；"身份来源在插件设置中配置"已取消（2026-10-21 起不可配置，固定 `replace`，见 build 设计第 7 节） |
+| v12 `feature-policy` 及以前 | ≤0.1.71 | 2.1.304 的第一版补丁：十个环境字段来源、外部历史保真 | 见 [CC-FEATURE-LAYERS-DESIGN](../../../../docs/ccgateway-feature-support/CC-FEATURE-LAYERS-DESIGN.md) |
 
-当前线上为 **2.1.302 / `ccgateway-v11-native-build-parameters`**，随 ccgateway **0.1.67** 部署至 21/30/31/32，Core 保持 0.1.168。build 删除客户端 parameters 的 extraBody 整包覆盖，改由原生接口处理生成参数；补充 temperature/output_config.format 映射。未映射字段不再自动透传，需要完整 body 保真时使用 direct。37 项支持模块测试、19 次 Linux 原生 ELF 隔离抓包通过；21 号真实搜索请求和页面摘要请求均 HTTP 200。详见 [302 文档第 19/20 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。
+2.1.302（v7–v11）与 2.1.296（v3–v6）的记录分别在 [302 文档](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md) 与 [296 文档](../../docs/CLAUDE-CODE-2.1.296-ANALYSIS-AND-CHANGES.md)；两个旧补丁器在 2026-10-24 工作树里已删除（审核 D6），需要时从 git 历史取。
 
-此前 **2.1.302 / `ccgateway-v10-raw-http-errors`** 已随 Core 0.1.168 / ccgateway 0.1.66 发布：HTTP 错误正文按原字节保存/透传，stderr 仍传状态与诊断；不再把非 JSON 或超过 64 KiB 的上游错误包装成新 JSON。v11 保持此错误契约。见 [302 文档第 15 节](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。以下 v9 是更早发布基线。
+## 历史：2.1.296 的 mods 工具注入扩展（v3–v6）
 
-**此前发布基线为 2.1.302 / `ccgateway-v9-stderr-errors`，完整说明见 [302 独立文档](../../docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。** v9 新增 `request_error_stderr` 能力：错误通过带版本的 stderr JSON 行交给 Worker，正常 JSON/SSE 继续走 stdout。延续 v8 的显式 API Key / 原生 OAuth 支持；没有 API Key 时使用 CC 读取/刷新凭证及生成 Bearer，并合并原生 OAuth beta。`patch-cli.cjs` 按恢复目录 package.json 选择独立的 `patch-cli-2.1.296.cjs` 或 `patch-cli-2.1.302.cjs`，每个版本仍做自己的哈希和唯一锚点检查。302 基线映射在 `profiles/linux-x64-2.1.302.json`；`--ccgateway-info` 报告补丁能力，Worker 启动还需匹配二进制 SHA-256。296 未在本次重新发布或验证，下面的 v6 限制是历史记录。
-
-302 构建原生 ELF 后，用 `node package-release.cjs <ELF> <ccgateway-patch.json> <新 release 目录>` 生成 Worker 的 `cli-mods/release/` 输入。Worker 与兼容入口 Dockerfile 从此目录安装指定版本，不再在构建时下载官方 CLI。镜像内目录会去掉组/其他用户写权限；Controller 创建账号时验证 manifest、版本与哈希，然后设置禁更和版本环境。管理更新不能把已固定的定制 CLI 替换成官方渠道包。`package-release.cjs` 只接受 `profiles/linux-x64-<版本>.json` 的 `extension` 所写的当前补丁标签；Worker Dockerfile 构建时核对 release 中该版本的 SHA-256 与 manifest 一致、补丁标签与该 profile 一致，旧补丁产物会让镜像构建失败。
-
-下面保留的是 2.1.296/v6 的使用背景；**302 的函数名、产物身份和测试以新文档为准**，旧版本文档不覆盖。
-
-此目录维护 Linux x64/glibc Claude Code **2.1.296** 的源码补丁。2.1.296 基线版本为 `ccgateway-v6-components-betas`，支持 `claude request --direct/--build --betas "a,b" file.json`，也支持 stdin 和原 `--input`。direct 传完整 HTTP body；build 接收 Worker 提取的组件，复用 CC 内置渲染和构建后单次发送。request 入口仅启用显式 `ANTHROPIC_API_KEY`，不选择或刷新订阅账号。组件契约、构建链和 WebSearch 见 [请求与搜索说明](../../docs/CLAUDE-REQUEST-AND-WEBSEARCH.md)。
-
-v6 中 Worker 提取 user 文本内完整的 `<system-reminder>` 片段和独立 `role:system` 消息，用引用保留原位置。CLI 通过原生 `MDe` 回放提醒文本，通过 `hT/Jan/Xyr` 保留 system 角色、原内容块和生命周期字段；不猜测 CLAUDE.md/memory 类型，也不重新生成 Worker 本机上下文。顶层 system text 块的缓存字段保留。API Key 由 CC 工厂生成认证头，最终发送前隔离 CC/SDK 环境头；beta 在构建前进入原生 beta 描述符流程。
-
-2026-10-18 多轮实测补充：build 部分 tool_result.content 会从字符串转成 text 块数组，文字一致但 JSON 形状不同；direct 保持原文字节。官方本地客户端的工具循环与长报告续写发生在调用方，远端 request 不执行工具。[2.1.296 总记录](../../docs/CLAUDE-CODE-2.1.296-ANALYSIS-AND-CHANGES.md) 留存当前实现、最新测试、日志位置和未解决问题。
+> 以下是 2.1.296 时期的说明，Worker 已不使用 mods（native 运行时 2026-10-24 删除，CONTRACTS §53.21）。补丁里的工具分发代码仍在，对应 `native_tools`、`mods_dispatch` 两个能力声明。保留原文供查阅。
 
 固定补丁基线时必须设置 `DISABLE_AUTOUPDATER=1`；本目录 Dockerfile 已固化此变量。若由 Controller 管理 Worker，还需把 `/admin/cli` 的 `auto_update` 设为 false，防止受管更新下载官方版本覆盖定制 ELF。禁用自动更新不阻止手工安装，替换前仍须核对 manifest/hash。2.1.296 是本项目验证基线，不是自动追踪 stable/latest 的声明。
 
 原有 v3 功能仍保留：模型 `tool_use` 交给 mods 的 `tool.call` 处理器，包括原内置工具、MCP 工具、mod 工具和未登记名称；按名称新增或完整替换工具定义，无 MCP 前缀。审计已发现该执行链仍有 context、ask、结构化结果及恢复路径的兼容问题，本次 request 命令未修复这些问题，不将既有测试通过等同于全部 hooks 兼容。
 
-## 使用
+### 使用
 
 下面的 `kind: 'native'` 是本项目扩展。使用本目录构建的 CLI，在 mod 的 `hooks/register.js` 中注册：
 
@@ -112,7 +130,7 @@ export function register(on) {
 
 未指定 `kind: 'native'` 的 `$.tool.register()` 仍通过原 MCP 路径注册带前缀的定义，但调用也统一交给 mods。注册仍通过现有 tool.register 事件入口及名称、描述、Schema 对象形式校验；native 分支不进入原 MCP 注册器的限制。工具调用不再要求事先成功注册，模型返回的未知名称也能被 mod 接管。
 
-## 调用语义
+### 调用语义
 
 1. 按会话保存定义；同名注册以最后一次成功注册为准，替换整个工具对象。
 2. 在 headless 和 terminal 工具池最终合并定义，更新缓存版本。不会套用原工具的 allowed/disallowed、`--tools` 等筛选。
@@ -129,20 +147,9 @@ export function register(on) {
 
 任何工具无人接管或最终调用 `next()` 时都返回 `No tool.call mod handler answered ...`，不会执行原内置工具或 MCP 服务。无需改定义的原内置工具只需注册 tool.call 处理器，无需先执行 $.tool.register。注册记录在进程内按会话隔离；目前没有额外提供 unregister API，恢复会话时由 mod 重新注册。
 
-## 构建
+### 2.1.296 的构建与验证
 
-输入必须是已按研究流程恢复的 Linux 2.1.296 模块目录。补丁器校验七个目标 chunk 及 cli.js 的完整 SHA-256，再通过 AST 定位绑定、验证唯一锚点，并记录七个支持模块的哈希。遇到其他版本或修改过的模块直接失败，不猜测偏移。输出目录必须不存在，原目录不会修改。
-
-```sh
-cd next/plugins/ccgateway/companions/cli-mods
-npm install --ignore-scripts
-node patch-cli.cjs /absolute/path/restored /absolute/path/patched
-sh build.sh /absolute/path/patched /absolute/path/claude-linux-native
-```
-
-使用 **Bun 1.4.3、Linux x64/glibc** 编译。`build.sh` 同时指定 CLI 和 `src/plugins/functionHooks/hooks-worker/hooks-worker.js` 两个入口。仅编译 CLI 会遗漏外部 mods 使用的 worker，虽然 `--version` 和部分 `plugin test` 仍能成功，但实际会话加载 mod 会失败。
-
-如果复用已有 Babel 安装，可以设置 `CCG_BABEL_PACKAGE` 为该安装的绝对 `package.json` 路径，补丁器通过它解析 `@babel/parser`。默认使用本目录安装的依赖。
+2.1.296 的补丁器（已删除，见 git 历史）校验七个目标 chunk 及 cli.js 的完整 SHA-256，再通过 AST 定位绑定、验证唯一锚点，并记录七个支持模块的哈希。
 
 Dockerfile 的构建上下文需要包含生成的 `claude-linux-native`：
 
@@ -150,8 +157,6 @@ Dockerfile 的构建上下文需要包含生成的 `claude-linux-native`：
 docker build -f /absolute/path/cli-mods/Dockerfile -t ccgateway-cli:native /absolute/path/binary-directory
 docker run --rm ccgateway-cli:native --version
 ```
-
-## 验证
 
 ```sh
 npm test
@@ -178,8 +183,4 @@ bun test/runtime-probe.cjs /absolute/path/bun /absolute/path/patched/cli.js /tmp
 
 探针故意提供新 Schema 之外的额外参数，检查它仍原样到达 mod；同时检查日志中没有触发旧工具规范化。断言容许 CLI 在工具结果之后附加自身的 system-reminder。
 
-当前端到端验证覆盖 Linux headless 模式。terminal 工具池已接入同一注册表，但交互 TUI、子 agent、ToolSearch 延迟发现及完整历史恢复尚未做端到端验收。Windows/macOS 需要针对对应发行包重新定位、应用补丁和验证。
-
-v3 ELF 已通过 12 个回环场景与 8 项单元测试，另在不安装 Bun 的 Debian 运行镜像中通过版本启动检查。[验证摘要](../../docs/cli-research/2.1.296/mods-all-tools-verification.json) 保存场景、二进制及补丁哈希。研究机镜像为 `ccgateway-cli:mods-hooks-2.1.296`。
-
-普通 mods 工具执行与 request 模式独立。Worker 已通过 CCG_REQUEST_MODE=direct/build 接入 request，模型 tool_use 交回客户端执行。v6 的独立 OVH Worker、官方客户端对照和实际 API Key 请求结果见 [v6 验证](../../docs/cli-research/2.1.296/components-v6-verification.json)。未切换原 21 号服务。
+当时的端到端验证覆盖 Linux headless 模式。terminal 工具池已接入同一注册表，但交互 TUI、子 agent、ToolSearch 延迟发现及完整历史恢复未做端到端验收。v3 ELF 通过 12 个回环场景与 8 项单元测试，[验证摘要](../../docs/cli-research/2.1.296/mods-all-tools-verification.json) 保存场景、二进制及补丁哈希。

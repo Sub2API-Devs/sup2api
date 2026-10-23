@@ -41,6 +41,18 @@ function one(matches, label) {
   assert.equal(matches.length, 1, `Expected unique AST anchor: ${label}`);
   return matches[0];
 }
+// compact spells a module's tokens with no comments and no layout: a space only
+// between two word tokens, each token as written in the source.
+function compact(source) {
+  let out = '';
+  for (const token of parser.parse(source, { sourceType: 'module', tokens: true }).tokens) {
+    if (token.type === 'CommentLine' || token.type === 'CommentBlock') continue;
+    const text = source.slice(token.start, token.end);
+    if (/[\w$]$/.test(out) && /^[\w$]/.test(text)) out += ' ';
+    out += text;
+  }
+  return out;
+}
 
 before(() => {
   assert(fs.existsSync(baseline), 'Recovered 2.1.304 baseline is required; this test must not silently pass without it');
@@ -96,6 +108,9 @@ function assemble({ external, tools, extra = {}, choice = { type: 'auto' }, thin
 
 test('304 patch binds baseline hashes and emits a matching native module hash', () => {
   const profile = JSON.parse(fs.readFileSync(path.join(mods, 'profiles/linux-x64-2.1.304.json'), 'utf8'));
+  // The capabilities are the profile's, and --ccgateway-info prints the same.
+  assert.deepEqual(patchManifest.capabilities, profile.capabilities);
+  assert(compact(fs.readFileSync(path.join(output, 'cli.js'), 'utf8')).includes('console.log(JSON.stringify({version:"2.1.304",patch:' + JSON.stringify(profile.extension) + ',capabilities:' + JSON.stringify(profile.capabilities) + '}));return}'));
   for (const [name, hashes] of Object.entries(patchManifest.files)) {
     assert.equal(hashes.before, profile.modules[name]);
     assert.equal(hashes.before, sha(fs.readFileSync(path.join(baseline, name))));
@@ -210,7 +225,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v22-client-entrypoint');
+  assert.equal(patchManifest.extension, 'ccgateway-v23-bound-imports');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
@@ -222,7 +237,9 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // appended prompt) and recognizer. Direct gets only the native header line
   // (kLo over RIs of the first user prompt, with a main-thread prompt's ID and
   // turn), no identity line (2026-10-23).
-  const cli = fs.readFileSync(path.join(output, 'cli.js'), 'utf8');
+  // The entry is inserted as written (request-entry.inc.js); its code, without
+  // comments or layout, is compared token for token in its minimal spelling.
+  const cli = compact(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'));
   const lines = '\\{official_cli:ccgPrefix\\(\\{isNonInteractive:!1,hasAppendSystemPrompt:!1\\}\\),official_cli_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!0\\}\\),agent_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!1\\}\\)\\}';
   assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix,PAs:ccgHead\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
   assert(cli.includes('nativeBilling:()=>ccgHead([],void 0,{fingerprint:fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agentContext:o.agentContext??agent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};'));

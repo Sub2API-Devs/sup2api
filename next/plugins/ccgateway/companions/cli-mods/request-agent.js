@@ -14,8 +14,8 @@
 // built as CC's main thread (2026-10-23: a request without the header is
 // completed as the main agent's).
 import { createHash, createHmac } from 'node:crypto';
+import { uuidPattern as uuid } from './shared.js';
 
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const clientFields = {
   request_class: /^[a-z][a-z_]{0,31}$/,
   agent_id: /^[!-~]{1,256}$/,

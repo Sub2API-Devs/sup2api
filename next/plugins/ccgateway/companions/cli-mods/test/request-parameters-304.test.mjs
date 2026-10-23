@@ -7,6 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateBuildParameters, mergeAdditionalParameters, wireToolDefinitions } from '../request-parameters.js';
 import { parseRequestJSON } from '../request-options.js';
+import { installSupport } from './support.mjs';
 
 const validThinking = { type: 'enabled', budget_tokens: 1024 };
 test('304 parameter merge preserves caller extensions and native-owned results independently', () => {
@@ -105,18 +106,17 @@ test('304 wire tools retain order, missing description, attributes and absent ve
 
 async function adapterFixture() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-304-params-'));
-  for (const name of ['request-input','request-options','request-policy','content-policy','request-parameters']) await fs.copyFile(new URL(`../${name}.js`, import.meta.url), path.join(dir, `ccgateway-${name}.js`));
-  await fs.copyFile(new URL('../request-build-2.1.304.js', import.meta.url), path.join(dir, 'ccgateway-request-build.js'));
+  await installSupport(dir, ['request-input','request-options','request-policy','content-policy','request-parameters','request-build']);
   for (const [name, source] of Object.entries({
     'package.json':'{"type":"module"}',
-    'chunk-kasbfbhj.js': `export let calls=0,captured; export const MDe=()=>{throw Error('unexpected attachment')}; export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)}); export const ccgatewayDefaultPrompt=()=>{throw Error('unexpected prompt')}; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=()=>{throw Error('unexpected attachments')}; export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)}); export async function* Kvt(input){calls++;captured=input;yield {type:'ccgateway_request',body:{model:'native-model',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools},max_tokens:4096,tool_choice:{type:'auto'},metadata:{user_id:'native'},output_config:{effort:'low'},betas:['native-beta']}}}`,
+    'chunk-rncrmfyt.js': `export let calls=0,captured; export const aBe=()=>{throw Error('unexpected attachment')}; export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)}); export const ccgatewayDefaultPrompt=()=>{throw Error('unexpected prompt')}; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=()=>{throw Error('unexpected attachments')}; export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)}); export async function* jOt(input){calls++;captured=input;yield {type:'ccgateway_request',body:{model:'native-model',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools},max_tokens:4096,tool_choice:{type:'auto'},metadata:{user_id:'native'},output_config:{effort:'low'},betas:['native-beta']}}}`,
     'chunk-7y2kvacy.js':`export const oJe=${JSON.stringify(vocabulary.billingHeader)};`,
     'chunk-jkcb7qdd.js':`export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
     'chunk-eanw7pgv.js':'export const m4t=()=>[];', 'chunk-t61vswm2.js':'export const t1n=()=>false;',
-    'chunk-0ycjphb5.js':'export const El=()=>({});', 'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};', 'chunk-6dwnw6av.js':'export const YEr=()=>true;',
+    'chunk-7p6jp6kj.js':'export const Al=()=>({});', 'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};', 'chunk-4qs43hr1.js':'export const mBr=()=>true;',
     'ccgateway-native-tools.js':'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{});export const findNative=(_session,name)=>registry.get(name);',
   })) await fs.writeFile(path.join(dir,name),source);
-  return { dir, adapter: await import(pathToFileURL(path.join(dir,'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir,'chunk-kasbfbhj.js'))) };
+  return { dir, adapter: await import(pathToFileURL(path.join(dir,'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir,'chunk-rncrmfyt.js'))) };
 }
 
 test('304 adapter transmits extensions and complete wire tools without undoing native normalization', async () => {
@@ -137,6 +137,21 @@ test('304 adapter transmits extensions and complete wire tools without undoing n
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });
 
+// stream reaches the upstream exactly as the client sent it: absent stays
+// absent (the API's default is false), a sent value keeps its native position.
+test('304 adapter sends stream only when the client did', async () => {
+  const fixture=await adapterFixture();
+  try {
+    const base={model:'fixture',messages:[{role:'user',content:'fixture'}],parameters:{max_tokens:16}};
+    const absent=await fixture.adapter.buildRequest(structuredClone(base),{},new AbortController().signal);
+    assert.ok(!Object.hasOwn(absent.body,'stream'), JSON.stringify(absent.body));
+    for (const stream of [true,false]) {
+      const sent=await fixture.adapter.buildRequest({...structuredClone(base),stream},{},new AbortController().signal);
+      assert.equal(sent.body.stream,stream);
+    }
+  } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
+});
+
 test('304 adapter rejects invalid generation input before any native build invocation', async () => {
   const fixture=await adapterFixture();
   try {
@@ -144,6 +159,29 @@ test('304 adapter rejects invalid generation input before any native build invoc
       await assert.rejects(fixture.adapter.buildRequest({model:'fixture',messages:[{role:'user',content:'no send'}],parameters},{},new AbortController().signal), e=>e.status===400 && e.field.startsWith('parameters.'));
     }
     assert.equal(fixture.native.calls,0,'invalid input cannot invoke the native builder or transport');
+  } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
+});
+
+// Generation options go to CC as its own option names; the native rules decide
+// what is sent (moved here from the deleted 2.1.296/302 adapter test).
+test('304 adapter passes generation options to CC by its option names', async () => {
+  const fixture=await adapterFixture();
+  try {
+    const format={type:'json_schema',schema:{type:'object',properties:{}}};
+    for (const thinking of [{type:'disabled'},{type:'adaptive'},{type:'enabled',budget_tokens:1024}]) {
+      const components={model:'fixture',messages:[{role:'user',content:'fixture'}],stream:true,
+        parameters:{thinking,max_tokens:8192,temperature:0.25,tool_choice:{type:'tool',name:'web_search'},output_config:{effort:'medium',format}}};
+      await fixture.adapter.buildRequest(components,{'anthropic-beta':'client-beta'},new AbortController().signal);
+      const {options,thinkingConfig}=fixture.native.captured;
+      assert.equal(options.maxOutputTokensOverride,8192);
+      assert.equal(options.temperatureOverride,0.25);
+      assert.equal(options.effortValue,'medium');
+      assert.deepEqual(options.outputFormat,format);
+      assert.deepEqual(options.toolChoice,components.parameters.tool_choice);
+      assert.deepEqual(options.ccgatewayRequestBetas,['client-beta']);
+      assert.deepEqual(thinkingConfig,thinking.type==='enabled'?{type:'enabled',budgetTokens:1024,display:undefined}
+        :thinking.type==='adaptive'?{type:'enabled',display:undefined}:{type:'disabled',mechanical:true});
+    }
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });
 

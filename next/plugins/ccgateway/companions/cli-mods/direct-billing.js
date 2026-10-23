@@ -8,6 +8,7 @@
 // client's other header values included, goes byte for byte: edits are spliced
 // into the raw JSON text, and only the edited string is re-encoded.
 import { createBillingPolicy } from './content-policy.js';
+import { splice } from './shared.js';
 
 const ws = ' \t\n\r';
 function skipWs(s, i) { while (i < s.length && ws.includes(s[i])) i++; return i; }
@@ -59,8 +60,6 @@ function elements(s, i) {
 }
 // The last occurrence wins, as in JSON.parse.
 const member = (list, key) => list.findLast(m => m.key === key);
-const splice = (text, edits) => edits.sort((a, b) => b.at - a.at || b.order - a.order)
-  .reduce((out, e) => out.slice(0, e.at) + e.text + out.slice(e.end ?? e.at), text);
 
 // applyDirectBilling returns the raw body to send. nativeBilling() is the
 // CLI's own header line (kLo).
@@ -78,7 +77,7 @@ export function applyDirectBilling(raw, body, { policy = {}, billingHeader, nati
     const rest = line ? own.slice(line.length).replace(/^(\r\n|\r|\n)/, '') : own;
     const blocks = [...line ? [{ type: 'text', text: line }] : [], ...rest ? [{ type: 'text', text: rest }] : []];
     const final = line ? [...merge([blocks[0]]), ...blocks.slice(1)] : [...merge([]), ...blocks];
-    return splice(raw, [{ at: system.start, end: system.end, text: JSON.stringify(final) }]);
+    return splice(raw, [{ start: system.start, end: system.end, value: JSON.stringify(final) }]);
   }
   if (body.system !== undefined && !Array.isArray(body.system)) return raw;
   const blocks = body.system ?? [];
@@ -103,16 +102,16 @@ export function applyDirectBilling(raw, body, { policy = {}, billingHeader, nati
   for (const item of items) {
     if (item.index === undefined) { pending.push(item.block); continue; }
     const element = list[item.index];
-    if (pending.length) edits.push({ at: element.start, text: pending.map(b => JSON.stringify(b)).join(',') + ',', order: order++ });
+    if (pending.length) edits.push({ start: element.start, value: pending.map(b => JSON.stringify(b)).join(',') + ',', order: order++ });
     pending = [];
     if (item.text !== undefined) {
       const text = member(members(raw, element.start), 'text');
-      edits.push({ at: text.start, end: text.end, text: JSON.stringify(item.text), order: order++ });
+      edits.push({ start: text.start, end: text.end, value: JSON.stringify(item.text), order: order++ });
     }
   }
   if (pending.length) {
     const json = pending.map(b => JSON.stringify(b)).join(',');
-    edits.push(list.length ? { at: list.at(-1).end, text: ',' + json, order: order++ } : { at: system.start + 1, text: json, order: order++ });
+    edits.push(list.length ? { start: list.at(-1).end, value: ',' + json, order: order++ } : { start: system.start + 1, value: json, order: order++ });
   }
   return splice(raw, edits);
 }

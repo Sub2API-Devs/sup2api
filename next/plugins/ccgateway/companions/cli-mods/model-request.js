@@ -68,7 +68,7 @@ export async function openModelRequest(options, owner, signal, createClient, tra
     try {
       const headers = new Headers(options.headers);
       if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-      const body = options.transformBody ? options.transformBody(options.rawBody ?? options.body) : options.rawBody ?? options.body;
+      const body = options.rawBody ?? options.body;
       // The deadline above bounds the whole exchange. The client's own timeout
       // (sent as x-stainless-timeout) stays Claude Code's default, as a native
       // request carries it, unless the deadline is shorter.

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { installSupport } from './support.mjs';
 
 // The request command hands CC's client factory the client's kind of request:
 // its query source, agent context and prompt ID decide the headers CC writes.
@@ -13,18 +14,16 @@ test('the client factory and direct billing get the client kind of request', asy
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-request-agent-'));
   try {
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']) {
-      await fs.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
-    }
+    await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-gr4a0fky.js': `import fs from 'node:fs';
-        export class rbe {}
-        export const eF=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new rbe()};
-        export const Zre=()=>{};`,
-      'chunk-0ycjphb5.js': 'export const El=()=>({agentType:"main",agentId:"native-session"});',
-      'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
+      'chunk-38xgev2z.js': `import fs from 'node:fs';
+        export class _ke {}
+        export const sF=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new _ke()};
+        export const mle=()=>{};`,
+      'chunk-7p6jp6kj.js': 'export const Al=()=>({agentType:"main",agentId:"native-session"});',
+      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
       // CC's request-scoped entrypoint (TY/H2r), recorded.
-      'chunk-q61sszgr.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
+      'chunk-72vwyp9d.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
       // A build stand-in: the system goes out as it came (the client's header
       // stays), the agent context is resolved as the real build does.
       'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''})});",

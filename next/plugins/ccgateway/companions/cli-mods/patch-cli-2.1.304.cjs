@@ -16,6 +16,7 @@ for (const [file, sha] of Object.entries(expected)) {
   if (digest(text) !== sha) throw Error(`Unsupported or modified baseline: ${file}`);
   files.set(file, text);
 }
+const baseline = new Map(files);
 const modified = new Set();
 function nodes(text, predicate) {
   const found = [];
@@ -41,28 +42,16 @@ function edit(file, name, transform, method = false) {
   files.set(file, text.slice(0, n.start) + after + text.slice(n.end)); modified.add(file);
 }
 const core = 'chunk-rncrmfyt.js', guest = 'chunk-0q47gehe.js', headless = 'chunk-8w3jrzn0.js', terminal = 'chunk-g8r6rccx.js';
-// What this patch adds; --ccgateway-info and the release manifest report the same list.
-const capabilities = ['request_direct', 'request_build', 'request_oauth', 'request_error_stderr', 'request_raw_http_errors', 'native_tools', 'mods_dispatch', 'request_policy_mode_v1', 'build_attachment_sources_v2', 'build_billing_sources_v1', 'build_content_preservation_v1', 'container_resource_reporting_v1', 'request_identity_v1', 'build_identity_line_v1', 'direct_billing_v1', 'request_agent_context_v1', 'build_injection_v1', 'request_levels_v1', 'client_user_agent_v1'];
-edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.304",patch:' + JSON.stringify(profile.extension) + ',capabilities:' + JSON.stringify(capabilities) + '}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-3nrrbnwj.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{gTe:oauthAuth}=await import("./chunk-4qs43hr1.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
+// What this patch adds is the profile's list: --ccgateway-info and the release
+// manifest report it, and the Worker checks it.
+const capabilities = profile.capabilities;
+if (!Array.isArray(capabilities) || !capabilities.length || !capabilities.every(name => typeof name === 'string' && /^[a-z][a-z0-9_]*$/.test(name)) || new Set(capabilities).size !== capabilities.length) throw Error('Invalid profile capabilities');
+// The request command's entry (request-entry.inc.js), ahead of Ve's own handling.
+const entry = fs.readFileSync(path.join(__dirname, 'request-entry.inc.js'), 'utf8').trim();
+if (entry.split('CCGATEWAY_INFO').length !== 2) throw Error('Expected one CCGATEWAY_INFO in the request entry');
+const info = `{version:${JSON.stringify(profile.version)},patch:${JSON.stringify(profile.extension)},capabilities:${JSON.stringify(capabilities)}}`;
+edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', entry.replace('CCGATEWAY_INFO', () => info) + 'if(n!==void 0){'));
 edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchema:", "name:r.name,description:r.description,...r.kind===\"native\"?{kind:\"native\"}:{},inputSchema:"));
-edit('cli.js', 'Ve', t => {
-  // Direct's header is the native main-thread header (PAs, which reads the
-  // attribution project itself) over the native fingerprint (RIs) of the first
-  // user prompt, as build computes it (fingerprintMessages), with a main-thread
-  // prompt's ID and turn (request-command.js).
-  const lines = '{official_cli:ccgPrefix({isNonInteractive:!1,hasAppendSystemPrompt:!1}),official_cli_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!0}),agent_sdk:ccgPrefix({isNonInteractive:!0,hasAppendSystemPrompt:!1})}';
-  t = once(t, 'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))',
-    'let{applyBuildMetadata:ccgBuildMetadata,applyBuildCliPrefix:ccgPrefixBuild}=await import("./ccgateway-request-identity.js");let{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix,PAs:ccgHead}=await import("./chunk-t61vswm2.js");let{B1s:ccgIsBilling,oJe:ccgHeader}=await import("./chunk-7y2kvacy.js");' +
-    'let ccgDirect=async(raw,body,o)=>{let{applyDirectBilling:apply}=await import("./ccgateway-direct-billing.js");let{fingerprintMessages:prompt}=await import("./ccgateway-request-input.js");let{RIs:fingerprint}=await import("./chunk-2gh4h0fv.js");let{KF:reminder}=await import("./chunk-jkcb7qdd.js");let{Al:agent}=await import("./chunk-7p6jp6kj.js");' +
-    'return apply(raw,body,{...o,billingHeader:ccgHeader,nativeBilling:()=>ccgHead([],void 0,{fingerprint:fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agentContext:o.agentContext??agent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};' +
-    // The client's kind of request is chosen from CC's own query source naming
-    // (Zoe), billing header (oJe), prompt fingerprint text and turn, and the
-    // client loop header names (request-agent.js).
-    'let{Zoe:ccgQuerySource}=await import("./chunk-m5q1b1c4.js");let{createBillingPolicy:ccgBillingFor}=await import("./ccgateway-content-policy.js");let{fingerprintMessages:ccgPromptOf}=await import("./ccgateway-request-input.js");let{KF:ccgReminder}=await import("./chunk-jkcb7qdd.js");let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js");let ccgBilling=ccgBillingFor(ccgHeader);' +
-    'let ccgAgent={querySourceFor:ccgQuerySource,loopHeaders:ccgLayers().loopHeaders,requestBilling:s=>ccgBilling.requestBilling(s),leadingBilling:s=>ccgBilling.leadingBilling(s),entrypoint:(s,p)=>ccgBilling.requestEntrypoint(s,p),prompt:m=>ccgPromptOf(m,ccgReminder)[0].message.content,turn:ccgTurnOf};' +
-    'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling),directBuild:ccgDirect,agentNative:ccgAgent}))');
-  return t;
-});
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
 files.set('chunk-dxktn51d.js', 'import {requestSessionID as ccgRequestSessionID} from "./ccgateway-request-identity.js";\n' + files.get('chunk-dxktn51d.js'));
 // Only reporting readers change. Resource admission, Git concurrency, process
@@ -165,26 +154,90 @@ if (appendJoin.length !== 1) throw Error('Expected the native append prompt join
 const appendJoinText = mainModule.slice(appendJoin[0].start, appendJoin[0].end).replace(/^function pr\(/, 'function ccgatewayJoinAppend(');
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + appendJoinText);
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
+const supportInputs = ['shared','native-tools','model-request','request-command','request-input','request-build','request-parameters','request-output','request-options','request-error','request-policy','content-policy','container-resources','request-identity','direct-billing','request-agent'];
+const support = new Map();
+for (const input of supportInputs) {
+  const supportSource = input === 'request-build' ? 'request-build-2.1.304.js' : input+'.js';
+  // Support modules import each other by source name; installed, they carry the ccgateway- prefix.
+  let text = fs.readFileSync(path.join(__dirname, supportSource), 'utf8');
+  for (const name of supportInputs) text = text.replaceAll(`'./${name}.js'`, `'./ccgateway-${name}.js'`);
+  support.set('ccgateway-'+input+'.js', { source: supportSource, text });
+}
+checkImports();
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
 const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities, files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };
 }
-const importFiles = {'chunk-kasbfbhj.js':'chunk-rncrmfyt.js','chunk-gr4a0fky.js':'chunk-38xgev2z.js','chunk-0ycjphb5.js':'chunk-7p6jp6kj.js','chunk-6dwnw6av.js':'chunk-4qs43hr1.js','chunk-q61sszgr.js':'chunk-72vwyp9d.js'};
-const supportInputs = ['native-tools','model-request','request-command','request-input','request-build','request-parameters','request-output','request-options','request-error','request-policy','content-policy','container-resources','request-identity','direct-billing','request-agent'];
-for (const input of supportInputs) {
-  const supportSource = input === 'request-build' ? 'request-build-2.1.304.js' : input+'.js';
-  // Support modules import each other by source name; installed, they carry the ccgateway- prefix.
-  let text = fs.readFileSync(path.join(__dirname, supportSource), 'utf8');
-  for (const name of supportInputs) text = text.replaceAll(`'./${name}.js'`, `'./ccgateway-${name}.js'`);
-  if (input === 'request-command' || input === 'request-build') {
-    text = rename(text, {eF:'sF',rbe:'_ke',Zre:'mle',El:'Al',YEr:'mBr',Kvt:'jOt',MDe:'aBe'});
-    for (const [a,b] of Object.entries(importFiles)) text = text.replaceAll(a,b);
-  }
-  parser.parse(text,{sourceType:'module'});
-  const target='ccgateway-'+input+'.js';fs.writeFileSync(path.join(output,target),text);
-  manifest.supportFiles[target]={source:supportSource,sha256:digest(text)};
+for (const [target, { source: supportSource, text }] of support) {
+  fs.writeFileSync(path.join(output, target), text);
+  manifest.supportFiles[target] = { source: supportSource, sha256: digest(text) };
 }
 fs.writeFileSync(path.join(output,'ccgateway-patch.json'),JSON.stringify(manifest,null,2));
 console.log(JSON.stringify({output,...manifest}));
+
+// Every name the patch imports from a sibling module, statically or with
+// `let {name: local} = await import(...)`, must be exported by that module as
+// it is installed, and a CLI module must be one the profile hash-binds: a
+// symbol is only as pinned as the module that defines it. Imports the native
+// modules already had are theirs; only the ones the patch adds are checked.
+function checkImports() {
+  const installed = name => support.get(name)?.text ?? (Object.hasOwn(expected, name) ? files.get(name) : undefined);
+  const exportsOf = new Map();
+  const exported = name => {
+    if (!exportsOf.has(name)) {
+      const names = new Set();
+      let star = false;
+      for (const node of parser.parse(installed(name), { sourceType: 'module' }).program.body) {
+        if (node.type === 'ExportAllDeclaration') star = true;
+        if (node.type === 'ExportDefaultDeclaration') names.add('default');
+        if (node.type !== 'ExportNamedDeclaration') continue;
+        for (const specifier of node.specifiers) names.add(specifier.exported.name ?? specifier.exported.value);
+        const declaration = node.declaration;
+        if (declaration?.id) names.add(declaration.id.name);
+        for (const declarator of declaration?.declarations ?? []) {
+          if (declarator.id.type !== 'Identifier') throw Error(`${name}: unsupported export pattern`);
+          names.add(declarator.id.name);
+        }
+      }
+      exportsOf.set(name, { names, star });
+    }
+    return exportsOf.get(name);
+  };
+  const isImport = n => n?.type === 'ImportExpression' || n?.type === 'CallExpression' && n.callee?.type === 'Import';
+  // The import records of a module as `target|name` counts; `target|*` is a
+  // dynamic import whose names this check cannot read.
+  function records(text) {
+    const counts = new Map(), add = key => counts.set(key, (counts.get(key) ?? 0) + 1);
+    const destructured = n => n.type === 'VariableDeclarator' && n.init?.type === 'AwaitExpression' && isImport(n.init.argument);
+    const found = nodes(text, n => n.type === 'ImportDeclaration' || destructured(n) || isImport(n));
+    const named = new Set(), source = call => call.source ?? call.arguments?.[0];
+    for (const n of found) {
+      if (n.type === 'ImportDeclaration') {
+        for (const specifier of n.specifiers) add(n.source.value + '|' + (specifier.type === 'ImportSpecifier' ? specifier.imported.name ?? specifier.imported.value : specifier.type === 'ImportDefaultSpecifier' ? 'default' : '*'));
+      } else if (destructured(n)) {
+        const target = source(n.init.argument);
+        if (target?.type !== 'StringLiteral' || n.id.type !== 'ObjectPattern' || n.id.properties.some(p => p.type !== 'ObjectProperty' || p.computed)) continue;
+        named.add(n.init.argument);
+        for (const property of n.id.properties) add(target.value + '|' + (property.key.name ?? property.key.value));
+      }
+    }
+    for (const call of found) if (isImport(call) && !named.has(call)) add((source(call)?.value ?? '?') + '|*');
+    return counts;
+  }
+  const checked = [...modified].map(file => [file, records(files.get(file)), records(baseline.get(file))]);
+  for (const [file, { text }] of support) checked.push([file, records(text), new Map()]);
+  for (const [file, after, before] of checked) {
+    for (const [key, count] of after) {
+      if (count <= (before.get(key) ?? 0)) continue;
+      const [specifier, name] = key.split('|');
+      if (!specifier.startsWith('./')) continue;
+      const target = specifier.slice(2);
+      if (installed(target) === undefined) throw Error(`${file} imports ${target}, which the profile does not hash-bind`);
+      if (name === '*') throw Error(`${file} imports ${target} in a form whose names cannot be checked`);
+      const { names, star } = exported(target);
+      if (!names.has(name)) throw Error(`${file} imports ${name} from ${target}, which ${star ? 'is not provably exported by' : 'does not export it'}`);
+    }
+  }
+}

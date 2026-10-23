@@ -6,6 +6,8 @@ import vm from 'node:vm';
 import { applyBuildCliPrefix } from '../request-identity.js';
 import { identityLineFor } from '../request-policy.js';
 import { vocabulary } from './vocabulary.mjs';
+import { restored, nativeSkip } from './artifacts.mjs';
+import { installSupport } from './support.mjs';
 
 // The functions take the CLI's recognizer (t1n) and lines (n1n) as arguments;
 // these lines stand in for them, so nothing here depends on a copy of the
@@ -107,20 +109,18 @@ test('claude request adds the line to OAuth build; direct changes only with the 
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ccg-cli-prefix-'));
   try {
     await fsp.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy', 'request-agent']) {
-      await fsp.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
-    }
+    await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-gr4a0fky.js': 'export class rbe {} export const eF=async()=>new rbe(); export const Zre=()=>{};',
-      'chunk-0ycjphb5.js': 'export const El=()=>({});',
-      'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
-      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
+      'chunk-38xgev2z.js': 'export class _ke {} export const sF=async()=>new _ke(); export const mle=()=>{};',
+      'chunk-7p6jp6kj.js': 'export const Al=()=>({});',
+      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
+      'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // The build names the line its entrypoint asks for.
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body:{model:body.model,system:[{type:"text",text:"built"}]},headers:{},identityLine:{line:"official_cli",fallback:"official_cli"}});',
       // Records exactly what would be sent, then answers with an HTTP error.
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         export const checkModelRequest=()=>null;
-        export const openModelRequest=async o=>{const b=o.transformBody?o.transformBody(o.rawBody??o.body):o.rawBody??o.body;
+        export const openModelRequest=async o=>{const b=o.rawBody??o.body;
           await fs.writeFile('sent.json',typeof b==='string'?b:JSON.stringify(b));
           await fs.writeFile('keys.json',JSON.stringify(Object.keys(o)));return {id:'x',ok:false,status:400,headers:{}}};
         export const cancelModelResponse=async()=>{};
@@ -164,9 +164,9 @@ test('claude request adds the line to OAuth build; direct changes only with the 
 // The real recognizer and selector from the recovered CLI (2.1.304
 // chunk-t61vswm2.js: the le/ke/De declaration, t1n and n1n). The recovered
 // source is not in Git, so this is skipped, visibly, where it is absent.
-const restored = new URL('../../../../../../artifacts/claude-2.1.304/linux-restored/chunk-t61vswm2.js', import.meta.url);
-test('the CLI recognizes its own lines and gives one per identity line name', { skip: fs.existsSync(restored) ? false : 'Recovered CLI 2.1.304 source unavailable: native t1n/n1n were not executed.' }, () => {
-  const chunk = fs.readFileSync(restored, 'utf8');
+const restoredChunk = new URL('chunk-t61vswm2.js', restored);
+test('the CLI recognizes its own lines and gives one per identity line name', { skip: nativeSkip('native t1n/n1n were') }, () => {
+  const chunk = fs.readFileSync(restoredChunk, 'utf8');
   const piece = pattern => { const m = chunk.match(pattern); assert(m, String(pattern)); return m[0]; };
   const native = vm.runInNewContext(piece(/var le="You are Claude Code[^;]*;/) + piece(/function t1n\(e\)\{[^}]*\}/) +
     piece(/function n1n\(e\)\{.*?return le\}/) + ';({t1n,n1n,lines:vt})', { Pe: () => 'firstParty' });

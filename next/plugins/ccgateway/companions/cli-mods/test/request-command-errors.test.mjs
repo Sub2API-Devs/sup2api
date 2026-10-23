@@ -4,19 +4,18 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { installSupport } from './support.mjs';
 
 test('CLI stores complete opaque HTTP error bodies and reserves envelopes for local failures', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-http-errors-'));
   try {
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']) {
-      await fs.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
-    }
+    await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-gr4a0fky.js': 'export class rbe {} export const eF=async()=>new rbe(); export const Zre=()=>{};',
-      'chunk-0ycjphb5.js': 'export const El=()=>({});',
-      'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
-      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
+      'chunk-38xgev2z.js': 'export class _ke {} export const sF=async()=>new _ke(); export const mle=()=>{};',
+      'chunk-7p6jp6kj.js': 'export const Al=()=>({});',
+      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
+      'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{}});',
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         let body,offset=0;

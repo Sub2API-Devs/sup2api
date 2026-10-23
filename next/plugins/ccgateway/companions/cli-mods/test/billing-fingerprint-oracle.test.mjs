@@ -5,11 +5,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { fingerprintMessages } from '../request-input.js';
 import { vocabulary } from './vocabulary.mjs';
+import { restored, nativeSkip } from './artifacts.mjs';
 const require = createRequire(import.meta.url);
-const root = new URL('../../../../../../', import.meta.url);
-const restored = new URL('artifacts/claude-2.1.304/linux-restored/', root);
-const available = fs.existsSync(new URL('chunk-2gh4h0fv.js', restored));
-const options = { skip: available ? false : 'Pristine CLI 2.1.304 source unavailable: native fingerprint oracle was not executed.' };
+const options = { skip: nativeSkip('native fingerprint oracle was') };
 let oracle;
 function native() {
   // Loading the oracle validates the full native source hash. Changed baselines

@@ -3,6 +3,8 @@
 // recognizes (the vocabulary: ccgatewayEnvironmentVocabulary in
 // native-environment-2.1.304.inc.js plus the native billing header); this
 // module only edits recognized spans.
+import { toBlocks, systemTexts, splice } from './shared.js';
+
 const fields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'];
 const billingFields = ['cc_version', 'cc_entrypoint'];
 const escapeRE = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -203,10 +205,6 @@ function textSlots(input) {
   });
   return slots;
 }
-function splice(text, edits) {
-  for (const edit of edits.sort((a, b) => b.start - a.start)) text = text.slice(0, edit.start) + edit.value + text.slice(edit.end);
-  return text;
-}
 function validatePolicy(policy) {
   for (const [section, allowed, values] of [['build_attachment_sources', fields, ['client', 'worker', 'erase']], ['build_billing_sources', billingFields, ['client', 'worker']]]) {
     if (policy[section] === undefined) continue;
@@ -217,30 +215,36 @@ function validatePolicy(policy) {
   if (policy.build_billing_entrypoint !== undefined && !/^[a-z][a-z0-9_-]{0,63}$/.test(policy.build_billing_entrypoint)) throw error('Invalid build_billing_entrypoint');
 }
 
+// planRegion records one environment region of a slot and plans its entries
+// whose source is not the client's. The baseline is the fields a full
+// (non-delta) entry has already given, in request order.
+function planRegion(state, slot, range, region) {
+  const { sources, plans, regionsBySlot, blocked, baseline, emitDiagnostic } = state;
+  if (!regionsBySlot.has(slot)) regionsBySlot.set(slot, []);
+  regionsBySlot.get(slot).push({ ...region, start: region.start + range.start, end: region.end + range.start, headerEnd: region.headerEnd + range.start });
+  for (const [field, status] of region.blocked) {
+    blocked.add(field); diagnostic(emitDiagnostic, field, status, slot.carrier);
+  }
+  for (const entry of region.entries) {
+    const source = sources[entry.field] ?? 'client';
+    if (source === 'client') continue;
+    if (region.update && source === 'worker' && !baseline.has(entry.field) && entry.delta) {
+      blocked.add(entry.field); diagnostic(emitDiagnostic, entry.field, 'missing_baseline', slot.carrier);
+    }
+    plans.push({ slot, region, entry, start: range.start + entry.start, end: range.start + entry.end, source, redundant: region.update && baseline.has(entry.field) });
+    if (!region.update || !entry.delta) baseline.add(entry.field);
+  }
+}
+
 async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagnostic) {
   validatePolicy(policy);
   const output = structuredClone(input);
-  if (policy.relay_mode === 'direct') return output;
-  const sources = policy.build_attachment_sources ?? {}, slots = textSlots(output), plans = [], regionsBySlot = new Map(), blocked = new Set(), baseline = new Set();
-  for (const slot of slots) {
+  const state = { sources: policy.build_attachment_sources ?? {}, plans: [], regionsBySlot: new Map(), blocked: new Set(), baseline: new Set(), emitDiagnostic };
+  for (const slot of textSlots(output)) {
     const ranges = slot.role === 'user' ? recognizedUser(c, slot.text) : [{ text: slot.text, start: 0 }];
-    for (const range of ranges) for (const region of environmentRegions(c, range.text, slot.path)) {
-      if (!regionsBySlot.has(slot)) regionsBySlot.set(slot, []);
-      regionsBySlot.get(slot).push({ ...region, start: region.start + range.start, end: region.end + range.start, headerEnd: region.headerEnd + range.start });
-      for (const [field, status] of region.blocked) {
-        blocked.add(field); diagnostic(emitDiagnostic, field, status, slot.carrier);
-      }
-      for (const entry of region.entries) {
-        const source = sources[entry.field] ?? 'client';
-        if (source === 'client') continue;
-        if (region.update && source === 'worker' && !baseline.has(entry.field) && entry.delta) {
-          blocked.add(entry.field); diagnostic(emitDiagnostic, entry.field, 'missing_baseline', slot.carrier);
-        }
-        plans.push({ slot, region, entry, start: range.start + entry.start, end: range.start + entry.end, source, redundant: region.update && baseline.has(entry.field) });
-        if (!region.update || !entry.delta) baseline.add(entry.field);
-      }
-    }
+    for (const range of ranges) for (const region of environmentRegions(c, range.text, slot.path)) planRegion(state, slot, range, region);
   }
+  const { sources, plans, regionsBySlot, blocked } = state;
   const active = plans.filter(plan => !blocked.has(plan.entry.field));
   let server = new Map();
   if (active.some(plan => plan.source === 'worker' && !plan.redundant)) {
@@ -352,9 +356,8 @@ function billingCandidate(c, text) {
 // replaces it in the native line, so it is the value filled or written.
 function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emitDiagnostic) {
   validatePolicy(policy);
-  if (policy.relay_mode === 'direct') return structuredClone(system);
   const replaced = new Set(billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker'));
-  const blocks = typeof system === 'string' ? [{ type: 'text', text: system }] : structuredClone(system);
+  const blocks = structuredClone(toBlocks(system));
   if (!Array.isArray(blocks)) throw error('system must be text or blocks');
   const found = []; let conflict = '';
   blocks.forEach((block, index) => {
@@ -431,8 +434,7 @@ function requestEntrypoint(c, system, policy = {}) {
 // hasBilling says whether the system carries a billing header line anywhere,
 // even one that cannot be edited: such a request is Claude Code's own.
 function hasBilling(c, system) {
-  const texts = typeof system === 'string' ? [system] : Array.isArray(system) ? system.map(block => block?.text) : [];
-  return texts.some(text => {
+  return systemTexts(system).some(text => {
     if (typeof text !== 'string') return false;
     const result = billingCandidate(c, text);
     return Boolean(result.conflict) || result.candidates.length > 0;
@@ -454,8 +456,7 @@ function leadingBilling(c, system) {
 function requestBilling(c, system) {
   const leading = leadingBilling(c, system);
   if (leading !== null) return leading;
-  const texts = typeof system === 'string' ? [system] : Array.isArray(system) ? system.map(block => block?.text) : [];
-  for (const text of texts) {
+  for (const text of systemTexts(system)) {
     if (typeof text !== 'string') continue;
     const result = billingCandidate(c, text);
     if (result.conflict) return {};

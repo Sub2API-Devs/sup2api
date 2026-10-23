@@ -1,7 +1,28 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v22-client-entrypoint",
+  "extension": "ccgateway-v23-bound-imports",
+  "capabilities": [
+    "request_direct",
+    "request_build",
+    "request_oauth",
+    "request_error_stderr",
+    "request_raw_http_errors",
+    "native_tools",
+    "mods_dispatch",
+    "request_policy_mode_v1",
+    "build_attachment_sources_v2",
+    "build_billing_sources_v1",
+    "build_content_preservation_v1",
+    "container_resource_reporting_v1",
+    "request_identity_v1",
+    "build_identity_line_v1",
+    "direct_billing_v1",
+    "request_agent_context_v1",
+    "build_injection_v1",
+    "request_levels_v1",
+    "client_user_agent_v1"
+  ],
   "modules": {
     "chunk-rncrmfyt.js": "42ceeaea3d0b44fdb20c4a9855f4a1b567f772ff1f327e5ad3c1ecb1111da35b",
     "chunk-0q47gehe.js": "f58ff3b17ff2956d27a36cc8e45e9393b8225f0ad210e0c8710c6a8e37aa7bf4",
@@ -22,6 +43,11 @@
     "chunk-2gh4h0fv.js": "c2d6555486a87ac42b8826897bb2ddf6f5cf1957f500bb25ab81fa01ee2abac1",
     "chunk-yqea5hk4.js": "2f8532c70f540af8dbda7d3c8d81afb1a8b781899d721451ad7e272dca5232fb",
     "chunk-sx3g9k86.js": "a54b978c593ec183274fc84cb2ab583115e109113820be9bb42055977adae409",
-    "chunk-wt08cjq1.js": "79151f0bec194d531dc2e0895d9e9c2507ef74c0c748f8b080a26c3d5c5e54fd"
+    "chunk-wt08cjq1.js": "79151f0bec194d531dc2e0895d9e9c2507ef74c0c748f8b080a26c3d5c5e54fd",
+    "chunk-7y2kvacy.js": "bf778bb30530bde4e0123db7bb76a6407051378d06f0782e8cdfc0dbab243142",
+    "chunk-jkcb7qdd.js": "551733b64319a368040ebb3d7fc52d86be4695c3a9fccbaf8fd97f0b856d772a",
+    "chunk-m5q1b1c4.js": "dcf74beba1900cad45be67b6a5c2b568c1042ffe9c3398c3f29f19548e33832c",
+    "chunk-eanw7pgv.js": "9c4b43891227ffc79e943b51f1d173d8b438418a286cdbe7d150cf91207431ce",
+    "chunk-t2p0d04m.js": "14d280e183c86d4a22265ebabaf321d038e74ab4ebe12e19909df4f698b6a6f0"
   }
 }

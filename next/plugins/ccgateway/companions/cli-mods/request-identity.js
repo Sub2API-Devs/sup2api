@@ -1,7 +1,8 @@
 // The identity source decides what metadata.user_id the upstream request
 // carries. Only the verified Worker supplies this context; no account secret or
 // client identifier enters the CLI environment.
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+import { uuidV4Pattern as uuid } from './shared.js';
+
 const modes = new Set(['client', 'worker', 'replace']);
 
 function identity() {

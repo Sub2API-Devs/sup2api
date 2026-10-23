@@ -10,10 +10,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { restored, nativeSkip } from './artifacts.mjs';
 
 const fixture = new URL('./fixtures/native-vocabulary-2.1.304.json', import.meta.url);
-const restored = new URL('../../../../../../artifacts/claude-2.1.304/linux-restored/', import.meta.url);
-const available = fs.existsSync(new URL('chunk-rncrmfyt.js', restored));
 
 function declarations(file, names) {
   const parser = createRequire(import.meta.url)('@babel/parser');
@@ -41,7 +40,7 @@ function nativeVocabulary() {
   return JSON.parse(JSON.stringify(vm.runInContext('({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] })', context)));
 }
 
-test('the committed vocabulary is what the CLI renders', { skip: available ? false : 'Recovered CLI 2.1.304 source unavailable: native vocabulary was not rendered.' }, () => {
+test('the committed vocabulary is what the CLI renders', { skip: nativeSkip('native vocabulary was') }, () => {
   const generated = nativeVocabulary();
   if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) fs.writeFileSync(fixture, JSON.stringify(generated, null, 2) + '\n');
   assert.deepEqual(JSON.parse(fs.readFileSync(fixture, 'utf8')), generated, 'native wording changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1');
@@ -59,7 +58,7 @@ function nativeLayers() {
   return JSON.parse(JSON.stringify(vm.runInContext('ccgatewayLayerVocabulary()', context)));
 }
 
-test('the committed layer vocabulary is what the CLI renders', { skip: available ? false : 'Recovered CLI 2.1.304 source unavailable: native layer vocabulary was not rendered.' }, () => {
+test('the committed layer vocabulary is what the CLI renders', { skip: nativeSkip('native layer vocabulary was') }, () => {
   const generated = nativeLayers();
   if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) fs.writeFileSync(layersFixture, JSON.stringify(generated, null, 2) + '\n');
   assert.deepEqual(JSON.parse(fs.readFileSync(layersFixture, 'utf8')), generated, 'native wording changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1');
@@ -68,7 +67,7 @@ test('the committed layer vocabulary is what the CLI renders', { skip: available
 // The turn each prompt gets is the native query loop's (iws, h0n), run here
 // on the recovered code: the SDK numbers turns, a human also numbers prompts,
 // and a history CC could not number (a compacted one) gets no position.
-test('main-thread prompts get the native turn', { skip: available ? false : 'Recovered CLI 2.1.304 source unavailable.' }, () => {
+test('main-thread prompts get the native turn', { skip: nativeSkip('native turn functions were') }, () => {
   const context = vm.createContext({});
   vm.runInContext(declarations('chunk-rncrmfyt.js', ['iws', 'm5e', 'o9t', 'h0n', 'Svt', 'mde', 'T3', '_vt', 'kvt', 'wso', 'pde', 'jSe', 'a3e', 'l0']), context);
   vm.runInContext(declarations('chunk-jkcb7qdd.js', ['vre']), context);

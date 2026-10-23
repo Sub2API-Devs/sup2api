@@ -36,20 +36,22 @@ export function parseRequestOptions(args) {
     if (arg === '--betas') options.betas = normalizeBetas(options.betas, value);
     if (arg === '--timeout-ms') options.timeoutMs = Number(value);
     if (arg === '--response-meta') options.meta = value;
-    if (arg === '--header') {
-      const colon = value.indexOf(':');
-      if (colon < 1 || /[\r\n\0]/.test(value)) throw Error('--header must be name:value without control characters');
-      const name = value.slice(0, colon).trim().toLowerCase(), content = value.slice(colon + 1).trim();
-      if (name === 'anthropic-beta') options.betas = normalizeBetas(options.betas, content);
-      else if (name === 'anthropic-version') {
-        if (content !== '2023-06-01') throw Error('Unsupported anthropic-version');
-        options.headers[name] = content;
-      } else throw Error(`Header ${name} is not a client protocol header; CC owns authentication and transport`);
-    }
+    if (arg === '--header') addHeader(options, value);
   }
   options.mode ??= 'direct';
   if (options.betas.length) options.headers['anthropic-beta'] = options.betas.join(',');
   return options;
+}
+
+// Only the client protocol headers are taken: the betas, and the one API version.
+function addHeader(options, value) {
+  const colon = value.indexOf(':');
+  if (colon < 1 || /[\r\n\0]/.test(value)) throw Error('--header must be name:value without control characters');
+  const name = value.slice(0, colon).trim().toLowerCase(), content = value.slice(colon + 1).trim();
+  if (name === 'anthropic-beta') { options.betas = normalizeBetas(options.betas, content); return; }
+  if (name !== 'anthropic-version') throw Error(`Header ${name} is not a client protocol header; CC owns authentication and transport`);
+  if (content !== '2023-06-01') throw Error('Unsupported anthropic-version');
+  options.headers[name] = content;
 }
 
 // JSON.parse may round a nonintegral token such as 1.00000000000000001 to 1.

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { object } from './shared.js';
 
 const environmentFields = [
   'platform_name', 'os_version', 'shell', 'primary_directory',
@@ -6,7 +7,6 @@ const environmentFields = [
   'scratchpad_directory', 'github_cli', 'agent_proxy',
 ];
 const billingFields = ['cc_version', 'cc_entrypoint'];
-const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // The cc_entrypoint values build may write and, per entrypoint, the identity
 // lines real clients send with it, the default first (contracts

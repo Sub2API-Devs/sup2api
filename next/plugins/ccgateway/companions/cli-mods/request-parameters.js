@@ -1,6 +1,7 @@
 // External 2.1.304 build boundary only. Interactive CLI defaults and the older
 // adapters do not import this module.
-const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+import { object } from './shared.js';
+
 const has = (value, key) => Object.hasOwn(value, key);
 const fail = (field, reason) => {
   throw Object.assign(new Error(`request --build: ${field} ${reason}`), { status: 400, code: 'invalid_request_error', field });
