@@ -74,21 +74,29 @@ func TestRuntimePairedWorkersExplicitAndAudited(t *testing.T) {
 	var n int
 	require.NoError(t, f.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='ccgateway.runtime.workers' AND detail->>'cli_version'='2.1.304' AND detail->'components'='["worker","cli"]'::jsonb`).Scan(&n))
 	require.Equal(t, 1, n)
-	for _, bad := range []string{`{"components":[]}`, `{"components":["cli"]}`, `{"components":["cli","worker"],"cli_version":"2.1.304"}`, `{"components":["worker","cli"],"cli_version":"2.1.302"}`, `{"cli_version":"2.1.304"}`, `{"path":"/tmp/evil"}`, `{"components":["worker","cli"],"cli_version":"2.1.304","target":"/etc"}`} {
+	for _, bad := range []string{`{"components":[]}`, `{"components":["cli"]}`, `{"components":["cli","worker"],"cli_version":"2.1.304"}`, `{"components":["worker","cli"],"cli_version":"latest"}`, `{"components":["worker","cli"],"cli_version":"2.1"}`, `{"components":["worker","cli"]}`, `{"cli_version":"2.1.304"}`, `{"path":"/tmp/evil"}`, `{"components":["worker","cli"],"cli_version":"2.1.304","target":"/etc"}`} {
 		code, out = f.request(admin, "POST", path, bad)
 		require.Equal(t, 400, code, out)
 	}
 	require.Len(t, requests, 2)
-	code, out = f.request(admin, "POST", path, `{"components":["worker"]}`)
+	// The core does not pin the version (audit B3): the controller checks it
+	// against the image's CLI manifest. An answer naming another version than
+	// asked is not believed.
+	code, out = f.request(admin, "POST", path, `{"components":["worker","cli"],"cli_version":"2.1.305","image":"ccgateway:305"}`)
 	require.Equal(t, 200, code, out)
 	require.Len(t, requests, 4)
-	require.NotContains(t, requests[2], "components")
-	require.NotContains(t, requests[2], "cli_version")
+	require.Equal(t, "2.1.305", requests[2]["cli_version"])
+	require.Equal(t, "invalid_response", workerResults(t, out)["21"]["reason"])
+	code, out = f.request(admin, "POST", path, `{"components":["worker"]}`)
+	require.Equal(t, 200, code, out)
+	require.Len(t, requests, 6)
+	require.NotContains(t, requests[4], "components")
+	require.NotContains(t, requests[4], "cli_version")
 	pairedCap = false
 	code, out = f.request(admin, "POST", path, body)
 	require.Equal(t, 503, code, out)
 	require.Equal(t, "controller_outdated", reason(out))
-	require.Len(t, requests, 4)
+	require.Len(t, requests, 6)
 }
 
 func (c *fakeWorkers) ServeHTTP(w http.ResponseWriter, r *http.Request) {

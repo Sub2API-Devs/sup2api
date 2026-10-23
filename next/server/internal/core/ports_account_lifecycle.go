@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -41,7 +42,14 @@ type AccountActionResource interface {
 // AccountDeletionResource records durable cleanup intent in the account
 // deletion transaction. Reconciliation performs the remote cleanup afterward.
 type AccountDeletionResource interface {
-	MarkAccountDeleted(context.Context, pgx.Tx, int64) error
+	MarkAccountDeleted(context.Context, pgx.Tx, int64, AccountDeletionOptions) error
+}
+
+// AccountDeletionOptions is how a deleted account's resources go.
+type AccountDeletionOptions struct {
+	// RetainUntil keeps the resources (stopped) until then, as the account
+	// type's lifecycle.deletion.retentionDays allows; nil removes them at once.
+	RetainUntil *time.Time
 }
 
 type AccountLifecycleResource interface {

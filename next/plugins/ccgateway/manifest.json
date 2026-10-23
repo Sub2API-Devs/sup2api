@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费；不支持 token 计数和模型发现。"
   },
-  "version": "0.1.86",
+  "version": "0.1.87",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",
@@ -41,7 +41,7 @@
           {"key": "7d_sonnet", "label": {"en": "Sonnet weekly usage", "zh": "Sonnet 周用量"}, "shortLabel": {"en": "Sonnet 7d", "zh": "Sonnet 7 天"}}
         ]
       },
-      "lifecycle": {"preparation": true, "required": true, "actions": [{"id": "refresh_token", "label": {"en": "Refresh token", "zh": "刷新令牌"}, "icon": "refresh"}, {"id": "refresh_auth", "label": {"en": "Refresh authorization", "zh": "重新授权"}, "icon": "refresh"}]},
+      "lifecycle": {"preparation": true, "required": true, "actions": [{"id": "refresh_token", "label": {"en": "Refresh token", "zh": "刷新令牌"}, "icon": "refresh"}, {"id": "refresh_auth", "label": {"en": "Refresh authorization", "zh": "重新授权"}, "icon": "refresh"}], "deletion": {"retentionDays": 3}},
       "label": {
         "en": "Claude Code",
         "zh": "Claude Code"
@@ -103,7 +103,7 @@
     },
     {
       "id": "apikey",
-      "lifecycle": {},
+      "lifecycle": {"deletion": {"retentionDays": 3}},
       "label": {
         "en": "Claude Code",
         "zh": "Claude Code"

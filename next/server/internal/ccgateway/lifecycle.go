@@ -66,8 +66,8 @@ func (s *Service) AccountPreparationAction(ctx context.Context, p core.AccountPr
 	}
 	defer close()
 	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, 65537))
-	if err != nil || len(raw) > 65536 {
+	raw, err := readBounded(response.Body, 65536)
+	if err != nil {
 		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
 	if action == "session" && response.StatusCode == 404 {

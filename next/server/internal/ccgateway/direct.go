@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -24,21 +23,6 @@ type accountConnection struct {
 }
 
 var errAccountNotSynchronized = errors.New("account runtime is not synchronized")
-
-// openAccountModel opens a client of runtime key at revision for one use:
-// the connection is asked from the controller and the client is closed by
-// the caller. The request path keeps both instead (route).
-func (s *Service) openAccountModel(ctx context.Context, cfg Config, runtimeKey, revision string) (*http.Client, string, string, func() error, error) {
-	connection, err := s.fetchConnection(ctx, cfg, runtimeKey, revision)
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	client, closeClient, err := s.openAccountTransport(ctx, cfg, runtimeKey, revision, connection.target())
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	return client, "http://" + connection.target(), connection.Key, closeClient, nil
-}
 
 func (c accountConnection) target() string { return net.JoinHostPort(c.IP, strconv.Itoa(c.Port)) }
 
@@ -74,8 +58,8 @@ func (s *Service) fetchConnection(ctx context.Context, cfg Config, runtimeKey, r
 	if response.StatusCode != 200 {
 		return connection, errors.New("account runtime is not synchronized")
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, 8193))
-	if err != nil || len(data) > 8192 {
+	data, err := readBounded(response.Body, 8192)
+	if err != nil {
 		return connection, errors.New("invalid account connection response")
 	}
 	if err = json.Unmarshal(data, &connection); err != nil {
@@ -103,7 +87,7 @@ func (s *Service) openAccountTransport(ctx context.Context, cfg Config, runtimeK
 		return accountTunnelClient(ctx, cfg, runtimeKey, revision, target)
 	case cfg.Mode == "local":
 		transport := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
-		client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client := newNoRedirectClient(transport)
 		return client, func() error { transport.CloseIdleConnections(); return nil }, nil
 	}
 	return nil, nil, errors.New("account transport is not configured")

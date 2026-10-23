@@ -73,6 +73,13 @@ func (p FeatureOverrides) Validate() error {
 	if p.RelayMode != nil && *p.RelayMode != "build" && *p.RelayMode != "direct" {
 		return errors.New("invalid relay_mode: must be build or direct")
 	}
+	// Stored only, never resolved: still checked when saved.
+	if err := p.BuildIdentityLines.Validate(); err != nil {
+		return err
+	}
+	if err := p.RequestIdentitySources.Validate(); err != nil {
+		return err
+	}
 	base := defaultRequestPolicy()
 	applyFeatureOverrides(&base, p, nil, "")
 	return validateRequestPolicy(base)
@@ -134,71 +141,124 @@ func mergeSourceMap[M ~map[string]string](in, stored M) M {
 }
 
 func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[string]string, layer string) {
-	for key, pair := range map[string][2]*string{
-		"unknown_field": {o.UnknownField, &p.UnknownField}, "tool_search": {o.ToolSearch, &p.ToolSearch},
-		"thinking_disabled_compat": {o.ThinkingDisabledCompat, &p.ThinkingDisabledCompat}, "custom_tool_prefix": {o.CustomToolPrefix, &p.CustomToolPrefix},
-		"build_billing_entrypoint": {o.BuildBillingEntrypoint, &p.BuildBillingEntrypoint},
-	} {
-		if pair[0] != nil {
-			*pair[1] = *pair[0]
+	for _, f := range layerFields {
+		for _, key := range f.apply(p, o) {
 			if sources != nil {
 				sources[key] = layer
 			}
 		}
 	}
-	if p.BuildAttachmentSources == nil {
-		p.BuildAttachmentSources = features.BuildAttachmentSources{}
-	}
-	if p.BuildBillingSources == nil {
-		p.BuildBillingSources = features.BuildBillingSources{}
-	}
-	if p.BuildIdentityLines == nil {
-		p.BuildIdentityLines = features.BuildIdentityLines{}
-	}
-	if p.RequestIdentitySources == nil {
-		p.RequestIdentitySources = features.RequestIdentitySources{}
-	}
-	for k, v := range o.BuildAttachmentSources {
-		p.BuildAttachmentSources[k] = v
-		if sources != nil {
-			sources["build_attachment_sources."+k] = layer
+}
+
+// layerField is one setting a group or account layer may override. keys are
+// its entries in FeatureResolution.Sources; apply copies what o sets onto p
+// and names the entries it set; fill (nil: none) gives the global policy's
+// unset entries their default. The identity lines and identity sources are
+// not among them: stored only, never resolved (audit A9, 2026-10-21/23).
+type layerField struct {
+	keys  []string
+	apply func(p *RequestPolicy, o FeatureOverrides) []string
+	fill  func(p *RequestPolicy)
+}
+
+// layerFields in the order a layer applies them: the level last, it reads
+// what the others merged (applyLevelOverride).
+var layerFields = []layerField{
+	scalarField("unknown_field", func(o FeatureOverrides) *string { return o.UnknownField }, func(p *RequestPolicy) *string { return &p.UnknownField }, ""),
+	scalarField("tool_search", func(o FeatureOverrides) *string { return o.ToolSearch }, func(p *RequestPolicy) *string { return &p.ToolSearch }, ""),
+	scalarField("thinking_disabled_compat", func(o FeatureOverrides) *string { return o.ThinkingDisabledCompat }, func(p *RequestPolicy) *string { return &p.ThinkingDisabledCompat }, ""),
+	scalarField("custom_tool_prefix", func(o FeatureOverrides) *string { return o.CustomToolPrefix }, func(p *RequestPolicy) *string { return &p.CustomToolPrefix }, ""),
+	scalarField("build_billing_entrypoint", func(o FeatureOverrides) *string { return o.BuildBillingEntrypoint }, func(p *RequestPolicy) *string { return &p.BuildBillingEntrypoint }, features.DefaultBillingEntrypoint),
+	sourceField("build_attachment_sources", features.BuildAttachmentFields,
+		func(o FeatureOverrides) map[string]string { return o.BuildAttachmentSources },
+		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildAttachmentSources) }),
+	sourceField("build_billing_sources", []string{"cc_version", "cc_entrypoint"},
+		func(o FeatureOverrides) map[string]string { return o.BuildBillingSources },
+		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildBillingSources) }),
+	injectionField(),
+	{keys: []string{"level", "relay_mode"}, apply: applyLevelOverride},
+}
+
+// scalarField is a string setting; def ("" none) is the global default.
+func scalarField(name string, from func(FeatureOverrides) *string, to func(*RequestPolicy) *string, def string) layerField {
+	f := layerField{keys: []string{name}, apply: func(p *RequestPolicy, o FeatureOverrides) []string {
+		v := from(o)
+		if v == nil {
+			return nil
+		}
+		*to(p) = *v
+		return []string{name}
+	}}
+	if def != "" {
+		f.fill = func(p *RequestPolicy) {
+			if *to(p) == "" {
+				*to(p) = def
+			}
 		}
 	}
-	for k, v := range o.BuildBillingSources {
-		p.BuildBillingSources[k] = v
-		if sources != nil {
-			sources["build_billing_sources."+k] = layer
-		}
+	return f
+}
+
+// sourceField is a map of sources overridden key by key; an unset key of
+// the global policy is "client".
+func sourceField(name string, fields []string, from func(FeatureOverrides) map[string]string, to func(*RequestPolicy) *map[string]string) layerField {
+	keys := make([]string, len(fields))
+	for i, k := range fields {
+		keys[i] = name + "." + k
 	}
-	for k, v := range o.BuildIdentityLines {
-		p.BuildIdentityLines[k] = v
-		if sources != nil {
-			sources["build_identity_lines."+k] = layer
-		}
+	return layerField{keys: keys,
+		apply: func(p *RequestPolicy, o FeatureOverrides) []string {
+			m := to(p)
+			if *m == nil {
+				*m = map[string]string{}
+			}
+			var set []string
+			for k, v := range from(o) {
+				(*m)[k] = v
+				set = append(set, name+"."+k)
+			}
+			return set
+		},
+		fill: func(p *RequestPolicy) {
+			m := to(p)
+			if *m == nil {
+				*m = map[string]string{}
+			}
+			for _, k := range fields {
+				if (*m)[k] == "" {
+					(*m)[k] = "client"
+				}
+			}
+		}}
+}
+
+// injectionField: the system prompt and each attachment and tool override on
+// their own; an omitted one inherits.
+func injectionField() layerField {
+	keys := []string{"build_injection.system_prompt"}
+	for _, k := range features.InjectionAttachments {
+		keys = append(keys, "build_injection.attachments."+k)
 	}
-	// The system prompt and each attachment and tool override on their own;
-	// an omitted one inherits.
-	if o.BuildInjection != nil {
+	for _, k := range features.InjectionTools {
+		keys = append(keys, "build_injection.tools."+k)
+	}
+	return layerField{keys: keys, apply: func(p *RequestPolicy, o FeatureOverrides) []string {
+		if o.BuildInjection == nil {
+			return nil
+		}
 		p.BuildInjection = p.BuildInjection.Merge(o.BuildInjection)
-		if sources != nil {
-			if o.BuildInjection.SystemPrompt != nil {
-				sources["build_injection.system_prompt"] = layer
-			}
-			for k := range o.BuildInjection.Attachments {
-				sources["build_injection.attachments."+k] = layer
-			}
-			for k := range o.BuildInjection.Tools {
-				sources["build_injection.tools."+k] = layer
-			}
+		var set []string
+		if o.BuildInjection.SystemPrompt != nil {
+			set = append(set, "build_injection.system_prompt")
 		}
-	}
-	for k, v := range o.RequestIdentitySources {
-		p.RequestIdentitySources[k] = v
-		if sources != nil {
-			sources["request_identity_sources."+k] = layer
+		for k := range o.BuildInjection.Attachments {
+			set = append(set, "build_injection.attachments."+k)
 		}
-	}
-	applyLevelOverride(p, o, sources, layer)
+		for k := range o.BuildInjection.Tools {
+			set = append(set, "build_injection.tools."+k)
+		}
+		return set
+	}}
 }
 
 // applyLevelOverride applies an override's level after its layer settings. A
@@ -206,7 +266,7 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 // direct is level none; build lifts only a none level so far, to the level of
 // what the merged settings do (features.LegacyLevel, keeping what they added).
 // The relay mode follows the level either way.
-func applyLevelOverride(p *RequestPolicy, o FeatureOverrides, sources map[string]string, layer string) {
+func applyLevelOverride(p *RequestPolicy, o FeatureOverrides) []string {
 	changed := false
 	switch {
 	case o.Level != nil:
@@ -220,9 +280,10 @@ func applyLevelOverride(p *RequestPolicy, o FeatureOverrides, sources map[string
 		}
 	}
 	p.RelayMode = features.RelayModeForLevel(p.Level)
-	if changed && sources != nil {
-		sources["level"], sources["relay_mode"] = layer, layer
+	if changed {
+		return []string{"level", "relay_mode"}
 	}
+	return nil
 }
 
 type FeatureResolution struct {
@@ -247,48 +308,22 @@ func (c Config) allowsAccountFeatures(groupID int64) bool {
 
 // ResolveFeaturePolicy is shared by preview and transport. A missing request
 // group deliberately disables account overrides; probes never choose a group.
+// The identity lines and identity sources are stored only: they are neither
+// resolved nor shown (the console dropped them anyway, audit A9).
 func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy) FeatureResolution {
 	p := copyPolicy(c.EffectiveRequestPolicy())
+	p.BuildIdentityLines, p.RequestIdentitySources = nil, nil
 	// What the current vocabulary does not know is ignored, layer by layer
 	// (feature_policy_sanitize.go); the stored values are not touched.
 	warnDropped("global", sanitizePolicy(&p))
 	sources := map[string]string{}
-	for _, k := range []string{"level", "relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix", "build_billing_entrypoint"} {
-		sources[k] = "global"
-	}
-	if p.BuildBillingEntrypoint == "" {
-		p.BuildBillingEntrypoint = features.DefaultBillingEntrypoint
-	}
-	for _, k := range features.BillingEntrypoints {
-		if p.BuildIdentityLines[k] == "" {
-			p.BuildIdentityLines[k] = features.DefaultIdentityLine(k)
+	for _, f := range layerFields {
+		if f.fill != nil {
+			f.fill(&p)
 		}
-		sources["build_identity_lines."+k] = "global"
-	}
-	sources["build_injection.system_prompt"] = "global"
-	for _, k := range features.InjectionAttachments {
-		sources["build_injection.attachments."+k] = "global"
-	}
-	for _, k := range features.InjectionTools {
-		sources["build_injection.tools."+k] = "global"
-	}
-	for _, k := range features.BuildAttachmentFields {
-		if p.BuildAttachmentSources[k] == "" {
-			p.BuildAttachmentSources[k] = "client"
+		for _, k := range f.keys {
+			sources[k] = "global"
 		}
-		sources["build_attachment_sources."+k] = "global"
-	}
-	for _, k := range []string{"cc_version", "cc_entrypoint"} {
-		if p.BuildBillingSources[k] == "" {
-			p.BuildBillingSources[k] = "client"
-		}
-		sources["build_billing_sources."+k] = "global"
-	}
-	for _, k := range features.RequestIdentityFields {
-		if p.RequestIdentitySources[k] == "" {
-			p.RequestIdentitySources[k] = features.RequestIdentityDefault
-		}
-		sources["request_identity_sources."+k] = "global"
 	}
 	g, ok := c.CCFeatureGroups[strconv.FormatInt(groupID, 10)]
 	reason := ""
@@ -357,7 +392,7 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 	account := AccountFeaturePolicy{Mode: "follow"}
 	if accountID > 0 && c.allowsAccountFeatures(groupID) {
 		var err error
-		account, err = LoadAccountFeaturePolicy(ctx, s.DB.Pool, accountID)
+		account, err = s.requestAccountFeatures(ctx, accountID)
 		if err != nil {
 			return features.WorkerPolicy{}, err
 		}

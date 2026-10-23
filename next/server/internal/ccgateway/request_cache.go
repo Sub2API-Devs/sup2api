@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +20,9 @@ import (
 // so they are kept between requests (2026-10-11) instead of being read from
 // the database and the controller every time. A change drops them on this
 // node and, through the bus, on the others. The bus is best-effort, so the
-// configuration and the desired revisions also expire after requestCacheTTL.
+// configuration and the desired revisions also expire after requestCacheTTL,
+// and a route is only used for the controller of the configuration read and
+// for routeMaxAge (audit A4).
 // A connection is only asked from the controller for the revision the core
 // wants, and every new tunnel carries it (the controller answers 409 unless
 // it is the applied one); dropping a route closes its idle tunnels.
@@ -58,8 +62,16 @@ type requestCache struct {
 	gen     uint64
 	cfg     *cachedConfig
 	desired map[int64]cachedDesired
+	// features holds each account's CC feature policy (audit A7); it changes
+	// with the account, so account:changed drops it with the desired state.
+	features map[int64]cachedFeatures
 	// routes is keyed by runtime key and holds the route of one revision.
 	routes map[string]*accountRoute
+}
+
+type cachedFeatures struct {
+	p  AccountFeaturePolicy
+	at time.Time
 }
 
 type cachedConfig struct {
@@ -77,11 +89,48 @@ type cachedDesired struct {
 // client per request (SSH mode, whose connection lives with the request).
 type accountRoute struct {
 	key, revision, base, target, modelKey string
-	client                                *http.Client
-	closeIdle                             func() error
+	// endpoint is the controller the connection was asked from
+	// (controllerEndpoint): a configuration that names another one, read once
+	// the configuration expired, never reuses the route (audit A4).
+	endpoint  string
+	client    *http.Client
+	closeIdle func() error
+	// at is when the controller last confirmed the connection; after
+	// routeMaxAge it is asked again (guarded by requestCache.mu).
+	at time.Time
+	// health is the Worker's last /healthz answer through this route and when
+	// it was read (guarded by requestCache.mu): the capability check of a
+	// model request reuses it for requestCacheTTL (audit A7). The Worker still
+	// refuses a policy its CLI cannot apply itself, so a stale answer only
+	// delays the core's own, clearer refusal.
+	health   *workerHealth
+	healthAt time.Time
 	// closed: the route was dropped; a connection a request still holds is
 	// closed when the request ends instead of being kept.
 	closed atomic.Bool
+}
+
+// routeMaxAge is how long a route is used before the controller is asked for
+// the connection again: the bus is best-effort and a runtime's address or
+// Worker key may change behind the same revision. An unchanged answer keeps
+// the route and its tunnels.
+var routeMaxAge = 5 * time.Minute
+
+// controllerEndpoint identifies what a route's connection was asked from: the
+// mode, address and trust of the controller and the management key.
+func controllerEndpoint(cfg Config) string {
+	return revisionOf(strings.Join([]string{cfg.Mode, cfg.panelScheme(), cfg.Host, strconv.Itoa(cfg.Port), cfg.BasePath, cfg.ControllerCA, cfg.AdminKey}, "\x00"))
+}
+
+// fresh reports whether r serves revision through endpoint without asking
+// the controller (caller holds requestCache.mu).
+func (r *accountRoute) fresh(revision, endpoint string) bool {
+	return r != nil && r.revision == revision && r.endpoint == endpoint && time.Since(r.at) < routeMaxAge
+}
+
+// same reports whether r is the connection other describes.
+func (r *accountRoute) same(other *accountRoute) bool {
+	return r.revision == other.revision && r.endpoint == other.endpoint && r.target == other.target && r.modelKey == other.modelKey
 }
 
 func (r *accountRoute) close() {
@@ -141,11 +190,13 @@ func (s *Service) requestDesired(ctx context.Context, id int64) (d accountDesire
 }
 
 // route returns the route of runtime key at revision, asking the controller
-// for the connection only when there is none for that revision yet.
+// for the connection only when there is no fresh one for that revision and
+// controller yet.
 func (s *Service) route(ctx context.Context, cfg Config, key, revision string) (*accountRoute, error) {
+	endpoint := controllerEndpoint(cfg)
 	c := &s.cache
 	c.mu.Lock()
-	if r := c.routes[key]; r != nil && r.revision == revision {
+	if r := c.routes[key]; r.fresh(revision, endpoint) {
 		c.mu.Unlock()
 		return r, nil
 	}
@@ -155,14 +206,14 @@ func (s *Service) route(ctx context.Context, cfg Config, key, revision string) (
 	if err != nil {
 		return nil, err
 	}
-	r := &accountRoute{key: key, revision: revision, target: connection.target(), base: "http://" + connection.target(), modelKey: connection.Key}
+	r := &accountRoute{key: key, revision: revision, endpoint: endpoint, target: connection.target(), base: "http://" + connection.target(), modelKey: connection.Key, at: time.Now()}
 	if s.openAccount == nil {
 		switch cfg.Mode {
 		case "controller":
 			r.client, r.closeIdle = pooledTunnelClient(cfg, key, revision, r.target)
 		case "local":
 			transport := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10, IdleConnTimeout: routeIdleTimeout}
-			r.client = &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+			r.client = newNoRedirectClient(transport)
 			r.closeIdle = func() error { transport.CloseIdleConnections(); return nil }
 		}
 	}
@@ -174,8 +225,10 @@ func (s *Service) route(ctx context.Context, cfg Config, key, revision string) (
 		return r, nil
 	}
 	if old := c.routes[key]; old != nil {
-		if old.revision == revision {
-			// Another request stored one first.
+		if old.same(r) {
+			// Another request stored it first, or the controller confirmed
+			// the kept connection: keep it and its tunnels.
+			old.at = r.at
 			r.close()
 			return old, nil
 		}
@@ -202,8 +255,53 @@ func (s *Service) openRoute(ctx context.Context, cfg Config, r *accountRoute) (*
 	return s.openAccountTransport(ctx, cfg, r.key, r.revision, r.target)
 }
 
+// requestAccountFeatures is LoadAccountFeaturePolicy for the request path:
+// read once per account and kept like its desired state (audit A7; §49.18
+// said forwarding no longer reads the database, the account policy was the
+// exception).
+func (s *Service) requestAccountFeatures(ctx context.Context, id int64) (AccountFeaturePolicy, error) {
+	c := &s.cache
+	c.mu.Lock()
+	if e, ok := c.features[id]; ok && time.Since(e.at) < requestCacheTTL {
+		c.mu.Unlock()
+		return e.p, nil
+	}
+	gen := c.gen
+	c.mu.Unlock()
+	p, err := LoadAccountFeaturePolicy(ctx, s.DB.Pool, id)
+	if err != nil {
+		return p, err
+	}
+	c.mu.Lock()
+	if c.gen == gen {
+		if c.features == nil {
+			c.features = map[int64]cachedFeatures{}
+		}
+		c.features[id] = cachedFeatures{p: p, at: time.Now()}
+	}
+	c.mu.Unlock()
+	return p, nil
+}
+
+// routeHealth is the Worker health r last read, nil when there is none or it
+// is older than requestCacheTTL.
+func (s *Service) routeHealth(r *accountRoute) *workerHealth {
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+	if r.health == nil || time.Since(r.healthAt) >= requestCacheTTL {
+		return nil
+	}
+	return r.health
+}
+
+func (s *Service) keepRouteHealth(r *accountRoute, h workerHealth) {
+	s.cache.mu.Lock()
+	r.health, r.healthAt = &h, time.Now()
+	s.cache.mu.Unlock()
+}
+
 // forgetAccount drops what the request path keeps for one account: its
-// desired revision and its route.
+// desired revision, its feature policy and its route.
 func (s *Service) forgetAccount(id int64, key string) {
 	c := &s.cache
 	c.mu.Lock()
@@ -212,11 +310,37 @@ func (s *Service) forgetAccount(id int64, key string) {
 		key = d.d.Key
 	}
 	delete(c.desired, id)
+	delete(c.features, id)
 	r := c.routes[key]
 	delete(c.routes, key)
 	c.mu.Unlock()
 	r.close()
 	s.forgetBlocked()
+}
+
+// AccountChanged follows a committed change of account id on this node (the
+// account service calls it next to publishing account:changed, so the node
+// that saved does not depend on receiving its own message).
+func (s *Service) AccountChanged(id int64) {
+	if s == nil || id <= 0 {
+		return
+	}
+	s.forgetAccount(id, "")
+}
+
+// workerChanged follows an in-place Worker update of runtime key (of
+// account id, 0 for an unadopted draft): the Worker's capabilities may differ
+// behind the same revision, so this node drops the route and the other nodes
+// are told through account:changed.
+func (s *Service) workerChanged(ctx context.Context, id int64, key string) {
+	s.forgetAccount(id, key)
+	if s.Bus == nil || id <= 0 {
+		return
+	}
+	b, _ := json.Marshal(map[string]int64{"account_id": id})
+	if err := s.Bus.Publish(context.WithoutCancel(ctx), core.ChannelAccountChanged, b); err != nil {
+		slog.WarnContext(ctx, "CCGateway: publish account:changed", "err", err)
+	}
 }
 
 // invalidateRequests drops everything the request path keeps. keepConfig
@@ -229,6 +353,7 @@ func (s *Service) invalidateRequests(keepConfig bool) {
 		c.cfg = nil
 	}
 	c.desired = nil
+	c.features = nil
 	routes := c.routes
 	c.routes = nil
 	c.mu.Unlock()

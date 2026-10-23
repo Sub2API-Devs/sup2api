@@ -300,3 +300,136 @@ func TestConnectCCGatewaySharedNeedsAuthorization(t *testing.T) {
 		t.Fatalf("account created: %d %v", n, err)
 	}
 }
+
+// runtimeDeletion reads the cleanup intent the account's runtime row holds:
+// whether it is marked, its purge_after relative to now, and purged_at.
+func (e *env) runtimeDeletion(id int64) (marked bool, purgeIn time.Duration, purged bool) {
+	e.t.Helper()
+	var seconds float64
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT retired_at IS NOT NULL, COALESCE(EXTRACT(EPOCH FROM purge_after-now()),-1e9), purged_at IS NOT NULL
+		FROM ccgateway_runtimes WHERE account_id=$1`, id).Scan(&marked, &seconds, &purged); err != nil {
+		e.t.Fatal(err)
+	}
+	return marked, time.Duration(seconds * float64(time.Second)), purged
+}
+
+// TestDeleteRetainResources: DELETE /accounts/:id?retain_resources=1 keeps
+// the runtime for the retention days the account type declares; a type
+// without a declaration, or any other value, is refused and nothing is
+// deleted.
+func TestDeleteRetainResources(t *testing.T) {
+	e := setup(t)
+	e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"status":"pending"}`)) })
+	retained := e.mkRawAccount("ccgateway", "managed", "retained", "unused", true)
+	immediate := e.mkRawAccount("ccgateway", "managed", "immediate", "unused", true)
+	other := e.mkRawAccount("anthropic", "apikey", "other", "sk-good-key-123", true)
+	deleted := func(id int64) bool {
+		var gone bool
+		if err := e.db.Pool.QueryRow(context.Background(), `SELECT deleted_at IS NOT NULL FROM accounts WHERE id=$1`, id).Scan(&gone); err != nil {
+			t.Fatal(err)
+		}
+		return gone
+	}
+	for _, tc := range []struct {
+		id    int64
+		query string
+	}{
+		{retained, "?retain_resources=yes"},
+		{retained, "?retain_resources=0"},
+		{retained, "?retain_resources=1"}, // this fixture's ccgateway/managed declares no retention
+		{other, "?retain_resources=1"},    // a type without any deletion resource
+	} {
+		code, out := e.do("DELETE", "/accounts/"+itoa(tc.id)+tc.query, nil)
+		errObj, _ := out["error"].(map[string]any)
+		if code != 400 || errObj["code"] != "invalid_argument" || errObj["message"] == "" || deleted(tc.id) {
+			t.Fatalf("%d%s: %d %v", tc.id, tc.query, code, out)
+		}
+	}
+	e.gen.types[len(e.gen.types)-1].Type.Lifecycle = &manifest.AccountLifecycle{Deletion: &manifest.AccountDeletion{RetentionDays: 3}}
+	if code, out := e.do("DELETE", "/accounts/"+itoa(retained)+"?retain_resources=1", nil); code != 204 {
+		t.Fatalf("retained delete: %d %v", code, out)
+	}
+	if code, out := e.do("DELETE", "/accounts/"+itoa(immediate)+"?retain_resources=", nil); code != 204 {
+		t.Fatalf("immediate delete: %d %v", code, out)
+	}
+	if marked, in, purged := e.runtimeDeletion(retained); !marked || purged || (in-72*time.Hour).Abs() > time.Minute {
+		t.Fatalf("retained: marked=%v purge in %v purged=%v", marked, in, purged)
+	}
+	if marked, in, purged := e.runtimeDeletion(immediate); !marked || purged || in > 0 {
+		t.Fatalf("immediate: marked=%v purge in %v purged=%v", marked, in, purged)
+	}
+	audits := e.auditRows("account.delete")
+	if len(audits) != 2 {
+		t.Fatalf("audits: %v", audits)
+	}
+	for _, a := range audits {
+		detail, _ := a["detail"].(map[string]any)
+		until, has := detail["retain_until"].(string)
+		at, err := time.Parse(time.RFC3339, until)
+		switch a["target_id"] {
+		case itoa(retained):
+			if !has || err != nil || time.Until(at)-72*time.Hour > time.Minute || 72*time.Hour-time.Until(at) > time.Minute {
+				t.Fatalf("retained audit: %v", a)
+			}
+		default:
+			if has {
+				t.Fatalf("immediate audit carries retain_until: %v", a)
+			}
+		}
+	}
+}
+
+// TestPurgePluginAccountsMarksRuntimeCleanup: uninstalling the plugin
+// deletes its accounts' runtimes too (at once), instead of keeping their
+// data forever.
+func TestPurgePluginAccountsMarksRuntimeCleanup(t *testing.T) {
+	e := setup(t)
+	e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) })
+	e.gen.types[len(e.gen.types)-1].Type.Lifecycle = &manifest.AccountLifecycle{Deletion: &manifest.AccountDeletion{RetentionDays: 3}}
+	a, b := e.mkRawAccount("ccgateway", "managed", "a", "unused", true), e.mkRawAccount("ccgateway", "managed", "b", "unused", true)
+	if _, err := e.db.Pool.Exec(context.Background(), `INSERT INTO ccgateway_runtimes(key,account_id,adopted_at) VALUES('d00000000000000aa',$1,now())`, b); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.svc.PurgePluginAccounts(context.Background(), "ccgateway"); err != nil || n != 2 {
+		t.Fatalf("purge: %d %v", n, err)
+	}
+	for _, id := range []int64{a, b} {
+		if marked, in, purged := e.runtimeDeletion(id); !marked || purged || in > 0 {
+			t.Fatalf("account %d: marked=%v purge in %v purged=%v", id, marked, in, purged)
+		}
+	}
+}
+
+// failingResource fails every reconcile like a controller refusing a
+// deletion (409 resource_in_use).
+type failingResource struct{ *preparationResource }
+
+func (failingResource) ReconcileAccount(context.Context, int64) error {
+	return core.ErrUnavailable.WithDetails(map[string]any{"reason": "resource_in_use"})
+}
+
+// TestDeletedLifecycleFailureDoesNotHoldEvents: the cleanup intent of a
+// deleted account is persisted and reconciliation retries it, so a remote
+// failure is only recorded; it does not fail the event delivery (which held
+// back every lifecycle event of the plugin for minutes). Other phases still
+// fail and are retried.
+func TestDeletedLifecycleFailureDoesNotHoldEvents(t *testing.T) {
+	e := setup(t)
+	e.gen.types[0].Type.Lifecycle = &manifest.AccountLifecycle{}
+	e.gen.types[0].Client = &preparationPlugin{fakePlatform: e.plat}
+	e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"anthropic": failingResource{&preparationResource{}}}
+	id := e.mkRawAccount("anthropic", "apikey", "deleted", "sk-good-key-123", true)
+	if err := e.svc.deliverAccountLifecycle(t.Context(), id, "anthropic", core.EventAccountUpdated, []string{"name"}); err == nil {
+		t.Fatal("update failure hidden")
+	}
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET deleted_at=now(),updated_at=now() WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.deliverAccountLifecycle(t.Context(), id, "anthropic", core.EventAccountDeleted, nil); err != nil {
+		t.Fatalf("deleted phase failure held the event: %v", err)
+	}
+	var status, code string
+	if err := e.db.Pool.QueryRow(t.Context(), `SELECT status,code FROM account_lifecycle_sync WHERE account_id=$1`, id).Scan(&status, &code); err != nil || status != "failed" || code != "resource_in_use" {
+		t.Fatalf("synchronization state: %s %s %v", status, code, err)
+	}
+}

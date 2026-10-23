@@ -1,7 +1,6 @@
 package ccgateway
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +17,7 @@ func TestCLIManagementRoutesRequirePermission(t *testing.T) {
 		engine := gin.New()
 		auth := ccgRouteAuth{false}
 		(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
-		request := httptest.NewRequest(method, "/api/v1/system/ccgateway/cli/22", strings.NewReader(`{"action":"update"}`))
+		request := httptest.NewRequest(method, "/api/v1/system/ccgateway/cli/22", strings.NewReader(`{"action":"check"}`))
 		request.Header.Set("Authorization", "Bearer fixture")
 		out := httptest.NewRecorder()
 		engine.ServeHTTP(out, request)
@@ -28,83 +27,42 @@ func TestCLIManagementRoutesRequirePermission(t *testing.T) {
 	}
 }
 
-func TestCLIToolCatalogRouteRequiresReadPermission(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	auth := ccgRouteAuth{false}
-	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
-	request := httptest.NewRequest("GET", "/api/v1/system/ccgateway/cli/22/catalog", nil)
-	request.Header.Set("Authorization", "Bearer fixture")
-	out := httptest.NewRecorder()
-	engine.ServeHTTP(out, request)
-	if out.Code != 403 {
-		t.Fatal("catalog read bypassed permissions", out.Code)
-	}
-}
+// cliViewFixture is the Worker's /admin/cli answer since the managed install
+// was retired (CONTRACTS §53.21): the version check fills catalog, no tools
+// are counted and nothing is ever updating.
+const cliViewFixture = `{"catalog":{"installed_version":"2.1.304","catalog_version":"2.1.304","state":"ready","tool_count":0,"variant_count":0,"checked_at":"2026-10-24T00:00:00Z","synced_at":"2026-10-24T00:00:00Z"},"auto_update":false,"auto_update_mode":"managed","pinned_version":"2.1.304","channel":"stable","latest_version":"","release_checked_at":"0001-01-01T00:00:00Z","updating":false,"update_state":"idle","update_error":""}`
 
-const cliCatalogFixture = `{"catalog":{"installed_version":"2.1.296","catalog_version":"2.1.296","state":"ready","tool_count":1,"variant_count":2,"checked_at":"2026-10-13T00:00:00Z","synced_at":"2026-10-13T00:00:00Z"},"tools":[{"name":"Read","variants":[{"description":" Read\n保留空格 ","input_schema":{"type":"object","properties":{"n":{"description":" parameter\n","maximum":9007199254740993,"type":"integer"}},"required":["n"],"additionalProperties":false}},{"description":"","input_schema":{"type":"object"}}]}]}`
-
-func TestCLIToolCatalogDecode(t *testing.T) {
-	value, err := decodeCLIToolCatalog([]byte(cliCatalogFixture))
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := json.Marshal(value)
-	if err != nil || !strings.Contains(string(raw), "9007199254740993") || value.Tools[0].Variants[0].Description == nil || *value.Tools[0].Variants[0].Description != " Read\n保留空格 " {
-		t.Fatal("tool definition changed", string(raw), err)
-	}
-	for _, bad := range []string{
-		strings.Replace(cliCatalogFixture, `"state":"ready"`, `"state":"failed"`, 1),
-		strings.Replace(cliCatalogFixture, `"catalog_version":"2.1.296"`, `"catalog_version":"2.1.292"`, 1),
-		strings.Replace(cliCatalogFixture, `"tool_count":1`, `"tool_count":2`, 1),
-		strings.Replace(cliCatalogFixture, `"variant_count":2`, `"variant_count":1`, 1),
-		strings.Replace(cliCatalogFixture, `"name":"Read"`, `"name":"mcp__client__Read"`, 1),
-		strings.Replace(cliCatalogFixture, `"description":""`, `"description":null`, 1),
-		strings.Replace(cliCatalogFixture, `"input_schema":{"type":"object"}`, `"input_schema":null`, 1),
-		strings.Replace(cliCatalogFixture, `"input_schema":{"type":"object"}`, `"input_schema":[]`, 1),
-		strings.Replace(cliCatalogFixture, `"input_schema":{"type":"object"}`, `"input_schema":{"type":"string"}`, 1),
-		cliCatalogFixture + `{}`,
-	} {
-		if _, err := decodeCLIToolCatalog([]byte(bad)); err == nil {
-			t.Fatal("invalid catalog accepted", bad)
-		}
-	}
-}
-
-func TestCLIToolCatalogProxy(t *testing.T) {
-	payload := strings.Replace(cliCatalogFixture, `"description":""`, `"description":"`+strings.Repeat("long description ", 2048)+`"`, 1)
-	status, calls := http.StatusOK, 0
+// TestCLIManagementAfterTheManagedInstall: the view of the current Worker is
+// read; the tool catalog route is gone; POST only checks the release channel
+// or re-reads the installed version, an update never reaches the Worker.
+func TestCLIManagementAfterTheManagedInstall(t *testing.T) {
+	var calls []string
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/admin/cli/catalog") || r.Header.Get("Authorization") != "Bearer controller-secret" || r.Header.Get("X-CCG-Revision") == "" {
-			t.Error("wrong catalog forwarding", r.Method, r.URL.Path)
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		if !strings.HasSuffix(r.URL.Path, "/admin/cli") || r.Header.Get("X-CCG-Revision") == "" {
+			t.Error("unexpected Worker call", r.Method, r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(payload))
+		_, _ = w.Write([]byte(cliViewFixture))
 	})
 	id := f.account(true)
-	path := fmt.Sprintf("/system/ccgateway/cli/%d/catalog", id)
-	f.auth.keys[1] = []string{"settings:read"}
-	code, response := f.request(1, "GET", path, "")
-	if code != 200 || calls != 1 || len(data(response)["tools"].([]any)) != 1 {
-		t.Fatal("read-only catalog proxy failed", code, response, calls)
+	path := fmt.Sprintf("/system/ccgateway/cli/%d", id)
+	code, out := f.request(1, "GET", path, "")
+	if code != 200 || data(out)["updating"] != false || data(out)["catalog"].(map[string]any)["tool_count"] != float64(0) {
+		t.Fatal("CLI view", code, out)
 	}
-	for _, method := range []string{"POST", "PUT", "DELETE"} {
-		code, _ := f.request(1, method, path, `{"action":"update"}`)
-		if code < 400 || calls != 1 {
-			t.Fatal("catalog mutation reached Worker", method, code, calls)
+	for _, action := range []string{"check", "sync"} {
+		if code, out := f.request(1, "POST", path, `{"action":"`+action+`"}`); code != 200 {
+			t.Fatal(action, code, out)
 		}
 	}
-	for _, upstream := range []int{404, 503} {
-		status, payload = upstream, `{"error":{"type":"api_error","message":"unavailable"}}`
-		if code, _ := f.request(1, "GET", path, ""); code < 400 {
-			t.Fatal("unsupported or unavailable catalog reported success", upstream)
-		}
+	if len(calls) != 3 {
+		t.Fatal("calls", calls)
 	}
-	status, payload = 200, strings.Repeat("x", (8<<20)+1)
-	if code, _ := f.request(1, "GET", path, ""); code != 503 {
-		t.Fatal("oversized catalog accepted", code)
+	if code, out := f.request(1, "POST", path, `{"action":"update"}`); code != 400 || len(calls) != 3 {
+		t.Fatal("update reached the Worker or was accepted", code, out, calls)
+	}
+	if code, _ := f.request(1, "GET", path+"/catalog", ""); code != 404 || len(calls) != 3 {
+		t.Fatal("the tool catalog route is retired", code, calls)
 	}
 }
 
@@ -118,12 +76,12 @@ func TestCLIManagementInput(t *testing.T) {
 		{http.MethodPut, `{"channel":"latest"}`, false},
 		{http.MethodPut, `{"auto_update":true,"channel":"stable; cmd"}`, false},
 		{http.MethodPut, `{"auto_update":true,"channel":"stable","url":"https://invalid.test"}`, false},
-		{http.MethodPost, `{"action":"update"}`, true},
+		{http.MethodPost, `{"action":"update"}`, false},
 		{http.MethodPost, `{"action":"check"}`, true},
 		{http.MethodPost, `{"action":"sync"}`, true},
-		{http.MethodPost, `{"action":"update","channel":"stable"}`, false},
+		{http.MethodPost, `{"action":"check","channel":"stable"}`, false},
 		{http.MethodPost, `{"action":"exec"}`, false},
-		{http.MethodPost, `{"action":"update"} {}`, false},
+		{http.MethodPost, `{"action":"check"} {}`, false},
 	} {
 		if _, err := cliManagementBody(tc.method, []byte(tc.body)); (err == nil) != tc.valid {
 			t.Errorf("%s %s: %v", tc.method, tc.body, err)

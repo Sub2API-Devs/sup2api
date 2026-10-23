@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -131,6 +132,17 @@ func (s *Service) deliverAccountLifecycle(ctx context.Context, id int64, pluginK
 	}
 	if err != nil {
 		state = core.AccountSynchronization{Status: "failed", Code: "runtime_sync_failed"}
+		if phase == "deleted" {
+			// The cleanup intent is in the database already and every
+			// reconcile pass retries it, so a failing controller must not
+			// hold back the plugin's other lifecycle events: record why
+			// (e.g. resource_in_use) and move on.
+			if reason, _ := core.AsError(err).Details["reason"].(string); reason != "" {
+				state.Code = reason
+			}
+			slog.WarnContext(ctx, "account lifecycle: deleted account resource cleanup failed, left to reconciliation", "account_id", id, "plugin_key", pluginKey, "code", state.Code, "err", err)
+			err = nil
+		}
 	}
 	if saveErr := s.saveLifecycleStatus(ctx, id, account.UpdatedAt, generation, state); saveErr != nil {
 		return saveErr

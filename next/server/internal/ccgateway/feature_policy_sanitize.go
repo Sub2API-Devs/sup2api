@@ -34,13 +34,13 @@ func sanitizePolicy(p *RequestPolicy) []string {
 	}
 	p.BuildAttachmentSources, dropped = keepValid(p.BuildAttachmentSources, "build_attachment_sources", features.BuildAttachmentSources.Validate, dropped)
 	p.BuildBillingSources, dropped = keepValid(p.BuildBillingSources, "build_billing_sources", features.BuildBillingSources.Validate, dropped)
-	p.BuildIdentityLines, dropped = keepValid(p.BuildIdentityLines, "build_identity_lines", features.BuildIdentityLines.Validate, dropped)
-	p.RequestIdentitySources, dropped = keepValid(p.RequestIdentitySources, "request_identity_sources", features.RequestIdentitySources.Validate, dropped)
 	p.BuildInjection, dropped = keepValidInjection(p.BuildInjection, dropped)
 	return dropped
 }
 
-// sanitizeOverrides is sanitizePolicy for one layer's overrides.
+// sanitizeOverrides is sanitizePolicy for one layer's overrides. The identity
+// lines and sources are not resolved (ResolveFeaturePolicy), so whatever an
+// override stored for them is left alone.
 func sanitizeOverrides(o *FeatureOverrides) []string {
 	var dropped []string
 	if o.Level != nil && features.ValidateRequestLevel(*o.Level) != nil {
@@ -53,8 +53,6 @@ func sanitizeOverrides(o *FeatureOverrides) []string {
 	}
 	o.BuildAttachmentSources, dropped = keepValid(o.BuildAttachmentSources, "build_attachment_sources", features.BuildAttachmentSources.Validate, dropped)
 	o.BuildBillingSources, dropped = keepValid(o.BuildBillingSources, "build_billing_sources", features.BuildBillingSources.Validate, dropped)
-	o.BuildIdentityLines, dropped = keepValid(o.BuildIdentityLines, "build_identity_lines", features.BuildIdentityLines.Validate, dropped)
-	o.RequestIdentitySources, dropped = keepValid(o.RequestIdentitySources, "request_identity_sources", features.RequestIdentitySources.Validate, dropped)
 	o.BuildInjection, dropped = keepValidInjection(o.BuildInjection, dropped)
 	return dropped
 }

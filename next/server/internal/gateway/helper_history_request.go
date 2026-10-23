@@ -299,7 +299,7 @@ func (g *Gateway) helperHistoryRuntime(ctx context.Context, accountID int64, mod
 	if err != nil {
 		return info, ccgateway.VerificationStage("policy", err)
 	}
-	policy, err := json.Marshal(cfg.WorkerRequestPolicy(accountID))
+	policy, err := json.Marshal(cfg.EffectiveRequestPolicy())
 	if err != nil {
 		return info, ccgateway.VerificationStage("policy", err)
 	}

@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
                 <SSegmented :model-value="network.allocation" :options="allocationOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.remote.networkAllocation')" data-testid="network-allocation" @update:model-value="network.allocation = $event as typeof network.allocation" />
               </SSettingRow>
             </SSettingsGroup>
-            <RuntimeInstall v-show="activeTab === 'deployment'" :key="runtimeRevision" :mode="saved.mode" :account-runtimes="saved.account_runtimes" :has-admin-key="saved.has_admin_key" :disabled="disabled || dirty" @changed="reloadQuietly">
+            <RuntimeInstall v-show="activeTab === 'deployment'" :key="runtimeRevision" :mode="saved.mode" :account-runtimes="saved.account_runtimes" :has-admin-key="saved.has_admin_key" :cli-version="normalizeRequestPolicy(saved.request_policy).cli_version" :disabled="disabled || dirty" @changed="reloadQuietly">
               <SSettingsGroup :title="t('ccgateway.remote.images')" :description="t('ccgateway.remote.imagesHint')" data-testid="settings-images">
                 <SSettingRow v-for="key in IMAGE_KEYS" :key="key" :label="imageLabel(key)" :description="saved.effective_images?.[key] ? t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) : ''">
                   <SInput v-model="images[key]" mono autocomplete="off" spellcheck="false" class="w-full sm:w-80" :data-testid="`image-${key}`" />

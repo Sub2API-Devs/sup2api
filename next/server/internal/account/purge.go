@@ -7,16 +7,43 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 var _ core.PluginAccountPurger = (*Service)(nil)
 
+// deletionResource is the resource recording a deleted account's cleanup
+// intent for accounts of pluginKey, nil when the plugin has none.
+func (s *Service) deletionResource(pluginKey string) core.AccountDeletionResource {
+	resource := s.d.LifecycleResources[pluginKey]
+	if resource == nil && pluginKey == "ccgateway" && s.d.CCGateway != nil {
+		resource = s.d.CCGateway
+	}
+	deletion, _ := resource.(core.AccountDeletionResource)
+	return deletion
+}
+
+// retentionDays is how many days deleting an account of the type may keep
+// its resources (lifecycle.deletion.retentionDays), 0 when it may not.
+func (s *Service) retentionDays(pluginKey, typ string) int {
+	binding, ok := s.accountType(pluginKey, typ)
+	if !ok || binding.Type.Lifecycle == nil || binding.Type.Lifecycle.Deletion == nil {
+		return 0
+	}
+	days := binding.Type.Lifecycle.Deletion.RetentionDays
+	if days < 1 || days > manifest.MaxRetentionDays {
+		return 0
+	}
+	return days
+}
+
 // PurgePluginAccounts implements core.PluginAccountPurger (CONTRACTS §14.3):
 // it soft-deletes every account of the plugin's account types, removes their
-// group memberships and emits one account.deleted event per account, all in
-// one transaction; then it clears their cooldowns and broadcasts
-// account:changed once. Returns the number of accounts deleted.
+// group memberships, records their resources' cleanup (at once, no
+// retention) and emits one account.deleted event per account, all in one
+// transaction; then it clears their cooldowns and broadcasts account:changed
+// once. Returns the number of accounts deleted.
 func (s *Service) PurgePluginAccounts(ctx context.Context, pluginKey string) (int, error) {
 	if pluginKey == "" {
 		return 0, core.ErrInvalidArgument.WithMessage("plugin key is required")
@@ -49,6 +76,13 @@ func (s *Service) PurgePluginAccounts(ctx context.Context, pluginKey string) (in
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = ANY($1)`, ids); err != nil {
 			return err
+		}
+		if deletion := s.deletionResource(pluginKey); deletion != nil {
+			for _, id := range ids {
+				if err := deletion.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{}); err != nil {
+					return err
+				}
+			}
 		}
 		return s.d.Events.Emit(ctx, tx, evs...)
 	})

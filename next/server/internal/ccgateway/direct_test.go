@@ -9,6 +9,21 @@ import (
 	"testing"
 )
 
+// openAccountModel opens a client of runtime key at revision for one use, as
+// the request path's route does (fetchConnection + openAccountTransport). Test
+// helper: production keeps both in the route instead.
+func (s *Service) openAccountModel(ctx context.Context, cfg Config, runtimeKey, revision string) (*http.Client, string, string, func() error, error) {
+	connection, err := s.fetchConnection(ctx, cfg, runtimeKey, revision)
+	if err != nil {
+		return nil, "", "", nil, err
+	}
+	client, closeClient, err := s.openAccountTransport(ctx, cfg, runtimeKey, revision, connection.target())
+	if err != nil {
+		return nil, "", "", nil, err
+	}
+	return client, "http://" + connection.target(), connection.Key, closeClient, nil
+}
+
 func TestAccountModelConnectsDirectlyWithoutControllerBody(t *testing.T) {
 	const revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	connection := accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: revision}

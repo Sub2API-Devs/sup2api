@@ -104,11 +104,12 @@ func sortedCopy(in []string) []string {
 }
 
 // sortedDeletes lists the expected controller calls in key order (the sweep
-// reads retired rows ordered by key).
+// reads retired rows ordered by key). An account-id runtime is deleted with
+// its data volume and recovery backup (X-CCG-Delete-Data): nothing is left.
 func sortedDeletes(draftKey, accountKey string) []string {
 	calls := map[string]string{
 		draftKey:   "DELETE /accounts/" + draftKey,
-		accountKey: "DELETE /accounts/" + accountKey + " delete-account=" + accountKey,
+		accountKey: "DELETE /accounts/" + accountKey + " delete-account=" + accountKey + " delete-data=1",
 	}
 	var out []string
 	for _, k := range sortedCopy([]string{draftKey, accountKey}) {

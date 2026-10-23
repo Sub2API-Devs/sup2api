@@ -15,7 +15,6 @@ import (
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/cc-features/preview", s.accountFeaturePreview, "settings:manage", "account:update", "account:own:update")
 	r.Perm("GET", "/system/ccgateway/cli/:id", "settings:read", s.cliManagement)
-	r.Perm("GET", "/system/ccgateway/cli/:id/catalog", "settings:read", s.cliCatalogGet)
 	r.Perm("POST", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
 	r.Perm("PUT", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
 	r.Perm("GET", "/system/ccgateway/features", "settings:read", s.featuresGet)
@@ -63,6 +62,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// Worker update in place, never recreating account containers (§53.7).
 	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
 	r.Perm("POST", "/system/ccgateway/runtime/cleanup", "settings:manage", s.runtimeCleanup)
+	// Runtimes of deleted accounts kept for their retention period.
+	r.Perm("GET", "/system/ccgateway/runtimes/retained", "settings:read", s.retainedRuntimes)
+	r.Perm("POST", "/system/ccgateway/runtimes/:key/purge", "settings:manage", s.runtimePurge)
 	// The shared-container endpoints (status, proxy, auth/*, remote-action)
 	// are gone: per-account runtimes are the only mode (§53.9).
 	r.Perm("POST", "/system/ccgateway/remote-test", "settings:manage", s.remoteTest)

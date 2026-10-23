@@ -25,3 +25,17 @@ func TestLifecycleExtensionBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestLifecycleDeletionRetentionBounds(t *testing.T) {
+	for days, valid := range map[int]bool{0: false, 1: true, 3: true, manifest.MaxRetentionDays: true, manifest.MaxRetentionDays + 1: false, -1: false} {
+		v := &validator{m: &manifest.Manifest{Capabilities: []manifest.Capability{{ID: manifest.CapAccountLifecycle}}}}
+		v.accountLifecycle("accountTypes[0]", manifest.AccountType{Lifecycle: &manifest.AccountLifecycle{Deletion: &manifest.AccountDeletion{RetentionDays: days}}})
+		bad := false
+		for _, e := range v.errs {
+			bad = bad || e.Field == "accountTypes[0].lifecycle.deletion.retentionDays"
+		}
+		if bad == valid {
+			t.Fatalf("%d days: %v", days, v.errs)
+		}
+	}
+}

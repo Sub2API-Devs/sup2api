@@ -334,6 +334,7 @@ function actualModel(r: TestRow): string {
               <SDescItem v-if="row.result.model" :label="t('accounts.testActualModel')" mono>{{ row.result.model }}</SDescItem>
               <SDescItem v-if="row.result.upstream" :label="t('accounts.testUpstream')" mono class="break-all">{{ row.result.upstream }}</SDescItem>
               <SDescItem v-if="row.result.test_mode === 'native_build'" :label="t('accounts.testMethod')">{{ t('accounts.testNativeBuild') }}</SDescItem>
+              <SDescItem v-if="row.result.policy_scope === 'global'" :label="t('accounts.testPolicy')">{{ t('accounts.testPolicyGlobal') }}</SDescItem>
               <SDescItem label="HTTP" mono>{{ row.result.status || t('accounts.testNoHTTPResponse') }}</SDescItem>
               <SDescItem v-if="requestId(row)" label="Request ID" mono class="break-all">
                 <span data-testid="model-test-request-id-detail">{{ requestId(row) }}</span>

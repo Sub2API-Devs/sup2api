@@ -293,8 +293,19 @@ func (s *Service) loadVersioned(ctx context.Context) (Config, []byte, error) {
 	if s == nil || s.DB == nil || s.DB.Pool == nil {
 		return Config{}, nil, errors.New("configuration storage unavailable")
 	}
+	return s.loadIn(ctx, s.DB.Pool, false)
+}
+
+// loadIn is the stored configuration read through q (a transaction sees its
+// own changes; forShare keeps it from changing until the transaction ends)
+// and the stored value as read.
+func (s *Service) loadIn(ctx context.Context, q store.Querier, forShare bool) (Config, []byte, error) {
+	query := "SELECT value FROM settings WHERE key=$1"
+	if forShare {
+		query += " FOR SHARE"
+	}
 	var raw []byte
-	e := s.DB.Pool.QueryRow(ctx, "SELECT value FROM settings WHERE key=$1", settingKey).Scan(&raw)
+	e := q.QueryRow(ctx, query, settingKey).Scan(&raw)
 	if store.IsNoRows(e) {
 		// The row a later update creates holds {}.
 		raw, e = []byte("{}"), nil
@@ -322,17 +333,8 @@ func (s *Service) loadVersioned(ctx context.Context) (Config, []byte, error) {
 // target stay the same, but nothing can switch to a legacy mode; installing
 // a controller migrates it.
 func mergeConfig(c, old Config) (Config, error) {
-	if c.CCFeatureGroups == nil {
-		c.CCFeatureGroups = old.CCFeatureGroups
-	}
-	for key, group := range c.CCFeatureGroups {
-		id, err := strconv.ParseInt(key, 10, 64)
-		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != key {
-			return c, errors.New("invalid feature group id")
-		}
-		if err := group.Overrides.Validate(); err != nil {
-			return c, err
-		}
+	if err := mergeFeatureGroups(&c, old); err != nil {
+		return c, err
 	}
 	c.AccountRuntimes = true
 	if c.Mode == "ssh" && c.Port == 0 {
@@ -346,65 +348,9 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	// Network, request policy and images are independent of the target and
 	// kept when disconnected too (the install uses the saved images).
-	if c.Network == nil {
-		c.Network = old.Network
-	}
-	network, err := validateNetwork(c.EffectiveNetwork())
-	if err != nil {
-		return c, err
-	}
-	c.Network = &network
-	if c.RequestPolicy != nil && c.RequestPolicy.RelayMode != "" && c.RequestPolicy.RelayMode != "build" && c.RequestPolicy.RelayMode != "direct" {
-		return c, errors.New("invalid relay_mode: must be build or direct")
-	}
-	if c.RequestPolicy == nil {
-		c.RequestPolicy = old.RequestPolicy
-	} else if old.RequestPolicy != nil {
-		// Older clients do not know the new source maps. Omission preserves
-		// them, while an explicit {} remains an intentional reset.
-		c.RequestPolicy.BuildBillingSources = mergeSourceMap(c.RequestPolicy.BuildBillingSources, old.RequestPolicy.BuildBillingSources)
-		c.RequestPolicy.BuildIdentityLines = mergeSourceMap(c.RequestPolicy.BuildIdentityLines, old.RequestPolicy.BuildIdentityLines)
-		if c.RequestPolicy.BuildInjection == nil {
-			c.RequestPolicy.BuildInjection = old.RequestPolicy.BuildInjection
-		}
-		if c.RequestPolicy.BuildBillingEntrypoint == "" {
-			c.RequestPolicy.BuildBillingEntrypoint = old.RequestPolicy.BuildBillingEntrypoint
-		}
-		c.RequestPolicy.BuildAttachmentSources = mergeSourceMap(c.RequestPolicy.BuildAttachmentSources, old.RequestPolicy.BuildAttachmentSources)
-		c.RequestPolicy.RequestIdentitySources = mergeSourceMap(c.RequestPolicy.RequestIdentitySources, old.RequestPolicy.RequestIdentitySources)
-		// A save without a level (a console from before levels) keeps the
-		// stored one; the saved relay_mode then only applies to a stored
-		// policy from before levels too, through the migration on read.
-		if c.RequestPolicy.Level == "" {
-			c.RequestPolicy.Level = old.RequestPolicy.Level
-		}
-	}
-	policy := c.EffectiveRequestPolicy()
-	if err := validateRequestPolicy(policy); err != nil {
-		return c, err
-	}
-	c.RequestPolicy = &policy
-	featureChanged := !reflect.DeepEqual(c.EffectiveRequestPolicy(), old.EffectiveRequestPolicy()) || !reflect.DeepEqual(c.CCFeatureGroups, old.CCFeatureGroups)
-	if featureChanged && c.FeatureRevision != old.FeatureRevision {
-		return c, featureRevisionConflict()
-	}
-	c.FeatureRevision = old.FeatureRevision
-	if featureChanged {
-		c.FeatureRevision++
-	}
-	// Images: omitted keeps the saved ones, {} (empty fields) returns to the
-	// pinned references.
-	if c.Images == nil {
-		c.Images = old.Images
-	}
-	if c.Images != nil {
-		for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller, c.Images.Gateway} {
-			if ref != "" && !validImage(ref) {
-				return c, errors.New("invalid runtime image reference")
-			}
-		}
-		if *c.Images == (RuntimeImages{}) {
-			c.Images = nil
+	for _, merge := range []func(*Config, Config) error{mergeNetwork, mergeRequestPolicy, mergeImages} {
+		if err := merge(&c, old); err != nil {
+			return c, err
 		}
 	}
 	if c.Mode == "disabled" {
@@ -414,6 +360,118 @@ func mergeConfig(c, old Config) (Config, error) {
 	if legacy {
 		return mergeLegacy(c, old)
 	}
+	return mergeController(c, old)
+}
+
+// mergeFeatureGroups: omitted keeps the stored group policies; each named
+// one must be a group id with valid overrides.
+func mergeFeatureGroups(c *Config, old Config) error {
+	if c.CCFeatureGroups == nil {
+		c.CCFeatureGroups = old.CCFeatureGroups
+	}
+	for key, group := range c.CCFeatureGroups {
+		id, err := strconv.ParseInt(key, 10, 64)
+		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != key {
+			return errors.New("invalid feature group id")
+		}
+		if err := group.Overrides.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeNetwork(c *Config, old Config) error {
+	if c.Network == nil {
+		c.Network = old.Network
+	}
+	network, err := validateNetwork(c.EffectiveNetwork())
+	if err != nil {
+		return err
+	}
+	c.Network = &network
+	return nil
+}
+
+// mergeRequestPolicy merges the global policy (mergeStoredPolicy), validates
+// it and moves the feature revision when the CC settings changed.
+func mergeRequestPolicy(c *Config, old Config) error {
+	// Checked before EffectiveRequestPolicy, which reads any other stored
+	// relay mode as build (a saved one only migrates a policy from before
+	// levels): a body naming one is still wrong.
+	if c.RequestPolicy != nil && c.RequestPolicy.RelayMode != "" && c.RequestPolicy.RelayMode != "build" && c.RequestPolicy.RelayMode != "direct" {
+		return errors.New("invalid relay_mode: must be build or direct")
+	}
+	if c.RequestPolicy == nil {
+		c.RequestPolicy = old.RequestPolicy
+	} else if old.RequestPolicy != nil {
+		mergeStoredPolicy(c.RequestPolicy, *old.RequestPolicy)
+	}
+	policy := c.EffectiveRequestPolicy()
+	if err := validateRequestPolicy(policy); err != nil {
+		return err
+	}
+	c.RequestPolicy = &policy
+	featureChanged := !reflect.DeepEqual(c.EffectiveRequestPolicy(), old.EffectiveRequestPolicy()) || !reflect.DeepEqual(c.CCFeatureGroups, old.CCFeatureGroups)
+	if featureChanged && c.FeatureRevision != old.FeatureRevision {
+		return featureRevisionConflict()
+	}
+	c.FeatureRevision = old.FeatureRevision
+	if featureChanged {
+		c.FeatureRevision++
+	}
+	return nil
+}
+
+// mergeStoredPolicy keeps what a body leaves out. Older clients do not know
+// the newer fields: omission preserves them, while an explicit {} remains an
+// intentional reset of a source map.
+func mergeStoredPolicy(p *RequestPolicy, old RequestPolicy) {
+	p.BuildBillingSources = mergeSourceMap(p.BuildBillingSources, old.BuildBillingSources)
+	p.BuildIdentityLines = mergeSourceMap(p.BuildIdentityLines, old.BuildIdentityLines)
+	if p.BuildInjection == nil {
+		p.BuildInjection = old.BuildInjection
+	}
+	if p.BuildBillingEntrypoint == "" {
+		p.BuildBillingEntrypoint = old.BuildBillingEntrypoint
+	}
+	p.BuildAttachmentSources = mergeSourceMap(p.BuildAttachmentSources, old.BuildAttachmentSources)
+	p.RequestIdentitySources = mergeSourceMap(p.RequestIdentitySources, old.RequestIdentitySources)
+	// A save without a level (a console from before levels) keeps the stored
+	// one; the saved relay_mode then only applies to a stored policy from
+	// before levels too, through the migration on read.
+	if p.Level == "" {
+		p.Level = old.Level
+	}
+	// Omitted keeps the stored Claude Code version too: it is never reset to
+	// the pinned one by a body that does not name it (audit B3).
+	if p.CLIVersion == "" {
+		p.CLIVersion = old.CLIVersion
+	}
+}
+
+// mergeImages: omitted keeps the saved ones, {} (empty fields) returns to the
+// pinned references.
+func mergeImages(c *Config, old Config) error {
+	if c.Images == nil {
+		c.Images = old.Images
+	}
+	if c.Images == nil {
+		return nil
+	}
+	for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller, c.Images.Gateway} {
+		if ref != "" && !validImage(ref) {
+			return errors.New("invalid runtime image reference")
+		}
+	}
+	if *c.Images == (RuntimeImages{}) {
+		c.Images = nil
+	}
+	return nil
+}
+
+// mergeController saves a control panel endpoint (§53.2 / §53.9).
+func mergeController(c, old Config) (Config, error) {
 	// The controller is reached over HTTP(S) only: no SSH credentials.
 	c.clearSSH()
 	c.Host = normalizeControllerHost(c.Host)
@@ -435,10 +493,20 @@ func mergeConfig(c, old Config) (Config, error) {
 		return c, errors.New("invalid control panel base path")
 	}
 	c.BasePath = basePath
-	// The key is kept only for the same saved endpoint (scheme, address,
-	// port, base path) and trust: the panel is public and the key reaches
-	// the accounts, so pointing the core elsewhere (or leaving a legacy
-	// mode) needs it typed again; the install endpoint sets it itself.
+	if err := mergeControllerKeys(&c, old); err != nil {
+		return c, err
+	}
+	if e := validateControllerConfig(c); e != nil {
+		return c, e
+	}
+	return c, nil
+}
+
+// mergeControllerKeys: the keys are kept only for the same saved endpoint
+// (scheme, address, port, base path) and trust. The panel is public and the
+// key reaches the accounts, so pointing the core elsewhere (or leaving a
+// legacy mode) needs it typed again; the install endpoint sets it itself.
+func mergeControllerKeys(c *Config, old Config) error {
 	same := old.Mode == "controller" && c.Host == old.Host && c.Port == old.Port && c.Scheme == old.panelScheme() && c.BasePath == old.BasePath
 	typedKey := c.AdminKey != ""
 	if same {
@@ -455,26 +523,32 @@ func mergeConfig(c, old Config) (Config, error) {
 	if c.Scheme == "http" {
 		c.ControllerCA = "" // no TLS, nothing to pin
 	}
-	if len(c.AdminKey) > 8192 || len(c.APIKey) > 8192 || strings.ContainsAny(c.AdminKey+c.APIKey, "\r\n") {
-		return c, errors.New("invalid sidecar keys")
-	}
-	if c.AdminKey != "" && c.AdminKey == c.APIKey {
-		return c, errors.New("API and management keys must differ")
+	if err := checkSidecarKeys(c.AdminKey, c.APIKey); err != nil {
+		return err
 	}
 	if c.ControllerCA != "" {
 		normalized, _, e := parseControllerCA(c.ControllerCA)
 		if e != nil {
-			return c, e
+			return e
 		}
 		c.ControllerCA = normalized
 	}
 	if !typedKey && c.ControllerCA != old.ControllerCA {
 		c.AdminKey = "" // new trust anchor: the key must be typed again
 	}
-	if e := validateControllerConfig(c); e != nil {
-		return c, e
+	return nil
+}
+
+// checkSidecarKeys bounds the management and API keys (they travel in
+// headers) and keeps them apart.
+func checkSidecarKeys(admin, api string) error {
+	if len(admin) > 8192 || len(api) > 8192 || strings.ContainsAny(admin+api, "\r\n") {
+		return errors.New("invalid sidecar keys")
 	}
-	return c, nil
+	if admin != "" && admin == api {
+		return errors.New("API and management keys must differ")
+	}
+	return nil
 }
 
 // mergeLegacy saves the other settings of a configuration still on a legacy
@@ -497,11 +571,8 @@ func mergeLegacy(c, old Config) (Config, error) {
 	if c.APIKey == "" {
 		c.APIKey = old.APIKey
 	}
-	if len(c.AdminKey) > 8192 || len(c.APIKey) > 8192 || strings.ContainsAny(c.AdminKey+c.APIKey, "\r\n") {
-		return c, errors.New("invalid sidecar keys")
-	}
-	if c.AdminKey != "" && c.AdminKey == c.APIKey {
-		return c, errors.New("API and management keys must differ")
+	if err := checkSidecarKeys(c.AdminKey, c.APIKey); err != nil {
+		return c, err
 	}
 	if c.Mode == "local" {
 		c.Host, c.Port = "", old.Port
@@ -565,6 +636,66 @@ func pruneFeatureGroups(ctx context.Context, tx pgx.Tx, saved *Config, named map
 	return nil
 }
 
+// admitSavedCLIVersion checks the cli_version a PUT remote-config body
+// changes (admitCLIVersion) and answers the request when it is refused;
+// admitted is the version checked ("" when the body keeps the stored one).
+func (s *Service) admitSavedCLIVersion(c *gin.Context, in Config) (admitted string, ok bool) {
+	requested := requestedCLIVersion(in)
+	if requested == "" {
+		return "", true
+	}
+	current, err := s.Load(c.Request.Context())
+	if err != nil || requested == current.EffectiveRequestPolicy().CLIVersion {
+		return "", true // a stored configuration that cannot be read fails the save itself
+	}
+	if err := s.admitCLIVersion(c.Request.Context(), current, requested); err != nil {
+		httpapi.Fail(c, err)
+		return "", false
+	}
+	return requested, true
+}
+
+// mergeStored is one save under the settings row lock: the stored
+// configuration (raw) merged with the body, its feature groups checked. A
+// cli_version change other than the admitted one (someone saved another
+// meanwhile) is refused.
+func (s *Service) mergeStored(ctx context.Context, tx pgx.Tx, in Config, raw json.RawMessage, admitted string) (saved, old Config, err error) {
+	old, err = s.decode(raw)
+	if err != nil {
+		return saved, old, err
+	}
+	saved, err = mergeConfig(in, old)
+	if err != nil {
+		// mergeConfig's errors name what is wrong with the body: the caller
+		// gets the text (audit A5); a conflict keeps its code.
+		if core.AsError(err).Code == core.ErrInternal.Code {
+			err = core.ErrInvalidArgument.WithMessage(err.Error())
+		}
+		return saved, old, err
+	}
+	if v := saved.EffectiveRequestPolicy().CLIVersion; v != old.EffectiveRequestPolicy().CLIVersion && v != admitted {
+		return saved, old, reasonError(core.ErrConflict, "config_changed")
+	}
+	if err := pruneFeatureGroups(ctx, tx, &saved, in.CCFeatureGroups); err != nil {
+		return saved, old, err
+	}
+	saved.bundled = old.bundled
+	return saved, old, nil
+}
+
+// sealConfig is the stored form of c: {"cipher": <encrypted JSON>}.
+func (s *Service) sealConfig(c Config) (json.RawMessage, error) {
+	if s.Cipher == nil {
+		return nil, errors.New("encryption unavailable")
+	}
+	plain, _ := json.Marshal(c)
+	enc, err := s.Cipher.Encrypt(plain, configAAD)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"cipher": enc})
+}
+
 func (s *Service) save(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	var in Config
@@ -578,37 +709,25 @@ func (s *Service) save(c *gin.Context) {
 	if uid > 0 {
 		updatedBy = &uid
 	}
+	// A changed Claude Code version is checked against what the runtimes run
+	// before anything is written (audit B3): asking the Workers takes a while
+	// and must not hold the settings row.
+	admitted, ok := s.admitSavedCLIVersion(c, in)
+	if !ok {
+		return
+	}
 	var saved Config
 	var runtimeChanged bool
 	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
 		_, e := store.UpdateSettingJSONTx(ctx, tx, settingKey, updatedBy, func(raw json.RawMessage) (json.RawMessage, error) {
-			old, e := s.decode(raw)
+			var old Config
+			var e error
+			saved, old, e = s.mergeStored(ctx, tx, in, raw, admitted)
 			if e != nil {
-				return nil, e
-			}
-			saved, e = mergeConfig(in, old)
-			if e != nil {
-				// mergeConfig's errors name what is wrong with the body: the
-				// caller gets the text (audit A5); a conflict keeps its code.
-				if core.AsError(e).Code == core.ErrInternal.Code {
-					e = core.ErrInvalidArgument.WithMessage(e.Error())
-				}
-				return nil, e
-			}
-			if e := pruneFeatureGroups(ctx, tx, &saved, in.CCFeatureGroups); e != nil {
 				return nil, e
 			}
 			runtimeChanged = !sameRuntimeConfig(saved, old)
-			saved.bundled = old.bundled
-			plain, _ := json.Marshal(saved)
-			if s.Cipher == nil {
-				return nil, errors.New("encryption unavailable")
-			}
-			enc, e := s.Cipher.Encrypt(plain, configAAD)
-			if e != nil {
-				return nil, e
-			}
-			return json.Marshal(map[string]any{"cipher": enc})
+			return s.sealConfig(saved)
 		})
 		if e != nil {
 			return e

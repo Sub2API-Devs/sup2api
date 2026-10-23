@@ -72,7 +72,7 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "build", CLIVersion: "2.1.304", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, CustomToolPrefix: "ccgateway", UnknownField: "reject", AllowFast: true, AllowEffort: true, ToolSearch: "request", ThinkingDisabledCompat: "pass", RelayMode: "build", CLIVersion: PinnedCLIVersion, Betas: features.BetaRules()}
 }
 
 // Used only when no encrypted configuration has ever been stored. Historic
@@ -102,29 +102,30 @@ func keepLegacyInjection(level string, injection *features.BuildInjection) *feat
 	if out == nil {
 		out = &features.BuildInjection{}
 	}
-	for _, name := range features.InjectionAttachments {
-		if !added.Attachments[name] {
-			if out.Attachments == nil {
-				out.Attachments = map[string]bool{}
-			}
-			out.Attachments[name] = false
-		}
-	}
+	out.Attachments = markNotAdded(out.Attachments, features.InjectionAttachments, added.Attachments)
 	if features.LevelHasPromptAndTools(level) {
 		if added.SystemPrompt == nil {
 			off := false
 			out.SystemPrompt = &off
 		}
-		for _, name := range features.DefaultInjectionTools {
-			if !added.Tools[name] {
-				if out.Tools == nil {
-					out.Tools = map[string]bool{}
-				}
-				out.Tools[name] = false
-			}
-		}
+		out.Tools = markNotAdded(out.Tools, features.DefaultInjectionTools, added.Tools)
 	}
 	return out
+}
+
+// markNotAdded sets every name added does not add to false in choices
+// (created only when something is set).
+func markNotAdded(choices map[string]bool, names []string, added map[string]bool) map[string]bool {
+	for _, name := range names {
+		if added[name] {
+			continue
+		}
+		if choices == nil {
+			choices = map[string]bool{}
+		}
+		choices[name] = false
+	}
+	return choices
 }
 
 // migrateLegacyLevel gives a policy saved before levels the level of what it
@@ -175,14 +176,10 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	migrateLegacyLevel(&p)
 	p.RelayMode = features.RelayModeForLevel(p.Level)
 	if p.CLIVersion == "" {
-		p.CLIVersion = "2.1.304"
+		p.CLIVersion = PinnedCLIVersion
 	}
 	p.Betas = defaultRequestPolicy().Betas
 	return p
-}
-
-func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
-	return c.EffectiveRequestPolicy()
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
@@ -225,7 +222,7 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.RelayMode != "" && p.RelayMode != "build" && p.RelayMode != "direct" {
 		return errors.New("invalid relay_mode: must be build or direct")
 	}
-	if p.CLIVersion != "" && !regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`).MatchString(p.CLIVersion) {
+	if p.CLIVersion != "" && !cliReleasePattern.MatchString(p.CLIVersion) {
 		return errors.New("invalid cli_version")
 	}
 	if err := features.ValidateEraseClientAttachments(p.EraseClientAttachments); err != nil {

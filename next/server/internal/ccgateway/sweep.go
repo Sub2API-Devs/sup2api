@@ -148,31 +148,15 @@ func (s *Service) sweepRetired(ctx context.Context) (int, error) {
 	var firstErr error
 	for _, key := range keys {
 		c, cancel := context.WithTimeout(ctx, time.Minute)
-		e := s.lockedTx(c, key, false, func(tx pgx.Tx) error {
-			if accountKeyPattern.MatchString(key) {
-				id, _ := strconv.ParseInt(key, 10, 64)
-				var used bool
-				if e := tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1)
-					AND NOT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE account_id=$1)`, id).Scan(&used); e != nil || used {
-					if used {
-						slog.WarnContext(c, "CCGateway: retired runtime is still the account's runtime, kept", "key", key)
-					}
-					return e
-				}
-			} else if !isDraftKey(key) {
-				return nil
-			}
-			tag, e := tx.Exec(c, `DELETE FROM ccgateway_runtimes WHERE key=$1 AND account_id IS NULL AND retired_at IS NOT NULL`, key)
-			if e != nil || tag.RowsAffected() == 0 {
-				return e
-			}
-			if e = s.deleteRemote(c, key, true); e != nil {
-				return e
-			}
-			removed++
-			return nil
+		var done bool
+		e := s.lockedTx(c, key, false, func(tx pgx.Tx) (err error) {
+			done, err = s.sweepRetiredKey(c, tx, key)
+			return err
 		})
 		cancel()
+		if done {
+			removed++
+		}
 		if e != nil && firstErr == nil {
 			firstErr = e
 		}
@@ -181,6 +165,34 @@ func (s *Service) sweepRetired(ctx context.Context) (int, error) {
 		}
 	}
 	return removed, firstErr
+}
+
+// sweepRetiredKey deletes one retired runtime under its lock: the row, then
+// the runtime on the controller; removed reports both happened.
+func (s *Service) sweepRetiredKey(ctx context.Context, tx pgx.Tx, key string) (removed bool, err error) {
+	switch {
+	case accountKeyPattern.MatchString(key):
+		id, _ := strconv.ParseInt(key, 10, 64)
+		var used bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1)
+			AND NOT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE account_id=$1)`, id).Scan(&used); err != nil {
+			return false, err
+		}
+		if used {
+			slog.WarnContext(ctx, "CCGateway: retired runtime is still the account's runtime, kept", "key", key)
+			return false, nil
+		}
+	case !isDraftKey(key):
+		return false, nil
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM ccgateway_runtimes WHERE key=$1 AND account_id IS NULL AND retired_at IS NOT NULL`, key)
+	if err != nil || tag.RowsAffected() == 0 {
+		return false, err
+	}
+	if err := s.deleteRemote(ctx, key, true); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // remoteRuntime is one entry of the controller's GET /accounts.

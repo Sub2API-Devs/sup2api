@@ -38,6 +38,10 @@ var reasonMessages = map[string]string{
 	"api_key_account":         "API key accounts do not use OAuth authorization.",
 	"draft_not_found":         "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
 	"draft_not_authorized":    "Claude Code is not signed in in this runtime yet.",
+	// Deleting a runtime (account deletion, retired runtimes).
+	reasonResourceInUse:      "A container outside the account runtime still uses its network or data volume; nothing was deleted. Remove that container, the deletion is retried automatically.",
+	"runtime_cleanup_failed": "The controller could not delete the account runtime; the deletion is retried automatically.",
+	"runtime_not_retained":   "The runtime is not one of a deleted account kept for its retention period.",
 	// Runtime installation (§49.16).
 	"ssh_not_configured":   "Save an SSH connection to the Docker host first.",
 	"ssh_failed":           "The Docker host could not be reached over SSH, or the remote command failed.",

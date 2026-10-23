@@ -75,7 +75,14 @@ func TestAnthropicReleaseAndUpgradeFixtureRemainDistinct(t *testing.T) {
 	}
 	fixture := strings.TrimSpace(runOK(t, "pack", "--dir", dir, "--runtimes", runtimes,
 		"--overlay", "testdata/v0.3.0-test", "--out-dir", market))
-	if release == fixture || filepath.Base(release) != "anthropic-0.2.5.s2plugin" || filepath.Base(fixture) != "anthropic-0.3.0-test.s2plugin" {
+	var shipped struct {
+		Version string `json:"version"`
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	if err != nil || json.Unmarshal(raw, &shipped) != nil || shipped.Version == "" {
+		t.Fatal("cannot read the release manifest version", err)
+	}
+	if release == fixture || filepath.Base(release) != "anthropic-"+shipped.Version+".s2plugin" || filepath.Base(fixture) != "anthropic-0.3.0-test.s2plugin" {
 		t.Fatalf("release=%s fixture=%s", release, fixture)
 	}
 	after, _ := os.ReadFile(release)

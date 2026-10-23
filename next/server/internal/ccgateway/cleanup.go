@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"time"
@@ -11,23 +12,32 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
 const cleanupFeature = "runtime-cleanup-v1"
 
+// reasonResourceInUse: the controller kept a runtime because a container
+// outside it still uses one of its networks or its data volume (409).
+const reasonResourceInUse = "resource_in_use"
+
 // Preserve the account mapping as a durable deletion job. A retired timestamp
-// on an attached, deleted account means purge requested; detached retired rows
-// retain their historical reauthorization meaning. Previously deleted accounts
-// are cleaned only by the explicit orphan-cleanup action, not during rollout.
-func (s *Service) MarkAccountDeleted(ctx context.Context, tx pgx.Tx, id int64) error {
-	tag, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at=now() WHERE account_id=$1`, id)
+// on an attached, deleted account means purge requested: at purge_after (now,
+// or the end of the retention the account type allows), after which purged_at
+// records the purge. Detached retired rows retain their historical
+// reauthorization meaning. Previously deleted accounts are cleaned only by the
+// explicit orphan-cleanup action, not during rollout.
+func (s *Service) MarkAccountDeleted(ctx context.Context, tx pgx.Tx, id int64, opts core.AccountDeletionOptions) error {
+	tag, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at=now(),purge_after=COALESCE($2::timestamptz,now()),purged_at=NULL
+	 WHERE account_id=$1`, id, opts.RetainUntil)
 	if err != nil || tag.RowsAffected() != 0 {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key,account_id,adopted_at,retired_at)
-	 VALUES($1::bigint::text,$1,now(),now()) ON CONFLICT(key) DO UPDATE SET account_id=EXCLUDED.account_id,retired_at=EXCLUDED.retired_at`, id)
+	_, err = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key,account_id,adopted_at,retired_at,purge_after)
+	 VALUES($1::bigint::text,$1,now(),now(),COALESCE($2::timestamptz,now())) ON CONFLICT(key) DO UPDATE
+	 SET account_id=EXCLUDED.account_id,retired_at=EXCLUDED.retired_at,purge_after=EXCLUDED.purge_after,purged_at=NULL`, id, opts.RetainUntil)
 	return err
 }
 
@@ -81,10 +91,40 @@ func (s *Service) purgeRuntime(ctx context.Context, key string) error {
 	}
 	defer close()
 	defer res.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 65536))
+	raw, _ := io.ReadAll(io.LimitReader(res.Body, 65536))
 	if res.StatusCode != http.StatusOK {
-		return reasonError(core.ErrUnavailable, "runtime_cleanup_failed")
+		return deleteFailure(res.StatusCode, raw, "runtime_cleanup_failed")
 	}
+	return nil
+}
+
+// deleteFailure is the error of a refused DELETE /accounts/<key>: the
+// controller's 409 resource_in_use is named (a foreign container still uses
+// the runtime's network or volume); anything else is reason fallback.
+func deleteFailure(status int, raw []byte, fallback string) *core.Error {
+	reason := fallback
+	if code, _ := parseRuntimeError(raw); status == http.StatusConflict && code == reasonResourceInUse {
+		reason = reasonResourceInUse
+	}
+	return reasonError(core.ErrUnavailable, reason).WithDetails(map[string]any{"status": status})
+}
+
+// purgeAndRecord purges the runtime of deleted account d (Reconcile holds its
+// lock in tx) and records purged_at in tx, so no node purges it again. A
+// failure leaves the row for the next pass and is logged with its reason.
+func (s *Service) purgeAndRecord(ctx context.Context, tx pgx.Tx, key string, d accountDesired) error {
+	if err := s.purgeRuntime(ctx, key); err != nil {
+		slog.WarnContext(ctx, "CCGateway: deleted account runtime not purged", "key", key, "account", d.AccountID, "reason", reasonOf(core.AsError(err)), "err", err)
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET purged_at=now() WHERE key=$1 AND account_id=$2 AND purged_at IS NULL`, key, d.AccountID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	s.markBlocked(key, d.Revision)
+	slog.InfoContext(ctx, "CCGateway: deleted account runtime purged", "key", key, "account", d.AccountID)
 	return nil
 }
 
@@ -92,12 +132,15 @@ func (s *Service) purgeRuntime(ctx context.Context, key string) error {
 // the caller's account visibility never determine which resources are retained.
 // Keep registered drafts even after their idle timeout: their locked sweeper
 // owns expiry, so a concurrent authorization heartbeat cannot race this list.
+// Keep the runtimes of deleted accounts still in their retention period too:
+// Reconcile purges them when it ends.
 func (s *Service) cleanupKeepKeys(ctx context.Context) ([]string, error) {
 	rows, err := s.DB.Pool.Query(ctx, `
 SELECT COALESCE(r.key,a.id::text) FROM accounts a LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
  WHERE a.plugin_key='ccgateway' AND a.deleted_at IS NULL
 UNION SELECT r.key FROM ccgateway_runtimes r WHERE r.account_id IS NULL AND r.retired_at IS NULL
-UNION SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at >= now()-$1::bigint*interval '1 second'`,
+UNION SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at >= now()-$1::bigint*interval '1 second'
+UNION SELECT key FROM ccgateway_runtimes WHERE account_id IS NOT NULL AND purged_at IS NULL AND purge_after > now()`,
 		int64(retiredGrace/time.Second))
 	if err != nil {
 		return nil, err
@@ -171,4 +214,99 @@ func (s *Service) runtimeCleanup(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, report)
+}
+
+// retainedRuntime is a deleted account's runtime not purged yet: kept
+// (stopped) until purge_after, or due (Reconcile is purging it and retries
+// until the controller succeeds).
+type retainedRuntime struct {
+	Key         string `json:"key"`
+	AccountID   int64  `json:"account_id"`
+	AccountName string `json:"account_name"`
+	AccountType string `json:"account_type"`
+	DeletedAt   string `json:"deleted_at"`
+	PurgeAfter  string `json:"purge_after"`
+	Due         bool   `json:"due"`
+}
+
+// retainedRuntimes serves GET /system/ccgateway/runtimes/retained: the
+// runtimes of deleted accounts not purged yet, the one due first first, so a
+// purge that keeps failing stays visible. A row an older core marked has no
+// purge_after and is due since it was retired. Times are RFC3339 (UTC).
+func (s *Service) retainedRuntimes(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	rows, err := s.DB.Pool.Query(c.Request.Context(), `SELECT r.key,a.id,a.name,a.type,a.deleted_at,COALESCE(r.purge_after,r.retired_at),COALESCE(r.purge_after,r.retired_at) <= now()
+  FROM ccgateway_runtimes r JOIN accounts a ON a.id=r.account_id
+  WHERE a.plugin_key='ccgateway' AND a.deleted_at IS NOT NULL AND r.retired_at IS NOT NULL AND r.purged_at IS NULL
+  ORDER BY 6,r.key`)
+	if err != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+	defer rows.Close()
+	out := []retainedRuntime{}
+	for rows.Next() {
+		var item retainedRuntime
+		var deletedAt, purgeAfter time.Time
+		if err := rows.Scan(&item.Key, &item.AccountID, &item.AccountName, &item.AccountType, &deletedAt, &purgeAfter, &item.Due); err != nil {
+			httpapi.Fail(c, core.ErrUnavailable)
+			return
+		}
+		item.DeletedAt, item.PurgeAfter = deletedAt.UTC().Format(time.RFC3339), purgeAfter.UTC().Format(time.RFC3339)
+		out = append(out, item)
+	}
+	if rows.Err() != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+	httpapi.OK(c, map[string]any{"runtimes": out})
+}
+
+// runtimePurge serves POST /system/ccgateway/runtimes/:key/purge: the
+// retention of a deleted account's runtime ends now (purge_after = now(),
+// under the runtime's lock; a due one keeps its time) and this node
+// reconciles it, which purges it, so a failed purge can be retried at once.
+// 202: the purge itself runs in the background and is retried like any
+// other. 404: no such runtime; 409 runtime_not_retained: not a deleted
+// account's runtime, or purged already.
+func (s *Service) runtimePurge(c *gin.Context) {
+	key := c.Param("key")
+	if !accountKeyPattern.MatchString(key) && !isDraftKey(key) {
+		httpapi.Fail(c, core.ErrNotFound)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 30*time.Second)
+	defer cancel()
+	var accountID int64
+	found, retained := false, false
+	err := s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT a.id, a.deleted_at IS NOT NULL AND r.retired_at IS NOT NULL AND r.purged_at IS NULL
+  FROM ccgateway_runtimes r JOIN accounts a ON a.id=r.account_id WHERE r.key=$1 AND a.plugin_key='ccgateway' FOR UPDATE OF r`, key).Scan(&accountID, &retained)
+		if store.IsNoRows(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		found = true
+		if !retained {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET purge_after=now() WHERE key=$1 AND purge_after > now()`, key); err != nil {
+			return err
+		}
+		uid, _ := core.UserID(ctx)
+		return audit.Audit(ctx, tx, uid, "ccgateway.runtime.purge", "system", "ccgateway", map[string]any{"key": key, "account_id": accountID})
+	})
+	switch {
+	case err != nil:
+		httpapi.Fail(c, core.ErrUnavailable)
+	case !found:
+		httpapi.Fail(c, core.ErrNotFound)
+	case !retained:
+		httpapi.Fail(c, reasonError(core.ErrConflict, "runtime_not_retained"))
+	default:
+		s.Kick(key)
+		c.JSON(http.StatusAccepted, gin.H{"data": map[string]any{"accepted": true, "key": key, "account_id": accountID}})
+	}
 }

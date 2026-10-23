@@ -281,7 +281,7 @@ export interface AccountType {
   default_model_mapping?: Record<string, string>
   common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
-  lifecycle?: { preparation?: boolean; required?: boolean; actions?: Array<{ id: string; label: LText; icon?: string }> }
+  lifecycle?: { preparation?: boolean; required?: boolean; actions?: Array<{ id: string; label: LText; icon?: string }>; deletion?: { retentionDays: number } }
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
@@ -618,6 +618,8 @@ export interface AccountTestUsage {
 
 export interface AccountTestResult {
   test_mode?: 'native_build'
+  /** CCGateway: the test ran with the global CC feature policy, not the account's groups. */
+  policy_scope?: 'global'
   response_headers?: Record<string, string>
   error_code?: string
   error_source?: string

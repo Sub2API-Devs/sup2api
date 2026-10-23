@@ -188,8 +188,8 @@ func (s *Service) uploadGet(c *gin.Context) {
 // answerUpload relays the controller's upload state ({"offset","size"}, or
 // {"deleted"} for a delete) or its error.
 func (s *Service) answerUpload(c *gin.Context, res *http.Response, deleted bool) {
-	raw, e := io.ReadAll(io.LimitReader(res.Body, 65537))
-	if e != nil || len(raw) > 65536 {
+	raw, e := readBounded(res.Body, 65536)
+	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "controller_unhealthy"))
 		return
 	}

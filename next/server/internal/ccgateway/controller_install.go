@@ -216,69 +216,15 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	}
 	// target: where the scripts run and how the controller is reached while
 	// installing; in memory only.
-	var target Config
 	legacy := in.Method == ""
-	host := in.Host
-	switch in.Method {
-	case "":
-		// Compatibility: the saved (legacy) SSH connection. account_runtimes
-		// is not checked: per-account runtimes are the only mode (§53.9) and
-		// the switch saves it as true.
-		if cfg.Mode != "ssh" {
-			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "ssh_not_configured"))
-			return
-		}
-		target = cfg
-		if host == "" {
-			host = cfg.Host
-		}
-	case "ssh":
-		if in.SSH == nil {
-			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_ssh"))
-			return
-		}
-		target = Config{Mode: "ssh", AccountRuntimes: true, Images: cfg.Images, Host: in.SSH.Host, Port: in.SSH.Port, User: in.SSH.User,
-			AuthMode: in.SSH.AuthMode, Password: in.SSH.Password, PrivateKey: in.SSH.PrivateKey, Passphrase: in.SSH.Passphrase,
-			HostKeyFingerprint: in.SSH.HostKeyFingerprint, bundled: cfg.bundled}
-		if target.Port == 0 {
-			target.Port = 22
-		}
-		if remotedocker.Validate(target.SSH()) != nil {
-			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_ssh"))
-			return
-		}
-		if host == "" {
-			host = target.Host
-		}
-	case "local":
-		target = Config{Mode: localInstallMode, AccountRuntimes: true, Images: cfg.Images, bundled: cfg.bundled}
-		if host == "" {
-			host = "127.0.0.1"
-		}
-	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The install method must be ssh or local."))
+	target, host, failure := installTarget(in, cfg)
+	if failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
-	scheme := in.Scheme
-	switch scheme {
-	case "", "https":
-		scheme = "https"
-	case "http":
-	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The control panel scheme must be https or http."))
-		return
-	}
-	if !validControllerHost(host) {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_host"))
-		return
-	}
-	host = normalizeControllerHost(host)
-	if in.Port < 0 || in.Port > 65535 {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The control panel port must be 0 (automatic) or between 1 and 65535."))
-		return
-	}
-	if in.Email != "" && !validACMEEmail(in.Email) {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_email"))
+	scheme, host, failure := installEndpoint(in, host)
+	if failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
 	gateway, e := gatewayScript(cfg.EffectiveImages().Gateway)
@@ -303,18 +249,11 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	// saved SSH configuration's key, saved first when there is none.
 	if legacy {
 		if cfg.AdminKey == "" {
-			key, e := s.ensureControllerKey(ctx, cfg, uid)
-			if e != nil {
-				httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+			if cfg, version, failure = s.legacyControllerKey(ctx, cfg, uid); failure != nil {
+				httpapi.Fail(c, failure)
 				return
 			}
-			// Re-read so that this own write is not taken for someone else's.
-			cur, v, e := s.loadVersioned(ctx)
-			if e != nil || cur.Mode != "ssh" || cur.AdminKey != key {
-				httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
-				return
-			}
-			cfg, version, target = cur, v, cur
+			target = cfg
 		}
 	} else if target.AdminKey, e = newControllerKey(); e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
@@ -352,39 +291,11 @@ func (s *Service) controllerInstall(c *gin.Context) {
 			return
 		}
 	}
-	// 2. The gateway (its bundled Caddy image loaded first, §53.10).
-	if err := s.loadBundledImages(ctx, target, []string{"gateway"}, map[string]bool{"gateway": true}); err != nil {
+	// 2. The gateway and 3. the root of its internal CA for HTTPS to an IP.
+	ca, err := s.startGateway(ctx, target, gateway, caddy, scheme == "https" && net.ParseIP(host) != nil)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
-	}
-	res, e := s.run(ctx, target, gateway, []byte(caddy), installScriptLimit)
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, runFailure(target)))
-		return
-	}
-	if result := scriptResult(res.Output); res.ExitStatus != 0 || result != "started" {
-		if result != "image_pull_failed" {
-			result = "gateway_failed"
-		}
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, result))
-		return
-	}
-	// 3. HTTPS to an IP: pin the root of Caddy's internal CA.
-	var ca string
-	if scheme == "https" && net.ParseIP(host) != nil {
-		res, e = s.run(ctx, target, gatewayCAScript, nil, 2*time.Minute)
-		if e != nil {
-			httpapi.Fail(c, reasonError(core.ErrUnavailable, runFailure(target)))
-			return
-		}
-		if res.ExitStatus != 0 || scriptResult(res.Output) != "ok" {
-			httpapi.Fail(c, reasonError(core.ErrUnavailable, "ca_unavailable"))
-			return
-		}
-		if ca, _, e = parseControllerCA(res.Output); e != nil {
-			httpapi.Fail(c, reasonError(core.ErrUnavailable, "ca_unavailable"))
-			return
-		}
 	}
 	// 4. The core reaches the controller through the gateway itself.
 	panel := Config{Mode: "controller", AccountRuntimes: true, Scheme: scheme, Host: host, Port: port, ControllerCA: ca, AdminKey: target.AdminKey}
@@ -427,6 +338,117 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	}
 	httpapi.OK(c, view)
 	s.kickAll(ctx)
+}
+
+// installTarget is where an installation's scripts run (method ssh, local, or
+// the saved legacy SSH connection) and the default connection host.
+func installTarget(in installRequest, cfg Config) (target Config, host string, failure *core.Error) {
+	host = in.Host
+	switch in.Method {
+	case "":
+		// Compatibility: the saved (legacy) SSH connection. account_runtimes
+		// is not checked: per-account runtimes are the only mode (§53.9) and
+		// the switch saves it as true.
+		if cfg.Mode != "ssh" {
+			return target, host, reasonError(core.ErrInvalidArgument, "ssh_not_configured")
+		}
+		target = cfg
+	case "ssh":
+		if in.SSH == nil {
+			return target, host, reasonError(core.ErrInvalidArgument, "invalid_ssh")
+		}
+		target = Config{Mode: "ssh", AccountRuntimes: true, Images: cfg.Images, Host: in.SSH.Host, Port: in.SSH.Port, User: in.SSH.User,
+			AuthMode: in.SSH.AuthMode, Password: in.SSH.Password, PrivateKey: in.SSH.PrivateKey, Passphrase: in.SSH.Passphrase,
+			HostKeyFingerprint: in.SSH.HostKeyFingerprint, bundled: cfg.bundled}
+		if target.Port == 0 {
+			target.Port = 22
+		}
+		if remotedocker.Validate(target.SSH()) != nil {
+			return target, host, reasonError(core.ErrInvalidArgument, "invalid_ssh")
+		}
+	case "local":
+		target = Config{Mode: localInstallMode, AccountRuntimes: true, Images: cfg.Images, bundled: cfg.bundled}
+		if host == "" {
+			host = "127.0.0.1"
+		}
+	default:
+		return target, host, core.ErrInvalidArgument.WithMessage("The install method must be ssh or local.")
+	}
+	if host == "" {
+		host = target.Host
+	}
+	return target, host, nil
+}
+
+// installEndpoint checks the control panel endpoint of an installation.
+func installEndpoint(in installRequest, host string) (scheme, normalized string, failure *core.Error) {
+	switch in.Scheme {
+	case "", "https":
+		scheme = "https"
+	case "http":
+		scheme = "http"
+	default:
+		return "", host, core.ErrInvalidArgument.WithMessage("The control panel scheme must be https or http.")
+	}
+	if !validControllerHost(host) {
+		return scheme, host, reasonError(core.ErrInvalidArgument, "invalid_host")
+	}
+	if in.Port < 0 || in.Port > 65535 {
+		return scheme, host, core.ErrInvalidArgument.WithMessage("The control panel port must be 0 (automatic) or between 1 and 65535.")
+	}
+	if in.Email != "" && !validACMEEmail(in.Email) {
+		return scheme, host, reasonError(core.ErrInvalidArgument, "invalid_email")
+	}
+	return scheme, normalizeControllerHost(host), nil
+}
+
+// legacyControllerKey saves a management key into the legacy SSH
+// configuration that has none, and reads it back with its stored version.
+func (s *Service) legacyControllerKey(ctx context.Context, cfg Config, uid int64) (Config, []byte, *core.Error) {
+	key, e := s.ensureControllerKey(ctx, cfg, uid)
+	if e != nil {
+		return cfg, nil, reasonError(core.ErrUnavailable, "install_failed")
+	}
+	// Re-read so that this own write is not taken for someone else's.
+	cur, v, e := s.loadVersioned(ctx)
+	if e != nil || cur.Mode != "ssh" || cur.AdminKey != key {
+		return cfg, nil, reasonError(core.ErrConflict, "config_changed")
+	}
+	return cur, v, nil
+}
+
+// startGateway loads the bundled Caddy image (§53.10), starts the gateway
+// with caddy and, when pinCA (HTTPS to an IP), reads the root of its
+// internal CA.
+func (s *Service) startGateway(ctx context.Context, target Config, gateway, caddy string, pinCA bool) (string, *core.Error) {
+	if err := s.loadBundledImages(ctx, target, []string{"gateway"}, map[string]bool{"gateway": true}); err != nil {
+		return "", err
+	}
+	res, e := s.run(ctx, target, gateway, []byte(caddy), installScriptLimit)
+	if e != nil {
+		return "", reasonError(core.ErrUnavailable, runFailure(target))
+	}
+	if result := scriptResult(res.Output); res.ExitStatus != 0 || result != "started" {
+		if result != "image_pull_failed" {
+			result = "gateway_failed"
+		}
+		return "", reasonError(core.ErrUnavailable, result)
+	}
+	if !pinCA {
+		return "", nil
+	}
+	res, e = s.run(ctx, target, gatewayCAScript, nil, 2*time.Minute)
+	if e != nil {
+		return "", reasonError(core.ErrUnavailable, runFailure(target))
+	}
+	if res.ExitStatus != 0 || scriptResult(res.Output) != "ok" {
+		return "", reasonError(core.ErrUnavailable, "ca_unavailable")
+	}
+	ca, _, e := parseControllerCA(res.Output)
+	if e != nil {
+		return "", reasonError(core.ErrUnavailable, "ca_unavailable")
+	}
+	return ca, nil
 }
 
 // gatewayPort runs portScript on target: the wanted port when it is free

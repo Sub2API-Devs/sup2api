@@ -214,6 +214,9 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h := r.Header.Get("X-CCG-Delete-Account"); h != "" {
 		call += " delete-account=" + h
 	}
+	if r.Header.Get("X-CCG-Delete-Data") == "1" {
+		call += " delete-data=1"
+	}
 	c.calls = append(c.calls, call)
 	if r.URL.Path == "/accounts" && r.Method == "GET" {
 		list := []map[string]string{}

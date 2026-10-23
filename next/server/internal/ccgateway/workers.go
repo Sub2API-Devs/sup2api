@@ -70,10 +70,13 @@ func (o workerUpdateOptions) validate() error {
 	if slices.Equal(o.Components, []string{"worker"}) && o.CLIVersion == "" {
 		return nil
 	}
-	if o.paired() && o.CLIVersion == "2.1.304" {
+	// Any release version: the controller takes the pair from the image's
+	// CLI manifest and refuses a version the image does not package
+	// (runtime_updates.release_entry), so the core does not pin one here.
+	if o.paired() && cliReleasePattern.MatchString(o.CLIVersion) {
 		return nil
 	}
-	return errors.New("components must be worker-only, or worker and cli with cli_version 2.1.304")
+	return errors.New("components must be worker-only, or worker and cli with a cli_version (x.y.z)")
 }
 
 // updateWorkers updates the worker of every runtime the controller lists,
@@ -133,14 +136,15 @@ func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, imag
 			r.AccountID = &id
 		}
 		if r.Status == "updated" || r.Status == "rolled_back" {
+			// Another Worker answers behind the same revision: every node
+			// drops the route and the capabilities it read (audit A7).
+			s.workerChanged(ctx, accounts[key], key)
 			// The restart rebuilt the container's network namespace; the
-			// controller restores it, a reconcile makes sure.
-			if options.paired() {
-				// A paired activation already verifies the same container.
-				// Reconcile could still carry the deliberately retained old
-				// global CLI version until the operator saves new policy.
-				s.forgetAccount(accounts[key], key)
-			} else {
+			// controller restores it, a reconcile makes sure. A paired
+			// activation already verifies the same container, and a
+			// reconcile could still carry the deliberately retained old
+			// global CLI version until the operator saves new policy.
+			if !options.paired() {
 				s.Kick(key)
 			}
 		}
@@ -180,12 +184,8 @@ func (s *Service) runtimeAccounts(ctx context.Context, keys []string) map[string
 	return out
 }
 
-// updateWorker calls the controller's POST /accounts/<key>/worker, at most
-// workerLimit.
-func (s *Service) updateWorker(ctx context.Context, cfg Config, key, image string) workerResult {
-	return s.updateWorkerWithOptions(ctx, cfg, key, image, workerUpdateOptions{})
-}
-
+// updateWorkerWithOptions calls the controller's POST /accounts/<key>/worker,
+// at most workerLimit.
 func (s *Service) updateWorkerWithOptions(ctx context.Context, cfg Config, key, image string, options workerUpdateOptions) workerResult {
 	failed := func(reason string) workerResult { return workerResult{Key: key, Status: "failed", Reason: reason} }
 	if options.validate() != nil {
@@ -219,8 +219,8 @@ func (s *Service) updateWorkerWithOptions(ctx context.Context, cfg Config, key, 
 	}
 	defer close()
 	defer res.Body.Close()
-	body, e := io.ReadAll(io.LimitReader(res.Body, 65537))
-	if e != nil || len(body) > 65536 {
+	body, e := readBounded(res.Body, 65536)
+	if e != nil {
 		return lost()
 	}
 	if res.StatusCode != http.StatusOK {

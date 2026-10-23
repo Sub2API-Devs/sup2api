@@ -123,10 +123,14 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 	// a recently used group's cached policy for the same account.
 	check(3, "build", features.BuildAttachmentSources{"os_version": "worker", "shell": "erase"}, features.BuildBillingSources{"cc_version": "worker", "cc_entrypoint": "worker"})
 	// Follow clears the complete account record, including relay_mode and
-	// both source maps, and must affect the very next model request.
+	// both source maps, and must affect the very next model request once the
+	// change is announced: the request path keeps the account's policy (audit
+	// A7) until account:changed, which the account service publishes after
+	// every account PATCH and also hands this node directly (AccountChanged).
 	ap.Mode = "follow"
 	ap.Revision = 1
 	require.NoError(t, save(ap))
+	svc.AccountChanged(1)
 	stored, err := ccgateway.LoadAccountFeaturePolicy(ctx, svc.DB.Pool, 1)
 	require.NoError(t, err)
 	require.Equal(t, ccgateway.FeatureOverrides{}, stored.Overrides)
@@ -136,5 +140,7 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 	check(6, "build", features.BuildAttachmentSources{"platform_name": "worker"}, nil)
 	check(8, "direct", nil, nil)
 	require.Equal(t, 11, len(e.up.keys()))
+	// The shared runtime has no route to keep its health on: each request
+	// reads the capabilities (per-account runtimes keep them, audit A7).
 	require.EqualValues(t, 11, healthProbes.Load())
 }

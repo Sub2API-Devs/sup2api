@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"regexp"
 	"slices"
@@ -17,23 +16,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Probe the same account route immediately before sending a transformed model
-// request. Do not cache this across in-place Worker updates/downgrades: an old
-// Worker ignores unknown policy fields. This local read never calls a model.
-func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, base, key, cliVersion string) error {
-	return requireCapabilities(ctx, client, base, key, cliVersion, []string{features.BuildAttachmentCapability})
-}
-
 // requestPolicyCapabilities are what the Worker and CLI must confirm for a
-// wire policy (workerPolicy). Every policy follows the request levels: an
-// older CLI would add the identity line in direct and complete a request
-// without a billing header as a subagent.
+// wire policy (workerPolicy), whatever the CLI version: every policy follows
+// the request levels and may switch the mode per request, and build keeps the
+// client's blocks (the Worker refuses build without it, CONTRACTS §53.21).
 func requestPolicyCapabilities(p features.WorkerPolicy) []string {
-	required := []string{}
-	if p.CLIVersion == "2.1.304" || p.RelayMode == "direct" {
-		required = append(required, features.RequestPolicyModeCapability)
-	}
-	required = append(required, features.RequestLevelsCapability)
+	required := []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}
 	// The identity line follows the entrypoint in the CLI.
 	identityLines := p.BuildBillingEntrypoint != ""
 	if p.RelayMode == "direct" {
@@ -42,9 +30,7 @@ func requestPolicyCapabilities(p features.WorkerPolicy) []string {
 		}
 		return required
 	}
-	if p.CLIVersion == "2.1.304" {
-		required = append(required, features.BuildContentPreservationCapability)
-	}
+	required = append(required, features.BuildContentPreservationCapability)
 	if p.BuildAttachmentSources.RequiresV2() {
 		required = append(required, features.BuildAttachmentCapabilityV2)
 	} else if p.BuildAttachmentSources.UsesWorker() {
@@ -62,53 +48,84 @@ func requestPolicyCapabilities(p features.WorkerPolicy) []string {
 	return required
 }
 
-func requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, p features.WorkerPolicy) error {
-	return requireCapabilities(ctx, client, base, key, p.CLIVersion, requestPolicyCapabilities(p))
+// requireRequestPolicyCapabilities confirms the Worker behind r (nil: a
+// connection of this request only) can apply p, reusing r's health answer
+// while it is fresh.
+func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) error {
+	required := requestPolicyCapabilities(p)
+	if r != nil {
+		if h := s.routeHealth(r); h != nil {
+			return h.require(p.CLIVersion, required)
+		}
+	}
+	h, err := readWorkerHealth(ctx, client, base, key)
+	if err != nil {
+		return err
+	}
+	if r != nil && h.Status == "ok" {
+		s.keepRouteHealth(r, h)
+	}
+	return h.require(p.CLIVersion, required)
 }
 
-func requireCapabilities(ctx context.Context, client *http.Client, base, key, cliVersion string, required []string) error {
+// workerHealth is the Worker's GET /healthz answer; why is set when it could
+// not be read.
+type workerHealth struct {
+	Status       string   `json:"status"`
+	CLIVersion   string   `json:"claude_version"`
+	Capabilities []string `json:"capabilities"`
+	why          string
+}
+
+const workerHealthLimit = 8192
+
+// readWorkerHealth reads GET <base>/healthz. Only a refused route revision is
+// an error (the caller reads the account again); a Worker that does not
+// answer is a health whose require names why.
+func readWorkerHealth(ctx context.Context, client *http.Client, base, key string) (workerHealth, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/healthz", nil)
 	if err != nil {
-		return err
+		return workerHealth{}, err
 	}
 	req.Header.Set("x-api-key", key)
 	res, err := client.Do(req)
-	if err != nil && errors.Is(err, errAccountNotSynchronized) {
-		// The route's revision was refused: not a capability answer, the
-		// caller reads the account again (forwardAttempt).
-		return err
+	if err != nil {
+		if errors.Is(err, errAccountNotSynchronized) {
+			return workerHealth{}, err
+		}
+		return workerHealth{why: "the account Worker did not answer its health check"}, nil
 	}
-	// The answer names what is missing (audit A6): the Worker's absence, its
-	// CLI version or the capabilities it lacks, so the cooldown reason and the
-	// client's error say which.
-	why := "the account Worker did not answer its health check"
-	if err == nil {
-		defer res.Body.Close()
-		raw, readErr := io.ReadAll(io.LimitReader(res.Body, 8193))
-		var health struct {
-			Status       string   `json:"status"`
-			CLIVersion   string   `json:"claude_version"`
-			Capabilities []string `json:"capabilities"`
-		}
-		switch {
-		case res.StatusCode != http.StatusOK || readErr != nil || len(raw) > 8192 || json.Unmarshal(raw, &health) != nil || health.Status != "ok":
-			why = "the account Worker's health check failed"
-		case cliVersion != "" && cliVersion != health.CLIVersion:
-			why = "the account runs Claude Code " + health.CLIVersion + ", the policy needs " + cliVersion
-		default:
-			var missing []string
-			for _, capability := range required {
-				if !slices.Contains(health.Capabilities, capability) {
-					missing = append(missing, capability)
-				}
+	defer res.Body.Close()
+	var h workerHealth
+	raw, err := readBounded(res.Body, workerHealthLimit)
+	if res.StatusCode != http.StatusOK || err != nil || json.Unmarshal(raw, &h) != nil || h.Status != "ok" {
+		return workerHealth{why: "the account Worker's health check failed"}, nil
+	}
+	return h, nil
+}
+
+// require names what is missing (audit A6): the Worker's absence, its CLI
+// version or the capabilities it lacks, so the cooldown reason and the
+// client's error say which.
+func (h workerHealth) require(cliVersion string, required []string) error {
+	why := h.why
+	switch {
+	case why != "":
+	case cliVersion != "" && cliVersion != h.CLIVersion:
+		why = "the account runs Claude Code " + h.CLIVersion + ", the policy needs " + cliVersion
+	default:
+		var missing []string
+		for _, capability := range required {
+			if !slices.Contains(h.Capabilities, capability) {
+				missing = append(missing, capability)
 			}
-			if len(missing) == 0 {
-				return nil
-			}
-			why = "the account Worker/CLI lacks " + strings.Join(missing, ", ") + " (update the Worker and CLI in place)"
 		}
+		if len(missing) == 0 {
+			return nil
+		}
+		why = "the account Worker/CLI lacks " + strings.Join(missing, ", ") + " (update the Worker and CLI in place)"
 	}
 	return core.ErrConflict.WithMessage("The feature policy cannot be applied: " + why + ".").WithDetails(map[string]any{"reason": "configuration_error", "required_capabilities": required})
 }
@@ -136,8 +153,8 @@ func (s *Service) serveFeatures(c *gin.Context, ctx context.Context, d accountDe
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Worker capability inspection unavailable; this may be an older Worker or controller."))
 		return
 	}
-	raw, err := io.ReadAll(io.LimitReader(res.Body, 128*1024+1))
-	if err != nil || len(raw) > 128*1024 {
+	raw, err := readBounded(res.Body, 128*1024)
+	if err != nil {
 		httpapi.Fail(c, core.ErrUnavailable)
 		return
 	}
@@ -171,8 +188,8 @@ func (s *Service) observedCLIVersion(ctx context.Context, d accountDesired) stri
 	if res.StatusCode != http.StatusOK {
 		return ""
 	}
-	raw, err := io.ReadAll(io.LimitReader(res.Body, 128*1024+1))
-	if err != nil || len(raw) > 128*1024 {
+	raw, err := readBounded(res.Body, 128*1024)
+	if err != nil {
 		return ""
 	}
 	doc, err := features.DecodeRuntimeCapabilities(raw)

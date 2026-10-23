@@ -35,17 +35,12 @@ func matrixFields() []matrixField {
 	for _, key := range []string{"cc_version", "cc_entrypoint"} {
 		fields = append(fields, matrixField{"build_billing_sources." + key, []string{"client", "worker"}})
 	}
-	fields = append(fields, matrixField{"request_identity_sources.user_id", []string{"client", "worker", "replace"}})
+	// The identity sources are stored only, never resolved (audit A9).
 	return fields
 }
 
 // matrixDefault is what a field resolves to when no layer sets it.
-func matrixDefault(field string) string {
-	if strings.HasPrefix(field, "request_identity_sources.") {
-		return features.RequestIdentityDefault
-	}
-	return "client"
-}
+func matrixDefault(string) string { return "client" }
 
 func matrixOverride(field, value string) FeatureOverrides {
 	o := FeatureOverrides{}
@@ -58,8 +53,6 @@ func matrixOverride(field, value string) FeatureOverrides {
 		o.BuildAttachmentSources = features.BuildAttachmentSources{key: value}
 	case "build_billing_sources":
 		o.BuildBillingSources = features.BuildBillingSources{key: value}
-	case "request_identity_sources":
-		o.RequestIdentitySources = features.RequestIdentitySources{key: value}
 	default:
 		panic("matrix field without a section: " + field)
 	}
@@ -74,16 +67,12 @@ func matrixValue(p RequestPolicy, field string) string {
 		value = p.BuildAttachmentSources[key]
 	case "build_billing_sources":
 		value = p.BuildBillingSources[key]
-	case "request_identity_sources":
-		value = p.RequestIdentitySources[key]
 	// The level and the relay mode it decides; resolved policies carry both.
 	case "level":
 		return p.Level
 	case "relay_mode":
 		return p.RelayMode
-	// Resolved policies carry every default of these two.
-	case "build_identity_lines":
-		return p.BuildIdentityLines[key]
+	// Resolved policies carry the default entrypoint.
 	case "build_billing_entrypoint":
 		return p.BuildBillingEntrypoint
 	// build_injection.system_prompt, build_injection.attachments.<name> and
@@ -122,13 +111,12 @@ func matrixGlobal(field, value string) RequestPolicy {
 	o := matrixOverride(field, value)
 	p.BuildAttachmentSources = o.BuildAttachmentSources
 	p.BuildBillingSources = o.BuildBillingSources
-	p.RequestIdentitySources = o.RequestIdentitySources
 	return p
 }
 
-// 10 * 3 * 4 * 4 * 4 * 2 + 2 * 2 * 3 * 3 * 4 * 2 + 3 * 4 * 4 * 4 * 2 = 4,512
-// cases: every global source, sparse group/account value, both group gates and
-// modes, for the attachment, billing and identity sources.
+// 10 * 3 * 4 * 4 * 4 * 2 + 2 * 2 * 3 * 3 * 4 * 2 = 4,128 cases: every global
+// source, sparse group/account value, both group gates and modes, for the
+// attachment and billing sources.
 func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 	cases := 0
 	for _, field := range matrixFields() {
@@ -177,7 +165,7 @@ func TestFeatureSourceInheritanceExhaustiveMatrix(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 4512, cases)
+	require.Equal(t, 4128, cases)
 }
 
 func TestFeatureMissingGroupPolicyAllowsAccountsButNoRequestGroupStaysGlobal(t *testing.T) {
@@ -204,7 +192,7 @@ func TestFeatureMissingGroupPolicyAllowsAccountsButNoRequestGroupStaysGlobal(t *
 			}
 		}
 	}
-	require.Equal(t, 214, cases)
+	require.Equal(t, 196, cases)
 }
 
 func TestFeatureMixedFieldsHaveIndependentInheritance(t *testing.T) {
@@ -470,7 +458,7 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 			evidence = append(evidence, evidenceCase{tc.Name, tc.Field, tc.ExpectedSource, tc.ExpectedSources, tc.ExpectedOrigin, tc.ExpectedMode, tc.ExpectedLevel, wire, r.Effective, r.Sources})
 		})
 	}
-	require.Len(t, evidence, 70)
+	require.Len(t, evidence, 67)
 	if output := os.Getenv("CCG_POLICY_MATRIX_OUTPUT"); output != "" {
 		require.True(t, filepath.IsAbs(output), "matrix output must be an explicit absolute artifact path")
 		data, err := json.MarshalIndent(map[string]any{"schema_version": 1, "cli_version": "2.1.304", "cases": evidence}, "", "  ")
@@ -480,10 +468,9 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 }
 
 // The identity is not configurable (2026-10-21 decision): a source stored in
-// any layer still resolves for the preview, but the Worker never receives it
-// and no request needs the identity capability.
+// any layer is stored only. It is neither resolved for the preview (audit A9)
+// nor sent to the Worker, and no request needs the identity capability.
 func TestIdentitySourceIsNeverSentToTheWorker(t *testing.T) {
-	field := "request_identity_sources.user_id"
 	cases := 0
 	for _, mode := range []string{"build", "direct"} {
 		for _, origin := range []string{"global", "group", "account"} {
@@ -492,19 +479,20 @@ func TestIdentitySourceIsNeverSentToTheWorker(t *testing.T) {
 					p := defaultRequestPolicy()
 					p.RelayMode = mode
 					group, account := GroupFeaturePolicy{Enabled: true, AllowAccountOverride: true}, AccountFeaturePolicy{Mode: "custom"}
+					stored := features.RequestIdentitySources{"user_id": source}
 					switch origin {
 					case "global":
-						p.RequestIdentitySources = matrixOverride(field, source).RequestIdentitySources
+						p.RequestIdentitySources = stored
 					case "group":
-						group.Overrides = matrixOverride(field, source)
+						group.Overrides.RequestIdentitySources = stored
 					case "account":
-						account.Overrides = matrixOverride(field, source)
+						account.Overrides.RequestIdentitySources = stored
 					}
 					cfg := Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": group}}
 					before, _ := json.Marshal([]any{cfg, account})
 					r := cfg.ResolveFeaturePolicy(7, account)
-					require.Equal(t, source, matrixValue(r.Effective, field))
-					require.Equal(t, origin, r.Sources[field])
+					require.Nil(t, r.Effective.RequestIdentitySources)
+					require.NotContains(t, r.Sources, "request_identity_sources.user_id")
 					require.Equal(t, mode, r.Effective.RelayMode)
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 					require.NoError(t, err)

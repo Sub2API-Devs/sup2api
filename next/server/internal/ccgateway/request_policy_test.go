@@ -159,16 +159,13 @@ func TestRequestPolicySaveAndWorkerProjection(t *testing.T) {
 			var reloaded Config
 			require.NoError(t, json.Unmarshal(raw, &reloaded))
 			assert.Equal(t, want, reloaded.EffectiveRequestPolicy().RelayMode)
-			for _, id := range []int64{-1, 0, 22, 23, 24} {
-				worker := reloaded.WorkerRequestPolicy(id)
-				assert.Equal(t, want, worker.RelayMode)
-				assert.Equal(t, reloaded.EffectiveRequestPolicy(), worker)
-				wire, err := json.Marshal(worker)
-				require.NoError(t, err)
-				assert.NotContains(t, string(wire), "relay_native_accounts")
-				assert.NotContains(t, string(wire), "relay_passthrough_accounts")
-				assert.NotContains(t, string(wire), "pass_upstream_errors")
-			}
+			worker := reloaded.EffectiveRequestPolicy()
+			assert.Equal(t, want, worker.RelayMode)
+			wire, err := json.Marshal(worker)
+			require.NoError(t, err)
+			assert.NotContains(t, string(wire), "relay_native_accounts")
+			assert.NotContains(t, string(wire), "relay_passthrough_accounts")
+			assert.NotContains(t, string(wire), "pass_upstream_errors")
 		})
 	}
 }
@@ -188,11 +185,9 @@ func TestRelayModeStoredPolicyNormalizesToBuild(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, old.RequestPolicy)
 			assert.Equal(t, mode, old.RequestPolicy.RelayMode)
-			for _, id := range []int64{-1, 0, 22, 23, 24} {
-				p := old.WorkerRequestPolicy(id)
-				assert.Equal(t, "build", p.RelayMode)
-				assert.Equal(t, "false", p.ToolSearch)
-			}
+			p := old.EffectiveRequestPolicy()
+			assert.Equal(t, "build", p.RelayMode)
+			assert.Equal(t, "false", p.ToolSearch)
 			assert.Equal(t, "build", old.EffectiveRequestPolicy().RelayMode)
 			assert.Equal(t, mode, old.RequestPolicy.RelayMode)
 			public, err := json.Marshal(old.Public())
@@ -242,7 +237,7 @@ func TestEraseClientAttachmentsSave(t *testing.T) {
 	if err := json.Unmarshal(plain, &reloaded); err != nil {
 		t.Fatal(err)
 	}
-	if got := reloaded.WorkerRequestPolicy(26).EraseClientAttachments; len(got) != 2 || got[0] != "session_context" || got[1] != "date" {
+	if got := reloaded.EffectiveRequestPolicy().EraseClientAttachments; len(got) != 2 || got[0] != "session_context" || got[1] != "date" {
 		t.Fatalf("reloaded: %v", got)
 	}
 	for _, types := range [][]string{{"claudeMd"}, {"date", "date"}} {
@@ -266,7 +261,7 @@ func TestEraseClientAttachmentsAbsentKeepsWorkerPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []Config{legacy, saved} {
-		raw, _ := json.Marshal(c.WorkerRequestPolicy(26))
+		raw, _ := json.Marshal(c.EffectiveRequestPolicy())
 		if strings.Contains(string(raw), "erase_client_attachments") {
 			t.Fatalf("worker policy gained erase: %s", raw)
 		}
@@ -284,7 +279,7 @@ func TestReplaceClientAttachmentsSave(t *testing.T) {
 	plain, _ := json.Marshal(saved)
 	var reloaded Config
 	require.NoError(t, json.Unmarshal(plain, &reloaded))
-	require.Equal(t, []string{"environment", "model"}, reloaded.WorkerRequestPolicy(26).ReplaceClientAttachments)
+	require.Equal(t, []string{"environment", "model"}, reloaded.EffectiveRequestPolicy().ReplaceClientAttachments)
 	all := *saved.RequestPolicy
 	all.EraseClientAttachments, all.ReplaceClientAttachments = nil, []string{"environment", "model", "date", "total_tokens_reminder", "session_context"}
 	_, err = mergeConfig(Config{Mode: "disabled", RequestPolicy: &all, FeatureRevision: reloaded.FeatureRevision}, reloaded)
@@ -306,7 +301,7 @@ func TestIndependentEnvironmentPolicySave(t *testing.T) {
 	require.NoError(t, err)
 	var reloaded Config
 	require.NoError(t, json.Unmarshal(raw, &reloaded))
-	policy := reloaded.WorkerRequestPolicy(21)
+	policy := reloaded.EffectiveRequestPolicy()
 	assert.Equal(t, []string{"platform", "environment_update"}, policy.EraseClientAttachments)
 	assert.Equal(t, []string{"working_directory"}, policy.ReplaceClientAttachments)
 }
@@ -320,7 +315,7 @@ func TestAttachmentChildrenPolicySave(t *testing.T) {
 	require.NoError(t, err)
 	var reloaded Config
 	require.NoError(t, json.Unmarshal(raw, &reloaded))
-	policy := reloaded.WorkerRequestPolicy(21)
+	policy := reloaded.EffectiveRequestPolicy()
 	assert.Equal(t, []string{"git_status", "model_id", "date_change"}, policy.EraseClientAttachments)
 	assert.Equal(t, []string{"shell", "user_email", "current_date"}, policy.ReplaceClientAttachments)
 }

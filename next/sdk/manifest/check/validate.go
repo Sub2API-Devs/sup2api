@@ -823,6 +823,9 @@ func (v *validator) accountLifecycle(field string, at manifest.AccountType) {
 			}
 			seen[action.ID] = true
 		}
+		if d := lifecycle.Deletion; d != nil && (d.RetentionDays < 1 || d.RetentionDays > manifest.MaxRetentionDays) {
+			v.add(field+".lifecycle.deletion.retentionDays", "invalid", "retention must be 1 to %d days", manifest.MaxRetentionDays)
+		}
 	}
 	if len(at.ExtensionsSchema) == 0 {
 		return

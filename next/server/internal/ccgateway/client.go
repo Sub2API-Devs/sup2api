@@ -45,7 +45,7 @@ func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, fun
 			}
 			return (&net.Dialer{Timeout: controllerDialTimeout}).DialContext(ctx, network, address)
 		}
-		client := &http.Client{Transport: fixedTarget{rt: tr, scheme: "http", host: localControllerAddress}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client := newNoRedirectClient(fixedTarget{rt: tr, scheme: "http", host: localControllerAddress})
 		return client, "http://" + localControllerAddress, func() error { tr.CloseIdleConnections(); return nil }, nil
 	}
 	if c.Mode != "local" {
@@ -60,19 +60,28 @@ func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, fun
 		return nil, "", nil, errors.New("invalid configured CCGateway address")
 	}
 	tr := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
-	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := newNoRedirectClient(tr)
 	return client, base, func() error { tr.CloseIdleConnections(); return nil }, nil
 }
 
 // ModelClient is used only after the caller checks plugin/type/URL identity.
 // Connection lifetime follows response-body Close, including streaming bodies.
+// It carries no request group, so the CC feature policy it sends is the global
+// one (ModelPolicyScope): no group and no account override applies. Model
+// requests from API keys use ModelClientForRequest instead.
 func (s *Service) ModelClient(accountIDs ...int64) *http.Client {
 	var id int64
 	if len(accountIDs) > 0 {
 		id = accountIDs[0]
 	}
-	return &http.Client{Transport: modelTransport{s: s, accountID: id, proxySelected: len(accountIDs) > 1 && accountIDs[1] > 0}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return newNoRedirectClient(modelTransport{s: s, accountID: id, proxySelected: len(accountIDs) > 1 && accountIDs[1] > 0})
 }
+
+// ModelPolicyScope names the CC feature policy layers a ModelClient /
+// ModelClientFor request is resolved with: the global policy only (audit
+// A10). The account test reports it, since a test that passes says nothing of
+// the account's group policy (a level none group, high injection, ...).
+const ModelPolicyScope = "global"
 
 func (s *Service) ModelClientFor(id int64, proxyID *int64) *http.Client {
 	var proxy int64
@@ -91,8 +100,7 @@ type ModelRequestContext struct {
 }
 
 func (s *Service) ModelClientForRequest(in ModelRequestContext) *http.Client {
-	return &http.Client{Transport: modelTransport{s: s, accountID: in.AccountID, groupID: in.GroupID, proxySelected: in.ProxyID != nil && *in.ProxyID > 0},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return newNoRedirectClient(modelTransport{s: s, accountID: in.AccountID, groupID: in.GroupID, proxySelected: in.ProxyID != nil && *in.ProxyID > 0})
 }
 
 type modelTransport struct {
@@ -142,140 +150,216 @@ func (t modelTransport) forwardManaged(req *http.Request, path string, resource 
 // revision that came from the request cache; the caller may retry, and the
 // answer is notSynchronizedResponse otherwise.
 func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.CancelFunc, req *http.Request, body io.ReadCloser, path string, resource bool) (*http.Response, bool, error) {
-	fail := func(e error) (*http.Response, bool, error) {
-		cancel()
-		return nil, false, e
+	a := &attempt{t: t, ctx: ctx, cancel: cancel, req: req}
+	if o := a.resolveRoute(resource); o != nil {
+		return o.values()
 	}
-	cfg, e := t.s.requestConfig(ctx)
+	clone := a.clone(body, path)
+	if !resource {
+		if o := a.attachPolicy(clone, path); o != nil {
+			return o.values()
+		}
+	}
+	return a.send(clone).values()
+}
+
+// attempt is one forwardAttempt: where it goes (resolveRoute) and how it
+// ends. Every step either continues (nil outcome) or ends the attempt.
+type attempt struct {
+	t      modelTransport
+	ctx    context.Context
+	cancel context.CancelFunc
+	req    *http.Request
+	cfg    Config
+	// key, revision and cached: the runtime asked and whether its revision
+	// came from the request cache (per-account runtimes only).
+	key, revision string
+	cached        bool
+	// route is nil for the shared runtime.
+	route          *accountRoute
+	client         *http.Client
+	base, modelKey string
+	close          func() error
+	// finish closes the connection and the context once, when the answer
+	// body is closed or the attempt ends before sending.
+	finish func()
+}
+
+type outcome struct {
+	res   *http.Response
+	stale bool
+	err   error
+}
+
+func (o *outcome) values() (*http.Response, bool, error) { return o.res, o.stale, o.err }
+
+func (a *attempt) fail(e error) *outcome {
+	a.cancel()
+	return &outcome{err: e}
+}
+
+// refuse answers the core's own refusals (the account, the configuration,
+// the policy) as Anthropic errors marked X-CCGateway-Error-Source: core
+// (audit A6), not as transport failures: the plugin then cools the account
+// down for the stated reason and the client reads it, instead of "upstream
+// connection failed".
+func (a *attempt) refuse(reason, message string) *outcome {
+	a.cancel()
+	return &outcome{res: coreRefusal(a.req, reason, message)}
+}
+
+// notSynchronized: the runtime is not at the revision the core wants. The
+// account is read again next time and its runtime reconciled now; a revision
+// from the cache is retried by the caller (the context stays for it).
+func (a *attempt) notSynchronized() *outcome {
+	a.t.s.forgetAccount(a.t.accountID, a.key)
+	a.t.s.Kick(a.key)
+	if a.cached {
+		return &outcome{stale: true, err: errAccountNotSynchronized}
+	}
+	a.cancel()
+	return &outcome{res: notSynchronizedResponse(a.req)}
+}
+
+// resolveRoute reads the configuration and the account and opens the
+// connection to its runtime.
+func (a *attempt) resolveRoute(resource bool) *outcome {
+	cfg, e := a.t.s.requestConfig(a.ctx)
 	if e != nil {
-		return fail(e)
+		return a.fail(e)
 	}
-	if resource && (!cfg.AccountRuntimes || t.accountID <= 0) {
-		return fail(errors.New("provider resources require per-account runtimes"))
+	a.cfg = cfg
+	if resource && (!cfg.AccountRuntimes || a.t.accountID <= 0) {
+		return a.fail(errors.New("provider resources require per-account runtimes"))
 	}
-	var revision, key string
-	var cached bool
-	if !cfg.AccountRuntimes && t.accountID > 0 {
+	if !cfg.AccountRuntimes {
+		return a.resolveShared()
+	}
+	d, fromCache, err := a.t.s.requestDesired(a.ctx, a.t.accountID)
+	if err != nil {
+		return a.fail(transportError(err))
+	}
+	if reason := d.unavailable(); reason != "" {
+		return a.refuse(reason, reasonError(core.ErrUnavailable, reason).Message)
+	}
+	a.revision, a.key, a.cached = d.Revision, d.Key, fromCache
+	if cfg.AdminKey == "" {
+		return a.refuse("not_configured", reasonMessages["not_configured"])
+	}
+	r, err := a.t.s.route(a.ctx, cfg, a.key, a.revision)
+	if err == nil {
+		a.route, a.base, a.modelKey = r, r.base, r.modelKey
+		a.client, a.close, err = a.t.s.openRoute(a.ctx, cfg, r)
+	}
+	if err != nil {
+		if errors.Is(err, errAccountNotSynchronized) {
+			return a.notSynchronized()
+		}
+		return a.fail(transportError(err))
+	}
+	a.finishOnce()
+	return nil
+}
+
+// resolveShared opens the shared runtime of a configuration saved without
+// per-account runtimes (a mode §53.9 retired; a stored one keeps working
+// until it is migrated).
+func (a *attempt) resolveShared() *outcome {
+	if a.t.accountID > 0 {
 		var kind string
-		if err := t.s.DB.Pool.QueryRow(ctx, "SELECT type FROM accounts WHERE id=$1 AND plugin_key='ccgateway'", t.accountID).Scan(&kind); err != nil || kind == "apikey" {
-			return fail(errors.New("API key accounts require per-account runtimes"))
+		if err := a.t.s.DB.Pool.QueryRow(a.ctx, "SELECT type FROM accounts WHERE id=$1 AND plugin_key='ccgateway'", a.t.accountID).Scan(&kind); err != nil || kind == "apikey" {
+			return a.fail(errors.New("API key accounts require per-account runtimes"))
 		}
 	}
-	if t.proxySelected && !cfg.AccountRuntimes {
-		return fail(errors.New("account proxy requires per-account runtimes"))
+	if a.t.proxySelected {
+		return a.fail(errors.New("account proxy requires per-account runtimes"))
 	}
-	// The core's own refusals (the account, the configuration, the policy)
-	// are answered as Anthropic errors marked X-CCGateway-Error-Source: core
-	// (audit A6), not returned as transport failures: the plugin then cools
-	// the account down for the stated reason and the client reads it, instead
-	// of "upstream connection failed".
-	refuse := func(reason, message string) (*http.Response, bool, error) {
-		cancel()
-		return coreRefusal(req, reason, message), false, nil
+	if a.cfg.APIKey == "" {
+		return a.refuse("not_configured", reasonMessages["not_configured"])
 	}
-	if cfg.AccountRuntimes {
-		d, fromCache, err := t.s.requestDesired(ctx, t.accountID)
-		if err != nil {
-			return fail(transportError(err))
-		}
-		if reason := d.unavailable(); reason != "" {
-			return refuse(reason, reasonError(core.ErrUnavailable, reason).Message)
-		}
-		revision, key, cached = d.Revision, d.Key, fromCache
-	}
-	if (!cfg.AccountRuntimes && cfg.APIKey == "") || (cfg.AccountRuntimes && cfg.AdminKey == "") {
-		return refuse("not_configured", reasonMessages["not_configured"])
-	}
-	// notSynchronized: the runtime is not at the revision the core wants.
-	// The account is read again next time and its runtime reconciled now.
-	notSynchronized := func() (*http.Response, bool, error) {
-		t.s.forgetAccount(t.accountID, key)
-		t.s.Kick(key)
-		if cached {
-			return nil, true, errAccountNotSynchronized
-		}
-		cancel()
-		return notSynchronizedResponse(req), false, nil
-	}
-	var client *http.Client
-	var base, modelKey string
-	var close func() error
-	if cfg.AccountRuntimes {
-		r, err := t.s.route(ctx, cfg, key, revision)
-		if err == nil {
-			base, modelKey = r.base, r.modelKey
-			client, close, err = t.s.openRoute(ctx, cfg, r)
-		}
-		e = err
-	} else {
-		client, base, close, e = t.s.open(ctx, cfg)
-		modelKey = cfg.APIKey
-	}
+	client, base, closeFn, e := a.t.s.open(a.ctx, a.cfg)
 	if e != nil {
-		if errors.Is(e, errAccountNotSynchronized) {
-			return notSynchronized()
-		}
-		return fail(transportError(e))
+		return a.fail(transportError(e))
 	}
+	a.client, a.base, a.close, a.modelKey = client, base, closeFn, a.cfg.APIKey
+	a.finishOnce()
+	return nil
+}
+
+func (a *attempt) finishOnce() {
 	var once sync.Once
-	finish := func() { once.Do(func() { _ = close(); cancel() }) }
-	clone := req.Clone(ctx)
+	a.finish = func() { once.Do(func() { _ = a.close(); a.cancel() }) }
+}
+
+// clone is req addressed to the runtime with body.
+func (a *attempt) clone(body io.ReadCloser, path string) *http.Request {
+	clone := a.req.Clone(a.ctx)
 	clone.Body = body
-	clone.URL, _ = url.Parse(base + path)
-	clone.URL.RawQuery = req.URL.RawQuery
+	clone.URL, _ = url.Parse(a.base + path)
+	clone.URL.RawQuery = a.req.URL.RawQuery
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
-	if !resource {
-		policy, err := t.s.resolvedWorkerPolicy(ctx, cfg, t.accountID, t.groupID)
-		if err != nil {
-			finish()
-			return nil, false, err
-		}
-		if err := policy.Validate(); err != nil {
-			finish()
-			return refuse("invalid_request_policy", "The CC feature policy is invalid: "+err.Error()+".")
-		}
-		// Every policy carries a request level (request_levels_v1), so each
-		// model request and probe confirms the Worker/CLI first, whatever the
-		// global, group or account settings resolved to.
-		if path == "/v1/messages" || path == "/v1/ccgateway/probe" {
-			if err := requireRequestPolicyCapabilities(ctx, client, base, modelKey, policy); err != nil {
-				if cfg.AccountRuntimes && errors.Is(err, errAccountNotSynchronized) {
-					// Refused like the model request would be: read the
-					// account again (the context stays for the retry).
-					_ = close()
-					return notSynchronized()
-				}
-				finish()
-				return refuse("configuration_error", core.AsError(err).Message)
-			}
-		}
-		policyJSON, _ := json.Marshal(policy)
-		clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
+	return clone
+}
+
+// attachPolicy resolves the account's CC feature policy, confirms the Worker
+// can apply it and puts it on clone (X-CCGateway-Request-Policy).
+func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
+	policy, err := a.t.s.resolvedWorkerPolicy(a.ctx, a.cfg, a.t.accountID, a.t.groupID)
+	if err != nil {
+		a.finish()
+		return &outcome{err: err}
 	}
+	if err := policy.Validate(); err != nil {
+		a.finish()
+		return a.refuse("invalid_request_policy", "The CC feature policy is invalid: "+err.Error()+".")
+	}
+	// Every policy carries a request level (request_levels_v1), so each model
+	// request and probe confirms the Worker/CLI first, whatever the global,
+	// group or account settings resolved to.
+	if path == "/v1/messages" || path == "/v1/ccgateway/probe" {
+		if err := a.t.s.requireRequestPolicyCapabilities(a.ctx, a.client, a.base, a.modelKey, a.route, policy); err != nil {
+			if a.cfg.AccountRuntimes && errors.Is(err, errAccountNotSynchronized) {
+				// Refused like the model request would be: read the account
+				// again (the context stays for the retry).
+				_ = a.close()
+				return a.notSynchronized()
+			}
+			a.finish()
+			return a.refuse("configuration_error", core.AsError(err).Message)
+		}
+	}
+	policyJSON, _ := json.Marshal(policy)
+	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
+	return nil
+}
+
+// send forwards clone with the Worker key; the answer body closes the
+// connection (finish).
+func (a *attempt) send(clone *http.Request) *outcome {
 	clone.Header.Del("Authorization")
-	clone.Header.Set("x-api-key", modelKey)
+	clone.Header.Set("x-api-key", a.modelKey)
 	clone.Header.Del("X-CCG-Revision")
-	res, e := client.Do(clone)
+	res, e := a.client.Do(clone)
 	if e != nil {
-		_ = close()
-		if cfg.AccountRuntimes {
+		_ = a.close()
+		if a.cfg.AccountRuntimes {
 			if errors.Is(e, errAccountNotSynchronized) {
-				return notSynchronized()
+				return a.notSynchronized()
 			}
 			// The runtime may have moved: ask the controller again next time.
-			t.s.forgetAccount(t.accountID, key)
+			a.t.s.forgetAccount(a.t.accountID, a.key)
 		}
-		cancel()
-		return nil, false, errors.New("CCGateway model request failed")
+		a.cancel()
+		return &outcome{err: errors.New("CCGateway model request failed")}
 	}
-	if cfg.AccountRuntimes && res.StatusCode == http.StatusUnauthorized {
+	if a.cfg.AccountRuntimes && res.StatusCode == http.StatusUnauthorized {
 		// A recreated runtime has a new Worker key; an upstream 401 only
 		// costs one connection lookup.
-		t.s.forgetAccount(t.accountID, key)
+		a.t.s.forgetAccount(a.t.accountID, a.key)
 	}
-	res.Body = &modelBody{ReadCloser: res.Body, finish: finish}
-	return res, false, nil
+	res.Body = &modelBody{ReadCloser: res.Body, finish: a.finish}
+	return &outcome{res: res}
 }
 
 // notSynchronizedResponse is the core's refusal while a runtime is

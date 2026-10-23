@@ -60,8 +60,8 @@ func (s *Service) WorkerCapabilities(ctx context.Context, accountID int64) (feat
 	if res.StatusCode != http.StatusOK {
 		return zero, verificationHTTPError("capabilities", res, "", fmt.Errorf("Worker capabilities unavailable"))
 	}
-	raw, err := io.ReadAll(io.LimitReader(res.Body, (128<<10)+1))
-	if err != nil || len(raw) > 128<<10 {
+	raw, err := readBounded(res.Body, 128<<10)
+	if err != nil {
 		return zero, verificationHTTPError("capabilities", res, "invalid_document", fmt.Errorf("invalid Worker capabilities response"))
 	}
 	doc, err := features.DecodeRuntimeCapabilities(raw)

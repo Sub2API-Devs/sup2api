@@ -52,12 +52,7 @@ func validateNetwork(n RuntimeNetwork) (RuntimeNetwork, error) {
 // Read through the caller's transaction so adoption and dispatch agree on the
 // same network revision. Any network policy change invalidates old readiness.
 func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d accountDesired) (accountDesired, error) {
-	var raw []byte
-	err := q.QueryRow(ctx, "SELECT value FROM settings WHERE key=$1", settingKey).Scan(&raw)
-	if err != nil && !store.IsNoRows(err) {
-		return d, err
-	}
-	c, err := s.decode(raw)
+	c, _, err := s.loadIn(ctx, q, false)
 	if err != nil {
 		return d, err
 	}
@@ -66,12 +61,21 @@ func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d account
 	d.Revision = revisionOf(d.Revision + "|network:" + string(encoded))
 	policy := c.EffectiveRequestPolicy()
 	if policy.CLIVersion != "" {
-		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: "build", DisableAutoUpdate: true}
+		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: runtimeDefaultMode, DisableAutoUpdate: true}
 		encoded, _ = json.Marshal(d.CLI)
 		d.Revision = revisionOf(d.Revision + "|cli:" + string(encoded))
 	}
 	return d, nil
 }
+
+// runtimeDefaultMode is the request_mode of every CLI profile (audit A11). It
+// decides nothing per request: the core sends relay_mode with each one and
+// the Worker switches to it (CONTRACTS §53.21). The controller still requires
+// the key (cli_profiles.validate_profile accepts exactly version, request_mode
+// and disable_auto_update) and checks the packaged CLI has that mode; and the
+// profile is part of every revision, so changing it re-applies every runtime.
+// Dropping it needs the controller first.
+const runtimeDefaultMode = "build"
 
 // RuntimeCLI travels with the account revision, including authorization drafts.
 // An omitted profile keeps legacy containers until an operator selects a version.

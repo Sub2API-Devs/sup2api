@@ -36,6 +36,7 @@ type TestResult struct {
 	ErrorCode       string            `json:"error_code,omitempty"`
 	ErrorSource     string            `json:"error_source,omitempty"`
 	TestMode        string            `json:"test_mode,omitempty"`
+	PolicyScope     string            `json:"policy_scope,omitempty"` // CCGateway: the policy layers the test used, "global" (audit A10)
 	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	// Model actually requested: the model the plugin reported, else the
 	// requested model after the account's mapping.
@@ -248,6 +249,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	var hc *http.Client
 	if managedCCG {
 		hc = s.d.CCGateway.ModelClientFor(acct.GetId(), proxyID)
+		res.PolicyScope = ccgateway.ModelPolicyScope
 	} else {
 		hc, err = s.d.Proxies.HTTPClient(ctx, proxyID)
 	}

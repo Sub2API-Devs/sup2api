@@ -127,7 +127,7 @@ func openControllerPanel(cfg Config) (*http.Client, string, func() error, error)
 			return nil, errors.New("control panel destination rejected")
 		}
 	}
-	client := &http.Client{Transport: fixedTarget{rt: tr, scheme: scheme, host: addr, prefix: cfg.BasePath}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := newNoRedirectClient(fixedTarget{rt: tr, scheme: scheme, host: addr, prefix: cfg.BasePath})
 	return client, scheme + "://" + addr + cfg.BasePath, func() error { tr.CloseIdleConnections(); return nil }, nil
 }
 

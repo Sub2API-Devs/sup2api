@@ -45,17 +45,6 @@ func (c *reauthController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	key, path := m[1], m[2]
 	switch {
-	case path == "migrate-auth" && r.Method == "POST":
-		var body struct {
-			Source string `json:"source"`
-		}
-		if json.NewDecoder(r.Body).Decode(&body) != nil || !c.loggedIn[body.Source] || body.Source == key {
-			w.WriteHeader(400)
-			return
-		}
-		c.calls = append(c.calls, "MIGRATE "+body.Source+" "+key)
-		c.loggedIn[key] = true
-		_, _ = w.Write([]byte(`{"migrated":true}`))
 	case path == "" && r.Method == "DELETE":
 		if !strings.HasPrefix(key, "d") && r.Header.Get("X-CCG-Delete-Account") != key {
 			w.WriteHeader(405)
@@ -202,7 +191,7 @@ func TestCCGatewayReauthorize(t *testing.T) {
 		if err := e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM ccgateway_runtimes WHERE for_account=$1 OR (account_id=$1 AND retired_at IS NOT NULL)`, id).Scan(&n); err != nil || n != 0 {
 			t.Fatalf("replacement records created: %d %v", n, err)
 		}
-		if len(ctl.seen("PUT")) != beforeWrites || len(ctl.seen("DELETE")) != 0 || len(ctl.seen("MIGRATE")) != 0 {
+		if len(ctl.seen("PUT")) != beforeWrites || len(ctl.seen("DELETE")) != 0 {
 			t.Fatalf("reauth changed runtime: %v", ctl.seen(""))
 		}
 		if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled' WHERE id=$1`, id); err != nil {

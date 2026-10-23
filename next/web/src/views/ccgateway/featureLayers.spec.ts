@@ -9,7 +9,10 @@ beforeEach(() => { i18n.global.locale.value = 'zh' })
 describe('CC feature layer contract', () => {
   it('keeps historical defaults and applies worker defaults only to explicit new policies', () => {
     expect(normalizeRequestPolicy({ cli_version: '2.1.302' }).build_attachment_sources).toEqual({})
-    expect(normalizeRequestPolicy({ cli_version: '2.1.302' }).cli_version).toBe('2.1.304')
+    // A saved CLI version is kept (the core checks it against the runtimes);
+    // no saved one is the packaged default.
+    expect(normalizeRequestPolicy({ cli_version: '2.1.302' }).cli_version).toBe('2.1.302')
+    expect(normalizeRequestPolicy({}).cli_version).toBe('2.1.304')
     expect(newRequestPolicy().build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })
   })
   it('merges sparse nested values and counts only actual differences', () => {

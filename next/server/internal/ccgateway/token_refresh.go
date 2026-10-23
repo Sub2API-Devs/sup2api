@@ -3,7 +3,6 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
@@ -36,8 +35,8 @@ func (s *Service) RefreshToken(ctx context.Context, accountID int64) (map[string
 	}
 	defer closeConn()
 	defer res.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(res.Body, 4097))
-	if e != nil || len(raw) > 4096 {
+	raw, e := readBounded(res.Body, 4096)
+	if e != nil {
 		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
 	if res.StatusCode != http.StatusOK {

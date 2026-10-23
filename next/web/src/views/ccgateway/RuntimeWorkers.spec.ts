@@ -135,7 +135,7 @@ describe('CCGateway worker update in place', () => {
   it('requests paired Worker and CLI activation explicitly and displays per-account outcomes', async () => {
     const paired = report()
     mocks.post.mockResolvedValue({ ...paired, components: ['worker', 'cli'], cli_version: '2.1.304', results: paired.results.map(row => ({ ...row, cli_version: '2.1.304', cli_patch: 'ccgateway-v12-feature-policy', cli_sha256: 'c'.repeat(64), online: true })) })
-    const w = await render(configured('controller'))
+    const w = await render({ ...configured('controller'), cliVersion: '2.1.304' })
     expect(w.get('[data-testid="ccgateway-workers-cli-hint"]').text()).toContain('存量 302 配置不在后台自动迁移')
     await w.get('[data-testid="ccgateway-workers-cli-update"]').trigger('click')
     await flushPromises()

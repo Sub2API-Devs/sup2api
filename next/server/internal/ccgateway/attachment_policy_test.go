@@ -27,7 +27,7 @@ func TestBuildAttachmentPolicySaveAndForward(t *testing.T) {
 	var loaded Config
 	require.NoError(t, json.Unmarshal(raw, &loaded))
 	want := features.BuildAttachmentSources{"platform_name": "client", "os_version": "worker"}
-	require.Equal(t, want, loaded.WorkerRequestPolicy(21).BuildAttachmentSources)
+	require.Equal(t, want, loaded.EffectiveRequestPolicy().BuildAttachmentSources)
 	public, _ := json.Marshal(loaded.Public())
 	require.Contains(t, string(public), `"build_attachment_sources":{"os_version":"worker","platform_name":"client"}`)
 	for _, sources := range []features.BuildAttachmentSources{{"cwd": "worker"}, {"os_version": "unknown"}} {
@@ -113,7 +113,7 @@ func TestNativePolicyDropsRetiredControlsOnSaveReload(t *testing.T) {
 		cfg.FeatureRevision = 0 // each iteration models a fresh persistence target
 		saved, err := mergeConfig(cfg, Config{Mode: "disabled"})
 		require.NoError(t, err)
-		for _, value := range []any{saved, saved.Public(), saved.WorkerRequestPolicy(26)} {
+		for _, value := range []any{saved, saved.Public(), saved.EffectiveRequestPolicy()} {
 			raw, err := json.Marshal(value)
 			require.NoError(t, err)
 			for _, field := range []string{"unknown_beta", "attachment_source", "attachment_sources", "environment_fields", "unknown_client_attachment", "unknown_gateway_attachment"} {

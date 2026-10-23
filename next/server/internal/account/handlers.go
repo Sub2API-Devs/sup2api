@@ -1426,6 +1426,17 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// retain_resources=1 keeps the account's resources (stopped) for the
+	// retention days its type declares (lifecycle.deletion.retentionDays).
+	retain := false
+	switch c.Query("retain_resources") {
+	case "":
+	case "1":
+		retain = true
+	default:
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("retain_resources must be 1 or omitted."))
+		return
+	}
 	scope := core.OwnerScope(ctx, "account:delete")
 	uid, _ := core.UserID(ctx)
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -1441,16 +1452,29 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
 			return err
 		}
-		resource := s.d.LifecycleResources[pk]
-		if resource == nil && pk == "ccgateway" && s.d.CCGateway != nil {
-			resource = s.d.CCGateway
+		deletion := s.deletionResource(pk)
+		var options core.AccountDeletionOptions
+		if retain {
+			days := s.retentionDays(pk, typ)
+			if days == 0 || deletion == nil {
+				return core.ErrInvalidArgument.WithMessage("This account type does not keep resources after deletion; delete without retain_resources.")
+			}
+			var until time.Time
+			if err := tx.QueryRow(ctx, `SELECT now() + make_interval(days => $1)`, days).Scan(&until); err != nil {
+				return err
+			}
+			options.RetainUntil = &until
 		}
-		if deletion, ok := resource.(core.AccountDeletionResource); ok {
-			if err := deletion.MarkAccountDeleted(ctx, tx, id); err != nil {
+		if deletion != nil {
+			if err := deletion.MarkAccountDeleted(ctx, tx, id, options); err != nil {
 				return err
 			}
 		}
-		if err := audit.Audit(ctx, tx, uid, "account.delete", "account", itoa(id), map[string]any{"name": name}); err != nil {
+		detail := map[string]any{"name": name}
+		if options.RetainUntil != nil {
+			detail["retain_until"] = options.RetainUntil.UTC().Format(time.RFC3339)
+		}
+		if err := audit.Audit(ctx, tx, uid, "account.delete", "account", itoa(id), detail); err != nil {
 			return err
 		}
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountDeleted, Payload: basicPayload(id, pk, typ, name)})

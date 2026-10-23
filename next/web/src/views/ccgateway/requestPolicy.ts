@@ -214,6 +214,8 @@ export function defaultRequestPolicy(): RequestPolicy {
     build_billing_sources: {},
     request_identity_sources: {},
     level: defaultRequestLevel,
+    // The packaged CLI the runtimes run (core: PinnedCLIVersion); a saved
+    // policy keeps its own, which the core checks against the runtimes.
     cli_version: '2.1.304',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -264,7 +266,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     ...(injection === undefined ? {} : { build_injection: injection }),
     request_identity_sources: { ...policy?.request_identity_sources },
     level,
-    cli_version: defaults.cli_version,
+    cli_version: policy?.cli_version || defaults.cli_version,
     betas: policy?.betas ?? defaults.betas
   }
 }

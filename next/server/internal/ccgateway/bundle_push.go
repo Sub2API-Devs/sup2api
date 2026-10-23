@@ -163,8 +163,8 @@ func (s *Service) sendChunk(ctx context.Context, cfg Config, id string, offset i
 	}
 	defer close()
 	defer res.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(res.Body, 65537))
-	if err != nil || len(raw) > 65536 {
+	raw, err := readBounded(res.Body, 65536)
+	if err != nil {
 		return 0, nil, errors.New("unreadable controller answer")
 	}
 	return res.StatusCode, raw, nil
@@ -207,28 +207,10 @@ type bundledResult struct {
 // the caller disconnects.
 func (s *Service) runtimeBundled(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
-	var in struct {
-		Roles *[]string `json:"roles"`
-	}
-	if e != nil || (len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &in) != nil) {
+	wanted, ok := bundledRoles(c)
+	if !ok {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
 		return
-	}
-	wanted := map[string]bool{"app": true, "egress": true, "controller": true}
-	if in.Roles != nil {
-		wanted = map[string]bool{}
-		for _, r := range *in.Roles {
-			if r != "app" && r != "egress" && r != "controller" {
-				httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
-				return
-			}
-			wanted[r] = true
-		}
-		if len(wanted) == 0 {
-			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
-			return
-		}
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), loadLimit)
 	defer cancel()
@@ -265,33 +247,14 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 		if !wanted[role] {
 			continue
 		}
-		ref := b.ref(role)
-		r := bundledResult{Role: role, Ref: ref, Status: "loaded"}
-		fail := func(err *core.Error) {
-			r.Status, r.Reason = "failed", reasonOf(err)
-			if r.Reason == "" {
-				r.Reason = "install_failed"
-			}
+		r, report, saved := s.pushBundledRole(ctx, cfg, b, uid, role, current[role])
+		if saved != nil {
+			cfg = *saved
 		}
-		if current[role] == ref {
-			// The controller runs it already: nothing to send or switch.
-			r.Status = "present"
-		} else if ctx.Err() != nil {
-			r.Status, r.Reason = "failed", "timeout"
-		} else if err := s.pushBundled(ctx, cfg, b, role); err != nil {
-			fail(err)
-		} else if saved, err := s.useBundled(ctx, uid, role); err != nil {
-			fail(err)
-		} else {
-			cfg = saved
-			report, err := s.switchImage(ctx, cfg, role, ref)
-			if err != nil {
-				fail(err)
-			} else {
-				switched = true
-				if report != nil {
-					workers = report
-				}
+		if r.Status == "loaded" {
+			switched = true
+			if report != nil {
+				workers = report
 			}
 		}
 		results = append(results, r)
@@ -311,6 +274,66 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 		out["workers"] = workers
 	}
 	httpapi.OK(c, out)
+}
+
+// bundledRoles reads {"roles"?: [...]} of POST runtime/bundled; every role
+// when omitted.
+func bundledRoles(c *gin.Context) (map[string]bool, bool) {
+	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
+	var in struct {
+		Roles *[]string `json:"roles"`
+	}
+	if e != nil || (len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &in) != nil) {
+		return nil, false
+	}
+	if in.Roles == nil {
+		return map[string]bool{"app": true, "egress": true, "controller": true}, true
+	}
+	wanted := map[string]bool{}
+	for _, r := range *in.Roles {
+		if r != "app" && r != "egress" && r != "controller" {
+			return nil, false
+		}
+		wanted[r] = true
+	}
+	return wanted, len(wanted) > 0
+}
+
+// pushBundledRole uploads, loads and switches to the bundled image of role
+// unless the controller runs it already (current). saved is the
+// configuration after the switch was saved (nil before); report the worker
+// updates an app switch ran.
+func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, uid int64, role, current string) (r bundledResult, report *workersReport, saved *Config) {
+	ref := b.ref(role)
+	r = bundledResult{Role: role, Ref: ref, Status: "loaded"}
+	fail := func(err *core.Error) bundledResult {
+		r.Status, r.Reason = "failed", reasonOf(err)
+		if r.Reason == "" {
+			r.Reason = "install_failed"
+		}
+		return r
+	}
+	switch {
+	case current == ref:
+		// The controller runs it already: nothing to send or switch.
+		r.Status = "present"
+		return r, nil, nil
+	case ctx.Err() != nil:
+		r.Status, r.Reason = "failed", "timeout"
+		return r, nil, nil
+	}
+	if err := s.pushBundled(ctx, cfg, b, role); err != nil {
+		return fail(err), nil, nil
+	}
+	next, err := s.useBundled(ctx, uid, role)
+	if err != nil {
+		return fail(err), nil, nil
+	}
+	report, err = s.switchImage(ctx, next, role, ref)
+	if err != nil {
+		return fail(err), nil, &next
+	}
+	return r, report, &next
 }
 
 // useBundled removes the configured override of role, so that the bundled

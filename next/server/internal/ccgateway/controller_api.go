@@ -76,8 +76,8 @@ func (s *Service) controllerJSONLimit(ctx context.Context, cfg Config, method, p
 	}
 	defer close()
 	defer res.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(res.Body, limit+1))
-	if e != nil || int64(len(raw)) > limit {
+	raw, e := readBounded(res.Body, limit)
+	if e != nil {
 		return reasonError(core.ErrUnavailable, "controller_unhealthy")
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
@@ -228,11 +228,11 @@ func (s *Service) requestUpgrade(ctx context.Context, cfg Config, image string) 
 	if res.StatusCode >= 200 && res.StatusCode <= 299 {
 		return nil
 	}
-	body, e := io.ReadAll(io.LimitReader(res.Body, 65537))
+	body, e := readBounded(res.Body, 65536)
 	var answer struct {
 		Error string `json:"error"`
 	}
-	if e != nil || len(body) > 65536 || json.Unmarshal(body, &answer) != nil || answer.Error == "" {
+	if e != nil || json.Unmarshal(body, &answer) != nil || answer.Error == "" {
 		return nil
 	}
 	return controllerAPIError(res.StatusCode, body)

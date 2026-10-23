@@ -27,7 +27,7 @@ import { knownReason, setupProblems } from './ccgAuthFlow'
 import { BUNDLED_ROLES, BUNDLED_TIMEOUT_MS, RUNTIME_COMPONENTS, bundledAllEnabled, bundledState, componentImages, runtimeState, displayImage } from './runtimeInstall'
 import { WORKERS_TIMEOUT_MS, type ImageLoadResult } from './imageUpload'
 
-const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean }>()
+const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean; cliVersion?: string }>()
 const emit = defineEmits<{ (event: 'changed'): void }>()
 const { t, te } = useI18n()
 const auth = useAuthStore()
@@ -174,7 +174,7 @@ async function updateWorkers(paired = false) {
   workersError.value = ''
   try {
     // One synchronous request: every runtime in turn, at most 5 minutes each, 25 minutes in all (the core keeps going if this tab gives up).
-    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'], cli_version: '2.1.304' } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
+    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'], cli_version: props.cliVersion } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
     pairedReport.value = paired
     toast(t(paired ? 'ccgateway.workers.pairedDone' : 'ccgateway.workers.done'), 'success')
   } catch (e) {

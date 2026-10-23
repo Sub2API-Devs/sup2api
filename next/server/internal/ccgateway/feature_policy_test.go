@@ -133,7 +133,7 @@ func TestStalePolicyVocabularyStillLoads(t *testing.T) {
 	require.NotContains(t, r.Effective.BuildAttachmentSources, "color")
 	require.Equal(t, features.DefaultBillingEntrypoint, r.Effective.BuildBillingEntrypoint, "an entrypoint the vocabulary does not know is ignored")
 	require.NotContains(t, r.Effective.BuildIdentityLines, "remote")
-	require.Equal(t, "replace", r.Effective.RequestIdentitySources["user_id"])
+	require.Nil(t, r.Effective.RequestIdentitySources, "stored only: never resolved (audit A9)")
 	wire, err := s.resolvedWorkerPolicy(context.Background(), cfg, 0, 7)
 	require.NoError(t, err)
 	require.NoError(t, wire.Validate())
@@ -179,7 +179,7 @@ func TestWirePolicyNeverSendsIdentity(t *testing.T) {
 		raw, err := json.Marshal(p)
 		require.NoError(t, err)
 		require.NotContains(t, string(raw), "request_identity_sources", mode)
-		require.Equal(t, "replace", cfg.ResolveFeaturePolicy(0, AccountFeaturePolicy{}).Effective.RequestIdentitySources["user_id"], "the preview still shows the applied default")
+		require.Nil(t, cfg.ResolveFeaturePolicy(0, AccountFeaturePolicy{}).Effective.RequestIdentitySources, "stored only: the preview no longer resolves it (audit A9)")
 
 		for _, source := range []string{features.RequestIdentityDefault, "client", "worker"} {
 			cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
@@ -363,20 +363,21 @@ func TestNewConfigDefaultsDoNotChangeLegacyDefaults(t *testing.T) {
 	require.Empty(t, old.EffectiveRequestPolicy().BuildAttachmentSources)
 }
 
-// The entrypoint and identity lines resolve per key through the layers, the
-// preview shows every default, and the wire carries only what differs from the
-// CLI's own defaults, so an unchanged policy needs no newer Worker (2026-10-22).
+// The entrypoint resolves through the layers and the wire carries it only when
+// it differs from the CLI's own default, so an unchanged policy needs no newer
+// Worker (2026-10-22). The identity lines are stored only (the CLI adapts the
+// line to the entrypoint, 2026-10-23): neither resolved nor shown (audit A9).
 func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
 	cfg := Config{RequestPolicy: ptrPolicy(defaultRequestPolicy()), CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, AllowAccountOverride: true,
 		Overrides: FeatureOverrides{BuildIdentityLines: features.BuildIdentityLines{"claude-desktop": "agent_sdk"}}}}}
 	got := cfg.ResolveFeaturePolicy(7, AccountFeaturePolicy{Mode: "custom", Overrides: FeatureOverrides{BuildBillingEntrypoint: ptr("cli"), BuildIdentityLines: features.BuildIdentityLines{"cli": "none"}}})
 	require.Equal(t, "cli", got.Effective.BuildBillingEntrypoint)
-	require.Equal(t, features.BuildIdentityLines{"cli": "none", "sdk-cli": "agent_sdk", "sdk-ts": "agent_sdk", "sdk-py": "agent_sdk", "claude-desktop": "agent_sdk", "claude-vscode": "official_cli_sdk"}, got.Effective.BuildIdentityLines)
+	require.Nil(t, got.Effective.BuildIdentityLines)
 	require.Equal(t, "sdk-cli", got.Inherited.BuildBillingEntrypoint)
 	require.Equal(t, "account", got.Sources["build_billing_entrypoint"])
-	require.Equal(t, "account", got.Sources["build_identity_lines.cli"])
-	require.Equal(t, "group", got.Sources["build_identity_lines.claude-desktop"])
-	require.Equal(t, "global", got.Sources["build_identity_lines.sdk-ts"])
+	for key := range got.Sources {
+		require.NotContains(t, key, "identity", "no identity entry is resolved")
+	}
 
 	svc := &Service{}
 	p, err := svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)

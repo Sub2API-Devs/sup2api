@@ -210,6 +210,9 @@ func (s *Service) invalidate() {
 // changed invalidates local caches and tells the other nodes.
 func (s *Service) changed(ctx context.Context, id int64) {
 	s.invalidate()
+	// CCGateway keeps what its request path read of the account (its
+	// desired state and CC feature policy): this node drops it at once.
+	s.d.CCGateway.AccountChanged(id)
 	if s.d.Bus == nil {
 		return
 	}

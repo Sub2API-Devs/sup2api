@@ -325,7 +325,19 @@ type AccountLifecycle struct {
 	Preparation bool                     `json:"preparation,omitempty"`
 	Required    bool                     `json:"required,omitempty"`
 	Actions     []AccountLifecycleAction `json:"actions,omitempty"`
+	// Deletion offers keeping an account's runtime resources for a while after
+	// the account is deleted, before they are removed.
+	Deletion *AccountDeletion `json:"deletion,omitempty"`
 }
+
+// AccountDeletion is what deleting an account of the type may keep. The
+// operator chooses per deletion; the days come from the manifest only.
+type AccountDeletion struct {
+	RetentionDays int `json:"retentionDays"`
+}
+
+// MaxRetentionDays bounds AccountDeletion.RetentionDays.
+const MaxRetentionDays = 30
 
 type AccountLifecycleAction struct {
 	ID    string        `json:"id"`

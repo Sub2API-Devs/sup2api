@@ -8,7 +8,6 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
@@ -128,12 +127,7 @@ func (s *Service) SaveAccountFeatures(ctx context.Context, tx pgx.Tx, id int64, 
 		return err
 	}
 	if p.Mode == "custom" && (old.Mode != p.Mode || !reflect.DeepEqual(old.Overrides, p.Overrides)) {
-		var raw []byte
-		err = tx.QueryRow(ctx, "SELECT value FROM settings WHERE key=$1 FOR SHARE", settingKey).Scan(&raw)
-		if err != nil && !store.IsNoRows(err) {
-			return err
-		}
-		cfg, err := s.decode(raw)
+		cfg, _, err := s.loadIn(ctx, tx, true)
 		if err != nil {
 			return err
 		}

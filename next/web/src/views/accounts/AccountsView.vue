@@ -6,7 +6,6 @@ import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
-import { deleteWithConfirm } from '@/composables/crud'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
@@ -24,6 +23,7 @@ import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
 import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
+import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
 import { TEST_CONCURRENCY, lastTestOf } from './accountTest'
 import { runPool } from './pool'
@@ -453,7 +453,13 @@ async function toggleEnabled(a: Account, v: boolean) {
   }
 }
 
-const remove = (a: Account) => deleteWithConfirm(`/accounts/${a.id}`, t('common.confirmDelete', { name: a.name }), list.reload)
+const deleteOpen = ref(false)
+const deleteTarget = ref<Account | null>(null)
+const deleteTargetType = computed(() => (deleteTarget.value ? accountTypes.find(deleteTarget.value.plugin_key, deleteTarget.value.type) || null : null))
+function remove(a: Account) {
+  deleteTarget.value = a
+  deleteOpen.value = true
+}
 
 // Plugin-registered actions (CONTRACTS §52). An action that starts a
 // re-authorization answers the draft key: it continues in the editor. A token
@@ -658,6 +664,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
 
     <!-- test -->
     <AccountModelTest v-model:open="testOpen" :account="testTarget" :account-type="testTargetType" @tested="onTested" @updated="onTestUpdated" />
+    <AccountDeleteDialog v-model:open="deleteOpen" :account="deleteTarget" :account-type="deleteTargetType" @deleted="list.reload" />
 
     <!-- reveal -->
     <SModal v-model:open="revealOpen" :title="t('accounts.revealCredentials')" width="lg" @close="revealed = null">

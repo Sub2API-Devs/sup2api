@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -63,8 +62,8 @@ func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accoun
 	}
 	defer closeConn()
 	defer res.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(res.Body, 4097))
-	if e != nil || len(raw) > 4096 {
+	raw, e := readBounded(res.Body, 4096)
+	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
 	}

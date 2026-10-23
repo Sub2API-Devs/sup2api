@@ -325,15 +325,16 @@ func (s *Service) lockedTx(ctx context.Context, key string, wait bool, fn func(p
 // deleteRemote removes a runtime on the controller (DELETE /accounts/<key>,
 // idempotent): a draft runtime, or with retired an account-id runtime a
 // re-authorization replaced, which the controller only deletes when
-// X-CCG-Delete-Account names it again (§49.17). 404 counts as removed: a
-// controller without the endpoint predates draft keys and cannot have
-// created the runtime.
+// X-CCG-Delete-Account names it again (§49.17); X-CCG-Delete-Data also removes
+// its data volume and recovery backup (a draft's volume always goes, and a
+// draft has no backup). 404 counts as removed: a controller without the
+// endpoint predates draft keys and cannot have created the runtime.
 func (s *Service) deleteRemote(ctx context.Context, key string, retired bool) error {
 	var header []string
 	switch {
 	case isDraftKey(key):
 	case retired && accountKeyPattern.MatchString(key):
-		header = []string{"X-CCG-Delete-Account", key}
+		header = []string{"X-CCG-Delete-Account", key, "X-CCG-Delete-Data", "1"}
 	default:
 		return errors.New("only draft and retired runtimes are deleted")
 	}
@@ -343,9 +344,9 @@ func (s *Service) deleteRemote(ctx context.Context, key string, retired bool) er
 	}
 	defer close()
 	defer res.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 4096))
+	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
-		return errors.New("controller refused to delete the runtime")
+		return deleteFailure(res.StatusCode, raw, "runtime_cleanup_failed")
 	}
 	return nil
 }

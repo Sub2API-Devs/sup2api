@@ -11,9 +11,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
+	"github.com/jackc/pgx/v5"
 )
 
 // cachePanel is a fake control panel for any runtime key: GET .../connection
@@ -300,5 +303,209 @@ func TestBlockedRuntimeIsNotRewrittenEveryPass(t *testing.T) {
 	s.Kick(key)
 	if e := s.Reconcile(ctx, key); e != nil || count() != 2 {
 		t.Fatalf("not blocked again after a change: %v %d", e, count())
+	}
+}
+
+// TestRouteFollowsTheControllerWithoutTheBus: a node that missed the
+// configuration message used to keep the route (and the tunnels to the old
+// controller) until the account's revision changed (audit A4). The route
+// belongs to the controller of the configuration it was asked through, so the
+// expired configuration naming another controller asks that one; and a kept
+// route is confirmed with the controller after routeMaxAge, keeping its
+// tunnels when the answer is the same.
+func TestRouteFollowsTheControllerWithoutTheBus(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	cipher, _ := secret.New(make([]byte, 32))
+	s := New(db, cipher)
+	var id int64
+	if e := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('ccg','ccgateway','managed',''::bytea) RETURNING id`).Scan(&id); e != nil {
+		t.Fatal(e)
+	}
+	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveFakeWorkerHealth(w, r, "2.1.302") {
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer account.Close()
+	store := func(panel *httptest.Server) {
+		cfg := testPanelConfig("127.0.0.1", panel.Listener.Addr().(*net.TCPAddr).Port, "")
+		cfg.Scheme = "http"
+		cfg.RequestPolicy = &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}
+		plain, _ := json.Marshal(cfg)
+		encrypted, _ := cipher.Encrypt(plain, configAAD)
+		envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
+		if _, e := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey, envelope); e != nil {
+			t.Fatal(e)
+		}
+	}
+	oldPanel, newPanel := &cachePanel{accountAddr: account.Listener.Addr().String()}, &cachePanel{accountAddr: account.Listener.Addr().String()}
+	oldServer, newServer := httptest.NewServer(oldPanel), httptest.NewServer(newPanel)
+	defer oldServer.Close()
+	defer newServer.Close()
+	store(oldServer)
+	d, e := s.desired(ctx, id, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	oldPanel.apply(d.Revision)
+	newPanel.apply(d.Revision)
+	call := func() {
+		t.Helper()
+		req, _ := http.NewRequest("POST", VirtualURL, strings.NewReader(`{}`))
+		res, e := s.ModelClient(id).Do(req)
+		if e != nil {
+			t.Fatal(e)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatal("model request", res.StatusCode)
+		}
+	}
+	call()
+	call()
+	if connections, tunnels := oldPanel.counts(); connections != 1 || tunnels != 1 {
+		t.Fatalf("old controller: %d connections, %d tunnels", connections, tunnels)
+	}
+
+	// Another node moved the configuration to another controller; this node
+	// missed the message. Once its configuration expired it asks the new one.
+	store(newServer)
+	s.cache.mu.Lock()
+	s.cache.cfg.at = time.Now().Add(-time.Hour)
+	s.cache.mu.Unlock()
+	call()
+	if connections, _ := oldPanel.counts(); connections != 1 {
+		t.Fatalf("the old controller was asked again: %d", connections)
+	}
+	if connections, tunnels := newPanel.counts(); connections != 1 || tunnels != 1 {
+		t.Fatalf("new controller: %d connections, %d tunnels", connections, tunnels)
+	}
+
+	// After routeMaxAge the controller confirms the kept route: the same
+	// connection keeps the route and its idle tunnel.
+	s.cache.mu.Lock()
+	for _, r := range s.cache.routes {
+		r.at = time.Now().Add(-routeMaxAge - time.Second)
+	}
+	s.cache.mu.Unlock()
+	call()
+	if connections, tunnels := newPanel.counts(); connections != 2 || tunnels != 1 {
+		t.Fatalf("after routeMaxAge: %d connections, %d tunnels; want 2, 1", connections, tunnels)
+	}
+}
+
+// TestRequestPathKeepsPolicyAndWorkerHealth: every model request used to read
+// the account's CC feature policy from the database and ask the Worker's
+// /healthz (audit A7). Both are kept with the route now: an account change
+// (account:changed, AccountChanged) or an in-place Worker update drops them,
+// and the health answer expires after requestCacheTTL.
+func TestRequestPathKeepsPolicyAndWorkerHealth(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	cipher, _ := secret.New(make([]byte, 32))
+	s := New(db, cipher)
+	var id, gid int64
+	if e := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('ccg','ccgateway','managed',''::bytea) RETURNING id`).Scan(&id); e != nil {
+		t.Fatal(e)
+	}
+	if e := db.Pool.QueryRow(ctx, `INSERT INTO groups(name) VALUES('a7') RETURNING id`).Scan(&gid); e != nil {
+		t.Fatal(e)
+	}
+	var mu sync.Mutex
+	probes := 0
+	var policies []string
+	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if serveFakeWorkerHealth(w, r, "2.1.302") {
+			probes++
+			return
+		}
+		policies = append(policies, r.Header.Get("X-CCGateway-Request-Policy"))
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer account.Close()
+	panel := &cachePanel{accountAddr: account.Listener.Addr().String()}
+	srv := httptest.NewServer(panel)
+	defer srv.Close()
+	cfg := testPanelConfig("127.0.0.1", srv.Listener.Addr().(*net.TCPAddr).Port, "")
+	cfg.Scheme = "http"
+	cfg.RequestPolicy = &RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}
+	plain, _ := json.Marshal(cfg)
+	encrypted, _ := cipher.Encrypt(plain, configAAD)
+	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
+	if _, e := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey, envelope); e != nil {
+		t.Fatal(e)
+	}
+	d, e := s.desired(ctx, id, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	panel.apply(d.Revision)
+	savePolicy := func(p AccountFeaturePolicy) {
+		t.Helper()
+		if e := db.Tx(ctx, func(tx pgx.Tx) error { return SaveAccountFeaturePolicyTx(ctx, tx, id, p) }); e != nil {
+			t.Fatal(e)
+		}
+	}
+	savePolicy(AccountFeaturePolicy{Mode: "custom", Overrides: FeatureOverrides{BuildBillingSources: features.BuildBillingSources{"cc_version": "worker"}}})
+	call := func() string {
+		t.Helper()
+		req, _ := http.NewRequest("POST", VirtualURL, strings.NewReader(`{}`))
+		res, e := s.ModelClientForRequest(ModelRequestContext{AccountID: id, GroupID: gid}).Do(req)
+		if e != nil {
+			t.Fatal(e)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatal("model request", res.StatusCode)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		return policies[len(policies)-1]
+	}
+	counts := func() int { mu.Lock(); defer mu.Unlock(); return probes }
+	for range 3 {
+		if p := call(); !strings.Contains(p, `"cc_version":"worker"`) {
+			t.Fatalf("account policy not applied: %s", p)
+		}
+	}
+	if counts() != 1 {
+		t.Fatalf("/healthz asked %d times for three requests", counts())
+	}
+
+	// A saved account policy is read again once the change is announced.
+	savePolicy(AccountFeaturePolicy{Mode: "follow", Revision: 1})
+	if p := call(); !strings.Contains(p, `"cc_version":"worker"`) {
+		t.Fatal("the kept policy was dropped without an announcement")
+	}
+	s.AccountChanged(id)
+	if p := call(); strings.Contains(p, `"cc_version"`) {
+		t.Fatalf("account change not followed: %s", p)
+	}
+	if counts() != 2 {
+		t.Fatalf("/healthz after the account change: %d, want 2", counts())
+	}
+
+	// The health answer expires on its own.
+	s.cache.mu.Lock()
+	for _, r := range s.cache.routes {
+		r.healthAt = time.Now().Add(-requestCacheTTL - time.Second)
+	}
+	s.cache.mu.Unlock()
+	call()
+	if counts() != 3 {
+		t.Fatalf("/healthz after its TTL: %d, want 3", counts())
+	}
+
+	// An in-place Worker update drops it at once.
+	s.workerChanged(ctx, id, d.Key)
+	call()
+	if counts() != 4 {
+		t.Fatalf("/healthz after a Worker update: %d, want 4", counts())
 	}
 }

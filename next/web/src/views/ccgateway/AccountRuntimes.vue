@@ -16,6 +16,7 @@ import { containerPhase, type CcgContainer } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import CLISettings from './CLISettings.vue'
+import RetainedRuntimes from './RetainedRuntimes.vue'
 import RequestLogViewer from './RequestLogViewer.vue'
 
 type RequestLogLevel = 'off' | 'summary' | 'full'
@@ -90,6 +91,7 @@ const { t } = useI18n()
 const router = useRouter()
 const { blockedTitle } = useCcgText()
 const auth = useAuthStore()
+const retained = ref<InstanceType<typeof RetainedRuntimes>>()
 const own = useOwnership()
 const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
 // Reading the logs: settings or account readers, not own-level ones (§7).
@@ -147,6 +149,7 @@ async function inspect(r: Row) {
 async function load() {
   loading.value = true
   error.value = ''
+  void retained.value?.load()
   try {
     const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
     rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
@@ -408,6 +411,7 @@ async function refreshAuth(r: Row) {
           </div>
         </template>
       </STable>
+      <RetainedRuntimes v-if="auth.has('settings:read')" ref="retained" />
     </div>
     <SModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning">
       <div class="space-y-3" data-testid="request-log-full-dialog">

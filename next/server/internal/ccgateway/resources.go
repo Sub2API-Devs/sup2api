@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -44,9 +43,9 @@ func (t resourceTransport) Identity(ctx context.Context, accountID int64) (core.
 		}
 		return core.ResourceBinding{}, verificationHTTPError("identity", resp, "", core.ErrUnavailable.WithMessage("account does not provide a verified resource issuer"))
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8193))
+	raw, err := readBounded(resp.Body, 8192)
 	var identity resourcecontract.Identity
-	if err != nil || len(raw) > 8192 || json.Unmarshal(raw, &identity) != nil || !validResourceIdentity(identity.PrincipalID, identity.Generation) {
+	if err != nil || json.Unmarshal(raw, &identity) != nil || !validResourceIdentity(identity.PrincipalID, identity.Generation) {
 		return core.ResourceBinding{}, verificationHTTPError("identity", resp, "invalid_document", errors.New("invalid Worker resource identity response"))
 	}
 	return core.ResourceBinding{AccountID: accountID, PrincipalID: identity.PrincipalID, Generation: identity.Generation}, nil
@@ -56,8 +55,8 @@ func verifiedMissingResourceIssuer(resp *http.Response) bool {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		return false
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8193))
-	if err != nil || len(raw) > 8192 {
+	raw, err := readBounded(resp.Body, 8192)
+	if err != nil {
 		return false
 	}
 	var body struct {

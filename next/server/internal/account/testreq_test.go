@@ -273,6 +273,10 @@ func TestAccountTestPreservesManagedCLIErrorWithoutInference(t *testing.T) {
 			if d.Get("reason").Exists() || d.Get("effect").Exists() || calls.Load() != 1 {
 				t.Fatal("added inference or extra request", string(raw), calls.Load())
 			}
+			// The test is resolved with the global policy only (audit A10).
+			if d.Get("policy_scope").String() != ccgateway.ModelPolicyScope {
+				t.Fatal("policy scope not reported", string(raw))
+			}
 			_, saved := e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
 			last := gjson.GetBytes(saved, "data.last_test")
 			if last.Get("message").String() != body || last.Get("error_source").String() != wantSource {
@@ -312,6 +316,9 @@ func TestAccountTestPreserves429WithoutInferredReason(t *testing.T) {
 			}
 			if d.Get("reason").Exists() || d.Get("effect").Exists() || d.Get("body").String() != tc.body {
 				t.Fatal("test must report the response without inferred causes", string(raw))
+			}
+			if d.Get("policy_scope").Exists() {
+				t.Fatal("policy_scope is only for CCGateway accounts", string(raw))
 			}
 			_, saved := e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
 			if gjson.GetBytes(saved, "data.last_test.message").String() != d.Get("message").String() {

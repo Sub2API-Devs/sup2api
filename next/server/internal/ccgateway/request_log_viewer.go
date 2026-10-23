@@ -96,8 +96,8 @@ func (s *Service) viewerJSON(c *gin.Context, ctx context.Context, d accountDesir
 	}
 	defer closeConn()
 	defer res.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(res.Body, limit+1))
-	if e != nil || int64(len(raw)) > limit {
+	raw, e := readBounded(res.Body, limit)
+	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return nil, false
 	}
