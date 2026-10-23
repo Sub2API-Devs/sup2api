@@ -10,7 +10,6 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -28,10 +27,6 @@ const (
 
 // StatusOverloaded is Anthropic's "overloaded" status code.
 const StatusOverloaded = 529
-
-// errorScopeHeader (lowercase, as the host passes headers) marks a gateway
-// error that belongs to the request alone (companions/engine requestRefusal).
-const errorScopeHeader = "x-ccgateway-error-scope"
 
 // errorTypeForStatus maps an HTTP status to the Anthropic error type.
 func errorTypeForStatus(code int) string {
@@ -94,16 +89,11 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	// The gateway's own refusals (the core before any Worker, or the Worker
 	// before the CLI) carry their source and reason (contracts/requestfailure,
 	// audit C2/A6): they are never the upstream's verdict on the account.
-	local := requestfailure.Local(requestfailure.SourceOf(headerValues(in.GetHeaders(), "x-ccgateway-error-source")))
+	source := requestfailure.SourceOf(headerValues(in.GetHeaders(), sourceHeader))
+	local := requestfailure.Local(source)
 	localReason := requestfailure.ReasonOf(in.GetHeaders()["x-ccgateway-error-reason"])
 
 	switch {
-	case in.GetHeaders()[errorScopeHeader] == "request":
-		// The gateway refused this request itself (its history or features
-		// could not be carried exactly): another account would refuse it the
-		// same way, and the account is not at fault.
-		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
-		resp.LocalFailure = true
 	case code == 0:
 		cooldown(serverErrorCooldown, "transport error: "+truncate(in.GetTransportError(), 200))
 		resp.LocalFailure = true
@@ -135,8 +125,7 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		// another account would answer the same.
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
 		resp.LocalFailure = true
-	case code == http.StatusBadRequest && (isAccountBillingError(msg) ||
-		(in.GetHeaders()["x-ccgateway-error-source"] == "cli" && in.GetHeaders()["x-ccgateway-cli-error"] == "billing_error")):
+	case code == http.StatusBadRequest && isAccountBillingError(msg):
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
 		resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
 		resp.Reason = "upstream credit balance too low"
@@ -148,26 +137,7 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 			resp.Reason += ": " + truncate(msg, 200)
 		}
 	case code == http.StatusTooManyRequests:
-		// A Worker from before the source header names its limit in words.
-		resp.LocalFailure = msg == "Gateway concurrency limit reached"
-		if !resp.LocalFailure {
-			resp.Quota = nativeQuotaObservation(in, now)
-			if len(resp.GetQuota().GetWindows()) == 1 {
-				key := resp.Quota.Windows[0].GetKey()
-				if key == "7d_fable" || key == "7d_sonnet" {
-					resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
-					resp.Reason = "native scoped quota rejected: " + key
-					return resp, nil
-				}
-			}
-		}
-		until, src := rateLimitReset(in.GetHeaders(), now)
-		cooldown(until.Sub(now), "rate limited until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
-		if in.GetAccount().GetType() == AccountTypeManaged && !resp.LocalFailure {
-			resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
-			resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
-				Reason: resp.Reason, Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: until.Unix()}}
-		}
+		classifyRateLimit(resp, in, source, now, cooldown)
 	case code == StatusOverloaded:
 		cooldown(overloadedCooldown, "upstream overloaded (529)")
 	case code == http.StatusRequestTimeout || code >= 500:
@@ -179,17 +149,58 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	return resp, nil
 }
 
-func nativeQuotaObservation(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.QuotaResult {
+// classifyRateLimit handles an upstream 429. A managed account's answer names
+// the limit it hit the way Claude Code reads it (the representative claim): a
+// model-scoped weekly limit only moves the request to another account, the
+// account stays usable for other models; any other limit disables the
+// account until it resets.
+//
+// Only an upstream HTTP answer names a limit: the Worker marks it
+// (requestfailure.SourceHTTP) and never relays a provider's x-ccgateway-*
+// headers (httpfacts.Apply), so a provider cannot claim the source.
+func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.ClassifyErrorRequest, source string, now time.Time, cooldown func(time.Duration, string)) {
+	if source == requestfailure.SourceHTTP {
+		resp.Quota = rejectedQuota(in, now)
+	}
+	if window := resp.GetQuota().GetWindows(); len(window) == 1 && scopedQuota(window[0].GetKey()) {
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
+		resp.Reason = "scoped quota rejected: " + window[0].GetKey()
+		return
+	}
+	until, src := rateLimitReset(in.GetHeaders(), now)
+	cooldown(until.Sub(now), "rate limited until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
+	if in.GetAccount().GetType() == AccountTypeManaged {
+		resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
+		resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
+			Reason: resp.Reason, Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: until.Unix()}}
+	}
+}
+
+func scopedQuota(key string) bool { return key == "7d_fable" || key == "7d_sonnet" }
+
+// sourceHeader is requestfailure.SourceHeader as the host passes headers
+// (lowercase).
+const sourceHeader = "x-ccgateway-error-source"
+
+// claimHeader is the limit a rejected request hit, as Claude Code reads it
+// (rateLimitType); claimResetHeader is when the unified limit resets.
+const (
+	claimHeader      = "anthropic-ratelimit-unified-representative-claim"
+	claimResetHeader = "anthropic-ratelimit-unified-reset"
+)
+
+// rejectedQuota is the quota window a managed account's 429 names, or nil.
+func rejectedQuota(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.QuotaResult {
 	h := in.GetHeaders()
-	if in.GetAccount().GetType() != AccountTypeManaged || in.GetStatus() != http.StatusTooManyRequests || h[errorScopeHeader] != "" || h["x-ccgateway-error-source"] != "cli" || h["x-ccgateway-cli-error"] != "rate_limit" || h[httpfacts.NativeObservedStatusHeader] != "429" {
+	if in.GetAccount().GetType() != AccountTypeManaged {
 		return nil
 	}
-	key := httpfacts.NativeQuotaKey(h[httpfacts.NativeQuotaTypeHeader])
+	key := quotaClaimKey(h[claimHeader])
 	if key == "" {
 		return nil
 	}
 	window := &pluginv1.QuotaWindow{Key: key, Status: "rejected", UtilizationUnknown: true}
-	if raw := h[httpfacts.NativeQuotaResetHeader]; raw != "" {
+	if raw := h[claimResetHeader]; raw != "" {
 		reset, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || reset <= 0 || reset > 253402300799 || strconv.FormatInt(reset, 10) != raw {
 			return nil
@@ -198,6 +209,22 @@ func nativeQuotaObservation(in *pluginv1.ClassifyErrorRequest, now time.Time) *p
 	}
 	windows := []*pluginv1.QuotaWindow{window}
 	return &pluginv1.QuotaResult{Windows: windows, NextCheckAtUnix: nextQuotaCheck(now, windows)}
+}
+
+// quotaClaimKey maps a representative claim to the plugin's quota key.
+func quotaClaimKey(claim string) string {
+	switch claim {
+	case "five_hour":
+		return "5h"
+	case "seven_day":
+		return "7d"
+	case "seven_day_sonnet":
+		return "7d_sonnet"
+	case "seven_day_overage_included":
+		return "7d_fable"
+	default:
+		return ""
+	}
 }
 
 // headerValues is the single-valued header map as header values.

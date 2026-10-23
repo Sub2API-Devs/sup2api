@@ -10,48 +10,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNativeBillingClassification(t *testing.T) {
+// An upstream billing refusal disables the account; the CLI-side and the
+// gateway's own 400s never do.
+func TestBillingClassification(t *testing.T) {
+	billing := []byte(`{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}`)
 	for _, tc := range []struct {
-		name, source, category, scope string
-		status                        int32
-		disable                       bool
+		name, source string
+		disable      bool
 	}{
-		{"native billing", "cli", "billing_error", "", 400, true},
-		{"private request scope", "cli", "billing_error", "request", 400, false},
-		{"unknown category", "cli", "future_error", "", 400, false},
-		{"missing category", "cli", "", "", 400, false},
-		{"category exact case", "cli", "Billing_Error", "", 400, false},
-		{"category exact whitespace", "cli", "billing_error ", "", 400, false},
-		{"body only", "", "", "", 400, false},
-		{"source spoof", "upstream", "billing_error", "", 400, false},
-		{"missing source", "", "billing_error", "", 400, false},
-		{"source exact case", "CLI", "billing_error", "", 400, false},
-		{"source exact whitespace", "cli ", "billing_error", "", 400, false},
-		{"other status", "cli", "billing_error", "", 402, false},
-		{"unknown status", "cli", "billing_error", "", 499, false},
+		{"upstream answer", "http", true},
+		{"no source", "", true},
+		{"gateway refusal", "gateway", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{
-				Status:     tc.status,
-				BodyPrefix: []byte(`{"type":"error","error":{"type":"invalid_request_error","message":"Claude Code native error: billing_error"}}`),
-				Headers: map[string]string{
-					"x-ccgateway-error-source": tc.source,
-					"x-ccgateway-cli-error":    tc.category,
-					errorScopeHeader:           tc.scope,
-				},
-			})
+			out, err := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 400, BodyPrefix: billing, Headers: map[string]string{sourceHeader: tc.source}})
 			require.NoError(t, err)
 			if tc.disable {
-				require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
 				require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect())
 				require.Equal(t, "upstream credit balance too low", out.GetReason())
-			} else {
-				require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction())
-				require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.GetAccountEffect())
+				return
 			}
-			require.Equal(t, tc.scope == "request", out.GetLocalFailure())
-			require.Zero(t, out.GetCooldownUntilUnix())
-			require.Nil(t, out.GetAutomaticState())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.GetAccountEffect())
 		})
 	}
 }
@@ -108,8 +88,8 @@ func TestGatewayRefusalsAreLocal(t *testing.T) {
 			pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, "gateway refused the request (unauthorized: Invalid gateway API key)"},
 		{"worker: mode mismatch", "gateway", "configuration_error", 409, nil, body("configuration_error", "Loaded CLI does not support the requested mode"),
 			pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, "gateway refused the request (configuration_error: Loaded CLI does not support the requested mode)"},
-		{"worker: not ready", "gateway", "unavailable", 503, nil, body("api_error", "Claude Code tool catalog is not ready"),
-			pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, "gateway refused the request (unavailable: Claude Code tool catalog is not ready)"},
+		{"worker: CLI changed", "gateway", "unavailable", 503, nil, body("api_error", "Claude Code changed from 2.1.304 to 2.1.305; reconcile the runtime"),
+			pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, "gateway refused the request (unavailable: Claude Code changed"},
 		{"worker: concurrency", "gateway", "concurrency_limit", 429, map[string]string{"retry-after": "1"}, body("rate_limit_error", "Gateway concurrency limit reached"),
 			pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, "gateway concurrency limit until"},
 		{"worker: bad body", "gateway", "invalid_request", 400, nil, body("invalid_request_error", "Cannot read body"),
@@ -146,7 +126,7 @@ func TestGatewayRefusalsAreLocal(t *testing.T) {
 	}
 }
 
-func TestNativeQuotaRetryAfterClassification(t *testing.T) {
+func TestRateLimitRetryAfterClassification(t *testing.T) {
 	now := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	reset := now.Add(5 * time.Hour)
 	for _, retryAfter := range []string{"18000", reset.Format(http.TimeFormat)} {
@@ -155,12 +135,8 @@ func TestNativeQuotaRetryAfterClassification(t *testing.T) {
 			out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{
 				Account:    &pluginv1.Account{Type: AccountTypeManaged},
 				Status:     http.StatusTooManyRequests,
-				BodyPrefix: []byte(`{"error":{"type":"rate_limit_error","message":"Claude Code native error: rate_limit_error"}}`),
-				Headers: map[string]string{
-					"x-ccgateway-error-source": "cli",
-					"x-ccgateway-cli-error":    "rate_limit_error",
-					"retry-after":              retryAfter,
-				},
+				BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"rate limited"}}`),
+				Headers:    map[string]string{sourceHeader: "http", "retry-after": retryAfter},
 			})
 			require.NoError(t, err)
 			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())

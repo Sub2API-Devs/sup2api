@@ -212,13 +212,14 @@ func TestQuotaLimitDeclaresTimedAutomaticDisable(t *testing.T) {
 	if err != nil || out.GetAutomaticState().GetUntilUnix() != reset.Unix() {
 		t.Fatalf("worker retry hint was shortened by the token window: %v %v", out, err)
 	}
-	in.Headers = map[string]string{"retry-after": "1"}
+	in.Headers = map[string]string{"retry-after": "1", sourceHeader: "gateway", "x-ccgateway-error-reason": "concurrency_limit"}
 	in.BodyPrefix = []byte(`{"error":{"type":"rate_limit_error","message":"Gateway concurrency limit reached"}}`)
 	out, err = p.ClassifyError(context.Background(), in)
 	if err != nil || out.GetAutomaticState() != nil || out.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN || out.GetCooldownUntilUnix() != now.Add(time.Second).Unix() {
 		t.Fatalf("worker capacity: %v %v", out, err)
 	}
 	in.Status = 401
+	in.Headers = map[string]string{}
 	out, err = p.ClassifyError(context.Background(), in)
 	if err != nil || out.GetAutomaticState() != nil || out.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE {
 		t.Fatalf("authentication rejection must not have timed recovery: %v %v", out, err)
@@ -238,18 +239,15 @@ func TestErrorsPreserveCoreFailover(t *testing.T) {
 // back to the client without cooling the account down: every account would
 // refuse it, and the others' sessions must keep working (2026-10-10, a 502
 // that left the group with "no available account").
-func TestRequestScopedGatewayErrorKeepsTheAccount(t *testing.T) {
-	body := []byte(`{"type":"error","error":{"type":"api_error","message":"cannot prepare the upstream request: fixture"}}`)
-	r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body,
-		Headers: map[string]string{"x-ccgateway-error-scope": "request"}})
-	if e != nil || r.GetAction() != pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT ||
-		r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED || r.GetCooldownUntilUnix() != 0 {
-		t.Fatalf("request-scoped error: %v %v", r, e)
-	}
-	// Without the mark a 502 is still an upstream failure.
-	r, e = New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body})
-	if e != nil || r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN {
-		t.Fatalf("unmarked 502: %v %v", r, e)
+// A CLI-side failure (the CLI never reached the upstream) is not the
+// gateway's refusal: a 502 cools the account down like any upstream 5xx.
+func TestCLIFailureIsNotAGatewayRefusal(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"api_error","code":"cli_process_error","message":"CLI request failed without a valid structured error"}}`)
+	for _, source := range []string{"internal", "transport", ""} {
+		r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body, Headers: map[string]string{sourceHeader: source}})
+		if e != nil || r.GetLocalFailure() || r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN {
+			t.Fatalf("%q: %v %v", source, r, e)
+		}
 	}
 }
 
