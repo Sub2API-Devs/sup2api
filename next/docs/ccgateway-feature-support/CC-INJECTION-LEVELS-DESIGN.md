@@ -247,7 +247,7 @@ direct（`direct-billing.js`）只处理开头的计费头：
 - **旧 118 项矩阵**：API Key 117/118，唯一失败是“direct 字符串 system 保持字符串”；OAuth 67/118。失败项都属于三类有意变化：direct 不补身份行、CC 请求不补身份行、字符串变数组。
 - **31 号真实上游**：14 个场景全部 200，包括 CC 辅助请求只带计费头不带身份行、direct 字符串 system、cli 入口的 human turn。
 
-## 13. 写死改成原生提取（2026-10-23，CLI v21 `ccgateway-v21-native-layers`，未发布）
+## 13. 写死改成原生提取（2026-10-23，CLI v21 `ccgateway-v21-native-layers`，插件 0.1.80）
 
 审核表里列出的写死项，改法如下：
 
