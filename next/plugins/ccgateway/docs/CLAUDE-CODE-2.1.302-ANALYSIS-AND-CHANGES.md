@@ -1,5 +1,7 @@
 # Claude Code 2.1.302 分析与改动记录
 
+> 2026-10-24：本文是 2.1.302 时期（v7–v11）的历史记录。其中的 native 模式、Mod 与原生工具相关内容已随 native 运行时从 Worker 删除（CONTRACTS §53.21），生产 CLI 是 2.1.304（见 [cli-mods README](../companions/cli-mods/README.md)），现行请求链路见 [请求模式](REQUEST-MODES.md) 第 1 节。
+
 > 2026-10-19 最新上线：Core **0.1.168**、ccgateway/Controller/Worker **0.1.66**、CLI **2.1.302 / ccgateway-v10-raw-http-errors**。上游 HTTP 错误状态/正文原样透传，非 JSON、空正文和超长正文不再重新封装；仅本地转发失败生成错误。21/30/31/32 号均已固定新原生 ELF，公网 400 正文与 Worker 哈希一致，日志记录实际错误消息。详见第 15 节。
 
 > 2026-10-19 0.1.165 发布：Core **0.1.165**、ccgateway/Controller/Worker **0.1.65**。Worker 区分调用方取消与自身超时，公网取消已验证为 Core 499/client_canceled、Worker 保留已发 HTTP 200 并记录 client_canceled。CLI 沿用第 13 节的 2.1.302/v9 原生 ELF，SHA 未变；详见第 14 节。

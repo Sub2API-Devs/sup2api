@@ -1,4 +1,6 @@
-# CCGateway request policy（native-only 工作树）
+# CCGateway request policy（已归档）
+
+> 归档（2026-10-24，审核 C5）：本文描述的 native 请求策略（附件擦除/替换、工具前缀、Beta 规则、tool_search 等）随 native 执行路径已从 engine 删除，生产只走 CLI 的 `request` 命令。本文不描述当前行为；现状见 [CONTRACTS §53.18–§53.21](CONTRACTS.md) 与 [REQUEST-MODES](../plugins/ccgateway/docs/REQUEST-MODES.md)。
 
 本文描述当前代码契约，不是发布或部署验收记录。旧模型 relay 仅保留在
 `archive/ccgateway-relay-0.1.41@4b0e0967c`；当前工作树的旧主体与

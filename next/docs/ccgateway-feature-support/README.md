@@ -1,5 +1,7 @@
 # CCGateway 当前文档
 
+> 2026-10-24：下面的状态行停在 2026-10-22，之后的版本以 `next/deploy/gateway/ovh/README.md` 为准。请求链路的现行事实源是 [请求模式](../../plugins/ccgateway/docs/REQUEST-MODES.md) 第 1 节、[build 组件设计](../../plugins/ccgateway/docs/BUILD-REQUEST-COMPONENTS-DESIGN.md)、[注入等级设计](CC-INJECTION-LEVELS-DESIGN.md)、[请求头的去向](REQUEST-HEADERS.md) 与 CONTRACTS §53.18–§53.21。本目录里描述 native 运行时（Mod、原生工具目录、历史缓存、出站中继）的文档——[实现指南](IMPLEMENTATION-GUIDE.md)、[交接](HANDOFF-2026-10-09.md)、[剩余工作](REMAINING-WORK.md)、[PASSTHROUGH-DESIGN](PASSTHROUGH-DESIGN.md)、[子代理说明](SUBAGENT-DESIGN.md) 等——只作历史，该运行时已从 Worker 删除（CONTRACTS §53.21）。
+
 2026-10-22 当前状态：Core **0.1.176**、CCGateway／Controller／Worker **0.1.74**、全局 **build＋CLI 2.1.304（ccgateway-v17-identity-line）** 已部署（计费头 build 与 direct 都必传、服务端入口六选一、身份行按入口可选，见 [计费头入口与身份行设计](BILLING-IDENTITY-AUTOFILL-DESIGN.md)；v16 见 [system 开头注入设计](SYSTEM-PREFIX-INJECTION-DESIGN.md)），部署记录见 [OVH 部署入口](../../deploy/gateway/ovh/README.md)顶部。停用账号的运行时现在保持运行（只退出调度）。以下为 0.1.173 时的说明：分组 CC 配置默认可选，账号可直接覆盖全局；只有已启用的分组限制才阻止账号覆盖。账号 30、31、32 在线升级并通过真实上游复测；账号 21 已离线升级，按用户要求保持停用。接手先读 [304 实施与部署记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12–13 节和 [环境指南](ENVIRONMENT-RUNBOOK.md)顶部状态。
 
 专项设计：[CC 特性分层配置与请求内容转换设计](CC-FEATURE-LAYERS-DESIGN.md)，涵盖计费归属、10 个环境字段、连续会话与客户端动态 system 排除参数兼容。配套 [UI 设计稿](cc-feature-layers-mockup.html) 和 [讨论记录](CC-FEATURE-LAYERS-DISCUSSION.md)。实际实现、测试及限制以实施记录为准。

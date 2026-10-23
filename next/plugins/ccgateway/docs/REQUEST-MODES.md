@@ -1,5 +1,73 @@
 # CCGateway 请求模式
 
+第 1 节是当前契约（2026-10-24，插件 0.1.87 / CLI 2.1.304 `ccgateway-v22-client-entrypoint`，以代码为准）；第 2 节是按发布顺序保留的历史记录，其中的版本、默认值和规则只代表当时。
+
+## 1. 当前契约
+
+### 1.1 两种模式
+
+每个 `/v1/messages` 请求在账号 Worker 里运行一次打包 CLI 的 `claude request --build` 或 `--direct`（engine `serveRequestCommand`），没有第三种执行方式；Worker 没有请求模式时回 500 `Worker has no request mode`（CONTRACTS §53.21）。两种模式都把工具调用交回调用方执行，网关不运行 Agent 工具循环；CLI 以 `maxRetries: 0` 发送，一次客户端请求只触发一次模型生成。
+
+| 模式 | 注入等级 | 做什么 |
+|---|---|---|
+| `direct` | 0 | body 原样转发，只处理开头的计费头：缺头或缺字段补原生值，按计费来源换字段；字符串 system 改成块数组；**不补身份行**（[build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) §6.3） |
+| `build` | 微、低、高 | Worker 把客户端的块原样装进组件信封，CLI 用 CC 原生构造器重新组装后发送：总带计费头；没有计费头的请求按等级补身份行（OAuth）、环境附件、内置提示词与工具；环境字段按来源转换；身份按账号映射（[build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md)、[注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)） |
+
+模式不单独配置：核心按全局→分组→账号解析出的注入等级决定（none → direct，其余 → build），随每个请求的策略头下发。新安装的默认等级是「低」（build，平台与系统版本用服务端的值）；固定 CLI 版本是 2.1.304。Worker 容器的 `CCG_REQUEST_MODE`（缺省 build）只在请求没有策略头（手动调用）时生效。
+
+**build 的生成参数**：`max_tokens`、`thinking`、`tool_choice`、`temperature`、`output_config.effort`/`format` 交给 CC 原生构建接口，最终值由原生模型规则决定；`metadata` 由身份逻辑决定（build 设计第 7 节）。其余参数——如 `top_p`、`top_k`、`stop_sequences`、`service_tier`，以及 `output_config` 的其他子键——由 `mergeAdditionalParameters`（`cli-mods/request-parameters.js`）原样并回最终 body；`diagnostics` 只在客户端自己发了时才发。客户端没发 `stream` 时 build 发出 `"stream":false`（审核 C10）。
+
+### 1.2 策略头
+
+核心每个请求带 `X-CCGateway-Request-Policy`，线形是 `contracts/features.WorkerPolicy`（CONTRACTS §53.18）：`schema_version`、`relay_mode`、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。Worker 对它的处理：
+
+- 头无效 → 400 `invalid_request_error`（`Invalid gateway request policy`）；未知键忽略（先发插件后发核心）。
+- `cli_version` 与 Worker 的 CLI 不同 → 409 `configuration_error`。
+- `relay_mode` 与容器模式不同时，要求 CLI 声明 `request_<mode>`，否则 409。
+- 身份行与 `metadata.user_id` 的映射不在策略里：前者由 CLI 按计费头入口自适应，后者固定 `replace`（build 设计第 6.1、7 节）。
+
+### 1.3 能力门
+
+两道检查，都按 CLI 的 `--ccgateway-info` 能力，不按版本号推断：
+
+- **核心预检**：发送 `/v1/messages` 或 `/v1/ccgateway/probe` 前，经同一账号路由读 Worker `/healthz`，核对 CLI 版本与线形要求的能力（`requestPolicyCapabilities`：总是 `request_policy_mode_v1`、`request_levels_v1`，其余按线形内容）。不满足时核心自己回 503，`X-CCGateway-Error-Source: core`、原因 `configuration_error`，消息写明缺的能力或版本不符。
+- **Worker**：读 body 之前按同一张表检查（`requestCapabilityGates`）：带核心策略头的请求要求 `request_levels_v1`；build 必须有 `build_content_preservation_v1`，并按下发的来源、入口、注入要求对应能力；direct 下发了入口或计费来源要求 `direct_billing_v1`。不满足 409 `configuration_error`。
+
+能力表见 [build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) §2.1、§10（其中注明了 2026-10-24 工作树与 HEAD 的差别：Worker 的 `request_levels_v1` 门、核心的 `/healthz` 缓存）。Worker 就绪只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验（CONTRACTS §53.21）。
+
+### 1.4 账号测试（probe）
+
+账号测试走 Worker 的 `/v1/ccgateway/probe`：传入所选模型、字符串 system 和一个简短问题，**固定走 build**（即使业务等级是 0），不带客户端请求上下文（CC 原生主线程），响应头 `X-CCGateway-Test-Mode: native_build`，测试结果标 `test_mode: native_build`。核心对 probe 同样做能力预检。它测账号连通性，不代表业务请求按 direct 发出的样子。
+
+### 1.5 Worker 的其他准入
+
+- 只接受 `POST /v1/messages` 与 `/v1/ccgateway/probe`；其他路径 404 `not_found_error`（`count_tokens` 插件不声明，核心不调度到 CCGateway）。
+- `anthropic-version` 只接受 `2023-06-01`；body 上限 32 MiB（413）；Worker 密钥不对 401。
+- 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（2026-10-24 工作树，审核 C3；HEAD 是读完 body、装好信封之后才占）。
+- direct 也解析 body：必须是 JSON 对象且 `model` 非空；有请求上下文能力时还解析 `metadata.user_id` 与 agent 请求头，解析失败 400（审核 C9）。
+- 客户端请求头没有一个原样转发，去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
+
+### 1.6 错误与来源
+
+| 来源（`X-CCGateway-Error-Source`） | 谁写 | 答复 |
+|---|---|---|
+| `http` | CLI 帧 | 上游 HTTP 错误：状态、`Content-Type` 与正文原字节透传（正文经请求目录的 sidecar 文件交给 Worker，不受 stderr 行长限制） |
+| `input` / `transport` / `internal` | CLI 帧 | CLI 在到达上游前或途中失败，按帧里的状态与官方错误类型答复 |
+| `timeout` | Worker | 超过 Worker 时限（`REQUEST_TIMEOUT`/`CCG_TIMEOUT` 与 `CLI_TIMEOUT` 中较小者，缺省 1 小时）：未开始响应时 504 `timeout_error` |
+| `interrupted` | CLI 帧 | CLI 被中断 |
+| `gateway` | Worker 自己 | 运行 CLI 前的拒绝（401/400/404/405/413/429/409/500，以及 CLI 版本检查失败、维护中、关闭中的 503），另带 `X-CCGateway-Error-Reason` |
+| `core` | 核心自己 | 问 Worker 之前的拒绝（账号状态、未配置、策略无效、能力不足、`not_synchronized`），503 |
+
+上游答复永远带不上这两个头（`httpfacts.Apply`）。插件按来源分类：本地来源只短冷却并切换，不因 Worker 401 停用账号（CONTRACTS §53.20）。响应已开始后出错（流中断、超时）以中断连接告终，不追加 JSON。调用方先断开时 Worker 不伪造响应；未开始响应的记 499 诊断，已开始的保留原状态并记 `client_canceled`。CLI 帧报告上游 401 时，Worker 记下存储的访问令牌不可用，用量查询据此报告。
+
+### 1.7 发布顺序
+
+先发插件（Controller、Worker 镜像与随镜像打包的 CLI；账号容器经原地更新换上新 Worker 与 CLI，CONTRACTS §53.7），再发核心：Worker 接受旧核心的多余键，而新核心的能力预检会拒绝旧 Worker。
+
+## 2. 历史
+
+以下为 2026-10-19 起的发布记录原文，不描述当前行为。
+
 2026-10-19 最新：ccgateway **0.1.67 / CLI v11** 已部署到 21/30/31/32，Core 保持 **0.1.168**。build 已去掉客户端 parameters 经 extraBody 覆盖原生结果的路径。max_tokens、thinking、tool_choice、temperature、output_config.effort/format 映射到 CC 原生构建接口，最终值由模型规则决定；不再承诺任意 parameters 字段直接进入 HTTP body。top_p、stop_sequences、调用方 metadata 等没有映射的字段不会自动补传，需原样请求时使用 direct。21 号真实 WebSearch 和页面摘要请求均 HTTP 200。详见 [302 文档第 19/20 节](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。
 
 2026-10-19 历史发布：Core **0.1.168** / ccgateway **0.1.66** / CLI **2.1.302/v10** 上线。direct/build 均将上游 HTTP 错误状态和正文原样返回，包括空正文、非 JSON、非 UTF-8 和超过 64 KiB 的内容；只在本地转发失败时生成错误。21/30/31/32 当时固定新原生 ELF，日志保存上游实际消息。[发布验收](cli-research/2.1.302/raw-http-errors-deployment-0.1.168.json)。
@@ -27,7 +95,7 @@
 
 CLI v10 保留结构化 stderr 状态/诊断通道，完整 HTTP 错误正文通过 Worker 请求目录中的 sidecar 文件传递，不受 stderr 行长度限制；Worker/Core 原样发送上游状态、Content-Type 和正文。正常 JSON/SSE 继续从 stdout 返回。流中途断开会向客户端传播为中断，不作为正常完成；v9 的非 JSON/超长错误封装行为已被替代，详细契约见 [302 文档第 15 节](CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md)。
 
-## 配置和迁移
+### 配置和迁移（2026-10-19）
 
 Core 缺省配置为 build / CLI 2.1.302。历史 native、legacy、passthrough 和空模式在读取时归一为 build；保存新配置只接受 build/direct，不再接受显式 native。
 
@@ -35,13 +103,13 @@ Worker 的环境变量 `CCG_REQUEST_MODE` 缺省或空值均按 build；显式 n
 
 Controller 新建容器默认 build。迁移已存在的 Agent 容器时，使用当前配置的目标 Worker 镜像，验证固定 CLI 的哈希与 build 能力后才替换容器。账号专属数据卷、认证配置、网络策略保持；build/direct 之间切换仍保持原有镜像选择规则。
 
-## 发布顺序
+### 发布顺序（2026-10-19）
 
 先构建并加载新 Worker/Controller 镜像，再更新 Controller 及其未来镜像配置，最后通过正常发布流程升级 Core。新版 Core 会归一旧配置并同步已有账号，因此原 native 容器可能在此时重建；应先保存容器基线和数据卷备份，在账号空闲时切换。不要先对旧 Core 管理下的 native 容器单独更新 Worker，以免旧 native 请求头与新 build 默认值产生冲突。
 
 发布后核对四节点设置回读为 build、Controller 状态中的 CLI profile、Worker features 的 `request_build`、CLI 哈希及禁更状态；以真实 Messages 请求和本地 CC 工具回合验证。
 
-## OVH 正式发布（2026-10-19，北京时间）
+### OVH 正式发布（2026-10-19，北京时间）
 
 - 源码 `1ab76a3a5f91582d2c96aa558b8aa5763a094b67`；Core 四节点 **0.1.160**，ccgateway 插件/Controller/Worker **0.1.60**。release `v0.1.160`，升级计划 `22d4715a46d5e171a3b2d8cd0f3e6f87` 完成 27 步。
 - Controller 先升级并设置未来镜像为 0.1.60，再升级 Core。经正常管理 API 将归一后的 build 配置写回，21 号同步为 `ccgateway-app:0.1.60`、`CCG_REQUEST_MODE=build`，features 返回 `execution_modes:["request_build"]`。

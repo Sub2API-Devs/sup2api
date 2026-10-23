@@ -1,5 +1,7 @@
 # 子代理请求上下文设计
 
+> 2026-10-24：本文"非 CC 请求按子代理构建"（第 1 节、第 2 节表、第 9 节表中的非 CC 行）已被 [注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) 第 3 节第 1 条取代（CLI v20 起）：没有计费头的请求按**主线程**构建（客户端请求头 `x-claude-code-request-class` 自己写明类别时除外；`querySource: sdk`，不发 agent-id，prompt ID 由首条提示派生，计费头不带 `cc_is_subagent`），见 `request-agent.js` `resolveAgentContext`。CC 请求的主线程/子代理/压缩判断与 ID 映射仍按本文。
+
 2026-10-22。已实现为 CLI v18（`ccgateway-v18-agent-context`，能力 `request_agent_context_v1`），未发布，实施结果见第 9 节。依据见 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md](CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) 第 9–11 节：build 原样保留子代理的提示词、消息和计费头，但请求头按主线程生成（`request-class: main`，没有 agent-id、agent-type、prompt-id），还多带了 1 小时缓存的 beta。原因是请求命令和原生构建都写死了 `querySource: 'sdk'` 和主线程上下文。
 
 ## 1. 已定的规则（2026-10-22 用户决定）

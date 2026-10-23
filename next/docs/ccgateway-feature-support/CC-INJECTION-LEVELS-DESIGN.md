@@ -33,7 +33,7 @@
 | 1 计费头 | `hasBilling`（`oJe` 开头的行） | `cc_version`、`cc_entrypoint` 按「客户端／服务端」转换 | 补**主线程**形状的头（第 3 节） |
 | 2 身份行 | system 某块整块等于 `n1n` 三句之一（`t1n`） | 保留 | 按计费头入口自适应补一句（第 8 节决定 4） |
 | 3 环境 | 消息里的环境附件：`zkt` 两行开头（`# Environment` + `You have been invoked…`）；只认消息载体（system 轮、reminder），因为动态段 `Qrr` 也用 `# Environment` 标题 | 十个字段按「客户端／服务端／擦除」转换（现有） | 补原生环境附件；另可选补 model、total_tokens、date（各自按开头判断：`Eoo2`、`<total_tokens>`、`fSt2`） |
-| 4 内置提示词 | system 里有安全段 `p4n` 全文（只被主提示词三种开头引用），或子代理段 `T7t` | 保留 | `wx(最终工具, 模型)` 渲染默认提示词 |
+| 4 内置提示词 | system 里有安全段 `p4n` 全文（只被主提示词三种开头引用）。设计时还想把子代理段 `T7t` 也算“已有”，**没有实现**：CLI 只查 `p4n`（`injectLayers`，词表 `ccgatewayLayerVocabulary().systemPrompt`），所以 system 里只有子代理提示词的非 CC 请求在高注入下仍会补主提示词（审核 D12） | 保留 | `wx(最终工具, 模型)` 渲染默认提示词 |
 | 5 工具 | 按工具名：客户端已有同名工具 | 保留客户端定义 | 补原生定义（`e$` 取工具对象，`FH` 生成） |
 
 附件的载体（Opus 是第一条 user 之后的 system 轮，Sonnet 是 reminder 块）仍由原生按模型决定。v19 的探针做法保留。
@@ -99,7 +99,7 @@
     - direct → `none`；
     - build 只在继承来的等级是 `none` 时生效，按合并后的策略算等级，否则视为跟随；
     - 显式的 `level` 总是优先。
-  - 不在 7 个候选里的旧工具选择，读取时丢弃。2026-10-23 审核 A3 前只有前端这样做，核心在解码时就校验，一条旧覆盖会让整份配置解码失败；之后核心解码只看结构、解析（`ResolveFeaturePolicy`）时按层丢弃并记一条告警、保存时才严格校验（`feature_policy_sanitize.go`，CONTRACTS §53.19）。
+  - 不在 7 个候选里的旧工具选择，读取时丢弃：核心解码只看结构，解析（`ResolveFeaturePolicy`）时对全局、分组、账号三层分别丢弃当前词表不认的条目并记一条告警（`sanitizePolicy`/`sanitizeOverrides`，`feature_policy_sanitize.go`，CONTRACTS §53.19），存储值不改；保存时仍严格校验，界面重新保存一次即清掉。前端加载时同样丢弃。2026-10-23 审核 A3 之前核心在解码时就校验，一条旧覆盖会让整份配置解码失败。
 - 线上全局现在的配置是：build，平台和系统版本用服务端的，不注入。迁移后是 `low`，四种附件为“不补”。
 - 仍然会变的有两处，发布说明要写明：
   - 非 CC 请求按主线程补完整的计费头（第 3 节第 1、2 条）；
@@ -112,7 +112,7 @@
 | 核心 → Worker | `X-CCGateway-Request-Policy`，线形是 `contracts/features.WorkerPolicy`（2026-10-23 审核 A1/C4 后唯一的线形，CONTRACTS §53.18）：`schema_version`、`relay_mode`、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。核心先按 `level` 算出生效的项，只发等级内的项，`relay_mode` 由等级决定（见下表） |
 | Worker → CLI（build） | components 的 `requestPolicy`（`contract_version: 2`，`features.CLIPolicy`）：`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`；不再带 `build_identity_lines` |
 | Worker → CLI（direct） | `CCG_DIRECT_POLICY`：`{build_billing_entrypoint?, build_billing_sources?}`。direct 新增支持计费来源，不再带身份行 |
-| 能力 | 新能力 `request_levels_v1`，Worker 和 CLI 都要声明。核心对每个带等级的策略都要求这个能力，因为旧 CLI 在 direct 下会补身份行、把非 CC 请求当子代理 |
+| 能力 | 新能力 `request_levels_v1`，Worker 和 CLI 都要声明。核心对每个带等级的策略都要求这个能力（预检 `requestPolicyCapabilities`），因为旧 CLI 在 direct 下会补身份行、把非 CC 请求当子代理。Worker 自己只在 direct 下发了计费来源时检查它，build 路径不检查（审核 C11），依赖核心预检 |
 
 核心按等级下发的项：
 
@@ -264,4 +264,4 @@ direct（`direct-billing.js`）只处理开头的计费头：
 - cli-mods 169 项。新增断言：补丁输出里的 `ccgatewayJoinAppend` 行为与原生一致，主模块未被改动。
 - 层词表夹具无变化，说明两个开头的推导结果和原来相同。
 - docker：OAuth、API Key 各 20/20。
-- 31 号真实上游：14 个场景全部 200。高注入的几次请求读到的缓存，正好等于 v20 当时写入的量（4509、10627、6697、4492），说明发出的提示词与 v20 逐字节相同。
+- 31 号真实上游：14 个场景全部 200。高注入的几次请求读到的缓存，正好等于 v20 当时写入的量（4509、10627、6697、4492）：缓存命中量与 v20 一致。这是发出的提示词前缀与 v20 相同的强间接证据，不是逐字节比对（审核 04 §8 第 6 条）。

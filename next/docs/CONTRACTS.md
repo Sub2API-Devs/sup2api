@@ -3154,11 +3154,14 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 | `api_key_account` | 400 | `apikey` 账号不做 OAuth 授权 |
 | `draft_not_found` | 404 / 400 | 草稿接口 404；`POST /accounts` 400 |
 | `draft_not_authorized` | 400 | `POST /accounts` 时草稿未登录或无法确认 |
+| `resource_in_use` | 503 | 删除运行环境时控制器回 409：运行环境之外的容器仍连在它的网络上或挂着它的数据卷，控制器什么都没删；核心之后自动重试（§49.14、§49.23）。出现在草稿 `DELETE`、已删除账号的 `sync`，以及账号生命周期同步状态的 `code` |
+| `runtime_cleanup_failed` | 503 | 控制器删除运行环境的其他失败（含同名资源不属于该运行环境）；核心之后自动重试 |
+| `runtime_not_retained` | 409 | `POST /system/ccgateway/runtimes/:key/purge`：该 key 不是待清除的已删除账号运行环境（账号未删除或已清除，§49.23） |
 
 透传规则：
 
 - 业务容器或控制器回 400：其错误代码（业务容器 `{"type":"error","error":{"type":"<code>","message":"..."}}`，或控制器 `{"error":"<code>"}`）原样放进 `details.reason`（**未知代码也原样透传**），message 用容器给的英文（去控制字符、最多 200 字；没有时用核心的英文说明）。不是小写标识符的代码（旧镜像发的是句子）丢弃，只返回 400 和通用英文 message。业务容器的代码见 §49.14。
-- 控制器 409 → 503 `not_synchronized`（代码为 `api_key_account` 时 400 `api_key_account`）。
+- 控制器 409 → 503 `not_synchronized`（代码为 `api_key_account` 时 400 `api_key_account`）。删除运行环境（`DELETE /accounts/<key>`）例外：409 `resource_in_use` → 503 `resource_in_use`，其他非 200（404 视为已删除的情形除外）→ 503 `runtime_cleanup_failed`，`details.status` 为控制器的 HTTP 状态。
 - 其他非 200 → 503，`details.reason` 为控制器给出的代码（例如 `image_pull_failed`、`runtime_unavailable`、`unauthorized`），没有代码时 `runtime_unavailable`。
 - `GET session` 遇到 404（旧镜像没有该端点）返回 `null`。
 
@@ -3170,7 +3173,8 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 1. `account_id IS NULL` 且（`last_seen_at` 早于 15 分钟前，或 `created_at` 早于 2 小时前）的草稿：在一个事务里拿该 key 的 advisory 锁（`pg_try_advisory_xact_lock`，与 `Reconcile` 同一把；拿不到就跳过，下一轮再试）→ `DELETE ... WHERE key=$1 AND account_id IS NULL` → 控制器 `DELETE /accounts/<key>` → 成功才提交。这样正在 reconcile 的运行环境不会被删到一半又被重建；同时进行的 `POST /accounts` 认领要等这一行的锁，之后找不到草稿而返回 `draft_not_found`；反过来认领先提交时清理的 DELETE 删不到行，也就不碰控制器。控制器失败则回滚，行保留。控制器回 404 视为已删除（没有该端点的旧控制器也不可能建过草稿运行环境）。
 2. 孤儿：先读控制器 `GET /accounts`，再查表；控制器列出的草稿 key（只认 `^d[0-9a-f]{16}$`）在表里**没有任何行**（已认领的也算有）、且 `created_at` 早于 15 分钟前的，在同一把 advisory 锁下再确认一次没有行后删除。`created_at` 解析不了的跳过。控制器没有 `GET /accounts`（404/405）时跳过这一步。
-3. 数字 key 和已认领的运行环境**绝不**被清理任务删除（删除账号数据仍是管理员的显式操作；控制器对数字 key 的 `DELETE` 也返回 405）。例外：重新授权后**已退役**的运行环境（含数字 key）在退役 10 分钟后删除，见 §49.17。
+3. 数字 key 和已认领的运行环境**绝不**被清理任务删除（控制器对不带 `X-CCG-Delete-Account` 的数字 key `DELETE` 也返回 405）。例外：重新授权后**已退役**、不再属于任何账号（`account_id IS NULL`）的运行环境（含数字 key）在退役 70 分钟后删除（`retiredGrace`，长于模型请求一小时的期限；本节原写 10 分钟，与代码不符），见 §49.17。
+4. 已删除账号的运行环境不归清理任务删除，由 `Reconcile` 清除（§49.22、§49.23）：删除时选择立即清除的（`purge_after` 为删除时间）在删除事件或下一轮扫描时清除；选择保留的保留到 `purge_after`，到期后的扫描清除；清除成功后写 `purged_at`，之后不再处理。设置页的孤立资源清理（`POST /system/ccgateway/runtime/cleanup`）的保留名单也包含保留期内（`purged_at` 为空且 `purge_after > now()`）的这些 key，以及退役 70 分钟内的运行环境。
 
 ### 49.14 业务容器管理接口（`tools/ccgateway/auth.go`）与控制器接口（`runtime/manager.py`）
 
@@ -3189,16 +3193,21 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 控制器（`127.0.0.1:8787`）：
 
 - 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`、`GET /accounts/<key>/admin/usage` 和 `POST /accounts/<key>/admin/auth/refresh`（控制器 ccgateway 0.1.53 起）。
-- `DELETE /accounts/<key>`：删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`。草稿 key 直接删；数字 key 只在请求头 `X-CCG-Delete-Account: <同一 key>` 时删除（§49.17 退役运行环境），否则 405 `method_not_allowed`。
+- `DELETE /accounts/<key>`：完整删除一个运行环境，幂等，什么都没有时也 `200`。应答 `{"deleted":true,"removed":{"containers":[<名字>...],"networks":[<名字>...],"volume":bool}}`，列出这次实际删掉的资源。
+  - **归属**：运行环境的容器 = 带标签 `io.sup2api.ccgateway.account=<key>`、且名字为 `<控制器前缀>-<key>-app|egress[-<后缀>]` 的全部容器（停止的也算），包括人工迁移留下的 `-app-rollback-<tag>` 副本；另一个控制器实例（不同前缀、同一 key）的容器不算。网络 `<前缀>-<key>-net|uplink` 与卷 `<前缀>-<key>-data` 按精确名字查找并核对同一标签；同名但标签不符的资源 → 503 `runtime_unavailable`，什么都不删。
+  - **先检查、再删除**：运行环境之外的容器仍连在它的网络上，或（要删卷时）仍挂着它的卷 → 409 `resource_in_use`，什么都不删；外来容器的名字只写进控制器日志，应答体只有 `{"error":"resource_in_use"}`。共享出口网关不算外来；本控制器遗留的已结束 one-shot 助手容器一并删除。
+  - **顺序**：解除共享出口绑定 → 清掉内存中的就绪记录 → 容器 → 网络（先断开共享出口网关）→ 数据卷（按下述请求头）→ 状态目录（`state.json`、`sing-box.json`、`firewall.nft` 等）→ 恢复备份。子网与 app/egress/网关地址由控制器按现存 Docker 网络分配，网络删除即释放。
+  - **请求头**：草稿 key 直接删，卷一并删除。数字 key 只在 `X-CCG-Delete-Account: <同一 key>` 时删除，否则 405 `method_not_allowed`。`X-CCG-Delete-Data: 1` 同时删除数据卷和恢复备份，必须与 `X-CCG-Delete-Account` 一起出现，否则 400 `invalid_request`；只带 `X-CCG-Delete-Account` 时保留数据卷，并把状态写入 `backups/<key>.json` 供人工恢复。核心清除已删除账号和退役运行环境时都带两个头（§49.23）。
+  - `/health` 的 `features` 含 `runtime-purge-v2` 表示控制器支持以上语义（按标签加名字前缀找容器、409 `resource_in_use`、`removed`）。核心只要求 `runtime-cleanup-v1`，不按 `runtime-purge-v2` 门控；旧控制器删不掉回滚副本或被外来容器占用的卷时，核心看到的是 `runtime_cleanup_failed`。
 - `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
 - app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
-- 错误 `{"error":"<code>"}`：`unauthorized`、`not_found`、`invalid_request`（400）、`not_synchronized`（409）、`api_key_account`、`image_pull_failed` / `runtime_unavailable`（503）、`method_not_allowed`。
+- 错误 `{"error":"<code>"}`：`unauthorized`、`not_found`、`invalid_request`（400）、`not_synchronized` / `resource_in_use`（409）、`api_key_account`、`image_pull_failed` / `runtime_unavailable`（503）、`method_not_allowed`。
 
 ### 49.15 已知问题与部署顺序
 
 - **先升级控制器，再升级核心。** 旧控制器只认数字 key：草稿运行环境建不起来（草稿一直 `creating`），清理时 `DELETE` 得到 404 被视为已删除（行被删，正确，因为旧控制器不可能建过）。
 - **混合版本集群**：旧核心节点不知道 `ccgateway_runtimes`，会按账号 id 为已认领草稿 key 的账号再建一套数字 key 运行环境（未授权、不会被清理），并且把这些账号的模型请求发到 `/accounts/<id>`。滚动升级期间应尽快完成全部节点升级；升级后多出来的 `ccg-<id>-*` 需要管理员手工删除。
-- 已认领的账号被删除（软删除）后，其草稿 key 运行环境与数字 key 一样被阻断，不会被清理任务删除。
+- 已认领的账号被删除（软删除）后，其草稿 key 运行环境与数字 key 一样处理，不会被清理任务删除；2026-10-24 起由 `Reconcile` 立即清除或保留到期后清除（§49.23）。
 
 ### 49.16 运行环境安装 / 升级（2026-10-05，用户要求）
 
@@ -3308,6 +3317,10 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
   - Worker 回 401 或连接失败时清掉该账号的路由，下一个请求重新问控制器。
 - **空闲连接**保持 30 秒，比 Worker 的 60 秒空闲超时短。
 - **请求策略**（`X-CCGateway-Request-Policy`）仍随每个请求发送，Worker 保持无状态。
+- **账号策略与 Worker 能力也缓存，路由有最长使用时间**（2026-10-24 补充，审核 01 §5 第 6 条、A4/A7；**依据未提交的工作树** `request_cache.go`、`runtime_features.go`、`feature_policy.go`，提交前需复核）：
+  - 账号 CC 特性策略：上面写"转发请求不再每次读库"，但 A7 之前账号策略是例外——请求带分组且该分组允许账号覆盖（未配置或未启用的分组也算允许，`allowsAccountFeatures`）时，每个请求都 `LoadAccountFeaturePolicy` 查一次 `ccgateway_account_feature_policies`。现在由 `requestAccountFeatures` 按账号缓存，与期望状态同样 30 秒过期，`account:changed` 与本节点保存账号时（`AccountChanged`）清掉。
+  - Worker 能力：`/v1/messages` 与 `/v1/ccgateway/probe` 发送前的 `/healthz` 核对（§53.18）原先每请求一次、不缓存；现在挂在路由上缓存 30 秒（`routeHealth`），Worker 原地更新后本节点丢弃该路由并发 `account:changed`（`workerChanged`）。缓存期间的旧答复只会推迟核心的拒绝，Worker 自己仍拒绝 CLI 做不到的策略。
+  - 路由：A4 之前路由只按（运行环境 key, 修订号）缓存、**没有过期时间**，上面"30 秒过期"不包括它——漏掉总线消息的节点在控制器地址或密钥变化后仍连旧路由，直到 Worker 401、连接失败或修订号被拒。现在路由还记下取得它的控制器（模式、地址、根证书、管理密钥的摘要，`controllerEndpoint`），配置换了控制器就不再复用；并且最长使用 5 分钟（`routeMaxAge`），之后重新问控制器，答复不变时保留原路由和它的隧道。
 - **定时扫描**：`Run` 改为每 60 秒一轮，只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
 - **已阻断的运行环境不再反复写配置**（2026-10-21 起只有已删除账号会被阻断，§49.22）：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
 
@@ -3338,10 +3351,55 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - **期望状态**（`desired` / `draftDesired`）：`enabled` = 账号未删除（草稿恒为 true）。账号 `status`、代理 `status` 不再参与 `enabled`，也不再参与修订号，所以停用、启用账号或代理不会重写或重启容器。
 - **停用的代理**：照常作为出口写入期望配置，容器继续经它出网。只有新选择代理（草稿 POST/PUT）时仍拒绝已停用的代理（`proxy_disabled`）。
 - **不可用的代理**（绑定的记录不存在——草稿没有外键——或协议不是 http/https/socks5）：不重写配置，容器保持原样；需要运行环境的操作（模型请求与测试、授权、重新授权、刷新令牌、额度、请求日志、CLI 管理）回 `proxy_unavailable`。**任何情况都不回退直连**。
-- **删除的账号**：运行环境停止（有清理意图时清除，§49.13），原因 `account_deleted`；`status` 为 `blocked`。
+- **删除的账号**：原因 `account_deleted`，`status` 为 `blocked`。2026-10-24 起删除时二选一（§49.23）：立即清除运行环境的全部资源（默认），或在插件声明了保留天数时保留到 `purge_after`——保留期内运行环境停止，到期后清除。
 - 原因码 `account_disabled` 取消；`no_proxy` 早已不再产生，控制台一并删除。
 - 调度不变：只使用 `status='active'` 且可调度的账号。
 - 2026-10-22 用户决定：**账号停用只限制调度，其他全部不限制**。停用的账号照常：手动与后台额度查询（后台刷新仍按“可调度或从未查询过”）、被动额度采样、CCGateway 用量查询、凭证刷新（含后台）、异步任务结算。
+
+### 49.23 删除账号时保留运行资源（2026-10-24，用户要求）
+
+用户要求：删除账号时，把它的容器、目录、IP 分配等全部删掉，不留残留；另外可以选择让控制器把这些资源保留 3 天再删，这项能力由插件声明。代码：SDK `manifest.go`、`check/validate.go`，核心 `account/handlers.go`、`account/purge.go`、`ccgateway/cleanup.go`、`ccgateway/accounts.go`、迁移 `0057`，控制器 `manager.py`、`cleanup.py`，控制台 `AccountDeleteDialog.vue`、`RetainedRuntimes.vue`。
+
+**删除的内容。** 清除一个已删除账号的运行环境就是控制器 `DELETE /accounts/<key>`，带 `X-CCG-Delete-Account: <key>` 与 `X-CCG-Delete-Data: 1`（§49.14）：该运行环境的全部容器（app、egress 和人工迁移留下的副本）、`net` / `uplink` 网络（连同子网和地址分配）、数据卷（授权、会话历史、日志）、状态目录和恢复备份；共享出口只解除该账号的绑定。核心只检查控制器的 `runtime-cleanup-v1`。
+
+**manifest。** 账号类型可选声明 `lifecycle.deletion: {"retentionDays": N}`（SDK `manifest.AccountDeletion`）。N 必须在 1 到 30 之间（`manifest.MaxRetentionDays`），否则 manifest 校验报 `lifecycle.deletion.retentionDays` `invalid`；核心运行时再检查一次，超出范围按未声明处理。天数只来自 manifest，操作者每次删除只能选"立即清除"或"保留 N 天"。账号类型 JSON 的 `lifecycle` 原样带出这个字段。ccgateway 0.1.87 对 `managed` 与 `apikey` 都声明 3 天。
+
+**删除账号：`DELETE /accounts/:id`。**
+
+- 不带 `retain_resources`（或值为空）：立即清除。`?retain_resources=1`：保留。成功都是 204。
+- 其他值 → 400 `invalid_argument`，message `retain_resources must be 1 or omitted.`；账号类型没有声明保留，或插件没有删除资源 → 400 `invalid_argument`，message `This account type does not keep resources after deletion; delete without retain_resources.`。两种情况都没有 `details.reason`，在删除事务里拒绝，账号不被删除。
+- 删除事务里调用 `AccountDeletionResource.MarkAccountDeleted(ctx, tx, id, AccountDeletionOptions{RetainUntil})`：`ccgateway_runtimes` 行写 `retired_at = now()`、`purge_after = RetainUntil`（立即清除时为 `now()`）、`purged_at = NULL`；旧式数字 key 没有行时补建。保留时 `RetainUntil = now() + N 天`，按数据库时间在同一事务里计算；审计 `account.delete` 的 detail 多一个 `retain_until`（RFC3339 UTC）。写入失败时账号删除一起回滚。
+- 卸载插件（`PurgePluginAccounts`）也为每个账号写清理意图，一律立即清除，不保留。此前卸载插件不写清理意图，资源一直留着。
+- 迁移 `0057_ccgateway_runtime_retention.sql` 只加两个可空列：`purge_after`（核心清除的时间）和 `purged_at`（已经清除，任何节点都不再清除）。
+
+**清除时机。** `Reconcile` 先处理已删除账号，阻断标记和不可用的代理都不影响清除：
+
+- 已清除（`purged_at` 非空）：跳过；定时扫描的运行环境列表也不再包含它。
+- `retired_at` 非空且不在保留期（`purge_after` 已到，或为空——旧核心写的行）：清除。控制器成功后在同一事务里写 `purged_at`。
+- 保留期内：照旧阻断。
+
+删除事件和每 60 秒一轮的扫描都会触发 `Reconcile`，保留到期后由下一轮扫描清除。清除失败（例如控制器 409 → `resource_in_use`）时行保留，下一轮重试，节点记 WARN。删除事件的投递不再因清除失败而失败：账号生命周期同步状态记为 `failed`，`code` 为失败原因（如 `resource_in_use`，没有原因时为 `runtime_sync_failed`），插件的其他生命周期事件不再被挡住。
+
+**保留期间。** 账号已软删除，不接收请求，运行环境接口回 `account_deleted`。运行环境被阻断：控制器停止 app 和 egress 容器（不删除），共享出口的绑定置为停用；网络（连同子网和地址分配）、数据卷、状态目录都保留。孤立资源清理的保留名单包含保留期内的 key（§49.13）。
+
+**保留列表与提前清除。**
+
+- `GET /system/ccgateway/runtimes/retained`（`settings:read`，`Cache-Control: no-store`）→ `{"runtimes":[{key, account_id, account_name, account_type, deleted_at, purge_after, due}]}`。列出还没清除（`purged_at` 为空）的已删除账号运行环境：保留期内的 `due=false`；已到期、正在清除或清除一直失败的 `due=true`（包括删除时选择立即清除的，清除成功后离开列表），所以清除失败不会从列表里消失。旧核心写的行没有 `purge_after`，用 `retired_at` 代替。按 `purge_after` 排序；时间为 RFC3339 UTC。
+- `POST /system/ccgateway/runtimes/:key/purge`（`settings:manage`，审计 `ccgateway.runtime.purge`，detail `{key, account_id}`）：在该 key 的 advisory 锁下把还在保留期的 `purge_after` 改为 `now()`（已到期的不改），然后让本节点 Kick 它，所以对 `due` 的运行环境就是立即重试清除。应答：
+  - 202 `{"data":{"accepted":true,"key":"<key>","account_id":<id>}}`：清除本身在后台进行，失败照常重试；
+  - 404 `not_found`：key 格式不对，或没有这条运行环境；
+  - 409 `runtime_not_retained`：账号未删除，或已经清除。
+
+**控制台。**
+
+- 账号删除对话框：账号类型声明了 `retentionDays` 时，在"立即删除全部运行资源"（默认）与"保留 N 天后自动清理"之间选择，并显示对应说明；没有声明时只有确认。
+- CCGateway 设置的账号容器列表下方有"待清理（已删除账号）"，有 `settings:read` 且列表非空时显示：账号、删除时间、自动清理时间；`due` 的行显示"清理中"。有 `settings:manage` 时，保留中的行有"立即清理"（确认后调用 purge 接口），清理中的行有"重试清理"（不再确认）。
+
+**限制与部署。**
+
+- 保留期内**不能恢复**已删除的账号，没有恢复接口；保留只用于人工取回数据或排查。
+- **全部核心节点升级后才能使用保留。** 旧核心节点不认 `purge_after` 和 `purged_at`：它会把保留中的运行环境当作待清除立即删掉，清除之后每轮再发一次 `DELETE`（控制器幂等，回 200）；它执行孤立资源清理时，保留名单也不含保留中的 key。
+- 清除一直失败时列表只显示"清理中"，失败原因（如 `resource_in_use`）只在节点日志里。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 
@@ -3720,7 +3778,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
   - `POST /images/uploads/<id>/load`：必须已收齐（否则 409 `incomplete`）；计算 SHA-256，声明过且不符 → 400 `checksum_mismatch`；`docker load`（tar 或 gzip tar）→ `{"sha256": "...", "images": [{"id": "sha256:...", "tags": [...]}]}`；加载失败 → 400 `load_failed`。`docker load` 用单独的 1800 秒超时客户端（大镜像加载期间 daemon 可能长时间无输出）。除 409 `incomplete` 外，无论成败都删除上传文件。上传 / 目标镜像 / 自升级接口出错时响应带 `Connection: close`（请求体可能未读完）；请求格式不对统一 400 `invalid_request`，JSON 体上限 64 KiB；PUT 中途断开时丢弃这一块，偏移不前进。
 - **目标镜像** `GET /runtime/images` → `{"app", "egress", "controller"}`。`PUT /runtime/images` `{"app"?, "egress"?}`：引用必须匹配 §49.16 的镜像正则；本地没有则拉取（失败 503 `image_pull_failed`）；app 镜像同 `provision` 一样拒绝带凭据 / 代理环境变量的镜像（400 `invalid_image`）。持久化到 `<root>/runtime.json`（原子写，0600），同时记录保存时进程环境变量里的 `CCG_APP_IMAGE` / `CCG_EGRESS_IMAGE` 原值；启动时只有当前环境变量与记录一致才用它覆盖（不一致说明 SSH 重装改过环境文件，覆盖作废——否则回到 SSH 模式重装会被旧覆盖顶掉而判为不健康并回滚）。`{}` 不落盘。更新内存目标并清掉 30 秒镜像 id 缓存。返回 `/health` 内容。已有账号容器不会因此被替换（同 §49.16，重新授权时用新镜像）。
 - **控制器自升级** `POST /runtime/controller` `{"image": ref}`：确保镜像在本地（同上拉取规则），然后用**该新镜像**启动一次性辅助容器 `<name>-upgrade`（`<name>` 取环境变量 `CCG_CONTROLLER_NAME`，缺省 `ccg-controller`，须匹配 `^[a-z][a-z0-9-]{0,40}$`，prev 为 `<name>-prev`；同一主机上的隔离测试实例因此不会碰到线上控制器；`--rm`、host 网络、挂 Docker socket 与环境文件 `CCG_RUNTIME_ENV_FILE`（缺省 `/opt/ccgateway-runtime.env`）**所在目录**（读写；对单文件 bind mount 做 rename 会 EBUSY，所以挂目录以便原子替换）。新控制器容器的环境里强制写入 `CCG_CONTROLLER_NAME` 与 `CCG_CONTROLLER_PORT`，避免下次自升级找错容器），执行 `python upgrade.py <image>` 后回 202 `{"accepted": true}`（辅助容器可能在 202 写完前就停掉旧控制器，核心把请求发出后的连接中断也当作已受理，继续轮询 `/health`）；辅助容器已在运行 → 409 `upgrade_in_progress`。`upgrade.py` 等价于 §49.16 的安装脚本（名字、端口、环境文件、`CCG_RUNTIME_ROOT` 挂载都取自上述配置，不写死）：环境文件写入 `CCG_CONTROLLER_IMAGE=<image>`（原子替换）→ 删除残留 prev → 旧控制器改名 `ccg-controller-prev` 并停止 → 按原参数创建并启动新控制器 → 60 秒内 `GET http://127.0.0.1:<port>/health` 报告的 `controller_image` 等于 `<image>` 即删除 prev；否则删除新容器、把 prev 改回原名启动、恢复环境文件。
-- 旧的模型转发路径保留（SSH 模式不用），转发改为收到多少写多少（`iter_content(chunk_size=None)`），不再攒满 1 KiB。
+- ~~旧的模型转发路径保留（SSH 模式不用）~~（2026-10-24 更正，审核 02 §5 第 1 条）：这条保留理由不成立。核心在任何模式下都先 `GET /accounts/<key>/connection`，再经隧道（或本机直连）把模型请求发到账号 Worker 的 `app_ip:8787`，从不调用控制器的 `/accounts/<key>/v1/messages`；SSH 也只剩安装方式（§53.9）。控制器里这段转发代码还在（`manager.py` `handle_request` 的 `v1/messages` 分支，转发改为收到多少写多少 `iter_content(chunk_size=None)`），但没有调用方（审核 B5），不是可用的模型路径。
 - 修正：`self.boots = {}`；Dockerfile 拷贝 `images.py`、`upgrade.py`。
 
 ### 53.6 核心的镜像上传与升级接口（只在 `controller` 模式；其他模式 400 `controller_not_configured`）
@@ -3739,6 +3797,11 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 ### 53.7 Worker 原地更新：不重建账号容器（2026-10-09，用户要求）
 
 用户要求：账号容器（尤其 #21 / #22）**永远不因 worker 更新而重建**；更新 worker 就是把新程序放进现有容器、只重启该容器。容器 ID、镜像标签、挂载、标签、数据卷、授权都不变。这把此前人工执行的 `update-account.sh` 流程（确认无活动 CLI → 备份旧程序 → 同目录临时文件 → 校验哈希 / 0755 → 再确认无活动 CLI → 原子 mv → 只重启原容器 → 健康检查）做成控制器接口。核对过：控制器的 `provision` 只在凭据指纹或网络策略变化时重建 app 容器，目标镜像变化从不重建（§49.16 安装后"重建 app 容器"的说法是错的，已有容器继续用原镜像）。
+
+> 2026-10-24 补充（审核 02 §5 第 4 条，以 `manager.py` `provision` 为准）：现在 `PUT config` 对已有 app 容器有三种结果——
+> 1. **凭据指纹、网络策略、CLI 都没变**：不重建；只有 `locale`/`timezone` 变化时记为待推送，由 Worker 原地应用。
+> 2. **凭据指纹和网络策略没变，但 CLI 版本变了**（或请求模式在 build/direct 之外变化），以及容器就是在线配对激活记录里的那个、而 CLI 版本不同时：不重建，回 409 `cli_profile_unavailable`（`InvalidCLIProfile`）。换 CLI 版本必须走配对原地更新（`POST /system/ccgateway/runtime/workers` 带 `components: ["worker","cli"]` 与 `cli_version`），核心对账在此期间看到的是该运行环境 pending。
+> 3. **凭据指纹或网络策略变了**：重建 app 容器，沿用原容器的镜像；但 CLI 版本同时变化（且不是 2 的激活情形）或旧容器是退役模式（native 等）时，换成控制器当前的目标 app 镜像——这与代码注释"凭据/网络变化不应顺带升级镜像"相左，是迁移退役模式的有意例外。
 
 **控制器** `POST /accounts/<key>/worker` `{"image": ref}`（ref 匹配镜像正则，本地没有则按 `ensure_image` 拉取，失败 503 `image_pull_failed`）：
 
@@ -3859,9 +3922,9 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.11 设置页精简（2026-10-09，用户要求）
 
-> 2026-10-23（§53.18）：本节的 `thinking_disabled_compat`、`unknown_field`、`tool_search`、`custom_tool_prefix` 以及 `allow_fast`/`allow_effort`、`betas` 都是 native 执行路径的设置；native 已不可达，这些字段**只保留在存储里**，设置页不再编辑，Worker 收不到。下文是历史记录。
+> 2026-10-23（§53.18）：本节的 `thinking_disabled_compat`、`unknown_field`、`tool_search`、`custom_tool_prefix` 以及 `allow_fast`/`allow_effort`、`betas` 都是 native 执行路径的设置；native 已从 Worker 删除（§53.21），这些字段**只保留在存储里**，设置页不再编辑，核心不下发，Worker 收不到——包括线上曾开的 `thinking_disabled_compat=omit`，它在 build/direct 下从未生效。下文是历史记录；现行策略线形见 §53.18，执行方式见 §53.21。
 
-以下设置页布局沿革不代表所有旧开关仍影响执行：native-only 已取消 relay 模式/灰度名单/直返错误选路，附件表达也不再使用旧 relay 来源策略，beta 固定规则不是转发白名单。现行策略见 §53.13 与 `CCGATEWAY-REQUEST-POLICY.md`。
+以下设置页布局沿革不代表所有旧开关仍影响执行：native-only 已取消 relay 模式/灰度名单/直返错误选路，附件表达也不再使用旧 relay 来源策略，beta 固定规则不是转发白名单。（当时"现行策略见 §53.13 与 `CCGATEWAY-REQUEST-POLICY.md`"——两者描述的 native 策略也已失效。）
 
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
@@ -3959,7 +4022,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.15 擦除客户端附件（`erase_client_attachments`，2026-10-14，用户要求）
 
-> 2026-10-23（§53.18）：**已下线**。native 路径不可达后此字段只保留在存储里，Worker 收不到；附件按 §53.17 的 `build_attachment_sources`（`erase` 值）处理。下文是历史记录。
+> 2026-10-23（§53.18）：**已下线**。native 路径已从 Worker 删除（§53.21），此字段只保留在存储里，核心不下发，Worker 收不到；附件按 §53.17 的 `build_attachment_sources`（`erase` 值，等级低及以上）处理。下文是历史记录。
 
 native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.13）；本节只增加"按类型擦除客户端附件"，不恢复旧附件来源策略。
 - 策略字段 `erase_client_attachments`：字符串数组，可选值 `environment`（环境与环境更新）、`model`（模型说明）、`date`（日期与日期变更）、`total_tokens_reminder`、`session_context`（CLAUDE.md、git 状态、邮箱等会话上下文提醒）。词表在 `contracts/features/attachments.go`，核心保存与 Worker 解析都用它校验，未知或重复类型拒绝。缺省／空数组＝不擦除；字段可选、`omitempty`，旧配置下发给 Worker 的策略与升级前相同，旧 Worker 忽略它，`schema_version` 不升（仍为 1）。
@@ -3970,7 +4033,7 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 
 ### 53.16 客户端附件换成网关渲染（`replace_client_attachments`，2026-10-14，用户要求）
 
-> 2026-10-23（§53.18）：**已下线**。同 §53.15：字段只保留在存储里，Worker 收不到；"服务端"按 §53.17 的 `build_attachment_sources`（`worker` 值）处理。下文是历史记录。
+> 2026-10-23（§53.18）：**已下线**。同 §53.15：native 路径已删除（§53.21），字段只保留在存储里，核心不下发，Worker 收不到；"服务端"按 §53.17 的 `build_attachment_sources`（`worker` 值，由 CLI 用原生渲染取值）处理。下文（含 0.1.56、0.1.57 的子项）是历史记录。
 
 "保留服务端"在透传下的含义：客户端附件留在原位置，文字换成该 Worker 上 Claude Code 自己渲染的同类附件。旧的 `attachment_source: gateway/both` 在透传下不起作用（Worker 强制 client），不恢复。
 - 策略字段 `replace_client_attachments`：字符串数组，可选 `environment`、`model`、`total_tokens_reminder`，ccgateway 0.1.54 起另加 `date`、`session_context`（`features.ReplaceableClientAttachments`，即全部可擦除类型；旧 Worker 收到新类型会拒绝整个策略，须先更新 Worker 再保存）。每类一次、不得与 `erase_client_attachments` 重叠，核心保存与 Worker 解析都用 `features.ValidateReplaceClientAttachments` 校验。缺省／空＝不替换；`omitempty`，旧 Worker 忽略，`schema_version` 仍为 1。优先级：擦除 > 替换 > 保留。
@@ -3989,6 +4052,8 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 ### 53.17 build 附件来源（2026-10-20）
 
 > 2026-10-23 更新：键集合已扩为 `contracts/features/attachments.go` 的 `BuildAttachmentFields`（platform_name、os_version、shell、primary_directory、additional_directories、git_repository、worktree、scratchpad_directory、github_cli、agent_proxy），值为 `client`（默认）、`worker`、`erase`；按注入等级低及以上才下发（§53.18）。下面第一条的"两个键、两个值"是 2026-10-20 的状态。
+>
+> 2026-10-24 更新（§53.21）：下面第二、三条描述的是 Worker 侧 v1 改写（Worker 在组件提取前用本机 `uname`/`ver` 改写环境段），已随 native 清理删除。现在 Worker 只把客户端的块原样交给 CLI，CLI 未声明 `build_content_preservation_v1` 时 build 409；`worker` 值由 CLI 用原生环境渲染（`zkt`）取得，识别、擦除与拒绝规则见 `plugins/ccgateway/docs/BUILD-REQUEST-COMPONENTS-DESIGN.md` 第 5 节。第五条也已不成立：注入等级 0（direct）同样经过核心的能力预检（`request_levels_v1` 总是要求），附件来源在 direct 下不下发。
 
 - 插件设置“CC 特性 → 附件转换”保存 `request_policy.build_attachment_sources`。对象仅允许 `platform_name`、`os_version` 两个键，值为 `client`（默认）或 `worker`；缺失/空对象保留客户端。核心和 Worker 共享 `features.BuildAttachmentSources` 校验。沿用远程配置加密存储、读取和请求策略下发，不新增数据库表。它与旧 native 的擦除/替换数组独立，升级不激活旧规则。
 - build 模式在消息组件提取前原位替换已识别环境文本中的平台/系统版本。支持顶层 system、role=system 的直接 text 和完整 user 环境 reminder；模板包括 `# Environment`、固定引导行和唯一平台字段。代码围栏、混合用户正文、嵌套/不平衡包裹、重复字段和未知模板保留。工具结果不递归转换；cwd、额外目录、Git/worktree、Shell、CLAUDE.md、媒体、工具参数、签名、缓存标记和 system 生命周期保持。

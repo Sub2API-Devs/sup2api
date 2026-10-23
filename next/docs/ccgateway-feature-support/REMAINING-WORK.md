@@ -1,5 +1,7 @@
 # 剩余工作与验收
 
+> 失效说明（2026-10-24）：本清单针对 2026-10-09 的 native 运行时（helper 历史、Mod、原生工具与 MCP 目录、续聊 bootstrap），该运行时已从 Worker 删除（CONTRACTS §53.21），清单中的工作项不再适用。下文是历史记录。
+
 基线：Core .78 / Plugin .14 / Worker .80 / Controller .48（2026-10-09）。单项多数已有实现；下列是仍需接续的组合、策略和真实验收，不是从零重建。先读[当前状态](HANDOFF-2026-10-09.md)，环境和命令见[使用指南](ENVIRONMENT-RUNBOOK.md)。
 
 ## 建议顺序

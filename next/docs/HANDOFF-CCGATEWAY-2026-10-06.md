@@ -1,5 +1,7 @@
 # CCGateway 会话与 system 适配完整交接
 
+> 归档（2026-10-24，审核 C5）：本文交接的 native 会话与 system 适配（Mod、历史缓存、回环中继）已从 engine 删除，生产只走 CLI 的 `request` 命令。本文不描述当前行为；现状见 [CONTRACTS §53.18–§53.21](CONTRACTS.md) 与 [REQUEST-MODES](../plugins/ccgateway/docs/REQUEST-MODES.md)。
+
 交接日期：2026 年 10 月 6 日，Asia/Shanghai。接收者：接手 sup2api / CCGateway 开发、测试及部署的 AI。
 
 本文记录用户要求、现有实现、真实测试证据、已经上线的版本、未部署修改以及剩余工作。最重要的状态是：**通过 Claude Code Mod 的 `prompt.submit → context` 注入 system 上下文已在真实授权容器中验证；该方案尚未接入业务。手工构建 system attachment 历史并 resume 尚未验证。最新的 1 小时请求超时只修改了代码，尚未部署。**

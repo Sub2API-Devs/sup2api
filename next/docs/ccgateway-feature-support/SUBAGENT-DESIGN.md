@@ -1,5 +1,7 @@
 # 子代理 / Agent Teams 经 CCGateway 的实现说明（2026-10-10）
 
+> 失效说明（2026-10-24）：本文描述 native 运行时的做法（Worker 内部会话分支、`--resume` 续接、会话文件与索引），该运行时已从 Worker 删除（CONTRACTS §53.21）。现在子代理请求由 CLI 按客户端请求头还原类别，见 [子代理请求上下文设计](../../plugins/ccgateway/docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)。下文是历史记录。
+
 用户问题（2026-10-10）：服务端返回 Agent 工具调用后，客户端要在本地起一个新 agent，CCGateway 要如何处理？
 每个子代理对 Worker 来说是不是一个新会话？能不能做成原生 CC 子代理 jsonl 的样子？要不要拦截请求头里的 agent id？
 

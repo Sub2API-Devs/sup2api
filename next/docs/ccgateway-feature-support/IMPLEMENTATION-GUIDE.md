@@ -1,5 +1,7 @@
 # 当前实现指南
 
+> 失效说明（2026-10-24）：本文是 2026-10-09 native 运行时的结构说明（Worker 以 stream-json 驱动 CLI 会话、Mod 回环、原生工具拦截、历史与隐藏辅助轮），这些已从 Worker 删除（CONTRACTS §53.21），`companions/mod/` 目录也已删除。现在 Worker 只运行 CLI 的 `request --build|--direct`，见 [请求模式](../../plugins/ccgateway/docs/REQUEST-MODES.md) 第 1 节。下文是历史记录。
+
 产品基线Core .78 / Plugin .14 / Worker .80 / Controller .48。逐项状态见[交接](HANDOFF-2026-10-09.md)，开放组合和验收见[剩余工作](REMAINING-WORK.md)，访问、运行和部署命令见[环境指南](ENVIRONMENT-RUNBOOK.md)。本文件仅说明当前结构和修改入口。
 
 ## 目录与职责

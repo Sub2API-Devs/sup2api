@@ -1,5 +1,7 @@
 # Claude Code 2.1.296 分析与改动记录
 
+> 2026-10-24：本文是 2.1.296 时期（v3–v6）的历史记录。Worker 已不使用 mods 工具分发与 native 运行时（CONTRACTS §53.21），生产 CLI 是 2.1.304（见 [cli-mods README](../companions/cli-mods/README.md)），现行请求链路见 [请求模式](REQUEST-MODES.md) 第 1 节。
+
 记录日期：2026-10-18。本文作为本项目对 Claude Code **2.1.296** 的分析、补丁和验证状态总入口。版本已由用户确认，并与原版源码头、补丁 manifest、已测试产物一致。
 
 当前版本为 **v6 CLI 补丁与独立 Worker 测试部署**：已实现无前缀工具注册、同名工具覆盖、mods 分发，以及 `claude request --direct/--build --betas "a,b" file.json`。控制器转发，Worker 提取 messages 内的提醒/system 组件，CLI 复用内置函数组装并单次发送；request 仅启用显式 API Key，不使用订阅账号。原 21 号未切换。完整本机 startup 自动构建仍属后续工作，不与本轮已渲染上下文提取混淆。

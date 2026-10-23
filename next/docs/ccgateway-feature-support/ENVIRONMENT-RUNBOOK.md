@@ -1,5 +1,7 @@
 # CCGateway 环境与操作指南
 
+> 2026-10-24：下文的状态块停在 2026-10-20，其中关于 native 模式、Mod、原生工具目录、历史缓存与 `CCG_NATIVE_TOOLS` 的描述已失效——native 运行时已从 Worker 删除（CONTRACTS §53.21），现行请求链路见 [请求模式](../../plugins/ccgateway/docs/REQUEST-MODES.md) 第 1 节，部署状态以 `next/deploy/gateway/ovh/README.md` 为准。
+
 > **2026-10-20：Core 0.1.173 已上线，分组 CC 配置改为可选。** 未配置或未启用的分组继承全局，账号自定义可直接覆盖全局；只有已启用分组的 `allow_account_override=false` 才限制账号覆盖。UI 默认隐藏未启用的覆盖字段，浏览分组不创建配置，新建分组配置默认允许账号覆盖。四节点版本、账号预览及不落库检查通过；前端 66 项测试和类型检查、后端三个相关包的 Feature／CCGateway 专项通过。源码 `83107b8eeead030672a88ebbce6106d3d74edfc4`，升级计划 `4b940e7f10acd40708d3dff04a95c9a8` completed/27。数据库契约不变，插件与 Worker 仍为 0.1.70；账号容器 ID、启停时间及配置不变，21 保持停用。
 
 > **2026-10-20：Core 0.1.172 / CCGateway、Controller、Worker 0.1.70 / CLI 2.1.304 已部署。** 四个 Core 节点全局为 build＋304；账号 30、31、32 原地配对升级后真实上游测试 3/3 通过。账号 21 按用户要求离线更新到 304，仍 disabled、不可调度、容器停止，未启动验收。7 个历史停止草稿保持原状。最终镜像官方 CLI 10/10、组合替换 216/216 通过。运行容器旧镜像标签与旧 CLI 链接可能仍为 302 时代值，应以 active-runtime 指针及 Worker health 为准。详情及测试边界见 [304 实施记录](../CLAUDE-CODE-2.1.304-IMPLEMENTATION.md)第 12 节。

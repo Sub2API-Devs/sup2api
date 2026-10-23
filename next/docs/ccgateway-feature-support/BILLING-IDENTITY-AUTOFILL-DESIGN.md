@@ -1,5 +1,7 @@
 # 计费头入口与身份行自动填充：源码核对、设计与实施
 
+> 2026-10-24：本文的"身份行按入口配置（`build_identity_lines`）"与"direct 也补身份行"已被 [注入等级设计](CC-INJECTION-LEVELS-DESIGN.md)（CLI v20 起）取代：身份行由 CLI 按计费头入口自适应、不可配置，带计费头的 CC 请求不补，direct 不补。服务端入口六选一与计费头补齐仍现行。现行规则见 [build 组件设计](../../plugins/ccgateway/docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §5.5、§6.1、§6.3。
+
 2026-10-22。源码为恢复的 Claude Code 2.1.304（`artifacts/claude-2.1.304/linux-restored`），实际请求数据取自 30 号 Worker 的请求日志（只统计计数，不读内容）。状态：**已实施为 CLI v17（`ccgateway-v17-identity-line`），2026-10-22 随 Core 0.1.176 / 插件 0.1.74 部署 ovh**，结果见第 6 节；第 7 节起 direct 也补计费头与身份行。
 
 ## 1. 源码核对

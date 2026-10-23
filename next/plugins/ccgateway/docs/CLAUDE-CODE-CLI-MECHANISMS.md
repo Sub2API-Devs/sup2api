@@ -1,5 +1,7 @@
 # Claude Code CLI 机制与改造指南
 
+> 2026-10-24：本文的 CLI 机制分析（2.1.296）仍可作参考，但其中"CCGateway 经 mods 拦截工具、驱动 CLI 会话"的改造方向已不使用：native 运行时已从 Worker 删除（CONTRACTS §53.21），现在的改造是补丁加进去的 `claude request` 命令，见 [cli-mods README](../companions/cli-mods/README.md)。
+
 本文说明 Claude Code 的发行结构、SDK 与 VS Code 接入方式、mods 事件机制、工具定义与执行路径，以及 CCGateway 后续扩展 CLI 时需要修改和验证的位置。
 
 **分析基线为 2026-10-17 获取和验证的 Claude Code 2.1.296。** 结论不自动适用于其他版本，也不代表生产 Worker 当前使用的版本。压缩符号、模块名和文件偏移都与具体构建绑定。

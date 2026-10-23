@@ -1,5 +1,7 @@
 # build 模式的附件提取与转换研究
 
+> 2026-10-24：第 8 节的实现（Worker 在 `claude request --build` 前提取上下文、用本机事实改写平台/系统版本，即 v1 路径）已随 native 清理删除（CONTRACTS §53.21）。现在 Worker 把客户端的块原样交给 CLI，十个环境字段由 CLI 用原生渲染转换，见 [build 组件设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) 第 5 节。第 1–3 节的附件清点仍可作参考。
+
 2026-10-20。第 1–7 节保留调查阶段的证据与设计，第 8 节记录随后完成的实际实现。业务接入、插件设置和测试已完成本地修改，未部署；实际配置以第 8 节为准。
 
 目标：客户端发送完整 Messages 请求，Worker 在 `claude request --build` 前提取上下文，按配置混合信息来源。例如平台和 OS 使用 Worker，cwd、Git 和项目指令使用客户端。继续保持一次客户端请求触发一次模型生成，工具调用交回客户端。
