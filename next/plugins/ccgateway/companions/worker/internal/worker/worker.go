@@ -5,10 +5,8 @@ import (
 	"ccgateway/worker/internal/config"
 	"ccgateway/worker/pkg/types"
 	"context"
-	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -39,13 +37,6 @@ func New(cfg *config.Config) (Worker, error) {
 	if cfg.CLITimeout > 0 && (timeout <= 0 || cfg.CLITimeout < timeout) {
 		timeout = cfg.CLITimeout
 	}
-	internalBaseURL := ""
-	if cfg.Port > 0 {
-		// Account egress only allows loopback connections to the business
-		// HTTP port. Reuse the original relay carrier instead of opening a
-		// random loopback port that the firewall deliberately blocks.
-		internalBaseURL = workerInternalURL(cfg.BindHost, cfg.Port)
-	}
 	runtime, err := engine.NewRuntime(engine.Options{
 		ExpectedCLIVersion: cfg.CLIVersion, ExpectedCLISHA256: cfg.CLISHA256, ExpectedCLIPatch: cfg.CLIPatch,
 		RequestMode:               cfg.RequestMode,
@@ -53,22 +44,14 @@ func New(cfg *config.Config) (Worker, error) {
 		RuntimeMaintenanceLease:   cfg.RuntimeMaintenanceLease,
 		RuntimeMaintenanceExpires: cfg.RuntimeMaintenanceExpires,
 		MaintenanceOnly:           cfg.MaintenanceOnly,
-		InternalBaseURL:           internalBaseURL,
-		CLI:                       cfg.CLIPath, Plugin: cfg.PluginPath, DataDir: cfg.HistoryDir, CacheDir: cfg.CacheDir,
-		Key: cfg.APIKey, AdminKey: cfg.AdminKey, NativeTools: cfg.NativeTools,
-		Timeout: timeout, CacheLimit: cfg.MaxCacheSize, Env: env,
+		CLI:                       cfg.CLIPath, DataDir: cfg.HistoryDir,
+		Key: cfg.APIKey, AdminKey: cfg.AdminKey,
+		Timeout: timeout, Env: env,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &impl{Runtime: runtime, id: cfg.WorkerID, startTime: time.Now()}, nil
-}
-
-func workerInternalURL(host string, port int) string {
-	if ip := net.ParseIP(host); host == "" || host == "localhost" || ip != nil && ip.IsUnspecified() {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func (w *impl) Health(ctx context.Context) (*types.HealthStatus, error) {

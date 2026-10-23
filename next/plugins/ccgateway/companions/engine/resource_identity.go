@@ -82,7 +82,7 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 		return id, err
 	}
 	op := &resourceExchange{route: resourceRoute{method: "GET", path: "/api/oauth/profile"}, dir: b.dir, limit: 1 << 20, budget: b.budget, identity: probe}
-	resp, err := b.g.runner(ctx).runResource(ctx, op)
+	resp, err := b.g.Runner.runResource(ctx, op)
 	if err != nil {
 		return resources.Identity{}, err
 	}

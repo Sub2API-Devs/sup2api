@@ -13,20 +13,18 @@ import (
 // Config Worker 配置
 type Config struct {
 	// 基础配置
-	WorkerID    string
-	Port        int
-	BindHost    string
-	LogLevel    string
-	APIKey      string
-	AdminKey    string
-	NativeTools string
+	WorkerID string
+	Port     int
+	BindHost string
+	LogLevel string
+	APIKey   string
+	AdminKey string
 
 	// CLI 配置
 	CLIPath                   string
 	CLIVersion                string
 	CLISHA256                 string
 	CLIPatch                  string
-	PluginPath                string
 	RequestMode               string
 	WorkingDirectory          string
 	RuntimeMaintenanceLease   string
@@ -36,11 +34,6 @@ type Config struct {
 	// 存储配置
 	ConfigDir  string
 	HistoryDir string
-	CacheDir   string
-
-	// 缓存配置
-	MaxCacheSize     int64
-	HistoryRetention time.Duration
 
 	// 超时配置
 	RequestTimeout time.Duration
@@ -93,19 +86,14 @@ func Load() (*Config, error) {
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
 		APIKey:           os.Getenv("CCG_API_KEY"),
 		AdminKey:         os.Getenv("CCG_ADMIN_KEY"),
-		NativeTools:      os.Getenv("CCG_NATIVE_TOOLS"),
 		CLIPath:          getEnv("WORKER_CLI_PATH", "/usr/local/bin/claude"),
 		CLIVersion:       os.Getenv("WORKER_CLI_VERSION"),
 		CLISHA256:        os.Getenv("CCG_CLI_SHA256"),
 		CLIPatch:         os.Getenv("CCG_CLI_PATCH"),
-		PluginPath:       os.Getenv("WORKER_PLUGIN_PATH"),
 		RequestMode:      getEnv("CCG_REQUEST_MODE", "build"),
 		WorkingDirectory: getEnv("CCG_WORKING_DIRECTORY", "/work"),
 		ConfigDir:        getEnv("CLAUDE_CONFIG_DIR", "/root/.claude"),
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
-		CacheDir:         getEnv("CACHE_DIR", filepath.Join(dataDir, "cache")),
-		MaxCacheSize:     getEnvInt64("MAX_CACHE_SIZE", 128<<20),
-		HistoryRetention: getEnvDuration("HISTORY_RETENTION", 24*time.Hour),
 		RequestTimeout:   requestTimeout,
 		CLITimeout:       getEnvDuration("CLI_TIMEOUT", requestTimeout),
 		HealthTimeout:    getEnvDuration("HEALTH_TIMEOUT", 5*time.Second),
@@ -162,32 +150,6 @@ func getEnv(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
-}
-
-// getEnvInt 获取整数环境变量
-func getEnvInt(key string, defaultValue int) int {
-	v := os.Getenv(key)
-	if v == "" {
-		return defaultValue
-	}
-	i, err := strconv.Atoi(v)
-	if err != nil {
-		return defaultValue
-	}
-	return i
-}
-
-// getEnvInt64 获取 int64 环境变量
-func getEnvInt64(key string, defaultValue int64) int64 {
-	v := os.Getenv(key)
-	if v == "" {
-		return defaultValue
-	}
-	i, err := strconv.ParseInt(v, 10, 64)
-	if err != nil {
-		return defaultValue
-	}
-	return i
 }
 
 // getEnvDuration 获取时间间隔环境变量

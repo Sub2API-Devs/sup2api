@@ -24,6 +24,10 @@ type cliUpdatePolicy struct {
 	Channel    string `json:"channel"`
 }
 
+// cliManagement is the /admin/cli state: the release channel followed and the
+// latest official release seen there. The CLI itself is the packaged one the
+// container was created with and is never replaced in place: an official
+// release has no request command (a newer packaged CLI is a new container).
 type cliManagement struct {
 	pinnedVersion string
 	mu            sync.Mutex
@@ -31,10 +35,8 @@ type cliManagement struct {
 	path          string
 	latest        string
 	checked       time.Time
-	updating      bool
 	result        string
 	failure       string
-	install       *cliInstallLease
 }
 
 func newCLIManagement(root string) (*cliManagement, error) {
@@ -57,9 +59,6 @@ func (m *cliManagement) save(policy cliUpdatePolicy) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.updating {
-		return fmt.Errorf("CLI update in progress")
-	}
 	raw, _ := json.Marshal(policy)
 	file, err := os.CreateTemp(filepath.Dir(m.path), ".cli-update-")
 	if err != nil {
@@ -86,11 +85,12 @@ func (m *cliManagement) save(policy cliUpdatePolicy) error {
 	return nil
 }
 
+// cliView is the /admin/cli answer; updating stays false (nothing installs).
 func (r *Runtime) cliView() Object {
 	m := r.cliManagement
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return Object{"catalog": r.catalog.status(), "auto_update": m.policy.AutoUpdate, "auto_update_mode": "managed", "pinned_version": m.pinnedVersion, "channel": m.policy.Channel, "latest_version": m.latest, "release_checked_at": m.checked, "updating": m.updating, "update_state": m.result, "update_error": m.failure}
+	return Object{"catalog": r.cli.status(), "auto_update": m.policy.AutoUpdate, "auto_update_mode": "managed", "pinned_version": m.pinnedVersion, "channel": m.policy.Channel, "latest_version": m.latest, "release_checked_at": m.checked, "updating": false, "update_state": m.result, "update_error": m.failure}
 }
 
 func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
@@ -100,18 +100,19 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}
-	if request.URL.Path == "/admin/cli/catalog" {
-		r.serveCLICatalog(w, request)
-		return
-	}
-	if request.Method == "GET" {
+	switch request.Method {
+	case http.MethodGet:
 		_ = json.NewEncoder(w).Encode(r.cliView())
-		return
-	}
-	if request.Method != "POST" && request.Method != "PUT" {
+	case http.MethodPut:
+		r.putCLIPolicy(w, request)
+	case http.MethodPost:
+		r.postCLIAction(w, request)
+	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
 	}
+}
+
+func readCLIRequest(w http.ResponseWriter, request *http.Request) (Object, bool) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, request.Body, 4096))
 	var body Object
 	if err == nil {
@@ -119,60 +120,45 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 	}
 	if err != nil {
 		apiError(w, 400, "invalid_request_error", "Invalid CLI management request")
+		return nil, false
+	}
+	return body, true
+}
+
+func (r *Runtime) putCLIPolicy(w http.ResponseWriter, request *http.Request) {
+	body, ok := readCLIRequest(w, request)
+	if !ok {
 		return
 	}
-	if request.Method == "PUT" {
-		if keys(body, "auto_update", "channel") != nil {
-			apiError(w, 400, "invalid_request_error", "Unknown CLI setting")
-			return
-		}
-		auto, ok := body["auto_update"].(bool)
-		if auto && r.cliManagement.pinnedVersion != "" {
-			apiError(w, 409, "configuration_error", "CLI version is pinned by ccgateway; automatic updates are disabled")
-			return
-		}
-		policy := cliUpdatePolicy{AutoUpdate: auto, Channel: str(body, "channel")}
-		if !ok || !policy.valid() {
-			apiError(w, 400, "invalid_request_error", "Invalid CLI update policy")
-			return
-		}
-		if err := r.cliManagement.save(policy); err != nil {
-			apiError(w, 409, "api_error", err.Error())
-			return
-		}
-		_ = json.NewEncoder(w).Encode(r.cliView())
+	if keys(body, "auto_update", "channel") != nil {
+		apiError(w, 400, "invalid_request_error", "Unknown CLI setting")
 		return
 	}
-	if str(body, "action") == "validate-install" {
-		if r.cliManagement.pinnedVersion != "" {
-			apiError(w, 409, "configuration_error", "CLI is pinned; use a packaged version")
-			return
-		}
-		m := r.cliManagement
-		m.mu.Lock()
-		valid := m.install != nil && m.install.token == str(body, "lease") && time.Until(m.install.expires) > time.Minute && keys(body, "action", "lease") == nil
-		if valid {
-			m.install.expires = time.Now().Add(5 * time.Minute)
-		}
-		m.mu.Unlock()
-		if !valid || keys(body, "action", "lease") != nil {
-			apiError(w, 409, "api_error", "CLI installation lease expired")
-			return
-		}
-		_ = json.NewEncoder(w).Encode(Object{"valid": true})
+	auto, isBool := body["auto_update"].(bool)
+	if auto && r.cliManagement.pinnedVersion != "" {
+		apiError(w, 409, "configuration_error", "CLI version is pinned by ccgateway; automatic updates are disabled")
 		return
 	}
-	if str(body, "action") == "finish-install" {
-		installed, ok := body["installed"].(bool)
-		if !ok || keys(body, "action", "lease", "installed") != nil {
-			apiError(w, 400, "invalid_request_error", "Invalid CLI installation completion")
-			return
-		}
-		if err := r.finishCLIInstall(str(body, "lease"), installed); err != nil {
-			apiError(w, 409, "api_error", err.Error())
-			return
-		}
-		_ = json.NewEncoder(w).Encode(r.cliView())
+	policy := cliUpdatePolicy{AutoUpdate: auto, Channel: str(body, "channel")}
+	if !isBool || !policy.valid() {
+		apiError(w, 400, "invalid_request_error", "Invalid CLI update policy")
+		return
+	}
+	if err := r.cliManagement.save(policy); err != nil {
+		apiError(w, 409, "api_error", err.Error())
+		return
+	}
+	_ = json.NewEncoder(w).Encode(r.cliView())
+}
+
+func (r *Runtime) postCLIAction(w http.ResponseWriter, request *http.Request) {
+	body, ok := readCLIRequest(w, request)
+	if !ok {
+		return
+	}
+	action := str(body, "action")
+	if action == "begin-install" || action == "validate-install" || action == "finish-install" {
+		apiError(w, 409, "configuration_error", "CLI is pinned by ccgateway; use a packaged version")
 		return
 	}
 	if keys(body, "action") != nil {
@@ -181,36 +167,30 @@ func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), 30*time.Second)
 	defer cancel()
-	switch str(body, "action") {
+	switch action {
 	case "check":
-		err = r.checkCLIRelease(ctx)
+		if err := r.checkCLIRelease(ctx); err != nil {
+			apiError(w, 502, "api_error", err.Error())
+			return
+		}
 	case "sync":
-		if !r.startCLISync() {
-			apiError(w, 409, "api_error", "CLI maintenance is busy")
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-	case "begin-install":
-		if r.cliManagement.pinnedVersion != "" {
-			apiError(w, 409, "configuration_error", "CLI is pinned; use a packaged version")
-			return
-		}
-		lease, beginErr := r.beginCLIInstall(ctx)
-		if beginErr != nil {
-			apiError(w, 409, "api_error", beginErr.Error())
-			return
-		}
-		_ = json.NewEncoder(w).Encode(lease)
-		return
+		r.recordCLIAction(r.cli.recheck(ctx))
 	default:
 		apiError(w, 400, "invalid_request_error", "Unknown CLI action")
 		return
 	}
-	if err != nil {
-		apiError(w, 502, "api_error", err.Error())
-		return
-	}
 	_ = json.NewEncoder(w).Encode(r.cliView())
+}
+
+// recordCLIAction keeps the outcome of the last sync for the view.
+func (r *Runtime) recordCLIAction(err error) {
+	m := r.cliManagement
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.result, m.failure = "complete", ""
+	if err != nil {
+		m.result, m.failure = "failed", err.Error()
+	}
 }
 
 func (r *Runtime) checkCLIRelease(ctx context.Context) error {
@@ -243,44 +223,12 @@ func (r *Runtime) checkCLIRelease(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runtime) startCLISync() bool {
-	m := r.cliManagement
-	m.mu.Lock()
-	if m.updating {
-		m.mu.Unlock()
-		return false
-	}
-	m.updating, m.result, m.failure = true, "running", ""
-	m.mu.Unlock()
-	r.mu.Lock()
-	if r.closed {
-		r.mu.Unlock()
-		m.mu.Lock()
-		m.updating, m.result = false, "stopped"
-		m.mu.Unlock()
-		return false
-	}
-	r.active.Add(1)
-	r.mu.Unlock()
-	go func() {
-		defer r.active.Done()
-		ctx, cancel := context.WithTimeout(r.life, 5*time.Minute)
-		defer cancel()
-		err := r.catalog.sync(ctx)
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		m.updating, m.result = false, "complete"
-		if err != nil {
-			m.result, m.failure = "failed", err.Error()
-		}
-	}()
-	return true
-}
-
+// autoUpdateCLI keeps latest_version current for a Worker that follows its
+// channel; nothing is installed.
 func (r *Runtime) autoUpdateCLI(ctx context.Context) {
 	m := r.cliManagement
 	m.mu.Lock()
-	check := m.policy.AutoUpdate && !m.updating && time.Since(m.checked) >= 6*time.Hour
+	check := m.policy.AutoUpdate && time.Since(m.checked) >= 6*time.Hour
 	m.mu.Unlock()
 	if !check {
 		return
@@ -288,19 +236,4 @@ func (r *Runtime) autoUpdateCLI(ctx context.Context) {
 	bounded, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	_ = r.checkCLIRelease(bounded)
-}
-
-func newerCLIVersion(candidate, installed string) bool {
-	if !cliReleaseVersion.MatchString(candidate) || !cliReleaseVersion.MatchString(installed) {
-		return false
-	}
-	var next, old [3]int
-	_, _ = fmt.Sscanf(candidate, "%d.%d.%d", &next[0], &next[1], &next[2])
-	_, _ = fmt.Sscanf(installed, "%d.%d.%d", &old[0], &old[1], &old[2])
-	for i := range next {
-		if next[i] != old[i] {
-			return next[i] > old[i]
-		}
-	}
-	return false
 }

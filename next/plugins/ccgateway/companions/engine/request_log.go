@@ -313,7 +313,7 @@ func pruneRequestLogs(root string) (removed []string) {
 	var records []record
 	var summaryTotal, contentTotal int64
 	for _, entry := range entries {
-		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
 		p := filepath.Join(root, entry.Name())
@@ -366,7 +366,7 @@ func requestLogUsage(root string) Object {
 	var summary, content, requests int64
 	entries, _ := os.ReadDir(root)
 	for _, entry := range entries {
-		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
 		requests++
@@ -393,7 +393,7 @@ func clearContent(root string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
 		files, _ := os.ReadDir(filepath.Join(root, entry.Name()))

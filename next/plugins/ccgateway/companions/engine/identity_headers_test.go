@@ -1,9 +1,10 @@
 package engine
 
 import (
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 	"net/http"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
 func TestWorkerSharedIdentityGrantRequiresOneValue(t *testing.T) {

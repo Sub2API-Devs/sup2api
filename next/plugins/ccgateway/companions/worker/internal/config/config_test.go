@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -59,7 +58,6 @@ func TestExistingAccountContainerConfig(t *testing.T) {
 	t.Setenv("WORKER_ID", "")
 	t.Setenv("WORKER_PORT", "")
 	t.Setenv("HISTORY_DIR", "")
-	t.Setenv("CACHE_DIR", "")
 	t.Setenv("CCG_BIND", "0.0.0.0:8787")
 	t.Setenv("CCG_DATA_DIR", "/work/data")
 	t.Setenv("CCG_API_KEY", "test-request-key")
@@ -68,32 +66,30 @@ func TestExistingAccountContainerConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != 8787 || cfg.HistoryDir != "/work/data" || cfg.CacheDir != filepath.Join("/work/data", "cache") || cfg.WorkerID == "" {
+	if cfg.Port != 8787 || cfg.HistoryDir != "/work/data" || cfg.WorkerID == "" {
 		t.Fatal("existing account container configuration was not preserved")
 	}
 }
 
-func TestLegacyTimeoutAndCacheSurviveMigration(t *testing.T) {
+func TestLegacyTimeoutSurvivesMigration(t *testing.T) {
 	for _, scenario := range []struct {
-		name, legacy, request, cli, cache string
-		wantRequest, wantCLI              time.Duration
-		wantCache                         int64
+		name, legacy, request, cli string
+		wantRequest, wantCLI       time.Duration
 	}{
-		{"default", "", "", "", "", time.Hour, time.Hour, 128 << 20},
-		{"legacy", "37m", "", "", "", 37 * time.Minute, 37 * time.Minute, 128 << 20},
-		{"explicit", "37m", "12m", "2m", "67108864", 12 * time.Minute, 2 * time.Minute, 64 << 20},
+		{"default", "", "", "", time.Hour, time.Hour},
+		{"legacy", "37m", "", "", 37 * time.Minute, 37 * time.Minute},
+		{"explicit", "37m", "12m", "2m", 12 * time.Minute, 2 * time.Minute},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Setenv("CCG_TIMEOUT", scenario.legacy)
 			t.Setenv("REQUEST_TIMEOUT", scenario.request)
 			t.Setenv("CLI_TIMEOUT", scenario.cli)
-			t.Setenv("MAX_CACHE_SIZE", scenario.cache)
 			cfg, err := Load()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.RequestTimeout != scenario.wantRequest || cfg.CLITimeout != scenario.wantCLI || cfg.MaxCacheSize != scenario.wantCache {
-				t.Fatal("in-place migration changed execution limits", cfg.RequestTimeout, cfg.CLITimeout, cfg.MaxCacheSize)
+			if cfg.RequestTimeout != scenario.wantRequest || cfg.CLITimeout != scenario.wantCLI {
+				t.Fatal("in-place migration changed execution limits", cfg.RequestTimeout, cfg.CLITimeout)
 			}
 		})
 	}
@@ -198,21 +194,6 @@ func TestGetEnv(t *testing.T) {
 	got = getEnv("NONEXISTENT", "default")
 	if got != "default" {
 		t.Errorf("getEnv() = %s, want default", got)
-	}
-}
-
-func TestGetEnvInt(t *testing.T) {
-	os.Setenv("TEST_INT", "42")
-	defer os.Unsetenv("TEST_INT")
-
-	got := getEnvInt("TEST_INT", 0)
-	if got != 42 {
-		t.Errorf("getEnvInt() = %d, want 42", got)
-	}
-
-	got = getEnvInt("NONEXISTENT", 100)
-	if got != 100 {
-		t.Errorf("getEnvInt() = %d, want 100", got)
 	}
 }
 

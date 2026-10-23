@@ -22,7 +22,7 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	r.Header.Set("Authorization", "Bearer secret-test-key")
 	r.Header.Set("Cookie", "session=secret-cookie")
 	w := httptest.NewRecorder()
-	g := &Gateway{Runner: &Runner{}, RequestLogDir: root}
+	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogDir: root}
 	g.ServeHTTP(w, r)
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 || w.Code != 400 || w.Header().Get("request-id") == "" {
@@ -40,7 +40,7 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "metadata.json"))
 	var m Object
-	if json.Unmarshal(b, &m) != nil || m["stage"] != "parse_request" || m["request_id"] != w.Header().Get("request-id") || m["event"] != "request_finished" {
+	if json.Unmarshal(b, &m) != nil || m["stage"] != "admission" || m["request_id"] != w.Header().Get("request-id") || m["event"] != "request_finished" {
 		t.Fatalf("wrong diagnostic metadata: %s", b)
 	}
 }

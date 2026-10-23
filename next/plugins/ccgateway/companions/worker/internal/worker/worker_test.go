@@ -21,24 +21,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInternalControlUsesExplicitListenerHost(t *testing.T) {
-	for _, tc := range []struct{ host, want string }{{"", "http://127.0.0.1:8787"}, {"0.0.0.0", "http://127.0.0.1:8787"}, {"::", "http://127.0.0.1:8787"}, {"::1", "http://[::1]:8787"}, {"127.0.0.1", "http://127.0.0.1:8787"}, {"10.0.0.2", "http://10.0.0.2:8787"}} {
-		assert.Equal(t, tc.want, workerInternalURL(tc.host, 8787), tc.host)
-	}
-}
-
 // Run the request command through a real subprocess and OS pipes.
 func TestMain(m *testing.M) {
-	if strings.Contains(os.Getenv("ANTHROPIC_BASE_URL"), "/ccg-tool-catalog/") {
-		if err := catalogPeer(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		os.Exit(0)
-	}
 	if os.Getenv("WORKER_TEST_PEER") == "1" {
 		if len(os.Args) > 1 && os.Args[1] == "--version" {
 			fmt.Println("2.1.302")
+			os.Exit(0)
+		}
+		if len(os.Args) > 1 && os.Args[1] == "--ccgateway-info" {
+			fmt.Println(`{"version":"2.1.302","patch":"worker-test","capabilities":["request_build","request_direct","build_content_preservation_v1"]}`)
 			os.Exit(0)
 		}
 		if err := peer(); err != nil {
@@ -48,26 +39,6 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
-}
-
-func catalogPeer() error {
-	request, err := http.NewRequest("POST", os.Getenv("ANTHROPIC_BASE_URL")+"/v1/messages", strings.NewReader(`{"model":"fixture","tools":[{"name":"Read","description":"fixture","input_schema":{"type":"object"}}]}`))
-	if err != nil {
-		return err
-	}
-	request.Header.Set("X-Api-Key", os.Getenv("ANTHROPIC_API_KEY"))
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{}}
-	defer client.CloseIdleConnections()
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("catalog status %d", response.StatusCode)
-	}
-	_, err = io.Copy(io.Discard, response.Body)
-	return err
 }
 
 func peer() error {

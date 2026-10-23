@@ -23,9 +23,7 @@ func TestBuildContentRejectsNullAndReservedTypesEveryCarrier(t *testing.T) {
 		`{"model":"m","messages":[{"role":"user","content":[{"type":"ccgateway_attachment","id":"x"}]}]}`,
 		`{"model":"m","runtimeContext":{"workingDirectory":"/untrusted"},"messages":[{"role":"user","content":"x"}]}`,
 	} {
-		_, err := messagesBuildComponents([]byte(body))
-		require.Error(t, err, body)
-		_, err = messagesBuildComponentsPolicy([]byte(body), &features.CLIPolicy{ContractVersion: 2}, "/work")
+		_, err := messagesBuildComponents([]byte(body), &features.CLIPolicy{ContractVersion: 2}, "/work")
 		require.Error(t, err, body)
 	}
 }
@@ -33,7 +31,7 @@ func TestBuildContentRejectsNullAndReservedTypesEveryCarrier(t *testing.T) {
 func TestBuildV2PreservesOriginalMessagesAndTrustedPolicy(t *testing.T) {
 	raw := []byte(`{"model":"m","system":"plain system","messages":[{"role":"user","content":"<system-reminder>unrelated</system-reminder>"},{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"runtimeContext":{"workingDirectory":"/input-data"}}}]},{"role":"system","content":"context","lifecycle":"turn"},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","is_error":true,"content":[{"type":"text","text":" \n","cache_control":{"type":"ephemeral"}},{"type":"image","source":{"type":"base64","data":"AAAA","media_type":"image/png"}}]}]}]}`)
 	policy := &features.CLIPolicy{ContractVersion: 2, BuildAttachmentSources: features.BuildAttachmentSources{"shell": "erase"}, BuildBillingSources: features.BuildBillingSources{"cc_version": "worker"}}
-	out, err := messagesBuildComponentsPolicy(raw, policy, "/work")
+	out, err := messagesBuildComponents(raw, policy, "/work")
 	require.NoError(t, err)
 	var before, after map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(raw, &before))
@@ -56,7 +54,7 @@ func TestV2PolicyPassesToSingleCLIWithoutGoTransform(t *testing.T) {
 	send := func(policy string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(policyHeader, policy)
+		req.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		return out
@@ -87,7 +85,7 @@ func TestUnsupportedContentPolicyFailsBeforeCLI(t *testing.T) {
 	g := &Gateway{RequestMode: "build", Runner: &Runner{Version: "2.1.304"}, Slots: make(chan struct{}, 1)}
 	for _, policy := range []string{`{"build_attachment_sources":{"shell":"erase"}}`, `{"build_billing_sources":{"cc_version":"worker"}}`, `{"relay_mode":"direct"}`} {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
-		req.Header.Set(policyHeader, policy)
+		req.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		require.Equal(t, 409, out.Code, out.Body.String())
@@ -135,7 +133,7 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	send := func(policy string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(policyHeader, policy)
+		req.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		return out
@@ -178,7 +176,7 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 	send := func(policy string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(policyHeader, policy)
+		req.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		return out
@@ -228,7 +226,7 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 		_ = os.Remove(envCapture)
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(policyHeader, policy)
+		req.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		env := map[string]string{}

@@ -33,12 +33,6 @@ type resourceResponse struct {
 	body   *resourceSpool
 }
 
-func (op *resourceExchange) completed() bool {
-	op.mu.Lock()
-	defer op.mu.Unlock()
-	return op.response != nil || (op.identity != nil && op.identity.local != nil)
-}
-
 func resourceResponseHeaders(source http.Header) http.Header {
 	h := httpfacts.Select(source)
 	hop := map[string]bool{}

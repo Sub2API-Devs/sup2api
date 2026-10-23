@@ -5,7 +5,6 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,23 +77,6 @@ func (d *requestDiagnostic) trace(event string, detail any) {
 	}
 }
 
-// traceContent records an event whose detail is request or response content
-// (a search result, a Mod's attachment text): whole at the full level, as its
-// shape (summary) otherwise.
-func (d *requestDiagnostic) traceContent(event string, detail, summary any) {
-	if !d.enabled() {
-		return
-	}
-	d.mu.Lock()
-	content := !d.summaryOnly
-	d.mu.Unlock()
-	if content {
-		d.trace(event, detail)
-	} else {
-		d.trace(event, summary)
-	}
-}
-
 // boundStrings is detail with every string cut to logValue's 256 bytes.
 func boundStrings(detail any) any {
 	raw, err := json.Marshal(detail)
@@ -124,34 +106,4 @@ func boundStrings(detail any) any {
 		return v
 	}
 	return bound(value)
-}
-
-func (d *requestDiagnostic) snapshot(name, source string) {
-	if !d.enabled() || source == "" {
-		return
-	}
-	f, err := os.Open(source)
-	if err != nil {
-		d.trace("snapshot_unavailable", Object{"file": name})
-		return
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, (64<<20)+1))
-	if err == nil {
-		d.save(name, b)
-	}
-}
-
-type traceReader struct {
-	io.ReadCloser
-	diagnostic *requestDiagnostic
-	name       string
-}
-
-func (r *traceReader) Read(p []byte) (int, error) {
-	n, err := r.ReadCloser.Read(p)
-	if n > 0 {
-		r.diagnostic.appendTrace(r.name, p[:n])
-	}
-	return n, err
 }

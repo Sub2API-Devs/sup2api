@@ -6,7 +6,6 @@ import (
 	"slices"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestContainerResourceReportingRequiresVerifiedCLICapability(t *testing.T) {
@@ -116,22 +115,6 @@ func TestEnvironmentOverridesRequestProcesses(t *testing.T) {
 	// A nil store (older construction paths) applies nothing.
 	if env := (&Runner{Env: []string{"TZ=UTC"}}).baseEnv(); environmentValue(env, "TZ") != "UTC" {
 		t.Fatalf("nil store %v", env)
-	}
-}
-
-// Cached gateway renderings are keyed by the date the CLI sees.
-func TestEnvironmentOverridesToday(t *testing.T) {
-	now := time.Date(2026, 10, 20, 20, 0, 0, 0, time.UTC)
-	var nilStore *EnvironmentOverrides
-	if got := nilStore.today(now); got != "2026-10-20" {
-		t.Fatalf("nil store %s", got)
-	}
-	s := NewEnvironmentOverrides(t.TempDir())
-	if err := s.Update(environmentOverride{Timezone: "Asia/Tokyo"}); err != nil {
-		t.Fatal(err)
-	}
-	if got := s.today(now); got != "2026-10-21" {
-		t.Fatalf("Asia/Tokyo %s", got)
 	}
 }
 

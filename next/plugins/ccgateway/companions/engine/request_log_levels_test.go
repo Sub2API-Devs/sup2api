@@ -24,7 +24,6 @@ func logRequest(t *testing.T, store *requestLogStore) string {
 	d.request([]byte(`{"model":"m","messages":[{"role":"user","content":"`+privateMarker+`"}]}`), r.Header)
 	d.save("build-components.json", []byte(privateMarker))
 	d.appendTrace("cli-stdout.jsonl", []byte(privateMarker))
-	d.traceContent("web_search_output", Object{"text": privateMarker}, Object{"bytes": 1})
 	d.trace("cli_error", Object{"message": strings.Repeat("e", 300)})
 	_, _ = out.Write([]byte(privateMarker))
 	d.finish()
@@ -87,9 +86,6 @@ func TestSummaryLevelKeepsNoContent(t *testing.T) {
 		}
 	}
 	events, _ := os.ReadFile(filepath.Join(dir, "events.jsonl"))
-	if !strings.Contains(string(events), `"web_search_output","detail":{"bytes":1}`) && !strings.Contains(string(events), `"detail":{"bytes":1},"event":"web_search_output"`) {
-		t.Fatal("content event lost its shape", string(events))
-	}
 	if strings.Contains(string(events), strings.Repeat("e", 257)) || !strings.Contains(string(events), strings.Repeat("e", 256)) {
 		t.Fatal("event text not bounded to 256 bytes")
 	}
@@ -118,7 +114,7 @@ func TestFullLevelExpiresToSummary(t *testing.T) {
 		t.Fatal("full level lost the response body")
 	}
 	events, _ := os.ReadFile(filepath.Join(dir, "events.jsonl"))
-	if !strings.Contains(string(events), privateMarker) || !strings.Contains(string(events), strings.Repeat("e", 300)) {
+	if !strings.Contains(string(events), strings.Repeat("e", 300)) {
 		t.Fatal("full level cut its events")
 	}
 	now = now.Add(4*time.Hour + time.Second)

@@ -82,9 +82,7 @@ func resourceManagementTraceCLI(t *testing.T, runner *Runner, expected []string)
 }
 
 func TestResourceIdentityPersistsAndRotates(t *testing.T) {
-	cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 1<<20)
-	require.NoError(t, err)
-	b := &resourceBroker{g: &Gateway{Cache: cache}, identityPath: filepath.Join(t.TempDir(), "identity-v1.json")}
+	b := &resourceBroker{g: &Gateway{}, identityPath: filepath.Join(t.TempDir(), "identity-v1.json")}
 	first, err := b.persistIdentity(resources.Identity{PrincipalID: "issuer"}, "")
 	require.NoError(t, err)
 	second, err := b.persistIdentity(resources.Identity{PrincipalID: "issuer"}, "")
@@ -103,28 +101,24 @@ func TestResourceIdentityPersistsAndRotates(t *testing.T) {
 	}
 }
 
-func TestResourceIdentitySurvivesCacheReplacementAndRestart(t *testing.T) {
+func TestResourceIdentitySurvivesRestart(t *testing.T) {
 	root := t.TempDir()
-	broker := func(cacheDir string) *resourceBroker {
-		cache, err := newCache(cacheDir, 1<<20)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, err := newResourceBroker(&Gateway{Runner: &Runner{Env: []string{"CCG_RESOURCE_BODY_LIMIT_BYTES=1024"}}, Cache: cache}, &authManager{}, root)
+	broker := func() *resourceBroker {
+		b, err := newResourceBroker(&Gateway{Runner: &Runner{Env: []string{"CCG_RESOURCE_BODY_LIMIT_BYTES=1024"}}}, &authManager{}, root)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = b.lease.Close() })
 		return b
 	}
-	first := broker(filepath.Join(t.TempDir(), "cache"))
+	first := broker()
 	want, err := first.persistIdentity(resources.Identity{PrincipalID: "stable-issuer"}, "")
 	require.NoError(t, err)
 	first.lease.Close()
-	restarted := broker(filepath.Join(t.TempDir(), "replacement-cache"))
+	restarted := broker()
 	got, err := restarted.persistIdentity(resources.Identity{PrincipalID: "stable-issuer"}, "")
 	if err != nil || got.Generation != want.Generation {
-		t.Fatal("resource ownership lost when conversation cache changed", err)
+		t.Fatal("resource ownership lost on restart", err)
 	}
 	rotated, err := restarted.persistIdentity(resources.Identity{PrincipalID: "stable-issuer"}, "managed-new-epoch")
 	if err != nil || rotated.Generation == got.Generation {
@@ -161,9 +155,7 @@ func TestRealCLIResourceHTTPIdentityAndProviderErrors(t *testing.T) {
 			if oauth {
 				runner.Env = envWith(runner.Env, map[string]string{"ANTHROPIC_API_KEY": "", "CLAUDE_CODE_OAUTH_TOKEN": "dummy-resource-oauth"})
 			}
-			cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 1<<20)
-			require.NoError(t, err)
-			g := &Gateway{Runner: runner, Cache: cache, Key: "worker-fixture", Slots: make(chan struct{}, 2)}
+			g := &Gateway{Runner: runner, Key: "worker-fixture", Slots: make(chan struct{}, 2)}
 			broker, err := newResourceBroker(g, &authManager{}, t.TempDir())
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = broker.lease.Close() })
@@ -194,7 +186,6 @@ func TestRealCLIResourceHTTPIdentityAndProviderErrors(t *testing.T) {
 			assert.Equal(t, "3", response.Header().Get("Retry-After"))
 			assert.Contains(t, response.Body.String(), "resource fixture")
 			assert.EqualValues(t, 1, resourcesCalled.Load())
-			assert.Empty(t, cache.entries)
 			files, err := os.ReadDir(broker.dir)
 			require.NoError(t, err)
 			assert.Empty(t, files)

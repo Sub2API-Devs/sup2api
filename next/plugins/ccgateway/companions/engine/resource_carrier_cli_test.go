@@ -36,10 +36,6 @@ func resourceTestRunner(t *testing.T, handler http.HandlerFunc) *Runner {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	plugin, err := extractMod(root)
-	if err != nil {
-		t.Fatal(err)
-	}
 	up := httptest.NewServer(handler)
 	t.Cleanup(up.Close)
 	base := []string{}
@@ -49,7 +45,7 @@ func resourceTestRunner(t *testing.T, handler http.HandlerFunc) *Runner {
 		}
 	}
 	env := envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), "ANTHROPIC_API_KEY": "dummy-resource-fixture", "ANTHROPIC_BASE_URL": up.URL, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1"})
-	return &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}
+	return &Runner{CLI: cli, Version: version, Work: root, Env: env}
 }
 
 // x509 fallback roots are process-global and cannot be restored. Run each
@@ -243,7 +239,6 @@ func TestRealCLIResourceCarrierNeverGenerates(t *testing.T) {
 			assert.Equal(t, "gzip", resp.header.Get("Content-Encoding"))
 			assert.Empty(t, resp.header.Get("Set-Cookie"))
 			assert.Equal(t, "request_resource_test", resp.header.Get("Request-Id"))
-			assert.True(t, op.completed())
 			_, err = runner.runResource(ctx, op)
 			require.ErrorContains(t, err, "already consumed")
 			assert.Equal(t, int32(1), calls.Load(), "consumed exchange was dispatched twice")

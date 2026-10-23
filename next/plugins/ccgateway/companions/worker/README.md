@@ -1,6 +1,6 @@
 # CCGateway Worker
 
-每账号独立HTTP入口与生命周期，完整API→Claude Code协议实现复用`../engine`，Mod在`../mod`，跨组件合同在`../contracts`。不要重新写简化DTO或第二套历史实现。
+每账号独立HTTP入口与生命周期：每个 `/v1/messages` 交 `../engine` 运行一次打包 CLI 的 `request --build|--direct`，请求由 CLI 用原生函数组装；跨组件合同在`../contracts`。
 
 当前上线状态见[交接](../../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)，访问/运行/日志/测试/更新见[环境指南](../../../../docs/ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md)。
 
@@ -8,10 +8,9 @@
 
 - `CCG_API_KEY`调用鉴权，`CCG_ADMIN_KEY`独立管理鉴权；不要记录值。
 - 容器`CCG_BIND`默认8787；`WORKER_PORT`可覆盖；裸程序未设两者时使用8788。
-- `WORKER_CLI_PATH`指原生CLI；默认使用随程序嵌入Mod。自定义`WORKER_PLUGIN_PATH`须有`hooks/hooks.json`。
-- `CLAUDE_CONFIG_DIR`账号CLI配置/授权，`HISTORY_DIR`、`CACHE_DIR`历史及持久缓存；兼容原容器`CCG_DATA_DIR`。
+- `WORKER_CLI_PATH`指打包的定制CLI（`/opt/ccgateway/cli/<版本>`），`CCG_REQUEST_MODE`为 `build`（默认）或 `direct`。
+- `CLAUDE_CONFIG_DIR`账号CLI配置/授权，`HISTORY_DIR`为Worker数据目录（请求日志、资源身份等）；兼容原容器`CCG_DATA_DIR`。
 - `REQUEST_TIMEOUT`/`CLI_TIMEOUT`取较短正值；`WORKER_CLI_VERSION`不替代实际版本探测。
-- 历史保留沿用引擎24h，`HISTORY_RETENTION`目前不改变此行为。
 
 `/v1/messages` JSON/SSE、健康`/health`/`/healthz`、管理`/admin/*`交共享引擎。其它资源/计数能力按engine和真实Worker features判断，不从image tag猜。
 

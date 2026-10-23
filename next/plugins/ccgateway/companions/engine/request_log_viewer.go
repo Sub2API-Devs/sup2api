@@ -93,7 +93,7 @@ func (s *requestLogStore) ensureIndex() {
 	s.index = map[string]logEntry{}
 	entries, _ := os.ReadDir(s.root)
 	for _, entry := range entries {
-		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
 		raw, err := readBounded(filepath.Join(s.root, entry.Name(), "metadata.json"), viewerMetadataMax)
@@ -176,7 +176,7 @@ func (s *requestLogStore) serveViewer(w http.ResponseWriter, r *http.Request, ac
 			ID      string `json:"id"`
 			Content bool   `json:"content"`
 		}
-		if decoder.Decode(&q) != nil || !nativeSessionName.MatchString(q.ID) {
+		if decoder.Decode(&q) != nil || !uuidPattern.MatchString(q.ID) {
 			apiError(w, 400, "invalid_request_error", "Invalid request log id")
 			return
 		}
@@ -233,7 +233,7 @@ func (q *logQuery) valid() bool {
 	if q.Before != "" {
 		at, id, ok := strings.Cut(q.Before, "_")
 		nanos, err := strconv.ParseInt(at, 10, 64)
-		if !ok || err != nil || !nativeSessionName.MatchString(id) {
+		if !ok || err != nil || !uuidPattern.MatchString(id) {
 			return false
 		}
 		q.cursor = &logEntry{ID: id, Time: time.Unix(0, nanos).UTC()}
@@ -467,7 +467,7 @@ func (q *logRead) valid() bool {
 	if q.Length == 0 {
 		q.Length = viewerChunkMax
 	}
-	return nativeSessionName.MatchString(q.ID) && logFileName.MatchString(q.Name) && !summaryFiles[q.Name] &&
+	return uuidPattern.MatchString(q.ID) && logFileName.MatchString(q.Name) && !summaryFiles[q.Name] &&
 		q.Offset >= 0 && q.Length > 0 && q.Length <= viewerChunkMax && !(q.Download && q.Offset != 0)
 }
 

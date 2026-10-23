@@ -113,18 +113,6 @@ func (s *EnvironmentOverrides) Apply(base []string) []string {
 	return envWith(base, values)
 }
 
-// today is the date a new CLI process sees: in the configured timezone when
-// one is set (the Worker's own clock zone is the container's). Without zone
-// data the Worker's zone is the best available answer.
-func (s *EnvironmentOverrides) today(now time.Time) string {
-	if zone := s.get().Timezone; zone != "" {
-		if location, err := time.LoadLocation(zone); err == nil {
-			now = now.In(location)
-		}
-	}
-	return now.Format("2006-01-02")
-}
-
 // View reports the stored override and what a new CLI process receives.
 func (s *EnvironmentOverrides) View(base []string) Object {
 	current := s.get()

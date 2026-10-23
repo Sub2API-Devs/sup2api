@@ -2,20 +2,15 @@ package engine
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func lifecycleTestExecutable() (string, error) {
@@ -145,49 +140,4 @@ func cliTailPeer() error {
 	// Far beyond pipe capacity on Windows and Linux. Wait-before-drain hangs.
 	_, err = os.Stdout.Write(bytes.Repeat([]byte("\n"), 4<<20))
 	return err
-}
-
-func TestRunnerCancellationClosesInheritedOutputPipe(t *testing.T) {
-	cli, err := lifecycleTestExecutable()
-	require.NoError(t, err)
-	dir := t.TempDir()
-	runner := &Runner{CLI: cli, Env: envWith(nativeProbeEnv(dir, "http://127.0.0.1:1"), map[string]string{
-		"CCG_TEST_CLI_TAIL": "descendant", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"),
-	})}
-	p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
-	raw, err := json.Marshal(basic())
-	require.NoError(t, err)
-	req, err := parsePolicyRequest(raw, nil)
-	require.NoError(t, err)
-	req.diagnostic = newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw)))
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	defer cancel()
-	started := time.Now()
-	// Let the intentionally detached fixture exit before go test removes its
-	// executable on Windows; the measured request itself must return promptly.
-	t.Cleanup(func() { time.Sleep(time.Until(started.Add(2500 * time.Millisecond))) })
-	_, err = runner.run(ctx, req, p, dir, func(Object) error { return nil })
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Less(t, time.Since(started), time.Second, "cancellation waited for descendant to close inherited stdout")
-}
-
-func TestRunnerDrainsOutputAfterResult(t *testing.T) {
-	cli, err := lifecycleTestExecutable()
-	require.NoError(t, err)
-	dir := t.TempDir()
-	runner := &Runner{CLI: cli, Env: envWith(nativeProbeEnv(dir, "http://127.0.0.1:1"), map[string]string{
-		"CCG_TEST_CLI_TAIL": "1", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"),
-	})}
-	p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
-	raw, err := json.Marshal(basic())
-	require.NoError(t, err)
-	req, err := parsePolicyRequest(raw, nil)
-	require.NoError(t, err)
-	req.diagnostic = newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(raw)))
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	answer, err := runner.run(ctx, req, p, dir, func(Object) error { return nil })
-	require.NoError(t, err)
-	assert.Equal(t, "msg_tail", str(answer, "id"))
-	assert.Len(t, p.NativeRows, 1, "complete response and persisted transcript must be retained")
 }

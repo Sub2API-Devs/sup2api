@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all clean docker-build docker-push lint fmt vet coverage coverage-all
+.PHONY: all build test clean docker-build docker-push lint fmt vet coverage
 
 # 变量
 BINARY_NAME=worker
@@ -20,26 +20,11 @@ test:
 	@echo "Running unit tests..."
 	$(GO) test -v -race -coverprofile=coverage.out ./internal/... ./pkg/... ./cmd/...
 
-# 集成测试
-test-integration:
-	@echo "Running integration tests..."
-	@bash scripts/run-tests.sh --integration-only
-
-# 所有测试（单元 + 集成）
-test-all:
-	@echo "Running all tests..."
-	@bash scripts/run-tests.sh
-
 # 测试覆盖率（单元测试）
 coverage: test
 	@echo "Generating coverage report..."
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report saved to coverage.html"
-
-# 完整覆盖率（单元 + 集成）
-coverage-all:
-	@echo "Generating full coverage report..."
-	@bash scripts/run-tests.sh
 
 # 运行
 run:
@@ -93,10 +78,7 @@ help:
 	@echo "  all             - Run tests and build (default)"
 	@echo "  build           - Build the binary"
 	@echo "  test            - Run unit tests"
-	@echo "  test-integration - Run integration tests"
-	@echo "  test-all        - Run all tests (unit + integration)"
 	@echo "  coverage        - Generate unit test coverage report"
-	@echo "  coverage-all    - Generate full coverage report"
 	@echo "  run             - Run the application"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  fmt             - Format code"

@@ -116,7 +116,6 @@ func TestResourceManagementResponseSpoolRejectsIncompleteOrOversize(t *testing.T
 			response, err := resourceManagementHTTP(ctx, env, op, auth, client)
 			require.ErrorContains(t, err, "resource response unavailable")
 			assert.Nil(t, response)
-			assert.False(t, op.completed(), "failed spool published a completed response")
 			assert.Equal(t, int32(1), calls.Load())
 			assertResourceSpoolReleased(t, op.dir, op.budget)
 		})

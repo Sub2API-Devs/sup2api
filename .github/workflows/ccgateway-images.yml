@@ -64,8 +64,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Mod attachment policy
-        run: node --test next/plugins/ccgateway/companions/engine/attachment_policy_mod_test.mjs
       # The CLI support modules, including the Worker → CLI contract fixture.
       # patch-wire-preservation-304 patches the recovered CLI, which is not in
       # Git; it runs where that source is (tests needing it otherwise skip,

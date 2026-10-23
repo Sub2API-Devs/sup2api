@@ -23,7 +23,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 		{"F-BUILD-IDENTITY-LINE", "build 计费头入口与身份行", BuildIdentityCapability},
 		{"F-BUILD-INJECTION", "build 给非 CC 请求补提示词、附件与工具", BuildInjectionCapability},
 		{"F-REQUEST-LEVELS", "注入等级：0 / 微 / 低 / 高", RequestLevelsCapability},
-		{"F-DIRECT-BILLING", "direct 补计费头与身份行", DirectBillingCapability},
+		{"F-DIRECT-BILLING", "direct 补计费头", DirectBillingCapability},
 		{"F-REQUEST-AGENT-CONTEXT", "按客户端还原主代理/子代理请求", RequestAgentContextCapability},
 		{"F-BUILD-PRESERVATION", "build 内容保真", BuildContentPreservationCapability},
 		{"F-REQUEST-POLICY-MODE", "按请求选择 direct/build", RequestPolicyModeCapability},
@@ -35,20 +35,20 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 	return doc
 }
 
-// RequestCatalog does not inherit the legacy agent loop's policy claims.
+// RequestCatalog describes the request command, the only way a Worker answers.
 func RequestCatalog(mode string) Document {
 	doc := Document{CatalogVersion: "2026-10-20.request-attachments-v1", PolicySchemaVersion: PolicySchemaVersion, Features: []Feature{{
 		ID: "F-REQUEST-MODES", Title: "单次请求 direct/build", Category: "CC 执行上下文", Scope: "cc", Status: "partial",
 		BodyPaths: []string{"system", "messages", "tools"}, BetaHeaders: []string{},
 		Mechanisms: []string{mode, "CLI 原生单次发送", "API Key 认证", "调用方执行工具"},
-		Reason:     "direct 保留 Messages 原文；build 由 Worker 提取上下文后交 CLI 构建，可能改变文本块形状。均不执行工具循环，不启用旧 native 的附件擦除、工具前缀或字段忽略策略。count_tokens 未实现。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。",
+		Reason:     "direct 保留 Messages 原文，只补缺失的计费头；build 由 CLI 用原生函数按客户端原块组装，Worker 不改写内容。均不执行工具循环，工具由调用方执行。count_tokens 未实现。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。",
 	}}}
 	if mode == "request_build" {
 		doc.Features = append(doc.Features, Feature{
 			ID: "F-BUILD-ATTACHMENTS", Title: "build 环境附件来源", Category: "CC 执行上下文", Scope: "cc", Status: "supported",
 			BodyPaths: []string{"system", "messages[].content"}, BetaHeaders: []string{},
-			Mechanisms: []string{BuildAttachmentCapability, "build_attachment_sources", "原位字段替换"},
-			Reason:     "平台和 OS 版本可使用 Worker 本机事实；默认保留客户端。仅识别完整 CC 环境段落，保留 cwd、Git、Shell、指令、工具结果、媒体和 system 生命周期。未知或歧义格式保留；不调用额外模型。direct 不执行转换。",
+			Mechanisms: []string{BuildAttachmentCapabilityV2, "build_attachment_sources", "CLI 原生环境段"},
+			Reason:     "环境段各字段按来源由 CLI 的内容适配器生成：默认保留客户端，也可用 Worker 本机事实或擦除。仅识别完整 CC 环境段落，其余内容原样保留；不调用额外模型。direct 不执行转换。",
 		})
 	}
 	return doc

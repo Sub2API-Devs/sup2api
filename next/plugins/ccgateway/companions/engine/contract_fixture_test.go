@@ -99,7 +99,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			g.requestIdentitySecret = bytes.Repeat([]byte{7}, 32)
 			req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(sc.body))
 			req.Header.Set("x-api-key", "fixture")
-			req.Header.Set(policyHeader, sc.policy)
+			req.Header.Set(features.PolicyHeader, sc.policy)
 			out := httptest.NewRecorder()
 			g.ServeHTTP(out, req)
 			require.Equal(t, 200, out.Code, out.Body.String())

@@ -88,13 +88,6 @@ func refusedWith(env []string, token string) bool {
 	return ok && digest.([32]byte) == tokenDigest(token)
 }
 
-// credentialsPath is where Claude Code keeps its OAuth tokens on Linux: the
-// secure-storage directory (the image sets it to $CLAUDE_CONFIG_DIR), else the
-// configuration directory, else ~/.claude.
-func credentialsPath() string {
-	return credentialsPathIn(os.Environ())
-}
-
 func credentialsPathIn(env []string) string {
 	if value, present := environmentEntry(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR"); present {
 		if value != "" {
@@ -103,16 +96,6 @@ func credentialsPathIn(env []string) string {
 		env = envWith(env, nil, "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR")
 	}
 	return filepath.Join(snapshotConfigDirectory(env), ".credentials.json")
-}
-
-// storedAccessToken reads the OAuth access token Claude Code stored; "" when
-// there is none (not signed in with a Claude account).
-func storedAccessToken() string {
-	return storedAccessTokenIn(os.Environ())
-}
-
-func storedAccessTokenIn(env []string) string {
-	return storedOAuthIn(env).access
 }
 
 func storedOAuthIn(env []string) storedOAuth {

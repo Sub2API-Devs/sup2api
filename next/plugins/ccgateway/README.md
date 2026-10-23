@@ -12,15 +12,13 @@ ccgateway/
 ├─ assets/                # 插件资源
 ├─ docs/                  # CLI 逆向机制、改造说明及小型证据
 └─ companions/            # 配套运行组件，不随插件包安装到核心
-   ├─ go.mod              # 共享交互引擎模块 ccgateway
-   ├─ engine/             # Anthropic ↔ Claude Code、历史、工具、日志
-   ├─ mod/                # 嵌入 Worker 的 Mod
-   ├─ catalog/            # 原生工具定义
+   ├─ go.mod              # Worker 引擎模块 ccgateway
+   ├─ engine/             # /v1/messages → CLI request 命令、身份、日志、资源身份
    ├─ worker/             # 账号 Worker 独立模块及 Dockerfile
+   ├─ contracts/          # 跨组件合同与契约夹具
+   ├─ cli-mods/           # 定制 CLI 补丁与打包
    ├─ controller/         # Python 容器控制器及 Dockerfile
-   ├─ egress/             # 出口代理及 Dockerfile
-   ├─ main.go             # 独立网关兼容入口
-   └─ Dockerfile          # 兼容入口构建文件
+   └─ egress/             # 出口代理及 Dockerfile
 ```
 
 平台插件只依赖自己的模块与平台 SDK，不依赖 companions。插件打包器通过白名单收集 manifest、资源、表单和插件二进制，不收集 companions。核心 Docker 上下文也排除 companions，构建脚本相应排除它的 Go workspace 条目。

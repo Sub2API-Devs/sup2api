@@ -16,7 +16,8 @@ var BuildAttachmentFields = []string{"platform_name", "os_version", "shell", "pr
 // BuildAttachmentSources is deliberately separate from the retired agent
 // policy: upgrading a Worker must not activate old saved erase/replace rules.
 // Missing fields keep the client's text. Extended fields and erasure require
-// the versioned CLI content adapter; the v1 Worker path only owns platform/OS.
+// the versioned CLI content adapter, which applies every source: the Worker
+// never rewrites the content itself.
 type BuildAttachmentSources map[string]string
 
 func (p BuildAttachmentSources) Validate() error {

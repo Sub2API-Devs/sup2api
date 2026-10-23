@@ -64,7 +64,7 @@ func TestWorkerRealCLI(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
 	service := httptest.NewUnstartedServer(nil)
 	defer service.Close()
-	w, err := New(&config.Config{WorkerID: "real-test", Port: service.Listener.Addr().(*net.TCPAddr).Port, CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), CacheDir: filepath.Join(root, "cache"), APIKey: "test-gateway-key", AdminKey: "test-admin-key", RequestTimeout: 20 * time.Second})
+	w, err := New(&config.Config{WorkerID: "real-test", Port: service.Listener.Addr().(*net.TCPAddr).Port, CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "test-gateway-key", AdminKey: "test-admin-key", RequestTimeout: 20 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

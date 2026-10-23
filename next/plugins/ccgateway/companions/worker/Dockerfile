@@ -61,8 +61,7 @@ ENV CLAUDE_CONFIG_DIR=/work/config \
     CCG_WORKING_DIRECTORY=/work \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
     CCG_BIND=0.0.0.0:8787 \
-    CCG_DATA_DIR=/work/data \
-    CACHE_DIR=/work/data/cache
+    CCG_DATA_DIR=/work/data
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

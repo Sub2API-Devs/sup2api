@@ -55,9 +55,7 @@ func TestBuildGenerationRejectsMalformedExplicitControls(t *testing.T) {
 	for _, tc := range invalidBuildGeneration {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := generationRequest(tc.fields)
-			_, err := messagesBuildComponents(raw)
-			require.Error(t, err)
-			_, err = messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
+			_, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.Error(t, err)
 		})
 	}
@@ -80,7 +78,7 @@ func TestBuildGenerationKeepsNativeDefaultsAndBudgetAdjustment(t *testing.T) {
 	} {
 		t.Run(fields, func(t *testing.T) {
 			raw := generationRequest(fields)
-			out, err := messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
+			out, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.NoError(t, err)
 			var before, after map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(raw, &before))
@@ -125,7 +123,7 @@ func TestInvalidBuildGenerationNeverStartsCLIAndDirectKeepsBytes(t *testing.T) {
 	raw := []byte("{\n  \"model\":\"fixture\", \"max_tokens\":0,\n \"thinking\":{\"type\":\"invalid-fixture\"}, \"messages\":[{\"role\":\"user\",\"content\":\"direct\"}]\n}\n")
 	req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 	req.Header.Set("x-api-key", "fixture")
-	req.Header.Set(policyHeader, `{"relay_mode":"direct","cli_version":"2.1.304"}`)
+	req.Header.Set(features.PolicyHeader, `{"relay_mode":"direct","cli_version":"2.1.304"}`)
 	out := httptest.NewRecorder()
 	g.ServeHTTP(out, req)
 	require.Equal(t, 200, out.Code, out.Body.String())

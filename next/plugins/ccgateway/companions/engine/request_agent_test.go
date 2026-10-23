@@ -53,7 +53,7 @@ func TestRequestAgentContext(t *testing.T) {
 					remove = append(remove, "ANTHROPIC_API_KEY")
 				}
 				g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
-					CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestIdentityCapability, features.RequestAgentContextCapability}},
+					CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestIdentityCapability, features.RequestAgentContextCapability, features.BuildContentPreservationCapability}},
 					Runner:  &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), account, remove...)}}
 				require.NoError(t, g.configureRequestIdentity(root))
 				send := func(session string, headers map[string]string) (requestAgent, map[string]string) {
@@ -157,7 +157,7 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 			root := t.TempDir()
 			target := filepath.Join(root, "agent-env.json")
 			g := &Gateway{RequestMode: "build", Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
-				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: tc.capabilities},
+				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: append(tc.capabilities, features.BuildContentPreservationCapability)},
 				Runner: &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"),
 					"CCG_TEST_REQUEST_ENV_CAPTURE": target, requestAgentEnv: "untrusted",
@@ -182,7 +182,7 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 // renamed, in place.
 func TestBuildInputKeepsToolKeyOrder(t *testing.T) {
 	body := `{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"name":"Read","description":"d","input_schema":{"type":"object","z":1,"a":2},"cache_control":{"type":"ephemeral"}},{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`
-	out, err := messagesBuildComponentsPolicy([]byte(body), &features.CLIPolicy{}, "/w")
+	out, err := messagesBuildComponents([]byte(body), &features.CLIPolicy{}, "/w")
 	require.NoError(t, err)
 	var components struct {
 		Tools []json.RawMessage `json:"tools"`

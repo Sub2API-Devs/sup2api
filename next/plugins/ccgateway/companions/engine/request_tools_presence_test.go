@@ -16,7 +16,7 @@ func TestBuildRetainsAbsentVersusExplicitEmptyTools(t *testing.T) {
 				if version == "v2" {
 					policy = &features.CLIPolicy{ContractVersion: 2}
 				}
-				out, err := messagesBuildComponentsPolicy(generationRequest(fields), policy, "/work")
+				out, err := messagesBuildComponents(generationRequest(fields), policy, "/work")
 				require.NoError(t, err)
 				var components map[string]json.RawMessage
 				require.NoError(t, json.Unmarshal(out, &components))
@@ -37,9 +37,7 @@ func TestBuildRejectsNullAndMalformedToolCatalog(t *testing.T) {
 	for _, value := range []string{"null", "{}", `"tools"`, "true", "0", "[null]", "[1]"} {
 		t.Run(value, func(t *testing.T) {
 			raw := generationRequest(`"tools":` + value)
-			_, err := messagesBuildComponents(raw)
-			require.Error(t, err)
-			_, err = messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
+			_, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.Error(t, err)
 		})
 	}

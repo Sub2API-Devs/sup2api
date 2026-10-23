@@ -85,7 +85,7 @@ func TestRequestCommandSeparatesCancellationAndDeadline(t *testing.T) {
 					if cause == "client_with_frame" {
 						env = envWith(env, map[string]string{"CCG_TEST_REQUEST_FRAME": "1"})
 					}
-					g := &Gateway{RequestMode: mode, Key: "fixture", Runner: &Runner{CLI: exe, Work: root, Env: env}, Slots: make(chan struct{}, 1), Timeout: time.Minute, RequestLogDir: logs}
+					g := &Gateway{RequestMode: mode, Key: "fixture", Runner: &Runner{CLI: exe, Work: root, Env: env}, Slots: make(chan struct{}, 1), Timeout: time.Minute, RequestLogDir: logs, CLIInfo: buildCLI}
 					if cause == "worker_deadline" {
 						g.Timeout = 2 * time.Second
 					}

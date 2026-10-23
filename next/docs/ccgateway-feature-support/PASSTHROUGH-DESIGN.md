@@ -1,4 +1,6 @@
-# CCGateway 原生请求表达（native-only 当前设计）
+# CCGateway 原生请求表达（已归档）
+
+> 归档（2026-10-24，审计 C5）：本文描述的 native 执行路径（Worker 维护 CLI 会话、工具目录、历史缓存、Mod）已从 engine 删除，生产自 2026-10-19 起只走 CLI 的 `request` 命令。本文不描述当前行为；现状见 [REQUEST-MODES](../../plugins/ccgateway/docs/REQUEST-MODES.md) 与 [companions/README](../../plugins/ccgateway/companions/README.md)。
 
 本文沿用原文件路径，但不再描述可选的 passthrough HTTP relay。
 当前工作树只保留 native 模型执行：请求由内层 Claude Code CLI 构造并连接 provider；

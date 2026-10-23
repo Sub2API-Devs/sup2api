@@ -4035,6 +4035,19 @@ CCGateway 请求链路上的错误答复分三类来源，由 `contracts/request
 - **保存配置**（`save`）：`mergeConfig` 的校验文案原样返回（400 `invalid_argument`），只有存储/加密失败才是笼统文案；分组被删除后残留的 `cc_feature_groups` 键在下一次保存时自动清掉（`pruneFeatureGroups`）。
 - **PUT config 的原因**（`putConfig`）：控制器的错误码（`cli_profile_unavailable`、`disk_quota_unavailable`、`image_pull_failed`，激活失败的 `proxy_check_failed`/`egress_not_ready`…）经 `syncError` 成为 `details.reason`，`POST …/sync` 与对账日志都带它；控制器自己每个失败请求在 stderr 记一行（方法、key、路径、异常类型与消息、回给核心的码；未命名异常带堆栈），不记请求体与头。
 
+### 53.21 Worker 只运行 CLI 的请求命令（2026-10-24，审核 C1/C5）
+
+native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历史缓存、Mod 回环、托管安装官方 CLI）从 engine 删除；§53.11、§53.14–53.16 描述的 Worker 行为随之失效，只作历史。现在：
+
+- **唯一答复方式**：`/v1/messages` 与 `/v1/ccgateway/probe` 每次运行一次打包 CLI 的 `request --build|--direct`。`RequestMode` 为空（只可能是代码错误）时回 500 `Worker has no request mode`，不退回任何其他执行方式。
+- **就绪**：只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验；不再在启动时与每 10 分钟跑 7 次 `claude -p` 工具目录探针，`/v1/messages` 不再因探针失败 503（C1）。`/admin/cli` 的 `sync` 改为重新读取 CLI 版本：与启动时不同或读不到时，业务请求 503 并在 `catalog.error` 说明，恢复后自动放行。
+- **`/admin/cli` 视图**：字段形状不变（核心 `cliCatalogState` 与控制台按此解析）；`catalog` 由版本检查填写，`catalog_version` 等于已装版本，`tool_count`/`variant_count` 恒为 0，`updating` 恒为 false。`begin-install`/`validate-install`/`finish-install` 一律 409 `configuration_error`（官方 CLI 没有 `request` 命令，装上会使 Worker 无法应答）；`check` 仍查询发布渠道的最新版本。`/admin/cli/catalog` 已删除。
+- **模式切换**：策略头的 `relay_mode` 与容器模式不同时，要求 CLI 声明 `request_<mode>`；`cli_version` 与 Worker 的 CLI 不同 409。两项都在请求命令唯一一次解析策略头时检查（不再在 `Gateway.ServeHTTP` 预解析一次，C8）。
+- **build 只走内容保留（v2）**：CLI 未声明 `build_content_preservation_v1` 时 build 409；Worker 不再自己抽取 reminder、不再用本机事实改写环境段（v1）。客户端的块原样进入信封，环境段来源由 CLI 的内容适配器处理（`build_attachment_sources_v2`）。
+- **HTTP 错误只认帧**：CLI 的上游 HTTP 错误只以 stderr 错误帧交回；旧 CLI 的"exit 2 + meta + stdout"契约删除。
+- **令牌被拒**：CLI 帧报告上游 HTTP 401 时，Worker 记下存储的访问令牌（`noteAuthenticationRefused`），用量查询据此报告该令牌不可用直到它改变。此前这只在 native 路径写入，请求模式自 2026-10-19 起一直缺失。
+- **Worker 配置**：`WORKER_PLUGIN_PATH`、`CCG_NATIVE_TOOLS`、`CACHE_DIR`、`MAX_CACHE_SIZE`、`HISTORY_RETENTION` 不再读取；`engine.Options` 去掉 `Plugin`、`CacheDir`、`CacheLimit`、`NativeTools`、`InternalBaseURL`。独立入口 `companions/main.go` 与根 Dockerfile 删除，账号部署只用 `worker/Dockerfile`。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

@@ -55,7 +55,7 @@ func (b *resourceBroker) resourceDiagnostic(w http.ResponseWriter, r *http.Reque
 	if !d.enabled() {
 		return captured, r, func() { d.finish() }
 	}
-	d.artifact("resource-config.json", Object{"body_limit_bytes": b.limit, "spool_budget_bytes": b.budget.limit, "timeout_seconds": resourceTimeout.Seconds(), "cli_version": b.g.runner(r.Context()).Version, "auth_carrier": "native_cli", "session_checkpoint": false})
+	d.artifact("resource-config.json", Object{"body_limit_bytes": b.limit, "spool_budget_bytes": b.budget.limit, "timeout_seconds": resourceTimeout.Seconds(), "cli_version": b.g.Runner.Version, "auth_carrier": "native_cli", "session_checkpoint": false})
 	d.trace("resource_received", Object{"method": r.Method, "path": r.URL.Path, "query": r.URL.RawQuery, "content_type": r.Header.Get("Content-Type"), "declared_bytes": r.ContentLength})
 	writer := &resourceDiagnosticWriter{ResponseWriter: captured, d: d, digest: sha256.New()}
 	finish := func() {

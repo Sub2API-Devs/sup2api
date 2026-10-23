@@ -295,7 +295,7 @@ func mapRequestIdentity(key, raw []byte, mode string) (requestIdentity, error) {
 	switch mode {
 	case "client":
 		// Forwarded unchanged; only the CLI session follows the client's own.
-		if nativeSessionName.MatchString(session) {
+		if uuidPattern.MatchString(session) {
 			result.Session = session
 		}
 	case "worker":

@@ -20,6 +20,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 )
 
 func validateRequestMode(mode string) error {
@@ -29,16 +30,11 @@ func validateRequestMode(mode string) error {
 	return nil
 }
 
-// messagesBuildComponents preserves message blocks, including reminder text,
-// in their original positions. Tags alone cannot recover native attachment
-// types. Explicit typed attachments remain a CLI component-level API.
-func messagesBuildComponents(raw []byte) ([]byte, error) {
-	return messagesBuildComponentsPolicy(raw, nil, "")
-}
-
-// messagesBuildComponentsPolicy writes the build envelope; policy is the
-// CLI's part of the wire policy (features.CLIPolicy), nil for the v1 contract.
-func messagesBuildComponentsPolicy(raw []byte, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
+// messagesBuildComponents writes the envelope of the CLI's request --build:
+// the client's blocks in their positions and order (only tools[].input_schema
+// renamed in place), the CLI's part of the wire policy (features.CLIPolicy)
+// and the Worker's runtime context.
+func messagesBuildComponents(raw []byte, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
 	if err := validateBuildNumbers(raw); err != nil {
 		return nil, err
 	}
@@ -128,21 +124,13 @@ func messagesBuildComponentsPolicy(raw []byte, policy *features.CLIPolicy, worki
 	components := map[string]any{
 		"model": model, "systemPrompt": system, "messages": messages, "attachments": []any{}, "parameters": body, "stream": stream,
 	}
-	// An absent tool catalog differs from an explicit empty catalog. Retain
-	// that distinction through both legacy and preserving CLI build paths.
+	// An absent tool catalog differs from an explicit empty one: the CLI
+	// sends tools only when the client did.
 	if hasTools {
 		components["tools"] = wireTools
 	}
-	if policy != nil {
-		components["requestPolicy"] = policy
-		components["runtimeContext"] = map[string]any{"workingDirectory": workingDirectory, "additionalWorkingDirectories": []string{}}
-		return json.Marshal(components)
-	}
-	extracted, attachments, err := extractSystemComponents(messages)
-	if err != nil {
-		return nil, err
-	}
-	components["messages"], components["attachments"] = extracted, attachments
+	components["requestPolicy"] = policy
+	components["runtimeContext"] = map[string]any{"workingDirectory": workingDirectory, "additionalWorkingDirectories": []string{}}
 	return json.Marshal(components)
 }
 
@@ -194,7 +182,8 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		return
 	}
 	// The wire policy is exactly what this Worker reads (features.WorkerPolicy);
-	// without one (the CLI run by hand) the container's own mode applies.
+	// without one (the CLI run by hand) the container's own mode applies. The
+	// request runs on the CLI the core chose or not at all.
 	var policy features.WorkerPolicy
 	if value := r.Header.Get(features.PolicyHeader); value != "" {
 		parsed, err := features.ParseWorkerPolicy([]byte(value))
@@ -205,6 +194,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		policy = parsed
 		if policy.RelayMode != "" {
 			requestMode = policy.RelayMode
+		}
+		if policy.CLIVersion != "" && policy.CLIVersion != g.Runner.Version {
+			fail(409, "configuration_error", "Worker CLI version differs from gateway configuration; reconcile the runtime")
+			return
 		}
 	}
 	probe := r.URL.Path == "/v1/ccgateway/probe"
@@ -217,7 +210,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
 		d.setField("test_mode", "native_build")
 	}
-	if g.CLIInfo.Version != "" && !g.CLIInfo.supports("request_"+requestMode) {
+	// The container's own mode was checked when the Worker started; another
+	// one needs the CLI to declare it.
+	if !g.CLIInfo.supports("request_"+requestMode) && (g.CLIInfo.Version != "" || requestMode != g.RequestMode) {
 		fail(409, "configuration_error", "Loaded CLI does not support the requested mode")
 		return
 	}
@@ -251,7 +246,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	// Direct is a pure passthrough (2026-10-21 decision): the identity, like the
 	// rest of the body, goes upstream exactly as the client sent it.
 	if g.requestIdentityEnabled && requestMode == "build" {
-		mapped, mapErr := g.resolveRequestIdentity(g.runner(r.Context()).baseEnv(), raw, identityMode)
+		mapped, mapErr := g.resolveRequestIdentity(g.Runner.baseEnv(), raw, identityMode)
 		if mapErr != nil {
 			fail(400, "invalid_request_error", mapErr.Error())
 			return
@@ -265,7 +260,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	// the CLI's native context.
 	var agent *requestAgent
 	if !probe && g.CLIInfo.supports(features.RequestAgentContextCapability) {
-		resolved, agentErr := g.resolveRequestAgent(g.runner(r.Context()).baseEnv(), raw, r.Header, requestMode)
+		resolved, agentErr := g.resolveRequestAgent(g.Runner.baseEnv(), raw, r.Header, requestMode)
 		if agentErr != nil {
 			fail(400, "invalid_request_error", agentErr.Error())
 			return
@@ -309,49 +304,22 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		}
 	}
 	if requestMode == "build" {
+		// The CLI assembles the request from the client's own blocks
+		// (build_content_preservation_v1); the Worker never rewrites them.
+		if !g.CLIInfo.supports(features.BuildContentPreservationCapability) {
+			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
+			return
+		}
 		// The identity line follows the entrypoint in the CLI (BuildIdentityCapability).
 		identityLines := cli.BuildBillingEntrypoint != ""
-		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
-		if (cli.BuildAttachmentSources.RequiresV2() || v2 && cli.BuildAttachmentSources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || cli.BuildBillingSources.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
+		if (cli.BuildAttachmentSources.RequiresV2() || cli.BuildAttachmentSources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || cli.BuildBillingSources.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
 			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) || cli.BuildInjection != nil && !g.CLIInfo.supports(features.BuildInjectionCapability) {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
 			return
 		}
-		if (cli.BuildAttachmentSources.RequiresV2() || cli.BuildBillingSources.UsesWorker() || identityLines || cli.BuildInjection != nil) && !v2 {
-			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
-			return
-		}
-		if !v2 && cli.BuildAttachmentSources.UsesWorker() {
-			// Reject invalid content before v1 host fact collection; v2
-			// validates once while constructing its preserved envelope.
-			if err = validateBuildContent(raw); err != nil {
-				fail(400, "invalid_request_error", err.Error())
-				return
-			}
-			legacySources := features.BuildAttachmentSources{}
-			for _, field := range []string{"platform_name", "os_version"} {
-				if source, ok := cli.BuildAttachmentSources[field]; ok {
-					legacySources[field] = source
-				}
-			}
-			facts, factErr := buildAttachmentEnvironment(legacySources)
-			if factErr != nil {
-				fail(503, "configuration_error", factErr.Error())
-				return
-			}
-			var decisions []Object
-			input, decisions, err = transformBuildAttachments(raw, legacySources, facts)
-			d.trace("build_attachment_transform", Object{"sources": cli.BuildAttachmentSources, "changed": len(decisions), "decisions": decisions})
-		}
-		if err == nil {
-			if v2 {
-				// The CLI envelope carries the content and billing choices only:
-				// the identity context travels in its own environment variable.
-				input, err = messagesBuildComponentsPolicy(input, &cli, g.Runner.WorkingDirectory)
-			} else {
-				input, err = messagesBuildComponents(input)
-			}
-		}
+		// The CLI envelope carries the content and billing choices only: the
+		// identity context travels in its own environment variable.
+		input, err = messagesBuildComponents(input, &cli, g.Runner.WorkingDirectory)
 	} else {
 		var body map[string]json.RawMessage
 		err = json.Unmarshal(raw, &body)
@@ -383,7 +351,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	runner := g.runner(ctx)
+	runner := g.Runner
 	dir, err := os.MkdirTemp(runner.Work, "request-")
 	if err != nil {
 		fail(500, "api_error", "Cannot prepare CLI request")
@@ -437,7 +405,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		}
 	}
 	cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_ENTRYPOINT": entrypoint})
-	if requestMode == "build" && g.CLIInfo.supports(features.BuildContentPreservationCapability) {
+	if requestMode == "build" {
 		cmd.Dir = runner.WorkingDirectory
 	}
 	cmd.WaitDelay = 2 * time.Second
@@ -493,9 +461,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		return
 	}
 	if output.started {
-		// Compatibility with the old CLI's meta + stdout HTTP-error contract.
-		legacyHTTPError := frame == nil && output.status >= 400 && cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 2
-		if err != nil && !legacyHTTPError || frame != nil {
+		if err != nil || frame != nil {
 			if frame == nil {
 				frame = localRequestError(502, "api_error", "cli_stream_interrupted", "CC response stream was interrupted")
 			}
@@ -507,6 +473,11 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		return
 	}
 	if frame != nil && err != nil {
+		if frame.Source == requestfailure.SourceHTTP && frame.Status == http.StatusUnauthorized {
+			// The usage query reports the stored token unusable until it
+			// changes (usage.go).
+			noteAuthenticationRefused(runner.baseEnv())
+		}
 		frame.record(d, false)
 		frame.write(w)
 		return
@@ -517,7 +488,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		frame.write(w)
 		return
 	}
-	if err == nil || cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 2 {
+	if err == nil {
 		if output.start() == nil {
 			return
 		}

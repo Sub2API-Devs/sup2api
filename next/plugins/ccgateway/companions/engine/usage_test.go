@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -152,35 +151,4 @@ func TestUsageTellsExpiredFromRevoked(t *testing.T) {
 	if w := authRequest(a, "GET", "/admin/usage", "", "admin-key"); w.Code != 200 {
 		t.Fatalf("renewed token: %d %s", w.Code, w.Body.String())
 	}
-}
-
-// A model request that ends refused by Anthropic marks the stored token.
-func TestRefusedModelRequestMarksStoredToken(t *testing.T) {
-	path := usageEnv(t)
-	if err := os.WriteFile(path, []byte(`{"claudeAiOauth":{"accessToken":"a-refused","refreshToken":"r","expiresAt":1}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	g := &Gateway{Runner: &Runner{}}
-	for _, e := range []error{
-		&nativeError{Status: 502, Category: "server_error", Message: "other"},
-		&nativeError{Status: 403, Category: "permission_error", Message: "forbidden", ObservedStatus: true},
-	} {
-		x := &exchange{g: g, w: httptest.NewRecorder(), r: httptest.NewRequest(http.MethodPost, "/v1/messages", nil), diagnostic: &requestDiagnostic{fields: Object{}}}
-		x.runFailed(context.Background(), e)
-		if refusedWith(os.Environ(), "a-refused") {
-			t.Fatalf("%v marked the token", e)
-		}
-	}
-	for _, e := range []error{
-		&nativeError{Status: 502, Category: "authentication_failed", Message: "Claude Code native error: authentication_failed"},
-		&nativeError{Status: 401, Category: "unknown", Message: "unauthorized", ObservedStatus: true},
-	} {
-		refusedTokens.Delete(path)
-		x := &exchange{g: g, w: httptest.NewRecorder(), r: httptest.NewRequest(http.MethodPost, "/v1/messages", nil), diagnostic: &requestDiagnostic{fields: Object{}}}
-		x.runFailed(context.Background(), e)
-		if !refusedWith(os.Environ(), "a-refused") {
-			t.Fatalf("%v did not mark the token", e)
-		}
-	}
-	refusedTokens.Delete(path)
 }
