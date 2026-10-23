@@ -229,6 +229,7 @@ func newRequestLogStore(root string) (*requestLogStore, error) {
 			return nil, err
 		}
 	}
+	s.ensureIndex()
 	return s, nil
 }
 
@@ -297,11 +298,11 @@ func safeHeaders(h http.Header) http.Header {
 // pruneRequestLogs keeps each level within its retention and budget, oldest
 // first: a request's content files as full content (24h, 512 MiB), the
 // request itself as a summary (7 days, 128 MiB). Only directories created by
-// this logger are eligible for removal.
-func pruneRequestLogs(root string) {
+// this logger are eligible for removal. It returns the removed requests.
+func pruneRequestLogs(root string) (removed []string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return
+		return nil
 	}
 	type record struct {
 		path             string
@@ -319,8 +320,8 @@ func pruneRequestLogs(root string) {
 		info, err := os.Stat(filepath.Join(p, "metadata.json"))
 		if err != nil {
 			// Interrupted requests have no completion metadata. They must still expire.
-			if info, statErr := entry.Info(); statErr == nil && time.Since(info.ModTime()) > fullRetention {
-				_ = os.RemoveAll(p)
+			if info, statErr := entry.Info(); statErr == nil && time.Since(info.ModTime()) > fullRetention && os.RemoveAll(p) == nil {
+				removed = append(removed, entry.Name())
 			}
 			continue
 		}
@@ -353,9 +354,11 @@ func pruneRequestLogs(root string) {
 		if time.Since(r.time) > summaryRetention || summaryTotal > summaryBudget {
 			if os.RemoveAll(r.path) == nil {
 				summaryTotal -= r.summary
+				removed = append(removed, filepath.Base(r.path))
 			}
 		}
 	}
+	return removed
 }
 
 // requestLogUsage is what the logs hold now, by level.
@@ -426,11 +429,10 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root
 	}
 	// A week of summaries is many directories: a request prunes at most once a
 	// minute (the maintenance loop prunes every minute too).
-	if d.store == nil || d.store.clock().Sub(d.store.pruned) >= time.Minute {
+	if d.store == nil {
 		pruneRequestLogs(root)
-		if d.store != nil {
-			d.store.pruned = d.store.clock()
-		}
+	} else if d.store.clock().Sub(d.store.pruned) >= time.Minute {
+		d.store.pruneLocked()
 	}
 	d.fields["log_level"] = logLevelFull
 	if d.summaryOnly {
@@ -609,6 +611,9 @@ func (d *requestDiagnostic) finish() {
 	d.finished = true
 	if d.store != nil {
 		delete(d.store.active, d)
+		if d.directory != "" && d.store.enabled {
+			d.store.indexed(filepath.Base(d.directory), b)
+		}
 	}
 }
 
@@ -625,6 +630,8 @@ type requestLogStore struct {
 	pruned time.Time
 	now    func() time.Time
 	active map[*requestDiagnostic]bool
+	// index lists the finished requests for the viewer; nil until built.
+	index map[string]logEntry
 }
 
 func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
@@ -675,6 +682,7 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 					d.discarded = true
 					d.mu.Unlock()
 				}
+				s.index = map[string]logEntry{}
 				if err := os.RemoveAll(s.root); err != nil {
 					apiError(w, 500, "api_error", "Cannot clear request logs")
 					return
@@ -766,5 +774,7 @@ func (s *requestLogStore) describe() Object {
 		"usage":                   requestLogUsage(s.root),
 		"per_request_limit_bytes": fullRequestLimit, "retention_hours": int(fullRetention / time.Hour), "storage_budget_bytes": fullBudget,
 		"overflow_behavior": "retain_partial_with_metadata",
+		// viewer: the logs can be read through /admin/request-logs/{query,detail,read}.
+		"viewer": true,
 	}
 }

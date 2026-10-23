@@ -145,6 +145,7 @@ export default {
     title: '请求',
     id: '请求 ID',
     clientId: '客户端请求 ID',
+    log: '请求日志',
     clientIdNone: '客户端没有发送 X-Request-Id',
     endpoint: '端点',
     upstreamModel: '上游模型',

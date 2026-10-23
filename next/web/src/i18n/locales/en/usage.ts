@@ -145,6 +145,7 @@ export default {
     title: 'Request',
     id: 'Request ID',
     clientId: 'Client request ID',
+    log: 'Request log',
     clientIdNone: 'The client sent no X-Request-Id',
     endpoint: 'Endpoint',
     upstreamModel: 'Upstream model',

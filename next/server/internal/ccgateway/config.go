@@ -201,6 +201,9 @@ type Service struct {
 	kick chan string
 	// installMu serializes runtime installs without a Locker.
 	installMu sync.Mutex
+	// logReads: when each caller last read a request log file (one audit row
+	// per file and window, request_log_viewer.go).
+	logReads sync.Map
 	// runScript / runLocalScript / openController replace
 	// remotedocker.RunScript, remotedocker.RunLocalScript and the tunnel to
 	// the controller in tests (nil: the real ones).

@@ -21,7 +21,7 @@ const leveledWorkerState = `{"enabled":true,"level":"full","full_until":"2026-10
 	`"limits":{"summary":{"retention_hours":168,"storage_budget_bytes":134217728,"per_request_limit_bytes":262144},` +
 	`"full":{"retention_hours":24,"storage_budget_bytes":536870912,"per_request_limit_bytes":67108864}},` +
 	`"usage":{"summary_bytes":2048,"full_bytes":4096,"requests":3},` +
-	`"per_request_limit_bytes":67108864,"retention_hours":24,"storage_budget_bytes":536870912,"overflow_behavior":"retain_partial_with_metadata","private_data":"must-not-leak"}`
+	`"per_request_limit_bytes":67108864,"retention_hours":24,"storage_budget_bytes":536870912,"overflow_behavior":"retain_partial_with_metadata","viewer":true,"private_data":"must-not-leak"}`
 
 // requestLogsService points a fresh Service at a fake controller/Worker.
 func requestLogsService(t *testing.T, handler http.HandlerFunc) (*Service, *store.DB) {
@@ -95,7 +95,7 @@ func TestRequestLogsLevelsForwardAndAudit(t *testing.T) {
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
 	if strings.Contains(w.Body.String(), "private_data") || got.Data["level"] != "full" || got.Data["full_until"] != "2026-10-23T07:04:05Z" ||
-		got.Data["retention_hours"] != float64(24) || got.Data["usage"] == nil || got.Data["limits"] == nil {
+		got.Data["retention_hours"] != float64(24) || got.Data["usage"] == nil || got.Data["limits"] == nil || got.Data["viewer"] != true {
 		t.Fatalf("GET projection: %s", w.Body.String())
 	}
 	for _, tc := range []struct{ in, want string }{

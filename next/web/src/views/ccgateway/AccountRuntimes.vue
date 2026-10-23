@@ -16,6 +16,7 @@ import { containerPhase, type CcgContainer } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import CLISettings from './CLISettings.vue'
+import RequestLogViewer from './RequestLogViewer.vue'
 
 type RequestLogLevel = 'off' | 'summary' | 'full'
 const LOG_LEVELS: readonly RequestLogLevel[] = ['off', 'summary', 'full']
@@ -43,6 +44,8 @@ interface RequestLogState {
   levels?: RequestLogLevel[]
   limits?: { summary?: RequestLogTier; full?: RequestLogTier }
   usage?: { summary_bytes?: number; full_bytes?: number; requests?: number }
+  /** The Worker serves the log reads (REQUEST-LOG-VIEWER-DESIGN.md). */
+  viewer?: boolean
 }
 
 /** Validated level state of a Worker that reports levels. */
@@ -55,6 +58,7 @@ interface RequestLogLevels {
   full: RequestLogTier | null
   usage: { summary_bytes: number | null; full_bytes: number | null; requests: number | null }
   overflow: boolean
+  viewer: boolean
 }
 
 interface Row {
@@ -88,6 +92,11 @@ const { blockedTitle } = useCcgText()
 const auth = useAuthStore()
 const own = useOwnership()
 const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
+// Reading the logs: settings or account readers, not own-level ones (§7).
+const canViewLogs = computed(() => auth.has('settings:read') || auth.has('account:read'))
+const viewing = ref<Row | null>(null)
+const viewerOpen = computed({ get: () => viewing.value !== null, set: (v: boolean) => { if (!v) viewing.value = null } })
+const showViewer = (r: Row) => canViewLogs.value && !!r.logsLevels?.viewer && r.logsLevels.level !== 'off'
 const rows = ref<Row[]>([])
 const loading = ref(false)
 const cleaning = ref(false)
@@ -207,6 +216,7 @@ function levelsOf(state: RequestLogState): RequestLogLevels {
     summary: tierOf(state.limits?.summary), full: tierOf(state.limits?.full),
     usage: { summary_bytes: usage('summary_bytes'), full_bytes: usage('full_bytes'), requests: usage('requests') },
     overflow: state.overflow_behavior === 'retain_partial_with_metadata',
+    viewer: state.viewer === true,
   }
 }
 
@@ -371,7 +381,10 @@ async function refreshAuth(r: Row) {
               <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
               <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
             </STooltip>
-            <div v-if="row.logsLevels.level === 'full' || (row.logsLevels.usage.full_bytes ?? 0) > 0" class="mt-1 flex items-center gap-2 whitespace-nowrap">
+            <div v-if="row.logsLevels.level === 'full' || (row.logsLevels.usage.full_bytes ?? 0) > 0 || showViewer(row)" class="mt-1 flex items-center gap-2 whitespace-nowrap">
+              <SButton v-if="showViewer(row)" size="sm" variant="ghost" icon="list" :data-testid="`request-log-view-${row.id}`" @click="viewing = row">
+                {{ row.logsLevels.usage.requests === null ? t('ccgateway.requestLogs.view') : t('ccgateway.requestLogs.viewCount', { count: row.logsLevels.usage.requests }) }}
+              </SButton>
               <SHint v-if="row.logsLevels.level === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
               <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
             </div>
@@ -406,5 +419,6 @@ async function refreshAuth(r: Row) {
         <SButton variant="primary" data-testid="request-log-full-confirm" @click="confirmFull">{{ t('ccgateway.requestLogs.fullAction') }}</SButton>
       </template>
     </SModal>
+    <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="viewing.logsLevels ? logDetails(viewing) : undefined" />
   </SCard>
 </template>

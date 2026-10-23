@@ -98,10 +98,12 @@ WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSigna
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|egress|migrate-auth|admin/(?:status|usage|features|request-logs|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
+                   r'connection|tunnel|worker|egress|migrate-auth|admin/(?:status|usage|features|request-logs(?:/(?:query|detail|read))?|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller|cleanup)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
+# A request log file read reports where its bytes sit in the file.
+LOG_READ_HEADERS = ('X-Log-File-Size', 'X-Log-Offset', 'X-Log-Length', 'X-Content-Type-Options')
 
 
 class BadRequest(ValueError):
@@ -1584,7 +1586,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not state or state.get('revision') != self.headers.get('X-CCG-Revision', ''):
                     return self.fail(409, 'not_synchronized')
                 return self.reply(200, manager.cli_updates.request(state))
-            methods = {'admin/request-logs': ('GET', 'PUT'), 'admin/cli': ('GET', 'POST', 'PUT')}.get(path, ('GET', 'POST'))
+            # Reading the request logs is POST with its query in the body (no
+            # query strings here), REQUEST-LOG-VIEWER-DESIGN.md §5.
+            methods = {'admin/request-logs': ('GET', 'PUT'), 'admin/request-logs/query': ('POST',), 'admin/request-logs/detail': ('POST',),
+                       'admin/request-logs/read': ('POST',), 'admin/cli': ('GET', 'POST', 'PUT')}.get(path, ('GET', 'POST'))
             if path in ('config', 'status') or self.command not in methods:
                 return self.fail(405, 'method_not_allowed')
             if path in ('admin/usage', 'admin/features', 'admin/cli/catalog') and self.command != 'GET':
@@ -1622,6 +1627,10 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header('Content-Type', response.headers.get('Content-Type', 'application/json'))
                     self.send_header('Connection', 'close')
                     self.send_header('Cache-Control', 'no-store')
+                    if path == 'admin/request-logs/read':
+                        for name in LOG_READ_HEADERS:
+                            if response.headers.get(name):
+                                self.send_header(name, response.headers[name])
                     self.end_headers()
                     self.response_started = True
                     self.close_connection = True

@@ -240,20 +240,25 @@ CCGateway 请求策略的 `custom_tool_prefix` 可配置普通自定义工具的
 
 ### 请求调试日志
 
-记录由 Worker 容器独立拥有；核心/插件仅代理开关，不复制诊断正文。每个请求对应
-`request-logs/<随机目录>/`，`metadata.json` 同时包含 `request_id` 和 `log_directory` 以便关联查询。
-所有新增文件受同一日志开关、24 小时保留期和容量限制控制：
+记录由 Worker 容器独立拥有，只存在账号数据卷的 `request-logs/<随机目录>/` 里。`metadata.json` 同时包含 `request_id`（核心的请求 ID，插件经 `x-request-id` 转发）和 `log_directory`。
 
-- `events.jsonl`：请求生命周期、历史准备/提交、CLI 输入输出、Mod 配置获取/加载确认/system 确认、附件 keep/drop/relabel、上游交换状态。
-- `effective-config.json`、`mod-config.json`：实际 CLI 参数、网关生成的环境选项和 Mod 配置。不会转储继承环境、账号 Key、内部 Mod/relay URL 或令牌。
-- `history.json`、`history-prepared.jsonl`、`history-native.jsonl`：恢复模式、session/anchor、准备的历史及退出后可读取的原生历史；失败时以事件标明无法读取的快照。
-- `cli-stdout.jsonl`：原生 stream-json 输出，包括结束后的排空记录。
-- `upstream-<id>-cli-request.body`、`-request.body`、`-response.body` 和相应头/状态文件：每次模型/计数请求的适配前正文、实际转发正文和原始上游响应，包括不需要适配的请求。头部鉴权字段脱敏。
+分三级（`next/docs/ccgateway-feature-support/REQUEST-LOG-LEVELS-DESIGN.md`）：
 
-正文只落容器诊断目录，不复制到插件或 Docker 输出。发生容量超限会删除整条诊断，不能把被清理的记录声称为完整保留。日志实现集中在 `gateway/request_log.go` 和 `gateway/request_trace.go`，业务通过 nil-safe trace/artifact/snapshot 接口接入。
+- 关闭：不记录，并删除已有日志。
+- 摘要（默认）：只写 `metadata.json`、`events.jsonl`、脱敏后的请求头和响应头；事件里的文字最多 256 字节。保留 7 天，总量 128 MiB。
+- 完整：另存正文，只能开 1、4 或 24 小时，到期回到摘要。正文保留 24 小时，总量 512 MiB，单条 64 MiB（超出时保留已写部分并标记截断）。
 
-管理接口 `GET/PUT /admin/request-logs` 查询或设置 `{"enabled":true|false}`，需要管理密钥。CCGateway 页面按账号控制该设置，状态保存在运行容器的数据卷中。
+完整级别的正文文件：
 
-开启时在 `CCG_DATA_DIR/request-logs/<随机目录>/` 保存原始 `request.body`、`response.body`（含 SSE）、脱敏后的请求/响应头及 `metadata.json`。请求体被出站适配改写过的请求（客户端 system 还原、`thinking.display`）另保存为 `upstream-request-<序号>-<随机标识>.body`（被拒绝的为 `upstream-refused-*`），未改写的不另存，受同一开关和容量限制。消息正文仅写入这些可删除的文件，不输出到 Docker 日志。关闭会停止现有请求的记录、删除全部调试日志，并阻止后续请求落盘；不会中断业务响应。
+- `request.body`、`response.body`（含 SSE）。
+- `effective-config.json`、`mod-config.json`、`build-components.json` 等：实际 CLI 参数、Mod 配置和组装结果。不会转储继承环境、账号 Key、内部 Mod/relay URL 或令牌。
+- `history.json`、`history-prepared.jsonl`、`history-native.jsonl`：恢复模式、session/anchor 和历史。
+- `cli-stdout.jsonl`：原生 stream-json 输出。
+- `upstream-*`：每次模型请求的适配前正文、实际转发正文和上游响应，鉴权字段脱敏。
 
-单请求日志超过 64 MiB 时删除整条日志，不保存部分正文。已完成日志保留 24 小时，总量软限制 512 MiB，按时间清理。这里的零保留仅指调试日志，不改变业务会话缓存。
+管理接口（需要管理密钥）：
+
+- `GET/PUT /admin/request-logs`：级别、到期时间、各级上限和占用；PUT 接受 `{"level":…}`、`{"level":"full","full_for_hours":1|4|24}`、`{"clear_full":true}` 和旧的 `{"enabled":bool}`。
+- `POST /admin/request-logs/query|detail|read`：列表、单条详情、正文分段读取或下载（`next/docs/ccgateway-feature-support/REQUEST-LOG-VIEWER-DESIGN.md`）。核心只把正文读取开放给 `settings:manage`，每次读取记审计。
+
+日志实现在 `engine/request_log.go`、`request_trace.go` 和 `request_log_viewer.go`。正文不输出到 Docker 日志。这里的保留期只针对调试日志，不改变业务会话缓存。

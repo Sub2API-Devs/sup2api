@@ -30,6 +30,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 		}
 		s.accountManage(c)
 	}, "settings:manage", "account:update", "account:own:update")
+	// Reading the request logs (REQUEST-LOG-VIEWER-DESIGN.md §6).
+	s.registerRequestLogViewer(r)
 	// Draft runtimes of accounts being created (CONTRACTS §49.9).
 	s.registerDraftRoutes(r)
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {

@@ -145,6 +145,9 @@ var agentContextHeaders = map[string]*regexp.Regexp{
 	"x-claude-code-context-compacted": regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
 }
 
+// workerRequestID is the shape the Worker takes as its log's request ID.
+var workerRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+
 // The host resolves this exact virtual target for this plugin and account type,
 // then injects authentication. No caller-supplied URL or credential is forwarded.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
@@ -167,6 +170,11 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	outHeaders := headers(in.GetInboundHeaders())
 	// Scope is supplied by the authenticated host, never copied from caller headers.
 	outHeaders["x-ccgateway-session-scope"] = fmt.Sprintf("user:%d:key:%d", in.GetMeta().GetUserId(), in.GetMeta().GetApiKeyId())
+	// The core's request ID names the Worker's log, so a usage record leads
+	// to it (REQUEST-LOG-VIEWER-DESIGN.md §3); a caller's own is not copied.
+	if id := in.GetMeta().GetRequestId(); workerRequestID.MatchString(id) {
+		outHeaders["x-request-id"] = id
+	}
 	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: target, Headers: outHeaders, UpstreamModel: model}, nil
 }
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {

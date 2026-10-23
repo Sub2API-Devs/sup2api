@@ -655,11 +655,11 @@ func Serve() error {
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
 	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: g.RequestLogs}
-	return g.listen(bind, admin, logs.root)
+	return g.listen(bind, admin, logs)
 }
 
 // listen serves the gateway and its management API until SIGINT or SIGTERM.
-func (g *Gateway) listen(bind string, admin http.Handler, logDir string) error {
+func (g *Gateway) listen(bind string, admin http.Handler, logs *requestLogStore) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	mux := http.NewServeMux()
@@ -671,7 +671,7 @@ func (g *Gateway) listen(bind string, admin http.Handler, logDir string) error {
 	defer close(done)
 	go func() {
 		defer close(backgroundDone)
-		maintain(ctx, done, server, g.Cache, logDir)
+		maintain(ctx, done, server, g.Cache, logs)
 	}()
 	log.Printf("ccgateway listening on %s; Claude Code %s; native session retention 24h", bind, g.Runner.Version)
 	e := server.ListenAndServe()
@@ -699,16 +699,14 @@ func nativeAllowlist(list string) (map[string]bool, error) {
 
 // maintain prunes the history cache and request logs every minute, and shuts
 // the server down when ctx ends; it returns then, or when done closes.
-func maintain(ctx context.Context, done <-chan struct{}, server *http.Server, cache *HistoryCache, logDir string) {
+func maintain(ctx context.Context, done <-chan struct{}, server *http.Server, cache *HistoryCache, logs *requestLogStore) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			cache.prune()
-			if logDir != "" {
-				pruneRequestLogs(logDir)
-			}
+			logs.prune()
 		case <-ctx.Done():
 			shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

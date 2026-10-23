@@ -120,6 +120,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: () => voi
       const out = await r.handler(mreq)
       if (out && typeof out === 'object' && '__status' in out) {
         for (const [name, value] of Object.entries((out as any).__headers || {})) res.setHeader(name, String(value))
+        // __bytes: a raw (non-JSON) body, e.g. a request log file.
+        if ((out as any).__bytes instanceof Uint8Array) {
+          res.statusCode = (out as any).__status
+          return res.end((out as any).__bytes)
+        }
         return send(res, (out as any).__status, (out as any).body)
       }
       return send(res, 200, out && typeof out === 'object' && ('data' in out || 'error' in out) ? out : { data: out })

@@ -75,8 +75,8 @@ func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 	p := New()
 	in := &pluginv1.BuildUpstreamRequestRequest{
 		Account:        &pluginv1.Account{Platform: PlatformID, Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: "{}"},
-		Meta:           &pluginv1.RequestMeta{Protocol: ProtocolMessages, UserId: 12, ApiKeyId: 34},
-		InboundHeaders: map[string]string{"x-ccgateway-session-id": "conversation-a", "x-ccgateway-session-scope": "attacker", "x-claude-code-agent-id": "agent-fixture"},
+		Meta:           &pluginv1.RequestMeta{Protocol: ProtocolMessages, UserId: 12, ApiKeyId: 34, RequestId: "0123456789abcdef01234567"},
+		InboundHeaders: map[string]string{"x-ccgateway-session-id": "conversation-a", "x-ccgateway-session-scope": "attacker", "x-claude-code-agent-id": "agent-fixture", "x-request-id": "caller"},
 	}
 	r, err := p.BuildUpstreamRequest(context.Background(), in)
 	if err != nil {
@@ -85,15 +85,22 @@ func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 	if r.Headers["x-ccgateway-session-scope"] != "user:12:key:34" {
 		t.Fatal("native session scope not owned by host")
 	}
+	if r.Headers["x-request-id"] != "0123456789abcdef01234567" {
+		t.Fatal("the Worker's log is not named by the core's request ID", r.Headers)
+	}
 	// The session comes from the body (CONTRACTS §53.12); the legacy header
 	// is not forwarded. A client subagent's own header is.
 	if _, forwarded := r.Headers["x-ccgateway-session-id"]; forwarded || r.Headers["x-claude-code-agent-id"] != "agent-fixture" {
 		t.Fatal("session headers", r.Headers)
 	}
 	in.Meta.ApiKeyId = 35
+	in.Meta.RequestId = "not/a request id"
 	r2, err := p.BuildUpstreamRequest(context.Background(), in)
 	if err != nil || r2.Headers["x-ccgateway-session-scope"] == r.Headers["x-ccgateway-session-scope"] {
 		t.Fatal("API keys share session scope")
+	}
+	if _, forwarded := r2.Headers["x-request-id"]; forwarded {
+		t.Fatal("a malformed request ID or the caller's was forwarded")
 	}
 }
 

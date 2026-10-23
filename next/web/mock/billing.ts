@@ -993,6 +993,13 @@ for (let i = 0; i < 90; i++) {
     _detail: billing.detail,
     _price: billing.status === 'billed' && price ? { id: price.id, model: price.model, source: price.source } : null
   }
+  // Two records served by a CCGateway account, whose Worker logs the viewer
+  // finds by request ID (one retried twice, one logged once).
+  if (row.account_id && (i === 1 || i === 2)) {
+    Object.assign(row, { account_id: 25, account_name: 'cc-main', plugin_key: 'ccgateway', account_type: 'managed' })
+    if (i === 1) row.request_id = 'c0ffee00c0ffee00c0ffee00'
+    row.created_at = new Date(Date.now() - i * 5 * 60000).toISOString()
+  }
   usageRows.push(row)
 }
 usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))

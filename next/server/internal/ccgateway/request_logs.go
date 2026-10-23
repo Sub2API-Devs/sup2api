@@ -16,8 +16,8 @@ import (
 )
 
 // Request log levels (REQUEST-LOG-LEVELS-DESIGN §2/§4). Only the level,
-// expiry, validated limits and usage are exposed; log contents stay on the
-// runtime.
+// expiry, validated limits and usage are exposed here; the logs themselves are
+// read through request_log_viewer.go.
 const (
 	requestLogOff     = "off"
 	requestLogSummary = "summary"
@@ -225,6 +225,8 @@ type requestLogLevelState struct {
 		Full    *requestLogTier `json:"full,omitempty"`
 	} `json:"limits"`
 	Usage *requestLogUsage `json:"usage,omitempty"`
+	// Viewer: the Worker serves the log reads (REQUEST-LOG-VIEWER-DESIGN.md).
+	Viewer bool `json:"viewer"`
 }
 
 func validLimit(limit *int64) bool {
@@ -270,12 +272,13 @@ func decodeRequestLogState(raw []byte) (any, error) {
 			Summary *requestLogTier `json:"summary"`
 			Full    *requestLogTier `json:"full"`
 		} `json:"limits"`
-		Usage *requestLogUsage `json:"usage"`
+		Usage  *requestLogUsage `json:"usage"`
+		Viewer bool             `json:"viewer"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	out := requestLogLevelState{requestLogState: legacy}
+	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer}
 	if len(in.Levels) == 0 || len(in.Levels) > len(requestLogLevels) {
 		return nil, errors.New("invalid request log levels")
 	}

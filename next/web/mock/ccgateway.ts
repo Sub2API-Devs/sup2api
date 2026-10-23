@@ -192,6 +192,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       usage: { summary_bytes: s.summaryBytes, full_bytes: s.fullBytes, requests: s.requests },
       // Legacy top-level fields (full tier values) for older consoles.
       retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata',
+      viewer: true,
     }
   }
   on('GET', `${base}/accounts/:id/request-logs`, (req) => {
@@ -217,6 +218,142 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     } else if (keys === 'clear_full' && body.clear_full === true) s.fullBytes = 0
     else return fail(400, 'invalid_argument', 'Send exactly one of {"level":"off"}, {"level":"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":true|false}.')
     return requestLogState(r.key)
+  })
+
+  // Reading the logs (REQUEST-LOG-VIEWER-DESIGN.md §6): a fixed set per account.
+  interface MockLog {
+    id: string; request_id: string; time: string; duration_ms: number; status: number; stage: string; model: string; stream: boolean
+    log_level: 'summary' | 'full'; error_type?: string; error?: string; log_status: string; test: boolean; attempt?: number; files: Record<string, Uint8Array>
+  }
+  const mockLogs = new Map<string, MockLog[]>()
+  const uuidOf = (seed: string) => {
+    const h = createHash('sha256').update(seed).digest('hex')
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
+  }
+  const enc = (v: string) => new TextEncoder().encode(v)
+  const logFiles = (rid: string, n: number): Record<string, Uint8Array> => {
+    const sse = ['event: message_start', `data: {"type":"message_start","message":{"id":"msg_${n}","model":"claude-sonnet-4-6","usage":{"input_tokens":18231,"cache_read_input_tokens":17984}}}`, '',
+      'event: content_block_delta', 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"好的，我先看一下这个报错……"}}', '',
+      'event: message_stop', 'data: {"type":"message_stop"}', '', ''].join('\n')
+    // The first log's CLI output is over 1 MiB, to page through it.
+    const cli = Array.from({ length: n === 0 ? 30000 : 3 }, (_, i) => JSON.stringify(i === 0
+      ? { type: 'system', subtype: 'init', model: 'claude-sonnet-4-6', session_id: rid }
+      : { type: 'assistant', message: { content: [{ type: 'text', text: `第 ${i} 段输出 <b>不应渲染为 HTML</b>` }] } })).join('\n') + '\n'
+    return {
+      'request.body': enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, system: [{ type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: '帮我看看这个报错 <script>alert(1)</script>' }] })),
+      'build-components.json': enc(JSON.stringify({ level: 'low', system_blocks: 3, tools: ['Bash', 'Read', 'Edit', 'Write'], attachments: ['date', 'environment'] })),
+      'effective-config.json': enc(JSON.stringify({ args: ['--print', '--output-format', 'stream-json'], model: 'claude-sonnet-4-6' })),
+      'cli-stdout.jsonl': enc(cli),
+      'response.body': enc(sse),
+      'upstream-1-request.body': new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x02, 0xff, ...enc('binary payload')]),
+    }
+  }
+  const logsFor = (key: string): MockLog[] => {
+    let list = mockLogs.get(key)
+    if (list) return list
+    list = []
+    const now = Date.now()
+    for (let n = 0; n < 120; n++) {
+      const rid = n === 2 || n === 3 ? 'c0ffee00c0ffee00c0ffee00' : createHash('md5').update(key + n).digest('hex').slice(0, 24)
+      const failed = n % 9 === 3
+      const rejected = n % 17 === 5
+      const full = n < 8
+      list.push({
+        id: uuidOf(key + ':' + n), request_id: rid, time: new Date(now - n * 7 * 60000 - 4000).toISOString(), duration_ms: failed ? 900 : rejected ? 12 : 1200 + (n * 317) % 9000,
+        status: failed ? 529 : rejected ? 400 : 200, stage: failed ? 'upstream' : rejected ? 'parse_request' : 'finished',
+        model: n % 4 === 1 ? 'claude-opus-4-1' : 'claude-sonnet-4-6', stream: n % 5 !== 0, log_level: full ? 'full' : 'summary',
+        error_type: failed ? 'overloaded_error' : rejected ? 'invalid_request_error' : undefined,
+        error: failed ? 'Overloaded' : rejected ? 'messages: roles must alternate between "user" and "assistant"' : undefined,
+        log_status: n === 0 ? 'truncated' : 'complete', test: n === 11, attempt: n === 2 ? 2 : n === 3 ? 1 : undefined,
+        files: full ? logFiles(rid, n) : {},
+      })
+    }
+    mockLogs.set(key, list)
+    return list
+  }
+  const logBytes = (files: Record<string, Uint8Array>) => 3072 + Object.values(files).reduce((a, f) => a + f.length, 0)
+  const logAccount = (req: MockRequest) => {
+    const r = accountRuntime(req)
+    if (!isRuntime(r)) return r
+    if (!ready(r.key)) return notSynchronized()
+    if (logsOf(r.key).level === 'off') return fail(409, 'conflict', 'Request logs are off for this account.', { reason: 'request_logs_off' })
+    return r
+  }
+  on('GET', `${base}/accounts/:id/request-logs/requests`, (req) => {
+    if (!hasPerm(caller(req), ['settings:read', 'account:read'])) return fail(403, 'permission_denied', 'settings:read or account:read is required')
+    const r = logAccount(req)
+    if (!isRuntime(r)) return r
+    const q = req.query
+    const limit = Number(q.limit || 50)
+    // A usage record's own request ID: its log, made once.
+    const logs = logsFor(r.key)
+    if (q.request_id?.startsWith('req_') && !logs.some(l => l.request_id === q.request_id)) {
+      logs.splice(1, 0, { ...logs[1], id: uuidOf(r.key + ':' + q.request_id), request_id: q.request_id })
+    }
+    let list = logsFor(r.key).filter(l => (!q.request_id || l.request_id === q.request_id) && (!q.model || l.model === q.model) && (!q.level || l.log_level === q.level)
+      && (!q.status || (q.status === 'error') === (l.status >= 400)) && (!q.since || l.time >= q.since))
+    if (q.before) list = list.slice(list.findIndex(l => l.id === q.before.split('_')[1]) + 1)
+    const page = list.slice(0, limit)
+    const last = page[page.length - 1]
+    return {
+      items: page.map(({ files, ...l }) => ({ ...l, has_content: Object.keys(files).length > 0, bytes: logBytes(files) })),
+      next: list.length > limit ? `${Date.parse(last.time)}000000_${last.id}` : null,
+      active: q.before ? [] : [{ request_id: 'e11c0de0e11c0de0e11c0de0', started: new Date(Date.now() - 18000).toISOString(), stage: 'upstream' }],
+    }
+  })
+  const findLog = (req: MockRequest, key: string) => logsFor(key).find(l => l.id === req.params.log)
+  const logMissing = () => fail(404, 'not_found', 'The request log was not found; it may have expired.', { reason: 'request_log_not_found' })
+  const fileKind = (name: string) => name === 'request.body' ? 'request' : name === 'response.body' ? 'response' : name.startsWith('upstream') ? 'upstream' : name.startsWith('cli-') ? 'cli' : 'build'
+  on('GET', `${base}/accounts/:id/request-logs/requests/:log`, (req) => {
+    const who = caller(req)
+    if (!hasPerm(who, ['settings:read', 'account:read', 'settings:manage'])) return fail(403, 'permission_denied', 'settings:read or account:read is required')
+    const r = logAccount(req)
+    if (!isRuntime(r)) return r
+    const l = findLog(req, r.key)
+    if (!l) return logMissing()
+    const content = hasPerm(who, 'settings:manage')
+    const t0 = Date.parse(l.time)
+    const at = (ms: number) => new Date(t0 + ms).toISOString()
+    const long = 'x'.repeat(300)
+    return {
+      metadata: {
+        request_id: l.request_id, event: 'request_finished', stage: l.stage, status: l.status, http_status: l.status, model: l.model, stream: l.stream, log_level: l.log_level,
+        message_count: 12, history_mode: 'prefix-hit', execution_mode: 'build', anthropic_beta: 'claude-code-20250219,oauth-2025-04-20', duration_ms: l.duration_ms, log_status: l.log_status,
+        error_type: l.error_type, error: l.error, messages: [{ index: 0, role: 'user', content_type: 'string', text_bytes: 42 }],
+      },
+      events: [
+        { time: at(0), event: 'request_received', detail: { request_id: l.request_id } },
+        { time: at(3), event: 'request_level', detail: { level: 'low', relay_mode: 'build' } },
+        { time: at(41), event: 'build_components', detail: { system_blocks: 3, tools: 4 } },
+        { time: at(44), event: 'cli_started', detail: { version: '2.1.304' } },
+        { time: at(812), event: 'upstream_request', detail: { attempt: 1 } },
+        ...(l.status >= 400 ? [{ time: at(Math.max(l.duration_ms - 5, 0)), event: 'upstream_error', detail: { status: l.status, message: content ? long : long.slice(0, 256) } }] : []),
+        { time: at(l.duration_ms), event: 'request_finished', detail: { stage: l.stage, status: l.status } },
+      ],
+      events_truncated: false,
+      request_headers: { 'Content-Type': ['application/json'], 'Anthropic-Version': ['2023-06-01'], 'X-Api-Key': ['[REDACTED]'], 'X-Request-Id': [l.request_id], 'X-Ccgateway-Session-Scope': ['user:118:key:402'] },
+      response_headers: { 'Content-Type': [l.stream ? 'text/event-stream' : 'application/json'], 'Request-Id': [l.request_id] },
+      files: Object.entries(l.files).map(([name, b]) => ({ name, bytes: b.length, kind: fileKind(name) })),
+      content,
+    }
+  })
+  on('GET', `${base}/accounts/:id/request-logs/requests/:log/files/:name`, (req) => {
+    if (!hasPerm(caller(req), 'settings:manage')) return fail(403, 'permission_denied', 'settings:manage is required')
+    const r = logAccount(req)
+    if (!isRuntime(r)) return r
+    const l = findLog(req, r.key)
+    const file = l?.files[req.params.name]
+    if (!l || !file) return logMissing()
+    const download = req.query.download === '1'
+    const offset = download ? 0 : Number(req.query.offset || 0)
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > file.length) return fail(400, 'invalid_argument', 'Invalid offset.')
+    const part = download ? file : file.subarray(offset, offset + (1 << 20))
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff',
+      'X-Log-File-Size': String(file.length), 'X-Log-Offset': String(offset), 'X-Log-Length': String(part.length),
+    }
+    if (download) headers['Content-Disposition'] = `attachment; filename="account-${req.params.id}-${l.id}-${req.params.name}"`
+    return { __status: 200, __headers: headers, __bytes: part, body: undefined }
   })
 
   /** Proxy check of POST / PUT drafts, like the core: none → direct egress, unknown → proxy_not_found, disabled → proxy_disabled. */

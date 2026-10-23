@@ -291,6 +291,10 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.requestLogs.serve(w, r)
 		return
 	}
+	if action, ok := strings.CutPrefix(r.URL.Path, "/admin/request-logs/"); ok {
+		a.requestLogs.serveViewer(w, r, action)
+		return
+	}
 	if r.URL.Path == "/admin/usage" {
 		a.usage(w, r)
 		return

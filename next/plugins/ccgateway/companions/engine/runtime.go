@@ -235,7 +235,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 				return
 			case <-ticker.C:
 				cache.prune()
-				pruneRequestLogs(logs.root)
+				logs.prune()
 			}
 		}
 	}()

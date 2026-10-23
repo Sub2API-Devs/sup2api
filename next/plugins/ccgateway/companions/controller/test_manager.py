@@ -953,6 +953,44 @@ class HandlerTests(Base):
         self.assertEqual(len(FakeSession.calls), calls)
         # PUT remains forbidden on all other pass-through endpoints.
         self.assertEqual(self.call('PUT', '/accounts/7/admin/status', '{}', headers={'X-CCG-Revision': REV})[0], 405)
+        # Reading the logs: POST only, the query in the body.
+        for action in ('query', 'detail', 'read'):
+            self.assertEqual(self.call('POST', f'{path}/{action}', '{}', headers={'X-CCG-Revision': REV})[0], 200)
+            self.assertEqual(FakeSession.calls[-1][:2], ('POST', f'http://{state["app_ip"]}:8787/admin/request-logs/{action}'))
+            calls = len(FakeSession.calls)
+            for method in ('GET', 'PUT', 'DELETE'):
+                self.assertEqual(self.call(method, f'{path}/{action}', '{}', headers={'X-CCG-Revision': REV})[0], 405)
+            self.assertEqual(len(FakeSession.calls), calls)
+        for other in (f'{path}/query?limit=1', f'{path}/files', f'{path}/read/x'):
+            self.assertEqual(self.call('POST', other, '{}', headers={'X-CCG-Revision': REV})[0], 404, other)
+
+    def test_request_log_read_reports_its_range(self):
+        self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
+
+        class Chunk(FakeResponse):
+            headers = {'Content-Type': 'application/octet-stream', 'X-Log-File-Size': '9', 'X-Log-Offset': '2', 'X-Log-Length': '3',
+                       'X-Content-Type-Options': 'nosniff', 'X-Other': 'dropped'}
+
+            def iter_content(self, chunk_size):
+                yield b'abc'
+
+        class Session(FakeSession):
+            def request(self, method, url, data=None, headers=None, **kwargs):
+                FakeSession.calls.append((method, url, dict(headers or {})))
+                return Chunk()
+
+        with patch.object(manager.requests, 'Session', Session):
+            conn = http.client.HTTPConnection('127.0.0.1', self.server.server_address[1], timeout=10)
+            try:
+                conn.request('POST', '/accounts/7/admin/request-logs/read', body=b'{}',
+                             headers={'Authorization': 'Bearer ' + CONTROLLER_KEY, 'X-CCG-Revision': REV})
+                res = conn.getresponse()
+                self.assertEqual((res.status, res.read()), (200, b'abc'))
+                self.assertEqual([res.getheader(h) for h in ('X-Log-File-Size', 'X-Log-Offset', 'X-Log-Length', 'X-Content-Type-Options', 'X-Other')],
+                                 ['9', '2', '3', 'nosniff', None])
+                self.assertEqual(res.getheader('Content-Type'), 'application/octet-stream')
+            finally:
+                conn.close()
 
     def test_features_read_only_pass_through(self):
         self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCGateway · 请求日志查看 界面设计</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #e6e8ec; --fg: #1f2329; --muted: #6b7280; --faint: #9ca3af;
+    --primary: #14b8a6; --primary-weak: #e6f7f5; --primary-fg: #0f766e; --chip: #f3f4f6; --shadow: 0 1px 2px rgba(0,0,0,.04);
+    --danger: #dc2626; --danger-weak: #fdecec; --warn: #b45309; --warn-weak: #fef3c7; --code: #f8fafc;
+  }
+  [data-theme=dark] {
+    --bg: #0f1115; --card: #171a21; --line: #2a2f3a; --fg: #e5e7eb; --muted: #9aa3b2; --faint: #6b7280;
+    --primary: #2dd4bf; --primary-weak: #123a36; --primary-fg: #5eead4; --chip: #222733; --shadow: none;
+    --danger: #f87171; --danger-weak: #3a1717; --warn: #fbbf24; --warn-weak: #3a2c0c; --code: #12151b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--fg); }
+  .page { max-width: 1100px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .note { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; color: var(--muted); margin-bottom: 16px; }
+  .note b { color: var(--fg); }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 4px 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .seg button.on { background: var(--card); color: var(--primary-fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tbody tr.click { cursor: pointer; } tbody tr.click:hover { background: var(--chip); }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--primary-fg); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .badge { display: inline-block; font-size: 11px; border-radius: 999px; padding: 0 8px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.ok { color: var(--primary-fg); border-color: var(--primary); background: var(--primary-weak); }
+  .badge.err { color: var(--danger); border-color: var(--danger); background: var(--danger-weak); }
+  .badge.warn { color: var(--warn); border-color: var(--warn); background: var(--warn-weak); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); } .small { font-size: 12px; }
+  .copy { color: var(--faint); cursor: pointer; margin-left: 4px; }
+  input, select { font: inherit; font-size: 12px; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+
+  /* drawer */
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: none; }
+  .mask.open { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(960px, 100vw); background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; transform: translateX(100%); transition: transform .18s; }
+  .mask.open .drawer { transform: none; }
+  .dh { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .dh h2 { font-size: 15px; margin: 0; flex: 1; }
+  .db { flex: 1; overflow: auto; padding: 12px 16px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .active { background: var(--warn-weak); color: var(--warn); border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 10px 0 12px; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); padding: 7px 12px; font: inherit; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--primary-fg); border-bottom-color: var(--primary); font-weight: 600; }
+  .desc { display: grid; grid-template-columns: 140px 1fr 140px 1fr; gap: 6px 12px; }
+  .desc dt { color: var(--muted); } .desc dd { margin: 0; min-width: 0; word-break: break-all; }
+  .tl { border-left: 2px solid var(--line); margin-left: 6px; }
+  .ev { padding: 4px 0 4px 12px; position: relative; cursor: pointer; }
+  .ev::before { content: ""; position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--card); border: 2px solid var(--primary); }
+  .ev.err::before { border-color: var(--danger); }
+  .ev .t { color: var(--faint); width: 64px; display: inline-block; }
+  .ev pre { display: none; margin: 6px 0 2px; }
+  .ev.open pre { display: block; }
+  pre.code { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow: auto; max-height: 420px; margin: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; white-space: pre; }
+  pre.code.wrap { white-space: pre-wrap; word-break: break-all; }
+  .kv { display: grid; grid-template-columns: 260px 1fr; gap: 4px 12px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .red { color: var(--faint); font-style: italic; }
+  .content { display: grid; grid-template-columns: 240px 1fr; gap: 12px; }
+  .files .grp { color: var(--faint); font-size: 11px; margin: 8px 0 2px; text-transform: uppercase; }
+  .files a { display: flex; justify-content: space-between; padding: 4px 8px; border-radius: 6px; cursor: pointer; color: var(--fg); text-decoration: none; }
+  .files a.on { background: var(--primary-weak); color: var(--primary-fg); }
+  .vt { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .vt .sp { flex: 1; }
+  .warnbox { background: var(--warn-weak); color: var(--warn); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px; }
+  .more { text-align: center; margin-top: 8px; }
+  .sse { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; }
+  .sse b { display: block; padding: 3px 8px; background: var(--chip); font-size: 12px; font-weight: 500; }
+  .sse pre { margin: 0; padding: 6px 8px; font-size: 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>请求日志 · 界面查看（原型）</h1>
+  <p class="sub">对应 REQUEST-LOG-VIEWER-DESIGN.md。数据都是假的；点击按钮可以体验交互。</p>
+  <div class="toolbar">
+    <span class="muted small">主题</span>
+    <div class="seg" id="theme"><button class="on" data-v="light">浅色</button><button data-v="dark">深色</button></div>
+    <span class="muted small">当前身份</span>
+    <div class="seg" id="role"><button class="on" data-v="manage">settings:manage</button><button data-v="read">settings:read / account:read</button></div>
+  </div>
+  <div class="note"><b>入口一：</b>部署与运行 → 账号容器，“请求调试日志”列多一个「查看日志」。<b>入口二：</b>用量记录详情的请求 ID 旁边的「请求日志」链接（只有 CCGateway 账号的记录才有）。两个入口打开的是同一个抽屉。</div>
+
+  <div class="card" style="margin-bottom:16px">
+    <table>
+      <thead><tr><th>账号</th><th>容器</th><th>请求调试日志</th></tr></thead>
+      <tbody>
+        <tr><td>#31 ccg-audit-prod</td><td><span class="badge ok">运行中</span></td>
+          <td><div class="seg"><button>关闭</button><button>摘要</button><button class="on">完整</button></div>
+            <span class="muted small" style="margin:0 8px">剩余 3 小时 12 分</span>
+            <button class="btn" onclick="openDrawer()">查看日志（128）</button></td></tr>
+        <tr><td>#32 team-b</td><td><span class="badge ok">运行中</span></td>
+          <td><div class="seg"><button>关闭</button><button class="on">摘要</button><button>完整</button></div>
+            <span style="margin-left:8px"></span><button class="btn" onclick="openDrawer()">查看日志（2,041）</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="padding:12px 14px">
+    <div class="muted small" style="margin-bottom:6px">用量记录 · 详情（节选）</div>
+    <div class="kv">
+      <div>账号</div><div>#31 ccg-audit-prod</div>
+      <div>请求 ID</div><div><span class="mono">3f9a7d20c4b1e85f6a0d12c1</span><span class="copy">⧉</span> <button class="btn ghost" onclick="openDrawer('3f9a7d20c4b1e85f6a0d12c1')">请求日志 →</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mask" onclick="if(event.target===this)closeDrawer()">
+  <div class="drawer">
+    <div class="dh">
+      <h2 id="dtitle">账号 #31 · 请求日志</h2>
+      <span class="muted small">级别：完整（剩余 3 小时 12 分）· 摘要 3.2 MiB / 128 MiB · 完整 41 MiB / 512 MiB</span>
+      <button class="btn" onclick="closeDrawer()">×</button>
+    </div>
+    <div class="db" id="body"></div>
+  </div>
+</div>
+
+<script>
+const LOGS = [
+  { id: 'a1', rid: '3f9a7d20c4b1e85f6a0d12c1', time: '10-23 10:42:13', model: 'claude-sonnet-4-6', status: 200, stage: 'finished', dur: '4.2s', level: 'full', size: '1.8 MiB', attempt: 2, stream: true },
+  { id: 'a0', rid: '3f9a7d20c4b1e85f6a0d12c1', time: '10-23 10:42:11', model: 'claude-sonnet-4-6', status: 529, err: 'overloaded_error', errText: 'Overloaded', stage: 'upstream', dur: '0.9s', level: 'full', size: '0.4 MiB', attempt: 1, stream: true },
+  { id: 'b1', rid: 'b07e55a1f9e3c2d4a6b8909d', time: '10-23 10:40:02', model: 'claude-opus-4-1', status: 400, err: 'invalid_request_error', errText: 'messages: roles must alternate between "user" and "assistant"', stage: 'parse_request', dur: '12ms', level: 'summary', size: '3 KiB' },
+  { id: 'c1', rid: 'c4410be2d07f9a3e5b6c7d18', time: '10-23 10:38:47', model: 'claude-haiku-4-5', status: 200, stage: 'finished', dur: '1.1s', level: 'summary', size: '2 KiB', truncated: false },
+  { id: 't1', rid: 'd034a3cc-91e0-4c3b-8f02-5e6a7b8c9d0e', time: '10-23 10:30:00', model: 'claude-sonnet-4-6', status: 200, stage: 'finished', dur: '2.0s', level: 'full', size: '64.0 MiB', truncated: true, test: true },
+]
+const EVENTS = [
+  ['+0ms', 'request_received', { request_id: '3f9a7d20c4b1e85f6a0d12c1' }],
+  ['+3ms', 'request_level', { level: 'low', relay_mode: 'build' }],
+  ['+41ms', 'build_components', { system_blocks: 3, tools: 4, attachments: ['date', 'environment'] }],
+  ['+44ms', 'cli_started', { pid: 412, version: '2.1.304' }],
+  ['+812ms', 'upstream_request', { attempt: 1, url: 'https://api.anthropic.com/v1/messages?beta=true' }],
+  ['+1207ms', 'upstream_response', { status: 200, ttfb_ms: 395 }],
+  ['+4188ms', 'request_finished', { status: 200, input_tokens: 18231, output_tokens: 412, cache_read: 17984 }],
+]
+const FILES = [
+  ['请求', 'request.body', '6.1 KiB'],
+  ['组装', 'build-components.json', '92 KiB'], ['组装', 'effective-config.json', '3 KiB'], ['组装', 'feature-decisions.json', '2 KiB'],
+  ['CLI', 'cli-stdout.jsonl', '1.2 MiB'],
+  ['上游', 'upstream.body', '88 KiB'],
+  ['响应', 'response.body', '14 KiB'],
+]
+let role = 'manage', view = { name: 'list', tab: 'overview', file: 'request.body', wrap: false, raw: false, ack: false, filter: '' }
+
+const $ = s => document.querySelector(s)
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const short = rid => rid.slice(0, 4) + '…' + rid.slice(-2)
+function seg(id, cb) { document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x === b)); cb(b.dataset.v) }) }
+seg('theme', v => document.documentElement.dataset.theme = v)
+seg('role', v => { role = v; render() })
+
+function openDrawer(rid) {
+  view = { ...view, name: 'list', filter: rid || '', tab: 'overview' }
+  const hits = rid ? LOGS.filter(l => l.rid === rid) : []
+  if (hits.length === 1) view = { ...view, name: 'detail', log: hits[0] }
+  $('#mask').classList.add('open'); render()
+}
+function closeDrawer() { $('#mask').classList.remove('open') }
+
+function statusBadge(l) {
+  if (l.status < 400) return `<span class="badge ok">${l.status}</span>`
+  return `<span class="badge err" title="${esc(l.errText || '')}">${l.status} ${esc(l.err || '')}</span>`
+}
+function list() {
+  const rows = LOGS.filter(l => !view.filter || l.rid.includes(view.filter))
+  return `
+  <div class="filters">
+    <select><option>最近 24 小时</option><option>最近 7 天</option><option>自定义…</option></select>
+    <div class="seg"><button class="on">全部</button><button>成功</button><button>失败</button></div>
+    <select><option>全部模型</option><option>claude-sonnet-4-6</option><option>claude-opus-4-1</option></select>
+    <div class="seg"><button class="on">全部级别</button><button>摘要</button><button>完整</button></div>
+    <input placeholder="请求 ID" value="${esc(view.filter)}" oninput="view.filter=this.value;render()" style="width:200px">
+    <button class="btn">刷新</button>
+  </div>
+  <div class="active">● 进行中 1 个：<span class="mono">e11c…02</span> · upstream · 已 18 秒</div>
+  ${rows.length ? `<table><thead><tr><th>时间</th><th>请求 ID</th><th>模型</th><th>状态</th><th>阶段</th><th>耗时</th><th>级别</th><th>大小</th></tr></thead><tbody>
+  ${rows.map(l => `<tr class="click" onclick="view={...view,name:'detail',tab:'overview',log:LOGS.find(x=>x.id==='${l.id}')};render()">
+    <td>${l.time}</td>
+    <td><span class="mono">${short(l.rid)}</span><span class="copy" title="复制">⧉</span>${l.attempt ? ` <span class="badge">第 ${l.attempt} 次</span>` : ''}${l.test ? ' <span class="badge">测试</span>' : ''}</td>
+    <td>${l.model}</td><td>${statusBadge(l)}</td><td class="mono">${l.stage}</td><td>${l.dur}</td>
+    <td>${l.level === 'full' ? '<span class="badge warn">完整</span>' : '<span class="badge">摘要</span>'}</td>
+    <td>${l.size}${l.truncated ? ' <span class="badge warn">已截断</span>' : ''}</td></tr>`).join('')}
+  </tbody></table><div class="more"><button class="btn">加载更多</button></div>`
+  : `<div class="note">未找到：可能是升级前的记录（当时还没有关联请求 ID），或已过期。</div>`}`
+}
+function detail() {
+  const l = view.log, full = l.level === 'full', canRead = role === 'manage'
+  const tabs = [['overview', '概览'], ['events', `事件 (${EVENTS.length})`], ['req', '请求头'], ['res', '响应头']]
+  if (full && canRead) tabs.push(['content', `正文 (${FILES.length})`])
+  let inner = ''
+  if (view.tab === 'overview') inner = `
+    <dl class="desc">
+      <dt>请求 ID</dt><dd class="mono">${l.rid} <span class="copy">⧉</span></dd><dt>时间</dt><dd>${l.time}（${l.dur}）</dd>
+      <dt>状态</dt><dd>${statusBadge(l)}</dd><dt>阶段</dt><dd class="mono">${l.stage}</dd>
+      <dt>模型</dt><dd>${l.model}</dd><dt>流式</dt><dd>${l.stream ? '是' : '否'}</dd>
+      <dt>消息数</dt><dd>12</dd><dt>执行方式</dt><dd class="mono">build · low</dd>
+      <dt>历史模式</dt><dd class="mono">prefix-hit</dd><dt>anthropic-beta</dt><dd class="mono small">claude-code-20250219,oauth-2025-04-20</dd>
+      ${l.err ? `<dt>错误</dt><dd style="grid-column:span 3">${esc(l.err)}：${esc(l.errText)}</dd>` : ''}
+      <dt>日志</dt><dd style="grid-column:span 3">${full ? '完整' : '摘要'} · ${l.size}${l.truncated ? ' · <span class="badge warn">已截断（超过单条 64 MiB）</span>' : ''}</dd>
+    </dl>
+    <details style="margin-top:10px"><summary class="muted small">全部字段（metadata.json）</summary><pre class="code" style="margin-top:6px">${esc(JSON.stringify({ request_id: l.rid, event: 'request_finished', stage: l.stage, status: l.status, model: l.model, log_level: l.level, message_count: 12, history_mode: 'prefix-hit', execution_mode: 'build' }, null, 2))}</pre></details>
+    ${!full ? '<div class="note" style="margin-top:12px">摘要级别不保存正文；需要时在账号容器里临时开启完整级别。</div>' : ''}
+    ${full && !canRead ? '<div class="note" style="margin-top:12px">这条日志有正文，查看正文需要 <b>settings:manage</b> 权限。</div>' : ''}`
+  if (view.tab === 'events') inner = `
+    <div class="filters"><input placeholder="按事件名过滤" style="width:200px"></div>
+    <div class="tl">${EVENTS.map(([t, n, d], i) => `<div class="ev${n.includes('error') ? ' err' : ''}" onclick="this.classList.toggle('open')">
+      <span class="t mono">${t}</span><b class="mono">${n}</b> <span class="muted small mono">${esc(JSON.stringify(d)).slice(0, 90)}</span>
+      <pre class="code">${esc(JSON.stringify(d, null, 2))}</pre></div>`).join('')}</div>`
+  if (view.tab === 'req') inner = kv({ 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-beta': 'claude-code-20250219', 'x-request-id': l.rid, 'x-ccgateway-session-scope': 'user:118:key:402', 'x-claude-code-request-class': 'main', authorization: null, 'x-api-key': null })
+  if (view.tab === 'res') inner = kv({ 'content-type': 'text/event-stream', 'request-id': l.rid, 'anthropic-ratelimit-unified-status': 'allowed', 'retry-after': '' })
+  if (view.tab === 'content') inner = content()
+  return `
+  <div class="vt"><button class="btn" onclick="view.name='list';render()">← 返回列表</button>
+    <span class="mono">${l.rid}</span><span class="copy">⧉</span> ${statusBadge(l)} <span class="muted">${l.dur} · ${l.model} · ${l.stream ? '流式' : '非流式'} · ${full ? '完整' : '摘要'}</span></div>
+  <div class="tabs">${tabs.map(([k, n]) => `<button class="${view.tab === k ? 'on' : ''}" onclick="view.tab='${k}';render()">${n}</button>`).join('')}</div>${inner}`
+}
+function kv(o) { return `<div class="kv">${Object.entries(o).map(([k, v]) => `<div class="mono">${k}</div><div class="mono">${v === null ? '<span class="red">[redacted]</span>' : esc(v)}</div>`).join('')}</div>` }
+function content() {
+  let groups = '', last = ''
+  FILES.forEach(([g, n, s]) => { if (g !== last) { groups += `<div class="grp">${g}</div>`; last = g } groups += `<a class="${view.file === n ? 'on' : ''}" onclick="view.file='${n}';render()"><span class="mono">${n}</span><span class="muted small">${s}</span></a>` })
+  const size = FILES.find(f => f[1] === view.file)[2]
+  let body
+  if (view.file === 'response.body' && !view.raw) body = [['message_start', '{"type":"message_start","message":{"id":"msg_01…","model":"claude-sonnet-4-6","usage":{"input_tokens":18231,"cache_read_input_tokens":17984}}}'], ['content_block_delta', '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"好的，我先看一下……"}}'], ['message_stop', '{"type":"message_stop"}']].map(([e, d]) => `<div class="sse"><b class="mono">event: ${e}</b><pre>${esc(d)}</pre></div>`).join('')
+  else if (view.file === 'cli-stdout.jsonl') body = `<div class="tl">${['{"type":"system","subtype":"init","model":"claude-sonnet-4-6"}', '{"type":"assistant","message":{"content":[{"type":"text","text":"好的…"}]}}', '{"type":"result","subtype":"success","duration_ms":4102}'].map((x, i) => `<div class="ev" onclick="this.classList.toggle('open')"><span class="t mono">#${i + 1}</span><span class="mono small">${esc(x).slice(0, 80)}</span><pre class="code">${esc(JSON.stringify(JSON.parse(x), null, 2))}</pre></div>`).join('')}</div>`
+  else body = `<pre class="code${view.wrap ? ' wrap' : ''}">${esc(view.raw ? '{"model":"claude-sonnet-4-6","max_tokens":32000,"stream":true,"system":[{"type":"text","text":"…"}],"messages":[{"role":"user","content":"帮我看看这个报错……"}]}' : JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, system: [{ type: 'text', text: '…' }], messages: [{ role: 'user', content: '帮我看看这个报错……' }] }, null, 2))}</pre>`
+  return `
+  ${view.ack ? '' : `<div class="warnbox">正文包含用户对话内容，查看会记入审计。 <button class="btn" onclick="view.ack=true;render()">知道了</button></div>`}
+  <div class="content">
+    <div class="files">${groups}</div>
+    <div>
+      <div class="vt"><b class="mono">${view.file}</b><span class="muted small">${size}</span><span class="sp"></span>
+        <div class="seg"><button class="${view.raw ? '' : 'on'}" onclick="view.raw=false;render()">${view.file === 'response.body' ? 'SSE 事件' : '格式化'}</button><button class="${view.raw ? 'on' : ''}" onclick="view.raw=true;render()">原文</button></div>
+        <label class="small"><input type="checkbox" ${view.wrap ? 'checked' : ''} onchange="view.wrap=this.checked;render()"> 自动换行</label>
+        <button class="btn">复制已加载</button><button class="btn">下载完整文件</button></div>
+      ${body}
+      ${view.file === 'cli-stdout.jsonl' ? '<div class="more"><button class="btn">继续加载（已显示 1 MiB / 共 1.2 MiB）</button></div>' : ''}
+    </div>
+  </div>`
+}
+function render() { $('#body').innerHTML = view.name === 'list' ? list() : detail() }
+</script>
+</body>
+</html>
