@@ -395,6 +395,7 @@ export default {
     api_key_account: 'API key accounts need no Claude authorization',
     runtime_unavailable: 'The container runtime is unavailable',
     disk_quota_unavailable: 'The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.',
+    cli_profile_unavailable: 'The controller cannot provide the configured Claude Code version for this container: the image lacks it, or a running container was asked to change version (update the Worker and CLI in place first)',
     method_not_allowed: 'The container controller does not allow this operation',
     authentication_error: 'Claude Code authentication failed; authorize again',
     not_found_error: 'Claude Code could not find the requested resource',

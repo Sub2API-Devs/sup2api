@@ -193,12 +193,14 @@ func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
 		}
 		_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
 		d := gjson.GetBytes(raw, "data")
-		if d.Get("ok").Bool() || d.Get("status").Int() != 0 || d.Get("error_code").String() != "proxy_unavailable" || d.Get("error_source").String() != "gateway" || calls.Load() != 0 {
+		// The core answers its own refusal as a marked 503 (audit A6): the
+		// diagnostic keeps the reason as its code and names the core.
+		if d.Get("ok").Bool() || d.Get("status").Int() != 503 || d.Get("error_code").String() != "proxy_unavailable" || d.Get("error_source").String() != "core" || calls.Load() != 0 {
 			t.Fatalf("blocked diagnostic: %s calls=%d", raw, calls.Load())
 		}
 		_, raw = e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
 		last := gjson.GetBytes(raw, "data.last_test")
-		if !last.Get("status").Exists() || last.Get("status").Int() != 0 || last.Get("error_code").String() != "proxy_unavailable" || last.Get("error_source").String() != "gateway" || strings.Count(last.Get("message").String(), reason) != 1 {
+		if !last.Get("status").Exists() || last.Get("status").Int() != 503 || last.Get("error_code").String() != "proxy_unavailable" || last.Get("error_source").String() != "core" || strings.Count(last.Get("message").String(), reason) != 1 {
 			t.Fatalf("persisted diagnostic: %s", raw)
 		}
 	})

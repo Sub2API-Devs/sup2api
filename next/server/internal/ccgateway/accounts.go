@@ -436,7 +436,8 @@ func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) e
 	defer close()
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return errors.New("account runtime synchronization failed")
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return syncError(res.StatusCode, raw)
 	}
 	return nil
 }
@@ -646,6 +647,12 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 	switch action {
 	case "sync":
 		if e := s.Reconcile(ctx, d.Key); e != nil {
+			// The controller's own reason (syncError) is kept; a connection
+			// failure or anything unnamed is reported as such.
+			if known := core.AsError(e); known.Code == core.ErrUnavailable.Code && known.Details["reason"] != nil {
+				httpapi.Fail(c, known)
+				return
+			}
 			reason := "sync_failed"
 			if errors.Is(e, errNotConfigured) || errors.Is(e, errUnreachable) {
 				reason = "not_configured"

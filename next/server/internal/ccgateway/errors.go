@@ -23,18 +23,19 @@ const (
 // core produces itself (CONTRACTS §49.12). The console translates the code;
 // the message is the fallback for codes it does not know.
 var reasonMessages = map[string]string{
-	"not_configured":         "Account runtimes are not configured or the Docker host cannot be reached.",
-	"not_synchronized":       "The account runtime is not ready yet; try again shortly.",
-	"sync_failed":            "The account runtime could not be synchronized (container creation or the proxy check failed).",
-	"runtime_unavailable":    "The account runtime is unavailable.",
-	"disk_quota_unavailable": "The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.",
-	"proxy_disabled":         "The runtime's proxy is disabled.",
-	"proxy_not_found":        "The proxy does not exist or is not visible to you.",
-	reasonAccountDeleted:     "The account has been deleted.",
-	reasonProxyUnavailable:   "The bound proxy no longer exists or has an unsupported protocol; choose another proxy.",
-	"api_key_account":        "API key accounts do not use OAuth authorization.",
-	"draft_not_found":        "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
-	"draft_not_authorized":   "Claude Code is not signed in in this runtime yet.",
+	"not_configured":          "Account runtimes are not configured or the Docker host cannot be reached.",
+	"not_synchronized":        "The account runtime is not ready yet; try again shortly.",
+	"sync_failed":             "The account runtime could not be synchronized (container creation or the proxy check failed).",
+	"runtime_unavailable":     "The account runtime is unavailable.",
+	"disk_quota_unavailable":  "The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.",
+	"cli_profile_unavailable": "The controller cannot provide the configured Claude Code version for this runtime: the runtime image lacks it, or the version changed for a running container (update the Worker and CLI in place first).",
+	"proxy_disabled":          "The runtime's proxy is disabled.",
+	"proxy_not_found":         "The proxy does not exist or is not visible to you.",
+	reasonAccountDeleted:      "The account has been deleted.",
+	reasonProxyUnavailable:    "The bound proxy no longer exists or has an unsupported protocol; choose another proxy.",
+	"api_key_account":         "API key accounts do not use OAuth authorization.",
+	"draft_not_found":         "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
+	"draft_not_authorized":    "Claude Code is not signed in in this runtime yet.",
 	// Runtime installation (§49.16).
 	"ssh_not_configured":   "Save an SSH connection to the Docker host first.",
 	"ssh_failed":           "The Docker host could not be reached over SSH, or the remote command failed.",
@@ -85,6 +86,26 @@ func reasonError(base *core.Error, reason string) *core.Error {
 		msg = base.Message
 	}
 	return base.WithMessage(msg).WithDetails(map[string]any{"reason": reason})
+}
+
+// syncError maps a controller answer that refused a PUT config: its error
+// code (cli_profile_unavailable, disk_quota_unavailable, image_pull_failed,
+// ...) becomes details.reason so the reconcile log and the sync endpoint say
+// why an account stays pending (audit B1); an answer without a code is the
+// generic sync_failed.
+func syncError(status int, raw []byte) *core.Error {
+	code, msg := parseRuntimeError(raw)
+	if code == "" {
+		return reasonError(core.ErrUnavailable, "sync_failed").WithDetails(map[string]any{"reason": "sync_failed", "status": status})
+	}
+	e := reasonError(core.ErrUnavailable, code)
+	if reasonMessages[code] == "" {
+		if msg == "" {
+			msg = "The account runtime could not be synchronized: the controller answered " + code + "."
+		}
+		e = e.WithMessage(msg)
+	}
+	return e.WithDetails(map[string]any{"reason": code, "status": status})
 }
 
 // transportError maps a failed controller call.

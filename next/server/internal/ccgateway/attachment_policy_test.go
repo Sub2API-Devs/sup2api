@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -87,7 +88,13 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer inbound-not-upstream")
 			res, err := svc.ModelClient().Do(req)
 			if tc.blocked {
-				require.ErrorContains(t, err, "capabilities")
+				// The core's own refusal: a marked 503 naming what is missing.
+				require.NoError(t, err)
+				require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+				require.Equal(t, requestfailure.SourceCore, requestfailure.Source(res.Header))
+				answer, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				require.Contains(t, string(answer), "The feature policy cannot be applied")
 				require.Equal(t, 0, modelRequests)
 			} else {
 				require.NoError(t, err)

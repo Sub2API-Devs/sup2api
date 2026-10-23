@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -247,6 +248,41 @@ func TestWorkerFullRetryAfter(t *testing.T) {
 	assert.Equal(t, 429, w.Code)
 	assert.Equal(t, "1", w.Header().Get("Retry-After"))
 	assert.Contains(t, w.Body.String(), "Gateway concurrency limit reached")
+	// The Worker's own answers say so (audit C2): the plugin never takes
+	// them for the upstream's verdict on the account.
+	assert.Equal(t, requestfailure.SourceGateway, requestfailure.Source(w.Header()))
+	assert.Equal(t, "concurrency_limit", requestfailure.Reason(w.Header()))
+}
+
+// Every answer the Worker writes itself carries its source and a reason.
+func TestWorkerOwnErrorsCarryTheirSource(t *testing.T) {
+	g := &Gateway{RequestMode: "build", Key: "fixture", Runner: &Runner{CLI: "unused", Version: "2.1.304"}, Timeout: 5 * time.Second, Slots: make(chan struct{}, 1),
+		CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build"}}}
+	send := func(key, policy string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
+		if key != "" {
+			req.Header.Set("x-api-key", key)
+		}
+		if policy != "" {
+			req.Header.Set(policyHeader, policy)
+		}
+		g.ServeHTTP(w, req)
+		return w
+	}
+	for _, tc := range []struct {
+		key, policy, reason string
+		status              int
+	}{
+		{"wrong", "", "unauthorized", 401},
+		{"fixture", `{"relay_mode":"direct","cli_version":"2.1.304"}`, "configuration_error", 409},
+		{"fixture", `{"relay_mode":"nope"}`, "invalid_request", 400},
+	} {
+		w := send(tc.key, tc.policy)
+		assert.Equal(t, tc.status, w.Code, tc.reason)
+		assert.Equal(t, requestfailure.SourceGateway, requestfailure.Source(w.Header()), tc.reason)
+		assert.Equal(t, tc.reason, requestfailure.Reason(w.Header()))
+	}
 }
 
 func TestWebSearchContentSignature(t *testing.T) {

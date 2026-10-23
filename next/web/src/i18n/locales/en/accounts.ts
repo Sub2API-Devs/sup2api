@@ -127,7 +127,7 @@ export default {
   testNativeBuild: 'CC native build probe (one request, no model fallback)',
   testResponseHeaders: 'Upstream response information',
   testNoHTTPResponse: 'No HTTP response received',
-  testErrorSources: { gateway: 'Gateway/runtime', transport: 'Transport', response: 'HTTP response', plugin: 'Plugin', input: 'CC request input', timeout: 'CC request timeout', interrupted: 'CC request interrupted', internal: 'CC runtime' },
+  testErrorSources: { gateway: 'Gateway/runtime', core: 'Core (before the account runtime)', transport: 'Transport', response: 'HTTP response', plugin: 'Plugin', input: 'CC request input', timeout: 'CC request timeout', interrupted: 'CC request interrupted', internal: 'CC runtime' },
   credentials: 'Credentials',
   orphanedEdit: 'The plugin that owns this account type is not enabled, so credentials cannot be edited. Basic information can still be changed.',
   formUnavailable: 'The plugin form could not be loaded.',

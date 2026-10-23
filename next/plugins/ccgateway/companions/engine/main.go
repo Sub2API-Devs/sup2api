@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 )
 
 type Gateway struct {
@@ -42,10 +43,47 @@ type Gateway struct {
 	requestIdentitySecret  []byte
 }
 
+// apiError is the Worker's own error answer: an Anthropic error body marked
+// as the gateway's (requestfailure.SourceGateway) with a machine-readable
+// reason, so the plugin never mistakes it for the upstream's (audit C2) and
+// the client's error text stays the Worker's own. Upstream answers never
+// pass through here (requestErrorFrame writes them with their own source).
 func apiError(w http.ResponseWriter, status int, kind, msg string) {
 	w.Header().Set("Content-Type", "application/json")
+	// A writer that named the source already (the native path's "cli") keeps it.
+	if w.Header().Get(requestfailure.SourceHeader) == "" {
+		w.Header().Set(requestfailure.SourceHeader, requestfailure.SourceGateway)
+		w.Header().Set(requestfailure.ReasonHeader, gatewayReason(status, kind))
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(Object{"type": "error", "error": Object{"type": kind, "message": msg}})
+}
+
+// gatewayReason names a Worker refusal by its status (and the configuration
+// type) for requestfailure.ReasonHeader.
+func gatewayReason(status int, kind string) string {
+	switch {
+	case kind == "configuration_error":
+		return "configuration_error"
+	case status == http.StatusUnauthorized:
+		return "unauthorized"
+	case status == http.StatusNotFound:
+		return "not_found"
+	case status == http.StatusMethodNotAllowed:
+		return "method_not_allowed"
+	case status == http.StatusRequestEntityTooLarge:
+		return "request_too_large"
+	case status == http.StatusTooManyRequests:
+		return "concurrency_limit"
+	case status == http.StatusGatewayTimeout:
+		return "timeout"
+	case status == http.StatusServiceUnavailable:
+		return "unavailable"
+	case status >= 500:
+		return "internal"
+	default:
+		return "invalid_request"
+	}
 }
 func (g *Gateway) authorized(r *http.Request) bool {
 	if g.Key == "" {

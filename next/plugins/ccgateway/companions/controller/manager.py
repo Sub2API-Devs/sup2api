@@ -14,6 +14,7 @@ import io
 from urllib.parse import urlsplit
 import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 import posixpath
@@ -21,6 +22,7 @@ import re
 import secrets
 import shutil
 import socket
+import sys
 import tarfile
 import threading
 import time
@@ -42,6 +44,8 @@ REVISION = re.compile(r'[a-f0-9]{64}')
 LABEL = 'io.sup2api.ccgateway.account'
 PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
               'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
+
+log = logging.getLogger('ccgateway.controller')
 
 AUTH_LABEL = 'io.sup2api.ccgateway.auth'
 IMAGE_LABEL = 'io.sup2api.ccgateway.image'
@@ -1230,9 +1234,10 @@ class Manager:
             else:
                 self._activate(aid, state, app, self.owned(aid, 'egress'), revision)
             return True
-        except Exception:
+        except Exception as e:
             # The core's next reconciliation applies the configuration again;
             # nothing is recreated here.
+            log.warning('reactivate key=%s failed: %s: %s', aid, type(e).__name__, str(e)[:300])
             self.online.pop(aid, None)
             return False
 
@@ -1300,6 +1305,14 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Requests may contain OAuth material; never log bodies or URLs.
 
+    def note_failure(self, exc, outcome, trace=False):
+        """One stderr line per failed request (audit B1): the method, the
+        account key and the path, the exception's type and message, and what
+        the core was told. Never the body or the headers; URLs only through
+        the exception text of our own calls (an account address)."""
+        log.warning('%s key=%s path=%s -> %s: %s: %s', self.command, self.account_key, self.request_path, outcome,
+                    type(exc).__name__, str(exc)[:300], exc_info=trace)
+
     def reply(self, status, data):
         raw = json.dumps(data).encode()
         self.send_response(status)
@@ -1339,6 +1352,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _management(self, route):
         manager = self.server.manager
+        self.request_path = route[0]
         # Whatever fails, the request body may be left unread: never reuse the connection.
         try:
             if route.re is RUNTIME_ROUTE:
@@ -1397,10 +1411,12 @@ class Handler(BaseHTTPRequestHandler):
         except UpgradeInProgress:
             self.close_connection = True
             self.fail(409, 'upgrade_in_progress')
-        except (BrokenPipeError, ConnectionResetError, TimeoutError):
+        except (BrokenPipeError, ConnectionResetError, TimeoutError) as e:
             self.close_connection = True
-        except Exception:
+            self.note_failure(e, 'connection dropped')
+        except Exception as e:
             self.close_connection = True
+            self.note_failure(e, '503 runtime_unavailable', trace=True)
             if not self.response_started:
                 self.fail(503, 'runtime_unavailable')
 
@@ -1481,6 +1497,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_request(self):
         self.response_started = False
+        self.account_key = self.request_path = None
         manager = self.server.manager
         key = self.headers.get('Authorization', '').removeprefix('Bearer ')
         if not hmac.compare_digest(key, self.server.key):
@@ -1498,6 +1515,7 @@ class Handler(BaseHTTPRequestHandler):
         if not match:
             return self.fail(404, 'not_found', close=True)
         aid, path = match[1], match[2]
+        self.account_key, self.request_path = aid, path
         if path == 'tunnel':
             return self.handle_tunnel(aid)  # GET without a body; never read one
         if path == 'worker':
@@ -1638,26 +1656,34 @@ class Handler(BaseHTTPRequestHandler):
                     for chunk in response.iter_content(chunk_size=None):
                         self.wfile.write(chunk)
                         self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError) as e:
             self.close_connection = True
-        except BadRequest:
+            self.note_failure(e, 'connection dropped')
+        except BadRequest as e:
             self.close_connection = True
+            self.note_failure(e, '400 invalid_request')
             if not self.response_started:
                 self.fail(400, 'invalid_request')
-        except ImagePullFailed:
+        except ImagePullFailed as e:
             self.close_connection = True
+            self.note_failure(e, '503 image_pull_failed')
             if not self.response_started:
                 self.fail(503, 'image_pull_failed')
-        except InvalidCLIProfile:
+        except InvalidCLIProfile as e:
             self.close_connection = True
+            self.note_failure(e, '409 cli_profile_unavailable')
             if not self.response_started:
                 self.fail(409, 'cli_profile_unavailable')
-        except DiskQuotaUnavailable:
+        except DiskQuotaUnavailable as e:
             self.close_connection = True
+            self.note_failure(e, '503 disk_quota_unavailable')
             if not self.response_started:
                 self.fail(503, 'disk_quota_unavailable')
-        except Exception:
+        except Exception as e:
+            # Anything unnamed (a Docker error, a programming error): the
+            # traceback goes to stderr, the core gets runtime_unavailable.
             self.close_connection = True
+            self.note_failure(e, '503 runtime_unavailable', trace=True)
             if not self.response_started:
                 self.fail(503, 'runtime_unavailable')
 
@@ -1666,6 +1692,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.umask(0o077)
+    # Failures go to stderr (the container log), one line each, without
+    # request bodies or headers (audit B1); the request log stays off.
+    logging.basicConfig(stream=sys.stderr, level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
     key = os.environ['CCG_CONTROLLER_KEY']
     if len(key) < 32:
         raise SystemExit('controller key must contain at least 32 characters')

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
@@ -163,18 +164,27 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 	if t.proxySelected && !cfg.AccountRuntimes {
 		return fail(errors.New("account proxy requires per-account runtimes"))
 	}
+	// The core's own refusals (the account, the configuration, the policy)
+	// are answered as Anthropic errors marked X-CCGateway-Error-Source: core
+	// (audit A6), not returned as transport failures: the plugin then cools
+	// the account down for the stated reason and the client reads it, instead
+	// of "upstream connection failed".
+	refuse := func(reason, message string) (*http.Response, bool, error) {
+		cancel()
+		return coreRefusal(req, reason, message), false, nil
+	}
 	if cfg.AccountRuntimes {
 		d, fromCache, err := t.s.requestDesired(ctx, t.accountID)
 		if err != nil {
 			return fail(transportError(err))
 		}
 		if reason := d.unavailable(); reason != "" {
-			return fail(reasonError(core.ErrUnavailable, reason))
+			return refuse(reason, reasonError(core.ErrUnavailable, reason).Message)
 		}
 		revision, key, cached = d.Revision, d.Key, fromCache
 	}
 	if (!cfg.AccountRuntimes && cfg.APIKey == "") || (cfg.AccountRuntimes && cfg.AdminKey == "") {
-		return fail(errors.New("CCGateway key is not configured"))
+		return refuse("not_configured", reasonMessages["not_configured"])
 	}
 	// notSynchronized: the runtime is not at the revision the core wants.
 	// The account is read again next time and its runtime reconciled now.
@@ -223,7 +233,7 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 		}
 		if err := policy.Validate(); err != nil {
 			finish()
-			return nil, false, err
+			return refuse("invalid_request_policy", "The CC feature policy is invalid: "+err.Error()+".")
 		}
 		// Every policy carries a request level (request_levels_v1), so each
 		// model request and probe confirms the Worker/CLI first, whatever the
@@ -237,7 +247,7 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 					return notSynchronized()
 				}
 				finish()
-				return nil, false, err
+				return refuse("configuration_error", core.AsError(err).Message)
 			}
 		}
 		policyJSON, _ := json.Marshal(policy)
@@ -268,12 +278,23 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 	return res, false, nil
 }
 
-// notSynchronizedResponse is an Anthropic 503 api_error, like the Worker's
-// own unavailability answers: the plugin fails over to another account and
-// cools this one down briefly while its runtime is reconciled.
+// notSynchronizedResponse is the core's refusal while a runtime is
+// reconciled: the plugin fails over to another account and cools this one
+// down briefly.
 func notSynchronizedResponse(req *http.Request) *http.Response {
-	body, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]string{"type": "api_error", "message": reasonMessages["not_synchronized"]}})
-	return &http.Response{StatusCode: http.StatusServiceUnavailable, Status: "503 Service Unavailable", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(body)), Request: req}
+	return coreRefusal(req, "not_synchronized", reasonMessages["not_synchronized"])
+}
+
+// coreRefusal is an Anthropic 503 api_error the core answers itself, before
+// any Worker is asked, marked with its source (requestfailure.SourceCore) and
+// reason (requestfailure.ReasonHeader) so the plugin classifies it as the
+// gateway's own failure, not the upstream's, and the client reads why.
+func coreRefusal(req *http.Request, reason, message string) *http.Response {
+	body, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]string{"type": "api_error", "message": message}})
+	header := http.Header{"Content-Type": []string{"application/json"}}
+	header.Set(requestfailure.SourceHeader, requestfailure.SourceCore)
+	header.Set(requestfailure.ReasonHeader, reason)
+	return &http.Response{StatusCode: http.StatusServiceUnavailable, Status: "503 Service Unavailable", Header: header, Body: io.NopCloser(bytes.NewReader(body)), Request: req}
 }
 
 type modelBody struct {

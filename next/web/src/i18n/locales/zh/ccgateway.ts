@@ -395,6 +395,7 @@ export default {
     api_key_account: 'API Key 账号不需要 Claude 授权',
     runtime_unavailable: '容器运行环境不可用',
     disk_quota_unavailable: '账号数据卷的磁盘配额不可用，请先准备支持配额的存储，并迁移旧数据卷',
+    cli_profile_unavailable: '控制器无法为该容器提供配置的 Claude Code 版本：镜像里没有这个版本，或运行中的容器被要求换版本（请先原地更新 Worker 与 CLI）',
     method_not_allowed: '容器控制器不允许该操作',
     authentication_error: 'Claude Code 认证失败，请重新授权',
     not_found_error: 'Claude Code 找不到请求的资源',

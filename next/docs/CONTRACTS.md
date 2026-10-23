@@ -4017,6 +4017,24 @@ CC 特性策略的词表会收窄（注入工具 20→7 等）。此前 `Feature
 
 测试 `TestStalePolicyVocabularyStillLoads`：含未知工具、附件、入口、身份行、身份来源的全局/分组/账号三层都能解码、解析出的策略通过校验、线形不含未知项、存储值不变、保存被拒。
 
+### 53.20 错误来源与原因：网关自己的拒绝不算上游的判决（2026-10-23，审核 B1/C2/A5/A6）
+
+CCGateway 请求链路上的错误答复分三类来源，由 `contracts/requestfailure` 的两个头标记，`httpfacts.Apply` 保证上游答复永远带不上它们：
+
+| `X-CCGateway-Error-Source` | 谁写 | 含义 |
+|---|---|---|
+| `http` | Worker（CLI 帧） | 上游 HTTP 错误原字节透传 |
+| `input` / `transport` / `timeout` / `interrupted` / `internal` | Worker（CLI 帧） | CLI 在到达上游前/途中失败 |
+| `gateway` | Worker 自己（`apiError`） | Worker 在运行 CLI 前拒绝：密钥、策略、请求体、并发（401/400/404/405/413/429/409/503） |
+| `core` | 核心自己（`coreRefusal`） | 核心在问任何 Worker 前拒绝：账号状态（`account_deleted`、`proxy_unavailable`…）、未配置、策略无效、Worker 不具备能力（`configuration_error`，消息写明缺哪个能力或版本不符）、`not_synchronized` |
+
+`X-CCGateway-Error-Reason` 随 `gateway`/`core` 一起给出小写标识（`unauthorized`、`configuration_error`、`concurrency_limit`、`invalid_request`、`request_too_large`、`unavailable`、`not_synchronized`、`invalid_request_policy`、各账号原因）。正文仍是官方 Anthropic 错误类型，供客户端原样阅读。
+
+- **插件分类**（`classify.go`）：`requestfailure.Local(source)` 为真时一律 `LocalFailure`；429 按并发限制短冷却；401/403/409/5xx 短冷却并切换，理由写 `gateway refused the request (<reason>: <message>)`，**不再因 Worker 401 停用账号**；其余 4xx 原样回客户端。之前核心的配置类失败以 error 返回，被当作传输错误（10 秒冷却 + 客户端 502 "upstream connection failed"），能力细节只剩一句话。
+- **账号测试**（`account/testreq.go`）：本地来源的 `error_code` 取 Reason 头，`error_source` 为 `core`/`gateway`。
+- **保存配置**（`save`）：`mergeConfig` 的校验文案原样返回（400 `invalid_argument`），只有存储/加密失败才是笼统文案；分组被删除后残留的 `cc_feature_groups` 键在下一次保存时自动清掉（`pruneFeatureGroups`）。
+- **PUT config 的原因**（`putConfig`）：控制器的错误码（`cli_profile_unavailable`、`disk_quota_unavailable`、`image_pull_failed`…）经 `syncError` 成为 `details.reason`，`POST …/sync` 与对账日志都带它；控制器自己每个失败请求在 stderr 记一行（方法、key、路径、异常类型与消息、回给核心的码；未命名异常带堆栈），不记请求体与头。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

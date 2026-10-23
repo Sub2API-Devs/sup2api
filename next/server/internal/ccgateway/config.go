@@ -527,6 +527,44 @@ func (c *Config) clearSSH() {
 	c.Passphrase = ""
 	c.HostKeyFingerprint = ""
 }
+
+// pruneFeatureGroups checks the saved CC feature groups against the groups
+// table: a key the body names must exist; a key only the stored configuration
+// still holds (its group was deleted meanwhile) is dropped here, the next
+// time anyone saves, so orphans do not accumulate (audit A5).
+func pruneFeatureGroups(ctx context.Context, tx pgx.Tx, saved *Config, named map[string]GroupFeaturePolicy) error {
+	if len(saved.CCFeatureGroups) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(saved.CCFeatureGroups))
+	for key := range saved.CCFeatureGroups {
+		id, _ := strconv.ParseInt(key, 10, 64)
+		ids = append(ids, id)
+	}
+	rows, err := tx.Query(ctx, "SELECT id FROM groups WHERE id = ANY($1)", ids)
+	if err != nil {
+		return err
+	}
+	existing, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		return err
+	}
+	live := map[string]bool{}
+	for _, id := range existing {
+		live[strconv.FormatInt(id, 10)] = true
+	}
+	for key := range saved.CCFeatureGroups {
+		if live[key] {
+			continue
+		}
+		if _, inBody := named[key]; inBody {
+			return core.ErrInvalidArgument.WithMessage("Unknown CC feature group.").WithDetails(map[string]any{"group_id": key})
+		}
+		delete(saved.CCFeatureGroups, key)
+	}
+	return nil
+}
+
 func (s *Service) save(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	var in Config
@@ -550,18 +588,15 @@ func (s *Service) save(c *gin.Context) {
 			}
 			saved, e = mergeConfig(in, old)
 			if e != nil {
+				// mergeConfig's errors name what is wrong with the body: the
+				// caller gets the text (audit A5); a conflict keeps its code.
+				if core.AsError(e).Code == core.ErrInternal.Code {
+					e = core.ErrInvalidArgument.WithMessage(e.Error())
+				}
 				return nil, e
 			}
-			if in.CCFeatureGroups != nil {
-				for key := range in.CCFeatureGroups {
-					var exists bool
-					if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id=$1)", key).Scan(&exists); err != nil {
-						return nil, err
-					}
-					if !exists {
-						return nil, core.ErrInvalidArgument.WithMessage("Unknown CC feature group.")
-					}
-				}
+			if e := pruneFeatureGroups(ctx, tx, &saved, in.CCFeatureGroups); e != nil {
+				return nil, e
 			}
 			runtimeChanged = !sameRuntimeConfig(saved, old)
 			saved.bundled = old.bundled
@@ -581,11 +616,13 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
-		if core.AsError(e).Code == core.ErrConflict.Code {
+		// Validation and conflicts carry their own message; anything else
+		// (storage, encryption) is internal and stays generic.
+		if code := core.AsError(e).Code; code == core.ErrConflict.Code || code == core.ErrInvalidArgument.Code {
 			httpapi.Fail(c, e)
 			return
 		}
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, the connection mode (controller or disabled), or the control panel scheme, address, management key and root certificate."))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved."))
 		return
 	}
 	if runtimeChanged {

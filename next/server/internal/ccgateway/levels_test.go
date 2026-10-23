@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/stretchr/testify/require"
 )
 
@@ -232,7 +233,15 @@ func TestModelRequestNeedsTheLevelsCapability(t *testing.T) {
 		require.NoError(t, err)
 		res, err := svc.ModelClientForRequest(ModelRequestContext{GroupID: 7}).Do(req)
 		if !capable {
-			require.ErrorContains(t, err, "capabilities")
+			// The core answers itself (audit A6): a 503 marked as the core's
+			// with the missing capability named, never a transport failure.
+			require.NoError(t, err)
+			require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+			require.Equal(t, requestfailure.SourceCore, requestfailure.Source(res.Header))
+			require.Equal(t, "configuration_error", requestfailure.Reason(res.Header))
+			answer, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			require.Contains(t, string(answer), "lacks "+features.RequestLevelsCapability)
 			require.Empty(t, policies)
 		} else {
 			require.NoError(t, err)

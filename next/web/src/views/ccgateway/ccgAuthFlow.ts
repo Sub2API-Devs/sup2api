@@ -63,6 +63,7 @@ export const CCG_REASONS = [
   'api_key_account',
   'runtime_unavailable',
   'disk_quota_unavailable',
+  'cli_profile_unavailable',
   'method_not_allowed',
   // business container, passed through from Claude Code's own API errors
   'authentication_error',

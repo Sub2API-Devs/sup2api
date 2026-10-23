@@ -857,8 +857,17 @@ class HandlerTests(Base):
         def broken(*args, **kwargs):
             raise docker.errors.APIError('daemon error')
         self.fake.networks.create = broken
-        self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
-                         (503, {'error': 'runtime_unavailable'}))
+        # Every failed request leaves one line on stderr naming the method,
+        # key, path, exception and outcome (audit B1); never the body.
+        with self.assertLogs('ccgateway.controller', level='WARNING') as logs:
+            self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
+                             (503, {'error': 'runtime_unavailable'}))
+        self.assertEqual(len(logs.records), 1)
+        line = logs.output[0]
+        for part in ('PUT', 'key=1', 'path=config', '503 runtime_unavailable', 'APIError', 'daemon error'):
+            self.assertIn(part, line)
+        self.assertNotIn(REV, line, 'the body never reaches the log')
+        self.assertIsNotNone(logs.records[0].exc_info, 'an unnamed failure keeps its traceback')
 
     def test_health(self):
         self.assertEqual(self.call('GET', '/health', key='wrong' * 8), (401, {'error': 'unauthorized'}))

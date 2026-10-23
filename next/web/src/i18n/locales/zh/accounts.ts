@@ -127,7 +127,7 @@ export default {
   testNativeBuild: 'CC 原生构建探测（单次请求，无模型回退）',
   testResponseHeaders: '上游响应信息',
   testNoHTTPResponse: '未收到 HTTP 响应',
-  testErrorSources: { gateway: '网关／运行环境', transport: '传输链路', response: 'HTTP 响应', plugin: '插件', input: 'CC 请求输入', timeout: 'CC 请求超时', interrupted: 'CC 请求中断', internal: 'CC 运行环境' },
+  testErrorSources: { gateway: '网关／运行环境', core: '核心（未到达账号容器）', transport: '传输链路', response: 'HTTP 响应', plugin: '插件', input: 'CC 请求输入', timeout: 'CC 请求超时', interrupted: 'CC 请求中断', internal: 'CC 运行环境' },
   credentials: '凭证',
   orphanedEdit: '该账号类型所属的插件未启用，无法编辑凭证；基本信息仍可修改。',
   formUnavailable: '无法加载插件表单。',

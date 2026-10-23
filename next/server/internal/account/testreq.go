@@ -316,6 +316,11 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 			if source != "http" {
 				res.ErrorSource = source
 			}
+			// The gateway's own refusal (core or Worker) names its reason in a
+			// header; that is the code worth keeping, not the body's api_error.
+			if reason := requestfailure.Reason(resp.Header); reason != "" && requestfailure.Local(source) {
+				res.ErrorCode = reason
+			}
 			return res
 		}
 	}

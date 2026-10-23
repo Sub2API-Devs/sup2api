@@ -11,6 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
@@ -90,6 +91,11 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		resp.CooldownUntilUnix = now.Add(d).Unix()
 		resp.Reason = reason
 	}
+	// The gateway's own refusals (the core before any Worker, or the Worker
+	// before the CLI) carry their source and reason (contracts/requestfailure,
+	// audit C2/A6): they are never the upstream's verdict on the account.
+	local := requestfailure.Local(requestfailure.SourceOf(headerValues(in.GetHeaders(), "x-ccgateway-error-source")))
+	localReason := requestfailure.ReasonOf(in.GetHeaders()["x-ccgateway-error-reason"])
 
 	switch {
 	case in.GetHeaders()[errorScopeHeader] == "request":
@@ -105,6 +111,30 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		if resp.ClientMessage == "" {
 			resp.ClientMessage = "upstream connection failed"
 		}
+	case local && code == http.StatusTooManyRequests:
+		// The Worker's concurrency limit: free again in a moment.
+		resp.LocalFailure = true
+		until, src := rateLimitReset(in.GetHeaders(), now)
+		cooldown(until.Sub(now), "gateway concurrency limit until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
+	case local && (code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusConflict || code >= 500):
+		// The runtime refused for a reason of its own (a stale Worker key the
+		// core re-reads, a policy its CLI cannot carry, an account state, a
+		// Worker not ready): try another account, cool this one down briefly,
+		// and say why. The account's credentials are not in question.
+		resp.LocalFailure = true
+		why := localReason
+		if why == "" {
+			why = fmt.Sprintf("status %d", code)
+		}
+		if msg != "" {
+			why += ": " + truncate(msg, 200)
+		}
+		cooldown(serverErrorCooldown, "gateway refused the request ("+why+")")
+	case local:
+		// The Worker found the request itself unusable (400, 404, 405, 413):
+		// another account would answer the same.
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+		resp.LocalFailure = true
 	case code == http.StatusBadRequest && (isAccountBillingError(msg) ||
 		(in.GetHeaders()["x-ccgateway-error-source"] == "cli" && in.GetHeaders()["x-ccgateway-cli-error"] == "billing_error")):
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
@@ -118,6 +148,7 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 			resp.Reason += ": " + truncate(msg, 200)
 		}
 	case code == http.StatusTooManyRequests:
+		// A Worker from before the source header names its limit in words.
 		resp.LocalFailure = msg == "Gateway concurrency limit reached"
 		if !resp.LocalFailure {
 			resp.Quota = nativeQuotaObservation(in, now)
@@ -167,6 +198,14 @@ func nativeQuotaObservation(in *pluginv1.ClassifyErrorRequest, now time.Time) *p
 	}
 	windows := []*pluginv1.QuotaWindow{window}
 	return &pluginv1.QuotaResult{Windows: windows, NextCheckAtUnix: nextQuotaCheck(now, windows)}
+}
+
+// headerValues is the single-valued header map as header values.
+func headerValues(h map[string]string, name string) []string {
+	if v, ok := h[name]; ok && v != "" {
+		return []string{v}
+	}
+	return nil
 }
 
 func truncate(s string, n int) string {

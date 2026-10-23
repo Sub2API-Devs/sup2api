@@ -8,6 +8,7 @@ import copy
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 import secrets
@@ -16,6 +17,8 @@ import time
 
 import docker
 from network import PRIVATE_DESTINATIONS, proxy_outbound, business_rules
+
+log = logging.getLogger('ccgateway.controller.shared_egress')
 
 SHARED = 'shared_xray'
 LEGACY = 'per_account_singbox'
@@ -531,12 +534,15 @@ class SharedEgress:
                         continue
                     if self.m.public(key)['status'] != 'ready' or not self.healthy(key, state):
                         self.apply(key, state, self.desired(key))
-                except Exception:
+                except Exception as e:
+                    log.warning('shared egress recover key=%s: %s: %s', key, type(e).__name__, str(e)[:300])
                     self.m.online.pop(key, None)
 
     def run(self):
         while True:
             time.sleep(10)
-            with contextlib.suppress(Exception):
+            try:
                 self.recover()
                 self.collect()
+            except Exception as e:
+                log.warning('shared egress pass failed: %s: %s', type(e).__name__, str(e)[:300])

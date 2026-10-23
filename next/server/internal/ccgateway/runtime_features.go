@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -79,6 +80,10 @@ func requireCapabilities(ctx context.Context, client *http.Client, base, key, cl
 		// caller reads the account again (forwardAttempt).
 		return err
 	}
+	// The answer names what is missing (audit A6): the Worker's absence, its
+	// CLI version or the capabilities it lacks, so the cooldown reason and the
+	// client's error say which.
+	why := "the account Worker did not answer its health check"
 	if err == nil {
 		defer res.Body.Close()
 		raw, readErr := io.ReadAll(io.LimitReader(res.Body, 8193))
@@ -87,19 +92,25 @@ func requireCapabilities(ctx context.Context, client *http.Client, base, key, cl
 			CLIVersion   string   `json:"claude_version"`
 			Capabilities []string `json:"capabilities"`
 		}
-		if res.StatusCode == http.StatusOK && readErr == nil && len(raw) <= 8192 &&
-			json.Unmarshal(raw, &health) == nil && health.Status == "ok" &&
-			(cliVersion == "" || cliVersion == health.CLIVersion) {
-			complete := true
+		switch {
+		case res.StatusCode != http.StatusOK || readErr != nil || len(raw) > 8192 || json.Unmarshal(raw, &health) != nil || health.Status != "ok":
+			why = "the account Worker's health check failed"
+		case cliVersion != "" && cliVersion != health.CLIVersion:
+			why = "the account runs Claude Code " + health.CLIVersion + ", the policy needs " + cliVersion
+		default:
+			var missing []string
 			for _, capability := range required {
-				complete = complete && slices.Contains(health.Capabilities, capability)
+				if !slices.Contains(health.Capabilities, capability) {
+					missing = append(missing, capability)
+				}
 			}
-			if complete {
+			if len(missing) == 0 {
 				return nil
 			}
+			why = "the account Worker/CLI lacks " + strings.Join(missing, ", ") + " (update the Worker and CLI in place)"
 		}
 	}
-	return core.ErrConflict.WithMessage("The account Worker/CLI does not confirm the requested feature policy capabilities or CLI version.").WithDetails(map[string]any{"reason": "configuration_error", "required_capabilities": required})
+	return core.ErrConflict.WithMessage("The feature policy cannot be applied: " + why + ".").WithDetails(map[string]any{"reason": "configuration_error", "required_capabilities": required})
 }
 
 // Inspection only: never reconcile, start a container or change routing state.
