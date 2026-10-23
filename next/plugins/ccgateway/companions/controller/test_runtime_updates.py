@@ -2,7 +2,6 @@
 import contextlib
 import hashlib
 import json
-import sys
 import types
 import unittest
 from unittest.mock import patch
@@ -107,15 +106,15 @@ class RuntimePairTests(unittest.TestCase):
         self.entry = {'path': '2.1.304/claude', 'sha256': digest(b'\x7fELFcli'),
                       'patch': 'ccgateway-v12-feature-policy', 'modes': ['direct', 'build']}
         self.args = {'image': 'trusted:release', 'components': ['worker', 'cli'], 'cli_version': '2.1.304'}
-        manager = types.SimpleNamespace(BadRequest=ValueError, RuntimeNotFound=LookupError,
-                                       UnsupportedContainer=RuntimeError, check=lambda x: None,
-                                       valid_image=lambda x: isinstance(x, str) and ':' in x,
-                                       container_identity=lambda x: x.id, worker_target=lambda x: ('/usr/local/bin/worker', 'worker'),
-                                       worker_idle=lambda *_: True, tar_file=lambda n, b: (n, b),
-                                       read_single_file=lambda data, *_: data)
+        # runtime_updates imports these from common/dockerfs; the fake
+        # container keeps (name, data) archives and unwrapped bytes.
         docker = types.SimpleNamespace(errors=types.SimpleNamespace(NotFound=KeyError))
         self.patches = [
-            patch.dict(sys.modules, {'manager': manager, 'docker': docker}),
+            patch.multiple('runtime_updates', check=lambda x: None,
+                           valid_image=lambda x: isinstance(x, str) and ':' in x,
+                           container_identity=lambda x: x.id, worker_target=lambda x: ('/usr/local/bin/worker', 'worker'),
+                           worker_idle=lambda *_: True, tar_file=lambda n, b: (n, b),
+                           read_single_file=lambda data, *_: data, docker=docker),
             patch.object(self.update, 'package', return_value=(b'new worker', b'\x7fELFcli', self.entry)),
             patch.object(self.update, 'healthy', return_value=True),
             patch('runtime_updates.maintenance', return_value={'lease': 'a' * 48, 'active_requests': 0, 'paused': True}),

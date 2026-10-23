@@ -98,7 +98,7 @@ def main():
         headers = {'Authorization': 'Bearer ' + control.key, 'X-CCG-Revision': 'a' * 64}
         status = requests.get(origin + '/accounts/1/admin/status', headers=headers, timeout=20)
         assert status.status_code == 200, status.status_code
-        stale = requests.post(origin + '/accounts/1/v1/messages', json={},
+        stale = requests.get(origin + '/accounts/1/connection',
             headers={**headers, 'X-CCG-Revision': 'f' * 64}, timeout=5)
         assert stale.status_code == 409
         def request(aid, target='http://203.0.113.10/'):

@@ -1,8 +1,7 @@
 """Pinned CLI selection from the chosen, trusted worker image; never latest."""
 import json
-import re
 
-VERSION = re.compile(r'[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}')
+from common import VERSION
 
 def validate_profile(value):
     if value is None:

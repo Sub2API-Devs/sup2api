@@ -16,23 +16,17 @@ new image on /health within 60 s, otherwise everything is put back.
 import contextlib
 import json
 import os
-import re
 import sys
 import time
 import urllib.request
 
 import docker
 
-IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
-IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
-CONTROLLER_NAME = re.compile(r'[a-z][a-z0-9-]{0,40}')
+from common import CONTROLLER_NAME, valid_image
+
 DOCKER_SOCKET = '/var/run/docker.sock'
 HEALTH_WAIT = 60
 HEALTH_INTERVAL = 2
-
-
-def valid_image(ref):
-    return isinstance(ref, str) and bool(IMAGE_REF.fullmatch(ref) or IMAGE_ID.fullmatch(ref))
 
 
 def parse_env(text):

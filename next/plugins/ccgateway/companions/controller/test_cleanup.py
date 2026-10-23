@@ -7,11 +7,6 @@ from manager import BadRequest
 
 
 class CleanupTests(Base):
-    def setUp(self):
-        super().setUp()
-        self.fake.containers.list = lambda **kwargs: list(self.fake.containers.items.values())
-        self.fake.volumes.list = lambda **kwargs: list(self.fake.volumes.items.values())
-
     def inventory(self):
         return self.m.cleanup_inventory()['runtimes']
 
@@ -31,7 +26,32 @@ class CleanupTests(Base):
         self.assertNotIn('ccg-21-data', self.fake.volumes.items)
         self.assertFalse(self.m.dir('21').exists())
         self.assertFalse((backup / '21.json').exists())
-        self.assertEqual(self.m.delete('21', account=True, purge=True), {'deleted': True})
+        self.assertTrue(self.m.delete('21', account=True, purge=True)['deleted'])
+
+    def test_rollback_copy_alone_is_found_identified_and_purged(self):
+        # Only the renamed original app container of a manual migration is
+        # left (account 30): inventory used to miss it.
+        rollback = self.fake.containers.create('app:test', name='ccg-30-app-rollback-cli16x', labels={LABEL: '30'},
+                                               volumes={'ccg-30-data': {'bind': '/work', 'mode': 'rw'}})
+        snapshot = self.inventory()
+        self.assertEqual([row['key'] for row in snapshot], ['30'])
+        rollback.start()  # its identity covers the rollback container
+        self.assertEqual(self.cleanup([], snapshot)['results'][0]['status'], 'changed')
+        self.assertEqual(self.cleanup([])['deleted'], 1)
+        self.assertTrue(rollback.removed)
+        self.assertEqual(self.inventory(), [])
+
+    def test_other_prefix_and_unrelated_names_are_not_inventoried(self):
+        self.fake.containers.create('app:test', name='ccg-clean-x1-31-app-rollback-a', labels={LABEL: '31'})
+        self.fake.containers.create('app:test', name='ccg-31-sidecar', labels={LABEL: '31'})
+        self.assertEqual(self.inventory(), [])
+
+    def test_foreign_user_of_the_volume_is_reported_in_use(self):
+        self.apply('21')
+        self.fake.containers.create('busybox', name='debug-shell', volumes={'ccg-21-data': {'bind': '/d', 'mode': 'ro'}})
+        result = self.cleanup([])
+        self.assertEqual(result['results'], [{'key': '21', 'status': 'failed', 'reason': 'resource_in_use'}])
+        self.assertIn('ccg-21-app', self.fake.containers.items)
 
     def test_disabled_account_and_authorization_preparation_are_kept(self):
         for key in ['21', '22', DRAFT_KEY, OTHER_DRAFT]:

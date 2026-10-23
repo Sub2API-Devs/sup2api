@@ -17,6 +17,7 @@ from unittest.mock import patch
 import docker
 
 import manager
+import worker_update
 from manager import ContainerChanged, InvalidImage, RuntimeNotFound, UnsupportedContainer, ROUTE
 from test_manager import FakeContainer, LABEL, REV
 from test_uploads import ServerBase
@@ -144,7 +145,7 @@ class WorkerBase(ServerBase):
         p = patch('test_manager.FakeContainer', WorkerContainer)
         p.start()
         self.addCleanup(p.stop)
-        p = patch.multiple('manager', WORKER_IDLE_WAIT=0, WORKER_IDLE_INTERVAL=0,
+        p = patch.multiple('worker_update', WORKER_IDLE_WAIT=0, WORKER_IDLE_INTERVAL=0,
                            WORKER_HEALTH_WAIT=0, WORKER_HEALTH_INTERVAL=0)
         p.start()
         self.addCleanup(p.stop)
@@ -205,8 +206,9 @@ class WorkerUpdateTests(WorkerBase):
         users = {tuple(cmd[:1]): user for cmd, user in app.execs}
         self.assertEqual((users[('sha256sum',)], users[('mv',)], users[('chmod',)]), ('0', '0', '0'))
         self.assertIsNone(users[('node',)])
-        # Readiness restored at the old revision after firewall/route/probe again.
-        self.assertEqual(len(self.fake.containers.runs), runs + 1)  # the nft/route helper
+        # Readiness restored at the old revision after firewall/route/probe
+        # again; the rules also go back right after the restart (audit B4).
+        self.assertEqual(len(self.fake.containers.runs), runs + 2)  # the nft/route helper, twice
         self.assertEqual(self.m.online['21'], REV)
         self.assertEqual(self.m.public('21')['status'], 'ready')
         self.assertEqual(self.m.connection('21', REV)['revision'], REV)
@@ -239,7 +241,7 @@ class WorkerUpdateTests(WorkerBase):
     def test_busy_all_along_changes_nothing(self):
         app = self.target
         app.procs = ['docker-init', 'worker', 'claude']
-        with patch.object(manager, 'WORKER_IDLE_WAIT', 0.05):
+        with patch.object(worker_update, 'WORKER_IDLE_WAIT', 0.05):
             self.assertEqual(self.update(), {'status': 'busy'})
         self.assertGreater(app.tops, 1)  # rechecked until the deadline
         self.assertEqual(app.files, {WORKER: (OLD, 0o755, 0)})
@@ -256,7 +258,7 @@ class WorkerUpdateTests(WorkerBase):
             if c.tops == 3:
                 c.procs = ['docker-init', 'worker']
         app.top_hook = finish
-        with patch.object(manager, 'WORKER_IDLE_WAIT', 5):
+        with patch.object(worker_update, 'WORKER_IDLE_WAIT', 5):
             self.assertEqual(self.update()['status'], 'updated')
         self.assertEqual(app.files[WORKER][0], NEW)
 
@@ -403,8 +405,22 @@ class WorkerUpdateTests(WorkerBase):
         runs = len(self.fake.containers.runs)
         result = self.update()
         self.assertEqual((result['status'], result['online']), ('updated', False))
-        self.assertEqual(len(self.fake.containers.runs), runs)  # no helper
+        # Only the business rules after the restart (B4); no activation.
+        self.assertEqual(len(self.fake.containers.runs), runs + 1)
         self.assertNotIn('21', self.m.online)
+
+    def test_rules_return_right_after_restart_before_health_wait(self):
+        order = []
+        original = self.m._worker_healthy
+
+        def healthy(aid, identity):
+            order.append('health')
+            return original(aid, identity)
+        with patch.object(self.m, 'business_firewall', side_effect=lambda *a: order.append('firewall')), \
+                patch.object(self.m, '_worker_healthy', side_effect=healthy), \
+                patch.object(self.m, '_reactivate', return_value=True):
+            self.assertEqual(self.update()['status'], 'updated')
+        self.assertEqual(order, ['firewall', 'health'])
 
     def test_backups_keep_newest_five(self):
         folder = Path(self.tmp) / '21' / 'worker-backups'

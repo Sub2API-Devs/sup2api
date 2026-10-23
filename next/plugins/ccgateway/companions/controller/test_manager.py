@@ -2,7 +2,7 @@
 
 Run on Linux (manager.py uses fcntl) from this directory, as CI does:
     pip install -r requirements.txt
-    python -m unittest -v test_network test_headers test_manager test_tunnel test_uploads test_runtime test_upgrade
+    python -m unittest discover -v -p 'test_*.py'
 """
 import http.client
 import json
@@ -24,6 +24,9 @@ DRAFT_KEY = 'd0123456789abcdef'
 OTHER_DRAFT = 'dfedcba9876543210'
 REV = 'a' * 64
 CONTROLLER_KEY = 'k' * 32
+# Every variable the controller reads from its environment.
+ENVIRONMENT = ('CCG_CONTROLLER_VERSION', 'CCG_DEFAULT_CLI_VERSION', 'CCG_ACCOUNT_DISK_GIB', 'CCG_ACCOUNT_DISK_QUOTA_REQUIRED',
+               'CCG_CONTROLLER_NAME', 'CCG_CONTROLLER_PORT', 'CCG_CONTROLLER_IMAGE', 'CCG_RUNTIME_ENV_FILE', 'CCG_XRAY_IMAGE')
 
 
 def not_found(name):
@@ -47,6 +50,8 @@ class FakeContainer:
 
     def remove(self, force=False):
         self.client.containers.items.pop(self.name, None)
+        for network in self.client.networks.items.values():
+            network.endpoints.pop(self.id, None)
         self.removed = True
 
     def reload(self):
@@ -54,6 +59,11 @@ class FakeContainer:
 
     def exec_run(self, cmd):
         return 0, b''
+
+
+def label_filter_matches(labels, wanted):
+    key, _, value = wanted.partition('=')
+    return key in labels and (not value or labels[key] == value)
 
 
 class FakeContainers:
@@ -71,7 +81,23 @@ class FakeContainers:
         c = FakeContainer(self.client, name, image, labels)
         c.kwargs = kwargs
         self.items[name] = c
+        if kwargs.get('network') in self.client.networks.items:
+            endpoint = (kwargs.get('networking_config') or {}).get(kwargs['network']) or {}
+            self.client.networks.items[kwargs['network']].connect(c, endpoint.get('ipv4_address'))
         return c
+
+    def list(self, all=False, filters=None, **kwargs):
+        """The label and volume filters of the Docker API (volume: by name)."""
+        out = []
+        for c in self.items.values():
+            if not all and c.status != 'running':
+                continue
+            if 'label' in (filters or {}) and not label_filter_matches(c.labels, filters['label']):
+                continue
+            if 'volume' in (filters or {}) and filters['volume'] not in (getattr(c, 'kwargs', {}).get('volumes') or {}):
+                continue
+            out.append(c)
+        return out
 
     def run(self, image, **kwargs):
         self.runs.append(image)
@@ -112,14 +138,25 @@ class FakeNetwork:
         self.networks, self.name = networks, name
         self.attrs = {'Labels': dict(labels or {}), 'IPAM': {'Config': [{'Subnet': subnet}]}}
         self.connected, self.removed = [], False
+        self.endpoints = {}  # container id -> endpoint, as Docker's inspect "Containers"
+        self.id = 'nid-' + name
+        self.reload()
 
     def reload(self):
-        pass
+        self.attrs['Containers'] = {cid: dict(endpoint) for cid, endpoint in self.endpoints.items()}
 
     def connect(self, container, ipv4_address=None):
         self.connected.append((container.name, ipv4_address))
+        self.endpoints[container.id] = {'Name': container.name, 'IPv4Address': f'{ipv4_address}/24' if ipv4_address else ''}
+        self.reload()
+
+    def disconnect(self, container, force=False):
+        self.endpoints.pop(getattr(container, 'id', container), None)
+        self.reload()
 
     def remove(self):
+        if self.endpoints:
+            raise docker.errors.APIError('network has active endpoints')
         self.networks.items.pop(self.name, None)
         self.removed = True
 
@@ -131,6 +168,7 @@ class FakeNetworks:
     def get(self, name):
         if name not in self.items:
             raise not_found(name)
+        self.items[name].reload()  # Docker answers a fresh inspect
         return self.items[name]
 
     def create(self, name, labels=None, **kwargs):
@@ -139,7 +177,7 @@ class FakeNetworks:
         self.items[name] = n
         return n
 
-    def list(self):
+    def list(self, **kwargs):
         return list(self.items.values())
 
 
@@ -165,6 +203,9 @@ class FakeVolumes:
     def create(self, name, labels=None, driver='local', driver_opts=None):
         # Docker returns the existing volume for an existing name.
         return self.items.setdefault(name, FakeVolume(self, name, labels, driver, driver_opts))
+
+    def list(self, **kwargs):
+        return list(self.items.values())
 
 
 class FakeAPI:
@@ -193,7 +234,10 @@ class Base(unittest.TestCase):
         env = patch.dict(os.environ)
         env.start()
         self.addCleanup(env.stop)
-        os.environ.pop('CCG_CONTROLLER_VERSION', None)
+        # The controller image sets some of these (CCG_DEFAULT_CLI_VERSION);
+        # a test host must not change what the tests see (audit B10).
+        for name in ENVIRONMENT:
+            os.environ.pop(name, None)
         self.m = self.make('app:test', 'egress:test')
         # Pure configuration generation is covered by test_network.py.
         for target, value in (('manager.configuration', ({'outbounds': []}, 'table inet x {}\n')),
@@ -373,7 +417,6 @@ class KeyTests(unittest.TestCase):
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/status')[1], key)
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/auth/session')[2], 'admin/auth/session')
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/usage')[2], 'admin/usage')
-            self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/v1/messages/count_tokens')[2], 'v1/messages/count_tokens')
             m = ROUTE.fullmatch(f'/accounts/{key}')
             self.assertEqual((m[1], m[2]), (key, None))
         for key in self.INVALID:
@@ -381,9 +424,11 @@ class KeyTests(unittest.TestCase):
                 self.assertIsNone(ROUTE.fullmatch(f'/accounts/{key}/status'), repr(key))
         m = ROUTE.fullmatch('/accounts')
         self.assertEqual((m[1], m[2]), (None, None))
+        # Retired: the model relay, the credential copy and the CLI catalog.
         for path in ('/accounts/', '/accounts/1/', '/accounts/1/admin/auth/other', '/accounts/1/status?x=1',
                      '/accounts/1/../2/status', '/accounts/1/admin/auth/session/x', '/accounts/1/admin/usage/x',
-                     '/accounts/1/admin/auth/usage'):
+                     '/accounts/1/admin/auth/usage', '/accounts/1/v1/messages', '/accounts/1/v1/messages/count_tokens',
+                     f'/accounts/{DRAFT_KEY}/migrate-auth', '/accounts/1/admin/cli/catalog'):
             self.assertIsNone(ROUTE.fullmatch(path), path)
 
 
@@ -410,50 +455,16 @@ class ManagerTests(Base):
                 self.m.oneshot('egress:test', entrypoint=['true'])
         self.assertEqual([n for n in self.fake.containers.items if '-oneshot-' in n and not self.fake.containers.items[n].removed], [])
 
-    def test_auth_migration_isolated_idempotent_and_source_readonly(self):
+    def test_failed_migration_draft_left_by_an_older_controller_is_only_discarded(self):
         self.apply('7')
         self.apply(DRAFT_KEY)
-        source, target = self.app('7'), self.app(DRAFT_KEY)
-        source_boot = source.attrs['State']['StartedAt']
-        with patch.object(self.fake.containers, 'run') as run:
-            self.assertEqual(self.m.migrate_auth(DRAFT_KEY, '7'), {'migrated': True})
-            self.m.migrate_auth(DRAFT_KEY, '7')
-            self.assertEqual(run.call_count, 1)
-            opts = run.call_args.kwargs
-            self.assertEqual(opts['volumes']['ccg-7-data']['mode'], 'ro')
-            self.assertEqual(opts['network_mode'], 'none')
-            self.assertEqual(opts['user'], '1000:1000')
-        self.assertEqual(source.attrs['State']['StartedAt'], source_boot)
-        self.assertEqual(self.m.public('7')['status'], 'ready')
-        self.assertIs(self.app(DRAFT_KEY), target)
-        self.assertNotEqual(self.m.state('7')['admin_key'], self.m.state(DRAFT_KEY)['admin_key'])
-        self.apply(DRAFT_KEY)
-        self.assertEqual(self.m.public(DRAFT_KEY)['status'], 'ready')
-
-    def test_failed_migration_never_changes_source_or_promotes_partial_copy(self):
-        self.apply('7')
-        self.apply(DRAFT_KEY)
-        source = self.app('7')
-        with patch.object(self.fake.containers, 'run', side_effect=RuntimeError('copy failed')):
-            with self.assertRaises(RuntimeError):
-                self.m.migrate_auth(DRAFT_KEY, '7')
-        self.assertIs(self.app('7'), source)
-        self.assertEqual(self.m.public('7')['status'], 'ready')
-        self.assertEqual(self.app(DRAFT_KEY).status, 'exited')
+        state = self.m.state(DRAFT_KEY)
+        state['migration_failed'] = True
+        self.m.save(DRAFT_KEY, state)
         with self.assertRaises(BadRequest):
             self.apply(DRAFT_KEY)
         self.m.delete(DRAFT_KEY)
         self.assertIn('ccg-7-data', self.fake.volumes.items)
-
-    def test_migration_rejects_non_draft_same_runtime_and_foreign_volume(self):
-        self.apply('7')
-        self.apply(DRAFT_KEY)
-        for dest, source in [('7', DRAFT_KEY), (DRAFT_KEY, DRAFT_KEY), (DRAFT_KEY, '../7')]:
-            with self.assertRaises(BadRequest):
-                self.m.migrate_auth(dest, source)
-        self.fake.volumes.get('ccg-7-data').attrs['Labels'][LABEL] = 'foreign'
-        with self.assertRaises(BadRequest):
-            self.m.migrate_auth(DRAFT_KEY, '7')
 
     def test_missing_default_image_does_not_break_existing_connection(self):
         self.apply('7')
@@ -685,7 +696,8 @@ class ManagerTests(Base):
         self.apply(OTHER_DRAFT)
         names = [f'ccg-{DRAFT_KEY}-{r}' for r in ('app', 'egress')]
         self.assertTrue(all(n in self.fake.containers.items for n in names))
-        self.assertEqual(self.m.delete(DRAFT_KEY), {'deleted': True})
+        self.assertEqual(self.m.delete(DRAFT_KEY), {'deleted': True, 'removed': {
+            'containers': sorted(names), 'networks': [f'ccg-{DRAFT_KEY}-net', f'ccg-{DRAFT_KEY}-uplink'], 'volume': True}})
         for n in names:
             self.assertNotIn(n, self.fake.containers.items)
         self.assertNotIn(f'ccg-{DRAFT_KEY}-net', self.fake.networks.items)
@@ -694,8 +706,9 @@ class ManagerTests(Base):
         self.assertNotIn(DRAFT_KEY, self.m.online)
         self.assertEqual(self.m.public(DRAFT_KEY)['status'], 'pending')
         # Nothing left: still success. Other runtimes untouched.
-        self.assertEqual(self.m.delete(DRAFT_KEY), {'deleted': True})
-        self.assertEqual(self.m.delete('d' + 'f' * 16), {'deleted': True})
+        nothing = {'deleted': True, 'removed': {'containers': [], 'networks': [], 'volume': False}}
+        self.assertEqual(self.m.delete(DRAFT_KEY), nothing)
+        self.assertEqual(self.m.delete('d' + 'f' * 16), nothing)
         self.assertIn(f'ccg-{OTHER_DRAFT}-app', self.fake.containers.items)
         self.assertTrue((Path(self.tmp) / OTHER_DRAFT / 'state.json').exists())
 
@@ -711,18 +724,109 @@ class ManagerTests(Base):
 
     def test_delete_account_runtime_when_named_explicitly(self):
         self.apply('5')
-        self.assertEqual(self.m.delete('5', account=True), {'deleted': True})
+        self.assertTrue(self.m.delete('5', account=True)['deleted'])
         self.assertNotIn('ccg-5-app', self.fake.containers.items)
         self.assertIn('ccg-5-data', self.fake.volumes.items)
         self.assertTrue((Path(self.tmp) / 'backups' / '5.json').exists())
         self.assertFalse((Path(self.tmp) / '5').exists())
-        self.assertEqual(self.m.delete('5', account=True), {'deleted': True})
+        self.assertTrue(self.m.delete('5', account=True)['deleted'])
 
     def test_delete_refuses_foreign_resources(self):
         self.fake.containers.create('app:test', name=f'ccg-{DRAFT_KEY}-app', labels={LABEL: 'someone-else'})
         with self.assertRaises(ValueError):
             self.m.delete(DRAFT_KEY)
         self.assertIn(f'ccg-{DRAFT_KEY}-app', self.fake.containers.items)
+
+    def rollback_copy(self, aid, prefix='ccg', tag='rollback-cli16x'):
+        """What migrate-cli-16x.py leaves: the stopped original app container,
+        renamed, with its label and the data volume still mounted."""
+        app = self.fake.containers.create('app:test', name=f'{prefix}-{aid}-app-{tag}', labels={LABEL: aid},
+                                          volumes={f'{prefix}-{aid}-data': {'bind': '/work', 'mode': 'rw'}})
+        app.status = 'exited'
+        return app
+
+    def test_delete_purge_removes_suffixed_rollback_containers(self):
+        self.apply('21')
+        rollback = self.rollback_copy('21')
+        result = self.m.delete('21', account=True, purge=True)
+        self.assertEqual(result['removed'], {'containers': ['ccg-21-app', 'ccg-21-app-rollback-cli16x', 'ccg-21-egress'],
+                                             'networks': ['ccg-21-net', 'ccg-21-uplink'], 'volume': True})
+        self.assertTrue(rollback.removed)
+        self.assertNotIn('ccg-21-data', self.fake.volumes.items)
+        self.assertFalse((Path(self.tmp) / '21').exists())
+        # Only the rollback copy and the volume left (the 30 incident): still completed.
+        self.fake.volumes.create('ccg-30-data', labels={LABEL: '30'})
+        self.rollback_copy('30')
+        self.assertEqual(self.m.delete('30', account=True, purge=True)['removed'],
+                         {'containers': ['ccg-30-app-rollback-cli16x'], 'networks': [], 'volume': True})
+        self.assertNotIn('ccg-30-data', self.fake.volumes.items)
+
+    def test_delete_refuses_foreign_container_on_the_volume_and_removes_nothing(self):
+        self.apply('21')
+        backup = Path(self.tmp) / 'backups'
+        backup.mkdir()
+        (backup / '21.json').write_text('{}')
+        foreign = self.fake.containers.create('busybox', name='debug-shell',
+                                              volumes={'ccg-21-data': {'bind': '/data', 'mode': 'ro'}})
+        with self.assertRaises(manager.ResourceInUse) as raised:
+            self.m.delete('21', account=True, purge=True)
+        self.assertEqual(raised.exception.names, ['debug-shell'])
+        for name in ('ccg-21-app', 'ccg-21-egress', 'debug-shell'):
+            self.assertIn(name, self.fake.containers.items)
+        self.assertIn('ccg-21-net', self.fake.networks.items)
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.assertTrue((Path(self.tmp) / '21' / 'state.json').exists())
+        self.assertTrue((backup / '21.json').exists())
+        # A foreign endpoint on the account network blocks it as well.
+        foreign.remove()
+        self.fake.networks.get('ccg-21-uplink').connect(FakeContainer(self.fake, 'sidecar', 'busybox', {}))
+        with self.assertRaises(manager.ResourceInUse):
+            self.m.delete('21', account=True, purge=True)
+        self.assertIn('ccg-21-app', self.fake.containers.items)
+
+    def test_delete_removes_stale_helpers_but_not_a_running_one(self):
+        self.apply('21')
+        volumes = {'ccg-21-data': {'bind': '/work', 'mode': 'rw'}}
+        running = self.fake.containers.create('app:test', name='ccg-oneshot-0123456789abcdef', volumes=volumes)
+        running.start()
+        with self.assertRaises(manager.ResourceInUse):
+            self.m.delete('21', account=True, purge=True)
+        running.status = 'created'  # what docker-py leaves behind when it cannot start
+        removed = self.m.delete('21', account=True, purge=True)['removed']
+        self.assertIn('ccg-oneshot-0123456789abcdef', removed['containers'])
+        self.assertTrue(removed['volume'])
+
+    def test_delete_never_touches_another_prefix_with_the_same_key(self):
+        self.apply('21')
+        other = self.rollback_copy('21', prefix='ccg-clean-x1')
+        other_app = self.fake.containers.create('app:test', name='ccg-clean-x1-21-app', labels={LABEL: '21'})
+        self.m.delete('21', account=True, purge=True)
+        self.assertIn(other.name, self.fake.containers.items)
+        self.assertIn(other_app.name, self.fake.containers.items)
+        self.assertNotIn('ccg-21-app', self.fake.containers.items)
+
+    def test_delete_without_purge_keeps_volume_and_backup(self):
+        self.apply('21')
+        rollback = self.rollback_copy('21')
+        result = self.m.delete('21', account=True)
+        self.assertTrue(rollback.removed)
+        self.assertFalse(result['removed']['volume'])
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.assertTrue((Path(self.tmp) / 'backups' / '21.json').exists())
+        # Repeated: nothing left to remove, the backup and the volume stay.
+        self.assertEqual(self.m.delete('21', account=True)['removed'], {'containers': [], 'networks': [], 'volume': False})
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.assertTrue((Path(self.tmp) / 'backups' / '21.json').exists())
+
+    def test_delete_failure_propagates_and_retry_completes(self):
+        self.apply('21')
+        rollback = self.rollback_copy('21')
+        with patch.object(rollback, 'remove', side_effect=docker.errors.APIError('device busy')):
+            with self.assertRaises(docker.errors.APIError):
+                self.m.delete('21', account=True, purge=True)
+        self.assertIn('ccg-21-data', self.fake.volumes.items)  # not reached
+        self.assertTrue(self.m.delete('21', account=True, purge=True)['removed']['volume'])
+        self.assertNotIn(rollback.name, self.fake.containers.items)
 
     def test_runtimes_lists_state_directories(self):
         self.apply('3')
@@ -885,7 +989,7 @@ class HandlerTests(Base):
         self.assertEqual(self.call('GET', '/health'),
                          (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
                                 'controller_image': '', 'network_policy_version': 1,
-                            'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1'],
+                            'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1', 'runtime-purge-v2'],
                             'disk_quota': {'default_bytes': 10 << 30, 'support': 'unknown'}}))
 
     def test_unsupported_disk_quota_has_a_specific_error(self):
@@ -899,12 +1003,22 @@ class HandlerTests(Base):
         self.apply('21')
         self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Data': '1'})[0], 400)
         self.assertIn('ccg-21-data', self.fake.volumes.items)
-        self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Account': '21', 'X-CCG-Delete-Data': '1'}), (200, {'deleted': True}))
+        status, body = self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Account': '21', 'X-CCG-Delete-Data': '1'})
+        self.assertEqual((status, body['deleted'], body['removed']['volume']), (200, True, True))
         self.assertNotIn('ccg-21-data', self.fake.volumes.items)
 
+    def test_delete_with_a_foreign_volume_user_is_a_conflict(self):
+        self.apply('21')
+        self.fake.containers.create('busybox', name='debug-shell', volumes={'ccg-21-data': {'bind': '/d', 'mode': 'ro'}})
+        with self.assertLogs('ccgateway.controller', level='WARNING') as logs:
+            self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Account': '21', 'X-CCG-Delete-Data': '1'}),
+                             (409, {'error': 'resource_in_use'}))
+        self.assertIn('409 resource_in_use', logs.output[0])
+        self.assertIn('debug-shell', logs.output[0])
+        self.assertIn('ccg-21-app', self.fake.containers.items)
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+
     def test_cleanup_http_requires_auth_and_complete_snapshot(self):
-        self.fake.containers.list = lambda **kwargs: list(self.fake.containers.items.values())
-        self.fake.volumes.list = lambda **kwargs: list(self.fake.volumes.items.values())
         self.apply('21')
         self.apply('22')
         self.assertEqual(self.call('GET', '/runtime/cleanup', key='wrong')[0], 401)
@@ -936,11 +1050,13 @@ class HandlerTests(Base):
         self.assertEqual(self.call('DELETE', '/accounts/9'), (405, {'error': 'method_not_allowed'}))
         self.assertIn('ccg-9-app', self.fake.containers.items)
         for _ in range(2):
-            self.assertEqual(self.call('DELETE', f'/accounts/{DRAFT_KEY}'), (200, {'deleted': True}))
+            status, body = self.call('DELETE', f'/accounts/{DRAFT_KEY}')
+            self.assertEqual((status, body['deleted']), (200, True))
         self.assertEqual([r['key'] for r in self.call('GET', '/accounts')[1]['runtimes']], ['9'])
         # An account runtime is deleted only when the header names it.
         self.assertEqual(self.call('DELETE', '/accounts/9', headers={'X-CCG-Delete-Account': '8'}), (405, {'error': 'method_not_allowed'}))
-        self.assertEqual(self.call('DELETE', '/accounts/9', headers={'X-CCG-Delete-Account': '9'}), (200, {'deleted': True}))
+        status, body = self.call('DELETE', '/accounts/9', headers={'X-CCG-Delete-Account': '9'})
+        self.assertEqual((status, body['deleted']), (200, True))
         self.assertEqual(self.call('GET', '/accounts')[1]['runtimes'], [])
 
     def test_session_pass_through(self):
@@ -1026,33 +1142,31 @@ class HandlerTests(Base):
             self.assertEqual(self.call(method, path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
         self.assertEqual(len(FakeSession.calls), calls)
 
-    def test_cli_catalog_read_only_pass_through(self):
+    def test_cli_management_is_a_plain_pass_through(self):
+        # The controller no longer installs an official CLI: every /admin/cli
+        # call, an old core's {"action":"update"} included, is the Worker's.
         self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
         state = self.m.state('7')
-        path = '/accounts/7/admin/cli/catalog'
-        self.assertEqual(self.call('GET', path, key='wrong' * 8)[0], 401)
+        path = '/accounts/7/admin/cli'
         self.assertEqual(self.call('GET', path)[0], 409)
-        payload = {'tools': [{'name': 'Read', 'variants': [{'description': 'definition ' * 4096, 'input_schema': {'type': 'object'}}]}]}
-        with patch.object(FakeResponse, 'iter_content', return_value=iter([json.dumps(payload).encode()])):
-            self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV}), (200, payload))
-        method, url, headers = FakeSession.calls[-1]
-        self.assertEqual((method, url), ('GET', f'http://{state["app_ip"]}:8787/admin/cli/catalog'))
-        self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        for method, body in (('GET', None), ('POST', '{"action":"check"}'), ('POST', '{"action":"sync"}'),
+                             ('POST', '{"action":"update"}'), ('PUT', '{"auto_update":false}')):
+            self.assertEqual(self.call(method, path, body, headers={'X-CCG-Revision': REV})[0], 200)
+            actual, url, headers = FakeSession.calls[-1]
+            self.assertEqual((actual, url), (method, f'http://{state["app_ip"]}:8787/admin/cli'))
+            self.assertEqual(headers, {'Authorization': 'Bearer ' + state['admin_key'], 'Content-Type': 'application/json'})
         calls = len(FakeSession.calls)
-        for method in ('POST', 'PUT', 'DELETE'):
-            self.assertEqual(self.call(method, path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
-        self.assertEqual(self.call('GET', path + '/other', headers={'X-CCG-Revision': REV})[0], 404)
+        self.assertEqual(self.call('DELETE', path, headers={'X-CCG-Revision': REV})[0], 405)
+        self.assertEqual(self.call('GET', path + '/catalog', headers={'X-CCG-Revision': REV}), (404, {'error': 'not_found'}))
         self.assertEqual(len(FakeSession.calls), calls)
+        self.assertFalse(hasattr(self.m, 'cli_updates'))
 
-    def test_cli_catalog_never_waits_for_installation_lock(self):
+    def test_pass_through_never_forwards_caller_headers(self):
         self.apply('7')
-        path = '/accounts/7/admin/cli/catalog'
-        with self.m.guard('7'):
-            self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 503)
-        with self.m.cli_updates.mu:
-            self.m.cli_updates.running.add('7')
-        self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 503)
-        self.assertFalse(FakeSession.calls)
+        state = self.m.state('7')
+        self.call('GET', '/accounts/7/admin/status', headers={
+            'X-CCG-Revision': REV, 'Anthropic-Beta': 'a', 'X-CCGateway-Request-Policy': '{}', 'X-Api-Key': 'caller'})
+        self.assertEqual(FakeSession.calls[-1][2], {'Authorization': 'Bearer ' + state['admin_key'], 'Content-Type': 'application/json'})
 
     def test_usage_pass_through(self):
         self.apply('7')
@@ -1080,6 +1194,84 @@ if __name__ == '__main__':
     unittest.main()
 
 class ConnectionTests(Base):
+    def test_request_path_never_waits_unbounded_for_the_account_lock(self):
+        self.apply('21')
+        held, release = threading.Event(), threading.Event()
+
+        def hold():
+            with self.m.guard('21'):
+                held.set()
+                release.wait(5)
+        threading.Thread(target=hold, daemon=True).start()
+        held.wait(5)
+        try:
+            with patch.object(manager, 'REQUEST_LOCK_WAIT', 0.05):
+                with self.assertRaises(manager.RuntimeBusy):
+                    self.m.connection('21', REV)
+        finally:
+            release.set()
+        self.assertEqual(self.m.connection('21', REV)['revision'], REV)
+
+    def test_connection_reads_readiness_without_image_lookups(self):
+        self.apply('21')
+        with patch.object(self.m, 'app_image_id', side_effect=AssertionError('image lookup on the request path')):
+            self.assertEqual(self.m.connection('21', REV)['revision'], REV)
+
+
+class ProxyRecheckTests(Base):
+    def resolve(self, *addresses):
+        return patch('manager.socket.getaddrinfo', return_value=[(2, 1, 6, '', (a, 3128)) for a in addresses])
+
+    def ready_with_host(self):
+        with patch('manager.configuration', return_value=({'outbounds': [{'server': '198.51.100.7'}]}, 'table inet x {}\n')):
+            self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
+        self.assertEqual(self.m.public('21')['status'], 'ready')
+
+    def test_moved_proxy_host_makes_the_runtime_pending(self):
+        self.ready_with_host()
+        with self.resolve('198.51.100.7', '198.51.100.8'):
+            self.m.recheck_proxies()  # round-robin that still includes the pinned address
+        self.assertEqual(self.m.public('21')['status'], 'ready')
+        with patch('manager.socket.getaddrinfo', side_effect=OSError('no DNS')):
+            self.m.recheck_proxies()  # a failed lookup is no evidence
+        self.assertEqual(self.m.public('21')['status'], 'ready')
+        with self.resolve('198.51.100.9'), self.assertLogs('ccgateway.controller', level='WARNING'):
+            self.m.recheck_proxies()
+        self.assertEqual(self.m.public('21')['status'], 'pending')
+
+    def test_new_resolution_rebuilds_the_egress_at_the_same_revision(self):
+        self.ready_with_host()
+        egress = self.fake.containers.get('ccg-21-egress')
+        self.m.drop_readiness('21')
+        with patch('manager.configuration', return_value=({'outbounds': [{'server': '198.51.100.9'}]}, 'table inet x {}\n')):
+            self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
+        self.assertTrue(egress.removed)
+        self.assertIsNot(self.fake.containers.get('ccg-21-egress'), egress)
+        self.assertEqual(self.m.public('21')['status'], 'ready')
+
+    def test_address_literal_and_direct_are_never_rechecked(self):
+        self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': '198.51.100.7', 'port': 3128}})
+        self.m.apply('22', {'revision': REV, 'proxy': None, 'direct': True})
+        with patch('manager.socket.getaddrinfo', side_effect=AssertionError('resolved')):
+            self.m.recheck_proxies()
+        self.assertEqual(self.m.public('21')['status'], 'ready')
+
+
+class EnvironmentValidationTests(unittest.TestCase):
+    def test_locale_and_timezone_shapes(self):
+        for locale in ('ja_JP.UTF-8', 'en_US.UTF-8', 'zh_CN', 'C', 'C.UTF-8', 'POSIX', 'sr_RS.UTF-8@latin', ''):
+            self.assertEqual(manager.authentication({'mode': 'oauth', 'locale': locale}).get('locale', ''), locale)
+        for timezone in ('Asia/Tokyo', 'UTC', 'Etc/GMT+5', 'America/Argentina/Buenos_Aires', ''):
+            self.assertEqual(manager.authentication({'mode': 'oauth', 'timezone': timezone}).get('timezone', ''), timezone)
+        for bad in ({'locale': 'en_US.UTF-8; rm -rf /'}, {'locale': 'x' * 65}, {'locale': 7}, {'locale': '../x'},
+                    {'timezone': '../../etc/passwd'}, {'timezone': 'Asia/Tokyo\n'}, {'timezone': 'Local'},
+                    {'timezone': '/Asia/Tokyo'}, {'timezone': None}):
+            for mode in ({'mode': 'oauth'}, {'mode': 'api_key', 'api_key': 'sk-test-key-123'}):
+                with self.assertRaises(BadRequest, msg=(bad, mode)):
+                    manager.authentication({**mode, **bad})
+
+
+class ConnectionStateTests(Base):
     def test_connection_requires_current_ready_revision_and_keeps_key_private(self):
         self.apply('21')
         state = self.m.state('21')

@@ -1,14 +1,24 @@
 """Owned runtime inventory and identity-checked, authoritative keep-list cleanup."""
 import hashlib
 import json
+import logging
 
 import docker
 
+from common import KEY, LABEL, SHA256_HEX, BadRequest, ResourceInUse, check
+
 MAX_KEYS = 20000
 
+log = logging.getLogger('ccgateway.controller.cleanup')
 
-def snapshot(manager, key):
-    from manager import LABEL
+
+def resource_row(kind, role, item):
+    return [kind, role, getattr(item, 'id', None), item.attrs.get('CreatedAt'),
+            item.attrs.get('Created'), item.attrs.get('State', {}).get('StartedAt')]
+
+
+def docker_resources(manager, key):
+    """Identity rows of the runtime's containers, networks and volume."""
     resources = []
     for kind, collection, roles in [('container', manager.docker.containers, ('app', 'egress')),
                                     ('network', manager.docker.networks, ('net', 'uplink')),
@@ -21,8 +31,18 @@ def snapshot(manager, key):
             labels = item.labels if kind == 'container' else item.attrs.get('Labels') or {}
             if labels.get(LABEL) != key:
                 raise ValueError('resource ownership mismatch')
-            resources.append([kind, role, getattr(item, 'id', None), item.attrs.get('CreatedAt'),
-                              item.attrs.get('Created'), item.attrs.get('State', {}).get('StartedAt')])
+            resources.append(resource_row(kind, role, item))
+    # Other containers of the runtime (a rollback copy left by a manual
+    # migration): a runtime with only such a container is still found.
+    exact = {manager.name(key, role) for role in ('app', 'egress')}
+    head = len(f'{manager.prefix}-{key}-')
+    resources.extend(resource_row('container', item.name[head:], item)
+                     for item in manager.account_containers(key) if item.name not in exact)
+    return resources
+
+
+def snapshot(manager, key):
+    resources = docker_resources(manager, key)
     path = manager.dir(key)
     if path.is_symlink():
         raise ValueError('runtime directory is a symlink')
@@ -50,21 +70,20 @@ def snapshot(manager, key):
 
 
 def inventory(manager):
-    from manager import KEY, LABEL
     keys = {p.name for p in manager.root.iterdir() if KEY.fullmatch(p.name) and p.is_dir() and not p.is_symlink()}
     backups = manager.root / 'backups'
     if backups.is_dir() and not backups.is_symlink():
         keys.update(p.stem for p in backups.glob('*.json') if KEY.fullmatch(p.stem) and not p.is_symlink())
     if (manager.root / 'shared-egress' / 'state.json').exists():
         keys.update(key for key in manager.shared.data['bindings'] if KEY.fullmatch(key))
-    for kind, items, roles in [
-        ('container', manager.docker.containers.list(all=True, filters={'label': LABEL}), ('app', 'egress')),
-        ('network', manager.docker.networks.list(), ('net', 'uplink')),
-        ('volume', manager.docker.volumes.list(), ('data',)),
-    ]:
+    for item in manager.docker.containers.list(all=True, filters={'label': LABEL}, ignore_removed=True):
+        key = item.labels.get(LABEL, '')
+        if isinstance(key, str) and KEY.fullmatch(key) and manager.container_of(key, item.name):
+            keys.add(key)
+    for kind, items, roles in [('network', manager.docker.networks.list(), ('net', 'uplink')),
+                               ('volume', manager.docker.volumes.list(), ('data',))]:
         for item in items:
-            labels = item.labels if kind == 'container' else item.attrs.get('Labels') or {}
-            key = labels.get(LABEL, '')
+            key = (item.attrs.get('Labels') or {}).get(LABEL, '')
             if isinstance(key, str) and KEY.fullmatch(key) and item.name in {manager.name(key, role) for role in roles}:
                 keys.add(key)
     if len(keys) > MAX_KEYS:
@@ -79,7 +98,6 @@ def inventory(manager):
 
 
 def cleanup(manager, desired):
-    from manager import BadRequest, SHA256_HEX, check
     if not isinstance(desired, dict) or set(desired) != {'keep_keys', 'candidates'}:
         raise BadRequest('complete keep list and resource inventory required')
     keep, candidates = desired['keep_keys'], desired['candidates']
@@ -98,24 +116,24 @@ def cleanup(manager, desired):
             raise BadRequest('invalid cleanup identity')
         seen.add(row['key'])
     keep = set(keep)
-    results = []
-    for row in candidates:
-        key = row['key']
-        if key in keep:
-            results.append({'key': key, 'status': 'kept'})
-            continue
-        try:
-            with manager.guard(key):
-                current = snapshot(manager, key)
-                if current is None:
-                    status = 'absent'
-                elif current != row['identity']:
-                    status = 'changed'
-                else:
-                    manager.delete(key, account=True, purge=True)
-                    status = 'deleted'
-            results.append({'key': key, 'status': status})
-        except Exception:
-            results.append({'key': key, 'status': 'failed', 'reason': 'resource_cleanup_failed'})
+    results = [{'key': row['key'], 'status': 'kept'} if row['key'] in keep else clean_one(manager, row)
+               for row in candidates]
     return {'results': results, 'deleted': sum(x['status'] == 'deleted' for x in results),
             'failed': sum(x['status'] == 'failed' for x in results)}
+
+
+def clean_one(manager, row):
+    key = row['key']
+    try:
+        with manager.guard(key):
+            current = snapshot(manager, key)
+            if current is None:
+                return {'key': key, 'status': 'absent'}
+            if current != row['identity']:
+                return {'key': key, 'status': 'changed'}
+            manager.delete(key, account=True, purge=True)
+            return {'key': key, 'status': 'deleted'}
+    except Exception as e:
+        log.warning('cleanup key=%s failed: %s: %s', key, type(e).__name__, str(e)[:300])
+        reason = 'resource_in_use' if isinstance(e, ResourceInUse) else 'resource_cleanup_failed'
+        return {'key': key, 'status': 'failed', 'reason': reason}

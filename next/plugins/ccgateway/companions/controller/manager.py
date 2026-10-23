@@ -1,56 +1,68 @@
 """Host-side account runtime controller; binds only to loopback.
 
-The core reaches it over an SSH tunnel or through the Caddy HTTPS gateway on
-the same host (CONTRACTS §49.16, §53). Docker SDK owns container lifecycle;
-sing-box owns proxy protocols. The control API is never exposed on a business
+The core reaches it through the Caddy HTTPS gateway on the same host or over
+SSH port forwarding (CONTRACTS §49.16, §53.9); model requests go to the
+account Worker through GET connection / tunnel, never through this process's
+HTTP relay. Docker SDK owns container lifecycle; sing-box (or the shared Xray
+gateway) owns proxy protocols. The control API is never exposed on a business
 network. State is root-private on this host.
+
+Modules (none imports this one, so there is no import cycle):
+  common          patterns, labels, exceptions and their HTTP answers, helpers
+  dockerfs        single files inside containers, staged replace
+  http_api        the HTTP API (Handler): routing, errors, tunnel, pass-through
+  worker_update   in-place Worker update (§53.7), Manager mixin
+  runtime_updates paired Worker+CLI activation
+  runtime_admin   health, target images, self-upgrade, cleanup, Manager mixin
+  shared_egress   the shared Xray gateway; cleanup: orphan inventory
+  network / images / cli_profiles / upgrade
+This module: the account runtime lifecycle (Manager) and the entry point
+`python manager.py`.
 """
 import contextlib
-from datetime import datetime, timezone
 import fcntl
 import hmac
 import hashlib
-import io
-from urllib.parse import urlsplit
 import ipaddress
 import json
 import logging
 import os
 from pathlib import Path
-import posixpath
 import re
 import secrets
 import shutil
 import socket
 import sys
-import tarfile
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
+from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import docker
 import requests
-from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
-from images import Uploads, UploadError, MAX_CHUNK
-from cli_profiles import validate_profile, resolve_profile
 
-# Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
-# created by the editor before the account exists. Every key that reaches a
-# path, container or volume name passes this pattern first.
-KEY_PATTERN = r'(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})'
-KEY = re.compile(KEY_PATTERN)
-DRAFT = re.compile(r'd[0-9a-f]{16}')
-REVISION = re.compile(r'[a-f0-9]{64}')
-LABEL = 'io.sup2api.ccgateway.account'
-PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
-              'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
+from cli_profiles import validate_profile, resolve_profile
+# Several names below are only re-exported: tests and the manual scripts in
+# this directory (integration_test.py, *_probe.py, offline_migrate_account.py)
+# import them from manager.
+from common import (ACCOUNT_PORT, AUTH_LABEL, CONTROLLER_NAME, DISK_QUOTA_LABEL, DRAFT, IMAGE_LABEL, KEY, KEY_PATTERN,
+                    LABEL, NETWORK_LABEL, REVISION, SHA256_HEX, ActivationFailed, BadRequest, ContainerChanged,
+                    DiskQuotaUnavailable, ImagePullFailed, InvalidCLIProfile, InvalidImage, NotDraft, ResourceInUse,
+                    RuntimeBusy, RuntimeNotFound, UnsupportedContainer, UpgradeInProgress, absent_ok, boot_id, check,
+                    check_business_image, read_json, rfc3339, valid_image, worker_session, write_private,
+                    write_private_bytes)
+from dockerfs import (WORKER_DIR, WORKER_MAX_BYTES, WORKER_NAMES, WORKER_SOURCE, container_identity, image_of,
+                      read_single_file, tar_file, worker_idle, worker_target)
+from http_api import Handler, ROUTE, RUNTIME_ROUTE, UPLOAD_ROUTE, upstream_headers
+from images import Uploads
+from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
+from runtime_admin import FEATURES, RuntimeAdmin
+from shared_egress import OWNER as SHARED_OWNER, SharedEgress
+from worker_update import (WORKER_HEALTH_SCRIPT, WORKER_RESTART_TIMEOUT, WorkerUpdates)
 
 log = logging.getLogger('ccgateway.controller')
 
-AUTH_LABEL = 'io.sup2api.ccgateway.auth'
-IMAGE_LABEL = 'io.sup2api.ccgateway.image'
-NETWORK_LABEL = 'io.sup2api.ccgateway.network'
-AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
 # Every operational telemetry channel Claude Code exposes through an environment
 # variable, and nothing that removes a capability: CLAUDE_CODE_DISABLE_WEB_FETCH,
 # CLAUDE_CODE_DISABLE_ARTIFACT, ENABLE_CLAUDEAI_MCP_SERVERS and
@@ -72,122 +84,39 @@ TELEMETRY_ENV = {
     'CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY': '1',
 }
 IMAGE_CACHE_SECONDS = 30
-ACCOUNT_PORT = 8787  # every account container listens here on its private network
-TUNNEL_IDLE_SECONDS = 3700
 LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
-FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1', 'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1')
-DISK_QUOTA_LABEL = 'io.sup2api.ccgateway.disk-quota-bytes'
+# Longest wait for the account lock on the request path (connection, tunnel,
+# admin pass-through); the core gives up on connection after 15 s.
+REQUEST_LOCK_WAIT = 20
+# How often the proxy host names of ready runtimes are resolved again (B9).
+PROXY_RECHECK_SECONDS = 300
+# Container names of a runtime after <prefix>-<key>-: its role, optionally
+# with a suffix (a rollback copy of a manual migration keeps label and volume).
+ACCOUNT_CONTAINER_ROLE = re.compile(r'(?:app|egress)(?:-[A-Za-z0-9_.-]+)?')
 DEFAULT_ACCOUNT_DISK_GIB = 10
-# Same reference rules as the core (CONTRACTS §49.16).
-IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
-IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
 DEFAULT_ENV_FILE = '/opt/ccgateway-runtime.env'
 DEFAULT_CONTROLLER_NAME = 'ccg-controller'
-CONTROLLER_NAME = re.compile(r'[a-z][a-z0-9-]{0,40}')
-DOCKER_SOCKET = '/var/run/docker.sock'
-
-# In-place worker update (CONTRACTS §53.7). The account container is never
-# recreated: only its program file is replaced and only it is restarted.
-WORKER_SOURCE = '/usr/local/bin/worker'  # the program inside a worker image
-WORKER_DIR = '/usr/local/bin'
-WORKER_NAMES = ('worker', 'ccgateway')  # new images / older `docker-entrypoint.sh ccgateway`
-WORKER_MAX_BYTES = 256 << 20
-WORKER_BACKUPS = 5
-WORKER_BACKUP_NAME = re.compile(r'[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}')
-WORKER_IDLE_WAIT, WORKER_IDLE_INTERVAL = 120, 2
-WORKER_HEALTH_WAIT, WORKER_HEALTH_INTERVAL = 30, 1
-WORKER_RESTART_TIMEOUT = 30
-WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSignal.timeout(3000)})"
-                        ".then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))")
-SHA256_HEX = re.compile(r'[0-9a-f]{64}')
-
-ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|egress|migrate-auth|admin/(?:status|usage|features|request-logs(?:/(?:query|detail|read))?|cli(?:/catalog)?|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
-UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
-RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller|cleanup)')
-DECIMAL = re.compile(r'[0-9]{1,12}')
-# A request log file read reports where its bytes sit in the file.
-LOG_READ_HEADERS = ('X-Log-File-Size', 'X-Log-Offset', 'X-Log-Length', 'X-Content-Type-Options')
+# Creates the volume layout and drops what an earlier container's Worker kept
+# in place (locale/timezone come from the new container's environment).
+PREPARE_VOLUME = ('mkdir -p /work/config /work/data; rm -f /work/data/environment.json; '
+                  'printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; '
+                  'chown -R 1000:1000 /work')
+NFT_REPLACE = ('if nft list table inet ccg_app >/dev/null 2>&1; then '
+               '{ printf "delete table inet ccg_app\\n"; cat /app.nft; } | nft -f -; '
+               'else nft -f /app.nft; fi; ')
+PROBE_SCRIPT = ('fetch(process.argv[1],{signal:AbortSignal.timeout(10000)})'
+                '.then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))')
+# POSIX locale names (ja_JP.UTF-8, C, POSIX) and IANA zone names
+# (Asia/Tokyo, UTC, Etc/GMT+5): what the core sends.
+LOCALE = re.compile(r'(?:C|POSIX|[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8}){0,2})(?:\.[A-Za-z0-9-]{1,16})?(?:@[A-Za-z0-9]{1,16})?')
+TIMEZONE = re.compile(r'[A-Za-z][A-Za-z0-9_+-]{0,63}(?:/[A-Za-z0-9][A-Za-z0-9_+-]{0,63}){0,3}')
 
 
-class BadRequest(ValueError):
-    """The request itself is invalid (answered 400 invalid_request)."""
-
-
-class NotDraft(ValueError):
-    """Only draft runtimes can be deleted through the API."""
-
-
-class ImagePullFailed(RuntimeError):
-    """A configured image is missing locally and could not be pulled."""
-
-
-class InvalidImage(ValueError):
-    """A business image carries credential or proxy environment variables."""
-
-
-class InvalidCLIProfile(ValueError):
-    """The selected image cannot provide the pinned CLI identity."""
-
-
-class DiskQuotaUnavailable(RuntimeError):
-    """A requested hard quota cannot be enforced by the storage backend."""
-
-
-class UpgradeInProgress(RuntimeError):
-    """The self-upgrade helper container is still running."""
-
-
-class ActivationFailed(RuntimeError):
-    """The containers run but the account cannot reach its upstream: the
-    egress did not come up or the proxy check failed (audit B1: the core
-    is told which, as egress_not_ready / proxy_check_failed)."""
-
-    def __init__(self, code, message):
-        super().__init__(message)
-        self.code = code
-
-
-class RuntimeNotFound(LookupError):
-    """The runtime has no app container of its own (answered 404 not_found)."""
-
-
-class UnsupportedContainer(RuntimeError):
-    """The worker program of this container cannot be located or replaced (409)."""
-
-
-class ContainerChanged(RuntimeError):
-    """The account container is no longer the one the operation started on (503)."""
-
-
-def valid_image(ref):
-    return isinstance(ref, str) and bool(IMAGE_REF.fullmatch(ref) or IMAGE_ID.fullmatch(ref))
-
-
-def check_business_image(image):
-    env = image.attrs['Config'].get('Env') or []
-    if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in env):
-        raise InvalidImage('business image contains account credentials or proxy environment variables')
-
-
-def check(aid):
-    if not isinstance(aid, str) or not KEY.fullmatch(aid):
-        raise BadRequest('invalid runtime key')
-    return aid
-
-
-def rfc3339(timestamp):
-    return datetime.fromtimestamp(timestamp, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-
-def upstream_headers(inbound, secret):
-    headers = {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
-    for name in ('anthropic-version', 'anthropic-beta', 'x-ccgateway-session-scope', 'x-ccgateway-request-policy', 'x-claude-code-agent-id'):
-        if name in inbound:
-            # Forward all beta header lines; component parsing belongs to Worker.
-            values = inbound.get_all(name) if name == 'anthropic-beta' and hasattr(inbound, 'get_all') else None
-            headers[name] = ','.join(values) if values else inbound[name]
-    return headers
+def environment_value(key, value):
+    pattern, limit = (LOCALE, 64) if key == 'locale' else (TIMEZONE, 128)
+    if not isinstance(value, str) or len(value) > limit or value and (not pattern.fullmatch(value) or value == 'Local'):
+        raise BadRequest('invalid ' + key)
+    return value
 
 
 def authentication(raw):
@@ -195,16 +124,13 @@ def authentication(raw):
     raw = {'mode': 'oauth'} if raw is None else raw
     if not isinstance(raw, dict):
         raise BadRequest('invalid authentication')
-    # Extract locale and timezone if present (pass through without validation)
-    locale = raw.get('locale', '')
-    timezone = raw.get('timezone', '')
-    if raw == {'mode': 'oauth'} or (set(raw) <= {'mode', 'locale', 'timezone'} and raw.get('mode') == 'oauth'):
-        result = {'mode': 'oauth'}
-        if locale:
-            result['locale'] = locale
-        if timezone:
-            result['timezone'] = timezone
-        return result
+    # locale and timezone become LANG/LC_ALL/TZ of the account container: the
+    # core validates them (account settings), the controller checks the shape
+    # again (audit B11). Empty means "not set".
+    environment = {key: environment_value(key, raw.get(key, '')) for key in ('locale', 'timezone')}
+    environment = {key: value for key, value in environment.items() if value}
+    if set(raw) <= {'mode', 'locale', 'timezone'} and raw.get('mode') == 'oauth':
+        return {'mode': 'oauth', **environment}
     if raw.get('mode') != 'api_key' or set(raw) - {'mode', 'api_key', 'base_url', 'locale', 'timezone'}:
         raise BadRequest('invalid authentication')
     key, base = raw.get('api_key'), raw.get('base_url') or 'https://api.anthropic.com'
@@ -216,117 +142,50 @@ def authentication(raw):
     if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None or '?' in base or '#' in base:
         raise BadRequest('invalid base URL')
     base = base.rstrip('/').removesuffix('/v1')
-    result = {'mode': 'api_key', 'api_key': key, 'base_url': base}
-    if locale:
-        result['locale'] = locale
-    if timezone:
-        result['timezone'] = timezone
-    return result
+    return {'mode': 'api_key', 'api_key': key, 'base_url': base, **environment}
 
 
-def write_private(path, value):
-    tmp = path.with_suffix(path.suffix + '.tmp')
-    with open(tmp, 'w', encoding='utf-8') as f:
-        os.chmod(tmp, 0o600)
-        f.write(value)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+def auth_fingerprint(salt, auth):
+    """Credential identity of a container (its AUTH_LABEL). Hashed with a
+    private per-account salt: upstream keys are never persisted in controller
+    state and status never exposes a credential fingerprint."""
+    identity = {key: value for key, value in auth.items() if key not in ('locale', 'timezone')}
+    return hmac.new(salt.encode(), json.dumps(identity, sort_keys=True).encode(), hashlib.sha256).hexdigest()
 
 
-def write_private_bytes(path, data):
-    tmp = path.with_suffix(path.suffix + '.tmp')
-    with open(tmp, 'wb') as f:
-        os.chmod(tmp, 0o600)
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+def first_subnet(network):
+    return ipaddress.ip_network(network.attrs['IPAM']['Config'][0]['Subnet'])
 
 
-def image_of(container):
-    # Docker's inspect data names the image actually running (also for
-    # containers created before IMAGE_LABEL existed); the label is a fallback.
-    return container.attrs.get('Image') or container.labels.get(IMAGE_LABEL, '')
-
-
-def read_single_file(chunks, limit=WORKER_MAX_BYTES):
-    """Content of the only entry of a get_archive tar stream; it must be a regular file."""
-    buf, size = io.BytesIO(), 0
-    for chunk in chunks:
-        size += len(chunk)
-        if size > limit + (1 << 20):  # headers and padding of one entry
-            raise ValueError('archive too large')
-        buf.write(chunk)
-    buf.seek(0)
-    try:
-        with tarfile.open(fileobj=buf, mode='r:') as tar:
-            members = tar.getmembers()
-            if len(members) != 1 or not members[0].isreg() or members[0].size > limit:
-                raise ValueError('not a single regular file')
-            data = tar.extractfile(members[0]).read()
-    except tarfile.TarError as e:
-        raise ValueError('invalid archive') from e
-    if len(data) != members[0].size:
-        raise ValueError('truncated archive')
-    return data
-
-
-def tar_file(name, data):
-    """One root-owned 0755 regular file, for put_archive."""
-    info = tarfile.TarInfo(name)
-    info.size, info.mode, info.uid, info.gid = len(data), 0o755, 0, 0
-    info.uname = info.gname = 'root'
-    info.mtime = int(time.time())
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode='w') as tar:
-        tar.addfile(info, io.BytesIO(data))
-    return buf.getvalue()
-
-
-def worker_target(container):
-    """(path, basename) of the worker program the container runs (§53.7 step 3).
-
-    The first entry of Path + Args whose basename is a worker name. Only the
-    bare name (resolved through PATH) or /usr/local/bin/<name> are accepted:
-    anything else would make the replaced file differ from the program run.
-    """
-    attrs = container.attrs
-    for entry in [attrs.get('Path')] + list(attrs.get('Args') or []):
-        if not isinstance(entry, str):
-            continue
-        base = posixpath.basename(entry)
-        if base in WORKER_NAMES:
-            if entry not in (base, posixpath.join(WORKER_DIR, base)):
-                raise UnsupportedContainer('worker program outside ' + WORKER_DIR)
-            return posixpath.join(WORKER_DIR, base), base
-    raise UnsupportedContainer('container command runs no worker program')
-
-
-def worker_idle(container, base):
-    """No process besides docker-init and the worker itself (no running CLI request)."""
-    top = container.top(ps_args='-eo pid,comm')
-    titles = top.get('Titles') or []
-    if 'COMMAND' not in titles:
-        raise RuntimeError('unexpected process list')
-    column = titles.index('COMMAND')
-    allowed = {'docker-init', base[:15]}  # Linux truncates comm to 15 characters
-    return all(len(p) > column and p[column] in allowed for p in top.get('Processes') or [])
-
-
-def container_identity(container):
-    """What must not change while the worker is replaced (§53.7 step 10)."""
-    attrs, config = container.attrs, container.attrs.get('Config') or {}
-    return json.dumps({'id': container.id, 'image': attrs.get('Image'), 'config_image': config.get('Image'),
-                       'user': config.get('User'), 'labels': container.labels,
-                       'mounts': sorted(json.dumps(m, sort_keys=True) for m in attrs.get('Mounts') or []),
-                       'path': attrs.get('Path'), 'args': attrs.get('Args')}, sort_keys=True)
-
-
-class Manager:
+class Manager(RuntimeAdmin, WorkerUpdates):
     def __init__(self, root, app_image, egress_image, prefix='ccg', probe_url='https://www.gstatic.com/generate_204'):
         if not re.fullmatch(r'[a-z][a-z0-9-]{0,24}', prefix):
             raise ValueError('invalid prefix')
+        self._configure_from_environment()
+        self.root = Path(root).resolve()
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.root, 0o700)
+        # One authoritative writer per state directory, including across processes.
+        self.lockfile = open(self.root / '.lock', 'w')
+        fcntl.flock(self.lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.docker = docker.from_env(timeout=60)
+        self.app_image, self.egress_image, self.prefix = app_image, egress_image, prefix
+        self.probe_url = probe_url
+        self.locks, self.lock = {}, threading.Lock()
+        self.network_lock = threading.RLock()
+        self.online = {}  # Never trust persisted readiness after controller restart.
+        self.boots = {}
+        self.image_seen = (0.0, '')  # (monotonic time, app image id)
+        self.runtime_lock, self.upgrade_lock = threading.Lock(), threading.Lock()
+        # Target images set through PUT /runtime/images override the environment
+        # only while the environment is the one they were saved against: an SSH
+        # (re)install that rewrote CCG_APP_IMAGE / CCG_EGRESS_IMAGE wins.
+        self.env_images = {'app': app_image, 'egress': egress_image}
+        self._restore_runtime_images()
+        self.uploads = Uploads(docker.from_env(timeout=LOAD_TIMEOUT), self.root / 'uploads')
+        self._shared = None
+
+    def _configure_from_environment(self):
         disk_gib = os.getenv('CCG_ACCOUNT_DISK_GIB', str(DEFAULT_ACCOUNT_DISK_GIB))
         if not re.fullmatch(r'[1-9][0-9]{0,3}', disk_gib) or not 1 <= int(disk_gib) <= 1024:
             raise ValueError('CCG_ACCOUNT_DISK_GIB must be an integer between 1 and 1024')
@@ -345,28 +204,11 @@ class Manager:
         if not CONTROLLER_NAME.fullmatch(self.controller_name):
             raise ValueError('invalid controller name')
         self.controller_port = int(os.getenv('CCG_CONTROLLER_PORT') or '8787')
-        self.root = Path(root).resolve()
-        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(self.root, 0o700)
-        # One authoritative writer per state directory, including across processes.
-        self.lockfile = open(self.root / '.lock', 'w')
-        fcntl.flock(self.lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        self.docker = docker.from_env(timeout=60)
-        self.app_image, self.egress_image, self.prefix = app_image, egress_image, prefix
-        self.probe_url = probe_url
-        self.locks, self.lock = {}, threading.Lock()
-        self.network_lock = threading.RLock()
-        self.online = {}  # Never trust persisted readiness after controller restart.
-        self.boots = {}
-        self.image_seen = (0.0, '')  # (monotonic time, app image id)
         self.version = os.getenv('CCG_CONTROLLER_VERSION') or 'dev'
         self.controller_image = os.getenv('CCG_CONTROLLER_IMAGE', '')
         self.env_file = os.getenv('CCG_RUNTIME_ENV_FILE') or DEFAULT_ENV_FILE
-        self.runtime_lock, self.upgrade_lock = threading.Lock(), threading.Lock()
-        # Target images set through PUT /runtime/images override the environment
-        # only while the environment is the one they were saved against: an SSH
-        # (re)install that rewrote CCG_APP_IMAGE / CCG_EGRESS_IMAGE wins.
-        self.env_images = {'app': app_image, 'egress': egress_image}
+
+    def _restore_runtime_images(self):
         runtime = self.root / 'runtime.json'
         with contextlib.suppress(FileNotFoundError):
             try:
@@ -378,121 +220,15 @@ class Manager:
                 self.app_image, self.egress_image = saved['app'], saved['egress']
             else:
                 runtime.unlink()  # stale, old format or damaged: the environment applies
-        self.uploads = Uploads(docker.from_env(timeout=LOAD_TIMEOUT), self.root / 'uploads')
-        from cli_updates import CLIUpdates
-        self.cli_updates = CLIUpdates(self)
-        self._shared = None
 
     @property
     def shared(self):
         with self.lock:
             if self._shared is None:
-                from shared_egress import SharedEgress
                 self._shared = SharedEgress(self)
             return self._shared
 
-    def health(self):
-        return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
-                'controller_image': self.controller_image, 'network_policy_version': 1,
-                'features': list(FEATURES),
-                'disk_quota': {'default_bytes': self.account_disk_bytes, 'support': self.disk_quota_support}}
-
-    def account_volume(self, aid, allow_unbounded=False):
-        """Native Docker local-volume project quota. Never replace saved data."""
-        name = self.name(aid, 'data')
-        try:
-            volume = self.docker.volumes.get(name)
-        except docker.errors.NotFound:
-            try:
-                volume = self.docker.volumes.create(name, driver='local',
-                    driver_opts={'size': str(self.account_disk_bytes)},
-                    labels={LABEL: aid, DISK_QUOTA_LABEL: str(self.account_disk_bytes)})
-            except docker.errors.APIError as error:
-                if 'no quota support' not in str(error).lower():
-                    raise
-                self.disk_quota_support = 'unavailable'
-                if self.require_disk_quota or not allow_unbounded:
-                    raise DiskQuotaUnavailable('Docker data volumes do not support disk quotas') from error
-                volume = self.docker.volumes.create(name, driver='local', labels={LABEL: aid})
-        labels = volume.attrs.get('Labels') or {}
-        if labels.get(LABEL) != aid:
-            raise ValueError('volume ownership mismatch')
-        size = (volume.attrs.get('Options') or {}).get('size')
-        if not size and DISK_QUOTA_LABEL not in labels and allow_unbounded:
-            return volume, 0
-        if (volume.attrs.get('Driver') != 'local' or not isinstance(size, str) or
-                not re.fullmatch(r'[1-9][0-9]{0,14}', size) or
-                labels.get(DISK_QUOTA_LABEL) != size or not (1 << 30) <= int(size) <= (1024 << 30)):
-            raise DiskQuotaUnavailable('Existing volume requires explicit disk quota migration')
-        self.disk_quota_support = 'available'
-        # The stored limit wins: changing a default must never resize or
-        # replace a volume which may contain authorization and request history.
-        return volume, int(size)
-
-    def verify_disk_quota(self, image, volume, disk_bytes):
-        if not disk_bytes:
-            return
-        # XFS project quotas make statfs on the quota root report its hard limit.
-        # Validate before replacing any running container or network.
-        script = ("const fs=require('fs'),s=fs.statfsSync('/work',{bigint:true});"
-                  f"if(s.blocks<=0n||s.blocks*s.bsize>BigInt('{disk_bytes}'))process.exit(42);")
-        try:
-            self.oneshot(image, entrypoint=['node'], command=['-e', script], user='1000:1000',
-                network_mode='none', cap_drop=['ALL'], security_opt=['no-new-privileges:true'],
-                volumes={volume.name: {'bind': '/work', 'mode': 'ro'}})
-        except docker.errors.DockerException as error:
-            raise DiskQuotaUnavailable('The account volume does not expose its enforced quota') from error
-
-    def runtime_images(self):
-        return {'app': self.app_image, 'egress': self.egress_image, 'controller': self.controller_image}
-
-    def set_runtime_images(self, desired):
-        if not isinstance(desired, dict) or set(desired) - {'app', 'egress'}:
-            raise BadRequest('invalid runtime images')
-        if not all(valid_image(ref) for ref in desired.values()):
-            raise BadRequest('invalid image reference')
-        if not desired:
-            return self.health()  # nothing to change: nothing is written
-        with self.runtime_lock:
-            for role, ref in desired.items():
-                image = self.ensure_image(ref)
-                if role == 'app':
-                    check_business_image(image)
-            app, egress = desired.get('app', self.app_image), desired.get('egress', self.egress_image)
-            write_private(self.root / 'runtime.json',
-                          json.dumps({'app': app, 'egress': egress, 'env': self.env_images}))
-            self.app_image, self.egress_image = app, egress
-            self.image_seen = (0.0, '')
-        return self.health()
-
-    def upgrade_controller(self, desired):
-        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
-        if not valid_image(ref):
-            raise BadRequest('invalid image reference')
-        env_dir = posixpath.dirname(self.env_file)
-        if not posixpath.isabs(self.env_file) or env_dir == '/':
-            raise RuntimeError('invalid runtime environment file path')
-        with self.upgrade_lock:
-            image = self.ensure_image(ref)
-            if (self.root / 'shared-egress' / 'state.json').exists():
-                if image.attrs.get('Config', {}).get('Labels', {}).get('io.sup2api.ccgateway.shared-egress') != '1':
-                    if self.shared.data['bindings']:
-                        raise BadRequest('migrate shared accounts back before controller downgrade')
-            helper_name = self.controller_name + '-upgrade'
-            with contextlib.suppress(docker.errors.NotFound):
-                helper = self.docker.containers.get(helper_name)
-                if helper.status == 'running':
-                    raise UpgradeInProgress('controller upgrade in progress')
-                helper.remove(force=True)  # a finished helper that was not auto-removed
-            # The new image runs its own upgrade.py. The environment file's
-            # directory is mounted (not the file) so it can be replaced atomically.
-            self.docker.containers.run(ref, ['python', 'upgrade.py', ref], name=helper_name,
-                remove=True, detach=True, network_mode='host',
-                environment={'CCG_RUNTIME_ENV_FILE': self.env_file, 'CCG_CONTROLLER_NAME': self.controller_name,
-                             'CCG_CONTROLLER_PORT': str(self.controller_port)},
-                volumes={DOCKER_SOCKET: {'bind': DOCKER_SOCKET, 'mode': 'rw'},
-                         env_dir: {'bind': env_dir, 'mode': 'rw'}})
-        return {'accepted': True}
+    # Names, ownership, state.
 
     def guard(self, aid):
         check(aid)
@@ -511,12 +247,33 @@ class Manager:
             raise ValueError('container ownership mismatch')
         return c
 
+    def owned_resource(self, collection, aid, role):
+        """The network or volume <prefix>-<key>-<role>, None when absent;
+        ValueError when the name is taken by someone else's resource."""
+        try:
+            item = collection.get(self.name(aid, role))
+        except docker.errors.NotFound:
+            return None
+        if (item.attrs.get('Labels') or {}).get(LABEL) != aid:
+            raise ValueError(f'{role} ownership mismatch')
+        return item
+
     def state(self, aid):
-        p = self.dir(aid) / 'state.json'
-        return json.loads(p.read_text()) if p.exists() else None
+        return read_json(self.dir(aid) / 'state.json')
 
     def save(self, aid, state):
         write_private(self.dir(aid) / 'state.json', json.dumps(state))
+
+    def save_desired(self, aid, desired):
+        """What the core asked for (without credentials): shared-egress
+        migration and the proxy recheck read it back."""
+        write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
+
+    def drop_readiness(self, aid):
+        self.online.pop(aid, None)
+        self.boots.pop(aid, None)
+
+    # Images, one-shot helpers, networks, volumes.
 
     def app_image_id(self):
         # Status is polled often; resolve the configured tag at most every 30 s.
@@ -568,27 +325,79 @@ class Manager:
             cap_drop=['ALL'], cap_add=['NET_ADMIN'], security_opt=['no-new-privileges:true'],
             volumes={str(d / 'app.nft'): {'bind': '/app.nft', 'mode': 'ro'}})
 
+    def docker_ipv4_subnets(self):
+        """(labels, subnet) of every IPv4 subnet of every Docker network."""
+        for n in self.docker.networks.list():
+            for cfg in n.attrs.get('IPAM', {}).get('Config') or []:
+                subnet = ipaddress.ip_network(cfg['Subnet']) if cfg.get('Subnet') else None
+                if subnet is not None and subnet.version == 4:
+                    yield n.attrs.get('Labels') or {}, subnet
+
     def ensure_network(self, aid, role, policy, internal):
         with self.network_lock:
-            try:
-                network = self.docker.networks.get(self.name(aid, role))
-                if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
-                    raise ValueError('network ownership mismatch')
+            network = self.owned_resource(self.docker.networks, aid, role)
+            if network is not None:
                 return network
-            except docker.errors.NotFound:
-                pass
-            occupied = host_routes()
-            for n in self.docker.networks.list():
-                for cfg in n.attrs.get('IPAM', {}).get('Config') or []:
-                    if cfg.get('Subnet'):
-                        subnet = ipaddress.ip_network(cfg['Subnet'])
-                        if subnet.version == 4:
-                            occupied.append(subnet)
+            occupied = host_routes() + [subnet for _, subnet in self.docker_ipv4_subnets()]
             subnet = allocate_subnet(policy, occupied)
             return self.docker.networks.create(self.name(aid, role), driver='bridge',
                 internal=internal, labels={LABEL: aid, NETWORK_LABEL: json.dumps(policy, sort_keys=True)},
                 enable_ipv6=False, ipam=docker.types.IPAMConfig(pool_configs=[
                     docker.types.IPAMPool(subnet=str(subnet), gateway=str(subnet.network_address + 1))]))
+
+    def account_volume(self, aid, allow_unbounded=False):
+        """Native Docker local-volume project quota. Never replace saved data."""
+        volume = self._data_volume(aid, allow_unbounded)
+        labels = volume.attrs.get('Labels') or {}
+        if labels.get(LABEL) != aid:
+            raise ValueError('volume ownership mismatch')
+        size = (volume.attrs.get('Options') or {}).get('size')
+        if not size and DISK_QUOTA_LABEL not in labels and allow_unbounded:
+            return volume, 0
+        if (volume.attrs.get('Driver') != 'local' or not isinstance(size, str) or
+                not re.fullmatch(r'[1-9][0-9]{0,14}', size) or
+                labels.get(DISK_QUOTA_LABEL) != size or not (1 << 30) <= int(size) <= (1024 << 30)):
+            raise DiskQuotaUnavailable('Existing volume requires explicit disk quota migration')
+        self.disk_quota_support = 'available'
+        # The stored limit wins: changing a default must never resize or
+        # replace a volume which may contain authorization and request history.
+        return volume, int(size)
+
+    def _data_volume(self, aid, allow_unbounded):
+        """The existing volume, or a new one: with a hard size limit, or
+        unbounded where the storage has no project quotas and that is allowed."""
+        name = self.name(aid, 'data')
+        try:
+            return self.docker.volumes.get(name)
+        except docker.errors.NotFound:
+            pass
+        try:
+            return self.docker.volumes.create(name, driver='local',
+                driver_opts={'size': str(self.account_disk_bytes)},
+                labels={LABEL: aid, DISK_QUOTA_LABEL: str(self.account_disk_bytes)})
+        except docker.errors.APIError as error:
+            if 'no quota support' not in str(error).lower():
+                raise
+            self.disk_quota_support = 'unavailable'
+            if self.require_disk_quota or not allow_unbounded:
+                raise DiskQuotaUnavailable('Docker data volumes do not support disk quotas') from error
+        return self.docker.volumes.create(name, driver='local', labels={LABEL: aid})
+
+    def verify_disk_quota(self, image, volume, disk_bytes):
+        if not disk_bytes:
+            return
+        # XFS project quotas make statfs on the quota root report its hard limit.
+        # Validate before replacing any running container or network.
+        script = ("const fs=require('fs'),s=fs.statfsSync('/work',{bigint:true});"
+                  f"if(s.blocks<=0n||s.blocks*s.bsize>BigInt('{disk_bytes}'))process.exit(42);")
+        try:
+            self.oneshot(image, entrypoint=['node'], command=['-e', script], user='1000:1000',
+                network_mode='none', cap_drop=['ALL'], security_opt=['no-new-privileges:true'],
+                volumes={volume.name: {'bind': '/work', 'mode': 'ro'}})
+        except docker.errors.DockerException as error:
+            raise DiskQuotaUnavailable('The account volume does not expose its enforced quota') from error
+
+    # Provision: the app container, its networks and volume.
 
     def provision(self, aid, auth=None, policy=None, cli=None):
         # Serialize allocation and replacement across accounts. Otherwise two
@@ -619,8 +428,7 @@ class Manager:
         try:
             if self.owned(aid, 'app').status != 'running':
                 return
-            with requests.Session() as session:
-                session.trust_env = False
+            with worker_session() as session:
                 response = session.request('PUT', f'http://{state["app_ip"]}:{ACCOUNT_PORT}/admin/environment',
                     json=desired, headers={'Authorization': 'Bearer ' + state['admin_key']},
                     timeout=(3, 10), allow_redirects=False)
@@ -643,64 +451,93 @@ class Manager:
             raise BadRequest(str(e)) from e
         policy = network_policy(policy)
         auth = authentication(auth)
-        d = self.dir(aid)
-        d.mkdir(mode=0o700, exist_ok=True)
+        self.dir(aid).mkdir(mode=0o700, exist_ok=True)
         state = self.state(aid)
-        # Hash with a private per-account salt; never persist upstream keys in
-        # controller state or expose a credential fingerprint in status.
         salt = state['admin_key'] if state else secrets.token_urlsafe(32)
-        identity = {key: value for key, value in auth.items() if key not in ('locale', 'timezone')}
-        fingerprint = hmac.new(salt.encode(), json.dumps(identity, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+        fingerprint = auth_fingerprint(salt, auth)
         environment = {key: auth.get(key, '') for key in ('locale', 'timezone')}
         existing = None
         if state:
             with contextlib.suppress(docker.errors.NotFound):
                 existing = self.owned(aid, 'app')
-            # Defaults apply to new containers only. A tag/digest change must
-            # never replace a working account (including after controller restart).
-            active = state.get('active_runtime') or {}
-            active_matches = (existing and active.get('container_identity') == container_identity(existing)
-                              and cli is not None and cli['version'] == active.get('version'))
-            saved_cli = state.get('cli') or {}
-            same_runtime = (cli is None or saved_cli == cli or active_matches or
-                            cli.get('version') == saved_cli.get('version') and
-                            cli.get('request_mode') in ('direct', 'build') and
-                            saved_cli.get('request_mode') in ('direct', 'build'))
-            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and same_runtime:
-                current = state.get('environment', {'locale': '', 'timezone': ''})
-                # State written before in-place changes: the values the
-                # container was created with are the last applied ones.
-                state.setdefault('environment_created', current)
-                state['environment_pending'] = environment != current
-                if state['environment_pending']:
-                    state['environment_desired'] = environment  # provision() pushes it to the Worker
-                else:
-                    state.pop('environment_desired', None)
-                self.save(aid, state)
+            if self._keep_existing(aid, state, existing, policy, fingerprint, cli, environment):
                 return state
-            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and not same_runtime:
+        # Everything is validated before a working container or network goes.
+        plan = self._plan_container(aid, state, existing, cli)
+        if not state or state.get('network') != policy:
+            self._check_subnet_capacity(aid, policy)
+        self._remove_replaced(aid, state, existing, policy)
+        addresses = self._addresses(aid, state, policy)
+        state = self._record_runtime(aid, state, salt, policy, addresses, plan)
+        self._create_app(aid, state, auth, fingerprint, plan, addresses)
+        state['auth_mode'] = auth['mode']
+        if plan.cli is not None:
+            state['cli'] = plan.cli
+        state.update(environment=environment, environment_created=environment, environment_pending=False)
+        state.pop('environment_desired', None)
+        self.save(aid, state)
+        return state
+
+    @staticmethod
+    def _same_runtime(state, existing, cli):
+        """Whether cli keeps the CLI the container runs. Defaults apply to new
+        containers only: a tag/digest change must never replace a working
+        account (including after controller restart)."""
+        active = state.get('active_runtime') or {}
+        active_matches = (existing and active.get('container_identity') == container_identity(existing)
+                          and cli is not None and cli['version'] == active.get('version'))
+        saved = state.get('cli') or {}
+        return (cli is None or saved == cli or active_matches or
+                cli.get('version') == saved.get('version') and
+                cli.get('request_mode') in ('direct', 'build') and
+                saved.get('request_mode') in ('direct', 'build'))
+
+    def _keep_existing(self, aid, state, existing, policy, fingerprint, cli, environment):
+        """True when the existing container stays (same network, credentials
+        and CLI; a locale/timezone change is applied in place)."""
+        same_runtime = self._same_runtime(state, existing, cli)
+        if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint:
+            if not same_runtime:
                 raise InvalidCLIProfile('CLI version changes require a packaged in-place Worker+CLI activation')
-            if existing and active.get('container_identity') == container_identity(existing) and cli is not None and not same_runtime:
-                raise InvalidCLIProfile('activate a packaged Worker+CLI pair before selecting a different CLI version')
+            self._note_environment(aid, state, environment)
+            return True
+        active = state.get('active_runtime') or {}
+        if existing and active.get('container_identity') == container_identity(existing) and cli is not None and not same_runtime:
+            raise InvalidCLIProfile('activate a packaged Worker+CLI pair before selecting a different CLI version')
+        return False
+
+    def _note_environment(self, aid, state, environment):
+        current = state.get('environment', {'locale': '', 'timezone': ''})
+        # State written before in-place changes: the values the container was
+        # created with are the last applied ones.
+        state.setdefault('environment_created', current)
+        state['environment_pending'] = environment != current
+        if state['environment_pending']:
+            state['environment_desired'] = environment  # provision() pushes it to the Worker
+        else:
+            state.pop('environment_desired', None)
+        self.save(aid, state)
+
+    def _plan_container(self, aid, state, existing, cli):
+        """Image, CLI and volume of the container to create, all validated:
+        nothing has been stopped or removed yet."""
         # Credential/network changes must not incidentally upgrade the image.
         if existing is None and cli is None and os.getenv('CCG_DEFAULT_CLI_VERSION'):
             try:
                 cli = validate_profile({'version': os.environ['CCG_DEFAULT_CLI_VERSION'], 'request_mode': 'build', 'disable_auto_update': True})
             except ValueError as e:
                 raise BadRequest('invalid controller default CLI version') from e
-        version_changed = cli is not None and (state or {}).get('cli', {}).get('version') != cli['version']
-        retired_mode = cli is not None and (state or {}).get('cli', {}).get('request_mode') not in ('direct', 'build')
+        saved_cli = (state or {}).get('cli', {})
+        version_changed = cli is not None and saved_cli.get('version') != cli['version']
+        retired_mode = cli is not None and saved_cli.get('request_mode') not in ('direct', 'build')
         # Migrating the removed agent path also installs the current Worker.
         image_ref = image_of(existing) if existing and not version_changed and not retired_mode else self.app_image
         image = self.ensure_image(image_ref)
-        # Validate the new image before an existing container is replaced.
         check_business_image(image)
-        # Validate the selected version and its digest before stopping anything.
         try:
             cli_env = resolve_profile(self, image_ref, cli)
         except (ValueError, docker.errors.DockerException) as e:
             raise InvalidCLIProfile('requested CLI version/mode is unavailable or invalid in the selected image') from e
-        # Fail unsupported storage BEFORE removing a working container/network.
         # An enforced quota never silently becomes unbounded; legacy data
         # always stays usable, and unbounded storage only while not required.
         recorded = state.get('disk_quota', {}).get('status', 'legacy_unbounded') if state else None
@@ -708,192 +545,207 @@ class Manager:
         unbounded = legacy or recorded in (None, 'unbounded') and not self.require_disk_quota
         volume, disk_bytes = self.account_volume(aid, allow_unbounded=unbounded)
         self.verify_disk_quota(image_ref, volume, disk_bytes)
-        if not state or state.get('network') != policy:
-            old_subnets, occupied = [], []
-            for n in self.docker.networks.list():
-                for cfg in n.attrs.get('IPAM', {}).get('Config') or []:
-                    if cfg.get('Subnet'):
-                        subnet = ipaddress.ip_network(cfg['Subnet'])
-                        if subnet.version == 4:
-                            (old_subnets if (n.attrs.get('Labels') or {}).get(LABEL) == aid else occupied).append(subnet)
-            occupied.extend(r for r in host_routes() if r not in old_subnets)
-            first = allocate_subnet(policy, occupied)
-            allocate_subnet(policy, occupied + [first])
-            # Validate capacity/conflicts before removing working containers.
+        return SimpleNamespace(image_ref=image_ref, image=image, cli=cli, cli_env=cli_env, volume=volume,
+                               disk_bytes=disk_bytes, legacy=legacy)
+
+    def _check_subnet_capacity(self, aid, policy):
+        """Two free subnets for a new network policy, before anything goes."""
+        old_subnets, occupied = [], []
+        for labels, subnet in self.docker_ipv4_subnets():
+            (old_subnets if labels.get(LABEL) == aid else occupied).append(subnet)
+        occupied.extend(r for r in host_routes() if r not in old_subnets)
+        first = allocate_subnet(policy, occupied)
+        allocate_subnet(policy, occupied + [first])
+
+    def _remove_replaced(self, aid, state, existing, policy):
         if existing:
             self.online.pop(aid, None)
-            with contextlib.suppress(docker.errors.NotFound):
-                existing.remove(force=True)
-        if not state or state.get('network') != policy:
-            self.online.pop(aid, None)
-            self.boots.pop(aid, None)
-            with contextlib.suppress(docker.errors.NotFound):
-                self.owned(aid, 'egress').remove(force=True)
-            for role in ('net', 'uplink'):
-                with contextlib.suppress(docker.errors.NotFound):
-                    old = self.docker.networks.get(self.name(aid, role))
-                    if (old.attrs.get('Labels') or {}).get(LABEL) != aid:
-                        raise ValueError('network ownership mismatch')
-                    old.remove()
+            absent_ok(existing.remove, force=True)
+        if state and state.get('network') == policy:
+            return
+        self.drop_readiness(aid)
+        with contextlib.suppress(docker.errors.NotFound):
+            self.owned(aid, 'egress').remove(force=True)
+        for role in ('net', 'uplink'):
+            old = self.owned_resource(self.docker.networks, aid, role)
+            if old is not None:
+                absent_ok(old.remove)
+
+    def _addresses(self, aid, state, policy):
         network = self.ensure_network(aid, 'net', policy, True)
         uplink = self.ensure_network(aid, 'uplink', policy, False)
         network.reload()
-        subnet = ipaddress.ip_network(network.attrs['IPAM']['Config'][0]['Subnet'])
         if state and state.get('network') == policy:
-            gateway_ip, app_ip = state['gateway_ip'], state['app_ip']
-            uplink_ip = state['uplink_ip']
-        else:
-            gateway_ip, app_ip = allocate_addresses(subnet, policy['allocation'])
-            uplink_subnet = ipaddress.ip_network(uplink.attrs['IPAM']['Config'][0]['Subnet'])
-            uplink_ip = allocate_addresses(uplink_subnet, policy['allocation'], 1)[0]
-        write_private(d / 'resolv.conf', f'nameserver {gateway_ip}\noptions timeout:2 attempts:2\n')
+            return SimpleNamespace(network=network, gateway_ip=state['gateway_ip'], app_ip=state['app_ip'],
+                                   uplink_ip=state['uplink_ip'])
+        gateway_ip, app_ip = allocate_addresses(first_subnet(network), policy['allocation'])
+        uplink_ip = allocate_addresses(first_subnet(uplink), policy['allocation'], 1)[0]
+        return SimpleNamespace(network=network, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip)
+
+    def _record_runtime(self, aid, state, salt, policy, addresses, plan):
+        d = self.dir(aid)
+        write_private(d / 'resolv.conf', f'nameserver {addresses.gateway_ip}\noptions timeout:2 attempts:2\n')
         # resolv.conf contains only the ordinary internal DNS address.
         os.chmod(d / 'resolv.conf', 0o644)
         state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': salt,
-                 'app_ip': app_ip, 'gateway_ip': gateway_ip, 'revision': '', 'status': 'pending',
-                 'created_at': rfc3339(time.time())}
-        state.update(network=policy, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip,
-                     revision='', status='pending')
+                          'app_ip': addresses.app_ip, 'gateway_ip': addresses.gateway_ip, 'revision': '',
+                          'status': 'pending', 'created_at': rfc3339(time.time())}
+        state.update(network=policy, gateway_ip=addresses.gateway_ip, app_ip=addresses.app_ip,
+                     uplink_ip=addresses.uplink_ip, revision='', status='pending')
+        state['disk_quota'] = {'limit_bytes': plan.disk_bytes, 'status': 'enforced' if plan.disk_bytes
+                               else 'legacy_unbounded' if plan.legacy else 'unbounded'}
         self.save(aid, state)
-        state['disk_quota'] = {'limit_bytes': disk_bytes,
-                               'status': 'enforced' if disk_bytes else 'legacy_unbounded' if legacy else 'unbounded'}
-        self.save(aid, state)
-        # A new container gets locale/timezone from its environment below; drop
-        # the in-place values an earlier container's Worker kept in the volume.
-        self.oneshot(image_ref, entrypoint=['sh', '-ec'],
-            command=['mkdir -p /work/config /work/data; rm -f /work/data/environment.json; printf \'{"auto_update":false,"channel":"stable"}\\n\' > /work/data/cli-update.json; chown -R 1000:1000 /work'],
-            user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
-        env = {**cli_env, **TELEMETRY_ENV}
+        return state
+
+    def app_environment(self, state, auth, plan):
+        env = {**plan.cli_env, **TELEMETRY_ENV}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
-        if disk_bytes:
-            env['CCG_ACCOUNT_DISK_QUOTA_BYTES'] = str(disk_bytes)
+        if plan.disk_bytes:
+            env['CCG_ACCOUNT_DISK_QUOTA_BYTES'] = str(plan.disk_bytes)
         if auth['mode'] == 'api_key':
             env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
-        # Apply locale and timezone configuration from account settings
-        locale = auth.get('locale', '')
-        timezone = auth.get('timezone', '')
+        locale, timezone = auth.get('locale', ''), auth.get('timezone', '')
         if locale:
             env['LANG'] = locale if '.' in locale else f'{locale}.UTF-8'
             env['LC_ALL'] = env['LANG']
         if timezone:
             env['TZ'] = timezone
+        return env
+
+    def _create_app(self, aid, state, auth, fingerprint, plan, addresses):
+        self.oneshot(plan.image_ref, entrypoint=['sh', '-ec'], command=[PREPARE_VOLUME],
+            user='0', network_mode='none', volumes={plan.volume.name: {'bind': '/work', 'mode': 'rw'}})
         options = self.common(aid)
         options['labels'][AUTH_LABEL] = fingerprint
-        options['labels'][IMAGE_LABEL] = image.id
-        self.docker.containers.create(image_ref, name=self.name(aid, 'app'),
-            network=network.name, networking_config={network.name: self.docker.api.create_endpoint_config(ipv4_address=app_ip)}, user='1000:1000', environment=env,
-            volumes={volume.name: {'bind': '/work', 'mode': 'rw'},
-                     str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
+        options['labels'][IMAGE_LABEL] = plan.image.id
+        network = addresses.network.name
+        self.docker.containers.create(plan.image_ref, name=self.name(aid, 'app'), network=network,
+            networking_config={network: self.docker.api.create_endpoint_config(ipv4_address=addresses.app_ip)},
+            user='1000:1000', environment=self.app_environment(state, auth, plan),
+            volumes={plan.volume.name: {'bind': '/work', 'mode': 'rw'},
+                     str(self.dir(aid) / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
             mem_limit='1g', nano_cpus=2000000000, **options)
-        state['auth_mode'] = auth['mode']
-        if cli is not None:
-            state['cli'] = cli
-        state['environment'] = environment
-        state['environment_created'] = environment
-        state['environment_pending'] = False
-        state.pop('environment_desired', None)
-        self.save(aid, state)
-        return state
+
+    # Apply: PUT /accounts/<key>/config.
 
     def apply(self, aid, desired):
         with self.guard(aid):
-            if (self.state(aid) or {}).get('migration_failed'):
-                raise BadRequest('failed migration draft must be discarded')
-            if not isinstance(desired, dict):
-                raise BadRequest('invalid configuration')
-            try:
-                validate_profile(desired.get('cli'))
-            except ValueError as e:
-                raise BadRequest(str(e)) from e
-            revision = desired.get('revision', '')
-            if not isinstance(revision, str) or not REVISION.fullmatch(revision):
-                raise BadRequest('invalid revision')
-            try:
-                policy = network_policy(desired.get('network'))
-            except (ValueError, TypeError) as e:
-                raise BadRequest('invalid network policy') from e
-            # No proxy egresses directly only when the core says so (direct):
-            # an older core without the flag still gets the runtime blocked.
-            direct = desired.get('direct') is True and not desired.get('proxy')
+            revision, policy, direct = self._validate_desired(aid, desired)
             state = self.state(aid)
             if state:
-                write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
+                self.save_desired(aid, desired)
             if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
                 return self.block(aid)
             if state and state.get('egress_backend') == 'shared_xray':
-                if state.get('network') != policy:
-                    raise BadRequest('migrate back before changing network allocation')
-                if state.get('egress_migration') and state['egress_migration'].get('phase') == 'failed':
-                    raise BadRequest('resume or rollback failed egress migration')
-                if self.public(aid)['revision'] == revision:
-                    return self.public(aid)
-                self.shared.remove(aid)
-                state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
-                return self.shared.apply(aid, state, desired)
-            old = None
-            with contextlib.suppress(docker.errors.NotFound):
-                old = self.owned(aid, 'egress')
-            egress_image = image_of(old) if old else self.egress_image
-            self.ensure_image(egress_image)
-            state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
-            write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
-            if self.public(aid)['revision'] == revision:
-                app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
-                if app.status == 'running' and egress.status == 'running':
-                    return self.public(aid)
-            self.online.pop(aid, None)
-            reuse_egress = old is not None and state.get('revision') == revision
-            state['status'] = 'syncing'
-            self.save(aid, state)
-            # Config validation happens before the old egress is stopped.
-            try:
-                config, rules = configuration(None if direct else desired['proxy'], state['app_ip'], state['gateway_ip'])
-            except (ValueError, KeyError, TypeError) as e:
-                raise BadRequest('invalid proxy') from e
-            d = self.dir(aid)
-            if old is not None and not reuse_egress:
-                with contextlib.suppress(OSError, ValueError):
-                    reuse_egress = json.loads((d / 'sing-box.json').read_text()) == config
-            write_private(d / 'sing-box.json', json.dumps(config))
-            write_private(d / 'firewall.nft', rules)
-            self.oneshot(egress_image,
-                entrypoint=['sing-box', 'check', '-c', '/config/sing-box.json'],
-                network_mode='none', volumes={str(d): {'bind': '/config', 'mode': 'ro'}})
-            try:
-                old = self.owned(aid, 'egress')
-            except docker.errors.NotFound:
-                old = None
-            if old and not reuse_egress:
-                old.remove(force=True)
-            egress = old if reuse_egress else None
-            if egress is None:
-                egress = self.docker.containers.create(egress_image, name=self.name(aid, 'egress'),
-                    network=self.name(aid, 'uplink'),
-                    networking_config={self.name(aid, 'uplink'): self.docker.api.create_endpoint_config(ipv4_address=state['uplink_ip'])},
-                    cap_add=['NET_ADMIN'],
-                    sysctls={'net.ipv4.ip_forward': '0', 'net.ipv6.conf.all.disable_ipv6': '1'},
-                    volumes={str(d): {'bind': '/config', 'mode': 'ro'}}, mem_limit='128m',
-                    **self.common(aid))
-                self.docker.networks.get(self.name(aid, 'net')).connect(egress, ipv4_address=state['gateway_ip'])
-            if egress.status != 'running':
-                egress.start()
-            app = self.owned(aid, 'app')
-            if app.status != 'running':
-                app.start()
-            self._activate(aid, state, app, egress, revision)
+                return self._apply_shared(aid, state, desired, policy, revision)
+            return self._apply_dedicated(aid, state, desired, policy, revision, direct)
+
+    def _validate_desired(self, aid, desired):
+        if (self.state(aid) or {}).get('migration_failed'):
+            raise BadRequest('failed migration draft must be discarded')
+        if not isinstance(desired, dict):
+            raise BadRequest('invalid configuration')
+        try:
+            validate_profile(desired.get('cli'))
+        except ValueError as e:
+            raise BadRequest(str(e)) from e
+        revision = desired.get('revision', '')
+        if not isinstance(revision, str) or not REVISION.fullmatch(revision):
+            raise BadRequest('invalid revision')
+        try:
+            policy = network_policy(desired.get('network'))
+        except (ValueError, TypeError) as e:
+            raise BadRequest('invalid network policy') from e
+        # No proxy egresses directly only when the core says so (direct):
+        # an older core without the flag still gets the runtime blocked.
+        return revision, policy, desired.get('direct') is True and not desired.get('proxy')
+
+    def _apply_shared(self, aid, state, desired, policy, revision):
+        if state.get('network') != policy:
+            raise BadRequest('migrate back before changing network allocation')
+        if state.get('egress_migration') and state['egress_migration'].get('phase') == 'failed':
+            raise BadRequest('resume or rollback failed egress migration')
+        if self.public(aid)['revision'] == revision:
             return self.public(aid)
+        self.shared.remove(aid)
+        state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
+        return self.shared.apply(aid, state, desired)
+
+    def _apply_dedicated(self, aid, state, desired, policy, revision, direct):
+        old = None
+        with contextlib.suppress(docker.errors.NotFound):
+            old = self.owned(aid, 'egress')
+        egress_image = image_of(old) if old else self.egress_image
+        self.ensure_image(egress_image)
+        had_state = state is not None
+        state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
+        if not had_state:
+            self.save_desired(aid, desired)
+        if self.public(aid)['revision'] == revision:
+            app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
+            if app.status == 'running' and egress.status == 'running':
+                return self.public(aid)
+        self.online.pop(aid, None)
+        state['status'] = 'syncing'
+        self.save(aid, state)
+        egress = self._egress(aid, state, desired, direct, egress_image, old is not None)
+        app = self.owned(aid, 'app')
+        if app.status != 'running':
+            app.start()
+        self._activate(aid, state, app, egress, revision)
+        return self.public(aid)
+
+    def _egress(self, aid, state, desired, direct, egress_image, had_egress):
+        """The running egress with the configuration desired asks for. The
+        running one is kept only with the very configuration it runs: the
+        same revision can resolve the proxy host to another address (B9)."""
+        # Config validation happens before the old egress is stopped.
+        try:
+            config, rules = configuration(None if direct else desired['proxy'], state['app_ip'], state['gateway_ip'])
+        except (ValueError, KeyError, TypeError) as e:
+            raise BadRequest('invalid proxy') from e
+        d = self.dir(aid)
+        reuse = False
+        if had_egress:
+            with contextlib.suppress(OSError, ValueError):
+                reuse = json.loads((d / 'sing-box.json').read_text()) == config
+        write_private(d / 'sing-box.json', json.dumps(config))
+        write_private(d / 'firewall.nft', rules)
+        self.oneshot(egress_image, entrypoint=['sing-box', 'check', '-c', '/config/sing-box.json'],
+                     network_mode='none', volumes={str(d): {'bind': '/config', 'mode': 'ro'}})
+        try:
+            old = self.owned(aid, 'egress')
+        except docker.errors.NotFound:
+            old = None
+        if old and not reuse:
+            old.remove(force=True)
+        egress = (old if reuse else None) or self._create_egress(aid, state, egress_image)
+        if egress.status != 'running':
+            egress.start()
+        return egress
+
+    def _create_egress(self, aid, state, egress_image):
+        uplink = self.name(aid, 'uplink')
+        egress = self.docker.containers.create(egress_image, name=self.name(aid, 'egress'), network=uplink,
+            networking_config={uplink: self.docker.api.create_endpoint_config(ipv4_address=state['uplink_ip'])},
+            cap_add=['NET_ADMIN'], sysctls={'net.ipv4.ip_forward': '0', 'net.ipv6.conf.all.disable_ipv6': '1'},
+            volumes={str(self.dir(aid)): {'bind': '/config', 'mode': 'ro'}}, mem_limit='128m',
+            **self.common(aid))
+        self.docker.networks.get(self.name(aid, 'net')).connect(egress, ipv4_address=state['gateway_ip'])
+        return egress
+
+    def business_firewall(self, aid, app, gateway_ip):
+        """The ccg_app rules and the default route inside the account's
+        network namespace (atomic nft replacement; nothing in the host's
+        routing table or firewall). A (re)started container has neither:
+        Docker gives it a fresh namespace."""
+        self.helper(aid, app, NFT_REPLACE + f'ip route replace default via {gateway_ip}', business_rules(gateway_ip))
 
     def _activate(self, aid, state, app, egress, revision):
         """Business firewall and default route, egress readiness, proxied probe,
         then readiness at revision. Shared by apply and the in-place worker
         update (a container restart rebuilds the account network namespace)."""
-        # Atomic nft replacement inside the account namespace. Nothing is
-        # configured in the host's default routing table or firewall.
-        script = ('if nft list table inet ccg_app >/dev/null 2>&1; then '
-                  '{ printf "delete table inet ccg_app\\n"; cat /app.nft; } | nft -f -; '
-                  'else nft -f /app.nft; fi; '
-                  f'ip route replace default via {state["gateway_ip"]}')
-        self.helper(aid, app, script, business_rules(state['gateway_ip']))
+        self.business_firewall(aid, app, state['gateway_ip'])
         for _ in range(30):
             egress.reload()
             if egress.status != 'running':
@@ -905,61 +757,15 @@ class Manager:
         else:
             raise ActivationFailed('egress_not_ready', 'egress not ready')
         # Probe through the business namespace, not through host networking.
-        code, _ = app.exec_run(['node', '-e',
-            'fetch(process.argv[1],{signal:AbortSignal.timeout(10000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
-            self.probe_url])
+        code, _ = app.exec_run(['node', '-e', PROBE_SCRIPT, self.probe_url])
         if code != 0:
             raise ActivationFailed('proxy_check_failed', 'account proxy connectivity check failed')
         state.update(revision=revision, status='ready')
         self.save(aid, state)
-        app.reload(); egress.reload()
-        self.boots[aid] = tuple(c.attrs['State']['StartedAt'] for c in (app, egress))
+        app.reload()
+        egress.reload()
+        self.boots[aid] = tuple(boot_id(c) for c in (app, egress))
         self.online[aid] = revision
-
-    def migrate_auth(self, aid, source):
-        """Explicit control-plane operation; only the independent draft is changed."""
-        check(source)
-        if not DRAFT.fullmatch(aid) or aid == source:
-            raise BadRequest('migration requires a separate draft')
-        # Stable order prevents two manual operations deadlocking.
-        with self.guard(min(aid, source)), self.guard(max(aid, source)):
-            target_state, source_state = self.state(aid), self.state(source)
-            if not target_state or not source_state or source_state.get('auth_mode') != 'oauth':
-                raise BadRequest('migration requires OAuth runtimes')
-            if target_state.get('auth_migrated_from') == source:
-                return {'migrated': True}
-            if target_state.get('auth_migrated_from'):
-                raise BadRequest('draft already migrated')
-            target = self.owned(aid, 'app')
-            self.owned(source, 'app')
-            volumes = {}
-            for key, mount in ((source, '/source'), (aid, '/target')):
-                volume = self.docker.volumes.get(self.name(key, 'data'))
-                if (volume.attrs.get('Labels') or {}).get(LABEL) != key:
-                    raise BadRequest('volume ownership mismatch')
-                volumes[volume.name] = {'bind': mount, 'mode': 'ro' if key == source else 'rw'}
-            # Never mount the Docker socket, share source writes, or run the
-            # target CLI while its config is being populated.
-            target.stop(timeout=10)
-            self.online.pop(aid, None)
-            try:
-                self.oneshot(image_of(target), user='1000:1000',
-                    entrypoint=['sh', '-ec'], command=[
-                        'test -d /source/config && test ! -L /source/config; '
-                        'test -d /target/config && test ! -L /target/config; '
-                        'test ! -e /target/config/.credentials.json; '
-                        'cp -a /source/config/. /target/config/'],
-                    network_mode='none', volumes=volumes, cap_drop=['ALL'],
-                    security_opt=['no-new-privileges:true'])
-                target_state['auth_migrated_from'] = source
-                self.save(aid, target_state)
-            except Exception:
-                target_state['migration_failed'] = True
-                self.save(aid, target_state)
-                raise
-            target.start()
-            # Readiness is re-established by apply's firewall/connectivity checks.
-            return {'migrated': True}
 
     def block(self, aid):
         self.online.pop(aid, None)
@@ -974,69 +780,123 @@ class Manager:
                 self.shared.remove(aid)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
+    # Delete: DELETE /accounts/<key>.
+
     def delete(self, aid, account=False, purge=False):
         """Remove a runtime completely; idempotent. Drafts always; an account
         runtime only when the caller says so explicitly (account=True): the
-        purge=True also removes account data and recovery metadata."""
+        purge=True also removes account data and recovery metadata.
+
+        Every container of the runtime goes, also copies a manual migration
+        left behind (<prefix>-<key>-app-rollback-<tag>, same label and volume),
+        which used to keep the volume busy forever. Everything is checked
+        before anything is removed: a same-name resource of someone else is a
+        ValueError, a container outside the runtime that still uses one of its
+        networks or the volume to be removed is ResourceInUse (409)."""
         check(aid)
         if not DRAFT.fullmatch(aid) and not account:
             raise NotDraft('only draft runtimes can be deleted')
+        remove_volume = not account or purge
         with self.guard(aid):
-            # Validate every named resource before deleting any of them.
-            # A same-name foreign resource must never be partially dismantled.
-            for role in ('egress', 'app'):
-                with contextlib.suppress(docker.errors.NotFound):
-                    self.owned(aid, role)
-            for collection, roles in ((self.docker.networks, ('net', 'uplink')),
-                                      (self.docker.volumes, ('data',))):
-                for role in roles:
-                    with contextlib.suppress(docker.errors.NotFound):
-                        resource = collection.get(self.name(aid, role))
-                        if (resource.attrs.get('Labels') or {}).get(LABEL) != aid:
-                            raise ValueError('resource ownership mismatch')
-            if ((self.state(aid) or {}).get('egress_backend') == 'shared_xray'
-                    or ((self.root / 'shared-egress' / 'state.json').exists() and aid in self.shared.data['bindings'])):
-                self.shared.remove(aid, disconnect=True)
-            if account and not purge and self.state(aid):
+            containers, networks, volume = self._deletion_plan(aid, remove_volume)
+            self._detach_shared(aid)
+            state = self.state(aid)
+            if account and not purge and state:
                 backup = self.root / 'backups'
                 backup.mkdir(mode=0o700, exist_ok=True)
-                write_private(backup / (aid + '.json'), json.dumps(self.state(aid)))
-            self.online.pop(aid, None)
-            self.boots.pop(aid, None)
-            # Containers first: the egress is attached to the network and the
-            # app container mounts the volume.
-            for role in ('egress', 'app'):
-                with contextlib.suppress(docker.errors.NotFound):
-                    self.owned(aid, role).remove(force=True)
-            for role in ('net', 'uplink'):
-                with contextlib.suppress(docker.errors.NotFound):
-                    network = self.docker.networks.get(self.name(aid, role))
-                    if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
-                        raise ValueError('network ownership mismatch')
-                    network.remove()
-            with contextlib.suppress(docker.errors.NotFound):
-                volume = self.docker.volumes.get(self.name(aid, 'data'))
-                if (volume.attrs.get('Labels') or {}).get(LABEL) != aid:
-                    raise ValueError('volume ownership mismatch')
-                if not account or purge:
-                    volume.remove(force=True)
-                # Retired account data is retained for manual recovery. Draft
-                # cancellation still deletes its independent volume.
+                write_private(backup / (aid + '.json'), json.dumps(state))
+            self.drop_readiness(aid)
+            removed = self._remove_resources(aid, containers, networks, volume if remove_volume else None)
             d = self.dir(aid)
             if d.is_dir() and not d.is_symlink():
                 shutil.rmtree(d)
             if purge:
                 with contextlib.suppress(FileNotFoundError):
                     (self.root / 'backups' / (aid + '.json')).unlink()
-        return {'deleted': True}
+        return {'deleted': True, 'removed': removed}
 
-    def cleanup_inventory(self):
-        from cleanup import inventory
-        return inventory(self)
+    def _remove_resources(self, aid, containers, networks, volume):
+        """Containers first (they hold the networks and the volume), then the
+        networks, then the volume when given (retired account data is kept for
+        manual recovery unless purged; a draft's volume always goes)."""
+        removed = {'containers': [], 'networks': [], 'volume': False}
+        for container in containers:
+            if absent_ok(container.remove, force=True):
+                log.info('delete key=%s removed container %s', aid, container.name)
+                removed['containers'].append(container.name)
+        for network in networks:
+            self._disconnect_shared_gateway(network)
+            if absent_ok(network.remove):
+                removed['networks'].append(network.name)
+        if volume is not None:
+            removed['volume'] = absent_ok(volume.remove, force=True)
+        return removed
 
-    def cleanup_runtimes(self, desired):
-        from cleanup import cleanup
-        return cleanup(self, desired)
+    def account_containers(self, aid):
+        """Every container of this runtime, stopped ones included: the account
+        label says it is ours, the name <prefix>-<key>-app|egress[-suffix]
+        keeps the containers of another controller instance (another prefix,
+        same key) out."""
+        check(aid)
+        found = self.docker.containers.list(all=True, filters={'label': f'{LABEL}={aid}'}, ignore_removed=True)
+        return sorted((c for c in found if c.labels.get(LABEL) == aid and self.container_of(aid, c.name)),
+                      key=lambda c: c.name)
+
+    def container_of(self, aid, name):
+        """Whether name is a container name of runtime aid (its role, optionally suffixed)."""
+        head = f'{self.prefix}-{aid}-'
+        return name.startswith(head) and bool(ACCOUNT_CONTAINER_ROLE.fullmatch(name[len(head):]))
+
+    def _deletion_plan(self, aid, remove_volume):
+        """(containers, networks, volume) of the runtime; nothing is changed."""
+        for role in ('app', 'egress'):
+            absent_ok(self.owned, aid, role)  # a same-name foreign container raises
+        containers = self.account_containers(aid)
+        networks = [n for n in (self.owned_resource(self.docker.networks, aid, role) for role in ('net', 'uplink')) if n]
+        volume = self.owned_resource(self.docker.volumes, aid, 'data')
+        ours, gateway = {c.id for c in containers}, self._shared_gateway_id()
+        foreign = set()
+        for network in networks:
+            foreign.update(endpoint.get('Name') or cid for cid, endpoint in (network.attrs.get('Containers') or {}).items()
+                           if cid not in ours and cid != gateway)
+        if volume is not None and remove_volume:
+            for c in self.docker.containers.list(all=True, filters={'volume': volume.name}, ignore_removed=True):
+                if c.id in ours:
+                    continue
+                if self._stale_helper(c):
+                    containers.append(c)  # this controller's own leftover one-shot helper
+                else:
+                    foreign.add(c.name)
+        if foreign:
+            raise ResourceInUse(foreign)
+        return containers, networks, volume
+
+    def _stale_helper(self, container):
+        """A one-shot helper of this controller that never ran or has ended
+        (older controllers left failed ones behind in "Created")."""
+        return container.name.startswith(f'{self.prefix}-oneshot-') and container.status in ('created', 'exited', 'dead')
+
+    def _detach_shared(self, aid):
+        if ((self.state(aid) or {}).get('egress_backend') == 'shared_xray'
+                or ((self.root / 'shared-egress' / 'state.json').exists() and aid in self.shared.data['bindings'])):
+            self.shared.remove(aid, disconnect=True)
+
+    def _shared_gateway_id(self):
+        """Id of this controller's shared egress gateway, attached to every
+        shared account's network (detached by _detach_shared), or None."""
+        try:
+            gateway = self.docker.containers.get(f'{self.prefix}-shared-egress')
+        except docker.errors.NotFound:
+            return None
+        return gateway.id if gateway.labels.get(SHARED_OWNER) == self.prefix else None
+
+    def _disconnect_shared_gateway(self, network):
+        gateway = self._shared_gateway_id()
+        network.reload()
+        if gateway and gateway in (network.attrs.get('Containers') or {}):
+            absent_ok(network.disconnect, gateway, force=True)
+
+    # Readiness and the request path.
 
     def runtimes(self):
         out = []
@@ -1049,30 +909,39 @@ class Manager:
                 created = state.get('created_at') or rfc3339(entry.stat().st_mtime)
             except (OSError, ValueError):
                 continue  # removed concurrently
-            if state.get('status') == 'blocked':
-                status = 'blocked'
-            else:
-                try:
-                    status = self.public(aid)['status']
-                except (docker.errors.DockerException, ValueError):
-                    status = 'pending'
-            out.append({'key': aid, 'status': status, 'created_at': created})
+            out.append({'key': aid, 'status': self._listed_status(aid, state), 'created_at': created})
         return {'runtimes': out}
+
+    def _listed_status(self, aid, state):
+        if state.get('status') == 'blocked':
+            return 'blocked'
+        try:
+            return self.public(aid)['status']
+        except (docker.errors.DockerException, ValueError):
+            return 'pending'
+
+    def readiness(self, aid, state):
+        """The revision the containers are online at ('' when none). Drops
+        readiness the containers no longer back (stopped, restarted, gone).
+        Two inspects, no image lookup: the request path calls this."""
+        if aid not in self.online:
+            return ''
+        try:
+            if state.get('egress_backend') == 'shared_xray':
+                containers = [self.owned(aid, 'app'), self.shared.container()]
+                if not self.shared.healthy(aid, state):
+                    self.online.pop(aid, None)
+            else:
+                containers = [self.owned(aid, role) for role in ('app', 'egress')]
+            if any(c.status != 'running' for c in containers) or tuple(boot_id(c) for c in containers) != self.boots.get(aid):
+                self.online.pop(aid, None)
+        except docker.errors.NotFound:
+            self.online.pop(aid, None)
+        return self.online.get(aid, '')
 
     def public(self, aid):
         state = self.state(aid) or {}
-        if aid in self.online:
-            try:
-                if state.get('egress_backend') == 'shared_xray':
-                    containers = [self.owned(aid, 'app'), self.shared.container()]
-                    if not self.shared.healthy(aid, state):
-                        self.online.pop(aid, None)
-                else:
-                    containers = [self.owned(aid, role) for role in ('app', 'egress')]
-                if any(c.status != 'running' for c in containers) or tuple(c.attrs['State']['StartedAt'] for c in containers) != self.boots.get(aid):
-                    self.online.pop(aid, None)
-            except docker.errors.NotFound:
-                self.online.pop(aid, None)
+        online = self.readiness(aid, state)
         current_image, target_id = '', ''
         with contextlib.suppress(docker.errors.NotFound):
             current_image = image_of(self.owned(aid, 'app'))
@@ -1084,628 +953,101 @@ class Manager:
                 'target_image_available': bool(target_id),
                 'environment_pending': bool(state.get('environment_pending')),
                 'disk_quota': state.get('disk_quota', {'limit_bytes': 0, 'status': 'legacy_unbounded'}),
-                'status': 'ready' if self.online.get(aid) == state.get('revision') and aid in self.online else 'pending',
-                'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth'),
+                'status': 'ready' if aid in self.online and online == state.get('revision') else 'pending',
+                'revision': online, 'auth_mode': state.get('auth_mode', 'oauth'),
                 'network': state.get('network'), 'app_ip': state.get('app_ip', ''),
                 'gateway_ip': state.get('gateway_ip', ''), 'uplink_ip': state.get('uplink_ip', '')}
+
+    @contextlib.contextmanager
+    def request_guard(self, aid):
+        """The account lock for the request path (connection, tunnel, admin
+        pass-through): never wait longer than the core does (audit B8). A
+        long apply or paired update answers 503 runtime_unavailable instead."""
+        guard = self.guard(aid)
+        if not guard.acquire(timeout=REQUEST_LOCK_WAIT):
+            raise RuntimeBusy('account runtime is busy')
+        try:
+            yield
+        finally:
+            guard.release()
 
     def connection(self, aid, revision):
         # Private control-plane response, never a public account/UI payload.
         # The same check guards the byte tunnel (GET .../tunnel).
-        with self.guard(aid):
+        with self.request_guard(aid):
             state = self.state(aid)
-            if not state or not revision or self.public(aid)['revision'] != revision:
+            if not state or not revision or self.readiness(aid, state) != revision:
                 return None
             return {'app_ip': state['app_ip'], 'port': ACCOUNT_PORT,
                     'api_key': state['api_key'], 'revision': revision}
 
-    # In-place worker update (CONTRACTS §53.7). Never provision, create, remove
-    # or recreate the account container: replace one file, restart only it.
+    # Proxy host names that moved (audit B9).
 
-    def worker_program(self, ref):
-        """Step 1: the program of image ref (from a never-started temporary container) and its SHA-256."""
-        self.ensure_image(ref)
-        temp = self.docker.containers.create(ref, entrypoint=['true'], network_disabled=True)
-        try:
-            try:
-                chunks, _ = temp.get_archive(WORKER_SOURCE)
-                data = read_single_file(chunks)
-            except (docker.errors.NotFound, ValueError) as e:
-                raise InvalidImage('image has no worker program') from e
-        finally:
-            with contextlib.suppress(docker.errors.DockerException, requests.exceptions.RequestException):
-                temp.remove(force=True)
-        return data, hashlib.sha256(data).hexdigest()
-
-    def _same(self, aid, identity):
-        """The account's app container, provided it is still the one the update started on."""
-        try:
-            container = self.owned(aid, 'app')
-        except (docker.errors.NotFound, ValueError) as e:
-            raise ContainerChanged('account container changed') from e
-        if container_identity(container) != identity:
-            raise ContainerChanged('account container changed')
-        return container
+    def pinned_proxy(self, aid, state):
+        """(host, port, pinned address) of a runtime whose proxy is a host
+        name, else None. The address is the one its egress dials."""
+        with contextlib.suppress(OSError, ValueError, KeyError, IndexError, TypeError):
+            proxy = read_json(self.dir(aid) / 'egress-desired.json', {}).get('proxy')
+            host = proxy['host'] if isinstance(proxy, dict) else None
+            if not isinstance(host, str) or not host or self._is_address(host):
+                return None
+            address = self._pinned_address(aid, state)
+            return (host, int(proxy['port']), address) if isinstance(address, str) else None
+        return None
 
     @staticmethod
-    def _sha256(container, path):
-        code, out = container.exec_run(['sha256sum', path], user='0')
-        digest = (out or b'').decode(errors='replace').split(' ', 1)[0]
-        return digest if code == 0 and SHA256_HEX.fullmatch(digest) else None
-
-    @staticmethod
-    def _discard(container, path):
-        with contextlib.suppress(Exception):
-            container.exec_run(['rm', '-f', path], user='0')
-
-    def _stage(self, container, target, data, digest):
-        """Put data next to target as <target>.next-<random> (root, 0755) and verify it."""
-        tmp = f'{target}.next-{secrets.token_hex(6)}'
+    def _is_address(host):
         try:
-            if not container.put_archive(posixpath.dirname(target), tar_file(posixpath.basename(tmp), data)):
-                raise RuntimeError('copy into container failed')
-            code, _ = container.exec_run(['chmod', '0755', tmp], user='0')
-            if code != 0:
-                raise RuntimeError('chmod failed')
-            code, out = container.exec_run(['stat', '-c', '%u:%g:%a', tmp], user='0')
-            if code != 0 or (out or b'').strip() != b'0:0:755':
-                raise RuntimeError('unexpected owner or mode')
-            if self._sha256(container, tmp) != digest:
-                raise RuntimeError('copied program differs')
-        except BaseException:
-            self._discard(container, tmp)
-            raise
-        return tmp
-
-    def _swap(self, container, tmp, target):
-        code, _ = container.exec_run(['mv', '-f', tmp, target], user='0')
-        if code != 0:
-            self._discard(container, tmp)
-            raise RuntimeError('replace failed')
-
-    def _wait_idle(self, aid, identity, base):
-        deadline = time.monotonic() + WORKER_IDLE_WAIT
-        while True:
-            container = self._same(aid, identity)
-            if worker_idle(container, base):
-                return container
-            if time.monotonic() >= deadline:
-                return None
-            time.sleep(WORKER_IDLE_INTERVAL)
-
-    def _backup_worker(self, aid, container, target, digest):
-        """Step 6: <root>/<key>/worker-backups/<UTC time>-<sha[:12]>, 0600, newest 5 kept."""
-        chunks, _ = container.get_archive(target)
-        try:
-            data = read_single_file(chunks)
-        except ValueError as e:
-            raise UnsupportedContainer('worker program is not a regular file') from e
-        if hashlib.sha256(data).hexdigest() != digest:
-            raise RuntimeError('backup differs from the installed program')
-        folder = self.dir(aid) / 'worker-backups'
-        folder.mkdir(mode=0o700, exist_ok=True)
-        os.chmod(folder, 0o700)
-        name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + digest[:12]
-        write_private_bytes(folder / name, data)
-        backups = sorted(p for p in folder.iterdir()
-                         if WORKER_BACKUP_NAME.fullmatch(p.name) and p.is_file() and not p.is_symlink())
-        for old in backups[:-WORKER_BACKUPS]:
-            old.unlink()
-        return data
-
-    def _worker_healthy(self, aid, identity):
-        deadline = time.monotonic() + WORKER_HEALTH_WAIT
-        while True:
-            container = self._same(aid, identity)
-            if container.status != 'running':
-                return False  # exited: no restart policy brings it back
-            with contextlib.suppress(docker.errors.APIError):
-                code, _ = container.exec_run(['node', '-e', WORKER_HEALTH_SCRIPT])
-                if code == 0:
-                    return True
-            if time.monotonic() >= deadline:
-                return False
-            time.sleep(WORKER_HEALTH_INTERVAL)
-
-    def _restart_healthy(self, aid, identity):
-        """Restart only this container; healthy only if it really restarted and answers /health."""
-        container = self._same(aid, identity)
-        before = container.attrs['State'].get('StartedAt')
-        with contextlib.suppress(docker.errors.APIError, requests.exceptions.RequestException):
-            container.restart(timeout=WORKER_RESTART_TIMEOUT)
-        container = self._same(aid, identity)
-        if container.attrs['State'].get('StartedAt') == before:
-            return False  # the old process may still be serving /health
-        return self._worker_healthy(aid, identity)
-
-    def _restore(self, aid, identity, target, data, digest):
-        """Put the backup back: temporary file + mv while running; written
-        directly into a stopped container (exec is impossible there and
-        nothing executes the file)."""
-        container = self._same(aid, identity)
-        if container.status == 'running':
-            self._swap(container, self._stage(container, target, data, digest), target)
-            return
-        if not container.put_archive(WORKER_DIR, tar_file(posixpath.basename(target), data)):
-            raise RuntimeError('restore failed')
-        chunks, _ = container.get_archive(target)
-        if hashlib.sha256(read_single_file(chunks)).hexdigest() != digest:
-            raise RuntimeError('restored program differs')
-
-    def _reactivate(self, aid, identity, revision):
-        """Step 9: firewall, route and probe again; readiness at the old revision or none."""
-        app = self._same(aid, identity)
-        try:
-            state = self.state(aid)
-            if not state or state.get('revision') != revision:
-                raise RuntimeError('revision changed')
-            if state.get('egress_backend') == 'shared_xray':
-                self.shared.apply(aid, state, self.shared.desired(aid))
-            else:
-                self._activate(aid, state, app, self.owned(aid, 'egress'), revision)
-            return True
-        except Exception as e:
-            # The core's next reconciliation applies the configuration again;
-            # nothing is recreated here.
-            log.warning('reactivate key=%s failed: %s: %s', aid, type(e).__name__, str(e)[:300])
-            self.online.pop(aid, None)
-            return False
-
-    def update_worker(self, aid, desired):
-        """POST /accounts/<key>/worker {"image": ref} (CONTRACTS §53.7)."""
-        if isinstance(desired, dict) and 'components' in desired:
-            from runtime_updates import RuntimeUpdates
-            return RuntimeUpdates(self).update(aid, desired)
-        check(aid)
-        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
-        if not valid_image(ref):
-            raise BadRequest('invalid image reference')
-        data, digest = self.worker_program(ref)
-        with self.guard(aid):
-            try:
-                container = self.owned(aid, 'app')
-            except (docker.errors.NotFound, ValueError) as e:
-                raise RuntimeNotFound('no account container') from e
-            if container.status != 'running':
-                return {'status': 'not_running'}
-            identity = container_identity(container)
-            target, base = worker_target(container)
-            previous = self._sha256(container, target)
-            if previous is None:
-                raise UnsupportedContainer('worker program not readable')
-            if previous == digest:
-                return {'status': 'unchanged', 'sha256': digest}
-            container = self._wait_idle(aid, identity, base)
-            if container is None:
-                return {'status': 'busy'}
-            old = self._backup_worker(aid, container, target, previous)
-            tmp = self._stage(container, target, data, digest)
-            try:
-                container = self._same(aid, identity)
-                idle = worker_idle(container, base)
-            except BaseException:
-                self._discard(container, tmp)
-                raise
-            if not idle:
-                self._discard(container, tmp)
-                return {'status': 'busy'}
-            self.public(aid)  # drops readiness that no longer matches the containers
-            revision = (self.state(aid) or {}).get('revision', '')
-            was_online = bool(revision) and self.online.get(aid) == revision
-            self.online.pop(aid, None)
-            self._swap(container, tmp, target)
-            if self._restart_healthy(aid, identity):
-                result = {'status': 'updated', 'previous_sha256': previous, 'sha256': digest, 'path': target}
-            else:
-                self._restore(aid, identity, target, old, previous)
-                if not self._restart_healthy(aid, identity):
-                    return {'status': 'rolled_back', 'reason': 'rollback_unhealthy', 'online': False}
-                result = {'status': 'rolled_back', 'reason': 'unhealthy'}
-            result['online'] = was_online and self._reactivate(aid, identity, revision)
-            return result
-
-
-class Handler(BaseHTTPRequestHandler):
-    protocol_version = 'HTTP/1.1'
-
-    def setup(self):
-        super().setup()
-        self.connection.settimeout(240)
-
-    def log_message(self, *args):
-        pass  # Requests may contain OAuth material; never log bodies or URLs.
-
-    def note_failure(self, exc, outcome, trace=False):
-        """One stderr line per failed request (audit B1): the method, the
-        account key and the path, the exception's type and message, and what
-        the core was told. Never the body or the headers; URLs only through
-        the exception text of our own calls (an account address)."""
-        log.warning('%s key=%s path=%s -> %s: %s: %s', self.command, self.account_key, self.request_path, outcome,
-                    type(exc).__name__, str(exc)[:300], exc_info=trace)
-
-    def reply(self, status, data):
-        raw = json.dumps(data).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(raw)))
-        self.send_header('Cache-Control', 'no-store')
-        if self.close_connection:
-            self.send_header('Connection', 'close')  # tell keep-alive clients
-        self.end_headers()
-        self.response_started = True
-        self.wfile.write(raw)
-
-    def fail(self, status, code, close=False):
-        if close:
-            self.close_connection = True
-        return self.reply(status, {'error': code})
-
-    def read_body(self, limit=64 << 10):
-        """Read a small request body exactly; anything unusual is a bad request."""
-        raw = self.headers.get('Content-Length', '0')
-        if self.headers.get('Transfer-Encoding') or not DECIMAL.fullmatch(raw) or int(raw) > limit:
-            raise BadRequest('invalid body')
-        return self.rfile.read(int(raw))
-
-    def read_json(self, limit=64 << 10):
-        try:
-            return json.loads(self.read_body(limit))
-        except ValueError as e:
-            raise BadRequest('invalid JSON') from e
-
-    def handle_management(self, route):
-        """Uploads (/images/uploads...) and target images (/runtime/...)."""
-        try:
-            self._management(route)
-        except OSError:
-            self.close_connection = True  # the client went away; nothing to answer
-
-    def _management(self, route):
-        manager = self.server.manager
-        self.request_path = route[0]
-        # Whatever fails, the request body may be left unread: never reuse the connection.
-        try:
-            if route.re is RUNTIME_ROUTE:
-                kind = route[1]
-                if kind == 'cleanup' and self.command == 'GET':
-                    self.read_body()
-                    return self.reply(200, manager.cleanup_inventory())
-                if kind == 'cleanup' and self.command == 'POST':
-                    return self.reply(200, manager.cleanup_runtimes(self.read_json(8 << 20)))
-                if kind == 'images' and self.command == 'GET':
-                    self.read_body()
-                    return self.reply(200, manager.runtime_images())
-                if kind == 'images' and self.command == 'PUT':
-                    return self.reply(200, manager.set_runtime_images(self.read_json()))
-                if kind == 'controller' and self.command == 'POST':
-                    return self.reply(202, manager.upgrade_controller(self.read_json()))
-                return self.fail(405, 'method_not_allowed', close=True)
-            uploads, upload_id, load = manager.uploads, route[1], route[2]
-            if upload_id is None:
-                if self.command != 'POST':
-                    return self.fail(405, 'method_not_allowed', close=True)
-                body = self.read_json()
-                if not isinstance(body, dict) or set(body) - {'size', 'sha256'}:
-                    raise BadRequest('invalid upload')
-                return self.reply(200, uploads.create(body.get('size'), body.get('sha256')))
-            if load:
-                if self.command != 'POST':
-                    return self.fail(405, 'method_not_allowed', close=True)
-                self.read_body()
-                return self.reply(200, uploads.load(upload_id))
-            if self.command == 'PUT':
-                raw, offset = self.headers.get('Content-Length', ''), self.headers.get('X-CCG-Offset', '')
-                if (self.headers.get('Transfer-Encoding') or not DECIMAL.fullmatch(raw)
-                        or not 1 <= int(raw) <= MAX_CHUNK or not DECIMAL.fullmatch(offset)):
-                    raise BadRequest('invalid chunk')
-                # Exactly Content-Length bytes: the connection stays usable.
-                return self.reply(200, uploads.write(upload_id, int(offset), int(raw), self.rfile))
-            if self.command in ('GET', 'DELETE'):
-                self.read_body()
-                return self.reply(200, (uploads.status if self.command == 'GET' else uploads.delete)(upload_id))
-            return self.fail(405, 'method_not_allowed', close=True)
-        except UploadError as e:
-            self.close_connection = True
-            if not self.response_started:
-                self.reply(e.status, e.body())
-        except BadRequest:
-            self.close_connection = True
-            if not self.response_started:
-                self.fail(400, 'invalid_request')
-        except InvalidImage:
-            self.close_connection = True
-            self.fail(400, 'invalid_image')
-        except ImagePullFailed:
-            self.close_connection = True
-            self.fail(503, 'image_pull_failed')
-        except UpgradeInProgress:
-            self.close_connection = True
-            self.fail(409, 'upgrade_in_progress')
-        except (BrokenPipeError, ConnectionResetError, TimeoutError) as e:
-            self.close_connection = True
-            self.note_failure(e, 'connection dropped')
-        except Exception as e:
-            self.close_connection = True
-            self.note_failure(e, '503 runtime_unavailable', trace=True)
-            if not self.response_started:
-                self.fail(503, 'runtime_unavailable')
-
-    def handle_tunnel(self, aid):
-        """GET /accounts/<key>/tunnel: raw bytes to <app_ip>:8787 (CONTRACTS §53.5)."""
-        self.close_connection = True  # the connection never returns to HTTP
-        if self.command != 'GET':
-            return self.fail(405, 'method_not_allowed')
-        tokens = {t.strip().lower() for t in self.headers.get('Connection', '').split(',')}
-        if (self.headers.get('Upgrade', '').strip().lower() != 'ccg-tunnel' or 'upgrade' not in tokens
-                or self.headers.get('Transfer-Encoding') or self.headers.get('Content-Length', '0') != '0'):
-            return self.fail(400, 'invalid_request')
-        try:
-            target = self.server.manager.connection(aid, self.headers.get('X-CCG-Revision', ''))
-        except BadRequest:
-            return self.fail(400, 'invalid_request')
-        except Exception:
-            return self.fail(503, 'runtime_unavailable')
-        if target is None:
-            return self.fail(409, 'not_synchronized')
-        try:
-            upstream = socket.create_connection((target['app_ip'], ACCOUNT_PORT), timeout=5)
-        except OSError:
-            return self.fail(503, 'runtime_unavailable')
-        with upstream, contextlib.suppress(OSError):  # the client may already be gone
-            self.send_response(101)
-            self.send_header('Connection', 'Upgrade')
-            self.send_header('Upgrade', 'ccg-tunnel')
-            self.end_headers()
-            self.response_started = True
-            upstream.settimeout(TUNNEL_IDLE_SECONDS)
-            self.connection.settimeout(TUNNEL_IDLE_SECONDS)
-            client = self.connection
-
-            def pump(read, write, peer):
-                # Content is never inspected or logged.
-                try:
-                    while data := read():
-                        write(data)
-                    with contextlib.suppress(OSError):
-                        peer.shutdown(socket.SHUT_WR)
-                except (OSError, ValueError):
-                    # Idle timeout or reset on either side ends the whole tunnel.
-                    for s in (client, upstream):
-                        with contextlib.suppress(OSError):
-                            s.shutdown(socket.SHUT_RDWR)
-
-            # rfile is buffered: read1 also returns bytes it already holds
-            # (a request pipelined right behind the upgrade request).
-            back = threading.Thread(target=pump, daemon=True,
-                                    args=(lambda: upstream.recv(65536), self.wfile.write, client))
-            back.start()
-            pump(lambda: self.rfile.read1(65536), upstream.sendall, upstream)
-            back.join()
-
-    def handle_worker(self, aid):
-        """POST /accounts/<key>/worker: in-place worker update (CONTRACTS §53.7)."""
-        try:
-            if self.command != 'POST':
-                return self.fail(405, 'method_not_allowed', close=True)
-            return self.reply(200, self.server.manager.update_worker(aid, self.read_json()))
-        except (BrokenPipeError, ConnectionResetError):
-            self.close_connection = True
-            return None
-        except Exception as e:
-            # The request body may be left unread: never reuse the connection.
-            self.close_connection = True
-            if self.response_started:
-                return None
-            for kind, status, code in ((BadRequest, 400, 'invalid_request'), (InvalidImage, 400, 'invalid_image'),
-                                       (RuntimeNotFound, 404, 'not_found'),
-                                       (UnsupportedContainer, 409, 'unsupported_container'),
-                                       (ImagePullFailed, 503, 'image_pull_failed'),
-                                       (ContainerChanged, 503, 'container_changed')):
-                if isinstance(e, kind):
-                    return self.fail(status, code)
-            return self.fail(503, 'runtime_unavailable')
-
-    def handle_request(self):
-        self.response_started = False
-        self.account_key = self.request_path = None
-        manager = self.server.manager
-        key = self.headers.get('Authorization', '').removeprefix('Bearer ')
-        if not hmac.compare_digest(key, self.server.key):
-            return self.fail(401, 'unauthorized', close=True)
-        if self.path == '/health':
-            self.close_connection = True  # any request body is left unread
-            if self.command != 'GET':
-                return self.fail(405, 'method_not_allowed')
-            return self.reply(200, manager.health())
-        route = UPLOAD_ROUTE.fullmatch(self.path) or RUNTIME_ROUTE.fullmatch(self.path)
-        if route:
-            return self.handle_management(route)
-
-        match = ROUTE.fullmatch(self.path)
-        if not match:
-            return self.fail(404, 'not_found', close=True)
-        aid, path = match[1], match[2]
-        self.account_key, self.request_path = aid, path
-        if path == 'tunnel':
-            return self.handle_tunnel(aid)  # GET without a body; never read one
-        if path == 'worker':
-            return self.handle_worker(aid)
-        try:
-            n = int(self.headers.get('Content-Length', '0'))
+            ipaddress.ip_address(host)
         except ValueError:
-            return self.fail(400, 'invalid_request', close=True)
-        if n < 0 or n > (32 << 20) or self.headers.get('Transfer-Encoding'):
-            return self.fail(400, 'invalid_request', close=True)
-        body = self.rfile.read(n)
+            return False
+        return True  # an address literal never moves
+
+    def _pinned_address(self, aid, state):
+        if state.get('egress_backend') == 'shared_xray':
+            binding = self.shared.data['bindings'].get(aid) or {}
+            endpoint = (self.shared.data['nodes'].get(binding.get('tag')) or {}).get('endpoint')
+            return endpoint[0] if endpoint else None
+        return json.loads((self.dir(aid) / 'sing-box.json').read_text())['outbounds'][0]['server']
+
+    def proxy_moved(self, aid):
+        """Whether the proxy host name no longer resolves to the address the
+        egress was pinned to. A failed lookup is no evidence: the runtime
+        keeps working with the pinned address."""
+        pinned = self.pinned_proxy(aid, self.state(aid) or {})
+        if pinned is None:
+            return False
+        host, port, address = pinned
         try:
-            if path == 'egress':
-                if self.command == 'GET':
-                    return self.reply(200, manager.shared.status(aid))
-                if self.command == 'POST':
-                    try:
-                        payload = json.loads(body)
-                    except ValueError as e:
-                        raise BadRequest('invalid egress request') from e
-                    if not isinstance(payload, dict) or set(payload) != {'backend'}:
-                        raise BadRequest('invalid egress request')
-                    return self.reply(200, manager.shared.migrate(aid, payload['backend']))
-                return self.fail(405, 'method_not_allowed')
-            if aid is None:
-                if self.command != 'GET':
-                    return self.fail(405, 'method_not_allowed')
-                return self.reply(200, manager.runtimes())
-            if path is None:
-                if self.command != 'DELETE':
-                    return self.fail(405, 'method_not_allowed')
-                try:
-                    # Deleting an account's runtime needs the header naming it
-                    # again (a retired runtime after re-authorization).
-                    account = self.headers.get('X-CCG-Delete-Account', '') == aid
-                    purge = self.headers.get('X-CCG-Delete-Data', '') == '1'
-                    if purge and not account:
-                        raise BadRequest('full deletion requires account confirmation')
-                    return self.reply(200, manager.delete(aid, account=account, purge=purge))
-                except NotDraft:
-                    return self.fail(405, 'method_not_allowed')
-            if path == 'config' and self.command == 'PUT':
-                try:
-                    try:
-                        desired = json.loads(body)
-                    except ValueError as e:
-                        raise BadRequest('invalid JSON') from e
-                    result = manager.apply(aid, desired)
-                except Exception:
-                    manager.online.pop(aid, None)
-                    raise
-                return self.reply(200, result)
-            if path == 'status' and self.command == 'GET':
-                return self.reply(200, manager.public(aid))
+            found = {info[4][0] for info in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)}
+        except OSError:
+            return False
+        return bool(found) and address not in found
 
-            if path == 'migrate-auth':
-                if self.command != 'POST':
-                    return self.fail(405, 'method_not_allowed')
-                try:
-                    payload = json.loads(body)
-                    source = payload.get('source') if isinstance(payload, dict) else None
-                    check(source)
-                except (ValueError, TypeError) as e:
-                    raise BadRequest('invalid migration') from e
-                return self.reply(200, manager.migrate_auth(aid, source))
-
-            if path == 'connection':
-                if self.command != 'GET':
-                    return self.fail(405, 'method_not_allowed')
-                connection = manager.connection(aid, self.headers.get('X-CCG-Revision', ''))
-                if connection is None:
-                    return self.fail(409, 'not_synchronized')
-                return self.reply(200, connection)
-            if path == 'admin/cli' and self.command == 'POST':
-                try:
-                    action = json.loads(body)
-                except ValueError as e:
-                    raise BadRequest('invalid CLI request') from e
-                if action == {'action': 'update'}:
-                    try:
-                        return self.reply(202, manager.cli_updates.start(aid, self.headers.get('X-CCG-Revision', '')))
-                    except RuntimeError:
-                        return self.fail(409, 'cli_update_unavailable')
-            if path == 'admin/cli' and self.command == 'GET' and manager.cli_updates.active(aid):
-                state = manager.state(aid)
-                if not state or state.get('revision') != self.headers.get('X-CCG-Revision', ''):
-                    return self.fail(409, 'not_synchronized')
-                return self.reply(200, manager.cli_updates.request(state))
-            # Reading the request logs is POST with its query in the body (no
-            # query strings here), REQUEST-LOG-VIEWER-DESIGN.md §5.
-            methods = {'admin/request-logs': ('GET', 'PUT'), 'admin/request-logs/query': ('POST',), 'admin/request-logs/detail': ('POST',),
-                       'admin/request-logs/read': ('POST',), 'admin/cli': ('GET', 'POST', 'PUT')}.get(path, ('GET', 'POST'))
-            if path in ('config', 'status') or self.command not in methods:
-                return self.fail(405, 'method_not_allowed')
-            if path in ('admin/usage', 'admin/features', 'admin/cli/catalog') and self.command != 'GET':
-                return self.fail(405, 'method_not_allowed')
-            guard = manager.guard(aid)
-            if not guard.acquire(blocking=path != 'admin/cli/catalog'):
-                return self.fail(503, 'cli_maintenance_busy')
+    def recheck_proxies(self):
+        """Drop readiness of every ready runtime whose proxy moved: the core's
+        next reconciliation (status pending) applies the configuration again,
+        which resolves the host anew and rebuilds the egress."""
+        for aid in sorted(self.online):
+            guard = self.guard(aid)
+            if not guard.acquire(blocking=False):
+                continue  # an apply or update is running; it resolves anew anyway
             try:
-                state = manager.state(aid)
-                revision = self.headers.get('X-CCG-Revision', '')
-                if not state or not revision or manager.public(aid)['revision'] != revision:
-                    return self.fail(409, 'not_synchronized')
-                if path == 'admin/cli/catalog' and manager.cli_updates.active(aid):
-                    return self.fail(503, 'cli_maintenance_busy')
-                if (path.startswith('admin/auth/') or path == 'admin/usage') and state.get('auth_mode') == 'api_key':
-                    return self.fail(409, 'api_key_account')
-                address = state['app_ip']
-                secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
+                if aid in self.online and self.proxy_moved(aid):
+                    log.warning('proxy of key=%s resolves to another address; runtime marked pending', aid)
+                    self.drop_readiness(aid)
+            except Exception as e:
+                log.warning('proxy recheck key=%s: %s: %s', aid, type(e).__name__, str(e)[:300])
             finally:
                 guard.release()
-            # No configuration writes on the request path. Concurrent streams
-            # do not hold the account reconciliation lock. (Legacy relay: the
-            # core now talks to the account directly or through the tunnel.)
-            headers = upstream_headers(self.headers, secret)
-            # Model execution has a one-hour deadline; leave time to relay its
-            # terminal response. Keep management requests on their short limit.
-            relay_timeout = 3660 if path == 'v1/messages' else 240
-            if path == 'v1/messages':
-                self.connection.settimeout(relay_timeout)
-            with requests.Session() as session:
-                session.trust_env = False
-                with session.request(self.command, f'http://{address}:{ACCOUNT_PORT}/{path}', data=body,
-                                     headers=headers, stream=True, timeout=(5, relay_timeout), allow_redirects=False) as response:
-                    self.send_response(response.status_code)
-                    self.send_header('Content-Type', response.headers.get('Content-Type', 'application/json'))
-                    self.send_header('Connection', 'close')
-                    self.send_header('Cache-Control', 'no-store')
-                    if path == 'admin/request-logs/read':
-                        for name in LOG_READ_HEADERS:
-                            if response.headers.get(name):
-                                self.send_header(name, response.headers[name])
-                    self.end_headers()
-                    self.response_started = True
-                    self.close_connection = True
-                    # Write whatever arrives; never wait to fill a buffer.
-                    for chunk in response.iter_content(chunk_size=None):
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError) as e:
-            self.close_connection = True
-            self.note_failure(e, 'connection dropped')
-        except BadRequest as e:
-            self.close_connection = True
-            self.note_failure(e, '400 invalid_request')
-            if not self.response_started:
-                self.fail(400, 'invalid_request')
-        except ImagePullFailed as e:
-            self.close_connection = True
-            self.note_failure(e, '503 image_pull_failed')
-            if not self.response_started:
-                self.fail(503, 'image_pull_failed')
-        except InvalidCLIProfile as e:
-            self.close_connection = True
-            self.note_failure(e, '409 cli_profile_unavailable')
-            if not self.response_started:
-                self.fail(409, 'cli_profile_unavailable')
-        except DiskQuotaUnavailable as e:
-            self.close_connection = True
-            self.note_failure(e, '503 disk_quota_unavailable')
-            if not self.response_started:
-                self.fail(503, 'disk_quota_unavailable')
-        except ActivationFailed as e:
-            self.close_connection = True
-            self.note_failure(e, '503 ' + e.code)
-            if not self.response_started:
-                self.fail(503, e.code)
-        except Exception as e:
-            # Anything unnamed (a Docker error, a programming error): the
-            # traceback goes to stderr, the core gets runtime_unavailable.
-            self.close_connection = True
-            self.note_failure(e, '503 runtime_unavailable', trace=True)
-            if not self.response_started:
-                self.fail(503, 'runtime_unavailable')
 
-    do_GET = do_POST = do_PUT = do_DELETE = handle_request
+    def watch_proxies(self):
+        while True:
+            time.sleep(PROXY_RECHECK_SECONDS)
+            self.recheck_proxies()
 
 
-if __name__ == '__main__':
+def main():
     os.umask(0o077)
     # Failures go to stderr (the container log), one line each, without
     # request bodies or headers (audit B1); the request log stays off.
@@ -1718,6 +1060,10 @@ if __name__ == '__main__':
     server.key = key
     server.manager = Manager(os.environ['CCG_RUNTIME_ROOT'], os.environ['CCG_APP_IMAGE'],
                              os.environ['CCG_EGRESS_IMAGE'], os.getenv('CCG_RUNTIME_PREFIX', 'ccg'))
-    threading.Thread(target=server.manager.cli_updates.run, daemon=True).start()
     threading.Thread(target=server.manager.shared.run, daemon=True).start()
+    threading.Thread(target=server.manager.watch_proxies, daemon=True).start()
     server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

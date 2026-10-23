@@ -1,3 +1,5 @@
+> 归档（2026-10-24，审核 02 §5 第 5 条）：这是原 `companions/controller/VALIDATION.md` 的原文，记录 2026-10-03/04 的控制器与出口验证。当时的拓扑是核心经 SSH 隧道连控制器、每账号一个 sing-box 出口、"十个用户指定模型"白名单，不覆盖之后的 HTTPS 控制面板与隧道（CONTRACTS §53）、共享 Xray 出口、CLI 固定版本与请求日志。不代表当前验证状态；现状见 [controller/README.md](../../companions/controller/README.md) 与 CONTRACTS §49、§53。
+
 # Account egress validation — 2026-10-03
 
 Implemented account-scoped runtime management and change-driven proxy
