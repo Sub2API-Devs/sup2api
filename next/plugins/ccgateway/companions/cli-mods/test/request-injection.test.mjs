@@ -49,10 +49,10 @@ async function fixture(probeBody) {
     'chunk-jkcb7qdd.js': `export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
     'chunk-eanw7pgv.js': `export const m4t=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
     'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE';`,
-    'chunk-0ycjphb5.js': 'export const El=()=>({});', 'chunk-q61sszgr.js': 'export const getRootSession=()=>({});', 'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
+    'chunk-0ycjphb5.js': 'export const El=()=>({});', 'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
     'ccgateway-native-tools.js': 'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{name:tool.name});export const findNative=(_session,name)=>registry.get(name);',
   })) await fs.writeFile(path.join(dir, name), source);
-  return { dir, adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-kasbfbhj.js'))) };
+  return { dir, adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-kasbfbhj.js'))), session: await import(pathToFileURL(path.join(dir, 'chunk-q61sszgr.js'))) };
 }
 const injectAll = { contract_version: 2, build_injection: { system_prompt: true, attachments: { environment: true, date: true }, tools: { Read: true, Bash: true } } };
 const client = (system, policy = injectAll) => ({ model: 'm', systemPrompt: system, messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'again' }],
@@ -154,6 +154,20 @@ test('the client\'s last prompt carries the main thread\'s turn', async () => {
     f.native.calls.length = 0;
     await f.adapter.buildRequest(client('s', { contract_version: 2 }), {}, signal(), () => ({ requestClass: 'subagent', promptId: 'p-1', querySource: 'agent:custom' }));
     assert(mainOf(f).messages.every(r => r.turnOrigin === undefined && r.promptId === undefined), 'a subagent has no turn');
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// CC's request entrypoint (setEntrypointOnRequests) is set before the native
+// build, so the native header (PAs) and the User-Agent (dN) both carry the
+// entrypoint the request's header will have.
+test('the request entrypoint is set natively before the build', async () => {
+  const f = await fixture({ system: [], tools: [], messages: [] });
+  try {
+    const own = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=2.1.310.b17; cc_entrypoint=claude-desktop;' }];
+    await f.adapter.buildRequest(client('s', { contract_version: 2 }), {}, signal());
+    await f.adapter.buildRequest(client('s', { contract_version: 2, build_billing_entrypoint: 'cli' }), {}, signal());
+    await f.adapter.buildRequest(client(own, { contract_version: 2, build_billing_entrypoint: 'cli' }), {}, signal());
+    assert.deepEqual(f.session.entrypoints, ['sdk-cli', 'cli', 'claude-desktop']);
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });
 

@@ -3,10 +3,12 @@ import fs from 'node:fs/promises';
 import { eF, rbe, Zre } from './chunk-gr4a0fky.js';
 import { El } from './chunk-0ycjphb5.js';
 import { YEr } from './chunk-6dwnw6av.js';
+import { setEntrypointOnRequests } from './chunk-q61sszgr.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
 import { validateDirectPolicy, defaultEntrypoint } from './ccgateway-request-policy.js';
+import { readRequestAgent, resolveAgentContext, keepClientUserAgent } from './ccgateway-request-agent.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
@@ -78,7 +80,6 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     // (request-agent.js); without it the request is CC's native main thread.
     let resolveAgent, agent;
     if (process.env.CCG_REQUEST_AGENT && agentNative) {
-      const { readRequestAgent, resolveAgentContext } = await import('./ccgateway-request-agent.js');
       const context = readRequestAgent();
       resolveAgent = facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders });
     }
@@ -92,10 +93,14 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     const directPolicy = options.mode === 'direct' ? validateDirectPolicy(process.env.CCG_DIRECT_POLICY) : undefined;
     if (directPolicy && directBuild) {
       phase = 'build';
-      // A main thread's header names its prompt's turn, as CC's query loop
-      // counts it (the terminal entrypoint is a human typing).
+      // The request's entrypoint, the one its header will carry, is set the
+      // way CC sets it for a request (setEntrypointOnRequests): the native
+      // header and User-Agent both read it. A main thread's header names its
+      // prompt's turn, as CC's query loop counts it (the terminal entrypoint
+      // is a human typing).
       const main = !agent || agent.requestClass === 'main';
-      const entrypoint = agentNative?.requestBilling(body.system)?.cc_entrypoint ?? directPolicy.build_billing_entrypoint ?? defaultEntrypoint;
+      const entrypoint = (agentNative ? agentNative.entrypoint(body.system, directPolicy) : directPolicy.build_billing_entrypoint) ?? defaultEntrypoint;
+      setEntrypointOnRequests(entrypoint);
       const turn = main ? agentNative?.turn(Array.isArray(body.messages) ? body.messages : [], entrypoint === 'cli') : undefined;
       const sent = await directBuild(rawBody, body, { policy: directPolicy, agentContext: agent?.agentContext, promptId: agent?.promptId, ...turn });
       if (sent !== rawBody) outgoing = { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
@@ -115,6 +120,9 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
       if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body, identityLine);
     }
     if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
+    // A request sent with the client's own header keeps the client's User-Agent
+    // (build reads the client's system from its components).
+    keepClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? body.systemPrompt : body.system), agentNative?.leadingBilling(outgoing.body.system));
     const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
     if (betas.length && !YEr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
     outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };

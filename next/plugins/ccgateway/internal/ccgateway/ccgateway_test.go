@@ -121,6 +121,7 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 			"x-claude-code-compaction":          "auto",
 			"x-cc-context-compacted":            "manual",
 			"x-claude-code-context-compacted":   "manual",
+			"user-agent":                        "claude-cli/2.1.310 (external, sdk-ts, agent-sdk/0.2.71)",
 			"x-claude-code-session-id":          "475d3bc6-d49a-4c42-8d1a-f5d9ab945851",
 		},
 	}
@@ -146,6 +147,8 @@ func TestAgentContextHeadersForwarded(t *testing.T) {
 		"x-claude-code-prompt-id":           "not-a-uuid",
 		"x-claude-code-prev-tool-durations": "Agent=76,Read=12",
 		"x-cc-compaction-request":           "Auto Compact",
+		// Only Claude Code's own User-Agent is the client's to keep.
+		"user-agent": "anthropic-sdk-python/0.40.0",
 	} {
 		in.InboundHeaders = map[string]string{key: bad}
 		r, err = p.BuildUpstreamRequest(context.Background(), in)

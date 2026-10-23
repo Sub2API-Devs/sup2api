@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -107,6 +108,36 @@ func TestRequestAgentContext(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// The client's User-Agent travels with the context only to a CLI that knows
+// the field, and only when it is Claude Code's own.
+func TestRequestAgentClientUserAgent(t *testing.T) {
+	headers := func(agent string) http.Header {
+		h := http.Header{}
+		h.Set("X-Claude-Code-Request-Class", "main")
+		if agent != "" {
+			h.Set("User-Agent", agent)
+		}
+		return h
+	}
+	cc := "claude-cli/2.1.304 (external, cli)"
+	require.Equal(t, map[string]string{"request_class": "main"}, readClientAgentHeaders(headers(cc), false), "an older CLI refuses an unknown field")
+	require.Equal(t, map[string]string{"request_class": "main", "user_agent": cc}, readClientAgentHeaders(headers(cc), true))
+	for _, agent := range []string{
+		"claude-cli/2.1.310 (external, sdk-ts, agent-sdk/0.2.71)",
+		"claude-cli/2.1.304 (external, claude-desktop, client-app/desktop/1.2.3)",
+		"claude-cli/2.1.304 (external, cli, agent-sdk/1.0.0, client-app/x, workload/batch)",
+	} {
+		require.Equal(t, agent, readClientAgentHeaders(headers(agent), true)["user_agent"], agent)
+	}
+	for _, agent := range []string{
+		"anthropic-sdk-python/0.40.0", "curl/8.0", "claude-cli/2.1.304 (internal, cli)", "claude-cli/2.1.304 (external, cli) extra",
+		"claude-cli/2.1.304 (external, Cli)", "claude-cli/2.1.304 (external, cli, agent-sdk/)", "claude-cli/2.1.304 (external, cli; x)",
+	} {
+		_, ok := readClientAgentHeaders(headers(agent), true)["user_agent"]
+		require.False(t, ok, agent)
 	}
 }
 

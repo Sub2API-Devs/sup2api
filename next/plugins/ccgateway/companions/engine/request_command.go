@@ -459,7 +459,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	// The patched request command runs before the interactive CLI initializer.
 	// Apply its non-interactive entrypoint default at process startup; an
-	// explicitly configured SDK/editor entrypoint remains unchanged.
+	// explicitly configured SDK/editor entrypoint remains unchanged. This is
+	// the process default only: the CLI names the request's own entrypoint
+	// (the one its billing header carries) for the header and the User-Agent
+	// alike (ClientUserAgentCapability).
 	entrypoint := "sdk-cli"
 	for _, item := range cmd.Env {
 		key, value, _ := strings.Cut(item, "=")

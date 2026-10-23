@@ -48,6 +48,7 @@ export function createContentPolicy(vocabulary) {
     applyContentPolicy: (input, policy, native, emitDiagnostic) => applyContentPolicy(c, input, policy, native, emitDiagnostic),
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
+    requestEntrypoint: (system, policy) => requestEntrypoint(c, system, policy),
     leadingBilling: system => leadingBilling(c, system),
     requestBilling: system => requestBilling(c, system),
     hasBilling: system => hasBilling(c, system),
@@ -63,6 +64,7 @@ export function createBillingPolicy(billingHeader) {
   return {
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
+    requestEntrypoint: (system, policy) => requestEntrypoint(c, system, policy),
     leadingBilling: system => leadingBilling(c, system),
     requestBilling: system => requestBilling(c, system),
     setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
@@ -410,6 +412,17 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
 // block, the one upstream reads; undefined without a usable one.
 function billingEntrypoint(c, system) {
   return leadingBilling(c, system)?.cc_entrypoint;
+}
+
+// requestEntrypoint is the cc_entrypoint the request's header carries once
+// build or direct has filled it: the client's own when its leading header has
+// one and the Worker does not replace the field, else the configured one;
+// undefined when neither names one (the caller's default applies). Claude
+// Code names its User-Agent and its header from this one value (2.1.304 dN,
+// kLo: setEntrypointOnRequests), and so does the request command.
+function requestEntrypoint(c, system, policy = {}) {
+  const own = billingEntrypoint(c, system);
+  return own !== undefined && policy.build_billing_sources?.cc_entrypoint !== 'worker' ? own : policy.build_billing_entrypoint;
 }
 
 // leadingBilling is the fields of the header that opens the first block, by

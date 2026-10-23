@@ -1,6 +1,12 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v21-native-layers`**（插件 0.1.80 起，核心仍 0.1.179）。v21 在 v20 之上把审核列出的写死改成原生提取：权限上下文用原生 `gd()`；内置提示词按非交互主线程（`xh`）组装，客户端 system 用 CLI 自己拼接追加提示词的函数（主模块的 `pr`，补丁按 AST 原样复制）拼接后放在 `r1e` 结果之后；剩余 token 附件直接调原生 `JDr`（用客户端的记录）；环境附件的开头由 `zkt` 渲染结果截取，剩余 token 的开头取两次渲染的公共前缀。
+当前代码为 **2.1.304 / `ccgateway-v22-client-entrypoint`**（插件 0.1.83 起）。v22 修 2026-10-23 审核的唯一 P1（D1）：此前 Worker 把 `CLAUDE_CODE_ENTRYPOINT` 钉成 `sdk-cli`，原生 `dN()` 据此写出 UA `claude-cli/2.1.304 (external, sdk-cli)`，而计费头的 `cc_entrypoint` 保留客户端值，交互式 CC 经网关会发出官方不可能出现的组合。现在：
+
+- **请求入口由 CLI 按请求设置**：`requestEntrypoint`（content-policy.js）取首块计费头的 `cc_entrypoint`（`build_billing_sources.cc_entrypoint` 为 worker 时改取 `build_billing_entrypoint`，没有则 `sdk-cli`），在原生构建前调原生 `setEntrypointOnRequests`（`H2r`，CC 自己给请求改入口用的那个），于是原生计费头 `kLo` 和 UA `dN` 读到同一个值；build 的 turn 判断也用它。Worker 仍设进程默认 `sdk-cli`，但不再决定请求的入口。
+- **客户端自己的 UA 跟着自己的计费头走**：插件 `passHeaders` 和 Worker 的 `CCG_REQUEST_AGENT.client` 新增 `user_agent`（只收 CC 形状 `claude-cli/x.y.z (external, <入口>[, agent-sdk/…][, client-app/…][, workload/…])`）。请求发出时若首块计费头的 `cc_version`、`cc_entrypoint` 都还是客户端的（没补、没换），UA 原样用客户端的（`keepClientUserAgent`，补丁让 `nl()` 先读它），这样 2.1.310 的客户端经网关仍是 `claude-cli/2.1.310 (…)`，SDK 的 `agent-sdk/x` 段也保留；否则用原生 `dN()` 按已设入口生成。
+- 新能力 `client_user_agent_v1`；Worker 只对声明它的 CLI 转发 `user_agent`（旧 CLI 的 `readRequestAgent` 会拒绝未知字段）。补丁器的能力列表与标签只剩一处（审核 D7）。
+
+v21 `ccgateway-v21-native-layers`（插件 0.1.80 起）在 v20 之上把审核列出的写死改成原生提取：权限上下文用原生 `gd()`；内置提示词按非交互主线程（`xh`）组装，客户端 system 用 CLI 自己拼接追加提示词的函数（主模块的 `pr`，补丁按 AST 原样复制）拼接后放在 `r1e` 结果之后；剩余 token 附件直接调原生 `JDr`（用客户端的记录）；环境附件的开头由 `zkt` 渲染结果截取，剩余 token 的开头取两次渲染的公共前缀。
 
 v20 `ccgateway-v20-request-levels`（插件 0.1.79 起，与核心 0.1.179 一起发布）按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
 

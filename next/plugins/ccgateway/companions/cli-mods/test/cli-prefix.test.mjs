@@ -107,13 +107,14 @@ test('claude request adds the line to OAuth build; direct changes only with the 
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ccg-cli-prefix-'));
   try {
     await fsp.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy']) {
+    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy', 'request-agent']) {
       await fsp.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
     }
     for (const [name, code] of Object.entries({
       'chunk-gr4a0fky.js': 'export class rbe {} export const eF=async()=>new rbe(); export const Zre=()=>{};',
       'chunk-0ycjphb5.js': 'export const El=()=>({});',
       'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
+      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // The build names the line its entrypoint asks for.
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body:{model:body.model,system:[{type:"text",text:"built"}]},headers:{},identityLine:{line:"official_cli",fallback:"official_cli"}});',
       // Records exactly what would be sent, then answers with an HTTP error.

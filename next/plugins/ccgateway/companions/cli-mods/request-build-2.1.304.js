@@ -7,7 +7,7 @@ import { t1n as isIdentityLine } from './chunk-t61vswm2.js';
 import { registerNative, findNative } from './ccgateway-native-tools.js';
 import { prepareBuildInput, fingerprintMessages } from './ccgateway-request-input.js';
 import { normalizeBetas } from './ccgateway-request-options.js';
-import { getRootSession } from './chunk-q61sszgr.js';
+import { getRootSession, setEntrypointOnRequests } from './chunk-q61sszgr.js';
 import { YEr } from './chunk-6dwnw6av.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices, defaultEntrypoint } from './ccgateway-request-policy.js';
@@ -130,12 +130,18 @@ function placeLayers(messages, layers) {
 // request CC builds from the client's leading billing header and first prompt;
 // without it the request is CC's native main thread.
 export async function buildRequest(components, headers, signal, resolveAgent) {
-  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint, requestBilling, hasBilling, setLeadingBillingField } = nativeContentPolicy();
+  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint, requestEntrypoint, requestBilling, hasBilling, setLeadingBillingField } = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
   const context = runtimeContext(suppliedContext);
   const initial = prepareBuildInput(external, MDe, { preserveContent: true });
+  // The request's entrypoint, the one its header will carry (the client's own
+  // or the configured one), is set the way CC sets it for a request
+  // (setEntrypointOnRequests): the native header (PAs) and the User-Agent
+  // (dN) both read it, so the two agree as they do in Claude Code.
+  const entrypoint = requestEntrypoint(initial.systemBlocks, policy) ?? defaultEntrypoint;
+  setEntrypointOnRequests(entrypoint);
   // Policy sees the exact resolved carriers, before the native builder computes
   // the fingerprint. It never receives or overlays generation parameters.
   const rawMessages = initial.messages.flatMap(row => {
@@ -154,7 +160,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   // (hasBilling decides the same): its kind and IDs come from that header.
   const clientBilling = requestBilling(initial.systemBlocks);
   const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content });
-  if (!agent || agent.requestClass === 'main') markPrompt(input.messages, agent?.promptId, clientBilling?.cc_entrypoint ?? policy.build_billing_entrypoint ?? defaultEntrypoint);
+  if (!agent || agent.requestClass === 'main') markPrompt(input.messages, agent?.promptId, entrypoint);
   let nativeBilling;
   const clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   if (clientBetas.length && !YEr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');

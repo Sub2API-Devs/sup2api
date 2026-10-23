@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readRequestAgent, resolveAgentContext } from '../request-agent.js';
+import { readRequestAgent, resolveAgentContext, keepClientUserAgent, clientUserAgent } from '../request-agent.js';
 import { layers } from './vocabulary.mjs';
 
 // Claude Code 2.1.304's own query source naming (Zoe).
@@ -106,6 +106,33 @@ test('the Worker context is validated', () => {
     `{"version":1,"map":false,"client":{"agent_id":"a b"}}`, `{"version":1,"map":false,"client":{"unknown":"x"}}`, `{"version":1,"map":false,"extra":1}`]) {
     assert.throws(() => readRequestAgent(bad), /Invalid Worker agent context/, bad);
   }
+});
+
+// The client's own User-Agent (Claude Code's shape only) rides with the
+// context, and the request keeps it only while it keeps the client's header:
+// in CC the header's cc_version/cc_entrypoint and the User-Agent come from
+// one place, so they must still agree after build or direct.
+test('the client User-Agent is kept with the client billing header', () => {
+  const ua = 'claude-cli/2.1.310 (external, sdk-ts, agent-sdk/0.2.71)';
+  for (const good of [ua, 'claude-cli/2.1.304 (external, cli)', 'claude-cli/2.1.304 (external, claude-desktop, client-app/desktop/1.2, workload/x)']) {
+    assert.equal(readRequestAgent(JSON.stringify({ version: 1, map: false, client: { user_agent: good } })).client.user_agent, good);
+  }
+  for (const bad of ['anthropic-sdk-python/0.40.0', 'claude-cli/2.1.304 (internal, cli)', 'claude-cli/2.1.304 (external, Cli)', 'claude-cli/2.1.304 (external, cli) x', 'claude-cli/2.1.304 (external, cli, agent-sdk/)']) {
+    assert.throws(() => readRequestAgent(JSON.stringify({ version: 1, map: false, client: { user_agent: bad } })), /Invalid Worker agent context/, bad);
+  }
+  const agent = resolve(mapped({ request_class: 'main', user_agent: ua }), mainHeader);
+  assert.equal(agent.userAgent, ua);
+  assert.equal(resolve(mapped({ request_class: 'main' }), mainHeader).userAgent, undefined);
+  const header = { cc_version: '2.1.310.b17', cc_entrypoint: 'sdk-ts', cc_prompt_id: 'x' };
+  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_prompt_id: 'mapped' }), ua, 'a mapped prompt ID does not change the User-Agent');
+  assert.equal(clientUserAgent(), ua);
+  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_version: '2.1.304.b17' }), undefined, 'the Worker owns the version');
+  assert.equal(clientUserAgent(), undefined);
+  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_entrypoint: 'sdk-cli' }), undefined, 'the Worker owns the entrypoint');
+  assert.equal(keepClientUserAgent(agent, null, header), undefined, 'no header of its own');
+  assert.equal(keepClientUserAgent(agent, { cc_entrypoint: 'cli' }, { cc_version: '2.1.304.b17', cc_entrypoint: 'cli' }), undefined, 'a filled field');
+  assert.equal(keepClientUserAgent(undefined, header, header), undefined);
+  assert.equal(keepClientUserAgent({ requestClass: 'main' }, header, header), undefined, 'no User-Agent of its own');
 });
 
 test('the previous turn tool timings go on unchanged', () => {

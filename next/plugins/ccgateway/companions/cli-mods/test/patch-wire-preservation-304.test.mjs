@@ -210,7 +210,8 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v21-native-layers');
+  assert.equal(patchManifest.extension, 'ccgateway-v22-client-entrypoint');
+  assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   assert(patchManifest.capabilities.includes('build_identity_line_v1'));
@@ -226,7 +227,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix,PAs:ccgHead\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
   assert(cli.includes('nativeBilling:()=>ccgHead([],void 0,{fingerprint:fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agentContext:o.agentContext??agent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};'));
   assert(cli.includes('PAs:ccgHead}=await import("./chunk-t61vswm2.js")') && !cli.includes('kLo:header'));
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1"]/);
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1"]/);
   // The loop header names and the layer wording come from the native core,
   // and the date attachment uses the query loop's own date (POo).
   assert(cli.includes('let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js")') && cli.includes('loopHeaders:ccgLayers().loopHeaders') && cli.includes('turn:ccgTurnOf'));
@@ -245,6 +246,17 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // The client's kind of request is chosen with CC's own query source naming,
   // billing header and prompt fingerprint text.
   assert.match(cli, /let\{Zoe:ccgQuerySource\}=await import\("\.\/chunk-m5q1b1c4\.js"\).*let ccgBilling=ccgBillingFor\(ccgHeader\);.*directBuild:ccgDirect,agentNative:ccgAgent\}\)\)/);
+  // The default headers' User-Agent is the client's own when the request keeps
+  // the client's billing header, else CC's (dN); the request command names the
+  // entrypoint natively (setEntrypointOnRequests) for the header and dN alike.
+  const transport = fs.readFileSync(path.join(output, 'chunk-38xgev2z.js'), 'utf8');
+  assert(transport.startsWith('import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n'));
+  assert.equal(transport.split('"User-Agent":ccgatewayClientUserAgent()??dN()').length, 2);
+  assert(!transport.includes('"User-Agent":dN()'));
+  assert(cli.includes('leadingBilling:s=>ccgBilling.leadingBilling(s),entrypoint:(s,p)=>ccgBilling.requestEntrypoint(s,p),'));
+  for (const name of ['ccgateway-request-command.js', 'ccgateway-request-build.js']) {
+    assert(fs.readFileSync(path.join(output, name), 'utf8').includes("setEntrypointOnRequests } from './chunk-72vwyp9d.js'"), name);
+  }
   // Installed support modules import each other by their installed names.
   assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-content-policy\.js'/);
   assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);

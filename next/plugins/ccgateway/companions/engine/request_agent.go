@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"slices"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // requestAgentEnv carries the client's request context to the CLI: the CC
@@ -17,12 +20,15 @@ import (
 // subagent field (SUBAGENT-REQUEST-CONTEXT-DESIGN.md).
 const requestAgentEnv = "CCG_REQUEST_AGENT"
 
-// clientAgentHeaders are the CC context headers the plugin forwards, with the
-// shape each must have. A value of another shape is ignored.
-var clientAgentHeaders = []struct {
+// clientHeader is one client header the plugin forwards, with the shape it
+// must have. A value of another shape is ignored.
+type clientHeader struct {
 	name, header string
 	valid        *regexp.Regexp
-}{
+}
+
+// clientAgentHeaders are the CC context headers.
+var clientAgentHeaders = []clientHeader{
 	{"request_class", "X-Claude-Code-Request-Class", regexp.MustCompile(`^[a-z][a-z_]{0,31}$`)},
 	{"agent_id", "X-Claude-Code-Agent-Id", regexp.MustCompile(`^[!-~]{1,256}$`)},
 	{"parent_agent_id", "X-Claude-Code-Parent-Agent-Id", regexp.MustCompile(`^[!-~]{1,256}$`)},
@@ -39,6 +45,14 @@ var clientAgentHeaders = []struct {
 
 var compactionKind = regexp.MustCompile(`^[a-z][a-z_]{0,31}$`)
 
+// clientUserAgent is the client's own User-Agent, when it is Claude Code's
+// (2.1.304 dN: the version, "external", the entrypoint and up to three
+// qualifiers: the agent SDK version, the client app, the workload). The CLI
+// keeps it on a request that keeps the client's billing header. Only a CLI
+// that knows the field gets it (ClientUserAgentCapability): an older one
+// refuses an unknown field. Another User-Agent is not a Claude Code client's.
+var clientUserAgent = clientHeader{"user_agent", "User-Agent", regexp.MustCompile(`^claude-cli/[0-9]+\.[0-9]+\.[0-9]+ \(external, [a-z][a-z0-9-]{0,31}(, [a-z-]{1,32}/[!-~]{1,64}){0,3}\)$`)}
+
 // requestAgent is the CLI's agent context. Map says the prompt ID goes
 // upstream mapped (build on an OAuth account); otherwise the client's own
 // value goes, as direct forwards the body that carries it unchanged. Agent IDs
@@ -53,10 +67,15 @@ type requestAgent struct {
 	Client  map[string]string `json:"client,omitempty"`
 }
 
-// readClientAgentHeaders reads the forwarded CC context headers.
-func readClientAgentHeaders(h http.Header) map[string]string {
+// readClientAgentHeaders reads the forwarded CC context headers, and the
+// client's User-Agent when the CLI takes it.
+func readClientAgentHeaders(h http.Header, userAgent bool) map[string]string {
 	out := map[string]string{}
-	for _, field := range clientAgentHeaders {
+	fields := clientAgentHeaders
+	if userAgent {
+		fields = append(slices.Clone(fields), clientUserAgent)
+	}
+	for _, field := range fields {
 		if value := h.Get(field.header); len(value) <= 4096 && field.valid.MatchString(value) {
 			out[field.name] = value
 		}
@@ -72,7 +91,7 @@ func readClientAgentHeaders(h http.Header) map[string]string {
 // API-key account has no Claude account to map for: its IDs go unchanged and
 // a missing one is derived without a secret.
 func (g *Gateway) resolveRequestAgent(env []string, raw []byte, h http.Header, mode string) (requestAgent, error) {
-	result := requestAgent{Version: 1, Client: readClientAgentHeaders(h)}
+	result := requestAgent{Version: 1, Client: readClientAgentHeaders(h, g.CLIInfo.supports(features.ClientUserAgentCapability))}
 	fields, _, err := clientIdentityFields(raw)
 	if err != nil {
 		return result, err

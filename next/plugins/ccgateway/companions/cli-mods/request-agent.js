@@ -30,6 +30,9 @@ const clientFields = {
   claude_code_compaction: /^[a-z][a-z_]{0,31}$/,
   cc_context_compacted: /^[a-z][a-z_]{0,31}$/,
   claude_code_context_compacted: /^[a-z][a-z_]{0,31}$/,
+  // The client's own User-Agent when it is Claude Code's (2.1.304 dN: the
+  // version, "external", the entrypoint, up to three qualifiers).
+  user_agent: /^claude-cli\/[0-9]+\.[0-9]+\.[0-9]+ \(external, [a-z][a-z0-9-]{0,31}(, [a-z-]{1,32}\/[!-~]{1,64}){0,3}\)$/,
 };
 // The client's own loop state, sent on as the client sent it.
 const loopFields = ['prev_tool_durations', 'cc_compaction_request', 'claude_code_compaction', 'cc_context_compacted', 'claude_code_context_compacted'];
@@ -82,7 +85,7 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
   const clientPrompt = client.prompt_id ?? (claudeCode && uuid.test(billing.cc_prompt_id ?? '') ? billing.cc_prompt_id : undefined);
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
-  const result = { requestClass, promptId };
+  const result = { requestClass, promptId, ...client.user_agent !== undefined && { userAgent: client.user_agent } };
   // The previous turn's tool timings and the compaction kind are the client's
   // loop state; CC sends them as headers and so do we, unchanged.
   const headers = Object.fromEntries(loopFields.filter(field => client[field] !== undefined).map(field => [loopHeaders[field], client[field]]));
@@ -108,3 +111,19 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
   }
   return result;
 }
+
+// The User-Agent of the request being sent, when it is the client's own: a
+// request that keeps the client's billing header (its cc_version and
+// cc_entrypoint) keeps the User-Agent Claude Code wrote with them, as the two
+// come from one place in CC. Any other request gets CC's own User-Agent for
+// the entrypoint its header carries (the request command sets that entrypoint
+// natively). The patched header function (nl) reads this value first.
+let requestUserAgent;
+export function keepClientUserAgent(agent, clientHeader, sentHeader) {
+  const keep = agent?.userAgent !== undefined && clientHeader != null && sentHeader != null &&
+    clientHeader.cc_version !== undefined && clientHeader.cc_version === sentHeader.cc_version &&
+    clientHeader.cc_entrypoint !== undefined && clientHeader.cc_entrypoint === sentHeader.cc_entrypoint;
+  requestUserAgent = keep ? agent.userAgent : undefined;
+  return requestUserAgent;
+}
+export const clientUserAgent = () => requestUserAgent;

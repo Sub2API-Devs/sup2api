@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createContentPolicy } from '../content-policy.js';
+import { createContentPolicy, createBillingPolicy } from '../content-policy.js';
 import { vocabulary } from './vocabulary.mjs';
 const { applyContentPolicy, mergeBillingAttribution } = createContentPolicy(vocabulary);
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
@@ -215,6 +215,23 @@ test('the request entrypoint is read from the header that opens the system', () 
     [{ type: 'text', text: '```\nx-anthropic-billing-header: cc_entrypoint=cli;\n```' }]]) {
     assert.equal(billingEntrypoint(system), undefined, JSON.stringify(system));
   }
+});
+
+// The entrypoint the request's header carries once filled names CC's request
+// entrypoint (setEntrypointOnRequests), so the header and the User-Agent agree.
+test('the request entrypoint is the client header value unless the Worker owns the field', () => {
+  const { requestEntrypoint } = createContentPolicy(vocabulary);
+  const own = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_entrypoint=claude-desktop-3p;' }];
+  assert.equal(requestEntrypoint(own, {}), 'claude-desktop-3p');
+  assert.equal(requestEntrypoint(own, { build_billing_entrypoint: 'sdk-ts' }), 'claude-desktop-3p', 'the configured one fills, it does not replace');
+  assert.equal(requestEntrypoint(own, { build_billing_entrypoint: 'sdk-ts', build_billing_sources: { cc_entrypoint: 'worker' } }), 'sdk-ts');
+  assert.equal(requestEntrypoint(own, { build_billing_sources: { cc_entrypoint: 'worker' } }), undefined, 'the caller supplies the default');
+  // No usable leading header: the configured one, or nothing.
+  for (const system of [undefined, 'prompt', [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1;' }], [{ type: 'text', text: 'prompt' }, own[0]]]) {
+    assert.equal(requestEntrypoint(system, { build_billing_entrypoint: 'cli' }), 'cli', JSON.stringify(system));
+    assert.equal(requestEntrypoint(system, {}), undefined, JSON.stringify(system));
+  }
+  assert.equal(createBillingPolicy(vocabulary.billingHeader).requestEntrypoint(own, {}), 'claude-desktop-3p', 'direct reads the same value');
 });
 
 // The leading header says whether the request is Claude Code's and which

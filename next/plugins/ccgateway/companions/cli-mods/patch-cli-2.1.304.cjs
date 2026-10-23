@@ -41,10 +41,11 @@ function edit(file, name, transform, method = false) {
   files.set(file, text.slice(0, n.start) + after + text.slice(n.end)); modified.add(file);
 }
 const core = 'chunk-rncrmfyt.js', guest = 'chunk-0q47gehe.js', headless = 'chunk-8w3jrzn0.js', terminal = 'chunk-g8r6rccx.js';
-edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.304",patch:"ccgateway-v12-feature-policy",capabilities:["request_direct","request_build","request_oauth","request_error_stderr","request_raw_http_errors","native_tools","mods_dispatch","request_policy_mode_v1","build_attachment_sources_v2","build_billing_sources_v1","build_content_preservation_v1"]}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-3nrrbnwj.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{gTe:oauthAuth}=await import("./chunk-4qs43hr1.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
+// What this patch adds; --ccgateway-info and the release manifest report the same list.
+const capabilities = ['request_direct', 'request_build', 'request_oauth', 'request_error_stderr', 'request_raw_http_errors', 'native_tools', 'mods_dispatch', 'request_policy_mode_v1', 'build_attachment_sources_v2', 'build_billing_sources_v1', 'build_content_preservation_v1', 'container_resource_reporting_v1', 'request_identity_v1', 'build_identity_line_v1', 'direct_billing_v1', 'request_agent_context_v1', 'build_injection_v1', 'request_levels_v1', 'client_user_agent_v1'];
+edit('cli.js', 'Ve', t => once(t, 'if(n!==void 0){', 'if(e[0]==="--ccgateway-info"){console.log(JSON.stringify({version:"2.1.304",patch:' + JSON.stringify(profile.extension) + ',capabilities:' + JSON.stringify(capabilities) + '}));return}if(e[0]==="request"){let{loadFastPathPolicy:policy}=await import("./chunk-3nrrbnwj.js");let refusal=await policy(s);if(refusal){let{encodeErrorFrame:errFrame}=await import("./ccgateway-request-error.js");process.stderr.write(errFrame({protocol:"ccgateway.request.error.v1",source:"input",status:403,error:{type:"permission_error",code:"cli_policy_denied",message:"CC policy denied this request"}}));process.exitCode=1;return}let{runRequestCommand:run}=await import("./ccgateway-request-command.js");let{gTe:oauthAuth}=await import("./chunk-4qs43hr1.js");process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header}))}if(n!==void 0){'));
 edit(guest, 'Pb', t => once(t, "name:r.name,description:r.description,inputSchema:", "name:r.name,description:r.description,...r.kind===\"native\"?{kind:\"native\"}:{},inputSchema:"));
 edit('cli.js', 'Ve', t => {
-  t = once(t, 'patch:"ccgateway-v12-feature-policy"', `patch:"${profile.extension}"`);
   // Direct's header is the native main-thread header (PAs, which reads the
   // attribution project itself) over the native fingerprint (RIs) of the first
   // user prompt, as build computes it (fingerprintMessages), with a main-thread
@@ -58,9 +59,9 @@ edit('cli.js', 'Ve', t => {
     // (Zoe), billing header (oJe), prompt fingerprint text and turn, and the
     // client loop header names (request-agent.js).
     'let{Zoe:ccgQuerySource}=await import("./chunk-m5q1b1c4.js");let{createBillingPolicy:ccgBillingFor}=await import("./ccgateway-content-policy.js");let{fingerprintMessages:ccgPromptOf}=await import("./ccgateway-request-input.js");let{KF:ccgReminder}=await import("./chunk-jkcb7qdd.js");let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js");let ccgBilling=ccgBillingFor(ccgHeader);' +
-    'let ccgAgent={querySourceFor:ccgQuerySource,loopHeaders:ccgLayers().loopHeaders,requestBilling:s=>ccgBilling.requestBilling(s),prompt:m=>ccgPromptOf(m,ccgReminder)[0].message.content,turn:ccgTurnOf};' +
+    'let ccgAgent={querySourceFor:ccgQuerySource,loopHeaders:ccgLayers().loopHeaders,requestBilling:s=>ccgBilling.requestBilling(s),leadingBilling:s=>ccgBilling.leadingBilling(s),entrypoint:(s,p)=>ccgBilling.requestEntrypoint(s,p),prompt:m=>ccgPromptOf(m,ccgReminder)[0].message.content,turn:ccgTurnOf};' +
     'process.exit(await run(e.slice(1),{oauthBeta:oauthAuth.header,identityBuild:(b,m)=>ccgBuildMetadata(b,m,ccgNativeMetadata),prefixBuild:(b,c)=>ccgPrefixBuild(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling),directBuild:ccgDirect,agentNative:ccgAgent}))');
-  return once(t, '"build_content_preservation_v1"]', '"build_content_preservation_v1","container_resource_reporting_v1","request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1"]');
+  return t;
 });
 edit('chunk-dxktn51d.js', 'Yi', t => once(t, 'id:ier()??Ure()', 'id:ccgRequestSessionID()??ier()??Ure()'));
 files.set('chunk-dxktn51d.js', 'import {requestSessionID as ccgRequestSessionID} from "./ccgateway-request-identity.js";\n' + files.get('chunk-dxktn51d.js'));
@@ -138,6 +139,11 @@ edit('chunk-38xgev2z.js', 'sF', t => {
   t = once(t, 'let $e=await Zle({credentials:C,storageV5:O}),Xe=Mn(),Kt=q6n({anthropicAuthEnabled:ll(),oauthScopes:Xe?.scopes}),', 'let $e=ccgatewayAPIKeyOnly?void 0:await Zle({credentials:C,storageV5:O}),Xe=ccgatewayAPIKeyOnly?null:Mn(),Kt=ccgatewayAPIKeyOnly?false:q6n({anthropicAuthEnabled:ll(),oauthScopes:Xe?.scopes}),');
   return once(t, 'if(!Kt&&!Gr())Pt=await ty(me,Se());await T2e();', 'if(!ccgatewayAPIKeyOnly&&!Kt&&!Gr())Pt=await ty(me,Se());if(!ccgatewayAPIKeyOnly)await T2e();else for(let name of Object.keys(me))if(["authorization","x-api-key"].includes(name.toLowerCase()))delete me[name];');
 });
+// The default headers' User-Agent is the client's own when the request keeps
+// the client's billing header (request-agent.js keepClientUserAgent); any
+// other request gets CC's (dN), for the entrypoint set on the request.
+edit('chunk-38xgev2z.js', 'nl', t => once(t, '"User-Agent":dN()', '"User-Agent":ccgatewayClientUserAgent()??dN()'));
+files.set('chunk-38xgev2z.js', 'import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n' + files.get('chunk-38xgev2z.js'));
 // Capture the generated attribution BEFORE system grouping can replace it with
 // the client's billing block. The native function retains its opt-out rules.
 edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);'));
@@ -160,7 +166,7 @@ const appendJoinText = mainModule.slice(appendJoin[0].start, appendJoin[0].end).
 files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + appendJoinText);
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1','direct_billing_v1','request_agent_context_v1','build_injection_v1','request_levels_v1'], files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities, files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

@@ -9,13 +9,14 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-http-errors-'));
   try {
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
-    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy']) {
+    for (const name of ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']) {
       await fs.copyFile(new URL('../' + name + '.js', import.meta.url), path.join(dir, 'ccgateway-' + name + '.js'));
     }
     for (const [name, code] of Object.entries({
       'chunk-gr4a0fky.js': 'export class rbe {} export const eF=async()=>new rbe(); export const Zre=()=>{};',
       'chunk-0ycjphb5.js': 'export const El=()=>({});',
       'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
+      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{}});',
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         let body,offset=0;

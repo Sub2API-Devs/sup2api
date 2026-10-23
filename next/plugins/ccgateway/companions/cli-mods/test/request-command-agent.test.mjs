@@ -23,7 +23,11 @@ test('the client factory and direct billing get the client kind of request', asy
         export const Zre=()=>{};`,
       'chunk-0ycjphb5.js': 'export const El=()=>({agentType:"main",agentId:"native-session"});',
       'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
-      'ccgateway-request-build.js': 'export const buildRequest=async()=>{throw Error("build is not under test")};',
+      // CC's request-scoped entrypoint (TY/H2r), recorded.
+      'chunk-q61sszgr.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
+      // A build stand-in: the system goes out as it came (the client's header
+      // stays), the agent context is resolved as the real build does.
+      'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''})});",
       'ccgateway-model-request.js': `
         export const checkModelRequest=()=>null;
         export const openModelRequest=async(outgoing,owner,signal,factory)=>{(await import('node:fs')).writeFileSync('outgoing.json',JSON.stringify(outgoing.headers??{}));await factory({});return {id:'x',ok:true,status:200,headers:{}}};
@@ -31,16 +35,21 @@ test('the client factory and direct billing get the client kind of request', asy
         export const readModelResponse=async()=>({done:true,text:''});`,
       'run.mjs': `import fs from 'node:fs';
         import {runRequestCommand} from './ccgateway-request-command.js';
-        const agentNative={querySourceFor:(type,builtIn)=>builtIn?'agent:builtin:'+type:'agent:custom',
+        import {clientUserAgent} from './ccgateway-request-agent.js';
+        const leading=system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;
+        const agentNative={leadingBilling:leading,entrypoint:(system,policy)=>{const own=leading(system)?.cc_entrypoint;return own!==undefined&&policy.build_billing_sources?.cc_entrypoint!=='worker'?own:policy.build_billing_entrypoint},querySourceFor:(type,builtIn)=>builtIn?'agent:builtin:'+type:'agent:custom',
           loopHeaders:{prev_tool_durations:'x-claude-code-prev-tool-durations',cc_compaction_request:'x-cc-compaction-request',claude_code_compaction:'x-claude-code-compaction',cc_context_compacted:'x-cc-context-compacted',claude_code_context_compacted:'x-claude-code-context-compacted'},
           turn:(messages,interactive)=>({turnOrigin:interactive?'human':'sdk',turnPosition:{promptIndex:0,turnIndex:messages.filter(m=>m.role==='user').length}}),
           requestBilling:system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null,
           prompt:messages=>typeof messages[0]?.content==='string'?messages[0].content:''};
-        const directBuild=async(raw,body,options)=>{fs.writeFileSync('direct.json',JSON.stringify(options));return raw};
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{directBuild,agentNative});`,
+        // The stand-in rewrites the version when the Worker owns it, as direct-billing does.
+        const directBuild=async(raw,body,options)=>{fs.writeFileSync('direct.json',JSON.stringify(options));return options.policy.build_billing_sources?.cc_version==='worker'?raw.replace('cc_version=2.1.304.9a4','cc_version=2.1.304.fff'):raw};
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{directBuild,agentNative});
+        fs.writeFileSync('user-agent.json',JSON.stringify(clientUserAgent()??null));`,
     })) await fs.writeFile(path.join(dir, name), code);
-    const run = (body, env) => new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['run.mjs', '--direct'], { cwd: dir, env: { ...process.env, CCG_DIRECT_POLICY: '{}', ...env } });
+    const run = (body, env, mode = '--direct') => new Promise((resolve, reject) => {
+      for (const name of ['entrypoint.json', 'user-agent.json']) fs.rm(path.join(dir, name), { force: true });
+      const child = spawn(process.execPath, ['run.mjs', mode], { cwd: dir, env: { ...process.env, CCG_DIRECT_POLICY: '{}', ...env } });
       const err = [];
       child.stderr.on('data', b => err.push(b));
       child.on('error', reject);
@@ -50,10 +59,15 @@ test('the client factory and direct billing get the client kind of request', asy
     const read = async name => JSON.parse(await fs.readFile(path.join(dir, name), 'utf8'));
     const header = 'x-anthropic-billing-header: cc_version=2.1.304.9a4; cc_entrypoint=sdk-cli; cc_is_subagent=true; cc_prompt_id=a606b757-b9e1-4f6f-8eb0-88ffd9569a8d;';
     const subagent = { model: 'm', system: [{ type: 'text', text: header }], messages: [{ role: 'user', content: 'Reply with OK.' }] };
-    const context = { version: 1, map: false, key: 'ab'.repeat(32), client: { request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', prev_tool_durations: 'Agent=76' } };
+    const userAgent = 'claude-cli/2.1.304 (external, sdk-cli, agent-sdk/0.2.71)';
+    const context = { version: 1, map: false, key: 'ab'.repeat(32), client: { request_class: 'subagent', agent_id: 'a12268251d7ed891f', agent_type: 'general-purpose', prompt_id: 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', prev_tool_durations: 'Agent=76', user_agent: userAgent } };
 
     let result = await run(subagent, { CCG_REQUEST_AGENT: JSON.stringify(context) });
     assert.equal(result.code, 0, result.stderr);
+    // The request keeps the client's header, so it keeps the client's
+    // User-Agent, and CC's request entrypoint is the header's.
+    assert.equal(await read('user-agent.json'), userAgent);
+    assert.equal(await read('entrypoint.json'), 'sdk-cli');
     let factory = await read('factory.json');
     assert.equal(factory.source, 'agent:builtin:general-purpose');
     assert.equal(factory.querySource, 'agent:builtin:general-purpose');
@@ -65,11 +79,35 @@ test('the client factory and direct billing get the client kind of request', asy
     assert.equal(direct.promptId, factory.promptId);
     assert.equal(direct.turnOrigin, undefined, 'a subagent has no turn');
 
+    // Build reads the client's system from the components; the User-Agent
+    // follows the same rule.
+    result = await run({ model: 'm', systemPrompt: subagent.system, messages: subagent.messages }, { CCG_REQUEST_AGENT: JSON.stringify(context) }, '--build');
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(await read('user-agent.json'), userAgent);
+    result = await run({ model: 'm', messages: subagent.messages }, { CCG_REQUEST_AGENT: JSON.stringify(context) }, '--build');
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(await read('user-agent.json'), null, 'no header of its own in build either');
+
+    // The Worker owns the version: the header is no longer the client's, so
+    // the User-Agent is CC's own (for the entrypoint the header carries).
+    result = await run(subagent, { CCG_REQUEST_AGENT: JSON.stringify(context), CCG_DIRECT_POLICY: '{"build_billing_sources":{"cc_version":"worker"}}' });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(await read('user-agent.json'), null);
+    assert.equal(await read('entrypoint.json'), 'sdk-cli');
+    // The Worker owns the entrypoint: the configured one names the request.
+    result = await run(subagent, { CCG_REQUEST_AGENT: JSON.stringify(context), CCG_DIRECT_POLICY: '{"build_billing_entrypoint":"cli","build_billing_sources":{"cc_entrypoint":"worker"}}' });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(await read('entrypoint.json'), 'cli');
+
     // A request that is not Claude Code's: the main thread with a derived
     // prompt ID (2026-10-23), and the header direct fills names the same
     // prompt and its turn.
-    result = await run({ model: 'm', messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }, { role: 'user', content: 'again' }] }, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: {} }) });
+    result = await run({ model: 'm', messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }, { role: 'user', content: 'again' }] }, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: { user_agent: 'anthropic-sdk-python/0.40.0' } }) });
+    assert.notEqual(result.code, 0, 'a User-Agent that is not Claude Code\'s is refused by the context check');
+    result = await run({ model: 'm', messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }, { role: 'user', content: 'again' }] }, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: {} }), CCG_DIRECT_POLICY: '{"build_billing_entrypoint":"sdk-ts"}' });
     assert.equal(result.code, 0, result.stderr);
+    assert.equal(await read('user-agent.json'), null, 'no header of its own, no User-Agent of its own');
+    assert.equal(await read('entrypoint.json'), 'sdk-ts');
     factory = await read('factory.json');
     direct = await read('direct.json');
     assert.equal(factory.querySource, 'sdk');

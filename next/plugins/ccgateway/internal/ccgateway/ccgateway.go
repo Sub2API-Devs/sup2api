@@ -143,6 +143,10 @@ var agentContextHeaders = map[string]*regexp.Regexp{
 	"x-claude-code-compaction":        regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
 	"x-cc-context-compacted":          regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
 	"x-claude-code-context-compacted": regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
+	// The client's own User-Agent, only when it is Claude Code's (2.1.304 dN):
+	// the Worker's CLI keeps it on a request that keeps the client's billing
+	// header, so the two agree as they do in Claude Code (audit D1).
+	"user-agent": regexp.MustCompile(`^claude-cli/[0-9]+\.[0-9]+\.[0-9]+ \(external, [a-z][a-z0-9-]{0,31}(, [a-z-]{1,32}/[!-~]{1,64}){0,3}\)$`),
 }
 
 // workerRequestID is the shape the Worker takes as its log's request ID.

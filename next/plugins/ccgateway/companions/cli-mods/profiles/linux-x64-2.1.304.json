@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v21-native-layers",
+  "extension": "ccgateway-v22-client-entrypoint",
   "modules": {
     "chunk-rncrmfyt.js": "42ceeaea3d0b44fdb20c4a9855f4a1b567f772ff1f327e5ad3c1ecb1111da35b",
     "chunk-0q47gehe.js": "f58ff3b17ff2956d27a36cc8e45e9393b8225f0ad210e0c8710c6a8e37aa7bf4",

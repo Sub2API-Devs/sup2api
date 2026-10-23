@@ -113,7 +113,7 @@ async function adapterFixture() {
     'chunk-7y2kvacy.js':`export const oJe=${JSON.stringify(vocabulary.billingHeader)};`,
     'chunk-jkcb7qdd.js':`export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
     'chunk-eanw7pgv.js':'export const m4t=()=>[];', 'chunk-t61vswm2.js':'export const t1n=()=>false;',
-    'chunk-0ycjphb5.js':'export const El=()=>({});', 'chunk-q61sszgr.js':'export const getRootSession=()=>({});', 'chunk-6dwnw6av.js':'export const YEr=()=>true;',
+    'chunk-0ycjphb5.js':'export const El=()=>({});', 'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};', 'chunk-6dwnw6av.js':'export const YEr=()=>true;',
     'ccgateway-native-tools.js':'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{});export const findNative=(_session,name)=>registry.get(name);',
   })) await fs.writeFile(path.join(dir,name),source);
   return { dir, adapter: await import(pathToFileURL(path.join(dir,'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir,'chunk-kasbfbhj.js'))) };

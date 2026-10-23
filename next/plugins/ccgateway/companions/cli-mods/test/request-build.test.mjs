@@ -25,7 +25,7 @@ test('build passes generation options to CC and keeps its normalized result', as
             metadata:{user_id:'native'},betas:['native-beta']}};
         }`,
       'chunk-0ycjphb5.js': 'export const El=()=>({});',
-      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});',
+      'chunk-q61sszgr.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
       'ccgateway-native-tools.js': 'export const registerNative=()=>{}; export const findNative=()=>({});',
     })) await fs.writeFile(path.join(dir, name), code);
