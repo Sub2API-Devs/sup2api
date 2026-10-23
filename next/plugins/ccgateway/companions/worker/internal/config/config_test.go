@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 func TestLoad(t *testing.T) {
@@ -71,12 +73,34 @@ func TestExistingAccountContainerConfig(t *testing.T) {
 	}
 }
 
+func TestRequestSlotsComeFromTheEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+		bad  bool
+	}{{"", 0, false}, {"1", 1, false}, {"12", 12, false}, {"0", 0, true}, {"-2", 0, true}, {"four", 0, true}} {
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Setenv("CCG_REQUEST_SLOTS", tc.raw)
+			cfg, err := Load()
+			if tc.bad {
+				if err == nil {
+					t.Fatal("accepted", tc.raw)
+				}
+				return
+			}
+			if err != nil || cfg.RequestSlots != tc.want {
+				t.Fatal(tc.raw, err)
+			}
+		})
+	}
+}
+
 func TestLegacyTimeoutSurvivesMigration(t *testing.T) {
 	for _, scenario := range []struct {
 		name, legacy, request, cli string
 		wantRequest, wantCLI       time.Duration
 	}{
-		{"default", "", "", "", time.Hour, time.Hour},
+		{"default", "", "", "", features.RequestTimeout, features.RequestTimeout},
 		{"legacy", "37m", "", "", 37 * time.Minute, 37 * time.Minute},
 		{"explicit", "37m", "12m", "2m", 12 * time.Minute, 2 * time.Minute},
 	} {

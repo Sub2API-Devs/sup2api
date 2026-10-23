@@ -6,15 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 )
 
 // Maintenance lease is held by the controller while swapping a verified
 // Worker+CLI pair. No in-flight model request is killed to obtain it.
 func (r *Runtime) serveRuntimeMaintenance(w http.ResponseWriter, req *http.Request) {
-	key := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-	if r.admin == nil || r.admin.key == "" || !strings.HasPrefix(req.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare([]byte(key), []byte(r.admin.key)) != 1 {
+	if r.admin == nil || !AdminAuthorized(req, r.admin.key) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}

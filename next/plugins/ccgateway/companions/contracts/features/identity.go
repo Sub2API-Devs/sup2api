@@ -38,11 +38,3 @@ func (p RequestIdentitySources) Mode() string {
 	}
 	return RequestIdentityDefault
 }
-
-// Explicit reports whether the policy names a source that only a CLI with
-// RequestIdentityCapability can honour; such a request is refused rather than
-// silently forwarded with the client's identity.
-func (p RequestIdentitySources) Explicit() bool {
-	source := p["user_id"]
-	return source != "" && source != "client"
-}

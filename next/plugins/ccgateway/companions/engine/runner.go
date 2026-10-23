@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -44,7 +45,9 @@ func checkVersion(cli string) (string, error) {
 func checkCLIVersion(parent context.Context, cli string) (string, error) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, cli, "--version").Output()
+	cmd := exec.CommandContext(ctx, cli, "--version")
+	cmd.Env = withoutWorkerSecrets(os.Environ())
+	b, e := cmd.Output()
 	if e != nil {
 		return "", fmt.Errorf("cannot read Claude Code version")
 	}
@@ -58,6 +61,24 @@ func checkCLIVersion(parent context.Context, cli string) (string, error) {
 		return "", fmt.Errorf("Claude Code >=2.1.287 required, found %s", v)
 	}
 	return v, nil
+}
+
+// workerSecrets are the Worker's own keys: the gateway key callers present
+// and the management key. No CLI process gets them, whoever runs the Worker
+// (audit C16); everything else the CLI may read is inherited, as Claude Code
+// reads far more variables than a list here could keep up with.
+var workerSecrets = []string{"CCG_API_KEY", "CCG_ADMIN_KEY"}
+
+// withoutWorkerSecrets is env without the Worker's keys, in any spelling.
+func withoutWorkerSecrets(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, item := range env {
+		key, _, _ := strings.Cut(item, "=")
+		if !slices.ContainsFunc(workerSecrets, func(secret string) bool { return strings.EqualFold(key, secret) }) {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 func envWith(base []string, values map[string]string, remove ...string) []string {
 	key := func(k string) string {

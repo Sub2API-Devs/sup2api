@@ -294,8 +294,10 @@ func mapRequestIdentity(key, raw []byte, mode string) (requestIdentity, error) {
 	}
 	switch mode {
 	case "client":
-		// Forwarded unchanged; only the CLI session follows the client's own.
-		if uuidPattern.MatchString(session) {
+		// Forwarded unchanged; only the CLI session follows the client's own,
+		// when the CLI can adopt it (audit C6): otherwise the CLI keeps its
+		// native random session and the metadata still goes as sent.
+		if cliSessionPattern.MatchString(session) {
 			result.Session = session
 		}
 	case "worker":

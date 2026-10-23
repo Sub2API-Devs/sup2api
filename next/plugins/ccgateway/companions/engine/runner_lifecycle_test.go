@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,7 +46,25 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	if log := os.Getenv("CCG_TEST_INFO_PEER"); log != "" {
+		infoPeer(log)
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
+}
+
+// infoPeer answers the startup questions of a pinned 2.1.304 CLI and counts
+// them in log, one line per run.
+func infoPeer(log string) {
+	f, _ := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	fmt.Fprintln(f, strings.Join(os.Args[1:], " "))
+	f.Close()
+	switch strings.Join(os.Args[1:], " ") {
+	case "--version":
+		fmt.Println("2.1.304 (Claude Code)")
+	case "--ccgateway-info":
+		fmt.Println(`{"version":"2.1.304","patch":"ccgateway-test","capabilities":["request_build","request_direct"]}`)
+	}
 }
 
 func cliTailPeer() error {

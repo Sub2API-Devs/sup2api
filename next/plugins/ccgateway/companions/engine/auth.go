@@ -275,7 +275,7 @@ func (a *authManager) cancelSession(w http.ResponseWriter, r *http.Request) (Obj
 
 func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if a.key == "" || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")), []byte(a.key)) != 1 {
+	if !AdminAuthorized(r, a.key) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}

@@ -39,6 +39,7 @@ func New(cfg *config.Config) (Worker, error) {
 	}
 	runtime, err := engine.NewRuntime(engine.Options{
 		ExpectedCLIVersion: cfg.CLIVersion, ExpectedCLISHA256: cfg.CLISHA256, ExpectedCLIPatch: cfg.CLIPatch,
+		CLIChecksumVerified:       cfg.CLIChecksumVerified,
 		RequestMode:               cfg.RequestMode,
 		WorkingDirectory:          cfg.WorkingDirectory,
 		RuntimeMaintenanceLease:   cfg.RuntimeMaintenanceLease,
@@ -46,7 +47,7 @@ func New(cfg *config.Config) (Worker, error) {
 		MaintenanceOnly:           cfg.MaintenanceOnly,
 		CLI:                       cfg.CLIPath, DataDir: cfg.HistoryDir,
 		Key: cfg.APIKey, AdminKey: cfg.AdminKey,
-		Timeout: timeout, Env: env,
+		Timeout: timeout, Env: env, Slots: cfg.RequestSlots,
 	})
 	if err != nil {
 		return nil, err

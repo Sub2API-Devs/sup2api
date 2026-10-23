@@ -95,6 +95,7 @@ func (c *Config) loadActiveRuntime(root string) error {
 		return fmt.Errorf("active runtime CLI checksum mismatch")
 	}
 	c.CLIPath, c.CLIVersion, c.CLISHA256, c.CLIPatch = binary, selection.Version, item.SHA256, item.Patch
+	c.CLIChecksumVerified = true
 	c.RequestMode = selection.RequestMode
 	c.MaintenanceOnly = selection.MaintenanceOnly
 	if selection.MaintenanceLease != "" {

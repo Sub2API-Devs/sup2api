@@ -183,13 +183,15 @@ func (s *ProxyConfigStore) Update(mode, raw string) (Object, error) {
 
 // Environment snapshots configuration once per new process. NO_PROXY remains
 // inherited in proxy mode; direct mode removes all proxy and bypass variables.
+// The Worker's own keys never reach a CLI process (withoutWorkerSecrets).
 func (s *ProxyConfigStore) Environment(base []string) []string {
+	base = withoutWorkerSecrets(base)
 	if os.Getenv("CCG_EXTERNAL_EGRESS") == "1" {
 		out := make([]string, 0, len(base))
 		for _, item := range base {
 			key, _, _ := strings.Cut(item, "=")
 			switch strings.ToUpper(key) {
-			case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "CCG_EXTERNAL_EGRESS", "CCG_API_KEY", "CCG_ADMIN_KEY":
+			case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "CCG_EXTERNAL_EGRESS":
 				continue
 			}
 			out = append(out, item)
@@ -197,13 +199,13 @@ func (s *ProxyConfigStore) Environment(base []string) []string {
 		return out
 	}
 	if s == nil {
-		return append([]string(nil), base...)
+		return base
 	}
 	s.mu.RLock()
 	cfg := s.config
 	s.mu.RUnlock()
 	if cfg.Mode == "inherit" {
-		return append([]string(nil), base...)
+		return base
 	}
 	result := make([]string, 0, len(base)+4)
 	for _, item := range base {

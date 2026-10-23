@@ -9,21 +9,36 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // Options configures one account's gateway without changing process-wide env.
 type Options struct {
 	ExpectedCLIVersion, ExpectedCLISHA256, ExpectedCLIPatch string
-	RequestMode                                             string // the CLI request transport: direct or build (default)
-	CLI, DataDir                                            string
-	WorkingDirectory                                        string
-	RuntimeMaintenanceLease                                 string
-	RuntimeMaintenanceExpires                               time.Time
-	MaintenanceOnly                                         bool
-	Key, AdminKey                                           string
-	Timeout                                                 time.Duration
-	Env                                                     []string
+	// CLIChecksumVerified: the caller already checked ExpectedCLISHA256 on a
+	// root-owned file a non-root Worker cannot change (the active runtime),
+	// so the CLI is not hashed again.
+	CLIChecksumVerified       bool
+	RequestMode               string // the CLI request transport: direct or build (default)
+	CLI, DataDir              string
+	WorkingDirectory          string
+	RuntimeMaintenanceLease   string
+	RuntimeMaintenanceExpires time.Time
+	MaintenanceOnly           bool
+	Key, AdminKey             string
+	Timeout                   time.Duration
+	// Slots is how many requests the account runs at once (DefaultRequestSlots
+	// when zero); one more is refused with 429 before its body is read.
+	Slots int
+	Env   []string
 }
+
+// DefaultRequestSlots is the account's concurrent requests by default.
+const DefaultRequestSlots = 4
+
+// maxRequestSlots bounds Options.Slots: each slot is a CLI process.
+const maxRequestSlots = 64
 
 // Runtime is one account's Worker: the gateway (the CLI's request command per
 // /v1/messages), the resource broker and the management APIs over one pinned
@@ -81,7 +96,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 	}()
 	timeout := o.Timeout
 	if timeout <= 0 {
-		timeout = time.Hour
+		timeout = features.RequestTimeout
 	}
 	proxy, err := NewProxyConfigStore(root, o.AdminKey)
 	if err != nil {
@@ -92,6 +107,10 @@ func NewRuntime(o Options) (*Runtime, error) {
 		return nil, err
 	}
 	overrides := NewEnvironmentOverrides(root)
+	slots := o.Slots
+	if slots == 0 {
+		slots = DefaultRequestSlots
+	}
 	g := &Gateway{
 		Runner:          &Runner{CLI: cli, Version: version, Work: work, Proxy: proxy, Overrides: overrides, Env: o.Env, WorkingDirectory: o.WorkingDirectory},
 		RequestMode:     o.RequestMode,
@@ -99,7 +118,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 		MaintenanceOnly: o.MaintenanceOnly,
 		Key:             o.Key,
 		Timeout:         timeout,
-		Slots:           make(chan struct{}, 4),
+		Slots:           make(chan struct{}, slots),
 		RequestLogDir:   logs.root,
 		RequestLogs:     logs,
 	}
@@ -151,6 +170,9 @@ func validateOptions(o Options) error {
 	if o.DataDir == "" {
 		return fmt.Errorf("worker data directory is required")
 	}
+	if o.Slots < 0 || o.Slots > maxRequestSlots {
+		return fmt.Errorf("request slots must be between 1 and %d", maxRequestSlots)
+	}
 	if o.WorkingDirectory == "" {
 		return nil
 	}
@@ -176,17 +198,20 @@ func loadPinnedCLI(o Options) (cli, version string, info cliRequestInfo, err err
 	if o.MaintenanceOnly {
 		verifyOptions.RequestMode = ""
 	}
-	if err = verifyPinnedCLI(cli, version, verifyOptions); err != nil {
+	info, verified, err := verifyPinnedCLI(cli, version, verifyOptions)
+	if err != nil {
 		return
 	}
-	info, infoErr := readCLIRequestInfo(cli, version, o)
-	if infoErr != nil && o.ExpectedCLIVersion != "" {
-		err = infoErr
-		return
-	}
-	if !o.MaintenanceOnly && infoErr == nil && !info.supports("request_"+o.RequestMode) {
-		err = fmt.Errorf("loaded CLI does not support configured request mode")
-		return
+	if !verified {
+		var infoErr error
+		if info, infoErr = readCLIRequestInfo(cli, version, o); infoErr != nil {
+			// An unpinned CLI without request info serves its configured
+			// mode only (the capabilities stay empty).
+			info = cliRequestInfo{}
+		} else if !o.MaintenanceOnly && !info.supports("request_"+o.RequestMode) {
+			err = fmt.Errorf("loaded CLI does not support configured request mode")
+			return
+		}
 	}
 	info.SHA256 = o.ExpectedCLISHA256
 	return
@@ -238,11 +263,16 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	defer stop()
 	defer cancel()
 	// A request runs on the CLI read at startup, never on one a recheck
-	// found changed or missing.
-	if (business || strings.HasPrefix(request.URL.Path, resourcePrefix+"/")) && r.gateway.authorized(request) {
-		if err := r.cli.ready(); err != nil {
-			apiError(w, 503, "api_error", err.Error())
-			return
+	// found changed or missing. The key is compared once here; the gateway
+	// and the resource broker read the answer (withAuthorization).
+	if business || strings.HasPrefix(request.URL.Path, resourcePrefix+"/") {
+		authorized := r.gateway.keyMatches(request)
+		ctx = withAuthorization(ctx, authorized)
+		if authorized {
+			if err := r.cli.ready(); err != nil {
+				apiError(w, 503, "api_error", err.Error())
+				return
+			}
 		}
 	}
 	r.Handler.ServeHTTP(w, request.WithContext(ctx))

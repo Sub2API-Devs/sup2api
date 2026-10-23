@@ -49,14 +49,6 @@ var IdentityLineChoices = map[string][]string{
 	"claude-vscode":  {"official_cli_sdk", "agent_sdk", "official_cli"},
 }
 
-// DefaultIdentityLine is the line an entrypoint gets when no layer chooses one.
-func DefaultIdentityLine(entrypoint string) string {
-	if choices := IdentityLineChoices[entrypoint]; len(choices) > 0 {
-		return choices[0]
-	}
-	return IdentityLineChoices[DefaultBillingEntrypoint][0]
-}
-
 // ValidateBillingEntrypoint accepts "" (inherit/default) or a known value.
 func ValidateBillingEntrypoint(value string) error {
 	if value != "" && !slices.Contains(BillingEntrypoints, value) {

@@ -3,7 +3,7 @@
     {
       "name": "build-default",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"max_tokens\":64,\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":\"plain system\"}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"max_tokens\":64,\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"systemPrompt\":\"plain system\"}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"9c1c2cbe-7392-42f9-a262-bfc1f4115e14\",\"device_id\":\"b864f8530fa81965e318cd80b90addd91043fe4536677fd86222d68198f72548\",\"carrier\":\"json\"}"
     },
     {
@@ -15,31 +15,31 @@
     {
       "name": "build-older-core-keys",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":\"user_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee_account__session_12345678-1234-4123-8123-123456789012\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[]}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":\"user_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee_account__session_12345678-1234-4123-8123-123456789012\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",
       "identity": "{\"version\":2,\"mode\":\"worker\",\"rewrite\":true,\"carrier\":\"flat\"}"
     },
     {
       "name": "build-entrypoint",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_billing_entrypoint\":\"claude-vscode\"},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}]}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_billing_entrypoint\":\"claude-vscode\"},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"systemPrompt\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}]}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
       "name": "build-injection",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"NotebookEdit\":true,\"Read\":true,\"Write\":true}}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":\"plain system\"}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"NotebookEdit\":true,\"Read\":true,\"Write\":true}}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"systemPrompt\":\"plain system\"}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
       "name": "build-no-identity",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"hi\"},{\"role\":\"user\",\"content\":\"again\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[]}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"hi\"},{\"role\":\"user\",\"content\":\"again\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
       "name": "build-unusable-identity",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":{\"foo\":\"x\"}}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[]}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":{\"foo\":\"x\"}}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {

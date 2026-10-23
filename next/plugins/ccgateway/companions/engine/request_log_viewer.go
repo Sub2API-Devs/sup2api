@@ -85,35 +85,79 @@ func parseLogEntry(id string, raw []byte) (logEntry, bool) {
 		Error: logValue(m.Error), LogStatus: logValue(m.LogStatus), Test: test}, true
 }
 
-// ensureIndex builds the index from disk once (caller holds s.mu).
-func (s *requestLogStore) ensureIndex() {
-	if s.index != nil {
-		return
+// startIndex builds the index in the background: a week of summaries is tens
+// of thousands of metadata.json files, and the Worker serves requests while
+// they are read (audit C7). The viewer waits for it (waitIndex).
+func (s *requestLogStore) startIndex() {
+	s.indexBuilding, s.indexPending, s.indexPruned = true, map[string]logEntry{}, map[string]bool{}
+	s.indexReady = make(chan struct{})
+	go s.buildIndex()
+}
+
+// buildIndex scans the disk without holding s.mu, then applies what the
+// requests finished and pruned meanwhile. Logs turned off meanwhile reset
+// the index, and the scan is dropped.
+func (s *requestLogStore) buildIndex() {
+	scanned := scanLogIndex(s.root)
+	s.mu.Lock()
+	if s.index == nil {
+		for id, e := range s.indexPending {
+			scanned[id] = e
+		}
+		for id := range s.indexPruned {
+			delete(scanned, id)
+		}
+		s.index = scanned
 	}
-	s.index = map[string]logEntry{}
-	entries, _ := os.ReadDir(s.root)
+	s.indexBuilding, s.indexPending, s.indexPruned = false, nil, nil
+	s.mu.Unlock()
+	close(s.indexReady)
+}
+
+// waitIndex waits for the background index (caller does not hold s.mu).
+func (s *requestLogStore) waitIndex() {
+	if s.indexReady != nil {
+		<-s.indexReady
+	}
+}
+
+// ensureIndex builds the index of a store that has none (caller holds s.mu):
+// one made without newRequestLogStore.
+func (s *requestLogStore) ensureIndex() {
+	if s.index == nil {
+		s.index = scanLogIndex(s.root)
+	}
+}
+
+// scanLogIndex reads every finished request's metadata.
+func scanLogIndex(root string) map[string]logEntry {
+	index := map[string]logEntry{}
+	entries, _ := os.ReadDir(root)
 	for _, entry := range entries {
 		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
-		raw, err := readBounded(filepath.Join(s.root, entry.Name(), "metadata.json"), viewerMetadataMax)
+		raw, err := readBounded(filepath.Join(root, entry.Name(), "metadata.json"), viewerMetadataMax)
 		if err != nil {
 			continue
 		}
 		if e, ok := parseLogEntry(entry.Name(), raw); ok {
-			s.index[entry.Name()] = e
+			index[entry.Name()] = e
 		}
 	}
+	return index
 }
 
-// indexed adds a finished request (caller holds s.mu). Before the index is
-// built, the scan finds the request on disk.
+// indexed adds a finished request (caller holds s.mu). While the index is
+// built it waits in indexPending; a store without one finds it on disk.
 func (s *requestLogStore) indexed(id string, metadata []byte) {
-	if s.index == nil {
-		return
-	}
-	if e, ok := parseLogEntry(id, metadata); ok {
+	e, ok := parseLogEntry(id, metadata)
+	switch {
+	case !ok:
+	case s.index != nil:
 		s.index[id] = e
+	case s.indexBuilding:
+		s.indexPending[id] = e
 	}
 }
 
@@ -124,15 +168,29 @@ func (s *requestLogStore) prune() {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pruneLocked()
+	s.pruned = s.clock()
+	s.mu.Unlock()
+	s.pruneFiles()
 }
 
-func (s *requestLogStore) pruneLocked() {
-	for _, id := range pruneRequestLogs(s.root) {
-		delete(s.index, id)
+// pruneFiles removes what the levels' limits no longer keep without holding
+// s.mu, then drops it from the index. One prune runs at a time: another one
+// due meanwhile is skipped.
+func (s *requestLogStore) pruneFiles() {
+	if !s.pruning.TryLock() {
+		return
 	}
-	s.pruned = s.clock()
+	defer s.pruning.Unlock()
+	removed := pruneRequestLogs(s.root)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range removed {
+		delete(s.index, id)
+		if s.indexBuilding {
+			delete(s.indexPending, id)
+			s.indexPruned[id] = true
+		}
+	}
 }
 
 func readBounded(path string, limit int64) ([]byte, error) {
@@ -281,6 +339,7 @@ func (s *requestLogStore) off(w http.ResponseWriter) bool {
 }
 
 func (s *requestLogStore) query(w http.ResponseWriter, q logQuery) {
+	s.waitIndex()
 	s.mu.Lock()
 	if s.off(w) {
 		s.mu.Unlock()
@@ -350,6 +409,7 @@ func logItemOf(root string, e logEntry) (logItem, bool) {
 
 // directoryOf is a finished request's directory, or "" (writes the error).
 func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
+	s.waitIndex()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.off(w) {

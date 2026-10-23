@@ -47,7 +47,7 @@ func TestV2PolicyPassesToSingleCLIWithoutGoTransform(t *testing.T) {
 	require.NoError(t, err)
 	root := t.TempDir()
 	capture := filepath.Join(root, "requests.jsonl")
-	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability}},
+	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestLevelsCapability}},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
 		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
 	raw := []byte(`{"model":"m","stream":true,"messages":[{"role":"user","content":"no environment"}]}`)
@@ -61,7 +61,7 @@ func TestV2PolicyPassesToSingleCLIWithoutGoTransform(t *testing.T) {
 	}
 	// The environment is build's; direct ignores its sources. Billing sources
 	// belong to direct too since the request levels (2026-10-23), so this CLI,
-	// without request_levels_v1, refuses them in direct instead of dropping them.
+	// without direct_billing_v1, refuses them in direct instead of dropping them.
 	for _, policy := range []string{
 		`{"relay_mode":"build","cli_version":"2.1.304","build_attachment_sources":{"os_version":"worker","shell":"erase"},"build_billing_sources":{"cc_version":"worker"}}`,
 		`{"relay_mode":"direct","cli_version":"2.1.304","build_attachment_sources":{"os_version":"worker","shell":"erase"}}`,
@@ -126,7 +126,7 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	require.NoError(t, err)
 	root := t.TempDir()
 	capture := filepath.Join(root, "requests.jsonl")
-	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability}
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestLevelsCapability}
 	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
 		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
@@ -169,7 +169,7 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 	require.NoError(t, err)
 	root := t.TempDir()
 	capture := filepath.Join(root, "requests.jsonl")
-	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability}
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestLevelsCapability}
 	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
 		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
@@ -209,14 +209,15 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 // Direct hands the CLI its billing context only on a CLI that applies it; a
 // choice an older CLI cannot honour refuses the request, while the default
 // leaves that CLI a pure passthrough (2026-10-22). Direct is the billing header
-// alone (request levels, 2026-10-23): its sources need request_levels_v1 and
-// an identity line never reaches the CLI.
+// alone (request levels, 2026-10-23): every policy the core sends names a
+// level, so it needs request_levels_v1 as the core's preflight does (audit
+// C11), and an identity line never reaches the CLI.
 func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
 	root := t.TempDir()
 	envCapture := filepath.Join(root, "env.json")
-	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability}
+	capabilities := []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.RequestLevelsCapability}
 	g := &Gateway{RequestMode: "direct", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 			"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "requests.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
@@ -226,7 +227,9 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 		_ = os.Remove(envCapture)
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(features.PolicyHeader, policy)
+		if policy != "" {
+			req.Header.Set(features.PolicyHeader, policy)
+		}
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
 		env := map[string]string{}
@@ -251,9 +254,26 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 	require.Empty(t, env[directPolicyEnv])
 	require.NotContains(t, g.requestCapabilities(), features.DirectBillingCapability)
 
-	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability)
+	// A CLI that does not follow the request levels takes no policy from the
+	// core, whatever it asks; run by hand (no policy) it still serves its mode.
+	g.CLIInfo.Capabilities = []string{"request_build", "request_direct", features.BuildContentPreservationCapability, features.DirectBillingCapability}
 	require.Contains(t, g.requestCapabilities(), features.DirectBillingCapability)
 	require.NotContains(t, g.requestCapabilities(), features.RequestLevelsCapability)
+	for _, p := range []string{`{"relay_mode":"direct","cli_version":"2.1.304"}`, choices, sources, `{"relay_mode":"direct","build_identity_lines":{"cli":"agent_sdk"}}`} {
+		code, _ = send(p)
+		require.Equal(t, 409, code, p)
+	}
+	code, env = send("")
+	require.Equal(t, 200, code)
+	require.JSONEq(t, `{}`, env[directPolicyEnv])
+	// An invalid policy is refused as such before any capability.
+	for _, p := range []string{`{"relay_mode":"direct","build_billing_sources":{"cc_version":"erase"}}`, `{"relay_mode":"direct","build_billing_entrypoint":"claude-desktop-3p"}`} {
+		code, _ = send(p)
+		require.Equal(t, 400, code, p)
+	}
+
+	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability)
+	require.Contains(t, g.requestCapabilities(), features.RequestLevelsCapability)
 	code, env = send(`{"relay_mode":"direct","cli_version":"2.1.304"}`)
 	require.Equal(t, 200, code)
 	require.JSONEq(t, `{}`, env[directPolicyEnv])
@@ -262,17 +282,6 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 	require.JSONEq(t, `{"build_billing_entrypoint":"cli"}`, env[directPolicyEnv], "never an identity line in direct")
 	code, _ = send(`{"relay_mode":"direct","build_identity_lines":{"cli":"agent_sdk"}}`)
 	require.Equal(t, 200, code, "direct ignores identity lines, valid or not")
-	// Billing sources in direct need a CLI following the request levels: an
-	// older CLI refuses the key in its direct context.
-	code, _ = send(sources)
-	require.Equal(t, 409, code)
-	for _, p := range []string{`{"relay_mode":"direct","build_billing_sources":{"cc_version":"erase"}}`, `{"relay_mode":"direct","build_billing_entrypoint":"claude-desktop-3p"}`} {
-		code, _ = send(p)
-		require.Equal(t, 400, code, p)
-	}
-
-	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability, features.RequestLevelsCapability)
-	require.Contains(t, g.requestCapabilities(), features.RequestLevelsCapability)
 	code, env = send(sources)
 	require.Equal(t, 200, code)
 	require.JSONEq(t, `{"build_billing_entrypoint":"claude-desktop","build_billing_sources":{"cc_version":"worker","cc_entrypoint":"client"}}`, env[directPolicyEnv])
@@ -280,7 +289,38 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 	require.Equal(t, 200, code)
 	require.JSONEq(t, `{"build_billing_sources":{"cc_version":"client"}}`, env[directPolicyEnv])
 	// The level capability alone does not carry the direct context.
-	g.CLIInfo.Capabilities = append(capabilities, features.RequestLevelsCapability)
+	g.CLIInfo.Capabilities = capabilities
 	code, _ = send(sources)
 	require.Equal(t, 409, code)
+}
+
+// Build takes the core's policy only on a CLI that follows the request
+// levels, as the core's preflight requires (audit C11): one capability table
+// serves both modes. Without a policy (the CLI run by hand) the container's
+// own mode needs no level.
+func TestBuildPolicyNeedsTheRequestLevels(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	root := t.TempDir()
+	g := &Gateway{RequestMode: "build", Key: "fixture", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", "request_direct", features.BuildContentPreservationCapability}},
+		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "requests.jsonl")})},
+		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
+	send := func(path, policy string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", path, bytes.NewBufferString(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
+		req.Header.Set("x-api-key", "fixture")
+		if policy != "" {
+			req.Header.Set(features.PolicyHeader, policy)
+		}
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, req)
+		return out
+	}
+	for _, path := range []string{"/v1/messages", "/v1/ccgateway/probe"} {
+		out := send(path, `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`)
+		require.Equal(t, 409, out.Code, path)
+		require.Contains(t, out.Body.String(), "request levels")
+		require.Equal(t, 200, send(path, "").Code, path)
+	}
+	g.CLIInfo.Capabilities = append(g.CLIInfo.Capabilities, features.RequestLevelsCapability)
+	require.Equal(t, 200, send("/v1/messages", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`).Code)
 }

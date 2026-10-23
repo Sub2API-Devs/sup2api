@@ -16,3 +16,17 @@ func TestProviderFactsExcludeSecretsAndHopHeaders(t *testing.T) {
 		t.Fatal("aliased source")
 	}
 }
+
+// A provider cannot relay the gateway's own markers (the native-era CLI quota
+// markers and the error source among them).
+func TestProviderHeadersCannotRelayNativeQuotaMarkers(t *testing.T) {
+	h := http.Header{}
+	for name, value := range map[string]string{"x-ccgateway-cli-quota-type": "seven_day_overage_included", "x-ccgateway-cli-quota-reset": "1900000000", "x-ccgateway-cli-status": "429", "x-ccgateway-error-source": "cli", "x-ccgateway-cli-error": "rate_limit", "x-ccgateway-error-scope": "request"} {
+		h.Set(name, value)
+	}
+	h.Set("Request-Id", "req_fixture")
+	got := Select(h)
+	if len(got) != 1 || got.Get("Request-Id") != "req_fixture" {
+		t.Fatalf("provider response leaked internal markers: %v", got)
+	}
+}

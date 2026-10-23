@@ -2,12 +2,12 @@ package server
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"runtime/debug"
-	"strings"
 	"time"
+
+	"ccgateway/engine"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
@@ -32,8 +32,7 @@ func binaryBuildInfo() features.BuildInfo {
 }
 
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || s.adminKey == "" || subtle.ConstantTimeCompare([]byte(key), []byte(s.adminKey)) != 1 {
+	if !engine.AdminAuthorized(r, s.adminKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

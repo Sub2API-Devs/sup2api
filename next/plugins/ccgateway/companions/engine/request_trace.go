@@ -16,9 +16,7 @@ func (d *requestDiagnostic) enabled() bool {
 	}
 	unlock := d.lock()
 	defer unlock()
-	if d.store != nil && !d.store.enabled {
-		return false
-	}
+	// Logs turned off clear the directory (store.serve).
 	return d.directory != "" && !d.discarded && !d.finished
 }
 
@@ -42,9 +40,6 @@ func (d *requestDiagnostic) appendTrace(name string, b []byte) {
 		return // Raw transport chunks can split a credential at any byte; a summary keeps no content.
 	}
 	b = d.redactCaptureLocked(b)
-	if d.store != nil && !d.store.enabled {
-		return
-	}
 	if d.directory == "" || !d.reserve(len(b)) {
 		return
 	}

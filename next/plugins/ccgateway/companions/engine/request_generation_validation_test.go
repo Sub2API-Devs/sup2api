@@ -100,7 +100,7 @@ func TestInvalidBuildGenerationNeverStartsCLIAndDirectKeepsBytes(t *testing.T) {
 	g := &Gateway{
 		RequestMode: "build", Key: "fixture",
 		CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{
-			"request_build", "request_direct", features.BuildContentPreservationCapability,
+			"request_build", "request_direct", features.BuildContentPreservationCapability, features.RequestLevelsCapability,
 		}},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root,
 			Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},

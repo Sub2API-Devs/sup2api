@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -96,7 +95,7 @@ func (r *Runtime) cliView() Object {
 func (r *Runtime) serveCLI(w http.ResponseWriter, request *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	if r.admin.key == "" || !strings.HasPrefix(request.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")), []byte(r.admin.key)) != 1 {
+	if !AdminAuthorized(request, r.admin.key) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}

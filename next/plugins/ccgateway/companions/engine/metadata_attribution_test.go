@@ -291,6 +291,18 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 	require.Empty(t, client.Device)
 	require.Equal(t, "3f2a1b0c-4d5e-4f70-8192-a3b4c5d6e7f8", client.Session, "the CLI session follows the client's own")
 	require.Equal(t, "json", client.Carrier)
+	// The CLI adopts only a lowercase version 4 session (cli-mods
+	// request-identity.js): any other UUID is not handed over (audit C6).
+	for _, session := range []string{"3F2A1B0C-4D5E-4F70-8192-A3B4C5D6E7F8", "3f2a1b0c-4d5e-1f70-8192-a3b4c5d6e7f8", "3f2a1b0c-4d5e-4f70-c192-a3b4c5d6e7f8", "not-a-session"} {
+		other, err := mapRequestIdentity(key, []byte(`{"metadata":{"user_id":{"device_id":"client-device","session_id":"`+session+`"}}}`), "client")
+		require.NoError(t, err)
+		require.Empty(t, other.Session, session)
+		require.False(t, other.Rewrite)
+		require.Equal(t, "object", other.Carrier, "the client's value still goes as sent")
+	}
+	for _, mapped := range []string{uuid(), digestUUID(identityDigest(key, "session", "x"))} {
+		require.True(t, cliSessionPattern.MatchString(mapped), mapped)
+	}
 
 	worker, err := mapRequestIdentity(key, raw, "worker")
 	require.NoError(t, err)
@@ -310,12 +322,8 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 		require.False(t, absent.Rewrite, mode)
 		require.Empty(t, absent.Session, mode)
 	}
-	// Sources are a closed vocabulary; the empty set is the default replace,
-	// which is never explicit: only another source must be honoured or refused.
+	// Sources are a closed vocabulary; the empty set is the default replace.
 	require.Equal(t, "replace", features.RequestIdentitySources{}.Mode())
-	require.False(t, features.RequestIdentitySources{}.Explicit())
-	require.False(t, features.RequestIdentitySources{"user_id": "client"}.Explicit())
-	require.True(t, features.RequestIdentitySources{"user_id": "worker"}.Explicit())
 	require.Equal(t, "client", features.RequestIdentitySources{"user_id": "client"}.Mode())
 	require.Equal(t, "worker", features.RequestIdentitySources{"user_id": "worker"}.Mode())
 	require.NoError(t, features.RequestIdentitySources{"user_id": "replace"}.Validate())

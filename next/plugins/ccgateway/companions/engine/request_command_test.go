@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -145,7 +146,7 @@ func TestBuildEnvelopeCarriesOnlyCLIPolicyKeys(t *testing.T) {
 	capture := filepath.Join(root, "requests.jsonl")
 	g := &Gateway{RequestMode: "build", Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 		CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", features.BuildContentPreservationCapability,
-			features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestIdentityCapability}},
+			features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.RequestIdentityCapability, features.RequestLevelsCapability}},
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 			"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture,
 		})}}
@@ -178,6 +179,49 @@ func TestBuildEnvelopeCarriesOnlyCLIPolicyKeys(t *testing.T) {
 
 // buildCLI preserves the client's build content, as every packaged CLI does.
 var buildCLI = cliRequestInfo{Capabilities: []string{features.BuildContentPreservationCapability}}
+
+// No CLI process gets the Worker's own keys, whether or not an egress
+// controller runs the Worker (audit C16): the request command, the login and
+// management processes and the startup questions alike.
+func TestCLIProcessesNeverGetTheWorkerKeys(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	for _, egress := range []string{"", "1"} {
+		t.Run("egress="+egress, func(t *testing.T) {
+			t.Setenv("CCG_EXTERNAL_EGRESS", egress)
+			root := t.TempDir()
+			target := filepath.Join(root, "child-env.json")
+			secrets := map[string]string{"CCG_API_KEY": "worker-gateway-key", "CCG_ADMIN_KEY": "worker-admin-key", "ccg_api_key": "lower"}
+			env := envWith(os.Environ(), map[string]string{
+				"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": target,
+				"CCG_ACCOUNT_DISK_QUOTA_BYTES": "1024",
+			})
+			for k, v := range secrets {
+				env = append(env, k+"="+v)
+			}
+			g := &Gateway{RequestMode: "direct", Key: "worker-gateway-key", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second, CLIInfo: buildCLI,
+				Runner: &Runner{CLI: exe, Work: root, Env: env}}
+			req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}]}`))
+			req.Header.Set("x-api-key", "worker-gateway-key")
+			out := httptest.NewRecorder()
+			g.ServeHTTP(out, req)
+			require.Equal(t, 200, out.Code, out.Body.String())
+			data, err := os.ReadFile(target)
+			require.NoError(t, err)
+			var child map[string]string
+			require.NoError(t, json.Unmarshal(data, &child))
+			for name := range child {
+				require.False(t, strings.EqualFold(name, "CCG_API_KEY") || strings.EqualFold(name, "CCG_ADMIN_KEY"), name)
+			}
+			require.Equal(t, "1024", child["CCG_ACCOUNT_DISK_QUOTA_BYTES"], "the rest is inherited")
+			auth := &authManager{env: env, overrides: NewEnvironmentOverrides(root)}
+			for _, item := range append(auth.environment(), withoutWorkerSecrets(env)...) {
+				key, _, _ := strings.Cut(item, "=")
+				require.False(t, strings.EqualFold(key, "CCG_API_KEY") || strings.EqualFold(key, "CCG_ADMIN_KEY"), key)
+			}
+		})
+	}
+}
 
 func TestMessagesBuildComponentsPreservesHistoryAndSchemas(t *testing.T) {
 	raw := []byte(`{"model":"m","system":[{"type":"text","text":"policy","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"custom":9007199254740993}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"},{"type":"text","text":"<system-reminder>keep position</system-reminder>"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}}]}],"tools":[{"name":"Bash","description":"custom","input_schema":{"type":"object","properties":{"custom":{"type":"integer"}}},"strict":true},{"type":"web_search_20250305","name":"web_search"}],"max_tokens":128,"stream":true,"unknown_generation_field":{"value":9007199254740993}}`)
@@ -223,6 +267,25 @@ func TestMessagesBuildComponentsPreservesHistoryAndSchemas(t *testing.T) {
 	}
 }
 
+// The envelope carries what the client sent and nothing in its place (audit
+// C10): no stream and no system when the client sent none; the CLI reads
+// them as false and none.
+func TestMessagesBuildComponentsLeaveOutWhatTheClientDidNotSend(t *testing.T) {
+	out, err := messagesBuildComponents([]byte(`{"model":"m","messages":[{"role":"user","content":"x"}]}`), &features.CLIPolicy{ContractVersion: 2}, "/w")
+	require.NoError(t, err)
+	var components map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(out, &components))
+	for _, key := range []string{"stream", "systemPrompt", "tools"} {
+		require.NotContains(t, components, key)
+	}
+	out, err = messagesBuildComponents([]byte(`{"model":"m","system":[],"stream":false,"tools":[],"messages":[{"role":"user","content":"x"}]}`), &features.CLIPolicy{ContractVersion: 2}, "/w")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(out, &components))
+	require.Equal(t, `[]`, string(components["systemPrompt"]))
+	require.Equal(t, `false`, string(components["stream"]))
+	require.Equal(t, `[]`, string(components["tools"]))
+}
+
 func TestMessagesBuildComponentsRejectsUnrepresentableSystem(t *testing.T) {
 	for _, raw := range []string{`null`, `{}`, `{"model":"m","messages":[]}`, `{"model":"m","messages":[{}],"system":[{"type":"image"}]}`, `{"model":"m","messages":[{}],"system":[{"type":"text","text":"x","unknown_semantic":true}]}`} {
 		if _, err := messagesBuildComponents([]byte(raw), &features.CLIPolicy{ContractVersion: 2}, ""); err == nil {
@@ -253,7 +316,7 @@ exit 2
 			if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 				t.Fatal(err)
 			}
-			g := &Gateway{RequestMode: mode, Key: "gateway", Runner: &Runner{CLI: cli, Work: root, Env: append(os.Environ(), "FIXTURE="+root)}, Slots: make(chan struct{}, 1), Timeout: time.Second}
+			g := &Gateway{RequestMode: mode, Key: "gateway", CLIInfo: buildCLI, Runner: &Runner{CLI: cli, Work: root, Env: append(os.Environ(), "FIXTURE="+root)}, Slots: make(chan struct{}, 1), Timeout: time.Second}
 			raw := "{ \"model\":\"m\", \"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":16 }\n"
 			r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(raw))
 			r.Header.Set("x-api-key", "gateway")
@@ -303,7 +366,9 @@ func TestRuntimeDefaultsToBuildAndRefusesRetiredHostMode(t *testing.T) {
 	r.Header.Set(features.PolicyHeader, `{"relay_mode":"native"}`)
 	out := httptest.NewRecorder()
 	rt.gateway.ServeHTTP(out, r)
-	if out.Code != 409 {
+	// The wire policy knows build and direct only (features.WorkerPolicy):
+	// a retired mode is an invalid policy.
+	if out.Code != 400 {
 		t.Fatalf("retired mode accepted: %d %s", out.Code, out.Body.String())
 	}
 	if _, err := NewRuntime(Options{RequestMode: "native"}); err == nil {
@@ -327,6 +392,51 @@ func TestRequestCommandAdmission(t *testing.T) {
 	if out.Code != 429 {
 		t.Fatal(out.Code)
 	}
+}
+
+// unreadBody fails the test when the handler reads it.
+type unreadBody struct{ t *testing.T }
+
+func (b unreadBody) Read([]byte) (int, error) {
+	b.t.Error("the body was read")
+	return 0, io.EOF
+}
+
+// A Worker at its limit refuses before it reads or checks the body (audit
+// C3); what the headers alone decide keeps its own answer. /healthz reports
+// the slots.
+func TestRequestSlotIsTakenBeforeTheBody(t *testing.T) {
+	cli := cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", features.BuildContentPreservationCapability, features.RequestLevelsCapability}}
+	g := &Gateway{RequestMode: "build", Key: "secret", CLIInfo: cli, Runner: &Runner{Version: "2.1.304"}, Slots: make(chan struct{}, 3)}
+	for range 3 {
+		g.Slots <- struct{}{}
+	}
+	for _, path := range []string{"/v1/messages", "/v1/ccgateway/probe"} {
+		r := httptest.NewRequest("POST", path, unreadBody{t})
+		r.Header.Set("x-api-key", "secret")
+		r.Header.Set(features.PolicyHeader, `{"relay_mode":"build","cli_version":"2.1.304"}`)
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, r)
+		require.Equal(t, 429, out.Code, path)
+		require.Equal(t, "1", out.Header().Get("Retry-After"))
+	}
+	r := httptest.NewRequest("POST", "/v1/messages", unreadBody{t})
+	r.Header.Set("x-api-key", "secret")
+	r.Header.Set(features.PolicyHeader, `{"relay_mode":"build","cli_version":"2.1.302"}`)
+	out := httptest.NewRecorder()
+	g.ServeHTTP(out, r)
+	require.Equal(t, 409, out.Code, "a policy for another CLI is not a full Worker")
+	r = httptest.NewRequest("POST", "/v1/messages", unreadBody{t})
+	out = httptest.NewRecorder()
+	g.ServeHTTP(out, r)
+	require.Equal(t, 401, out.Code, "authentication comes first")
+	out = httptest.NewRecorder()
+	g.ServeHTTP(out, httptest.NewRequest("GET", "/healthz", nil))
+	var health struct {
+		Slots int `json:"slots"`
+	}
+	require.NoError(t, json.Unmarshal(out.Body.Bytes(), &health))
+	require.Equal(t, 3, health.Slots)
 }
 
 func TestMessagesBuildComponentsRejectsMalformedTools(t *testing.T) {

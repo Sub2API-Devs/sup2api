@@ -90,12 +90,13 @@ func readClientAgentHeaders(h http.Header, userAgent bool) map[string]string {
 // and its subagents. A session-less request uses the empty session. An
 // API-key account has no Claude account to map for: its IDs go unchanged and
 // a missing one is derived without a secret.
+//
+// A metadata.user_id the Worker cannot read is an error; the context is
+// still the session-less one, which direct uses (audit C9: the body goes
+// upstream as sent, and the upstream judges it).
 func (g *Gateway) resolveRequestAgent(env []string, raw []byte, h http.Header, mode string) (requestAgent, error) {
 	result := requestAgent{Version: 1, Client: readClientAgentHeaders(h, g.CLIInfo.supports(features.ClientUserAgentCapability))}
-	fields, _, err := clientIdentityFields(raw)
-	if err != nil {
-		return result, err
-	}
+	fields, _, unreadable := clientIdentityFields(raw)
 	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
 	if oauth && key == nil && len(g.requestIdentitySecret) > 0 {
 		// The login's email is unknown: the Worker's own secret still keeps
@@ -109,7 +110,7 @@ func (g *Gateway) resolveRequestAgent(env []string, raw []byte, h http.Header, m
 		result.Key = hex.EncodeToString(sum[:])
 		result.Map = mode == "build"
 	}
-	return result, nil
+	return result, unreadable
 }
 
 func (a requestAgent) env() string {

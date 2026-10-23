@@ -10,6 +10,11 @@ import (
 // session IDs).
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// cliSessionPattern is the session the CLI adopts (cli-mods request-identity.js
+// accepts exactly a lowercase version 4 UUID, as crypto.randomUUID makes and
+// formatUUID writes); another value would fail the request in the CLI.
+var cliSessionPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
 // uuid is a random version 4 UUID.
 func uuid() string {
 	var b [16]byte

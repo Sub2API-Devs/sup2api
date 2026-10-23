@@ -22,7 +22,7 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	r.Header.Set("Authorization", "Bearer secret-test-key")
 	r.Header.Set("Cookie", "session=secret-cookie")
 	w := httptest.NewRecorder()
-	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogDir: root}
+	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogDir: root, Slots: make(chan struct{}, 1)}
 	g.ServeHTTP(w, r)
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 || w.Code != 400 || w.Header().Get("request-id") == "" {

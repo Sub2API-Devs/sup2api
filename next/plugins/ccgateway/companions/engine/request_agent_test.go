@@ -178,6 +178,49 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 	}
 }
 
+// Direct sends the body as the client wrote it: an identity the Worker cannot
+// read is the upstream's to judge (audit C9), and the CLI gets the session-
+// less agent context. Build, which rebuilds the metadata, refuses it.
+func TestDirectForwardsAnUnreadableIdentity(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	for _, body := range []string{
+		`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":17}}`,
+		`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"a","user_id":"b"}}`,
+		`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":[]}`,
+	} {
+		for _, mode := range []string{"direct", "build"} {
+			root := t.TempDir()
+			capture, target := filepath.Join(root, "input.jsonl"), filepath.Join(root, "agent-env.json")
+			g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
+				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestAgentContextCapability, features.BuildContentPreservationCapability}},
+				Runner: &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), map[string]string{
+					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture, "CCG_TEST_REQUEST_ENV_CAPTURE": target,
+				})}}
+			request := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
+			request.Header.Set("x-api-key", "fixture")
+			response := httptest.NewRecorder()
+			g.ServeHTTP(response, request)
+			if mode == "build" {
+				require.Equal(t, 400, response.Code, body)
+				continue
+			}
+			require.Equal(t, 200, response.Code, response.Body.String())
+			sent, err := os.ReadFile(capture)
+			require.NoError(t, err)
+			require.Equal(t, body+"\n", string(sent), "direct changed the body")
+			raw, err := os.ReadFile(target)
+			require.NoError(t, err)
+			var env map[string]string
+			require.NoError(t, json.Unmarshal(raw, &env))
+			var agent requestAgent
+			require.NoError(t, json.Unmarshal([]byte(env[requestAgentEnv]), &agent))
+			require.False(t, agent.Map)
+			require.Empty(t, env[requestIdentityEnv])
+		}
+	}
+}
+
 // The CLI gets every tool with the client's key order; only input_schema is
 // renamed, in place.
 func TestBuildInputKeepsToolKeyOrder(t *testing.T) {

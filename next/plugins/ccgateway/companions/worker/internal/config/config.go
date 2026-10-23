@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // Config Worker 配置
@@ -21,10 +23,13 @@ type Config struct {
 	AdminKey string
 
 	// CLI 配置
-	CLIPath                   string
-	CLIVersion                string
-	CLISHA256                 string
-	CLIPatch                  string
+	CLIPath    string
+	CLIVersion string
+	CLISHA256  string
+	CLIPatch   string
+	// CLIChecksumVerified: loadActiveRuntime hashed CLIPath, a root-owned
+	// file, against CLISHA256; the engine does not hash it again.
+	CLIChecksumVerified       bool
 	RequestMode               string
 	WorkingDirectory          string
 	RuntimeMaintenanceLease   string
@@ -39,6 +44,10 @@ type Config struct {
 	RequestTimeout time.Duration
 	CLITimeout     time.Duration
 	HealthTimeout  time.Duration
+
+	// RequestSlots is how many requests the account runs at once
+	// (CCG_REQUEST_SLOTS, default engine.DefaultRequestSlots).
+	RequestSlots int
 }
 
 // Load 从环境变量加载配置
@@ -75,10 +84,17 @@ func Load() (*Config, error) {
 		}
 	}
 	dataDir := getEnv("CCG_DATA_DIR", "/work/history")
-	// Existing standalone account containers use a one-hour model timeout.
-	// Preserve that behavior during an in-place Worker migration; explicit
-	// Worker settings take precedence over the legacy setting.
-	requestTimeout := getEnvDuration("REQUEST_TIMEOUT", getEnvDuration("CCG_TIMEOUT", time.Hour))
+	// The model timeout (features.RequestTimeout by default): REQUEST_TIMEOUT,
+	// else the older containers' CCG_TIMEOUT, so an in-place Worker migration
+	// keeps their value; CLI_TIMEOUT may only lower it (worker.New).
+	requestTimeout := getEnvDuration("REQUEST_TIMEOUT", getEnvDuration("CCG_TIMEOUT", features.RequestTimeout))
+	slots := 0
+	if raw := os.Getenv("CCG_REQUEST_SLOTS"); raw != "" {
+		var err error
+		if slots, err = strconv.Atoi(raw); err != nil || slots < 1 {
+			return nil, fmt.Errorf("invalid CCG_REQUEST_SLOTS")
+		}
+	}
 	cfg := &Config{
 		WorkerID:         getEnv("WORKER_ID", workerID),
 		Port:             port,
@@ -97,6 +113,7 @@ func Load() (*Config, error) {
 		RequestTimeout:   requestTimeout,
 		CLITimeout:       getEnvDuration("CLI_TIMEOUT", requestTimeout),
 		HealthTimeout:    getEnvDuration("HEALTH_TIMEOUT", 5*time.Second),
+		RequestSlots:     slots,
 	}
 
 	if cfg.RequestMode == "native" {

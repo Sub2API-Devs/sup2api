@@ -74,19 +74,16 @@ func (d *requestDiagnostic) requestLimit() int64 {
 	return fullRequestLimit
 }
 
-// Always acquire the store before the request mutex; disable uses the same
-// order while closing active files. Standalone diagnostics still need a lock.
+// Locks (audit C7): the account's store.mu guards only its level, its active
+// requests and its index; a request's files are written under that request's
+// own d.mu, so one slow write never holds every other request. Whoever needs
+// both takes store.mu first (turning logs off, clearing content, listing the
+// active requests); nothing holding d.mu takes store.mu. Turning logs off
+// clears each active request's directory under its d.mu, so no write lands
+// after the logs are removed.
 func (d *requestDiagnostic) lock() func() {
-	if d.store != nil {
-		d.store.mu.Lock()
-	}
 	d.mu.Lock()
-	return func() {
-		d.mu.Unlock()
-		if d.store != nil {
-			d.store.mu.Unlock()
-		}
-	}
+	return d.mu.Unlock
 }
 
 func (d *requestDiagnostic) setStage(stage string) {
@@ -134,7 +131,7 @@ func (w *diagnosticWriter) Write(b []byte) (int, error) {
 		}
 	}
 	unlock()
-	// A slow client must not hold the account-wide logging/disable mutex.
+	// A slow client must not hold the request's log lock.
 	return w.ResponseWriter.Write(b)
 }
 
@@ -155,9 +152,7 @@ func (d *requestDiagnostic) save(name string, b []byte) {
 
 func (d *requestDiagnostic) saveLocked(name string, b []byte) {
 	b = d.redactCaptureLocked(b)
-	if d.store != nil && !d.store.enabled {
-		return
-	}
+	// Logs turned off clear the directory (store.serve).
 	if d.directory == "" || !d.keeps(name) {
 		return
 	}
@@ -229,7 +224,7 @@ func newRequestLogStore(root string) (*requestLogStore, error) {
 			return nil, err
 		}
 	}
-	s.ensureIndex()
+	s.startIndex()
 	return s, nil
 }
 
@@ -408,31 +403,47 @@ func clearContent(root string) error {
 	return nil
 }
 
+// capture starts the request's log; the gateway calls it once the caller is
+// authenticated (audit C7), so an unauthenticated request leaves nothing.
 func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root string) http.ResponseWriter {
-	unlock := d.lock()
-	defer unlock()
-	d.summaryOnly = false
-	if d.store != nil {
-		if !d.store.enabled {
+	prune := d.store == nil
+	if s := d.store; s != nil {
+		s.mu.Lock()
+		if !s.enabled {
+			s.mu.Unlock()
 			return w
 		}
-		d.summaryOnly = !d.store.captureContent()
-		d.store.active[d] = true
-		root = d.store.root
+		// The level is the store's when the request starts; clearing content
+		// later changes it for the active requests (store.serve).
+		d.mu.Lock()
+		d.summaryOnly = !s.captureContent()
+		d.mu.Unlock()
+		s.active[d] = true
+		root = s.root
+		// A week of summaries is many directories: a request prunes at most
+		// once a minute (the maintenance loop prunes every minute too).
+		now := s.clock()
+		if prune = now.Sub(s.pruned) >= time.Minute; prune {
+			s.pruned = now
+		}
+		s.mu.Unlock()
 	}
 	if root == "" {
 		return w
 	}
+	if d.store == nil {
+		pruneRequestLogs(root)
+	} else if prune {
+		d.store.pruneFiles()
+	}
+	unlock := d.lock()
+	defer unlock()
+	if d.discarded {
+		return w // logs were turned off meanwhile
+	}
 	if err := os.MkdirAll(root, 0700); err != nil {
 		d.logFailure(err)
 		return w
-	}
-	// A week of summaries is many directories: a request prunes at most once a
-	// minute (the maintenance loop prunes every minute too).
-	if d.store == nil {
-		pruneRequestLogs(root)
-	} else if d.store.clock().Sub(d.store.pruned) >= time.Minute {
-		d.store.pruneLocked()
 	}
 	d.fields["log_level"] = logLevelFull
 	if d.summaryOnly {
@@ -578,8 +589,8 @@ func (d *requestDiagnostic) finish() {
 	d.mu.Unlock()
 	d.trace("request_finished", detail)
 	unlock := d.lock()
-	defer unlock()
 	if d.finished {
+		unlock()
 		return
 	}
 	d.fields["stage"] = d.stage
@@ -609,15 +620,24 @@ func (d *requestDiagnostic) finish() {
 	}
 	d.saveLocked("metadata.json", b)
 	d.finished = true
-	if d.store != nil {
-		delete(d.store.active, d)
-		if d.directory != "" && d.store.enabled {
-			d.store.indexed(filepath.Base(d.directory), b)
+	unlock()
+	if s := d.store; s != nil {
+		s.mu.Lock()
+		delete(s.active, d)
+		// Logs turned off since clear the directory: nothing to list.
+		d.mu.Lock()
+		directory := d.directory
+		d.mu.Unlock()
+		if directory != "" && s.enabled {
+			s.indexed(filepath.Base(directory), b)
 		}
+		s.mu.Unlock()
 	}
 }
 
 type requestLogStore struct {
+	// mu guards the level, the active requests and the index; no file is
+	// written under it except the level's own (see requestDiagnostic.lock).
 	mu      sync.Mutex
 	root    string
 	enabled bool
@@ -632,6 +652,15 @@ type requestLogStore struct {
 	active map[*requestDiagnostic]bool
 	// index lists the finished requests for the viewer; nil until built.
 	index map[string]logEntry
+	// While the index is built in the background (startIndex), the requests
+	// finished meanwhile wait in indexPending and the ones pruned in
+	// indexPruned; indexReady closes when it is built.
+	indexBuilding bool
+	indexPending  map[string]logEntry
+	indexPruned   map[string]bool
+	indexReady    chan struct{}
+	// pruning lets one prune run at a time.
+	pruning sync.Mutex
 }
 
 func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
@@ -639,18 +668,30 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 503, "api_error", "Request logs unavailable")
 		return
 	}
+	view, ok := s.change(w, r)
+	if !ok {
+		return
+	}
+	// The logs' size is read from disk without holding the account's lock.
+	view["usage"] = requestLogUsage(s.root)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(view)
+}
+
+// change applies a PUT and describes the logs; false means it answered.
+func (s *requestLogStore) change(w http.ResponseWriter, r *http.Request) (Object, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r.Method == "PUT" {
 		var input map[string]json.RawMessage
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil {
 			apiError(w, 400, "invalid_request_error", "Invalid request log setting")
-			return
+			return nil, false
 		}
 		level, hours, clear, ok := requestLogChange(input)
 		if !ok {
 			apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":bool}`)
-			return
+			return nil, false
 		}
 		if clear {
 			for d := range s.active {
@@ -660,7 +701,7 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := clearContent(s.root); err != nil {
 				apiError(w, 500, "api_error", "Cannot clear request log content")
-				return
+				return nil, false
 			}
 		} else {
 			previous, previousUntil := s.level, s.fullUntil
@@ -671,7 +712,7 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 			if err := s.persist(); err != nil {
 				s.level, s.fullUntil = previous, previousUntil
 				apiError(w, 500, "api_error", "Cannot persist request log setting")
-				return
+				return nil, false
 			}
 			s.enabled = level != logLevelOff
 			if !s.enabled {
@@ -685,16 +726,15 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 				s.index = map[string]logEntry{}
 				if err := os.RemoveAll(s.root); err != nil {
 					apiError(w, 500, "api_error", "Cannot clear request logs")
-					return
+					return nil, false
 				}
 			}
 		}
 	} else if r.Method != "GET" {
 		apiError(w, 405, "invalid_request_error", "Use GET or PUT")
-		return
+		return nil, false
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.describe())
+	return s.describe(), true
 }
 
 // requestLogChange reads one PUT: a level (full with its hours), clearing the
@@ -747,8 +787,8 @@ func (d *requestDiagnostic) stopContent() {
 	d.summaryOnly = true
 }
 
-// describe is the level, each level's limits and what the logs hold (caller
-// holds s.mu). The top-level limits are the full level's, as an older core reads them.
+// describe is the level and each level's limits (caller holds s.mu); serve
+// adds the usage. The top-level limits are the full level's, as an older core reads them.
 func (s *requestLogStore) describe() Object {
 	level := s.level
 	if level == "" {
@@ -771,7 +811,6 @@ func (s *requestLogStore) describe() Object {
 			logLevelSummary: Object{"retention_hours": int(summaryRetention / time.Hour), "storage_budget_bytes": summaryBudget, "per_request_limit_bytes": summaryRequestLimit},
 			logLevelFull:    Object{"retention_hours": int(fullRetention / time.Hour), "storage_budget_bytes": fullBudget, "per_request_limit_bytes": fullRequestLimit},
 		},
-		"usage":                   requestLogUsage(s.root),
 		"per_request_limit_bytes": fullRequestLimit, "retention_hours": int(fullRetention / time.Hour), "storage_budget_bytes": fullBudget,
 		"overflow_behavior": "retain_partial_with_metadata",
 		// viewer: the logs can be read through /admin/request-logs/{query,detail,read}.
