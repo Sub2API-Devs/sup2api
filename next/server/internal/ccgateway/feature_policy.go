@@ -57,8 +57,11 @@ func (p *FeatureOverrides) UnmarshalJSON(raw []byte) error {
 	if err := d.Decode(&out); err != nil {
 		return err
 	}
+	// The structure only: the vocabulary is checked when saving (Validate)
+	// and applied leniently when resolving (sanitizeOverrides), so a stored
+	// override from an older vocabulary still decodes.
 	*p = FeatureOverrides(out)
-	return p.Validate()
+	return nil
 }
 
 func (p FeatureOverrides) Validate() error {
@@ -246,6 +249,9 @@ func (c Config) allowsAccountFeatures(groupID int64) bool {
 // group deliberately disables account overrides; probes never choose a group.
 func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy) FeatureResolution {
 	p := copyPolicy(c.EffectiveRequestPolicy())
+	// What the current vocabulary does not know is ignored, layer by layer
+	// (feature_policy_sanitize.go); the stored values are not touched.
+	warnDropped("global", sanitizePolicy(&p))
 	sources := map[string]string{}
 	for _, k := range []string{"level", "relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix", "build_billing_entrypoint"} {
 		sources[k] = "global"
@@ -293,11 +299,15 @@ func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy
 		reason = "account_override_disabled"
 	}
 	if groupID > 0 && ok && g.Enabled {
-		applyFeatureOverrides(&p, g.Overrides, sources, "group")
+		overrides := g.Overrides
+		warnDropped("group", sanitizeOverrides(&overrides))
+		applyFeatureOverrides(&p, overrides, sources, "group")
 	}
 	inherited := copyPolicy(p)
 	if reason == "" && account.Mode == "custom" {
-		applyFeatureOverrides(&p, account.Overrides, sources, "account")
+		overrides := account.Overrides
+		warnDropped("account", sanitizeOverrides(&overrides))
+		applyFeatureOverrides(&p, overrides, sources, "account")
 	}
 	return FeatureResolution{Effective: p, Inherited: inherited, Sources: sources, Editable: reason == "", DisabledReason: reason,
 		PolicyRevision: fmt.Sprintf("%d:%d:%d", c.FeatureRevision, groupID, account.Revision)}

@@ -1,6 +1,7 @@
 package ccgateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
@@ -88,13 +90,62 @@ func TestFeatureConfigRevisionAndOmission(t *testing.T) {
 	require.True(t, sameRuntimeConfig(got, cleared))
 }
 
+// Decoding checks the structure (an object, no nulls, no unknown keys);
+// the vocabulary is checked when saving (Validate), so a value stored under
+// an older vocabulary still loads (feature_policy_sanitize.go).
 func TestFeatureOverridesRejectUnsupportedAndEmpty(t *testing.T) {
-	for _, raw := range []string{`{"cli_version":"2.1.304"}`, `{"relay_mode":""}`, `{"build_attachment_sources":{"shell":"follow"}}`, `{"build_billing_sources":{"cc_version":"erase"}}`, `null`} {
+	for _, raw := range []string{`{"cli_version":"2.1.304"}`, `null`, `{"level":null}`} {
 		var p FeatureOverrides
 		require.Error(t, json.Unmarshal([]byte(raw), &p), raw)
 	}
+	for _, raw := range []string{`{"relay_mode":""}`, `{"build_attachment_sources":{"shell":"follow"}}`, `{"build_billing_sources":{"cc_version":"erase"}}`, `{"build_injection":{"tools":{"NoSuchTool":true}}}`} {
+		var p FeatureOverrides
+		require.NoError(t, json.Unmarshal([]byte(raw), &p), raw)
+		require.Error(t, p.Validate(), raw)
+	}
 	var p FeatureOverrides
 	require.NoError(t, json.Unmarshal([]byte(`{"build_attachment_sources":{"shell":"erase"},"build_billing_sources":{"cc_version":"worker"}}`), &p))
+	require.NoError(t, p.Validate())
+}
+
+// A stored override from an older vocabulary (the injection tools narrowed
+// from 20 to 7 on 2026-10-23) still loads: the whole configuration decodes,
+// the unknown items are ignored when resolving, the wire validates, and the
+// stored value is left as it was. Saving such a value is still refused.
+func TestStalePolicyVocabularyStillLoads(t *testing.T) {
+	cipher, _ := secret.New(bytes.Repeat([]byte{9}, 32))
+	s := &Service{Cipher: cipher}
+	plain := `{"mode":"controller","host":"panel.example.com","admin_key":"k","request_policy":{"schema_version":1,"unknown_field":"reject","level":"high","build_injection":{"tools":{"Bash":true,"Grep":true}},"build_attachment_sources":{"shell":"worker","color":"erase"}},
+		"cc_feature_groups":{"7":{"enabled":true,"allow_account_override":true,"overrides":{"level":"high","build_injection":{"tools":{"Read":true,"NoSuchTool":true},"attachments":{"environment":true,"weather":true}},"build_billing_entrypoint":"claude-desktop-3p","build_identity_lines":{"cli":"none","remote":"none"}}}}}`
+	encrypted, err := cipher.Encrypt([]byte(plain), configAAD)
+	require.NoError(t, err)
+	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
+	cfg, err := s.decodeStored(envelope)
+	require.NoError(t, err, "a stale override must not keep the configuration from loading")
+	account := AccountFeaturePolicy{Mode: "custom", Revision: 3}
+	require.NoError(t, json.Unmarshal([]byte(`{"build_injection":{"tools":{"Edit":true,"TodoWrite":true}},"request_identity_sources":{"user_id":"anyone"}}`), &account.Overrides))
+	before, _ := json.Marshal([]any{cfg, account})
+	r := cfg.ResolveFeaturePolicy(7, account)
+	require.NoError(t, validateRequestPolicy(r.Effective), "what resolves is valid under the current vocabulary")
+	require.Equal(t, map[string]bool{"Bash": true, "Read": true, "Edit": true}, r.Effective.BuildInjection.Tools, "known tools from every layer stay, unknown ones go")
+	require.Equal(t, map[string]bool{"environment": true}, r.Effective.BuildInjection.Attachments)
+	require.Equal(t, "worker", r.Effective.BuildAttachmentSources["shell"])
+	require.NotContains(t, r.Effective.BuildAttachmentSources, "color")
+	require.Equal(t, features.DefaultBillingEntrypoint, r.Effective.BuildBillingEntrypoint, "an entrypoint the vocabulary does not know is ignored")
+	require.NotContains(t, r.Effective.BuildIdentityLines, "remote")
+	require.Equal(t, "replace", r.Effective.RequestIdentitySources["user_id"])
+	wire, err := s.resolvedWorkerPolicy(context.Background(), cfg, 0, 7)
+	require.NoError(t, err)
+	require.NoError(t, wire.Validate())
+	raw, _ := json.Marshal(wire)
+	require.NotContains(t, string(raw), "NoSuchTool")
+	after, _ := json.Marshal([]any{cfg, account})
+	require.JSONEq(t, string(before), string(after), "resolving leaves the stored values as they were")
+	// Saving the same values is refused: the vocabulary is checked on write.
+	require.Error(t, cfg.CCFeatureGroups["7"].Overrides.Validate())
+	require.Error(t, account.Validate())
+	_, err = mergeConfig(Config{CCFeatureGroups: cfg.CCFeatureGroups}, Config{Mode: "controller", Host: "panel.example.com", AdminKey: "k", AccountRuntimes: true, Scheme: "https", Port: 443})
+	require.Error(t, err)
 }
 
 func TestFeatureRequiredCapabilities(t *testing.T) {

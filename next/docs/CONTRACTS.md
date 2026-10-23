@@ -4007,6 +4007,16 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - **跨层夹具**：`contracts/testdata/core-worker-policies.json` 由核心测试（`server/internal/ccgateway/contract_fixture_test.go`，编辑器 16 例的线形）生成，`CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成；engine 测试（`core_policy_fixture_test.go`）读同一份字节，要求每条都被 Worker 接受并原样成为 CLI 信封的 `requestPolicy`（`WorkerPolicy.CLI()`，contract 2，键：`contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`）。Worker→CLI 夹具 `worker-cli-requests.json` 同时覆盖 replace/client/worker 三种身份模式（Claude 登录、API Key、无邮箱）。
 - 核心的能力预检（`requestPolicyCapabilities`）只看线形：`request_levels_v1` 总是要求；设了入口要求 `build_identity_line_v1`（direct 为 `direct_billing_v1`）；来源用 worker/erase 要求对应能力；有注入要求 `build_injection_v1`。
 
+### 53.19 已存策略对词表收窄的宽容（2026-10-23，审核 A3）
+
+CC 特性策略的词表会收窄（注入工具 20→7 等）。此前 `FeatureOverrides.UnmarshalJSON` 在解码时就跑 `Validate`，一条含旧工具名的分组覆盖会让整份加密 `Config` 解码失败——所有 CCGateway 页面与请求一起失效；账号覆盖同理让该账号的详情与每个请求失败。现在三处分工：
+
+- **解码只看结构**：对象、不允许 null、不允许未知键（键从不删除，所以结构稳定）；值的词表不在解码时检查。全局 `RequestPolicy` 本就如此。
+- **解析时按层丢弃**：`ResolveFeaturePolicy` 对全局生效策略、分组覆盖、账号覆盖各做一次 `sanitizePolicy`/`sanitizeOverrides`（`feature_policy_sanitize.go`）：等级、入口、附件/计费/身份/身份行来源的每个条目、注入的每个附件与工具，凡当前词表不认的就丢掉，其余照常生效；存储值不改（复制后丢弃）；每个（层, 条目）组合在进程内只记一条 Warn（`CCGateway: a stored CC feature setting is no longer a choice and is ignored`），因为策略每个请求都解析一次。
+- **保存时严格**：远程配置 PUT（`mergeConfig` 对分组覆盖与全局策略）、账号 PATCH（`SaveAccountFeaturePolicyTx`）、预览都调 `Validate`，旧值原样保存会被拒绝——界面重新保存一次即可清掉。
+
+测试 `TestStalePolicyVocabularyStillLoads`：含未知工具、附件、入口、身份行、身份来源的全局/分组/账号三层都能解码、解析出的策略通过校验、线形不含未知项、存储值不变、保存被拒。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

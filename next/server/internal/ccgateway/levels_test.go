@@ -287,9 +287,12 @@ func TestGlobalSaveKeepsTheStoredLevel(t *testing.T) {
 }
 
 func TestFeatureOverridesLevel(t *testing.T) {
-	for _, raw := range []string{`{"level":""}`, `{"level":"medium"}`, `{"level":null}`, `{"relay_mode":"native"}`} {
+	var p0 FeatureOverrides
+	require.Error(t, json.Unmarshal([]byte(`{"level":null}`), &p0))
+	for _, raw := range []string{`{"level":""}`, `{"level":"medium"}`, `{"relay_mode":"native"}`} {
 		var p FeatureOverrides
-		require.Error(t, json.Unmarshal([]byte(raw), &p), raw)
+		require.NoError(t, json.Unmarshal([]byte(raw), &p), raw)
+		require.Error(t, p.Validate(), raw)
 	}
 	var p FeatureOverrides
 	require.NoError(t, json.Unmarshal([]byte(`{"level":"high","relay_mode":"direct"}`), &p))
