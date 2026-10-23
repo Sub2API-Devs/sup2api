@@ -3,11 +3,11 @@
 // account). Authorizing happens on the Accounts page: each row links to the
 // account editor (/accounts?edit=<id>), where the container is started and
 // the Claude login is completed.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SSwitch, STable, STooltip, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
@@ -17,12 +17,44 @@ import { useCcgText } from './ccgError'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import CLISettings from './CLISettings.vue'
 
+type RequestLogLevel = 'off' | 'summary' | 'full'
+const LOG_LEVELS: readonly RequestLogLevel[] = ['off', 'summary', 'full']
+const FULL_HOURS = [1, 4, 24] as const
+
+interface RequestLogTier {
+  retention_hours?: number
+  storage_budget_bytes?: number
+  per_request_limit_bytes?: number
+}
+
+/**
+ * GET / PUT /request-logs. A Worker with levels (REQUEST-LOG-LEVELS-DESIGN §4)
+ * reports `levels`; an older one only `enabled` and the flat limits, and
+ * keeps the old switch.
+ */
 interface RequestLogState {
   enabled: boolean
   per_request_limit_bytes?: number
   retention_hours?: number
   storage_budget_bytes?: number
   overflow_behavior?: string
+  level?: RequestLogLevel
+  full_until?: string | null
+  levels?: RequestLogLevel[]
+  limits?: { summary?: RequestLogTier; full?: RequestLogTier }
+  usage?: { summary_bytes?: number; full_bytes?: number; requests?: number }
+}
+
+/** Validated level state of a Worker that reports levels. */
+interface RequestLogLevels {
+  level: RequestLogLevel
+  levels: RequestLogLevel[]
+  /** ms since epoch, only at the full level */
+  fullUntil: number | null
+  summary: RequestLogTier | null
+  full: RequestLogTier | null
+  usage: { summary_bytes: number | null; full_bytes: number | null; requests: number | null }
+  overflow: boolean
 }
 
 interface Row {
@@ -46,6 +78,8 @@ interface Row {
   logsBusy: boolean
   logsError: boolean
   logsLimits: RequestLogState | null
+  /** null: an older Worker without levels (the switch is shown). */
+  logsLevels: RequestLogLevels | null
 }
 
 const { t } = useI18n()
@@ -106,7 +140,7 @@ async function load() {
   error.value = ''
   try {
     const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null }))
+    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -136,20 +170,118 @@ async function cleanupOrphans() {
 }
 
 async function setLogs(r: Row, enabled: boolean) {
+  await putLogs(r, { enabled })
+}
+
+async function putLogs(r: Row, body: Record<string, unknown>) {
   if (r.logsBusy || !canLogs(r)) return
   r.logsBusy = true
   r.logsError = false
   try {
-    applyLogs(r, await api.put<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`, { enabled }))
+    applyLogs(r, await api.put<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`, body))
   } catch { r.logsError = true }
   finally { r.logsBusy = false }
 }
 
+const safeCount = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min
+const isLevel = (v: unknown): v is RequestLogLevel => typeof v === 'string' && (LOG_LEVELS as readonly string[]).includes(v)
+
+function tierOf(v: RequestLogTier | undefined): RequestLogTier | null {
+  if (!v || typeof v !== 'object') return null
+  const values = [v.retention_hours, v.storage_budget_bytes, v.per_request_limit_bytes]
+  return values.every(x => safeCount(x, 1)) ? v : null
+}
+
+/** The level state of a Worker that reports levels; throws when it is malformed. */
+function levelsOf(state: RequestLogState): RequestLogLevels {
+  const levels = state.levels!
+  if (!levels.length || !levels.every(isLevel) || !isLevel(state.level) || !levels.includes(state.level)) throw new Error('invalid request log level')
+  let fullUntil: number | null = null
+  if (state.level === 'full') {
+    fullUntil = typeof state.full_until === 'string' ? Date.parse(state.full_until) : NaN
+    if (!Number.isFinite(fullUntil)) throw new Error('invalid request log expiry')
+  }
+  const usage = (k: 'summary_bytes' | 'full_bytes' | 'requests') => (safeCount(state.usage?.[k], 0) ? state.usage![k]! : null)
+  return {
+    level: state.level, levels, fullUntil,
+    summary: tierOf(state.limits?.summary), full: tierOf(state.limits?.full),
+    usage: { summary_bytes: usage('summary_bytes'), full_bytes: usage('full_bytes'), requests: usage('requests') },
+    overflow: state.overflow_behavior === 'retain_partial_with_metadata',
+  }
+}
+
 function applyLogs(r: Row, state: RequestLogState) {
   if (typeof state?.enabled !== 'boolean') throw new Error('invalid request log state')
+  const levels = Array.isArray(state.levels) ? levelsOf(state) : null
   r.logsEnabled = state.enabled
+  r.logsLevels = levels
   const values = [state.per_request_limit_bytes, state.retention_hours, state.storage_budget_bytes]
   r.logsLimits = values.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0) ? state : null
+}
+
+const levelOptions = (r: Row): SelectOption[] => r.logsLevels!.levels.map(l => ({ value: l, label: t(`ccgateway.requestLogs.level.${l}`) }))
+
+/** The full level is only enabled for a chosen duration, after the warning. */
+const fullDialog = ref<{ row: Row; hours: number } | null>(null)
+const fullDialogOpen = computed({ get: () => fullDialog.value !== null, set: (v: boolean) => { if (!v) fullDialog.value = null } })
+const hourOptions = computed<SelectOption[]>(() => FULL_HOURS.map(h => ({ value: h, label: t('ccgateway.requestLogs.hours', { n: h }) })))
+function setHours(v: SelectOption['value']) {
+  if (fullDialog.value && typeof v === 'number' && (FULL_HOURS as readonly number[]).includes(v)) fullDialog.value.hours = v
+}
+
+async function chooseLevel(r: Row, value: SelectOption['value']) {
+  if (r.logsBusy || !canLogs(r) || !isLevel(value) || value === r.logsLevels?.level) return
+  if (value === 'full') {
+    fullDialog.value = { row: r, hours: 1 }
+    return
+  }
+  if (value === 'off' && !await confirm({ title: t('ccgateway.requestLogs.offTitle'), message: t('ccgateway.requestLogs.offConfirm'), confirmText: t('ccgateway.requestLogs.offAction'), danger: true })) return
+  await putLogs(r, { level: value })
+}
+
+async function confirmFull() {
+  const pending = fullDialog.value
+  if (!pending) return
+  fullDialog.value = null
+  await putLogs(pending.row, { level: 'full', full_for_hours: pending.hours })
+}
+
+async function clearFull(r: Row) {
+  if (r.logsBusy || !canLogs(r)) return
+  if (!await confirm({ title: t('ccgateway.requestLogs.clearFullTitle'), message: t('ccgateway.requestLogs.clearFullConfirm'), confirmText: t('ccgateway.requestLogs.clearFull'), danger: true })) return
+  await putLogs(r, { clear_full: true })
+}
+
+// The countdown of the full level, refreshed every 30 seconds.
+const now = ref(Date.now())
+let clock: ReturnType<typeof setInterval> | undefined
+onMounted(() => { clock = setInterval(() => { now.value = Date.now() }, 30000) })
+onBeforeUnmount(() => clearInterval(clock))
+
+function fullRemaining(r: Row): string {
+  const until = r.logsLevels?.fullUntil
+  if (until == null) return ''
+  const minutes = Math.ceil((until - now.value) / 60000)
+  if (minutes <= 0) return t('ccgateway.requestLogs.fullExpired')
+  const hours = Math.floor(minutes / 60)
+  return hours > 0
+    ? t('ccgateway.requestLogs.fullRemaining', { hours, minutes: minutes % 60 })
+    : t('ccgateway.requestLogs.fullRemainingMinutes', { minutes })
+}
+
+const mib = (bytes: number) => Number((bytes / 1048576).toFixed(3))
+const retention = (hours: number) => (hours >= 48 && hours % 24 === 0 ? t('ccgateway.requestLogs.days', { n: hours / 24 }) : t('ccgateway.requestLogs.hours', { n: hours }))
+
+function tierText(name: 'summary' | 'full', tier: RequestLogTier | null, used: number | null): string {
+  const label = t(`ccgateway.requestLogs.level.${name}`)
+  const usage = used === null ? '' : t('ccgateway.requestLogs.tierUsage', { used: mib(used) })
+  if (!tier) return `${t('ccgateway.requestLogs.tierUnreported', { name: label })}${usage}`
+  return `${t('ccgateway.requestLogs.tier', {
+    name: label,
+    retention: retention(tier.retention_hours!),
+    request: mib(tier.per_request_limit_bytes!),
+    total: mib(tier.storage_budget_bytes!),
+  })}${usage}`
 }
 
 function logLimits(r: Row): string {
@@ -161,8 +293,16 @@ function logLimits(r: Row): string {
     total: Number((limits.storage_budget_bytes! / 1048576).toFixed(3)),
   })
 }
-/** Limits and overflow behavior the Worker reported: shown on hover / focus of the switch. */
+/** Limits and overflow behavior the Worker reported: shown on hover / focus of the control. */
 function logDetails(r: Row): string {
+  const lv = r.logsLevels
+  if (lv) {
+    const parts = [tierText('summary', lv.summary, lv.usage.summary_bytes), tierText('full', lv.full, lv.usage.full_bytes)]
+    if (lv.usage.requests !== null) parts.push(t('ccgateway.requestLogs.requests', { count: lv.usage.requests }))
+    parts.push(t('ccgateway.requestLogs.errorText'))
+    if (lv.overflow) parts.push(t('ccgateway.requestLogs.overflow'))
+    return parts.join(' ')
+  }
   const overflow = r.logsLimits?.overflow_behavior === 'retain_partial_with_metadata' ? t('ccgateway.requestLogs.overflow') : t('ccgateway.requestLogs.unreportedOverflow')
   return `${logLimits(r)} ${overflow}`
 }
@@ -224,7 +364,19 @@ async function refreshAuth(r: Row) {
         </template>
         <template #cell-request_logs="{ row }">
           <!-- The tooltip only mirrors the row's hidden description, which assistive technology reads instead. -->
-          <STooltip v-if="row.logsEnabled !== null" :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
+          <template v-if="row.logsLevels">
+            <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
+              <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
+              <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
+              <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
+              <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
+            </STooltip>
+            <div v-if="row.logsLevels.level === 'full' || (row.logsLevels.usage.full_bytes ?? 0) > 0" class="mt-1 flex items-center gap-2 whitespace-nowrap">
+              <SHint v-if="row.logsLevels.level === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
+              <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+            </div>
+          </template>
+          <STooltip v-else-if="row.logsEnabled !== null" :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
             <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
             <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
             <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
@@ -244,5 +396,15 @@ async function refreshAuth(r: Row) {
         </template>
       </STable>
     </div>
+    <SModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning">
+      <div class="space-y-3" data-testid="request-log-full-dialog">
+        <SHint id="request-log-full-warning" tone="warning">{{ t('ccgateway.requestLogs.fullWarning') }}</SHint>
+        <SSegmented v-if="fullDialog" :model-value="fullDialog.hours" :options="hourOptions" block :aria-label="t('ccgateway.requestLogs.fullDuration')" data-testid="request-log-full-hours" @update:model-value="setHours" />
+      </div>
+      <template #footer>
+        <SButton data-testid="request-log-full-cancel" @click="fullDialog = null">{{ t('common.cancel') }}</SButton>
+        <SButton variant="primary" data-testid="request-log-full-confirm" @click="confirmFull">{{ t('ccgateway.requestLogs.fullAction') }}</SButton>
+      </template>
+    </SModal>
   </SCard>
 </template>

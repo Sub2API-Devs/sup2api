@@ -152,13 +152,13 @@ func NewRuntime(o Options) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	logDir, err := configureRequestLogs(root)
+	logs, err := newRequestLogStore(root)
 	if err != nil {
 		return nil, err
 	}
 	overrides := NewEnvironmentOverrides(root)
-	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
-	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
+	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logs.root}
+	g.RequestLogs = logs
 	g.RequestMode = o.RequestMode
 	g.CLIInfo = cliInfo
 	g.MaintenanceOnly = o.MaintenanceOnly
@@ -235,9 +235,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 				return
 			case <-ticker.C:
 				cache.prune()
-				if logDir != "" {
-					pruneRequestLogs(logDir)
-				}
+				pruneRequestLogs(logs.root)
 			}
 		}
 	}()

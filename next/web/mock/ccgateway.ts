@@ -169,9 +169,31 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   runtimeRoutes(`${base}/accounts/:id`, accountRuntime)
   runtimeRoutes(`${base}/drafts/:key`, draftRuntime)
 
-  // Request debug logs of an account's Worker, with the limits a current Worker reports.
-  const requestLogs = new Map<string, boolean>()
-  const requestLogState = (key: string) => ({ enabled: requestLogs.get(key) ?? false, retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata' })
+  // Request debug logs of an account's Worker with levels (REQUEST-LOG-LEVELS-DESIGN §4).
+  type LogLevel = 'off' | 'summary' | 'full'
+  interface LogState { level: LogLevel; fullUntil: number | null; summaryBytes: number; fullBytes: number; requests: number }
+  const requestLogs = new Map<string, LogState>()
+  const logsOf = (key: string): LogState => {
+    let s = requestLogs.get(key)
+    if (!s) requestLogs.set(key, (s = { level: 'summary', fullUntil: null, summaryBytes: 3 << 20, fullBytes: 0, requests: 412 }))
+    // Expiry returns to summary; the full content stays until its retention ends.
+    if (s.level === 'full' && s.fullUntil !== null && s.fullUntil <= Date.now()) Object.assign(s, { level: 'summary', fullUntil: null })
+    return s
+  }
+  const requestLogState = (key: string) => {
+    const s = logsOf(key)
+    return {
+      enabled: s.level !== 'off', level: s.level, full_until: s.fullUntil === null ? null : new Date(s.fullUntil).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      levels: ['off', 'summary', 'full'],
+      limits: {
+        summary: { retention_hours: 168, storage_budget_bytes: 128 << 20, per_request_limit_bytes: 256 << 10 },
+        full: { retention_hours: 24, storage_budget_bytes: 512 << 20, per_request_limit_bytes: 64 << 20 },
+      },
+      usage: { summary_bytes: s.summaryBytes, full_bytes: s.fullBytes, requests: s.requests },
+      // Legacy top-level fields (full tier values) for older consoles.
+      retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata',
+    }
+  }
   on('GET', `${base}/accounts/:id/request-logs`, (req) => {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
@@ -181,8 +203,19 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
     if (!ready(r.key)) return notSynchronized()
-    if (typeof req.body?.enabled !== 'boolean') return fail(400, 'invalid_argument', 'enabled must be a boolean.')
-    requestLogs.set(r.key, req.body.enabled)
+    const body = (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {}) as Record<string, unknown>
+    const keys = Object.keys(body).sort().join(',')
+    const s = logsOf(r.key)
+    const set = (level: LogLevel) => {
+      if (level === 'off') Object.assign(s, { summaryBytes: 0, fullBytes: 0, requests: 0 })
+      Object.assign(s, { level, fullUntil: null })
+    }
+    if (keys === 'enabled' && typeof body.enabled === 'boolean') set(body.enabled ? 'summary' : 'off')
+    else if (keys === 'level' && (body.level === 'off' || body.level === 'summary')) set(body.level)
+    else if (keys === 'full_for_hours,level' && body.level === 'full' && [1, 4, 24].includes(body.full_for_hours as number)) {
+      Object.assign(s, { level: 'full', fullUntil: Date.now() + (body.full_for_hours as number) * 3600000, fullBytes: Math.max(s.fullBytes, 6 << 20) })
+    } else if (keys === 'clear_full' && body.clear_full === true) s.fullBytes = 0
+    else return fail(400, 'invalid_argument', 'Send exactly one of {"level":"off"}, {"level":"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":true|false}.')
     return requestLogState(r.key)
   })
 

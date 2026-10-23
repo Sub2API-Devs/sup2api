@@ -29,6 +29,49 @@ type requestDiagnostic struct {
 	discarded     bool
 	finished      bool
 	store         *requestLogStore
+	// summaryOnly: this request keeps no request or response content (the
+	// summary level), decided when its log starts; only the summary files
+	// are written. A diagnostic without a store keeps everything.
+	summaryOnly bool
+}
+
+// Request log levels (REQUEST-LOG-LEVELS-DESIGN.md): off keeps nothing; the
+// summary keeps what a request looked like (metadata, events, headers with
+// credentials masked) and no content; full also keeps request and response
+// content, for a chosen time, after which the summary applies again.
+const (
+	logLevelOff     = "off"
+	logLevelSummary = "summary"
+	logLevelFull    = "full"
+)
+
+// Each level's retention and budgets. A request's summary files age as a
+// summary; its content files age (and are removed) as full content.
+const (
+	summaryRetention    = 7 * 24 * time.Hour
+	summaryBudget       = 128 << 20
+	summaryRequestLimit = 256 << 10
+	fullRetention       = 24 * time.Hour
+	fullBudget          = 512 << 20
+	fullRequestLimit    = 64 << 20
+)
+
+// fullDurations are the times the full level may be chosen for, in hours.
+var fullDurations = map[int]bool{1: true, 4: true, 24: true}
+
+// summaryFiles are the files the summary level writes: none holds request or
+// response content. Every other file is content and needs the full level.
+var summaryFiles = map[string]bool{"metadata.json": true, "events.jsonl": true, "request-headers.json": true, "response-headers.json": true}
+
+// keeps says whether this request's log takes the named file.
+func (d *requestDiagnostic) keeps(name string) bool { return !d.summaryOnly || summaryFiles[name] }
+
+// requestLimit is the bytes one request's log may hold at its level.
+func (d *requestDiagnostic) requestLimit() int64 {
+	if d.summaryOnly {
+		return summaryRequestLimit
+	}
+	return fullRequestLimit
 }
 
 // Always acquire the store before the request mutex; disable uses the same
@@ -115,7 +158,7 @@ func (d *requestDiagnostic) saveLocked(name string, b []byte) {
 	if d.store != nil && !d.store.enabled {
 		return
 	}
-	if d.directory == "" {
+	if d.directory == "" || !d.keeps(name) {
 		return
 	}
 	// Completion metadata remains queryable even when payload capture overflowed.
@@ -133,7 +176,8 @@ func (d *requestDiagnostic) reserve(n int) bool {
 	if d.discarded || d.finished {
 		return false
 	}
-	if d.bytes+int64(n) <= 64<<20 {
+	limit := d.requestLimit()
+	if d.bytes+int64(n) <= limit {
 		d.bytes += int64(n)
 		return true
 	}
@@ -142,24 +186,102 @@ func (d *requestDiagnostic) reserve(n int) bool {
 		d.response = nil
 	}
 	d.fields["log_status"] = "truncated"
-	d.fields["log_limit_bytes"] = 64 << 20
+	d.fields["log_limit_bytes"] = limit
 	d.fields["log_retained_bytes"] = d.bytes
 	d.fields["log_overflow_stage"] = d.stage
 	d.discarded = true
 	return false
 }
 
-func configureRequestLogs(root string) (string, error) {
-	dir := filepath.Join(root, "request-logs")
-	if _, err := os.Stat(filepath.Join(root, "request-logs.disabled")); err == nil {
-		if err := os.RemoveAll(dir); err != nil {
-			return "", err
+// The level is kept beside the logs (request-logs.json); an older Worker's
+// marker (request-logs.disabled) is read as off and written for off, so a
+// rollback keeps logging off. Without either the level is the summary.
+const requestLogStateFile, requestLogDisabledMarker = "request-logs.json", "request-logs.disabled"
+
+type requestLogState struct {
+	Level     string     `json:"level"`
+	FullUntil *time.Time `json:"full_until"`
+}
+
+// newRequestLogStore reads the account's level. Off removes any log left.
+func newRequestLogStore(root string) (*requestLogStore, error) {
+	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelSummary, active: map[*requestDiagnostic]bool{}}
+	raw, err := os.ReadFile(filepath.Join(root, requestLogStateFile))
+	var saved requestLogState
+	switch {
+	case err == nil && json.Unmarshal(raw, &saved) == nil && (saved.Level == logLevelOff || saved.Level == logLevelSummary || saved.Level == logLevelFull && saved.FullUntil != nil):
+		s.level = saved.Level
+		if saved.FullUntil != nil {
+			s.fullUntil = *saved.FullUntil
 		}
-		return "", nil
-	} else if !os.IsNotExist(err) {
-		return "", err
+	case err != nil && !os.IsNotExist(err):
+		return nil, err
+	default:
+		if _, err := os.Stat(filepath.Join(root, requestLogDisabledMarker)); err == nil {
+			s.level = logLevelOff
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
 	}
-	return dir, nil
+	s.enabled = s.level != logLevelOff
+	if !s.enabled {
+		if err := os.RemoveAll(s.root); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+// persist writes the level (caller holds s.mu). A store without a state
+// directory keeps its level in memory.
+func (s *requestLogStore) persist() error {
+	if s.state == "" {
+		return nil
+	}
+	state := requestLogState{Level: s.level}
+	if s.level == logLevelFull {
+		until := s.fullUntil.UTC()
+		state.FullUntil = &until
+	}
+	b, _ := json.Marshal(state)
+	tmp := filepath.Join(s.state, requestLogStateFile+".tmp")
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, filepath.Join(s.state, requestLogStateFile)); err != nil {
+		return err
+	}
+	marker := filepath.Join(s.state, requestLogDisabledMarker)
+	if s.level == logLevelOff {
+		return os.WriteFile(marker, []byte("disabled"), 0600)
+	}
+	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// captureContent says whether a request starting now keeps content (caller
+// holds s.mu). The full level ends at its time and the summary applies again.
+// A store built without a level (tests, embedded gateways) keeps everything.
+func (s *requestLogStore) captureContent() bool {
+	if s.level == "" {
+		return true
+	}
+	if s.level == logLevelFull && !s.clock().Before(s.fullUntil) {
+		s.level, s.fullUntil = logLevelSummary, time.Time{}
+		if err := s.persist(); err != nil {
+			log.Printf("request log level not saved: %v", err)
+		}
+	}
+	return s.level == logLevelFull
+}
+
+func (s *requestLogStore) clock() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 func safeHeaders(h http.Header) http.Header {
@@ -172,20 +294,23 @@ func safeHeaders(h http.Header) http.Header {
 	return out
 }
 
-// Keep complete requests for 24h, with a 512 MiB soft storage budget.
-// Only directories created by this logger are eligible for removal.
+// pruneRequestLogs keeps each level within its retention and budget, oldest
+// first: a request's content files as full content (24h, 512 MiB), the
+// request itself as a summary (7 days, 128 MiB). Only directories created by
+// this logger are eligible for removal.
 func pruneRequestLogs(root string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return
 	}
 	type record struct {
-		path string
-		time time.Time
-		size int64
+		path             string
+		time             time.Time
+		summary, content int64
+		contentFiles     []string
 	}
 	var records []record
-	var total int64
+	var summaryTotal, contentTotal int64
 	for _, entry := range entries {
 		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
 			continue
@@ -194,40 +319,101 @@ func pruneRequestLogs(root string) {
 		info, err := os.Stat(filepath.Join(p, "metadata.json"))
 		if err != nil {
 			// Interrupted requests have no completion metadata. They must still expire.
-			if info, statErr := entry.Info(); statErr == nil && time.Since(info.ModTime()) > 24*time.Hour {
+			if info, statErr := entry.Info(); statErr == nil && time.Since(info.ModTime()) > fullRetention {
 				_ = os.RemoveAll(p)
 			}
 			continue
 		}
-		var size int64
-		_ = filepath.WalkDir(p, func(_ string, e os.DirEntry, err error) error {
-			if err == nil && !e.IsDir() {
-				if i, err := e.Info(); err == nil {
-					size += i.Size()
-				}
+		r := record{path: p, time: info.ModTime()}
+		files, _ := os.ReadDir(p)
+		for _, f := range files {
+			i, err := f.Info()
+			if err != nil || f.IsDir() {
+				continue
 			}
-			return nil
-		})
-		records = append(records, record{p, info.ModTime(), size})
-		total += size
+			if summaryFiles[f.Name()] {
+				r.summary += i.Size()
+			} else {
+				r.content += i.Size()
+				r.contentFiles = append(r.contentFiles, filepath.Join(p, f.Name()))
+			}
+		}
+		records = append(records, r)
+		summaryTotal += r.summary
+		contentTotal += r.content
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].time.Before(records[j].time) })
 	for _, r := range records {
-		if time.Since(r.time) > 24*time.Hour || total > 512<<20 {
+		if r.content > 0 && (time.Since(r.time) > fullRetention || contentTotal > fullBudget) {
+			for _, f := range r.contentFiles {
+				_ = os.Remove(f)
+			}
+			contentTotal -= r.content
+		}
+		if time.Since(r.time) > summaryRetention || summaryTotal > summaryBudget {
 			if os.RemoveAll(r.path) == nil {
-				total -= r.size
+				summaryTotal -= r.summary
 			}
 		}
 	}
 }
 
+// requestLogUsage is what the logs hold now, by level.
+func requestLogUsage(root string) Object {
+	var summary, content, requests int64
+	entries, _ := os.ReadDir(root)
+	for _, entry := range entries {
+		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+			continue
+		}
+		requests++
+		files, _ := os.ReadDir(filepath.Join(root, entry.Name()))
+		for _, f := range files {
+			if i, err := f.Info(); err == nil && !f.IsDir() {
+				if summaryFiles[f.Name()] {
+					summary += i.Size()
+				} else {
+					content += i.Size()
+				}
+			}
+		}
+	}
+	return Object{"summary_bytes": summary, "full_bytes": content, "requests": requests}
+}
+
+// clearContent removes every request's content files, keeping the summaries.
+func clearContent(root string) error {
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !nativeSessionName.MatchString(entry.Name()) {
+			continue
+		}
+		files, _ := os.ReadDir(filepath.Join(root, entry.Name()))
+		for _, f := range files {
+			if !f.IsDir() && !summaryFiles[f.Name()] {
+				if err := os.Remove(filepath.Join(root, entry.Name(), f.Name())); err != nil && !os.IsNotExist(err) {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root string) http.ResponseWriter {
 	unlock := d.lock()
 	defer unlock()
+	d.summaryOnly = false
 	if d.store != nil {
 		if !d.store.enabled {
 			return w
 		}
+		d.summaryOnly = !d.store.captureContent()
 		d.store.active[d] = true
 		root = d.store.root
 	}
@@ -238,7 +424,18 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root
 		d.logFailure(err)
 		return w
 	}
-	pruneRequestLogs(root)
+	// A week of summaries is many directories: a request prunes at most once a
+	// minute (the maintenance loop prunes every minute too).
+	if d.store == nil || d.store.clock().Sub(d.store.pruned) >= time.Minute {
+		pruneRequestLogs(root)
+		if d.store != nil {
+			d.store.pruned = d.store.clock()
+		}
+	}
+	d.fields["log_level"] = logLevelFull
+	if d.summaryOnly {
+		d.fields["log_level"] = logLevelSummary
+	}
 	// A separate random filename prevents callers from selecting or overwriting files.
 	directory := filepath.Join(root, uuid())
 	if err := os.Mkdir(directory, 0700); err != nil {
@@ -253,11 +450,13 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root
 			d.logFailure(err)
 		}
 	}
-	f, err := os.OpenFile(filepath.Join(directory, "response.body"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		d.logFailure(err)
-	} else {
-		d.response = f
+	if !d.summaryOnly {
+		f, err := os.OpenFile(filepath.Join(directory, "response.body"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			d.logFailure(err)
+		} else {
+			d.response = f
+		}
 	}
 	d.writer = &diagnosticWriter{ResponseWriter: w, diagnostic: d}
 	return d.writer
@@ -417,7 +616,15 @@ type requestLogStore struct {
 	mu      sync.Mutex
 	root    string
 	enabled bool
-	active  map[*requestDiagnostic]bool
+	// level is off, summary or full; "" (tests, embedded gateways) keeps
+	// everything and never expires. fullUntil ends the full level.
+	level     string
+	fullUntil time.Time
+	// state is the directory the level is saved in; "" keeps it in memory.
+	state  string
+	pruned time.Time
+	now    func() time.Time
+	active map[*requestDiagnostic]bool
 }
 
 func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
@@ -428,45 +635,136 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r.Method == "PUT" {
-		var input struct {
-			Enabled *bool `json:"enabled"`
-		}
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil || input.Enabled == nil {
-			apiError(w, 400, "invalid_request_error", "enabled must be boolean")
+		var input map[string]json.RawMessage
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil {
+			apiError(w, 400, "invalid_request_error", "Invalid request log setting")
 			return
 		}
-		marker := filepath.Join(filepath.Dir(s.root), "request-logs.disabled")
-		if !*input.Enabled {
-			if err := os.WriteFile(marker, []byte("disabled"), 0600); err != nil {
-				apiError(w, 500, "api_error", "Cannot persist request log setting")
-				return
-			}
-			s.enabled = false
+		level, hours, clear, ok := requestLogChange(input)
+		if !ok {
+			apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":bool}`)
+			return
+		}
+		if clear {
 			for d := range s.active {
 				d.mu.Lock()
-				if d.response != nil {
-					_ = d.response.Close()
-					d.response = nil
-				}
-				d.directory = ""
-				d.discarded = true
+				d.stopContent()
 				d.mu.Unlock()
 			}
-			if err := os.RemoveAll(s.root); err != nil {
-				apiError(w, 500, "api_error", "Cannot clear request logs")
+			if err := clearContent(s.root); err != nil {
+				apiError(w, 500, "api_error", "Cannot clear request log content")
 				return
 			}
 		} else {
-			if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
+			previous, previousUntil := s.level, s.fullUntil
+			s.level, s.fullUntil = level, time.Time{}
+			if level == logLevelFull {
+				s.fullUntil = s.clock().Add(time.Duration(hours) * time.Hour)
+			}
+			if err := s.persist(); err != nil {
+				s.level, s.fullUntil = previous, previousUntil
 				apiError(w, 500, "api_error", "Cannot persist request log setting")
 				return
 			}
-			s.enabled = true
+			s.enabled = level != logLevelOff
+			if !s.enabled {
+				for d := range s.active {
+					d.mu.Lock()
+					d.stopContent()
+					d.directory = ""
+					d.discarded = true
+					d.mu.Unlock()
+				}
+				if err := os.RemoveAll(s.root); err != nil {
+					apiError(w, 500, "api_error", "Cannot clear request logs")
+					return
+				}
+			}
 		}
 	} else if r.Method != "GET" {
 		apiError(w, 405, "invalid_request_error", "Use GET or PUT")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(Object{"enabled": s.enabled, "per_request_limit_bytes": 64 << 20, "retention_hours": 24, "storage_budget_bytes": 512 << 20, "overflow_behavior": "retain_partial_with_metadata"})
+	_ = json.NewEncoder(w).Encode(s.describe())
+}
+
+// requestLogChange reads one PUT: a level (full with its hours), clearing the
+// content, or an older core's switch (on is the summary).
+func requestLogChange(input map[string]json.RawMessage) (level string, hours int, clear, ok bool) {
+	only := func(keys ...string) bool {
+		if len(input) != len(keys) {
+			return false
+		}
+		for _, key := range keys {
+			if _, present := input[key]; !present {
+				return false
+			}
+		}
+		return true
+	}
+	switch {
+	case only("enabled"):
+		var on bool
+		if json.Unmarshal(input["enabled"], &on) != nil || string(input["enabled"]) == "null" {
+			return "", 0, false, false
+		}
+		if on {
+			return logLevelSummary, 0, false, true
+		}
+		return logLevelOff, 0, false, true
+	case only("clear_full"):
+		var yes bool
+		return "", 0, true, json.Unmarshal(input["clear_full"], &yes) == nil && yes
+	case only("level"), only("level", "full_for_hours"):
+		if json.Unmarshal(input["level"], &level) != nil {
+			return "", 0, false, false
+		}
+		_, timed := input["full_for_hours"]
+		if level == logLevelFull {
+			return level, hours, false, timed && json.Unmarshal(input["full_for_hours"], &hours) == nil && fullDurations[hours]
+		}
+		return level, 0, false, !timed && (level == logLevelOff || level == logLevelSummary)
+	}
+	return "", 0, false, false
+}
+
+// stopContent ends a running request's content capture; its summary goes on
+// (caller holds d.mu).
+func (d *requestDiagnostic) stopContent() {
+	if d.response != nil {
+		_ = d.response.Close()
+		d.response = nil
+	}
+	d.summaryOnly = true
+}
+
+// describe is the level, each level's limits and what the logs hold (caller
+// holds s.mu). The top-level limits are the full level's, as an older core reads them.
+func (s *requestLogStore) describe() Object {
+	level := s.level
+	if level == "" {
+		level = logLevelFull
+	}
+	if !s.enabled {
+		level = logLevelOff
+	}
+	var until any
+	if level == logLevelFull && !s.fullUntil.IsZero() {
+		if !s.clock().Before(s.fullUntil) {
+			level = logLevelSummary
+		} else {
+			until = s.fullUntil.UTC().Format(time.RFC3339)
+		}
+	}
+	return Object{
+		"enabled": s.enabled, "level": level, "full_until": until, "levels": []string{logLevelOff, logLevelSummary, logLevelFull},
+		"limits": Object{
+			logLevelSummary: Object{"retention_hours": int(summaryRetention / time.Hour), "storage_budget_bytes": summaryBudget, "per_request_limit_bytes": summaryRequestLimit},
+			logLevelFull:    Object{"retention_hours": int(fullRetention / time.Hour), "storage_budget_bytes": fullBudget, "per_request_limit_bytes": fullRequestLimit},
+		},
+		"usage":                   requestLogUsage(s.root),
+		"per_request_limit_bytes": fullRequestLimit, "retention_hours": int(fullRetention / time.Hour), "storage_budget_bytes": fullBudget,
+		"overflow_behavior": "retain_partial_with_metadata",
+	}
 }

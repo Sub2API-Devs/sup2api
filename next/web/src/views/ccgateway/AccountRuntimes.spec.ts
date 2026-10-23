@@ -6,15 +6,16 @@ import AccountRuntimes from './AccountRuntimes.vue'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), manage: true }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
-vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: async () => true, toast: vi.fn() }))
+vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: (...a: unknown[]) => mocks.confirm(...a), toast: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'settings:manage' ? mocks.manage : key === 'account:read', me: { id: 1 } }) }))
 
 describe('account runtime debug log switches', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.manage = true
+    mocks.confirm.mockResolvedValue(true)
     mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'cc-main', type: 'managed', created_by: 1 }] })
     mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? { status: 'ready', container: 'cc-25' } : path.endsWith('/health') ? { logged_in: true } : { enabled: true })
     mocks.put.mockResolvedValue({ enabled: false })
@@ -167,5 +168,176 @@ describe('account runtime list layout', () => {
     await w.get('[data-testid="request-logs-25"] [role="switch"], [role="switch"][data-testid="request-logs-25"]').trigger('focusout')
     expect(tooltip()).toBeNull()
     w.unmount()
+  })
+})
+
+describe('account runtime debug log levels', () => {
+  const MIB = 1048576
+  const leveled = (over: Record<string, unknown> = {}) => ({
+    enabled: true, level: 'summary', full_until: null, levels: ['off', 'summary', 'full'],
+    limits: {
+      summary: { retention_hours: 168, storage_budget_bytes: 128 * MIB, per_request_limit_bytes: 262144 },
+      full: { retention_hours: 24, storage_budget_bytes: 512 * MIB, per_request_limit_bytes: 64 * MIB },
+    },
+    usage: { summary_bytes: 2 * MIB, full_bytes: 0, requests: 3 },
+    per_request_limit_bytes: 64 * MIB, retention_hours: 24, storage_budget_bytes: 512 * MIB, overflow_behavior: 'retain_partial_with_metadata',
+    ...over,
+  })
+  function worker(state: Record<string, unknown>) {
+    mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? { status: 'ready', container: 'cc-25' } : path.endsWith('/health') ? { logged_in: true } : state)
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.manage = true
+    mocks.confirm.mockResolvedValue(true)
+    mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'cc-main', type: 'managed', created_by: 1 }] })
+    i18n.global.locale.value = 'zh'
+  })
+  async function render() {
+    const wrapper = mount(AccountRuntimes, { attachTo: document.body, global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    return wrapper
+  }
+  const radio = (w: Awaited<ReturnType<typeof render>>, level: string) => w.get<HTMLInputElement>(`[data-testid="request-log-level-25"] input[value="${level}"]`)
+  const dialog = () => document.body.querySelector('[data-testid="request-log-full-dialog"]')
+  const click = async (testid: string) => {
+    ;(document.body.querySelector(`[data-testid="${testid}"]`) as HTMLElement).click()
+    await flushPromises()
+  }
+
+  it('shows the three levels instead of the switch, with both tiers in the details', async () => {
+    worker(leveled())
+    const w = await render()
+    expect(w.find('[role="switch"]').exists()).toBe(false)
+    expect(w.get('[data-testid="request-log-level-25"]').text().replace(/\s+/g, '')).toBe('关闭摘要完整')
+    expect(radio(w, 'summary').element.checked).toBe(true)
+    const details = w.get('[data-testid="request-log-limits-25"]').text()
+    expect(details).toContain('摘要：保留 7 天；单请求 0.25 MiB；总预算 128 MiB。当前占用 2 MiB。')
+    expect(details).toContain('完整：保留 24 小时；单请求 64 MiB；总预算 512 MiB。当前占用 0 MiB。')
+    expect(details).toContain('共 3 个请求')
+    expect(details).toContain('256 个字符')
+    expect(w.get('[data-testid="request-log-level-25"]').attributes('aria-describedby')).toBe('request-log-limits-25')
+    expect(w.find('[data-testid="request-log-full-25"]').exists()).toBe(false)
+    expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+    expect(w.text()).toContain('摘要：只记元数据')
+    w.unmount()
+  })
+
+  it('asks for a duration before turning the full level on', async () => {
+    worker(leveled())
+    mocks.put.mockResolvedValue(leveled({ level: 'full', full_until: new Date(Date.now() + 4 * 3600000).toISOString(), usage: { summary_bytes: 1, full_bytes: 0, requests: 3 } }))
+    const w = await render()
+    await radio(w, 'full').setValue(true)
+    await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(dialog()?.textContent).toContain('完整级别会保存请求和响应正文（用户对话），到期自动回到摘要')
+    expect(dialog()?.textContent?.replace(/\s+/g, '')).toContain('1小时4小时24小时')
+    // The row keeps its level while the dialog is open.
+    expect(radio(w, 'summary').element.checked).toBe(true)
+    ;(document.body.querySelector('[data-testid="request-log-full-hours"] input[value="4"]') as HTMLInputElement).click()
+    await flushPromises()
+    await click('request-log-full-confirm')
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'full', full_for_hours: 4 })
+    expect(dialog()).toBeNull()
+    expect(radio(w, 'full').element.checked).toBe(true)
+    expect(w.get('[data-testid="request-log-full-25"]').text()).toMatch(/^完整：剩余 (3 小时 59|4 小时 0) 分（到期回到摘要）$/)
+    w.unmount()
+  })
+
+  it('sends nothing when the full dialog is cancelled', async () => {
+    worker(leveled())
+    const w = await render()
+    await radio(w, 'full').setValue(true)
+    await flushPromises()
+    await click('request-log-full-cancel')
+    expect(dialog()).toBeNull()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(radio(w, 'summary').element.checked).toBe(true)
+    expect(radio(w, 'full').element.checked).toBe(false)
+    w.unmount()
+  })
+
+  it('counts down the full level from full_until', async () => {
+    for (const [ms, text] of [
+      [(3 * 60 + 12) * 60000 - 5000, '完整：剩余 3 小时 12 分（到期回到摘要）'],
+      [25 * 60000 - 5000, '完整：剩余 25 分（到期回到摘要）'],
+      [-60000, '完整：已到期，下一个请求开始时回到摘要'],
+    ] as const) {
+      worker(leveled({ level: 'full', full_until: new Date(Date.now() + ms).toISOString() }))
+      const w = await render()
+      expect(w.get('[data-testid="request-log-full-25"]').text()).toBe(text)
+      w.unmount()
+    }
+  })
+
+  it('deletes the full content with clear_full after confirmation', async () => {
+    worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
+    mocks.put.mockResolvedValue(leveled({ usage: { summary_bytes: MIB, full_bytes: 0, requests: 9 } }))
+    mocks.confirm.mockResolvedValueOnce(false)
+    const w = await render()
+    expect(w.find('[data-testid="request-log-full-25"]').exists()).toBe(false)
+    await w.get('[data-testid="request-log-clear-full-25"]').trigger('click')
+    await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
+    await w.get('[data-testid="request-log-clear-full-25"]').trigger('click')
+    await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { clear_full: true })
+    expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('confirms before turning logs off, then sends the level', async () => {
+    worker(leveled())
+    mocks.put.mockResolvedValue(leveled({ enabled: false, level: 'off', usage: { summary_bytes: 0, full_bytes: 0, requests: 0 } }))
+    mocks.confirm.mockResolvedValueOnce(false)
+    const w = await render()
+    await radio(w, 'off').setValue(true)
+    await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(radio(w, 'summary').element.checked).toBe(true)
+    await radio(w, 'off').setValue(true)
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ danger: true }))
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'off' })
+    expect(radio(w, 'off').element.checked).toBe(true)
+    w.unmount()
+  })
+
+  it('sends summary without a confirmation and keeps the level on failure', async () => {
+    worker(leveled({ level: 'full', full_until: new Date(Date.now() + 3600000).toISOString() }))
+    mocks.put.mockRejectedValue(new Error('unreachable'))
+    const w = await render()
+    await radio(w, 'summary').setValue(true)
+    await flushPromises()
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'summary' })
+    expect(radio(w, 'full').element.checked).toBe(true)
+    expect(w.text()).toContain('读取或更新日志开关失败')
+    w.unmount()
+  })
+
+  it('lets readers see the level but not change it or delete content', async () => {
+    mocks.manage = false
+    worker(leveled({ usage: { summary_bytes: 1, full_bytes: 5, requests: 1 } }))
+    const w = await render()
+    expect(radio(w, 'full').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('rejects a malformed level state instead of guessing', async () => {
+    for (const bad of [
+      leveled({ level: 'debug' }),
+      leveled({ level: 'full', full_until: null }),
+      leveled({ level: 'full', full_until: 'soon' }),
+      leveled({ levels: ['off', 'summary'], level: 'full', full_until: new Date().toISOString() }),
+      leveled({ levels: [] }),
+    ]) {
+      worker(bad)
+      const w = await render()
+      expect(w.find('[data-testid="request-log-level-25"]').exists()).toBe(false)
+      expect(w.text()).toContain('读取或更新日志开关失败')
+      w.unmount()
+    }
   })
 })

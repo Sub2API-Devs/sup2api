@@ -215,9 +215,9 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		c.gatewayAttachments[detail.Type] = detail.Text
 	case ack.Event == "trace" && c.ready:
-		c.diagnostic.trace("mod_attachment", ack.Detail)
+		c.diagnostic.traceContent("mod_attachment", ack.Detail, Object{"bytes": len(ack.Detail)})
 	case ack.Event == "tool" && c.ready:
-		c.diagnostic.trace("mod_tool_call", ack.Detail)
+		c.diagnostic.traceContent("mod_tool_call", ack.Detail, Object{"bytes": len(ack.Detail)})
 	default:
 		w.WriteHeader(400)
 		return

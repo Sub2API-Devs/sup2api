@@ -123,7 +123,7 @@ func (r *Runner) runNativeWebSearch(ctx context.Context, req *Request, dir strin
 		if err != nil {
 			return nil, fmt.Errorf("invalid native WebSearch CLI frame")
 		}
-		req.diagnostic.trace("web_search_output", frame)
+		req.diagnostic.traceContent("web_search_output", frame, Object{"type": logValue(str(frame, "type")), "bytes": len(scan.Bytes())})
 		state.observe(frame)
 		switch str(frame, "type") {
 		case "control_request":

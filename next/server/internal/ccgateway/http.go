@@ -65,11 +65,15 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// are gone: per-account runtimes are the only mode (§53.9).
 	r.Perm("POST", "/system/ccgateway/remote-test", "settings:manage", s.remoteTest)
 }
-func (s *Service) record(c *gin.Context, action string) {
+func (s *Service) record(c *gin.Context, action string) { s.recordDetail(c, action, nil) }
+
+// recordDetail audits with a non-sensitive detail object (enum values,
+// counts, timestamps; never secrets or log contents).
+func (s *Service) recordDetail(c *gin.Context, action string, detail any) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Second)
 	defer cancel()
 	uid, _ := core.UserID(ctx)
-	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway."+action, "system", "ccgateway", nil); e != nil {
+	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway."+action, "system", "ccgateway", detail); e != nil {
 		slog.Error("CCGateway audit failed", "action", action)
 	}
 }

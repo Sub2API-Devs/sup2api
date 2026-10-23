@@ -625,12 +625,12 @@ func Serve() error {
 	if e != nil {
 		return e
 	}
-	logDir, e := configureRequestLogs(root)
+	logs, e := newRequestLogStore(root)
 	if e != nil {
 		return e
 	}
 	overrides := NewEnvironmentOverrides(root)
-	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
+	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Overrides: overrides}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logs.root}
 	g.RequestMode = os.Getenv("CCG_REQUEST_MODE")
 	if g.RequestMode == "" {
 		g.RequestMode = "build"
@@ -648,14 +648,14 @@ func Serve() error {
 		return err
 	}
 	g.Runner.WorkingDirectory = envDefault("CCG_WORKING_DIRECTORY", root)
-	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
+	g.RequestLogs = logs
 	relayHost := "127.0.0.1"
 	if ip != nil && ip.IsLoopback() {
 		relayHost = ip.String()
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
 	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: g.RequestLogs}
-	return g.listen(bind, admin, logDir)
+	return g.listen(bind, admin, logs.root)
 }
 
 // listen serves the gateway and its management API until SIGINT or SIGTERM.

@@ -73,7 +73,18 @@ func TestRequestLogRetentionSkipsActiveAndUnrelatedDirectories(t *testing.T) {
 	}
 	meta := filepath.Join(completed, "metadata.json")
 	_ = os.WriteFile(meta, []byte("{}"), 0600)
+	_ = os.WriteFile(filepath.Join(completed, "request.body"), []byte("content"), 0600)
+	// After a day the content is gone and the summary stays; after a week, all.
 	old := time.Now().Add(-25 * time.Hour)
+	_ = os.Chtimes(meta, old, old)
+	pruneRequestLogs(root)
+	if _, err := os.Stat(filepath.Join(completed, "request.body")); !os.IsNotExist(err) {
+		t.Fatal("expired content retained")
+	}
+	if _, err := os.Stat(meta); err != nil {
+		t.Fatal("summary removed with the content")
+	}
+	old = time.Now().Add(-8 * 24 * time.Hour)
 	_ = os.Chtimes(meta, old, old)
 	pruneRequestLogs(root)
 	if _, err := os.Stat(completed); !os.IsNotExist(err) {
@@ -94,9 +105,9 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "request-logs.disabled"), []byte("disabled"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	configured, err := configureRequestLogs(root)
-	if err != nil || configured != "" {
-		t.Fatal(configured, err)
+	store, err := newRequestLogStore(root)
+	if err != nil || store.enabled || store.level != logLevelOff {
+		t.Fatal(store, err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatal("disabled logs retained")
@@ -129,7 +140,7 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 
 func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 	root := t.TempDir()
-	store := &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	store := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, enabled: true, active: map[*requestDiagnostic]bool{}}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
@@ -149,9 +160,11 @@ func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 	if _, err := os.Stat(store.root); !os.IsNotExist(err) {
 		t.Fatal("active log recreated after disable")
 	}
-	dir, err := configureRequestLogs(root)
-	if err != nil || dir != "" {
-		t.Fatal("disable not persisted", dir, err)
+	if saved, err := newRequestLogStore(root); err != nil || saved.enabled {
+		t.Fatal("disable not persisted", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "request-logs.disabled")); err != nil {
+		t.Fatal("an older Worker would not see the disable", err)
 	}
 	if w.Body.String() != "beforeafter" {
 		t.Fatal("disable interrupted response")
