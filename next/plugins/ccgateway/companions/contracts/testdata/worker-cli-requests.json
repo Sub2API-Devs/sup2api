@@ -27,7 +27,7 @@
     {
       "name": "build-injection",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true},\"tools\":{\"Read\":true}}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":\"plain system\"}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"NotebookEdit\":true,\"Read\":true,\"Write\":true}}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":\"plain system\"}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
@@ -43,10 +43,16 @@
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {
-      "name": "direct-identity-lines",
+      "name": "direct-entrypoint",
       "mode": "direct",
       "stdin": "{\"model\":\"fixture\",\"system\":\"plain system\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}",
-      "direct": "{\"build_billing_entrypoint\":\"claude-desktop\",\"build_identity_lines\":{\"claude-desktop\":\"agent_sdk\"}}"
+      "direct": "{\"build_billing_entrypoint\":\"claude-desktop\"}"
+    },
+    {
+      "name": "direct-billing-sources",
+      "mode": "direct",
+      "stdin": "{\"model\":\"fixture\",\"system\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.300.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}",
+      "direct": "{\"build_billing_entrypoint\":\"claude-desktop\",\"build_billing_sources\":{\"cc_entrypoint\":\"client\",\"cc_version\":\"worker\"}}"
     },
     {
       "name": "direct-passthrough",

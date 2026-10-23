@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SButton, SHint, SSegmented, SSelect } from '@sub2api/ui'
 import RequestPolicySettings from './RequestPolicySettings.vue'
-import { defaultRequestPolicy, type AccountFeaturePolicy, type FeaturePreview } from './requestPolicy'
+import { defaultRequestPolicy, savedOverrides, type AccountFeaturePolicy, type FeaturePreview } from './requestPolicy'
 import { reasonOf } from './ccgAuthFlow'
 const props = defineProps<{ accountId: number; canEdit: boolean; disabled?: boolean; errors?: Record<string, string> }>()
 const model = defineModel<AccountFeaturePolicy>()
@@ -39,7 +39,7 @@ async function load(initial = false, retainDraft = false) {
   try {
     const result = initial || !props.canEdit
       ? await api.get<FeaturePreview>(base, groupId.value == null ? undefined : { group_id: groupId.value }, { signal: controller.signal })
-      : await api.post<FeaturePreview>(base + '/preview', { group_id: groupId.value, cc_feature_policy: model.value }, { signal: controller.signal })
+      : await api.post<FeaturePreview>(base + '/preview', { group_id: groupId.value, cc_feature_policy: model.value && { ...model.value, overrides: savedOverrides(model.value.overrides) } }, { signal: controller.signal })
     if (seq !== sequence) return
     preview.value = result
     policy.value = result.effective

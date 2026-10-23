@@ -129,6 +129,9 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	}
 	upstreamCanceled := make(chan struct{})
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-api-key") == "secret-api" && serveFakeWorkerHealth(w, r, "2.1.302") {
+			return
+		}
 		if r.Header.Get("x-api-key") != "secret-api" || r.Header.Get("Authorization") != "" || r.URL.Path != "/v1/messages" {
 			t.Error("incorrect injected authorization")
 		}

@@ -8,40 +8,98 @@ export type IdentitySource = 'client' | 'worker' | 'replace'
 export const billingFields = ['cc_version', 'cc_entrypoint'] as const
 export type BillingField = (typeof billingFields)[number]
 export type BillingSource = 'client' | 'worker'
-// The cc_entrypoint values build may write, and per entrypoint the identity
-// lines real clients send with it, the default first (contracts
-// features/identity_line.go). Lines are names; Claude Code renders the text.
+// The cc_entrypoint values build may write into a billing header it adds.
 export const billingEntrypoints = ['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'] as const
 export type BillingEntrypoint = (typeof billingEntrypoints)[number]
 export const defaultBillingEntrypoint: BillingEntrypoint = 'sdk-cli'
-export type IdentityLine = 'official_cli' | 'official_cli_sdk' | 'agent_sdk'
-export type IdentityLineChoice = IdentityLine | 'none'
-export const identityLineChoices: Record<BillingEntrypoint, readonly IdentityLine[]> = {
-  cli: ['official_cli'],
-  'sdk-cli': ['agent_sdk', 'official_cli_sdk'],
-  'sdk-ts': ['agent_sdk', 'official_cli_sdk'],
-  'sdk-py': ['agent_sdk', 'official_cli_sdk'],
-  'claude-desktop': ['official_cli_sdk', 'agent_sdk'],
-  'claude-vscode': ['official_cli_sdk', 'agent_sdk']
-}
-export const defaultIdentityLine = (entrypoint: BillingEntrypoint): IdentityLine => identityLineChoices[entrypoint][0]!
-function validIdentityLines(lines: Record<string, string> | undefined): boolean {
-  return Object.entries(lines ?? {}).every(([entrypoint, line]) =>
-    entrypoint in identityLineChoices && (line === 'none' || (identityLineChoices[entrypoint as BillingEntrypoint] as readonly string[]).includes(line)))
-}
-// What build adds to a request without a billing header (one that is not
-// Claude Code's), each optional and inherited on its own (contracts
-// features/injection.go, 2026-10-23): CC's system prompt, its first-turn
-// attachments in CC's order and its own tools. The CLI renders all of it.
+// The identity line is no longer configured (2026-10-23): a request without
+// one gets the line its billing header's entrypoint calls for. A
+// build_identity_lines saved before is ignored by the core and dropped from
+// every save (savedOverrides, normalizeRequestPolicy).
+const retiredOverrideKeys = ['build_identity_lines'] as const
+// Request levels (contracts features/levels.go, 2026-10-23), from the least
+// to the most of Claude Code a request is given; each includes the ones
+// before it: none is the billing header alone (direct); micro adds the
+// identity line (build); low the environment; high CC's system prompt and
+// tools. The level decides which layers apply; each layer's choices are kept
+// when the level is lower and apply again when it is raised.
+export const requestLevels = ['none', 'micro', 'low', 'high'] as const
+export type RequestLevel = (typeof requestLevels)[number]
+export const defaultRequestLevel: RequestLevel = 'low'
+const isLevel = (value: unknown): value is RequestLevel => (requestLevels as readonly unknown[]).includes(value)
+const levelRank = (level?: RequestLevel | '') => requestLevels.indexOf(level || defaultRequestLevel)
+export const relayModeForLevel = (level?: RequestLevel | ''): 'direct' | 'build' => levelRank(level) === 0 ? 'direct' : 'build'
+export const levelHasIdentity = (level?: RequestLevel | '') => levelRank(level) >= 1
+export const levelHasEnvironment = (level?: RequestLevel | '') => levelRank(level) >= 2
+export const levelHasPromptAndTools = (level?: RequestLevel | '') => levelRank(level) >= 3
+// What a level adds to a request without a billing header (one that is not
+// Claude Code's), each choice optional and inherited on its own (contracts
+// features/injection.go): CC's first-turn attachments in CC's order (from
+// low), its system prompt and its own tools (high). The CLI renders all of it.
 export const injectionAttachments = ['environment', 'model', 'total_tokens', 'date'] as const
 export type InjectionAttachment = (typeof injectionAttachments)[number]
-export const injectionTools = ['Agent', 'Bash', 'Read', 'Edit', 'Write', 'NotebookEdit', 'ReportFindings', 'WebSearch', 'TaskStop', 'Skill',
-  'EnterWorktree', 'ExitWorktree', 'SendMessage', 'ListAgents', 'Workflow', 'CronCreate', 'CronDelete', 'CronList', 'ScheduleWakeup', 'ToolSearch'] as const
+// The tools CC's system prompt names, added at high without a choice, then
+// the optional ones (contracts InjectionTools, console order).
+export const defaultInjectionTools = ['Bash', 'Read', 'Edit', 'Write'] as const
+export const injectionTools = [...defaultInjectionTools, 'Agent', 'WebSearch', 'NotebookEdit'] as const
 export type InjectionTool = (typeof injectionTools)[number]
 export interface BuildInjection {
   system_prompt?: boolean
   attachments?: Partial<Record<InjectionAttachment, boolean>>
   tools?: Partial<Record<InjectionTool, boolean>>
+}
+// A choice's value when no layer makes it (LevelInjection): every attachment,
+// the system prompt and the default tools are added within their level.
+export function injectionDefault(part: 'system_prompt' | 'attachments' | 'tools', name?: string): boolean {
+  return part !== 'tools' || (defaultInjectionTools as readonly string[]).includes(name ?? '')
+}
+// Only what is added; undefined when nothing is (BuildInjection.Effective).
+function effectiveInjection(p?: BuildInjection): BuildInjection | undefined {
+  if (!p) return undefined
+  const out: BuildInjection = {}
+  if (p.system_prompt) out.system_prompt = true
+  for (const part of ['attachments', 'tools'] as const) {
+    const on = Object.entries(p[part] ?? {}).filter(([, value]) => value)
+    if (on.length) (out as Record<string, unknown>)[part] = Object.fromEntries(on.map(([name]) => [name, true]))
+  }
+  return Object.keys(out).length ? out : undefined
+}
+// LevelInjection: the configured choices within the level, each omitted one at
+// its default; nothing outside the level; undefined when nothing is added.
+export function levelInjection(level: RequestLevel | '' | undefined, configured?: BuildInjection): BuildInjection | undefined {
+  if (!levelHasEnvironment(level)) return undefined
+  const out: BuildInjection = { attachments: Object.fromEntries(injectionAttachments.map(name => [name, true])) }
+  if (levelHasPromptAndTools(level)) {
+    out.system_prompt = configured?.system_prompt ?? true
+    out.tools = { ...Object.fromEntries(defaultInjectionTools.map(name => [name, true])), ...configured?.tools }
+  }
+  out.attachments = { ...out.attachments, ...configured?.attachments }
+  return effectiveInjection(out)
+}
+// LegacyLevel: the level of a policy saved before levels. Direct is none;
+// build adding the prompt or a tool is high, converting or adding the
+// environment low, otherwise micro; an unknown mode has none ('').
+export function legacyLevel(relayMode: unknown, attachments?: Partial<Record<string, string>>, injection?: BuildInjection): RequestLevel | '' {
+  if (relayMode === 'direct') return 'none'
+  if (relayMode !== 'build' && relayMode !== '' && relayMode !== undefined && relayMode !== null) return ''
+  const added = effectiveInjection(injection)
+  if (added && (added.system_prompt !== undefined || Object.keys(added.tools ?? {}).length)) return 'high'
+  if (Object.values(attachments ?? {}).some(source => source !== 'client')) return 'low'
+  if (Object.keys(added?.attachments ?? {}).length) return 'low'
+  return 'micro'
+}
+// A legacy policy added nothing it did not choose, while a level adds its
+// omitted choices: the migration writes the level's unchosen ones as off, so
+// the level adds exactly what the policy did (the core does the same).
+function legacyInjection(level: RequestLevel, injection?: BuildInjection): BuildInjection | undefined {
+  if (!levelHasEnvironment(level)) return injection
+  const out = mergeInjection(injection) ?? {}
+  out.attachments = { ...Object.fromEntries(injectionAttachments.map(name => [name, false])), ...out.attachments }
+  if (levelHasPromptAndTools(level)) {
+    out.system_prompt ??= false
+    out.tools = { ...Object.fromEntries(defaultInjectionTools.map(name => [name, false])), ...out.tools }
+  }
+  return out
 }
 function validInjection(value: BuildInjection | undefined): boolean {
   if (value === undefined) return true
@@ -118,10 +176,10 @@ export interface RequestPolicy {
   build_billing_sources?: Partial<Record<BillingField, BillingSource>>
   // Absent is the default, sdk-cli.
   build_billing_entrypoint?: BillingEntrypoint
-  // Absent entrypoints use their default line.
-  build_identity_lines?: Partial<Record<BillingEntrypoint, IdentityLineChoice>>
-  // Absent adds nothing.
+  // Absent choices take their level's default (injectionDefault).
   build_injection?: BuildInjection
+  // Which layers apply; relay_mode follows from it (none is direct).
+  level: RequestLevel
   request_identity_sources?: Partial<Record<IdentityField, IdentitySource>>
   schema_version?: number
   unknown_field: 'reject' | 'ignore'
@@ -135,7 +193,9 @@ export interface RequestPolicy {
   erase_client_attachments?: ErasableAttachment[]
   // Client attachment types replaced in place with the Worker's Claude Code rendering; never an erased type.
   replace_client_attachments?: ReplaceableAttachment[]
-  relay_mode: 'direct' | 'build'
+  // Derived from the level and only read: a policy saved before levels has it
+  // instead of a level; the editor no longer writes it.
+  relay_mode?: 'direct' | 'build'
   cli_version?: string
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
@@ -152,9 +212,8 @@ export function defaultRequestPolicy(): RequestPolicy {
     replace_client_attachments: [],
     build_attachment_sources: {},
     build_billing_sources: {},
-    build_identity_lines: {},
     request_identity_sources: {},
-    relay_mode: 'build',
+    level: defaultRequestLevel,
     cli_version: '2.1.304',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -167,8 +226,9 @@ export function defaultRequestPolicy(): RequestPolicy {
     ]
   }
 }
-type SavedRequestPolicy = Partial<Omit<RequestPolicy, 'relay_mode' | 'erase_client_attachments' | 'replace_client_attachments'>> & {
+type SavedRequestPolicy = Partial<Omit<RequestPolicy, 'relay_mode' | 'level' | 'erase_client_attachments' | 'replace_client_attachments'>> & {
   relay_mode?: unknown
+  level?: unknown
   erase_client_attachments?: Array<ErasableAttachment | 'environment'>
   replace_client_attachments?: Array<ReplaceableAttachment | 'environment'>
 }
@@ -179,6 +239,14 @@ function expandEnvironment(types: Array<ErasableAttachment | 'environment'> = []
 }
 export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPolicy {
   const defaults = defaultRequestPolicy()
+  // A policy saved before levels gets the level LegacyLevel gives it, a
+  // retired mode (native, legacy, passthrough) read as build as the core does,
+  // with the level's choices it did not make written as off; no saved policy
+  // is the default level.
+  const legacy = !!policy && !isLevel(policy.level)
+  const level = !policy ? defaults.level : isLevel(policy.level) ? policy.level
+    : legacyLevel(savedRelayMode(policy.relay_mode), policy.build_attachment_sources, policy.build_injection) || defaults.level
+  const injection = knownInjection(legacy ? legacyInjection(level, policy?.build_injection) : policy?.build_injection)
   // Pick the editor's fields rather than spreading historical or server-defaulted policy data.
   return {
     ...(policy?.schema_version === undefined ? {} : { schema_version: policy.schema_version }),
@@ -193,13 +261,30 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     build_attachment_sources: { ...policy?.build_attachment_sources },
     build_billing_sources: { ...policy?.build_billing_sources },
     ...(policy?.build_billing_entrypoint === undefined ? {} : { build_billing_entrypoint: policy.build_billing_entrypoint }),
-    build_identity_lines: { ...policy?.build_identity_lines },
-    ...(policy?.build_injection === undefined ? {} : { build_injection: mergeInjection(policy.build_injection) }),
+    ...(injection === undefined ? {} : { build_injection: injection }),
     request_identity_sources: { ...policy?.request_identity_sources },
-    relay_mode: policy?.relay_mode === 'build' || policy?.relay_mode === 'direct' ? policy.relay_mode : 'build',
+    level,
     cli_version: defaults.cli_version,
     betas: policy?.betas ?? defaults.betas
   }
+}
+// Tools outside the narrowed candidates (2026-10-23: InjectionTools is seven)
+// cannot be given any more: a choice saved for one is dropped on reading.
+function knownInjection(injection?: BuildInjection): BuildInjection | undefined {
+  const out = mergeInjection(injection)
+  if (!out?.tools) return out
+  const tools = Object.fromEntries(Object.entries(out.tools).filter(([name]) => (injectionTools as readonly string[]).includes(name)))
+  if (Object.keys(tools).length) out.tools = tools
+  else delete out.tools
+  return out
+}
+// The core reads every saved mode but direct as build before LegacyLevel.
+const savedRelayMode = (mode: unknown) => mode === 'direct' ? 'direct' : 'build'
+// The level a policy applies; a policy without one (an older core's preview)
+// is read the way the core migrates it.
+export function levelOf(policy?: Partial<RequestPolicy> & { relay_mode?: unknown }): RequestLevel {
+  if (isLevel(policy?.level)) return policy.level
+  return (policy && legacyLevel(savedRelayMode(policy.relay_mode), policy.build_attachment_sources, policy.build_injection)) || defaultRequestLevel
 }
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
@@ -209,7 +294,6 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     Object.entries(p.build_billing_sources ?? {}).every(([field, source]) =>
       (billingFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
     (p.build_billing_entrypoint === undefined || (billingEntrypoints as readonly string[]).includes(p.build_billing_entrypoint)) &&
-    validIdentityLines(p.build_identity_lines) &&
     validInjection(p.build_injection) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
@@ -217,13 +301,15 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
     (p.erase_client_attachments ?? []).every((type, i, all) => erasableAttachments.includes(type) && all.indexOf(type) === i) &&
     (p.replace_client_attachments ?? []).every((type, i, all) => replaceableAttachments.includes(type) && all.indexOf(type) === i && !p.erase_client_attachments?.some(erased => containsAttachment(erased, type) || containsAttachment(type, erased))) &&
-    ['direct', 'build'].includes(p.relay_mode) &&
+    isLevel(p.level) &&
+    (p.relay_mode === undefined || ['direct', 'build'].includes(p.relay_mode)) &&
     (!p.cli_version || /^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$/.test(p.cli_version))
   )
 }
 
-// An absent key follows its parent; this also applies independently to nested fields.
-export type FeatureOverrides = Partial<Pick<RequestPolicy, 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_identity_lines' | 'build_injection' | 'request_identity_sources'>>
+// An absent key follows its parent; this also applies independently to nested
+// fields. relay_mode is only read: an override saved before levels.
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'level' | 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_injection' | 'request_identity_sources'>>
 export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
 export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
 export interface FeaturePreview {
@@ -240,28 +326,43 @@ export function newRequestPolicy(): RequestPolicy {
   return { ...defaultRequestPolicy(), build_attachment_sources: { platform_name: 'worker', os_version: 'worker' } }
 }
 export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOverrides): RequestPolicy {
-  return { ...parent, ...overrides, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_identity_lines: { ...parent.build_identity_lines, ...overrides.build_identity_lines }, build_injection: mergeInjection(parent.build_injection, overrides.build_injection), request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
+  const own: FeatureOverrides = savedOverrides(overrides)
+  delete own.relay_mode
+  const out: RequestPolicy = { ...parent, ...own, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_injection: mergeInjection(parent.build_injection, overrides.build_injection), request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
+  delete out.relay_mode
+  // A resolved parent from the core may still carry the retired identity lines.
+  for (const key of retiredOverrideKeys) delete (out as unknown as Record<string, unknown>)[key]
+  out.level = levelOf(parent)
+  // An override saved before levels, as the core migrates it: its level wins;
+  // direct is none; build only lifts an inherited none, to the level LegacyLevel
+  // gives the merged policy, with that level's unchosen items off.
+  if (isLevel(overrides.level)) out.level = overrides.level
+  else if (overrides.relay_mode === 'direct') out.level = 'none'
+  else if (overrides.relay_mode === 'build' && out.level === 'none') {
+    out.level = legacyLevel('build', out.build_attachment_sources, out.build_injection) || defaultRequestLevel
+    out.build_injection = legacyInjection(out.level, out.build_injection)
+  }
+  return out
 }
 export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
   let count = 0
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const [key, value] of Object.entries(savedOverrides(overrides))) {
     // The identity is not configurable (2026-10-21): a value stored before is
     // neither shown nor applied, so it is not a difference either.
     if (key === 'request_identity_sources') continue
-    if (key === 'build_attachment_sources' || key === 'build_billing_sources') {
+    if (key === 'level' || key === 'relay_mode') {
+      // A legacy mode counts once, and only without a level beside it.
+      if ((key === 'level' || overrides.level === undefined) && mergeFeaturePolicy(parent, overrides).level !== levelOf(parent)) count++
+    } else if (key === 'build_attachment_sources' || key === 'build_billing_sources') {
       for (const [field, source] of Object.entries(value as Record<string, string>)) {
         if (((parent[key] as Record<string, string> | undefined)?.[field] ?? 'client') !== source) count++
       }
-    } else if (key === 'build_identity_lines') {
-      for (const [entrypoint, line] of Object.entries(value as Record<string, string>)) {
-        if ((parent.build_identity_lines?.[entrypoint as BillingEntrypoint] ?? defaultIdentityLine(entrypoint as BillingEntrypoint)) !== line) count++
-      }
     } else if (key === 'build_injection') {
       const own = value as BuildInjection
-      if (own.system_prompt !== undefined && (parent.build_injection?.system_prompt ?? false) !== own.system_prompt) count++
+      if (own.system_prompt !== undefined && (parent.build_injection?.system_prompt ?? injectionDefault('system_prompt')) !== own.system_prompt) count++
       for (const field of ['attachments', 'tools'] as const) {
         for (const [name, on] of Object.entries(own[field] ?? {})) {
-          if (((parent.build_injection?.[field] as Record<string, boolean> | undefined)?.[name] ?? false) !== on) count++
+          if (((parent.build_injection?.[field] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(field, name)) !== on) count++
         }
       }
     } else if (key === 'build_billing_entrypoint') {
@@ -270,12 +371,76 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
   }
   return count
 }
-export function validFeatureOverrides(value: FeatureOverrides): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const allowed = ['relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_identity_lines', 'build_injection', 'request_identity_sources']
+// What a save sends: the overrides without the retired keys (the core ignores
+// them). An override read from an older save may still hold them.
+export function savedOverrides(overrides: FeatureOverrides): FeatureOverrides {
+  const out = { ...overrides } as Record<string, unknown>
+  for (const key of retiredOverrideKeys) delete out[key]
+  return out as FeatureOverrides
+}
+// A retired key is not validated: savedOverrides drops it from every save.
+export function validFeatureOverrides(input: FeatureOverrides): boolean {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false
+  const value = savedOverrides(input)
+  const allowed = ['level', 'relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_injection', 'request_identity_sources']
   if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
-  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_identity_lines', 'build_injection', 'request_identity_sources'] as const) {
+  if (value.level !== undefined && !isLevel(value.level)) return false
+  if (value.relay_mode !== undefined && !['direct', 'build'].includes(value.relay_mode)) return false
+  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_injection', 'request_identity_sources'] as const) {
     if (value[key] !== undefined && (typeof value[key] !== 'object' || Array.isArray(value[key]))) return false
   }
   return validRequestPolicy(mergeFeaturePolicy(defaultRequestPolicy(), value))
+}
+
+// ---------------------------------------------------------------- layers at the group and account level
+// A group or an account follows or customizes each configurable layer as a
+// whole (2026-10-23 user): a layer follows while its overrides hold none of
+// its keys; customizing writes every field of the layer, so it overrides the
+// parent entirely. An override saved before that holds only some keys counts
+// as customized (its unset fields still inherit). The identity line has no
+// settings, so it is not a layer here.
+export const featureLayers = ['level', 'billing', 'environment', 'prompt'] as const
+export type FeatureLayer = (typeof featureLayers)[number]
+const present = (value: unknown) => value !== undefined && value !== null &&
+  !(typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length)
+export function layerCustomized(overrides: FeatureOverrides, layer: FeatureLayer): boolean {
+  const injection = overrides.build_injection
+  switch (layer) {
+    case 'level': return present(overrides.level) || present(overrides.relay_mode)
+    case 'billing': return present(overrides.build_billing_entrypoint) || present(overrides.build_billing_sources)
+    case 'environment': return present(overrides.build_attachment_sources) || present(injection?.attachments)
+    case 'prompt': return injection?.system_prompt !== undefined || present(injection?.tools)
+  }
+}
+// Follow: the layer's keys removed (a legacy relay_mode with the level).
+export function followLayer(overrides: FeatureOverrides, layer: FeatureLayer): FeatureOverrides {
+  const next: FeatureOverrides = JSON.parse(JSON.stringify(overrides))
+  const injection = next.build_injection
+  if (layer === 'level') { delete next.level; delete next.relay_mode }
+  if (layer === 'billing') { delete next.build_billing_entrypoint; delete next.build_billing_sources }
+  if (layer === 'environment') { delete next.build_attachment_sources; delete injection?.attachments }
+  if (layer === 'prompt') { delete injection?.system_prompt; delete injection?.tools }
+  if (injection && !Object.keys(injection).length) delete next.build_injection
+  return next
+}
+// Customize: every field of the layer written with the value it inherits,
+// the level's defaults made explicit.
+export function customizeLayer(overrides: FeatureOverrides, inherited: RequestPolicy, layer: FeatureLayer): FeatureOverrides {
+  const next = followLayer(overrides, layer)
+  const from = inherited.build_injection
+  const choices = <T extends string>(part: 'attachments' | 'tools', names: readonly T[]) =>
+    Object.fromEntries(names.map(name => [name, (from?.[part] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(part, name)])) as Record<T, boolean>
+  if (layer === 'level') next.level = levelOf(inherited)
+  if (layer === 'billing') {
+    next.build_billing_entrypoint = inherited.build_billing_entrypoint ?? defaultBillingEntrypoint
+    next.build_billing_sources = Object.fromEntries(billingFields.map(field => [field, inherited.build_billing_sources?.[field] ?? 'client']))
+  }
+  if (layer === 'environment') {
+    next.build_attachment_sources = Object.fromEntries(buildAttachmentFields.map(field => [field, inherited.build_attachment_sources?.[field] ?? 'client']))
+    next.build_injection = { ...next.build_injection, attachments: choices('attachments', injectionAttachments) }
+  }
+  if (layer === 'prompt') {
+    next.build_injection = { ...next.build_injection, system_prompt: from?.system_prompt ?? injectionDefault('system_prompt'), tools: choices('tools', injectionTools) }
+  }
+  return next
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -29,6 +30,14 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			_, _ = w.Write([]byte(`{"features":["cli-profile-v1"]}`))
+			return
+		}
+		// The Worker's capability read before every model request and probe
+		// (each policy needs request_levels_v1).
+		if r.URL.Path == "/healthz" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": "2.1.302", "capabilities": []string{
+				features.RequestPolicyModeCapability, features.RequestLevelsCapability, features.BuildContentPreservationCapability,
+			}})
 			return
 		}
 		ctl(w, r)

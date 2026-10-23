@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CC 特性 · 注入等级 界面设计</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #e6e8ec; --fg: #1f2329; --muted: #6b7280; --faint: #9ca3af;
+    --primary: #14b8a6; --primary-weak: #e6f7f5; --primary-fg: #0f766e; --chip: #f3f4f6; --shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  [data-theme=dark] {
+    --bg: #0f1115; --card: #171a21; --line: #2a2f3a; --fg: #e5e7eb; --muted: #9aa3b2; --faint: #6b7280;
+    --primary: #2dd4bf; --primary-weak: #123a36; --primary-fg: #5eead4; --chip: #222733; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--fg); }
+  .page { max-width: 880px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .note { background: var(--card); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; color: var(--muted); margin-bottom: 16px; }
+  .note b { color: var(--fg); }
+
+  .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 5px 12px; border-radius: 6px; font: inherit; cursor: pointer; white-space: nowrap; }
+  .seg button.on { background: var(--card); color: var(--primary-fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+  .seg button:disabled { cursor: not-allowed; opacity: .5; }
+  .seg.full { display: flex; width: 100%; } .seg.full button { flex: 1; padding: 7px 0; }
+  .seg.sm button { padding: 3px 9px; font-size: 12px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .card-h { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .card-h h3 { font-size: 13px; margin: 0; flex: 1; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+  .card-b { padding: 4px 14px 10px; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .l { flex: 1; min-width: 0; }
+  .row .l b { display: block; font-weight: 500; }
+  .row .l small { color: var(--muted); }
+  .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .lab { color: var(--muted); font-size: 12px; }
+  select { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-width: 130px; }
+  .link { color: var(--primary-fg); cursor: pointer; font-size: 12px; user-select: none; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .chip.on::before { content: "✓ "; }
+  .chip:disabled { cursor: not-allowed; }
+  .incl { display: flex; gap: 6px; margin: 8px 0 2px; flex-wrap: wrap; }
+  .incl span { font-size: 11px; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line); color: var(--faint); }
+  .incl span.on { border-color: var(--primary); color: var(--primary-fg); background: var(--primary-weak); }
+  .incl span.on::before { content: "✓ "; }
+  .desc { color: var(--muted); font-size: 12px; margin: 4px 0 6px; }
+  .switch { width: 34px; height: 18px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; border: 0; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .switch.on { background: var(--primary); } .switch.on::after { left: 18px; }
+  .switch:disabled { cursor: not-allowed; }
+  .rule { background: var(--chip); border-radius: 8px; padding: 8px 10px; margin-top: 6px; display: grid; grid-template-columns: 220px 1fr; gap: 4px 12px; font-size: 12px; }
+  .rule code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  table.matrix { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+  .matrix th, .matrix td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+  .matrix th:first-child, .matrix td:first-child { text-align: left; }
+  .matrix tr.grp td { color: var(--muted); font-weight: 600; background: var(--chip); }
+  .matrix input { accent-color: var(--primary); }
+
+  .card.follow .card-b { opacity: .55; pointer-events: none; }
+  .card.locked .card-h { border-bottom: 0; }
+  .card.locked .card-h h3, .card.locked .card-h .tag { color: var(--faint); }
+  .locked-text { color: var(--faint); font-size: 12px; }
+  .drawer { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--bg); }
+  .drawer-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .drawer-h b { font-size: 14px; }
+  .anno { font-size: 11px; color: #b45309; background: #fef3c7; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  [data-theme=dark] .anno { background: #3b2f12; color: #fbbf24; }
+  .footer { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .btn { background: var(--primary); color: #fff; border: 0; border-radius: 8px; padding: 7px 16px; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>CC 特性 · 注入等级 界面设计</h1>
+  <p class="sub">插件 → Claude Code → 设置 → CC 特性。可交互：切换等级、全局 / 分组、跟随 / 自定义、勾选工具、展开规则。</p>
+
+  <div class="toolbar">
+    <div class="seg" id="layer"><button data-v="global" class="on">全局默认</button><button data-v="group">分组默认（vip）</button></div>
+    <div class="seg" id="theme"><button data-v="light" class="on">浅色</button><button data-v="dark">深色</button></div>
+  </div>
+
+  <div class="note">
+    <b>四个等级</b>：0 注入 = 计费头（direct，其余逐字节不动）；微注入 = + 身份行；低注入 = + 环境；高注入 = + 内置系统提示词与工具。
+    每一层：请求里<b>已有就保留</b>，<b>没有才补</b>；补的内容全部由 Worker 上的 Claude Code 生成。带计费头的 CC 请求只做字段转换，不补第 3、4 层。
+  </div>
+
+  <div id="root"></div>
+</div>
+
+<script>
+const levels = [
+  { v: 'none', name: '0 注入', desc: '只处理开头的计费头（direct），其余逐字节不动' },
+  { v: 'micro', name: '微注入', desc: '计费头 + 身份行（build）' },
+  { v: 'low', name: '低注入', desc: '微注入 + 环境：附件字段转换，缺的首轮附件补上' },
+  { v: 'high', name: '高注入', desc: '低注入 + Claude Code 内置系统提示词和常用工具' },
+];
+const rank = v => levels.findIndex(l => l.v === v);
+const layersOf = [['计费头', 0], ['身份行', 1], ['环境', 2], ['提示词与工具', 3]];
+const envGroups = [
+  ['运行环境', [['platform_name', '平台名称'], ['os_version', '系统版本'], ['shell', 'Shell']]],
+  ['目录与仓库', [['primary_directory', '工作目录'], ['additional_directories', '额外工作目录'], ['git_repository', 'Git 仓库状态'], ['worktree', 'Worktree 状态与说明'], ['scratchpad_directory', '临时目录']]],
+  ['工具与代理说明', [['github_cli', 'GitHub 工具说明'], ['agent_proxy', 'Agent 代理说明']]],
+];
+const envNames = Object.fromEntries(envGroups.flatMap(g => g[1]));
+const attachments = [['environment', '运行环境'], ['model', '模型说明'], ['total_tokens', '剩余 token'], ['date', '当前日期']];
+const tools = ['Bash', 'Read', 'Edit', 'Write', 'Agent', 'WebSearch', 'NotebookEdit'];
+
+// Global layer, and the vip group's overrides (per layer: undefined = follow).
+const global = {
+  level: 'low', entrypoint: 'sdk-cli', billing: { cc_version: 'worker', cc_entrypoint: 'client' },
+  env: { platform_name: 'worker', os_version: 'worker' }, attach: { environment: true, model: true, total_tokens: true, date: true },
+  prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true },
+};
+const group = { level: undefined, billing: undefined, env: undefined, prompt: undefined };
+const ui = { layer: 'global', rule: false, envEdit: false, open: {} };
+
+const clone = o => JSON.parse(JSON.stringify(o));
+const layerKeys = { level: ['level'], billing: ['entrypoint', 'billing'], env: ['env', 'attach'], prompt: ['prompt', 'tools'] };
+function view() {
+  if (ui.layer === 'global') return global;
+  const v = clone(global);
+  for (const [layer, keys] of Object.entries(layerKeys)) if (group[layer]) for (const k of keys) v[k] = group[layer][k];
+  return v;
+}
+function target(layer) { return ui.layer === 'global' ? global : group[layer]; }
+const custom = layer => ui.layer === 'global' || !!group[layer];
+
+function seg(items, value, on, cls = '', disabled = false) {
+  return `<div class="seg ${cls}">${items.map(([v, l]) => `<button data-act="${on}" data-v="${v}" class="${v === value ? 'on' : ''}" ${disabled ? 'disabled' : ''}>${l}</button>`).join('')}</div>`;
+}
+function followSeg(layer, enabled = true) {
+  if (ui.layer === 'global') return '';
+  return seg([['follow', '跟随上层'], ['custom', '自定义']], group[layer] ? 'custom' : 'follow', 'follow:' + layer, 'sm', !enabled);
+}
+function card(layer, title, tag, body, { from = 0, toggle = true } = {}) {
+  const lv = rank(view().level);
+  if (lv < from) {
+    return `<div class="card locked"><div class="card-h"><h3>› ${title}</h3><span class="locked-text">提升到${levels[from].name}后生效；已保存的配置保留</span>${tag ? `<span class="tag">${tag}</span>` : ''}</div></div>`;
+  }
+  const follow = toggle && ui.layer !== 'global' && !group[layer];
+  return `<div class="card ${follow ? 'follow' : ''}"><div class="card-h"><h3>${title}</h3>${tag ? `<span class="tag">${tag}</span>` : ''}${toggle ? followSeg(layer) : ''}</div><div class="card-b">${body}</div></div>`;
+}
+
+function envSummary(env) {
+  const worker = Object.entries(env).filter(([, s]) => s === 'worker').map(([f]) => envNames[f]);
+  const erase = Object.values(env).filter(s => s === 'erase').length;
+  const parts = [];
+  if (worker.length) parts.push(worker.length <= 3 ? worker.join('、') + '用服务端' : worker.length + ' 项用服务端');
+  if (erase) parts.push('擦除 ' + erase + ' 项');
+  parts.push(parts.length ? '其余保留客户端' : '全部保留客户端');
+  return parts.join('；');
+}
+
+function render() {
+  const v = view(), lv = rank(v.level), cur = levels[lv];
+  let html = '';
+  if (ui.layer === 'group') html += `<div class="drawer"><div class="drawer-h"><b>vip</b><span class="lab">分组覆盖已启用 · 允许账号级别覆盖<span class="anno">每张卡片右上角：跟随上层 / 自定义</span></span></div>`;
+
+  html += card('level', '注入等级', '', `
+    <div style="padding-top:8px">${seg(levels.map(l => [l.v, l.name + (l.v === 'low' ? '（默认）' : '')]), v.level, 'level', 'full')}</div>
+    <div class="incl">${layersOf.map(([n, r]) => `<span class="${lv >= r ? 'on' : ''}">${n}</span>`).join('')}</div>
+    <div class="desc">${cur.desc} · CLI <code>2.1.304</code>${ui.layer === 'group' && !group.level ? ' · 跟随全局：' + levels[rank(global.level)].name : ''}</div>`);
+
+  html += card('billing', '计费头', '所有等级', `
+    <div class="row"><div class="l"><b>没有时补（按主代理）</b><small>请求没有计费头时补完整的主代理计费头（带 prompt ID 和 turn），写这里的入口</small></div>
+      <div class="ctl"><span class="lab">入口</span><select data-act="entrypoint">${['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'].map(e => `<option ${e === v.entrypoint ? 'selected' : ''}>${e}</option>`).join('')}</select></div></div>
+    <div class="row"><div class="l"><b>已有时</b><small>按来源换两个字段；选客户端而客户端没带该字段时用服务端</small></div>
+      <div class="ctl"><span class="lab">版本</span>${seg([['client', '客户端'], ['worker', '服务端']], v.billing.cc_version, 'billing:cc_version', 'sm')}
+      <span class="lab">入口</span>${seg([['client', '客户端'], ['worker', '服务端']], v.billing.cc_entrypoint, 'billing:cc_entrypoint', 'sm')}</div></div>`);
+
+  html += card('identity', '身份行', '微注入起', `
+    <div class="row"><div class="l"><b>自适应：请求没有身份行时按计费头里的入口补</b>
+      <span class="link" data-act="rule">${ui.rule ? '收起规则 ⌃' : '查看规则 ⌄'}</span>
+      ${ui.rule ? `<div class="rule">
+        <code>cli</code><span>Claude Code CLI（终端）</span>
+        <code>claude-desktop、claude-vscode</code><span>Claude Code + Agent SDK</span>
+        <code>sdk-cli、sdk-ts、sdk-py</code><span>高注入（补了内置提示词）时 Claude Code + Agent SDK，其余 Claude Agent SDK</span>
+        <span>其他入口</span><span>按服务端入口</span>
+        <span style="grid-column:1/-1;color:var(--muted)">与 Claude Code 原生 n1n 一致：有追加提示词（客户端有 system）才用 “+ Agent SDK” 那句。只补没有计费头的请求；带计费头的 Claude Code 请求和已带身份行的请求不改。文字由 Claude Code 生成。</span>
+      </div>` : ''}</div></div>`, { from: 1, toggle: false });
+
+  html += card('env', '环境', '低注入起', `
+    <div class="row"><div class="l"><b>缺少时补</b><small>只对没有计费头的请求，内容由 Worker 上的 Claude Code 生成；Opus 放系统轮，Sonnet 放 reminder</small></div>
+      <div class="ctl chips">${attachments.map(([k, n]) => `<button class="chip ${v.attach[k] ? 'on' : ''}" data-act="attach" data-v="${k}">${n}</button>`).join('')}</div></div>
+    <div class="row" style="display:block"><div class="l"><b>字段转换</b><small>${envSummary(v.env)}</small></div>
+      <span class="link" data-act="envEdit">${ui.envEdit ? '收起 ⌃' : '编辑 ⌄'}</span>
+      ${ui.envEdit ? `<table class="matrix"><tr><th>字段</th><th>保留客户端</th><th>使用服务端</th><th>擦除</th></tr>
+        ${envGroups.map(([g, fields]) => `<tr class="grp"><td colspan="4">${g}</td></tr>` + fields.map(([f, n]) => `<tr><td>${n}</td>${['client', 'worker', 'erase'].map(s => `<td><input type="radio" name="${ui.layer}-${f}" data-act="env" data-f="${f}" data-v="${s}" ${(v.env[f] ?? 'client') === s ? 'checked' : ''}></td>`).join('')}</tr>`).join('')).join('')}
+      </table>` : ''}</div>`, { from: 2 });
+
+  html += card('prompt', '提示词与工具', '高注入', `
+    <div class="row"><div class="l"><b>内置系统提示词</b><small>客户端 system 并入 CC 动态块，与 --append-system-prompt 相同；缓存标记与官方一致</small></div>
+      <div class="ctl"><button class="switch ${v.prompt ? 'on' : ''}" data-act="prompt"></button></div></div>
+    <div class="row" style="display:block"><div class="l"><b>工具</b><small>工具调用都交回客户端执行，客户端必须能执行；客户端已有同名工具时用客户端的</small></div>
+      <div class="chips" style="margin-top:6px">${tools.map(t => `<button class="chip ${v.tools[t] ? 'on' : ''}" data-act="tool" data-v="${t}">${t}</button>`).join('')}</div>
+      <div class="hint">Agent：不补“可用代理类型”清单<br>WebSearch、NotebookEdit：没有 ToolSearch 时按完整定义发送</div></div>`, { from: 3 });
+
+  if (ui.layer === 'group') html += `</div>`;
+  html += `<div class="footer"><button class="btn">保存全部配置</button></div>`;
+  document.getElementById('root').innerHTML = html;
+}
+
+function edit(layer, fn) {
+  if (!custom(layer)) return;
+  fn(target(layer)); render();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const [act, arg] = b.dataset.act.split(':');
+  const v = b.dataset.v;
+  if (act === 'level') edit('level', t => { t.level = v; });
+  else if (act === 'billing') edit('billing', t => { t.billing[arg] = v; });
+  else if (act === 'attach') edit('env', t => { t.attach[v] = !t.attach[v]; });
+  else if (act === 'tool') edit('prompt', t => { t.tools[v] = !t.tools[v]; });
+  else if (act === 'prompt') edit('prompt', t => { t.prompt = !t.prompt; });
+  else if (act === 'env') edit('env', t => { t.env[b.dataset.f] = v; });
+  else if (act === 'rule') { ui.rule = !ui.rule; render(); }
+  else if (act === 'envEdit') { ui.envEdit = !ui.envEdit; render(); }
+  else if (act === 'follow') {
+    // Custom copies the inherited layer whole; follow drops it.
+    if (v === 'custom') group[arg] = Object.fromEntries(layerKeys[arg].map(k => [k, clone(global[k])]));
+    else group[arg] = undefined;
+    render();
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.act === 'entrypoint') edit('billing', t => { t.entrypoint = e.target.value; });
+});
+for (const [id, apply] of [['layer', v => { ui.layer = v; render(); }], ['theme', v => { document.documentElement.dataset.theme = v; }]]) {
+  document.getElementById(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of e.currentTarget.children) x.classList.toggle('on', x === b);
+    apply(b.dataset.v);
+  });
+}
+render();
+</script>
+</body>
+</html>

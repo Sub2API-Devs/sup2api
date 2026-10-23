@@ -73,8 +73,9 @@ test('the chosen line is inserted, and none only after a leading header', () => 
   }
 });
 
-// The entrypoint decides the line: the configured choice, else the default
-// real clients send with it (2026-10-22).
+// The entrypoint decides the line, as Claude Code picks it (2026-10-23,
+// adaptive): an SDK entrypoint takes the appended line only when build gave
+// the request CC's prompt with the client's system appended.
 test('the line is chosen by the request entrypoint', () => {
   const pick = (policy, entrypoint) => { const { line, fallback } = identityLineFor(policy, entrypoint); return [line, fallback]; };
   assert.deepEqual(pick({}, 'cli'), ['official_cli', 'official_cli']);
@@ -89,11 +90,12 @@ test('the line is chosen by the request entrypoint', () => {
   assert.deepEqual(pick({}, 'unknown'), ['agent_sdk', 'agent_sdk']);
   assert.deepEqual(pick({ build_billing_entrypoint: 'cli' }, 'remote'), ['official_cli', 'official_cli']);
   assert.deepEqual(pick({ build_billing_entrypoint: 'claude-vscode' }, undefined), ['official_cli_sdk', 'official_cli_sdk']);
+  const appended = entrypoint => identityLineFor({}, entrypoint, { appended: true }).line;
+  assert.deepEqual(['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'].map(appended), ['official_cli', 'official_cli_sdk', 'official_cli_sdk', 'official_cli_sdk', 'official_cli_sdk', 'official_cli_sdk']);
+  // Lines an older core still sends are not used.
   const policy = { build_identity_lines: { 'sdk-cli': 'official_cli_sdk', 'claude-desktop': 'none', cli: 'none' } };
-  assert.deepEqual(pick(policy, 'sdk-cli'), ['official_cli_sdk', 'agent_sdk']);
-  assert.deepEqual(pick(policy, 'claude-desktop-3p'), ['none', 'official_cli_sdk']);
-  assert.deepEqual(pick(policy, 'cli'), ['none', 'official_cli']);
-  assert.deepEqual(pick(policy, 'claude-vscode'), ['official_cli_sdk', 'official_cli_sdk']);
+  assert.deepEqual(pick(policy, 'sdk-cli'), ['agent_sdk', 'agent_sdk']);
+  assert.deepEqual(pick(policy, 'cli'), ['official_cli', 'official_cli']);
 });
 
 // Direct is a pure passthrough (2026-10-21 decision): the body goes out byte
@@ -141,12 +143,14 @@ test('claude request adds the line to OAuth build; direct changes only with the 
     });
     assert.equal(await run('--direct', false), input);
     assert.equal(await run('--direct', true), input);
-    // With the Worker's direct context, direct fills the header (2026-10-22):
-    // the policy and the account kind reach it, the rest stays the client's.
-    assert.equal(await run('--direct', false, '{"build_billing_entrypoint":"cli"}'), input.replace('"system":', '"direct":{"policy":{"build_billing_entrypoint":"cli"},"oauth":true},"system":'));
-    assert.equal(await run('--direct', true, '{}'), input.replace('"system":', '"direct":{"policy":{},"oauth":false},"system":'));
+    // With the Worker's direct context, direct fills the header as the main
+    // thread's (2026-10-23): the billing policy reaches it, identity lines from
+    // an older Worker do not, and the rest stays the client's.
+    assert.equal(await run('--direct', false, '{"build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}'), input.replace('"system":', '"direct":{"policy":{"build_billing_entrypoint":"cli"}},"system":'));
+    assert.equal(await run('--direct', true, '{"build_billing_sources":{"cc_version":"worker"}}'), input.replace('"system":', '"direct":{"policy":{"build_billing_sources":{"cc_version":"worker"}}},"system":'));
     await fsp.rm(path.join(dir, 'sent.json'));
     assert.equal(await run('--direct', false, '{"cch":1}'), null, 'an invalid context is refused before sending');
+    assert.equal(await run('--direct', false, '{"build_billing_sources":{"cch":"worker"}}'), null);
     assert.deepEqual(JSON.parse(await run('--build', false)).system, [t(interactive), t('built')]);
     // The choice is the CLI's own; it never reaches the transport.
     assert(!JSON.parse(await fsp.readFile(path.join(dir, 'keys.json'), 'utf8')).includes('identityLine'));

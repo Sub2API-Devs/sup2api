@@ -100,6 +100,9 @@ func TestRequestCacheControllerMode(t *testing.T) {
 	var mu sync.Mutex
 	var bodies []string
 	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-api-key") == strings.Repeat("k", 32) && serveFakeWorkerHealth(w, r, "2.1.302") {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		mu.Lock()
 		bodies = append(bodies, string(raw))

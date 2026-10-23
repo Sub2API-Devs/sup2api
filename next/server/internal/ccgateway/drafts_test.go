@@ -227,6 +227,9 @@ func TestAdoptedAccountUsesTheDraftKey(t *testing.T) {
 	directCalled := false
 	f.s.openAccount = func(_ context.Context, _ Config, target string) (*http.Client, func() error, error) {
 		return &http.Client{Transport: accountTransportFunc(func(r *http.Request) (*http.Response, error) {
+			if res := fakeWorkerHealthResponse(r, "2.1.302"); res != nil {
+				return res, nil
+			}
 			directCalled = target == "10.52.74.181:8787" && r.URL.Path == "/v1/messages" && r.Header.Get("x-api-key") == strings.Repeat("k", 32)
 			return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 		})}, func() error { return nil }, nil

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { vocabulary } from './vocabulary.mjs';
+import { vocabulary, layers } from './vocabulary.mjs';
 import { validateRequestPolicy, injectionChoices } from '../request-policy.js';
 import { createContentPolicy } from '../content-policy.js';
 
@@ -40,14 +40,14 @@ async function fixture(probeBody) {
   for (const [name, source] of Object.entries({
     'package.json': '{"type":"module"}',
     'chunk-kasbfbhj.js': `export const calls=[]; export const MDe=()=>({isKnownType:true,messages:[]}); export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)});
-      export const ccgatewayDefaultPrompt=async(tools)=>['PROMPT for '+tools.map(t=>t.name).join(',')]; export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type}));
+      export const ccgatewayDefaultPrompt=async(tools,model,append)=>['PROMPT for '+tools.map(t=>t.name).join(','),...append===undefined?[]:['APPEND '+append]]; export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type})); export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)});
       export async function* Kvt(input){calls.push(input); const probe=input.options.ccgatewayNativeProbe===true;
         const body=probe?${JSON.stringify(probeBody)}:{model:'m',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools}};
         if(probe) body.system=[{type:'text',text:${header}},{type:'text',text:'LINE'},...body.system];
         yield {type:'ccgateway_request',body}}`,
     'chunk-7y2kvacy.js': `export const oJe=${JSON.stringify(vocabulary.billingHeader)};`,
     'chunk-jkcb7qdd.js': `export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
-    'chunk-eanw7pgv.js': `export const e$=()=>[{name:'Bash'},{name:'Read'},{name:'Agent'}];`,
+    'chunk-eanw7pgv.js': `export const m4t=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
     'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE';`,
     'chunk-0ycjphb5.js': 'export const El=()=>({});', 'chunk-q61sszgr.js': 'export const getRootSession=()=>({});', 'chunk-6dwnw6av.js': 'export const YEr=()=>true;',
     'ccgateway-native-tools.js': 'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{name:tool.name});export const findNative=(_session,name)=>registry.get(name);',
@@ -58,24 +58,102 @@ const injectAll = { contract_version: 2, build_injection: { system_prompt: true,
 const client = (system, policy = injectAll) => ({ model: 'm', systemPrompt: system, messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'again' }],
   tools: [{ name: 'lookup', inputSchema: { type: 'object' } }], parameters: {}, requestPolicy: policy });
 
+const signal = () => new AbortController().signal;
+const probeOf = f => f.native.calls.find(c => c.options.ccgatewayNativeProbe);
+const mainOf = f => f.native.calls.find(c => !c.options.ccgatewayNativeProbe);
+
 test('a request without a billing header gets the probe\'s prompt, tools and attachments where CC puts them', async () => {
   const mark = 'CCGATEWAY_FIRST_PROMPT_7d3c1a';
-  const f = await fixture({ system: [{ type: 'text', text: 'STATIC' }, { type: 'text', text: 'DYNAMIC' }], tools: [{ name: 'Bash' }, { name: 'Read' }],
+  const f = await fixture({ system: [{ type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral', ttl: '1h', scope: 'global' } }, { type: 'text', text: 'DYNAMIC', cache_control: { type: 'ephemeral', ttl: '1h' } }],
+    tools: [{ name: 'Bash' }, { name: 'Read' }], betas: ['prompt-caching-scope-2026-01-05'],
     messages: [{ role: 'user', content: [{ type: 'text', text: '<system-reminder>\nENV\n</system-reminder>' }, { type: 'text', text: mark }] }, { role: 'system', content: 'DATE' }] });
   try {
-    const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'client system', cache_control: { type: 'ephemeral' } }]), {}, new AbortController().signal);
-    const probe = f.native.calls.find(c => c.options.ccgatewayNativeProbe);
-    // The probe has CC's tools in CC's order, the prompt for every tool, and the attachments.
+    const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'client system', cache_control: { type: 'ephemeral' } }, { type: 'text', text: 'more' }]), {}, signal());
+    const probe = probeOf(f);
+    // CC's tools in CC's order, the prompt for every tool with the client's
+    // system as the appended prompt, the attachments, and CC's cache markers.
     assert.deepEqual(probe.tools.map(t => t.name), ['Bash', 'Read']);
-    assert.deepEqual(probe.systemPrompt, ['PROMPT for Bash,Read,lookup']);
+    assert.deepEqual(probe.systemPrompt, ['PROMPT for Bash,Read,lookup', 'APPEND client system\n\nmore']);
     assert.deepEqual(probe.messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['environment', 'date']);
-    // The billing header and the identity line are not taken from the probe.
-    assert.deepEqual(out.body.system.slice(-3), [{ type: 'text', text: 'STATIC' }, { type: 'text', text: 'DYNAMIC' }, { type: 'text', text: 'client system', cache_control: { type: 'ephemeral' } }]);
-    assert.equal(out.body.system.filter(b => b.text === 'LINE').length, 0);
+    assert.equal(probe.options.enablePromptCaching, undefined);
+    // The client's system is in CC's prompt, so the system is the probe's
+    // blocks (the billing header and identity line are added later).
+    assert.deepEqual(out.body.system, [{ type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral', ttl: '1h', scope: 'global' } }, { type: 'text', text: 'DYNAMIC', cache_control: { type: 'ephemeral', ttl: '1h' } }]);
     assert.deepEqual(out.body.tools.map(t => t.name), ['Bash', 'Read', 'lookup']);
     assert.deepEqual(out.body.messages, [
       { role: 'user', content: [{ type: 'text', text: '<system-reminder>\nENV\n</system-reminder>' }, { type: 'text', text: 'hi' }] },
       { role: 'system', content: 'DATE' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'again' }]);
+    // The betas CC's markers need come with them.
+    assert.match(out.headers['anthropic-beta'], /prompt-caching-scope-2026-01-05/);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+test('a layer the request already carries is not added again', async () => {
+  const f = await fixture({ system: [], tools: [{ name: 'Bash' }], messages: [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }] });
+  try {
+    const environment = layers.attachments.environment[0] + ' \n - Primary working directory: /w';
+    const request = client([{ type: 'text', text: 'LINE' }, { type: 'text', text: 'mine\n' + layers.systemPrompt }]);
+    request.tools.push({ name: 'Read', inputSchema: { type: 'object' } });
+    request.messages.splice(1, 0, { role: 'system', content: environment });
+    await f.adapter.buildRequest(request, {}, signal());
+    const probe = probeOf(f);
+    // CC's prompt is there already; so are the environment and a client Read.
+    assert.deepEqual(probe.systemPrompt, []);
+    assert.deepEqual(probe.tools.map(t => t.name), ['Bash']);
+    assert.deepEqual(probe.messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['date']);
+    // An attachment's opening inside a prompt is the client's text, not a carrier.
+    const prompt = client('s', { contract_version: 2, build_injection: { attachments: { date: true } } });
+    prompt.messages[0].content = layers.attachments.date[0] + '2026-10-23.';
+    await f.adapter.buildRequest(prompt, {}, signal());
+    assert.deepEqual(f.native.calls.filter(c => c.options.ccgatewayNativeProbe).at(-1).messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['date']);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+test('an identity line in the client system stays in front of CC\'s prompt', async () => {
+  const f = await fixture({ system: [{ type: 'text', text: 'STATIC' }, { type: 'text', text: 'DYNAMIC' }], tools: [], messages: [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }] });
+  try {
+    const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'LINE' }, { type: 'text', text: 'own' }], { contract_version: 2, build_injection: { system_prompt: true } }), {}, signal());
+    assert.deepEqual(probeOf(f).systemPrompt, ['PROMPT for lookup', 'APPEND own']);
+    assert.deepEqual(out.body.system.map(b => b.text), ['LINE', 'STATIC', 'DYNAMIC']);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// Upstream takes four cache breakpoints; CC's markers on the injected prompt
+// give way, the dynamic block's first.
+test('CC\'s cache markers give way when the request would carry more than four', async () => {
+  const f = await fixture({ system: [{ type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral', scope: 'global' } }, { type: 'text', text: 'DYNAMIC', cache_control: { type: 'ephemeral' } }],
+    tools: [], messages: [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }] });
+  try {
+    const marked = text => ({ type: 'text', text, cache_control: { type: 'ephemeral' } });
+    const request = client('s', { contract_version: 2, build_injection: { system_prompt: true } });
+    request.messages = [{ role: 'user', content: [marked('a'), marked('b')] }, { role: 'assistant', content: 'ok' }, { role: 'user', content: [marked('c')] }];
+    let out = await f.adapter.buildRequest(request, {}, signal());
+    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [true, false]);
+    request.messages[0].content.push(marked('d'));
+    out = await f.adapter.buildRequest(request, {}, signal());
+    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [false, false]);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// The main thread's records name its prompt and turn, which CC's header
+// (PAs) writes as cc_prompt_id, cc_turn_origin, cc_prompt_index and cc_turn_index.
+test('the client\'s last prompt carries the main thread\'s turn', async () => {
+  const f = await fixture({ system: [], tools: [], messages: [] });
+  try {
+    await f.adapter.buildRequest(client('s', { contract_version: 2 }), {}, signal());
+    // Each prompt gets CC's own turn (ccgatewayMarkTurns, stubbed here).
+    const prompts = mainOf(f).messages.filter(r => r.type === 'user');
+    assert.deepEqual(prompts.map(r => [r.turnOrigin, r.turnPosition]), [['sdk', { promptIndex: 0, turnIndex: 1 }], ['sdk', { promptIndex: 0, turnIndex: 2 }]]);
+    // The terminal entrypoint is a human typing.
+    f.native.calls.length = 0;
+    await f.adapter.buildRequest(client('s', { contract_version: 2, build_billing_entrypoint: 'cli' }), {}, signal());
+    assert.equal(mainOf(f).messages.filter(r => r.type === 'user').at(-1).turnOrigin, 'human');
+    f.native.calls.length = 0;
+    await f.adapter.buildRequest(client('s', { contract_version: 2 }), {}, signal(), () => ({ requestClass: 'main', promptId: 'p-1', querySource: 'sdk' }));
+    assert.equal(mainOf(f).messages.filter(r => r.type === 'user').at(-1).promptId, 'p-1');
+    f.native.calls.length = 0;
+    await f.adapter.buildRequest(client('s', { contract_version: 2 }), {}, signal(), () => ({ requestClass: 'subagent', promptId: 'p-1', querySource: 'agent:custom' }));
+    assert(mainOf(f).messages.every(r => r.turnOrigin === undefined && r.promptId === undefined), 'a subagent has no turn');
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });
 
@@ -83,12 +161,33 @@ test('a request with a billing header, or a policy adding nothing, gets no layer
   const f = await fixture({ system: [], tools: [], messages: [] });
   try {
     const header = vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=cli;';
-    let out = await f.adapter.buildRequest(client([{ type: 'text', text: header }, { type: 'text', text: 'client system' }]), {}, new AbortController().signal);
+    let out = await f.adapter.buildRequest(client([{ type: 'text', text: header }, { type: 'text', text: 'client system' }]), {}, signal());
     assert.deepEqual(out.body.tools.map(t => t.name), ['lookup']);
     assert.equal(out.body.messages.length, 3);
-    out = await f.adapter.buildRequest(client('client system', { contract_version: 2, build_injection: { system_prompt: false, tools: { Read: false } } }), {}, new AbortController().signal);
+    out = await f.adapter.buildRequest(client('client system', { contract_version: 2, build_injection: { system_prompt: false, tools: { Read: false } } }), {}, signal());
     assert.equal(out.body.messages[0].content, 'hi');
     assert.equal(f.native.calls.filter(c => c.options.ccgatewayNativeProbe).length, 0);
-    await assert.rejects(f.adapter.buildRequest(client('s', { contract_version: 2, build_injection: { tools: { Glob: true } } }), {}, new AbortController().signal), /Claude Code tool Glob is not available; this CLI has Bash, Read, Agent/);
+    await assert.rejects(f.adapter.buildRequest(client('s', { contract_version: 2, build_injection: { tools: { Glob: true } } }), {}, signal()), /Claude Code tool Glob is not available; this CLI has Agent, Bash, Read/);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// The identity line adapts to the entrypoint (2026-10-23): the appended line
+// only when the client had a system to append to CC's prompt, and none for a
+// request that is Claude Code's own (its side requests have no line).
+test('the identity line follows the request', async () => {
+  const f = await fixture({ system: [{ type: 'text', text: 'STATIC' }, { type: 'text', text: 'DYNAMIC' }], tools: [], messages: [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }] });
+  try {
+    const prompt = { contract_version: 2, build_injection: { system_prompt: true } };
+    let out = await f.adapter.buildRequest(client([{ type: 'text', text: 'own' }], prompt), {}, signal());
+    assert.equal(out.identityLine.line, 'official_cli_sdk');
+    out = await f.adapter.buildRequest({ ...client(undefined, prompt), systemPrompt: undefined }, {}, signal());
+    assert.equal(out.identityLine.line, 'agent_sdk', 'nothing appended');
+    out = await f.adapter.buildRequest(client('own', { contract_version: 2 }), {}, signal());
+    assert.equal(out.identityLine.line, 'agent_sdk');
+    const header = vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=claude-desktop;';
+    for (const system of [[{ type: 'text', text: header }, { type: 'text', text: 'side request' }], [{ type: 'text', text: 'p' }, { type: 'text', text: header }]]) {
+      out = await f.adapter.buildRequest(client(system, prompt), {}, signal());
+      assert.equal(out.identityLine.line, 'none', 'Claude Code\'s own request keeps its system');
+    }
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });

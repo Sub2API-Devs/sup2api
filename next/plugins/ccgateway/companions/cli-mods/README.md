@@ -1,6 +1,16 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v19-request-layers`**（插件 0.1.78 起，与核心 0.1.178 一起发布）。v19 在 v18 之上给 build 下没有计费头的请求（不是 Claude Code 发的）按配置补 CC 自己的内置提示词、首轮附件（环境、模型、剩余 token、日期）和工具（2026-10-23 用户决定：只有计费头必须），全部由一次原生探针构建生成，见 [请求分层设计](../../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节。新能力 `build_injection_v1`；策略键 `build_injection`。
+当前代码为 **2.1.304 / `ccgateway-v20-request-levels`**（未发布）。v20 按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
+
+- **direct（0 注入）**：只处理开头的计费头，可按 `build_billing_sources` 换字段，不再补身份行。
+- **非 CC 请求按主线程处理**：不再当作自定义子代理。最后一条提示带上 prompt ID 和 turn，原生 `PAs` 据此写出完整的主线程计费头（`cc_prompt_id; cc_turn_origin=sdk; cc_prompt_index; cc_turn_index`）。
+- **请求里已有的层不再重复补**：同名工具、安全段 `p4n`、消息载体里的附件开头都算已有。
+- **内置提示词走原生 `r1e`**：客户端 system 作为追加提示词并入动态块，提示词带原生缓存标记和对应 beta，断点超过 4 个时先去掉注入的标记。
+- **工具和日期**：工具按原生 `assembleToolPool` 排序；日期改用 `POo`。
+- **检测文字取自原生**：附件开头、安全段、5 个循环请求头名都由 `ccgatewayLayerVocabulary()` 从原生渲染，夹具是 `test/fixtures/native-layers-2.1.304.json`。
+- **新能力**：`request_levels_v1`。
+
+v19 `ccgateway-v19-request-layers`（插件 0.1.78 起，与核心 0.1.178 一起发布）。v19 在 v18 之上给 build 下没有计费头的请求（不是 Claude Code 发的）按配置补 CC 自己的内置提示词、首轮附件（环境、模型、剩余 token、日期）和工具（2026-10-23 用户决定：只有计费头必须），全部由一次原生探针构建生成，见 [请求分层设计](../../../../docs/ccgateway-feature-support/CC-REQUEST-LEVELS-DESIGN.md) 第 7 节。新能力 `build_injection_v1`；策略键 `build_injection`。
 
 v18 `ccgateway-v18-agent-context`（插件 0.1.75 起；0.1.76 只换 Worker）。v18 在 v17 之上按客户端还原请求类别（2026-10-22 用户决定，[设计](../../docs/SUBAGENT-REQUEST-CONTEXT-DESIGN.md)）：
 

@@ -53,14 +53,25 @@ func TestV2PolicyPassesToSingleCLIWithoutGoTransform(t *testing.T) {
 		Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
 		Slots:  make(chan struct{}, 1), Timeout: 10 * time.Second}
 	raw := []byte(`{"model":"m","stream":true,"messages":[{"role":"user","content":"no environment"}]}`)
-	for _, mode := range []string{"build", "direct"} {
+	send := func(policy string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 		req.Header.Set("x-api-key", "fixture")
-		req.Header.Set(policyHeader, `{"relay_mode":"`+mode+`","cli_version":"2.1.304","build_attachment_sources":{"os_version":"worker","shell":"erase"},"build_billing_sources":{"cc_version":"worker"}}`)
+		req.Header.Set(policyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, req)
+		return out
+	}
+	// The environment is build's; direct ignores its sources. Billing sources
+	// belong to direct too since the request levels (2026-10-23), so this CLI,
+	// without request_levels_v1, refuses them in direct instead of dropping them.
+	for _, policy := range []string{
+		`{"relay_mode":"build","cli_version":"2.1.304","build_attachment_sources":{"os_version":"worker","shell":"erase"},"build_billing_sources":{"cc_version":"worker"}}`,
+		`{"relay_mode":"direct","cli_version":"2.1.304","build_attachment_sources":{"os_version":"worker","shell":"erase"}}`,
+	} {
+		out := send(policy)
 		require.Equal(t, 200, out.Code, out.Body.String())
 	}
+	require.Equal(t, 409, send(`{"relay_mode":"direct","cli_version":"2.1.304","build_billing_sources":{"cc_version":"worker"}}`).Code)
 	data, err := os.ReadFile(capture)
 	require.NoError(t, err)
 	lines := bytes.Split(bytes.TrimSpace(data), []byte("\n"))
@@ -168,9 +179,13 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 		g.ServeHTTP(out, req)
 		return out
 	}
-	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"date":true,"environment":true,"model":false},"tools":{"Read":true,"Bash":true}}}`
+	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"date":true,"environment":true,"model":false},"tools":{"Read":true,"Bash":true,"NotebookEdit":true,"WebSearch":false}}}`
 	require.Equal(t, 409, send(policy).Code)
-	for _, p := range []string{`{"build_injection":{"attachments":{"skills":true}}}`, `{"build_injection":{"tools":{"Glob":true}}}`} {
+	// Only Bash, Read, Edit, Write, Agent, WebSearch and NotebookEdit may be
+	// added (request levels): the rest of the CLI's pool, and tools 2.1.304
+	// does not have, are refused before the CLI runs.
+	for _, p := range []string{`{"build_injection":{"attachments":{"skills":true}}}`, `{"build_injection":{"tools":{"Glob":true}}}`,
+		`{"build_injection":{"tools":{"ToolSearch":true}}}`, `{"build_injection":{"tools":{"Skill":true}}}`, `{"build_injection":{"tools":{"Bash":true,"CronCreate":true}}}`} {
 		require.Equal(t, 400, send(p).Code, p)
 	}
 	out := send(`{"relay_mode":"build","build_injection":{"system_prompt":false,"attachments":{"date":false},"tools":{}}}`)
@@ -186,12 +201,14 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 		RequestPolicy map[string]json.RawMessage `json:"requestPolicy"`
 	}
 	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
-	require.JSONEq(t, `{"system_prompt":true,"attachments":{"environment":true,"date":true},"tools":{"Read":true,"Bash":true}}`, string(components.RequestPolicy["build_injection"]))
+	require.JSONEq(t, `{"system_prompt":true,"attachments":{"environment":true,"date":true},"tools":{"Read":true,"Bash":true,"NotebookEdit":true}}`, string(components.RequestPolicy["build_injection"]))
 }
 
 // Direct hands the CLI its billing context only on a CLI that applies it; a
 // choice an older CLI cannot honour refuses the request, while the default
-// leaves that CLI a pure passthrough (2026-10-22).
+// leaves that CLI a pure passthrough (2026-10-22). Direct is the billing header
+// alone (request levels, 2026-10-23): its sources need request_levels_v1 and
+// an identity line never reaches the CLI.
 func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -217,21 +234,51 @@ func TestDirectPolicyReachesOnlyACapableCLI(t *testing.T) {
 		return out.Code, env
 	}
 	choices := `{"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`
-	code, _ := send(choices)
-	require.Equal(t, 409, code)
+	sources := `{"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_billing_sources":{"cc_version":"worker","cc_entrypoint":"client"},"build_identity_lines":{"claude-desktop":"agent_sdk"}}`
+	for _, p := range []string{choices, sources, `{"relay_mode":"direct","build_billing_sources":{"cc_version":"client"}}`} {
+		code, _ := send(p)
+		require.Equal(t, 409, code, p)
+	}
 	code, env := send(`{"relay_mode":"direct","cli_version":"2.1.304"}`)
 	require.Equal(t, 200, code)
 	require.Empty(t, env[directPolicyEnv], "an inherited value never reaches the CLI")
+	// Direct has no identity line (level none): lines an older core still
+	// sends are ignored, so they need no capable CLI.
+	code, env = send(`{"relay_mode":"direct","build_identity_lines":{"cli":"none"}}`)
+	require.Equal(t, 200, code)
+	require.Empty(t, env[directPolicyEnv])
 	require.NotContains(t, g.requestCapabilities(), features.DirectBillingCapability)
 
 	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability)
 	require.Contains(t, g.requestCapabilities(), features.DirectBillingCapability)
+	require.NotContains(t, g.requestCapabilities(), features.RequestLevelsCapability)
 	code, env = send(`{"relay_mode":"direct","cli_version":"2.1.304"}`)
 	require.Equal(t, 200, code)
 	require.JSONEq(t, `{}`, env[directPolicyEnv])
 	code, env = send(choices)
 	require.Equal(t, 200, code)
-	require.JSONEq(t, `{"build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`, env[directPolicyEnv])
+	require.JSONEq(t, `{"build_billing_entrypoint":"cli"}`, env[directPolicyEnv], "never an identity line in direct")
 	code, _ = send(`{"relay_mode":"direct","build_identity_lines":{"cli":"agent_sdk"}}`)
-	require.Equal(t, 400, code)
+	require.Equal(t, 200, code, "direct ignores identity lines, valid or not")
+	// Billing sources in direct need a CLI following the request levels: an
+	// older CLI refuses the key in its direct context.
+	code, _ = send(sources)
+	require.Equal(t, 409, code)
+	for _, p := range []string{`{"relay_mode":"direct","build_billing_sources":{"cc_version":"erase"}}`, `{"relay_mode":"direct","build_billing_entrypoint":"claude-desktop-3p"}`} {
+		code, _ = send(p)
+		require.Equal(t, 400, code, p)
+	}
+
+	g.CLIInfo.Capabilities = append(capabilities, features.DirectBillingCapability, features.RequestLevelsCapability)
+	require.Contains(t, g.requestCapabilities(), features.RequestLevelsCapability)
+	code, env = send(sources)
+	require.Equal(t, 200, code)
+	require.JSONEq(t, `{"build_billing_entrypoint":"claude-desktop","build_billing_sources":{"cc_version":"worker","cc_entrypoint":"client"}}`, env[directPolicyEnv])
+	code, env = send(`{"relay_mode":"direct","build_billing_sources":{"cc_version":"client"}}`)
+	require.Equal(t, 200, code)
+	require.JSONEq(t, `{"build_billing_sources":{"cc_version":"client"}}`, env[directPolicyEnv])
+	// The level capability alone does not carry the direct context.
+	g.CLIInfo.Capabilities = append(capabilities, features.RequestLevelsCapability)
+	code, _ = send(sources)
+	require.Equal(t, 409, code)
 }

@@ -369,6 +369,12 @@ func mergeConfig(c, old Config) (Config, error) {
 		}
 		c.RequestPolicy.BuildAttachmentSources = mergeSourceMap(c.RequestPolicy.BuildAttachmentSources, old.RequestPolicy.BuildAttachmentSources)
 		c.RequestPolicy.RequestIdentitySources = mergeSourceMap(c.RequestPolicy.RequestIdentitySources, old.RequestPolicy.RequestIdentitySources)
+		// A save without a level (a console from before levels) keeps the
+		// stored one; the saved relay_mode then only applies to a stored
+		// policy from before levels too, through the migration on read.
+		if c.RequestPolicy.Level == "" {
+			c.RequestPolicy.Level = old.RequestPolicy.Level
+		}
 	}
 	policy := c.EffectiveRequestPolicy()
 	if err := validateRequestPolicy(policy); err != nil {

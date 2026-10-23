@@ -3,9 +3,12 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -42,7 +45,19 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 	}
 	e.gw.allowPrivate = false // the managed path must not require disabling SSRF.
 	e.gw.d.CCGateway = ccgateway.New(db, cipher)
-	t.Setenv("CCGATEWAY_URL", e.up.srv.URL)
+	// The shared runtime in front of the upstream double: every model request
+	// reads its capabilities first (each policy needs request_levels_v1).
+	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": "2.1.302", "capabilities": []string{
+				features.RequestPolicyModeCapability, features.RequestLevelsCapability, features.BuildContentPreservationCapability,
+			}})
+			return
+		}
+		e.up.handle(w, r)
+	}))
+	t.Cleanup(worker.Close)
+	t.Setenv("CCGATEWAY_URL", worker.URL)
 	t.Setenv("CCG_API_KEY", "")
 	t.Setenv("CCG_ADMIN_KEY", "")
 	if configured {

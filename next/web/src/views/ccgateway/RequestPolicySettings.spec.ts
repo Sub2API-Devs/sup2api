@@ -20,13 +20,28 @@ function config(policy: Partial<RequestPolicy> | undefined) {
 }
 const TABS = ['connection', 'network', 'cc', 'deployment'] as const
 const tab = (w: VueWrapper, key: (typeof TABS)[number]) => w.findAll('[data-testid="settings-tabs"] [role="tab"]')[TABS.indexOf(key)]
-// The source columns became one radio matrix: a row is a radiogroup keyed by the
-// field, and its cells follow the column order (client, worker, erase).
+// The billing sources and the level are segmented controls (radios in option
+// order); the environment fields one radio matrix (client, worker, erase).
 const radios = (w: VueWrapper, sel: string) => w.get(sel).findAll('input')
 const picked = (w: VueWrapper, sel: string) => radios(w, sel).findIndex(i => (i.element as HTMLInputElement).checked)
 const pick = (w: VueWrapper, sel: string, index: number) => radios(w, sel)[index]!.setValue(true)
+const level = (w: VueWrapper, value: string) => w.get(`[data-testid="request-level"] input[value="${value}"]`).setValue(true)
+const levelPicked = (w: VueWrapper) => w.get('[data-testid="request-level"]').findAll('input').find(i => (i.element as HTMLInputElement).checked)?.attributes('value')
+// Attachments and tools are toggle chips; the field matrix is folded under its summary.
+const chip = (w: VueWrapper, sel: string) => w.get(`${sel} button`)
+const pressed = (w: VueWrapper, sel: string) => chip(w, sel).attributes('aria-pressed') === 'true'
+const openConvert = (w: VueWrapper) => w.get('[data-testid="environment-convert-edit"] button').trigger('click')
+function storing() {
+  let stored = config(defaultRequestPolicy())
+  mocks.get.mockImplementation(async () => structuredClone(stored))
+  mocks.put.mockImplementation(async (_url, body) => {
+    stored = config(JSON.parse(JSON.stringify(body.request_policy)))
+    return structuredClone(stored)
+  })
+  return () => stored.request_policy!
+}
 
-describe('CCGateway single-request modes', () => {
+describe('CCGateway request levels', () => {
   beforeEach(() => { vi.resetAllMocks(); i18n.global.locale.value = 'zh' })
   async function render() {
     const w = mount(RemoteSettings, { global: { plugins: [i18n, createPinia()], stubs: { teleport: true } } })
@@ -49,25 +64,36 @@ describe('CCGateway single-request modes', () => {
     expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ feature_revision: 12, cc_feature_groups: { 3: { enabled: false, allow_account_override: true, overrides: { build_billing_sources: { cc_version: 'worker' } } } } }), expect.anything())
     w.unmount()
   })
-  it('offers only direct and build, defaults to build and hides removed agent controls', async () => {
+  // The relay mode and the non-CC card are gone: the level decides both.
+  it('offers the four levels with what each includes, defaults to low and hides removed controls', async () => {
     mocks.get.mockResolvedValue(config(undefined))
     const w = await render()
-    const select = w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element
-    expect(Array.from(select.options).filter(o => !o.disabled).map(o => o.textContent)).toHaveLength(2)
-    expect(select.options[select.selectedIndex].textContent).toContain('build')
-    expect(w.get('[data-testid="cli-request-mode"]').text()).not.toContain('native')
-    for (const id of ['tool-search', 'client-attachments', 'custom-tool-prefix', 'thinking-disabled-compat', 'unknown-field']) {
+    const cards = w.get('[data-testid="request-level"]')
+    expect(cards.findAll('input').map(i => i.attributes('value'))).toEqual(['none', 'micro', 'low', 'high'])
+    expect(cards.findAll('label').map(l => l.text())).toEqual(['0 注入', '微注入', '低注入（默认）', '高注入'])
+    expect(levelPicked(w)).toBe('low')
+    expect(w.get('[data-testid="level-desc"]').text()).toContain('缺的首轮附件补上')
+    // The layers the level includes, the last one not.
+    const layers = w.get('[data-testid="level-layers"]').findAll('[data-on]').map(c => c.text())
+    expect(layers).toEqual(['计费头', '身份行', '环境'])
+    expect(w.get('[data-testid="level-layers"]').text()).toContain('提示词与工具')
+    await level(w, 'none')
+    expect(w.get('[data-testid="level-desc"]').text()).toContain('只处理开头的计费头（direct）')
+    expect(w.get('[data-testid="level-layers"]').findAll('[data-on]').map(c => c.text())).toEqual(['计费头'])
+    for (const id of ['relay-mode', 'direct-hint', 'build-injection', 'cli-request-mode', 'tool-search', 'client-attachments', 'custom-tool-prefix', 'thinking-disabled-compat', 'unknown-field', 'layer-mode-level']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
     w.unmount()
   })
-  it.each(['direct', 'build'] as const)('saves %s with a pinned CLI version', async mode => {
-    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+  it.each(['none', 'micro', 'low', 'high'] as const)('saves level %s with a pinned CLI version and no relay mode', async value => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), level: value === 'low' ? 'high' : 'low' }))
     const w = await render()
-    await w.get('[data-testid="relay-mode"]').setValue(mode === 'direct' ? '0' : '1')
-    mocks.put.mockResolvedValue(config({...defaultRequestPolicy(), relay_mode: mode}))
+    await level(w, value)
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), level: value }))
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:mode,cli_version:'2.1.304'})}),expect.anything())
+    const sent = mocks.put.mock.calls[0]![1].request_policy
+    expect(sent).toMatchObject({ level: value, cli_version: '2.1.304' })
+    expect(sent).not.toHaveProperty('relay_mode')
     w.unmount()
   })
   // The core accepts request policy schema 1 only (contracts/features
@@ -76,142 +102,166 @@ describe('CCGateway single-request modes', () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), schema_version: 1 }))
     const w = await render()
     await pick(w, '[data-testid="billing-cc_version"]', 1)
-    await w.get('[data-testid="relay-mode"]').setValue('0')
+    await level(w, 'none')
     mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
     await w.get('form').trigger('submit'); await flushPromises()
     const sent = mocks.put.mock.calls[0]![1].request_policy
     expect([undefined, 1]).toContain(sent.schema_version)
     w.unmount()
   })
-  // Direct fills only the billing header and the identity line by entrypoint;
-  // build also replaces the user_id on its own, so the identity has no setting
-  // and no row in either mode (2026-10-21/22 decisions).
-  it('shows what each mode does on its own and offers no identity setting', async () => {
-    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'direct' }))
+  // Level 0 is the billing header alone: its entrypoint and both field sources
+  // stay editable; the identity line and the environment fold with the level
+  // they need, and come back as they were.
+  it('folds the layers above the level and keeps the billing header at every level', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), level: 'none' }))
     const w = await render()
-    expect(w.get('[data-testid="direct-hint"]').text()).toContain('只补缺的计费头')
-    for (const id of ['billing-cc_version', 'build-attachments', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
-      expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    expect(levelPicked(w)).toBe('none')
+    for (const id of ['billing-cc_version', 'billing-cc_entrypoint', 'billing-entrypoint']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(true)
+    expect(w.get('[data-testid="billing-sources"]').text()).toContain('请求没有计费头时补完整的主代理计费头')
+    expect(w.get('[data-testid="billing-sources"]').text()).toContain('所有等级')
+    for (const [id, needs] of [['identity-lines', '微注入'], ['build-attachments', '低注入'], ['prompt-tools', '高注入']] as const) {
+      expect(w.get(`[data-testid="${id}"]`).attributes('data-locked')).toBe('true')
+      expect(w.get(`[data-testid="${id}"]`).text()).toContain(`提升到${needs}后生效`)
     }
-    for (const id of ['billing-entrypoint', 'identity-lines']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(true)
-    await w.get('[data-testid="relay-mode"]').setValue('1')
-    for (const id of ['direct-hint', 'identity-sources', 'auto-user-id', 'auto-prefix']) {
-      expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
-    }
-    const billing = w.get('[data-testid="billing-sources"]').text()
-    expect(billing).toContain('计费头')
-    expect(billing).toContain('客户端，没有用服务端')
+    for (const id of ['identity-adaptive', 'environment-convert', 'injection-attachments-date', 'injection-system_prompt']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    // Opened, a folded layer shows its kept choices read-only.
+    await w.get('[data-testid="build-attachments"] button[aria-expanded]').trigger('click')
+    expect(chip(w, '[data-testid="injection-attachments-date"]').attributes('disabled')).toBeDefined()
+    await level(w, 'micro')
+    expect(w.get('[data-testid="identity-lines"]').attributes('data-locked')).toBeUndefined()
+    expect(w.get('[data-testid="identity-lines"]').text()).toContain('微注入起')
+    expect(w.get('[data-testid="build-attachments"]').attributes('data-locked')).toBe('true')
+    const billing = w.get('[data-testid="billing-sources"]')
+    expect(billing.get('[data-testid="billing-cc_version"]').findAll('label').map(l => l.text())).toEqual(['客户端', '服务端'])
     expect(picked(w, '[data-testid="billing-cc_version"]')).toBe(0)
     w.unmount()
   })
-  // Each entrypoint offers only the lines real clients send with it, plus
-  // none; defaults are what those clients send (2026-10-22).
-  it('picks the server entrypoint and each entrypoint identity line from its own choices', async () => {
-    let stored = config(defaultRequestPolicy())
-    mocks.get.mockImplementation(async () => structuredClone(stored))
-    mocks.put.mockImplementation(async (_url, body) => {
-      stored = config(JSON.parse(JSON.stringify(body.request_policy)))
-      return structuredClone(stored)
-    })
+  // The identity line has no settings any more: a read-only card with the
+  // rules, and a saved choice is dropped on the next save (the core ignores it).
+  it('picks the server entrypoint, shows the identity rules and drops saved identity lines', async () => {
+    const stored = storing()
+    mocks.get.mockImplementation(async () => config({ ...defaultRequestPolicy(), build_identity_lines: { cli: 'none' } } as Partial<RequestPolicy>))
     let w = await render()
     const select = (id: string) => w.get<HTMLSelectElement>(`[data-testid="${id}"]`).element
     const options = (id: string) => Array.from(select(id).options).filter(o => !o.disabled).map(o => o.textContent?.trim())
     const chosen = (id: string) => select(id).options[select(id).selectedIndex]?.textContent?.trim()
     expect(options('billing-entrypoint-select')).toEqual(['cli', 'sdk-cli', 'sdk-ts', 'sdk-py', 'claude-desktop', 'claude-vscode'])
     expect(chosen('billing-entrypoint-select')).toBe('sdk-cli')
-    expect(options('identity-line-select-cli')).toEqual(['Claude Code CLI（终端）', '不补'])
-    expect(options('identity-line-select-sdk-ts')).toEqual(['Claude Agent SDK', 'Claude Code + Agent SDK', '不补'])
-    expect(options('identity-line-select-claude-vscode')).toEqual(['Claude Code + Agent SDK', 'Claude Agent SDK', '不补'])
-    expect(chosen('identity-line-select-cli')).toBe('Claude Code CLI（终端）')
-    expect(chosen('identity-line-select-sdk-cli')).toBe('Claude Agent SDK')
-    expect(chosen('identity-line-select-claude-desktop')).toBe('Claude Code + Agent SDK')
+    const identity = w.get('[data-testid="identity-lines"]')
+    expect(identity.text()).toContain('自适应：请求没有身份行时按计费头里的入口补')
+    expect(identity.find('select').exists()).toBe(false)
+    expect(identity.find('input').exists()).toBe(false)
+    await identity.get('[data-testid="identity-rules"] button').trigger('click')
+    const rules = identity.findAll('dt').map((dt, i) => [dt.text(), identity.findAll('dd')[i]!.text()])
+    expect(rules).toEqual([
+      ['cli', 'Claude Code CLI（终端）'],
+      ['claude-desktop、claude-vscode', 'Claude Code + Agent SDK'],
+      ['sdk-cli、sdk-ts、sdk-py', '高注入（补了内置提示词）时 Claude Code + Agent SDK，其余 Claude Agent SDK'],
+      ['其他入口', '按服务端入口']
+    ])
     await w.get('[data-testid="billing-entrypoint-select"]').setValue('5')
-    await w.get('[data-testid="identity-line-select-cli"]').setValue('1')
-    await w.get('[data-testid="identity-line-select-claude-desktop"]').setValue('1')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(stored.request_policy?.build_billing_entrypoint).toBe('claude-vscode')
-    expect(stored.request_policy?.build_identity_lines).toEqual({ cli: 'none', 'claude-desktop': 'agent_sdk' })
+    expect(mocks.put.mock.calls[0]![1].request_policy).not.toHaveProperty('build_identity_lines')
+    expect(stored().build_billing_entrypoint).toBe('claude-vscode')
+    expect(stored()).not.toHaveProperty('build_identity_lines')
     w.unmount()
+    mocks.get.mockImplementation(async () => structuredClone(config(stored())))
     w = await render()
     expect(chosen('billing-entrypoint-select')).toBe('claude-vscode')
-    expect(chosen('identity-line-select-cli')).toBe('不补')
-    expect(chosen('identity-line-select-claude-desktop')).toBe('Claude Agent SDK')
-    expect(chosen('identity-line-select-claude-vscode')).toBe('Claude Code + Agent SDK')
     w.unmount()
   })
-  // A request without a billing header gets, per choice, Claude Code's system
-  // prompt, attachments and tools; only build shows the choices (2026-10-23).
-  it('saves what a request without a billing header is given and restores it', async () => {
-    let stored = config(defaultRequestPolicy())
-    mocks.get.mockImplementation(async () => structuredClone(stored))
-    mocks.put.mockImplementation(async (_url, body) => {
-      stored = config(JSON.parse(JSON.stringify(body.request_policy)))
-      return structuredClone(stored)
-    })
+  // Omitted choices are the level's defaults (LevelInjection): low adds every
+  // first-turn attachment, high also the prompt and Bash, Read, Edit, Write.
+  it('shows the level defaults, saves the choices made and keeps them below their level', async () => {
+    const stored = storing()
     let w = await render()
     const prompt = '[data-testid="injection-system_prompt"]', env = '[data-testid="injection-attachments-environment"]', date = '[data-testid="injection-attachments-date"]'
-    expect(picked(w, prompt)).toBe(1)
-    expect(picked(w, env)).toBe(1)
-    await pick(w, prompt, 0)
-    await pick(w, env, 0)
-    await w.get('[data-testid="build-injection"]').findAll('button').find(b => b.text().includes('Claude Code 工具'))!.trigger('click')
-    await pick(w, '[data-testid="injection-tools-Read"]', 0)
+    const tool = (name: string) => `[data-testid="injection-tools-${name}"]`
+    const promptOn = () => w.get<HTMLInputElement>(prompt).element.checked
+    for (const name of ['environment', 'model', 'total_tokens', 'date']) expect(pressed(w, `[data-testid="injection-attachments-${name}"]`)).toBe(true)
+    expect(w.get('[data-testid="environment-inject"]').text()).toContain('缺少时补')
+    expect(w.find(prompt).exists()).toBe(false)
+    await level(w, 'high')
+    expect(promptOn()).toBe(true)
+    expect(w.get('[data-testid="prompt-tools"]').text()).toContain('客户端 system 并入 CC 动态块，与 --append-system-prompt 相同')
+    expect(w.get('[data-testid="injection-tools"]').findAll('[data-testid^="injection-tools-"]').map(c => c.attributes('data-testid'))).toEqual(['Bash', 'Read', 'Edit', 'Write', 'Agent', 'WebSearch', 'NotebookEdit'].map(n => 'injection-tools-' + n))
+    for (const name of ['Bash', 'Read', 'Edit', 'Write']) expect(pressed(w, tool(name))).toBe(true)
+    for (const name of ['Agent', 'WebSearch', 'NotebookEdit']) expect(pressed(w, tool(name))).toBe(false)
+    const hints = w.get('[data-testid="tool-hints"]').findAll('li').map(li => li.text())
+    expect(hints).toEqual(['Agent：不补“可用代理类型”清单', 'WebSearch、NotebookEdit：没有 ToolSearch 时按完整定义发送'])
+    expect(w.get('[data-testid="tools-client-note"]').text()).toBe('工具调用都交回客户端执行，客户端必须能执行')
+    await chip(w, env).trigger('click')
+    await chip(w, tool('Agent')).trigger('click')
+    await chip(w, tool('Bash')).trigger('click')
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(stored.request_policy?.build_injection).toEqual({ system_prompt: true, attachments: { environment: true }, tools: { Read: true } })
+    expect(stored().level).toBe('high')
+    expect(stored().build_injection).toEqual({ attachments: { environment: false }, tools: { Agent: true, Bash: false } })
     w.unmount()
     w = await render()
-    expect(picked(w, prompt)).toBe(0)
-    expect(picked(w, env)).toBe(0)
-    expect(picked(w, date)).toBe(1)
-    expect(w.get('[data-testid="cli-request-mode"]').text()).toContain('非 CC 补 3 项')
-    await w.get('[data-testid="relay-mode"]').setValue('0')
-    expect(w.find('[data-testid="build-injection"]').exists()).toBe(false)
+    expect(levelPicked(w)).toBe('high')
+    expect(promptOn()).toBe(true)
+    expect(pressed(w, env)).toBe(false)
+    expect(pressed(w, date)).toBe(true)
+    expect(pressed(w, tool('Agent'))).toBe(true)
+    expect(pressed(w, tool('Bash'))).toBe(false)
+    await w.get(prompt).setValue(false)
+    await level(w, 'micro')
+    expect(w.find(prompt).exists()).toBe(false)
+    expect(w.find(env).exists()).toBe(false)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored()).toMatchObject({ level: 'micro', build_injection: { system_prompt: false, attachments: { environment: false }, tools: { Agent: true, Bash: false } } })
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {
-    let stored = config(defaultRequestPolicy())
-    mocks.get.mockImplementation(async () => structuredClone(stored))
-    mocks.put.mockImplementation(async (_url, body) => {
-      stored = config(JSON.parse(JSON.stringify(body.request_policy)))
-      return structuredClone(stored)
-    })
+    const stored = storing()
     let w = await render()
     const platform = '[data-testid="build-attachment-platform_name"]'
     const os = '[data-testid="build-attachment-os_version"]'
+    expect(w.get('[data-testid="environment-convert-summary"]').text()).toBe('全部保留客户端')
+    await openConvert(w)
     expect(picked(w, platform)).toBe(0)
     await pick(w, platform, 1)
+    expect(w.get('[data-testid="environment-convert-summary"]').text()).toBe('平台名称用服务端；其余保留客户端')
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.put).toHaveBeenCalled()
-    expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker' })
+    expect(stored().build_attachment_sources).toEqual({ platform_name: 'worker' })
     w.unmount()
     w = await render()
+    await openConvert(w)
     expect(picked(w, platform)).toBe(1)
     expect(picked(w, os)).toBe(0)
     await pick(w, os, 1)
-    await w.get('[data-testid="relay-mode"]').setValue('0')
+    await level(w, 'micro')
     expect(w.find(platform).exists()).toBe(false)
-    expect(w.text()).toContain('只补缺的计费头')
+    expect(w.text()).toContain('提升到低注入后生效')
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })
-    await w.get('[data-testid="relay-mode"]').setValue('1')
+    expect(stored().build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })
+    await level(w, 'low')
+    await openConvert(w)
     await pick(w, platform, 0)
     await pick(w, os, 0)
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(stored.request_policy?.build_attachment_sources).toEqual({ platform_name: 'client', os_version: 'client' })
+    expect(stored().build_attachment_sources).toEqual({ platform_name: 'client', os_version: 'client' })
     w.unmount()
   })
-  it.each(['native', 'legacy', 'passthrough', '', undefined])('migrates stored %s mode to build', async mode => {
-    mocks.get.mockResolvedValue(config({...defaultRequestPolicy(), relay_mode:mode} as Partial<RequestPolicy>))
+  // A policy saved before levels gets the level features.LegacyLevel gives it
+  // (a retired mode read as build, as the core does); saving writes that level
+  // and no relay mode.
+  it.each([['native', 'micro'], ['legacy', 'micro'], ['passthrough', 'micro'], ['', 'micro'], [undefined, 'micro'], ['direct', 'none'], ['build', 'micro']] as const)('migrates stored mode %s to level %s', async (mode, want) => {
+    const saved = { ...defaultRequestPolicy(), relay_mode: mode } as Partial<RequestPolicy>
+    delete saved.level
+    mocks.get.mockResolvedValue(config(saved))
     const w = await render()
-    const select = w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element
-    expect(select.options[select.selectedIndex].textContent).toContain('build')
+    expect(levelPicked(w)).toBe(want)
     mocks.put.mockResolvedValue(config(defaultRequestPolicy()))
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(mocks.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({request_policy:expect.objectContaining({relay_mode:'build'})}),expect.anything())
+    const sent = mocks.put.mock.calls[0]![1].request_policy
+    expect(sent.level).toBe(want)
+    expect(sent).not.toHaveProperty('relay_mode')
     w.unmount()
   })
 })

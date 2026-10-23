@@ -18,18 +18,21 @@ const BuildInjectionCapability = "build_injection_v1"
 // per model); none is copied anywhere else.
 var InjectionAttachments = []string{"environment", "model", "total_tokens", "date"}
 
-// InjectionTools are Claude Code 2.1.304's own tools a request may be given
-// (the CLI's tool pool, getTools, in a Worker), in its order. The CLI refuses
-// a name it does not have. A tool the model calls goes back to the client like
-// any other.
-var InjectionTools = []string{"Agent", "Bash", "Read", "Edit", "Write", "NotebookEdit", "ReportFindings", "WebSearch", "TaskStop", "Skill",
-	"EnterWorktree", "ExitWorktree", "SendMessage", "ListAgents", "Workflow", "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "ToolSearch"}
+// InjectionTools are the Claude Code 2.1.304 tools a request may be given, in
+// console order: the ones its system prompt names (DefaultInjectionTools),
+// then Agent, WebSearch and NotebookEdit. The rest of the CLI's pool (getTools)
+// is left out: each depends on session state or a listing attachment
+// (deferred tools, skills, agents' messages, cron) that a single request
+// cannot carry truthfully. The CLI orders the chosen ones as Claude Code does
+// and refuses a name it does not have. A tool the model calls goes back to the
+// client like any other.
+var InjectionTools = []string{"Bash", "Read", "Edit", "Write", "Agent", "WebSearch", "NotebookEdit"}
 
 // BuildInjection is what a request without a billing header is given. Every
 // choice is optional and inherits on its own when omitted: the system prompt,
 // and each attachment and tool by name (true adds it, false does not).
 type BuildInjection struct {
-	SystemPrompt *bool          `json:"system_prompt,omitempty"`
+	SystemPrompt *bool           `json:"system_prompt,omitempty"`
 	Attachments  map[string]bool `json:"attachments,omitempty"`
 	Tools        map[string]bool `json:"tools,omitempty"`
 }
@@ -110,8 +113,8 @@ func (p *BuildInjection) Effective() *BuildInjection {
 	return out
 }
 
-// Added lists what is added, attachments and tools in Claude Code's order:
-// the form the CLI takes.
+// Added lists what is added, attachments in Claude Code's order and tools in
+// console order (the CLI orders them as Claude Code does).
 func (p *BuildInjection) Added() (systemPrompt bool, attachments, tools []string) {
 	p = p.Effective()
 	if p == nil {

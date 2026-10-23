@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,17 +52,27 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 			}
 			r := cfg.ResolveFeaturePolicy(tc.GroupID, account)
 			require.NoError(t, validateRequestPolicy(r.Effective))
+			// Every resolved policy has a level (a save from before levels is
+			// migrated), and the level decides the relay mode.
+			require.Contains(t, features.RequestLevels, r.Effective.Level)
+			require.Equal(t, features.RelayModeForLevel(r.Effective.Level), r.Effective.RelayMode)
 			require.NotEmpty(t, tc.Expect)
 			for field, want := range tc.Expect {
-				got := r.Effective.RelayMode
-				if field != "relay_mode" {
-					got = matrixValue(r.Effective, field)
-				}
-				require.Equal(t, want, got, field)
+				// "level" and "relay_mode" read the resolved scalars.
+				require.Equal(t, want, matrixValue(r.Effective, field), field)
 			}
 			wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, validateRequestPolicy(wire))
+			require.Empty(t, wire.Level, "the level is not sent")
+			require.Equal(t, r.Effective.RelayMode, wire.RelayMode)
+			require.Equal(t, features.LevelInjection(r.Effective.Level, r.Effective.BuildInjection), wire.BuildInjection)
+			if !features.LevelHasIdentity(r.Effective.Level) {
+				require.Nil(t, wire.BuildIdentityLines)
+			}
+			if !features.LevelHasEnvironment(r.Effective.Level) {
+				require.Nil(t, wire.BuildAttachmentSources)
+			}
 		})
 	}
 	require.Equal(t, map[string]bool{"global": true, "group": true, "account": true}, layers, "every editor layer is covered")

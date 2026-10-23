@@ -3,3 +3,5 @@
 // content policy without the CLI.
 import fs from 'node:fs';
 export const vocabulary = JSON.parse(fs.readFileSync(new URL('./fixtures/native-vocabulary-2.1.304.json', import.meta.url), 'utf8'));
+// The layer vocabulary and loop header names (ccgatewayLayerVocabulary), checked the same way.
+export const layers = JSON.parse(fs.readFileSync(new URL('./fixtures/native-layers-2.1.304.json', import.meta.url), 'utf8'));

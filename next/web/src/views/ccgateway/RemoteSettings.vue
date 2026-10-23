@@ -16,7 +16,7 @@ import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
 import GroupPolicyList from './GroupPolicyList.vue'
 import ControllerInstall, { type InstallResult } from './ControllerInstall.vue'
-import { defaultRequestPolicy, newRequestPolicy, normalizeRequestPolicy, validRequestPolicy, validFeatureOverrides, type FeatureGroup, type RequestPolicy } from './requestPolicy'
+import { defaultRequestPolicy, newRequestPolicy, normalizeRequestPolicy, savedOverrides, validRequestPolicy, validFeatureOverrides, type FeatureGroup, type RequestPolicy } from './requestPolicy'
 import { reasonDisplay, reasonOf } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import { basePathOf, connectionStateOf, controllerFormProblem, endpointScheme, formatControllerEndpoint, parseControllerEndpoint, schemeOf } from './controllerMode'
@@ -233,7 +233,7 @@ async function save() {
     account_runtimes: true,
     ...connection,
     request_policy: normalizeRequestPolicy(requestPolicy.value),
-    cc_feature_groups: featureGroups.value,
+    cc_feature_groups: Object.fromEntries(Object.entries(featureGroups.value).map(([id, group]) => [id, { ...group, overrides: savedOverrides(group.overrides) }])),
     feature_revision: s.feature_revision ?? 0,
     images: gateway ? { ...imagesPayload.value, gateway } : imagesPayload.value,
     network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation }

@@ -105,8 +105,12 @@ func TestFeatureRequiredCapabilities(t *testing.T) {
 	require.Contains(t, required, features.BuildAttachmentCapabilityV2)
 	require.Contains(t, required, features.BuildContentPreservationCapability)
 	require.Contains(t, required, features.BuildBillingCapability)
+	require.Contains(t, required, features.RequestLevelsCapability)
 	p.RelayMode = "direct"
-	require.Equal(t, []string{features.RequestPolicyModeCapability}, requestPolicyCapabilities(p))
+	require.Equal(t, []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability, features.DirectBillingCapability}, requestPolicyCapabilities(p),
+		"direct with a billing source from the Worker")
+	p.BuildBillingSources = nil
+	require.Equal(t, []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}, requestPolicyCapabilities(p))
 	// Only an identity source other than the default needs the identity CLI.
 	p.RequestIdentitySources = features.RequestIdentitySources{"user_id": "worker"}
 	require.Contains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
@@ -200,7 +204,8 @@ func TestAccountFeaturePolicyRevisionAndClear(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "direct", wire.RelayMode, "load the saved account override without enabled group settings")
 		require.Equal(t, "account-tools", wire.CustomToolPrefix)
-		require.Empty(t, wire.BuildBillingSources, "direct still omits content transformations")
+		require.Nil(t, wire.BuildAttachmentSources, "none omits the environment")
+		require.Equal(t, features.BuildBillingSources{"cc_version": "worker", "cc_entrypoint": "worker"}, wire.BuildBillingSources, "none keeps the billing sources")
 	}
 	read.Mode = "follow"
 	require.NoError(t, save(read))
@@ -218,7 +223,7 @@ func TestFeatureModeUsesAuthenticatedGroup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "direct", p.RelayMode)
 	require.Nil(t, p.BuildAttachmentSources)
-	require.Nil(t, p.BuildBillingSources)
+	require.Empty(t, p.BuildBillingSources)
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 21, 0)
 	require.NoError(t, err)
 	require.Equal(t, "build", p.RelayMode)
@@ -341,19 +346,20 @@ func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
-	require.Equal(t, features.BuildIdentityLines{"sdk-cli": "official_cli_sdk", "claude-vscode": "none"}, p.BuildIdentityLines)
-	require.Contains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
-	// Direct fills the header and the identity line too (2026-10-22), so the
-	// choices reach the Worker, which must be able to apply them there.
+	// The identity line adapts in the CLI (2026-10-23): stored lines are not sent.
+	require.Nil(t, p.BuildIdentityLines)
+	require.Contains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability, "the entrypoint still needs it")
+	// Direct (level none) fills the billing header only (2026-10-23): the
+	// entrypoint reaches the Worker, the identity lines do not.
 	cfg.RequestPolicy.RelayMode = "direct"
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
-	require.Equal(t, features.BuildIdentityLines{"sdk-cli": "official_cli_sdk", "claude-vscode": "none"}, p.BuildIdentityLines)
-	require.Nil(t, p.BuildBillingSources)
+	require.Nil(t, p.BuildIdentityLines)
+	require.Empty(t, p.BuildBillingSources)
 	require.Contains(t, requestPolicyCapabilities(p), features.DirectBillingCapability)
 	require.NotContains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)
-	cfg.RequestPolicy.BuildBillingEntrypoint, cfg.RequestPolicy.BuildIdentityLines = "", nil
+	cfg.RequestPolicy.BuildBillingEntrypoint = ""
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 	require.NoError(t, err)
 	require.NotContains(t, requestPolicyCapabilities(p), features.DirectBillingCapability, "the default needs no newer Worker")
@@ -364,12 +370,12 @@ func TestIdentityLinesValidate(t *testing.T) {
 	for _, o := range []FeatureOverrides{
 		{BuildBillingEntrypoint: ptr("claude-desktop-3p")}, {BuildBillingEntrypoint: ptr("")},
 		{BuildIdentityLines: features.BuildIdentityLines{"cli": "agent_sdk"}},
-		{BuildIdentityLines: features.BuildIdentityLines{"claude-vscode": "official_cli"}},
+		{BuildIdentityLines: features.BuildIdentityLines{"sdk-cli": "official_cli"}},
 		{BuildIdentityLines: features.BuildIdentityLines{"remote": "none"}},
 	} {
 		require.Error(t, o.Validate(), "%+v", o)
 	}
-	require.NoError(t, FeatureOverrides{BuildBillingEntrypoint: ptr("sdk-py"), BuildIdentityLines: features.BuildIdentityLines{"cli": "none", "sdk-py": "official_cli_sdk", "claude-desktop": "agent_sdk"}}.Validate())
+	require.NoError(t, FeatureOverrides{BuildBillingEntrypoint: ptr("sdk-py"), BuildIdentityLines: features.BuildIdentityLines{"cli": "none", "sdk-py": "official_cli_sdk", "claude-desktop": "agent_sdk", "claude-vscode": "official_cli"}}.Validate())
 	var o FeatureOverrides
 	require.Error(t, json.Unmarshal([]byte(`{"build_billing_entrypoint":null}`), &o))
 	require.NoError(t, json.Unmarshal([]byte(`{"build_billing_entrypoint":"cli","build_identity_lines":{"cli":"none"}}`), &o))
@@ -403,7 +409,10 @@ func TestInjectionResolvesPerFieldAndNeedsTheCapability(t *testing.T) {
 		Overrides: FeatureOverrides{BuildInjection: inj(`{"tools":{"Read":true,"Bash":true}}`)}}}}
 	got := cfg.ResolveFeaturePolicy(7, AccountFeaturePolicy{Mode: "custom", Overrides: FeatureOverrides{BuildInjection: inj(`{"system_prompt":false,"attachments":{"date":false}}`)}})
 	raw, _ := json.Marshal(got.Effective.BuildInjection)
-	require.JSONEq(t, `{"system_prompt":false,"attachments":{"environment":true,"date":false},"tools":{"Read":true,"Bash":true}}`, string(raw))
+	// The global policy predates levels: adding the prompt makes it high, and
+	// what it did not add is kept off explicitly (migration on read).
+	require.JSONEq(t, `{"system_prompt":false,"attachments":{"environment":true,"date":false,"model":false,"total_tokens":false},"tools":{"Read":true,"Bash":true,"Edit":false,"Write":false}}`, string(raw))
+	require.Equal(t, features.LevelHigh, got.Effective.Level)
 	require.Equal(t, "account", got.Sources["build_injection.system_prompt"])
 	require.Equal(t, "global", got.Sources["build_injection.attachments.environment"])
 	require.Equal(t, "account", got.Sources["build_injection.attachments.date"])
@@ -428,12 +437,14 @@ func TestInjectionResolvesPerFieldAndNeedsTheCapability(t *testing.T) {
 
 	require.Error(t, FeatureOverrides{BuildInjection: inj(`{"tools":{"Glob":true}}`)}.Validate())
 	require.Error(t, FeatureOverrides{BuildInjection: inj(`{"attachments":{"skills":true}}`)}.Validate())
-	// A save from a client that does not know the field keeps it.
+	// A save from a client that does not know the field keeps it, written back
+	// in the levels' form: the level of what it did, adding exactly that.
 	stored := defaultRequestPolicy()
 	stored.BuildInjection = inj(`{"tools":{"Read":true}}`)
 	in := defaultRequestPolicy()
 	merged, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &in, FeatureRevision: 3}, Config{Mode: "disabled", RequestPolicy: &stored, FeatureRevision: 3})
 	require.NoError(t, err)
-	require.Equal(t, stored.BuildInjection, merged.RequestPolicy.BuildInjection)
+	require.Equal(t, features.LevelHigh, merged.RequestPolicy.Level)
+	require.Equal(t, stored.BuildInjection.Effective(), features.LevelInjection(merged.RequestPolicy.Level, merged.RequestPolicy.BuildInjection))
 }
 func ptr(v string) *string { return &v }

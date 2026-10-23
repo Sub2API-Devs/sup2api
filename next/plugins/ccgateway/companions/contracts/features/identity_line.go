@@ -33,16 +33,20 @@ const DefaultBillingEntrypoint = "sdk-cli"
 const IdentityLineNone = "none"
 
 // IdentityLineChoices are the lines each entrypoint may be given: the ones
-// real clients send with it on their main conversation, the default first
-// (2026-10-22: terminal cli; claude -p and the Agent SDKs without an appended
-// prompt; the desktop app and the VS Code extension append one).
+// real clients send with it, the default first (2026-10-22: terminal cli;
+// claude -p and the Agent SDKs without an appended prompt; the desktop app and
+// the VS Code extension append one). Claude Code picks the line by
+// interactivity and an appended prompt, not by entrypoint (2.1.304 n1n); the
+// desktop app's and the extension's side requests (WEo) and interactive
+// launches send official_cli (2026-10-23 AST), so they may have it too. cli
+// has only its own line: a non-interactive cli becomes sdk-cli (g7).
 var IdentityLineChoices = map[string][]string{
 	"cli":            {"official_cli"},
 	"sdk-cli":        {"agent_sdk", "official_cli_sdk"},
 	"sdk-ts":         {"agent_sdk", "official_cli_sdk"},
 	"sdk-py":         {"agent_sdk", "official_cli_sdk"},
-	"claude-desktop": {"official_cli_sdk", "agent_sdk"},
-	"claude-vscode":  {"official_cli_sdk", "agent_sdk"},
+	"claude-desktop": {"official_cli_sdk", "agent_sdk", "official_cli"},
+	"claude-vscode":  {"official_cli_sdk", "agent_sdk", "official_cli"},
 }
 
 // DefaultIdentityLine is the line an entrypoint gets when no layer chooses one.

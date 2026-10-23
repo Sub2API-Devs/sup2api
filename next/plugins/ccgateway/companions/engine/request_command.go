@@ -303,34 +303,38 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(400, "invalid_request_error", err.Error())
 		return
 	}
-	if err := policy.IdentityLines.Validate(); err != nil {
+	if err := policy.Billing.Validate(); err != nil {
 		fail(400, "invalid_request_error", err.Error())
 		return
 	}
-	identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
-	// Direct fills only a missing billing header or field and the identity
-	// line chosen for its entrypoint; the rest of the body goes byte for byte.
-	// The CLI does this only when the Worker hands it this context, so a CLI
-	// without the capability stays a pure passthrough unless a choice must be
-	// honoured.
+	// Direct is the billing header alone (request levels, 2026-10-23): the CLI
+	// fills a missing header or field for the entrypoint and converts the two
+	// billing fields by their sources; the rest of the body goes byte for byte.
+	// The identity line is build's (micro and up): an older core may still send
+	// the lines with direct, and they never reach the CLI. The CLI does this
+	// only when the Worker hands it this context, so a CLI without the
+	// capability stays a pure passthrough unless a choice must be honoured.
 	var directPolicy []byte
 	if requestMode == "direct" {
-		if g.CLIInfo.supports(features.DirectBillingCapability) {
-			directPolicy, _ = json.Marshal(struct {
-				Entrypoint    string                      `json:"build_billing_entrypoint,omitempty"`
-				IdentityLines features.BuildIdentityLines `json:"build_identity_lines,omitempty"`
-			}{policy.Entrypoint, policy.IdentityLines})
-		} else if identityLines {
+		levels := g.CLIInfo.supports(features.DirectBillingCapability) && g.CLIInfo.supports(features.RequestLevelsCapability)
+		if policy.Entrypoint != "" && !g.CLIInfo.supports(features.DirectBillingCapability) || len(policy.Billing) > 0 && !levels {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested direct policy")
 			return
 		}
+		if g.CLIInfo.supports(features.DirectBillingCapability) {
+			directPolicy, _ = json.Marshal(struct {
+				Entrypoint string                       `json:"build_billing_entrypoint,omitempty"`
+				Billing    features.BuildBillingSources `json:"build_billing_sources,omitempty"`
+			}{policy.Entrypoint, policy.Billing})
+		}
 	}
 	if requestMode == "build" {
-		if err := policy.Sources.Validate(); err != nil {
+		if err := policy.IdentityLines.Validate(); err != nil {
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}
-		if err := policy.Billing.Validate(); err != nil {
+		identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
+		if err := policy.Sources.Validate(); err != nil {
 			fail(400, "invalid_request_error", err.Error())
 			return
 		}

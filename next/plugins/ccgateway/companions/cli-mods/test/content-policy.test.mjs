@@ -229,6 +229,16 @@ test('the leading header is read by field and one field is rewritten in place', 
   for (const other of [undefined, [], 'prompt', [{ type: 'text', text: 'prompt' }, { type: 'text', text: header }], [{ type: 'text', text: 'before\n' + header }]]) {
     assert.equal(leadingBilling(other), null, JSON.stringify(other));
   }
+  // The request's own header, wherever it is: what hasBilling sees.
+  const { requestBilling, hasBilling } = createContentPolicy(vocabulary);
+  assert.deepEqual(requestBilling([{ type: 'text', text: 'prompt' }, { type: 'text', text: header }]), leadingBilling(system));
+  assert.deepEqual(requestBilling([{ type: 'text', text: 'before\n' + header }]), leadingBilling(system));
+  assert.deepEqual(requestBilling(system), leadingBilling(system));
+  assert.deepEqual(requestBilling([{ type: 'text', text: 'p' }, { type: 'text', text: 'x-anthropic-billing-header: cc_version=1; cc_version=2;' }]), {});
+  for (const other of [undefined, [], 'prompt', [{ type: 'text', text: 'mentions ' + header }]]) {
+    assert.equal(requestBilling(other), null, JSON.stringify(other));
+    assert.equal(hasBilling(other), false);
+  }
   const copy = structuredClone(system);
   const rewritten = setLeadingBillingField(system, 'cc_prompt_id', '11111111-2222-4333-8444-555555555555');
   assert.deepEqual(system, copy);

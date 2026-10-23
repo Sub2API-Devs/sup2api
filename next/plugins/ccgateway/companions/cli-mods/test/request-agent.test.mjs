@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readRequestAgent, resolveAgentContext } from '../request-agent.js';
+import { layers } from './vocabulary.mjs';
 
 // Claude Code 2.1.304's own query source naming (Zoe).
 const querySourceFor = (type, builtIn) => builtIn ? (type ? `agent:builtin:${type}` : 'agent:default') : (type ? `agent:custom:${type}` : 'agent:custom');
 const key = 'ab'.repeat(32), otherKey = 'cd'.repeat(32);
 const P = 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d';
 const mapped = (client = {}, k = key) => ({ map: true, key: k, client });
-const resolve = (context, billing, prompt = 'Reply with OK.') => resolveAgentContext(context, { billing, prompt, querySourceFor });
+// Claude Code 2.1.304's loop header names, rendered from the native constants.
+const { loopHeaders } = layers;
+const resolve = (context, billing, prompt = 'Reply with OK.') => resolveAgentContext(context, { billing, prompt, querySourceFor, loopHeaders });
 const subagentHeader = { cc_version: '2.1.304.9a4', cc_entrypoint: 'sdk-cli', cc_is_subagent: 'true', cc_prompt_id: P };
 const mainHeader = { cc_version: '2.1.304.1d1', cc_entrypoint: 'sdk-cli', cc_prompt_id: P };
 
@@ -37,7 +40,7 @@ test('a mapped subagent keeps every equality the client requests had', () => {
   assert.notEqual(elsewhere.promptId, sub.promptId);
 });
 
-test('without headers the body decides: CC main, CC subagent, anything else a custom subagent', () => {
+test('without headers the body decides: CC main, CC subagent, anything else the main thread', () => {
   const main = resolve(mapped(), mainHeader);
   assert.equal(main.requestClass, 'main');
   assert.equal(main.querySource, 'sdk');
@@ -51,13 +54,19 @@ test('without headers the body decides: CC main, CC subagent, anything else a cu
   assert.notEqual(sub.agentContext.agentId, resolve(mapped(), subagentHeader, 'another task').agentContext.agentId);
   assert.equal(sub.agentContext.parentAgentId, undefined, 'no parent is invented');
 
+  // A request that is not Claude Code's is completed as its main thread
+  // (2026-10-23): no agent, a prompt ID derived from its first prompt.
   const other = resolve(mapped(), null, 'hello');
-  assert.equal(other.requestClass, 'subagent');
-  assert.equal(other.querySource, 'agent:custom');
+  assert.equal(other.requestClass, 'main');
+  assert.equal(other.querySource, 'sdk');
+  assert.equal(other.agentContext, undefined);
+  assert.equal(other.explicitClass, undefined);
   assert.equal(other.billingPromptId, undefined, 'there is no client header to rewrite');
   assert.match(other.promptId, /^[0-9a-f-]{36}$/);
-  assert.equal(other.agentContext.parentPromptId, other.promptId, 'the header CC fills names the same prompt');
   assert.deepEqual(resolve(mapped(), null, 'hello'), other);
+  assert.notEqual(resolve(mapped(), null, 'another').promptId, other.promptId);
+  // The loop header names are CC's, never assumed.
+  assert.throws(() => resolveAgentContext(mapped(), { billing: null, prompt: 'x', querySourceFor }), /Missing native loop header names/);
 });
 
 test('direct and API-key accounts send the client IDs unchanged', () => {
@@ -68,12 +77,12 @@ test('direct and API-key accounts send the client IDs unchanged', () => {
     assert.equal(sub.agentContext.parentAgentId, 'aparent');
     assert.equal(sub.promptId, P);
     assert.equal(sub.billingPromptId, undefined, 'the body keeps its own value');
-    // A request that is not Claude Code's still gets stable IDs it never sent.
+    // A request that is not Claude Code's still gets a stable prompt ID it never sent.
     const other = resolve({ ...context, client: {} }, null, 'hello');
-    assert.match(other.agentContext.agentId, /^a[0-9a-f]{16}$/);
+    assert.match(other.promptId, /^[0-9a-f-]{36}$/);
     assert.deepEqual(resolve({ ...context, client: {} }, null, 'hello'), other);
   }
-  assert.notEqual(resolve({ map: false, key, client: {} }, null, 'hello').agentContext.agentId, resolve({ map: false, client: {} }, null, 'hello').agentContext.agentId);
+  assert.notEqual(resolve({ map: false, key, client: {} }, null, 'hello').promptId, resolve({ map: false, client: {} }, null, 'hello').promptId);
 });
 
 test('other request classes', () => {

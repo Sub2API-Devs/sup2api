@@ -11,29 +11,35 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 // The cc_entrypoint values build may write and, per entrypoint, the identity
 // lines real clients send with it, the default first (contracts
 // features/identity_line.go). The lines are names; CC renders the text (n1n).
+// The desktop app's and the extension's side requests send official_cli.
 export const defaultEntrypoint = 'sdk-cli';
 export const identityLineChoices = {
   cli: ['official_cli'],
   'sdk-cli': ['agent_sdk', 'official_cli_sdk'],
   'sdk-ts': ['agent_sdk', 'official_cli_sdk'],
   'sdk-py': ['agent_sdk', 'official_cli_sdk'],
-  'claude-desktop': ['official_cli_sdk', 'agent_sdk'],
-  'claude-vscode': ['official_cli_sdk', 'agent_sdk'],
+  'claude-desktop': ['official_cli_sdk', 'agent_sdk', 'official_cli'],
+  'claude-vscode': ['official_cli_sdk', 'agent_sdk', 'official_cli'],
 };
 // Entrypoints a client may send that answer to a configured one.
 const entrypointAliases = { 'claude-desktop-3p': 'claude-desktop' };
 
 // identityLineFor picks the identity line for the request's entrypoint (the
-// one its billing header carries after build filled it): the configured line,
-// else the entrypoint's default. An entrypoint outside the table uses the
-// configured one's row. fallback is the line inserted when none is chosen but
-// the request still needs one (its first block is not the header).
-export function identityLineFor(policy = {}, entrypoint) {
+// one its billing header carries after build filled it), the way Claude Code
+// picks it (2026-10-23: adaptive, no configuration; 2.1.304 n1n chooses by
+// interactivity and an appended prompt): the terminal cli its own line; the
+// desktop app and the VS Code extension, which append a prompt, the SDK line
+// with the append; the SDK entrypoints the plain SDK line, or the appended
+// one when build gave the request CC's system prompt with the client's system
+// appended (appended). An entrypoint outside the table uses the configured
+// one's row. The line is inserted only when the request has none. Identity
+// lines sent by an older core are accepted and not used.
+export function identityLineFor(policy = {}, entrypoint, { appended = false } = {}) {
   const configured = policy.build_billing_entrypoint ?? defaultEntrypoint;
   const row = Object.hasOwn(identityLineChoices, entrypoint) ? entrypoint
     : Object.hasOwn(entrypointAliases, entrypoint ?? '') ? entrypointAliases[entrypoint] : configured;
-  const fallback = identityLineChoices[row][0];
-  return { entrypoint: row, line: policy.build_identity_lines?.[row] ?? fallback, fallback };
+  const line = appended && identityLineChoices[row].includes('official_cli_sdk') ? 'official_cli_sdk' : identityLineChoices[row][0];
+  return { entrypoint: row, line, fallback: line };
 }
 
 // Entry point and identity line choices, shared by both envelopes.
@@ -48,15 +54,18 @@ function validateIdentityChoices(value) {
 }
 
 // validateDirectPolicy reads the Worker's direct context (CCG_DIRECT_POLICY):
-// the only choices direct takes. Undefined means none was given, and direct
-// then forwards the body unchanged.
+// the billing choices, the only ones direct takes. Undefined means none was
+// given, and direct then forwards the body unchanged. Identity lines from an
+// older Worker are accepted and not used: direct adds no line (2026-10-23).
 export function validateDirectPolicy(raw) {
   if (raw === undefined) return undefined;
   let value;
   try { value = JSON.parse(raw); } catch { throw Error('Invalid Worker direct policy'); }
-  if (!object(value) || Object.keys(value).some(key => !['build_billing_entrypoint', 'build_identity_lines'].includes(key))) throw Error('Invalid Worker direct policy');
+  if (!object(value) || Object.keys(value).some(key => !['build_billing_entrypoint', 'build_billing_sources', 'build_identity_lines'].includes(key))) throw Error('Invalid Worker direct policy');
   validateIdentityChoices(value);
-  return value;
+  validateSources(value, 'build_billing_sources', billingFields, ['client', 'worker']);
+  const { build_identity_lines: _, ...policy } = value;
+  return policy;
 }
 
 // What build adds to a request without a billing header (a request that is not
@@ -95,18 +104,18 @@ export function validateRequestPolicy(value) {
   }
   validateIdentityChoices(value);
   validateInjection(value.build_injection);
-  for (const [name, fields, sources] of [
-    ['build_attachment_sources', environmentFields, ['client', 'worker', 'erase']],
-    ['build_billing_sources', billingFields, ['client', 'worker']],
-  ]) {
-    const mapping = value[name];
-    if (mapping === undefined) continue;
-    if (!object(mapping)) throw Error(`${name} must be an object`);
-    for (const [key, source] of Object.entries(mapping)) {
-      if (!fields.includes(key) || !sources.includes(source)) throw Error(`Unsupported ${name}.${key}`);
-    }
-  }
+  validateSources(value, 'build_attachment_sources', environmentFields, ['client', 'worker', 'erase']);
+  validateSources(value, 'build_billing_sources', billingFields, ['client', 'worker']);
   return structuredClone(value);
+}
+
+function validateSources(value, name, fields, sources) {
+  const mapping = value[name];
+  if (mapping === undefined) return;
+  if (!object(mapping)) throw Error(`${name} must be an object`);
+  for (const [key, source] of Object.entries(mapping)) {
+    if (!fields.includes(key) || !sources.includes(source)) throw Error(`Unsupported ${name}.${key}`);
+  }
 }
 
 export function runtimeContext(value) {

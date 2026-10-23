@@ -58,7 +58,7 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 					probes++
 					caps := []string{}
 					if tc.capable {
-						caps = append(caps, features.BuildAttachmentCapability, features.RequestPolicyModeCapability, features.BuildContentPreservationCapability)
+						caps = append(caps, features.BuildAttachmentCapability, features.RequestPolicyModeCapability, features.BuildContentPreservationCapability, features.RequestLevelsCapability)
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": tc.version, "capabilities": caps})
 					return

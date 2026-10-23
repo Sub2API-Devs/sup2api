@@ -210,20 +210,27 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v19-request-layers');
+  assert.equal(patchManifest.extension, 'ccgateway-v20-request-levels');
+  assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   assert(patchManifest.capabilities.includes('build_identity_line_v1'));
   assert(patchManifest.capabilities.includes('direct_billing_v1'));
   assert(patchManifest.supportFiles['ccgateway-direct-billing.js']);
   // The Claude Code lines are the CLI's own: the build request gets the native
   // selector's three lines (interactive; non-interactive with and without an
-  // appended prompt) and recognizer. Direct gets the same lines plus the native
-  // header line (kLo over RIs of the first user prompt).
+  // appended prompt) and recognizer. Direct gets only the native header line
+  // (kLo over RIs of the first user prompt, with a main-thread prompt's ID and
+  // turn), no identity line (2026-10-23).
   const cli = fs.readFileSync(path.join(output, 'cli.js'), 'utf8');
   const lines = '\\{official_cli:ccgPrefix\\(\\{isNonInteractive:!1,hasAppendSystemPrompt:!1\\}\\),official_cli_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!0\\}\\),agent_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!1\\}\\)\\}';
-  assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
-  assert.match(cli, new RegExp('nativeBilling:\\(\\)=>header\\(fingerprint\\(prompt\\(Array\\.isArray\\(body\\.messages\\)\\?body\\.messages:\\[\\],reminder\\)\\),o\\.agentContext\\?\\?agent\\(\\),void 0,o\\.promptId\\),lines:' + lines));
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1"]/);
+  assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix,PAs:ccgHead\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
+  assert(cli.includes('nativeBilling:()=>ccgHead([],void 0,{fingerprint:fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agentContext:o.agentContext??agent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};'));
+  assert(cli.includes('PAs:ccgHead}=await import("./chunk-t61vswm2.js")') && !cli.includes('kLo:header'));
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1"]/);
+  // The loop header names and the layer wording come from the native core,
+  // and the date attachment uses the query loop's own date (POo).
+  assert(cli.includes('let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js")') && cli.includes('loopHeaders:ccgLayers().loopHeaders') && cli.includes('turn:ccgTurnOf'));
+  assert(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8').startsWith('import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n'));
   assert(patchManifest.capabilities.includes('request_agent_context_v1'));
   assert(patchManifest.supportFiles['ccgateway-request-agent.js']);
   // The client's kind of request is chosen with CC's own query source naming,

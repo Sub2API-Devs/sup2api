@@ -76,6 +76,9 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 		return &http.Client{Transport: accountTransportFunc(func(r *http.Request) (*http.Response, error) {
 			mu.Lock()
 			defer mu.Unlock()
+			if res := fakeWorkerHealthResponse(r, "2.1.302"); res != nil {
+				return res, nil
+			}
 			if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != strings.Repeat("k", 32) || r.Header.Get("Authorization") != "" || r.Header.Get("X-CCG-Revision") != "" {
 				t.Error("direct model authentication or endpoint incorrect")
 			}

@@ -26,7 +26,7 @@ func TestBuildInjectionLayersAndEffectiveForm(t *testing.T) {
 		t.Fatalf("effective %s", out)
 	}
 	prompt, attachments, tools := global.Merge(group).Added()
-	if !prompt || len(attachments) != 2 || attachments[0] != "environment" || attachments[1] != "date" || len(tools) != 2 || tools[0] != "Agent" || tools[1] != "Read" {
+	if !prompt || len(attachments) != 2 || attachments[0] != "environment" || attachments[1] != "date" || len(tools) != 2 || tools[0] != "Read" || tools[1] != "Agent" {
 		t.Fatalf("added %v %v %v", prompt, attachments, tools)
 	}
 	if injection(t, `{"system_prompt":false,"attachments":{"date":false}}`).Effective() != nil || (*BuildInjection)(nil).Effective() != nil {

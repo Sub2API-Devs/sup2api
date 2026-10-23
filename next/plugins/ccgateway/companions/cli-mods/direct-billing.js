@@ -1,13 +1,13 @@
-// Direct sends the client's Messages body as written, with two exceptions
-// (2026-10-22 decision): the billing header is required, so a request without
-// one that opens its system gets the native header there, and a header missing
-// a field gets the native value; and the identity line chosen for the
-// request's entrypoint follows it, as in build. Everything else, the client's
-// own header values included, goes byte for byte: edits are spliced into the
-// raw JSON text, and only the edited string is re-encoded.
+// Direct sends the client's Messages body as written except for the billing
+// header, which is required (2026-10-23, level none: the header alone, no
+// identity line): a request without one that opens its system gets the native
+// header there (the main thread's, as build fills it), a header missing a
+// field gets the native value, and a field the Worker owns
+// (build_billing_sources) gets the native value too; a string system becomes
+// blocks, as Claude Code sends it. Everything else, the
+// client's other header values included, goes byte for byte: edits are spliced
+// into the raw JSON text, and only the edited string is re-encoded.
 import { createBillingPolicy } from './content-policy.js';
-import { identityLineFor } from './request-policy.js';
-import { applyBuildCliPrefix } from './request-identity.js';
 
 const ws = ' \t\n\r';
 function skipWs(s, i) { while (i < s.length && ws.includes(s[i])) i++; return i; }
@@ -63,28 +63,22 @@ const splice = (text, edits) => edits.sort((a, b) => b.at - a.at || b.order - a.
   .reduce((out, e) => out.slice(0, e.at) + e.text + out.slice(e.end ?? e.at), text);
 
 // applyDirectBilling returns the raw body to send. nativeBilling() is the
-// CLI's own header line (kLo); lines, isPrefix and isBilling are the CLI's
-// identity lines (n1n), recognizer (t1n) and header-block test (B1s). The
-// identity line is OAuth only, as in build.
-export function applyDirectBilling(raw, body, { policy = {}, oauth, billingHeader, nativeBilling, lines, isPrefix, isBilling }) {
+// CLI's own header line (kLo).
+export function applyDirectBilling(raw, body, { policy = {}, billingHeader, nativeBilling }) {
   const billing = createBillingPolicy(billingHeader);
   let native;
-  const merge = blocks => billing.mergeBillingAttribution(blocks, { build_billing_entrypoint: policy.build_billing_entrypoint }, native ??= nativeBilling());
+  const merge = blocks => billing.mergeBillingAttribution(blocks, { build_billing_entrypoint: policy.build_billing_entrypoint, build_billing_sources: policy.build_billing_sources }, native ??= nativeBilling());
   const top = members(raw, skipWs(raw, 0)), system = member(top, 'system');
-  // A string keeps its type: the header opens it, followed by a newline
-  // (upstream reads a string system like a single block). It cannot carry a
-  // separate identity line.
+  // A string becomes blocks, the way Claude Code sends every system
+  // (2026-10-23; its side requests' string system is one block after the
+  // header, IAs): a leading header line is a block of its own, the rest one
+  // block.
   if (typeof body.system === 'string') {
-    const own = body.system;
-    let text = own;
-    if (own.startsWith(billingHeader)) {
-      const merged = merge(own);
-      if (Array.isArray(merged)) text = merged[0].text;
-    } else {
-      const merged = merge([]);
-      if (merged.length) text = merged[0].text + '\n' + own;
-    }
-    return text === own ? raw : splice(raw, [{ at: system.start, end: system.end, text: JSON.stringify(text) }]);
+    const own = body.system, line = own.startsWith(billingHeader) ? own.match(/^[^\r\n]*/)[0] : '';
+    const rest = line ? own.slice(line.length).replace(/^(\r\n|\r|\n)/, '') : own;
+    const blocks = [...line ? [{ type: 'text', text: line }] : [], ...rest ? [{ type: 'text', text: rest }] : []];
+    const final = line ? [...merge([blocks[0]]), ...blocks.slice(1)] : [...merge([]), ...blocks];
+    return splice(raw, [{ at: system.start, end: system.end, text: JSON.stringify(final) }]);
   }
   if (body.system !== undefined && !Array.isArray(body.system)) return raw;
   const blocks = body.system ?? [];
@@ -97,12 +91,6 @@ export function applyDirectBilling(raw, body, { policy = {}, oauth, billingHeade
   } else {
     const merged = merge([]);
     if (merged.length) items.unshift({ block: merged[0] });
-  }
-  if (oauth) {
-    const before = items.map(item => item.block);
-    const after = applyBuildCliPrefix({ system: before }, identityLineFor(policy, billing.billingEntrypoint(before)), lines, isPrefix, isBilling).system;
-    const at = after.findIndex((block, i) => block !== before[i]);
-    if (at >= 0) items.splice(at, 0, { block: after[at] });
   }
   if (items.every((item, i) => item.index === i && item.text === undefined) && items.length === blocks.length) return raw;
   if (!system) {

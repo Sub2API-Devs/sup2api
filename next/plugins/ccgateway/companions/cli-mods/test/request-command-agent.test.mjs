@@ -32,7 +32,9 @@ test('the client factory and direct billing get the client kind of request', asy
       'run.mjs': `import fs from 'node:fs';
         import {runRequestCommand} from './ccgateway-request-command.js';
         const agentNative={querySourceFor:(type,builtIn)=>builtIn?'agent:builtin:'+type:'agent:custom',
-          leadingBilling:system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null,
+          loopHeaders:{prev_tool_durations:'x-claude-code-prev-tool-durations',cc_compaction_request:'x-cc-compaction-request',claude_code_compaction:'x-claude-code-compaction',cc_context_compacted:'x-cc-context-compacted',claude_code_context_compacted:'x-claude-code-context-compacted'},
+          turn:(messages,interactive)=>({turnOrigin:interactive?'human':'sdk',turnPosition:{promptIndex:0,turnIndex:messages.filter(m=>m.role==='user').length}}),
+          requestBilling:system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null,
           prompt:messages=>typeof messages[0]?.content==='string'?messages[0].content:''};
         const directBuild=async(raw,body,options)=>{fs.writeFileSync('direct.json',JSON.stringify(options));return raw};
         process.exitCode=await runRequestCommand(process.argv.slice(2),{directBuild,agentNative});`,
@@ -61,18 +63,22 @@ test('the client factory and direct billing get the client kind of request', asy
     let direct = await read('direct.json');
     assert.deepEqual(direct.agentContext, factory.agentContext);
     assert.equal(direct.promptId, factory.promptId);
+    assert.equal(direct.turnOrigin, undefined, 'a subagent has no turn');
 
-    // A request that is not Claude Code's: a custom subagent with derived IDs,
-    // and the header direct fills names the same agent and prompt.
-    result = await run({ model: 'm', messages: [{ role: 'user', content: 'hello' }] }, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: {} }) });
+    // A request that is not Claude Code's: the main thread with a derived
+    // prompt ID (2026-10-23), and the header direct fills names the same
+    // prompt and its turn.
+    result = await run({ model: 'm', messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }, { role: 'user', content: 'again' }] }, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: {} }) });
     assert.equal(result.code, 0, result.stderr);
     factory = await read('factory.json');
     direct = await read('direct.json');
-    assert.equal(factory.querySource, 'agent:custom');
-    assert.match(factory.agentContext.agentId, /^a[0-9a-f]{16}$/);
+    assert.equal(factory.querySource, 'sdk');
+    assert.deepEqual(factory.agentContext, { agentType: 'main', agentId: 'native-session' });
     assert.match(factory.promptId, /^[0-9a-f-]{36}$/);
-    assert.deepEqual(direct.agentContext, factory.agentContext);
+    assert.equal(direct.agentContext, undefined);
     assert.equal(direct.promptId, factory.promptId);
+    assert.equal(direct.turnOrigin, 'sdk');
+    assert.deepEqual(direct.turnPosition, { promptIndex: 0, turnIndex: 2 });
 
     // No Worker context: CC's native main thread, as before.
     result = await run(subagent, { CCG_REQUEST_AGENT: '' });

@@ -28,7 +28,9 @@ describe('account feature preview', () => {
     expect(w.vm.draft?.overrides.build_billing_sources?.cc_version).toBe('worker')
     const billing = () => w.get('[data-testid="billing-cc_version"]').findAll('input')
     expect(billing().every(i => i.attributes('disabled') !== undefined)).toBe(true)
-    expect(billing().findIndex(i => (i.element as HTMLInputElement).checked)).toBe(1) // client, the effective value
+    expect(billing().findIndex(i => (i.element as HTMLInputElement).checked)).toBe(0) // client, the effective value
+    // A preview of what applies has no follow toggles.
+    expect(w.find('[data-testid^="layer-mode-"]').exists()).toBe(false)
     w.unmount()
   })
   it('ignores an older response after a newer group selection', async () => {
@@ -40,6 +42,38 @@ describe('account feature preview', () => {
     await w.get('[data-testid="account-feature-group"]').setValue('0'); await settle()
     finish(response({ editable: false, disabled_reason: 'group_disabled' })); await flushPromises()
     expect(w.get('[data-testid="billing-cc_version"]').findAll('input').some(i => i.attributes('disabled') === undefined)).toBe(true)
+    w.unmount()
+  })
+  // The level is a layer like the others: following shows the inherited
+  // level, customizing writes it and a pick changes `level` only, and a
+  // read-only preview shows the level that applies with its source.
+  it('previews an account level override and shows the effective level when read-only', async () => {
+    const w = mount(Host, { global: { plugins: [i18n] } }); await settle()
+    const cards = () => w.get('[data-testid="request-level"]').findAll('input')
+    const mode = (layer: string) => w.get(`[data-testid="layer-mode-${layer}"]`).findAll('input').find(i => (i.element as HTMLInputElement).checked)?.attributes('value')
+    expect(cards().map(i => i.attributes('value'))).toEqual(['none', 'micro', 'low', 'high'])
+    expect(cards().find(i => (i.element as HTMLInputElement).checked)?.attributes('value')).toBe('low')
+    expect(cards().every(i => i.attributes('disabled') !== undefined)).toBe(true)
+    expect([mode('level'), mode('billing'), mode('environment')]).toEqual(['follow', 'custom', 'follow'])
+    await w.get('[data-testid="layer-mode-level"] input[value="custom"]').setValue(true); await settle()
+    expect(w.vm.draft?.overrides).toEqual({ build_billing_sources: { cc_version: 'worker' }, level: 'low' })
+    await w.get('[data-testid="request-level"] input[value="micro"]').setValue(true); await settle()
+    expect(w.vm.draft?.overrides).toEqual({ build_billing_sources: { cc_version: 'worker' }, level: 'micro' })
+    expect(mocks.post.mock.calls.at(-1)![1].cc_feature_policy.overrides.level).toBe('micro')
+    mocks.post.mockResolvedValue(response({ editable: false, disabled_reason: 'account_override_disabled', effective: { ...defaultRequestPolicy(), level: 'high' }, sources: { level: 'group' } }))
+    await w.get('[data-testid="account-feature-group"]').setValue('1'); await settle()
+    expect(cards().every(i => i.attributes('disabled') !== undefined)).toBe(true)
+    expect(cards().find(i => (i.element as HTMLInputElement).checked)?.attributes('value')).toBe('high')
+    expect(w.get('[data-testid="level-desc"]').text()).toContain('内置系统提示词')
+    expect(w.get('[data-testid="request-level-group"]').text()).toContain('来源：分组')
+    expect(w.vm.draft?.overrides.level).toBe('micro')
+    w.unmount()
+  })
+  // A retired key in a saved override is not previewed (nor saved).
+  it('drops saved identity lines from the preview request', async () => {
+    mocks.get.mockResolvedValue(response({ cc_feature_policy: { mode: 'custom', overrides: { level: 'micro', build_identity_lines: { cli: 'none' } } as never, revision: 4 } }))
+    const w = mount(Host, { global: { plugins: [i18n] } }); await settle()
+    expect(mocks.post.mock.calls.at(-1)![1].cc_feature_policy.overrides).toEqual({ level: 'micro' })
     w.unmount()
   })
   it('uses read-only GET previews when account updates are forbidden', async () => {

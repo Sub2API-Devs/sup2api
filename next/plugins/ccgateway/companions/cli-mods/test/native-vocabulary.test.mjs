@@ -46,3 +46,39 @@ test('the committed vocabulary is what the CLI renders', { skip: available ? fal
   if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) fs.writeFileSync(fixture, JSON.stringify(generated, null, 2) + '\n');
   assert.deepEqual(JSON.parse(fs.readFileSync(fixture, 'utf8')), generated, 'native wording changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1');
 });
+
+// How build tells a request already carries a layer (ccgatewayLayerVocabulary)
+// and the client loop header names, from the same native renderers and
+// constants; fixtures/native-layers-2.1.304.json is the committed copy.
+const layersFixture = new URL('./fixtures/native-layers-2.1.304.json', import.meta.url);
+function nativeLayers() {
+  const context = vm.createContext({ p: thunk => thunk });
+  vm.runInContext(declarations('chunk-rncrmfyt.js', ['PNe', 'ooo', 'Eoo', 'fSt', 'u7t', 'm4t', 'u4t', 'c4t', 'f4t', 'p4t']), context);
+  vm.runInContext(declarations('chunk-h3dn4j2q.js', ['RBs', 'p4n']), context);
+  vm.runInContext(fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace(/^export /gm, ''), context);
+  return JSON.parse(JSON.stringify(vm.runInContext('ccgatewayLayerVocabulary()', context)));
+}
+
+test('the committed layer vocabulary is what the CLI renders', { skip: available ? false : 'Recovered CLI 2.1.304 source unavailable: native layer vocabulary was not rendered.' }, () => {
+  const generated = nativeLayers();
+  if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) fs.writeFileSync(layersFixture, JSON.stringify(generated, null, 2) + '\n');
+  assert.deepEqual(JSON.parse(fs.readFileSync(layersFixture, 'utf8')), generated, 'native wording changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1');
+});
+
+// The turn each prompt gets is the native query loop's (iws, h0n), run here
+// on the recovered code: the SDK numbers turns, a human also numbers prompts,
+// and a history CC could not number (a compacted one) gets no position.
+test('main-thread prompts get the native turn', { skip: available ? false : 'Recovered CLI 2.1.304 source unavailable.' }, () => {
+  const context = vm.createContext({});
+  vm.runInContext(declarations('chunk-rncrmfyt.js', ['iws', 'm5e', 'o9t', 'h0n', 'Svt', 'mde', 'T3', '_vt', 'kvt', 'wso', 'pde', 'jSe', 'a3e', 'l0']), context);
+  vm.runInContext(declarations('chunk-jkcb7qdd.js', ['vre']), context);
+  Object.assign(context, { itt: 'system-reminder', pT: '\u0000', Vp: '\u0000', hi: '<synthetic>', F6e: () => '', R1: '\u0001' });
+  vm.runInContext(fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace(/^export /gm, ''), context);
+  const messages = [{ role: 'user', content: 'one' }, { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Read', input: {} }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'x' }] }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'two' }];
+  const turn = (list, interactive) => { const value = context.ccgatewayPromptTurn(list, interactive); return value && JSON.parse(JSON.stringify(value)); };
+  assert.deepEqual(turn(messages, false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 2 } });
+  assert.deepEqual(turn(messages, true), { turnOrigin: 'human', turnPosition: { promptIndex: 2, turnIndex: 2 } });
+  assert.deepEqual(turn(messages.slice(0, 1), false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 1 } });
+  assert.equal(turn(messages.slice(1, 4), false), undefined, 'no prompt');
+});

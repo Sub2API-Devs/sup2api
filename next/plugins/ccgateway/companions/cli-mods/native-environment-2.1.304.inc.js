@@ -105,13 +105,16 @@ export function ccgatewayEnvironmentVocabulary() {
 }
 
 // The pieces build adds to a request that is not Claude Code's
-// (request-build-2.1.304.js injectLayers): CC's default system prompt for the
-// tools it will carry (wx), and the attachments CC sends on a session's first
-// turn, made by the same native producers as eIr: the environment snapshot
+// (request-build-2.1.304.js injectLayers). The system prompt is the native
+// main thread's: the default prompt for the tools it will carry (wx) through
+// r1e, which adds the tool-dependent sections and puts an appended prompt (the
+// client's own system, as --append-system-prompt) after the dynamic boundary.
+// The attachments are the ones CC sends on a session's first turn, made by the
+// same native producers as eIr and the query loop: the environment snapshot
 // (Wkt, as Dvn), the model identity (eSt, as Lvn), the token budget (u7t, as
-// JDr) and the date (FUs). They are rendered and placed by the native message
-// pipeline, never here.
-export const ccgatewayDefaultPrompt = (tools, model) => wx(tools, model);
+// JDr) and the date (POo, as the date attachment of the query loop). They are
+// rendered and placed by the native message pipeline, never here.
+export const ccgatewayDefaultPrompt = async (tools, model, appendSystemPrompt) => ki(r1e(await wx(tools, model), { tools, appendSystemPrompt }));
 export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records }) {
   const wanted = new Set(kinds), out = [];
   if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await Wkt({ cwd: workingDirectory, additionalWorkingDirectories }) });
@@ -122,6 +125,53 @@ export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory
     // session budget (padded-countdown) less what the records already used.
     if (mode !== 'off') out.push({ type: 'total_tokens_reminder', text: u7t(mode, (mode === 'countdown' ? bm(model, Of()) : mode === 'padded-countdown' ? NJ() : 0) - DZ(records)) });
   }
-  if (wanted.has('date')) out.push({ type: 'date', date: FUs() });
+  if (wanted.has('date')) out.push({ type: 'date', date: ccgDate() });
   return out;
+}
+
+// ccgatewayMarkTurns gives a main thread's records what Claude Code's query
+// loop gives each prompt (iws, h0n): its origin, and its position counted from
+// the prompt before it. PAs writes the last prompt's as cc_turn_origin,
+// cc_prompt_index and cc_turn_index. interactive is the terminal (cli, a human
+// typing); otherwise the prompt comes from the SDK. Returns the last prompt's
+// record (a3e), or undefined.
+export function ccgatewayMarkTurns(records, interactive) {
+  const origin = iws(interactive ? { origin: { kind: 'human' } } : { promptSource: 'sdk' });
+  records.forEach((row, at) => {
+    if (row?.type !== 'user' || !pde(row)) return;
+    row.turnOrigin = origin;
+    const position = h0n(records.slice(0, at), origin);
+    if (position !== undefined) row.turnPosition = position;
+  });
+  const last = a3e(records);
+  return last === -1 ? undefined : records[last];
+}
+// ccgatewayPromptTurn is the same for a Messages body (direct): its messages
+// as CC's records, and the last prompt's origin and position.
+export function ccgatewayPromptTurn(messages, interactive) {
+  const records = messages.filter(message => message?.role === 'user' || message?.role === 'assistant')
+    .map(message => ({ type: message.role, message: { ...message, content: typeof message.content === 'string' || Array.isArray(message.content) ? message.content : [] } }));
+  const last = ccgatewayMarkTurns(records, interactive);
+  return last && { turnOrigin: last.turnOrigin, turnPosition: last.turnPosition };
+}
+
+// ccgatewayLayerVocabulary is how build tells that a request already carries
+// a layer, in CC's own wording: each attachment's opening, rendered by its
+// native renderer with a marker value (the environment heading and intro, the
+// model identity in both its wordings, the token budget, the date and its
+// change notice); the security paragraph every main-thread system prompt
+// carries (p4n); and the client loop headers CC sends as they are.
+export function ccgatewayLayerVocabulary() {
+  const mark = 'CCGATEWAYMARK7';
+  const before = text => { const at = text.indexOf(mark); if (at <= 0) throw Error('Unexpected native attachment wording'); return text.slice(0, at); };
+  return {
+    attachments: {
+      environment: [PNe + '\n' + ooo.trimEnd()],
+      model: [before(Eoo({ modelId: mark })), before(RBs({ modelId: mark }))],
+      total_tokens: [before(u7t('countdown', 0).replace('0', mark))],
+      date: [before(fSt({ date: mark })), before(fSt({ date: mark, changed: true }))],
+    },
+    systemPrompt: p4n,
+    loopHeaders: { prev_tool_durations: m4t, cc_compaction_request: c4t, claude_code_compaction: f4t, cc_context_compacted: u4t, claude_code_context_compacted: p4t },
+  };
 }

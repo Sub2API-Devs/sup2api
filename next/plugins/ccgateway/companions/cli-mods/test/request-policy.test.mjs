@@ -15,7 +15,7 @@ test('304 policy rejects unknown fields, contract, and manual billing values', (
     { contract_version: 2, build_billing_entrypoint: 'claude-desktop-3p' },
     { contract_version: 2, build_billing_entrypoint: 'sdk-cli; cch=1' },
     { contract_version: 2, build_identity_lines: { cli: 'agent_sdk' } },
-    { contract_version: 2, build_identity_lines: { 'claude-vscode': 'official_cli' } },
+    { contract_version: 2, build_identity_lines: { 'sdk-ts': 'official_cli' } },
     { contract_version: 2, build_identity_lines: { remote: 'none' } },
     { contract_version: 2, build_identity_lines: [] },
   ]) assert.throws(() => validateRequestPolicy(value));

@@ -6,7 +6,7 @@ import { YEr } from './chunk-6dwnw6av.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
-import { validateDirectPolicy } from './ccgateway-request-policy.js';
+import { validateDirectPolicy, defaultEntrypoint } from './ccgateway-request-policy.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
@@ -80,18 +80,24 @@ export async function runRequestCommand(args, { oauthBeta, identityBuild, prefix
     if (process.env.CCG_REQUEST_AGENT && agentNative) {
       const { readRequestAgent, resolveAgentContext } = await import('./ccgateway-request-agent.js');
       const context = readRequestAgent();
-      resolveAgent = facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor });
+      resolveAgent = facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders });
     }
     if (resolveAgent && options.mode === 'direct') {
-      agent = resolveAgent({ billing: agentNative.leadingBilling(body.system), prompt: agentNative.prompt(Array.isArray(body.messages) ? body.messages : []) });
+      agent = resolveAgent({ billing: agentNative.requestBilling(body.system), prompt: agentNative.prompt(Array.isArray(body.messages) ? body.messages : []) });
     }
-    // Direct fills only a missing billing header or field and the identity
-    // line chosen for its entrypoint (2026-10-22), and only with the Worker's
-    // context; without it, as when run by hand, it forwards the body unchanged.
+    // Direct is the billing header alone (2026-10-23, level none): a missing
+    // header is filled as the main thread's, a missing field or one the
+    // Worker owns gets the native value, and only with the Worker's context;
+    // without it, as when run by hand, it forwards the body unchanged.
     const directPolicy = options.mode === 'direct' ? validateDirectPolicy(process.env.CCG_DIRECT_POLICY) : undefined;
     if (directPolicy && directBuild) {
       phase = 'build';
-      const sent = await directBuild(rawBody, body, { policy: directPolicy, oauth: !apiKey, agentContext: agent?.agentContext, promptId: agent?.promptId });
+      // A main thread's header names its prompt's turn, as CC's query loop
+      // counts it (the terminal entrypoint is a human typing).
+      const main = !agent || agent.requestClass === 'main';
+      const entrypoint = agentNative?.requestBilling(body.system)?.cc_entrypoint ?? directPolicy.build_billing_entrypoint ?? defaultEntrypoint;
+      const turn = main ? agentNative?.turn(Array.isArray(body.messages) ? body.messages : [], entrypoint === 'cli') : undefined;
+      const sent = await directBuild(rawBody, body, { policy: directPolicy, agentContext: agent?.agentContext, promptId: agent?.promptId, ...turn });
       if (sent !== rawBody) outgoing = { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
     }
     if (options.mode === 'build') {

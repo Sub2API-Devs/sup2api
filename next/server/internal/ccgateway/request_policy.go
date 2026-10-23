@@ -10,6 +10,12 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
+	// Level is the request level (features.RequestLevels): which of Claude
+	// Code's layers a request is given. It decides the relay mode (none is
+	// direct) and which of the layer settings below reach the Worker; the
+	// others are kept but not sent. "" is a policy saved before levels,
+	// migrated on read (EffectiveRequestPolicy). Never sent to the Worker.
+	Level               string                       `json:"level,omitempty"`
 	BuildBillingSources features.BuildBillingSources `json:"build_billing_sources,omitempty"`
 	// BuildBillingEntrypoint is the cc_entrypoint build writes when it fills
 	// the billing header or the source is worker; "" is the default (sdk-cli).
@@ -67,20 +73,82 @@ func defaultRequestPolicy() RequestPolicy {
 }
 
 // Used only when no encrypted configuration has ever been stored. Historic
-// configurations with omitted source maps retain client defaults.
+// configurations with omitted source maps retain client defaults. A new
+// installation starts at the default level with its defaults (low: every
+// first-turn attachment added to a request without a billing header).
 func newRequestPolicy() RequestPolicy {
 	p := defaultRequestPolicy()
+	p.Level = features.DefaultRequestLevel
 	p.BuildAttachmentSources = features.BuildAttachmentSources{"platform_name": "worker", "os_version": "worker"}
 	return p
 }
 
-// EffectiveRequestPolicy is the policy sent to the Worker. Features the
-// official API supports are always on: allow_fast (speed) and allow_effort
+// keepLegacyInjection turns every layer item the level adds by default, and a
+// policy saved before levels did not add, into an explicit "not added", so a
+// level derived from that policy adds what it added and nothing more:
+// LevelInjection(level, result) equals injection.Effective().
+func keepLegacyInjection(level string, injection *features.BuildInjection) *features.BuildInjection {
+	if !features.LevelHasEnvironment(level) {
+		return injection
+	}
+	added := injection.Effective()
+	if added == nil {
+		added = &features.BuildInjection{}
+	}
+	out := injection.Merge(nil)
+	if out == nil {
+		out = &features.BuildInjection{}
+	}
+	for _, name := range features.InjectionAttachments {
+		if !added.Attachments[name] {
+			if out.Attachments == nil {
+				out.Attachments = map[string]bool{}
+			}
+			out.Attachments[name] = false
+		}
+	}
+	if features.LevelHasPromptAndTools(level) {
+		if added.SystemPrompt == nil {
+			off := false
+			out.SystemPrompt = &off
+		}
+		for _, name := range features.DefaultInjectionTools {
+			if !added.Tools[name] {
+				if out.Tools == nil {
+					out.Tools = map[string]bool{}
+				}
+				out.Tools[name] = false
+			}
+		}
+	}
+	return out
+}
+
+// migrateLegacyLevel gives a policy saved before levels the level of what it
+// did (features.LegacyLevel), keeping what it added.
+func migrateLegacyLevel(p *RequestPolicy) {
+	if p.Level != "" {
+		return
+	}
+	p.Level = features.LegacyLevel(p.RelayMode, p.BuildAttachmentSources, p.BuildInjection)
+	if p.Level == "" {
+		p.Level = features.DefaultRequestLevel
+	}
+	p.BuildInjection = keepLegacyInjection(p.Level, p.BuildInjection)
+}
+
+// EffectiveRequestPolicy is the global policy as stored, completed and
+// migrated (the Worker receives resolvedWorkerPolicy's form of it). Features
+// the official API supports are always on: allow_fast (speed) and allow_effort
 // (output_config.effort) are no longer settings, so a saved false is ignored.
+// The level decides the relay mode: a saved relay_mode only migrates a policy
+// saved before levels.
 func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if c.RequestPolicy == nil {
 		p := defaultRequestPolicy()
 		p.SchemaVersion = features.PolicySchemaVersion
+		migrateLegacyLevel(&p)
+		p.RelayMode = features.RelayModeForLevel(p.Level)
 		return p
 	}
 	p := *c.RequestPolicy
@@ -101,6 +169,8 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.RelayMode != "direct" && p.RelayMode != "build" {
 		p.RelayMode = "build"
 	}
+	migrateLegacyLevel(&p)
+	p.RelayMode = features.RelayModeForLevel(p.Level)
 	if p.CLIVersion == "" {
 		p.CLIVersion = "2.1.304"
 	}
@@ -113,6 +183,9 @@ func (c Config) WorkerRequestPolicy(_ int64) RequestPolicy {
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
+	if err := features.ValidateRequestLevel(p.Level); err != nil {
+		return err
+	}
 	if err := p.BuildBillingSources.Validate(); err != nil {
 		return err
 	}

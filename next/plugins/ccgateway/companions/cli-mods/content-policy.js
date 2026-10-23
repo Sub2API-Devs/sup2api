@@ -49,6 +49,7 @@ export function createContentPolicy(vocabulary) {
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
     leadingBilling: system => leadingBilling(c, system),
+    requestBilling: system => requestBilling(c, system),
     hasBilling: system => hasBilling(c, system),
     setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
   };
@@ -63,6 +64,7 @@ export function createBillingPolicy(billingHeader) {
     mergeBillingAttribution: (system, policy, nativeBilling, emitDiagnostic) => mergeBillingAttribution(c, system, policy, nativeBilling, emitDiagnostic),
     billingEntrypoint: system => billingEntrypoint(c, system),
     leadingBilling: system => leadingBilling(c, system),
+    requestBilling: system => requestBilling(c, system),
     setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
   };
 }
@@ -430,6 +432,23 @@ function leadingBilling(c, system) {
   const result = billingCandidate(c, first);
   const header = result.conflict ? undefined : result.candidates.find(candidate => candidate.line.start === 0);
   return Object.fromEntries([...header?.keys ?? []].map(([field, { value }]) => [field, value]));
+}
+
+// requestBilling is the fields of the request's own billing header wherever it
+// is: the leading one, else the first one elsewhere in the system; null when
+// the system has none (hasBilling decides the same way), and an unreadable
+// header has no fields. It names the kind of request the client made.
+function requestBilling(c, system) {
+  const leading = leadingBilling(c, system);
+  if (leading !== null) return leading;
+  const texts = typeof system === 'string' ? [system] : Array.isArray(system) ? system.map(block => block?.text) : [];
+  for (const text of texts) {
+    if (typeof text !== 'string') continue;
+    const result = billingCandidate(c, text);
+    if (result.conflict) return {};
+    if (result.candidates.length) return Object.fromEntries([...result.candidates[0].keys].map(([field, { value }]) => [field, value]));
+  }
+  return null;
 }
 
 // setLeadingBillingField replaces one existing field value of that header and

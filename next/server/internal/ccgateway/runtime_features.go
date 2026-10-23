@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -22,17 +23,22 @@ func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, 
 	return requireCapabilities(ctx, client, base, key, cliVersion, []string{features.BuildAttachmentCapability})
 }
 
+// requestPolicyCapabilities are what the Worker and CLI must confirm for a
+// wire policy (workerPolicy). Every policy follows the request levels: an
+// older CLI would add the identity line in direct and complete a request
+// without a billing header as a subagent.
 func requestPolicyCapabilities(p RequestPolicy) []string {
 	required := []string{}
 	if p.CLIVersion == "2.1.304" || p.RelayMode == "direct" {
 		required = append(required, features.RequestPolicyModeCapability)
 	}
+	required = append(required, features.RequestLevelsCapability)
 	if p.RequestIdentitySources.Explicit() {
 		required = append(required, features.RequestIdentityCapability)
 	}
 	identityLines := p.BuildBillingEntrypoint != "" || len(p.BuildIdentityLines) > 0
 	if p.RelayMode == "direct" {
-		if identityLines {
+		if identityLines || p.BuildBillingSources.UsesWorker() {
 			required = append(required, features.DirectBillingCapability)
 		}
 		return required
@@ -70,6 +76,11 @@ func requireCapabilities(ctx context.Context, client *http.Client, base, key, cl
 	}
 	req.Header.Set("x-api-key", key)
 	res, err := client.Do(req)
+	if err != nil && errors.Is(err, errAccountNotSynchronized) {
+		// The route's revision was refused: not a capability answer, the
+		// caller reads the account again (forwardAttempt).
+		return err
+	}
 	if err == nil {
 		defer res.Body.Close()
 		raw, readErr := io.ReadAll(io.LimitReader(res.Body, 8193))

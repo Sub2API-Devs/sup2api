@@ -24,7 +24,7 @@ import { lt } from '@/i18n'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
 import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
-import { validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
+import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
@@ -542,7 +542,8 @@ function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
   if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
   if (needsProxy.value) body.settings = { locale: ccgSettings.locale, timezone: ccgSettings.timezone }
   if (needsProxy.value) body.auto_models = autoModels.value
-  if (needsProxy.value && editing.value && ccFeatureDirty.value) body.cc_feature_policy = ccFeaturePolicy.value
+  // Retired keys an older save may hold are dropped (the core ignores them).
+  if (needsProxy.value && editing.value && ccFeatureDirty.value) body.cc_feature_policy = { ...ccFeaturePolicy.value!, overrides: savedOverrides(ccFeaturePolicy.value!.overrides) }
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   if (proxyUrlToSend.value) body.proxy_url = proxyUrlToSend.value
   else body.proxy_id = basic.proxy_id

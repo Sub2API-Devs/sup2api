@@ -49,14 +49,18 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"user_` + strings.Repeat("e", 64) + `_account__session_` + session + `"}}`},
 		{"build-identity-lines", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","claude-vscode":"agent_sdk"}}`,
 			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`},
-		{"build-injection", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"environment":true,"date":true,"model":false},"tools":{"Read":true}}}`,
+		{"build-injection", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"environment":true,"date":true,"model":false},"tools":{"Bash":true,"Read":true,"Edit":true,"Write":true,"NotebookEdit":true,"WebSearch":false}}}`,
 			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`},
 		{"build-no-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":{"foo":"x"}}}`},
-		{"direct-identity-lines", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_identity_lines":{"claude-desktop":"agent_sdk"}}`,
+		// Direct is the billing header alone (request levels): identity lines an
+		// older core still sends never reach the CLI.
+		{"direct-entrypoint", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_identity_lines":{"claude-desktop":"agent_sdk"}}`,
 			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`},
+		{"direct-billing-sources", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_billing_sources":{"cc_version":"worker","cc_entrypoint":"client"}}`,
+			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.300.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`},
 		{"direct-passthrough", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`},
 	}
@@ -70,7 +74,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			envCapture := filepath.Join(root, "identity-env.json")
 			g := &Gateway{RequestMode: sc.mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
-					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability}},
+					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability}},
 				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 					"HOME": config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,
@@ -90,6 +94,7 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			raw, err := os.ReadFile(envCapture)
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(raw, &env))
+			require.NotContains(t, env[directPolicyEnv], "build_identity_lines", "direct never carries an identity line")
 			// The runtime context names this temporary directory; the CLI side
 			// substitutes its own working directory.
 			escaped, _ := json.Marshal(root)

@@ -76,13 +76,20 @@ func matrixValue(p RequestPolicy, field string) string {
 		value = p.BuildBillingSources[key]
 	case "request_identity_sources":
 		value = p.RequestIdentitySources[key]
+	// The level and the relay mode it decides; resolved policies carry both.
+	case "level":
+		return p.Level
+	case "relay_mode":
+		return p.RelayMode
 	// Resolved policies carry every default of these two.
 	case "build_identity_lines":
 		return p.BuildIdentityLines[key]
 	case "build_billing_entrypoint":
 		return p.BuildBillingEntrypoint
 	// build_injection.system_prompt, build_injection.attachments.<name> and
-	// build_injection.tools.<name> read "true" or "false" (unset adds nothing).
+	// build_injection.tools.<name> read the resolved choice, "true" or "false";
+	// an unset choice reads "false", though within the level it is added by
+	// default (features.LevelInjection decides what is sent).
 	case "build_injection":
 		inj := p.BuildInjection.Merge(nil)
 		if inj == nil {
@@ -235,7 +242,7 @@ func TestFeatureScalarSettingsAcrossAllLayers(t *testing.T) {
 		set    func(*FeatureOverrides, *string)
 		get    func(RequestPolicy) string
 	}{
-		{"relay_mode", []string{"build", "direct"}, func(o *FeatureOverrides, v *string) { o.RelayMode = v }, func(p RequestPolicy) string { return p.RelayMode }},
+		{"level", features.RequestLevels, func(o *FeatureOverrides, v *string) { o.Level = v }, func(p RequestPolicy) string { return p.Level }},
 		{"unknown_field", []string{"reject", "ignore"}, func(o *FeatureOverrides, v *string) { o.UnknownField = v }, func(p RequestPolicy) string { return p.UnknownField }},
 		{"tool_search", []string{"request", "false", "true", "auto", "auto:0", "auto:50", "auto:100"}, func(o *FeatureOverrides, v *string) { o.ToolSearch = v }, func(p RequestPolicy) string { return p.ToolSearch }},
 		{"thinking_disabled_compat", []string{"pass", "omit"}, func(o *FeatureOverrides, v *string) { o.ThinkingDisabledCompat = v }, func(p RequestPolicy) string { return p.ThinkingDisabledCompat }},
@@ -268,14 +275,21 @@ func TestFeatureScalarSettingsAcrossAllLayers(t *testing.T) {
 					require.Equal(t, "2.1.304", resolved.Effective.CLIVersion)
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &resolved.Effective}, 0, 0)
 					require.NoError(t, err)
-					require.Equal(t, value, field.get(wire))
+					if field.key == "level" {
+						// The level is not sent; it decides the relay mode.
+						require.Empty(t, wire.Level)
+						require.Equal(t, features.RelayModeForLevel(value), wire.RelayMode)
+						require.Equal(t, origin, resolved.Sources["relay_mode"])
+					} else {
+						require.Equal(t, value, field.get(wire))
+					}
 					require.NoError(t, validateRequestPolicy(wire))
 				})
 				cases++
 			}
 		}
 	}
-	require.Equal(t, 48, cases)
+	require.Equal(t, 54, cases)
 }
 
 type matrixRepresentative struct {
@@ -285,6 +299,7 @@ type matrixRepresentative struct {
 	ExpectedSources map[string]string
 	ExpectedOrigin  string
 	ExpectedMode    string
+	ExpectedLevel   string
 	Config          Config
 	Account         AccountFeaturePolicy
 	GroupID         int64
@@ -366,7 +381,7 @@ func representativeFeatureCases() []matrixRepresentative {
 		p := matrixGlobal(field, "worker")
 		g := GroupFeaturePolicy{Enabled: true, AllowAccountOverride: true}
 		ap := AccountFeaturePolicy{Mode: "custom"}
-		wantMode := "direct"
+		wantMode, wantLevel := "direct", features.LevelNone
 		switch where {
 		case "global":
 			p.RelayMode = "direct"
@@ -375,12 +390,32 @@ func representativeFeatureCases() []matrixRepresentative {
 		case "account":
 			ap.Overrides.RelayMode = featureString("direct")
 		default:
+			// Saved before levels: build over a direct group is the level of
+			// what the merged settings do (the shell from the Worker: low).
 			g.Overrides.RelayMode = featureString("direct")
 			ap.Overrides.RelayMode = featureString("build")
-			wantMode = "build"
+			wantMode, wantLevel = "build", features.LevelLow
 		}
-		cases = append(cases, matrixRepresentative{Name: "mode-" + where, Field: field, ExpectedSource: "worker", ExpectedOrigin: "global", ExpectedMode: wantMode,
+		cases = append(cases, matrixRepresentative{Name: "mode-" + where, Field: field, ExpectedSource: "worker", ExpectedOrigin: "global", ExpectedMode: wantMode, ExpectedLevel: wantLevel,
 			Config: Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": g}}, Account: ap, GroupID: 7})
+	}
+	for _, level := range features.RequestLevels {
+		for _, where := range []string{"global", "group", "account"} {
+			p := matrixGlobal(field, "worker")
+			g := GroupFeaturePolicy{Enabled: true, AllowAccountOverride: true}
+			ap := AccountFeaturePolicy{Mode: "custom"}
+			switch where {
+			case "global":
+				p.Level = level
+			case "group":
+				g.Overrides.Level = featureString(level)
+			case "account":
+				ap.Overrides.Level = featureString(level)
+			}
+			cases = append(cases, matrixRepresentative{Name: "level-" + level + "-" + where, Field: field, ExpectedSource: "worker", ExpectedOrigin: "global",
+				ExpectedMode: features.RelayModeForLevel(level), ExpectedLevel: level,
+				Config: Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": g}}, Account: ap, GroupID: 7})
+		}
 	}
 	return cases
 }
@@ -395,6 +430,7 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 		ExpectedSources map[string]string `json:"expected_sources,omitempty"`
 		ExpectedOrigin  string            `json:"expected_origin"`
 		ExpectedMode    string            `json:"expected_mode"`
+		ExpectedLevel   string            `json:"expected_level,omitempty"`
 		WorkerPolicy    RequestPolicy     `json:"worker_policy"`
 		Effective       RequestPolicy     `json:"effective"`
 		Sources         map[string]string `json:"sources"`
@@ -413,19 +449,28 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 				require.Equal(t, tc.ExpectedOrigin, r.Sources[tc.Field])
 			}
 			require.Equal(t, tc.ExpectedMode, r.Effective.RelayMode)
+			if tc.ExpectedLevel != "" {
+				require.Equal(t, tc.ExpectedLevel, r.Effective.Level)
+			}
 			// Feed the actual resolved result through the real wire finalizer;
 			// group/account application already occurred above, no DB is needed.
 			wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 			require.NoError(t, err)
+			require.Empty(t, wire.Level, "the level is not sent")
+			require.Equal(t, tc.ExpectedMode, wire.RelayMode)
+			require.Contains(t, requestPolicyCapabilities(wire), features.RequestLevelsCapability)
 			if tc.ExpectedMode == "direct" {
+				// none: the billing header only (no source differs here).
 				require.Nil(t, wire.BuildAttachmentSources)
-				require.Nil(t, wire.BuildBillingSources)
-				require.Equal(t, []string{features.RequestPolicyModeCapability}, requestPolicyCapabilities(wire))
+				require.Nil(t, wire.BuildIdentityLines)
+				require.Nil(t, wire.BuildInjection)
+				require.Empty(t, wire.BuildBillingSources)
+				require.Equal(t, []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}, requestPolicyCapabilities(wire))
 			}
-			evidence = append(evidence, evidenceCase{tc.Name, tc.Field, tc.ExpectedSource, tc.ExpectedSources, tc.ExpectedOrigin, tc.ExpectedMode, wire, r.Effective, r.Sources})
+			evidence = append(evidence, evidenceCase{tc.Name, tc.Field, tc.ExpectedSource, tc.ExpectedSources, tc.ExpectedOrigin, tc.ExpectedMode, tc.ExpectedLevel, wire, r.Effective, r.Sources})
 		})
 	}
-	require.Len(t, evidence, 58)
+	require.Len(t, evidence, 70)
 	if output := os.Getenv("CCG_POLICY_MATRIX_OUTPUT"); output != "" {
 		require.True(t, filepath.IsAbs(output), "matrix output must be an explicit absolute artifact path")
 		data, err := json.MarshalIndent(map[string]any{"schema_version": 1, "cli_version": "2.1.304", "cases": evidence}, "", "  ")

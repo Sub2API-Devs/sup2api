@@ -44,16 +44,19 @@ for (const c of fixture.cases) {
     await withIdentity(c.identity, async () => {
       if (c.mode === 'direct') {
         // Direct gets no identity context, only its billing context: the
-        // header and the identity line it selects are added, the rest of the
-        // body goes as the client wrote it (2026-10-22).
+        // header is filled or its Worker fields replaced, and nothing else is
+        // added; the rest of the body goes as the client wrote it (2026-10-23).
         assert.equal(c.identity, undefined);
         const policy = validateDirectPolicy(c.direct);
         assert.ok(policy);
-        const lines = { official_cli: 'Interactive line.', official_cli_sdk: 'SDK appended line.', agent_sdk: 'SDK line.' };
-        const sent = applyDirectBilling(stdin, body, { policy, oauth: true, billingHeader: vocabulary.billingHeader, nativeBilling: () => native.billing, lines,
-          isPrefix: value => Object.values(lines).includes(value), isBilling: block => block.text.startsWith(vocabulary.billingHeader) });
+        const sent = applyDirectBilling(stdin, body, { policy, billingHeader: vocabulary.billingHeader, nativeBilling: () => native.billing });
         assert.deepEqual({ ...JSON.parse(sent), system: undefined }, { ...body, system: undefined });
-        if (c.name === 'direct-identity-lines') assert.equal(JSON.parse(sent).system, native.billing.replace('sdk-cli', 'claude-desktop') + '\nplain system');
+        // A string system becomes blocks, as Claude Code sends it.
+        if (c.name === 'direct-entrypoint') assert.deepEqual(JSON.parse(sent).system, [{ type: 'text', text: native.billing.replace('sdk-cli', 'claude-desktop') }, { type: 'text', text: 'plain system' }]);
+        if (c.name === 'direct-billing-sources') {
+          const version = /cc_version=([^;]+);/.exec(native.billing)[1];
+          assert.deepEqual(JSON.parse(sent).system, [{ type: 'text', text: `${vocabulary.billingHeader} cc_version=${version}; cc_entrypoint=cli;` }, { type: 'text', text: 'plain system' }]);
+        }
         return;
       }
       // The identity context never travels in the envelope: the CLI's policy
@@ -75,8 +78,9 @@ for (const c of fixture.cases) {
       const opened = applyBuildCliPrefix({ system }, identityLineFor(policy, content.billingEntrypoint(system)), lines,
         value => Object.values(lines).includes(value), block => block.text.startsWith(vocabulary.billingHeader)).system;
       if (c.name === 'build-identity-lines') {
-        // The client's cli header keeps its entrypoint, and cli's line is none.
-        assert.deepEqual(opened.map(block => block.text), ['x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;', 'plain system']);
+        // The client's cli header keeps its entrypoint, and the line adapts to
+        // it (2026-10-23): identity lines an older core sends are not used.
+        assert.deepEqual(opened.map(block => block.text), ['x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;', 'Interactive line.', 'plain system']);
         assert.equal(policy.build_billing_entrypoint, 'claude-vscode');
       }
       const client = external.parameters?.metadata;

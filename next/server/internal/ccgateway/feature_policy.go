@@ -17,6 +17,9 @@ import (
 // FeatureOverrides is sparse: omitted keys inherit, including individual source
 // keys. No container settings or CLI executable selectors are accepted here.
 type FeatureOverrides struct {
+	// Level overrides the request level; it wins over RelayMode, which only
+	// overrides saved before levels carry (applyLevelOverride).
+	Level                  *string                         `json:"level,omitempty"`
 	RelayMode              *string                         `json:"relay_mode,omitempty"`
 	UnknownField           *string                         `json:"unknown_field,omitempty"`
 	ToolSearch             *string                         `json:"tool_search,omitempty"`
@@ -59,10 +62,13 @@ func (p *FeatureOverrides) UnmarshalJSON(raw []byte) error {
 }
 
 func (p FeatureOverrides) Validate() error {
-	for _, v := range []*string{p.RelayMode, p.UnknownField, p.ToolSearch, p.ThinkingDisabledCompat, p.CustomToolPrefix, p.BuildBillingEntrypoint} {
+	for _, v := range []*string{p.Level, p.RelayMode, p.UnknownField, p.ToolSearch, p.ThinkingDisabledCompat, p.CustomToolPrefix, p.BuildBillingEntrypoint} {
 		if v != nil && *v == "" {
 			return errors.New("feature override cannot be empty")
 		}
+	}
+	if p.RelayMode != nil && *p.RelayMode != "build" && *p.RelayMode != "direct" {
+		return errors.New("invalid relay_mode: must be build or direct")
 	}
 	base := defaultRequestPolicy()
 	applyFeatureOverrides(&base, p, nil, "")
@@ -126,9 +132,9 @@ func mergeSourceMap[M ~map[string]string](in, stored M) M {
 
 func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[string]string, layer string) {
 	for key, pair := range map[string][2]*string{
-		"relay_mode": {o.RelayMode, &p.RelayMode}, "unknown_field": {o.UnknownField, &p.UnknownField},
-		"tool_search": {o.ToolSearch, &p.ToolSearch}, "thinking_disabled_compat": {o.ThinkingDisabledCompat, &p.ThinkingDisabledCompat},
-		"custom_tool_prefix": {o.CustomToolPrefix, &p.CustomToolPrefix}, "build_billing_entrypoint": {o.BuildBillingEntrypoint, &p.BuildBillingEntrypoint},
+		"unknown_field": {o.UnknownField, &p.UnknownField}, "tool_search": {o.ToolSearch, &p.ToolSearch},
+		"thinking_disabled_compat": {o.ThinkingDisabledCompat, &p.ThinkingDisabledCompat}, "custom_tool_prefix": {o.CustomToolPrefix, &p.CustomToolPrefix},
+		"build_billing_entrypoint": {o.BuildBillingEntrypoint, &p.BuildBillingEntrypoint},
 	} {
 		if pair[0] != nil {
 			*pair[1] = *pair[0]
@@ -189,6 +195,31 @@ func applyFeatureOverrides(p *RequestPolicy, o FeatureOverrides, sources map[str
 			sources["request_identity_sources."+k] = layer
 		}
 	}
+	applyLevelOverride(p, o, sources, layer)
+}
+
+// applyLevelOverride applies an override's level after its layer settings. A
+// level always wins. An override saved before levels has only relay_mode:
+// direct is level none; build lifts only a none level so far, to the level of
+// what the merged settings do (features.LegacyLevel, keeping what they added).
+// The relay mode follows the level either way.
+func applyLevelOverride(p *RequestPolicy, o FeatureOverrides, sources map[string]string, layer string) {
+	changed := false
+	switch {
+	case o.Level != nil:
+		p.Level, changed = *o.Level, true
+	case o.RelayMode != nil && *o.RelayMode == "direct":
+		p.Level, changed = features.LevelNone, true
+	case o.RelayMode != nil && *o.RelayMode == "build" && p.Level == features.LevelNone:
+		if level := features.LegacyLevel("build", p.BuildAttachmentSources, p.BuildInjection); level != "" {
+			p.Level, changed = level, true
+			p.BuildInjection = keepLegacyInjection(level, p.BuildInjection)
+		}
+	}
+	p.RelayMode = features.RelayModeForLevel(p.Level)
+	if changed && sources != nil {
+		sources["level"], sources["relay_mode"] = layer, layer
+	}
 }
 
 type FeatureResolution struct {
@@ -216,7 +247,7 @@ func (c Config) allowsAccountFeatures(groupID int64) bool {
 func (c Config) ResolveFeaturePolicy(groupID int64, account AccountFeaturePolicy) FeatureResolution {
 	p := copyPolicy(c.EffectiveRequestPolicy())
 	sources := map[string]string{}
-	for _, k := range []string{"relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix", "build_billing_entrypoint"} {
+	for _, k := range []string{"level", "relay_mode", "unknown_field", "tool_search", "thinking_disabled_compat", "custom_tool_prefix", "build_billing_entrypoint"} {
 		sources[k] = "global"
 	}
 	if p.BuildBillingEntrypoint == "" {
@@ -322,6 +353,27 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 		}
 	}
 	p := c.ResolveFeaturePolicy(groupID, account).Effective
+	return workerPolicy(p), nil
+}
+
+// workerPolicy is the wire form of a resolved policy: only the layers of its
+// level, sparse. The level itself is not sent; it decides the relay mode
+// (none is direct) and what goes along:
+//
+//	none  - the billing entrypoint and sources
+//	micro - plus the identity lines
+//	low   - plus the attachment sources and the attachments added
+//	high  - plus the system prompt and the tools added
+//
+// Layers above the level stay configured but are not sent.
+func workerPolicy(p RequestPolicy) RequestPolicy {
+	p = copyPolicy(p)
+	level := p.Level
+	if level == "" {
+		level = features.DefaultRequestLevel
+	}
+	p.Level = ""
+	p.RelayMode = features.RelayModeForLevel(level)
 	// Client is also the wire default. Keep the wire sparse so unchanged
 	// legacy Workers never receive newly introduced no-op source keys.
 	for k, v := range p.BuildAttachmentSources {
@@ -334,32 +386,24 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 			delete(p.BuildBillingSources, k)
 		}
 	}
+	if !features.LevelHasEnvironment(level) {
+		p.BuildAttachmentSources = nil
+	}
 	// Defaults are the CLI's own too, so a policy that changes nothing needs no
 	// Worker able to honour the entrypoint and identity line choices.
 	if p.BuildBillingEntrypoint == features.DefaultBillingEntrypoint {
 		p.BuildBillingEntrypoint = ""
 	}
-	// Only what is added goes to the Worker; adding nothing needs no Worker
-	// able to inject.
-	p.BuildInjection = p.BuildInjection.Effective()
-	for k, v := range p.BuildIdentityLines {
-		if v == features.DefaultIdentityLine(k) {
-			delete(p.BuildIdentityLines, k)
-		}
-	}
-	if len(p.BuildIdentityLines) == 0 {
-		p.BuildIdentityLines = nil
-	}
+	// Only what the level adds goes to the Worker (its layers at their
+	// defaults unless chosen otherwise); adding nothing needs no Worker able
+	// to inject.
+	p.BuildInjection = features.LevelInjection(level, p.BuildInjection)
+	// The identity line adapts to the billing header's entrypoint in the CLI
+	// (2026-10-23): it is not configurable, and lines stored earlier are not sent.
+	p.BuildIdentityLines = nil
 	// The identity is not configurable (2026-10-21 decision): build replaces a
 	// client metadata.user_id and adds none, which is the Worker's own default,
 	// and direct forwards it untouched. A source stored earlier is not sent.
 	p.RequestIdentitySources = nil
-	// Direct still fills the billing header and the identity line by
-	// entrypoint (2026-10-22); the content sources are build's only.
-	if p.RelayMode == "direct" {
-		p.BuildAttachmentSources = nil
-		p.BuildBillingSources = nil
-		p.BuildInjection = nil
-	}
-	return p, nil
+	return p
 }

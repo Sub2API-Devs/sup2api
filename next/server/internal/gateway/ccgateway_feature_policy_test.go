@@ -85,8 +85,8 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 			healthProbes.Add(1)
 			require.Equal(t, "managed-sidecar-secret", r.Header.Get("x-api-key"))
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": "2.1.304", "capabilities": []string{
-				features.RequestPolicyModeCapability, features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2,
-				features.BuildBillingCapability, features.BuildContentPreservationCapability,
+				features.RequestPolicyModeCapability, features.RequestLevelsCapability, features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2,
+				features.BuildBillingCapability, features.BuildContentPreservationCapability, features.DirectBillingCapability,
 			}})
 			return
 		}
@@ -115,7 +115,9 @@ func TestCCGatewayAuthenticatedKeyGroupReachesWorkerAndFollowClearsAll(t *testin
 	check(4, "build", features.BuildAttachmentSources{"platform_name": "erase", "shell": "worker"}, features.BuildBillingSources{"cc_version": "worker"})
 	check(5, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
 	check(6, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
-	check(7, "direct", nil, nil)
+	// Level none (a group saved before levels with relay_mode direct): the
+	// billing header only, its sources included.
+	check(7, "direct", nil, features.BuildBillingSources{"cc_version": "worker"})
 	check(8, "build", features.BuildAttachmentSources{"shell": "erase"}, features.BuildBillingSources{"cc_entrypoint": "worker"})
 	// Returning to the first key must restore that key's context, not retain
 	// a recently used group's cached policy for the same account.

@@ -11,7 +11,8 @@
 // comes from the client's request-class header, otherwise from the body:
 // a first block that opens with CC's billing header is Claude Code's, a
 // subagent when the header says cc_is_subagent=true; any other request is
-// built as a custom subagent (2026-10-22 decision).
+// built as CC's main thread (2026-10-23: a request without the header is
+// completed as the main agent's).
 import { createHash, createHmac } from 'node:crypto';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,14 +31,8 @@ const clientFields = {
   cc_context_compacted: /^[a-z][a-z_]{0,31}$/,
   claude_code_context_compacted: /^[a-z][a-z_]{0,31}$/,
 };
-// Headers that are the client's own loop state: sent on as the client sent them.
-const passthrough = {
-  prev_tool_durations: 'x-claude-code-prev-tool-durations',
-  cc_compaction_request: 'x-cc-compaction-request',
-  claude_code_compaction: 'x-claude-code-compaction',
-  cc_context_compacted: 'x-cc-context-compacted',
-  claude_code_context_compacted: 'x-claude-code-context-compacted',
-};
+// The client's own loop state, sent on as the client sent it.
+const loopFields = ['prev_tool_durations', 'cc_compaction_request', 'claude_code_compaction', 'cc_context_compacted', 'claude_code_context_compacted'];
 
 // readRequestAgent is the Worker's context, or null without one (an older
 // Worker, or the CLI run by hand), which keeps the native main-thread request.
@@ -73,21 +68,24 @@ function uuidV4(bytes) {
 // resolveAgentContext chooses CC's inputs. billing is the client's own leading
 // billing header fields (null when the first block does not open with it),
 // prompt the client's first user prompt (the text CC fingerprints), and
-// querySourceFor CC's own query source naming (2.1.304 Zoe). Mapped values
+// querySourceFor CC's own query source naming (2.1.304 Zoe) and loopHeaders
+// the names of the headers that carry the client's own loop state, by field
+// (CC's constants, ccgatewayLayerVocabulary). Mapped values
 // replace the client's only when the context says so; IDs the client never
 // sent are derived in either mode.
-export function resolveAgentContext(context, { billing, prompt = '', querySourceFor }) {
+export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders }) {
+  if (loopFields.some(field => typeof loopHeaders?.[field] !== 'string')) throw Error('Missing native loop header names');
   const { client, map, key } = context;
   const own = (label, value) => map ? derive(key, label, value) : undefined;
   const claudeCode = billing !== null && billing !== undefined;
-  const requestClass = client.request_class ?? (!claudeCode || billing.cc_is_subagent === 'true' ? 'subagent' : 'main');
+  const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : 'main');
   const clientPrompt = client.prompt_id ?? (claudeCode && uuid.test(billing.cc_prompt_id ?? '') ? billing.cc_prompt_id : undefined);
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
   const result = { requestClass, promptId };
   // The previous turn's tool timings and the compaction kind are the client's
   // loop state; CC sends them as headers and so do we, unchanged.
-  const headers = Object.fromEntries(Object.entries(passthrough).filter(([field]) => client[field] !== undefined).map(([field, header]) => [header, client[field]]));
+  const headers = Object.fromEntries(loopFields.filter(field => client[field] !== undefined).map(field => [loopHeaders[field], client[field]]));
   if (Object.keys(headers).length) result.headers = headers;
   // The client's header says cc_prompt_id; the request header must agree.
   if (map && claudeCode && billing.cc_prompt_id !== undefined && promptId !== undefined) result.billingPromptId = promptId;

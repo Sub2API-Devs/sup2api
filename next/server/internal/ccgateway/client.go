@@ -225,8 +225,17 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 			finish()
 			return nil, false, err
 		}
-		if (path == "/v1/messages" || path == "/v1/ccgateway/probe") && (policy.RelayMode == "direct" || policy.CLIVersion == "2.1.304" || policy.BuildAttachmentSources.UsesWorker() || policy.BuildAttachmentSources.RequiresV2() || policy.BuildBillingSources.UsesWorker() || policy.BuildBillingEntrypoint != "" || len(policy.BuildIdentityLines) > 0 || policy.BuildInjection != nil || policy.RequestIdentitySources.Explicit() || policy.RelayMode != cfg.EffectiveRequestPolicy().RelayMode) {
+		// Every policy carries a request level (request_levels_v1), so each
+		// model request and probe confirms the Worker/CLI first, whatever the
+		// global, group or account settings resolved to.
+		if path == "/v1/messages" || path == "/v1/ccgateway/probe" {
 			if err := requireRequestPolicyCapabilities(ctx, client, base, modelKey, policy); err != nil {
+				if cfg.AccountRuntimes && errors.Is(err, errAccountNotSynchronized) {
+					// Refused like the model request would be: read the
+					// account again (the context stays for the retry).
+					_ = close()
+					return notSynchronized()
+				}
 				finish()
 				return nil, false, err
 			}
