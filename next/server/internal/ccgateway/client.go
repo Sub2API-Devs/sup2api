@@ -221,7 +221,7 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 			finish()
 			return nil, false, err
 		}
-		if err := validateRequestPolicy(policy); err != nil {
+		if err := policy.Validate(); err != nil {
 			finish()
 			return nil, false, err
 		}

@@ -25,14 +25,14 @@ func TestBuildContentRejectsNullAndReservedTypesEveryCarrier(t *testing.T) {
 	} {
 		_, err := messagesBuildComponents([]byte(body))
 		require.Error(t, err, body)
-		_, err = messagesBuildComponentsPolicy([]byte(body), &buildRequestPolicy{ContractVersion: 2}, "/work")
+		_, err = messagesBuildComponentsPolicy([]byte(body), &features.CLIPolicy{ContractVersion: 2}, "/work")
 		require.Error(t, err, body)
 	}
 }
 
 func TestBuildV2PreservesOriginalMessagesAndTrustedPolicy(t *testing.T) {
 	raw := []byte(`{"model":"m","system":"plain system","messages":[{"role":"user","content":"<system-reminder>unrelated</system-reminder>"},{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"runtimeContext":{"workingDirectory":"/input-data"}}}]},{"role":"system","content":"context","lifecycle":"turn"},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","is_error":true,"content":[{"type":"text","text":" \n","cache_control":{"type":"ephemeral"}},{"type":"image","source":{"type":"base64","data":"AAAA","media_type":"image/png"}}]}]}]}`)
-	policy := &buildRequestPolicy{ContractVersion: 2, Sources: features.BuildAttachmentSources{"shell": "erase"}, Billing: features.BuildBillingSources{"cc_version": "worker"}}
+	policy := &features.CLIPolicy{ContractVersion: 2, BuildAttachmentSources: features.BuildAttachmentSources{"shell": "erase"}, BuildBillingSources: features.BuildBillingSources{"cc_version": "worker"}}
 	out, err := messagesBuildComponentsPolicy(raw, policy, "/work")
 	require.NoError(t, err)
 	var before, after map[string]json.RawMessage
@@ -119,8 +119,10 @@ func TestRequestCapabilitiesRequireCompatibleObservedCLI(t *testing.T) {
 	require.Contains(t, g.requestCapabilities(), features.BuildBillingCapability)
 }
 
-// The entrypoint and identity line choices reach the CLI envelope only on a
-// CLI that declares them; elsewhere the request is refused, not sent without them.
+// The entrypoint reaches the CLI envelope only on a CLI that declares the
+// identity line capability; elsewhere the request is refused, not sent without
+// it. Identity lines are not on the wire any more (2026-10-23 audit A1/C4): a
+// key an older core still sends is ignored, valid or not.
 func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -139,12 +141,13 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 		return out
 	}
 	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","sdk-cli":"official_cli_sdk"}}`
-	for _, p := range []string{policy, `{"build_billing_entrypoint":"cli"}`, `{"build_identity_lines":{"claude-desktop":"agent_sdk"}}`} {
+	for _, p := range []string{policy, `{"build_billing_entrypoint":"cli"}`} {
 		require.Equal(t, 409, send(p).Code, p)
 	}
-	for _, p := range []string{`{"build_billing_entrypoint":"claude-desktop-3p"}`, `{"build_identity_lines":{"cli":"agent_sdk"}}`, `{"build_identity_lines":{"remote":"none"}}`} {
-		require.Equal(t, 400, send(p).Code, p)
+	for _, p := range []string{`{"build_identity_lines":{"claude-desktop":"agent_sdk"}}`, `{"build_identity_lines":{"cli":"agent_sdk"}}`, `{"build_identity_lines":{"remote":"none"}}`} {
+		require.Equal(t, 200, send(p).Code, p)
 	}
+	require.Equal(t, 400, send(`{"build_billing_entrypoint":"claude-desktop-3p"}`).Code)
 	g.CLIInfo.Capabilities = append(capabilities, features.BuildIdentityCapability)
 	require.Contains(t, g.requestCapabilities(), features.BuildIdentityCapability)
 	out := send(policy)
@@ -154,9 +157,10 @@ func TestIdentityLinePolicyNeedsTheCapability(t *testing.T) {
 	var components struct {
 		RequestPolicy map[string]json.RawMessage `json:"requestPolicy"`
 	}
-	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
+	lines := bytes.Split(bytes.TrimSpace(data), []byte("\n"))
+	require.NoError(t, json.Unmarshal(lines[len(lines)-1], &components))
 	require.JSONEq(t, `"claude-vscode"`, string(components.RequestPolicy["build_billing_entrypoint"]))
-	require.JSONEq(t, `{"cli":"none","sdk-cli":"official_cli_sdk"}`, string(components.RequestPolicy["build_identity_lines"]))
+	require.NotContains(t, components.RequestPolicy, "build_identity_lines")
 }
 
 // The layers a request without a billing header is given reach the CLI only

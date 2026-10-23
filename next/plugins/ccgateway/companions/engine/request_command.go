@@ -36,19 +36,9 @@ func messagesBuildComponents(raw []byte) ([]byte, error) {
 	return messagesBuildComponentsPolicy(raw, nil, "")
 }
 
-type buildRequestPolicy struct {
-	ContractVersion int                             `json:"contract_version"`
-	Sources         features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
-	Billing         features.BuildBillingSources    `json:"build_billing_sources,omitempty"`
-	Entrypoint      string                          `json:"build_billing_entrypoint,omitempty"`
-	IdentityLines   features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
-	Injection       *features.BuildInjection        `json:"build_injection,omitempty"`
-	Identity        features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
-	RelayMode       string                          `json:"relay_mode,omitempty"`
-	CLIVersion      string                          `json:"cli_version,omitempty"`
-}
-
-func messagesBuildComponentsPolicy(raw []byte, policy *buildRequestPolicy, workingDirectory string) ([]byte, error) {
+// messagesBuildComponentsPolicy writes the build envelope; policy is the
+// CLI's part of the wire policy (features.CLIPolicy), nil for the v1 contract.
+func messagesBuildComponentsPolicy(raw []byte, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
 	if err := validateBuildNumbers(raw); err != nil {
 		return nil, err
 	}
@@ -203,12 +193,16 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		fail(401, "authentication_error", "Invalid gateway API key")
 		return
 	}
-	var policy buildRequestPolicy
-	if value := r.Header.Get(policyHeader); value != "" {
-		if len(value) > 16384 || features.ValidatePolicySchemaJSON([]byte(value)) != nil || json.Unmarshal([]byte(value), &policy) != nil {
+	// The wire policy is exactly what this Worker reads (features.WorkerPolicy);
+	// without one (the CLI run by hand) the container's own mode applies.
+	var policy features.WorkerPolicy
+	if value := r.Header.Get(features.PolicyHeader); value != "" {
+		parsed, err := features.ParseWorkerPolicy([]byte(value))
+		if err != nil {
 			fail(400, "invalid_request_error", "Invalid gateway request policy")
 			return
 		}
+		policy = parsed
 		if policy.RelayMode != "" {
 			requestMode = policy.RelayMode
 		}
@@ -246,19 +240,11 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		return
 	}
 	d.prepareSecrets(raw, r.Header.Values("anthropic-beta")...)
-	if err := policy.Identity.Validate(); err != nil {
-		fail(400, "invalid_request_error", err.Error())
-		return
-	}
-	// An explicitly configured source must be honoured or refused. The default
-	// is never sent by the host, so it simply stays unapplied on a CLI that
-	// cannot express it and an old runtime keeps serving requests.
-	identityMode := policy.Identity.Mode()
-	if identityMode != "client" && !g.CLIInfo.supports(features.RequestIdentityCapability) {
-		if policy.Identity.Explicit() {
-			fail(409, "configuration_error", "Loaded CLI does not support the requested identity source")
-			return
-		}
+	// The identity is not configurable (2026-10-21 decision): build maps a
+	// client metadata.user_id with the account key (replace) when the CLI can
+	// carry the mapping, and forwards it unchanged on a CLI that cannot.
+	identityMode := features.RequestIdentityDefault
+	if !g.CLIInfo.supports(features.RequestIdentityCapability) {
 		identityMode = "client"
 	}
 	var identity *requestIdentity
@@ -299,25 +285,19 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	d.request(raw, r.Header)
 	input := raw
-	if err := features.ValidateBillingEntrypoint(policy.Entrypoint); err != nil {
-		fail(400, "invalid_request_error", err.Error())
-		return
-	}
-	if err := policy.Billing.Validate(); err != nil {
-		fail(400, "invalid_request_error", err.Error())
-		return
-	}
+	// The CLI's part of the policy: the content and billing choices, the
+	// injection reduced to what is added.
+	cli := policy.CLI()
 	// Direct is the billing header alone (request levels, 2026-10-23): the CLI
 	// fills a missing header or field for the entrypoint and converts the two
 	// billing fields by their sources; the rest of the body goes byte for byte.
-	// The identity line is build's (micro and up): an older core may still send
-	// the lines with direct, and they never reach the CLI. The CLI does this
-	// only when the Worker hands it this context, so a CLI without the
-	// capability stays a pure passthrough unless a choice must be honoured.
+	// The CLI does this only when the Worker hands it this context, so a CLI
+	// without the capability stays a pure passthrough unless a choice must be
+	// honoured.
 	var directPolicy []byte
 	if requestMode == "direct" {
 		levels := g.CLIInfo.supports(features.DirectBillingCapability) && g.CLIInfo.supports(features.RequestLevelsCapability)
-		if policy.Entrypoint != "" && !g.CLIInfo.supports(features.DirectBillingCapability) || len(policy.Billing) > 0 && !levels {
+		if cli.BuildBillingEntrypoint != "" && !g.CLIInfo.supports(features.DirectBillingCapability) || len(cli.BuildBillingSources) > 0 && !levels {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested direct policy")
 			return
 		}
@@ -325,35 +305,23 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			directPolicy, _ = json.Marshal(struct {
 				Entrypoint string                       `json:"build_billing_entrypoint,omitempty"`
 				Billing    features.BuildBillingSources `json:"build_billing_sources,omitempty"`
-			}{policy.Entrypoint, policy.Billing})
+			}{cli.BuildBillingEntrypoint, cli.BuildBillingSources})
 		}
 	}
 	if requestMode == "build" {
-		if err := policy.IdentityLines.Validate(); err != nil {
-			fail(400, "invalid_request_error", err.Error())
-			return
-		}
-		identityLines := policy.Entrypoint != "" || len(policy.IdentityLines) > 0
-		if err := policy.Sources.Validate(); err != nil {
-			fail(400, "invalid_request_error", err.Error())
-			return
-		}
-		if err := policy.Injection.Validate(); err != nil {
-			fail(400, "invalid_request_error", err.Error())
-			return
-		}
-		policy.Injection = policy.Injection.Effective()
+		// The identity line follows the entrypoint in the CLI (BuildIdentityCapability).
+		identityLines := cli.BuildBillingEntrypoint != ""
 		v2 := g.CLIInfo.supports(features.BuildContentPreservationCapability)
-		if (policy.Sources.RequiresV2() || v2 && policy.Sources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || policy.Billing.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
-			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) || policy.Injection != nil && !g.CLIInfo.supports(features.BuildInjectionCapability) {
+		if (cli.BuildAttachmentSources.RequiresV2() || v2 && cli.BuildAttachmentSources.UsesWorker()) && !g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) || cli.BuildBillingSources.UsesWorker() && !g.CLIInfo.supports(features.BuildBillingCapability) ||
+			identityLines && !g.CLIInfo.supports(features.BuildIdentityCapability) || cli.BuildInjection != nil && !g.CLIInfo.supports(features.BuildInjectionCapability) {
 			fail(409, "configuration_error", "Loaded CLI does not support the requested content policy")
 			return
 		}
-		if (policy.Sources.RequiresV2() || policy.Billing.UsesWorker() || identityLines || policy.Injection != nil) && !v2 {
+		if (cli.BuildAttachmentSources.RequiresV2() || cli.BuildBillingSources.UsesWorker() || identityLines || cli.BuildInjection != nil) && !v2 {
 			fail(409, "configuration_error", "Loaded CLI lacks build content preservation")
 			return
 		}
-		if !v2 && policy.Sources.UsesWorker() {
+		if !v2 && cli.BuildAttachmentSources.UsesWorker() {
 			// Reject invalid content before v1 host fact collection; v2
 			// validates once while constructing its preserved envelope.
 			if err = validateBuildContent(raw); err != nil {
@@ -362,7 +330,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			}
 			legacySources := features.BuildAttachmentSources{}
 			for _, field := range []string{"platform_name", "os_version"} {
-				if source, ok := policy.Sources[field]; ok {
+				if source, ok := cli.BuildAttachmentSources[field]; ok {
 					legacySources[field] = source
 				}
 			}
@@ -373,15 +341,13 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 			}
 			var decisions []Object
 			input, decisions, err = transformBuildAttachments(raw, legacySources, facts)
-			d.trace("build_attachment_transform", Object{"sources": policy.Sources, "changed": len(decisions), "decisions": decisions})
+			d.trace("build_attachment_transform", Object{"sources": cli.BuildAttachmentSources, "changed": len(decisions), "decisions": decisions})
 		}
 		if err == nil {
 			if v2 {
-				// The CLI envelope carries content sources only: the identity
-				// context travels in its own environment variable.
-				policy.ContractVersion = 2
-				policy.RelayMode, policy.CLIVersion, policy.Identity = "", "", nil
-				input, err = messagesBuildComponentsPolicy(input, &policy, g.Runner.WorkingDirectory)
+				// The CLI envelope carries the content and billing choices only:
+				// the identity context travels in its own environment variable.
+				input, err = messagesBuildComponentsPolicy(input, &cli, g.Runner.WorkingDirectory)
 			} else {
 				input, err = messagesBuildComponents(input)
 			}

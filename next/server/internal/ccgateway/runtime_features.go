@@ -27,16 +27,14 @@ func requireBuildAttachmentCapability(ctx context.Context, client *http.Client, 
 // wire policy (workerPolicy). Every policy follows the request levels: an
 // older CLI would add the identity line in direct and complete a request
 // without a billing header as a subagent.
-func requestPolicyCapabilities(p RequestPolicy) []string {
+func requestPolicyCapabilities(p features.WorkerPolicy) []string {
 	required := []string{}
 	if p.CLIVersion == "2.1.304" || p.RelayMode == "direct" {
 		required = append(required, features.RequestPolicyModeCapability)
 	}
 	required = append(required, features.RequestLevelsCapability)
-	if p.RequestIdentitySources.Explicit() {
-		required = append(required, features.RequestIdentityCapability)
-	}
-	identityLines := p.BuildBillingEntrypoint != "" || len(p.BuildIdentityLines) > 0
+	// The identity line follows the entrypoint in the CLI.
+	identityLines := p.BuildBillingEntrypoint != ""
 	if p.RelayMode == "direct" {
 		if identityLines || p.BuildBillingSources.UsesWorker() {
 			required = append(required, features.DirectBillingCapability)
@@ -63,7 +61,7 @@ func requestPolicyCapabilities(p RequestPolicy) []string {
 	return required
 }
 
-func requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, p RequestPolicy) error {
+func requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, p features.WorkerPolicy) error {
 	return requireCapabilities(ctx, client, base, key, p.CLIVersion, requestPolicyCapabilities(p))
 }
 

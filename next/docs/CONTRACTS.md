@@ -3859,6 +3859,8 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.11 设置页精简（2026-10-09，用户要求）
 
+> 2026-10-23（§53.18）：本节的 `thinking_disabled_compat`、`unknown_field`、`tool_search`、`custom_tool_prefix` 以及 `allow_fast`/`allow_effort`、`betas` 都是 native 执行路径的设置；native 已不可达，这些字段**只保留在存储里**，设置页不再编辑，Worker 收不到。下文是历史记录。
+
 以下设置页布局沿革不代表所有旧开关仍影响执行：native-only 已取消 relay 模式/灰度名单/直返错误选路，附件表达也不再使用旧 relay 来源策略，beta 固定规则不是转发白名单。现行策略见 §53.13 与 `CCGATEWAY-REQUEST-POLICY.md`。
 
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
@@ -3957,6 +3959,8 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.15 擦除客户端附件（`erase_client_attachments`，2026-10-14，用户要求）
 
+> 2026-10-23（§53.18）：**已下线**。native 路径不可达后此字段只保留在存储里，Worker 收不到；附件按 §53.17 的 `build_attachment_sources`（`erase` 值）处理。下文是历史记录。
+
 native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.13）；本节只增加"按类型擦除客户端附件"，不恢复旧附件来源策略。
 - 策略字段 `erase_client_attachments`：字符串数组，可选值 `environment`（环境与环境更新）、`model`（模型说明）、`date`（日期与日期变更）、`total_tokens_reminder`、`session_context`（CLAUDE.md、git 状态、邮箱等会话上下文提醒）。词表在 `contracts/features/attachments.go`，核心保存与 Worker 解析都用它校验，未知或重复类型拒绝。缺省／空数组＝不擦除；字段可选、`omitempty`，旧配置下发给 Worker 的策略与升级前相同，旧 Worker 忽略它，`schema_version` 不升（仍为 1）。
 - Worker 在准入前（`parsePassthroughRequest`）处理顶层 `system` 与 `user`／`system` 消息的文本块，之后的历史、计划原始请求与 fallback 看到同一份擦除结果；没有匹配时不重新序列化，原始请求逐字节不变。
@@ -3965,6 +3969,8 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 设置页"CC 特性 → 运行设置"按类型选择（见 §53.16）；特性目录 `F-CLIENT-ATTACHMENT-ERASE`。
 
 ### 53.16 客户端附件换成网关渲染（`replace_client_attachments`，2026-10-14，用户要求）
+
+> 2026-10-23（§53.18）：**已下线**。同 §53.15：字段只保留在存储里，Worker 收不到；"服务端"按 §53.17 的 `build_attachment_sources`（`worker` 值）处理。下文是历史记录。
 
 "保留服务端"在透传下的含义：客户端附件留在原位置，文字换成该 Worker 上 Claude Code 自己渲染的同类附件。旧的 `attachment_source: gateway/both` 在透传下不起作用（Worker 强制 client），不恢复。
 - 策略字段 `replace_client_attachments`：字符串数组，可选 `environment`、`model`、`total_tokens_reminder`，ccgateway 0.1.54 起另加 `date`、`session_context`（`features.ReplaceableClientAttachments`，即全部可擦除类型；旧 Worker 收到新类型会拒绝整个策略，须先更新 Worker 再保存）。每类一次、不得与 `erase_client_attachments` 重叠，核心保存与 Worker 解析都用 `features.ValidateReplaceClientAttachments` 校验。缺省／空＝不替换；`omitempty`，旧 Worker 忽略，`schema_version` 仍为 1。优先级：擦除 > 替换 > 保留。
@@ -3982,12 +3988,24 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 
 ### 53.17 build 附件来源（2026-10-20）
 
+> 2026-10-23 更新：键集合已扩为 `contracts/features/attachments.go` 的 `BuildAttachmentFields`（platform_name、os_version、shell、primary_directory、additional_directories、git_repository、worktree、scratchpad_directory、github_cli、agent_proxy），值为 `client`（默认）、`worker`、`erase`；按注入等级低及以上才下发（§53.18）。下面第一条的"两个键、两个值"是 2026-10-20 的状态。
+
 - 插件设置“CC 特性 → 附件转换”保存 `request_policy.build_attachment_sources`。对象仅允许 `platform_name`、`os_version` 两个键，值为 `client`（默认）或 `worker`；缺失/空对象保留客户端。核心和 Worker 共享 `features.BuildAttachmentSources` 校验。沿用远程配置加密存储、读取和请求策略下发，不新增数据库表。它与旧 native 的擦除/替换数组独立，升级不激活旧规则。
 - build 模式在消息组件提取前原位替换已识别环境文本中的平台/系统版本。支持顶层 system、role=system 的直接 text 和完整 user 环境 reminder；模板包括 `# Environment`、固定引导行和唯一平台字段。代码围栏、混合用户正文、嵌套/不平衡包裹、重复字段和未知模板保留。工具结果不递归转换；cwd、额外目录、Git/worktree、Shell、CLAUDE.md、媒体、工具参数、签名、缓存标记和 system 生命周期保持。
 - 平台来自实际 Worker 的 OS（Windows 为 `win32`）；Unix 系统版本使用本机 `uname -sr`（与 CC 302 的 os.type/release 口径一致），Windows 使用 `cmd.exe /d /c ver`。结果在 Worker 进程内缓存；采集失败返回 503，不删除或伪造内容。不启动 CC 渲染循环、不访问客户端目录、不调用额外模型。
 - build Worker 的 `/healthz.capabilities` 包含 `build_attachment_sources_v1`；`/admin/features` 目录增加 `F-BUILD-ATTACHMENTS`。选择 Worker 来源时，核心每次通过实际账号路由在模型发送前读取 `/healthz`，核对能力和配置的 CLI 版本；不支持、版本不符或无法确认时拒绝发送。能力不跨请求缓存，以覆盖原地更新/降级。该探测是本地管理读取，不是模型生成。
 - direct 正文不变且不执行能力探测；设置保留，界面禁用并说明切回 build 后生效。业务 direct 下的账号 build 连通性 probe 也不应用转换。`build_attachment_transform` 诊断只增加选择、改动数量、位置和前后摘要。
 - 不承诺从 HTTP 渲染文本逆推出所有 CC 内部 attachment。302 的默认渲染器显式识别 131 类，其中 43 类不直接输出正文；库存、可复现脚本与本地验证边界见 `plugins/ccgateway/docs/BUILD-ATTACHMENT-TRANSFORM-DESIGN.md`。
+
+### 53.18 核心→Worker 的策略线形 `WorkerPolicy`（2026-10-23，审核 A1/C4）
+
+核心发给 Worker 的请求策略（请求头 `X-CCGateway-Request-Policy`）有唯一的线形类型 `contracts/features.WorkerPolicy`（`wire.go`），核心的 `workerPolicy()` 构造它、Worker 的 `features.ParseWorkerPolicy` 读它；两边不再共用存储结构体。
+
+- **线上只有 7 个键**：`schema_version`（1）、`relay_mode`（build/direct，由等级推出）、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。来源为 `client` 的项、默认入口 `sdk-cli` 不下发；附件来源只在等级低及以上下发；`build_injection` 只含该等级加上的项（`LevelInjection`，只有 true）。`level` 本身不下发。
+- **不再下发**：`build_identity_lines`、`request_identity_sources`（身份行由 CLI 按计费头入口自适应、身份固定映射，2026-10-21/23）以及 §53.11/§53.15/§53.16 的全部 native 设置。它们在 `RequestPolicy`（存储形）里标为"stored only"，旧配置照常解码，设置页不编辑。
+- **Worker 对未知键宽容**：发布顺序是先插件后核心，新 Worker 会先收到旧核心带多余键的策略，所以 `ParseWorkerPolicy` 忽略未知键，只严格校验认识的键；Worker 不再解析 `request_identity_sources`/`build_identity_lines`，也不再因它们返回 409。核心实际下发什么由夹具固定（下一条）。
+- **跨层夹具**：`contracts/testdata/core-worker-policies.json` 由核心测试（`server/internal/ccgateway/contract_fixture_test.go`，编辑器 16 例的线形）生成，`CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成；engine 测试（`core_policy_fixture_test.go`）读同一份字节，要求每条都被 Worker 接受并原样成为 CLI 信封的 `requestPolicy`（`WorkerPolicy.CLI()`，contract 2，键：`contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`）。Worker→CLI 夹具 `worker-cli-requests.json` 同时覆盖 replace/client/worker 三种身份模式（Claude 登录、API Key、无邮箱）。
+- 核心的能力预检（`requestPolicyCapabilities`）只看线形：`request_levels_v1` 总是要求；设了入口要求 `build_identity_line_v1`（direct 为 `direct_billing_v1`）；来源用 worker/erase 要求对应能力；有注入要求 `build_injection_v1`。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

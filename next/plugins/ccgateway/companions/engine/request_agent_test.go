@@ -182,7 +182,7 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 // renamed, in place.
 func TestBuildInputKeepsToolKeyOrder(t *testing.T) {
 	body := `{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"name":"Read","description":"d","input_schema":{"type":"object","z":1,"a":2},"cache_control":{"type":"ephemeral"}},{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`
-	out, err := messagesBuildComponentsPolicy([]byte(body), &buildRequestPolicy{}, "/w")
+	out, err := messagesBuildComponentsPolicy([]byte(body), &features.CLIPolicy{}, "/w")
 	require.NoError(t, err)
 	var components struct {
 		Tools []json.RawMessage `json:"tools"`

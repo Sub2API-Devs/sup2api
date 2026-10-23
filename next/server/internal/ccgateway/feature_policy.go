@@ -343,67 +343,70 @@ func SaveAccountFeaturePolicyTx(ctx context.Context, tx pgx.Tx, id int64, p Acco
 	return err
 }
 
-func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID, groupID int64) (RequestPolicy, error) {
+func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID, groupID int64) (features.WorkerPolicy, error) {
 	account := AccountFeaturePolicy{Mode: "follow"}
 	if accountID > 0 && c.allowsAccountFeatures(groupID) {
 		var err error
 		account, err = LoadAccountFeaturePolicy(ctx, s.DB.Pool, accountID)
 		if err != nil {
-			return RequestPolicy{}, err
+			return features.WorkerPolicy{}, err
 		}
 	}
-	p := c.ResolveFeaturePolicy(groupID, account).Effective
-	return workerPolicy(p), nil
+	return workerPolicy(c.ResolveFeaturePolicy(groupID, account).Effective), nil
 }
 
-// workerPolicy is the wire form of a resolved policy: only the layers of its
-// level, sparse. The level itself is not sent; it decides the relay mode
-// (none is direct) and what goes along:
+// workerPolicy is the wire form of a resolved policy (features.WorkerPolicy):
+// only what the Worker reads, and only the layers of its level, sparse. The
+// level itself is not sent; it decides the relay mode (none is direct) and
+// what goes along:
 //
 //	none  - the billing entrypoint and sources
-//	micro - plus the identity lines
 //	low   - plus the attachment sources and the attachments added
 //	high  - plus the system prompt and the tools added
 //
-// Layers above the level stay configured but are not sent.
-func workerPolicy(p RequestPolicy) RequestPolicy {
-	p = copyPolicy(p)
+// Layers above the level stay configured but are not sent. The identity line
+// adapts to the billing header's entrypoint in the CLI and the identity is
+// mapped (neither is configurable, 2026-10-21/23); what a policy stored
+// earlier says about them stays stored and unsent, like every other field
+// the console no longer edits (RequestPolicy).
+func workerPolicy(p RequestPolicy) features.WorkerPolicy {
 	level := p.Level
 	if level == "" {
 		level = features.DefaultRequestLevel
 	}
-	p.Level = ""
-	p.RelayMode = features.RelayModeForLevel(level)
-	// Client is also the wire default. Keep the wire sparse so unchanged
-	// legacy Workers never receive newly introduced no-op source keys.
-	for k, v := range p.BuildAttachmentSources {
-		if v == "client" {
-			delete(p.BuildAttachmentSources, k)
-		}
+	wire := features.WorkerPolicy{SchemaVersion: features.PolicySchemaVersion, RelayMode: features.RelayModeForLevel(level), CLIVersion: p.CLIVersion}
+	if wire.CLIVersion == "" {
+		wire.CLIVersion = defaultRequestPolicy().CLIVersion
 	}
-	for k, v := range p.BuildBillingSources {
-		if v == "client" {
-			delete(p.BuildBillingSources, k)
-		}
+	// Client is also the wire default: the wire stays sparse.
+	wire.BuildBillingSources = withoutClient(p.BuildBillingSources)
+	if features.LevelHasEnvironment(level) {
+		wire.BuildAttachmentSources = withoutClient(p.BuildAttachmentSources)
 	}
-	if !features.LevelHasEnvironment(level) {
-		p.BuildAttachmentSources = nil
-	}
-	// Defaults are the CLI's own too, so a policy that changes nothing needs no
-	// Worker able to honour the entrypoint and identity line choices.
-	if p.BuildBillingEntrypoint == features.DefaultBillingEntrypoint {
-		p.BuildBillingEntrypoint = ""
+	// The default is the CLI's own too, so a policy that changes nothing needs
+	// no Worker able to honour the entrypoint.
+	if p.BuildBillingEntrypoint != features.DefaultBillingEntrypoint {
+		wire.BuildBillingEntrypoint = p.BuildBillingEntrypoint
 	}
 	// Only what the level adds goes to the Worker (its layers at their
 	// defaults unless chosen otherwise); adding nothing needs no Worker able
 	// to inject.
-	p.BuildInjection = features.LevelInjection(level, p.BuildInjection)
-	// The identity line adapts to the billing header's entrypoint in the CLI
-	// (2026-10-23): it is not configurable, and lines stored earlier are not sent.
-	p.BuildIdentityLines = nil
-	// The identity is not configurable (2026-10-21 decision): build replaces a
-	// client metadata.user_id and adds none, which is the Worker's own default,
-	// and direct forwards it untouched. A source stored earlier is not sent.
-	p.RequestIdentitySources = nil
-	return p
+	wire.BuildInjection = features.LevelInjection(level, p.BuildInjection)
+	return wire
+}
+
+// withoutClient is the sources map without the entries at the default, nil
+// when none remain.
+func withoutClient[M ~map[string]string](sources M) M {
+	var out M
+	for k, v := range sources {
+		if v == "client" {
+			continue
+		}
+		if out == nil {
+			out = M{}
+		}
+		out[k] = v
+	}
+	return out
 }

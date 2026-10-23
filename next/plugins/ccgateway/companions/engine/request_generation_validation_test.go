@@ -57,7 +57,7 @@ func TestBuildGenerationRejectsMalformedExplicitControls(t *testing.T) {
 			raw := generationRequest(tc.fields)
 			_, err := messagesBuildComponents(raw)
 			require.Error(t, err)
-			_, err = messagesBuildComponentsPolicy(raw, &buildRequestPolicy{ContractVersion: 2}, "/work")
+			_, err = messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.Error(t, err)
 		})
 	}
@@ -80,7 +80,7 @@ func TestBuildGenerationKeepsNativeDefaultsAndBudgetAdjustment(t *testing.T) {
 	} {
 		t.Run(fields, func(t *testing.T) {
 			raw := generationRequest(fields)
-			out, err := messagesBuildComponentsPolicy(raw, &buildRequestPolicy{ContractVersion: 2}, "/work")
+			out, err := messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.NoError(t, err)
 			var before, after map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(raw, &before))

@@ -34,51 +34,66 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 	require.NoError(t, err)
 	session := "12345678-1234-4123-8123-123456789012"
 	reminder := "<system-reminder>\n" + buildClientEnvironment + "</system-reminder>"
+	// account is the Worker's account: a Claude login with its email (the
+	// default), one without (noemail: the Worker's own identity) or an API key
+	// (apikey: nothing to map for, the client's identity goes unchanged).
 	scenarios := []struct {
 		name, mode, policy, body string
+		account                  string
 	}{
 		{"build-default", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
-			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}],"max_tokens":64,"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`},
-		{"build-sources", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_attachment_sources":{"platform_name":"worker","os_version":"erase"},"build_billing_sources":{"cc_version":"worker"},"request_identity_sources":{"user_id":"client"}}`,
+			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}],"max_tokens":64,"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`, ""},
+		{"build-sources", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_attachment_sources":{"platform_name":"worker","os_version":"erase"},"build_billing_sources":{"cc_version":"worker"}}`,
 			mustJSON(t, Object{"model": "fixture", "stream": true, "max_tokens": 128, "temperature": 0.5,
 				"system":   []any{Object{"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"}, Object{"type": "text", "text": "system text", "cache_control": Object{"type": "ephemeral"}}},
 				"messages": []any{Object{"role": "user", "content": []any{Object{"type": "text", "text": reminder}, Object{"type": "text", "text": "question"}}}},
 				"tools":    []any{Object{"name": "lookup", "description": "find", "input_schema": Object{"type": "object", "properties": Object{"q": Object{"type": "string"}}}}},
-				"metadata": Object{"user_id": Object{"device_id": strings.Repeat("d", 64), "session_id": session}}})},
-		{"build-identity-worker", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","request_identity_sources":{"user_id":"worker"}}`,
-			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"user_` + strings.Repeat("e", 64) + `_account__session_` + session + `"}}`},
-		{"build-identity-lines", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","claude-vscode":"agent_sdk"}}`,
-			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`},
+				"metadata": Object{"user_id": Object{"device_id": strings.Repeat("d", 64), "session_id": session}}}), "apikey"},
+		// Keys an older core still sends (the identity source and lines left
+		// the wire with audit A1/C4) are ignored: the identity is mapped as
+		// always, and the lines never reach the CLI.
+		{"build-older-core-keys", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","request_identity_sources":{"user_id":"worker"},"thinking_disabled_compat":"omit","betas":[]}`,
+			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"user_` + strings.Repeat("e", 64) + `_account__session_` + session + `"}}`, "noemail"},
+		{"build-entrypoint", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_billing_entrypoint":"claude-vscode","build_identity_lines":{"cli":"none","claude-vscode":"agent_sdk"}}`,
+			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"build-injection", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"environment":true,"date":true,"model":false},"tools":{"Bash":true,"Read":true,"Edit":true,"Write":true,"NotebookEdit":true,"WebSearch":false}}}`,
-			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`},
+			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"build-no-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
-			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`},
+			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`, ""},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
-			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":{"foo":"x"}}}`},
+			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":{"foo":"x"}}}`, ""},
 		// Direct is the billing header alone (request levels): identity lines an
-		// older core still sends never reach the CLI.
+		// older core still sends are ignored.
 		{"direct-entrypoint", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_identity_lines":{"claude-desktop":"agent_sdk"}}`,
-			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`},
+			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"direct-billing-sources", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304","build_billing_entrypoint":"claude-desktop","build_billing_sources":{"cc_version":"worker","cc_entrypoint":"client"}}`,
-			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.300.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`},
+			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.300.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"direct-passthrough", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
-			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`},
+			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`, ""},
 	}
 	var cases []workerCLICase
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
 			root := t.TempDir()
 			config := t.TempDir()
-			require.NoError(t, os.WriteFile(filepath.Join(config, ".claude.json"), []byte(`{"oauthAccount":{"emailAddress":"account@example.invalid"}}`), 0600))
+			claude := `{"oauthAccount":{"emailAddress":"account@example.invalid"}}`
+			if sc.account != "" {
+				claude = `{}`
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(config, ".claude.json"), []byte(claude), 0600))
 			require.NoError(t, os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"fixture"}}`), 0600))
+			account := map[string]string{}
+			if sc.account == "apikey" {
+				account["ANTHROPIC_API_KEY"] = "fixture"
+			}
 			envCapture := filepath.Join(root, "identity-env.json")
 			g := &Gateway{RequestMode: sc.mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
 					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability}},
-				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
+				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 					"HOME": config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,
-				}, "CLAUDE_CODE_USER_EMAIL", "ANTHROPIC_API_KEY")}}
+				}, "CLAUDE_CODE_USER_EMAIL", "ANTHROPIC_API_KEY"), account)}}
 			require.NoError(t, g.configureRequestIdentity(root))
 			// A fixed account secret keeps the mapped identity reproducible.
 			g.requestIdentitySecret = bytes.Repeat([]byte{7}, 32)
@@ -95,6 +110,8 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(raw, &env))
 			require.NotContains(t, env[directPolicyEnv], "build_identity_lines", "direct never carries an identity line")
+			require.NotContains(t, string(stdin), "build_identity_lines", "the envelope carries no identity lines")
+			require.NotContains(t, string(stdin), "request_identity_sources")
 			// The runtime context names this temporary directory; the CLI side
 			// substitutes its own working directory.
 			escaped, _ := json.Marshal(root)

@@ -1,0 +1,68 @@
+{
+  "cases": [
+    {
+      "name": "global/global-default",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-sources",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_billing_sources\":{\"cc_version\":\"worker\"},\"build_billing_entrypoint\":\"cli\",\"build_attachment_sources\":{\"os_version\":\"erase\",\"platform_name\":\"worker\"},\"build_injection\":{\"attachments\":{\"date\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-none",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"direct\",\"cli_version\":\"2.1.304\",\"build_billing_sources\":{\"cc_version\":\"worker\"}}"
+    },
+    {
+      "name": "global/global-micro",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\"}"
+    },
+    {
+      "name": "global/global-low",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"attachments\":{\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-high",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Agent\":true,\"Edit\":true,\"Read\":true,\"Write\":true}}}"
+    },
+    {
+      "name": "global/global-identity-lines-dropped",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\"}"
+    },
+    {
+      "name": "global/global-legacy-direct",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"direct\",\"cli_version\":\"2.1.304\"}"
+    },
+    {
+      "name": "global/global-legacy-build",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_attachment_sources\":{\"platform_name\":\"worker\"}}"
+    },
+    {
+      "name": "group/group-layers",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_billing_sources\":{\"cc_entrypoint\":\"worker\"},\"build_attachment_sources\":{\"platform_name\":\"worker\"},\"build_injection\":{\"attachments\":{\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "group/group-level",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Agent\":true,\"Bash\":true,\"Edit\":true,\"Read\":true,\"Write\":true}}}"
+    },
+    {
+      "name": "group/group-follow-billing",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"Read\":true,\"Write\":true}}}"
+    },
+    {
+      "name": "group/group-legacy-direct",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"direct\",\"cli_version\":\"2.1.304\"}"
+    },
+    {
+      "name": "account/account-billing",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_billing_sources\":{\"cc_version\":\"worker\"},\"build_billing_entrypoint\":\"claude-vscode\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "account/account-level",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\"}"
+    },
+    {
+      "name": "account/account-prompt",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"cli_version\":\"2.1.304\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Edit\":true,\"Read\":true,\"Write\":true}}}"
+    }
+  ]
+}

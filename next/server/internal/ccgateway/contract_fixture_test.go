@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/require"
 )
+
+// coreWorkerFixture is the producer half of the core → Worker contract: the
+// policy header the core sends for each editor case below. The Worker's tests
+// (engine/contract_fixture_test.go) read the same bytes. Regenerate with
+// CCG_UPDATE_CONTRACT_FIXTURES=1 after an intended change.
+var coreWorkerFixture = filepath.Join("..", "..", "..", "plugins", "ccgateway", "companions", "contracts", "testdata", "core-worker-policies.json")
 
 // Consumer half of the editor → core contract. The fixture holds what the
 // actual console editors send (web/src/views/ccgateway/contractFixtures.spec.ts
@@ -31,6 +38,11 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &fixture))
 	layers := map[string]bool{}
+	type wireCase struct {
+		Name string `json:"name"`
+		Wire string `json:"wire"`
+	}
+	var wires []wireCase
 	for _, tc := range fixture.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			layers[tc.Layer] = true
@@ -63,17 +75,32 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 			}
 			wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 			require.NoError(t, err)
-			require.NoError(t, validateRequestPolicy(wire))
-			require.Empty(t, wire.Level, "the level is not sent")
+			require.NoError(t, wire.Validate())
 			require.Equal(t, r.Effective.RelayMode, wire.RelayMode)
+			require.NotEmpty(t, wire.CLIVersion, "the core always names the CLI version")
 			require.Equal(t, features.LevelInjection(r.Effective.Level, r.Effective.BuildInjection), wire.BuildInjection)
-			if !features.LevelHasIdentity(r.Effective.Level) {
-				require.Nil(t, wire.BuildIdentityLines)
-			}
 			if !features.LevelHasEnvironment(r.Effective.Level) {
 				require.Nil(t, wire.BuildAttachmentSources)
 			}
+			raw, err := json.Marshal(wire)
+			require.NoError(t, err)
+			// The header carries exactly the wire keys: nothing stored-only.
+			var keys map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(raw, &keys))
+			for key := range keys {
+				require.Contains(t, []string{"schema_version", "relay_mode", "cli_version", "build_billing_sources", "build_billing_entrypoint", "build_attachment_sources", "build_injection"}, key)
+			}
+			wires = append(wires, wireCase{Name: strings.ReplaceAll(tc.Layer+"/"+tc.Name, " ", "-"), Wire: string(raw)})
 		})
 	}
 	require.Equal(t, map[string]bool{"global": true, "group": true, "account": true}, layers, "every editor layer is covered")
+	generated, err := json.MarshalIndent(map[string]any{"cases": wires}, "", "  ")
+	require.NoError(t, err)
+	generated = append(generated, '\n')
+	if os.Getenv("CCG_UPDATE_CONTRACT_FIXTURES") != "" {
+		require.NoError(t, os.WriteFile(coreWorkerFixture, generated, 0644))
+	}
+	committed, err := os.ReadFile(coreWorkerFixture)
+	require.NoError(t, err)
+	require.JSONEq(t, string(committed), string(generated), "core → Worker policies changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1 and run the engine contract test")
 }

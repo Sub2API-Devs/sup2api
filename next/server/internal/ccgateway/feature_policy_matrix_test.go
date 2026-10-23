@@ -275,15 +275,17 @@ func TestFeatureScalarSettingsAcrossAllLayers(t *testing.T) {
 					require.Equal(t, "2.1.304", resolved.Effective.CLIVersion)
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &resolved.Effective}, 0, 0)
 					require.NoError(t, err)
+					raw, _ := json.Marshal(wire)
 					if field.key == "level" {
 						// The level is not sent; it decides the relay mode.
-						require.Empty(t, wire.Level)
+						require.NotContains(t, string(raw), "level")
 						require.Equal(t, features.RelayModeForLevel(value), wire.RelayMode)
 						require.Equal(t, origin, resolved.Sources["relay_mode"])
 					} else {
-						require.Equal(t, value, field.get(wire))
+						// Stored only: resolved for the console, never on the wire.
+						require.NotContains(t, string(raw), field.key)
 					}
-					require.NoError(t, validateRequestPolicy(wire))
+					require.NoError(t, wire.Validate())
 				})
 				cases++
 			}
@@ -424,16 +426,16 @@ func representativeFeatureCases() []matrixRepresentative {
 // separate actual Worker -> CLI -> HTTP harness. No hand-authored policy JSON.
 func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 	type evidenceCase struct {
-		Name            string            `json:"name"`
-		Field           string            `json:"field"`
-		ExpectedSource  string            `json:"expected_source,omitempty"`
-		ExpectedSources map[string]string `json:"expected_sources,omitempty"`
-		ExpectedOrigin  string            `json:"expected_origin"`
-		ExpectedMode    string            `json:"expected_mode"`
-		ExpectedLevel   string            `json:"expected_level,omitempty"`
-		WorkerPolicy    RequestPolicy     `json:"worker_policy"`
-		Effective       RequestPolicy     `json:"effective"`
-		Sources         map[string]string `json:"sources"`
+		Name            string                `json:"name"`
+		Field           string                `json:"field"`
+		ExpectedSource  string                `json:"expected_source,omitempty"`
+		ExpectedSources map[string]string     `json:"expected_sources,omitempty"`
+		ExpectedOrigin  string                `json:"expected_origin"`
+		ExpectedMode    string                `json:"expected_mode"`
+		ExpectedLevel   string                `json:"expected_level,omitempty"`
+		WorkerPolicy    features.WorkerPolicy `json:"worker_policy"`
+		Effective       RequestPolicy         `json:"effective"`
+		Sources         map[string]string     `json:"sources"`
 	}
 	var evidence []evidenceCase
 	for _, tc := range representativeFeatureCases() {
@@ -456,13 +458,11 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 			// group/account application already occurred above, no DB is needed.
 			wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 			require.NoError(t, err)
-			require.Empty(t, wire.Level, "the level is not sent")
 			require.Equal(t, tc.ExpectedMode, wire.RelayMode)
 			require.Contains(t, requestPolicyCapabilities(wire), features.RequestLevelsCapability)
 			if tc.ExpectedMode == "direct" {
 				// none: the billing header only (no source differs here).
 				require.Nil(t, wire.BuildAttachmentSources)
-				require.Nil(t, wire.BuildIdentityLines)
 				require.Nil(t, wire.BuildInjection)
 				require.Empty(t, wire.BuildBillingSources)
 				require.Equal(t, []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}, requestPolicyCapabilities(wire))
@@ -508,8 +508,9 @@ func TestIdentitySourceIsNeverSentToTheWorker(t *testing.T) {
 					require.Equal(t, mode, r.Effective.RelayMode)
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &r.Effective}, 0, 0)
 					require.NoError(t, err)
-					require.NoError(t, validateRequestPolicy(wire))
-					require.Nil(t, wire.RequestIdentitySources)
+					require.NoError(t, wire.Validate())
+					raw, _ := json.Marshal(wire)
+					require.NotContains(t, string(raw), "request_identity_sources", "the identity source is stored only")
 					require.NotContains(t, requestPolicyCapabilities(wire), features.RequestIdentityCapability)
 					after, _ := json.Marshal([]any{cfg, account})
 					require.JSONEq(t, string(before), string(after), "resolving must not mutate stored policies")

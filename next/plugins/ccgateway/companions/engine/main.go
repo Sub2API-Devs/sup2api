@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 type Gateway struct {
@@ -74,12 +76,16 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer diagnostic.finish()
 	// The host's selected mode must match this container. Never silently fall
 	// back to the agent loop when zero-injection forwarding was requested.
-	if r.Header.Get(policyHeader) != "" && g.authorized(r) {
-		var policy struct {
-			RelayMode  string `json:"relay_mode"`
-			CLIVersion string `json:"cli_version"`
+	if value := r.Header.Get(features.PolicyHeader); value != "" && g.authorized(r) {
+		var policy features.WorkerPolicy
+		var err error
+		if g.RequestMode != "" {
+			policy, err = features.ParseWorkerPolicy([]byte(value))
+		} else if len(value) > features.MaxPolicyHeaderBytes || json.Unmarshal([]byte(value), &policy) != nil {
+			// The native path (not reachable in production) only reads the mode.
+			err = errors.New("invalid request policy")
 		}
-		if len(r.Header.Get(policyHeader)) > 16384 || json.Unmarshal([]byte(r.Header.Get(policyHeader)), &policy) != nil {
+		if err != nil {
 			apiError(w, 400, "invalid_request_error", "Invalid gateway request policy")
 			return
 		}

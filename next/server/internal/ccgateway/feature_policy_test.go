@@ -98,7 +98,7 @@ func TestFeatureOverridesRejectUnsupportedAndEmpty(t *testing.T) {
 }
 
 func TestFeatureRequiredCapabilities(t *testing.T) {
-	p := defaultRequestPolicy()
+	p := features.WorkerPolicy{SchemaVersion: 1, RelayMode: "build", CLIVersion: "2.1.304"}
 	p.BuildAttachmentSources = features.BuildAttachmentSources{"shell": "erase"}
 	p.BuildBillingSources = features.BuildBillingSources{"cc_version": "worker"}
 	required := requestPolicyCapabilities(p)
@@ -111,15 +111,9 @@ func TestFeatureRequiredCapabilities(t *testing.T) {
 		"direct with a billing source from the Worker")
 	p.BuildBillingSources = nil
 	require.Equal(t, []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}, requestPolicyCapabilities(p))
-	// Only an identity source other than the default needs the identity CLI.
-	p.RequestIdentitySources = features.RequestIdentitySources{"user_id": "worker"}
-	require.Contains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
-	p.RelayMode = ""
-	require.Contains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
-	for _, source := range []string{"client", ""} {
-		p.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
-		require.NotContains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability, source)
-	}
+	// The identity is not configurable: no wire policy asks for the identity CLI.
+	p.RelayMode = "build"
+	require.NotContains(t, requestPolicyCapabilities(p), features.RequestIdentityCapability)
 }
 
 // The identity is not configurable (2026-10-21 decision): no source reaches
@@ -131,7 +125,6 @@ func TestWirePolicyNeverSendsIdentity(t *testing.T) {
 		cfg.RequestPolicy.RelayMode = mode
 		p, err := svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 		require.NoError(t, err)
-		require.Empty(t, p.RequestIdentitySources, mode)
 		raw, err := json.Marshal(p)
 		require.NoError(t, err)
 		require.NotContains(t, string(raw), "request_identity_sources", mode)
@@ -141,7 +134,8 @@ func TestWirePolicyNeverSendsIdentity(t *testing.T) {
 			cfg.RequestPolicy.RequestIdentitySources = features.RequestIdentitySources{"user_id": source}
 			p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 			require.NoError(t, err)
-			require.Nil(t, p.RequestIdentitySources, mode+"/"+source)
+			raw, _ = json.Marshal(p)
+			require.NotContains(t, string(raw), "request_identity_sources", mode+"/"+source)
 		}
 	}
 }
@@ -203,7 +197,8 @@ func TestAccountFeaturePolicyRevisionAndClear(t *testing.T) {
 		wire, err := f.s.resolvedWorkerPolicy(ctx, cfg, id, 7)
 		require.NoError(t, err)
 		require.Equal(t, "direct", wire.RelayMode, "load the saved account override without enabled group settings")
-		require.Equal(t, "account-tools", wire.CustomToolPrefix)
+		raw, _ := json.Marshal(wire)
+		require.NotContains(t, string(raw), "custom_tool_prefix", "stored only, never on the wire")
 		require.Nil(t, wire.BuildAttachmentSources, "none omits the environment")
 		require.Equal(t, features.BuildBillingSources{"cc_version": "worker", "cc_entrypoint": "worker"}, wire.BuildBillingSources, "none keeps the billing sources")
 	}
@@ -347,7 +342,8 @@ func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
 	// The identity line adapts in the CLI (2026-10-23): stored lines are not sent.
-	require.Nil(t, p.BuildIdentityLines)
+	raw, _ = json.Marshal(p)
+	require.NotContains(t, string(raw), "build_identity_lines")
 	require.Contains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability, "the entrypoint still needs it")
 	// Direct (level none) fills the billing header only (2026-10-23): the
 	// entrypoint reaches the Worker, the identity lines do not.
@@ -355,7 +351,6 @@ func TestIdentityLinesResolveSparselyAndNeedTheCapability(t *testing.T) {
 	p, err = svc.resolvedWorkerPolicy(context.Background(), cfg, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, "claude-vscode", p.BuildBillingEntrypoint)
-	require.Nil(t, p.BuildIdentityLines)
 	require.Empty(t, p.BuildBillingSources)
 	require.Contains(t, requestPolicyCapabilities(p), features.DirectBillingCapability)
 	require.NotContains(t, requestPolicyCapabilities(p), features.BuildIdentityCapability)

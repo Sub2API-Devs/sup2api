@@ -10,7 +10,7 @@ import (
 )
 
 // Only the authenticated host/controller can provide this internal header.
-const policyHeader = "X-CCGateway-Request-Policy"
+const policyHeader = features.PolicyHeader
 
 type BetaRule = features.BetaRule
 type RequestPolicy struct {

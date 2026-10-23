@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 	"github.com/gin-gonic/gin"
@@ -136,14 +137,15 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 			t.Error("incorrect injected authorization")
 		}
 
-		var policy RequestPolicy
-		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownField != "reject" {
-			t.Error("trusted request policy not injected")
+		// The trusted policy is the wire form (features.WorkerPolicy): the
+		// caller's header is replaced, and stored-only fields never travel.
+		policy, err := features.ParseWorkerPolicy([]byte(r.Header.Get(features.PolicyHeader)))
+		if err != nil || policy.RelayMode != "build" || policy.CLIVersion != "2.1.302" {
+			t.Errorf("trusted request policy not injected: %v %+v", err, policy)
 		}
-		assert.Equal(t, "build", policy.RelayMode)
-		assert.Equal(t, "request", policy.ToolSearch)
-		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"attachment_source"`)
-		assert.NotContains(t, r.Header.Get("X-CCGateway-Request-Policy"), `"unknown_beta"`)
+		for _, absent := range []string{`"attachment_source"`, `"unknown_beta"`, `"unknown_field"`, `"tool_search"`, `"betas"`} {
+			assert.NotContains(t, r.Header.Get(features.PolicyHeader), absent)
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
 		w.(http.Flusher).Flush()

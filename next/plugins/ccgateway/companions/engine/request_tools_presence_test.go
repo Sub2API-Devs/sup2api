@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/require"
 )
 
@@ -11,9 +12,9 @@ func TestBuildRetainsAbsentVersusExplicitEmptyTools(t *testing.T) {
 	for _, version := range []string{"legacy", "v2"} {
 		for _, fields := range []string{"", `"tools":[]`} {
 			t.Run(version+"/"+fields, func(t *testing.T) {
-				var policy *buildRequestPolicy
+				var policy *features.CLIPolicy
 				if version == "v2" {
-					policy = &buildRequestPolicy{ContractVersion: 2}
+					policy = &features.CLIPolicy{ContractVersion: 2}
 				}
 				out, err := messagesBuildComponentsPolicy(generationRequest(fields), policy, "/work")
 				require.NoError(t, err)
@@ -38,7 +39,7 @@ func TestBuildRejectsNullAndMalformedToolCatalog(t *testing.T) {
 			raw := generationRequest(`"tools":` + value)
 			_, err := messagesBuildComponents(raw)
 			require.Error(t, err)
-			_, err = messagesBuildComponentsPolicy(raw, &buildRequestPolicy{ContractVersion: 2}, "/work")
+			_, err = messagesBuildComponentsPolicy(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
 			require.Error(t, err)
 		})
 	}

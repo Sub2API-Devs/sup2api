@@ -169,7 +169,7 @@ func TestWirePolicyCarriesOnlyTheLayersOfItsLevel(t *testing.T) {
 			stored, _ := json.Marshal(p)
 			wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &p}, 0, 0)
 			require.NoError(t, err)
-			require.NoError(t, validateRequestPolicy(wire))
+			require.NoError(t, wire.Validate())
 			after, _ := json.Marshal(p)
 			require.JSONEq(t, string(stored), string(after), "layers above the level stay configured")
 			raw, _ := json.Marshal(wire)
@@ -178,7 +178,7 @@ func TestWirePolicyCarriesOnlyTheLayersOfItsLevel(t *testing.T) {
 			require.Equal(t, "claude-vscode", wire.BuildBillingEntrypoint)
 			require.Equal(t, features.BuildBillingSources{"cc_version": "worker"}, wire.BuildBillingSources)
 			// The identity line adapts in the CLI at every build level: stored lines are never sent.
-			require.Nil(t, wire.BuildIdentityLines)
+			require.NotContains(t, string(raw), "build_identity_lines")
 			if c.environment {
 				require.Equal(t, features.BuildAttachmentSources{"os_version": "worker", "platform_name": "erase"}, wire.BuildAttachmentSources)
 			} else {

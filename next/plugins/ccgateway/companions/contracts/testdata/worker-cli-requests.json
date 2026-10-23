@@ -13,15 +13,15 @@
       "identity": "{\"version\":2,\"mode\":\"client\",\"rewrite\":false,\"session_id\":\"12345678-1234-4123-8123-123456789012\",\"carrier\":\"object\"}"
     },
     {
-      "name": "build-identity-worker",
+      "name": "build-older-core-keys",
       "mode": "build",
       "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":\"user_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee_account__session_12345678-1234-4123-8123-123456789012\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[]}",
       "identity": "{\"version\":2,\"mode\":\"worker\",\"rewrite\":true,\"carrier\":\"flat\"}"
     },
     {
-      "name": "build-identity-lines",
+      "name": "build-entrypoint",
       "mode": "build",
-      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_billing_entrypoint\":\"claude-vscode\",\"build_identity_lines\":{\"claude-vscode\":\"agent_sdk\",\"cli\":\"none\"}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}]}",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_billing_entrypoint\":\"claude-vscode\"},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"stream\":false,\"systemPrompt\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}]}",
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
     },
     {

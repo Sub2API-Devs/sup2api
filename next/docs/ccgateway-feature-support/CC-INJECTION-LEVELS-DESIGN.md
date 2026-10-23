@@ -109,8 +109,8 @@
 
 | 段 | 形状 |
 |---|---|
-| 核心 → Worker | `X-CCGateway-Request-Policy` 沿用现有的键。核心先按 `level` 算出生效的项，只发等级内的项，`relay_mode` 由等级决定（见下表） |
-| Worker → CLI（build） | components 的 `requestPolicy`（`contract_version: 2`），键不变 |
+| 核心 → Worker | `X-CCGateway-Request-Policy`，线形是 `contracts/features.WorkerPolicy`（2026-10-23 审核 A1/C4 后唯一的线形，CONTRACTS §53.18）：`schema_version`、`relay_mode`、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。核心先按 `level` 算出生效的项，只发等级内的项，`relay_mode` 由等级决定（见下表） |
+| Worker → CLI（build） | components 的 `requestPolicy`（`contract_version: 2`，`features.CLIPolicy`）：`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`；不再带 `build_identity_lines` |
 | Worker → CLI（direct） | `CCG_DIRECT_POLICY`：`{build_billing_entrypoint?, build_billing_sources?}`。direct 新增支持计费来源，不再带身份行 |
 | 能力 | 新能力 `request_levels_v1`，Worker 和 CLI 都要声明。核心对每个带等级的策略都要求这个能力，因为旧 CLI 在 direct 下会补身份行、把非 CC 请求当子代理 |
 
@@ -119,7 +119,7 @@
 | 等级 | relay_mode | 下发 |
 |---|---|---|
 | none | direct | 计费入口、计费来源 |
-| micro | build | 再加身份行 |
+| micro | build | 与 none 相同（身份行由 CLI 按计费头入口自适应，不是下发项） |
 | low | build | 再加环境来源、`build_injection.attachments`（`LevelInjection`） |
 | high | build | 再加 `build_injection.system_prompt`、`tools` |
 

@@ -8,7 +8,12 @@ import (
 	"strings"
 )
 
-// RequestPolicy is supplied by the authenticated host, never by API callers.
+// RequestPolicy is the stored policy (the global one and the shape the layer
+// overrides resolve to), supplied by the authenticated host, never by API
+// callers. What reaches the Worker is its projection features.WorkerPolicy
+// (workerPolicy): the fields below marked "stored only" are kept so a saved
+// configuration still decodes, but the console no longer edits them and the
+// Worker never receives them (2026-10-23 audit A1).
 type RequestPolicy struct {
 	// Level is the request level (features.RequestLevels): which of Claude
 	// Code's layers a request is given. It decides the relay mode (none is
@@ -20,37 +25,35 @@ type RequestPolicy struct {
 	// BuildBillingEntrypoint is the cc_entrypoint build writes when it fills
 	// the billing header or the source is worker; "" is the default (sdk-cli).
 	BuildBillingEntrypoint string `json:"build_billing_entrypoint,omitempty"`
-	// BuildIdentityLines picks Claude Code's identity line per entrypoint;
-	// omitted entrypoints use their default (features.IdentityLineChoices).
+	// BuildIdentityLines: stored only. The identity line follows the billing
+	// header's entrypoint in the CLI (2026-10-23).
 	BuildIdentityLines features.BuildIdentityLines `json:"build_identity_lines,omitempty"`
 	// BuildInjection is what build gives a request without a billing header
 	// (one that is not Claude Code's): CC's system prompt, first-turn
 	// attachments and tools, each optional; nil adds nothing.
 	BuildInjection         *features.BuildInjection        `json:"build_injection,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
+	// RequestIdentitySources: stored only. The identity is mapped, not
+	// configurable (2026-10-21).
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	SchemaVersion          int                             `json:"schema_version"`
-	UnknownField           string                          `json:"unknown_field"`
-	AllowFast              bool                            `json:"allow_fast"`
-	ToolSearch             string                          `json:"tool_search,omitempty"`
-	AllowEffort            bool                            `json:"allow_effort"`
-	CustomToolPrefix       string                          `json:"custom_tool_prefix"`
-	// ThinkingDisabledCompat is "pass" (default: thinking "disabled" goes
-	// upstream as sent, so a model that rejects it answers 400 as the official
-	// API does) or "omit" (the Worker drops it for the models it knows reject
-	// it, e.g. when a client proxy rewrote claude-opus-5 to claude-opus-5-5).
-	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
-	// EraseClientAttachments lists the client attachment types (environment,
-	// model, date, total_tokens_reminder, session_context) the Worker erases
-	// before admission; empty keeps every client attachment as sent.
-	EraseClientAttachments []string `json:"erase_client_attachments,omitempty"`
-	// ReplaceClientAttachments lists the client attachment types (environment,
-	// model, total_tokens_reminder) the Worker replaces in place with Claude
-	// Code's own rendering on that Worker; never an erased type.
-	ReplaceClientAttachments []string   `json:"replace_client_attachments,omitempty"`
-	RelayMode                string     `json:"relay_mode,omitempty"`
-	CLIVersion               string     `json:"cli_version,omitempty"`
-	Betas                    []BetaRule `json:"betas"`
+	// UnknownField, AllowFast, ToolSearch, AllowEffort, CustomToolPrefix,
+	// ThinkingDisabledCompat, EraseClientAttachments, ReplaceClientAttachments
+	// and Betas: stored only, settings of the retired native execution path.
+	// Attachments are converted by build_attachment_sources now.
+	UnknownField             string   `json:"unknown_field"`
+	AllowFast                bool     `json:"allow_fast"`
+	ToolSearch               string   `json:"tool_search,omitempty"`
+	AllowEffort              bool     `json:"allow_effort"`
+	CustomToolPrefix         string   `json:"custom_tool_prefix"`
+	ThinkingDisabledCompat   string   `json:"thinking_disabled_compat,omitempty"`
+	EraseClientAttachments   []string `json:"erase_client_attachments,omitempty"`
+	ReplaceClientAttachments []string `json:"replace_client_attachments,omitempty"`
+	// RelayMode is derived from Level on read (EffectiveRequestPolicy); a
+	// saved value only migrates a policy from before levels.
+	RelayMode  string     `json:"relay_mode,omitempty"`
+	CLIVersion string     `json:"cli_version,omitempty"`
+	Betas      []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
 
