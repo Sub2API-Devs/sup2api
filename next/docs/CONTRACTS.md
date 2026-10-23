@@ -4033,7 +4033,7 @@ CCGateway 请求链路上的错误答复分三类来源，由 `contracts/request
 - **插件分类**（`classify.go`）：`requestfailure.Local(source)` 为真时一律 `LocalFailure`；429 按并发限制短冷却；401/403/409/5xx 短冷却并切换，理由写 `gateway refused the request (<reason>: <message>)`，**不再因 Worker 401 停用账号**；其余 4xx 原样回客户端。之前核心的配置类失败以 error 返回，被当作传输错误（10 秒冷却 + 客户端 502 "upstream connection failed"），能力细节只剩一句话。
 - **账号测试**（`account/testreq.go`）：本地来源的 `error_code` 取 Reason 头，`error_source` 为 `core`/`gateway`。
 - **保存配置**（`save`）：`mergeConfig` 的校验文案原样返回（400 `invalid_argument`），只有存储/加密失败才是笼统文案；分组被删除后残留的 `cc_feature_groups` 键在下一次保存时自动清掉（`pruneFeatureGroups`）。
-- **PUT config 的原因**（`putConfig`）：控制器的错误码（`cli_profile_unavailable`、`disk_quota_unavailable`、`image_pull_failed`…）经 `syncError` 成为 `details.reason`，`POST …/sync` 与对账日志都带它；控制器自己每个失败请求在 stderr 记一行（方法、key、路径、异常类型与消息、回给核心的码；未命名异常带堆栈），不记请求体与头。
+- **PUT config 的原因**（`putConfig`）：控制器的错误码（`cli_profile_unavailable`、`disk_quota_unavailable`、`image_pull_failed`，激活失败的 `proxy_check_failed`/`egress_not_ready`…）经 `syncError` 成为 `details.reason`，`POST …/sync` 与对账日志都带它；控制器自己每个失败请求在 stderr 记一行（方法、key、路径、异常类型与消息、回给核心的码；未命名异常带堆栈），不记请求体与头。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

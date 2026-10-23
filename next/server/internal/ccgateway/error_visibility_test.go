@@ -40,9 +40,10 @@ func TestSyncReportsTheControllerReason(t *testing.T) {
 // A refused controller answer without a code stays sync_failed; an unknown
 // code is named as such.
 func TestSyncErrorMapsControllerCodes(t *testing.T) {
-	e := syncError(503, []byte(`{"error":"egress_not_ready"}`))
-	require.Equal(t, "egress_not_ready", e.Details["reason"])
-	require.Contains(t, e.Message, "egress_not_ready")
+	e := syncError(503, []byte(`{"error":"some_future_code"}`))
+	require.Equal(t, "some_future_code", e.Details["reason"])
+	require.Contains(t, e.Message, "some_future_code", "an unknown code is named as such")
+	require.Equal(t, reasonMessages["egress_not_ready"], syncError(503, []byte(`{"error":"egress_not_ready"}`)).Message)
 	e = syncError(500, []byte(`internal server error`))
 	require.Equal(t, "sync_failed", e.Details["reason"])
 	e = syncError(409, []byte(`{"error":"disk_quota_unavailable"}`))

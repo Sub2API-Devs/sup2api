@@ -29,6 +29,8 @@ var reasonMessages = map[string]string{
 	"runtime_unavailable":     "The account runtime is unavailable.",
 	"disk_quota_unavailable":  "The account data volume has no enforceable disk quota. Configure quota-capable storage and migrate legacy data volumes.",
 	"cli_profile_unavailable": "The controller cannot provide the configured Claude Code version for this runtime: the runtime image lacks it, or the version changed for a running container (update the Worker and CLI in place first).",
+	"proxy_check_failed":      "The account container cannot reach the upstream through its proxy: check the proxy.",
+	"egress_not_ready":        "The account's egress container did not come up.",
 	"proxy_disabled":          "The runtime's proxy is disabled.",
 	"proxy_not_found":         "The proxy does not exist or is not visible to you.",
 	reasonAccountDeleted:      "The account has been deleted.",

@@ -138,6 +138,16 @@ class UpgradeInProgress(RuntimeError):
     """The self-upgrade helper container is still running."""
 
 
+class ActivationFailed(RuntimeError):
+    """The containers run but the account cannot reach its upstream: the
+    egress did not come up or the proxy check failed (audit B1: the core
+    is told which, as egress_not_ready / proxy_check_failed)."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 class RuntimeNotFound(LookupError):
     """The runtime has no app container of its own (answered 404 not_found)."""
 
@@ -893,13 +903,13 @@ class Manager:
                 break
             time.sleep(.2)
         else:
-            raise RuntimeError('egress not ready')
+            raise ActivationFailed('egress_not_ready', 'egress not ready')
         # Probe through the business namespace, not through host networking.
         code, _ = app.exec_run(['node', '-e',
             'fetch(process.argv[1],{signal:AbortSignal.timeout(10000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
             self.probe_url])
         if code != 0:
-            raise RuntimeError('account proxy connectivity check failed')
+            raise ActivationFailed('proxy_check_failed', 'account proxy connectivity check failed')
         state.update(revision=revision, status='ready')
         self.save(aid, state)
         app.reload(); egress.reload()
@@ -1679,6 +1689,11 @@ class Handler(BaseHTTPRequestHandler):
             self.note_failure(e, '503 disk_quota_unavailable')
             if not self.response_started:
                 self.fail(503, 'disk_quota_unavailable')
+        except ActivationFailed as e:
+            self.close_connection = True
+            self.note_failure(e, '503 ' + e.code)
+            if not self.response_started:
+                self.fail(503, e.code)
         except Exception as e:
             # Anything unnamed (a Docker error, a programming error): the
             # traceback goes to stderr, the core gets runtime_unavailable.

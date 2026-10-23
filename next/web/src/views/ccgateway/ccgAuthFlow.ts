@@ -64,6 +64,8 @@ export const CCG_REASONS = [
   'runtime_unavailable',
   'disk_quota_unavailable',
   'cli_profile_unavailable',
+  'proxy_check_failed',
+  'egress_not_ready',
   'method_not_allowed',
   // business container, passed through from Claude Code's own API errors
   'authentication_error',

@@ -868,6 +868,17 @@ class HandlerTests(Base):
             self.assertIn(part, line)
         self.assertNotIn(REV, line, 'the body never reaches the log')
         self.assertIsNotNone(logs.records[0].exc_info, 'an unnamed failure keeps its traceback')
+        self.fake.networks.create = type(self.fake.networks).create.__get__(self.fake.networks)
+        # A failed proxy probe is named for the core (not runtime_unavailable).
+        original = FakeContainer.exec_run
+        FakeContainer.exec_run = lambda self, cmd: (1, b'') if cmd[0] == 'node' else (0, b'')
+        try:
+            with self.assertLogs('ccgateway.controller', level='WARNING') as logs:
+                self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
+                                 (503, {'error': 'proxy_check_failed'}))
+            self.assertIn('503 proxy_check_failed: ActivationFailed: account proxy connectivity check failed', logs.output[0])
+        finally:
+            FakeContainer.exec_run = original
 
     def test_health(self):
         self.assertEqual(self.call('GET', '/health', key='wrong' * 8), (401, {'error': 'unauthorized'}))
