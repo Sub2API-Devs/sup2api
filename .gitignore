@@ -178,3 +178,7 @@ issues/
 # plugin package by the core build (CONTRACTS §53.10). Build output, never
 # committed; next/Dockerfile.dockerignore keeps it in the build context.
 /next/plugins/ccgateway/images/
+
+# Local MCP configs (keep MCP settings out of git)
+.mcp.json
+.mcp-servers/
