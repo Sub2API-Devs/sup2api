@@ -1,6 +1,6 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v20-request-levels`**（未发布）。v20 按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
+当前代码为 **2.1.304 / `ccgateway-v20-request-levels`**（插件 0.1.79 起，与核心 0.1.179 一起发布）。v20 按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
 
 - **direct（0 注入）**：只处理开头的计费头，可按 `build_billing_sources` 换字段，不再补身份行。
 - **非 CC 请求按主线程处理**：不再当作自定义子代理。最后一条提示带上 prompt ID 和 turn，原生 `PAs` 据此写出完整的主线程计费头（`cc_prompt_id; cc_turn_origin=sdk; cc_prompt_index; cc_turn_index`）。
