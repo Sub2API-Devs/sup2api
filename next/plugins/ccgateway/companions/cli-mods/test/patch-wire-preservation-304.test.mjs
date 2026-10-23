@@ -210,7 +210,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v20-request-levels');
+  assert.equal(patchManifest.extension, 'ccgateway-v21-native-layers');
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
   assert(patchManifest.capabilities.includes('build_identity_line_v1'));
@@ -231,6 +231,15 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // and the date attachment uses the query loop's own date (POo).
   assert(cli.includes('let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js")') && cli.includes('loopHeaders:ccgLayers().loopHeaders') && cli.includes('turn:ccgTurnOf'));
   assert(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8').startsWith('import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n'));
+  // The client's system blocks join as the CLI joins two appended prompts:
+  // its own function, copied from the main module (which stays unchanged).
+  const core = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  const join = core.slice(core.lastIndexOf('function ccgatewayJoinAppend('));
+  const joinContext = vm.createContext({});
+  vm.runInContext(join, joinContext);
+  assert.equal(joinContext.ccgatewayJoinAppend('a\n', 'b'), 'a\n\nb');
+  assert.equal(joinContext.ccgatewayJoinAppend(undefined, 'b'), 'b');
+  assert(!patchManifest.files['chunk-wt08cjq1.js']);
   assert(patchManifest.capabilities.includes('request_agent_context_v1'));
   assert(patchManifest.supportFiles['ccgateway-request-agent.js']);
   // The client's kind of request is chosen with CC's own query source naming,

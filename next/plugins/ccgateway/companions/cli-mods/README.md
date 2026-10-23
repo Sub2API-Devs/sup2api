@@ -1,6 +1,8 @@
 # Claude Code mods 工具注入扩展
 
-当前代码为 **2.1.304 / `ccgateway-v20-request-levels`**（插件 0.1.79 起，与核心 0.1.179 一起发布）。v20 按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
+当前代码为 **2.1.304 / `ccgateway-v21-native-layers`**（未发布）。v21 在 v20 之上把审核列出的写死改成原生提取：权限上下文用原生 `gd()`；内置提示词按非交互主线程（`xh`）组装，客户端 system 用 CLI 自己拼接追加提示词的函数（主模块的 `pr`，补丁按 AST 原样复制）拼接后放在 `r1e` 结果之后；剩余 token 附件直接调原生 `JDr`（用客户端的记录）；环境附件的开头由 `zkt` 渲染结果截取，剩余 token 的开头取两次渲染的公共前缀。
+
+v20 `ccgateway-v20-request-levels`（插件 0.1.79 起，与核心 0.1.179 一起发布）按注入等级工作（2026-10-23 用户决定，[注入等级设计](../../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)），具体变化：
 
 - **direct（0 注入）**：只处理开头的计费头，可按 `build_billing_sources` 换字段，不再补身份行。
 - **非 CC 请求按主线程处理**：不再当作自定义子代理。最后一条提示带上 prompt ID 和 turn，原生 `PAs` 据此写出完整的主线程计费头（`cc_prompt_id; cc_turn_origin=sdk; cc_prompt_index; cc_turn_index`）。

@@ -52,8 +52,8 @@ test('the committed vocabulary is what the CLI renders', { skip: available ? fal
 // constants; fixtures/native-layers-2.1.304.json is the committed copy.
 const layersFixture = new URL('./fixtures/native-layers-2.1.304.json', import.meta.url);
 function nativeLayers() {
-  const context = vm.createContext({ p: thunk => thunk });
-  vm.runInContext(declarations('chunk-rncrmfyt.js', ['PNe', 'ooo', 'Eoo', 'fSt', 'u7t', 'm4t', 'u4t', 'c4t', 'f4t', 'p4t']), context);
+  const context = vm.createContext({ p: thunk => thunk, Nu: String, ir: () => false, foo: () => null, Jno: path.posix.join });
+  vm.runInContext(declarations('chunk-rncrmfyt.js', ['PNe', 'ooo', 'zkt', '_oo', 'Kkt', 'Gkt', 'ANe', 'iys', 'xNe', 'guo', 'dy', 'ule', 'l1', 'yoo', 'goo', 'hoo', 'Okt', 'Eoo', 'fSt', 'u7t', 'm4t', 'u4t', 'c4t', 'f4t', 'p4t']), context);
   vm.runInContext(declarations('chunk-h3dn4j2q.js', ['RBs', 'p4n']), context);
   vm.runInContext(fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace(/^export /gm, ''), context);
   return JSON.parse(JSON.stringify(vm.runInContext('ccgatewayLayerVocabulary()', context)));

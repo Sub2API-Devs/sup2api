@@ -246,3 +246,22 @@ direct（`direct-billing.js`）只处理开头的计费头：
 - **docker**：OAuth、API Key 各 20/20。新增 5 项：CC 请求不补身份行、计费头不在首块、高注入但客户端没有 system、direct 字符串变数组、cli 入口是 human turn。
 - **旧 118 项矩阵**：API Key 117/118，唯一失败是“direct 字符串 system 保持字符串”；OAuth 67/118。失败项都属于三类有意变化：direct 不补身份行、CC 请求不补身份行、字符串变数组。
 - **31 号真实上游**：14 个场景全部 200，包括 CC 辅助请求只带计费头不带身份行、direct 字符串 system、cli 入口的 human turn。
+
+## 13. 写死改成原生提取（2026-10-23，CLI v21 `ccgateway-v21-native-layers`，未发布）
+
+审核表里列出的写死项，改法如下：
+
+| 原来 | 现在 |
+|---|---|
+| 手写的权限上下文对象（少两个字段） | 原生 `gd()`，工具池和构建选项都用它 |
+| 客户端 system 用 `'\n\n'` 拼接，交给 `r1e` 作追加提示词（交互路径） | 按非交互主线程 `xh` 组装：`r1e(wx(...), {appendSystemPrompt: undefined})` 之后接追加提示词。客户端各块用 CLI 自己拼接两段追加提示词的函数（主模块 `chunk-wt08cjq1` 的 `pr`，用于 `--append-system-prompt-file` 加 `--append-system-prompt`）拼接；补丁按 AST 从哈希绑定的模块原样复制并改名为 `ccgatewayJoinAppend`，该模块本身不改 |
+| 剩余 token 自己算，扣减用探针记录 | 直接调原生 `JDr(session, 客户端记录, model, …)` |
+| 环境附件开头写成 `PNe + '\n' + ooo` | 取 `zkt` 渲染结果中字段之前的部分 |
+| 剩余 token 开头用 `replace('0', mark)` | 取 `u7t` 两次渲染的公共前缀 |
+| turn 位置自己算 | 第 12 节已改为原生 `iws`/`h0n` |
+
+测试：
+- cli-mods 169 项。新增断言：补丁输出里的 `ccgatewayJoinAppend` 行为与原生一致，主模块未被改动。
+- 层词表夹具无变化，说明两个开头的推导结果和原来相同。
+- docker：OAuth、API Key 各 20/20。
+- 31 号真实上游：14 个场景全部 200。高注入的几次请求读到的缓存，正好等于 v20 当时写入的量（4509、10627、6697、4492），说明发出的提示词与 v20 逐字节相同。

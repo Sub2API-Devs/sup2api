@@ -1,4 +1,4 @@
-import { Kvt, MDe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns } from './chunk-kasbfbhj.js';
+import { Kvt, MDe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext } from './chunk-kasbfbhj.js';
 import { oJe } from './chunk-7y2kvacy.js';
 import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { El } from './chunk-0ycjphb5.js';
@@ -19,7 +19,6 @@ let contentPolicy, layerVocabulary;
 const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] });
 const nativeLayers = () => layerVocabulary ??= ccgatewayLayerVocabulary();
 
-const permissionContext = () => ({ mode: 'default', alwaysAllowRules: {}, alwaysDenyRules: {}, alwaysAskRules: {}, additionalWorkingDirectories: new Map() });
 const firstPrompt = 'CCGATEWAY_FIRST_PROMPT_7d3c1a';
 const toBlocks = content => typeof content === 'string' ? [{ type: 'text', text: content }] : content;
 
@@ -46,7 +45,7 @@ const opensWith = (texts, openings) => texts.some(text => openings.some(opening 
 // (--append-system-prompt), in CC's dynamic block; otherwise the client's
 // system stays as it was. CC's tools go in front of the client's, and the
 // attachments around its first prompt.
-async function injectLayers(injection, { model, context, clientSystem, clientTools, clientToolNames, messages, options, signal }) {
+async function injectLayers(injection, { model, context, clientSystem, clientTools, clientToolNames, messages, clientRecords, session, options, signal }) {
   const chosen = injectionChoices(injection), vocabulary = nativeLayers();
   const names = chosen.tools.filter(name => !clientToolNames.has(name));
   const carriers = attachmentCarriers(messages);
@@ -54,16 +53,16 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const prompt = chosen.systemPrompt && !clientSystem.some(block => block.text.includes(vocabulary.systemPrompt));
   if (!names.length && !kinds.length && !prompt) return null;
   // The tools go in CC's own order (assembleToolPool sorts them by name).
-  const pool = names.length ? nativeToolPool(permissionContext(), [], {}) : [];
+  const pool = names.length ? nativeToolPool(ccgatewayPermissionContext(), [], {}) : [];
   const missing = names.filter(name => !pool.some(tool => tool.name === name));
   if (missing.length) throw Error(`Claude Code tool ${missing.join(', ')} is not available; this CLI has ${pool.map(tool => tool.name).join(', ')}`);
   const tools = pool.filter(tool => names.includes(tool.name));
   // An identity line in the client's system stays its own line, in front.
   const lines = prompt ? clientSystem.filter(block => isIdentityLine(block.text)) : [];
   const own = prompt ? clientSystem.filter(block => !isIdentityLine(block.text)).map(block => block.text) : [];
-  const systemPrompt = prompt ? await ccgatewayDefaultPrompt([...tools, ...clientTools], model, own.length ? own.join('\n\n') : undefined) : [];
+  const systemPrompt = prompt ? await ccgatewayDefaultPrompt([...tools, ...clientTools], model, own) : [];
   const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, MDe);
-  const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: probe.messages });
+  const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: clientRecords, session });
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
   let built;
   for await (const event of Kvt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
@@ -183,7 +182,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   const options = {
     model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? El(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
-    getToolPermissionContext: async () => ({ mode: 'default', alwaysAllowRules: {}, alwaysDenyRules: {}, alwaysAskRules: {}, additionalWorkingDirectories: new Map() }),
+    getToolPermissionContext: async () => ccgatewayPermissionContext(),
     agents: [], allowedAgentTypes: [], mcpClients: [],
     extraToolSchemas: input.extraToolSchemas, toolChoice: body.tool_choice,
     maxOutputTokensOverride: body.max_tokens, effortValue: body.output_config?.effort,
@@ -202,7 +201,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   // fields and attachments converted; one without gets the chosen layers.
   const layers = hasBilling(initial.systemBlocks) ? null
     : await injectLayers(policy.build_injection, { model: body.model, context, clientSystem: input.systemBlocks, clientTools: tools,
-      clientToolNames: new Set((external.tools ?? []).map(tool => tool?.name)), messages: transformed.messages, options, signal });
+      clientToolNames: new Set((external.tools ?? []).map(tool => tool?.name)), messages: transformed.messages, clientRecords: input.messages, session, options, signal });
   if (layers) {
     if (layers.system) options.ccgatewaySystemBlocks = layers.system;
     options.ccgatewayWireMessages = placeLayers(transformed.messages, layers);

@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v20-request-levels",
+  "extension": "ccgateway-v21-native-layers",
   "modules": {
     "chunk-rncrmfyt.js": "42ceeaea3d0b44fdb20c4a9855f4a1b567f772ff1f327e5ad3c1ecb1111da35b",
     "chunk-0q47gehe.js": "f58ff3b17ff2956d27a36cc8e45e9393b8225f0ad210e0c8710c6a8e37aa7bf4",
@@ -21,6 +21,7 @@
     "chunk-32vra4sg.js": "187368f034078e27ba067765cdf443eaa48b9d86ebcffa67b6be894c6e52a14e",
     "chunk-2gh4h0fv.js": "c2d6555486a87ac42b8826897bb2ddf6f5cf1957f500bb25ab81fa01ee2abac1",
     "chunk-yqea5hk4.js": "2f8532c70f540af8dbda7d3c8d81afb1a8b781899d721451ad7e272dca5232fb",
-    "chunk-sx3g9k86.js": "a54b978c593ec183274fc84cb2ab583115e109113820be9bb42055977adae409"
+    "chunk-sx3g9k86.js": "a54b978c593ec183274fc84cb2ab583115e109113820be9bb42055977adae409",
+    "chunk-wt08cjq1.js": "79151f0bec194d531dc2e0895d9e9c2507ef74c0c748f8b080a26c3d5c5e54fd"
   }
 }

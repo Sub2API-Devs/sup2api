@@ -105,26 +105,29 @@ export function ccgatewayEnvironmentVocabulary() {
 }
 
 // The pieces build adds to a request that is not Claude Code's
-// (request-build-2.1.304.js injectLayers). The system prompt is the native
-// main thread's: the default prompt for the tools it will carry (wx) through
-// r1e, which adds the tool-dependent sections and puts an appended prompt (the
-// client's own system, as --append-system-prompt) after the dynamic boundary.
-// The attachments are the ones CC sends on a session's first turn, made by the
+// (request-build-2.1.304.js injectLayers). The system prompt is the one the
+// non-interactive main thread sends (xh): the default prompt for the tools it
+// will carry (wx) through r1e, which adds the tool-dependent sections, and the
+// appended prompt (the client's own system, as --append-system-prompt) after
+// it, past the dynamic boundary. The client's blocks are joined as the CLI
+// joins two appended prompts (ccgatewayJoinAppend, its own pr). The
+// attachments are the ones CC sends on a session's first turn, made by the
 // same native producers as eIr and the query loop: the environment snapshot
-// (Wkt, as Dvn), the model identity (eSt, as Lvn), the token budget (u7t, as
-// JDr) and the date (POo, as the date attachment of the query loop). They are
-// rendered and placed by the native message pipeline, never here.
-export const ccgatewayDefaultPrompt = async (tools, model, appendSystemPrompt) => ki(r1e(await wx(tools, model), { tools, appendSystemPrompt }));
-export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records }) {
+// (Wkt, as Dvn), the model identity (eSt, as Lvn), the token budget (JDr) and
+// the date (POo, as the date attachment of the query loop). They are rendered
+// and placed by the native message pipeline, never here.
+export const ccgatewayDefaultPrompt = async (tools, model, appended) => {
+  const append = appended.reduce((joined, text) => ccgatewayJoinAppend(joined, text), undefined);
+  return ki([...r1e(await wx(tools, model), { tools, memoryMechanicsPrompt: null, appendSystemPrompt: void 0 }), ...append ? [append] : []]);
+};
+// The permission context a fresh non-interactive session starts with.
+export const ccgatewayPermissionContext = () => gd();
+export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records, session }) {
   const wanted = new Set(kinds), out = [];
   if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await Wkt({ cwd: workingDirectory, additionalWorkingDirectories }) });
   if (wanted.has('model')) out.push(await eSt(Jkt(ah({ permissionMode: 'default', mainLoopModel: model, exceeds200kTokens: false }))));
-  if (wanted.has('total_tokens')) {
-    const mode = DJ(model, void 0);
-    // A new session's countdown: the context window (countdown) or the
-    // session budget (padded-countdown) less what the records already used.
-    if (mode !== 'off') out.push({ type: 'total_tokens_reminder', text: u7t(mode, (mode === 'countdown' ? bm(model, Of()) : mode === 'padded-countdown' ? NJ() : 0) - DZ(records)) });
-  }
+  // A session's first turn: the main thread, without a task budget.
+  if (wanted.has('total_tokens')) out.push(...JDr(session, records, model, void 0, false, void 0, false));
   if (wanted.has('date')) out.push({ type: 'date', date: ccgDate() });
   return out;
 }
@@ -164,11 +167,16 @@ export function ccgatewayPromptTurn(messages, interactive) {
 export function ccgatewayLayerVocabulary() {
   const mark = 'CCGATEWAYMARK7';
   const before = text => { const at = text.indexOf(mark); if (at <= 0) throw Error('Unexpected native attachment wording'); return text.slice(0, at); };
+  // What two renderings share before their values differ.
+  const common = (a, b) => { let at = 0; while (at < a.length && a[at] === b[at]) at++; if (!at) throw Error('Unexpected native attachment wording'); return a.slice(0, at); };
+  // The environment's opening is what zkt renders ahead of the field lines.
+  const snapshot = { platform: mark, additionalWorkingDirectories: [] }, environment = zkt(snapshot), fields = _oo(snapshot);
+  if (!environment.endsWith(fields) || environment.length === fields.length) throw Error('Unexpected native attachment wording');
   return {
     attachments: {
-      environment: [PNe + '\n' + ooo.trimEnd()],
+      environment: [environment.slice(0, -fields.length).trimEnd()],
       model: [before(Eoo({ modelId: mark })), before(RBs({ modelId: mark }))],
-      total_tokens: [before(u7t('countdown', 0).replace('0', mark))],
+      total_tokens: [common(u7t('countdown', 1), u7t('countdown', 2))],
       date: [before(fSt({ date: mark })), before(fSt({ date: mark, changed: true }))],
     },
     systemPrompt: p4n,

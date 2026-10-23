@@ -149,7 +149,15 @@ edit(terminal, 'computeToolPool', t => {
 }, true);
 const imports = 'import {registerNative as ccgRegister,nativeRevision as ccgRevision,mergeNative as ccgMerge,findNative as ccgFind,isNative as ccgIsNative,nativeDefinition as ccgDefinition,dispatchNative as ccgDispatch} from "./ccgateway-native-tools.js";\n';
 for (const file of [core, headless, terminal]) files.set(file, imports + files.get(file));
-files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8'));
+// The client's system blocks are joined the way the CLI joins two appended
+// prompts (pr in the main module, for --append-system-prompt-file with
+// --append-system-prompt): the function itself, taken from the hash-bound
+// module by AST and renamed; that module is read, never changed.
+const mainModule = files.get('chunk-wt08cjq1.js');
+const appendJoin = nodes(mainModule, n => n.type === 'FunctionDeclaration' && n.id?.name === 'pr' && mainModule.slice(n.start, n.end).includes('\n\n'));
+if (appendJoin.length !== 1) throw Error('Expected the native append prompt join');
+const appendJoinText = mainModule.slice(appendJoin[0].start, appendJoin[0].end).replace(/^function pr\(/, 'function ccgatewayJoinAppend(');
+files.set(core, 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + files.get(core) + '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + appendJoinText);
 for (const file of modified) parser.parse(files.get(file), { sourceType: 'module' });
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
 const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities: ['request_direct','request_build','request_oauth','request_error_stderr','request_raw_http_errors','native_tools','mods_dispatch','request_policy_mode_v1','build_attachment_sources_v2','build_billing_sources_v1','build_content_preservation_v1','container_resource_reporting_v1','request_identity_v1','build_identity_line_v1','direct_billing_v1','request_agent_context_v1','build_injection_v1','request_levels_v1'], files: {}, supportFiles: {} };
