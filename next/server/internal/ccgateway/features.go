@@ -6,9 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// This endpoint is a versioned implementation catalog, not a live capability
-// probe. A disconnected or older Worker must never appear verified here.
+// This endpoint describes the request path the core speaks to a Worker, not
+// a live capability probe. A disconnected or older Worker must never appear
+// verified here; per-account evidence is served by serveFeatures.
 func (s *Service) featuresGet(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	httpapi.OK(c, features.Catalog())
+	httpapi.NoStore(c)
+	httpapi.OK(c, features.RequestCatalog("request_build"))
 }

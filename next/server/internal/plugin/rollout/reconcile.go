@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // slot is the local state of one plugin on this node.
@@ -191,8 +192,10 @@ func (c *Controller) Reconcile(ctx context.Context) {
 	c.cleanHistory(ctx)
 }
 
-func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) NodePluginState {
-	var serving, standby, keep string
+// desiredVersions is the rollout's answer to "which versions should this node
+// run": the one it serves, the candidate that may start next to it, and the
+// old one that must stay until the rollout activates.
+func desiredVersions(p *pluginRow) (serving, standby, keep string) {
 	ro := p.ro
 	switch {
 	case ro != nil && ro.phase == PhasePreparing:
@@ -208,6 +211,12 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 			serving = *p.active
 		}
 	}
+	return serving, standby, keep
+}
+
+func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) NodePluginState {
+	ro := p.ro
+	serving, standby, keep := desiredVersions(p)
 
 	// A standby only starts once the target's SQL migrations are applied.
 	standbyBlocked := ""
@@ -263,70 +272,11 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 		}
 	}
 	s.serving = serving
-	var running []Instance
-	var retryOK []bool // per running instance: resource restart may be tried
 	st := NodePluginState{Serving: serving, Standby: standby, Fallback: fallback}
-	versions := make([]string, 0, len(s.entries))
-	for v := range s.entries {
-		versions = append(versions, v)
-	}
-	sort.Strings(versions)
-	for _, v := range versions {
-		e := s.entries[v]
-		is := InstanceState{Version: v}
-		if e.inst != nil {
-			is.State, is.Error = e.inst.State()
-			is.Restarts = e.inst.Restarts()
-			if is.Error == "" && e.restartErr != "" {
-				is.Error = e.restartErr
-			}
-			running = append(running, e.inst)
-			retryOK = append(retryOK, e.restartErr == "" || time.Since(e.restartFailAt) >= c.o.LoadRetry)
-		} else {
-			is.State, is.Error = stateFailed, e.loadErr
-		}
-		st.Instances = append(st.Instances, is)
-	}
-	entryState := func(v string) (string, string) {
-		e := s.entries[v]
-		if e == nil {
-			return NodePending, ""
-		}
-		if e.inst == nil {
-			return NodeFailed, e.loadErr
-		}
-		switch state, msg := e.inst.State(); state {
-		case stateReady, stateDraining:
-			return NodeReady, ""
-		case stateFailed, stateStopped:
-			return NodeFailed, msg
-		default:
-			return NodePending, msg
-		}
-	}
+	running, retryOK := collectInstances(s, c, &st)
 	if ro != nil {
 		st.RolloutID = ro.id
-		switch ro.phase {
-		case PhasePreparing:
-			switch {
-			case standby == "":
-				st.Rollout = NodeReady
-			case standbyBlocked != "":
-				st.Rollout, st.Error = NodePending, standbyBlocked
-			default:
-				st.Rollout, st.Error = entryState(standby)
-			}
-		case PhaseActivating:
-			if want == "" {
-				st.Rollout = NodeActive
-			} else {
-				state, msg := entryState(want)
-				if state == NodeReady {
-					state = NodeActive
-				}
-				st.Rollout, st.Error = state, msg
-			}
-		}
+		rolloutNodeState(ro, &st, want, standby, standbyBlocked, func(v string) (string, string) { return s.entryState(v) })
 	}
 	switch {
 	case st.Rollout != "":
@@ -334,7 +284,7 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	case serving == "":
 		st.State = "stopped"
 	default:
-		state, msg := entryState(want)
+		state, msg := s.entryState(want)
 		if state == NodeReady {
 			state = NodeActive
 		}
@@ -379,6 +329,80 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 		c.drainMu.Unlock()
 	}
 	return st
+}
+
+// collectInstances fills st.Instances (sorted by version) and returns the
+// running instances with, per instance, whether a resource restart may be
+// tried now.
+func collectInstances(s *slot, c *Controller, st *NodePluginState) (running []Instance, retryOK []bool) {
+	versions := make([]string, 0, len(s.entries))
+	for v := range s.entries {
+		versions = append(versions, v)
+	}
+	sort.Strings(versions)
+	for _, v := range versions {
+		e := s.entries[v]
+		is := InstanceState{Version: v}
+		if e.inst != nil {
+			is.State, is.Error = e.inst.State()
+			is.Restarts = e.inst.Restarts()
+			if is.Error == "" && e.restartErr != "" {
+				is.Error = e.restartErr
+			}
+			running = append(running, e.inst)
+			retryOK = append(retryOK, e.restartErr == "" || time.Since(e.restartFailAt) >= c.o.LoadRetry)
+		} else {
+			is.State, is.Error = stateFailed, e.loadErr
+		}
+		st.Instances = append(st.Instances, is)
+	}
+	return running, retryOK
+}
+
+// entryState maps the local entry of one version to the node state.
+func (s *slot) entryState(v string) (string, string) {
+	e := s.entries[v]
+	if e == nil {
+		return NodePending, ""
+	}
+	if e.inst == nil {
+		return NodeFailed, e.loadErr
+	}
+	switch state, msg := e.inst.State(); state {
+	case stateReady, stateDraining:
+		return NodeReady, ""
+	case stateFailed, stateStopped:
+		return NodeFailed, msg
+	default:
+		return NodePending, msg
+	}
+}
+
+// rolloutNodeState fills st.Rollout and st.Error for an open rollout. A node
+// reports itself ready for the preparing phase once the standby runs (or
+// there is none), and active only when it serves the target version.
+func rolloutNodeState(ro *rolloutRow, st *NodePluginState, want, standby, standbyBlocked string, entryState func(string) (string, string)) {
+	switch ro.phase {
+	case PhasePreparing:
+		switch {
+		case standby == "":
+			st.Rollout = NodeReady
+		case standbyBlocked != "":
+			st.Rollout, st.Error = NodePending, standbyBlocked
+		default:
+			st.Rollout, st.Error = entryState(standby)
+		}
+	case PhaseActivating:
+		if want == "" {
+			st.Rollout = NodeActive
+		} else {
+			state, msg := entryState(want)
+			if state == NodeReady {
+				state = NodeActive
+			}
+			st.Rollout, st.Error = state, msg
+		}
+	}
 }
 
 func (c *Controller) migrationsPending(ctx context.Context, key, version string) (bool, error) {
@@ -546,12 +570,7 @@ func (c *Controller) republish() {
 	c.log.Info("plugin generation published", "generation", g.Number(), "plugins", len(list))
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
-}
+func truncate(s string, n int) string { return x.Truncate(s, n) }
 
 // entryReady reports a running instance that can serve.
 func entryReady(e *entry) bool {

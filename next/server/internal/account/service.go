@@ -312,11 +312,6 @@ func (s *Service) proxyRangeFor(ctx context.Context, allKey string) proxyRange {
 	return s.proxyRangeOf(ctx)
 }
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
 func cooldownKey(id int64) string { return "cooldown:account:" + itoa(id) }

@@ -87,6 +87,16 @@ func Locale(ctx context.Context) string {
 	return "en"
 }
 
+// Text picks the message for the request locale: zh when the caller asked
+// for Chinese, en otherwise. Every package that renders a localized error
+// message goes through it instead of carrying its own two-line helper.
+func Text(ctx context.Context, en, zh string) string {
+	if Locale(ctx) == "zh" {
+		return zh
+	}
+	return en
+}
+
 // LocalizedText is {"en": "...", "zh": "..."}; a bare JSON string decodes as
 // {"en": s}.
 type LocalizedText map[string]string

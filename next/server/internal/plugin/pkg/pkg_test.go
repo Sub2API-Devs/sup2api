@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
@@ -630,10 +631,10 @@ func TestPathsOverlap(t *testing.T) {
 		{"/v1/a", "/v1/a/b", false},
 	}
 	for _, tc := range cases {
-		if got := PathsOverlap(tc.a, tc.b); got != tc.want {
+		if got := check.PathsOverlap(tc.a, tc.b); got != tc.want {
 			t.Errorf("PathsOverlap(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
 		}
-		if got := PathsOverlap(tc.b, tc.a); got != tc.want {
+		if got := check.PathsOverlap(tc.b, tc.a); got != tc.want {
 			t.Errorf("PathsOverlap(%q, %q) = %v, want %v", tc.b, tc.a, got, tc.want)
 		}
 	}
@@ -641,7 +642,7 @@ func TestPathsOverlap(t *testing.T) {
 	if !EndpointsConflict(a, manifest.Endpoint{Method: "POST", Path: "/v1/y"}) || EndpointsConflict(a, manifest.Endpoint{Method: "GET", Path: "/v1/y"}) {
 		t.Fatal("EndpointsConflict")
 	}
-	if p := PathParams("/v1beta/models/:model:generateContent/*rest"); len(p) != 2 || p[0] != "model" || p[1] != "rest" {
+	if p := check.PathParams("/v1beta/models/:model:generateContent/*rest"); len(p) != 2 || p[0] != "model" || p[1] != "rest" {
 		t.Fatalf("PathParams = %v", p)
 	}
 }
@@ -657,7 +658,7 @@ func TestBuiltinPlatformsValid(t *testing.T) {
 				}
 			}
 		}
-		for _, fe := range CheckPlatform(p) {
+		for _, fe := range check.CheckPlatform(p) {
 			t.Errorf("%s: %s %s %s", p.ID, fe.Field, fe.Code, fe.Message)
 		}
 	}
@@ -712,7 +713,7 @@ func TestScopeWithin(t *testing.T) {
 	if !ScopeWithin(map[string]any{"subscribe": []any{"usage.recorded"}}, map[string]any{"subscribe": []any{"usage.*"}}) {
 		t.Error("pattern should cover")
 	}
-	if !PatternCovers("*.example.com", "hooks.example.com") || PatternCovers("*.example.com", "example.com") {
+	if !check.PatternCovers("*.example.com", "hooks.example.com") || check.PatternCovers("*.example.com", "example.com") {
 		t.Error("domain wildcard")
 	}
 }

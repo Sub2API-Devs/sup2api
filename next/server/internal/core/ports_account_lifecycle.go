@@ -41,15 +41,19 @@ type AccountActionResource interface {
 
 // AccountDeletionResource records durable cleanup intent in the account
 // deletion transaction. Reconciliation performs the remote cleanup afterward.
+// MarkAccountDeleted reports when the resources may be purged (now when
+// nothing is retained), so the caller can audit the retention without a
+// second query.
 type AccountDeletionResource interface {
-	MarkAccountDeleted(context.Context, pgx.Tx, int64, AccountDeletionOptions) error
+	MarkAccountDeleted(context.Context, pgx.Tx, int64, AccountDeletionOptions) (time.Time, error)
 }
 
 // AccountDeletionOptions is how a deleted account's resources go.
 type AccountDeletionOptions struct {
-	// RetainUntil keeps the resources (stopped) until then, as the account
-	// type's lifecycle.deletion.retentionDays allows; nil removes them at once.
-	RetainUntil *time.Time
+	// RetainDays keeps the resources (stopped) for that many days, as the
+	// account type's lifecycle.deletion.retentionDays allows; 0 removes them
+	// at once.
+	RetainDays int
 }
 
 type AccountLifecycleResource interface {

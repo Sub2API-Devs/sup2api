@@ -100,132 +100,157 @@ func (m *managedCore) status(ctx context.Context) runtimecontract.Status {
 
 func (m *managedCore) handler(begin func(runtimecontract.PrepareRequest)) http.Handler {
 	mux := http.NewServeMux()
-	write := func(w http.ResponseWriter, status int, v any) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(v)
-	}
-	decode := func(w http.ResponseWriter, r *http.Request, v any) bool {
-		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
-		d.DisallowUnknownFields()
-		if err := d.Decode(v); err != nil {
-			http.Error(w, "invalid control request", http.StatusBadRequest)
-			return false
-		}
-		return true
-	}
-	mux.HandleFunc("GET "+runtimecontract.HelloPath, func(w http.ResponseWriter, r *http.Request) { write(w, 200, m.hello) })
-	mux.HandleFunc("GET "+runtimecontract.StatusPath, func(w http.ResponseWriter, r *http.Request) { write(w, 200, m.status(r.Context())) })
+	mux.HandleFunc("GET "+runtimecontract.HelloPath, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, m.hello)
+	})
+	mux.HandleFunc("GET "+runtimecontract.StatusPath, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, m.status(r.Context()))
+	})
 	mux.HandleFunc("POST "+runtimecontract.PreparePath, func(w http.ResponseWriter, r *http.Request) {
-		var p runtimecontract.PrepareRequest
-		if !decode(w, r, &p) {
-			return
-		}
-		m.mu.Lock()
-		if p.BootID != m.hello.BootID || p.ReleaseDigest != m.hello.ReleaseDigest {
-			m.mu.Unlock()
-			http.Error(w, "core identity mismatch", 409)
-			return
-		}
-		if m.mode != "candidate" {
-			ok := p == m.prepare && (m.mode == "preparing" || m.mode == "prepared" || m.mode == "serving")
-			m.mu.Unlock()
-			if !ok {
-				http.Error(w, "prepare cannot change this boot", 409)
-				return
-			}
-			write(w, 202, map[string]string{"status": "accepted"})
-			return
-		}
-		m.mode, m.prepare = "preparing", p
-		m.mu.Unlock()
-		begin(p)
-		write(w, 202, map[string]string{"status": "accepted"})
+		m.handlePrepare(w, r, begin)
 	})
-	mux.HandleFunc("POST "+runtimecontract.AdmissionPath, func(w http.ResponseWriter, r *http.Request) {
-		m.opMu.Lock()
-		defer m.opMu.Unlock()
-		var a runtimecontract.Admission
-		if !decode(w, r, &a) {
-			return
-		}
-		m.mu.Lock()
-		if a.BootID != m.hello.BootID || a.ReleaseDigest != m.hello.ReleaseDigest || a.Revision < 1 || (m.mode != "prepared" && m.mode != "serving") || a.Revision < m.admission.Revision {
-			m.mu.Unlock()
-			http.Error(w, "stale identity or runtime not prepared", 409)
-			return
-		}
-		validate, check := m.validate, m.check
-		m.mu.Unlock()
-		// The socket authenticates the supervisor; PG remains the authority for
-		// the exact boot, release, revision and permitted roles.
-		if validate == nil || check == nil {
-			http.Error(w, "runtime not initialized", 409)
-			return
-		}
-		if err := validate(r.Context(), a); err != nil {
-			http.Error(w, "admission is not approved in database", 409)
-			return
-		}
-		if _, err := check(r.Context()); err != nil {
-			http.Error(w, err.Error(), 409)
-			return
-		}
-		m.mu.Lock()
-		if (m.mode != "prepared" && m.mode != "serving") || a.Revision < m.admission.Revision {
-			m.mu.Unlock()
-			http.Error(w, "runtime state changed", 409)
-			return
-		}
-		m.admission, m.mode = a, "serving"
-		m.gate.stop()
-		start := m.start
-		m.mu.Unlock()
-		if a.ClaimBackground && start != nil {
-			if err := start(); err != nil {
-				m.mu.Lock()
-				m.drainLocked()
-				m.mu.Unlock()
-				http.Error(w, "background startup failed", 500)
-				return
-			}
-		}
-		if a.ServeHTTP {
-			m.gate.open()
-		}
-		write(w, 200, m.status(r.Context()))
-	})
-	mux.HandleFunc("POST "+runtimecontract.DrainPath, func(w http.ResponseWriter, r *http.Request) {
-		var d runtimecontract.DrainRequest
-		if !decode(w, r, &d) {
-			return
-		}
-		if d.OperationID == "" {
-			http.Error(w, "operation_id required", 400)
-			return
-		}
-		// Deadline is an observation budget, never permission to kill a writer.
-		m.drain()
-		write(w, 202, m.status(r.Context()))
-	})
-	mux.HandleFunc("POST "+runtimecontract.ShutdownPath, func(w http.ResponseWriter, r *http.Request) {
-		m.mu.Lock()
-		drained := m.mode == "drained"
-		m.mu.Unlock()
-		if !drained {
-			http.Error(w, "drain incomplete", 409)
-			return
-		}
-		write(w, 200, map[string]string{"status": "stopping"})
-		m.shutdownOnce.Do(func() { close(m.shutdown) })
-	})
+	mux.HandleFunc("POST "+runtimecontract.AdmissionPath, m.handleAdmission)
+	mux.HandleFunc("POST "+runtimecontract.DrainPath, m.handleDrain)
+	mux.HandleFunc("POST "+runtimecontract.ShutdownPath, m.handleShutdown)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+m.token)) != 1 {
-			http.Error(w, "unauthorized", 401)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// writeJSON is the one response writer of the control API.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// decodeControl reads one strict JSON control body; false means the 400 was
+// already written.
+func decodeControl(w http.ResponseWriter, r *http.Request, v any) bool {
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		http.Error(w, "invalid control request", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// handlePrepare accepts the supervisor's prepare request for this boot. A
+// boot can be prepared with one and only one request.
+func (m *managedCore) handlePrepare(w http.ResponseWriter, r *http.Request, begin func(runtimecontract.PrepareRequest)) {
+	var p runtimecontract.PrepareRequest
+	if !decodeControl(w, r, &p) {
+		return
+	}
+	m.mu.Lock()
+	if p.BootID != m.hello.BootID || p.ReleaseDigest != m.hello.ReleaseDigest {
+		m.mu.Unlock()
+		http.Error(w, "core identity mismatch", http.StatusConflict)
+		return
+	}
+	if m.mode != "candidate" {
+		ok := p == m.prepare && (m.mode == "preparing" || m.mode == "prepared" || m.mode == "serving")
+		m.mu.Unlock()
+		if !ok {
+			http.Error(w, "prepare cannot change this boot", http.StatusConflict)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+		return
+	}
+	m.mode, m.prepare = "preparing", p
+	m.mu.Unlock()
+	begin(p)
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+// handleAdmission moves a prepared boot to serving once PostgreSQL confirms
+// the admission, then opens the request gate and starts background work.
+func (m *managedCore) handleAdmission(w http.ResponseWriter, r *http.Request) {
+	m.opMu.Lock()
+	defer m.opMu.Unlock()
+	var a runtimecontract.Admission
+	if !decodeControl(w, r, &a) {
+		return
+	}
+	m.mu.Lock()
+	if a.BootID != m.hello.BootID || a.ReleaseDigest != m.hello.ReleaseDigest || a.Revision < 1 || (m.mode != "prepared" && m.mode != "serving") || a.Revision < m.admission.Revision {
+		m.mu.Unlock()
+		http.Error(w, "stale identity or runtime not prepared", http.StatusConflict)
+		return
+	}
+	validate, check := m.validate, m.check
+	m.mu.Unlock()
+	// The socket authenticates the supervisor; PG remains the authority for
+	// the exact boot, release, revision and permitted roles.
+	if validate == nil || check == nil {
+		http.Error(w, "runtime not initialized", http.StatusConflict)
+		return
+	}
+	if err := validate(r.Context(), a); err != nil {
+		http.Error(w, "admission is not approved in database", http.StatusConflict)
+		return
+	}
+	if _, err := check(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	m.mu.Lock()
+	if (m.mode != "prepared" && m.mode != "serving") || a.Revision < m.admission.Revision {
+		m.mu.Unlock()
+		http.Error(w, "runtime state changed", http.StatusConflict)
+		return
+	}
+	m.admission, m.mode = a, "serving"
+	m.gate.stop()
+	start := m.start
+	m.mu.Unlock()
+	if a.ClaimBackground && start != nil {
+		if err := start(); err != nil {
+			m.mu.Lock()
+			m.drainLocked()
+			m.mu.Unlock()
+			http.Error(w, "background startup failed", http.StatusInternalServerError)
+			return
+		}
+	}
+	if a.ServeHTTP {
+		m.gate.open()
+	}
+	writeJSON(w, http.StatusOK, m.status(r.Context()))
+}
+
+// handleDrain stops admitting work. The deadline is an observation budget,
+// never permission to kill a writer.
+func (m *managedCore) handleDrain(w http.ResponseWriter, r *http.Request) {
+	var d runtimecontract.DrainRequest
+	if !decodeControl(w, r, &d) {
+		return
+	}
+	if d.OperationID == "" {
+		http.Error(w, "operation_id required", http.StatusBadRequest)
+		return
+	}
+	m.drain()
+	writeJSON(w, http.StatusAccepted, m.status(r.Context()))
+}
+
+// handleShutdown acknowledges a drain and releases the process.
+func (m *managedCore) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	drained := m.mode == "drained"
+	m.mu.Unlock()
+	if !drained {
+		http.Error(w, "drain incomplete", http.StatusConflict)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
+	m.shutdownOnce.Do(func() { close(m.shutdown) })
 }
 
 func (m *managedCore) drain() {

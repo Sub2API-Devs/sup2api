@@ -25,6 +25,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // TestResult is returned by POST /accounts/:id/test.
@@ -443,16 +444,7 @@ func (s *Service) classifyTest(ctx context.Context, bt core.AccountTypeBinding, 
 // gateway.
 const classifyPrefix = 4 << 10
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	s = s[:n]
-	for !utf8.ValidString(s) && len(s) > 0 {
-		s = s[:len(s)-1]
-	}
-	return s + "…"
-}
+func truncate(s string, n int) string { return x.TruncateEllipsis(s, n) }
 
 // guardUpstream refuses a direct connection to a non-public host for the
 // console's own upstream calls (test account, fetch models, quota query),

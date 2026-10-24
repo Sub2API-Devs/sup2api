@@ -197,17 +197,75 @@ func newControllerKey() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
+// failInstall answers an installation failure that is not the caller's fault
+// (nothing reaches the controller / configuration could not be written).
+func (s *Service) failInstall(c *gin.Context) {
+	httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+}
+
+// installDestination resolves the install target and the endpoint the core
+// will reach the controller at.
+func installDestination(in installRequest, cfg Config) (target Config, scheme, host string, legacy bool, failure *core.Error) {
+	legacy = in.Method == ""
+	target, host, failure = installTarget(in, cfg)
+	if failure != nil {
+		return target, "", "", legacy, failure
+	}
+	scheme, host, failure = installEndpoint(in, host)
+	return target, scheme, host, legacy, failure
+}
+
+// installAdminKey keeps the saved key for the legacy flow (creating one when
+// there is none) and always creates a new key for a request installation: a
+// key never moves to another host. It returns the version the connection is
+// written with and the target carrying the management key.
+func (s *Service) installAdminKey(ctx context.Context, cfg Config, version []byte, target Config, legacy bool, uid int64) ([]byte, Config, *core.Error) {
+	if legacy {
+		if cfg.AdminKey == "" {
+			cfg2, version2, failure := s.legacyControllerKey(ctx, cfg, uid)
+			if failure != nil {
+				return version, target, failure
+			}
+			return version2, cfg2, nil
+		}
+		return version, target, nil
+	}
+	key, e := newControllerKey()
+	if e != nil {
+		return version, target, reasonError(core.ErrUnavailable, "install_failed")
+	}
+	target.AdminKey = key
+	return version, target, nil
+}
+
+// installGatewayPlan computes the gateway port and Caddyfile. A domain over
+// HTTPS gets automatic certificates (system roots, nothing pinned); HTTPS to
+// an IP pins the root of the gateway's internal CA.
+func (s *Service) installGatewayPlan(ctx context.Context, target Config, scheme, host string, in installRequest) (port int, domain, pinCA bool, caddy string, failure *core.Error) {
+	domain = scheme == "https" && net.ParseIP(host) == nil
+	pinCA = scheme == "https" && !domain
+	port, err := s.gatewayPort(ctx, target, scheme, in.Port, domain)
+	if err != nil {
+		return 0, false, false, "", core.AsError(err)
+	}
+	caddy, failure = installCaddyfile(scheme, host, port, in.Email)
+	if failure != nil {
+		return 0, false, false, "", failure
+	}
+	return port, domain, pinCA, caddy, nil
+}
+
 // controllerInstall serves POST /system/ccgateway/controller/install. Like
 // the runtime install it runs to its end when the caller disconnects.
 func (s *Service) controllerInstall(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	var in installRequest
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 192<<10))
 	if e != nil || (len(strings.TrimSpace(string(raw))) > 0 && json.Unmarshal(raw, &in) != nil) || in.BasePath != nil {
 		httpapi.Fail(c, core.ErrInvalidArgument)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), controllerInstallLimit)
+	ctx, cancel := detached(c, controllerInstallLimit)
 	defer cancel()
 	cfg, version, e := s.loadVersioned(ctx)
 	if e != nil {
@@ -216,25 +274,19 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	}
 	// target: where the scripts run and how the controller is reached while
 	// installing; in memory only.
-	legacy := in.Method == ""
-	target, host, failure := installTarget(in, cfg)
-	if failure != nil {
-		httpapi.Fail(c, failure)
-		return
-	}
-	scheme, host, failure := installEndpoint(in, host)
+	target, scheme, host, legacy, failure := installDestination(in, cfg)
 	if failure != nil {
 		httpapi.Fail(c, failure)
 		return
 	}
 	gateway, e := gatewayScript(cfg.EffectiveImages().Gateway)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		s.failInstall(c)
 		return
 	}
 	ctx, release, ok, e := s.lockInstall(ctx)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		s.failInstall(c)
 		return
 	}
 	if !ok {
@@ -247,39 +299,24 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	// The management key: a new one for every installation through the
 	// request (a key never moves to another host); the legacy flow keeps the
 	// saved SSH configuration's key, saved first when there is none.
-	if legacy {
-		if cfg.AdminKey == "" {
-			if cfg, version, failure = s.legacyControllerKey(ctx, cfg, uid); failure != nil {
-				httpapi.Fail(c, failure)
-				return
-			}
-			target = cfg
-		}
-	} else if target.AdminKey, e = newControllerKey(); e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+	if version, target, failure = s.installAdminKey(ctx, cfg, version, target, legacy, uid); failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
 
-	// 0. Docker and the gateway port, before anything is replaced. A domain
-	// over HTTPS gets automatic certificates (system roots, nothing pinned);
-	// HTTPS to an IP pins the root of the gateway's internal CA.
-	domain := scheme == "https" && net.ParseIP(host) == nil
-	pinCA := scheme == "https" && !domain
-	port, err := s.gatewayPort(ctx, target, scheme, in.Port, domain)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	caddy, failure := installCaddyfile(scheme, host, port, in.Email)
+	// 0. Docker and the gateway port, before anything is replaced.
+	port, domain, pinCA, caddy, failure := s.installGatewayPlan(ctx, target, scheme, host, in)
 	if failure != nil {
 		httpapi.Fail(c, failure)
 		return
 	}
 	// 1. The controller.
-	if target, err = s.installController(ctx, target, uid, legacy); err != nil {
+	installed, err := s.installController(ctx, target, uid, legacy)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	target = installed
 	// 2. The gateway and 3. the root of its internal CA.
 	ca, err := s.startGateway(ctx, target, gateway, caddy, pinCA)
 	if err != nil {

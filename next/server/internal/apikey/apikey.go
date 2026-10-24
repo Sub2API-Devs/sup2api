@@ -298,12 +298,7 @@ func scanKey(row pgx.Row) (*APIKey, error) {
 	return &k, err
 }
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
 func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "api key not found", "API Key 不存在"))
@@ -406,7 +401,7 @@ func futureExpiry(ctx context.Context, at *time.Time) error {
 }
 
 func (s *Service) createMine(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
 	var in struct {
@@ -490,7 +485,7 @@ func (s *Service) rotateMine(c *gin.Context) {
 }
 
 func (s *Service) rotate(c *gin.Context, ownerID int64) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
@@ -542,7 +537,7 @@ func (s *Service) rotate(c *gin.Context, ownerID int64) {
 }
 
 func (s *Service) reveal(c *gin.Context, ownerID int64) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return

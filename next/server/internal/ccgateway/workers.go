@@ -115,16 +115,7 @@ func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, imag
 	if err != nil {
 		return report, reasonError(core.ErrUnavailable, "controller_unhealthy")
 	}
-	seen := map[string]bool{}
-	var keys []string
-	for _, r := range list.Runtimes {
-		// The key goes into a path: only runtime keys the core creates.
-		if seen[r.Key] || (!accountKeyPattern.MatchString(r.Key) && !isDraftKey(r.Key)) {
-			continue
-		}
-		seen[r.Key] = true
-		keys = append(keys, r.Key)
-	}
+	keys := runtimeKeysOf(list.Runtimes)
 	accounts := s.runtimeAccounts(ctx, keys)
 	for _, key := range keys {
 		var r workerResult
@@ -152,6 +143,22 @@ func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, imag
 		report.Results = append(report.Results, r)
 	}
 	return report, nil
+}
+
+// runtimeKeysOf lists the runtime keys of a controller GET /accounts answer,
+// in order and without repeats. The key goes into a path: only runtime keys
+// the core creates (account ids and drafts) are kept.
+func runtimeKeysOf(list []remoteRuntime) []string {
+	seen := make(map[string]bool, len(list))
+	keys := make([]string, 0, len(list))
+	for _, r := range list {
+		if seen[r.Key] || (!accountKeyPattern.MatchString(r.Key) && !isDraftKey(r.Key)) {
+			continue
+		}
+		seen[r.Key] = true
+		keys = append(keys, r.Key)
+	}
+	return keys
 }
 
 // runtimeAccounts maps runtime keys to their account: an account id key is
@@ -231,53 +238,88 @@ func (s *Service) updateWorkerWithOptions(ctx context.Context, cfg Config, key, 
 		}
 		return failed(code)
 	}
-	var answer struct {
-		Status         string `json:"status"`
-		SHA256         string `json:"sha256"`
-		PreviousSHA256 string `json:"previous_sha256"`
-		Reason         string `json:"reason"`
-		CLIVersion     string `json:"cli_version"`
-		CLIPatch       string `json:"cli_patch"`
-		CLISHA256      string `json:"cli_sha256"`
-		Online         *bool  `json:"online"`
-	}
+	var answer workerAnswer
 	if json.Unmarshal(body, &answer) != nil || !workerStatuses[answer.Status] {
 		return failed("invalid_response")
 	}
-	if options.paired() && (answer.Status == "updated" || answer.Status == "unchanged") &&
-		(answer.CLIVersion != options.CLIVersion || !sha256Pattern.MatchString(answer.CLISHA256) || !cliVersionPattern.MatchString(answer.CLIPatch)) {
+	if !answer.pairedActivation(options) {
 		return failed("invalid_response")
 	}
-	r := workerResult{Key: key, Status: answer.Status}
+	return answer.result(key, options)
+}
+
+// workerAnswer is the controller's 200 answer of POST /accounts/<key>/worker.
+// Every field but status is optional and echoed only after its format check.
+type workerAnswer struct {
+	Status         string `json:"status"`
+	SHA256         string `json:"sha256"`
+	PreviousSHA256 string `json:"previous_sha256"`
+	Reason         string `json:"reason"`
+	CLIVersion     string `json:"cli_version"`
+	CLIPatch       string `json:"cli_patch"`
+	CLISHA256      string `json:"cli_sha256"`
+	Online         *bool  `json:"online"`
+}
+
+// pairedActivation reports whether the controller really applied the paired
+// CLI the caller asked for: an activated runtime must answer the requested
+// version, its patch and a well-formed digest.
+func (a workerAnswer) pairedActivation(options workerUpdateOptions) bool {
+	if !options.paired() || (a.Status != "updated" && a.Status != "unchanged") {
+		return true
+	}
+	return a.CLIVersion == options.CLIVersion &&
+		sha256Pattern.MatchString(a.CLISHA256) && cliVersionPattern.MatchString(a.CLIPatch)
+}
+
+// result is the reported outcome: the CLI fields only for a paired update,
+// and only the values that pass their format checks.
+func (a workerAnswer) result(key string, options workerUpdateOptions) workerResult {
+	r := workerResult{Key: key, Status: a.Status}
 	if options.paired() {
-		r.Online = answer.Online
-		if answer.CLIVersion == options.CLIVersion {
-			r.CLIVersion = answer.CLIVersion
+		r.Online = a.Online
+		if a.CLIVersion == options.CLIVersion {
+			r.CLIVersion = a.CLIVersion
 		}
-		if cliVersionPattern.MatchString(answer.CLIPatch) {
-			r.CLIPatch = answer.CLIPatch
+		if cliVersionPattern.MatchString(a.CLIPatch) {
+			r.CLIPatch = a.CLIPatch
 		}
-		if sha256Pattern.MatchString(answer.CLISHA256) {
-			r.CLISHA256 = answer.CLISHA256
+		if sha256Pattern.MatchString(a.CLISHA256) {
+			r.CLISHA256 = a.CLISHA256
 		}
 	}
-	if sha256Pattern.MatchString(answer.SHA256) {
-		r.SHA256 = answer.SHA256
+	if sha256Pattern.MatchString(a.SHA256) {
+		r.SHA256 = a.SHA256
 	}
-	if sha256Pattern.MatchString(answer.PreviousSHA256) {
-		r.PreviousSHA256 = answer.PreviousSHA256
+	if sha256Pattern.MatchString(a.PreviousSHA256) {
+		r.PreviousSHA256 = a.PreviousSHA256
 	}
-	if codePattern.MatchString(answer.Reason) {
-		r.Reason = answer.Reason
+	if codePattern.MatchString(a.Reason) {
+		r.Reason = a.Reason
 	}
 	return r
+}
+
+// decodeStrictJSON decodes one JSON document into v, rejecting unknown fields
+// and any trailing document after it. It is the body contract every console
+// endpoint of this module uses.
+func decodeStrictJSON(raw []byte, v any) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		return err
+	}
+	if err := d.Decode(new(any)); err != io.EOF {
+		return errors.New("unexpected trailing JSON")
+	}
+	return nil
 }
 
 // runtimeWorkers serves POST /system/ccgateway/runtime/workers {"image"?}:
 // the in-place worker update of every existing runtime (default image: the
 // effective app image). It runs to its end when the caller disconnects.
 func (s *Service) runtimeWorkers(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	var in struct {
 		Image string `json:"image"`
@@ -299,15 +341,7 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 				return errors.New("null update fields are not accepted")
 			}
 		}
-		d := json.NewDecoder(bytes.NewReader(raw))
-		d.DisallowUnknownFields()
-		if err := d.Decode(&in); err != nil {
-			return err
-		}
-		if err := d.Decode(new(any)); err != io.EOF {
-			return errors.New("unexpected trailing JSON")
-		}
-		return nil
+		return decodeStrictJSON(raw, &in)
 	}
 	if e != nil || decode() != nil || in.workerUpdateOptions.validate() != nil {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
@@ -317,7 +351,7 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_image"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), workersLimit)
+	ctx, cancel := detached(c, workersLimit)
 	defer cancel()
 	cfg, e := s.Load(ctx)
 	if e != nil {
@@ -340,13 +374,8 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_image"))
 		return
 	}
-	ctx, release, ok, e := s.lockInstall(ctx)
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-		return
-	}
+	ctx, release, ok := s.installLock(c, ctx)
 	if !ok {
-		httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
 		return
 	}
 	defer release()

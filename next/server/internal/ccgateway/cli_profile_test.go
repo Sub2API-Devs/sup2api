@@ -3,11 +3,12 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPinnedCLIDesiredRevisionAndControllerConfig(t *testing.T) {

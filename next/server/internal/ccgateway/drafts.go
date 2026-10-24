@@ -150,7 +150,7 @@ type draftInput struct {
 
 // draftCreate serves POST /system/ccgateway/drafts {proxy_id} → 201 {key}.
 func (s *Service) draftCreate(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx := c.Request.Context()
 	var in draftInput
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
@@ -180,7 +180,7 @@ func (s *Service) draftCreate(c *gin.Context) {
 // draftUpdate serves PUT /system/ccgateway/drafts/:key {proxy_id} → {key}.
 // A re-authorization draft keeps the account's proxy: not found.
 func (s *Service) draftUpdate(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx := c.Request.Context()
 	key := c.Param("key")
 	scope := draftScope(ctx)
@@ -233,7 +233,7 @@ func (s *Service) draftDelete(c *gin.Context) {
 // draftAction serves GET status|health|session and POST
 // sync|start|complete|cancel on a draft, like the account endpoints.
 func (s *Service) draftAction(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
 	key := c.Param("key")

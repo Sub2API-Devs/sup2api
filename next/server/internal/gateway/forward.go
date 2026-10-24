@@ -452,8 +452,3 @@ func readLine(br *bufio.Reader, limit int) ([]byte, error) {
 type usageAcc = usagerules.Acc
 
 func newUsageAcc(rules manifest.UsageRules) *usageAcc { return usagerules.New(rules) }
-
-// readPrefix reads at most n bytes of r.
-func readPrefix(r io.Reader, n int64) ([]byte, error) {
-	return io.ReadAll(io.LimitReader(r, n))
-}

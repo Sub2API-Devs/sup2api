@@ -171,11 +171,6 @@ func (s *Service) isActiveWithVersion(ctx context.Context, uid int64) (bool, int
 	return active, version, nil
 }
 
-func (s *Service) isActive(ctx context.Context, uid int64) (bool, error) {
-	active, _, err := s.isActiveWithVersion(ctx, uid)
-	return active, err
-}
-
 func randomToken() (string, error) {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {

@@ -3,9 +3,10 @@ package ccgateway
 import (
 	"encoding/json"
 	"errors"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"regexp"
 	"strings"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // RequestPolicy is the stored policy (the global one and the shape the layer

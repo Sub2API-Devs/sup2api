@@ -193,9 +193,7 @@ func (s *Service) refundAbandoned(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	if ledgerRes != nil && !ledgerRes.Duplicate {
-		s.ledger.CacheBalance(ctx, userID, ledgerRes.LedgerID, ledgerRes.BalanceAfter)
-	}
+	s.cacheBalance(ctx, userID, ledgerRes)
 	httpapi.OK(c, gin.H{"refunded": amount, "ledger_id": ledgerRes.LedgerID})
 }
 

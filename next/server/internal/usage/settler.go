@@ -364,14 +364,27 @@ func jsonOr(v any, empty string) []byte {
 	return b
 }
 
+// lockUsageRow locks the usage row inside the caller's transaction and reads
+// its billing status. Every settlement path takes this lock first, so the
+// SQL and the lock order live here once.
+func lockUsageRow(ctx context.Context, tx pgx.Tx, id int64) (string, error) {
+	var status string
+	err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id=$1 FOR UPDATE`, id).Scan(&status)
+	return status, err
+}
+
+// cacheBalance refreshes the balance cache after a committed ledger change,
+// skipping idempotent replays that returned the earlier ledger entry.
+func (s *Service) cacheBalance(ctx context.Context, userID int64, res *core.LedgerResult) {
+	if res != nil && !res.Duplicate {
+		s.ledger.CacheBalance(ctx, userID, res.LedgerID, res.BalanceAfter)
+	}
+}
+
 // insert writes the batch (ignoring duplicate request ids) and emits
 // usage.recorded for free records. It returns the newly inserted records.
 func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*core.UsageRecord, error) {
-	return s.insertWith(ctx, batch, nil)
-}
-
-func (s *Service) insertWith(ctx context.Context, batch []*core.UsageRecord, after func(pgx.Tx, map[string]int64) error) ([]*core.UsageRecord, error) {
-	return s.insertAtomic(ctx, batch, nil, after, false)
+	return s.insertAtomic(ctx, batch, nil, nil, false)
 }
 
 func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, before func(pgx.Tx) error, after func(pgx.Tx, map[string]int64) error, settleNow bool) ([]*core.UsageRecord, error) {
@@ -729,7 +742,14 @@ func (s *Service) priceOne(ctx context.Context, p *pending) (total decimal.Decim
 		return decimal.Zero, BillingDetail{}, "", err
 	}
 
-	// Rebuild detail from the expression evaluation for the response
+	// Rebuild detail from the expression evaluation for the response.
+	//
+	// This is deliberately a second compile-free eval: Quote returns only the
+	// final amount (that is all core.Quoter promises), while billing_detail
+	// needs the tier, rules and per-token breakdown, which only prog.Eval
+	// exposes. Do not "optimise" the Quote call away: it applies the rate
+	// multiplier and rounding, so amount and res.Cost are not interchangeable.
+	// A future core.Quoter method returning both would remove this second pass.
 	t := p.Tokens
 	vars := expr.Normalize(p.Inputs.Semantics, expr.Tokens{
 		Input: t.Input, Output: t.Output, CacheRead: t.CacheRead,
@@ -785,9 +805,7 @@ func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error
 	if err != nil {
 		return err
 	}
-	if ledgerRes != nil && !ledgerRes.Duplicate {
-		s.ledger.CacheBalance(ctx, p.UserID, ledgerRes.LedgerID, ledgerRes.BalanceAfter)
-	}
+	s.cacheBalance(ctx, p.UserID, ledgerRes)
 	return nil
 }
 

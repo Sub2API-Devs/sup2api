@@ -163,7 +163,7 @@ func (s *Service) serveFeatures(c *gin.Context, ctx context.Context, d accountDe
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Worker capability document is invalid or uses an unsupported protocol."))
 		return
 	}
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	httpapi.OK(c, doc)
 }
 

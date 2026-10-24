@@ -208,32 +208,8 @@ func (c *call) sessionIdentity() string {
 // right now.
 func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) (*core.AccountRef, func(), bool) {
 	exhausted := c.exhausted(ctx, cands, excluded)
-	if s := c.sticky; s != nil && !s.tried {
-		s.tried = true
-		if s.bound != 0 && !excluded[s.bound] {
-			var bound *core.AccountRef
-			for i := range cands {
-				if cands[i].ID == s.bound {
-					bound = &cands[i]
-					break
-				}
-			}
-			if bound != nil {
-				// An unusable type (request not convertible) keeps the binding;
-				// an exhausted rate window counts as "no free slot".
-				if c.usable(bound) && !exhausted[bound.ID] {
-					if release, ok := c.acquireAccount(ctx, bound); ok {
-						s.hit = true
-						return bound, release, false
-					}
-				}
-			} else if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); c.failurePolicy == nil && err == nil && !cooling {
-				// Not in the group's schedulable set for this request and
-				// not merely cooling down: disabled, deleted, unschedulable,
-				// moved, or of a type that cannot serve this endpoint.
-				c.dropBinding(ctx, s)
-			}
-		}
+	if ref, release, _ := c.tryStickyBinding(ctx, cands, excluded, exhausted); ref != nil {
+		return ref, release, false
 	}
 	// Plugins may rewrite the priority/weight of the candidates for this
 	// request (CONTRACTS §24); everything below still gates them.
@@ -274,6 +250,43 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		if release, ok := c.acquireAccount(ctx, &ref); ok {
 			return &ref, release, false
 		}
+	}
+	return nil, nil, true
+}
+
+// tryStickyBinding honours this request's sticky binding once. ok reports
+// that a sticky binding was handled (hit or missed); ref is non-nil only on a
+// hit. A bound account that is absent from the schedulable set for this
+// request loses the binding unless it is merely cooling down.
+func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool, exhausted map[int64]bool) (*core.AccountRef, func(), bool) {
+	s := c.sticky
+	if s == nil || s.tried {
+		return nil, nil, false
+	}
+	s.tried = true
+	if s.bound == 0 || excluded[s.bound] {
+		return nil, nil, true
+	}
+	for i := range cands {
+		if cands[i].ID != s.bound {
+			continue
+		}
+		bound := &cands[i]
+		// An unusable type (request not convertible) keeps the binding; an
+		// exhausted rate window counts as "no free slot".
+		if c.usable(bound) && !exhausted[bound.ID] {
+			if release, ok := c.acquireAccount(ctx, bound); ok {
+				s.hit = true
+				return bound, release, true
+			}
+		}
+		return nil, nil, true
+	}
+	if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); c.failurePolicy == nil && err == nil && !cooling {
+		// Not in the group's schedulable set for this request and
+		// not merely cooling down: disabled, deleted, unschedulable,
+		// moved, or of a type that cannot serve this endpoint.
+		c.dropBinding(ctx, s)
 	}
 	return nil, nil, true
 }
@@ -434,6 +447,31 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, nil)
 }
 
+// validatePatches runs the guards that a plugin-built upstream request must
+// pass before it is sent: resource and model references must stay consistent
+// with the original body, and the account's usage rules must be able to meter
+// the operation and its attempts. The kind differs per guard on purpose: an
+// unaddressable resource reference is the client's mistake and is returned
+// (attemptReturn), everything else fails over.
+func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind, *gwError) {
+	if err := c.validateResourceReferencePatches(rt.upstream, upBody, body); err != nil {
+		return attemptReturn, invalidModelReference(err.Error())
+	}
+	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
+		return attemptFailover, invalidModelReference(err.Error())
+	}
+	if err := validateModelReferencePatches(upBody, body, rt.modelReferences); err != nil {
+		return attemptFailover, invalidModelReference(err.Error())
+	}
+	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
+		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested operation")
+	}
+	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, body) {
+		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested attempts")
+	}
+	return attemptDone, nil
+}
+
 func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
 	prepareCtx := ctx
 	if execution != nil {
@@ -460,20 +498,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	if err := c.validateResourceReferencePatches(rt.upstream, upBody, body); err != nil {
-		return attemptResult{kind: attemptReturn, err: invalidModelReference(err.Error())}
-	}
-	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
-		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
-	}
-	if err := validateModelReferencePatches(upBody, body, rt.modelReferences); err != nil {
-		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
-	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
-		return attemptResult{kind: attemptFailover, err: invalidModelReference("account usage rules cannot meter the requested operation")}
-	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, body) {
-		return attemptResult{kind: attemptFailover, err: invalidModelReference("account usage rules cannot meter the requested attempts")}
+	if kind, err := c.validatePatches(rt, upBody, body); err != nil {
+		return attemptResult{kind: kind, err: err}
 	}
 	var client *http.Client
 	if managedCCG {

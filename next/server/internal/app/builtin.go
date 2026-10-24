@@ -23,10 +23,7 @@ func startBuiltinBootstrap(ctx context.Context, s *install.Service, locker core.
 
 func builtinConvergence(ctx context.Context, s *install.Service, locker core.Locker, reg core.PluginRegistry, dir string, log *slog.Logger, once bool) (*atomic.Bool, func(context.Context)) {
 	ready := &atomic.Bool{}
-	ctx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
+	stop := runBuiltinLoop(ctx, func(ctx context.Context) {
 		var requirements map[string]install.BuiltinRequirement
 		for ctx.Err() == nil {
 			if requirements == nil {
@@ -45,37 +42,16 @@ func builtinConvergence(ctx context.Context, s *install.Service, locker core.Loc
 					return
 				}
 				if !ready.Load() {
-					lk, held, err := locker.TryLock(ctx, "plugins:builtin", time.Minute)
-					if err != nil {
-						log.Warn("builtin install lock failed", "err", err)
-					} else if held {
-						ictx, icancel := context.WithTimeout(ctx, 10*time.Minute)
-						work, stop := core.KeepLock(ictx, lk)
-						if err := s.EnsureBuiltin(work, dir, log); err != nil {
-							log.Warn("builtin install incomplete; will retry", "err", err)
-						}
-						stop()
-						icancel()
-						lk.Release()
-					}
+					ensureBuiltinOnce(ctx, s, locker, dir, log, "builtin install lock failed",
+						func(err error) { log.Warn("builtin install incomplete; will retry", "err", err) })
 				}
 			}
-			t := time.NewTimer(5 * time.Second)
-			select {
-			case <-ctx.Done():
-				t.Stop()
+			if !waitOrDone(ctx, 5*time.Second) {
 				return
-			case <-t.C:
 			}
 		}
-	}()
-	return ready, func(stopCtx context.Context) {
-		cancel()
-		select {
-		case <-done:
-		case <-stopCtx.Done():
-		}
-	}
+	})
+	return ready, stop
 }
 
 // startBuiltinUpgrade brings the plugins of a managed core's bundle up to the
@@ -88,10 +64,7 @@ func builtinConvergence(ctx context.Context, s *install.Service, locker core.Loc
 // version an operator installed. It stops once the cluster runs the bundle;
 // a node whose own instance lags behind catches up by itself (§36).
 func startBuiltinUpgrade(ctx context.Context, s *install.Service, locker core.Locker, dir string, allowed func() bool, log *slog.Logger) func(context.Context) {
-	ctx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
+	return runBuiltinLoop(ctx, func(ctx context.Context) {
 		if dir == "" {
 			return
 		}
@@ -109,27 +82,25 @@ func startBuiltinUpgrade(ctx context.Context, s *install.Service, locker core.Lo
 					log.Info("bundled plugins run the versions of this release")
 					return
 				}
-				if lk, held, err := locker.TryLock(ctx, "plugins:builtin", time.Minute); err != nil {
-					log.Warn("builtin upgrade lock failed", "err", err)
-				} else if held {
-					work, stop := core.KeepLock(ctx, lk)
-					ictx, icancel := context.WithTimeout(work, 10*time.Minute)
-					if err := s.EnsureBuiltin(ictx, dir, log); err != nil {
-						log.Info("bundled plugin upgrade not finished; will retry", "err", err)
-					}
-					icancel()
-					stop()
-					lk.Release()
-				}
+				ensureBuiltinOnce(ctx, s, locker, dir, log, "builtin upgrade lock failed",
+					func(err error) { log.Info("bundled plugin upgrade not finished; will retry", "err", err) })
 			}
-			t := time.NewTimer(10 * time.Second)
-			select {
-			case <-ctx.Done():
-				t.Stop()
+			if !waitOrDone(ctx, 10*time.Second) {
 				return
-			case <-t.C:
 			}
 		}
+	})
+}
+
+// runBuiltinLoop starts loop in its own goroutine and returns the stop
+// function both builtin loops hand to the app teardown: cancel, then wait for
+// the goroutine or for the caller's shutdown deadline.
+func runBuiltinLoop(ctx context.Context, loop func(context.Context)) func(context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		loop(ctx)
 	}()
 	return func(stopCtx context.Context) {
 		cancel()
@@ -138,4 +109,41 @@ func startBuiltinUpgrade(ctx context.Context, s *install.Service, locker core.Lo
 		case <-stopCtx.Done():
 		}
 	}
+}
+
+// waitOrDone sleeps for d and reports whether d elapsed; false means ctx
+// ended first, so the caller's loop should stop. The timer is always stopped.
+func waitOrDone(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// ensureBuiltinOnce takes the builtin install lock without waiting and runs
+// one EnsureBuiltin pass under it, bounded by the 10 minute install timeout.
+// It reports whether the pass ran at all: false means another node holds the
+// lock and the caller's loop should simply try again on its next tick.
+func ensureBuiltinOnce(ctx context.Context, s *install.Service, locker core.Locker, dir string, log *slog.Logger, lockMsg string, incomplete func(error)) bool {
+	lk, held, err := locker.TryLock(ctx, "plugins:builtin", time.Minute)
+	if err != nil {
+		log.Warn(lockMsg, "err", err)
+		return false
+	}
+	if !held {
+		return false
+	}
+	defer lk.Release()
+	work, stop := core.KeepLock(ctx, lk)
+	defer stop()
+	ictx, icancel := context.WithTimeout(work, 10*time.Minute)
+	defer icancel()
+	if err := s.EnsureBuiltin(ictx, dir, log); err != nil {
+		incomplete(err)
+	}
+	return true
 }

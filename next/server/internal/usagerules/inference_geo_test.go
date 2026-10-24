@@ -2,10 +2,11 @@ package usagerules
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
-	"testing"
 )
 
 func TestInferenceGeoResponseFact(t *testing.T) {

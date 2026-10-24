@@ -213,15 +213,35 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 	if g == nil {
 		return nil
 	}
+	keys := quotaSweepTypes(g)
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := s.initializeQuotaPage(ctx, keys); err != nil {
+		return err
+	}
+	ids, err := s.dueQuotaIDs(ctx, keys)
+	if err != nil {
+		return err
+	}
+	return s.queryDueQuotas(ctx, ids)
+}
+
+// quotaSweepTypes lists the "plugin/type" pairs whose quota is queryable and
+// auto-refreshed.
+func quotaSweepTypes(g core.Generation) []string {
 	keys := []string{}
 	for _, bt := range g.AccountTypes() {
 		if q := bt.Type.Quota; q != nil && q.Query && q.AutoRefresh && bt.Client != nil {
 			keys = append(keys, bt.Plugin.Key+"/"+bt.Type.ID)
 		}
 	}
-	if len(keys) == 0 {
-		return nil
-	}
+	return keys
+}
+
+// initializeQuotaPage walks one cursor page of accounts and creates the quota
+// snapshot rows they are missing, advancing the sweep cursor.
+func (s *Service) initializeQuotaPage(ctx context.Context, keys []string) error {
 	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id,a.plugin_key,a.type FROM accounts a WHERE a.deleted_at IS NULL
   AND a.plugin_key||'/'||a.type=ANY($1) AND a.id>$2 ORDER BY a.id LIMIT $3`, keys, s.quotaSweepAfter, quotaSweepPage)
 	if err != nil {
@@ -256,28 +276,37 @@ func (s *Service) sweepQuotas(ctx context.Context) error {
 	if len(entries) < quotaSweepPage {
 		s.quotaSweepAfter = 0
 	}
-	rows, err = s.d.DB.Pool.Query(ctx, `SELECT q.account_id FROM account_quota_snapshots q JOIN accounts a ON a.id=q.account_id
+	return nil
+}
+
+// dueQuotaIDs selects the accounts whose quota is due for a refresh now.
+func (s *Service) dueQuotaIDs(ctx context.Context, keys []string) ([]int64, error) {
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT q.account_id FROM account_quota_snapshots q JOIN accounts a ON a.id=q.account_id
   WHERE q.auto_refresh AND q.next_check_at<=now() AND (q.lease_until IS NULL OR q.lease_until<=now())
   AND (q.last_active_at IS NULL OR q.last_active_at<=now()-make_interval(secs=>$3::float8))
   AND (a.schedulable OR q.updated_at IS NULL) AND a.deleted_at IS NULL AND a.plugin_key||'/'||a.type=ANY($1)
   AND NOT EXISTS(SELECT 1 FROM account_lifecycle_sync l WHERE l.account_id=a.id AND NOT `+lifecycleQuotaReady+`)
   ORDER BY q.next_check_at,q.account_id LIMIT $2`, keys, quotaSweepPage, quotaQueryFloor.Seconds())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ids := []int64{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return err
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
 	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
+	return ids, rows.Err()
+}
+
+// queryDueQuotas queries the selected accounts concurrently, four at a time,
+// each behind the single-flight key so an explicit refresh and the sweep
+// never query one account twice.
+func (s *Service) queryDueQuotas(ctx context.Context, ids []int64) error {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
 	for _, id := range ids {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // For resolves the rules describing responses of protocol: the account type's
@@ -142,16 +143,7 @@ func numeric(r gjson.Result) bool {
 	}
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	// Do not cut a UTF-8 sequence in half.
-	for n > 0 && s[n]&0xC0 == 0x80 {
-		n--
-	}
-	return s[:n] + "…"
-}
+func truncate(s string, n int) string { return x.TruncateEllipsis(s, n) }
 
 // setMetric files a value under usage_logs.metrics. f is the fact declaring
 // it, nil for a usage map key that is not a standard usage field (those have

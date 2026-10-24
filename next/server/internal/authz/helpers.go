@@ -6,12 +6,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
 // CanGrant checks whether the actor can grant the given permissions. Returns
 // an error if any permission in perms is not held by the actor. This prevents

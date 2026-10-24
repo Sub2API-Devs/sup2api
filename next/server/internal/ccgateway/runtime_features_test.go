@@ -3,11 +3,12 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/gin-gonic/gin"
 	"net/http/httptest"
 	"slices"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ func TestRuntimeFeaturesRoutesRequirePermission(t *testing.T) {
 }
 
 func TestCoreRuntimeExecutionModesDecode(t *testing.T) {
-	base := features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "fixture", Revision: "fixture"}, Catalog: features.Catalog(), PolicySchemaVersions: []int{1}, Probes: []features.RuntimeProbe{{Name: "cli_version", Status: "observed", Value: "2.1.292"}}, ModelProviderVerification: "not_run"}
+	base := features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "fixture", Revision: "fixture"}, Catalog: features.RequestRuntimeCatalog(nil), PolicySchemaVersions: []int{1}, Probes: []features.RuntimeProbe{{Name: "cli_version", Status: "observed", Value: "2.1.292"}}, ModelProviderVerification: "not_run"}
 	for _, tc := range []struct {
 		name    string
 		modes   []string
@@ -83,26 +84,6 @@ func TestCoreRuntimeExecutionModesDecode(t *testing.T) {
 			assert.False(t, response.Data.Catalog.RuntimeVerified)
 			assert.Equal(t, "2.1.292", cliVersionOf(doc))
 		})
-	}
-}
-
-func TestNativeRuntimeCatalog(t *testing.T) {
-	doc := features.Catalog()
-	assert.False(t, doc.RuntimeVerified)
-	byID := map[string]features.Feature{}
-	for _, feature := range doc.Features {
-		byID[feature.ID] = feature
-		assert.NotContains(t, feature.BodyPaths, "relay_native_accounts")
-		assert.NotContains(t, feature.BodyPaths, "relay_passthrough_accounts")
-	}
-	require.Contains(t, byID, "F-RELAY-NATIVE")
-	assert.Equal(t, "partial", byID["F-RELAY-NATIVE"].Status)
-	assert.Equal(t, []string{"relay_mode"}, byID["F-RELAY-NATIVE"].BodyPaths)
-	assert.NotContains(t, byID, "F-RELAY-PASSTHROUGH")
-	for _, id := range []string{"F-FILES", "F-SKILLS"} {
-		require.Contains(t, byID, id)
-		assert.Equal(t, "partial", byID[id].Status, id)
-		assert.NotEmpty(t, byID[id].Mechanisms, id)
 	}
 }
 

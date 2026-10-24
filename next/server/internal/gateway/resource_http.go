@@ -374,80 +374,101 @@ func (x *resourceCall) list() {
 }
 
 func (x *resourceCall) existing(id string, content bool) {
+	r, ref, binding, ctx, release, ok := x.prepareExisting(id, content)
+	if !ok {
+		return
+	}
+	defer release()
+	if x.c.Request.Method == http.MethodDelete {
+		x.existingDelete(id, r, ref, binding, ctx)
+		return
+	}
+	x.existingGet(id, content, r, ref, binding, ctx)
+}
+
+// prepareExisting resolves everything a GET or DELETE of one resource needs
+// before the request: the ready row, its still-matching issuer identity and a
+// lease on the account. ok=false means the response was already written.
+func (x *resourceCall) prepareExisting(id string, content bool) (core.ProviderResource, core.AccountRef, core.ResourceBinding, context.Context, func(), bool) {
 	r, err := x.g.d.Resources.Get(x.c.Request.Context(), x.owner, id)
 	if err != nil {
 		x.fail(core.ErrNotFound)
-		return
+		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
 	}
 	expired := !r.ExpiresAt.IsZero() && !r.ExpiresAt.After(x.g.now())
 	metadataGone := expired && !r.ExpiresAt.Add(30*24*time.Hour).After(x.g.now())
 	if r.PluginKey != "ccgateway" || r.Kind != "file" || r.State != "ready" || content && expired || metadataGone {
 		x.fail(core.ErrNotFound)
-		return
+		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
 	}
 	ref, ok := x.account(r.Binding.AccountID)
 	if !ok {
 		x.fail(core.ErrNotFound)
-		return
+		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
 	}
 	binding, err := x.g.d.ResourceTransport.Identity(x.c.Request.Context(), ref.ID)
 	if err != nil || binding != r.Binding {
 		x.fail(core.ErrConflict.WithMessage("file issuer identity is no longer available"))
-		return
+		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
 	}
 	ctx, release, err := x.lease(ref)
 	if err != nil {
 		x.fail(err)
+		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+	}
+	return r, ref, binding, ctx, release, true
+}
+
+// existingDelete deletes the file upstream and records the outcome. The
+// reservation's operation id, not the row's, identifies the deletion.
+func (x *resourceCall) existingDelete(id string, r core.ProviderResource, ref core.AccountRef, binding core.ResourceBinding, ctx context.Context) {
+	reservation, err := x.g.d.Resources.BeginDelete(ctx, x.owner, id, binding)
+	if err != nil {
+		x.fail(err)
 		return
 	}
-	defer release()
-	method := x.c.Request.Method
-	operation := r.OperationID
-	if method == http.MethodDelete {
-		reservation, err := x.g.d.Resources.BeginDelete(ctx, x.owner, id, binding)
-		if err != nil {
-			x.fail(err)
-			return
-		}
-		if !reservation.Dispatch {
-			x.fail(core.ErrConflict)
-			return
-		}
-		operation = reservation.Resource.OperationID
+	if !reservation.Dispatch {
+		x.fail(core.ErrConflict)
+		return
 	}
+	operation := reservation.Resource.OperationID
+	req, _ := x.request(ctx, http.MethodDelete, "/v1/files/"+url.PathEscape(r.RemoteID), nil)
+	resp, err := x.g.d.ResourceTransport.RoundTrip(ref.ID, binding, req)
+	confirmed := false
+	var failure *resourceFailure
+	if err == nil && resp != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			failure = readResourceFailure(resp, r.RemoteID, id)
+			confirmed = failure.Status == 404 && failure.Kind == "not_found_error"
+		} else {
+			body, readErr := readResourceJSON(resp)
+			confirmed = readErr == nil && body["id"] == r.RemoteID && body["type"] == "file_deleted"
+		}
+	}
+	cleanup, cancel := resourceCleanupContext()
+	defer cancel()
+	storeErr := x.g.d.Resources.FinishDelete(cleanup, x.owner, id, operation, confirmed)
+	if failure != nil {
+		x.writeProviderFailure(failure)
+		return
+	}
+	if !confirmed || storeErr != nil {
+		x.fail(core.ErrUnavailable.WithMessage("file deletion outcome requires reconciliation"))
+		return
+	}
+	httpfacts.Apply(x.c.Writer.Header(), resp.Header)
+	x.c.JSON(200, gin.H{"id": id, "type": "file_deleted"})
+}
+
+// existingGet fetches the file content or its metadata from upstream.
+func (x *resourceCall) existingGet(id string, content bool, r core.ProviderResource, ref core.AccountRef, binding core.ResourceBinding, ctx context.Context) {
+	method := x.c.Request.Method
 	path := "/v1/files/" + url.PathEscape(r.RemoteID)
 	if content {
 		path += "/content"
 	}
 	req, _ := x.request(ctx, method, path, nil)
 	resp, err := x.g.d.ResourceTransport.RoundTrip(ref.ID, binding, req)
-	if method == http.MethodDelete {
-		confirmed := false
-		var failure *resourceFailure
-		if err == nil && resp != nil {
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				failure = readResourceFailure(resp, r.RemoteID, id)
-				confirmed = failure.Status == 404 && failure.Kind == "not_found_error"
-			} else {
-				body, readErr := readResourceJSON(resp)
-				confirmed = readErr == nil && body["id"] == r.RemoteID && body["type"] == "file_deleted"
-			}
-		}
-		cleanup, cancel := resourceCleanupContext()
-		defer cancel()
-		storeErr := x.g.d.Resources.FinishDelete(cleanup, x.owner, id, operation, confirmed)
-		if failure != nil {
-			x.writeProviderFailure(failure)
-			return
-		}
-		if !confirmed || storeErr != nil {
-			x.fail(core.ErrUnavailable.WithMessage("file deletion outcome requires reconciliation"))
-			return
-		}
-		httpfacts.Apply(x.c.Writer.Header(), resp.Header)
-		x.c.JSON(200, gin.H{"id": id, "type": "file_deleted"})
-		return
-	}
 	if err != nil || resp == nil {
 		x.fail(core.ErrUnavailable)
 		return

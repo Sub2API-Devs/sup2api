@@ -205,7 +205,7 @@ func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int6
 // validate and return the existing runtime (200 {key,in_place:true}).
 // The console starts OAuth through the account endpoints, then commits status.
 func (s *Service) reauthorizeCCGateway(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx := audit.Context(c)
 	id, _, ok := s.ccgReauthAccount(c, ctx)
 	if !ok {
@@ -244,7 +244,7 @@ func (s *Service) reauthorizeCCGateway(c *gin.Context) {
 // current runtime and reset account error, cooldown, quota and refresh state.
 // The runtime mapping and data remain in place. Returns the account view.
 func (s *Service) commitCCGatewayReauth(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx := audit.Context(c)
 	id, scope, ok := s.ccgReauthAccount(c, ctx)
 	if !ok {

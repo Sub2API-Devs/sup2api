@@ -242,20 +242,34 @@ func (r *refCollector) Visit(node *ast.Node) {
 			r.vars[n.Value] = true
 		}
 	case *ast.CallNode:
-		if id, ok := n.Callee.(*ast.IdentifierNode); ok {
-			switch id.Value {
-			case "flat":
-				r.flat = true
-			case "u":
-				if len(n.Arguments) > 0 {
-					if s, ok := n.Arguments[0].(*ast.StringNode); ok {
-						r.facts[s.Value] = true
-					}
-				}
-			default:
-				r.other = true
-			}
-		}
+		r.visitCall(n)
+	}
+}
+
+// visitCall classifies one call: flat(), u("<fact>") or anything else.
+func (r *refCollector) visitCall(n *ast.CallNode) {
+	id, ok := n.Callee.(*ast.IdentifierNode)
+	if !ok {
+		return
+	}
+	switch id.Value {
+	case "flat":
+		r.flat = true
+	case "u":
+		r.addFact(n)
+	default:
+		r.other = true
+	}
+}
+
+// addFact records the literal fact of a u() call; other argument shapes are
+// not fact references.
+func (r *refCollector) addFact(n *ast.CallNode) {
+	if len(n.Arguments) == 0 {
+		return
+	}
+	if s, ok := n.Arguments[0].(*ast.StringNode); ok {
+		r.facts[s.Value] = true
 	}
 }
 

@@ -2,15 +2,23 @@ package ccgateway
 
 import (
 	"context"
+	"log/slog"
+	"net/http"
+	"time"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"github.com/gin-gonic/gin"
-	"log/slog"
-	"net/http"
-	"time"
 )
+
+// detached returns a context that outlives the HTTP request (the caller or a
+// proxy in front of the core may give up first) with its own timeout. The
+// audit identity of the request is preserved.
+func detached(c *gin.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(audit.Context(c)), d)
+}
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/cc-features/preview", s.accountFeaturePreview, "settings:manage", "account:update", "account:own:update")
@@ -34,7 +42,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// Draft runtimes of accounts being created (CONTRACTS §49.9).
 	s.registerDraftRoutes(r)
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {
-		c.Header("Cache-Control", "no-store")
+		httpapi.NoStore(c)
 		v, e := s.Load(c.Request.Context())
 		if e != nil {
 			httpapi.Fail(c, core.ErrUnavailable)
@@ -74,7 +82,7 @@ func (s *Service) record(c *gin.Context, action string) { s.recordDetail(c, acti
 // recordDetail audits with a non-sensitive detail object (enum values,
 // counts, timestamps; never secrets or log contents).
 func (s *Service) recordDetail(c *gin.Context, action string, detail any) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Second)
+	ctx, cancel := detached(c, 5*time.Second)
 	defer cancel()
 	uid, _ := core.UserID(ctx)
 	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway."+action, "system", "ccgateway", detail); e != nil {

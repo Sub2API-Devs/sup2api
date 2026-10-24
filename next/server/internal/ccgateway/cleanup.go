@@ -42,16 +42,21 @@ const (
 // records the purge. Detached retired rows retain their historical
 // reauthorization meaning. Previously deleted accounts are cleaned only by the
 // explicit orphan-cleanup action, not during rollout.
-func (s *Service) MarkAccountDeleted(ctx context.Context, tx pgx.Tx, id int64, opts core.AccountDeletionOptions) error {
-	tag, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at=now(),purge_after=COALESCE($2::timestamptz,now()),purged_at=NULL
-	 WHERE account_id=$1`, id, opts.RetainUntil)
-	if err != nil || tag.RowsAffected() != 0 {
-		return err
+func (s *Service) MarkAccountDeleted(ctx context.Context, tx pgx.Tx, id int64, opts core.AccountDeletionOptions) (time.Time, error) {
+	var purgeAfter time.Time
+	err := tx.QueryRow(ctx, `UPDATE ccgateway_runtimes SET retired_at=now(),purge_after=now()+make_interval(days => $2::int),purged_at=NULL
+	 WHERE account_id=$1 RETURNING purge_after`, id, opts.RetainDays).Scan(&purgeAfter)
+	if err == nil {
+		return purgeAfter, nil
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key,account_id,adopted_at,retired_at,purge_after)
-	 VALUES($1::bigint::text,$1,now(),now(),COALESCE($2::timestamptz,now())) ON CONFLICT(key) DO UPDATE
-	 SET account_id=EXCLUDED.account_id,retired_at=EXCLUDED.retired_at,purge_after=EXCLUDED.purge_after,purged_at=NULL`, id, opts.RetainUntil)
-	return err
+	if !store.IsNoRows(err) {
+		return time.Time{}, err
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO ccgateway_runtimes(key,account_id,adopted_at,retired_at,purge_after)
+	 VALUES($1::bigint::text,$1,now(),now(),now()+make_interval(days => $2::int)) ON CONFLICT(key) DO UPDATE
+	 SET account_id=EXCLUDED.account_id,retired_at=EXCLUDED.retired_at,purge_after=EXCLUDED.purge_after,purged_at=NULL
+	 RETURNING purge_after`, id, opts.RetainDays).Scan(&purgeAfter)
+	return purgeAfter, err
 }
 
 type cleanupCandidate struct {
@@ -186,7 +191,7 @@ func (s *Service) runtimeCleanup(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Minute)
+	ctx, cancel := detached(c, 5*time.Minute)
 	defer cancel()
 	cfg, err := s.cleanupConfig(ctx)
 	if err != nil {
@@ -248,7 +253,7 @@ type retainedRuntime struct {
 // purge that keeps failing stays visible. A row an older core marked has no
 // purge_after and is due since it was retired. Times are RFC3339 (UTC).
 func (s *Service) retainedRuntimes(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	rows, err := s.DB.Pool.Query(c.Request.Context(), `SELECT r.key,a.id,a.name,a.type,a.deleted_at,`+sqlPurgeAt+`,`+sqlPurgeAt+` <= now()
   FROM ccgateway_runtimes r JOIN accounts a ON a.id=r.account_id
   WHERE a.plugin_key='ccgateway' AND `+sqlPendingPurge+`
@@ -289,7 +294,7 @@ func (s *Service) runtimePurge(c *gin.Context) {
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 30*time.Second)
+	ctx, cancel := detached(c, 30*time.Second)
 	defer cancel()
 	var accountID int64
 	found, retained := false, false

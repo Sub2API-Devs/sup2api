@@ -11,10 +11,6 @@ import (
 // only place the core sends a request a plugin described (the reconcile loop
 // of CONTRACTS §25.4 is the other), and two copies of this check would be one
 // copy too many.
-var (
-	errBadUpstreamURL  = netguard.ErrBadURL
-	errPrivateUpstream = netguard.ErrPrivate
-)
 
 // checkUpstreamURL validates a URL returned by BuildUpstreamRequest: http(s),
 // a host, and (unless AllowPrivateUpstream) only public addresses. Proxied

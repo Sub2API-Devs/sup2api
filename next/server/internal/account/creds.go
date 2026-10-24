@@ -22,9 +22,10 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+func itoa(n int64) string { return x.Itoa64(n) }
 
 // aad binds encrypted credentials to the plugin declaring the account type.
 // (Before account types were decoupled from platforms it was the platform

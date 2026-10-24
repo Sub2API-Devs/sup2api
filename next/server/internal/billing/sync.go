@@ -768,40 +768,58 @@ func scalePrice(p *syncPrice, m decimal.Decimal) error {
 			}
 		}
 	default:
-		if video, ok := cfg["video"].(map[string]any); ok {
-			entries := []map[string]any{video}
-			if rows, ok := video["resolution_prices"].([]any); ok {
-				for _, row := range rows {
-					if r, ok := row.(map[string]any); ok {
-						entries = append(entries, r)
-					}
-				}
-			}
-			for _, entry := range entries {
-				for _, key := range []string{"price_per_million_tokens", "video_input_price_per_million_tokens", "video_price_per_second"} {
-					if value, ok := entry[key]; ok {
-						entry[key] = scale(value)
-					}
-				}
-			}
+		if scaleVideoConfig(cfg, scale) {
 			break
 		}
-		if p.Expression == "" {
-			src, err := expressionFor(p.Mode, p.Config, "")
-			if err != nil {
-				return err
-			}
-			p.Expression = src
-		}
-		p.Mode, p.Config = expr.ModeExpression, json.RawMessage("{}")
-		p.Expression = strings.TrimSpace(p.Expression) + " " + expr.RuleSeparator + " true ? " + m.String() + " : 1"
-		return nil
+		return scaleAsExpression(p, m)
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {
 		return err
 	}
 	p.Config, p.Expression = b, ""
+	return nil
+}
+
+// scaleVideoConfig scales every per-video price in cfg. It reports whether cfg
+// carried a video block; other modes then fall back to an expression rule.
+func scaleVideoConfig(cfg map[string]any, scale func(any) any) bool {
+	video, ok := cfg["video"].(map[string]any)
+	if !ok {
+		return false
+	}
+	entries := []map[string]any{video}
+	if rows, ok := video["resolution_prices"].([]any); ok {
+		for _, row := range rows {
+			if r, ok := row.(map[string]any); ok {
+				entries = append(entries, r)
+			}
+		}
+	}
+	keys := []string{"price_per_million_tokens", "video_input_price_per_million_tokens", "video_price_per_second"}
+	for _, entry := range entries {
+		for _, key := range keys {
+			if value, ok := entry[key]; ok {
+				entry[key] = scale(value)
+			}
+		}
+	}
+	return true
+}
+
+// scaleAsExpression rewrites a config-based price as an expression with a
+// constant multiplier rule (the only way a surcharge can apply to arbitrary
+// expressions).
+func scaleAsExpression(p *syncPrice, m decimal.Decimal) error {
+	if p.Expression == "" {
+		src, err := expressionFor(p.Mode, p.Config, "")
+		if err != nil {
+			return err
+		}
+		p.Expression = src
+	}
+	p.Mode, p.Config = expr.ModeExpression, json.RawMessage("{}")
+	p.Expression = strings.TrimSpace(p.Expression) + " " + expr.RuleSeparator + " true ? " + m.String() + " : 1"
 	return nil
 }
 

@@ -124,6 +124,163 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 	return out, errs
 }
 
+// consentable is the locked state Consent decides on.
+type consentable struct {
+	pluginStatus  string
+	activeVersion *string
+	publisherID   *int64
+	manifestHash  string
+	trust         string
+	manifest      *manifest.Manifest
+	upgrade       bool
+	current       map[string]Grant
+}
+
+// loadConsentable locks the plugin and version rows and re-checkes every
+// barrier an approval must pass: uninstall in progress, consent status,
+// signature revocation, publisher revocation and exclusive resources.
+func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version string) (*consentable, error) {
+	c := &consentable{}
+	err := tx.QueryRow(ctx, `SELECT status, active_version, publisher_id FROM plugins WHERE key = $1 FOR UPDATE`, key).
+		Scan(&c.pluginStatus, &c.activeVersion, &c.publisherID)
+	if store.IsNoRows(err) {
+		return nil, core.ErrNotFound.WithMessage("plugin not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	var consent, sigStatus string
+	if err := checkUninstall(ctx, tx, key); err != nil {
+		return nil, err
+	}
+	err = tx.QueryRow(ctx, `SELECT consent_status, signature_status, manifest_hash FROM plugin_versions
+		WHERE plugin_key = $1 AND version = $2 FOR UPDATE`, key, version).Scan(&consent, &sigStatus, &c.manifestHash)
+	if store.IsNoRows(err) {
+		return nil, core.ErrNotFound.WithMessage("plugin version not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if consent != ConsentAwaiting {
+		return nil, core.ErrConflict.WithMessage(fmt.Sprintf("version %s is %s", version, consent))
+	}
+	if sigStatus == pkg.SigRevoked {
+		return nil, core.ErrPermissionDenied.WithMessage("the package signature has been revoked")
+	}
+	c.trust = pkg.TrustUnsigned
+	if c.publisherID != nil {
+		var pubStatus string
+		if err := tx.QueryRow(ctx, `SELECT trust_level, status FROM publishers WHERE id = $1`, *c.publisherID).Scan(&c.trust, &pubStatus); err != nil {
+			return nil, err
+		}
+		if pubStatus != "active" {
+			return nil, core.ErrPermissionDenied.WithMessage("the publisher has been revoked")
+		}
+	} else if !s.d.Trust.AllowUnsigned() {
+		return nil, core.ErrPermissionDenied.WithMessage("unsigned plugins are not allowed")
+	}
+	m, err := LoadManifest(ctx, tx, key, version)
+	if err != nil {
+		return nil, err
+	}
+	c.manifest = m
+	if err := pkg.CheckTrust(m, c.trust); err != nil {
+		return nil, err
+	}
+	// Exclusive resources are only held once approved: another plugin may
+	// have been approved for them since this version was uploaded.
+	if err := s.checkResources(ctx, tx, m); err != nil {
+		return nil, err
+	}
+	c.upgrade = c.pluginStatus != StatusAwaitingConsent
+	c.current = map[string]Grant{}
+	if c.upgrade {
+		if c.current, err = LoadGrants(ctx, tx, key); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+// decideAndApply records the operator's decisions and moves the plugin into
+// its post-consent state.
+func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version string, req ConsentRequest, actorID int64, c *consentable) (*ConsentResult, error) {
+	m := c.manifest
+	decisions, ferrs := decide(m, req, c.current, c.upgrade)
+	if len(ferrs) > 0 {
+		return nil, core.InvalidFields(ferrs...).WithMessage("consent does not match the requested permissions")
+	}
+	if err := s.checkGrantRights(ctx, actorID, decisions, c.trust, c.publisherID != nil); err != nil {
+		return nil, err
+	}
+	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
+		return nil, err
+	}
+	for _, d := range decisions {
+		scope, _ := json.Marshal(d.scope)
+		if _, err := tx.Exec(ctx, `
+				INSERT INTO plugin_permission_grants (plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+				ON CONFLICT (plugin_key, permission) DO UPDATE SET
+				  scope = EXCLUDED.scope, status = EXCLUDED.status, plugin_version = EXCLUDED.plugin_version,
+				  manifest_hash = EXCLUDED.manifest_hash, granted_by = EXCLUDED.granted_by, granted_at = now()`,
+			key, d.permission, scope, d.status, version, c.manifestHash, nullID(actorID)); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE plugin_versions SET consent_status = 'approved' WHERE plugin_key = $1 AND version = $2`, key, version); err != nil {
+		return nil, err
+	}
+
+	status := c.pluginStatus
+	switch {
+	case !c.upgrade:
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
+			return nil, err
+		}
+		name, _ := json.Marshal(m.Name)
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET status = $2, name = $3, installed_by = COALESCE(installed_by, $4),
+				installed_at = now(), updated_at = now(), row_version = row_version + 1 WHERE key = $1`,
+			key, StatusInstalled, name, nullID(actorID)); err != nil {
+			return nil, err
+		}
+		status = StatusInstalled
+	case c.activeVersion == nil:
+		// Nothing is running: the newest approved version becomes the
+		// one to enable, so its defaults apply now.
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
+			return nil, err
+		}
+	default:
+		// Register the new version's permissions next to the running
+		// ones so role grants chosen now exist before activation; the
+		// runtime's ApplyDefaults at activation removes stale ones.
+		if s.d.Permissions != nil {
+			old, err := LoadManifest(ctx, tx, key, *c.activeVersion)
+			if err != nil {
+				return nil, err
+			}
+			defs := unionDefs(PermissionDefs(old), PermissionDefs(m))
+			if err := s.d.Permissions.SyncPlugin(ctx, tx, key, defs, req.RoleKeysForNewPermissions); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	grants, err := LoadGrants(ctx, tx, key)
+	if err != nil {
+		return nil, err
+	}
+	res := &ConsentResult{PluginKey: key, Version: version, Status: status, Upgrade: c.upgrade, Grants: SortedGrants(grants)}
+	summary := make([]map[string]any, 0, len(decisions))
+	for _, d := range decisions {
+		summary = append(summary, map[string]any{"permission": d.permission, "status": d.status, "scope": d.scope, "carried": d.carried})
+	}
+	return res, audit.Audit(ctx, tx, actorID, "plugin.consent", "plugin", key, map[string]any{
+		"version": version, "upgrade": c.upgrade, "decisions": summary, "role_keys": req.RoleKeysForNewPermissions,
+	})
+}
+
 // Consent approves a version. First installs apply defaults and move the
 // plugin to installed; upgrades only approve the version (the runtime
 // applies defaults when it activates).
@@ -136,140 +293,12 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 
 	var res *ConsentResult
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		var (
-			status        string
-			activeVersion *string
-			pubID         *int64
-		)
-		err := tx.QueryRow(ctx, `SELECT status, active_version, publisher_id FROM plugins WHERE key = $1 FOR UPDATE`, key).
-			Scan(&status, &activeVersion, &pubID)
-		if store.IsNoRows(err) {
-			return core.ErrNotFound.WithMessage("plugin not found")
-		}
+		c, err := s.loadConsentable(ctx, tx, key, version)
 		if err != nil {
 			return err
 		}
-		var consent, sigStatus, manifestHash string
-		if err := checkUninstall(ctx, tx, key); err != nil {
-			return err
-		}
-		err = tx.QueryRow(ctx, `SELECT consent_status, signature_status, manifest_hash FROM plugin_versions
-			WHERE plugin_key = $1 AND version = $2 FOR UPDATE`, key, version).Scan(&consent, &sigStatus, &manifestHash)
-		if store.IsNoRows(err) {
-			return core.ErrNotFound.WithMessage("plugin version not found")
-		}
-		if err != nil {
-			return err
-		}
-		if consent != ConsentAwaiting {
-			return core.ErrConflict.WithMessage(fmt.Sprintf("version %s is %s", version, consent))
-		}
-		if sigStatus == pkg.SigRevoked {
-			return core.ErrPermissionDenied.WithMessage("the package signature has been revoked")
-		}
-		trust := pkg.TrustUnsigned
-		if pubID != nil {
-			var pubStatus string
-			if err := tx.QueryRow(ctx, `SELECT trust_level, status FROM publishers WHERE id = $1`, *pubID).Scan(&trust, &pubStatus); err != nil {
-				return err
-			}
-			if pubStatus != "active" {
-				return core.ErrPermissionDenied.WithMessage("the publisher has been revoked")
-			}
-		} else if !s.d.Trust.AllowUnsigned() {
-			return core.ErrPermissionDenied.WithMessage("unsigned plugins are not allowed")
-		}
-		m, err := LoadManifest(ctx, tx, key, version)
-		if err != nil {
-			return err
-		}
-		if err := pkg.CheckTrust(m, trust); err != nil {
-			return err
-		}
-		// Exclusive resources are only held once approved: another plugin
-		// may have been approved for them since this version was uploaded.
-		if err := s.checkResources(ctx, tx, m); err != nil {
-			return err
-		}
-		upgrade := status != StatusAwaitingConsent
-		current := map[string]Grant{}
-		if upgrade {
-			if current, err = LoadGrants(ctx, tx, key); err != nil {
-				return err
-			}
-		}
-		decisions, ferrs := decide(m, req, current, upgrade)
-		if len(ferrs) > 0 {
-			return core.InvalidFields(ferrs...).WithMessage("consent does not match the requested permissions")
-		}
-		if err := s.checkGrantRights(ctx, actorID, decisions, trust, pubID != nil); err != nil {
-			return err
-		}
-		if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
-			return err
-		}
-		for _, d := range decisions {
-			scope, _ := json.Marshal(d.scope)
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO plugin_permission_grants (plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-				ON CONFLICT (plugin_key, permission) DO UPDATE SET
-				  scope = EXCLUDED.scope, status = EXCLUDED.status, plugin_version = EXCLUDED.plugin_version,
-				  manifest_hash = EXCLUDED.manifest_hash, granted_by = EXCLUDED.granted_by, granted_at = now()`,
-				key, d.permission, scope, d.status, version, manifestHash, nullID(actorID)); err != nil {
-				return err
-			}
-		}
-		if _, err := tx.Exec(ctx, `UPDATE plugin_versions SET consent_status = 'approved' WHERE plugin_key = $1 AND version = $2`, key, version); err != nil {
-			return err
-		}
-
-		switch {
-		case !upgrade:
-			if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
-				return err
-			}
-			name, _ := json.Marshal(m.Name)
-			if _, err := tx.Exec(ctx, `UPDATE plugins SET status = $2, name = $3, installed_by = COALESCE(installed_by, $4),
-				installed_at = now(), updated_at = now(), row_version = row_version + 1 WHERE key = $1`,
-				key, StatusInstalled, name, nullID(actorID)); err != nil {
-				return err
-			}
-			status = StatusInstalled
-		case activeVersion == nil:
-			// Nothing is running: the newest approved version becomes the
-			// one to enable, so its defaults apply now.
-			if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
-				return err
-			}
-		default:
-			// Register the new version's permissions next to the running
-			// ones so role grants chosen now exist before activation; the
-			// runtime's ApplyDefaults at activation removes stale ones.
-			if s.d.Permissions != nil {
-				old, err := LoadManifest(ctx, tx, key, *activeVersion)
-				if err != nil {
-					return err
-				}
-				defs := unionDefs(PermissionDefs(old), PermissionDefs(m))
-				if err := s.d.Permissions.SyncPlugin(ctx, tx, key, defs, req.RoleKeysForNewPermissions); err != nil {
-					return err
-				}
-			}
-		}
-
-		grants, err := LoadGrants(ctx, tx, key)
-		if err != nil {
-			return err
-		}
-		res = &ConsentResult{PluginKey: key, Version: version, Status: status, Upgrade: upgrade, Grants: SortedGrants(grants)}
-		summary := make([]map[string]any, 0, len(decisions))
-		for _, d := range decisions {
-			summary = append(summary, map[string]any{"permission": d.permission, "status": d.status, "scope": d.scope, "carried": d.carried})
-		}
-		return audit.Audit(ctx, tx, actorID, "plugin.consent", "plugin", key, map[string]any{
-			"version": version, "upgrade": upgrade, "decisions": summary, "role_keys": req.RoleKeysForNewPermissions,
-		})
+		res, err = s.decideAndApply(ctx, tx, key, version, req, actorID, c)
+		return err
 	})
 	if err != nil {
 		return nil, err

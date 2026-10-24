@@ -51,7 +51,7 @@ func (s *Service) registerRequestLogViewer(r *httpapi.Router) {
 
 // viewerAccount is the account of :id with its runtime, or false (answered).
 func (s *Service) viewerAccount(c *gin.Context, ctx context.Context) (accountDesired, bool) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, e := strconv.ParseInt(c.Param("id"), 10, 64)
 	if e != nil || id <= 0 {
 		httpapi.Fail(c, core.ErrInvalidArgument)
@@ -310,24 +310,17 @@ func granted(ctx context.Context, key string) bool {
 // whole file with ?download=1. Streamed, never held in memory.
 func (s *Service) requestLogFile(c *gin.Context) {
 	log, name := c.Param("log"), c.Param("name")
-	download := c.Query("download") == "1"
 	for key := range c.Request.URL.Query() {
 		if key != "offset" && key != "download" {
 			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Invalid parameter "+strconv.Quote(key)+"."))
 			return
 		}
 	}
-	var offset int64
-	if v := c.Query("offset"); v != "" {
-		n, e := strconv.ParseInt(v, 10, 64)
-		if e != nil || n < 0 || n > requestLogFileLimit {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Invalid offset."))
-			return
-		}
-		offset = n
+	offset, download, ok := parseFileQuery(c)
+	if !ok {
+		return
 	}
-	if !requestLogID.MatchString(log) || !requestLogFileName.MatchString(name) || requestLogSummaryFiles[name] ||
-		download && offset != 0 || c.Query("download") != "" && !download {
+	if !requestLogID.MatchString(log) || !requestLogFileName.MatchString(name) || requestLogSummaryFiles[name] {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Invalid request log file."))
 		return
 	}
@@ -356,14 +349,50 @@ func (s *Service) requestLogFile(c *gin.Context) {
 		httpapi.Fail(c, viewerError(res.StatusCode, raw))
 		return
 	}
-	size, e1 := strconv.ParseInt(res.Header.Get("X-Log-File-Size"), 10, 64)
-	length, e2 := strconv.ParseInt(res.Header.Get("X-Log-Length"), 10, 64)
-	at, e3 := strconv.ParseInt(res.Header.Get("X-Log-Offset"), 10, 64)
-	if e1 != nil || e2 != nil || e3 != nil || at != offset || length < 0 || length > limit || size < 0 || offset+length > size {
+	size, length, ok := parseLogChunkHeaders(res, offset, limit)
+	if !ok {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
 	}
 	s.auditRequestLogRead(c, ctx, d.AccountID, log, name, offset, length, download)
+	copyLogChunk(c, res.Body, d.AccountID, log, name, offset, size, length, download)
+}
+
+// parseFileQuery reads ?offset= and ?download= and validates the combination:
+// a download is always the whole file, and "download" is only 1 when present.
+func parseFileQuery(c *gin.Context) (offset int64, download bool, ok bool) {
+	download = c.Query("download") == "1"
+	if v := c.Query("offset"); v != "" {
+		n, e := strconv.ParseInt(v, 10, 64)
+		if e != nil || n < 0 || n > requestLogFileLimit {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Invalid offset."))
+			return 0, false, false
+		}
+		offset = n
+	}
+	if download && offset != 0 || c.Query("download") != "" && !download {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Invalid request log file."))
+		return 0, false, false
+	}
+	return offset, download, true
+}
+
+// parseLogChunkHeaders validates the size headers of a chunk response and
+// returns the file size and chunk length.
+func parseLogChunkHeaders(res *http.Response, offset, limit int64) (size, length int64, ok bool) {
+	var e1, e2, e3 error
+	size, e1 = strconv.ParseInt(res.Header.Get("X-Log-File-Size"), 10, 64)
+	length, e2 = strconv.ParseInt(res.Header.Get("X-Log-Length"), 10, 64)
+	at, e3 := strconv.ParseInt(res.Header.Get("X-Log-Offset"), 10, 64)
+	if e1 != nil || e2 != nil || e3 != nil || at != offset || length < 0 || length > limit || size < 0 || offset+length > size {
+		return 0, 0, false
+	}
+	return size, length, true
+}
+
+// copyLogChunk streams the chunk to the client with the headers that make a
+// short read detectable.
+func copyLogChunk(c *gin.Context, body io.Reader, account int64, log, name string, offset, size, length int64, download bool) {
 	h := c.Writer.Header()
 	h.Set("Content-Type", "application/octet-stream")
 	h.Set("X-Content-Type-Options", "nosniff")
@@ -372,10 +401,10 @@ func (s *Service) requestLogFile(c *gin.Context) {
 	h.Set("X-Log-Length", strconv.FormatInt(length, 10))
 	h.Set("Content-Length", strconv.FormatInt(length, 10))
 	if download {
-		h.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="account-%d-%s-%s"`, d.AccountID, log, name))
+		h.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="account-%d-%s-%s"`, account, log, name))
 	}
 	c.Status(http.StatusOK)
-	_, _ = io.CopyN(c.Writer, res.Body, length)
+	_, _ = io.CopyN(c.Writer, body, length)
 }
 
 // auditRequestLogRead records who read which content. Paging through the

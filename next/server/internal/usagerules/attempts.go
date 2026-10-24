@@ -2,10 +2,11 @@ package usagerules
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/tidwall/gjson"
-	"strconv"
 )
 
 type attemptMeter struct {
@@ -68,27 +69,38 @@ func (u *Acc) applyAttempts(event string, body []byte, stream bool) {
 	}
 	doc := gjson.ParseBytes(body)
 	if !stream {
-		if !doc.IsObject() || doc.Get("type").Str != "message" {
-			m.err = fmt.Errorf("attempt usage expected message response")
-			return
-		}
-		m.model = doc.Get("model").Str
-		if !doc.Get("content").IsArray() {
-			m.err = fmt.Errorf("attempt response has invalid content")
-			return
-		}
-		m.reason = doc.Get("stop_reason").Str
-		m.usage = doc.Get("usage")
-		m.details = doc.Get("stop_details")
-		m.finalFacts = extractAttemptFacts(u.rules.Facts, body)
-		for _, b := range doc.Get("content").Array() {
-			if b.Get("type").Str == "fallback" {
-				m.boundaries = append(m.boundaries, b)
-			}
-		}
-		m.complete = true
+		u.applyAttemptsMessage(m, doc, body)
 		return
 	}
+	u.applyAttemptEvent(m, event, doc, body)
+}
+
+// applyAttemptsMessage loads a non-streamed message response: the whole
+// attempt chain is present at once.
+func (u *Acc) applyAttemptsMessage(m *attemptMeter, doc gjson.Result, body []byte) {
+	if !doc.IsObject() || doc.Get("type").Str != "message" {
+		m.err = fmt.Errorf("attempt usage expected message response")
+		return
+	}
+	m.model = doc.Get("model").Str
+	if !doc.Get("content").IsArray() {
+		m.err = fmt.Errorf("attempt response has invalid content")
+		return
+	}
+	m.reason = doc.Get("stop_reason").Str
+	m.usage = doc.Get("usage")
+	m.details = doc.Get("stop_details")
+	m.finalFacts = extractAttemptFacts(u.rules.Facts, body)
+	for _, b := range doc.Get("content").Array() {
+		if b.Get("type").Str == "fallback" {
+			m.boundaries = append(m.boundaries, b)
+		}
+	}
+	m.complete = true
+}
+
+// applyAttemptEvent advances the streamed state machine by one event.
+func (u *Acc) applyAttemptEvent(m *attemptMeter, event string, doc gjson.Result, body []byte) {
 	if !m.started && event != "message_start" && event != "ping" && event != "error" {
 		m.err = fmt.Errorf("attempt event before message_start")
 		return

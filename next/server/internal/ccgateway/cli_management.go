@@ -1,7 +1,6 @@
 package ccgateway
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -64,9 +63,7 @@ func cliManagementBody(method string, raw []byte) ([]byte, error) {
 		AutoUpdate *bool  `json:"auto_update,omitempty"`
 		Channel    string `json:"channel,omitempty"`
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {
+	if err := decodeStrictJSON(raw, &input); err != nil {
 		return nil, fmt.Errorf("invalid CLI management input")
 	}
 	switch method {
@@ -87,7 +84,7 @@ func cliManagementBody(method string, raw []byte) ([]byte, error) {
 // cliManagement serves GET/POST/PUT /system/ccgateway/cli/:id through the
 // account's Worker /admin/cli.
 func (s *Service) cliManagement(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
 		httpapi.Fail(c, core.ErrInvalidArgument)

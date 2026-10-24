@@ -376,20 +376,10 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 		seconds = int(s.window.Load())
 	}
 	out := &pluginv1.ReadObservationMetricsResponse{WindowSeconds: int32(seconds), AsOfUnixMs: s.now().UnixMilli(), Status: "unavailable", Accounts: make([]*pluginv1.AccountObservationMetrics, 0, len(ids))}
-	if seconds < 5 || seconds > statsMaxWindow || len(ids) > statsMaxAccounts || len(names) == 0 || len(names) > observation.MaxMetrics || len(ids)*len(names) > 600 {
-		return out, core.ErrInvalidArgument
-	}
-	seen := map[string]bool{}
-	for _, name := range names {
-		if !observation.ValidMetric(name) || seen[name] {
-			return out, core.ErrInvalidArgument
-		}
-		seen[name] = true
+	if err := validateMetricsQuery(ids, names, seconds); err != nil {
+		return out, err
 	}
 	for _, id := range ids {
-		if id <= 0 {
-			return out, core.ErrInvalidArgument
-		}
 		out.Accounts = append(out.Accounts, &pluginv1.AccountObservationMetrics{AccountId: id})
 	}
 	if s.slots != nil {
@@ -410,10 +400,59 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 	out.AsOfUnixMs = clock.UnixMilli()
 	end := clock.Unix()
 	start := end - int64(seconds) + 1
+	counts, gap, since, ok := s.readInternalCounters(ctx, namespace, ids, names, start, end)
+	if !ok {
+		return out, nil
+	}
+	out.Status = "warming"
+	if stamp, err := since.Int64(); err == nil {
+		out.ObservedSinceUnixMs = stamp * 1000
+		if stamp <= start {
+			out.Status = "ok"
+		}
+	}
+	s.gapMu.Lock()
+	localGap := s.gaps[namespace]
+	s.gapMu.Unlock()
+	if gap.Val() != 0 || localGap {
+		out.Status = "incomplete"
+	}
+	for i := range out.Accounts {
+		for j, name := range names {
+			sum, count := counts[i][2*j], counts[i][2*j+1]
+			out.Accounts[i].Metrics = append(out.Accounts[i].Metrics, &pluginv1.ObservationMetric{Name: name, Sum: sum, Count: count, PerMinute: float64(sum) * 60 / float64(seconds)})
+		}
+	}
+	return out, nil
+}
+
+// validateMetricsQuery enforces the combination limits of an observation
+// metrics read: window bounds, account and metric counts and their product.
+func validateMetricsQuery(ids []int64, names []string, seconds int) error {
+	if seconds < 5 || seconds > statsMaxWindow || len(ids) > statsMaxAccounts || len(names) == 0 || len(names) > observation.MaxMetrics || len(ids)*len(names) > 600 {
+		return core.ErrInvalidArgument
+	}
+	seen := map[string]bool{}
+	for _, name := range names {
+		if !observation.ValidMetric(name) || seen[name] {
+			return core.ErrInvalidArgument
+		}
+		seen[name] = true
+	}
+	for _, id := range ids {
+		if id <= 0 {
+			return core.ErrInvalidArgument
+		}
+	}
+	return nil
+}
+
+// readInternalCounters reads the per-minute counters of every account in one
+// Redis pipeline and sums them per metric. ok=false means "no usable
+// counters"; the caller then reports the response as unavailable.
+func (s *Stats) readInternalCounters(ctx context.Context, namespace string, ids []int64, names []string, start, end int64) (counts [][]int64, gap *redis.IntCmd, since *redis.StringCmd, ok bool) {
 	cmds := make([][]*redis.SliceCmd, len(ids))
-	var gap *redis.IntCmd
-	var since *redis.StringCmd
-	_, err = s.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
+	_, err := s.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
 		gap = p.Exists(ctx, statsMeta(namespace, "gap"))
 		since = p.Get(ctx, statsMeta(namespace, "since"))
 		for i, id := range ids {
@@ -438,15 +477,15 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 		return nil
 	})
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return out, nil
+		return nil, gap, since, false
 	}
-	counts := make([][]int64, len(ids))
+	counts = make([][]int64, len(ids))
 	for i, queries := range cmds {
 		counts[i] = make([]int64, len(names)*2)
 		for _, cmd := range queries {
 			values, err := cmd.Result()
 			if err != nil {
-				return out, nil
+				return nil, gap, since, false
 			}
 			for j, value := range values {
 				if value == nil {
@@ -455,32 +494,13 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 				n, err := strconv.ParseInt(fmt.Sprint(value), 10, 64)
 				index := j % len(counts[i])
 				if err != nil || n < 0 || counts[i][index] > math.MaxInt64-n {
-					return out, nil
+					return nil, gap, since, false
 				}
 				counts[i][index] += n
 			}
 		}
 	}
-	out.Status = "warming"
-	if stamp, err := since.Int64(); err == nil {
-		out.ObservedSinceUnixMs = stamp * 1000
-		if stamp <= start {
-			out.Status = "ok"
-		}
-	}
-	s.gapMu.Lock()
-	localGap := s.gaps[namespace]
-	s.gapMu.Unlock()
-	if gap.Val() != 0 || localGap {
-		out.Status = "incomplete"
-	}
-	for i := range out.Accounts {
-		for j, name := range names {
-			sum, count := counts[i][2*j], counts[i][2*j+1]
-			out.Accounts[i].Metrics = append(out.Accounts[i].Metrics, &pluginv1.ObservationMetric{Name: name, Sum: sum, Count: count, PerMinute: float64(sum) * 60 / float64(seconds)})
-		}
-	}
-	return out, nil
+	return counts, gap, since, true
 }
 
 func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (core.AccountStatsSnapshot, error) {

@@ -69,12 +69,6 @@ func Hash(src string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Version returns the expression version (1 when no prefix is present).
-func Version(src string) (int, error) {
-	v, _, err := splitVersion(src)
-	return v, err
-}
-
 // splitRules splits on "|||" outside string literals.
 func splitRules(body string) []string {
 	var parts []string

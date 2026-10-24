@@ -3,9 +3,10 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
-	"testing"
 )
 
 func TestRuntimeNetworkConfig(t *testing.T) {

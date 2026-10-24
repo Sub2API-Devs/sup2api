@@ -77,30 +77,11 @@ func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []Endpoin
 	return out
 }
 
-// CheckPlatform applies the endpoint, usage and sticky rules of a plugin
-// platform to a single platform definition (used to hold the built-in
-// platforms to the plugin contract).
-func CheckPlatform(p manifest.Platform) []core.FieldError {
-	fs := check.CheckPlatform(p)
-	out := make([]core.FieldError, len(fs))
-	for i, f := range fs {
-		out[i] = core.FieldError{Field: f.Field, Code: f.Code, Message: f.Message}
-	}
-	return out
-}
-
-// BinaryPath expands the {os}/{arch} template.
-func BinaryPath(tpl, goos, goarch string) string { return check.BinaryPath(tpl, goos, goarch) }
-
 // HostCompatible matches a semver range against the host version, ignoring
 // any pre-release/build suffix of the host version.
 func HostCompatible(constraint, hostVersion string) (bool, error) {
 	return check.HostCompatible(constraint, hostVersion)
 }
-
-// NormalizeRoutePath replaces gin parameter names so "/v1/:a" and "/v1/:b"
-// compare equal.
-func NormalizeRoutePath(p string) string { return check.NormalizeRoutePath(p) }
 
 // ParseSchedule parses a job schedule (5-field cron or "@every <d>").
 func ParseSchedule(s string) (cron.Schedule, error) { return check.ParseSchedule(s) }
@@ -109,14 +90,6 @@ func ParseSchedule(s string) (cron.Schedule, error) { return check.ParseSchedule
 func MigrationFiles(files map[string][]byte, dir string) []string {
 	return check.MigrationFiles(files, dir)
 }
-
-// PathParams returns the parameter names of an endpoint path (nil when the
-// path is malformed).
-func PathParams(p string) []string { return check.PathParams(p) }
-
-// PathsOverlap reports whether some request path matches both endpoint path
-// patterns (malformed paths never overlap).
-func PathsOverlap(a, b string) bool { return check.PathsOverlap(a, b) }
 
 // EndpointsConflict reports whether two gateway endpoints could both match
 // one request (same method, overlapping path patterns).

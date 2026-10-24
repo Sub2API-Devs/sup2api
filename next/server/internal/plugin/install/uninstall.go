@@ -222,22 +222,6 @@ func (s *Service) quiesce(ctx context.Context, key string, actorID int64) error 
 	}
 }
 
-func (s *Service) pluginStatus(ctx context.Context, key string) (string, error) {
-	var st string
-	err := s.d.DB.Pool.QueryRow(ctx, `SELECT status FROM plugins WHERE key = $1`, key).Scan(&st)
-	if store.IsNoRows(err) {
-		return "", core.ErrNotFound.WithMessage("plugin not found")
-	}
-	return st, err
-}
-
-func (s *Service) openRollout(ctx context.Context, key string) (bool, error) {
-	var n int
-	err := s.d.DB.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_rollouts
-		WHERE plugin_key = $1 AND phase IN ('preparing', 'activating')`, key).Scan(&n)
-	return n > 0, err
-}
-
 // disableRevoked disables running plugins after a revocation (best effort).
 func (s *Service) disableRevoked(ctx context.Context, keys []string, actorID int64, reason string) []string {
 	var disabled []string

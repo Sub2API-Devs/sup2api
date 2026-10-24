@@ -2,11 +2,12 @@ package usagerules
 
 import (
 	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"strings"
-	"testing"
 )
 
 func cacheEvidenceRules() manifest.UsageRules {

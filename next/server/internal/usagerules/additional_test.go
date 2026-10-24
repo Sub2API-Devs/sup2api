@@ -2,9 +2,10 @@ package usagerules
 
 import (
 	"fmt"
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"strings"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
 func additionalRules() manifest.UsageRules {

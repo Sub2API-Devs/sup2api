@@ -126,9 +126,4 @@ func rateLimitedError(ctx context.Context, wait time.Duration) error {
 		"登录失败次数过多，请稍后再试")).WithDetails(map[string]any{"retry_after_seconds": secs})
 }
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }

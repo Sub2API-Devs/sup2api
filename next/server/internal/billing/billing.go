@@ -97,14 +97,6 @@ func (s *Service) changed(ctx context.Context, key string) {
 	}
 }
 
-// changedAfterCommit is used when the change happens inside a caller-owned
-// transaction: invalidate now and again shortly after the caller commits.
-func (s *Service) changedAfterCommit(ctx context.Context, key string) {
-	s.invalidate()
-	ctx = context.WithoutCancel(ctx)
-	time.AfterFunc(time.Second, func() { s.changed(ctx, key) })
-}
-
 // RegisterRoutes mounts the billing console API.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPriceRoutes(r)

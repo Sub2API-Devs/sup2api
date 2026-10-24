@@ -131,7 +131,9 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		params        map[string]string
 		methodMissing bool
 	)
-	for idx, rb := range gen.Routes(key) {
+	routes := gen.Routes(key)
+	for idx := range routes {
+		rb := &routes[idx]
 		p, ok := matchPath(rb.Route.Path, sub)
 		if !ok {
 			continue
@@ -140,8 +142,7 @@ func (h *Handler) serveAPI(c *gin.Context) {
 			methodMissing = true
 			continue
 		}
-		routes := gen.Routes(key)
-		chosen, params = &routes[idx], p
+		chosen, params = rb, p
 		break
 	}
 	if chosen == nil {

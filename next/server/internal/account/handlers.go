@@ -22,6 +22,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // row is one accounts row.
@@ -377,12 +378,8 @@ func (s *Service) fullView(ctx context.Context, id int64, scope *int64) (*View, 
 func (s *Service) list(c *gin.Context) {
 	ctx := c.Request.Context()
 	page, size := httpapi.Pagination(c)
-	where := ` WHERE a.deleted_at IS NULL`
-	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where += " AND " + strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args)))
-	}
+	var filter store.Filter
+	filter.And("a.deleted_at IS NULL")
 	// Visible range: the caller's own rows unless account:read was granted;
 	// mine=true narrows to own rows either way; created_by=<id> filters
 	// within the "all" range and is ignored under the own range (§21.2).
@@ -401,17 +398,17 @@ func (s *Service) list(c *gin.Context) {
 		scope = &id
 	}
 	if scope != nil {
-		add("a.created_by = ?", *scope)
+		filter.And("a.created_by = ?", *scope)
 	}
 	// Accounts of a disabled or uninstalled plugin are hidden by default
 	// (their rows stay); orphaned=true lists only them, orphaned=all both.
 	if keys := s.activePluginKeys(); keys != nil {
 		switch c.Query("orphaned") {
 		case "true":
-			add("NOT (a.plugin_key = ANY(?))", keys)
+			filter.And("NOT (a.plugin_key = ANY(?))", keys)
 		case "all":
 		default:
-			add("a.plugin_key = ANY(?)", keys)
+			filter.And("a.plugin_key = ANY(?)", keys)
 		}
 	}
 	// An account type is identified by (plugin key, type id): two plugins
@@ -422,19 +419,19 @@ func (s *Service) list(c *gin.Context) {
 		return
 	}
 	if v := c.Query("plugin_key"); v != "" {
-		add("a.plugin_key = ?", v)
+		filter.And("a.plugin_key = ?", v)
 	}
 	if v := c.Query("type"); v != "" {
-		add("a.type = ?", v)
+		filter.And("a.type = ?", v)
 	}
 	if v := c.Query("status"); v != "" {
 		switch v {
 		case "active":
-			add("(a.status = ? AND a.schedulable)", v)
+			filter.And("(a.status = ? AND a.schedulable)", v)
 		case "auto_disabled":
-			add("(a.status = ? OR (a.status = 'active' AND NOT a.schedulable))", v)
+			filter.And("(a.status = ? OR (a.status = 'active' AND NOT a.schedulable))", v)
 		default:
-			add("a.status = ?", v)
+			filter.And("a.status = ?", v)
 		}
 	}
 	if v := c.Query("group_id"); v != "" {
@@ -443,14 +440,15 @@ func (s *Service) list(c *gin.Context) {
 			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid group_id"))
 			return
 		}
-		add("EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = a.id AND ag.group_id = ?)", gid)
+		filter.And("EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = a.id AND ag.group_id = ?)", gid)
 	}
 	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		add("a.name ILIKE '%' || ? || '%'", v)
+		filter.And("a.name ILIKE '%' || ? || '%'", v)
 	}
 	if v := strings.TrimSpace(c.Query("model")); v != "" {
-		add("(a.models = '{}' OR ? = ANY(a.models))", v)
+		filter.And("(a.models = '{}' OR ? = ANY(a.models))", v)
 	}
+	where, args := filter.Cond(), filter.Args()
 	var total int64
 	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT count(*) FROM accounts a`+where, args...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
@@ -815,17 +813,7 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 	return nil
 }
 
-func uniqueIDs(in []int64) []int64 {
-	seen := map[int64]struct{}{}
-	out := []int64{}
-	for _, id := range in {
-		if _, ok := seen[id]; !ok {
-			seen[id] = struct{}{}
-			out = append(out, id)
-		}
-	}
-	return out
-}
+func uniqueIDs(in []int64) []int64 { return x.Unique(in) }
 
 func setGroups(ctx context.Context, tx pgx.Tx, id int64, groupIDs []int64) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1 AND NOT (group_id = ANY($2))`, id, groupIDs); err != nil {
@@ -893,6 +881,28 @@ func (s *Service) auditProxy(ctx context.Context, tx pgx.Tx, created bool, proxy
 	return s.d.Resolver.AuditAutoCreate(ctx, tx, proxyID, uid, accountID)
 }
 
+// resolveWriteRefs normalizes the group list and proxy references shared by
+// create and update: deduplicate groups, check the caller may reference both,
+// and resolve a proxy_url to a spec (created later inside the transaction).
+func (s *Service) resolveWriteRefs(ctx context.Context, in *input, perm string) (groupIDs []int64, proxyID *int64, byURL *proxyByURL, err error) {
+	if in.GroupIDs != nil {
+		groupIDs = uniqueIDs(*in.GroupIDs)
+	}
+	if in.ProxyID.Valid {
+		proxyID = &in.ProxyID.V
+	}
+	// Under the own key proxy_id must be a proxy the caller can see (§21.2).
+	if err = checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, perm), groupIDs); err != nil {
+		return nil, nil, nil, err
+	}
+	if in.ProxyURL != nil {
+		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return groupIDs, proxyID, byURL, nil
+}
+
 func (s *Service) create(c *gin.Context) {
 	ctx := audit.Context(c)
 	var in input
@@ -913,26 +923,10 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
-	var groupIDs []int64
-	if in.GroupIDs != nil {
-		groupIDs = uniqueIDs(*in.GroupIDs)
-	}
-	var proxyID *int64
-	if in.ProxyID.Valid {
-		proxyID = &in.ProxyID.V
-	}
-	// Under the own key proxy_id must be a proxy the caller can see (§21.2).
-	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, "account:create"), groupIDs); err != nil {
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:create")
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
-	}
-	var byURL *proxyByURL
-	if in.ProxyURL != nil {
-		var err error
-		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
 	}
 	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
 	if err != nil {
@@ -962,40 +956,16 @@ func (s *Service) create(c *gin.Context) {
 			return
 		}
 	}
-	status, sched, autoDisable, prio, maxc, weight := "active", true, true, 10, 10, 1
-	if in.Status != nil {
-		status = *in.Status
-	}
-	if in.Schedulable != nil {
-		sched = *in.Schedulable
-	}
-	if in.AutoDisable != nil {
-		autoDisable = *in.AutoDisable
-	}
-	if in.Priority != nil {
-		prio = *in.Priority
-	}
-	if in.MaxConcurrency != nil {
-		maxc = *in.MaxConcurrency
-	}
-	if in.Weight != nil {
-		weight = *in.Weight
-	}
-	models, mapping := []string{}, map[string]string{}
-	if in.Models != nil {
-		models = *in.Models
-	}
-	if in.ModelMapping != nil {
-		mapping = *in.ModelMapping
-	}
-	var rpm int
-	var tpm int64
-	if in.RPMLimit != nil {
-		rpm = *in.RPMLimit
-	}
-	if in.TPMLimit != nil {
-		tpm = *in.TPMLimit
-	}
+	status := valueOr(in.Status, "active")
+	sched := valueOr(in.Schedulable, true)
+	autoDisable := valueOr(in.AutoDisable, true)
+	prio := valueOr(in.Priority, 10)
+	maxc := valueOr(in.MaxConcurrency, 10)
+	weight := valueOr(in.Weight, 1)
+	models := valueOr(in.Models, []string{})
+	mapping := valueOr(in.ModelMapping, map[string]string{})
+	rpm := valueOr(in.RPMLimit, 0)
+	tpm := valueOr(in.TPMLimit, int64(0))
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
@@ -1114,24 +1084,10 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	featureOnly := in.CCFeaturePolicy != nil && len(in.changedFields()) == 1
-	var groupIDs []int64
-	if in.GroupIDs != nil {
-		groupIDs = uniqueIDs(*in.GroupIDs)
-	}
-	var proxyID *int64
-	if in.ProxyID.Valid {
-		proxyID = &in.ProxyID.V
-	}
-	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, "account:update"), groupIDs); err != nil {
+	groupIDs, proxyID, byURL, err := s.resolveWriteRefs(ctx, &in, "account:update")
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
-	}
-	var byURL *proxyByURL
-	if in.ProxyURL != nil {
-		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
 	}
 	// Validate credentials (may call the plugin) before opening the transaction.
 	var p *prepared

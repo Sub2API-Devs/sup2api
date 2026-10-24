@@ -162,23 +162,14 @@ func (c *call) observeFallbackCredit(ctx context.Context, response *http.Respons
 	}
 	var message []byte
 	if sse {
-		var payloads [][]byte
-		for _, event := range events {
-			if len(event.data) > 0 {
-				payloads = append(payloads, event.data)
-			}
-		}
+		payloads := creditPayloads(events)
 		var err error
 		message, err = credits.MessageFromEvents(payloads)
 		if err != nil {
 			// Provider SSE errors do not issue credits and retain normal error
 			// forwarding. A Ready claim on such a stream is never accepted.
-			if response.Header.Get(credits.ReadyHeader) == "" {
-				for _, payload := range payloads {
-					if gjson.GetBytes(payload, "type").String() == "error" {
-						return nil
-					}
-				}
+			if response.Header.Get(credits.ReadyHeader) == "" && sseProviderError(payloads) {
+				return nil
 			}
 			return err
 		}
@@ -204,6 +195,27 @@ func (c *call) observeFallbackCredit(ctx context.Context, response *http.Respons
 		return &creditStorageError{cause: err}
 	}
 	return nil
+}
+
+// creditPayloads returns the non-empty event payloads in arrival order.
+func creditPayloads(events []resourceResponseEvent) [][]byte {
+	var payloads [][]byte
+	for _, event := range events {
+		if len(event.data) > 0 {
+			payloads = append(payloads, event.data)
+		}
+	}
+	return payloads
+}
+
+// sseProviderError reports whether any payload is a provider error event.
+func sseProviderError(payloads [][]byte) bool {
+	for _, payload := range payloads {
+		if gjson.GetBytes(payload, "type").String() == "error" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *call) creditPromptVerified(binding core.ResourceBinding) bool {

@@ -159,8 +159,8 @@ func (s *Service) applyMonitorResult(ctx context.Context, e *settleEntry, row *r
 		return s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
 			// Match legacy finance lock order and reject a row transferred to the
 			// managed task table while this callback was running.
-			var status string
-			if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id=$1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+			status, err := lockUsageRow(ctx, tx, e.usageLogID)
+			if err != nil {
 				return err
 			}
 			if status != StatusReserved {

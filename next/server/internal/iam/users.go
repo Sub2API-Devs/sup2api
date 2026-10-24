@@ -82,20 +82,19 @@ type ListUsersFilter struct {
 
 // ListUsers returns a page of non-deleted users ordered by id.
 func (s *Service) ListUsers(ctx context.Context, f ListUsersFilter) ([]*User, int64, error) {
-	where := ` WHERE u.deleted_at IS NULL`
-	var args []any
+	var filter store.Filter
+	filter.And("u.deleted_at IS NULL")
 	if q := strings.TrimSpace(f.Query); q != "" {
-		args = append(args, "%"+escapeLike(q)+"%")
-		where += ` AND (u.email ILIKE $1 OR u.display_name ILIKE $1)`
+		pattern := "%" + store.Like(q) + "%"
+		filter.And(`(u.email ILIKE ? OR u.display_name ILIKE ?)`, pattern, pattern)
 	}
 	if f.Status != "" {
-		args = append(args, f.Status)
-		where += ` AND u.status = $` + strconv.Itoa(len(args))
+		filter.And("u.status = ?", f.Status)
 	}
 	if f.Role != "" {
-		args = append(args, f.Role)
-		where += ` AND EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.key = $` + strconv.Itoa(len(args)) + `)`
+		filter.And(`EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.key = ?)`, f.Role)
 	}
+	where, args := filter.Cond(), filter.Args()
 	var total int64
 	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM users u`+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -258,10 +257,9 @@ func (s *Service) guardTarget(ctx context.Context, actorID, targetID int64) erro
 	return nil
 }
 
-// UpdateUser applies a partial update.
-func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput) (*User, error) {
-	var fields []core.FieldError
-	var email string
+// validateUpdate normalizes the partial update in place (email casing,
+// display-name trimming) and collects field errors in response order.
+func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError) {
 	if in.Email != nil {
 		email, fields = normalizeEmail(*in.Email)
 	}
@@ -282,6 +280,26 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 			fields = append(fields, *f)
 		}
 	}
+	return email, fields
+}
+
+// assertTargetPermissionsWithinActor is SEC-H2: the actor may not touch a
+// target that holds any permission the actor does not hold.
+func (s *Service) assertTargetPermissionsWithinActor(ctx context.Context, actorID, id int64) error {
+	target, err := s.authz.PermissionSet(ctx, id)
+	if err != nil {
+		return err
+	}
+	targetPerms := make([]string, 0, len(target.Keys))
+	for k := range target.Keys {
+		targetPerms = append(targetPerms, k)
+	}
+	return s.authz.CanActOn(ctx, actorID, targetPerms)
+}
+
+// UpdateUser applies a partial update.
+func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput) (*User, error) {
+	email, fields := validateUpdate(in)
 	if len(fields) > 0 {
 		return nil, core.InvalidFields(fields...)
 	}
@@ -307,15 +325,7 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset")
 		}
 		// SEC-H2: target permissions must not exceed actor's
-		target, err := s.authz.PermissionSet(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		targetPerms := make([]string, 0, len(target.Keys))
-		for k := range target.Keys {
-			targetPerms = append(targetPerms, k)
-		}
-		if err := s.authz.CanActOn(ctx, actorID, targetPerms); err != nil {
+		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
 			return nil, err
 		}
 	}
@@ -330,102 +340,9 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	var v int64
 	var u *User
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		// Keep the established authz -> user lock order. Even an apparently
-		// unchanged status must invalidate authorization after concurrent edits.
-		if in.Status != nil {
-			var err error
-			if v, err = s.authz.Bump(ctx, tx); err != nil {
-				return err
-			}
-		}
-		if err := lockRefreshUser(ctx, tx, id); err != nil {
-			if err == errBadRefresh {
-				return core.ErrNotFound.WithMessage("user not found")
-			}
-			return err
-		}
-		cur, err := s.getUser(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		statusChange := in.Status != nil && *in.Status != cur.Status
-		if statusChange {
-			if *in.Status == StatusDisabled {
-				if actorID == id {
-					return errSelfDisable
-				}
-				// SEC-H2: target permissions must not exceed actor's
-				target, err := s.authz.PermissionSet(ctx, id)
-				if err != nil {
-					return err
-				}
-				targetPerms := make([]string, 0, len(target.Keys))
-				for k := range target.Keys {
-					targetPerms = append(targetPerms, k)
-				}
-				if err := s.authz.CanActOn(ctx, actorID, targetPerms); err != nil {
-					return err
-				}
-				if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
-					return err
-				}
-			}
-		}
-
-		// SEC-M1: increment token_version when password changes or user is disabled
-		bumpTokenVersion := hash != nil || (statusChange && *in.Status == StatusDisabled)
-		if bumpTokenVersion {
-			_, err = tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id)
-			if err != nil {
-				return err
-			}
-		}
-
-		_, err = tx.Exec(ctx, `
-UPDATE users SET
-    email = COALESCE($2, email),
-    display_name = COALESCE($3, display_name),
-    status = COALESCE($4, status),
-    max_concurrency = COALESCE($5, max_concurrency),
-    password_hash = COALESCE($6, password_hash),
-    updated_at = now()
-WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency, nilBytes(hash))
-		if store.IsUniqueViolation(err, "") {
-			return emailTaken()
-		}
-		if err != nil {
-			return err
-		}
-		if hash != nil || (statusChange && *in.Status == StatusDisabled) {
-			if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
-				return err
-			}
-		}
-		if u, err = s.getUser(ctx, tx, id); err != nil {
-			return err
-		}
-		if err := s.emit(ctx, tx, "user.updated", id, u.Email, u.Status); err != nil {
-			return err
-		}
-
-		// SEC-M5: audit user changes
-		detail := map[string]any{}
-		if in.Email != nil {
-			detail["email_changed"] = true
-		}
-		if in.DisplayName != nil {
-			detail["display_name_changed"] = true
-		}
-		if in.Status != nil {
-			detail["status"] = *in.Status
-		}
-		if in.MaxConcurrency != nil {
-			detail["max_concurrency"] = *in.MaxConcurrency
-		}
-		if in.Password != nil {
-			detail["password_changed"] = true
-		}
-		return audit.Audit(ctx, tx, actorID, "user.update", "user", strconv.FormatInt(id, 10), detail)
+		var err error
+		v, u, err = s.applyUpdateTx(ctx, tx, actorID, id, in, email, hash)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -435,6 +352,101 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency,
 		s.authz.Committed(ctx, v)
 	}
 	return u, nil
+}
+
+// applyUpdateTx performs the locked read, authorization checks and the write
+// inside the caller's transaction.
+func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int64, in UpdateUserInput, email string, hash []byte) (int64, *User, error) {
+	var v int64
+	// Keep the established authz -> user lock order. Even an apparently
+	// unchanged status must invalidate authorization after concurrent edits.
+	if in.Status != nil {
+		var err error
+		if v, err = s.authz.Bump(ctx, tx); err != nil {
+			return 0, nil, err
+		}
+	}
+	if err := lockRefreshUser(ctx, tx, id); err != nil {
+		if err == errBadRefresh {
+			return 0, nil, core.ErrNotFound.WithMessage("user not found")
+		}
+		return 0, nil, err
+	}
+	cur, err := s.getUser(ctx, tx, id)
+	if err != nil {
+		return 0, nil, err
+	}
+	statusChange := in.Status != nil && *in.Status != cur.Status
+	if statusChange && *in.Status == StatusDisabled {
+		if actorID == id {
+			return 0, nil, errSelfDisable
+		}
+		// SEC-H2: target permissions must not exceed actor's
+		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
+			return 0, nil, err
+		}
+		if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
+			return 0, nil, err
+		}
+	}
+
+	// SEC-M1: increment token_version when password changes or user is disabled
+	bumpTokenVersion := hash != nil || (statusChange && *in.Status == StatusDisabled)
+	if bumpTokenVersion {
+		if _, err := tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id); err != nil {
+			return 0, nil, err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+UPDATE users SET
+    email = COALESCE($2, email),
+    display_name = COALESCE($3, display_name),
+    status = COALESCE($4, status),
+    max_concurrency = COALESCE($5, max_concurrency),
+    password_hash = COALESCE($6, password_hash),
+    updated_at = now()
+WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency, nilBytes(hash))
+	if store.IsUniqueViolation(err, "") {
+		return 0, nil, emailTaken()
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+	if bumpTokenVersion {
+		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
+			return 0, nil, err
+		}
+	}
+	u, err := s.getUser(ctx, tx, id)
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := s.emit(ctx, tx, "user.updated", id, u.Email, u.Status); err != nil {
+		return 0, nil, err
+	}
+
+	// SEC-M5: audit user changes
+	detail := map[string]any{}
+	if in.Email != nil {
+		detail["email_changed"] = true
+	}
+	if in.DisplayName != nil {
+		detail["display_name_changed"] = true
+	}
+	if in.Status != nil {
+		detail["status"] = *in.Status
+	}
+	if in.MaxConcurrency != nil {
+		detail["max_concurrency"] = *in.MaxConcurrency
+	}
+	if in.Password != nil {
+		detail["password_changed"] = true
+	}
+	if err := audit.Audit(ctx, tx, actorID, "user.update", "user", strconv.FormatInt(id, 10), detail); err != nil {
+		return 0, nil, err
+	}
+	return v, u, nil
 }
 
 // DeleteUser soft-deletes a user and revokes their refresh tokens.
@@ -588,8 +600,4 @@ func nilBytes(b []byte) *string {
 	}
 	s := string(b)
 	return &s
-}
-
-func escapeLike(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }

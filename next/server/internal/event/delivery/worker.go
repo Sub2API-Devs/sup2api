@@ -426,6 +426,9 @@ func backoff(failures int, lo, hi time.Duration) time.Duration {
 	return min(d, hi)
 }
 
+// truncate caps an error message at maxErrorLen bytes. It is the fixed-length
+// variant of x.Truncate (no rune-boundary handling, no ellipsis): the length
+// is part of what subscribers see, so it stays byte-exact.
 func truncate(s string) string {
 	if len(s) > maxErrorLen {
 		return s[:maxErrorLen]

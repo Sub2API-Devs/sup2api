@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 
 	"github.com/gin-gonic/gin"
 
@@ -296,7 +297,7 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if c.cliVersion != "" {
 			probes = append(probes, features.RuntimeProbe{Name: "cli_version", Status: "observed", Value: c.cliVersion})
 		}
-		_ = json.NewEncoder(w).Encode(features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "test", Revision: "fixture"}, Catalog: features.Catalog(), PolicySchemaVersions: []int{1}, Probes: probes, ModelProviderVerification: "not_run"})
+		_ = json.NewEncoder(w).Encode(features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "test", Revision: "fixture"}, Catalog: features.RequestRuntimeCatalog(nil), PolicySchemaVersions: []int{1}, Probes: probes, ModelProviderVerification: "not_run"})
 	case "admin/auth/session":
 		if c.pending[key] == "" {
 			_, _ = w.Write([]byte(`{"session":null}`))

@@ -4,14 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
-	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"maps"
 	"net"
 	"net/http"
@@ -21,6 +13,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 const settingKey = "ccgateway_remote"
@@ -703,7 +704,7 @@ func (s *Service) sealConfig(c Config) (json.RawMessage, error) {
 }
 
 func (s *Service) save(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	var in Config
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 192<<10)
 	if !httpapi.BindJSON(c, &in) {

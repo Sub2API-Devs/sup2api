@@ -247,31 +247,53 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			}
 		}
 	}
-	for _, x := range contains {
-		if v := strings.TrimSpace(c.Query(x.q)); v != "" {
-			if len(v) > 256 {
-				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q)
-			}
-			v = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(v)
-			f.add(x.cond, "%"+v+"%")
-		}
+	if err := addContainsFilters(c, f, contains); err != nil {
+		return nil, err
 	}
-	var from time.Time
-	for _, x := range []struct{ q, cond string }{{"from", "u.created_at >= ?"}, {"to", "u.created_at < ?"}} {
-		if v := c.Query(x.q); v != "" {
-			t, err := time.Parse(time.RFC3339, v)
-			if err != nil {
-				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q + " (RFC 3339)")
-			}
-			if x.q == "from" {
-				from = t
-			} else if !from.IsZero() && !t.After(from) {
-				return nil, core.ErrInvalidArgument.WithMessage("to must be after from")
-			}
-			f.add(x.cond, t)
-		}
+	if err := addTimeRange(c, f); err != nil {
+		return nil, err
 	}
 	return f, nil
+}
+
+// addContainsFilters adds the ILIKE filters. Each value is trimmed, capped and
+// escaped for the pattern, so a user cannot smuggle wildcards.
+func addContainsFilters(c *gin.Context, f *filter, contains []struct{ q, cond string }) error {
+	for _, x := range contains {
+		v := strings.TrimSpace(c.Query(x.q))
+		if v == "" {
+			continue
+		}
+		if len(v) > 256 {
+			return core.ErrInvalidArgument.WithMessage("invalid " + x.q)
+		}
+		v = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(v)
+		f.add(x.cond, "%"+v+"%")
+	}
+	return nil
+}
+
+// addTimeRange adds the RFC 3339 created_at bounds, rejecting an empty or
+// inverted range.
+func addTimeRange(c *gin.Context, f *filter) error {
+	var from time.Time
+	for _, x := range []struct{ q, cond string }{{"from", "u.created_at >= ?"}, {"to", "u.created_at < ?"}} {
+		v := c.Query(x.q)
+		if v == "" {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return core.ErrInvalidArgument.WithMessage("invalid " + x.q + " (RFC 3339)")
+		}
+		if x.q == "from" {
+			from = t
+		} else if !from.IsZero() && !t.After(from) {
+			return core.ErrInvalidArgument.WithMessage("to must be after from")
+		}
+		f.add(x.cond, t)
+	}
+	return nil
 }
 
 func (s *Service) myUsage(c *gin.Context) {

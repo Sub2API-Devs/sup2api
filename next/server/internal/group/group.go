@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Service serves the group endpoints.
@@ -110,12 +111,7 @@ func normRate(s string) string {
 	return d.String()
 }
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
 func (s *Service) list(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -572,18 +568,7 @@ func (s *Service) setUserGroups(c *gin.Context) {
 	httpapi.OK(c, v)
 }
 
-func uniqueIDs(in []int64) []int64 {
-	seen := make(map[int64]struct{}, len(in))
-	out := make([]int64, 0, len(in))
-	for _, id := range in {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out
-}
+func uniqueIDs(in []int64) []int64 { return x.Unique(in) }
 
 // dropKeyCache deletes cached API key principals ("apikey:{sha256}", see
 // CONTRACTS §7) for the keys selected by query, so group/user changes apply

@@ -372,17 +372,7 @@ func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRo
 	if client == nil {
 		return nil, fmt.Errorf("plugin %q has no platform service", e.pluginKey)
 	}
-	poll, monitor := false, false
-	if info, ok := gen.Plugin(e.pluginKey); ok && info.Manifest != nil {
-		for _, capability := range info.Manifest.Capabilities {
-			if capability.ID == manifest.CapPlatformMonitor {
-				monitor = true
-			}
-			if capability.ID == manifest.CapPlatformPoll {
-				poll = true
-			}
-		}
-	}
+	poll, monitor := pluginObservationContract(gen, e.pluginKey)
 	if e.task != nil {
 		var err error
 		e.task.paths, err = taskPaths(gen, e)
@@ -415,28 +405,60 @@ func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRo
 		return s.askMonitor(ctx, e, row, client, entry, acct, proxyID)
 	}
 	if poll {
-		p, ok := client.(core.PollPlugin)
-		if !ok {
-			return nil, errors.New("platform.poll.v1 has no Poll implementation")
-		}
-		var deferred atomic.Bool
-		result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: entry, Account: acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
-			return s.fetchExecutionHTTP(ctx, in, proxyID, func(ctx context.Context) error {
-				if r.Limiter != nil {
-					ok, err := r.Limiter.TryHit(ctx, e.account, "poll:"+row.p.RequestID)
-					if err != nil || !ok {
-						deferred.Store(true)
-						return errTaskDeferred
-					}
-				}
-				return nil
-			})
-		})
-		if deferred.Load() {
-			return nil, errTaskDeferred
-		}
-		return result, err
+		return s.askPoll(ctx, e, row, client, entry, acct, proxyID)
 	}
+	return s.buildAndAsk(ctx, e, row, client, entry, acct, proxyID)
+}
+
+// pluginObservationContract reports which observation protocols the plugin
+// declaring this entry supports. Monitor wins over poll when it declares both.
+func pluginObservationContract(gen core.Generation, pluginKey string) (poll, monitor bool) {
+	info, ok := gen.Plugin(pluginKey)
+	if !ok || info.Manifest == nil {
+		return false, false
+	}
+	for _, capability := range info.Manifest.Capabilities {
+		switch capability.ID {
+		case manifest.CapPlatformMonitor:
+			monitor = true
+		case manifest.CapPlatformPoll:
+			poll = true
+		}
+	}
+	return poll, monitor
+}
+
+// askPoll asks a platform.poll.v1 plugin. A limiter refusal during a fetch is
+// reported as deferred so the task is requeued rather than billed wrongly.
+func (s *Service) askPoll(ctx context.Context, e *settleEntry, row *reservedRowState, client core.PlatformPlugin, entry *pluginv1.ReconcileEntry, acct *pluginv1.Account, proxyID *int64) (*pluginv1.ReconcileResult, error) {
+	p, ok := client.(core.PollPlugin)
+	if !ok {
+		return nil, errors.New("platform.poll.v1 has no Poll implementation")
+	}
+	r := s.rec
+	var deferred atomic.Bool
+	result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: entry, Account: acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+		return s.fetchExecutionHTTP(ctx, in, proxyID, func(ctx context.Context) error {
+			if r.Limiter != nil {
+				ok, err := r.Limiter.TryHit(ctx, e.account, "poll:"+row.p.RequestID)
+				if err != nil || !ok {
+					deferred.Store(true)
+					return errTaskDeferred
+				}
+			}
+			return nil
+		})
+	})
+	if deferred.Load() {
+		return nil, errTaskDeferred
+	}
+	return result, err
+}
+
+// buildAndAsk asks a plugin through the Build+Parse protocol: the core sends
+// the HTTP request itself and hands the response back for parsing.
+func (s *Service) buildAndAsk(ctx context.Context, e *settleEntry, row *reservedRowState, client core.PlatformPlugin, entry *pluginv1.ReconcileEntry, acct *pluginv1.Account, proxyID *int64) (*pluginv1.ReconcileResult, error) {
+	r := s.rec
 	built, err := client.BuildReconcileRequest(ctx, &pluginv1.BuildReconcileRequestRequest{Entry: entry, Account: acct})
 	if err != nil {
 		return nil, fmt.Errorf("BuildReconcileRequest: %w", err)
@@ -553,8 +575,8 @@ func (s *Service) rescheduleAttempt(ctx context.Context, e *settleEntry, cfg res
 		next = e.deadlineAt
 	}
 	err := s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
-		var status string
-		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id=$1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+		status, err := lockUsageRow(ctx, tx, e.usageLogID)
+		if err != nil {
 			return err
 		}
 		if status != StatusReserved {
@@ -622,8 +644,8 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 		if err := s.lockTaskOutcome(ctx, tx, e, "closed"); err != nil {
 			return err
 		}
-		var status string
-		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+		status, err := lockUsageRow(ctx, tx, e.usageLogID)
+		if err != nil {
 			return err
 		}
 		if status != StatusReserved {
@@ -681,9 +703,7 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 		s.rec.log.Error("reconcile: settle", "entry", e.id, "request_id", p.RequestID, "err", err)
 		return
 	}
-	if ledgerRes != nil && !ledgerRes.Duplicate {
-		s.ledger.CacheBalance(ctx, p.UserID, ledgerRes.LedgerID, ledgerRes.BalanceAfter)
-	}
+	s.cacheBalance(ctx, p.UserID, ledgerRes)
 	s.rec.log.Info("reconcile: settled", "entry", e.id, "request_id", p.RequestID, "plugin", e.pluginKey,
 		"ref_id", e.refID, "reserved", row.totalCost.String(), "final", total.String())
 }
@@ -699,8 +719,8 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 		if err := s.lockTaskOutcome(ctx, tx, e, "closed"); err != nil {
 			return err
 		}
-		var status string
-		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+		status, err := lockUsageRow(ctx, tx, e.usageLogID)
+		if err != nil {
 			return err
 		}
 		if status != StatusReserved {
@@ -747,9 +767,7 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 		s.rec.log.Error("reconcile: refund a failed entry", "entry", e.id, "request_id", p.RequestID, "err", err)
 		return
 	}
-	if ledgerRes != nil && !ledgerRes.Duplicate {
-		s.ledger.CacheBalance(ctx, p.UserID, ledgerRes.LedgerID, ledgerRes.BalanceAfter)
-	}
+	s.cacheBalance(ctx, p.UserID, ledgerRes)
 	s.rec.log.Info("reconcile: upstream work failed, reservation refunded", "entry", e.id,
 		"request_id", p.RequestID, "refunded", row.totalCost.String(), "reason", reason)
 }
@@ -848,8 +866,8 @@ func (s *Service) keepEstimate(ctx context.Context, e *settleEntry, row *reserve
 		if err := s.lockTaskOutcome(ctx, tx, e, observation); err != nil {
 			return err
 		}
-		var status string
-		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+		status, err := lockUsageRow(ctx, tx, e.usageLogID)
+		if err != nil {
 			return err
 		}
 		if status != StatusReserved {

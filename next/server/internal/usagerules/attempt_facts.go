@@ -1,22 +1,13 @@
 package usagerules
 
 import (
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/tidwall/gjson"
 	"math"
 	"strings"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/tidwall/gjson"
 )
 
-func cloneAttemptFacts(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
-	}
-	out := map[string]any{}
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
 func extractAttemptFacts(rules map[string]manifest.UsageFact, body []byte) map[string]any {
 	out := map[string]any{}
 	for key, rule := range rules {

@@ -3,11 +3,12 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/jackc/pgx/v5"
-	"io"
-	"net/http"
 )
 
 const reauthLockSQL = `SELECT pg_advisory_xact_lock(hashtextextended('ccg-reauth:' || $1::bigint::text, 0))`

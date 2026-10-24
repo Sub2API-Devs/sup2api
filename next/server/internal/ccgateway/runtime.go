@@ -340,8 +340,23 @@ func (s *Service) runtimeStateHealth(ctx context.Context, cfg Config) (runtimeVi
 		// reads a reason with installed null as "state unknown").
 		return v, controllerHealth{}
 	}
+	in := installedFromScript(res.Output)
+	v.Installed = in
+	h, e := s.health(ctx, cfg)
+	if e != nil {
+		v.Reason = "controller_unhealthy"
+		return v, controllerHealth{}
+	}
+	applyHealthToInstalled(in, h)
+	v.UpToDate = in.ControllerImage == img.Controller && in.AppImage == img.App && in.EgressImage == img.Egress
+	return v, h
+}
+
+// installedFromScript reads the images an SSH inspect script printed:
+// a bare quoted line is the controller image, the CCG_* lines the others.
+func installedFromScript(output string) *installedRuntime {
 	in := &installedRuntime{}
-	sc := bufio.NewScanner(strings.NewReader(res.Output))
+	sc := bufio.NewScanner(strings.NewReader(output))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		switch {
@@ -356,12 +371,13 @@ func (s *Service) runtimeStateHealth(ctx context.Context, cfg Config) (runtimeVi
 			in.EgressImage = clean(strings.TrimPrefix(line, "CCG_EGRESS_IMAGE="), reportedImage)
 		}
 	}
-	v.Installed = in
-	h, e := s.health(ctx, cfg)
-	if e != nil {
-		v.Reason = "controller_unhealthy"
-		return v, controllerHealth{}
-	}
+	return in
+}
+
+// applyHealthToInstalled overlays what the controller itself reports on the
+// script's answer (the controller is authoritative for its own version and
+// images).
+func applyHealthToInstalled(in *installedRuntime, h controllerHealth) {
 	in.Version = clean(h.Version, reportedVersion)
 	if h.AppImage != "" {
 		in.AppImage = clean(h.AppImage, reportedImage)
@@ -369,13 +385,11 @@ func (s *Service) runtimeStateHealth(ctx context.Context, cfg Config) (runtimeVi
 	if h.EgressImage != "" {
 		in.EgressImage = clean(h.EgressImage, reportedImage)
 	}
-	v.UpToDate = in.ControllerImage == img.Controller && in.AppImage == img.App && in.EgressImage == img.Egress
-	return v, h
 }
 
 // runtimeGet serves GET /system/ccgateway/runtime.
 func (s *Service) runtimeGet(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
 	cfg, e := s.Load(ctx)
@@ -453,12 +467,28 @@ func (s *Service) lockInstall(ctx context.Context) (context.Context, func(), boo
 	return ctx, s.installMu.Unlock, true, nil
 }
 
+// installLock acquires the install lock for a handler. ok=false means the
+// response was already written: install_failed when the lock could not be
+// taken, install_in_progress when another operation holds it.
+func (s *Service) installLock(c *gin.Context, ctx context.Context) (context.Context, func(), bool) {
+	lctx, release, ok, e := s.lockInstall(ctx)
+	if e != nil {
+		s.failInstall(c)
+		return ctx, nil, false
+	}
+	if !ok {
+		httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
+		return ctx, nil, false
+	}
+	return lctx, release, true
+}
+
 // runtimeInstall serves POST /system/ccgateway/runtime/install. The
 // installation runs to its end even when the caller disconnects (an aborted
 // switch would leave the host without a controller).
 func (s *Service) runtimeInstall(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), installScriptLimit+3*time.Minute)
+	httpapi.NoStore(c)
+	ctx, cancel := detached(c, installScriptLimit+3*time.Minute)
 	defer cancel()
 	cfg, e := s.Load(ctx)
 	if e != nil {
@@ -469,13 +499,8 @@ func (s *Service) runtimeInstall(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "ssh_not_configured"))
 		return
 	}
-	ctx, release, ok, e := s.lockInstall(ctx)
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-		return
-	}
+	ctx, release, ok := s.installLock(c, ctx)
 	if !ok {
-		httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
 		return
 	}
 	defer release()

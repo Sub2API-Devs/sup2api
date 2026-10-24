@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
+	"github.com/gin-gonic/gin"
 
 	"github.com/stretchr/testify/assert"
 )

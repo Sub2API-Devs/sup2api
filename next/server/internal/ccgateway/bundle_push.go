@@ -206,13 +206,13 @@ type bundledResult struct {
 // from the plugin package, loaded and switched to. It runs to its end when
 // the caller disconnects.
 func (s *Service) runtimeBundled(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	wanted, ok := bundledRoles(c)
 	if !ok {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), loadLimit)
+	ctx, cancel := detached(c, loadLimit)
 	defer cancel()
 	cfg, ok := s.panelConfig(c, ctx)
 	if !ok {
@@ -223,13 +223,8 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "no_bundled_images"))
 		return
 	}
-	ctx, release, locked, e := s.lockInstall(ctx)
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-		return
-	}
+	ctx, release, locked := s.installLock(c, ctx)
 	if !locked {
-		httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
 		return
 	}
 	defer release()
@@ -240,6 +235,28 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 	}
 	current := map[string]string{"app": h.AppImage, "egress": h.EgressImage, "controller": h.ControllerImage}
 	uid, _ := core.UserID(ctx)
+	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, wanted, current)
+	// The worker updates may have used up the time: what follows still runs
+	// (bounded on its own).
+	tail, cancelTail := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancelTail()
+	if switched {
+		s.kickAll(tail)
+	}
+	if e := audit.Audit(tail, s.DB.Pool, uid, "ccgateway.runtime.bundled", "system", "ccgateway", map[string]any{"version": b.version, "results": results}); e != nil {
+		slog.Error("CCGateway audit failed", "action", "runtime.bundled")
+	}
+	out := gin.H{"results": results, "runtime": s.runtimeState(tail, cfg)}
+	if workers != nil {
+		out["workers"] = workers
+	}
+	httpapi.OK(c, out)
+}
+
+// pushRolesAndSwitch uploads, loads and switches every wanted role in order
+// and returns the per-role results, the last worker report of an app switch,
+// the configuration after the last save, and whether anything was switched.
+func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle, uid int64, wanted map[string]bool, current map[string]string) ([]bundledResult, *workersReport, Config, bool) {
 	results := []bundledResult{}
 	var workers *workersReport
 	switched := false
@@ -259,25 +276,9 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 		}
 		results = append(results, r)
 	}
-	// The worker updates may have used up the time: what follows still runs
-	// (bounded on its own).
-	tail, cancelTail := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-	defer cancelTail()
-	if switched {
-		s.kickAll(tail)
-	}
-	if e := audit.Audit(tail, s.DB.Pool, uid, "ccgateway.runtime.bundled", "system", "ccgateway", map[string]any{"version": b.version, "results": results}); e != nil {
-		slog.Error("CCGateway audit failed", "action", "runtime.bundled")
-	}
-	out := gin.H{"results": results, "runtime": s.runtimeState(tail, cfg)}
-	if workers != nil {
-		out["workers"] = workers
-	}
-	httpapi.OK(c, out)
+	return results, workers, cfg, switched
 }
 
-// bundledRoles reads {"roles"?: [...]} of POST runtime/bundled; every role
-// when omitted.
 func bundledRoles(c *gin.Context) (map[string]bool, bool) {
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	var in struct {

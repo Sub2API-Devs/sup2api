@@ -14,6 +14,17 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
+// localTokenizerEstimate is the fallback estimate when the plugin does not
+// implement EstimateUsage (or the endpoint has none): the local tokenizer
+// counts the prompt and the caller's pre-consume floor is kept.
+func localTokenizerEstimate(ctx context.Context, prompt string, floor int64) (*pluginv1.UsageReport, error) {
+	n, _, err := tokenizer.Count(ctx, prompt, "")
+	if err != nil {
+		return nil, err
+	}
+	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(n, floor)}}, nil
+}
+
 // precharge runs only after billing type admission and before scheduling.
 // The plugin reports units; the core owns the price snapshot and ledger.
 func (c *call) precharge(ctx context.Context) error {
@@ -53,12 +64,10 @@ func (c *call) precharge(ctx context.Context) error {
 					return fmt.Errorf("task estimator unavailable: %w", err)
 				}
 				// Fall back to local tokenizer for non-task endpoints
-				var n int64
-				n, _, err = tokenizer.Count(ctx, prompt, "")
+				report, err = localTokenizerEstimate(ctx, prompt, floor)
 				if err != nil {
 					return err
 				}
-				report = &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(n, floor)}}
 			} else {
 				return err
 			}
@@ -67,12 +76,10 @@ func (c *call) precharge(ctx context.Context) error {
 		if c.ep.TaskSubmit() {
 			return fmt.Errorf("task estimator unavailable")
 		}
-		var n int64
-		n, _, err = tokenizer.Count(ctx, prompt, "")
-		report = &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(n, floor)}}
-	}
-	if err != nil {
-		return err
+		report, err = localTokenizerEstimate(ctx, prompt, floor)
+		if err != nil {
+			return err
+		}
 	}
 	if report == nil || report.Reserve != nil {
 		return fmt.Errorf("invalid pre-upstream estimate")

@@ -274,6 +274,19 @@ func build(number uint64, exts []Extension) *generation {
 	}
 	// The first claimant of an exclusive resource keeps it: plugins are added
 	// in the order their keys were first approved (unknown last), then by key.
+	for _, ext := range sortedExtensions(exts) {
+		pkg := ext.Package()
+		if _, dup := g.byKey[pkg.Key]; dup {
+			continue
+		}
+		g.registerPlugin(ext, pkg)
+	}
+	g.finish()
+	return g
+}
+
+// sortedExtensions orders plugins by approval time (unknown last), then key.
+func sortedExtensions(exts []Extension) []Extension {
 	sorted := append([]Extension(nil), exts...)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		a, b := sorted[i].Package(), sorted[j].Package()
@@ -285,127 +298,182 @@ func build(number uint64, exts []Extension) *generation {
 		}
 		return a.Key < b.Key
 	})
-	for _, ext := range sorted {
-		pkg := ext.Package()
-		if _, dup := g.byKey[pkg.Key]; dup {
+	return sorted
+}
+
+// registerPlugin adds one plugin's resources to the generation. Each resource
+// type checks its own grant; a conflicting platform marks the plugin
+// abnormal (PluginInfo.Conflicts) instead of skipping the plugin.
+func (g *generation) registerPlugin(ext Extension, pkg *Package) {
+	info := Info(pkg)
+	m := pkg.Manifest
+	grants := ext.Grants()
+	for permission := range grants {
+		info.GrantedPermissions = append(info.GrantedPermissions, permission)
+	}
+	sort.Strings(info.GrantedPermissions)
+	g.plugins = append(g.plugins, info)
+	g.byKey[pkg.Key] = info
+	g.packages[pkg.Key] = pkg
+
+	pf := ext.Platform()
+	if conflicts := g.addPluginPlatforms(info, pkg, pf); len(conflicts) > 0 {
+		info.Conflicts = conflicts
+		g.plugins[len(g.plugins)-1] = info
+		g.byKey[pkg.Key] = info
+	}
+	g.addAccountTypes(info, pkg, pf, grants)
+	g.addHooks(ext, info, m, grants)
+	g.addRanker(ext, info, pkg, m)
+	g.addRoutes(ext, info, pkg, grants)
+	g.addObserver(ext, info, m, grants)
+	g.addJobsAndEvents(ext, info, m, grants)
+}
+
+// addPluginPlatforms registers the platforms m declares. Plugin platforms:
+// ids are unique across built-in and plugin platforms and endpoints never
+// overlap; a conflicting platform is skipped as a whole (the first claimant
+// wins) and the plugin is abnormal (PluginInfo.Conflicts). Client is the
+// declaring plugin's PlatformService, nil when it does not implement
+// platform.adapter.v1 (built-in platforms always have nil).
+func (g *generation) addPluginPlatforms(info core.PluginInfo, pkg *Package, pf core.PlatformPlugin) []core.ResourceConflict {
+	var conflicts []core.ResourceConflict
+	for _, p := range pkg.Manifest.Platforms {
+		if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p, Client: pf}); reason != "" {
+			slog.Error("plugin registry: platform skipped, the plugin is abnormal", "plugin", pkg.Key, "version", pkg.Version,
+				"platform", p.ID, "reason", reason)
+			conflicts = append(conflicts, core.ResourceConflict{Resource: "platform", ID: p.ID, Reason: reason})
+		}
+	}
+	return conflicts
+}
+
+// addAccountTypes registers the account types the plugin declares. They are
+// served by the declaring plugin, which must implement platform.adapter.v1
+// (ARCHITECTURE 6.6) and hold the accounts.credentials grant: without it the
+// plugin never receives credentials, so its account types are not offered or
+// scheduled.
+func (g *generation) addAccountTypes(info core.PluginInfo, pkg *Package, pf core.PlatformPlugin, grants Grants) {
+	if pf == nil || !grants.Has("accounts.credentials") {
+		return
+	}
+	for i, at := range pkg.Manifest.AccountTypes {
+		key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
+		if _, dup := g.atByKey[key]; dup {
 			continue
 		}
-		info := Info(pkg)
-		m := pkg.Manifest
-		grants := ext.Grants()
-		for permission := range grants {
-			info.GrantedPermissions = append(info.GrantedPermissions, permission)
+		atb := core.AccountTypeBinding{Plugin: info, Type: at, DeclIndex: i, Client: pf}
+		if at.Form.Mode == "schema" {
+			atb.FormSchema = readJSON(pkg, at.Form.Schema)
+			atb.FormUI = readJSON(pkg, at.Form.UISchema)
 		}
-		sort.Strings(info.GrantedPermissions)
-		g.plugins = append(g.plugins, info)
-		g.byKey[pkg.Key] = info
-		g.packages[pkg.Key] = pkg
+		g.atByKey[key] = atb
+		g.accTypes = append(g.accTypes, atb)
+	}
+}
 
-		pf := ext.Platform()
-		// Plugin platforms: ids are unique across built-in and plugin
-		// platforms and endpoints never overlap; a conflicting platform is
-		// skipped as a whole (the first claimant wins) and the plugin is
-		// abnormal (PluginInfo.Conflicts). Client is the declaring plugin's
-		// PlatformService, nil when it does not implement platform.adapter.v1
-		// (built-in platforms always have nil).
-		var conflicts []core.ResourceConflict
-		for _, p := range m.Platforms {
-			if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p, Client: pf}); reason != "" {
-				slog.Error("plugin registry: platform skipped, the plugin is abnormal", "plugin", pkg.Key, "version", pkg.Version,
-					"platform", p.ID, "reason", reason)
-				conflicts = append(conflicts, core.ResourceConflict{Resource: "platform", ID: p.ID, Reason: reason})
+// addHooks registers the plugin's hooks, restricted to the granted points and
+// fields.
+func (g *generation) addHooks(ext Extension, info core.PluginInfo, m *manifest.Manifest, grants Grants) {
+	hk := ext.Hook()
+	if hk == nil || !grants.Has("gateway.hook") {
+		return
+	}
+	points, pointsLimited := grants.List("gateway.hook", "points")
+	fields, fieldsLimited := grants.List("gateway.hook", "fields")
+	for i, h := range m.Hooks {
+		if pointsLimited && !contains(points, h.Point) {
+			continue
+		}
+		if h.ID == "" {
+			h.ID = strconv.Itoa(i)
+		}
+		granted := make([]string, 0, len(h.Needs))
+		for _, n := range h.Needs {
+			if !fieldsLimited || contains(fields, n) {
+				granted = append(granted, n)
 			}
 		}
-		if len(conflicts) > 0 {
-			info.Conflicts = conflicts
-			g.plugins[len(g.plugins)-1] = info
-			g.byKey[pkg.Key] = info
+		g.hooks[h.Point] = append(g.hooks[h.Point], core.HookBinding{Plugin: info, Hook: h, GrantedFields: granted, Client: hk})
+	}
+}
+
+// addRanker registers the scheduler, and the rank hook when the manifest
+// declares one and the plugin holds scheduler.rank.
+func (g *generation) addRanker(ext Extension, info core.PluginInfo, pkg *Package, m *manifest.Manifest) {
+	sc := ext.Scheduler()
+	if sc == nil {
+		return
+	}
+	g.scheds[pkg.Key] = sc
+	// Rewriting the scheduling parameters of candidate accounts needs both the
+	// manifest declaration and the capability; the scheduler.rank grant is
+	// checked by install-time validation.
+	if m.Scheduler != nil && m.Scheduler.Rank != nil && hasCapability(m, manifest.CapSchedulerRank) {
+		g.rankers = append(g.rankers, core.AccountRankerBinding{Plugin: info, Rank: *m.Scheduler.Rank, Client: sc})
+	}
+}
+
+// addRoutes registers the plugin's HTTP routes it holds grants for.
+func (g *generation) addRoutes(ext Extension, info core.PluginInfo, pkg *Package, grants Grants) {
+	hx := ext.HTTP()
+	if hx == nil {
+		return
+	}
+	for _, rt := range pkg.Manifest.Routes {
+		if !grants.Has("routes." + rt.Scope) {
+			continue
 		}
-		// Account types are served by the declaring plugin, which must
-		// implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the
-		// accounts.credentials grant: without it the plugin never receives
-		// credentials, so its account types are not offered or scheduled.
-		if pf != nil && grants.Has("accounts.credentials") {
-			for i, at := range m.AccountTypes {
-				key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
-				if _, dup := g.atByKey[key]; dup {
-					continue
-				}
-				atb := core.AccountTypeBinding{Plugin: info, Type: at, DeclIndex: i, Client: pf}
-				if at.Form.Mode == "schema" {
-					atb.FormSchema = readJSON(pkg, at.Form.Schema)
-					atb.FormUI = readJSON(pkg, at.Form.UISchema)
-				}
-				g.atByKey[key] = atb
-				g.accTypes = append(g.accTypes, atb)
-			}
+		g.routes[pkg.Key] = append(g.routes[pkg.Key], core.RouteBinding{Plugin: info, Route: rt, Client: hx})
+	}
+}
+
+// addObserver registers the observation contract, restricted to the granted
+// account scope.
+func (g *generation) addObserver(ext Extension, info core.PluginInfo, m *manifest.Manifest, grants Grants) {
+	source, ok := ext.(interface{ Observer() core.ObservationPlugin })
+	if !ok || m.Observations == nil || !hasCapability(m, manifest.CapGatewayObserve) || !grants.Has("gateway.observe") {
+		return
+	}
+	types, _ := grants.Scope("gateway.observe")["types"].(string)
+	if client := source.Observer(); client != nil && (types == "own" || types == "all") {
+		g.observers = append(g.observers, core.ObservationBinding{Plugin: info, Declaration: *m.Observations, AllAccounts: types == "all", Client: client})
+	}
+}
+
+// addJobsAndEvents registers the plugin's jobs and event subscriptions, each
+// restricted to the granted scope.
+func (g *generation) addJobsAndEvents(ext Extension, info core.PluginInfo, m *manifest.Manifest, grants Grants) {
+	app := ext.App()
+	if app == nil {
+		return
+	}
+	if grants.Has("jobs") {
+		for _, j := range m.Jobs {
+			g.jobs = append(g.jobs, core.JobBinding{Plugin: info, Job: j, Client: app})
 		}
-		if hk := ext.Hook(); hk != nil && grants.Has("gateway.hook") {
-			points, pointsLimited := grants.List("gateway.hook", "points")
-			fields, fieldsLimited := grants.List("gateway.hook", "fields")
-			for i, h := range m.Hooks {
-				if pointsLimited && !contains(points, h.Point) {
-					continue
-				}
-				if h.ID == "" {
-					h.ID = strconv.Itoa(i)
-				}
-				granted := make([]string, 0, len(h.Needs))
-				for _, n := range h.Needs {
-					if !fieldsLimited || contains(fields, n) {
-						granted = append(granted, n)
-					}
-				}
-				g.hooks[h.Point] = append(g.hooks[h.Point], core.HookBinding{Plugin: info, Hook: h, GrantedFields: granted, Client: hk})
-			}
-		}
-		if sc := ext.Scheduler(); sc != nil {
-			g.scheds[pkg.Key] = sc
-			// Rewriting the scheduling parameters of candidate accounts needs
-			// both the manifest declaration and the capability; the
-			// scheduler.rank grant is checked by install-time validation.
-			if m.Scheduler != nil && m.Scheduler.Rank != nil && hasCapability(m, manifest.CapSchedulerRank) {
-				g.rankers = append(g.rankers, core.AccountRankerBinding{Plugin: info, Rank: *m.Scheduler.Rank, Client: sc})
-			}
-		}
-		if hx := ext.HTTP(); hx != nil {
-			for _, rt := range m.Routes {
-				if !grants.Has("routes." + rt.Scope) {
-					continue
-				}
-				g.routes[pkg.Key] = append(g.routes[pkg.Key], core.RouteBinding{Plugin: info, Route: rt, Client: hx})
-			}
-		}
-		if source, ok := ext.(interface{ Observer() core.ObservationPlugin }); ok && m.Observations != nil && hasCapability(m, manifest.CapGatewayObserve) && grants.Has("gateway.observe") {
-			types, _ := grants.Scope("gateway.observe")["types"].(string)
-			if client := source.Observer(); client != nil && (types == "own" || types == "all") {
-				g.observers = append(g.observers, core.ObservationBinding{Plugin: info, Declaration: *m.Observations, AllAccounts: types == "all", Client: client})
-			}
-		}
-		if app := ext.App(); app != nil {
-			if grants.Has("jobs") {
-				for _, j := range m.Jobs {
-					g.jobs = append(g.jobs, core.JobBinding{Plugin: info, Job: j, Client: app})
-				}
-			}
-			if m.Events != nil && len(m.Events.Subscribe) > 0 && grants.Has("events") {
-				ev := *m.Events
-				if allowed, limited := grants.List("events", "subscribe"); limited {
-					ev.Subscribe = nil
-					for _, s := range m.Events.Subscribe {
-						if eventAllowed(allowed, s) {
-							ev.Subscribe = append(ev.Subscribe, s)
-						}
-					}
-				}
-				if len(ev.Subscribe) > 0 {
-					g.subs = append(g.subs, core.SubscriptionBinding{Plugin: info, Events: ev, Client: app})
-				}
+	}
+	if m.Events == nil || len(m.Events.Subscribe) == 0 || !grants.Has("events") {
+		return
+	}
+	ev := *m.Events
+	if allowed, limited := grants.List("events", "subscribe"); limited {
+		ev.Subscribe = nil
+		for _, s := range m.Events.Subscribe {
+			if eventAllowed(allowed, s) {
+				ev.Subscribe = append(ev.Subscribe, s)
 			}
 		}
 	}
-	for point := range g.hooks {
-		hs := g.hooks[point]
+	if len(ev.Subscribe) > 0 {
+		g.subs = append(g.subs, core.SubscriptionBinding{Plugin: info, Events: ev, Client: app})
+	}
+}
+
+// finish sorts the collections and warns about declarations that name
+// resources no plugin of this generation provides.
+func (g *generation) finish() {
+	for point, hs := range g.hooks {
 		sort.SliceStable(hs, func(i, j int) bool {
 			if hs[i].Hook.Order != hs[j].Hook.Order {
 				return hs[i].Hook.Order < hs[j].Hook.Order
@@ -446,29 +514,33 @@ func build(number uint64, exts []Extension) *generation {
 		return a.DeclIndex < b.DeclIndex
 	})
 	for _, atb := range g.accTypes {
-		seen := map[string]bool{}
-		for _, ap := range atb.Type.Platforms {
-			if ap.Platform == "" || seen[ap.Platform] {
-				continue
-			}
-			seen[ap.Platform] = true
-			// An account type may serve a platform another plugin declares,
-			// which need not be installed or enabled yet, so validation
-			// deliberately does not check that the platform exists and this
-			// cannot be an install error. But while it does not exist the type
-			// serves no endpoint at all and every request for that platform
-			// ends in "no enabled account type serves this endpoint", so warn
-			// once per generation: a misspelt platform id is indistinguishable
-			// from a platform whose plugin is simply not enabled yet.
-			if _, ok := g.platByID[ap.Platform]; !ok {
-				slog.Warn("plugin registry: account type serves a platform no platform of this generation declares",
-					"plugin", atb.Plugin.Key, "accountType", atb.Type.ID, "platform", ap.Platform,
-					"hint", "the plugin declaring the platform may not be installed or enabled yet, or the platform id is misspelled")
-			}
-			g.atByPlat[ap.Platform] = append(g.atByPlat[ap.Platform], atb)
-		}
+		g.indexAccountType(atb)
 	}
-	return g
+}
+
+// indexAccountType maps an account type under every platform it serves.
+func (g *generation) indexAccountType(atb core.AccountTypeBinding) {
+	seen := map[string]bool{}
+	for _, ap := range atb.Type.Platforms {
+		if ap.Platform == "" || seen[ap.Platform] {
+			continue
+		}
+		seen[ap.Platform] = true
+		// An account type may serve a platform another plugin declares,
+		// which need not be installed or enabled yet, so validation
+		// deliberately does not check that the platform exists and this
+		// cannot be an install error. But while it does not exist the type
+		// serves no endpoint at all and every request for that platform
+		// ends in "no enabled account type serves this endpoint", so warn
+		// once per generation: a misspelt platform id is indistinguishable
+		// from a platform whose plugin is simply not enabled yet.
+		if _, ok := g.platByID[ap.Platform]; !ok {
+			slog.Warn("plugin registry: account type serves a platform no platform of this generation declares",
+				"plugin", atb.Plugin.Key, "accountType", atb.Type.ID, "platform", ap.Platform,
+				"hint", "the plugin declaring the platform may not be installed or enabled yet, or the platform id is misspelled")
+		}
+		g.atByPlat[ap.Platform] = append(g.atByPlat[ap.Platform], atb)
+	}
 }
 
 func (g *generation) Number() uint64                            { return g.number }

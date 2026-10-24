@@ -47,16 +47,16 @@ func (s *Service) markResourcesDeleted(ctx context.Context, tx pgx.Tx, id int64,
 		if days == 0 || deletion == nil {
 			return nil, core.ErrInvalidArgument.WithMessage("This account type does not keep resources after deletion; delete without retain_resources.")
 		}
-		var until time.Time
-		if err := tx.QueryRow(ctx, `SELECT now() + make_interval(days => $1)`, days).Scan(&until); err != nil {
-			return nil, err
-		}
-		options.RetainUntil = &until
+		options.RetainDays = days
 	}
 	if deletion == nil {
 		return nil, nil
 	}
-	return options.RetainUntil, deletion.MarkAccountDeleted(ctx, tx, id, options)
+	purgeAfter, err := deletion.MarkAccountDeleted(ctx, tx, id, options)
+	if err != nil || options.RetainDays == 0 {
+		return nil, err
+	}
+	return &purgeAfter, nil
 }
 
 // PurgePluginAccounts implements core.PluginAccountPurger (CONTRACTS §14.3):
@@ -100,7 +100,7 @@ func (s *Service) PurgePluginAccounts(ctx context.Context, pluginKey string) (in
 		}
 		if deletion := s.deletionResource(pluginKey); deletion != nil {
 			for _, id := range ids {
-				if err := deletion.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{}); err != nil {
+				if _, err := deletion.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{}); err != nil {
 					return err
 				}
 			}

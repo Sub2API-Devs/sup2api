@@ -3,11 +3,12 @@ package usagerules
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/tidwall/gjson"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/tidwall/gjson"
 )
 
 func mergeUsageSnapshot(before, after gjson.Result) gjson.Result {
@@ -29,6 +30,41 @@ func mergeUsageSnapshot(before, after gjson.Result) gjson.Result {
 type attemptGroup struct {
 	model      string
 	start, end int
+}
+
+// attemptChain tracks the contiguous runs of one model in the sampling
+// iterations, rejecting a model that reappears after a handoff.
+type attemptChain struct {
+	groups       []attemptGroup
+	fallbackSeen bool
+}
+
+func (c *attemptChain) add(model string, i int) error {
+	if len(c.groups) == 0 || c.groups[len(c.groups)-1].model != model {
+		for _, g := range c.groups {
+			if g.model == model {
+				return fmt.Errorf("fallback model reappeared in attempt chain")
+			}
+		}
+		c.groups = append(c.groups, attemptGroup{model: model, start: i, end: i})
+		return nil
+	}
+	c.groups[len(c.groups)-1].end = i
+	return nil
+}
+
+// attemptEntryModel resolves the model of one sampling iteration. An absent
+// model may default to the primary only when the response has no fallback
+// boundary at all; anything else must carry a valid identity.
+func attemptEntryModel(entry gjson.Result, primary string, defaultPrimary bool) (string, error) {
+	model := entry.Get("model")
+	if (!model.Exists() || model.Type == gjson.Null) && defaultPrimary {
+		model = gjson.Result{Type: gjson.String, Str: primary}
+	}
+	if model.Type != gjson.String || model.Str == "" || len(model.Str) > 256 || !utf8.ValidString(model.Str) || strings.ContainsAny(model.Str, "\r\n\x00") {
+		return "", fmt.Errorf("missing or invalid attempt model")
+	}
+	return model.Str, nil
 }
 
 func (m *attemptMeter) anthropicFallback(kind, primary string) ([]core.AttemptUsage, error) {
@@ -76,40 +112,30 @@ func (m *attemptMeter) anthropicFallback(kind, primary string) ([]core.AttemptUs
 		return []core.AttemptUsage{item}, nil
 	}
 	items := make([]core.AttemptUsage, 0, len(selected))
-	groups := []attemptGroup{}
-	fallbackSeen := false
+	chain := attemptChain{}
+	defaultPrimary := len(m.boundaries) == 0 && !hasFallbackTerminal(selected)
 	for i, entry := range selected {
-		model := entry.Get("model")
-		if !model.Exists() || model.Type == gjson.Null {
-			if len(m.boundaries) == 0 && !hasFallbackTerminal(selected) {
-				model = gjson.Result{Type: gjson.String, Str: primary}
-			}
-		}
-		if model.Type != gjson.String || model.Str == "" || len(model.Str) > 256 || !utf8.ValidString(model.Str) || strings.ContainsAny(model.Str, "\r\n\x00") {
-			return nil, fmt.Errorf("missing or invalid attempt model")
+		model, err := attemptEntryModel(entry, primary, defaultPrimary)
+		if err != nil {
+			return nil, err
 		}
 		tokens, err := attemptTokens(entry)
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, core.AttemptUsage{Kind: kind, Model: model.Str, Metrics: iterationCacheMetrics(entry), UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"})
-		if len(groups) == 0 || groups[len(groups)-1].model != model.Str {
-			for _, g := range groups {
-				if g.model == model.Str {
-					return nil, fmt.Errorf("fallback model reappeared in attempt chain")
-				}
-			}
-			groups = append(groups, attemptGroup{model.Str, i, i})
-		} else {
-			groups[len(groups)-1].end = i
+		items = append(items, core.AttemptUsage{Kind: kind, Model: model, Metrics: iterationCacheMetrics(entry), UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"})
+		if err := chain.add(model, i); err != nil {
+			return nil, err
 		}
 		if entry.Get("type").Str == "fallback_message" {
-			if fallbackSeen || i != len(selected)-1 {
+			if chain.fallbackSeen || i != len(selected)-1 {
 				return nil, fmt.Errorf("fallback terminal must be final sampling iteration")
 			}
-			fallbackSeen = true
+			chain.fallbackSeen = true
 		}
 	}
+	groups, fallbackSeen := chain.groups, chain.fallbackSeen
+
 	if len(groups) > 4 || len(m.boundaries) != len(groups)-1 {
 		return nil, fmt.Errorf("fallback transition/usage groups disagree")
 	}

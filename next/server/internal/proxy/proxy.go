@@ -328,12 +328,7 @@ func scanProxy(r pgx.Row) (*Proxy, error) {
 	return &p, err
 }
 
-func t(ctx context.Context, en, zh string) string {
-	if core.Locale(ctx) == "zh" {
-		return zh
-	}
-	return en
-}
+func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
 func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "proxy not found", "代理不存在"))

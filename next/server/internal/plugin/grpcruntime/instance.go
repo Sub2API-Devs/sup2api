@@ -65,6 +65,8 @@ type Instance struct {
 // proc is one OS process of an instance; replaced on restart.
 type proc struct {
 	client     *plugin.Client
+	conn       *grpc.ClientConn
+	broker     *plugin.GRPCBroker
 	plugin     pluginv1.PluginServiceClient
 	platform   pluginv1.PlatformServiceClient
 	hook       pluginv1.HookServiceClient
@@ -194,20 +196,7 @@ func (i *Instance) launchSpec() core.LaunchSpec {
 		spec.MaxThreads = m.Resources.MaxThreads
 		spec.MaxOpenFiles = m.Resources.MaxOpenFiles
 	}
-	if l := st.limits; l.MemoryMB > 0 || l.CPU > 0 || l.MaxThreads > 0 || l.MaxOpenFiles > 0 {
-		if l.MemoryMB > 0 {
-			spec.MemoryMB = l.MemoryMB
-		}
-		if l.CPU > 0 {
-			spec.CPU = l.CPU
-		}
-		if l.MaxThreads > 0 {
-			spec.MaxThreads = l.MaxThreads
-		}
-		if l.MaxOpenFiles > 0 {
-			spec.MaxOpenFiles = l.MaxOpenFiles
-		}
-	}
+	mergeLimits(&spec, st.limits)
 	if max := i.rt.o.MaxMemoryMB; max > 0 && (spec.MemoryMB == 0 || spec.MemoryMB > max) {
 		spec.MemoryMB = max
 	}
@@ -222,6 +211,23 @@ func (i *Instance) launchSpec() core.LaunchSpec {
 		protocol.EnvDataDir + "=" + spec.WorkDir,
 	}
 	return spec
+}
+
+// mergeLimits applies the operator's per-plugin overrides on top of the
+// manifest limits; zero means "keep the manifest value".
+func mergeLimits(spec *core.LaunchSpec, l resourceLimits) {
+	if l.MemoryMB > 0 {
+		spec.MemoryMB = l.MemoryMB
+	}
+	if l.CPU > 0 {
+		spec.CPU = l.CPU
+	}
+	if l.MaxThreads > 0 {
+		spec.MaxThreads = l.MaxThreads
+	}
+	if l.MaxOpenFiles > 0 {
+		spec.MaxOpenFiles = l.MaxOpenFiles
+	}
 }
 
 func (i *Instance) startFirst(ctx context.Context) error {
@@ -240,23 +246,16 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	ctx, cancel := context.WithTimeout(ctx, i.rt.o.StartTimeout)
 	defer cancel()
 
-	// Re-verify the extracted binary before every start.
-	if sum, err := fileSum(i.binPath); err != nil || sum != i.binSum {
-		if _, _, err := i.pkg.ExtractBinary(goos(), goarch()); err != nil {
-			return nil, fmt.Errorf("re-extract binary: %w", err)
-		}
+	if err := i.reverifyBinary(); err != nil {
+		return nil, err
 	}
 	spec := i.launchSpec()
 	if err := os.MkdirAll(spec.WorkDir, 0o700); err != nil {
 		return nil, err
 	}
-	runDir, fallback, err := newRunDir(i.rt.o.RunDir, i.pkg.Key)
+	runDir, err := i.prepareRunDir()
 	if err != nil {
 		return nil, err
-	}
-	if fallback {
-		i.log.Warn("plugin run directory is too long for unix sockets; using a private directory under /tmp (set SUB2API_PLUGIN_RUN_DIR)",
-			"configured", i.rt.o.RunDir, "dir", runDir)
 	}
 	defer func() {
 		if err != nil {
@@ -265,6 +264,64 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	}()
 	spec.RunDir = runDir
 	spec.Env = append(spec.Env, runDirEnv(runDir)...)
+
+	p, err := i.newPluginClient(ctx, spec, runDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			i.killProc(p, false)
+		}
+	}()
+	if err := i.dispenseClients(p); err != nil {
+		return nil, err
+	}
+	if err := i.verifyInfo(ctx, p); err != nil {
+		return nil, err
+	}
+	if err := i.serveHostBroker(ctx, p); err != nil {
+		return nil, err
+	}
+	if err := i.configure(ctx, p, i.settings.Load()); err != nil {
+		return nil, err
+	}
+	if err := verifyHealth(ctx, p); err != nil {
+		return nil, err
+	}
+	if p.pid > 0 {
+		p.stopWatch = i.rt.o.Launcher.Watch(spec, p.pid, i.onResourceEvent)
+	}
+	return p, nil
+}
+
+// reverifyBinary re-extracts the binary when the extracted copy no longer
+// matches the package checksum.
+func (i *Instance) reverifyBinary() error {
+	if sum, err := fileSum(i.binPath); err == nil && sum == i.binSum {
+		return nil
+	}
+	if _, _, err := i.pkg.ExtractBinary(goos(), goarch()); err != nil {
+		return fmt.Errorf("re-extract binary: %w", err)
+	}
+	return nil
+}
+
+// prepareRunDir creates the private run directory of this process.
+func (i *Instance) prepareRunDir() (string, error) {
+	runDir, fallback, err := newRunDir(i.rt.o.RunDir, i.pkg.Key)
+	if err != nil {
+		return "", err
+	}
+	if fallback {
+		i.log.Warn("plugin run directory is too long for unix sockets; using a private directory under /tmp (set SUB2API_PLUGIN_RUN_DIR)",
+			"configured", i.rt.o.RunDir, "dir", runDir)
+	}
+	return runDir, nil
+}
+
+// newPluginClient builds the go-plugin client and starts the process.
+func (i *Instance) newPluginClient(ctx context.Context, spec core.LaunchSpec, runDir string) (_ *proc, err error) {
 	cmd, err := i.rt.o.Launcher.Command(ctx, spec)
 	if err != nil {
 		return nil, fmt.Errorf("launcher: %w", err)
@@ -320,7 +377,20 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	if !ok || pc.Conn == nil {
 		return nil, errors.New("dispense: unexpected client type")
 	}
-	var conn grpc.ClientConnInterface = pc.Conn
+	p.conn = pc.Conn
+	p.broker = pc.Broker
+	if run != nil {
+		p.pid = run.pid
+	}
+	return p, nil
+}
+
+// dispenseClients wires the eight service clients of the shared connection.
+func (i *Instance) dispenseClients(p *proc) error {
+	if p.conn == nil {
+		return errors.New("dispense: no connection")
+	}
+	var conn grpc.ClientConnInterface = p.conn
 	p.plugin = pluginv1.NewPluginServiceClient(conn)
 	p.platform = pluginv1.NewPlatformServiceClient(conn)
 	p.hook = pluginv1.NewHookServiceClient(conn)
@@ -329,20 +399,21 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	p.http = pluginv1.NewHTTPServiceClient(conn)
 	p.sched = pluginv1.NewSchedulerServiceClient(conn)
 	p.migration = pluginv1.NewMigrationServiceClient(conn)
-	if run != nil {
-		p.pid = run.pid
-	}
+	return nil
+}
 
+// verifyInfo checks GetInfo against the package identity and protocol.
+func (i *Instance) verifyInfo(ctx context.Context, p *proc) error {
 	info, err := p.plugin.GetInfo(ctx, &pluginv1.GetInfoRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("GetInfo: %w", err)
+		return fmt.Errorf("GetInfo: %w", err)
 	}
 	if info.GetPluginKey() != i.pkg.Key || info.GetVersion() != i.pkg.Version {
-		return nil, fmt.Errorf("GetInfo: plugin reports %s@%s, package is %s@%s",
+		return fmt.Errorf("GetInfo: plugin reports %s@%s, package is %s@%s",
 			info.GetPluginKey(), info.GetVersion(), i.pkg.Key, i.pkg.Version)
 	}
 	if info.GetProtocolVersion() != protocol.ProtocolVersion {
-		return nil, fmt.Errorf("GetInfo: protocol version %d, host supports %d", info.GetProtocolVersion(), protocol.ProtocolVersion)
+		return fmt.Errorf("GetInfo: protocol version %d, host supports %d", info.GetProtocolVersion(), protocol.ProtocolVersion)
 	}
 	reported := map[string]bool{}
 	for _, c := range info.GetCapabilities() {
@@ -353,8 +424,12 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 			i.log.Warn("plugin does not report a capability declared in its manifest", "capability", c)
 		}
 	}
+	return nil
+}
 
-	// Serve HostService and EgressService for this instance on the broker.
+// serveHostBroker accepts the plugin's HostService and EgressService calls
+// on the broker connection, then runs InitHost.
+func (i *Instance) serveHostBroker(ctx context.Context, p *proc) error {
 	// The tunnel is only registered for a plugin that may use it (the net
 	// grant, or its own database); the policy is still checked on every
 	// connection, so a later revocation applies at once.
@@ -363,8 +438,8 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	if pol := i.egressPolicy(); i.rt.o.Egress != nil && (pol.Net || pol.Database) {
 		egress = i.rt.o.Egress.ServerFor(i.pkg.Key, i.egressPolicy)
 	}
-	brokerID := pc.Broker.NextId()
-	go pc.Broker.AcceptAndServe(brokerID, func(opts []grpc.ServerOption) *grpc.Server {
+	brokerID := p.broker.NextId()
+	go p.broker.AcceptAndServe(brokerID, func(opts []grpc.ServerOption) *grpc.Server {
 		s := grpc.NewServer(opts...)
 		pluginv1.RegisterHostServiceServer(s, host)
 		pluginv1.RegisterEgressServiceServer(s, egress)
@@ -379,25 +454,24 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 		HostVersion:    i.rt.o.HostVersion,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("InitHost: %w", err)
+		return fmt.Errorf("InitHost: %w", err)
 	}
 	if !initResp.GetReady() {
-		return nil, fmt.Errorf("InitHost: plugin not ready: %s", initResp.GetMessage())
+		return fmt.Errorf("InitHost: plugin not ready: %s", initResp.GetMessage())
 	}
-	if err := i.configure(ctx, p, i.settings.Load()); err != nil {
-		return nil, err
-	}
+	return nil
+}
+
+// verifyHealth requires a healthy plugin before it is used.
+func verifyHealth(ctx context.Context, p *proc) error {
 	h, err := p.plugin.Health(ctx, &pluginv1.HealthRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("Health: %w", err)
+		return fmt.Errorf("Health: %w", err)
 	}
 	if !h.GetHealthy() {
-		return nil, fmt.Errorf("Health: unhealthy: %s", h.GetMessage())
+		return fmt.Errorf("Health: unhealthy: %s", h.GetMessage())
 	}
-	if p.pid > 0 {
-		p.stopWatch = i.rt.o.Launcher.Watch(spec, p.pid, i.onResourceEvent)
-	}
-	return p, nil
+	return nil
 }
 
 func (i *Instance) configure(ctx context.Context, p *proc, st *settings) error {

@@ -21,6 +21,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // DNSHost/DNSPort is the in-process DNS-over-TCP endpoint the plugin SDK
@@ -392,12 +393,7 @@ func normalizeHost(h string) string {
 	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
 }
 
-func truncate(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
+func truncate(s string, n int) string { return x.Truncate(s, n) }
 
 // check decides one TCP connection. It returns the addresses to dial (nil
 // with an empty reason: the configured database address, dialled by name),

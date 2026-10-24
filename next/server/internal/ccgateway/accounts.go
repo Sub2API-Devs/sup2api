@@ -613,7 +613,7 @@ func (s *Service) accountManage(c *gin.Context) {
 		s.accountFeaturePreview(c)
 		return
 	}
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, e := strconv.ParseInt(c.Param("id"), 10, 64)
 	if e != nil || id <= 0 {
 		httpapi.Fail(c, core.ErrInvalidArgument)

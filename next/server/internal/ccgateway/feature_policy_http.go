@@ -23,78 +23,21 @@ type featurePreview struct {
 }
 
 func (s *Service) accountFeaturePreview(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
 	}
 	ctx := c.Request.Context()
-	keys := []string{"settings:read", "account:read"}
-	if c.Request.Method == "POST" {
-		keys = []string{"settings:manage", "account:update"}
-	}
-	scope := callerScope(ctx, keys...)
-	var exists bool
-	err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1 AND deleted_at IS NULL
-		AND plugin_key='ccgateway' AND type IN ('managed','apikey') AND ($2::bigint IS NULL OR created_by=$2))`, id, scope).Scan(&exists)
-	if err != nil || !exists {
-		httpapi.Fail(c, core.ErrNotFound)
+	if !s.previewAuthorize(c, ctx, id) {
 		return
 	}
-	var groupID int64
-	var draft *AccountFeaturePolicy
-	if c.Request.Method == "POST" {
-		var in struct {
-			GroupID int64                 `json:"group_id"`
-			Policy  *AccountFeaturePolicy `json:"cc_feature_policy"`
-		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
-		if !httpapi.BindJSON(c, &in) {
-			return
-		}
-		groupID, draft = in.GroupID, in.Policy
-		if draft != nil {
-			if err := draft.Validate(); err != nil {
-				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(err.Error()))
-				return
-			}
-		}
-	} else if raw := c.Query("group_id"); raw != "" {
-		groupID, err = strconv.ParseInt(raw, 10, 64)
-		if err != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument)
-			return
-		}
-	}
-	if groupID < 0 {
-		httpapi.Fail(c, core.ErrInvalidArgument)
+	groupID, draft, ok := previewInput(c)
+	if !ok {
 		return
 	}
-	rows, err := s.DB.Pool.Query(ctx, `SELECT g.id,g.name FROM groups g JOIN account_groups a ON a.group_id=g.id WHERE a.account_id=$1 ORDER BY g.id`, id)
-	if err != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
-		return
-	}
-	groups := []featureGroupRef{}
-	found := groupID == 0
-	for rows.Next() {
-		var g featureGroupRef
-		if err = rows.Scan(&g.ID, &g.Name); err != nil {
-			break
-		}
-		groups = append(groups, g)
-		found = found || g.ID == groupID
-	}
-	if err == nil {
-		err = rows.Err()
-	}
-	rows.Close()
-	if err != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
-		return
-	}
-	if !found {
-		httpapi.Fail(c, core.ErrNotFound)
+	groups, ok := s.accountGroups(c, ctx, id, groupID)
+	if !ok {
 		return
 	}
 	account, err := LoadAccountFeaturePolicy(ctx, s.DB.Pool, id)
@@ -116,6 +59,92 @@ func (s *Service) accountFeaturePreview(c *gin.Context) {
 	}
 	out := featurePreview{FeatureResolution: cfg.ResolveFeaturePolicy(groupID, account), AccountPolicy: account, Groups: groups}
 	httpapi.OK(c, out)
+}
+
+// previewAuthorize confirms the account exists, is a CCGateway account and is
+// visible to the caller for this method's permission pair.
+func (s *Service) previewAuthorize(c *gin.Context, ctx context.Context, id int64) bool {
+	keys := []string{"settings:read", "account:read"}
+	if c.Request.Method == "POST" {
+		keys = []string{"settings:manage", "account:update"}
+	}
+	scope := callerScope(ctx, keys...)
+	var exists bool
+	err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1 AND deleted_at IS NULL
+		AND plugin_key='ccgateway' AND type IN ('managed','apikey') AND ($2::bigint IS NULL OR created_by=$2))`, id, scope).Scan(&exists)
+	if err != nil || !exists {
+		httpapi.Fail(c, core.ErrNotFound)
+		return false
+	}
+	return true
+}
+
+// previewInput reads the optional group and draft policy from a POST body or
+// the GET query.
+func previewInput(c *gin.Context) (groupID int64, draft *AccountFeaturePolicy, ok bool) {
+	if c.Request.Method == "POST" {
+		var in struct {
+			GroupID int64                 `json:"group_id"`
+			Policy  *AccountFeaturePolicy `json:"cc_feature_policy"`
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
+		if !httpapi.BindJSON(c, &in) {
+			return 0, nil, false
+		}
+		if in.Policy != nil {
+			if err := in.Policy.Validate(); err != nil {
+				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(err.Error()))
+				return 0, nil, false
+			}
+		}
+		if in.GroupID < 0 {
+			httpapi.Fail(c, core.ErrInvalidArgument)
+			return 0, nil, false
+		}
+		return in.GroupID, in.Policy, true
+	}
+	if raw := c.Query("group_id"); raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || v < 0 {
+			httpapi.Fail(c, core.ErrInvalidArgument)
+			return 0, nil, false
+		}
+		return v, nil, true
+	}
+	return 0, nil, true
+}
+
+// accountGroups lists the account's groups and confirms groupID is one of
+// them (0 means "no group selected").
+func (s *Service) accountGroups(c *gin.Context, ctx context.Context, id, groupID int64) ([]featureGroupRef, bool) {
+	rows, err := s.DB.Pool.Query(ctx, `SELECT g.id,g.name FROM groups g JOIN account_groups a ON a.group_id=g.id WHERE a.account_id=$1 ORDER BY g.id`, id)
+	if err != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return nil, false
+	}
+	groups := []featureGroupRef{}
+	found := groupID == 0
+	for rows.Next() {
+		var g featureGroupRef
+		if err = rows.Scan(&g.ID, &g.Name); err != nil {
+			break
+		}
+		groups = append(groups, g)
+		found = found || g.ID == groupID
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return nil, false
+	}
+	if !found {
+		httpapi.Fail(c, core.ErrNotFound)
+		return nil, false
+	}
+	return groups, true
 }
 
 // Saving a custom draft requires at least one current account group without an

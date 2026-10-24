@@ -49,7 +49,8 @@ func TestFeatureCatalogAuthorizationAndNoRuntimeDependency(t *testing.T) {
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if response.Data.RuntimeVerified || response.Data.CatalogVersion != features.CatalogVersion || response.Data.PolicySchemaVersion != features.PolicySchemaVersion || len(response.Data.Features) == 0 {
+			want := features.RequestCatalog("request_build")
+			if response.Data.RuntimeVerified || response.Data.CatalogVersion != want.CatalogVersion || response.Data.PolicySchemaVersion != features.PolicySchemaVersion || len(response.Data.Features) == 0 {
 				t.Fatalf("invalid catalog: %+v", response.Data)
 			}
 		})

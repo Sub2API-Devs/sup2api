@@ -43,6 +43,10 @@ func List(c *gin.Context, items any, p Page) {
 // NoContent renders 204.
 func NoContent(c *gin.Context) { c.Status(http.StatusNoContent) }
 
+// NoStore marks a response as uncacheable. Console state and runtime answers
+// are always read fresh; a cached copy would be a stale capability claim.
+func NoStore(c *gin.Context) { c.Header("Cache-Control", "no-store") }
+
 // Fail renders {"error": {...}} using core.Error; unknown errors become
 // "internal" and are logged with their cause.
 func Fail(c *gin.Context, err error) {

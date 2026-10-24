@@ -11,6 +11,20 @@ func Itoa64(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
 
+// Unique keeps the first occurrence of each value, preserving input order.
+func Unique[T comparable](in []T) []T {
+	seen := make(map[T]struct{}, len(in))
+	out := make([]T, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 // TruncUTF8 truncates s to at most n bytes, cutting at a rune boundary.
 func TruncUTF8(s string, n int) string {
 	if len(s) <= n {
@@ -22,25 +36,16 @@ func TruncUTF8(s string, n int) string {
 	return s[:n]
 }
 
-// PtrIfPositive returns a pointer to v if v > 0, otherwise nil.
-func PtrIfPositive(v int64) *int64 {
-	if v > 0 {
-		return &v
-	}
-	return nil
-}
+// Truncate is the shared byte cap for display and storage-bound text: it
+// shortens s to at most n bytes without splitting a UTF-8 rune.
+func Truncate(s string, n int) string { return TruncUTF8(s, n) }
 
-// Uniq removes consecutive duplicates from a sorted slice.
-func Uniq[T comparable](s []T) []T {
-	if len(s) == 0 {
+// TruncateEllipsis is Truncate with an ellipsis marking the cut: text that
+// already fits is returned unchanged, anything longer is trimmed at a rune
+// boundary and gets "…" appended.
+func TruncateEllipsis(s string, n int) string {
+	if len(s) <= n {
 		return s
 	}
-	w := 1
-	for i := 1; i < len(s); i++ {
-		if s[i] != s[i-1] {
-			s[w] = s[i]
-			w++
-		}
-	}
-	return s[:w]
+	return TruncUTF8(s, n) + "…"
 }

@@ -57,7 +57,10 @@ func TestDeletedRuntimePurgesDataAndRetriesFailure(t *testing.T) {
 			if len(purgeHeaders) != 0 {
 				t.Fatal("historical deletion purged without an explicit cleanup job")
 			}
-			if err := f.db.Tx(ctx, func(tx pgx.Tx) error { return f.s.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{}) }); err != nil {
+			if err := f.db.Tx(ctx, func(tx pgx.Tx) error {
+				_, err := f.s.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{})
+				return err
+			}); err != nil {
 				t.Fatal(err)
 			}
 			ctl.deleteCode = 500
@@ -97,15 +100,16 @@ func (f *runtimeFixture) purged(key string) bool {
 }
 
 // markDeleted soft-deletes account id as the account module does, keeping
-// its runtime until retainUntil (nil: purge at once).
-func (f *runtimeFixture) markDeleted(id int64, retainUntil *time.Time) {
+// its runtime for retainDays (0: purge at once).
+func (f *runtimeFixture) markDeleted(id int64, retainDays int) {
 	f.t.Helper()
 	ctx := context.Background()
 	if err := f.db.Tx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE accounts SET deleted_at=now() WHERE id=$1`, id); err != nil {
 			return err
 		}
-		return f.s.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{RetainUntil: retainUntil})
+		_, err := f.s.MarkAccountDeleted(ctx, tx, id, core.AccountDeletionOptions{RetainDays: retainDays})
+		return err
 	}); err != nil {
 		f.t.Fatal(err)
 	}
@@ -146,7 +150,7 @@ func TestRetainedDeletedRuntimeBlocksThenPurgesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	until := time.Now().Add(72 * time.Hour)
-	f.markDeleted(id, &until)
+	f.markDeleted(id, 3)
 	for i := 0; i < 2; i++ {
 		f.s.forgetBlocked()
 		if err := f.s.Reconcile(ctx, key); err != nil {
@@ -222,8 +226,8 @@ func TestDeletedRuntimePurgedDespiteUnusableProxyAndLegacyMark(t *testing.T) {
 	if _, err := f.db.Pool.Exec(ctx, `DELETE FROM proxies WHERE id=(SELECT proxy_id FROM accounts WHERE id=$1)`, unusable); err != nil {
 		t.Fatal(err)
 	}
-	f.markDeleted(unusable, nil)
-	f.markDeleted(legacy, nil)
+	f.markDeleted(unusable, 0)
+	f.markDeleted(legacy, 0)
 	if _, err := f.db.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET purge_after=NULL WHERE account_id=$1`, legacy); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +252,7 @@ func TestPurgeConflictNamesResourceInUse(t *testing.T) {
 	ctx := context.Background()
 	id := f.account(false)
 	key := strconv.FormatInt(id, 10)
-	f.markDeleted(id, nil)
+	f.markDeleted(id, 0)
 	err := f.s.Reconcile(ctx, key)
 	if reasonOf(core.AsError(err)) != reasonResourceInUse || f.purged(key) {
 		t.Fatalf("reconcile: %v purged=%v", err, f.purged(key))
@@ -287,9 +291,8 @@ func TestRuntimePurgeEndsRetention(t *testing.T) {
 	f := newRuntimeFixture(t, cleanupController(ctl, &code, &body))
 	ctx := context.Background()
 	retained, active, immediate := f.account(false), f.account(false), f.account(false)
-	until := time.Now().Add(24 * time.Hour)
-	f.markDeleted(retained, &until)
-	f.markDeleted(immediate, nil)
+	f.markDeleted(retained, 1)
+	f.markDeleted(immediate, 0)
 	key := strconv.FormatInt(retained, 10)
 	path := func(key string) string { return "/system/ccgateway/runtimes/" + key + "/purge" }
 	f.auth.keys[2] = []string{"settings:read"}

@@ -65,7 +65,7 @@ func uploadID(c *gin.Context) (string, bool) {
 
 // uploadCreate serves POST /system/ccgateway/runtime/uploads.
 func (s *Service) uploadCreate(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	var in struct {
 		Size   int64  `json:"size"`
 		SHA256 string `json:"sha256"`
@@ -126,7 +126,7 @@ func (t *trackedBody) Read(p []byte) (int, error) {
 // uploadPut serves PUT /system/ccgateway/runtime/uploads/:id: one chunk,
 // streamed to the controller with the caller's exact length.
 func (s *Service) uploadPut(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := uploadID(c)
 	if !ok {
 		return
@@ -164,7 +164,7 @@ func (s *Service) uploadPut(c *gin.Context) {
 
 // uploadGet serves GET and DELETE /system/ccgateway/runtime/uploads/:id.
 func (s *Service) uploadGet(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := uploadID(c)
 	if !ok {
 		return
@@ -218,39 +218,26 @@ type loadedImage struct {
 // controller loads the upload; with apply the image becomes the role's
 // image (configuration first, then the controller).
 func (s *Service) uploadLoad(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
+	httpapi.NoStore(c)
 	id, ok := uploadID(c)
 	if !ok {
 		return
 	}
-	var in struct {
-		Role  string `json:"role"`
-		Apply bool   `json:"apply"`
-	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	if in.Role != "app" && in.Role != "egress" && in.Role != "controller" {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
+	in, ok := decodeLoadRequest(c)
+	if !ok {
 		return
 	}
 	// Loading and switching images must not stop halfway when the caller (or
 	// a proxy in front of the core) gives up.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), loadLimit)
+	ctx, cancel := detached(c, loadLimit)
 	defer cancel()
 	cfg, ok := s.panelConfig(c, ctx)
 	if !ok {
 		return
 	}
 	if in.Apply {
-		lockCtx, release, locked, e := s.lockInstall(ctx)
-		if e != nil {
-			httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-			return
-		}
+		lockCtx, release, locked := s.installLock(c, ctx)
 		if !locked {
-			httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
 			return
 		}
 		defer release()
@@ -264,8 +251,60 @@ func (s *Service) uploadLoad(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	images := make([]loadedImage, 0, len(loaded.Images))
-	for _, img := range loaded.Images {
+	images, ok := sanitizeLoadedImages(c, loaded.SHA256, loaded.Images)
+	if !ok {
+		return
+	}
+	ref := images[0].ID
+	if len(images[0].Tags) > 0 {
+		ref = images[0].Tags[0]
+	}
+	uid, _ := core.UserID(ctx)
+	var workers *workersReport
+	if in.Apply {
+		var cancelTail context.CancelFunc
+		if cfg, workers, ctx, cancelTail, ok = s.applyLoadedImage(c, ctx, uid, in.Role, ref); !ok {
+			return
+		}
+		if cancelTail != nil {
+			defer cancelTail()
+		}
+	}
+	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.upload", "system", "ccgateway", map[string]any{"role": in.Role, "apply": in.Apply, "ref": ref}); e != nil {
+		slog.Error("CCGateway audit failed", "action", "runtime.upload")
+	}
+	out := gin.H{"sha256": loaded.SHA256, "images": images, "ref": ref, "runtime": s.runtimeState(ctx, cfg)}
+	if workers != nil {
+		out["workers"] = workers
+	}
+	httpapi.OK(c, out)
+}
+
+// decodeLoadRequest reads the small load body and validates the role.
+func decodeLoadRequest(c *gin.Context) (struct {
+	Role  string `json:"role"`
+	Apply bool   `json:"apply"`
+}, bool) {
+	var in struct {
+		Role  string `json:"role"`
+		Apply bool   `json:"apply"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	if !httpapi.BindJSON(c, &in) {
+		return in, false
+	}
+	if in.Role != "app" && in.Role != "egress" && in.Role != "controller" {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
+		return in, false
+	}
+	return in, true
+}
+
+// sanitizeLoadedImages keeps images and tags that pass the format limits and
+// writes the failure response when the answer cannot be used.
+func sanitizeLoadedImages(c *gin.Context, sha string, loaded []loadedImage) ([]loadedImage, bool) {
+	images := make([]loadedImage, 0, len(loaded))
+	for _, img := range loaded {
 		if !imageIDPattern.MatchString(img.ID) || len(images) == 64 {
 			continue
 		}
@@ -277,66 +316,57 @@ func (s *Service) uploadLoad(c *gin.Context) {
 		}
 		images = append(images, loadedImage{ID: img.ID, Tags: tags})
 	}
-	if !sha256Pattern.MatchString(loaded.SHA256) || len(images) == 0 {
+	if !sha256Pattern.MatchString(sha) || len(images) == 0 {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "load_failed"))
-		return
+		return nil, false
 	}
-	ref := images[0].ID
-	if len(images[0].Tags) > 0 {
-		ref = images[0].Tags[0]
-	}
-	uid, _ := core.UserID(ctx)
-	var workers *workersReport
-	if in.Apply {
-		saved, e := s.updateConfig(ctx, uid, []string{"images"}, func(cur *Config) error {
-			if cur.Mode != "controller" {
-				return errConfigChanged
-			}
-			img := RuntimeImages{}
-			if cur.Images != nil {
-				img = *cur.Images
-			}
-			switch in.Role {
-			case "app":
-				img.App = ref
-			case "egress":
-				img.Egress = ref
-			default:
-				img.Controller = ref
-			}
-			cur.Images = &img
-			return nil
-		})
-		if errors.Is(e, errConfigChanged) {
-			httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
-			return
+	return images, true
+}
+
+// applyLoadedImage makes ref the role's image: configuration first, then the
+// controller switch. ok=false means the response was already written. The
+// returned context (and its cancel, which the caller defers) carries the 2
+// minute tail budget the switch may need, so the audit and the runtime read
+// after it still run.
+func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string) (Config, *workersReport, context.Context, context.CancelFunc, bool) {
+	saved, e := s.updateConfig(ctx, uid, []string{"images"}, func(cur *Config) error {
+		if cur.Mode != "controller" {
+			return errConfigChanged
 		}
-		if e != nil {
-			httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-			return
+		img := RuntimeImages{}
+		if cur.Images != nil {
+			img = *cur.Images
 		}
-		cfg = saved
-		report, err := s.switchImage(ctx, cfg, in.Role, ref)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
+		switch role {
+		case "app":
+			img.App = ref
+		case "egress":
+			img.Egress = ref
+		default:
+			img.Controller = ref
 		}
-		if report != nil {
-			workers = report
-			// The worker updates may have used up the load's time: what
-			// follows still runs (bounded on its own).
-			var cancelTail context.CancelFunc
-			ctx, cancelTail = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-			defer cancelTail()
-		}
-		s.kickAll(ctx)
+		cur.Images = &img
+		return nil
+	})
+	if errors.Is(e, errConfigChanged) {
+		httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
+		return Config{}, nil, ctx, nil, false
 	}
-	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.upload", "system", "ccgateway", map[string]any{"role": in.Role, "apply": in.Apply, "ref": ref}); e != nil {
-		slog.Error("CCGateway audit failed", "action", "runtime.upload")
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		return Config{}, nil, ctx, nil, false
 	}
-	out := gin.H{"sha256": loaded.SHA256, "images": images, "ref": ref, "runtime": s.runtimeState(ctx, cfg)}
-	if workers != nil {
-		out["workers"] = workers
+	report, err := s.switchImage(ctx, saved, role, ref)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return Config{}, nil, ctx, nil, false
 	}
-	httpapi.OK(c, out)
+	var cancelTail context.CancelFunc
+	if report != nil {
+		// The worker updates may have used up the load's time: what follows
+		// still runs (bounded on its own).
+		ctx, cancelTail = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	}
+	s.kickAll(ctx)
+	return saved, report, ctx, cancelTail, true
 }

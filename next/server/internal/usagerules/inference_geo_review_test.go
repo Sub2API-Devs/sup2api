@@ -1,8 +1,9 @@
 package usagerules
 
 import (
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
 func TestReviewStringFactPreservesEscapesAndRejectsInvalidUpdates(t *testing.T) {
