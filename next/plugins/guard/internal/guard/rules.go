@@ -14,6 +14,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // Rule kinds.
@@ -131,7 +132,7 @@ func validateRules(in []ruleInput) ([]Rule, pluginsdk.FieldErrors) {
 			errs = errs.Add(f("pattern"), "too_long", fmt.Sprintf("pattern exceeds %d bytes / 匹配内容超过 %d 字节", maxPatternLen, maxPatternLen))
 		}
 		if rule.Name == "" {
-			rule.Name = truncateRunes(rule.Pattern, 40)
+			rule.Name = textutil.TruncateRunes(rule.Pattern, 40)
 		}
 		if utf8.RuneCountInString(rule.Name) > maxNameLen {
 			errs = errs.Add(f("name"), "too_long", fmt.Sprintf("name exceeds %d characters / 名称超过 %d 个字符", maxNameLen, maxNameLen))
@@ -139,14 +140,6 @@ func validateRules(in []ruleInput) ([]Rule, pluginsdk.FieldErrors) {
 		out = append(out, rule)
 	}
 	return out, errs
-}
-
-func truncateRunes(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:n])
 }
 
 func (p *Plugin) loadRules(ctx context.Context) ([]Rule, error) {
@@ -233,60 +226,7 @@ func (p *Plugin) putRules(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		return pluginsdk.ErrorResponse(http.StatusServiceUnavailable, "unavailable", err.Error()), nil
 	}
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		// Serialize whole-set replacements so the last save wins as a whole.
-		// Without it two PUTs on two nodes interleave under READ COMMITTED:
-		// each DELETE misses the rows the other one inserts, so both sets'
-		// new rules survive (or the two DELETEs deadlock on each other's
-		// rows). SHARE ROW EXCLUSIVE conflicts with itself and with row
-		// writes, not with plain SELECTs, so rule reloads and GET /rules are
-		// not blocked. Taking it needs UPDATE/DELETE on rules, which this
-		// handler needs anyway; the plugin role owns the table.
-		//
-		// A table lock rather than a cluster lock (host "lock" permission):
-		// those live in Redis, are not fenced and are not part of this
-		// transaction - a holder that stalls past its ttl would overlap the
-		// next one again. This one is held by the transaction itself and
-		// released on commit or rollback, exactly the span to protect. Not
-		// pg_advisory_xact_lock either: advisory keys are database-wide,
-		// shared with the core and every other plugin.
-		if _, err := tx.Exec(ctx, `LOCK TABLE rules IN SHARE ROW EXCLUSIVE MODE`); err != nil {
-			return err
-		}
-		keep := make([]int64, 0, len(rules))
-		for _, r := range rules {
-			if r.ID > 0 {
-				keep = append(keep, r.ID)
-			}
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM rules WHERE NOT (id = ANY($1))`, keep); err != nil {
-			return err
-		}
-		for _, r := range rules {
-			if r.ID > 0 {
-				tag, err := tx.Exec(ctx, `UPDATE rules SET name=$2, kind=$3, pattern=$4, enabled=$5, updated_at=now()
-					WHERE id=$1 AND (name, kind, pattern, enabled) IS DISTINCT FROM ($2, $3, $4, $5)`,
-					r.ID, r.Name, r.Kind, r.Pattern, r.Enabled)
-				if err != nil {
-					return err
-				}
-				if tag.RowsAffected() > 0 {
-					continue
-				}
-				var exists bool
-				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM rules WHERE id=$1)`, r.ID).Scan(&exists); err != nil {
-					return err
-				}
-				if exists {
-					continue
-				}
-				// Unknown id (deleted meanwhile): create it as a new rule.
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO rules (name, kind, pattern, enabled) VALUES ($1, $2, $3, $4)`,
-				r.Name, r.Kind, r.Pattern, r.Enabled); err != nil {
-				return err
-			}
-		}
-		return nil
+		return replaceRules(ctx, tx, rules)
 	})
 	if err != nil {
 		return nil, err
@@ -297,4 +237,71 @@ func (p *Plugin) putRules(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		return nil, err
 	}
 	return p.getRules(ctx, req)
+}
+
+// replaceRules writes the whole rule set inside tx: rules with an id are
+// updated (or created when that id is gone), and every rule missing from the
+// list is deleted.
+//
+// The table lock serializes whole-set replacements so the last save wins as a
+// whole. Without it two PUTs on two nodes interleave under READ COMMITTED:
+// each DELETE misses the rows the other one inserts, so both sets' new rules
+// survive (or the two DELETEs deadlock on each other's rows). SHARE ROW
+// EXCLUSIVE conflicts with itself and with row writes, not with plain
+// SELECTs, so rule reloads and GET /rules are not blocked. Taking it needs
+// UPDATE/DELETE on rules, which this handler needs anyway; the plugin role
+// owns the table.
+//
+// A table lock rather than a cluster lock (host "lock" permission): those live
+// in Redis, are not fenced and are not part of this transaction - a holder
+// that stalls past its ttl would overlap the next one again. This one is held
+// by the transaction itself and released on commit or rollback, exactly the
+// span to protect. Not pg_advisory_xact_lock either: advisory keys are
+// database-wide, shared with the core and every other plugin.
+func replaceRules(ctx context.Context, tx pgx.Tx, rules []Rule) error {
+	if _, err := tx.Exec(ctx, `LOCK TABLE rules IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+		return err
+	}
+	keep := make([]int64, 0, len(rules))
+	for _, r := range rules {
+		if r.ID > 0 {
+			keep = append(keep, r.ID)
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM rules WHERE NOT (id = ANY($1))`, keep); err != nil {
+		return err
+	}
+	for _, r := range rules {
+		if err := upsertRule(ctx, tx, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// upsertRule updates an existing rule, creating it when its id is unknown
+// (deleted meanwhile) and skipping the write when nothing changed.
+func upsertRule(ctx context.Context, tx pgx.Tx, r Rule) error {
+	if r.ID > 0 {
+		tag, err := tx.Exec(ctx, `UPDATE rules SET name=$2, kind=$3, pattern=$4, enabled=$5, updated_at=now()
+			WHERE id=$1 AND (name, kind, pattern, enabled) IS DISTINCT FROM ($2, $3, $4, $5)`,
+			r.ID, r.Name, r.Kind, r.Pattern, r.Enabled)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() > 0 {
+			return nil
+		}
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM rules WHERE id=$1)`, r.ID).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return nil
+		}
+		// Unknown id (deleted meanwhile): create it as a new rule.
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO rules (name, kind, pattern, enabled) VALUES ($1, $2, $3, $4)`,
+		r.Name, r.Kind, r.Pattern, r.Enabled)
+	return err
 }

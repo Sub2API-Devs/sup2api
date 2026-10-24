@@ -84,92 +84,87 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 		return fmt.Errorf("code is required")
 	}
 
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Lock and fetch promo code
 	var pc PromoCode
-	err = tx.QueryRow(ctx, `
-		SELECT id, code, bonus_amount, max_uses, used_count, status, expires_at
-		FROM promo_codes
-		WHERE code = $1
-		FOR UPDATE
-	`, code).Scan(
-		&pc.ID, &pc.Code, &pc.BonusAmount, &pc.MaxUses, &pc.UsedCount,
-		&pc.Status, &pc.ExpiresAt,
-	)
-	if err == pgx.ErrNoRows {
-		return fmt.Errorf("invalid promo code")
-	}
-	if err != nil {
-		return fmt.Errorf("query promo code: %w", err)
-	}
-
-	// Validate promo code
-	if !pc.CanUse() {
-		if pc.Status != PromoStatusActive {
-			return fmt.Errorf("promo code is disabled")
+	var ledgerID int64
+	var duplicate bool
+	err = withLockedRow(ctx, db, lockedRow{
+		query: `SELECT id, code, bonus_amount, max_uses, used_count, status, expires_at
+			FROM promo_codes
+			WHERE code = $1
+			FOR UPDATE`,
+		arg:       code,
+		missing:   "invalid promo code",
+		queryFail: "query promo code",
+	}, func(row pgx.Row) (PromoCode, error) {
+		var pc PromoCode
+		err := row.Scan(
+			&pc.ID, &pc.Code, &pc.BonusAmount, &pc.MaxUses, &pc.UsedCount,
+			&pc.Status, &pc.ExpiresAt,
+		)
+		return pc, err
+	}, func(tx pgx.Tx, row PromoCode) error {
+		pc = row
+		// Validate promo code
+		if !pc.CanUse() {
+			if pc.Status != PromoStatusActive {
+				return fmt.Errorf("promo code is disabled")
+			}
+			if pc.ExpiresAt != nil && time.Now().After(*pc.ExpiresAt) {
+				return fmt.Errorf("promo code expired")
+			}
+			if pc.MaxUses > 0 && pc.UsedCount >= pc.MaxUses {
+				return fmt.Errorf("promo code usage limit reached")
+			}
+			return fmt.Errorf("promo code not available")
 		}
-		if pc.ExpiresAt != nil && time.Now().After(*pc.ExpiresAt) {
-			return fmt.Errorf("promo code expired")
-		}
-		if pc.MaxUses > 0 && pc.UsedCount >= pc.MaxUses {
-			return fmt.Errorf("promo code usage limit reached")
-		}
-		return fmt.Errorf("promo code not available")
-	}
 
-	// Check if user already used this code
-	var existingUsage int
-	err = tx.QueryRow(ctx, `
-		SELECT COUNT(*) FROM promo_code_usage
-		WHERE promo_code_id = $1 AND user_id = $2
-	`, pc.ID, userID).Scan(&existingUsage)
-	if err != nil {
-		return fmt.Errorf("check existing usage: %w", err)
-	}
-	if existingUsage > 0 {
-		return fmt.Errorf("you have already used this promo code")
-	}
+		// Check if user already used this code
+		var existingUsage int
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM promo_code_usage
+			WHERE promo_code_id = $1 AND user_id = $2
+		`, pc.ID, userID).Scan(&existingUsage); err != nil {
+			return fmt.Errorf("check existing usage: %w", err)
+		}
+		if existingUsage > 0 {
+			return fmt.Errorf("you have already used this promo code")
+		}
 
-	// Credit balance
-	resp, err := s.credit(ctx, pluginsdk.LedgerChange{
-		UserID:         userID,
-		Amount:         pc.BonusAmount.String(),
-		RefType:        "promo_code",
-		RefID:          strconv.FormatInt(pc.ID, 10),
-		IdempotencyKey: fmt.Sprintf("promo_%d_%d", pc.ID, userID),
-		Note:           fmt.Sprintf("优惠码 %s 赠送 ¥%s", pc.Code, pc.BonusAmount.String()),
+		// Credit balance
+		resp, err := s.credit(ctx, pluginsdk.LedgerChange{
+			UserID:         userID,
+			Amount:         pc.BonusAmount.String(),
+			RefType:        "promo_code",
+			RefID:          strconv.FormatInt(pc.ID, 10),
+			IdempotencyKey: fmt.Sprintf("promo_%d_%d", pc.ID, userID),
+			Note:           fmt.Sprintf("优惠码 %s 赠送 ¥%s", pc.Code, pc.BonusAmount.String()),
+		})
+		if err != nil {
+			return fmt.Errorf("credit ledger: %w", err)
+		}
+		ledgerID, duplicate = resp.LedgerID, resp.Duplicate
+
+		// Record usage
+		now := time.Now()
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO promo_code_usage (promo_code_id, user_id, bonus_amount, used_at)
+			VALUES ($1, $2, $3, $4)
+		`, pc.ID, userID, pc.BonusAmount, now); err != nil {
+			return fmt.Errorf("insert usage record: %w", err)
+		}
+
+		// Increment used count
+		if _, err := tx.Exec(ctx, `
+			UPDATE promo_codes
+			SET used_count = used_count + 1, updated_at = $1
+			WHERE id = $2
+		`, now, pc.ID); err != nil {
+			return fmt.Errorf("increment used count: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("credit ledger: %w", err)
-	}
-
-	// Record usage
-	now := time.Now()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO promo_code_usage (promo_code_id, user_id, bonus_amount, used_at)
-		VALUES ($1, $2, $3, $4)
-	`, pc.ID, userID, pc.BonusAmount, now)
-	if err != nil {
-		return fmt.Errorf("insert usage record: %w", err)
-	}
-
-	// Increment used count
-	_, err = tx.Exec(ctx, `
-		UPDATE promo_codes
-		SET used_count = used_count + 1, updated_at = $1
-		WHERE id = $2
-	`, now, pc.ID)
-	if err != nil {
-		return fmt.Errorf("increment used count: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return err
 	}
 
 	slog.Info("promo code applied",
@@ -177,9 +172,8 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 		"code", pc.Code,
 		"user_id", userID,
 		"bonus", pc.BonusAmount.String(),
-		"ledger_id", resp.LedgerID,
-		"duplicate", resp.Duplicate)
-
+		"ledger_id", ledgerID,
+		"duplicate", duplicate)
 	return nil
 }
 
@@ -189,69 +183,41 @@ func (s *PromoService) ListPromoCodes(ctx context.Context, status string, limit,
 	if err != nil {
 		return nil, 0, err
 	}
-	// Count total
-	var total int
-	var countQuery string
-	var countArgs []any
-
+	// The status filter changes the placeholders of both statements, so the
+	// pair is built together (see listPaged).
+	q := pagedQuery{
+		countSQL:   `SELECT COUNT(*) FROM promo_codes`,
+		listSQL:    selectPromoCodes + ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		listArgs:   []any{limit, offset},
+		countLabel: "count promo codes",
+		queryLabel: "query promo codes",
+		scanLabel:  "scan promo code",
+	}
 	if status != "" {
-		countQuery = `SELECT COUNT(*) FROM promo_codes WHERE status = $1`
-		countArgs = []any{status}
-	} else {
-		countQuery = `SELECT COUNT(*) FROM promo_codes`
+		q.countSQL = `SELECT COUNT(*) FROM promo_codes WHERE status = $1`
+		q.countArgs = []any{status}
+		q.listSQL = selectPromoCodes + ` WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+		q.listArgs = []any{status, limit, offset}
 	}
-
-	err = db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count promo codes: %w", err)
-	}
-
-	// Query promo codes
-	var query string
-	var args []any
-
-	if status != "" {
-		query = `
-			SELECT id, code, bonus_amount, max_uses, used_count, status,
-				expires_at, notes, created_at
-			FROM promo_codes
-			WHERE status = $1
-			ORDER BY created_at DESC
-			LIMIT $2 OFFSET $3
-		`
-		args = []any{status, limit, offset}
-	} else {
-		query = `
-			SELECT id, code, bonus_amount, max_uses, used_count, status,
-				expires_at, notes, created_at
-			FROM promo_codes
-			ORDER BY created_at DESC
-			LIMIT $1 OFFSET $2
-		`
-		args = []any{limit, offset}
-	}
-
-	rows, err := db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query promo codes: %w", err)
-	}
-	defer rows.Close()
-
-	var codes []PromoCode
-	for rows.Next() {
+	codes, total, err := listPaged(ctx, db, q, func(row pgx.CollectableRow) (PromoCode, error) {
 		var pc PromoCode
-		err := rows.Scan(
+		err := row.Scan(
 			&pc.ID, &pc.Code, &pc.BonusAmount, &pc.MaxUses, &pc.UsedCount,
 			&pc.Status, &pc.ExpiresAt, &pc.Notes, &pc.CreatedAt,
 		)
-		if err != nil {
-			return nil, 0, fmt.Errorf("scan promo code: %w", err)
-		}
-		codes = append(codes, pc)
+		return pc, err
+	})
+	if err != nil {
+		return nil, 0, err
 	}
-
 	return codes, total, nil
 }
+
+// selectPromoCodes is the column list shared by the admin list statements.
+const selectPromoCodes = `
+	SELECT id, code, bonus_amount, max_uses, used_count, status,
+		expires_at, notes, created_at
+	FROM promo_codes`
 
 // UpdatePromoCode updates a promo code
 func (s *PromoService) UpdatePromoCode(ctx context.Context, id int64, status string, maxUses int) error {
@@ -296,39 +262,4 @@ func (s *PromoService) DeletePromoCode(ctx context.Context, id int64) error {
 
 	slog.Info("promo code deleted", "id", id)
 	return nil
-}
-
-// GetUserPromoUsage returns user's promo code usage history
-func (s *PromoService) GetUserPromoUsage(ctx context.Context, userID int64) ([]PromoCodeUsage, error) {
-	db, err := s.db(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := db.Query(ctx, `
-		SELECT u.id, u.promo_code_id, u.user_id, u.bonus_amount, u.used_at,
-			p.code
-		FROM promo_code_usage u
-		JOIN promo_codes p ON u.promo_code_id = p.id
-		WHERE u.user_id = $1
-		ORDER BY u.used_at DESC
-	`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("query promo usage: %w", err)
-	}
-	defer rows.Close()
-
-	var usages []PromoCodeUsage
-	for rows.Next() {
-		var u PromoCodeUsage
-		var code string
-		err := rows.Scan(
-			&u.ID, &u.PromoCodeID, &u.UserID, &u.BonusAmount, &u.UsedAt, &code,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan promo usage: %w", err)
-		}
-		usages = append(usages, u)
-	}
-
-	return usages, nil
 }

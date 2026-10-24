@@ -131,21 +131,6 @@ type Order struct {
 	UpdatedAt          time.Time
 }
 
-// ProviderInstance represents a payment provider configuration
-type ProviderInstance struct {
-	ID              int64
-	ProviderKey     string
-	Name            string
-	Config          map[string]string
-	Enabled         bool
-	SortOrder       int
-	Limits          map[string]any
-	RefundEnabled   bool
-	AllowUserRefund bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-}
-
 // RedeemCode represents a redeem code
 type RedeemCode struct {
 	ID           int64
@@ -208,15 +193,6 @@ func (p *PromoCode) CanUse() bool {
 		return false
 	}
 	return true
-}
-
-// PromoCodeUsage represents a promo code usage record
-type PromoCodeUsage struct {
-	ID          int64
-	PromoCodeID int64
-	UserID      int64
-	BonusAmount decimal.Decimal
-	UsedAt      time.Time
 }
 
 // HashRedeemCode hashes a redeem code using SHA-256

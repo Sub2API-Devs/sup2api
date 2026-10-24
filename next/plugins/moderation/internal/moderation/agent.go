@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // maxResponseBytes caps the upstream response body read (1 MiB).
@@ -219,12 +221,12 @@ func (a *agent) call(ctx context.Context, c *config, messages []json.RawMessage)
 }
 
 // scrubURL keeps error messages free of query strings.
-func scrubURL(s string) string { return truncateBytes(s, 500) }
+func scrubURL(s string) string { return textutil.TruncateBytes(s, 500) }
 
 func snippet(b []byte, n int) string {
 	s := strings.TrimSpace(string(b))
 	s = strings.Join(strings.Fields(s), " ")
-	return truncateBytes(s, n)
+	return textutil.TruncateBytes(s, n)
 }
 
 // contentString reads message.content: a string, null, or an array of
@@ -308,7 +310,7 @@ func parseVerdict(args string, known map[string]bool) (Verdict, error) {
 	switch v.Verdict {
 	case VerdictPass, VerdictFlag, VerdictBlock:
 	default:
-		return Verdict{}, fmt.Errorf("verdict 必须是 pass、flag 或 block，收到 %q", truncateRunes(*raw.Verdict, 20))
+		return Verdict{}, fmt.Errorf("verdict 必须是 pass、flag 或 block，收到 %q", textutil.TruncateRunes(*raw.Verdict, 20))
 	}
 	v.Categories = []string{}
 	if raw.Categories != nil && string(trimJSON(*raw.Categories)) != "null" {
@@ -338,7 +340,7 @@ func parseVerdict(args string, known map[string]bool) (Verdict, error) {
 		if json.Unmarshal(*raw.Reason, &r) != nil {
 			return Verdict{}, errors.New("reason 必须是字符串")
 		}
-		v.Reason = truncateRunes(strings.TrimSpace(r), 500)
+		v.Reason = textutil.TruncateRunes(strings.TrimSpace(r), 500)
 	}
 	if v.Verdict == VerdictPass {
 		v.Categories = []string{}

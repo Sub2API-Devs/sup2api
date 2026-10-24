@@ -61,9 +61,7 @@ func (h *HTTPHandler) register(r *pluginsdk.Router) {
 func (h *HTTPHandler) handleCreateOrder(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	userID := callerID(req)
 	if userID == 0 {
-		return jsonResponse(http.StatusUnauthorized, map[string]any{
-			"error": map[string]any{"code": "unauthenticated", "message": "Authentication required"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusUnauthorized, "unauthenticated", "Authentication required"), nil
 	}
 
 	var body struct {
@@ -73,16 +71,12 @@ func (h *HTTPHandler) handleCreateOrder(ctx context.Context, req *pluginv1.HTTPR
 		PlanID      *int64 `json:"plan_id"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid request body"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid request body"), nil
 	}
 
 	amount, err := decimal.NewFromString(body.Amount)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid amount"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid amount"), nil
 	}
 
 	orderReq := CreateOrderRequest{
@@ -97,9 +91,7 @@ func (h *HTTPHandler) handleCreateOrder(ctx context.Context, req *pluginv1.HTTPR
 	resp, err := h.orders.CreateOrder(ctx, orderReq)
 	if err != nil {
 		slog.Error("create order failed", "error", err)
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return jsonResponse(http.StatusOK, map[string]any{
@@ -117,9 +109,7 @@ func (h *HTTPHandler) handleCreateOrder(ctx context.Context, req *pluginv1.HTTPR
 func (h *HTTPHandler) handleListOrders(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	userID := callerID(req)
 	if userID == 0 {
-		return jsonResponse(http.StatusUnauthorized, map[string]any{
-			"error": map[string]any{"code": "unauthenticated", "message": "Authentication required"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusUnauthorized, "unauthenticated", "Authentication required"), nil
 	}
 
 	page, pageSize := pagination(req)
@@ -128,9 +118,7 @@ func (h *HTTPHandler) handleListOrders(ctx context.Context, req *pluginv1.HTTPRe
 	orders, total, err := h.orders.ListOrders(ctx, userID, pageSize, offset)
 	if err != nil {
 		slog.Error("list orders failed", "error", err)
-		return jsonResponse(http.StatusInternalServerError, map[string]any{
-			"error": map[string]any{"code": "internal", "message": "Internal error"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", "Internal error"), nil
 	}
 
 	items := make([]map[string]any, len(orders))
@@ -165,26 +153,20 @@ func (h *HTTPHandler) handleListOrders(ctx context.Context, req *pluginv1.HTTPRe
 func (h *HTTPHandler) handleRedeemCode(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	userID := callerID(req)
 	if userID == 0 {
-		return jsonResponse(http.StatusUnauthorized, map[string]any{
-			"error": map[string]any{"code": "unauthenticated", "message": "Authentication required"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusUnauthorized, "unauthenticated", "Authentication required"), nil
 	}
 
 	var body struct {
 		Code string `json:"code"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid request body"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid request body"), nil
 	}
 
 	code, err := h.redeem.RedeemCode(ctx, userID, body.Code)
 	if err != nil {
 		slog.Warn("redeem code failed", "user_id", userID, "error", err)
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return jsonResponse(http.StatusOK, map[string]any{
@@ -199,9 +181,7 @@ func (h *HTTPHandler) handleRedeemCode(ctx context.Context, req *pluginv1.HTTPRe
 func (h *HTTPHandler) handleRedeemHistory(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	userID := callerID(req)
 	if userID == 0 {
-		return jsonResponse(http.StatusUnauthorized, map[string]any{
-			"error": map[string]any{"code": "unauthenticated", "message": "Authentication required"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusUnauthorized, "unauthenticated", "Authentication required"), nil
 	}
 
 	page, pageSize := pagination(req)
@@ -210,9 +190,7 @@ func (h *HTTPHandler) handleRedeemHistory(ctx context.Context, req *pluginv1.HTT
 	codes, total, err := h.redeem.GetUserRedeemHistory(ctx, userID, pageSize, offset)
 	if err != nil {
 		slog.Error("get redeem history failed", "error", err)
-		return jsonResponse(http.StatusInternalServerError, map[string]any{
-			"error": map[string]any{"code": "internal", "message": "Internal error"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", "Internal error"), nil
 	}
 
 	items := make([]map[string]any, len(codes))
@@ -236,9 +214,7 @@ func (h *HTTPHandler) handleRedeemHistory(ctx context.Context, req *pluginv1.HTT
 func (h *HTTPHandler) handleWebhook(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	providerKey := pluginsdk.Param(req, "provider")
 	if providerKey == "" {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Provider not specified"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Provider not specified"), nil
 	}
 
 	body := string(req.GetBody())
@@ -252,9 +228,7 @@ func (h *HTTPHandler) handleWebhook(ctx context.Context, req *pluginv1.HTTPReque
 				Body:   []byte("OK"),
 			}, nil
 		}
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return &pluginv1.HTTPResponse{
@@ -284,9 +258,7 @@ func (h *HTTPHandler) handleListProviders(ctx context.Context, req *pluginv1.HTT
 }
 
 func (h *HTTPHandler) handleCreateProvider(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	return jsonResponse(http.StatusNotImplemented, map[string]any{
-		"error": map[string]any{"code": "unimplemented", "message": "Not implemented yet"},
-	})
+	return pluginsdk.ErrorResponse(http.StatusNotImplemented, "unimplemented", "Not implemented yet"), nil
 }
 
 func (h *HTTPHandler) handleListRedeemCodes(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -298,9 +270,7 @@ func (h *HTTPHandler) handleListRedeemCodes(ctx context.Context, req *pluginv1.H
 
 	codes, total, err := h.redeem.ListCodes(ctx, status, pageSize, offset)
 	if err != nil {
-		return jsonResponse(http.StatusInternalServerError, map[string]any{
-			"error": map[string]any{"code": "internal", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", err.Error()), nil
 	}
 
 	items := make([]map[string]any, len(codes))
@@ -327,16 +297,12 @@ func (h *HTTPHandler) handleListRedeemCodes(ctx context.Context, req *pluginv1.H
 func (h *HTTPHandler) handleGenerateRedeemCodes(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var body GenerateCodesRequest
 	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid request body"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid request body"), nil
 	}
 
 	codes, err := h.redeem.GenerateCodes(ctx, body)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	items := make([]map[string]any, len(codes))
@@ -356,15 +322,11 @@ func (h *HTTPHandler) handleDeleteRedeemCode(ctx context.Context, req *pluginv1.
 	idStr := pluginsdk.Param(req, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid code ID"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid code ID"), nil
 	}
 
 	if err := h.redeem.DeleteCode(ctx, id); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return &pluginv1.HTTPResponse{Status: http.StatusNoContent}, nil
@@ -379,9 +341,7 @@ func (h *HTTPHandler) handleListPromoCodes(ctx context.Context, req *pluginv1.HT
 
 	codes, total, err := h.promo.ListPromoCodes(ctx, status, pageSize, offset)
 	if err != nil {
-		return jsonResponse(http.StatusInternalServerError, map[string]any{
-			"error": map[string]any{"code": "internal", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", err.Error()), nil
 	}
 
 	items := make([]map[string]any, len(codes))
@@ -407,16 +367,12 @@ func (h *HTTPHandler) handleListPromoCodes(ctx context.Context, req *pluginv1.HT
 func (h *HTTPHandler) handleCreatePromoCode(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var body CreatePromoCodeRequest
 	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid request body"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid request body"), nil
 	}
 
 	code, err := h.promo.CreatePromoCode(ctx, body)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return jsonResponse(http.StatusOK, map[string]any{
@@ -434,9 +390,7 @@ func (h *HTTPHandler) handleUpdatePromoCode(ctx context.Context, req *pluginv1.H
 	idStr := pluginsdk.Param(req, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid promo code ID"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid promo code ID"), nil
 	}
 
 	var body struct {
@@ -444,15 +398,11 @@ func (h *HTTPHandler) handleUpdatePromoCode(ctx context.Context, req *pluginv1.H
 		MaxUses int    `json:"max_uses"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid request body"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid request body"), nil
 	}
 
 	if err := h.promo.UpdatePromoCode(ctx, id, body.Status, body.MaxUses); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return jsonResponse(http.StatusOK, map[string]any{"data": map[string]any{"updated": true}})
@@ -462,15 +412,11 @@ func (h *HTTPHandler) handleDeletePromoCode(ctx context.Context, req *pluginv1.H
 	idStr := pluginsdk.Param(req, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": "Invalid promo code ID"},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Invalid promo code ID"), nil
 	}
 
 	if err := h.promo.DeletePromoCode(ctx, id); err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]any{
-			"error": map[string]any{"code": "invalid_argument", "message": err.Error()},
-		})
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
 	}
 
 	return &pluginv1.HTTPResponse{Status: http.StatusNoContent}, nil

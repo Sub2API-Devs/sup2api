@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // Subscription quota (CONTRACTS §44). Both account types declare the
@@ -108,7 +108,7 @@ func (p *Plugin) BuildQuotaRequest(_ context.Context, req *pluginv1.BuildQuotaRe
 			"accept":         "application/json, text/plain, */*",
 			"content-type":   "application/json",
 			"authorization":  "Bearer " + creds.AccessToken,
-			"anthropic-beta": "oauth-2025-04-20",
+			"anthropic-beta": OAuthBeta,
 			"user-agent":     usageUserAgent,
 		},
 	}, nil
@@ -187,9 +187,5 @@ func bodySnippet(b []byte) string {
 	if len(s) <= max {
 		return s
 	}
-	s = s[:max]
-	for !utf8.ValidString(s) && len(s) > 0 {
-		s = s[:len(s)-1]
-	}
-	return s + "…"
+	return textutil.TruncateBytes(s, max) + "…"
 }

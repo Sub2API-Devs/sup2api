@@ -124,57 +124,51 @@ func (s *RedeemService) RedeemCode(ctx context.Context, userID int64, code strin
 		return nil, fmt.Errorf("code is required")
 	}
 
-	codeHash := HashRedeemCode(code)
-
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Lock and fetch code
 	var rc RedeemCode
-	err = tx.QueryRow(ctx, `
-		SELECT id, code_hash, type, value, group_id, validity_days,
-			status, used_by, used_at, expires_at, notes, created_at
-		FROM redeem_codes
-		WHERE code_hash = $1
-		FOR UPDATE
-	`, codeHash).Scan(
-		&rc.ID, &rc.CodeHash, &rc.Type, &rc.Value, &rc.GroupID, &rc.ValidityDays,
-		&rc.Status, &rc.UsedBy, &rc.UsedAt, &rc.ExpiresAt, &rc.Notes, &rc.CreatedAt,
-	)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("invalid code")
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query code: %w", err)
-	}
-
-	// Validate code
-	if !rc.CanUse() {
-		if rc.IsUsed() {
-			return nil, fmt.Errorf("code already used")
+	var now time.Time
+	err = withLockedRow(ctx, db, lockedRow{
+		query: `SELECT id, code_hash, type, value, group_id, validity_days,
+				status, used_by, used_at, expires_at, notes, created_at
+			FROM redeem_codes
+			WHERE code_hash = $1
+			FOR UPDATE`,
+		arg:       HashRedeemCode(code),
+		missing:   "invalid code",
+		queryFail: "query code",
+	}, func(row pgx.Row) (RedeemCode, error) {
+		var rc RedeemCode
+		err := row.Scan(
+			&rc.ID, &rc.CodeHash, &rc.Type, &rc.Value, &rc.GroupID, &rc.ValidityDays,
+			&rc.Status, &rc.UsedBy, &rc.UsedAt, &rc.ExpiresAt, &rc.Notes, &rc.CreatedAt,
+		)
+		return rc, err
+	}, func(tx pgx.Tx, row RedeemCode) error {
+		rc = row
+		// Validate code
+		if !rc.CanUse() {
+			if rc.IsUsed() {
+				return fmt.Errorf("code already used")
+			}
+			if rc.IsExpired() {
+				return fmt.Errorf("code expired")
+			}
+			return fmt.Errorf("code not available")
 		}
-		if rc.IsExpired() {
-			return nil, fmt.Errorf("code expired")
+
+		// Mark as used
+		now = time.Now()
+		if _, err := tx.Exec(ctx, `
+			UPDATE redeem_codes
+			SET status = $1, used_by = $2, used_at = $3, updated_at = $4
+			WHERE id = $5
+		`, RedeemStatusUsed, userID, now, now, rc.ID); err != nil {
+			return fmt.Errorf("update code: %w", err)
 		}
-		return nil, fmt.Errorf("code not available")
-	}
 
-	// Mark as used
-	now := time.Now()
-	_, err = tx.Exec(ctx, `
-		UPDATE redeem_codes
-		SET status = $1, used_by = $2, used_at = $3, updated_at = $4
-		WHERE id = $5
-	`, RedeemStatusUsed, userID, now, now, rc.ID)
-	if err != nil {
-		return nil, fmt.Errorf("update code: %w", err)
-	}
-
-	// Credit balance (only for balance type)
-	if rc.Type == RedeemTypeBalance {
+		// Credit balance (only for balance type)
+		if rc.Type != RedeemTypeBalance {
+			return nil
+		}
 		resp, err := s.credit(ctx, pluginsdk.LedgerChange{
 			UserID:         userID,
 			Amount:         rc.Value.String(),
@@ -184,19 +178,18 @@ func (s *RedeemService) RedeemCode(ctx context.Context, userID int64, code strin
 			Note:           fmt.Sprintf("兑换码充值 ¥%s", rc.Value.String()),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("credit ledger: %w", err)
+			return fmt.Errorf("credit ledger: %w", err)
 		}
-
 		slog.Info("redeem code credited",
 			"code_id", rc.ID,
 			"user_id", userID,
 			"amount", rc.Value.String(),
 			"ledger_id", resp.LedgerID,
 			"duplicate", resp.Duplicate)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	rc.Status = RedeemStatusUsed
@@ -213,69 +206,41 @@ func (s *RedeemService) ListCodes(ctx context.Context, status string, limit, off
 	if err != nil {
 		return nil, 0, err
 	}
-	// Count total
-	var total int
-	var countQuery string
-	var countArgs []any
-
+	// The status filter changes the placeholders of both statements, so the
+	// pair is built together; listPaged only runs them and reads the rows.
+	q := pagedQuery{
+		countSQL:   `SELECT COUNT(*) FROM redeem_codes`,
+		listSQL:    selectRedeemCodes + ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		listArgs:   []any{limit, offset},
+		countLabel: "count codes",
+		queryLabel: "query codes",
+		scanLabel:  "scan code",
+	}
 	if status != "" {
-		countQuery = `SELECT COUNT(*) FROM redeem_codes WHERE status = $1`
-		countArgs = []any{status}
-	} else {
-		countQuery = `SELECT COUNT(*) FROM redeem_codes`
+		q.countSQL = `SELECT COUNT(*) FROM redeem_codes WHERE status = $1`
+		q.countArgs = []any{status}
+		q.listSQL = selectRedeemCodes + ` WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+		q.listArgs = []any{status, limit, offset}
 	}
-
-	err = db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count codes: %w", err)
-	}
-
-	// Query codes
-	var query string
-	var args []any
-
-	if status != "" {
-		query = `
-			SELECT id, code_hash, type, value, group_id, validity_days,
-				status, used_by, used_at, expires_at, notes, created_at
-			FROM redeem_codes
-			WHERE status = $1
-			ORDER BY created_at DESC
-			LIMIT $2 OFFSET $3
-		`
-		args = []any{status, limit, offset}
-	} else {
-		query = `
-			SELECT id, code_hash, type, value, group_id, validity_days,
-				status, used_by, used_at, expires_at, notes, created_at
-			FROM redeem_codes
-			ORDER BY created_at DESC
-			LIMIT $1 OFFSET $2
-		`
-		args = []any{limit, offset}
-	}
-
-	rows, err := db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query codes: %w", err)
-	}
-	defer rows.Close()
-
-	var codes []RedeemCode
-	for rows.Next() {
+	codes, total, err := listPaged(ctx, db, q, func(row pgx.CollectableRow) (RedeemCode, error) {
 		var rc RedeemCode
-		err := rows.Scan(
+		err := row.Scan(
 			&rc.ID, &rc.CodeHash, &rc.Type, &rc.Value, &rc.GroupID, &rc.ValidityDays,
 			&rc.Status, &rc.UsedBy, &rc.UsedAt, &rc.ExpiresAt, &rc.Notes, &rc.CreatedAt,
 		)
-		if err != nil {
-			return nil, 0, fmt.Errorf("scan code: %w", err)
-		}
-		codes = append(codes, rc)
+		return rc, err
+	})
+	if err != nil {
+		return nil, 0, err
 	}
-
 	return codes, total, nil
 }
+
+// selectRedeemCodes is the column list shared by the admin list statements.
+const selectRedeemCodes = `
+	SELECT id, code_hash, type, value, group_id, validity_days,
+		status, used_by, used_at, expires_at, notes, created_at
+	FROM redeem_codes`
 
 // GetUserRedeemHistory returns user's redeem history
 func (s *RedeemService) GetUserRedeemHistory(ctx context.Context, userID int64, limit, offset int) ([]RedeemCode, int, error) {

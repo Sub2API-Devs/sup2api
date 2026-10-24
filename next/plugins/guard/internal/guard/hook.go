@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // DenyCode is returned to clients when a rule blocks a request.
@@ -123,7 +124,7 @@ func (p *Plugin) OnGatewayRequest(_ context.Context, in *pluginv1.GatewayRequest
 			DenyStatus:  http.StatusForbidden,
 			DenyCode:    DenyCode,
 			DenyMessage: fmt.Sprintf("Request blocked by guard rule %q / 请求被拦截规则「%s」拒绝", r.Name, r.Name),
-			Note:        fmt.Sprintf("guard: rule %d (%s)", r.ID, truncateRunes(r.Name, 60)),
+			Note:        fmt.Sprintf("guard: rule %d (%s)", r.ID, textutil.TruncateRunes(r.Name, 60)),
 		}, nil
 	}
 	return allow, nil

@@ -293,14 +293,16 @@ func (p *Plugin) recordCommission(ctx context.Context, inviteeUserID int64, even
 			return nil // expired
 		}
 	}
-	// Check per-invitee cap.
-	if cfg.ReferralMaxPerInvitee.Sign() > 0 {
-		var existing decimal.Decimal
-		err = db.QueryRow(ctx, `SELECT COALESCE(SUM(commission), 0) FROM commissions WHERE inviter_user_id = $1 AND invitee_user_id = $2`, inviterID, inviteeUserID).Scan(&existing)
+	// Per-invitee cap: read the credited total once and reuse it for both the
+	// "already at the cap" check and the clamp below.
+	var credited decimal.Decimal
+	capped := cfg.ReferralMaxPerInvitee.Sign() > 0
+	if capped {
+		err = db.QueryRow(ctx, `SELECT COALESCE(SUM(commission), 0) FROM commissions WHERE inviter_user_id = $1 AND invitee_user_id = $2`, inviterID, inviteeUserID).Scan(&credited)
 		if err != nil {
 			return err
 		}
-		if existing.GreaterThanOrEqual(cfg.ReferralMaxPerInvitee) {
+		if credited.GreaterThanOrEqual(cfg.ReferralMaxPerInvitee) {
 			return nil // cap reached
 		}
 	}
@@ -309,12 +311,8 @@ func (p *Plugin) recordCommission(ctx context.Context, inviteeUserID int64, even
 		return nil
 	}
 	// Apply cap.
-	if cfg.ReferralMaxPerInvitee.Sign() > 0 {
-		var existing decimal.Decimal
-		if err := db.QueryRow(ctx, `SELECT COALESCE(SUM(commission), 0) FROM commissions WHERE inviter_user_id = $1 AND invitee_user_id = $2`, inviterID, inviteeUserID).Scan(&existing); err != nil {
-			return err
-		}
-		remaining := cfg.ReferralMaxPerInvitee.Sub(existing)
+	if capped {
+		remaining := cfg.ReferralMaxPerInvitee.Sub(credited)
 		if commission.GreaterThan(remaining) {
 			commission = remaining.Round(8)
 		}

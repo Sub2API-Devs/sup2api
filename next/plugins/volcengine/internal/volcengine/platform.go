@@ -26,7 +26,6 @@ package volcengine
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/egress"
+	openaiprovider "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/openai"
 )
 
 // PlatformID is the built-in platform the apikey account type serves.
@@ -88,13 +88,6 @@ const (
 // Protocols lists the protocols of the built-in openai platform that
 // BuildUpstreamRequest supports, in that platform's endpoint order.
 var Protocols = []string{ProtocolChat, ProtocolResponses, ProtocolEmbeddings}
-
-// AnthropicProtocols lists the protocols of the built-in anthropic platform
-// this plugin supports. count_tokens is deliberately absent - the platform
-// declares it and routing therefore offers it to this account type anyway
-// (AccountPlatform has no per-endpoint filter), but Ark has no such endpoint,
-// so it is refused by name instead of sent somewhere that would 404.
-var AnthropicProtocols = []string{ProtocolMessages}
 
 // OwnProtocols lists the protocols of the plugin's own volcengine platform,
 // in manifest endpoint order.
@@ -429,20 +422,6 @@ func upstreamHeaders(protocol, apiKey string, inbound map[string]string) map[str
 	return h
 }
 
-// requestModel returns the model to send upstream: the body field when the
-// core forwarded one (requestFields), else meta.model. The core has already
-// applied the account's model mapping (CONTRACTS §18).
-func requestModel(in *pluginv1.BuildUpstreamRequestRequest) string {
-	model := in.GetMeta().GetModel()
-	if raw, ok := in.GetFields()["model"]; ok && raw != "" {
-		var s string
-		if json.Unmarshal([]byte(raw), &s) == nil && s != "" {
-			model = s
-		}
-	}
-	return model
-}
-
 // BuildUpstreamRequest implements pluginsdk.Platform: POST
 // {base_url}{api_prefix}/... following meta.protocol and, for chat
 // completions, the model (bots have their own path). Streaming chat
@@ -454,7 +433,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		return nil, err
 	}
 	meta := in.GetMeta()
-	model := requestModel(in)
+	model := pluginsdk.RequestModel(in)
 	method, ep, err := upstreamTarget(px, meta, model)
 	if err != nil {
 		return nil, err
@@ -505,16 +484,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if err != nil {
 		return nil, err
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model":      model,
-		"max_tokens": testMaxTokens,
-		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-	})
+	body := openaiprovider.ChatPingBody(model, testMaxTokens)
 	return &pluginv1.BuildTestRequestResponse{
 		Method:        "POST",
 		Url:           u,
 		Headers:       upstreamHeaders(ProtocolChat, cfg.APIKey, nil),
-		BodyJson:      string(body),
+		BodyJson:      body,
 		Model:         model,
 		UsageProtocol: ProtocolChat,
 	}, nil

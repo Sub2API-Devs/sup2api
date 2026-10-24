@@ -3,14 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -916,66 +914,6 @@ func builtinNamed(t *testing.T, id string) *manifest.Platform {
 	}
 	t.Fatalf("no built-in platform %q", id)
 	return nil
-}
-
-// usageDiff lists every way b differs from a, as sorted "where: old -> new"
-// lines. It exists so an account-type usage override can be asserted to differ
-// from the platform's rules in exactly the ways it means to: the override
-// replaces the whole block, so a hand copy that drops a field silently stops
-// counting it, and comparing the two structures is the only way to notice.
-func usageDiff(a, b manifest.UsageRules) []string {
-	var out []string
-	if a.Semantics != b.Semantics {
-		out = append(out, fmt.Sprintf("semantics: %q -> %q", a.Semantics, b.Semantics))
-	}
-	sse := func(u manifest.UsageRules) map[string]map[string]string {
-		m := map[string]map[string]string{}
-		for _, s := range u.SSE {
-			m[s.Event] = s.Map
-		}
-		return m
-	}
-	as, bs := sse(a), sse(b)
-	for _, ev := range union(keys(as), keys(bs)) {
-		for _, f := range union(keys(as[ev]), keys(bs[ev])) {
-			if as[ev][f] != bs[ev][f] {
-				out = append(out, fmt.Sprintf("sse[%s].map[%s]: %q -> %q", ev, f, as[ev][f], bs[ev][f]))
-			}
-		}
-	}
-	for _, f := range union(keys(a.JSON.Map), keys(b.JSON.Map)) {
-		if a.JSON.Map[f] != b.JSON.Map[f] {
-			out = append(out, fmt.Sprintf("json.map[%s]: %q -> %q", f, a.JSON.Map[f], b.JSON.Map[f]))
-		}
-	}
-	// Facts are part of the block too: an override that dropped them would
-	// stop every u("key") price expression from resolving.
-	if len(a.Facts) != len(b.Facts) {
-		out = append(out, fmt.Sprintf("facts: %d -> %d", len(a.Facts), len(b.Facts)))
-	}
-	sort.Strings(out)
-	return out
-}
-
-func keys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
-func union(a, b []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range append(append([]string{}, a...), b...) {
-		if !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 // New endpoint settings are optional and have no defaults: merely editing an

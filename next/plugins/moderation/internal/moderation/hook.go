@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // Deny codes and messages (CONTRACTS §20.4).
@@ -31,13 +32,13 @@ var (
 )
 
 func allow(note string) *pluginv1.GatewayRequestHookResponse {
-	return &pluginv1.GatewayRequestHookResponse{Decision: pluginv1.GatewayRequestHookResponse_DECISION_ALLOW, Note: truncateBytes(note, maxNoteBytes)}
+	return &pluginv1.GatewayRequestHookResponse{Decision: pluginv1.GatewayRequestHookResponse_DECISION_ALLOW, Note: textutil.TruncateBytes(note, maxNoteBytes)}
 }
 
 func deny(status int, code, msg, note string) *pluginv1.GatewayRequestHookResponse {
 	return &pluginv1.GatewayRequestHookResponse{
 		Decision: pluginv1.GatewayRequestHookResponse_DECISION_DENY, DenyStatus: int32(status),
-		DenyCode: code, DenyMessage: msg, Note: truncateBytes(note, maxNoteBytes),
+		DenyCode: code, DenyMessage: msg, Note: textutil.TruncateBytes(note, maxNoteBytes),
 	}
 }
 
@@ -68,75 +69,93 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 		return allowEmpty, nil
 	}
 	meta := in.GetMeta()
-	uid := meta.GetUserId()
-	if c.exempt[uid] {
-		return allowEmpty, nil
-	}
-	if p.isBlocked(uid) {
-		return deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked"), nil
-	}
-	if len(c.groups) > 0 && !c.groups[meta.GetGroupId()] {
-		return allowEmpty, nil
-	}
-	fields := in.GetFields()
-	model := fieldString(fields[FieldModel])
-	if model == "" {
-		model = meta.GetModel()
-	}
-	if !c.modelMatches(model) {
-		return allowEmpty, nil
-	}
-	text := extractText(fields)
-	if text == "" {
-		return allowEmpty, nil
-	}
-	if isSelfRequest(c.markerKey, text) {
-		return allowSelf, nil
-	}
-	if visibleChars(text) < c.MinChars {
-		return allowEmpty, nil
-	}
-	text = truncateText(text, c.InputMaxChars)
-	h := textHash(text)
-	if !sampled(h, c.SampleRate) {
-		return allowEmpty, nil
+	model, text, early := p.gate(c, meta, in.GetFields())
+	if early != nil {
+		return early, nil
 	}
 	protocol := meta.GetClientProtocol()
 	if protocol == "" {
 		protocol = meta.GetProtocol()
 	}
+	hash := textHash(text)
 	rec := eventRec{
-		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: uid, APIKeyID: meta.GetApiKeyId(),
-		GroupID: meta.GetGroupId(), Model: truncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
-		TextChars: utf8.RuneCountInString(text), TextHash: hex.EncodeToString(h[:]), LLMModel: c.Model,
+		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: meta.GetUserId(), APIKeyID: meta.GetApiKeyId(),
+		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
+		TextChars: utf8.RuneCountInString(text), TextHash: hex.EncodeToString(hash[:]), LLMModel: c.Model,
 	}
 	if c.StoreText {
-		t := truncateRunes(text, eventTextMaxChar)
+		t := textutil.TruncateRunes(text, eventTextMaxChar)
 		rec.Text = &t
 	}
 	key := cacheKey(c.policy, text)
-
 	if c.Mode == ModeObserve {
-		if v, ok := p.cacheGet(ctx, c, key, false); ok {
-			p.stats.cacheHits.Add(1)
-			rec.Cached = true
-			p.finishRecord(c, rec, v, nil, ActionAllow)
-			return allow(verdictNote(v, true)), nil
-		}
-		if !p.enqueue(observeJob{cfg: c, rec: rec, text: text, key: key}) {
-			p.stats.dropped.Add(1)
-			return allow(notePrefix + "dropped (queue full)"), nil
-		}
-		return allow(notePrefix + "queued"), nil
+		return p.observeDecision(ctx, c, rec, text, key), nil
 	}
+	return p.enforceInline(ctx, c, rec, text, key), nil
+}
 
-	// enforce
+// gate applies the preconditions that decide, without judging anything, that
+// the request is out of scope. It returns the model and the (truncated) text
+// to judge, or a non-nil early response that OnGatewayRequest returns as is.
+func (p *Plugin) gate(c *config, meta *pluginv1.RequestMeta, fields map[string]string) (model, text string, early *pluginv1.GatewayRequestHookResponse) {
+	uid := meta.GetUserId()
+	if c.exempt[uid] {
+		return "", "", allowEmpty
+	}
+	if p.isBlocked(uid) {
+		return "", "", deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked")
+	}
+	if len(c.groups) > 0 && !c.groups[meta.GetGroupId()] {
+		return "", "", allowEmpty
+	}
+	model = fieldString(fields[FieldModel])
+	if model == "" {
+		model = meta.GetModel()
+	}
+	if !c.modelMatches(model) {
+		return "", "", allowEmpty
+	}
+	text = extractText(fields)
+	if text == "" {
+		return "", "", allowEmpty
+	}
+	if isSelfRequest(c.markerKey, text) {
+		return "", "", allowSelf
+	}
+	if visibleChars(text) < c.MinChars {
+		return "", "", allowEmpty
+	}
+	text = truncateText(text, c.InputMaxChars)
+	if !sampled(textHash(text), c.SampleRate) {
+		return "", "", allowEmpty
+	}
+	return model, text, nil
+}
+
+// observeDecision answers observe mode: a cached verdict, or a queued job,
+// without ever blocking the client on the moderator.
+func (p *Plugin) observeDecision(ctx context.Context, c *config, rec eventRec, text string, key string) *pluginv1.GatewayRequestHookResponse {
+	if v, ok := p.cacheGet(ctx, c, key, false); ok {
+		p.stats.cacheHits.Add(1)
+		rec.Cached = true
+		p.finishRecord(c, rec, v, nil, ActionAllow)
+		return allow(verdictNote(v, true))
+	}
+	if !p.enqueue(observeJob{cfg: c, rec: rec, text: text, key: key}) {
+		p.stats.dropped.Add(1)
+		return allow(notePrefix + "dropped (queue full)")
+	}
+	return allow(notePrefix + "queued")
+}
+
+// enforceInline judges the request inline and turns the verdict into a decision.
+func (p *Plugin) enforceInline(ctx context.Context, c *config, rec eventRec, text string, key string) *pluginv1.GatewayRequestHookResponse {
 	start := time.Now()
 	if v, ok := p.cacheGet(ctx, c, key, true); ok {
 		p.stats.cacheHits.Add(1)
 		rec.Cached = true
 		rec.LatencyMs = int(time.Since(start).Milliseconds())
-		return p.enforceDecision(c, rec, v, nil, true), nil
+		return p.enforceDecision(c, rec, v, nil, true)
 	}
 	res, shared, err := p.judgeShared(ctx, c, key, text)
 	if res != nil {
@@ -150,9 +169,9 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 	}
 	rec.LatencyMs = int(time.Since(start).Milliseconds())
 	if err != nil {
-		return p.enforceDecision(c, rec, Verdict{}, err, false), nil
+		return p.enforceDecision(c, rec, Verdict{}, err, false)
 	}
-	return p.enforceDecision(c, rec, res.Verdict, nil, rec.Cached), nil
+	return p.enforceDecision(c, rec, res.Verdict, nil, rec.Cached)
 }
 
 // enforceDecision records the outcome and builds the hook response.
@@ -181,7 +200,7 @@ func (p *Plugin) finishRecord(c *config, rec eventRec, v Verdict, err error, act
 	rec.Action = action
 	if err != nil {
 		rec.Verdict = VerdictError
-		rec.Error = truncateRunes(err.Error(), 1000)
+		rec.Error = textutil.TruncateRunes(err.Error(), 1000)
 		rec.Categories = []string{}
 	} else {
 		rec.Verdict, rec.Categories, rec.Severity, rec.Reason = v.Verdict, v.Categories, v.Severity, v.Reason

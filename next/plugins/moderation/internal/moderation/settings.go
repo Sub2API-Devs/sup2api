@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
 // Modes (settings.mode).
@@ -118,82 +120,114 @@ func DecodeSettings(raw []byte) (Settings, error) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return s, err
 	}
-	str := func(k string, dst *string) {
-		if v, ok := m[k]; ok {
-			var x string
-			if json.Unmarshal(v, &x) == nil {
-				*dst = x
-			}
+	d := decoder{m: m}
+	d.network(&s)
+	d.limits(&s)
+	d.storage(&s)
+	d.ban(&s)
+	return s, nil
+}
+
+// decoder reads one raw settings document into a Settings. Every field is
+// independent, so the group methods may run in any order; each one only
+// touches its own keys.
+type decoder struct {
+	m map[string]json.RawMessage
+}
+
+// str copies a string value, leaving the destination alone when the key is
+// absent or of another type.
+func (d decoder) str(k string, dst *string) {
+	if v, ok := d.m[k]; ok {
+		var x string
+		if json.Unmarshal(v, &x) == nil {
+			*dst = x
 		}
 	}
-	num := func(k string, dst *float64) bool {
-		if v, ok := m[k]; ok {
-			var x float64
-			if json.Unmarshal(v, &x) == nil && !math.IsNaN(x) && !math.IsInf(x, 0) {
-				*dst = x
-				return true
-			}
-		}
-		return false
-	}
-	integer := func(k string, dst *int, lo, hi int) {
-		var f float64
-		if num(k, &f) {
-			*dst = clampInt(int(math.Round(math.Max(math.Min(f, 1e12), -1e12))), lo, hi)
-		} else {
-			*dst = clampInt(*dst, lo, hi)
+}
+
+// num copies a finite number value and reports whether it found one.
+func (d decoder) num(k string, dst *float64) bool {
+	if v, ok := d.m[k]; ok {
+		var x float64
+		if json.Unmarshal(v, &x) == nil && !math.IsNaN(x) && !math.IsInf(x, 0) {
+			*dst = x
+			return true
 		}
 	}
-	boolean := func(k string, dst *bool) {
-		if v, ok := m[k]; ok {
-			var x bool
-			if json.Unmarshal(v, &x) == nil {
-				*dst = x
-			}
+	return false
+}
+
+// integer reads a number, rounds it away from the float range and clamps it
+// into [lo, hi]. A missing or non-numeric value leaves the destination at its
+// default, clamped once.
+func (d decoder) integer(k string, dst *int, lo, hi int) {
+	var f float64
+	if d.num(k, &f) {
+		*dst = clampInt(int(math.Round(math.Max(math.Min(f, 1e12), -1e12))), lo, hi)
+	} else {
+		*dst = clampInt(*dst, lo, hi)
+	}
+}
+
+// boolean copies a bool value, ignoring other types.
+func (d decoder) boolean(k string, dst *bool) {
+	if v, ok := d.m[k]; ok {
+		var x bool
+		if json.Unmarshal(v, &x) == nil {
+			*dst = x
 		}
 	}
-	strList := func(k string) []string {
-		var out []string
-		if v, ok := m[k]; ok {
-			var xs []any
-			if json.Unmarshal(v, &xs) == nil {
-				for _, x := range xs {
-					switch t := x.(type) {
-					case string:
-						out = append(out, t)
-					case float64:
-						out = append(out, strconv.FormatFloat(t, 'f', -1, 64))
-					}
+}
+
+// strList reads a mixed array: strings are kept, numbers become their literal
+// form, and anything else (null, objects) is dropped.
+func (d decoder) strList(k string) []string {
+	var out []string
+	if v, ok := d.m[k]; ok {
+		var xs []any
+		if json.Unmarshal(v, &xs) == nil {
+			for _, x := range xs {
+				switch t := x.(type) {
+				case string:
+					out = append(out, t)
+				case float64:
+					out = append(out, strconv.FormatFloat(t, 'f', -1, 64))
 				}
 			}
 		}
-		return out
 	}
-	enum := func(k string, dst *string, allowed ...string) {
-		var x string
-		str(k, &x)
-		x = strings.ToLower(strings.TrimSpace(x))
-		for _, a := range allowed {
-			if x == a {
-				*dst = x
-				return
-			}
+	return out
+}
+
+// enum keeps a string value only when it (lower-cased, trimmed) is allowed.
+func (d decoder) enum(k string, dst *string, allowed ...string) {
+	var x string
+	d.str(k, &x)
+	x = strings.ToLower(strings.TrimSpace(x))
+	for _, a := range allowed {
+		if x == a {
+			*dst = x
+			return
 		}
 	}
+}
 
-	enum("mode", &s.Mode, ModeOff, ModeObserve, ModeEnforce)
-	str("base_url", &s.BaseURL)
+// network reads the upstream connection and prompt settings.
+func (d decoder) network(s *Settings) {
+	d.enum("mode", &s.Mode, ModeOff, ModeObserve, ModeEnforce)
+	d.str("base_url", &s.BaseURL)
 	s.BaseURL = strings.TrimSpace(s.BaseURL)
 	if s.BaseURL != "" && !baseURLRe.MatchString(s.BaseURL) {
 		s.BaseURL = ""
 	}
-	str("api_key", &s.APIKey)
+	d.str("api_key", &s.APIKey)
 	s.APIKey = strings.TrimSpace(s.APIKey)
-	str("model", &s.Model)
-	s.Model = truncateRunes(strings.TrimSpace(s.Model), 200)
-	str("system_prompt", &s.SystemPrompt)
-	s.SystemPrompt = truncateRunes(s.SystemPrompt, 20000)
-	if v, ok := m["categories"]; ok {
+	d.str("model", &s.Model)
+	s.Model = textutil.TruncateRunes(strings.TrimSpace(s.Model), 200)
+	d.str("system_prompt", &s.SystemPrompt)
+	s.SystemPrompt = textutil.TruncateRunes(s.SystemPrompt, 20000)
+	if v, ok := d.m["categories"]; ok {
 		var cats []struct {
 			ID          any `json:"id"`
 			Description any `json:"description"`
@@ -208,57 +242,68 @@ func DecodeSettings(raw []byte) (Settings, error) {
 					continue
 				}
 				seen[id] = true
-				s.Categories = append(s.Categories, Category{ID: id, Description: truncateRunes(strings.TrimSpace(desc), 500)})
+				s.Categories = append(s.Categories, Category{ID: id, Description: textutil.TruncateRunes(strings.TrimSpace(desc), 500)})
 				if len(s.Categories) == 50 {
 					break
 				}
 			}
 		}
 	}
-	enum("tool_choice", &s.ToolChoice, "required", "function", "auto")
-	integer("max_turns", &s.MaxTurns, 1, 5)
-	if num("temperature", &s.Temperature) {
+	d.enum("tool_choice", &s.ToolChoice, "required", "function", "auto")
+}
+
+// limits reads the per-request budget and the scope selectors.
+func (d decoder) limits(s *Settings) {
+	d.integer("max_turns", &s.MaxTurns, 1, 5)
+	if d.num("temperature", &s.Temperature) {
 		s.Temperature = math.Max(0, math.Min(2, s.Temperature))
 	}
-	integer("max_tokens", &s.MaxTokens, 64, 4096)
-	integer("timeout_ms", &s.TimeoutMs, 1000, 25000)
-	enum("on_error", &s.OnError, "allow", "block")
-	integer("max_concurrency", &s.MaxConcurrency, 1, 256)
-	integer("queue_size", &s.QueueSize, 1, 100000)
-	integer("input_max_chars", &s.InputMaxChars, 256, 100000)
-	integer("min_chars", &s.MinChars, 0, 1000)
-	integer("sample_rate", &s.SampleRate, 1, 100)
-	for _, g := range strList("group_ids") {
+	d.integer("max_tokens", &s.MaxTokens, 64, 4096)
+	d.integer("timeout_ms", &s.TimeoutMs, 1000, 25000)
+	d.enum("on_error", &s.OnError, "allow", "block")
+	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
+	d.integer("queue_size", &s.QueueSize, 1, 100000)
+	d.integer("input_max_chars", &s.InputMaxChars, 256, 100000)
+	d.integer("min_chars", &s.MinChars, 0, 1000)
+	d.integer("sample_rate", &s.SampleRate, 1, 100)
+	for _, g := range d.strList("group_ids") {
 		if id, err := strconv.ParseInt(strings.TrimSpace(g), 10, 64); err == nil && id > 0 {
 			s.GroupIDs = append(s.GroupIDs, id)
 		}
 	}
-	for _, p := range strList("model_patterns") {
+	for _, p := range d.strList("model_patterns") {
 		if p = strings.TrimSpace(p); p != "" {
 			s.ModelPatterns = append(s.ModelPatterns, p)
 		}
 	}
-	for _, u := range strList("exempt_user_ids") {
+	for _, u := range d.strList("exempt_user_ids") {
 		if u = strings.TrimSpace(u); u != "" {
 			if _, err := strconv.ParseInt(u, 10, 64); err == nil {
 				s.ExemptUserIDs = append(s.ExemptUserIDs, u)
 			}
 		}
 	}
-	integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
-	integer("block_status", &s.BlockStatus, 400, 599)
-	str("block_message", &s.BlockMessage)
-	s.BlockMessage = truncateRunes(strings.TrimSpace(s.BlockMessage), 500)
+}
+
+// storage reads the cache, block response and retention settings.
+func (d decoder) storage(s *Settings) {
+	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
+	d.integer("block_status", &s.BlockStatus, 400, 599)
+	d.str("block_message", &s.BlockMessage)
+	s.BlockMessage = textutil.TruncateRunes(strings.TrimSpace(s.BlockMessage), 500)
 	if s.BlockMessage == "" {
 		s.BlockMessage = DefaultBlockMessage
 	}
-	boolean("record_pass", &s.RecordPass)
-	boolean("store_text", &s.StoreText)
-	integer("retention_days", &s.RetentionDays, 1, 3650)
-	integer("ban_threshold", &s.BanThreshold, 0, 1000)
-	integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
-	integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
-	return s, nil
+	d.boolean("record_pass", &s.RecordPass)
+	d.boolean("store_text", &s.StoreText)
+	d.integer("retention_days", &s.RetentionDays, 1, 3650)
+}
+
+// ban reads the automatic ban rule.
+func (d decoder) ban(s *Settings) {
+	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
+	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
+	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
 }
 
 func clampInt(v, lo, hi int) int {
@@ -403,21 +448,6 @@ func globMatch(pattern, s string) bool {
 	return true
 }
 
-func truncateRunes(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:n])
-}
-
-// truncateBytes cuts s to at most n bytes on a rune boundary.
-func truncateBytes(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
-}
+// Text cutting uses the SDK's textutil helpers (TruncateRunes /
+// TruncateBytes); this plugin only keeps truncateText, whose middle ellipsis
+// is specific to prompt moderation.

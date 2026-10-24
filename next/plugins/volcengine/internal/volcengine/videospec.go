@@ -384,32 +384,12 @@ func readVideoSpec(fields map[string]string, omitted []string) videoSpec {
 		resolutions, ratios []string
 		durations, frames   []int64
 	)
-	if gone[PathResolution] {
-		resolutions = append(resolutions, "") // stated, unknowable
-		spec.ResolutionStated = true
-	} else if raw, ok := fields[PathResolution]; ok {
-		spec.ResolutionStated = true
-		if tier, ok := normalizeResolution(gjson.Parse(raw).String()); ok {
-			resolutions = append(resolutions, tier)
-		}
-	}
-	if gone[PathRatio] {
-		ratios = append(ratios, "")
-	} else if raw, ok := fields[PathRatio]; ok {
-		if r, ok := normalizeRatio(gjson.Parse(raw).String()); ok {
-			ratios = append(ratios, r)
-		}
-	}
-	if gone[PathDuration] {
-		durations = append(durations, 0)
-	} else if n, ok := jsonInt(fields[PathDuration]); ok {
-		durations = append(durations, n)
-	}
-	if gone[PathFrames] {
-		frames = append(frames, 0)
-	} else if n, ok := jsonInt(fields[PathFrames]); ok {
-		frames = append(frames, n)
-	}
+	resolutions, spec.ResolutionStated = readCandidates(PathResolution, gone, fields, "",
+		func(raw string) (string, bool) { return normalizeResolution(gjson.Parse(raw).String()) })
+	ratios, _ = readCandidates(PathRatio, gone, fields, "",
+		func(raw string) (string, bool) { return normalizeRatio(gjson.Parse(raw).String()) })
+	durations, _ = readCandidates(PathDuration, gone, fields, int64(0), jsonInt)
+	frames, _ = readCandidates(PathFrames, gone, fields, int64(0), jsonInt)
 
 	for _, text := range texts {
 		for key, v := range parsePromptCommands(text) {
@@ -439,6 +419,32 @@ func readVideoSpec(fields map[string]string, omitted []string) videoSpec {
 	spec.Seconds = largestPositive(durations)
 	spec.Frames = largestPositive(frames)
 	return spec
+}
+
+// readCandidates reads one declared field of the video request as a list of
+// candidate values, which is how the three states of a field are kept apart:
+//
+//   - omitted (in gone): the client stated a value the host would not carry,
+//     so one zero-value candidate goes in, which every combiner treats as
+//     "unknown" ("" for a resolution or ratio, 0 for a duration or a count);
+//   - present: the value is normalized and appended when it parses, and
+//     nothing is appended when it does not;
+//   - absent: neither, so the field contributes no candidate at all.
+//
+// stated reports whether the client said anything at all (omitted or present),
+// which only the resolution needs.
+func readCandidates[T any](path string, gone map[string]bool, fields map[string]string, zero T, normalize func(string) (T, bool)) (vals []T, stated bool) {
+	if gone[path] {
+		return []T{zero}, true
+	}
+	raw, ok := fields[path]
+	if !ok {
+		return nil, false
+	}
+	if v, ok := normalize(raw); ok {
+		vals = append(vals, v)
+	}
+	return vals, true
 }
 
 // jsonInt reads an integer out of a raw JSON value. gjson coerces a quoted

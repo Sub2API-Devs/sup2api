@@ -68,8 +68,10 @@ func (p *Plugin) routes() {
 
 // ---------------------------------------------------------------- helpers
 
+// unavailable and notFound wrap the SDK envelopes with this plugin's code
+// strings; badRequest is the SDK's one-field 400 as is.
 func unavailable(msg string) *pluginv1.HTTPResponse {
-	return pluginsdk.ErrorResponse(http.StatusServiceUnavailable, "unavailable", msg)
+	return pluginsdk.Unavailable(msg)
 }
 
 func notFound(msg string) *pluginv1.HTTPResponse {
@@ -77,8 +79,7 @@ func notFound(msg string) *pluginv1.HTTPResponse {
 }
 
 func badRequest(field, code, msg string) *pluginv1.HTTPResponse {
-	return pluginsdk.FieldErrorResponse("invalid request / 请求参数不正确",
-		pluginsdk.FieldErrors{}.Add(field, code, msg))
+	return pluginsdk.BadRequest(field, code, msg)
 }
 
 // upstreamFail maps an upstream Action failure onto an HTTP response. The
@@ -483,7 +484,7 @@ func (p *Plugin) getGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if bad != nil {
 		return bad, nil
 	}
-	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, groupResource, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -535,7 +536,7 @@ func (p *Plugin) updateGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, groupResource, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -568,7 +569,7 @@ func (p *Plugin) deleteGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, groupResource, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -630,7 +631,7 @@ func (p *Plugin) createAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	var createdID string
 	var createdWith *AssetConfig
-	resp, err := withGroup(ctx, db, in.GroupID, func(tx pgx.Tx, group *groupRow) (*pluginv1.HTTPResponse, error) {
+	resp, err := withResource(ctx, db, groupResource, in.GroupID, func(tx pgx.Tx, group *groupRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, group.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -689,7 +690,7 @@ func (p *Plugin) getAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if bad != nil {
 		return bad, nil
 	}
-	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, assetResource, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -732,7 +733,7 @@ func (p *Plugin) updateAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, assetResource, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil
@@ -764,7 +765,7 @@ func (p *Plugin) deleteAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+	return withResource(ctx, db, assetResource, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
 		cfg, bad := p.newCreds().config(ctx, row.AccountID)
 		if bad != nil {
 			return bad, nil

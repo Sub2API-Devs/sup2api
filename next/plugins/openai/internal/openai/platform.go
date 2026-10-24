@@ -7,8 +7,6 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -18,6 +16,7 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
+	openaiprovider "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/openai"
 )
 
 // PlatformID is the built-in platform the apikey account type serves.
@@ -47,12 +46,17 @@ const (
 )
 
 // spec describes the apikey account type; a trailing /v1 of base_url is
-// removed (users often paste the SDK base URL).
+// removed (users often paste the SDK base URL). Validation is the SDK's shared
+// apikey.Spec.Validate; Texts keeps the wording the console has always shown.
 var spec = apikey.Spec{
 	AccountType:    AccountTypeAPIKey,
 	DefaultBaseURL: DefaultBaseURL,
 	StripSuffixes:  []string{"/v1"},
 	KeyValidator:   &apikey.OpenAI,
+	Texts: apikey.Texts{
+		UnsupportedAccountType: "unsupported account type %q / 不支持的账号类型",
+		KeyNotString:           "API key must be a string / api_key 必须是字符串",
+	},
 }
 
 // forwardHeaders are client headers (lower-case, the built-in openai
@@ -84,80 +88,11 @@ type Plugin struct {
 // New returns the plugin.
 func New() *Plugin { return &Plugin{now: time.Now} }
 
-// ValidateCredentials implements pluginsdk.Platform.
+// ValidateCredentials implements pluginsdk.Platform: the shared apikey.Spec
+// validation (api_key normalized where it already lives, base_url with the
+// trailing /v1 stripped).
 func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
-	var errs pluginsdk.FieldErrors
-	if in.GetAccountType() != AccountTypeAPIKey {
-		errs = errs.Add("account_type", "unsupported", fmt.Sprintf("unsupported account type %q / 不支持的账号类型", in.GetAccountType()))
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}, nil
-	}
-	creds, err := apikey.DecodeObject(in.GetCredentialsJson())
-	if err != nil {
-		errs = errs.Add("", "invalid_json", "credentials must be a JSON object / 凭证必须是 JSON 对象")
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}, nil
-	}
-	settings, err := apikey.DecodeObject(in.GetSettingsJson())
-	if err != nil {
-		errs = errs.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象")
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}, nil
-	}
-
-	// api_key
-	rawKey, _ := apikey.Lookup("api_key", creds, settings)
-	key, isString := rawKey.(string)
-	key = strings.TrimSpace(key)
-	switch {
-	case rawKey == nil || (isString && key == ""):
-		errs = errs.Add("api_key", "required", "API key is required / 请填写 API Key")
-	case !isString:
-		errs = errs.Add("api_key", "pattern", "API key must be a string / api_key 必须是字符串")
-	default:
-		if _, fieldErr := spec.KeyValidator.Check(key); fieldErr != nil {
-			errs = append(errs, fieldErr)
-		}
-	}
-
-	// base_url
-	baseURL := DefaultBaseURL
-	if v, ok := apikey.Lookup("base_url", settings, creds); ok {
-		s, isStr := v.(string)
-		if !isStr {
-			errs = errs.Add("base_url", "type", "base_url must be a string / base_url 必须是字符串")
-		} else if n, err := apikey.NormalizeBaseURL(s, spec.StripSuffixes); err != nil {
-			errs = errs.Add("base_url", "format", "base_url "+err.Error()+" / base_url 格式错误")
-		} else {
-			baseURL = n
-		}
-	}
-
-	if len(errs) > 0 {
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}, nil
-	}
-
-	// Normalize each object in place, keeping its key set (unknown keys pass through untouched).
-	normalize := func(obj map[string]any) string {
-		if len(obj) == 0 {
-			return ""
-		}
-		out := make(map[string]any, len(obj))
-		for k, v := range obj {
-			switch k {
-			case "api_key":
-				out[k] = key
-			case "base_url":
-				out[k] = baseURL
-			default:
-				out[k] = v
-			}
-		}
-		b, _ := json.Marshal(out)
-		return string(b)
-	}
-
-	return &pluginv1.ValidateCredentialsResponse{
-		NormalizedCredentialsJson: normalize(creds),
-		NormalizedSettingsJson:    normalize(settings),
-	}, nil
+	return spec.Validate(in), nil
 }
 
 // upstreamPath maps the upstream protocol (RequestMeta.protocol, which may
@@ -204,13 +139,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if err != nil {
 		return nil, err
 	}
-	model := meta.GetModel()
-	if raw, ok := in.GetFields()["model"]; ok && raw != "" {
-		var s string
-		if json.Unmarshal([]byte(raw), &s) == nil && s != "" {
-			model = s
-		}
-	}
+	model := pluginsdk.RequestModel(in)
 	resp := &pluginv1.BuildUpstreamRequestResponse{
 		Method:        "POST",
 		Url:           cfg.BaseURL + ep,
@@ -242,16 +171,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if model == "" {
 		model = DefaultTestModel
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model":      model,
-		"max_tokens": 1,
-		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-	})
+	body := openaiprovider.ChatPingBody(model, 1)
 	return &pluginv1.BuildTestRequestResponse{
 		Method:        "POST",
 		Url:           cfg.BaseURL + "/v1/chat/completions",
 		Headers:       upstreamHeaders(cfg.APIKey, nil),
-		BodyJson:      string(body),
+		BodyJson:      body,
 		Model:         model,
 		UsageProtocol: "openai.chat",
 	}, nil
@@ -263,14 +188,7 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 	if err != nil {
 		return nil, err
 	}
-	h := upstreamHeaders(cfg.APIKey, nil)
-	delete(h, "content-type")
-	return &pluginv1.BuildModelsRequestResponse{
-		Method:  "GET",
-		Url:     cfg.BaseURL + "/v1/models",
-		Headers: h,
-		IdsPath: "data.#.id",
-	}, nil
+	return apikey.ModelListRequest(cfg, "/v1/models", "data.#.id", "", upstreamHeaders(cfg.APIKey, nil)), nil
 }
 
 // webSocketBeta opts the upstream connection into the Responses WebSocket

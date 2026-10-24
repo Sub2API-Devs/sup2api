@@ -17,6 +17,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/anthropic"
 )
 
 const (
@@ -32,6 +33,11 @@ const (
 
 	// 上游端点
 	MessagesURL = "https://api.anthropic.com/v1/messages"
+
+	// AnthropicAPIVersion 是所有 Anthropic 面请求带的版本头；
+	// OAuthBeta 是 OAuth 令牌/用量端点要求的 beta 名。
+	AnthropicAPIVersion = "2023-06-01"
+	OAuthBeta           = "oauth-2025-04-20"
 
 	// 控制台"测试账号"未指定模型时使用（manifest defaultModels 之一）
 	testModel = "claude-sonnet-5"
@@ -101,14 +107,14 @@ func (p *Plugin) BuildUpstreamRequest(ctx context.Context, req *pluginv1.BuildUp
 	// 构造 Authorization header
 	headers := map[string]string{
 		"authorization":     "Bearer " + creds.AccessToken,
-		"anthropic-version": "2023-06-01",
+		"anthropic-version": AnthropicAPIVersion,
 		"content-type":      "application/json",
 	}
 
 	// 添加 anthropic-beta header（对齐 backend gateway_claude_oauth_body.go）
-	if protocol := meta.GetProtocol(); protocol == "anthropic.messages" {
+	if protocol := meta.GetProtocol(); protocol == anthropic.ProtocolMessages {
 		// 简化版：仅添加 oauth beta（完整伪装由核心的 gateway 层实现）
-		headers["anthropic-beta"] = "oauth-2025-04-20"
+		headers["anthropic-beta"] = OAuthBeta
 	}
 
 	return &pluginv1.BuildUpstreamRequestResponse{
@@ -204,13 +210,13 @@ func (p *Plugin) BuildTestRequest(ctx context.Context, req *pluginv1.BuildTestRe
 		Url:    MessagesURL,
 		Headers: map[string]string{
 			"authorization":     "Bearer " + creds.AccessToken,
-			"anthropic-version": "2023-06-01",
-			"anthropic-beta":    "oauth-2025-04-20",
+			"anthropic-version": AnthropicAPIVersion,
+			"anthropic-beta":    OAuthBeta,
 			"content-type":      "application/json",
 		},
 		BodyJson:      string(bodyBytes),
 		Model:         model,
-		UsageProtocol: "anthropic.messages",
+		UsageProtocol: anthropic.ProtocolMessages,
 	}, nil
 }
 

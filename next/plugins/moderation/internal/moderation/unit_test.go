@@ -306,7 +306,7 @@ func TestLRU(t *testing.T) {
 	if _, ok := c.get("a", now.Add(2*time.Minute)); ok || c.len() != 1 {
 		t.Fatal("expired entry must be dropped")
 	}
-	if cacheKey("p1", "t") == cacheKey("p2", "t") || cacheKey("p1", "t") != cacheKey("p1", "t") {
+	if cacheKey("p1", "t") == cacheKey("p2", "t") || cacheKey("p1", "t") == "" {
 		t.Fatal("cache key must include the policy")
 	}
 }

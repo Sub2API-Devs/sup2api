@@ -49,28 +49,8 @@ func (p *Plugin) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) (*p
 	var last int64
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		for _, ev := range evs {
-			var inserted bool
-			if err := tx.QueryRow(ctx, `WITH ins AS (
-					INSERT INTO processed_events (event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1)
-				SELECT EXISTS (SELECT 1 FROM ins)`, ev.GetId()).Scan(&inserted); err != nil {
+			if err := p.applyEvent(ctx, tx, ev); err != nil {
 				return err
-			}
-			if inserted && ev.GetType() == "usage.recorded" {
-				var u usageRecorded
-				if err := json.Unmarshal([]byte(ev.GetPayloadJson()), &u); err != nil {
-					p.log.Warn("guard: bad usage.recorded payload", "event_id", ev.GetId(), "error", err.Error())
-				} else {
-					at := u.CreatedAt
-					if at.IsZero() {
-						at = time.UnixMilli(ev.GetOccurredAtUnixMs())
-					}
-					if _, err := tx.Exec(ctx, `INSERT INTO stats_minutely (minute, group_id, model, requests, blocked)
-						VALUES (date_trunc('minute', $1::timestamptz), $2, $3, 1, 0)
-						ON CONFLICT (minute, group_id, model) DO UPDATE SET requests = stats_minutely.requests + 1`,
-						at.UTC(), u.GroupID, u.Model); err != nil {
-						return err
-					}
-				}
 			}
 			if ev.GetId() > last {
 				last = ev.GetId()
@@ -82,6 +62,35 @@ func (p *Plugin) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) (*p
 		return nil, status.Error(codes.Unavailable, fmt.Sprintf("guard: store events: %v", err))
 	}
 	return &pluginv1.OnEventsResponse{AckedThroughId: last}, nil
+}
+
+// applyEvent records one event as processed and counts it. The idempotency
+// insert and the counter update share the caller's transaction, so a
+// redelivered event is either fully applied or not at all.
+func (p *Plugin) applyEvent(ctx context.Context, tx pgx.Tx, ev *pluginv1.Event) error {
+	var inserted bool
+	if err := tx.QueryRow(ctx, `WITH ins AS (
+			INSERT INTO processed_events (event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1)
+		SELECT EXISTS (SELECT 1 FROM ins)`, ev.GetId()).Scan(&inserted); err != nil {
+		return err
+	}
+	if !inserted || ev.GetType() != "usage.recorded" {
+		return nil
+	}
+	var u usageRecorded
+	if err := json.Unmarshal([]byte(ev.GetPayloadJson()), &u); err != nil {
+		p.log.Warn("guard: bad usage.recorded payload", "event_id", ev.GetId(), "error", err.Error())
+		return nil
+	}
+	at := u.CreatedAt
+	if at.IsZero() {
+		at = time.UnixMilli(ev.GetOccurredAtUnixMs())
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO stats_minutely (minute, group_id, model, requests, blocked)
+		VALUES (date_trunc('minute', $1::timestamptz), $2, $3, 1, 0)
+		ON CONFLICT (minute, group_id, model) DO UPDATE SET requests = stats_minutely.requests + 1`,
+		at.UTC(), u.GroupID, u.Model)
+	return err
 }
 
 // RunJob implements pluginsdk.JobRunner.

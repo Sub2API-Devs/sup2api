@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
@@ -146,11 +147,25 @@ func (p *Plugin) getStats(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if st.Bucket == "day" {
 		bucketExpr = "date_trunc('day', " + col + ", $3)"
 	}
+	if err := statsTrend(ctx, db, &st, table, col, bucketExpr, from, to, loc); err != nil {
+		return nil, err
+	}
+	if err := statsTopRules(ctx, db, &st, from, to); err != nil {
+		return nil, err
+	}
+	if err := statsRecent(ctx, db, &st, from, to); err != nil {
+		return nil, err
+	}
+	return pluginsdk.DataResponse(st), nil
+}
+
+// statsTrend fills the trend (with empty buckets) and the two totals.
+func statsTrend(ctx context.Context, db *pgxpool.Pool, st *Stats, table, col, bucketExpr string, from, to time.Time, loc *time.Location) error {
 	rows, err := db.Query(ctx, `SELECT `+bucketExpr+` AS ts, sum(blocked)::bigint, sum(requests)::bigint
 		FROM `+table+` WHERE `+col+` >= $1 AND `+col+` < $2 AND $3::text IS NOT NULL
 		GROUP BY 1 ORDER BY 1`, from, to, loc.String())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	points, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (TrendPoint, error) {
 		var tp TrendPoint
@@ -158,7 +173,7 @@ func (p *Plugin) getStats(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		return tp, err
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	byTS := make(map[int64]TrendPoint, len(points))
 	for _, tp := range points {
@@ -174,35 +189,39 @@ func (p *Plugin) getStats(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		tp.TS = tp.TS.UTC()
 		st.Trend = append(st.Trend, tp)
 	}
+	return nil
+}
 
-	rows, err = db.Query(ctx, `SELECT b.rule_id, coalesce(r.name, max(b.rule_name)), coalesce(r.kind, ''), coalesce(r.pattern, ''), count(*)
+// statsTopRules fills the ten rules that blocked most often.
+func statsTopRules(ctx context.Context, db *pgxpool.Pool, st *Stats, from, to time.Time) error {
+	rows, err := db.Query(ctx, `SELECT b.rule_id, coalesce(r.name, max(b.rule_name)), coalesce(r.kind, ''), coalesce(r.pattern, ''), count(*)
 		FROM block_log b LEFT JOIN rules r ON r.id = b.rule_id
 		WHERE b.occurred_at >= $1 AND b.occurred_at < $2
 		GROUP BY b.rule_id, r.name, r.kind, r.pattern
 		ORDER BY count(*) DESC, b.rule_id LIMIT 10`, from, to)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if st.TopRules, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (TopRule, error) {
+	st.TopRules, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (TopRule, error) {
 		var tr TopRule
 		err := r.Scan(&tr.RuleID, &tr.Name, &tr.Kind, &tr.Pattern, &tr.Hits)
 		return tr, err
-	}); err != nil {
-		return nil, err
-	}
+	})
+	return err
+}
 
-	rows, err = db.Query(ctx, `SELECT occurred_at, rule_id, rule_name, request_id, user_id, group_id, model, coalesce(snippet, '')
+// statsRecent fills the twenty most recent blocks.
+func statsRecent(ctx context.Context, db *pgxpool.Pool, st *Stats, from, to time.Time) error {
+	rows, err := db.Query(ctx, `SELECT occurred_at, rule_id, rule_name, request_id, user_id, group_id, model, coalesce(snippet, '')
 		FROM block_log WHERE occurred_at >= $1 AND occurred_at < $2
 		ORDER BY occurred_at DESC, id DESC LIMIT 20`, from, to)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if st.Recent, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (RecentBlock, error) {
+	st.Recent, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (RecentBlock, error) {
 		var rb RecentBlock
 		err := r.Scan(&rb.OccurredAt, &rb.RuleID, &rb.RuleName, &rb.RequestID, &rb.UserID, &rb.GroupID, &rb.Model, &rb.Snippet)
 		return rb, err
-	}); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(st), nil
+	})
+	return err
 }

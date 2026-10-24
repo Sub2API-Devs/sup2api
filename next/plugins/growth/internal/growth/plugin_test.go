@@ -478,3 +478,24 @@ func TestAdminRoutes(t *testing.T) {
 		}
 	}
 }
+
+// TestAdminRoutesQueryFailure: a query error is reported as 503, not answered
+// with zeroed statistics. The routes used to discard the Scan error, so a
+// broken schema looked like a healthy but empty installation.
+func TestAdminRoutesQueryFailure(t *testing.T) {
+	p, h, _ := startDB(t, nil)
+	ctx := context.Background()
+	db, err := p.db(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `DROP TABLE commissions`); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/admin/stats", "/admin/commissions", "/me/referral"} {
+		resp := h.Do("GET", path, nil, nil)
+		if resp.GetStatus() != 503 {
+			t.Errorf("%s: status %d, want 503 (%s)", path, resp.GetStatus(), resp.GetBody())
+		}
+	}
+}

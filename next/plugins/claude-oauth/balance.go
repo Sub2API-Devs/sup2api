@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
@@ -29,7 +26,7 @@ func (p *Plugin) BuildBalanceRequest(ctx context.Context, req *pluginv1.BuildBal
 		Url:    "https://platform.claude.com/v1/organization/usage",
 		Headers: map[string]string{
 			"authorization":     "Bearer " + creds.AccessToken,
-			"anthropic-version": "2023-06-01",
+			"anthropic-version": AnthropicAPIVersion,
 		},
 	}, nil
 }
@@ -105,49 +102,4 @@ func (p *Plugin) ParseBalanceResponse(ctx context.Context, req *pluginv1.ParseBa
 			Currency:     resp.AccountBalance.Currency,
 		},
 	}, nil
-}
-
-// queryBalance 是辅助方法，用于本地测试（可选）
-func (p *Plugin) queryBalance(ctx context.Context, accessToken string) (amountMicros int64, currency string, err error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://platform.claude.com/v1/organization/usage", nil)
-	if err != nil {
-		return 0, "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return 0, "", fmt.Errorf("upstream %d", resp.StatusCode)
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, "", err
-	}
-
-	var result struct {
-		AccountBalance *struct {
-			Amount   float64 `json:"amount"`
-			Currency string  `json:"currency"`
-		} `json:"account_balance"`
-	}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return 0, "", err
-	}
-
-	if result.AccountBalance == nil {
-		return 0, "", fmt.Errorf("no account_balance in response")
-	}
-
-	amountMicros = int64(result.AccountBalance.Amount * 1_000_000)
-	currency = result.AccountBalance.Currency
-
-	return amountMicros, currency, nil
 }

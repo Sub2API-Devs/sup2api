@@ -56,7 +56,9 @@ func TestValidateCredentials(t *testing.T) {
 		{name: "empty base url", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef","base_url":"  "}`, wantFields: []string{"base_url"}},
 		{name: "bad base url", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef","base_url":"ftp://x"}`, wantFields: []string{"base_url"}},
 		{name: "missing key", typ: "relay_key", creds: `{"base_url":"https://r.example.com"}`, wantFields: []string{"api_key"}},
-		{name: "nothing", typ: "relay_key", creds: `{}`, wantFields: []string{"base_url", "api_key"}},
+		// api_key first: both fields are missing, and the shared
+		// apikey.Spec.Validate checks the key before the URL.
+		{name: "nothing", typ: "relay_key", creds: `{}`, wantFields: []string{"api_key", "base_url"}},
 		{name: "wrong type", typ: "apikey", creds: `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com"}`, wantFields: []string{"account_type"}},
 		{name: "invalid json", typ: "relay_key", creds: `[1]`, wantFields: []string{""}},
 	}

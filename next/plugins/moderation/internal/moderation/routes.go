@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -141,20 +142,40 @@ func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	if err := db.QueryRow(ctx, `SELECT count(*),
+	if err := p.queryTotals(ctx, db, &o); err != nil {
+		return nil, err
+	}
+	if err := p.queryTrend(ctx, db, &o, now); err != nil {
+		return nil, err
+	}
+	if err := p.queryTopCategories(ctx, db, &o); err != nil {
+		return nil, err
+	}
+	if err := p.queryTopUsers(ctx, db, &o); err != nil {
+		return nil, err
+	}
+	return pluginsdk.DataResponse(o), nil
+}
+
+// queryTotals fills the summary counts of the range.
+func (p *Plugin) queryTotals(ctx context.Context, db *pgxpool.Pool, o *Overview) error {
+	return db.QueryRow(ctx, `SELECT count(*),
 			count(*) FILTER (WHERE verdict = 'pass'), count(*) FILTER (WHERE verdict = 'flag'),
 			count(*) FILTER (WHERE verdict = 'block'), count(*) FILTER (WHERE verdict = 'error'),
 			count(*) FILTER (WHERE action = 'deny')
 		FROM events WHERE created_at >= $1`, o.From).Scan(
-		&o.Totals.Total, &o.Totals.Pass, &o.Totals.Flag, &o.Totals.Block, &o.Totals.Error, &o.Totals.Denied); err != nil {
-		return nil, err
-	}
+		&o.Totals.Total, &o.Totals.Pass, &o.Totals.Flag, &o.Totals.Block, &o.Totals.Error, &o.Totals.Denied)
+}
+
+// queryTrend fills o.Trend with one point per bucket, including the empty
+// buckets the database does not return.
+func (p *Plugin) queryTrend(ctx context.Context, db *pgxpool.Pool, o *Overview, now time.Time) error {
 	rows, err := db.Query(ctx, `SELECT date_trunc($2, created_at, 'UTC') AS b,
 			count(*) FILTER (WHERE verdict = 'pass'), count(*) FILTER (WHERE verdict = 'flag'),
 			count(*) FILTER (WHERE verdict = 'block'), count(*) FILTER (WHERE verdict = 'error')
 		FROM events WHERE created_at >= $1 GROUP BY 1 ORDER BY 1`, o.From, o.Bucket)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	points, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (TrendPoint, error) {
 		var tp TrendPoint
@@ -162,7 +183,7 @@ func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return tp, err
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	byBucket := make(map[int64]TrendPoint, len(points))
 	for _, tp := range points {
@@ -181,32 +202,38 @@ func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		tp.Bucket = b
 		o.Trend = append(o.Trend, tp)
 	}
-	rows, err = db.Query(ctx, `SELECT c, count(*) FROM events, unnest(categories) AS c
+	return nil
+}
+
+// queryTopCategories fills the ten most frequent categories.
+func (p *Plugin) queryTopCategories(ctx context.Context, db *pgxpool.Pool, o *Overview) error {
+	rows, err := db.Query(ctx, `SELECT c, count(*) FROM events, unnest(categories) AS c
 		WHERE created_at >= $1 GROUP BY c ORDER BY count(*) DESC, c LIMIT 10`, o.From)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if o.TopCategories, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (CategoryCount, error) {
+	o.TopCategories, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (CategoryCount, error) {
 		var cc CategoryCount
 		err := r.Scan(&cc.Category, &cc.Count)
 		return cc, err
-	}); err != nil {
-		return nil, err
-	}
-	rows, err = db.Query(ctx, `SELECT user_id, count(*) FROM events
+	})
+	return err
+}
+
+// queryTopUsers fills the ten users with the most blocked requests.
+func (p *Plugin) queryTopUsers(ctx context.Context, db *pgxpool.Pool, o *Overview) error {
+	rows, err := db.Query(ctx, `SELECT user_id, count(*) FROM events
 		WHERE created_at >= $1 AND verdict = 'block' AND user_id > 0
 		GROUP BY user_id ORDER BY count(*) DESC, user_id LIMIT 10`, o.From)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if o.TopUsers, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (UserCount, error) {
+	o.TopUsers, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (UserCount, error) {
 		var uc UserCount
 		err := r.Scan(&uc.UserID, &uc.Count)
 		return uc, err
-	}); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(o), nil
+	})
+	return err
 }
 
 // ---------------------------------------------------------------- events
@@ -262,27 +289,57 @@ func (e *Event) scanTargets() []any {
 
 // eventFilter builds the WHERE clause of GET /events.
 func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs pluginsdk.FieldErrors) {
-	conds := []string{"TRUE"}
-	arg := func(v any) string {
-		args = append(args, v)
-		return "$" + strconv.Itoa(len(args))
+	f := &eventQuery{conds: []string{"TRUE"}}
+	f.enums(req)
+	f.ids(req)
+	f.category(req)
+	f.search(req)
+	from, to := f.times(req)
+	if !from.IsZero() && !to.IsZero() && !from.Before(to) {
+		f.errs = f.errs.Add("from", "range", "from must be before to / from 必须早于 to")
 	}
-	enum := func(name string, allowed ...string) {
-		v := pluginsdk.Query(req, name)
-		if v == "" {
+	return strings.Join(f.conds, " AND "), f.args, f.errs
+}
+
+// eventQuery accumulates the WHERE fragment of GET /events. Every value is
+// appended to args and referenced by its positional placeholder, so the
+// filters can be added in any order.
+type eventQuery struct {
+	conds []string
+	args  []any
+	errs  pluginsdk.FieldErrors
+}
+
+// arg appends v to the argument list and returns its placeholder.
+func (f *eventQuery) arg(v any) string {
+	f.args = append(f.args, v)
+	return "$" + strconv.Itoa(len(f.args))
+}
+
+// enums adds the three closed-vocabulary filters.
+func (f *eventQuery) enums(req *pluginv1.HTTPRequest) {
+	f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
+	f.enum(req, "action", ActionAllow, ActionDeny)
+	f.enum(req, "mode", ModeObserve, ModeEnforce)
+}
+
+// enum adds "name = value" when the query names an allowed value.
+func (f *eventQuery) enum(req *pluginv1.HTTPRequest, name string, allowed ...string) {
+	v := pluginsdk.Query(req, name)
+	if v == "" {
+		return
+	}
+	for _, a := range allowed {
+		if v == a {
+			f.conds = append(f.conds, name+" = "+f.arg(v))
 			return
 		}
-		for _, a := range allowed {
-			if v == a {
-				conds = append(conds, name+" = "+arg(v))
-				return
-			}
-		}
-		errs = errs.Add(name, "enum", fmt.Sprintf("%s must be one of %s / %s 取值为 %s", name, strings.Join(allowed, ", "), name, strings.Join(allowed, "、")))
 	}
-	enum("verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
-	enum("action", ActionAllow, ActionDeny)
-	enum("mode", ModeObserve, ModeEnforce)
+	f.errs = f.errs.Add(name, "enum", fmt.Sprintf("%s must be one of %s / %s 取值为 %s", name, strings.Join(allowed, ", "), name, strings.Join(allowed, "、")))
+}
+
+// ids adds the numeric id filters (user, api key, group).
+func (f *eventQuery) ids(req *pluginv1.HTTPRequest) {
 	for _, name := range []string{"user_id", "api_key_id", "group_id"} {
 		v := pluginsdk.Query(req, name)
 		if v == "" {
@@ -290,28 +347,43 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 		}
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id < 0 {
-			errs = errs.Add(name, "invalid", name+" must be a non-negative integer / "+name+" 必须是非负整数")
+			f.errs = f.errs.Add(name, "invalid", name+" must be a non-negative integer / "+name+" 必须是非负整数")
 			continue
 		}
-		conds = append(conds, name+" = "+arg(id))
+		f.conds = append(f.conds, name+" = "+f.arg(id))
 	}
-	if v := pluginsdk.Query(req, "category"); v != "" {
-		if !categoryIDRe.MatchString(v) {
-			errs = errs.Add("category", "invalid", "category must match ^[a-z0-9_]{1,32}$ / 分类 id 格式无效")
-		} else {
-			conds = append(conds, arg(v)+" = ANY(categories)")
-		}
+}
+
+// category matches one category id inside the events.categories array.
+func (f *eventQuery) category(req *pluginv1.HTTPRequest) {
+	v := pluginsdk.Query(req, "category")
+	if v == "" {
+		return
 	}
-	if v := strings.TrimSpace(pluginsdk.Query(req, "q")); v != "" {
-		if utf8.RuneCountInString(v) > 200 {
-			errs = errs.Add("q", "too_long", "q must be at most 200 characters / 搜索词最多 200 字")
-		} else {
-			like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(v) + "%"
-			a := arg(like)
-			conds = append(conds, "(request_id ILIKE "+a+" OR reason ILIKE "+a+" OR text ILIKE "+a+")")
-		}
+	if !categoryIDRe.MatchString(v) {
+		f.errs = f.errs.Add("category", "invalid", "category must match ^[a-z0-9_]{1,32}$ / 分类 id 格式无效")
+		return
 	}
-	var from, to time.Time
+	f.conds = append(f.conds, f.arg(v)+" = ANY(categories)")
+}
+
+// search matches the free-text term against request id, reason and text.
+func (f *eventQuery) search(req *pluginv1.HTTPRequest) {
+	v := strings.TrimSpace(pluginsdk.Query(req, "q"))
+	if v == "" {
+		return
+	}
+	if utf8.RuneCountInString(v) > 200 {
+		f.errs = f.errs.Add("q", "too_long", "q must be at most 200 characters / 搜索词最多 200 字")
+		return
+	}
+	like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(v) + "%"
+	a := f.arg(like)
+	f.conds = append(f.conds, "(request_id ILIKE "+a+" OR reason ILIKE "+a+" OR text ILIKE "+a+")")
+}
+
+// times adds the RFC 3339 time window and returns its bounds.
+func (f *eventQuery) times(req *pluginv1.HTTPRequest) (from, to time.Time) {
 	for _, name := range []string{"from", "to"} {
 		v := pluginsdk.Query(req, name)
 		if v == "" {
@@ -319,21 +391,18 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 		}
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			errs = errs.Add(name, "format", name+" must be RFC 3339 / "+name+" 必须是 RFC 3339 时间")
+			f.errs = f.errs.Add(name, "format", name+" must be RFC 3339 / "+name+" 必须是 RFC 3339 时间")
 			continue
 		}
 		if name == "from" {
 			from = t
-			conds = append(conds, "created_at >= "+arg(t))
+			f.conds = append(f.conds, "created_at >= "+f.arg(t))
 		} else {
 			to = t
-			conds = append(conds, "created_at < "+arg(t))
+			f.conds = append(f.conds, "created_at < "+f.arg(t))
 		}
 	}
-	if !from.IsZero() && !to.IsZero() && !from.Before(to) {
-		errs = errs.Add("from", "range", "from must be before to / from 必须早于 to")
-	}
-	return strings.Join(conds, " AND "), args, errs
+	return from, to
 }
 
 // pagination reads page (>= 1, default 1) and page_size (1-100, default 20).

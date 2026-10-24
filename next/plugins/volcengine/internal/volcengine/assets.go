@@ -74,11 +74,6 @@ type AssetConfig struct {
 	Region  string
 }
 
-// assetSpec normalizes asset_base_url the same way spec normalizes base_url,
-// minus the /api/v3 stripping: the control plane has no path prefix, every
-// Action is a POST to "/".
-var assetSpec = apikey.Spec{AccountType: AccountTypeAPIKey, DefaultBaseURL: DefaultAssetBaseURL}
-
 // assetRegionOK reports whether r is a plausible volcengine region id. It is
 // part of the V4 credential scope, so it must not carry separators that
 // would let a value smuggle extra scope segments into the signature.
@@ -125,18 +120,15 @@ func assetFields(credentialsJSON, settingsJSON string) (ak, sk, base, region str
 		return "", "", "", "", fmt.Errorf("settings: %w", err)
 	}
 	str := func(field string, first, second map[string]any) (string, error) {
-		for _, o := range []map[string]any{first, second} {
-			v, ok := o[field]
-			if !ok || v == nil {
-				continue
-			}
-			s, isStr := v.(string)
-			if !isStr {
-				return "", fmt.Errorf("%s must be a string", field)
-			}
-			return strings.TrimSpace(s), nil
+		v, ok := apikey.Lookup(field, first, second)
+		if !ok {
+			return "", nil
 		}
-		return "", nil
+		s, isStr := v.(string)
+		if !isStr {
+			return "", fmt.Errorf("%s must be a string", field)
+		}
+		return strings.TrimSpace(s), nil
 	}
 	if ak, err = str(FieldAccessKey, creds, settings); err != nil {
 		return
@@ -151,19 +143,11 @@ func assetFields(credentialsJSON, settingsJSON string) (ak, sk, base, region str
 	return ak, sk, base, region, err
 }
 
+// decodeJSONObject parses a credentials/settings JSON object. It is the SDK's
+// apikey.DecodeObject (empty or "null" yields an empty map), so the account
+// forms of every plugin read objects the same way.
 func decodeJSONObject(raw string) (map[string]any, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "null" {
-		return map[string]any{}, nil
-	}
-	var m map[string]any
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		return nil, err
-	}
-	if m == nil {
-		m = map[string]any{}
-	}
-	return m, nil
+	return apikey.DecodeObject(raw)
 }
 
 // AssetConfigOf returns the asset library configuration of an account read
