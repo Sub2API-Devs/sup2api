@@ -6,7 +6,7 @@ import { mBr } from './chunk-4qs43hr1.js';
 import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
-import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
+import { parseRequestOptions, parseRequestJSON, normalizeBetas, placeBetas } from './ccgateway-request-options.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
 import { readRequestAgent, resolveAgentContext, keepClientUserAgent } from './ccgateway-request-agent.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
@@ -132,10 +132,20 @@ async function prepareOutgoing(state, options, { body, rawBody, timeout, apiKey,
   // A request sent with the client's own header keeps the client's User-Agent
   // (build reads the client's system from its components).
   keepClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? body.systemPrompt : body.system), agentNative?.leadingBilling(outgoing.body.system));
-  const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
+  const order = natives.betaOrder?.(outgoing.body?.model) ?? [];
+  const betas = clientOrderedBetas(options, body, outgoing.headers?.['anthropic-beta'], order);
   if (betas.length && !mBr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
-  outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+  outgoing.headerPolicy = { apiKey, betas, oauthBeta, betaOrder: order, version: options.headers['anthropic-version'] ?? '2023-06-01' };
   return { outgoing, agent };
+}
+
+// clientOrderedBetas keeps the client's betas in the client's order and puts
+// the ones the request adds (build: CC's per-request betas such as the 1-hour
+// cache) where CC itself writes them.
+function clientOrderedBetas(options, body, outgoingBetas, order) {
+  const client = normalizeBetas(options.headers['anthropic-beta'], options.mode === 'build' ? body.parameters?.betas : undefined);
+  const all = normalizeBetas(outgoingBetas);
+  return placeBetas(all.filter(beta => client.includes(beta)), all.filter(beta => !client.includes(beta)), order);
 }
 
 // agentResolver resolves the client's kind of request from the Worker's agent

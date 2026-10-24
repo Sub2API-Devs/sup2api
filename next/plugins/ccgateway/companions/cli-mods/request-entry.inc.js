@@ -40,7 +40,7 @@ if (e[0] === "request") {
   // client loop header names (request-agent.js).
   let { Zoe: ccgQuerySource } = await import("./chunk-m5q1b1c4.js");
   let { createBillingPolicy: ccgBillingFor } = await import("./ccgateway-content-policy.js");
-  let { ccgatewayLayerVocabulary: ccgLayers, ccgatewayPromptTurn: ccgTurnOf } = await import("./chunk-rncrmfyt.js");
+  let { ccgatewayLayerVocabulary: ccgLayers, ccgatewayPromptTurn: ccgTurnOf, ccgatewayBetaOrder: ccgBetaOrder } = await import("./chunk-rncrmfyt.js");
   let ccgBilling = ccgBillingFor(ccgHeader);
   let ccgAgent = { querySourceFor: ccgQuerySource, loopHeaders: ccgLayers().loopHeaders,
     requestBilling: system => ccgBilling.requestBilling(system), leadingBilling: system => ccgBilling.leadingBilling(system),
@@ -48,7 +48,7 @@ if (e[0] === "request") {
     prompt: messages => ccgPromptText(messages, ccgReminder), turn: ccgTurnOf };
   // The identity lines are CC's own three (n1n): interactive, and
   // non-interactive with and without an appended prompt.
-  process.exit(await run(e.slice(1), { oauthBeta: oauthAuth.header,
+  process.exit(await run(e.slice(1), { oauthBeta: oauthAuth.header, betaOrder: ccgBetaOrder,
     identityBuild: (b, m) => ccgBuildMetadata(b, m, ccgNativeMetadata),
     prefixBuild: (b, c) => ccgPrefixBuild(b, c, {
       official_cli: ccgPrefix({ isNonInteractive: !1, hasAppendSystemPrompt: !1 }),

@@ -93,7 +93,23 @@ export function authenticatedRequestHeaders(nativeHeaders, policy) {
   if (!/^Bearer \S+$/i.test(headers.get('authorization') ?? '') || headers.has('x-api-key')) {
     throw Error('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY');
   }
-  return setProtocolHeaders(headers, normalizeBetas(policy.betas, policy.oauthBeta), policy.version ?? '2023-06-01');
+  return setProtocolHeaders(headers, placeBetas(policy.betas, [policy.oauthBeta], policy.betaOrder), policy.version ?? '2023-06-01');
+}
+
+// placeBetas adds betas to a list in Claude Code's own order (order, from
+// ccgatewayBetaOrder): each goes in front of the first listed beta CC writes
+// after it, or last when CC does not order it. The listed ones keep their
+// order, the client's.
+export function placeBetas(betas, additions, order = []) {
+  const rank = beta => order.indexOf(beta);
+  const placed = [...betas];
+  for (const beta of additions) {
+    if (!beta || placed.includes(beta)) continue;
+    const at = rank(beta) < 0 ? -1 : placed.findIndex(listed => rank(listed) > rank(beta));
+    if (at < 0) placed.push(beta);
+    else placed.splice(at, 0, beta);
+  }
+  return placed;
 }
 
 // An API key is not a login: the login's beta goes only with a login, as

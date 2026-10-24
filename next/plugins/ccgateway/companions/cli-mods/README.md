@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**Claude Code 2.1.304 / `ccgateway-v24-beta-path`**（2026-10-24，随插件 0.1.88 发布，ELF SHA-256 `2084a56fba5d137488e788251e20d39341153239362c337931e9aa3448baf14a`；上一版 `ccgateway-v23-bound-imports` 随插件 0.1.87；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
+**Claude Code 2.1.304 / `ccgateway-v25-beta-order`**（2026-10-24，未发布，ELF SHA-256 `348279c9a6676bbf85b168984cc79e16c7ecf5cff6d16ae80b330f177ab25681`；线上 `ccgateway-v24-beta-path` 随插件 0.1.88；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
 
 CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——`profiles/linux-x64-2.1.304.json` 的 `capabilities`（2026-10-24 工作树；之前是 `patch-cli-2.1.304.cjs` 里的常量）：
 
@@ -79,6 +79,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 |---|---|---|---|
 | v23 `bound-imports` | 插件 0.1.87 | 补丁导入的 5 个原生模块（`chunk-7y2kvacy/jkcb7qdd/m5q1b1c4/eanw7pgv/t2p0d04m`）加入 profile 哈希绑定，补丁期校验新增导入名确由目标模块导出（D3）；能力列表只在 profile、入口代码移到 `request-entry.inc.js`（D7）；删 296/302 补丁器与死代码（D6）；支持模块重构（`shared.js`）。2026-10-24 代码质量审核 04（J1–J21）：删 mods 工具执行链（`Pb`/`GYr`/`Ua`/`computeToolPool`/`Ten`/`N_e`/`mIt`/`ton`/`addTool`/`bz` 十处改写、`tool-dispatch.inc.js`、能力 `native_tools`/`mods_dispatch`，profile 少绑 5 个不再改写的模块），只留 `FH`；`buildRequest`/`applyContentPolicy`/`runRequestCommand` 拆分，策略只校验一次。出口：direct 给无 system 的请求补的 system 改放在 `messages` 之后（与官方键序一致，J2）；注入提示词的缓存断点按位置让出，客户端同文字的块保留自己的断点（J19）；其余与 v22 逐字节相同（17 种请求在新旧源码上的上游字节与请求头对拍全同）。2026-10-24 第二轮优化（`../../../docs/audits/2026-10-24-optimization-round2/05-ccgateway.md`，X31–X33）：`direct-billing.js` 的手写 JSON 扫描器外置到新的支持模块 `raw-json.js`（已在 profile 的 `supportModules` 登记），`applyDirectBilling`/`mergeBillingAttribution`/`openModelRequest`/`runRequestCommand` 拆成小函数；出口未变（`npm test` 171/171、0 跳过）。ELF `558d7b31…5b5c` | 已发布 |
 | v24 `beta-path` | 插件 0.1.88 | 出口地址与官方一致：Messages 发往 `/v1/messages?beta=true`（原生 `beta.messages.create` 的路径，`model-request.js` 的 `messagesPath`）；v23 发 `/v1/messages`（2026-10-24 工作流审核 P2，官方 49/49 带、网关 54/54 不带）。其余与 v23 相同。ELF `2084a56f…f14a` | 已发布 |
+| v25 `beta-order` | 未发布 | 请求加上的 beta 按 Claude Code 自己的顺序放（2026-10-24 工作流审核 P3）：客户端的 beta 保持客户端顺序；登录 beta（OAuth 账号）与请求构建加的 beta（如 1 小时缓存）放在 CC 写它们的位置，而不是追加到末尾。顺序取自原生代码：模型 beta 表 `S8n`，再接请求构建 `uXn` 逐个 push 的顺序（补丁期从哈希绑定的 `uXn` 读出，核心模块导出 `ccgatewayBetaOrder`）；`request-options.js` 的 `placeBetas`。离线对拍（API Key 形状客户端经 OAuth 账号 vs 官方 OAuth 客户端）：build 的 Haiku/Sonnet 逐位相同，Opus 只差客户端自己没发的 `mid-conversation-system-clear`；direct 的顺序相同，缺 `extended-cache-ttl`——客户端本身就没用 1 小时缓存（请求体也没有 `ttl:1h`），direct 原样转发。ELF `348279c9…5681` | 未发布 |
 | v22 `client-entrypoint` | 0.1.83 | 请求入口由 CLI 按请求设置（`requestEntrypoint` → 原生 `setEntrypointOnRequests`），计费头与 UA 读同一个值；CC 形状的客户端 UA 在计费头的 `cc_version`/`cc_entrypoint` 仍是客户端的时原样保留（`keepClientUserAgent`）；能力 `client_user_agent_v1` | 现行 |
 | v21 `native-layers` | 0.1.80 | 注入层的写死项改成原生提取：权限上下文 `gd()`、按非交互主线程 `xh` 组装提示词、追加提示词用原生 `pr`、剩余 token 用 `JDr` | 现行 |
 | v20 `request-levels` | 0.1.79 | 注入等级：direct 只处理计费头、不补身份行；非 CC 请求按主线程；已有的层不重复补；身份行自适应（不再按入口配置）；system 统一为块数组；能力 `request_levels_v1` | 现行 |

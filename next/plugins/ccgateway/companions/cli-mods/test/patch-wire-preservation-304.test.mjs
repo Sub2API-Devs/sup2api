@@ -225,7 +225,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v24-beta-path');
+  assert.equal(patchManifest.extension, 'ccgateway-v25-beta-order');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
@@ -247,7 +247,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1"]/);
   // The loop header names and the layer wording come from the native core,
   // and the date attachment uses the query loop's own date (POo).
-  assert(cli.includes('let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf}=await import("./chunk-rncrmfyt.js")') && cli.includes('loopHeaders:ccgLayers().loopHeaders') && cli.includes('turn:ccgTurnOf'));
+  assert(cli.includes('let{ccgatewayLayerVocabulary:ccgLayers,ccgatewayPromptTurn:ccgTurnOf,ccgatewayBetaOrder:ccgBetaOrder}=await import("./chunk-rncrmfyt.js")') && cli.includes('betaOrder:ccgBetaOrder') && cli.includes('loopHeaders:ccgLayers().loopHeaders') && cli.includes('turn:ccgTurnOf'));
   assert(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8').startsWith('import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n'));
   // The client's system blocks join as the CLI joins two appended prompts:
   // its own function, copied from the main module (which stays unchanged).

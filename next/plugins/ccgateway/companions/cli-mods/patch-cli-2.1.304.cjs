@@ -148,8 +148,18 @@ const mainModule = files.get('chunk-wt08cjq1.js');
 const appendJoin = nodes(tree('chunk-wt08cjq1.js'), n => n.type === 'FunctionDeclaration' && n.id?.name === 'pr' && mainModule.slice(n.start, n.end).includes('\n\n'));
 if (appendJoin.length !== 1) throw Error('Expected the native append prompt join');
 const appendJoinText = mainModule.slice(appendJoin[0].start, appendJoin[0].end).replace(/^function pr\(/, 'function ccgatewayJoinAppend(');
+// The order CC writes betas in: its model list (S8n, which puts the login's
+// beta in its own place), then the ones its request builder (uXn) adds for a
+// request, in the builder's order. Read from the hash-bound builder, so the
+// request command places a beta it adds where CC itself puts it.
+const requestBuilder = nodes(tree(core), n => n.type === 'VariableDeclarator' && n.id?.name === 'uXn');
+if (requestBuilder.length !== 1) throw Error('Expected the native request builder uXn');
+const builderText = files.get(core).slice(requestBuilder[0].init.start, requestBuilder[0].init.end);
+const builderBetas = [...new Set([...builderText.matchAll(/\bzr\.push\(([A-Za-z_$][\w$]*)\)/g)].map(match => match[1]))];
+if (!builderBetas.includes('g1t') || !builderBetas.includes('H_t')) throw Error('Expected the request builder to add the cache betas');
+const betaOrderText = `export function ccgatewayBetaOrder(model){let order=[];for(let beta of [...S8n(model,{isAgenticQuery:!0}),${builderBetas.join(',')}])if(beta&&!order.includes(beta.header))order.push(beta.header);return order}`;
 surround(core, { imports: 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + nativeTools,
-  code: '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + appendJoinText });
+  code: '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + betaOrderText + '\n' + appendJoinText });
 for (const [file, { head, tail }] of surroundings) { files.set(file, head + files.get(file) + tail); modified.add(file); }
 for (const file of modified) tree(file);
 // Support modules import each other by source name; installed, they carry the
