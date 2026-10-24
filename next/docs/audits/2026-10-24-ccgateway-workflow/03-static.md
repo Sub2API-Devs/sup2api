@@ -14,7 +14,7 @@
    - **请求行缺 `?beta=true`**：官方 `beta.messages.create` 打的是 `/v1/messages?beta=true`，我们的 `model-request.js` 直接 `client.post('/v1/messages')`；history 抓包 26/26 vs 74/74，`01-offline` 49/49 A 对 54/54 B，`02-prod31` 同。见 §4-D1。
    - **非 CC 请求自己补的计费头 `cch=00000`**（官方运行时才算 5 位十六进制）；CC 请求保留客户端自己的 cch（两种模式都实测逐请求相等），不受影响。见 §4-D2。
 4. **文档有若干处已过期**（`stream`/`system` 缺省填充、HEAD 与工作树的差别、stream:false），见 §5；两条已被 `01-offline` 实测确认（出口无 `stream` 键）。
-5. **一个会影响真实请求的契约缺口**：带 `fallback-credit-*` beta 的请求上游 200 后核心仍 502（Worker 不回写资源身份头），`02-prod31` 两次复现，见 §4-D3。
+5. **一个会影响真实请求的契约缺口（P1）**：请求头带 `fallback-credit-2026-06-01|2026-07-01` 或 `server-side-fallback-2026-07-01` 之一（不需要 token）→ 上游 200 后核心仍报错、客户端拿 502，`02-prod31` 两次复现，见 §4-D3。影响面是「任何主动带这几个 beta 的用户」，不是只有兑换场景。
 6. 下面 §3 的表是本文的主要产出；§6 是给动态验证队友的期望清单（两轮实测结果已在 §7 归因）。
 
 ---
@@ -188,12 +188,14 @@
 **D2（P3）非 CC 请求的 `cch` 恒为 `00000`。〔实测确认〕**
 官方 ELF 在运行时把 `cch=00000` 换成每次不同的 5 位十六进制（`CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md` §7）；我们重编的 CLI 没有这段，非 CC 请求由 `mergeBillingAttribution` / `applyDirectBilling` 插入的原生行里 `cch` 一直是 `00000`（`01-offline` #15/#16、`02-prod31` §4.5 均实测）。CC 请求不受影响：两种模式都把客户端的 `cch` 原样保留（`01-offline` 逐请求相等，如 `29f01`→`29f01`）。已在 SYSTEM-PROMPT-ASSEMBLY §7 记录，但 REQUEST-HEADERS 的「已知边界」只写了 `cch` 一句，容易被读成只影响账号测试。注意 build 会改写映射后的 `cc_prompt_id`，所以 `cch` 与 body 的对应关系在 build 下已不成立（设计内）。
 
-**D3（P2，跨路径）核心仍在发/仍在等已无消费者的头。**
+**D3（P1，跨路径）核心仍在发/仍在等已无消费者的头。〔已实测确认，判级由 P2 升 P1〕**
 - `X-CCGateway-Resource-Outputs/-Refs/-Contexts`、`X-CCGateway-Fallback-Credit`、`-Track`、`Principal`、`Generation` 由核心设在发往 `/v1/messages` 的请求上（`server/internal/gateway/resource_references.go:222-225,266`；`fallback_credit.go:137-140`），但 engine 的请求命令路径**没有任何读取**（engine 非测试代码 grep 全空）。
-- 后果 1：带 `fallback-credit-*` / `server-side-fallback-*` beta 的请求会让核心 `forward()` 进入 `forwardResourceResponse`（`forward.go:65`，`(resourceAccess.outputs) || creditAccess != nil`），随后 `observeFallbackCredit` 要求响应里有 `Resource-Principal/Generation` 与 `X-CCGateway-Fallback-Credit-Ready`（`fallback_credit.go:149-193`），而 Worker 的模型响应从不带这些头 → 报 “fallback credit issuer evidence mismatch”。native 时代 §53.13 的「准入拒绝 fallback_credit_token」已随 C1/C5 删除（该节本身已标注为历史），新路径既不拒绝也不消费：`fallback_credit_token` 留在 body 里，build 经 `parameters` 并回、direct 原样，最终发给上游。**〔已实测确认，且后果更重〕** `02-prod31` §4.6：上游真实 200 后核心才报错，客户端拿到 502 `upstream_error` / “upstream response could not be converted”，即每次白打一次上游；两次复现一致；客户端只需带 fallback-credit beta、无需 token。官方基线的 beta 列表不含这些，正常 CC 流量不受影响。
+- **触达面（决定 P1 的关键）**：`checkFallbackCredit` 只要请求头里出现三个名字之一就进入 credit 路径——`fallback_credit.go:34-52`（`!parameter.Present && !credits.Enabled(betas)` 才返回）、`contracts/credits/prompt.go:28-38`（`fallback-credit-2026-06-01`、`fallback-credit-2026-07-01`、`server-side-fallback-2026-07-01`）。**不需要 `fallback_credit_token`，也不需要伪造任何东西**：任何客户端主动带这三个 beta 之一就会命中。
+- **名单不对称（已用真实请求决定性验证，`02-prod31` §4.6）**：`features/betas.go:18-21` 把**四个**名字都标成 `forward`，`credits.Enabled` 只认**三个**。实测各 1 次：只带 `server-side-fallback-2026-06-01` → **200 正常通过**（不进 credit 路径）；只带 `fallback-credit-2026-07-01` → 上游 200 + 客户端 502。于是这四个名字目前有三种行为：3 个 502、1 个 200、四个都转发给上游。
+- 后果 1：带上述 beta 的请求会让核心 `forward()` 进入 `forwardResourceResponse`（`forward.go:65`，`(resourceAccess.outputs) || creditAccess != nil`），随后 `observeFallbackCredit` 要求响应里有 `Resource-Principal/Generation` 与 `X-CCGateway-Fallback-Credit-Ready`（`fallback_credit.go:149-193`），而 Worker 的模型响应从不带这些头 → 报 “fallback credit issuer evidence mismatch”。native 时代 §53.13 的「准入拒绝 fallback_credit_token」已随 C1/C5 删除（该节本身已标注为历史），新路径既不拒绝也不消费：`fallback_credit_token` 留在 body 里，build 经 `parameters` 并回、direct 原样，最终发给上游。**〔实测〕** `02-prod31` §4.6：上游真实 200 后核心才报错，客户端拿到 502 `upstream_error` / “upstream response could not be converted”，即每次白打一次上游；两次复现一致。官方基线的 beta 列表不含这些，正常 CC 流量不受影响。
 - 后果 2：资源输出（`Outputs`）同样需要响应里的 `Resource-Principal/Generation`（`resource_response.go:95-99`），而 Worker 模型路径不设 → 会 502。触发条件很窄：只有 body 出现 `container`、`container`/`code_execution`/`bash` 这类执行工具或工具变更时 `Outputs` 才为真（`contracts/resources/ptc_references.go:51-79`），真实 CC 客户端不会发。文件/技能引用本身靠 body 里的远端 id，不依赖这些头。
 - 后果 3（服务端工具）：typed 工具（`tools[].type != "custom"`）在 build 里进 `extraToolSchemas` 后被**原样**并入最终 `tools`（`request-input.js:221-231`、`request-build.js:202`、`patch-cli:105`），direct 更是不动；`mcp_servers`、`container` 也作为 `parameters` 并回。§53.13/§53.14 的「准入拒绝」在请求命令路径不存在。是否需要恢复这些拒绝属于产品决策（工具调用反正交回客户端），但文档必须更新。
-- 处置建议：要么在 engine 请求命令里恢复读取，要么在核心对 CCGateway 关闭这两类头与后续断言（payment 目前延后，风险已知）。
+- 处置建议（二选一）：①核心对 CCGateway 不再设这两类头、也不做 `observeFallbackCredit`/资源输出断言；②engine 请求命令路径恢复读取并在响应上回写 `Resource-Principal/Generation`（`Ready` 证据仍需 Worker 侧支持）。payment 目前延后，但 P1 的影响面是「任何用户主动带 beta」，不是只有兑换场景。
 
 **D4（P3）`x-ccgateway-session-scope` 已成为死头。**
 插件仍在加（`plugins/ccgateway/internal/ccgateway/ccgateway.go:162`），CONTRACTS §53.12 仍说它「只用于消息与资源归属」，但 native 路径删除后 engine 无任何读取；它唯一可见的地方是 Worker 请求日志的 `request-headers.json`（含 `user_id:key_id`）。不影响上游，属残留。
@@ -302,8 +304,8 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 | P5 | API-key 账号（若有） | 200；`x-api-key`、无 `authorization`；beta 不含 `oauth-2025-04-20` |
 | P6 | 请求日志 | Worker `request-headers.json` 应看到 `X-CCGateway-Request-Policy`、`x-ccgateway-session-scope`、`x-request-id`、`x-api-key`、13 个透传头；上游抓包中这些**都不出现** |
 | P7 | URL query | 记录 Worker→上游是否 `/v1/messages`（预期是，见 D1） |
-| P8 | helper history | 查 `provider_helper_records`（该用户/分组）是否有未过期链；如有，用一个能匹配其前缀的对话复测是否稳定 400（R8） |
-| P9 | fallback credit | 若线上有兑换码/credit 场景，用带 `fallback-credit-*` beta 的请求复测是否出现在 `fallback credit issuer evidence mismatch`（D3） |
+| P8 | helper history | 查 `provider_helper_records`（该用户/分组）是否有未过期链；如有，用一个能匹配其前缀的对话复测是否稳定 400（R8）。实测：2026-10-24 生产库为 0，现网不触发 |
+| P9 | fallback credit | ~~若线上有兑换码/credit 场景~~ → **改为无条件必测**：只要请求头带 `fallback-credit-2026-06-01`/`-07-01`/`server-side-fallback-2026-07-01` 之一（不需要 token）就应复现 502（D3，已由 prod31 确认两次） |
 | P10 | 资源引用 | 带 files/skills 引用的一条请求是否 200，响应里新注册的文件是否出现（D3 后果 2） |
 | P11 | 取消/超时 | 客户端取消 → 499 诊断、不伪造响应；Worker 超时 → 504 `timeout_error`（与请求头无关，确认 `x-stainless-timeout` 仍是 600） |
 
@@ -330,7 +332,7 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 | # | 现象（队友报告） | 归属 | 代码位置 | §4 预判 |
 |---|---|---|---|---|
 | A1 | 出口请求行 `/v1/messages`，官方 `/v1/messages?beta=true`（offline 49/49 对 54/54；prod31 全量） | **CLI 补丁**（固定写死路径） | `cli-mods/model-request.js:78` `client.post('/v1/messages', …)`（应走 `beta.messages.create` 或显式 query） | D1 ✓ 成立（升级为两轮双证） |
-| A2 | 带 fallback-credit beta 的普通 Messages：上游真实 200，客户端 502 `upstream_error` / "upstream response could not be converted"（prod31 g，两次一致，白打上游一次） | **核心 + Worker 契约缺口**：核心设 `X-CCGateway-Fallback-Credit-Track` + principal/generation、随后校验响应身份头；Worker 请求命令路径既不读入站头也不回写响应头 | 核心 `server/internal/gateway/fallback_credit.go:137-140,149-193`（`observeFallbackCredit` 的 `ValidateIdentityHeaders` 失败 → 转换失败分支 `forward.go:65,113-118`）；Worker 侧无消费者（engine 非测试代码 grep 为空） | D3 ✓ 成立，实测后果更重（未预判到「上游已计费」这一点） |
+| A2 | 带 fallback-credit beta 的普通 Messages（无 token）：上游真实 200，客户端 502 `upstream_error` / "upstream response could not be converted"（prod31 g，两次一致，白打上游一次） | **核心 + Worker 契约缺口**：核心设 `X-CCGateway-Fallback-Credit-Track` + principal/generation、随后校验响应身份头；Worker 请求命令路径既不读入站头也不回写响应头 | 核心 `server/internal/gateway/fallback_credit.go:34-52`（`credits.Enabled` 命中即进入）、`:137-140`（设头）、`:149-193`（`observeFallbackCredit` 的 `ValidateIdentityHeaders` 失败 → 转换失败分支 `forward.go:65,113-118`）；名单见 `contracts/credits/prompt.go:28-38`；Worker 侧无消费者（engine 非测试代码 grep 为空） | D3 ✓ **成立，P2→P1**（未预判到「上游已计费」与「无需 token」两点） |
 | A3 | 生产库无未过期 helper history 链；链路无辅助请求 → R8 现网不成立 | 机制仍在（核心 `EnableHelperHistory: true` + Worker 不再声明 schema） | `server/internal/app/phases.go:290`；`server/internal/gateway/helper_history_request.go:111-120,261-320`；`plugins/ccgateway/companions/worker/internal/server/features.go:51-57` | R8 ✓ 机制正确，现网不触发 |
 | A4 | 出口 24 个头名称与顺序与官方完全相同；`user-agent` 原样（含 `, agent-sdk/0.2.71`） | 原生 `sF`/`nl()` + 补丁 `keepClientUserAgent` | `patch-cli-2.1.304.cjs:136`；`request-agent.js:122-129`；`request-command.js:131-134` | §3.2 断言 ✓ |
 | A5 | `anthropic-beta` 集合相同、**顺序不同**（`oauth-2025-04-20`、`extended-cache-ttl-2025-04-11` 追加在末尾） | **CLI 补丁**（beta 合并用 Set 插入序） | `request-options.js:2-17`（`normalizeBetas`）+ `:96`（`normalizeBetas(policy.betas, policy.oauthBeta)`）+ `request-build.js:243`；原生 `g1t` 推送位置见 `chunk-rncrmfyt.js` 的 `if(gW==="1h"&&Py()&&!zr.includes(g1t))zr.push(g1t)` | R2/R3 方向 ✓，本轮首次由生产链路确认（原判 P3） |
@@ -347,16 +349,17 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 ### 7.2 需要更新的判级（以动态结果为准）
 
 - **D1**：P2 保持（系统性、易修、上游目前接受）。
-- **D3**：建议升 **P1**——不只是「无人消费的头」，而是**带某个 beta 的任何请求都会 502 且上游已被计费**。修法二选一：核心对 CCGateway 不再设 credit/resource 头与后续断言，或 Worker 回写资源身份头（后者要 CLI 路径能把身份带到响应头）。
+- **D3**：**P2 → P1**。不只是「无人消费的头」，而是：带三个 fallback-credit beta 之一（`fallback_credit.go:34-52` + `contracts/credits/prompt.go:28-38`）的**任何**请求，上游已 200 计费后客户端拿 502。修法二选一，见 D3「处置建议」。`02-prod31` 已同步把该行改为 P1。
 - **A5（beta 顺序）**：P3 保持，但应写进 REQUEST-HEADERS 的「已知边界」。
 - **A14**：作为可观测性项单列（不影响出口正确性，但让所有出口核对只能靠回放）。
 - 撤回 **R4、R7**；确认 **R5、R1**；R8 记为「机制成立、现网不触发」。
+- 附注（`contracts/features/betas.go:18-21` 与 `contracts/credits/prompt.go:28-38` 的名单不一致，已实测）：四个 fallback beta 目前有**三种行为**——`fallback-credit-2026-06-01`/`-07-01`/`server-side-fallback-2026-07-01` 命中 credit 路径并稳定 502；`server-side-fallback-2026-06-01` 被 `BetaRules` 标 `forward` 却不在 `Enabled`，实测 **200 正常通过**（仍转发给上游）。清理项：两个名单要么都含四个、要么都不含，且四个名字的行为要统一（要么都进 credit 路径、要么都不进）。`02-prod31` §4.6 有这两次真实请求的记录。
 
 ### 7.3 动态报告里仍缺的样本（建议下一轮）
 
 | # | 缺失 | 影响 |
 |---|---|---|
-| 1 | 辅助请求（标题/分类器/`request-class≠main`）无样本：offline 开/关非必要流量都不发，prod31 同样 | §3.4 的「辅助请求」一行仍只有代码推断。可试交互式 CLI（非 `-p`）或 `--resume` 会话触发 |
+| 1 | 辅助请求（标题/分类器/`request-class≠main`）无样本：offline 开/关非必要流量都不发，prod31 同样 | 已可结案为「该 ELF 2.1.304 在此配置（`-p`）下不发辅助请求」——两处独立环境一致（offline 基线 07、prod31），§3.4 的「辅助请求」一行仍只有代码推断，但现实流量里不会出现 |
 | 2 | offline 未跑 API-key 账号的 A/B 对照（只间接看到 curl 形状） | `apiKeyRequestHeaders` 路径的「beta 不含 `oauth-2025-04-20`」仍只有代码依据 |
 | 3 | 交互式客户端、`client-app`/`workload` UA 限定段、Windows/macOS 客户端 | `keepClientUserAgent` 的限定段逻辑（`dN()` 的 `CLAUDE_AGENT_SDK_CLIENT_APP`/workload）只有 `sdk-ts` 一例 |
 | 4 | 生产出口的真实报文（受 A14 限制） | prod31 的出口结论全部来自「同镜像回放」，不是生产抓包 |
