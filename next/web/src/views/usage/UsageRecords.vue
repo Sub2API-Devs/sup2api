@@ -3,7 +3,7 @@
 // totals and the optional daily trend / client-IP panels from `summaryPath`
 // under the same filters. `admin` adds the operator filters and columns.
 // The page header (title, refresh) stays with the view; it calls reload().
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SCard, SChart, SChip, SPagination, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
@@ -21,9 +21,12 @@ const props = withDefaults(
     defaultRange: RangeKey
     admin?: boolean
     groupOptions?: Array<{ value: string | number; label: string }>
+    /** Bumped by the page's refresh button: reload everything (the page owns the header). */
+    revision?: number
   }>(),
-  { admin: false, groupOptions: undefined }
+  { admin: false, groupOptions: undefined, revision: 0 }
 )
+const emit = defineEmits<{ (e: 'update:loading', value: boolean): void }>()
 const { t } = useI18n()
 
 const range = ref<RangeKey>(props.defaultRange)
@@ -47,7 +50,8 @@ function reload() {
   days.reload()
   ips.reload()
 }
-defineExpose({ reload, loading })
+watch(() => props.revision, reload)
+watch(loading, (v) => emit('update:loading', v), { immediate: true })
 </script>
 
 <template>

@@ -1,5 +1,4 @@
 export default {
-  appName: 'sub2api',
   actions: 'Actions',
   create: 'Create',
   add: 'Add',
@@ -86,8 +85,6 @@ export default {
     revoked: 'Revoked'
   },
   theme: {
-    light: 'Light',
-    dark: 'Dark',
     toggle: 'Toggle theme'
   },
   language: 'Language',

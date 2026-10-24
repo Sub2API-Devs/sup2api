@@ -7,11 +7,13 @@ import type { PluginHistory, PluginRelease } from '@/api/observability'
 import { formatDateTime } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { statusTone } from '@/api/admin'
+import { useOptionalT } from '@/composables/optionalText'
 import StatusBadge from './StatusBadge.vue'
 const props = defineProps<{ pluginKey?: string; since?: string }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 /** Localized rollout / node state; unknown values are shown raw. */
-const stateLabel = (v: string | null | undefined) => (v && te(`plugins.status.${v}`) ? t(`plugins.status.${v}`) : v || '—')
+const stateLabel = (v: string | null | undefined) => (v ? tr(`plugins.status.${v}`, undefined, v) : '—')
 const items = ref<PluginRelease[]>([]), events = ref<PluginHistory[]>([])
 const selected = ref<PluginRelease | null>(null), page = ref(1), total = ref(0), eventPage = ref(1), eventTotal = ref(0), error = ref('')
 const allEvents = ref(false)

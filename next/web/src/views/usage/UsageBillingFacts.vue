@@ -4,13 +4,15 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SHint, SIcon, SLink } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatNumber } from '@/utils/format'
+import { useOptionalT } from '@/composables/optionalText'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
 import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
 import { billingTone, factText, type UsageRow } from './usage'
 
 // Billing half of an expanded usage record (billing_detail, A.14).
 const props = defineProps<{ u: UsageRow }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 const auth = useAuthStore()
 const historyOpen = ref(false)
 
@@ -30,7 +32,7 @@ const inputs = computed(() => [
 
 /** The translation of `prefix.value` when there is one, else the raw value. */
 function label(prefix: string, value: string) {
-  return te(`${prefix}.${value}`) ? t(`${prefix}.${value}`) : value
+  return tr(`${prefix}.${value}`, undefined, value)
 }
 </script>
 

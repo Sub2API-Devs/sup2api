@@ -4,7 +4,7 @@ const { del, patch, toast, confirm } = vi.hoisted(() => ({ del: vi.fn(), patch: 
 vi.mock('@sub2api/host', async (orig) => ({ ...(await orig<typeof import('@sub2api/host')>()), api: { del, patch } }))
 vi.mock('@sub2api/ui', async (orig) => ({ ...(await orig<typeof import('@sub2api/ui')>()), toast, confirm }))
 import { ApiError } from '@sub2api/host'
-import { deleteResource, deleteWithConfirm, toggleStatus, useRowSwitch } from './crud'
+import { confirmAction, deleteResource, deleteWithConfirm, toggleStatus, useRowSwitch } from './crud'
 
 describe('row actions', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -35,6 +35,27 @@ describe('row actions', () => {
     patch.mockResolvedValueOnce(undefined)
     await toggleStatus('/x/1', 'active')
     expect(patch).toHaveBeenCalledWith('/x/1', { status: 'disabled' })
+  })
+
+  it('runs a confirmed non-DELETE action, then done with its result', async () => {
+    const run = vi.fn().mockResolvedValue('done')
+    const done = vi.fn()
+    confirm.mockResolvedValueOnce(false)
+    expect(await confirmAction({ message: 'sure?' }, run, done)).toBe(false)
+    expect(run).not.toHaveBeenCalled()
+    confirm.mockResolvedValueOnce(true)
+    expect(await confirmAction({ message: 'sure?' }, run, done)).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+    expect(done).toHaveBeenCalledWith('done')
+  })
+
+  it('toasts a failed confirmed action and skips done', async () => {
+    const done = vi.fn()
+    confirm.mockResolvedValueOnce(true)
+    const run = vi.fn().mockRejectedValueOnce(new ApiError(500, { code: 'internal', message: 'boom' }))
+    expect(await confirmAction({ message: 'sure?' }, run, done)).toBe(false)
+    expect(done).not.toHaveBeenCalled()
+    expect(toast).toHaveBeenCalledWith('boom', 'error')
   })
 
   it('switches a row optimistically and reverts on failure', async () => {

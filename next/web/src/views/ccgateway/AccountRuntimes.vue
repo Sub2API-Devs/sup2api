@@ -10,6 +10,7 @@ import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { fetchFirstPage } from '@/composables/lookups'
 import { runPool } from '@/views/accounts/pool'
 import type { CcgRuntimeHealth } from '@/api/types'
 import { containerPhase, type CcgContainer } from './ccgAuthFlow'
@@ -151,8 +152,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
+    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', 200, { plugin_key: 'ccgateway' })
+    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []

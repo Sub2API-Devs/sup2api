@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { SBadge } from '@sub2api/ui'
 import { statusTone } from '../pluginUtil'
+import { useOptionalT } from '@/composables/optionalText'
 
 // Plugin lifecycle / rollout / node state badge; unknown values are shown raw.
 const props = defineProps<{ status?: string | null }>()
-const { t, te } = useI18n()
+const tr = useOptionalT()
 const label = computed(() => {
   const v = props.status || 'unknown'
-  return te(`plugins.status.${v}`) ? t(`plugins.status.${v}`) : v
+  return tr(`plugins.status.${v}`, undefined, v)
 })
 </script>
 

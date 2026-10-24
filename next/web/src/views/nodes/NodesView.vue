@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
 import { SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
+import { fetchFirstPage } from '@/composables/lookups'
 import TimeText from '@/components/TimeText.vue'
 import TopologyGraph from './TopologyGraph.vue'
 
@@ -28,8 +28,8 @@ async function load(manual = false) {
   if (inflight) return
   inflight = true
   try {
-    const r = await api.list<NodeInfo>('/nodes', { page_size: 200 })
-    nodes.value = [...r.items].sort((a, b) => a.node_id.localeCompare(b.node_id))
+    const items = await fetchFirstPage<NodeInfo>('/nodes')
+    nodes.value = [...items].sort((a, b) => a.node_id.localeCompare(b.node_id))
     lastLoaded.value = new Date()
     failures = 0
   } catch (e) {

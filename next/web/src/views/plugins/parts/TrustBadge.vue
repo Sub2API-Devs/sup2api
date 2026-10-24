@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { SBadge } from '@sub2api/ui'
 import { trustTone } from '../pluginUtil'
+import { useOptionalT } from '@/composables/optionalText'
 
 const props = defineProps<{ trust?: string | null }>()
-const { t, te } = useI18n()
+const tr = useOptionalT()
 const label = computed(() => {
   const v = props.trust || 'unsigned'
-  return te(`plugins.trust.${v}`) ? t(`plugins.trust.${v}`) : v
+  return tr(`plugins.trust.${v}`, undefined, v)
 })
 </script>
 

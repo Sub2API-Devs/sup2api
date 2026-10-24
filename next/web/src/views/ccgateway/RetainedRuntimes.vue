@@ -48,6 +48,8 @@ async function load() {
 
 async function purge(row: RetainedRuntime) {
   if (purging.value) return
+  // A confirmed purge that is due needs no confirmation; a failure is shown in
+  // the CCGateway's own words, so this one stays outside confirmAction.
   if (!row.due && !await confirm({ title: t('ccgateway.retained.purge'), message: t('ccgateway.retained.confirm', { name: row.account_name }), confirmText: t('ccgateway.retained.purge'), danger: true })) return
   purging.value = row.key
   try {

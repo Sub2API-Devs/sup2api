@@ -2,12 +2,16 @@ import js from '@eslint/js'
 import vue from 'eslint-plugin-vue'
 import ts from 'typescript-eslint'
 import vueI18n from '@intlify/eslint-plugin-vue-i18n'
+import prettier from 'eslint-config-prettier'
 import globals from 'globals'
 
 export default [
   js.configs.recommended,
   ...ts.configs.recommended,
   ...vue.configs['flat/recommended'],
+  // Formatting is prettier's: its config turns off the layout rules that
+  // conflict with it (max-attributes-per-line, html-closing-bracket-newline, …).
+  prettier,
   {
     files: ['**/*.vue', '**/*.ts', '**/*.js'],
     languageOptions: {

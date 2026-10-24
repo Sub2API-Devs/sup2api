@@ -45,17 +45,10 @@ describe('locales', () => {
     }
     const missing: string[] = []
     const re = /(?<![\w$.])(?:\$?t|te|tm)\(\s*'([a-zA-Z][\w-]*(?:\.[\w-]+)+)'/g
-    // Known dynamic key patterns that are concatenated at runtime
-    const dynamicPatterns = [
-      /^ccgateway\.policy\.search_$/,
-      /^ccgateway\.policy\.attachment_$/,
-      /^ccgateway\.policy\.attachmentAction_$/
-    ]
     for (const [file, text] of Object.entries(sources)) {
       for (const m of text.matchAll(re)) {
         const key = m[1]
-        const isDynamic = dynamicPatterns.some(p => p.test(key))
-        if (!known.has(key) && !prefixes.has(key) && !isDynamic) {
+        if (!known.has(key) && !prefixes.has(key)) {
           missing.push(`${file}: ${key}`)
         }
       }

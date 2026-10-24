@@ -8,7 +8,7 @@ import Auth from './CCGatewayAccountAuth.vue'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), del: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: mocks, isApiError: () => false }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
-vi.mock('@/composables/lookups', () => ({ useProxiesLookup: () => ({ proxies: ref([]) }) }))
+vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), toast: vi.fn() }))
 
 describe('independent local credential flow regression', () => {

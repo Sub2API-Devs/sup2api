@@ -23,7 +23,7 @@ vi.mock('@sub2api/host', () => ({ api: mocks, isApiError: () => false }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ plugin: () => null, component: () => null }), assetURL: () => '' }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true }) }))
-vi.mock('@/composables/lookups', () => ({ useProxiesLookup: () => ({}) }))
+vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
 enableAutoUnmount(afterEach)
 
 const jsonCopy = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -75,7 +75,7 @@ async function remote(layer: 'global' | 'group') {
 }
 async function accountEditor() {
   const w = shallowMount(AccountEditor, { props: { account, accountType }, global: { plugins: [i18n], stubs: {
-    AccountFeatureSettings: false, RequestPolicySettings: false, SDisclosure: false, SSelect: false, SSegmented: false, SOptionMatrix: false, SChip: false, SSwitch: false,
+    AccountFeatureSettings: false, RequestPolicySettings: false, BillingLayerCard: false, EnvironmentLayerCard: false, PromptLayerCard: false, SDisclosure: false, SSelect: false, SSegmented: false, SOptionMatrix: false, SChip: false, SSwitch: false,
     SSettingsGroup: { template: '<section><slot name="actions" /><slot /></section>' }, SSettingRow: { template: '<div><slot /></div>' },
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' }, SField: { template: '<div><slot /></div>' }, SHint: { template: '<p><slot /></p>' },
     SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },

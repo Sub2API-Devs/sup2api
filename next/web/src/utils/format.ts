@@ -55,6 +55,16 @@ export function formatPercent(part: string | number | null | undefined, whole: s
   return ((Number(part) / w) * 100).toFixed(1) + '%'
 }
 
+/** 1234 -> "1.2K", 3_200_000 -> "3.2M"; small numbers stay as they are. */
+export function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  const a = Math.abs(n)
+  const trimZero = (v: number) => v.toFixed(1).replace(/\.0$/, '')
+  if (a >= 1_000_000) return `${trimZero(n / 1_000_000)}M`
+  if (a >= 1_000) return `${trimZero(n / 1_000)}K`
+  return String(n)
+}
+
 export function formatDateTime(v: string | number | Date | null | undefined): string {
   if (!v) return '—'
   const d = v instanceof Date ? v : new Date(v)
@@ -109,10 +119,6 @@ export function daysAgo(n: number): Date {
   const d = startOfToday()
   d.setDate(d.getDate() - n)
   return d
-}
-
-export function toRFC3339(d: Date | null | undefined): string | undefined {
-  return d ? d.toISOString() : undefined
 }
 
 // Re-export to preserve the shared helper used throughout the console.

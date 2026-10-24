@@ -12,7 +12,6 @@ export default {
   username: '用户名',
   password: '密码',
   passwordKeep: '留空表示不修改当前密码。',
-  passwordKeepMaybe: '留空表示不修改当前密码（如有）。',
   passwordNone: '当前未设置密码，留空保持不变。',
   passwordStored: '已设置密码（不显示）',
   clearPassword: '清除已保存的密码',

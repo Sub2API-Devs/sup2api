@@ -6,6 +6,7 @@ import { SBadge, SCheckbox, SEmpty, SHint, SInput, SLink, SSelect, SSpinner } fr
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { fetchAllPages } from '@/composables/lookups'
 import { typeKey, useAccountTypes } from '@/views/accounts/accountTypes'
 
 // Accounts of a group, of any account type (ARCHITECTURE §6.6: a group can
@@ -30,13 +31,7 @@ const typeFilter = ref('')
 const onlySelected = ref(false)
 
 async function loadAll(): Promise<Account[]> {
-  const out: Account[] = []
-  for (let page = 1; ; page++) {
-    const r = await api.list<Account>('/accounts', { page, page_size: 200 })
-    out.push(...r.items)
-    if (!r.items.length || out.length >= (r.page.total ?? out.length)) break
-  }
-  return out
+  return fetchAllPages<Account>('/accounts')
 }
 
 watch(

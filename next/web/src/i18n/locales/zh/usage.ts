@@ -14,9 +14,6 @@ export default {
     requests: '请求记录',
     ledger: '余额变动'
   },
-  range: {
-    custom: '自定义'
-  },
   nonStream: '非流式',
   search: {
     advanced: '更多筛选',
@@ -45,10 +42,7 @@ export default {
     stream: '响应方式'
   },
   filters: {
-    userId: '用户 ID',
-    accountId: '账号 ID',
-    clientRequestId: '客户端请求 ID',
-    clientRequestIdPlaceholder: '精确匹配 X-Request-Id'
+    userId: '用户 ID'
   },
   success: {
     ok: '成功',
@@ -62,8 +56,7 @@ export default {
     cost: '费用',
     daily: '每日',
     trend: '趋势',
-    cacheHit: '缓存命中',
-    partial: '按最近 {n} 条请求统计'
+    cacheHit: '缓存命中'
   },
   showDetails: '查看详情',
   hideDetails: '收起详情',
@@ -75,14 +68,12 @@ export default {
   cols: {
     modelAccount: '模型 / 账号',
     timing: '计时',
-    ip: 'IP',
     detail: '详情',
     input: '输入',
     output: '输出',
     cost: '费用',
     accountType: '账号类型',
-    upstreamProtocol: '上游协议',
-    clientRequestId: '客户端请求 ID'
+    upstreamProtocol: '上游协议'
   },
   filterByClientRequestId: '{id}（点击按此 ID 筛选）',
   cacheTitle: '缓存读 {r} · 缓存写 {w}',
@@ -113,8 +104,6 @@ export default {
     count: '共 {n} 个 IP，按请求数排序',
     top: '请求最多的 {n} 个 IP',
     empty: '这段时间没有记录到调用 IP',
-    filter: '{ip}（点击按此 IP 筛选）',
-    clear: '取消按此 IP 筛选',
     unknown: '未记录',
     lastAt: '最近调用'
   },
@@ -129,7 +118,6 @@ export default {
     rules: '加价规则',
     matched: '命中',
     notMatched: '未命中',
-    breakdown: '明细',
     inputs: '计费条件取值',
     statusLabel: '结算状态',
     ledger: '账本 #{id}',
@@ -154,7 +142,6 @@ export default {
     userAgent: '客户端 User-Agent',
     node: '节点',
     attempts: '上游尝试次数',
-    statusCode: 'HTTP 状态',
     latency: '耗时',
     firstToken: '首 token',
     error: '错误'

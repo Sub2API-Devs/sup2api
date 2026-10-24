@@ -7,6 +7,7 @@ import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, STable, t
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
+import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { consentPath, putReview } from './reviewCache'
 import PluginAvatar from './parts/PluginAvatar.vue'
@@ -50,8 +51,7 @@ const rows = computed(() => {
 async function load() {
   loading.value = true
   try {
-    const r = await api.list<PluginSummary>('/plugins', { page_size: 200 })
-    items.value = r.items
+    items.value = await fetchFirstPage<PluginSummary>('/plugins')
   } catch (e) {
     notifyError(e)
   } finally {

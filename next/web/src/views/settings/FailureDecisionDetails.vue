@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { SDescItem, SDescriptions } from '@sub2api/ui'
+import { useOptionalT } from '@/composables/optionalText'
 import type { FailureDecision, FailurePolicyForm } from './failurePolicy'
 
 const props = defineProps<{ decision: FailureDecision; policy?: FailurePolicyForm }>()
-const { t, te } = useI18n()
-const label = (group: string, value?: string) =>
-  value && te(`failurePolicy.${group}.${value}`) ? t(`failurePolicy.${group}.${value}`) : value || '—'
+const { t } = useI18n()
+const tr = useOptionalT()
+const label = (group: string, value?: string) => (value ? tr(`failurePolicy.${group}.${value}`, undefined, value) : '—')
 function ruleName(id?: string) {
   if (!id) return t('failurePolicy.noMatch')
   return [...(props.policy?.retry_rules || []), ...(props.policy?.account_rules || [])].find(r => r.id === id)?.name || id

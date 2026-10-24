@@ -18,7 +18,7 @@ vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage:
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: () => [], plugin: () => undefined, component: () => undefined }) }))
-vi.mock('@/composables/lookups', () => ({ useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
+vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]) }) }))
 vi.mock('@/composables/useList', () => ({ useList: () => list }))

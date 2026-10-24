@@ -5,8 +5,6 @@ export default {
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
   myTitle: 'API keys',
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
-  allTitle: 'All API keys',
-  allDescription: 'API keys of every user.',
   create: 'New API key',
   key: 'Key',
   ipAllowlist: 'IP allowlist',

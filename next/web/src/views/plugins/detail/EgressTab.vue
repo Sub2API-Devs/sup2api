@@ -8,6 +8,7 @@ import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import type { EgressDomain } from '@/api/types'
 import { asArray, formatDuration, pick, type PluginDetail } from '../pluginUtil'
+import { useOptionalT } from '@/composables/optionalText'
 
 interface EgressSummary {
   host: string
@@ -35,7 +36,8 @@ interface EgressLog {
 
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 const auth = useAuthStore()
 
 const canRead = computed(() => auth.has('plugin:egress:read'))
@@ -186,8 +188,7 @@ function resultTone(r: string) {
 /** Localized result label; "open" = connection still alive. */
 function resultLabel(r: string | undefined): string {
   if (!r) return '—'
-  const k = `plugins.egress.resultLabels.${r}`
-  return te(k) ? t(k) : r
+  return tr(`plugins.egress.resultLabels.${r}`, undefined, r)
 }
 
 const domainColumns = computed<TableColumn[]>(() => [

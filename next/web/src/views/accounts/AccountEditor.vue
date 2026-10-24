@@ -12,20 +12,18 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, toast } from '@sub2api/ui'
 import type { Account, AccountType, ProxyProbeResult } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
-import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import { lt } from '@/i18n'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
 import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
-import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
-import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
+import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
 import { useProxiesLookup } from '@/composables/lookups'
@@ -33,15 +31,15 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 import AccountEditorNav from './AccountEditorNav.vue'
+import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
-import ModelMappingEditor from './ModelMappingEditor.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
 import { useContainerEnvironment } from './useContainerEnvironment'
 import { useModelsEditor } from './useModelsEditor'
-import { CONNECTION_FIELDS, SCHEDULING_FIELDS, sectionOfErrors, splitFieldErrors, type EditorSection } from './editorErrors'
-import { subscriptionLabel } from './subscription'
+import { useAccountSave } from './useAccountSave'
+import { CONNECTION_FIELDS, SCHEDULING_FIELDS, splitFieldErrors, type EditorSection } from './editorErrors'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -169,10 +167,7 @@ watch(defaultModels, (next, previous) => {
     editorModels.setModels([...next])
   }
 })
-/** JSON example of the mapping box (not an i18n message: braces are placeholders there). */
-const mappingPlaceholder = '{\n  "claude-3-5-sonnet-latest": "claude-sonnet-4-5"\n}'
-/** 可视化 / JSON switch of the model list and mapping cards (new-api's 可视化 / 手动编辑). */
-const editModes = computed(() => [{ value: 'visual', label: t('accounts.editorUi.visualEdit') }, { value: 'json', label: 'JSON' }])
+/** JSON example of the mapping box and the 可视化 / JSON switch: AccountModelsCard. */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 const defaultMappingCount = computed(() => Object.keys(defaultMapping.value).length)
 
@@ -502,126 +497,48 @@ async function collectCredentials(): Promise<Record<string, unknown> | null> {
 }
 
 /** Checks done before the request; the section to show when one fails. */
-async function invalidSection(form: HTMLFormElement): Promise<EditorSection | 'native' | 'ccg' | null> {
-  if (ccFeatureDirty.value && (ccFeatureBlocked.value || !validFeatureOverrides(ccFeaturePolicy.value!.overrides))) {
-    errors.value = { cc_feature_policy: t('ccgateway.layers.invalid') }
-    return 'cc_features'
-  }
-  // Native constraints are checked explicitly so the first invalid field can
-  // be revealed before the browser tries to focus it in a hidden pane.
-  const invalid = form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input:invalid, select:invalid, textarea:invalid')
-  if (invalid) {
-    const section = invalid.closest<HTMLElement>('[data-editor-section]')?.dataset.editorSection
-    if (section) activeSection.value = section as EditorSection
-    await nextTick()
-    if (invalid.isConnected) invalid.reportValidity()
-    return 'native'
-  }
-  if (!basic.name.trim()) {
-    errors.value = { name: t('ui.schema.v.required') }
-    return 'connection'
-  }
-  if (ccgSaveBlocked.value) return 'ccg'
-  // Pending text-mode / draft edits are committed (and validated) before saving.
-  return editorModels.commitPending() ? null : 'models'
-}
-
-function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
-  if (automaticModels.value) editorModels.setModels([...defaultModels.value])
-  const body: Record<string, unknown> = {
-    name: basic.name.trim(),
-    group_ids: basic.group_ids,
-    priority: Number(basic.priority),
-    weight: Number(basic.weight),
-    max_concurrency: Number(basic.max_concurrency),
-    ...editorModels.payload(),
-    rpm_limit: Number(basic.rpm_limit) || 0,
-    tpm_limit: Number(basic.tpm_limit) || 0,
-  }
-  if (schedulingControl.value.configurable) body.schedulable = basic.schedulable
-  if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
-  if (needsProxy.value) body.settings = { locale: ccgSettings.locale, timezone: ccgSettings.timezone }
-  if (needsProxy.value) body.auto_models = autoModels.value
-  // Retired keys an older save may hold are dropped (the core ignores them).
-  if (needsProxy.value && editing.value && ccFeatureDirty.value) body.cc_feature_policy = { ...ccFeaturePolicy.value!, overrides: savedOverrides(ccFeaturePolicy.value!.overrides) }
-  // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
-  if (proxyUrlToSend.value) body.proxy_url = proxyUrlToSend.value
-  else body.proxy_id = basic.proxy_id
-  if (props.accountType && !props.account?.orphaned) body.credentials = creds
-  return body
-}
-
-async function submit(body: Record<string, unknown>): Promise<Account> {
-  if (editing.value) return api.patch<Account>(`/accounts/${props.account!.id}`, body)
-  // The account type is (plugin_key, type); accounts have no platform.
-  body.plugin_key = props.accountType!.plugin_key
-  body.type = props.accountType!.type
-  // A new Claude Code account adopts its authorized draft container.
-  const draft = ccgDraft.value ? ccgState.value.key : null
-  if (draft) body[preparationUrl.value ? 'preparation_key' : 'ccgateway_runtime'] = draft
-  const saved = await api.post<Account>('/accounts', body)
-  if (draft) ccgAuth.value?.adopt()
-  return saved
-}
-
-function showSaveError(e: unknown) {
-  if (reasonOf(e) === 'feature_revision_conflict') {
-    errors.value = { cc_feature_policy: t('ccgateway.layers.conflict') }
-    activeSection.value = 'cc_features'
-    return
-  }
-  // The draft was refused (gone, or no longer signed in): back to the authorization steps.
-  const ccgReason = ccgDraft.value ? reasonOf(e) : ''
-  if (ccgReason === 'draft_not_found' || ccgReason === 'draft_not_authorized') {
-    ccgAuth.value?.rejected(ccgReason)
-    toast(t(`ccgateway.reason.${ccgReason}`), 'error')
-    void showCcgAuth()
-    return
-  }
-  const all = fieldErrors(e)
-  const { cred, base } = splitFieldErrors(all)
-  errors.value = base
-  showCredentialErrors(cred)
-  const section = sectionOfErrors(base, cred)
-  if (section) activeSection.value = section
-  if (!Object.keys(all).length) notifyError(e)
-}
-
-async function save(event: Event) {
-  if (locationLoading.value) return
-  errors.value = {}
-  credErrors.value = {}
-  const problem = await invalidSection(event.currentTarget as HTMLFormElement)
-  if (problem === 'ccg') return void showCcgAuth()
-  if (problem && problem !== 'native') activeSection.value = problem
-  if (problem) return
-  const creds = await collectCredentials()
-  if (!creds) {
-    activeSection.value = 'connection'
-    return
-  }
-  saving.value = true
-  await loadAutoDisablePolicy()
-  const body = requestBody(creds)
-  try {
-    const saved = await submit(body)
-    toast(editing.value ? t('common.updated') : t('common.created'), 'success')
-    // The plugin may adjust a new account's models to its subscription (CONTRACTS §59).
-    if (!editing.value && saved?.models && saved.subscription_type && JSON.stringify(saved.models) !== JSON.stringify(body.models)) {
-      toast(t('accounts.modelsAdjusted', { plan: subscriptionLabel(saved.subscription_type), n: saved.models.length }), 'info')
-    }
-    if (body.proxy_url) {
-      // The proxy picker cache may now miss the (re)used proxy.
-      useProxiesLookup(true)
-      if (saved?.proxy_created) toast(t('accounts.proxyAutoCreated'), 'info')
-    }
-    emit('saved', saved)
-  } catch (e) {
-    showSaveError(e)
-  } finally {
-    saving.value = false
-  }
-}
+// The save pipeline (checks, request body, POST/PATCH, error routing) lives in
+// useAccountSave; the template and the wiring below stay here.
+const { save } = useAccountSave({
+  account: computed(() => props.account),
+  accountType: computed(() => props.accountType),
+  editing,
+  basic,
+  errors,
+  credErrors,
+  saving,
+  activeSection,
+  locationLoading,
+  models: {
+    setModels: editorModels.setModels,
+    payload: editorModels.payload,
+    commitPending: editorModels.commitPending,
+    defaultModels: () => defaultModels.value
+  },
+  environment: () => ({ locale: ccgSettings.locale, timezone: ccgSettings.timezone }),
+  gateway: {
+    needed: needsProxy,
+    automaticModels,
+    schedulingConfigurable: computed(() => schedulingControl.value.configurable),
+    autoDisableEnabled,
+    autoDisableConfigurable: computed(() => autoDisableControl.value.configurable),
+    proxyUrlToSend,
+    featureDirty: ccFeatureDirty,
+    featureBlocked: ccFeatureBlocked,
+    featurePolicy: ccFeaturePolicy,
+    draft: ccgDraft,
+    saveBlocked: ccgSaveBlocked,
+    draftKey: computed(() => ccgState.value.key),
+    preparationUrl,
+    adopt: () => ccgAuth.value?.adopt(),
+    rejected: (reason: string) => ccgAuth.value?.rejected(reason),
+    showAuth: showCcgAuth
+  },
+  collectCredentials,
+  showCredentialErrors,
+  loadAutoDisablePolicy,
+  saved: (a) => emit('saved', a)
+})
 </script>
 
 <template>
@@ -748,75 +665,48 @@ async function save(event: Event) {
 
         <!-- ============================================================ models -->
         <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-4">
-          <SSettingRow v-if="needsProxy" :label="t('accounts.editorUi.autoModels')" :description="t('accounts.editorUi.autoModelsHint')">
-            <SSwitch :model-value="autoModels" :aria-label="t('accounts.editorUi.autoModels')" data-testid="auto-models" @update:model-value="setAutoModels" />
-          </SSettingRow>
-          <SAlert v-if="prefilled && !editing && !automaticModels" tone="primary" dense data-testid="models-prefilled">{{ t('accounts.editorUi.prefilled', { what: prefillWhat }) }}</SAlert>
-          <SAlert v-else-if="prefilled && !automaticModels" tone="warning" dense data-testid="models-prefilled-edit">
-            {{ t('accounts.editorUi.prefilledEdit', { what: prefillWhat }) }}
-            <template #actions>
-              <SButton size="sm" variant="ghost" data-testid="models-prefilled-clear" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SButton>
-            </template>
-          </SAlert>
-          <SHint v-if="ccgDraft && automaticModels" size="xs" class="block" data-testid="models-by-subscription">{{ t('accounts.modelsBySubscription') }}</SHint>
-
-          <SCard :subtitle="t('accounts.editorUi.modelsCardHint')">
-            <template #title>
-              <h3 class="flex items-center gap-2 text-sm font-semibold text-fg">
-                {{ t('accounts.models') }}
-                <SBadge :tone="models.length ? 'primary' : 'gray'" data-testid="models-count">{{ models.length || t('accounts.editorUi.allModels') }}</SBadge>
-              </h3>
-            </template>
-            <template #actions>
-              <SSegmented size="sm" :options="editModes" :model-value="modelsTextMode ? 'json' : 'visual'" :aria-label="t('accounts.models')" data-testid="models-mode" @update:model-value="setModelsTextMode($event === 'json')" />
-            </template>
-
-            <SField :error="modelsError || serverModelsError">
-              <div v-if="modelsTextMode" class="space-y-2">
-                <STextarea v-model="modelsText" :readonly="automaticModels" mono :rows="10" :placeholder="t('accounts.modelsJsonPlaceholder')" data-testid="models-json" @blur="syncModelsText()" />
-              </div>
-              <ModelTagSelect v-else v-model="models" :readonly="automaticModels" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" :placeholder="t('accounts.modelsPlaceholder')" :error="!!(modelsError || serverModelsError)" @update:model-value="modelsError = ''" @invalid="rejectModel" />
-              <template #hint>
-                <span v-if="automaticModels">{{ t('accounts.editorUi.autoModelsHint') }}</span>
-                <SHint v-else-if="!models.length && !modelsTextMode" inline size="xs" tone="success" class="inline-flex items-center gap-1"><SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}</SHint>
-                <template v-else>{{ modelsTextMode ? t('accounts.editorUi.modelsJsonHint') : t('accounts.editorUi.modelsInputHint') }}</template>
-              </template>
-            </SField>
-
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <SButton v-if="defaultModels.length && !automaticModels" size="sm" variant="primary" icon="download" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}</SButton>
-              <SButton v-if="canFetch && !automaticModels" size="sm" icon="refresh" :loading="fetching" data-testid="models-fetch" :title="t('accounts.fetchModelsHint')" @click="fetchModels">{{ t('accounts.fetchModels') }}</SButton>
-              <SButton v-if="modelsTextMode && !automaticModels" size="sm" variant="ghost" icon="code" data-testid="models-format" @click="formatModelsText">{{ t('accounts.editorUi.formatJson') }}</SButton>
-              <SButton size="sm" variant="ghost" icon="copy" :disabled="!models.length" data-testid="models-copy" @click="copyModels">{{ t('accounts.editorUi.copyModels') }}</SButton>
-              <SButton v-if="!automaticModels" size="sm" variant="ghost" icon="trash" :disabled="!models.length && !modelsText.trim()" data-testid="models-clear" @click="clearModels">{{ t('accounts.editorUi.clearModels') }}</SButton>
-            </div>
-            <p class="mt-3 flex items-start gap-1.5 text-xs text-fg-subtle"><SIcon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />{{ t('accounts.editorUi.groupModelHint') }}</p>
-            <datalist id="account-model-options">
-              <option v-for="o in modelOptions" :key="o" :value="o" />
-            </datalist>
-          </SCard>
-
-          <SCard :subtitle="t('accounts.editorUi.mappingCardHint')">
-            <template #title>
-              <h3 class="flex items-center gap-2 text-sm font-semibold text-fg">{{ t('accounts.modelMapping') }}<SBadge v-if="mappingCount" tone="accent">{{ mappingCount }}</SBadge></h3>
-            </template>
-            <template #actions>
-              <SSegmented size="sm" :options="editModes" :model-value="mappingJsonMode ? 'json' : 'visual'" :aria-label="t('accounts.modelMapping')" data-testid="mapping-mode" @update:model-value="setMappingJsonMode($event === 'json')" />
-            </template>
-
-            <SField :error="mappingError || serverMappingError">
-              <STextarea v-if="mappingJsonMode" v-model="mappingText" mono :rows="10" :placeholder="mappingPlaceholder" data-testid="mapping-json" @blur="syncMappingText()" />
-              <ModelMappingEditor v-else v-model="mapping" :models="models" list-id="account-model-options" @add-models="mergeModels" />
-              <template #hint>{{ t('accounts.editorUi.mappingKeyHint') }}</template>
-            </SField>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <SButton v-if="defaultMappingCount" size="sm" icon="download" data-testid="mapping-fill-defaults" @click="fillDefaultMapping">{{ t('accounts.editorUi.fillDefaultMapping', { n: defaultMappingCount }) }}</SButton>
-              <template v-if="mappingJsonMode">
-                <SButton size="sm" variant="ghost" icon="list" data-testid="mapping-template" @click="fillMappingTemplate">{{ t('accounts.editorUi.fillTemplate') }}</SButton>
-                <SButton size="sm" variant="ghost" icon="code" data-testid="mapping-format" @click="formatMappingText">{{ t('accounts.editorUi.formatJson') }}</SButton>
-              </template>
-            </div>
-          </SCard>
+          <AccountModelsCard
+            v-model:models="models"
+            v-model:mapping="mapping"
+            v-model:models-text="modelsText"
+            v-model:mapping-text="mappingText"
+            v-model:models-text-mode="modelsTextMode"
+            v-model:mapping-json-mode="mappingJsonMode"
+            v-model:auto-models="autoModels"
+            :gateway="needsProxy"
+            :automatic="automaticModels"
+            :prefilled="prefilled"
+            :editing="editing"
+            :prefill-what="prefillWhat"
+            :draft="ccgDraft"
+            :can-fetch="canFetch"
+            :fetching="fetching"
+            :default-models="defaultModels"
+            :model-options="modelOptions"
+            :models-error="modelsError"
+            :server-models-error="serverModelsError"
+            :mapping-error="mappingError"
+            :server-mapping-error="serverMappingError"
+            :mapping-count="mappingCount"
+            :default-mapping-count="defaultMappingCount"
+            @update:models="modelsError = ''"
+            @update:auto-models="setAutoModels"
+            @fetch="fetchModels"
+            @clear-prefill="clearPrefill"
+            @models-text-mode="setModelsTextMode"
+            @sync-models-text="syncModelsText()"
+            @format-models-text="formatModelsText"
+            @copy-models="copyModels"
+            @clear-models="clearModels"
+            @fill-default-models="fillDefaultModels"
+            @reject-model="rejectModel"
+            @mapping-json-mode="setMappingJsonMode"
+            @sync-mapping-text="syncMappingText()"
+            @format-mapping-text="formatMappingText"
+            @fill-mapping-template="fillMappingTemplate"
+            @fill-default-mapping="fillDefaultMapping"
+            @merge-models="mergeModels"
+          />
         </div>
 
         <!-- ============================================================ scheduling and limits -->

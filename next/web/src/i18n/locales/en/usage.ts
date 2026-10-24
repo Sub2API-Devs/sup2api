@@ -14,9 +14,6 @@ export default {
     requests: 'Requests',
     ledger: 'Balance changes'
   },
-  range: {
-    custom: 'Custom'
-  },
   nonStream: 'Non-streaming',
   search: {
     advanced: 'More filters',
@@ -45,10 +42,7 @@ export default {
     stream: 'Response mode'
   },
   filters: {
-    userId: 'User ID',
-    accountId: 'Account ID',
-    clientRequestId: 'Client request ID',
-    clientRequestIdPlaceholder: 'Exact X-Request-Id'
+    userId: 'User ID'
   },
   success: {
     ok: 'Succeeded',
@@ -62,8 +56,7 @@ export default {
     cost: 'Cost',
     daily: 'Daily',
     trend: 'Trend',
-    cacheHit: 'Cache hit',
-    partial: 'Based on the latest {n} requests'
+    cacheHit: 'Cache hit'
   },
   showDetails: 'View details',
   hideDetails: 'Hide details',
@@ -75,14 +68,12 @@ export default {
   cols: {
     modelAccount: 'Model / account',
     timing: 'Timing',
-    ip: 'IP',
     detail: 'Details',
     input: 'Input',
     output: 'Output',
     cost: 'Cost',
     accountType: 'Account type',
-    upstreamProtocol: 'Upstream protocol',
-    clientRequestId: 'Client request ID'
+    upstreamProtocol: 'Upstream protocol'
   },
   filterByClientRequestId: '{id} (click to filter by this ID)',
   cacheTitle: 'cache read {r} · cache write {w}',
@@ -113,8 +104,6 @@ export default {
     count: '{n} IPs, busiest first',
     top: 'The {n} busiest IPs',
     empty: 'No client IP recorded in this period',
-    filter: '{ip} (click to filter by this IP)',
-    clear: 'Stop filtering by this IP',
     unknown: 'Not recorded',
     lastAt: 'Last call'
   },
@@ -129,7 +118,6 @@ export default {
     rules: 'Markup rules',
     matched: 'matched',
     notMatched: 'not matched',
-    breakdown: 'Breakdown',
     inputs: 'Billing condition values',
     statusLabel: 'Billing status',
     ledger: 'ledger #{id}',
@@ -154,7 +142,6 @@ export default {
     userAgent: 'User-Agent',
     node: 'Node',
     attempts: 'Upstream attempts',
-    statusCode: 'HTTP status',
     latency: 'Latency',
     firstToken: 'first token',
     error: 'Error'

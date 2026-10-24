@@ -1,4 +1,4 @@
-import { useI18n } from 'vue-i18n'
+import { useOptionalT } from '@/composables/optionalText'
 
 // Shapes and labels shared by the upgrade page and its step lanes.
 
@@ -7,9 +7,6 @@ export interface UpgradeEvent { id: number; kind: string; message: string; creat
 
 /** `label(group, value)`: upgrades.<group>.<value> when translated, else the raw value. */
 export function useUpgradeLabel() {
-  const { t, te } = useI18n()
-  return (group: string, value: string) => {
-    const key = `upgrades.${group}.${value}`
-    return te(key) ? t(key) : value
-  }
+  const tr = useOptionalT()
+  return (group: string, value: string) => tr(`upgrades.${group}.${value}`, undefined, value)
 }

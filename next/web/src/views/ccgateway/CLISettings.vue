@@ -10,6 +10,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SButton, SDescItem, SDescriptions, SHint, SModal, SSegmented, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
 import { formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { useOptionalT } from '@/composables/optionalText'
 import { useCcgError } from './ccgError'
 
 interface CLIState {
@@ -23,7 +24,8 @@ interface CLIState {
 
 const props = defineProps<{ accountId: number; disabled?: boolean }>()
 const emit = defineEmits<{ (event: 'changed'): void }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 const auth = useAuthStore()
 const describe = useCcgError()
 const manage = computed(() => auth.has('settings:manage'))
@@ -38,7 +40,7 @@ let controller: AbortController | undefined
 
 /** The controller reports Go's zero time for "never". */
 function when(value?: string) { return !value || value.startsWith('0001-') ? '—' : formatDateTime(value) }
-function label(value: string) { return te(`ccgateway.cli.states.${value}`) ? t(`ccgateway.cli.states.${value}`) : value }
+function label(value: string) { return tr(`ccgateway.cli.states.${value}`, undefined, value) }
 
 async function request(operation: (signal: AbortSignal) => Promise<CLIState>) {
   if (busy.value) return

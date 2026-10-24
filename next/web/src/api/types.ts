@@ -881,16 +881,6 @@ export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, num
   platform_hotpath_timeout_ms: [50, 2000]
 }
 
-/** GET/PUT /settings/auto-disable (CONTRACTS §42.2). */
-export interface AutoDisableSettings {
-  /** Global switch; off cools accounts down instead of disabling them. */
-  enabled: boolean
-  /** Status codes or ranges that disable the account, e.g. "401,403,500-503"; "" = none. */
-  status_codes: string
-  /** Lower-cased substrings of the upstream error that disable the account. */
-  keywords: string[]
-}
-
 // ------------------------------------------------------------------ sticky
 
 // Built-in rules come with the core; plugins take no part in sticky sessions.

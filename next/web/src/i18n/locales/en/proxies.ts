@@ -12,7 +12,6 @@ export default {
   username: 'Username',
   password: 'Password',
   passwordKeep: 'Leave empty to keep the current password.',
-  passwordKeepMaybe: 'Leave empty to keep the current password (if any).',
   passwordNone: 'No password is set. Leave empty to keep it that way.',
   passwordStored: 'Password set (not shown)',
   clearPassword: 'Clear the stored password',

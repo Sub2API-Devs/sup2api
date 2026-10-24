@@ -22,6 +22,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SHint, SSettingsGroup, STable, confirm, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { CcgBundledReport, CcgRuntimeImages, CcgWorkersReport } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import { useOptionalT } from '@/composables/optionalText'
 import CcgErrorAlert from './CcgErrorAlert.vue'
 import RuntimeImageUpload from './RuntimeImageUpload.vue'
 import { useCcgText } from './ccgError'
@@ -31,7 +32,8 @@ import { WORKERS_TIMEOUT_MS, type ImageLoadResult } from './imageUpload'
 
 const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean; cliVersion: string }>()
 const emit = defineEmits<{ (event: 'changed'): void }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 const auth = useAuthStore()
 const { describe, reasonLabel } = useCcgText()
 const ANCHOR = 'ccgateway-runtime'
@@ -59,7 +61,7 @@ const state = computed(() => runtimeState(info.value))
 const action = computed<'install' | 'upgrade' | null>(() => (state.value === 'notInstalled' ? 'install' : state.value === 'outdated' ? 'upgrade' : null))
 
 /** A code translated under `prefix`, else the code itself. */
-const codeText = (prefix: string, code?: string) => (!code ? '' : te(`${prefix}.${code}`) ? t(`${prefix}.${code}`) : code)
+const codeText = (prefix: string, code?: string) => (code ? tr(`${prefix}.${code}`, undefined, code) : '')
 const roleLabel = (role: string) => codeText('ccgateway.bundled.roles', role)
 const workerReason = (code?: string) => codeText('ccgateway.workers.reasons', code)
 /** A failed role's code: the shared reasons first, then the worker update's, else the code itself. */

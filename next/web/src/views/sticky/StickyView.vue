@@ -5,6 +5,7 @@ import { api } from '@sub2api/host'
 import { SBadge, SButton, SDropdown, SHint, SSectionTitle, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { StickyRule, StickyStats, StickySettings } from '@/api/types'
 import { deleteWithConfirm } from '@/composables/crud'
+import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
@@ -27,11 +28,11 @@ async function load() {
   loading.value = true
   try {
     const [r, s, settings] = await Promise.all([
-      api.list<StickyRule>('/sticky-rules', { page_size: 200 }),
+      fetchFirstPage<StickyRule>('/sticky-rules'),
       api.get<Stats[]>('/sticky-rules/stats').catch(() => [] as Stats[]),
       api.get<StickySettings>('/settings/sticky')
     ])
-    rules.value = [...r.items].sort((a, b) => b.priority - a.priority || a.id - b.id)
+    rules.value = [...r].sort((a, b) => b.priority - a.priority || a.id - b.id)
     stats.value = Array.isArray(s) ? s : []
     failurePolicyManaged.value = !!settings.failure_policy_managed
   } catch (e) {

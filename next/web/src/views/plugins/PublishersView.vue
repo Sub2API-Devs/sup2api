@@ -19,7 +19,6 @@ import {
   SSelect,
   STable,
   STextarea,
-  confirm,
   toast,
   type MenuAction,
   type TableColumn,
@@ -27,9 +26,10 @@ import {
 } from '@sub2api/ui'
 import type { Publisher } from '@/api/types'
 import { fromLocalInput, statusTone } from '@/api/admin'
+import { confirmAction } from '@/composables/crud'
+import { applyFormError } from '@/utils/formErrors'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
-import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
 
 type PublisherKey = NonNullable<Publisher['keys']>[number]
@@ -141,8 +141,7 @@ async function submitCreate() {
     createOpen.value = false
     list.reload()
   } catch (e) {
-    createErrors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, createErrors)
   } finally {
     creating.value = false
   }
@@ -194,8 +193,7 @@ async function submitKey() {
     keyOpen.value = false
     list.reload()
   } catch (e) {
-    keyErrors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, keyErrors)
   } finally {
     creating.value = false
   }
@@ -204,31 +202,30 @@ async function submitKey() {
 // ------------------------------------------------------------------ revoke
 
 async function revokePublisher(p: Publisher) {
-  const ok = await confirm({ title: t('publishers.revoke'), message: t('publishers.confirmRevoke', { name: p.name }), danger: true })
+  const ok = await confirmAction(
+    { title: t('publishers.revoke'), message: t('publishers.confirmRevoke', { name: p.name }), danger: true },
+    () => api.post(`/publishers/${p.id}/revoke`),
+    () => {
+      toast(t('publishers.revoked'), 'success')
+      list.reload()
+    }
+  )
   if (!ok) return
-  try {
-    await api.post(`/publishers/${p.id}/revoke`)
-    toast(t('publishers.revoked'), 'success')
-    list.reload()
-  } catch (e) {
-    notifyError(e)
-  }
 }
 
 async function revokeKey(p: Publisher, k: PublisherKey) {
-  const ok = await confirm({
-    title: t('publishers.revokeKey'),
-    message: t('publishers.confirmRevokeKey', { key: k.key_id, name: p.name }),
-    danger: true
-  })
-  if (!ok) return
-  try {
-    await api.post(`/publisher-keys/${encodeURIComponent(k.key_id)}/revoke`)
-    toast(t('publishers.revoked'), 'success')
-    list.reload()
-  } catch (e) {
-    notifyError(e)
-  }
+  await confirmAction(
+    {
+      title: t('publishers.revokeKey'),
+      message: t('publishers.confirmRevokeKey', { key: k.key_id, name: p.name }),
+      danger: true
+    },
+    () => api.post(`/publisher-keys/${encodeURIComponent(k.key_id)}/revoke`),
+    () => {
+      toast(t('publishers.revoked'), 'success')
+      list.reload()
+    }
+  )
 }
 </script>
 

@@ -14,11 +14,9 @@ export default {
     proxies: '代理',
     prices: '模型价格',
     usage: '使用记录',
-    sticky: '粘性会话',
     ledger: '余额流水',
     users: '用户',
     roles: '角色与权限',
-    apiKeysAll: '全部 API Key',
     platforms: '平台',
     plugins: '插件',
     market: '插件市场',
@@ -30,7 +28,6 @@ export default {
     myStats: '使用统计'
   },
   balance: '余额',
-  profile: '个人资料',
   changePassword: '修改密码',
   logout: '退出登录',
   collapse: '收起侧边栏',
@@ -39,8 +36,7 @@ export default {
   userMenu: '账号菜单',
   forbidden: {
     title: '没有权限',
-    desc: '你没有查看此页面的权限（{perm}）。',
-    home: '返回概览'
+    desc: '你没有查看此页面的权限（{perm}）。'
   },
   notFound: {
     title: '页面不存在',

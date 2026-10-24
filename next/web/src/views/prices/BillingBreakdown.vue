@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SHint } from '@sub2api/ui'
 import { formatMoney, formatNumber } from '@/utils/format'
+import { useOptionalT } from '@/composables/optionalText'
 
 // Renders a billing breakdown as produced by POST /prices/preview and stored
 // in usage billing_detail.breakdown:
@@ -15,7 +16,8 @@ const props = defineProps<{
   rules?: Array<{ multiplier: number | string; matched: boolean }>
   cacheWriteLabels?: { default: string; oneHour: string }
 }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 
 interface Item {
   tier?: string
@@ -34,7 +36,7 @@ function labelOf(l?: string): string {
   if (l === 'cc' && props.cacheWriteLabels) return props.cacheWriteLabels.default
   if (l === 'cc1h' && props.cacheWriteLabels) return props.cacheWriteLabels.oneHour
   if (l.startsWith('u:')) return l.slice(2)
-  return te(`prices.items.${l}`) ? t(`prices.items.${l}`) : l
+  return tr(`prices.items.${l}`, undefined, l)
 }
 
 function isNum(v: unknown) {

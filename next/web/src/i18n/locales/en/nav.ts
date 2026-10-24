@@ -14,11 +14,9 @@ export default {
     proxies: 'Proxies',
     prices: 'Model prices',
     usage: 'Usage logs',
-    sticky: 'Sticky sessions',
     ledger: 'Balance ledger',
     users: 'Users',
     roles: 'Roles & permissions',
-    apiKeysAll: 'All API keys',
     platforms: 'Platforms',
     plugins: 'Plugins',
     market: 'Plugin market',
@@ -30,7 +28,6 @@ export default {
     myStats: 'Usage statistics'
   },
   balance: 'Balance',
-  profile: 'Profile',
   changePassword: 'Change password',
   logout: 'Sign out',
   collapse: 'Collapse sidebar',
@@ -39,8 +36,7 @@ export default {
   userMenu: 'Account menu',
   forbidden: {
     title: 'No permission',
-    desc: 'You do not have permission to view this page ({perm}).',
-    home: 'Back to overview'
+    desc: 'You do not have permission to view this page ({perm}).'
   },
   notFound: {
     title: 'Page not found',

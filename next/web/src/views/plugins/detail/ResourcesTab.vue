@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SField, SHint, SInput, SSettingRow, SSettingsGroup, toast } from '@sub2api/ui'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import type { LText } from '@/api/types'
@@ -86,8 +86,7 @@ async function save() {
     toast((r?.message && lt(r.message)) || t('plugins.resources.saved'), 'success')
     emit('changed')
   } catch (e) {
-    errors.value = fieldErrors(e)
-    notifyError(e)
+    applyFormError(e, errors)
   } finally {
     saving.value = false
   }

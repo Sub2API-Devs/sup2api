@@ -2,8 +2,9 @@ export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_sear
 export const buildAttachmentFields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'] as const
 export type BuildAttachmentField = (typeof buildAttachmentFields)[number]
 export type BuildAttachmentSource = 'client' | 'worker' | 'erase'
-export const identityFields = ['user_id'] as const
-export type IdentityField = (typeof identityFields)[number]
+// The identity line is no longer configured (2026-10-23); the type stays for
+// policies saved before, whose value the core ignores.
+export type IdentityField = 'user_id'
 export type IdentitySource = 'client' | 'worker' | 'replace'
 export const billingFields = ['cc_version', 'cc_entrypoint'] as const
 export type BillingField = (typeof billingFields)[number]
@@ -28,6 +29,9 @@ export type RequestLevel = (typeof requestLevels)[number]
 export const defaultRequestLevel: RequestLevel = 'low'
 const isLevel = (value: unknown): value is RequestLevel => (requestLevels as readonly unknown[]).includes(value)
 const levelRank = (level?: RequestLevel | '') => requestLevels.indexOf(level || defaultRequestLevel)
+// Kept as a spec-only helper: the level table in requestPolicy.spec.ts mirrors
+// contracts features/levels.go (none is direct), which the editor no longer
+// writes.
 export const relayModeForLevel = (level?: RequestLevel | ''): 'direct' | 'build' => levelRank(level) === 0 ? 'direct' : 'build'
 export const levelHasIdentity = (level?: RequestLevel | '') => levelRank(level) >= 1
 export const levelHasEnvironment = (level?: RequestLevel | '') => levelRank(level) >= 2

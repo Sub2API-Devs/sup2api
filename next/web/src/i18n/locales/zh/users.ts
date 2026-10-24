@@ -24,13 +24,10 @@ export default {
   groupsHint: '用户可以在这些分组中创建 API Key（指定用户可见的分组需要分配）。',
   ledger: '余额流水',
   adjustBalance: '调整余额',
-  adjustBalanceTitle: '调整 {name} 的余额',
   currentBalance: '当前余额',
   direction: '方向',
   credit: '充值（增加）',
   debit: '扣减',
   amount: '金额（美元）',
-  amountHint: '正数，最多 8 位小数。',
-  amountInvalid: '请输入最多 8 位小数的正数金额',
-  balanceAdjusted: '余额已调整'
+  amountInvalid: '请输入最多 8 位小数的正数金额'
 }

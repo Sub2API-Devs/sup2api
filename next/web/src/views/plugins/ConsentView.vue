@@ -3,21 +3,23 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCheckbox, SDisclosure, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
-import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, accountTypesOf, asArray, capabilityIdsOf, display, endpointText, formatDuration, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, asArray, capabilityIdsOf, hpKey, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
-import PluginGatewayDecl from './parts/PluginGatewayDecl.vue'
-import RiskDot from './parts/RiskDot.vue'
-import ScopeChips from './parts/ScopeChips.vue'
 import TrustBadge from './parts/TrustBadge.vue'
+import ProvidesSummary from './consent/ProvidesSummary.vue'
+import HostPermissionTable from './consent/HostPermissionTable.vue'
+import type { HPRow } from './consent/hostPermission'
+import { useOptionalT } from '@/composables/optionalText'
+import { fetchFirstPage } from '@/composables/lookups'
 
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -36,14 +38,6 @@ const showMissing = ref(false)
 const checked = reactive<Record<string, boolean>>({})
 const roles = ref<Role[]>([])
 const roleKeys = ref<string[]>([])
-
-interface HPRow extends HostPermissionReview {
-  risk: Risk
-  requiredPerm: string | null
-  allowed: boolean
-  locked: boolean
-  diffTag: 'added' | 'widened' | null
-}
 
 function requiredPermOf(hp: HostPermissionReview, risk: Risk): string | null {
   if (hp.requires) return hp.requires
@@ -94,116 +88,28 @@ const signatureOk = computed(() => review.value?.signature_status === 'valid')
 const canSubmit = computed(() => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0)
 const isUpgrade = computed(() => !!review.value?.diff)
 const colon = computed(() => t('plugins.colon'))
-const listSep = computed(() => t('plugins.listSep'))
 
 function hpLabel(id: string): string {
-  const k = `plugins.hp.${hpKey(id)}`
-  return te(k) ? t(k) : id
+  return tr(`plugins.hp.${hpKey(id)}`, undefined, id)
 }
 
 function sigLabel(s: string | undefined): string {
   const v = s || 'unknown'
-  return te(`plugins.signature.${v}`) ? t(`plugins.signature.${v}`) : v
+  return tr(`plugins.signature.${v}`, undefined, v)
 }
 
 // ------------------------------------------------------------------ "provides" formatting
 
-function hookMatch(h: Record<string, any>): string {
-  const m = pick<Record<string, any>>(h, 'match') || {}
-  const parts: string[] = []
-  const protos = asArray<string>(m.protocols)
-  const models = asArray<string>(m.models)
-  const groups = asArray<string>(m.groups)
-  if (protos.length) parts.push(protos.join(', '))
-  parts.push(t('plugins.consent.models') + ': ' + (models.length === 0 || models.includes('*') ? t('common.all') : models.join(', ')))
-  parts.push(t('plugins.consent.groups') + ': ' + (groups.length === 0 || groups.includes('*') ? t('common.all') : groups.join(', ')))
-  return parts.join(' · ')
-}
-
-function hookNeeds(h: Record<string, any>): string[] {
-  return asArray<string>(pick(h, 'needs', 'fields'))
-}
-
-function fieldLabel(f: string): string {
-  const k = `plugins.fields.${hpKey(f)}`
-  return te(k) ? t(k) : f
-}
-
-function hookFailure(h: Record<string, any>): string {
-  const f = pick<string>(h, 'failure')
-  if (!f) return ''
-  return f === 'closed' ? t('plugins.consent.failClosed') : t('plugins.consent.failOpen')
-}
-
-function eventNames(list: unknown[]): string[] {
-  const out: string[] = []
-  for (const e of list) {
-    if (typeof e === 'string') out.push(e)
-    else if (e && typeof e === 'object') {
-      const sub = (e as any).subscribe
-      if (Array.isArray(sub)) out.push(...sub.map(String))
-      else out.push(String(pick(e, 'type', 'name', 'id') ?? display(e)))
-    }
-  }
-  return out
-}
-
-function routeText(r: Record<string, any>): string {
-  return [pick(r, 'method'), pick(r, 'path')].filter(Boolean).join(' ') || display(r)
-}
-
-function menuText(m: Record<string, any>): string {
-  const label = lt(pick(m, 'label', 'title')) || String(pick(m, 'id') ?? '')
-  const type = pick<string>(m, 'type', 'page_type')
-  return type ? `${label} (${type})` : label
-}
-
-const resourceItems = computed(() => {
-  const r = review.value?.resources
-  if (!r) return []
-  const out: Array<{ label: string; value: string }> = []
-  const mem = pick<number>(r, 'memoryMB', 'memory_mb')
-  const cpu = pick<number>(r, 'cpu')
-  const threads = pick<number>(r, 'maxProcs', 'max_threads', 'maxThreads')
-  const files = pick<number>(r, 'maxOpenFiles', 'max_open_files')
-  if (mem !== undefined) out.push({ label: t('plugins.resources.memory'), value: formatBytes(Number(mem) * 1024 * 1024) })
-  if (cpu !== undefined) out.push({ label: t('plugins.resources.cpu'), value: t('plugins.resources.cores', { n: cpu }) })
-  if (threads !== undefined) out.push({ label: t('plugins.resources.threads'), value: String(threads) })
-  if (files !== undefined) out.push({ label: t('plugins.resources.files'), value: String(files) })
-  return out
-})
-
 const capabilityIds = computed(() => capabilityIdsOf(review.value?.capabilities))
-const reviewAccountTypes = computed(() => accountTypesOf(review.value))
-const reviewPlatforms = computed(() => platformsOf(review.value))
-
-const hasProvides = computed(() => {
-  const r = review.value
-  if (!r) return false
-  return (
-    asArray(r.gateway_endpoints).length > 0 ||
-    reviewPlatforms.value.length > 0 ||
-    reviewAccountTypes.value.length > 0 ||
-    asArray(r.hooks).length > 0 ||
-    asArray(r.events).length > 0 ||
-    asArray(r.jobs).length > 0 ||
-    asArray(r.routes).length > 0 ||
-    asArray(r.menus).length > 0 ||
-    asArray(r.user_permissions).length > 0 ||
-    !!r.database ||
-    resourceItems.value.length > 0 ||
-    asArray(r.external_services).length > 0
-  )
-})
 
 // ------------------------------------------------------------------ load / submit
 
 async function loadRoles() {
   if (!auth.has('role:read') || asArray(review.value?.user_permissions).length === 0) return
   try {
-    const r = await api.list<Role>('/roles', { page_size: 200 })
-    roles.value = r.items
-    roleKeys.value = r.items.some((x) => x.key === 'admin') ? ['admin'] : []
+    const items = await fetchFirstPage<Role>('/roles')
+    roles.value = items
+    roleKeys.value = items.some((x) => x.key === 'admin') ? ['admin'] : []
   } catch {
     roles.value = []
   }
@@ -370,174 +276,10 @@ onMounted(load)
       </SCard>
 
       <!-- what the plugin provides -->
-      <SCard v-if="hasProvides" :title="t('plugins.consent.provides')" class="mt-4">
-        <ul class="space-y-4 text-sm">
-          <li v-if="reviewPlatforms.length">
-            <div class="font-medium">{{ t('plugins.consent.platforms') }}</div>
-            <div class="mt-1 pl-4">
-              <PluginGatewayDecl :platforms="reviewPlatforms" :account-types="[]" section="platforms" />
-            </div>
-          </li>
-          <li v-else-if="review.gateway_endpoints?.length">
-            <div class="font-medium">{{ t('plugins.consent.gatewayEndpoints') }}</div>
-            <ul class="mt-1 space-y-0.5 pl-4">
-              <li v-for="(e, i) in review.gateway_endpoints" :key="i" class="font-mono text-xs">{{ endpointText(e) }}</li>
-            </ul>
-          </li>
-
-          <li v-if="reviewAccountTypes.length">
-            <div class="font-medium">{{ t('plugins.consent.accountTypes') }}</div>
-            <div class="mt-1 pl-4" data-testid="review-account-types">
-              <PluginGatewayDecl :platforms="reviewPlatforms" :account-types="reviewAccountTypes" section="account_types" />
-            </div>
-          </li>
-
-          <li v-if="review.hooks?.length">
-            <div class="font-medium">{{ t('plugins.consent.hooks') }}</div>
-            <ul class="mt-1 space-y-2 pl-4">
-              <li v-for="(h, i) in review.hooks" :key="i" class="text-xs">
-                <div>
-                  <span class="font-mono font-medium">{{ h.point }}</span>
-                  <SHint v-if="h.id" inline size="xs"> #{{ h.id }}</SHint>
-                  <SHint inline size="xs"> — {{ hookMatch(h) }}</SHint>
-                </div>
-                <div class="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
-                  <span v-if="hookNeeds(h).length">
-                    <SHint inline size="xs">{{ t('plugins.consent.reads') }}{{ colon }}</SHint>{{ hookNeeds(h).map(fieldLabel).join(listSep) }}
-                  </span>
-                  <span v-if="pick(h, 'maxPromptBytes', 'max_prompt_bytes')">
-                    <SHint inline size="xs">{{ t('plugins.consent.maxPrompt') }}{{ colon }}</SHint>{{ formatBytes(Number(pick(h, 'maxPromptBytes', 'max_prompt_bytes'))) }}
-                  </span>
-                  <span v-if="pick(h, 'timeoutMs', 'timeout_ms')">
-                    <SHint inline size="xs">{{ t('plugins.consent.timeout') }}{{ colon }}</SHint>{{ formatDuration(Number(pick(h, 'timeoutMs', 'timeout_ms'))) }}
-                  </span>
-                  <span v-if="hookFailure(h)">
-                    <SHint inline size="xs">{{ t('plugins.consent.onFailure') }}{{ colon }}</SHint>
-                    <span :class="h.failure === 'closed' ? 'text-red-600 dark:text-red-400' : ''">{{ hookFailure(h) }}</span>
-                  </span>
-                </div>
-              </li>
-            </ul>
-          </li>
-
-          <li v-if="review.events?.length">
-            <span class="font-medium">{{ t('plugins.consent.events') }}{{ colon }}</span>
-            <span class="font-mono text-xs">{{ eventNames(review.events).join(', ') }}</span>
-          </li>
-
-          <li v-if="review.jobs?.length">
-            <span class="font-medium">{{ t('plugins.consent.jobs') }}{{ colon }}</span>
-            <span v-for="(j, i) in review.jobs" :key="i" class="mr-3 text-xs">
-              <span class="font-mono">{{ j.id }}</span>
-              <SHint inline size="xs"> ({{ j.schedule }})</SHint>
-            </span>
-          </li>
-
-          <li v-if="review.routes?.length">
-            <div class="font-medium">{{ t('plugins.consent.routes') }}</div>
-            <ul class="mt-1 space-y-0.5 pl-4">
-              <li v-for="(r, i) in review.routes" :key="i" class="text-xs">
-                <span class="font-mono">{{ routeText(r) }}</span>
-                <SBadge v-if="r.scope" class="ml-2" :tone="r.scope === 'public' || r.scope === 'webhook' ? 'warning' : 'gray'">{{ r.scope }}</SBadge>
-                <SHint v-if="r.permission" inline size="xs" class="ml-2">{{ r.permission }}</SHint>
-              </li>
-            </ul>
-          </li>
-
-          <li v-if="review.menus?.length">
-            <span class="font-medium">{{ t('plugins.consent.menus') }}{{ colon }}</span>
-            <span class="text-xs">{{ review.menus.map(menuText).join(listSep) }}</span>
-          </li>
-
-          <li v-if="review.user_permissions?.length">
-            <div class="font-medium">{{ t('plugins.consent.userPermissions') }}</div>
-            <ul class="mt-1 flex flex-wrap gap-1.5 pl-4">
-              <li v-for="p in review.user_permissions" :key="p.key">
-                <SBadge :tone="p.sensitive ? 'warning' : 'gray'" :title="lt(p.description)">
-                  {{ lt(p.label) || p.key }}
-                  <span class="font-mono opacity-70">({{ p.key }})</span>
-                  <SIcon v-if="p.sensitive" name="lock" class="h-3 w-3" />
-                </SBadge>
-              </li>
-            </ul>
-            <div v-if="roles.length" class="mt-2 pl-4">
-              <SHint size="xs">{{ t('plugins.consent.grantToRoles') }}</SHint>
-              <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                <SCheckbox v-for="r in roles" :key="r.key" size="xs" :model-value="roleKeys.includes(r.key)" @update:model-value="toggleRole(r.key, $event)">
-                  {{ lt(r.name) || r.key }}
-                </SCheckbox>
-              </div>
-            </div>
-          </li>
-
-          <li v-if="review.database">
-            <span class="font-medium">{{ t('plugins.consent.database') }}{{ colon }}</span>
-            <span class="text-xs">
-              schema <code class="font-mono">{{ review.database.schema }}</code>{{ listSep }}{{ t('plugins.consent.migrations', { n: review.database.migrations?.length || 0 }) }}
-            </span>
-            <SDisclosure v-if="review.database.migrations?.length" class="mt-1 pl-4" :label="t('plugins.consent.showMigrations')">
-              <ul class="font-mono">
-                <li v-for="m in review.database.migrations" :key="m">{{ m }}</li>
-              </ul>
-            </SDisclosure>
-          </li>
-
-          <li v-if="resourceItems.length">
-            <span class="font-medium">{{ t('plugins.consent.resources') }}{{ colon }}</span>
-            <span class="text-xs">{{ resourceItems.map((x) => `${x.label} ${x.value}`).join(listSep) }}</span>
-          </li>
-
-          <li v-if="review.external_services?.length">
-            <span class="font-medium">{{ t('plugins.consent.externalServices') }}{{ colon }}</span>
-            <code v-for="s in review.external_services" :key="s" class="mr-2 font-mono text-xs">{{ s }}</code>
-          </li>
-        </ul>
-      </SCard>
+      <ProvidesSummary :review="review" :roles="roles" :role-keys="roleKeys" @toggle-role="toggleRole" />
 
       <!-- host permissions -->
-      <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4">
-        <SEmpty v-if="rows.length === 0" :text="t('plugins.consent.noHostPermissions')" />
-        <ul v-else class="divide-y divide-gray-100 dark:divide-dark-700">
-          <li
-            v-for="row in rows"
-            :key="row.id"
-            class="flex items-start gap-3 py-3"
-            :class="[
-              !row.allowed ? 'opacity-60' : '',
-              showMissing && !row.optional && !checked[row.id] ? '-mx-2 rounded-lg bg-red-50 px-2 dark:bg-red-950/30' : '',
-              row.diffTag ? 'border-l-4 border-l-orange-400 pl-2' : ''
-            ]"
-          >
-            <RiskDot :risk="row.risk" class="mt-1" />
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-medium text-gray-900 dark:text-white">{{ hpLabel(row.id) }}</span>
-                <SHint inline size="xs" class="font-mono">{{ row.id }}</SHint>
-                <SBadge :tone="row.risk === 'critical' ? 'danger' : row.risk === 'high' ? 'warning' : row.risk === 'medium' ? 'warning' : 'success'">
-                  {{ t(`plugins.risk.${row.risk}`) }}
-                </SBadge>
-                <SBadge v-if="row.optional" tone="gray">{{ t('common.optional') }}</SBadge>
-                <SBadge v-if="row.diffTag === 'added'" tone="danger">{{ t('plugins.consent.diffAdded') }}</SBadge>
-                <SBadge v-if="row.diffTag === 'widened'" tone="warning">{{ t('plugins.consent.diffWidened') }}</SBadge>
-              </div>
-              <SHint v-if="te(`plugins.hpDesc.${hpKey(row.id)}`)" size="xs" class="mt-0.5" :data-hp-desc="row.id">{{ t(`plugins.hpDesc.${hpKey(row.id)}`) }}</SHint>
-              <p v-if="row.reason" class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ lt(row.reason) }}</p>
-              <p v-if="row.risk === 'critical'" class="mt-0.5 text-xs text-red-600 dark:text-red-400">
-                {{ te(`plugins.hpWarn.${hpKey(row.id)}`) ? t(`plugins.hpWarn.${hpKey(row.id)}`) : t('plugins.consent.criticalWarn') }}
-              </p>
-              <ScopeChips :scope="row.scope" class="mt-1" />
-              <p v-if="!row.allowed" class="mt-1 flex items-center gap-1 text-xs text-orange-700 dark:text-orange-300">
-                <SIcon name="lock" class="h-3.5 w-3.5" />
-                {{ t('plugins.consent.needPermission', { perm: row.requiredPerm }) }}
-              </p>
-            </div>
-            <div class="shrink-0 pt-0.5">
-              <SHint v-if="row.locked" inline size="xs">{{ t('plugins.consent.auto') }}</SHint>
-              <SCheckbox v-else bare class="h-5 w-5" :model-value="!!checked[row.id]" :disabled="!row.allowed" @update:model-value="toggle(row, $event)" />
-            </div>
-          </li>
-        </ul>
-      </SCard>
+      <HostPermissionTable :rows="rows" :checked="checked" :show-missing="showMissing" @toggle="toggle" />
 
       <!-- footer -->
       <div
@@ -554,7 +296,7 @@ onMounted(load)
         </div>
         <div class="flex gap-2">
           <SButton variant="danger" :loading="rejecting" :disabled="submitting" @click="reject">{{ t('plugins.consent.reject') }}</SButton>
-          <SButton variant="primary" :loading="submitting" :disabled="!canSubmit || rejecting" icon="shield" @click="submit">
+          <SButton variant="primary" :loading="submitting" :disabled="!canSubmit || rejecting" icon="shield" data-testid="consent-approve" @click="submit">
             {{ isUpgrade ? t('plugins.consent.approveUpgrade') : t('plugins.consent.approve') }}
           </SButton>
         </div>

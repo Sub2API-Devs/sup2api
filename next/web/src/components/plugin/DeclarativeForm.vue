@@ -6,7 +6,8 @@ import { SButton, SCard, SchemaForm, SHint, SSpinner, toast } from '@sub2api/ui'
 import type { UIPlugin, UIPluginPage } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import { assetURL } from '@/stores/plugins'
-import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
+import { errorMessage } from '@/utils/errors'
+import { applyFormError } from '@/utils/formErrors'
 import { fetchAsset, parseRouteRef } from './declarative'
 
 // Declarative plugin form page: JSON Schema from the package (page.schema),
@@ -62,8 +63,7 @@ async function submit() {
     await api.request(target.method, `/p/${props.plugin.key}${target.path}`, { body: value.value })
     toast(t('common.saved'), 'success')
   } catch (e) {
-    errors.value = fieldErrors(e)
-    if (!Object.keys(errors.value).length) notifyError(e)
+    applyFormError(e, errors)
   } finally {
     saving.value = false
   }

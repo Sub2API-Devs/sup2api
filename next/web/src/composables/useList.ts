@@ -1,4 +1,3 @@
-import { ref } from 'vue'
 import { api, useList as useHostList, type UseListOptions, type UseListResult } from '@sub2api/host'
 import { notifyError } from '@/utils/errors'
 
@@ -16,21 +15,4 @@ export function useList<T>(
   opts: Omit<UseListOptions, 'onError'> = {}
 ): UseListResult<T> {
   return useHostList<T>(api, path, initialFilters, { ...opts, onError: notifyError })
-}
-
-/** Runs an async action with a loading flag and error toast. */
-export function useAction() {
-  const busy = ref(false)
-  async function run<R>(fn: () => Promise<R>): Promise<R | undefined> {
-    busy.value = true
-    try {
-      return await fn()
-    } catch (e) {
-      notifyError(e)
-      return undefined
-    } finally {
-      busy.value = false
-    }
-  }
-  return { busy, run }
 }

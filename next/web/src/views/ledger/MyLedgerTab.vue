@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
@@ -11,7 +11,10 @@ import LedgerTable from './LedgerTable.vue'
 import { LEDGER_RANGES, useKindOptions } from './kinds'
 
 // "Balance changes" tab of Mine > Usage records: the caller's balance and
-// their own ledger (GET /me/balance, GET /me/ledger).
+// their own ledger (GET /me/balance, GET /me/ledger). `revision` (bumped by the
+// page's refresh button) reloads both; `loading` tells the button when to spin.
+const props = withDefaults(defineProps<{ revision?: number }>(), { revision: 0 })
+const emit = defineEmits<{ (e: 'update:loading', value: boolean): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 
@@ -49,7 +52,8 @@ function reloadAll() {
   reload()
 }
 
-defineExpose({ reload: reloadAll })
+watch(() => props.revision, reloadAll)
+watch(loading, (v) => emit('update:loading', v), { immediate: true })
 </script>
 
 <template>

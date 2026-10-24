@@ -1,5 +1,4 @@
 export default {
-  appName: 'sub2api',
   actions: '操作',
   create: '新建',
   add: '添加',
@@ -86,8 +85,6 @@ export default {
     revoked: '已吊销'
   },
   theme: {
-    light: '浅色',
-    dark: '深色',
     toggle: '切换主题'
   },
   language: '语言',

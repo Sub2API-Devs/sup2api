@@ -74,7 +74,6 @@ export default {
     title: '校验',
     ok: '编译通过，冒烟测试通过',
     pending: '等待输入…',
-    fixErrors: '请先修正校验错误',
     warnTitle: '确认高额费用',
     warnConfirm: '服务端提示：{list}。仍然保存？',
     costPerMillion: '100 万输入 token 的费用：{cost}'

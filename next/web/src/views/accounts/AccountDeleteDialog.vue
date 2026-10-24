@@ -27,12 +27,16 @@ watch(() => props.open, open => { if (open) keep.value = 'now' })
 async function remove() {
   if (!props.account || busy.value) return
   busy.value = true
-  const query = keep.value === 'retain' ? { retain_resources: 1 } : undefined
-  const deleted = await deleteResource(`/accounts/${props.account.id}`, query)
-  busy.value = false
-  if (!deleted) return
-  emit('update:open', false)
-  emit('deleted')
+  try {
+    const query = keep.value === 'retain' ? { retain_resources: 1 } : undefined
+    // The dialog stays busy until it is closed: clearing busy first would make
+    // it closable again for a tick while it is still open.
+    if (!(await deleteResource(`/accounts/${props.account.id}`, query))) return
+    emit('update:open', false)
+    emit('deleted')
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 

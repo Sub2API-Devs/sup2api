@@ -26,12 +26,13 @@ watch(tab, (v) => {
   if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
 })
 
-const records = ref<InstanceType<typeof UsageRecords> | null>(null)
-const ledgerRef = ref<InstanceType<typeof MyLedgerTab> | null>(null)
+// The page owns the header; the open tab follows `revision` and reports its
+// loading state, so no ref reaches into a child's methods.
+const revision = ref(0)
+const loading = ref(false)
 
 function refresh() {
-  if (tab.value === 'ledger') ledgerRef.value?.reload()
-  else records.value?.reload()
+  revision.value++
 }
 </script>
 
@@ -39,14 +40,14 @@ function refresh() {
   <div>
     <SPageHeader :title="t('usage.myTitle')" :description="t('usage.myDescription')">
       <template #actions>
-        <SButton :loading="tab === 'requests' && records?.loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
 
     <STabs v-model="tab" :tabs="tabs">
       <!-- v-show: the search survives a visit to the ledger tab -->
-      <UsageRecords v-show="tab === 'requests'" ref="records" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
-      <MyLedgerTab v-if="tab === 'ledger'" ref="ledgerRef" />
+      <UsageRecords v-show="tab === 'requests'" v-model:loading="loading" :revision="revision" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
+      <MyLedgerTab v-if="tab === 'ledger'" v-model:loading="loading" :revision="revision" />
     </STabs>
   </div>
 </template>

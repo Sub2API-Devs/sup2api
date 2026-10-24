@@ -7,6 +7,7 @@ import ProxyPicker from '@/components/ProxyPicker.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
+import AccountModelsCard from './AccountModelsCard.vue'
 import { SSwitch } from '@sub2api/ui'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }) }))
@@ -14,7 +15,7 @@ vi.mock('@sub2api/host', () => ({ api: mocks }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ plugin: () => null, component: () => null }), assetURL: () => '' }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true }) }))
-vi.mock('@/composables/lookups', () => ({ useProxiesLookup: () => ({}) }))
+vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
 
 enableAutoUnmount(afterEach)
 const accountType = { plugin_key: 'ccgateway', type: 'apikey', creation_group: 'ccgateway', form: { mode: 'schema' }, platforms: [], default_models: [], default_model_mapping: {} } as unknown as AccountType
@@ -22,6 +23,8 @@ const location = { ip: '8.8.8.8', country_code: 'US', timezone: 'America/Los_Ang
 
 function render(account?: Account, realSelect = false, type: AccountType = accountType) {
   return shallowMount(AccountEditor, { props: { accountType: type, account }, global: { plugins: [i18n], stubs: {
+    // The models card is rendered (not stubbed) so its tag select is reachable.
+    AccountModelsCard: false,
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
     SSettingRow: { template: '<div><slot /></div>' },
     SField: { props: ['error'], template: '<div><slot /><p v-if="error">{{ error }}</p><slot v-else name="hint" /></div>' },
@@ -323,7 +326,8 @@ describe('automatic Claude Code models', () => {
   const managed = { ...accountType, type: 'managed', default_models: maxModels, default_models_by_subscription: { pro: proModels } } as unknown as AccountType
   const subscribed = (subscription_type: string, extra: Partial<Account> = {}) =>
     ({ ...savedAccount(), models: ['custom-model'], subscription_type, ...extra }) as Account
-  const tags = (w: ReturnType<typeof render>) => w.getComponent(ModelTagSelect)
+  // The list lives inside the models card now: two levels down.
+  const tags = (w: ReturnType<typeof render>) => w.getComponent(AccountModelsCard).getComponent(ModelTagSelect)
 
   beforeEach(() => {
     vi.clearAllMocks()

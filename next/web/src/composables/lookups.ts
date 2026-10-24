@@ -1,9 +1,25 @@
 import { ref } from 'vue'
-import { api } from '@sub2api/host'
+import { api, type Query } from '@sub2api/host'
 import type { Group, Proxy } from '@/api/types'
 
 // Small cached lookups for selects (groups, proxies). Call refresh after
 // mutations that change them.
+
+/** One page (200 by default) of a list endpoint: the whole set for a select. `query` adds filters. */
+export async function fetchFirstPage<T>(path: string, pageSize = 200, query: Query = {}): Promise<T[]> {
+  return (await api.list<T>(path, { ...query, page_size: pageSize })).items
+}
+
+/** Every page of a list endpoint (the caller needs the complete set, not a dropdown). */
+export async function fetchAllPages<T>(path: string, pageSize = 200, query: Query = {}): Promise<T[]> {
+  const out: T[] = []
+  for (let page = 1; ; page++) {
+    const result = await api.list<T>(path, { ...query, page, page_size: pageSize })
+    out.push(...result.items)
+    if (!result.paged || !result.items.length || out.length >= result.page.total) break
+  }
+  return out
+}
 
 const groups = ref<Group[]>([])
 const proxies = ref<Proxy[]>([])
@@ -12,10 +28,9 @@ let proxiesP: Promise<void> | null = null
 
 export function useGroupsLookup(force = false) {
   if (force || !groupsP) {
-    groupsP = api
-      .list<Group>('/groups', { page_size: 200 })
-      .then((r) => {
-        groups.value = r.items
+    groupsP = fetchFirstPage<Group>('/groups')
+      .then((items) => {
+        groups.value = items
       })
       .catch(() => {
         groupsP = null
@@ -26,10 +41,9 @@ export function useGroupsLookup(force = false) {
 
 export function useProxiesLookup(force = false) {
   if (force || !proxiesP) {
-    proxiesP = api
-      .list<Proxy>('/proxies', { page_size: 200 })
-      .then((r) => {
-        proxies.value = r.items
+    proxiesP = fetchFirstPage<Proxy>('/proxies')
+      .then((items) => {
+        proxies.value = items
       })
       .catch(() => {
         proxiesP = null

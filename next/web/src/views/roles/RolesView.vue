@@ -6,6 +6,7 @@ import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid
 import type { LText, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
+import { fetchFirstPage } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -25,7 +26,7 @@ const selected = computed(() => roles.value.find((r) => r.id === selectedId.valu
 // ------------------------------------------------------------------ loading
 
 async function loadRoles() {
-  roles.value = (await api.list<RoleRow>('/roles', { page_size: 200 })).items
+  roles.value = await fetchFirstPage<RoleRow>('/roles')
 }
 
 async function init() {

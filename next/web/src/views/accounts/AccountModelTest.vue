@@ -8,9 +8,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SHint, SIcon, SInput, SLink, SModal, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SHint, SIcon, SInput, SLink, SModal, STable, toast, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { confirmAction } from '@/composables/crud'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { copyText } from '@/utils/format'
 import { runPool } from './pool'
@@ -183,23 +184,23 @@ async function removeFailed() {
     toast(t('accounts.modelTest.removeAllRefused'), 'warning')
     return
   }
-  const ok = await confirm({
-    title: t('accounts.modelTest.removeTitle'),
-    message: t('accounts.modelTest.removeConfirm', { n: removable.value.length, models: removable.value.join(', '), left: next.length }),
-    confirmText: t('accounts.modelTest.removeFailed', { n: removable.value.length }),
-    danger: true
-  })
+  const ok = await confirmAction(
+    {
+      title: t('accounts.modelTest.removeTitle'),
+      message: t('accounts.modelTest.removeConfirm', { n: removable.value.length, models: removable.value.join(', '), left: next.length }),
+      confirmText: t('accounts.modelTest.removeFailed', { n: removable.value.length }),
+      danger: true
+    },
+    () => api.patch<Account>(`/accounts/${a.id}`, { models: next }),
+    (saved) => {
+      const drop = new Set(removable.value)
+      rows.value = rows.value.filter((r) => !drop.has(r.model))
+      for (const m of drop) selected.delete(m)
+      toast(t('accounts.modelTest.removed', { n: drop.size }), 'success')
+      emit('updated', saved)
+    }
+  )
   if (!ok) return
-  try {
-    const saved = await api.patch<Account>(`/accounts/${a.id}`, { models: next })
-    const drop = new Set(removable.value)
-    rows.value = rows.value.filter((r) => !drop.has(r.model))
-    for (const m of drop) selected.delete(m)
-    toast(t('accounts.modelTest.removed', { n: drop.size }), 'success')
-    emit('updated', saved)
-  } catch (e) {
-    notifyError(e)
-  }
 }
 
 function close() {

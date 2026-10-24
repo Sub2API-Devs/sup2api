@@ -10,10 +10,12 @@ import { hpKey, riskOf, type PluginDetail, type PluginGrant } from '../pluginUti
 import RiskDot from '../parts/RiskDot.vue'
 import ScopeChips from '../parts/ScopeChips.vue'
 import StatusBadge from '../parts/StatusBadge.vue'
+import { useOptionalT } from '@/composables/optionalText'
 
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t, te } = useI18n()
+const tr = useOptionalT()
 const auth = useAuthStore()
 
 const grants = ref<PluginGrant[]>(props.detail.grants || [])
@@ -31,8 +33,7 @@ const columns = computed<TableColumn[]>(() => [
 ])
 
 function hpLabel(id: string): string {
-  const k = `plugins.hp.${hpKey(id)}`
-  return te(k) ? t(k) : id
+  return tr(`plugins.hp.${hpKey(id)}`, undefined, id)
 }
 
 async function load() {

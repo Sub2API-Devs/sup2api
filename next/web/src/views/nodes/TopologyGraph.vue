@@ -5,6 +5,7 @@ import { api, requestWithHeaders } from '@sub2api/host'
 import { SBadge, SCard, SEmpty, SHint, SSegmented, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { parseNodePlugin, statusTone } from '@/api/admin'
+import { fetchFirstPage } from '@/composables/lookups'
 import type { NodeInfo } from '@/api/types'
 import type { Release, ShellNode } from '@/api/observability'
 import NodeTopology from './NodeTopology.vue'
@@ -22,7 +23,7 @@ async function load() {
   if (inflight) return
   inflight = true
   const results = await Promise.allSettled([
-    auth.has('node:read') ? api.list<NodeInfo>('/nodes', { page_size: 200 }) : Promise.resolve(null),
+    auth.has('node:read') ? fetchFirstPage<NodeInfo>('/nodes') : Promise.resolve(null),
     auth.has('system:update:read') ? api.get<{ nodes: ShellNode[]; primary_node: string }>('/system/upgrades') : Promise.resolve(null),
     auth.has('system:update:read') ? api.get<{ releases: Release[] }>('/system/releases') : Promise.resolve(null),
     auth.has('settings:read') ? api.get<{ enabled: boolean; cpu_threshold_percent: number }>('/system/offload') : Promise.resolve(null),
@@ -33,7 +34,7 @@ async function load() {
     const [n, s, r, o, identity] = results
     visit.value = identity.status === 'fulfilled' ? { entry: identity.value.headers.get('X-Sub2api-Entry-Node')?.trim() || '', core: identity.value.data?.core_node_id || '', boot: identity.value.data?.core_boot_id || '' } : null
     failed.value = n.status === 'rejected' || s.status === 'rejected'
-    if (n.status === 'fulfilled') registered.value = n.value?.items || []
+    if (n.status === 'fulfilled') registered.value = n.value || []
     shellOK.value = s.status === 'fulfilled' && !!s.value
     if (s.status === 'fulfilled' && s.value) { shells.value = s.value.nodes || []; primary.value = s.value.primary_node }
     else if (s.status === 'fulfilled') { shells.value = []; primary.value = '' }

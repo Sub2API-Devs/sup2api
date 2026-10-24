@@ -5,9 +5,9 @@
 // are drafts of the settings form and go out with its single save.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDropdown, SHint, STable, confirm, type MenuAction, type TableColumn } from '@sub2api/ui'
 import GroupPolicyDrawer from './GroupPolicyDrawer.vue'
+import { fetchAllPages } from '@/composables/lookups'
 import { featureDifferenceCount, mergeFeaturePolicy, normalizeRequestPolicy, type FeatureGroup, type RequestPolicy } from './requestPolicy'
 const policies = defineModel<Record<string, FeatureGroup>>({ required: true })
 const props = defineProps<{
@@ -26,13 +26,7 @@ const editing = ref<string | null>(null)
 async function loadGroups() {
   failed.value = false
   try {
-    const all: Array<{ id: number; name: string }> = []
-    for (let page = 1; ; page++) {
-      const result = await api.list<{ id: number; name: string }>('/groups', { page, page_size: 200 })
-      all.push(...result.items)
-      if (!result.paged || !result.items.length || all.length >= result.page.total) break
-    }
-    groups.value = all
+    groups.value = await fetchAllPages<{ id: number; name: string }>('/groups')
   } catch { failed.value = true }
 }
 onMounted(loadGroups)

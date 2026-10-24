@@ -44,10 +44,6 @@ export function riskOf(id: string, fallback?: string): Risk {
   return r in RISK_ORDER ? r : 'high'
 }
 
-export function riskTone(r: string): Tone {
-  return r === 'low' ? 'success' : r === 'medium' ? 'warning' : r === 'high' ? 'warning' : 'danger'
-}
-
 export function riskDotClass(r: string): string {
   switch (r) {
     case 'low':

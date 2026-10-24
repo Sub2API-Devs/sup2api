@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
+import { fetchFirstPage } from '@/composables/lookups'
 import {
   SBadge,
   SButton,
@@ -45,7 +46,7 @@ const roles = ref<Role[]>([])
 async function loadRoles() {
   if (!auth.has('role:read') || roles.value.length) return
   try {
-    roles.value = (await api.list<Role>('/roles', { page_size: 200 })).items
+    roles.value = await fetchFirstPage<Role>('/roles')
   } catch (e) {
     notifyError(e)
   }

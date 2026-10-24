@@ -74,7 +74,6 @@ export default {
     title: 'Validation',
     ok: 'Compiled and smoke-tested',
     pending: 'Waiting for input…',
-    fixErrors: 'Fix the validation errors first',
     warnTitle: 'Confirm high cost',
     warnConfirm: 'The server reported: {list}. Save anyway?',
     costPerMillion: 'Cost of 1M input tokens: {cost}'

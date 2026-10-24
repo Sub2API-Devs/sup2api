@@ -77,10 +77,3 @@ export function parseNodePlugin(raw: unknown): NodePluginState {
   if (typeof raw !== 'string') return {}
   try { const value = JSON.parse(raw); return value && typeof value === 'object' ? value : { state: raw } } catch { return { state: raw } }
 }
-
-/** Positive decimal with at most 8 fraction digits ("12.5", "0.00000001"). */
-export const POSITIVE_DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
-
-export function isPositiveDecimal(v: string): boolean {
-  return POSITIVE_DECIMAL.test(v.trim()) && Number(v) > 0
-}

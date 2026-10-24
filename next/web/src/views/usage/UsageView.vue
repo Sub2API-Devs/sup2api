@@ -13,18 +13,25 @@ const auth = useAuthStore()
 const canGroups = auth.has('group:read')
 const groups = canGroups ? useGroupsLookup().groups : ref<Group[]>([])
 const groupOptions = computed(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
-const records = ref<InstanceType<typeof UsageRecords> | null>(null)
+// The page owns the header; the records component follows `revision` and
+// reports its loading state, so no ref reaches into its methods.
+const revision = ref(0)
+const loading = ref(false)
+function refresh() {
+  revision.value++
+}
 </script>
 
 <template>
   <div>
     <SPageHeader :title="t('usage.title')" :description="t('usage.description')">
       <template #actions>
-        <SButton :loading="records?.loading" icon="refresh" @click="records?.reload()">{{ t('common.refresh') }}</SButton>
+        <SButton :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
     <UsageRecords
-      ref="records"
+      v-model:loading="loading"
+      :revision="revision"
       list-path="/usage"
       summary-path="/usage/summary"
       default-range="today"

@@ -7,6 +7,7 @@ import { SBadge, SButton, SCard, SChoiceCards, SEmpty, SField, SHint, SIcon, SIn
 import type { MarketPlugin, MarketSource, MarketVersion, PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
+import { fetchFirstPage } from '@/composables/lookups'
 import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { consentPath, putReview } from './reviewCache'
@@ -109,9 +110,9 @@ const pickerChoices = computed<ChoiceOption[]>(() =>
 async function loadSources() {
   loadingSources.value = true
   try {
-    const r = await api.list<MarketSource>('/market/sources', { page_size: 200 })
-    sources.value = r.items
-    sourceId.value = (r.items.find((s) => s.enabled) || r.items[0])?.id ?? null
+    const items = await fetchFirstPage<MarketSource>('/market/sources')
+    sources.value = items
+    sourceId.value = (items.find((s) => s.enabled) || items[0])?.id ?? null
   } catch (e) {
     notifyError(e)
   } finally {
@@ -122,8 +123,8 @@ async function loadSources() {
 async function loadInstalled() {
   if (!auth.has('plugin:read')) return
   try {
-    const r = await api.list<PluginSummary>('/plugins', { page_size: 200 })
-    installed.value = Object.fromEntries(r.items.map((p) => [p.key, p]))
+    const items = await fetchFirstPage<PluginSummary>('/plugins')
+    installed.value = Object.fromEntries(items.map((p) => [p.key, p]))
   } catch {
     installed.value = {}
   }

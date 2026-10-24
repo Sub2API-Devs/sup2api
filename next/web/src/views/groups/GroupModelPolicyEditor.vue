@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SChoiceCards, SHint, SInput, type ChoiceOption } from '@sub2api/ui'
 import ModelListEditor from '@/components/models/ModelListEditor.vue'
+import { draftPatterns, mergeDraftPatterns } from './groupModelPolicy'
 
 const props = defineProps<{ modelValue: string[]; mode: 'whitelist' | 'blacklist'; options: string[]; loading?: boolean; unrestrictedAccounts?: number }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string[]): void; (e: 'update:mode', value: 'whitelist' | 'blacklist'): void }>()
@@ -14,14 +15,14 @@ const modeOptions = computed<ChoiceOption[]>(() =>
 )
 const suggestions = computed(() => [...new Set(props.options)])
 function fillGroupModels() {
-  const pending = draft.value.trim().split(/[\s,]+/).filter(Boolean)
+  const pending = draftPatterns(draft.value)
   if (!commit()) return
   emit('update:modelValue', [...new Set([...props.modelValue, ...pending, ...suggestions.value])])
 }
 function commit(): boolean {
-  const parts = draft.value.trim().split(/[\s,]+/).filter(Boolean)
+  const parts = draftPatterns(draft.value)
   if (parts.some(m => m.length > 200)) { error.value = t('groups.patternInvalid'); return false }
-  if (parts.length) emit('update:modelValue', [...new Set([...props.modelValue, ...parts])])
+  if (parts.length) emit('update:modelValue', mergeDraftPatterns(props.modelValue, draft.value))
   draft.value = ''
   error.value = ''
   return true

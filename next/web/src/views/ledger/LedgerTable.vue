@@ -5,12 +5,14 @@ import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import TimeText from '@/components/TimeText.vue'
 import { formatDelta, formatNumber } from '@/utils/format'
+import { useOptionalT } from '@/composables/optionalText'
 import { KIND_TONE } from './kinds'
 
 type Row = LedgerEntry & { user_name?: string; idempotency_key?: string }
 
 const props = withDefaults(defineProps<{ rows: Row[]; loading?: boolean; showUser?: boolean }>(), { showUser: true })
-const { t, te } = useI18n()
+const { t } = useI18n()
+const tr = useOptionalT()
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '120px' }]
@@ -25,7 +27,7 @@ const columns = computed<TableColumn[]>(() => {
 })
 
 function kindLabel(k: string) {
-  return te(`ledger.kinds.${k}`) ? t(`ledger.kinds.${k}`) : k
+  return tr(`ledger.kinds.${k}`, undefined, k)
 }
 
 function deltaCls(v: string) {

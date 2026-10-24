@@ -1,5 +1,5 @@
 import { computed, ref, type ComputedRef } from 'vue'
-import { api, type Query } from '@sub2api/host'
+import { api, type ConfirmOptions, type Query } from '@sub2api/host'
 import { confirm, toast, type SelectOption } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -26,6 +26,23 @@ export async function deleteResource(path: string, query?: Query, done?: () => u
 export async function deleteWithConfirm(path: string, message: string, done?: () => unknown): Promise<boolean> {
   if (!(await confirm({ title: t('common.delete'), message, danger: true }))) return false
   return deleteResource(path, undefined, done)
+}
+
+/**
+ * A confirmed action that is not a DELETE (revoke, purge, …): asks `opts`,
+ * runs `run` and then `done`; a failure is toasted. Resolves true once `run`
+ * succeeded, false when cancelled or failed.
+ */
+export async function confirmAction<T>(opts: ConfirmOptions, run: () => Promise<T>, done?: (result: T) => unknown): Promise<boolean> {
+  if (!(await confirm(opts))) return false
+  try {
+    const result = await run()
+    await done?.(result)
+    return true
+  } catch (e) {
+    notifyError(e)
+    return false
+  }
 }
 
 /** PATCHes `path` with the opposite of `status` (active ⇄ disabled), toasts and runs `done`. */

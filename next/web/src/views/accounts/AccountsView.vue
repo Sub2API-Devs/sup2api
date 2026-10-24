@@ -4,14 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
-import type { Account, AccountAction, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
+import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
-import { errorMessage, notifyError } from '@/utils/errors'
-import { formatDateTime, formatRelative, formatTime } from '@/utils/format'
+import { notifyError } from '@/utils/errors'
+import { formatCompact, formatDateTime, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
@@ -25,8 +25,8 @@ import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
-import { TEST_CONCURRENCY, lastTestOf } from './accountTest'
-import { runPool } from './pool'
+import { rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
+import { useBatchTest } from './useBatchTest'
 import { subscriptionLabel } from './subscription'
 import { hasBalance, hasQuota, refreshAccountCredentials, resetAccountStatus, useBalanceRefresh, useQuotaRefresh } from './accountQuota'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
@@ -98,18 +98,6 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right', width: '210px' }
 ])
 
-/** 1234 -> "1.2K", 3_200_000 -> "3.2M"; small numbers stay as they are. */
-function abbrev(n: number): string {
-  if (!Number.isFinite(n)) return '—'
-  const a = Math.abs(n)
-  if (a >= 1_000_000) return `${trimZero(n / 1_000_000)}M`
-  if (a >= 1_000) return `${trimZero(n / 1_000)}K`
-  return String(n)
-}
-function trimZero(v: number): string {
-  return v.toFixed(1).replace(/\.0$/, '')
-}
-
 type LimitCell = { key: string; label: string; text: string; hit: boolean }
 /** Configured limits of an account with the current window usage (CONTRACTS §18.4). */
 function limitsOf(a: Account): LimitCell[] {
@@ -120,7 +108,7 @@ function limitsOf(a: Account): LimitCell[] {
   ] as const
   for (const [key, limit] of pairs) {
     const used = a.rate_usage?.[key] ?? 0
-    out.push({ key, label: key.toUpperCase(), text: `${abbrev(used)}/${limit ? abbrev(limit) : '∞'}`, hit: !!limit && used >= limit })
+    out.push({ key, label: key.toUpperCase(), text: `${formatCompact(used)}/${limit ? formatCompact(limit) : '∞'}`, hit: !!limit && used >= limit })
   }
   return out
 }
@@ -262,68 +250,11 @@ function onTestUpdated(saved: Account) {
 }
 
 // ---------------------------------------------------------------- batch test (selected rows, plugin default model each)
-const picked = ref(new Set<number>())
-const batchTesting = ref(new Set<number>())
-const batchRunning = ref(false)
-const batchDone = ref(0)
-const batchTotal = ref(0)
-let batchCtrl: AbortController | null = null
 const testable = (a: Account) => canTest(a) && !a.orphaned
-const pageTestable = computed(() => list.items.value.filter(testable))
-const allPicked = computed(() => pageTestable.value.length > 0 && pageTestable.value.every((a) => picked.value.has(a.id)))
-const somePicked = computed(() => !allPicked.value && pageTestable.value.some((a) => picked.value.has(a.id)))
-
-function pickRow(id: number, v: boolean) {
-  const next = new Set(picked.value)
-  if (v) next.add(id)
-  else next.delete(id)
-  picked.value = next
-}
-function pickPage(v: boolean) {
-  const next = new Set(picked.value)
-  for (const a of pageTestable.value) {
-    if (v) next.add(a.id)
-    else next.delete(a.id)
-  }
-  picked.value = next
-}
-
-async function batchTest() {
-  const ids = [...picked.value]
-  if (batchRunning.value || !ids.length) return
-  batchRunning.value = true
-  batchDone.value = 0
-  batchTotal.value = ids.length
-  batchCtrl = new AbortController()
-  let ok = 0
-  let failed = 0
-  try {
-    await runPool(ids, TEST_CONCURRENCY, async (id) => {
-      batchTesting.value = new Set(batchTesting.value).add(id)
-      try {
-        const r = await api.post<AccountTestResult>(`/accounts/${id}/test`, {}, { signal: AbortSignal.timeout(120000) })
-        if (r.ok) ok++
-        else failed++
-        onTested(id, lastTestOf(r, ''))
-      } catch (e) {
-        failed++
-        onTested(id, { at: new Date().toISOString(), ok: false, latency_ms: 0, model: '', message: errorMessage(e) })
-      } finally {
-        const next = new Set(batchTesting.value)
-        next.delete(id)
-        batchTesting.value = next
-        batchDone.value++
-      }
-    }, batchCtrl.signal)
-  } finally {
-    batchRunning.value = false
-    batchCtrl = null
-  }
-  toast(t('accounts.batchTest.done', { ok, fail: failed }), failed ? 'warning' : 'success')
-}
-function stopBatch() {
-  batchCtrl?.abort()
-}
+const {
+  picked, batchTesting, batchRunning, batchDone, batchTotal,
+  pageTestable, allPicked, somePicked, pickRow, pickPage, batchTest, stopBatch
+} = useBatchTest({ items: computed(() => list.items.value), testable, tested: onTested })
 
 // ---------------------------------------------------------------- reveal credentials
 const revealOpen = ref(false)
@@ -492,22 +423,24 @@ async function runPluginAction(a: Account, action: AccountAction) {
   }
 }
 
-function actionsFor(a: Account) {
-  return [
-    { key: 'detail', label: t('common.detail') },
-    { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !canReveal(a) || a.orphaned },
-    { key: 'reset-status', label: t('accounts.resetStatus'), hidden: !canResetStatus(a) },
-    { key: 'refresh-credentials', label: t('accounts.credRefresh.action'), hidden: !canRefreshCreds(a) },
-    ...(a.actions || []).map((x) => ({ key: `plugin:${x.plugin_key}:${x.id}`, label: lt(x.label) || x.id, hidden: !canUpdate(a) || a.orphaned || runningActions.value.has(a.id) })),
-    { key: 'delete', label: t('common.delete'), danger: true, hidden: !canDelete(a) }
-  ]
+const rowActionDeps: RowActionDeps = {
+  t,
+  canReveal,
+  canResetStatus,
+  canRefreshCreds,
+  canUpdate,
+  canDelete,
+  running: (a) => runningActions.value.has(a.id),
+  openDetail,
+  reveal,
+  resetStatus,
+  refreshCreds,
+  remove,
+  runPluginAction
 }
-
-const ROW_ACTIONS: Record<string, (a: Account) => unknown> = { detail: openDetail, reveal, 'reset-status': resetStatus, 'refresh-credentials': refreshCreds, delete: remove }
+const actionsFor = (a: Account) => rowActions(a, rowActionDeps)
 function onAction(a: Account, key: string) {
-  const action = a.actions?.find((x) => `plugin:${x.plugin_key}:${x.id}` === key)
-  if (action) void runPluginAction(a, action)
-  else void ROW_ACTIONS[key]?.(a)
+  void runRowAction(a, key, rowActionDeps)
 }
 
 const statusOptions = ['active', 'auto_disabled', 'disabled', 'error']
