@@ -1,6 +1,6 @@
 # 2026-10-24 代码质量审核：汇总
 
-审的是 `f546fa31a..839d1c22e`（20 个提交，2026-10-23 审核的修复、Worker 只运行请求命令、CLI v23、删账号可选保留运行资源），按当前代码审，重点是这段新写或重写的部分；之后按审核修改的代码也在工作树里（未提交），本汇总按工作树里的代码核对过。准则是复用、解耦、简洁、低嵌套，以及顺带发现的真问题。五份分报告各有"处理结果"一节，逐条写了做法和审核不准的地方。
+审的是 `f546fa31a..839d1c22e`（20 个提交，2026-10-23 审核的修复、Worker 只运行请求命令、CLI v23、删账号可选保留运行资源），按当前代码审，重点是这段新写或重写的部分；按审核做的修改在 03580970d..bd4e19fa2。准则是复用、解耦、简洁、低嵌套，以及顺带发现的真问题。五份分报告各有"处理结果"一节，逐条写了做法和审核不准的地方。
 
 ## 五个范围
 
@@ -60,4 +60,4 @@
 - 核心旧共享运行时（ssh/local，`attempt.resolveShared`，§53.9）：是否删除待用户决定，删除时整段删掉即可。
 - B12（2026-10-23 审核）：直连模式可访问宿主公网 IP，只分析过，待用户决定。
 
-其余顺手可做的小尾巴：核心 `requestPolicyCapabilities` 在 worker 来源时直接要求 v2、`cli_version.go` 改用 `features.ValidCLIVersion`（W2、W10）；`features.BuildBillingFields`（K20）；旧日志过期后删 `logFileKind` 的旧分类（W14⑤）；Worker 的发布渠道自动检查是否保留（W20）；`AccountDeletionOptions` 改带 `RetainDays`（K10）；核心 `errors.go` 里 `resource_in_use` 的说明文字补上"或有外部资源占用了运行环境的名字"。
+其余顺手可做的小尾巴：旧日志过期后删 `logFileKind` 的旧分类（W14⑤）；Worker 的发布渠道自动检查是否保留（W20）；`AccountDeletionOptions` 改带 `RetainDays`（K10）。已在汇总后补做：核心改用 `features.ValidCLIVersion`（W10）、`features.BuildBillingFields`（K20）、`resource_in_use` 的说明文字补上同名资源，以及控制台原因表补上 `resource_in_use` 与 `runtime_cleanup_failed`。核心在 worker 来源时仍要求 `build_attachment_sources_v1`：v1 现在只在 CLI 支持 v2 时报，两者等价，没有改（W2）。
