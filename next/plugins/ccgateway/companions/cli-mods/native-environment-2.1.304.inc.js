@@ -1,8 +1,32 @@
 // Inserted only into the independently hash-bound 2.1.304 core module.
 // All readers and renderers below are native bindings verified for that build.
+//
+// The snapshot keys this reader fills: the fields the native environment
+// collector (Wkt) builds, which zkt then renders (test/native-environment.test.mjs
+// checks them against the recovered Wkt), and the one key the patched renderer
+// reads (`ccgatewayProxyText`: the proxy note as it was or was not requested).
+// Wkt itself is not called: it reads every field, and one failing reader would
+// fail the whole snapshot instead of leaving that field unavailable, while a
+// request that wants one field must not run the others (Git detection in
+// particular).
+export const ccgatewayEnvironmentSnapshotKeys = ['workingDirectory', 'isWorktree', 'isGitRepo', 'additionalWorkingDirectories', 'platform', 'shell', 'osVersion', 'scratchpadDirectory', 'githubCli'];
+// The on-demand readers, in the native snapshot's order: the requested field
+// that needs it, the snapshot key it fills, and its reader.
+const ccgatewayEnvironmentReaders = context => [
+  ['git_repository', 'isGitRepo', () => gH()],
+  ['worktree', 'isWorktree', () => Cl() !== null || hK(context.workingDirectory)],
+  ['additional_directories', 'additionalWorkingDirectories', () => [...context.additionalWorkingDirectories]],
+  ['shell', 'shell', () => uoo()],
+  ['os_version', 'osVersion', () => poo()],
+  ['scratchpad_directory', 'scratchpadDirectory', () => moo()],
+  ['github_cli', 'githubCli', () => Nkt()],
+];
 export async function ccgatewayEnvironment(context, selected) {
   const wanted = new Set(selected);
   const unavailableFields = [];
+  // The proxy note is rendered only when it is requested: the patched renderer
+  // reads ccgatewayProxyText (null suppresses the line), so content-policy can
+  // parse the snapshot without an unrequested proxy paragraph.
   const override = cle();
   if (override !== undefined) {
     let proxy = null;
@@ -10,37 +34,29 @@ export async function ccgatewayEnvironment(context, selected) {
       try { proxy = l1(override) ? ule(override) : foo(); }
       catch { unavailableFields.push('agent_proxy'); }
     }
-    return {
-      text: zkt({ ...override, ccgatewayProxyText: proxy }),
-      fieldText: { agent_proxy: proxy },
-      unavailableFields,
-    };
+    return { text: zkt({ ...override, ccgatewayProxyText: proxy }), fieldText: { agent_proxy: proxy }, unavailableFields };
   }
-  const snapshot = {
-    platform: a.platform, additionalWorkingDirectories: [],
-    ccgatewayProxyText: null,
-  };
-  async function read(field, key, reader) {
-    if (!wanted.has(field)) return;
-    try { snapshot[key] = await reader(); }
-    catch { unavailableFields.push(field); }
+  let proxy = null;
+  if (wanted.has('agent_proxy')) {
+    try { proxy = foo(); }
+    catch { unavailableFields.push('agent_proxy'); }
   }
+  const snapshot = { platform: a.platform, additionalWorkingDirectories: [], ccgatewayProxyText: proxy };
+  // primary_directory, git_repository and worktree are facts about the working
+  // directory: left absent unless one of them is wanted.
   if (['primary_directory', 'git_repository', 'worktree'].some(field => wanted.has(field))) {
     snapshot.workingDirectory = context.workingDirectory;
     snapshot.isGitRepo = false;
     snapshot.isWorktree = false;
   }
-  await read('git_repository', 'isGitRepo', () => gH());
-  await read('worktree', 'isWorktree', () => Cl() !== null || hK(context.workingDirectory));
-  await read('additional_directories', 'additionalWorkingDirectories', () => [...context.additionalWorkingDirectories]);
-  await read('shell', 'shell', () => uoo());
-  await read('os_version', 'osVersion', () => poo());
-  await read('scratchpad_directory', 'scratchpadDirectory', () => moo());
-  await read('github_cli', 'githubCli', () => Nkt());
-  await read('agent_proxy', 'ccgatewayProxyText', () => foo());
+  for (const [field, key, read] of ccgatewayEnvironmentReaders(context)) {
+    if (!wanted.has(field)) continue;
+    try { snapshot[key] = await read(); }
+    catch { unavailableFields.push(field); }
+  }
   return {
     text: zkt(snapshot),
-    fieldText: { agent_proxy: snapshot.ccgatewayProxyText },
+    fieldText: { agent_proxy: proxy },
     unavailableFields,
   };
 }

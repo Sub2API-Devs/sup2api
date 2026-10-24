@@ -12,7 +12,11 @@ const gatewayContext = (text, renderedRole) => record('attachment', {
   rendered: [{ content: text }], renderedRole,
 });
 
-function systemRecord(message) {
+// systemRecord is one api_system record: the native factory (core's ile,
+// exported as ccgatewaySystemRecord; the request build passes it in) forms the
+// record, and the fields CC reads for tool changes and scoping are added here.
+function systemRecord(message, nativeRecord) {
+  if (typeof nativeRecord !== 'function') fail('native system record factory is required');
   const blocks = toBlocks(message.content);
   if (!Array.isArray(blocks)) fail('system content must be text or a block array');
   const text = [], additions = [], removals = [], definitions = Object.create(null);
@@ -31,7 +35,7 @@ function systemRecord(message) {
   }
   // Internal CC records use string content; retain the already-rendered wire
   // blocks and lifecycle fields for the native Xyr serialization boundary.
-  const result = record('api_system', { message: { role: 'system', content: text.join('\n') }, ccgatewayWireSystem: structuredClone(message) });
+  const result = { ...nativeRecord(text.join('\n')), ccgatewayWireSystem: structuredClone(message) };
   if (additions.length) result.toolAdditions = additions;
   if (removals.length) result.toolRemovals = removals;
   if (Object.keys(definitions).length) result.toolDefinitions = definitions;
@@ -158,7 +162,7 @@ function placedAttachments(attachments, messageCount) {
 }
 
 // messageRecord is one message as CC's record, its references resolved.
-function messageRecord(source, messageIndex, { model, take, reminder, preserveContent }) {
+function messageRecord(source, messageIndex, { model, take, reminder, preserveContent, nativeSystemRecord }) {
   let resolved = source;
   if (object(source) && typeof source.attachment === 'string') {
     if (Object.keys(source).length !== 1) fail('system attachment reference cannot contain message fields');
@@ -167,7 +171,7 @@ function messageRecord(source, messageIndex, { model, take, reminder, preserveCo
   }
   if (!object(resolved) || !['user', 'assistant', 'system'].includes(resolved.role)) fail(`invalid role at messages[${messageIndex}]`);
   const message = structuredClone(resolved);
-  if (message.role === 'system') return systemRecord(message);
+  if (message.role === 'system') return systemRecord(message, nativeSystemRecord);
   message.content = resolveContent(message.content, reminder, preserveContent);
   if (typeof message.content !== 'string' && !Array.isArray(message.content)) fail(`invalid content at messages[${messageIndex}]`);
   const wire = preserveContent && { ccgatewayWireMessage: structuredClone(message) };
@@ -177,13 +181,13 @@ function messageRecord(source, messageIndex, { model, take, reminder, preserveCo
 
 // expandReferences gives the messages as CC's records, each followed by the
 // attachments placed after it; every extracted attachment must be used.
-function expandReferences(components, renderAttachment, preserveContent) {
+function expandReferences(components, renderAttachment, preserveContent, nativeSystemRecord) {
   const attachments = components.attachments ?? [];
   if (!Array.isArray(attachments)) fail('attachments must be an array');
   const { take, allUsed } = referenceTable(attachments);
   const reminder = id => renderReminder(take(id, 'reminder'), renderAttachment);
   const byMessage = placedAttachments(attachments, components.messages.length);
-  const context = { model: components.model, take, reminder, preserveContent };
+  const context = { model: components.model, take, reminder, preserveContent, nativeSystemRecord };
   const messages = [];
   for (const [messageIndex, source] of components.messages.entries()) {
     messages.push(messageRecord(source, messageIndex, context));
@@ -233,10 +237,11 @@ function splitTools(tools) {
 
 // prepareBuildInput resolves the components: the request's fields, its
 // messages as CC records (the Worker's references resolved, attachments
-// placed), the system prompt and the tools.
-export function prepareBuildInput(components, renderAttachment, { preserveContent = false } = {}) {
+// placed), the system prompt and the tools. nativeSystemRecord is the native
+// api_system record factory (core's ile), used for every system message.
+export function prepareBuildInput(components, renderAttachment, { preserveContent = false, systemRecord: nativeSystemRecord } = {}) {
   const { parameters, systemPrompt, systemBlocks } = parseComponents(components, preserveContent);
-  const messages = expandReferences(components, renderAttachment, preserveContent);
+  const messages = expandReferences(components, renderAttachment, preserveContent, nativeSystemRecord);
   if (preserveContent) validateToolPairs(messages);
   const { customTools, extraToolSchemas } = splitTools(components.tools);
   // stream goes upstream only when the client sent it (absent means false).
@@ -258,10 +263,10 @@ export function wireMessages(records, renderAttachment) {
 
 // wireRecords are wire messages (references already resolved) as CC records,
 // each keeping its wire message; every tool_use must be answered.
-export function wireRecords(messages, model) {
+export function wireRecords(messages, model, nativeSystemRecord) {
   if (!messages.length) fail('messages must be a non-empty array');
   const none = () => fail('attachment reference is missing, duplicated or has the wrong kind');
-  const records = messages.map((message, index) => messageRecord(message, index, { model, take: none, reminder: none, preserveContent: true }));
+  const records = messages.map((message, index) => messageRecord(message, index, { model, take: none, reminder: none, preserveContent: true, nativeSystemRecord }));
   validateToolPairs(records);
   return records;
 }

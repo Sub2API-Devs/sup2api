@@ -6,9 +6,11 @@ import { mBr } from './chunk-4qs43hr1.js';
 import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
-import { parseRequestOptions, parseRequestJSON, normalizeBetas, placeBetas } from './ccgateway-request-options.js';
+import { parseRequestOptions, parseRequestJSON } from './ccgateway-request-options.js';
+import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
+import { betaOrder } from './ccgateway-request-betas.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
-import { readRequestAgent, resolveAgentContext, keepClientUserAgent } from './ccgateway-request-agent.js';
+import { readRequestAgent, resolveAgentContext, setClientUserAgent } from './ccgateway-request-agent.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
@@ -35,52 +37,60 @@ references to preserve message/block positions. Generation fields go in paramete
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
-// runRequestCommand runs `claude request`. natives are the patched entry's
-// native bindings (request-entry.inc.js); without them the request is CC's
-// native main thread and direct forwards the body unchanged.
+// runRequestCommand runs `claude request`. natives are the native bindings its
+// support module gathers (request-entry.js: the identity lines, the billing
+// header, the direct builder and the client's kind of request); without them,
+// as in a unit test or when run by hand, the request is CC's native main thread
+// and direct forwards the body unchanged.
 export async function runRequestCommand(args, natives = {}) {
-  const controller = new AbortController(), signal = controller.signal;
-  // phase names the step that failed, for the error frame (request-error.js).
-  const state = { phase: 'input', responseStarted: false };
-  const run = { interrupted: false, timedOut: false, outputError: undefined, deadline: undefined, response: undefined };
+  const controller = new AbortController();
+  const ctx = {
+    state: { phase: 'input', responseStarted: false },
+    run: { interrupted: false, timedOut: false, outputError: undefined, deadline: undefined, response: undefined },
+    controller, signal: controller.signal, options: undefined, apiKey: undefined, natives,
+  };
   const customHeaders = process.env.ANTHROPIC_CUSTOM_HEADERS;
-  const listeners = installListeners(controller, run);
+  const listeners = installListeners(controller, ctx.run);
   try {
-    const options = parseRequestOptions(args);
-    if (options.help) { await write(process.stdout, help); return 0; }
-    // A reused metadata path must not describe an earlier successful request.
-    if (options.meta) {
-      state.phase = 'output';
-      await fs.rm(options.meta, { force: true });
-      await fs.rm(options.meta + '.error-body', { force: true });
-      state.phase = 'input';
-    }
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    ctx.options = parseRequestOptions(args);
+    if (ctx.options.help) { await write(process.stdout, help); return 0; }
+    await clearMeta(ctx);
+    ctx.apiKey = process.env.ANTHROPIC_API_KEY;
     // Both sF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
-    const request = await readRequest(state, options, signal, controller, run, { apiKey, natives });
-    state.phase = 'transport';
-    run.response = await openModelRequest(request.outgoing, signal, init => openClient(init, apiKey, request.agent), mle);
-    if (!run.response.ok) {
-      await writeHttpError(state, run.response, options.meta, signal);
+    const { outgoing, agent } = await readRequest(ctx);
+    ctx.state.phase = 'transport';
+    ctx.run.response = await openModelRequest(outgoing, ctx.signal, init => openClient(init, ctx.apiKey, agent), mle);
+    if (!ctx.run.response.ok) {
+      await writeHttpError(ctx, ctx.run.response);
       return 2;
     }
-    state.phase = 'output';
-    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: run.response.status, statusText: run.response.statusText, headers: run.response.headers, request: { mode: options.mode, ...run.response.request } }, null, 2) + '\n');
-    await streamResponse(state, run.response, signal);
+    ctx.state.phase = 'output';
+    if (ctx.options.meta) await fs.writeFile(ctx.options.meta, JSON.stringify({ status: ctx.run.response.status, statusText: ctx.run.response.statusText, headers: ctx.run.response.headers, request: { mode: ctx.options.mode, ...ctx.run.response.request } }, null, 2) + '\n');
+    await streamResponse(ctx, ctx.run.response);
     return 0;
   } catch (error) {
-    if (run.outputError?.code === 'EPIPE') return 0;
-    await write(process.stderr, encodeErrorFrame(localErrorFrame(error, { phase: state.phase, timedOut: run.timedOut, interrupted: run.interrupted, responseStarted: state.responseStarted })));
-    return run.interrupted ? 130 : 1;
+    if (ctx.run.outputError?.code === 'EPIPE') return 0;
+    await write(process.stderr, encodeErrorFrame(localErrorFrame(error, { phase: ctx.state.phase, timedOut: ctx.run.timedOut, interrupted: ctx.run.interrupted, responseStarted: ctx.state.responseStarted })));
+    return ctx.run.interrupted ? 130 : 1;
   } finally {
-    clearTimeout(run.deadline);
-    if (run.response) await cancelModelResponse(run.response);
+    clearTimeout(ctx.run.deadline);
+    if (ctx.run.response) await cancelModelResponse(ctx.run.response);
     removeListeners(listeners);
     if (customHeaders === undefined) delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     else process.env.ANTHROPIC_CUSTOM_HEADERS = customHeaders;
   }
+}
+
+// clearMeta runs first so a reused metadata path cannot describe an earlier
+// successful request.
+async function clearMeta(ctx) {
+  if (!ctx.options.meta) return;
+  ctx.state.phase = 'output';
+  await fs.rm(ctx.options.meta, { force: true });
+  await fs.rm(ctx.options.meta + '.error-body', { force: true });
+  ctx.state.phase = 'input';
 }
 
 // installListeners is the command's interruption, its output-error and its
@@ -102,50 +112,52 @@ function removeListeners({ interrupt, failedOutput }) {
 }
 
 // readRequest is the body as it arrived and the request to send, and starts
-// the overall deadline. apiKey was captured before the custom headers were
-// removed (readInput may block on stdin).
-async function readRequest(state, options, signal, controller, run, { apiKey, natives }) {
-  const rawBody = await readInput(options.input, signal);
-  const body = parseRequestJSON(rawBody, options.mode);
-  // checkModelRequest also bounds --timeout-ms.
-  const invalid = checkModelRequest({ body, headers: options.headers, timeoutMs: options.timeoutMs });
+// the overall deadline. The input is checked here, once: the transport sends
+// what it is given (openModelRequest). apiKey was captured before the custom
+// headers were removed (readInput may block on stdin).
+async function readRequest(ctx) {
+  const rawBody = await readInput(ctx.options.input, ctx.signal);
+  const body = parseRequestJSON(rawBody, ctx.options.mode);
+  const invalid = checkModelRequest({ body, headers: ctx.options.headers, timeoutMs: ctx.options.timeoutMs });
   if (invalid) throw Error(invalid);
-  const timeout = options.timeoutMs ?? defaultTimeout;
-  run.deadline = setTimeout(() => { run.timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
-  run.deadline.unref?.();
-  return prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives);
+  const timeout = ctx.options.timeoutMs ?? defaultTimeout;
+  ctx.run.deadline = setTimeout(() => { ctx.run.timedOut = true; ctx.controller.abort(new Error('request timed out')); }, timeout);
+  ctx.run.deadline.unref?.();
+  return prepareOutgoing(ctx, { body, rawBody, timeout });
 }
 
 const messagesOf = body => Array.isArray(body.messages) ? body.messages : [];
 
-// prepareOutgoing is the request to send, as the mode makes it, and the
-// client's kind of request (request-agent.js) it is sent as.
-async function prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives) {
+// prepareOutgoing is the request to send, as the mode makes it, the client's
+// kind of request (request-agent.js) it is sent as, and its betas.
+async function prepareOutgoing(ctx, incoming) {
+  const { options, natives } = ctx;
   const { oauthBeta, agentNative } = natives;
   const resolveAgent = agentResolver(agentNative);
-  let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout }, agent;
+  let outgoing = { body: incoming.body, rawBody: incoming.rawBody, headers: options.headers, timeoutMs: incoming.timeout };
+  let agent, clientBetas, addedBetas = [];
   if (options.mode === 'direct') {
-    agent = resolveAgent?.({ billing: agentNative.requestBilling(body.system), prompt: agentNative.prompt(messagesOf(body)) });
-    outgoing = await prepareDirect(state, outgoing, agent, natives);
-  } else ({ outgoing, agent } = await prepareBuild(state, body, options.headers, signal, resolveAgent, { ...natives, apiKey, timeout }));
+    agent = resolveAgent?.({ billing: agentNative.requestBilling(incoming.body.system), prompt: agentNative.prompt(messagesOf(incoming.body)) });
+    outgoing = await prepareDirect(ctx, outgoing, agent);
+    clientBetas = normalizeBetas(options.headers['anthropic-beta']);
+  } else ({ outgoing, agent, clientBetas, addedBetas } = await prepareBuild(ctx, incoming.body, resolveAgent));
   if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
   // A request sent with the client's own header keeps the client's User-Agent
   // (build reads the client's system from its components).
-  keepClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? body.systemPrompt : body.system), agentNative?.leadingBilling(outgoing.body.system));
-  const order = natives.betaOrder?.(outgoing.body?.model) ?? [];
-  const betas = clientOrderedBetas(options, body, outgoing.headers?.['anthropic-beta'], order);
+  setClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? incoming.body.systemPrompt : incoming.body.system), agentNative?.leadingBilling(outgoing.body.system));
+  const betas = requestBetas(outgoing.body?.model, clientBetas, [...addedBetas, ...(ctx.apiKey ? [] : [oauthBeta])]);
   if (betas.length && !mBr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
-  outgoing.headerPolicy = { apiKey, betas, oauthBeta, betaOrder: order, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+  outgoing.headerPolicy = { apiKey: ctx.apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
   return { outgoing, agent };
 }
 
-// clientOrderedBetas keeps the client's betas in the client's order and puts
-// the ones the request adds (build: CC's per-request betas such as the 1-hour
-// cache) where CC itself writes them.
-function clientOrderedBetas(options, body, outgoingBetas, order) {
-  const client = normalizeBetas(options.headers['anthropic-beta'], options.mode === 'build' ? body.parameters?.betas : undefined);
-  const all = normalizeBetas(outgoingBetas);
-  return placeBetas(all.filter(beta => client.includes(beta)), all.filter(beta => !client.includes(beta)), order);
+// requestBetas is the beta list once: the client's betas keep the client's
+// order, and the ones the request adds (build's per-request betas, a login's)
+// go where Claude Code writes them. The native order is computed only when
+// something is added; without it the beta is appended, as v24 did.
+function requestBetas(model, client, additions) {
+  const missing = [...new Set(additions.filter(beta => beta && !client.includes(beta)))];
+  return missing.length ? finalBetas(client, missing, betaOrder(model)) : [...client];
 }
 
 // agentResolver resolves the client's kind of request from the Worker's agent
@@ -173,10 +185,11 @@ async function readInput(input, signal) {
 // (2026-10-23, level none): a missing header is filled as the main thread's,
 // a missing field or one the Worker owns gets the native value, and only with
 // the Worker's context; without it, as when run by hand, the body goes as it is.
-async function prepareDirect(state, outgoing, agent, { directBuild, agentNative }) {
+async function prepareDirect(ctx, outgoing, agent) {
+  const { agentNative, directBuild } = ctx.natives;
   const policy = validateDirectPolicy(process.env.CCG_DIRECT_POLICY);
-  if (!policy || !directBuild) return outgoing;
-  state.phase = 'build';
+  if (!policy || !agentNative || !directBuild) return outgoing;
+  ctx.state.phase = 'build';
   const { body, rawBody } = outgoing;
   // The request's entrypoint, the one its header will carry, is set the way
   // CC sets it for a request (setEntrypointOnRequests): the native header and
@@ -190,20 +203,21 @@ async function prepareDirect(state, outgoing, agent, { directBuild, agentNative 
   return sent === rawBody ? outgoing : { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
 }
 
-// prepareBuild has CC build the request from the components.
-async function prepareBuild(state, body, headers, signal, resolveAgent, { identityBuild, prefixBuild, apiKey, timeout }) {
-  state.phase = 'build';
+// prepareBuild has CC build the request from the components. It returns the
+// client's betas and the ones the build adds, so the command places them once.
+async function prepareBuild(ctx, body, resolveAgent) {
+  ctx.state.phase = 'build';
   const { buildRequest } = await import('./ccgateway-request-build.js');
-  const { identityLine, agent, ...built } = await buildRequest(body, headers, signal, resolveAgent);
-  const outgoing = { ...built, timeoutMs: timeout };
+  const { identityLine, agent, clientBetas, addedBetas, ...built } = await buildRequest(body, ctx.options.headers, ctx.signal, resolveAgent);
+  const outgoing = { ...built, timeoutMs: ctx.options.timeoutMs ?? defaultTimeout };
   // Build always invents metadata; the identity source decides what the
   // upstream request really carries, and a client that sent none gets none.
-  if (identityBuild) outgoing.body = identityBuild(outgoing.body, body.parameters?.metadata);
+  if (ctx.natives.identityBuild) outgoing.body = ctx.natives.identityBuild(outgoing.body, body.parameters?.metadata);
   // OAuth only: upstream requires the header or Claude Code's identity line
   // first; the line follows the request's entrypoint. Direct is a pure
   // passthrough and changes nothing (2026-10-21 decision).
-  if (!apiKey && prefixBuild) outgoing.body = prefixBuild(outgoing.body, identityLine);
-  return { outgoing, agent };
+  if (!ctx.apiKey && ctx.natives.prefixBuild) outgoing.body = ctx.natives.prefixBuild(outgoing.body, identityLine);
+  return { outgoing, agent, clientBetas, addedBetas };
 }
 
 // openClient is CC's own authenticated client (sF) for the client's kind of
@@ -219,22 +233,22 @@ async function openClient(init, apiKey, agent) {
 
 // readErrorBody reads an HTTP error body whole: into <meta>.error-body when
 // there is a metadata path, else in memory; the preview is its first bytes.
-async function readErrorBody(state, response, meta, signal) {
+async function readErrorBody(ctx, response, meta) {
   const parts = [], preview = [];
   let size = 0, previewBytes = 0, file;
   try {
-    state.phase = 'output';
+    ctx.state.phase = 'output';
     if (meta) file = await fs.open(meta + '.error-body', 'wx', 0o600);
     for (let done = false; !done;) {
-      state.phase = 'transport';
-      const part = await readModelResponse(response, signal, true);
+      ctx.state.phase = 'transport';
+      const part = await readModelResponse(response, ctx.signal, true);
       const bytes = Buffer.from(part.bytes);
       size += bytes.length;
       if (previewBytes < maxErrorBody) {
         const sample = bytes.subarray(0, maxErrorBody - previewBytes);
         preview.push(sample); previewBytes += sample.length;
       }
-      state.phase = 'output';
+      ctx.state.phase = 'output';
       if (file) await file.writeFile(bytes);
       else parts.push(bytes);
       done = part.done;
@@ -245,23 +259,23 @@ async function readErrorBody(state, response, meta, signal) {
 
 // writeHttpError reports an HTTP error as a stderr frame, with the body's
 // bytes beside it or inside it.
-async function writeHttpError(state, response, meta, signal) {
-  const { preview, size, parts } = await readErrorBody(state, response, meta, signal);
+async function writeHttpError(ctx, response) {
+  const { preview, size, parts } = await readErrorBody(ctx, response, ctx.options.meta);
   const frame = httpErrorFrame(response, preview);
   delete frame.body;
   frame.bodyBytes = size;
-  if (meta) frame.bodyFile = true;
+  if (ctx.options.meta) frame.bodyFile = true;
   else frame.bodyBase64 = Buffer.concat(parts).toString('base64');
   await write(process.stderr, encodeErrorFrame(frame));
 }
 
 // streamResponse copies a successful response to stdout as it arrives.
-async function streamResponse(state, response, signal) {
+async function streamResponse(ctx, response) {
   for (let done = false; !done;) {
-    state.phase = 'transport';
-    const part = await readModelResponse(response, signal);
-    state.phase = 'output';
-    if (part.text) { state.responseStarted = true; await write(process.stdout, part.text, signal); }
+    ctx.state.phase = 'transport';
+    const part = await readModelResponse(response, ctx.signal);
+    ctx.state.phase = 'output';
+    if (part.text) { ctx.state.responseStarted = true; await write(process.stdout, part.text, ctx.signal); }
     done = part.done;
   }
 }

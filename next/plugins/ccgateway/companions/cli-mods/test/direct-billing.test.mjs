@@ -14,7 +14,11 @@ import { vocabulary } from './vocabulary.mjs';
 const native = 'x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=sdk-cli; cch=00000; cc_prompt_id=p; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;';
 const H = vocabulary.billingHeader;
 const identity = 'You are a Claude agent, built on Anthropic\'s Claude Agent SDK.';
-const send = (raw, policy = {}) => applyDirectBilling(raw, JSON.parse(raw), { policy, billingHeader: H, nativeBilling: () => native });
+// The request command sets the request's entrypoint natively
+// (setEntrypointOnRequests) before CC generates its header, so the CLI's header
+// carries the configured entrypoint already; the stand-in does the same.
+const nativeFor = policy => native.replace('cc_entrypoint=sdk-cli;', `cc_entrypoint=${policy.build_billing_entrypoint ?? 'sdk-cli'};`);
+const send = (raw, policy = {}) => applyDirectBilling(raw, JSON.parse(raw), { policy, billingHeader: H, nativeBilling: () => nativeFor(policy) });
 const system = raw => JSON.parse(raw).system;
 
 // The body is the client's: a complete header that opens the system leaves it
@@ -30,8 +34,8 @@ test('a complete leading header leaves the body byte for byte', () => {
 test('a missing header goes first; nothing else is added and the rest of the body is untouched', () => {
   const raw = '{"model":"m",\n  "n":12345678901234567890,\n  "system":[{"type":"text","text":"Be brief.","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hi"}]}';
   assert.equal(send(raw), raw.replace('"system":[', '"system":[' + JSON.stringify({ type: 'text', text: native }) + ','));
-  // The configured entrypoint is the one written.
-  assert.deepEqual(system(send(raw, { build_billing_entrypoint: 'claude-vscode' })).map(b => b.text), [native.replace('sdk-cli', 'claude-vscode'), 'Be brief.']);
+  // The configured entrypoint is the one the CLI's header carries (set natively).
+  assert.deepEqual(system(send(raw, { build_billing_entrypoint: 'claude-vscode' })).map(b => b.text), [nativeFor({ build_billing_entrypoint: 'claude-vscode' }), 'Be brief.']);
   // No system at all, and an empty one.
   assert.equal(send('{"model":"m","messages":[]}'), `{"model":"m","messages":[],"system":[${JSON.stringify({ type: 'text', text: native })}]}`);
   assert.deepEqual(system(send('{"model":"m","system":[],"messages":[]}')).map(b => b.text), [native]);

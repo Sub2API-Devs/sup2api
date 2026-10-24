@@ -32,12 +32,22 @@ function cpuCount(value) {
   return Number.isSafeInteger(count) && count > 0 ? count : undefined;
 }
 
-export function getContainerResources(
-  enabled = process.env.CCG_REPORT_CONTAINER_RESOURCES === '1',
-  read = readText,
-  disk = { limit: process.env.CCG_ACCOUNT_DISK_QUOTA_BYTES, statfs: fs.statfsSync },
-) {
-  if (!enabled) return null;
+// getContainerResources reports the current container's allocation, or null
+// when reporting is off. The readers are the process's own: a test chooses them
+// through getContainerResourcesForTest instead of this signature.
+export function getContainerResources() {
+  if (process.env.CCG_REPORT_CONTAINER_RESOURCES !== '1') return null;
+  return collect(readText, defaultDisk());
+}
+
+// getContainerResourcesForTest is the same read with its environment given.
+export function getContainerResourcesForTest({ enabled = true, read = readText, disk = defaultDisk() } = {}) {
+  return enabled ? collect(read, disk) : null;
+}
+
+const defaultDisk = () => ({ limit: process.env.CCG_ACCOUNT_DISK_QUOTA_BYTES, statfs: fs.statfsSync });
+
+function collect(read, disk) {
   const result = {};
   const diskLimit = integer(disk.limit);
   if (diskLimit > 0 && diskLimit <= 1024 * 2 ** 30) {

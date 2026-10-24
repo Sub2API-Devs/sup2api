@@ -13,10 +13,10 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
     await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
       'chunk-38xgev2z.js': 'export class _ke {} export const sF=async()=>new _ke(); export const mle=()=>{};',
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({});',
+      'chunk-7p6jp6kj.js': 'export const Al=()=>({});export const S8n=()=>[];',
       'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
       'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
-      'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{}});',
+      'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{},clientBetas:[],addedBetas:[]});',
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         let body,offset=0;
         export const checkModelRequest=()=>null;export const defaultTimeout=600000;

@@ -1,4 +1,4 @@
-import { jOt, aBe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext } from './chunk-rncrmfyt.js';
+import { jOt, aBe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewaySystemRecord } from './chunk-rncrmfyt.js';
 import { oJe } from './chunk-7y2kvacy.js';
 import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { Al } from './chunk-7p6jp6kj.js';
@@ -6,7 +6,7 @@ import { m4t as nativeToolPool } from './chunk-eanw7pgv.js';
 import { t1n as isIdentityLine } from './chunk-t61vswm2.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
-import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-options.js';
+import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
 import { getRootSession, setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
@@ -71,7 +71,7 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const lines = prompt ? clientSystem.filter(block => isIdentityLine(block.text)) : [];
   const own = prompt ? clientSystem.filter(block => !isIdentityLine(block.text)).map(block => block.text) : [];
   const systemPrompt = prompt ? await ccgatewayDefaultPrompt([...tools, ...clientTools], model, own) : [];
-  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, aBe);
+  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, aBe, { systemRecord: ccgatewaySystemRecord });
   const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: clientRecords, session });
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
   const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
@@ -154,7 +154,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
   const context = runtimeContext(suppliedContext);
-  const initial = prepareBuildInput(external, aBe, { preserveContent: true });
+  const initial = prepareBuildInput(external, aBe, { preserveContent: true, systemRecord: ccgatewaySystemRecord });
   // The request's entrypoint, the one its header will carry (the client's own
   // or the configured one), is set the way CC sets it for a request
   // (setEntrypointOnRequests): the native header (PAs) and the User-Agent
@@ -162,7 +162,7 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   const entrypoint = billing.requestEntrypoint(initial.systemBlocks, policy);
   setEntrypointOnRequests(entrypoint);
   const content = await convertContent(initial, policy, context);
-  const records = wireRecords(content.messages, external.model), session = getRootSession();
+  const records = wireRecords(content.messages, external.model, ccgatewaySystemRecord), session = getRootSession();
   const fingerprint = fingerprintMessages(content.messages, KF);
   // The client's own header, wherever it is, makes the request Claude Code's
   // (hasBilling decides the same): its kind and IDs come from that header.
@@ -240,11 +240,15 @@ function finishBuilt(native, { body, headers, external, policy, nativeBilling, a
   // request is left as it is (2026-10-23): its side requests have no line.
   const identityLine = clientBilling !== null ? { line: 'none', fallback: identityLineFor(policy, billingEntrypoint(built.system)).fallback }
     : identityLineFor(policy, billingEntrypoint(built.system), { appended: layers?.appended === true });
-  const outgoingHeaders = setProtocolHeaders(new Headers(headers), normalizeBetas(clientBetas, built.betas, layers?.betas));
+  // The beta list the request ends up with: the client's own, then what this
+  // build adds (the native builder's, the injected layers'). The request
+  // command places the added ones once (request-betas.js) and writes them.
+  const addedBetas = normalizeBetas(built.betas, layers?.betas).filter(beta => !clientBetas.includes(beta));
+  const outgoingHeaders = setProtocolHeaders(new Headers(headers), normalizeBetas(clientBetas, addedBetas));
   delete built.betas;
   // The native body has no stream; the client's goes last, where Claude Code
   // sends it, and a client that sent none gets none (absent means false).
   delete built.stream;
   if ('stream' in body) built.stream = body.stream;
-  return { body: built, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
+  return { body: built, headers: Object.fromEntries(outgoingHeaders), identityLine, agent, clientBetas, addedBetas };
 }

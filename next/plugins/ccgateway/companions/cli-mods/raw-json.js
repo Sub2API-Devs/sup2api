@@ -5,7 +5,9 @@ const ws = ' \t\n\r';
 
 export function skipWs(s, i) { while (i < s.length && ws.includes(s[i])) i++; return i; }
 
-export function skipString(s, i) {
+// skipString and skipValue walk one JSON string or value; members and elements
+// use them and they are not part of this module's interface.
+function skipString(s, i) {
   for (i++; i < s.length; i++) {
     if (s[i] === '\\') i++;
     else if (s[i] === '"') return i + 1;
@@ -13,7 +15,7 @@ export function skipString(s, i) {
   throw Error('Unterminated JSON string');
 }
 
-export function skipValue(s, i) {
+function skipValue(s, i) {
   if (s[i] === '"') return skipString(s, i);
   if (s[i] === '{' || s[i] === '[') {
     for (let depth = 0; i < s.length;) {

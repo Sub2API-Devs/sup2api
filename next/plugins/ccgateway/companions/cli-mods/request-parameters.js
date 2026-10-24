@@ -13,6 +13,9 @@ const envelopeKeys = new Set(['requestPolicy', 'runtimeContext']);
 // model aliases, forced tool choice, token limits, or beta bodies afterward.
 const nativeFields = new Set([...componentKeys, ...envelopeKeys, 'max_tokens', 'thinking', 'tool_choice', 'metadata', 'temperature', 'betas', 'output_config']);
 const nativeOutputFields = new Set(['effort', 'format']);
+// Exported for the reconciliation test against the native body literal
+// (test/request-parameters-304.test.mjs): what the adapter may not overwrite.
+export const nativeParameterFields = Object.freeze([...nativeFields]);
 // The native builder fills these from the history it rebuilt, and build
 // history comes from the client without upstream message ids: native
 // diagnostics.previous_message_id was an id it made up (msg_<uuid>, 2026-10-21

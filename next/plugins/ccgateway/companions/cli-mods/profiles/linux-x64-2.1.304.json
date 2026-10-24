@@ -21,7 +21,7 @@
     "request_levels_v1",
     "client_user_agent_v1"
   ],
-  "supportModules": ["shared", "raw-json", "native-tools", "model-request", "request-command", "request-input", "request-build", "request-parameters", "request-output", "request-options", "request-error", "request-policy", "content-policy", "container-resources", "request-identity", "direct-billing", "request-agent"],
+  "supportModules": ["shared", "raw-json", "native-tools", "model-request", "request-betas", "request-entry", "request-natives", "request-command", "request-input", "request-build", "request-parameters", "request-output", "request-options", "request-headers", "request-error", "request-policy", "content-policy", "container-resources", "request-identity", "direct-billing", "request-agent"],
   "modules": {
     "chunk-rncrmfyt.js": "42ceeaea3d0b44fdb20c4a9855f4a1b567f772ff1f327e5ad3c1ecb1111da35b",
     "chunk-38xgev2z.js": "1e4f06a9835e2028b2f9f8c3c23ebd7bef6214617a9b32740534bfe90e07c1bc",

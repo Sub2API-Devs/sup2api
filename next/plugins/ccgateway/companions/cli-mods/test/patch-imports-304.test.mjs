@@ -45,5 +45,5 @@ test('the patcher refuses an import the CLI does not export or the profile does 
   assert.notEqual(missingExport.code, 0);
   assert.match(missingExport.stderr, /ccgateway-request-build\.js imports ccgMissing from chunk-7y2kvacy\.js, which does not export it/);
   assert.notEqual(unbound.code, 0);
-  assert.match(unbound.stderr, /cli\.js imports chunk-m5q1b1c4\.js, which the profile does not hash-bind/);
+  assert.match(unbound.stderr, /imports chunk-m5q1b1c4\.js, which the profile does not hash-bind/);
 });

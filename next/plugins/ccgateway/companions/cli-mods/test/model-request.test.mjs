@@ -74,7 +74,9 @@ test('captured HTTP errors preserve their exact response body', async () => {
 
 test('OAuth direct fetch preserves body bytes and exposes only safe authentication metadata', async () => {
   const rawBody = '{ "model":"fixture", "messages":[], "n":9007199254740993 }';
-  const response = await openModelRequest({ ...options, rawBody, headerPolicy: { betas: ['client-beta'], oauthBeta: 'oauth-fixture' } }, undefined,
+  // The request command places the login's beta in the request's final list
+  // (request-headers.js finalBetas); the transport writes it as it is.
+  const response = await openModelRequest({ ...options, rawBody, headerPolicy: { betas: ['client-beta', 'oauth-fixture'], oauthBeta: 'oauth-fixture' } }, undefined,
     async init => ({ post: (url, request) => ({ asResponse: () => init.fetchOverride(url, { body: request.body, headers: { authorization: 'Bearer native-secret', 'user-agent': 'native-cc' } }) }) }),
     async (url, init) => {
       assert.equal(init.body, rawBody);

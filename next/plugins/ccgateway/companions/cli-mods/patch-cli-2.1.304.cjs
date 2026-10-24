@@ -40,6 +40,25 @@ function nodes(ast, predicate) {
   }
   walk(ast); return found;
 }
+// moduleBindings is a module's own scope: the local names its imports declare
+// and the names its top-level declarations bind. A name read inside a function
+// is only a native constant if it is one of these.
+function moduleBindings(ast) {
+  const names = new Set(), pattern = node => {
+    if (node?.type === 'Identifier') names.add(node.name);
+    else if (node?.type === 'ObjectPattern') node.properties.forEach(property => pattern(property.value ?? property.argument));
+    else if (node?.type === 'ArrayPattern') node.elements.forEach(pattern);
+    else if (node?.type === 'RestElement') pattern(node.argument);
+    else if (node?.type === 'AssignmentPattern') pattern(node.left);
+  };
+  for (const node of ast.program.body) {
+    if (node.type === 'ImportDeclaration') node.specifiers.forEach(specifier => names.add(specifier.local.name));
+    const declaration = node.type === 'ExportNamedDeclaration' || node.type === 'ExportDefaultDeclaration' ? node.declaration : node;
+    if (declaration?.type === 'FunctionDeclaration' || declaration?.type === 'ClassDeclaration') { if (declaration.id) names.add(declaration.id.name); }
+    else if (declaration?.type === 'VariableDeclaration') declaration.declarations.forEach(item => pattern(item.id));
+  }
+  return names;
+}
 function once(text, from, to) {
   if (text.split(from).length !== 2) throw Error(`Expected unique 2.1.304 anchor: ${from}`);
   return text.replace(from, to);
@@ -59,11 +78,72 @@ function surround(file, { imports = '', code = '' }) {
   surroundings.set(file, { head: head + imports, tail: tail + code });
 }
 const core = 'chunk-rncrmfyt.js';
+// coreBindings is how each name the core module uses is bound: its imports
+// (with the module and exported name they come from) and its own top-level
+// declarations (`local`).
+function coreBindings() {
+  const bindings = new Map(), declared = moduleBindings(tree(core));
+  for (const node of tree(core).program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    for (const specifier of node.specifiers) {
+      if (specifier.type !== 'ImportSpecifier') continue;
+      bindings.set(specifier.local.name, { from: node.source.value, imported: specifier.imported.name ?? specifier.imported.value });
+    }
+  }
+  for (const name of declared) if (!bindings.has(name)) bindings.set(name, { local: true });
+  return bindings;
+}
+// requestBuilderBetas is the list of betas the hash-bound request builder
+// (uXn) pushes onto its beta list, in its own order, by AST. A push of
+// anything but an identifier is not a beta constant of this module (the plugin
+// build's eS.beta is a per-request value) and is skipped; every identifier
+// taken must be a binding of the core module's scope.
+function requestBuilderBetas() {
+  const builders = nodes(tree(core), n => n.type === 'VariableDeclarator' && n.id?.name === 'uXn');
+  if (builders.length !== 1) throw Error('Expected the native request builder uXn');
+  const builder = builders[0].init;
+  if (nodes(builder, n => n.type === 'VariableDeclarator' && n.id?.name === 'zr').length !== 1) throw Error('Expected the request builder beta list zr');
+  const pushes = nodes(builder, n => n.type === 'CallExpression' && n.callee?.type === 'MemberExpression'
+    && n.callee.object?.type === 'Identifier' && n.callee.object.name === 'zr' && n.callee.computed === false && n.callee.property?.name === 'push');
+  const bindings = coreBindings(), betas = new Map();
+  for (const push of pushes) for (const argument of push.arguments) {
+    if (argument?.type !== 'Identifier') continue;
+    const binding = bindings.get(argument.name);
+    if (!binding) throw Error(`The request builder pushes ${argument.name}, which is not a binding of ${core}'s module scope`);
+    if (!betas.has(argument.name)) betas.set(argument.name, binding);
+  }
+  if (!betas.size) throw Error('Expected the native request builder to add betas');
+  return [...betas].map(([name, binding]) => ({ name, ...binding }));
+}
+// fillBetaModule writes the builder's betas into request-betas.js: the imports
+// they come from (the modules that export them; checkImports verifies each
+// name) and the list the order is built from.
+function fillBetaModule(text, betas) {
+  const bySource = new Map(), names = [];
+  for (const beta of betas) {
+    if (beta.local) throw Error(`The request builder beta ${beta.name} is declared in ${core} and cannot be imported beside it`);
+    const specifier = beta.imported === beta.name ? beta.name : `${beta.imported} as ${beta.name}`;
+    bySource.set(beta.from, [...(bySource.get(beta.from) ?? []), specifier]);
+    names.push(beta.name);
+  }
+  const imports = [...bySource].map(([from, list]) => `import { ${list.join(',')} } from "${from}";`).join('\n');
+  return once(once(text, '//CCGATEWAY_BETA_IMPORTS', imports), '/*CCGATEWAY_BETA_LIST*/', () => names.join(','));
+}
+// nativeSystemRecordExport makes the native api_system record factory (ile)
+// available to request-input.js, which reuses it instead of copying the record
+// shape.
+function nativeSystemRecordExport() {
+  if (!moduleBindings(tree(core)).has('ile')) throw Error(`Expected the native system record factory ile in ${core}`);
+  return '\nexport {ile as ccgatewaySystemRecord};\n';
+}
 // What this patch adds is the profile's list: --ccgateway-info and the release
 // manifest report it, and the Worker checks it.
 const capabilities = profile.capabilities;
 if (!Array.isArray(capabilities) || !capabilities.length || !capabilities.every(name => typeof name === 'string' && /^[a-z][a-z0-9_]*$/.test(name)) || new Set(capabilities).size !== capabilities.length) throw Error('Invalid profile capabilities');
-// The request command's entry (request-entry.inc.js), ahead of Ve's own handling.
+// The request command's entry (request-entry.inc.js) is a stub ahead of Ve's
+// own handling: the info line, and the command loaded from its support module
+// (request-entry.js), so the patched entry carries no request wiring and an
+// ordinary CLI start never loads it.
 const entry = fs.readFileSync(path.join(__dirname, 'request-entry.inc.js'), 'utf8').trim();
 if (entry.split('CCGATEWAY_INFO').length !== 2) throw Error('Expected one CCGATEWAY_INFO in the request entry');
 const info = `{version:${JSON.stringify(profile.version)},patch:${JSON.stringify(profile.extension)},capabilities:${JSON.stringify(capabilities)}}`;
@@ -131,13 +211,16 @@ edit('chunk-38xgev2z.js', 'sF', t => {
   return once(t, 'if(!Kt&&!Gr())Pt=await ty(me,Se());await T2e();', 'if(!ccgatewayAPIKeyOnly&&!Kt&&!Gr())Pt=await ty(me,Se());if(!ccgatewayAPIKeyOnly)await T2e();else for(let name of Object.keys(me))if(["authorization","x-api-key"].includes(name.toLowerCase()))delete me[name];');
 });
 // The default headers' User-Agent is the client's own when the request keeps
-// the client's billing header (request-agent.js keepClientUserAgent); any
+// the client's billing header (request-agent.js setClientUserAgent); any
 // other request gets CC's (dN), for the entrypoint set on the request.
 edit('chunk-38xgev2z.js', 'nl', t => once(t, '"User-Agent":dN()', '"User-Agent":ccgatewayClientUserAgent()??dN()'));
 surround('chunk-38xgev2z.js', { imports: 'import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n' });
 // Capture the generated attribution BEFORE system grouping can replace it with
 // the client's billing block. The native function retains its opt-out rules.
 edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);'));
+// The environment snapshot renders the proxy note the request asked for, and
+// none when it did not (ccgatewayEnvironment's ccgatewayProxyText): the note
+// is otherwise the process's own and would reach the content policy unasked.
 edit(core, '_oo', t => once(t, 'l1(e)?ule(e):foo()', 'Object.hasOwn(e,"ccgatewayProxyText")?e.ccgatewayProxyText:l1(e)?ule(e):foo()'));
 const nativeTools = 'import {isNative as ccgIsNative,nativeDefinition as ccgDefinition} from "./ccgateway-native-tools.js";\n';
 // The client's system blocks are joined the way the CLI joins two appended
@@ -148,18 +231,13 @@ const mainModule = files.get('chunk-wt08cjq1.js');
 const appendJoin = nodes(tree('chunk-wt08cjq1.js'), n => n.type === 'FunctionDeclaration' && n.id?.name === 'pr' && mainModule.slice(n.start, n.end).includes('\n\n'));
 if (appendJoin.length !== 1) throw Error('Expected the native append prompt join');
 const appendJoinText = mainModule.slice(appendJoin[0].start, appendJoin[0].end).replace(/^function pr\(/, 'function ccgatewayJoinAppend(');
-// The order CC writes betas in: its model list (S8n, which puts the login's
-// beta in its own place), then the ones its request builder (uXn) adds for a
-// request, in the builder's order. Read from the hash-bound builder, so the
-// request command places a beta it adds where CC itself puts it.
-const requestBuilder = nodes(tree(core), n => n.type === 'VariableDeclarator' && n.id?.name === 'uXn');
-if (requestBuilder.length !== 1) throw Error('Expected the native request builder uXn');
-const builderText = files.get(core).slice(requestBuilder[0].init.start, requestBuilder[0].init.end);
-const builderBetas = [...new Set([...builderText.matchAll(/\bzr\.push\(([A-Za-z_$][\w$]*)\)/g)].map(match => match[1]))];
-if (!builderBetas.includes('g1t') || !builderBetas.includes('H_t')) throw Error('Expected the request builder to add the cache betas');
-const betaOrderText = `export function ccgatewayBetaOrder(model){let order=[];for(let beta of [...S8n(model,{isAgenticQuery:!0}),${builderBetas.join(',')}])if(beta&&!order.includes(beta.header))order.push(beta.header);return order}`;
+// The order CC writes betas in is its model list (S8n, which puts the login's
+// beta in its own place) then the ones its request builder adds for a request,
+// in the builder's order; both are native lists, and the request command's beta
+// module (request-betas.js) holds the order so nothing of it stays in core.
+const builderBetas = requestBuilderBetas();
 surround(core, { imports: 'import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n' + nativeTools,
-  code: '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + betaOrderText + '\n' + appendJoinText });
+  code: '\n' + fs.readFileSync(path.join(__dirname, 'native-environment-2.1.304.inc.js'), 'utf8') + '\n' + appendJoinText + nativeSystemRecordExport() });
 for (const [file, { head, tail }] of surroundings) { files.set(file, head + files.get(file) + tail); modified.add(file); }
 for (const file of modified) tree(file);
 // Support modules import each other by source name; installed, they carry the
@@ -171,6 +249,11 @@ for (const input of supportInputs) {
   for (const name of supportInputs) text = text.replaceAll(`'./${name}.js'`, `'./ccgateway-${name}.js'`);
   support.set('ccgateway-' + input + '.js', { source: input + '.js', text });
 }
+// request-betas.js is filled from the hash-bound builder before the imports it
+// gains are checked like every other support module's (fillBetaModule).
+const betaEntry = support.get('ccgateway-request-betas.js');
+if (!betaEntry) throw Error('Expected the request beta support module');
+betaEntry.text = fillBetaModule(betaEntry.text, builderBetas);
 checkImports();
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
 const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities, files: {}, supportFiles: {} };

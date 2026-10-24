@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareBuildInput } from '../request-input.js';
+import { randomUUID } from 'node:crypto';
+import { prepareBuildInput as rawPrepare } from '../request-input.js';
 import { writeOutput } from '../request-output.js';
+
+// The native api_system record factory (core's ile), as the request build
+// passes it in: the record shape is the CLI's, not this module's.
+const systemRecord = content => ({ type: 'api_system', message: { role: 'system', content }, uuid: randomUUID(), timestamp: new Date().toISOString() });
+const prepareBuildInput = (components, render, options = {}) => rawPrepare(components, render, { systemRecord, ...options });
 
 test('explicit build components keep media, tool results and system in sequence', () => {
   const media = { type: 'image', source: { type: 'url', url: 'https://example.test/image' } };

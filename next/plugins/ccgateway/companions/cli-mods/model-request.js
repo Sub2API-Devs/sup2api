@@ -1,6 +1,6 @@
 // The request command's raw Messages transport. The caller supplies CC's
 // authenticated client factory; credentials and fetch policy stay inside it.
-import { authenticatedRequestHeaders, normalizeBetas } from './request-options.js';
+import { authenticatedRequestHeaders, normalizeBetas } from './request-headers.js';
 const forbiddenHeaders = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'cookie', 'connection', 'content-length', 'transfer-encoding']);
 // The deadline of a request without --timeout-ms, and Claude Code's own
 // client timeout.
@@ -87,10 +87,10 @@ function sendOnce(client, options, entry) {
 }
 
 // openModelRequest sends the request; the response it returns is read with
-// readModelResponse and closed with cancelModelResponse.
+// readModelResponse and closed with cancelModelResponse. The caller checked its
+// input once, at the request boundary (checkModelRequest): this module sends
+// the request it was given.
 export async function openModelRequest(options, signal, createClient, transportFetch) {
-  const error = checkModelRequest(options);
-  if (error) throw new Error(error);
   if (signal?.aborted) throw new Error('model request aborted');
   const entry = openEntry(options, signal);
   const captured = captureErrorResponse(options, transportFetch);

@@ -87,6 +87,18 @@ function fenceAfter(line, current) {
   if (!current) return { marker: match[1][0], length: match[1].length };
   return match[1][0] === current.marker && match[1].length >= current.length && !match[2].trim() ? null : current;
 }
+// fencedLines is the text's lines once, each saying whether a code fence is
+// open at it: a fence's own marker lines are `marker`, and every line between
+// two markers is `fenced`. The readers below consume this one sequence
+// instead of tracking fences again.
+function* fencedLines(text) {
+  let fence = null;
+  for (const line of lines(text)) {
+    const next = fenceAfter(line.body, fence);
+    if (next !== fence) { fence = next; yield { ...line, marker: true, fenced: true }; continue; }
+    yield { ...line, marker: false, fenced: fence !== null };
+  }
+}
 function identify(c, body, update) {
   if (!body.startsWith(' - ')) return null;
   const text = body.slice(3);
@@ -113,74 +125,67 @@ function suspectedField(c, body) {
 }
 // environmentRegions finds the environment sections of a text: a heading (with
 // its intro line, unless it is the update heading) outside a code fence, up to
-// the next boundary, and the native entries inside.
-function environmentRegions(c, text, carrier) {
-  const ls = lines(text), result = []; let fence = null;
-  for (let i = 0; i < ls.length; i++) {
-    const line = ls[i];
-    const nextFence = fenceAfter(line.body, fence);
-    if (nextFence !== fence) { fence = nextFence; continue; }
-    const first = fence ? -1 : regionStart(c, ls, i);
+// the next boundary, and the native entries inside. block(field, status) is
+// told about every field that cannot be edited safely.
+function environmentRegions(c, text, block) {
+  const scanned = [...fencedLines(text)], regions = [];
+  for (let i = 0; i < scanned.length; i++) {
+    if (scanned[i].fenced) continue;
+    const first = regionStart(c, scanned, i);
     if (first < 0) continue;
-    const update = line.body === c.updateHeading, stop = regionEnd(c, ls, first);
-    const { entries, blocked } = regionEntries(c, ls, text, first, stop, update);
-    result.push({ start: line.start, end: stop < ls.length ? ls[stop].start : text.length, headerEnd: first < ls.length ? ls[first].start : text.length, update, entries, blocked, carrier });
+    const update = scanned[i].body === c.updateHeading, stop = regionEnd(c, scanned, first), blocked = new Set();
+    const entries = regionEntries(c, scanned, text, first, stop, update, (field, status) => { blocked.add(field); block?.(field, status); });
+    regions.push({ start: scanned[i].start, end: stop < scanned.length ? scanned[stop].start : text.length, headerEnd: first < scanned.length ? scanned[first].start : text.length, update, entries, blocked });
     i = stop - 1;
   }
-  return result;
+  return regions;
 }
 // regionStart is the first entry line of a region whose heading is line i, or
 // -1 when line i opens none.
-function regionStart(c, ls, i) {
-  const body = ls[i].body;
+function regionStart(c, scanned, i) {
+  const body = scanned[i].body;
   if (body === c.updateHeading) return i + 1;
   if (body !== c.heading) return -1;
-  const intro = ls[i + 1]?.body;
+  const intro = scanned[i + 1]?.body;
   return intro === c.intro || intro === c.intro.trimEnd() ? i + 2 : -1;
 }
 // regionEnd is the line of the next boundary. A heading in an example is not
 // a new environment carrier: splitting there would discard the fence state
 // and re-enter quoted content.
-function regionEnd(c, ls, first) {
-  let stop = first, fence = null;
-  while (stop < ls.length) {
-    const next = fenceAfter(ls[stop].body, fence);
-    if (next !== fence) { fence = next; stop++; continue; }
-    if (!fence && c.boundary.test(ls[stop].body)) break;
-    stop++;
-  }
+function regionEnd(c, scanned, first) {
+  let stop = first;
+  while (stop < scanned.length && (scanned[stop].fenced || !c.boundary.test(scanned[stop].body))) stop++;
   return stop;
 }
-// regionEntries reads a region's native entries, and the fields that cannot
-// be edited safely (blocked, with the reason).
-function regionEntries(c, ls, text, first, stop, update) {
-  const entries = [], seen = new Set(), blocked = new Map(); let fence = null;
+// regionEntries reads a region's native entries, and tells block about the
+// fields that cannot be edited safely.
+function regionEntries(c, scanned, text, first, stop, update, block) {
+  const entries = [], seen = new Set();
   for (let j = first; j < stop; j++) {
-    const next = fenceAfter(ls[j].body, fence);
-    if (next !== fence) { fence = next; continue; }
-    const found = fence ? null : identify(c, ls[j].body, update);
+    if (scanned[j].marker) continue;
+    const found = scanned[j].fenced ? null : identify(c, scanned[j].body, update);
     if (!found) {
-      const suspected = suspectedField(c, ls[j].body);
-      if (suspected) blocked.set(suspected, fence ? 'ambiguous' : 'unsupported_format');
+      const suspected = suspectedField(c, scanned[j].body);
+      if (suspected) block(suspected, scanned[j].fenced ? 'ambiguous' : 'unsupported_format');
       continue;
     }
-    const end = entryEnd(c, ls, j, stop, found);
-    if (end < 0) { blocked.set(found.field, 'unsupported_format'); continue; }
-    const identity = update && found.field === 'additional_directories' ? ls[j].body : found.field;
-    if (seen.has(identity)) blocked.set(found.field, 'ambiguous');
+    const end = entryEnd(c, scanned, j, stop, found);
+    if (end < 0) { block(found.field, 'unsupported_format'); continue; }
+    const identity = update && found.field === 'additional_directories' ? scanned[j].body : found.field;
+    if (seen.has(identity)) block(found.field, 'ambiguous');
     seen.add(identity);
-    entries.push({ ...found, start: ls[j].start, end: ls[end].end, raw: text.slice(ls[j].start, ls[end].end) }); j = end;
+    entries.push({ ...found, start: scanned[j].start, end: scanned[end].end, raw: text.slice(scanned[j].start, scanned[end].end) }); j = end;
   }
-  return { entries, blocked };
+  return entries;
 }
 // entryEnd is the last line of the entry that opens at line j, or -1 when its
 // continuation is not the native one.
-function entryEnd(c, ls, j, stop, found) {
-  if (found.pair) return ls[j + 1]?.body === ' - ' + c.stash ? j + 1 : -1;
+function entryEnd(c, scanned, j, stop, found) {
+  if (found.pair) return scanned[j + 1]?.body === ' - ' + c.stash ? j + 1 : -1;
   if (!found.list) return j;
   let end = j;
-  while (end + 1 < stop && ls[end + 1].body.startsWith('  - ')) end++;
-  const malformed = end === j || ls.slice(j + 1, end + 1).some(line => !line.body.slice(4).trim()) || end + 1 < stop && /^\s{2,}\S/.test(ls[end + 1].body);
+  while (end + 1 < stop && scanned[end + 1].body.startsWith('  - ')) end++;
+  const malformed = end === j || scanned.slice(j + 1, end + 1).some(line => !line.body.slice(4).trim()) || end + 1 < stop && /^\s{2,}\S/.test(scanned[end + 1].body);
   return malformed ? -1 : end;
 }
 function recognizedUser(c, text) {
@@ -227,9 +232,6 @@ function planRegion(state, slot, range, region) {
   const { sources, plans, regionsBySlot, blocked, baseline, emitDiagnostic } = state;
   if (!regionsBySlot.has(slot)) regionsBySlot.set(slot, []);
   regionsBySlot.get(slot).push({ ...region, start: region.start + range.start, end: region.end + range.start, headerEnd: region.headerEnd + range.start });
-  for (const [field, status] of region.blocked) {
-    blocked.add(field); diagnostic(emitDiagnostic, field, status, slot.carrier);
-  }
   for (const entry of region.entries) {
     const source = sources[entry.field] ?? 'client';
     if (source === 'client') continue;
@@ -241,19 +243,28 @@ function planRegion(state, slot, range, region) {
   }
 }
 
+// blockedField is the one rule for a field this conversion will not edit: the
+// field stays as the client wrote it, and its reason is diagnostic only.
+function blockedField(state, slot, field, status) {
+  state.blocked.add(field);
+  diagnostic(state.emitDiagnostic, field, status, slot.carrier);
+}
+
 async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagnostic) {
   const output = structuredClone(input);
   const state = { sources: policy.build_attachment_sources ?? {}, plans: [], regionsBySlot: new Map(), blocked: new Set(), baseline: new Set(), emitDiagnostic };
   for (const slot of textSlots(output)) {
-    const ranges = slot.role === 'user' ? recognizedUser(c, slot.text) : [{ text: slot.text, start: 0 }];
-    for (const range of ranges) for (const region of environmentRegions(c, range.text, slot.path)) planRegion(state, slot, range, region);
+    // The user ranges are parsed once and kept on the slot: compactSlot reads
+    // the same ranges instead of parsing the same text again.
+    slot.ranges = slot.role === 'user' ? recognizedUser(c, slot.text) : [{ text: slot.text, start: 0 }];
+    for (const range of slot.ranges) for (const region of environmentRegions(c, range.text, (field, status) => blockedField(state, slot, field, status))) planRegion(state, slot, range, region);
   }
   const { sources, plans, regionsBySlot, blocked } = state;
   const active = plans.filter(plan => !blocked.has(plan.entry.field));
   const server = await readServerFields(c, active, native, emitDiagnostic);
   const possiblyEmpty = new Set();
   for (const [slot, edits] of planEdits(active, server, emitDiagnostic)) {
-    const text = splice(slot.text, compactSlot(c, slot, edits, regionsBySlot.get(slot) ?? []));
+    const text = splice(slot.text, compactSlot(slot, edits, regionsBySlot.get(slot) ?? []));
     if (!text.trim() && slot.text.trim()) { slot.remove(); if (slot.owner) possiblyEmpty.add(slot.owner); }
     else slot.replace(text);
   }
@@ -275,7 +286,7 @@ async function readServerFields(c, active, native, emitDiagnostic) {
     const snapshot = await native.readEnvironment?.([...new Set(needed.map(plan => plan.entry.field))]);
     const text = typeof snapshot === 'string' ? snapshot : snapshot?.text;
     if (typeof text !== 'string') throw Error('Missing native environment');
-    const regions = environmentRegions(c, text, 'native');
+    const regions = environmentRegions(c, text);
     if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || !regions[0].entries.some(e => e.field === 'platform_name')) throw Error('Invalid native environment');
     const server = new Map(regions[0].entries.map(entry => [entry.field, entry.raw]));
     if (active.some(plan => plan.source === 'worker' && snapshot?.unavailableFields?.includes(plan.entry.field))) throw Error('Unavailable native field');
@@ -317,12 +328,12 @@ function replacementFor(plan, server) {
 // the original heading and wrapper alive. Only this conversion can own the
 // removal of a reminder wrapper: empty reminders that were already present
 // are unrelated client content, not cleanup.
-function compactSlot(c, slot, edits, regions) {
+function compactSlot(slot, edits, regions) {
   const emptied = regions.filter(region => leavesBlank(slot.text.slice(region.headerEnd, region.end), within(edits, region.headerEnd, region.end), region.headerEnd))
     .map(region => ({ start: region.start, end: region.end, value: '' }));
   let result = [...edits.filter(e => !emptied.some(r => e.start >= r.start && e.end <= r.end)), ...emptied];
   if (slot.role !== 'user') return result;
-  for (const range of recognizedUser(c, slot.text)) {
+  for (const range of slot.ranges ?? []) {
     const local = within(result, range.start, range.start + range.text.length);
     if (!range.text.trim() || !leavesBlank(range.text, local, range.start)) continue;
     result = [...result.filter(edit => !local.includes(edit)), { start: range.wrapperStart, end: range.wrapperEnd, value: '' }];
@@ -339,10 +350,9 @@ const leavesBlank = (text, edits, offset) => edits.length > 0 && !splice(text, e
 // that cannot be edited safely is a conflict.
 function billingCandidate(c, text) {
   const prefix = c.billingHeader;
-  const candidates = []; let fenced = null;
-  for (const line of lines(text)) {
-    fenced = fenceAfter(line.body, fenced);
-    if (fenced || !line.body.startsWith(prefix)) continue;
+  const candidates = [];
+  for (const line of fencedLines(text)) {
+    if (line.fenced || !line.body.startsWith(prefix)) continue;
     if (line.body.split(prefix).length !== 2) return { conflict: 'a billing header line repeats the header' };
     const payload = line.body.slice(prefix.length), keys = new Map();
     let cursor = prefix.length;
@@ -363,9 +373,10 @@ function billingCandidate(c, text) {
 // whole, and a header missing a field gets the native value. client (the
 // default) keeps every value the client wrote; worker replaces them with the
 // native ones. Upstream refuses a header without both cc_version and
-// cc_entrypoint (400 "reserved keyword", verified 2026-10-21). The native
-// entrypoint is the request process's (sdk-cli); build_billing_entrypoint
-// replaces it in the native line, so it is the value filled or written.
+// cc_entrypoint (400 "reserved keyword", verified 2026-10-21). The request
+// command sets the request's entrypoint natively before CC generates the line
+// (setEntrypointOnRequests), so the native header's cc_entrypoint is already
+// the value filled or written here.
 function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emitDiagnostic) {
   const replaced = new Set(billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker'));
   const blocks = structuredClone(toBlocks(system));
@@ -384,7 +395,7 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   const target = found[0]?.index === 0 && found[0].line.start === 0 ? found[0] : undefined;
   const needed = target ? billingFields.filter(field => replaced.has(field) || !target.keys.has(field)) : billingFields;
   if (!needed.length) return structuredClone(system);
-  const generated = nativeHeader(c, nativeBilling, policy);
+  const generated = nativeHeader(c, nativeBilling);
   if (generated.conflict || generated.candidates?.length !== 1 || needed.some(field => !generated.candidates[0].keys.has(field))) {
     needed.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
     if (replaced.size) throw error('Required native billing attribution is unavailable', 503);
@@ -414,16 +425,12 @@ function findBillingHeader(c, blocks) {
   return { found, conflict };
 }
 
-// nativeHeader is the CLI's own header line (kLo), with the policy's
-// configured entrypoint in place of the process's; text is what a request
-// without a header carries.
-function nativeHeader(c, nativeBilling, policy) {
-  let generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
-  const nativeEntrypoint = generated.candidates?.length === 1 ? generated.candidates[0].keys.get('cc_entrypoint') : undefined;
-  if (policy.build_billing_entrypoint !== undefined && nativeEntrypoint) {
-    nativeBilling = splice(nativeBilling, [{ start: nativeEntrypoint.start, end: nativeEntrypoint.end, value: policy.build_billing_entrypoint }]);
-    generated = billingCandidate(c, nativeBilling);
-  }
+// nativeHeader is the CLI's own header line (kLo), read by its fields. Its
+// cc_entrypoint is already the request's: the request command sets it natively
+// (setEntrypointOnRequests) before CC generates the line, so nothing here is
+// rewritten. text is what a request without a header carries.
+function nativeHeader(c, nativeBilling) {
+  const generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
   return { ...generated, text: nativeBilling };
 }
 

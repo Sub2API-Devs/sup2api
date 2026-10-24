@@ -5,9 +5,14 @@ import { uuidV4Pattern as uuid } from './shared.js';
 
 const modes = new Set(['client', 'worker', 'replace']);
 
+// requestIdentity parses CCG_REQUEST_IDENTITY once per distinct value: the
+// process serves one request, and the session header, the metadata rewrite and
+// the identity source all read the same context.
+let cachedRaw, cachedValue;
 function identity() {
   const raw = process.env.CCG_REQUEST_IDENTITY;
   if (!raw) return null;
+  if (raw === cachedRaw) return cachedValue;
   let value;
   try { value = JSON.parse(raw); } catch { throw Error('Invalid Worker request identity'); }
   if (!value || value.version !== 2 || !modes.has(value.mode) ||
@@ -21,6 +26,7 @@ function identity() {
       value.carrier !== undefined && !['json', 'object', 'flat'].includes(value.carrier)) {
     throw Error('Invalid Worker request identity');
   }
+  cachedRaw = raw; cachedValue = value;
   return value;
 }
 

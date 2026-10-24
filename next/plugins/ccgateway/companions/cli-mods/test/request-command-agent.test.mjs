@@ -20,13 +20,13 @@ test('the client factory and direct billing get the client kind of request', asy
         export class _ke {}
         export const sF=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new _ke()};
         export const mle=()=>{};`,
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({agentType:"main",agentId:"native-session"});',
+      'chunk-7p6jp6kj.js': 'export const Al=()=>({agentType:"main",agentId:"native-session"});export const S8n=()=>[];',
       'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
       // CC's request-scoped entrypoint (TY/H2r), recorded.
       'chunk-72vwyp9d.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
       // A build stand-in: the system goes out as it came (the client's header
       // stays), the agent context is resolved as the real build does.
-      'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''})});",
+      'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''}),clientBetas:[],addedBetas:[]});",
       'ccgateway-model-request.js': `
         export const checkModelRequest=()=>null;export const defaultTimeout=600000;
         export const openModelRequest=async(outgoing,signal,factory)=>{(await import('node:fs')).writeFileSync('outgoing.json',JSON.stringify(outgoing.headers??{}));await factory({});return {id:'x',ok:true,status:200,headers:{}}};

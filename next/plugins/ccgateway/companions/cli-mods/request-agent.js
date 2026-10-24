@@ -119,11 +119,10 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
 // the entrypoint its header carries (the request command sets that entrypoint
 // natively). The patched header function (nl) reads this value first.
 let requestUserAgent;
-export function keepClientUserAgent(agent, clientHeader, sentHeader) {
+export function setClientUserAgent(agent, clientHeader, sentHeader) {
   const keep = agent?.userAgent !== undefined && clientHeader != null && sentHeader != null &&
     clientHeader.cc_version !== undefined && clientHeader.cc_version === sentHeader.cc_version &&
     clientHeader.cc_entrypoint !== undefined && clientHeader.cc_entrypoint === sentHeader.cc_entrypoint;
   requestUserAgent = keep ? agent.userAgent : undefined;
-  return requestUserAgent;
 }
 export const clientUserAgent = () => requestUserAgent;

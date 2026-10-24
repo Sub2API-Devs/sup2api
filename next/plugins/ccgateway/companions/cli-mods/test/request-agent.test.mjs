@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readRequestAgent, resolveAgentContext, keepClientUserAgent, clientUserAgent } from '../request-agent.js';
+import { readRequestAgent, resolveAgentContext, setClientUserAgent, clientUserAgent } from '../request-agent.js';
 import { layers } from './vocabulary.mjs';
 
 // Claude Code 2.1.304's own query source naming (Zoe).
@@ -124,15 +124,15 @@ test('the client User-Agent is kept with the client billing header', () => {
   assert.equal(agent.userAgent, ua);
   assert.equal(resolve(mapped({ request_class: 'main' }), mainHeader).userAgent, undefined);
   const header = { cc_version: '2.1.310.b17', cc_entrypoint: 'sdk-ts', cc_prompt_id: 'x' };
-  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_prompt_id: 'mapped' }), ua, 'a mapped prompt ID does not change the User-Agent');
+  setClientUserAgent(agent, header, { ...header, cc_prompt_id: 'mapped' }); assert.equal(clientUserAgent(), ua, 'a mapped prompt ID does not change the User-Agent');
   assert.equal(clientUserAgent(), ua);
-  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_version: '2.1.304.b17' }), undefined, 'the Worker owns the version');
+  setClientUserAgent(agent, header, { ...header, cc_version: '2.1.304.b17' }); assert.equal(clientUserAgent(), undefined, 'the Worker owns the version');
   assert.equal(clientUserAgent(), undefined);
-  assert.equal(keepClientUserAgent(agent, header, { ...header, cc_entrypoint: 'sdk-cli' }), undefined, 'the Worker owns the entrypoint');
-  assert.equal(keepClientUserAgent(agent, null, header), undefined, 'no header of its own');
-  assert.equal(keepClientUserAgent(agent, { cc_entrypoint: 'cli' }, { cc_version: '2.1.304.b17', cc_entrypoint: 'cli' }), undefined, 'a filled field');
-  assert.equal(keepClientUserAgent(undefined, header, header), undefined);
-  assert.equal(keepClientUserAgent({ requestClass: 'main' }, header, header), undefined, 'no User-Agent of its own');
+  setClientUserAgent(agent, header, { ...header, cc_entrypoint: 'sdk-cli' }); assert.equal(clientUserAgent(), undefined, 'the Worker owns the entrypoint');
+  setClientUserAgent(agent, null, header); assert.equal(clientUserAgent(), undefined, 'no header of its own');
+  setClientUserAgent(agent, { cc_entrypoint: 'cli' }, { cc_version: '2.1.304.b17', cc_entrypoint: 'cli' }); assert.equal(clientUserAgent(), undefined, 'a filled field');
+  setClientUserAgent(undefined, header, header); assert.equal(clientUserAgent(), undefined);
+  setClientUserAgent({ requestClass: 'main' }, header, header); assert.equal(clientUserAgent(), undefined, 'no User-Agent of its own');
 });
 
 test('the previous turn tool timings go on unchanged', () => {

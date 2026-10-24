@@ -187,17 +187,18 @@ test('billing generation failure is explicit for worker and tolerated for client
   assert.deepEqual(diagnostics.map(d => d.status), ['source_unavailable', 'source_unavailable']);
 });
 
-// The configured entrypoint stands in for the request process's own in the
-// native line: it is what a filled header and a worker field carry. A client
-// value under client stays.
-test('billing writes the configured entrypoint wherever the native one would go', () => {
+// The native line already carries the request's entrypoint: the request
+// command sets it natively (setEntrypointOnRequests) before CC generates the
+// header, so the merge writes the native values as they are. A client value
+// under client stays.
+test('billing writes the native values, whose entrypoint is the request entrypoint', () => {
   const policy = { build_billing_entrypoint: 'claude-vscode' };
   const vscode = billing.replace('cc_entrypoint=sdk-cli;', 'cc_entrypoint=claude-vscode;');
-  assert.deepEqual(mergeBillingAttribution([{ type: 'text', text: 'prompt' }], policy, billing), [{ type: 'text', text: vscode }, { type: 'text', text: 'prompt' }]);
-  assert.equal(mergeBillingAttribution('x-anthropic-billing-header: cc_version=9.9.9.own;', policy, billing)[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=claude-vscode;');
+  assert.deepEqual(mergeBillingAttribution([{ type: 'text', text: 'prompt' }], policy, vscode), [{ type: 'text', text: vscode }, { type: 'text', text: 'prompt' }]);
+  assert.equal(mergeBillingAttribution('x-anthropic-billing-header: cc_version=9.9.9.own;', policy, vscode)[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=claude-vscode;');
   const client = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=cli;' }];
-  assert.deepEqual(mergeBillingAttribution(client, policy, billing), client);
-  assert.equal(mergeBillingAttribution(client, { ...policy, build_billing_sources: { cc_entrypoint: 'worker' } }, billing)[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=claude-vscode;');
+  assert.deepEqual(mergeBillingAttribution(client, policy, vscode), client);
+  assert.equal(mergeBillingAttribution(client, { ...policy, build_billing_sources: { cc_entrypoint: 'worker' } }, vscode)[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=claude-vscode;');
 });
 
 test('the request entrypoint is read from the header that opens the system', () => {

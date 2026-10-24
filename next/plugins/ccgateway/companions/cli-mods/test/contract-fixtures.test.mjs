@@ -22,6 +22,9 @@ const native = {
   billing: 'x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;',
 };
 const nativeIdentity = () => ({ user_id: JSON.stringify({ device_id: 'b'.repeat(64), account_uuid: 'worker-account', session_id: '23456789-2345-4234-9234-234567890123' }) });
+// The native api_system record factory (core's ile), as the request build
+// passes it in.
+const systemRecord = content => ({ type: 'api_system', message: { role: 'system', content }, uuid: 'fixture', timestamp: 'fixture' });
 // The CC attachment renderer is native; the contract only needs the rows to resolve.
 const render = row => ({ isKnownType: true, messages: [{ message: { role: 'user', content: row.rendered?.[0]?.content ?? JSON.stringify(row.attachment ?? null) } }] });
 async function withIdentity(value, run) {
@@ -49,7 +52,7 @@ for (const c of fixture.cases) {
         assert.equal(c.identity, undefined);
         const policy = validateDirectPolicy(c.direct);
         assert.ok(policy);
-        const sent = applyDirectBilling(stdin, body, { policy, billingHeader: vocabulary.billingHeader, nativeBilling: () => native.billing });
+        const sent = applyDirectBilling(stdin, body, { policy, billingHeader: vocabulary.billingHeader, nativeBilling: () => native.billing.replace('sdk-cli', policy.build_billing_entrypoint ?? 'sdk-cli') });
         assert.deepEqual({ ...JSON.parse(sent), system: undefined }, { ...body, system: undefined });
         // A string system becomes blocks, as Claude Code sends it.
         if (c.name === 'direct-entrypoint') assert.deepEqual(JSON.parse(sent).system, [{ type: 'text', text: native.billing.replace('sdk-cli', 'claude-desktop') }, { type: 'text', text: 'plain system' }]);
@@ -65,7 +68,7 @@ for (const c of fixture.cases) {
       validateBuildParameters(external.parameters);
       const policy = validateRequestPolicy(requestPolicy);
       runtimeContext(context);
-      const initial = prepareBuildInput(external, render, { preserveContent: true });
+      const initial = prepareBuildInput(external, render, { preserveContent: true, systemRecord });
       const messages = initial.messages.flatMap(row => row.type !== 'attachment'
         ? [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)]
         : render(row).messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: item.message.content })));

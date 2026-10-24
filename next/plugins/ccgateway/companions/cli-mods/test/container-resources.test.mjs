@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getContainerResources } from '../container-resources.js';
+import { getContainerResourcesForTest } from '../container-resources.js';
 
 const root = '/sys/fs/cgroup';
 const gib = 2 ** 30, mib = 2 ** 20;
@@ -15,7 +15,7 @@ function fixture() {
     [root + '/memory.current']: String(512 * mib),
   };
   const read = file => files[file];
-  return { files, read, resources: () => getContainerResources(true, read) };
+  return { files, read, resources: () => getContainerResourcesForTest({ read }) };
 }
 
 test('reports allocated CPU and RAM instead of the shared host, without disk or load', () => {
@@ -85,7 +85,7 @@ test('missing usage stays unknown and usage above a lowered limit clamps headroo
 });
 
 test('disabled reporting does not read and invalid membership cannot escape the cgroup mount', () => {
-  assert.equal(getContainerResources(false, () => { throw Error('unexpected read'); }), null);
+  assert.equal(getContainerResourcesForTest({ enabled: false, read: () => { throw Error('unexpected read'); } }), null);
   const f = fixture();
   for (const member of ['0::/../../other', '0::relative', '1:memory:/account', '']) {
     f.files['/proc/self/cgroup'] = member;
@@ -102,16 +102,16 @@ test('only a bounded account volume exposes actual disk headroom', () => {
     assert.deepEqual(options, { bigint: true });
     return { blocks: 10n * 2n ** 18n, bsize: 4096n, bavail: 7n * 2n ** 18n };
   } };
-  assert.equal(getContainerResources(true, f.read, disk).disk_free_gb, 7);
-  assert.equal(getContainerResources(true, f.read, { ...disk, limit: undefined }).disk_free_gb, undefined);
+  assert.equal(getContainerResourcesForTest({ read: f.read, disk }).disk_free_gb, 7);
+  assert.equal(getContainerResourcesForTest({ read: f.read, disk: { ...disk, limit: undefined } }).disk_free_gb, undefined);
   assert.equal(calls, 1, 'unlimited legacy volumes must not read host filesystem sizes');
-  assert.equal(getContainerResources(true, f.read, {
+  assert.equal(getContainerResourcesForTest({ read: f.read, disk: {
     ...disk, statfs: () => ({ blocks: 1000n * 2n ** 18n, bsize: 4096n, bavail: 900n * 2n ** 18n }),
-  }).disk_free_gb, undefined);
-  assert.equal(getContainerResources(true, f.read, {
+  } }).disk_free_gb, undefined);
+  assert.equal(getContainerResourcesForTest({ read: f.read, disk: {
     ...disk, statfs: () => ({ blocks: 10n * 2n ** 18n, bsize: 4096n, bavail: 0n }),
-  }).disk_free_gb, 0);
-  assert.equal(getContainerResources(true, f.read, {
+  } }).disk_free_gb, 0);
+  assert.equal(getContainerResourcesForTest({ read: f.read, disk: {
     ...disk, statfs: () => { throw Error('quota unavailable'); },
-  }).disk_free_gb, undefined);
+  } }).disk_free_gb, undefined);
 });

@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateRequestPolicy, validateDirectPolicy, runtimeContext } from '../request-policy.js';
-import { prepareBuildInput } from '../request-input.js';
+import fs from 'node:fs';
+import { validateRequestPolicy, validateDirectPolicy, runtimeContext, identityLineChoices, defaultEntrypoint } from '../request-policy.js';
+import { prepareBuildInput as rawPrepare } from '../request-input.js';
+
+// The native api_system record factory (core's ile), as the request build
+// passes it in.
+const systemRecord = content => ({ type: 'api_system', message: { role: 'system', content }, uuid: 'fixture', timestamp: 'fixture' });
+const prepareBuildInput = (components, render, options = {}) => rawPrepare(components, render, { systemRecord, ...options });
 
 test('304 policy rejects unknown fields, contract, and manual billing values', () => {
   assert.deepEqual(validateRequestPolicy(), {});
@@ -43,6 +49,25 @@ test('runtime facts cannot claim a different startup directory', () => {
   assert.throws(() => runtimeContext({ workingDirectory: 'relative' }));
   assert.throws(() => runtimeContext({ workingDirectory: process.cwd(), additionalWorkingDirectories: [null] }));
   assert.throws(() => runtimeContext({ workingDirectory: process.cwd(), secret: true }));
+});
+
+// The identity line table is a contract with the Worker: this CLI's choices
+// and the Go contract (companions/contracts/features/identity_line.go) are one
+// table. A change on either side fails here (2026-10-24 审核 b5).
+test('the identity line choices are the Go contract\'s', () => {
+  const go = fs.readFileSync(new URL('../../contracts/features/identity_line.go', import.meta.url), 'utf8');
+  const block = /var IdentityLineChoices = map\[string\]\[\]string\{([\s\S]*?)\n\}/.exec(go);
+  assert(block, 'IdentityLineChoices in the Go contract');
+  const choices = {};
+  for (const line of block[1].split('\n')) {
+    const match = /"([^"]+)":\s*\{([^}]*)\}/.exec(line);
+    if (match) choices[match[1]] = [...match[2].matchAll(/"([^"]+)"/g)].map(quoted => quoted[1]);
+  }
+  assert.deepEqual(identityLineChoices, choices);
+  assert.match(go, new RegExp('const DefaultBillingEntrypoint = "' + defaultEntrypoint + '"'));
+  const listed = /var BillingEntrypoints = \[\]string\{([^}]*)\}/.exec(go);
+  assert(listed, 'BillingEntrypoints in the Go contract');
+  assert.deepEqual([...listed[1].matchAll(/"([^"]+)"/g)].map(quoted => quoted[1]).sort(), Object.keys(identityLineChoices).sort());
 });
 
 test('304 input preserves string system, missing system and wire metadata', () => {
