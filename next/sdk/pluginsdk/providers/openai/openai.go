@@ -4,6 +4,7 @@
 package openai
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +26,20 @@ var Policy = classify.Policy{
 		classify.RateLimit(rateLimitReset),
 		classify.ServerErrors(10 * time.Second),
 	},
+}
+
+// ChatPingBody is the body of a minimal chat completion: one user message
+// asking the upstream to answer "ping". BuildTestRequest uses it so every
+// OpenAI-compatible plugin probes the same shape; maxTokens stays a parameter
+// because the minimum a model accepts differs (1 for OpenAI, 16 for some Ark
+// models). The result is deterministic JSON: encoding/json sorts map keys.
+func ChatPingBody(model string, maxTokens int) string {
+	body, _ := json.Marshal(map[string]any{
+		"model":      model,
+		"max_tokens": maxTokens,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+	})
+	return string(body)
 }
 
 func parseError(body []byte) classify.Error {

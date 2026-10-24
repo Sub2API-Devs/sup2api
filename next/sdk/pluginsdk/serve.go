@@ -238,42 +238,70 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 		return nil, errors.New("plugin is nil")
 	}
 	rt := &runtime{p: p, opts: o, dial: dial}
+	declared, err := rt.parseManifest()
+	if err != nil {
+		return nil, err
+	}
+	rt.resolveIdentity()
+	if rt.key == "" || rt.version == "" {
+		return nil, errors.New("plugin key/version unknown: use WithManifest or WithInfo")
+	}
+	if err := rt.resolveCapabilities(declared); err != nil {
+		return nil, err
+	}
+	return rt, nil
+}
+
+// parseManifest reads the embedded manifest: identity, the declarative
+// capabilities that shape the runtime, and the checks that a plugin
+// implementing broadcast or tasks must agree with its manifest. It returns the
+// declared capability set, nil when no manifest was supplied.
+func (rt *runtime) parseManifest() (map[string]bool, error) {
 	var declared map[string]bool
-	if len(o.manifestRaw) > 0 {
-		var m manifest.Manifest
-		if err := json.Unmarshal(o.manifestRaw, &m); err != nil {
-			return nil, fmt.Errorf("parse embedded manifest: %w", err)
-		}
-		rt.key, rt.version = m.Key, m.Version
-		for _, accountType := range m.AccountTypes {
-			if accountType.ModelAvailability || accountType.Quota != nil && accountType.Quota.AutoRefresh {
-				rt.quotaCapabilities = true
-			}
-		}
-		rt.taskProtocols = map[string]bool{}
-		for _, platform := range m.Platforms {
-			for _, endpoint := range platform.Endpoints {
-				if endpoint.TaskSubmit() {
-					rt.taskProtocols[endpoint.Protocol] = true
-				}
-			}
-		}
-		declared = map[string]bool{}
-		for _, c := range m.Capabilities {
-			declared[c.ID] = true
-		}
-		if err := checkBroadcastManifest(p, &m, declared); err != nil {
-			return nil, err
-		}
-		if err := checkTaskManifest(p, &m, declared); err != nil {
-			return nil, err
+	o := rt.opts
+	if len(o.manifestRaw) == 0 {
+		return nil, nil
+	}
+	var m manifest.Manifest
+	if err := json.Unmarshal(o.manifestRaw, &m); err != nil {
+		return nil, fmt.Errorf("parse embedded manifest: %w", err)
+	}
+	rt.key, rt.version = m.Key, m.Version
+	for _, accountType := range m.AccountTypes {
+		if accountType.ModelAvailability || accountType.Quota != nil && accountType.Quota.AutoRefresh {
+			rt.quotaCapabilities = true
 		}
 	}
-	if o.key != "" {
-		rt.key = o.key
+	rt.taskProtocols = map[string]bool{}
+	for _, platform := range m.Platforms {
+		for _, endpoint := range platform.Endpoints {
+			if endpoint.TaskSubmit() {
+				rt.taskProtocols[endpoint.Protocol] = true
+			}
+		}
 	}
-	if o.version != "" {
-		rt.version = o.version
+	declared = map[string]bool{}
+	for _, c := range m.Capabilities {
+		declared[c.ID] = true
+	}
+	if err := checkBroadcastManifest(rt.p, &m, declared); err != nil {
+		return nil, err
+	}
+	if err := checkTaskManifest(rt.p, &m, declared); err != nil {
+		return nil, err
+	}
+	return declared, nil
+}
+
+// resolveIdentity applies the key/version overrides in precedence order:
+// WithInfo and WithManifest, then the -ldflags build identity, which wins so
+// one source tree can produce packages for several manifest versions.
+func (rt *runtime) resolveIdentity() {
+	if rt.opts.key != "" {
+		rt.key = rt.opts.key
+	}
+	if rt.opts.version != "" {
+		rt.version = rt.opts.version
 	}
 	if buildKey != "" {
 		rt.key = buildKey
@@ -281,14 +309,17 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 	if buildVersion != "" {
 		rt.version = buildVersion
 	}
-	if rt.key == "" || rt.version == "" {
-		return nil, errors.New("plugin key/version unknown: use WithManifest or WithInfo")
-	}
-	for _, c := range Capabilities(p) {
+}
+
+// resolveCapabilities collects the capabilities the plugin implements, limited
+// to the ones the manifest declares (all of them when it declares none), and
+// checks that each of them is backed by the interface it promises.
+func (rt *runtime) resolveCapabilities(declared map[string]bool) error {
+	for _, c := range Capabilities(rt.p) {
 		if declared == nil || declared[c] {
 			if c == manifest.CapPlatformExecute || c == manifest.CapPlatformMonitor {
-				if _, ok := p.(Platform); !ok {
-					return nil, fmt.Errorf("%s requires Platform", c)
+				if _, ok := rt.p.(Platform); !ok {
+					return fmt.Errorf("%s requires Platform", c)
 				}
 			}
 			rt.capabilities = append(rt.capabilities, c)
@@ -297,12 +328,12 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 	// platform.websocket.v1 is a promise about BuildUpstreamRequest, not an
 	// extra service, so it is reported when the manifest declares it.
 	if declared[manifest.CapPlatformWebSocket] {
-		if _, ok := p.(Platform); !ok {
-			return nil, fmt.Errorf("%s requires Platform", manifest.CapPlatformWebSocket)
+		if _, ok := rt.p.(Platform); !ok {
+			return fmt.Errorf("%s requires Platform", manifest.CapPlatformWebSocket)
 		}
 		rt.capabilities = append(rt.capabilities, manifest.CapPlatformWebSocket)
 	}
-	return rt, nil
+	return nil
 }
 
 func (rt *runtime) GetInfo(context.Context, *pluginv1.GetInfoRequest) (*pluginv1.GetInfoResponse, error) {

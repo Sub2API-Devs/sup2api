@@ -1,9 +1,12 @@
 package check
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
@@ -133,4 +136,184 @@ func (v *validator) menuIcon(field, icon string) {
 		return
 	}
 	v.add(field, "unknown_icon", "unknown icon %q; %s", icon, iconsStaleHint())
+}
+
+// coreMenuSections are the sidebar groups of the console a plugin menu may
+// join (authz/menus.go).
+var coreMenuSections = map[string]bool{"overview": true, "gateway": true, "finance": true, "system": true, "me": true}
+
+func (v *validator) ui() {
+	u := v.m.UI
+	if u == nil {
+		return
+	}
+	if len(u.Menus) > 0 || len(u.Pages) > 0 {
+		v.needPerm("ui", "ui.menu", "menus and pages")
+	}
+	sectionIDs := v.uiSections(u)
+	v.uiMenus(u, sectionIDs)
+	v.uiPages(u)
+	v.uiSlots(u)
+	v.uiNative(u)
+	if u.Settings != nil {
+		v.form("ui.settings", *u.Settings, true)
+	}
+}
+
+// uiSections validates ui.sections and returns the declared section ids.
+func (v *validator) uiSections(u *manifest.UI) map[string]bool {
+	sectionIDs := map[string]bool{}
+	for i, sec := range u.Sections {
+		f := fmt.Sprintf("ui.sections[%d]", i)
+		if !idRe.MatchString(sec.ID) {
+			v.add(f+".id", "invalid_format", "section id %q is invalid", sec.ID)
+		} else if coreMenuSections[sec.ID] || sec.ID == "plugins" {
+			v.add(f+".id", "invalid", "section id %q is reserved for the core sidebar", sec.ID)
+		} else if sectionIDs[sec.ID] {
+			v.add(f+".id", "duplicate", "section %q declared twice", sec.ID)
+		}
+		sectionIDs[sec.ID] = true
+		if firstText(sec.Label) == "" {
+			v.add(f+".label", "required", "label is required")
+		}
+	}
+	return sectionIDs
+}
+
+// uiMenus validates ui.menus against the declared sections and pages.
+func (v *validator) uiMenus(u *manifest.UI, sectionIDs map[string]bool) {
+	menuIDs := map[string]bool{}
+	for i, mn := range u.Menus {
+		f := fmt.Sprintf("ui.menus[%d]", i)
+		if !idRe.MatchString(mn.ID) {
+			v.add(f+".id", "invalid_format", "menu id %q is invalid", mn.ID)
+		} else if menuIDs[mn.ID] {
+			v.add(f+".id", "duplicate", "menu %q declared twice", mn.ID)
+		}
+		menuIDs[mn.ID] = true
+		if mn.Section != "plugins" && !coreMenuSections[mn.Section] && !sectionIDs[mn.Section] {
+			v.add(f+".section", "invalid", "section must be \"plugins\", a core section (overview, gateway, finance, system, me) or one of ui.sections")
+		}
+		if firstText(mn.Label) == "" {
+			v.add(f+".label", "required", "label is required")
+		}
+		if _, ok := u.Pages[mn.Page]; !ok {
+			v.add(f+".page", "unknown", "page %q is not declared in ui.pages", mn.Page)
+		}
+		v.menuIcon(f+".icon", mn.Icon)
+		if mn.Permission != "" && !v.userPerm(mn.Permission) {
+			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", mn.Permission)
+		}
+	}
+}
+
+// uiPages validates ui.pages (sorted by id so the reports are stable).
+func (v *validator) uiPages(u *manifest.UI) {
+	pageIDs := make([]string, 0, len(u.Pages))
+	for id := range u.Pages {
+		pageIDs = append(pageIDs, id)
+	}
+	sort.Strings(pageIDs)
+	for _, id := range pageIDs {
+		pg := u.Pages[id]
+		f := "ui.pages." + id
+		if !idRe.MatchString(id) {
+			v.add(f, "invalid_format", "page id %q is invalid", id)
+		}
+		switch pg.Type {
+		case "table":
+			if pg.Source == "" {
+				v.add(f+".source", "required", "table pages require source")
+			} else {
+				v.pageRouteRef(f+".source", pg.Source, "GET")
+			}
+		case "form":
+			v.needFile(f+".schema", pg.Schema)
+			if pg.Source != "" {
+				// Optional on a form: it pre-fills the fields.
+				v.pageRouteRef(f+".source", pg.Source, "GET")
+			}
+			// Without submit the console's Save button does nothing and says
+			// nothing (DeclarativeForm returns early when the reference does
+			// not parse), so a form page without it is a page that cannot be
+			// used, not a read-only one.
+			if pg.Submit == "" {
+				v.add(f+".submit", "required", "form pages require submit (the route the form posts to)")
+			} else {
+				v.pageRouteRef(f+".submit", pg.Submit, "POST")
+			}
+		case "iframe":
+			v.needPerm(f, "ui.iframe", "iframe pages")
+			v.needFile(f+".src", pg.Src)
+		case "native":
+			v.needPerm(f, "ui.native", "native pages")
+			if pg.Component == "" {
+				v.add(f+".component", "required", "component is required for native pages")
+			}
+			if u.Native == nil {
+				v.add(f, "missing_native_ui", "native pages require ui.native")
+			}
+		default:
+			v.add(f+".type", "invalid", "page type must be table, form, iframe or native")
+		}
+		v.pageSearch(f+".search", pg)
+	}
+}
+
+// uiSlots validates ui.slots.
+func (v *validator) uiSlots(u *manifest.UI) {
+	for i, s := range u.Slots {
+		f := fmt.Sprintf("ui.slots[%d]", i)
+		switch s.Slot {
+		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets":
+		default:
+			v.add(f+".slot", "invalid", "unknown slot %q", s.Slot)
+		}
+		if s.Component == "" {
+			v.add(f+".component", "required", "component is required")
+		}
+		v.needPerm(f, "ui.native", "slot components")
+		if u.Native == nil {
+			v.add(f, "missing_native_ui", "slot components require ui.native")
+		}
+		if s.Permission != "" && !v.userPerm(s.Permission) {
+			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", s.Permission)
+		}
+	}
+}
+
+// uiNative validates ui.native and hostUICompat.
+func (v *validator) uiNative(u *manifest.UI) {
+	if u.Native == nil {
+		return
+	}
+	v.needPerm("ui.native", "ui.native", "native UI")
+	if !v.opt.Tooling {
+		// The entry is produced by the native UI build, not written by
+		// the author; tooling checks for it at packaging time instead.
+		v.needFile("ui.native.entry", u.Native.Entry)
+	} else if u.Native.Entry == "" {
+		v.add("ui.native.entry", "required", "file path is required")
+	}
+	if u.Native.Entry != "" && !strings.HasPrefix(u.Native.Entry, "ui/") {
+		v.add("ui.native.entry", "invalid_path", "native entry must be under ui/")
+	}
+	if v.m.HostUICompat == "" {
+		v.add("hostUICompat", "required", "hostUICompat is required when ui.native is used")
+	} else if _, err := semver.NewConstraint(v.m.HostUICompat); err != nil {
+		v.add("hostUICompat", "invalid_constraint", "hostUICompat: %v", err)
+	}
+}
+
+// firstText returns the "en" text or any non-empty value.
+func firstText(t map[string]string) string {
+	if s := strings.TrimSpace(t["en"]); s != "" {
+		return s
+	}
+	for _, s := range t {
+		if s = strings.TrimSpace(s); s != "" {
+			return s
+		}
+	}
+	return ""
 }

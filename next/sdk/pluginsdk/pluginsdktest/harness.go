@@ -58,45 +58,8 @@ type Harness struct {
 // with t.Cleanup (Shutdown is called first).
 func Start(t testing.TB, p any, opts Options) *Harness {
 	t.Helper()
-	fh := opts.Host
-	if fh == nil {
-		fh = NewFakeHost()
-	}
-
-	// Fake host server.
-	hostLis := bufconn.Listen(1 << 20)
-	hostSrv := grpc.NewServer()
-	pluginv1.RegisterHostServiceServer(hostSrv, fh)
-	pluginv1.RegisterEgressServiceServer(hostSrv, fh)
-	go func() { _ = hostSrv.Serve(hostLis) }()
-
-	dialHost := func(id uint32) (*grpc.ClientConn, error) {
-		return dialBuf(hostLis)
-	}
-
-	// Plugin server.
-	sdkOpts := append([]pluginsdk.Option{pluginsdk.WithStrictNetwork(pluginsdk.StrictNever)}, opts.SDK...)
-	plugLis := bufconn.Listen(1 << 20)
-	plugSrv := pluginsdk.NewGRPCServer(nil)
-	if err := pluginsdk.Register(plugSrv, p, dialHost, sdkOpts...); err != nil {
-		t.Fatalf("pluginsdktest: register: %v", err)
-	}
-	go func() { _ = plugSrv.Serve(plugLis) }()
-
-	conn, err := dialBuf(plugLis)
-	if err != nil {
-		t.Fatalf("pluginsdktest: dial plugin: %v", err)
-	}
-	h := &Harness{
-		T: t, Host: fh, Conn: conn,
-		Plugin:    pluginv1.NewPluginServiceClient(conn),
-		Platform:  pluginv1.NewPlatformServiceClient(conn),
-		Hook:      pluginv1.NewHookServiceClient(conn),
-		App:       pluginv1.NewAppServiceClient(conn),
-		HTTP:      pluginv1.NewHTTPServiceClient(conn),
-		Scheduler: pluginv1.NewSchedulerServiceClient(conn),
-		Migration: pluginv1.NewMigrationServiceClient(conn),
-	}
+	fh, hostSrv, dialHost := startHost(t, opts)
+	plugSrv, conn, h := startPlugin(t, p, opts, fh, dialHost)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -129,6 +92,51 @@ func Start(t testing.TB, p any, opts Options) *Harness {
 		t.Fatalf("pluginsdktest: Configure rejected: %v", errs)
 	}
 	return h
+}
+
+// startHost serves the FakeHost's HostService and EgressService over an
+// in-memory listener and returns it with the dialer the plugin uses.
+func startHost(t testing.TB, opts Options) (*FakeHost, *grpc.Server, func(uint32) (*grpc.ClientConn, error)) {
+	t.Helper()
+	fh := opts.Host
+	if fh == nil {
+		fh = NewFakeHost()
+	}
+	hostLis := bufconn.Listen(1 << 20)
+	hostSrv := grpc.NewServer()
+	pluginv1.RegisterHostServiceServer(hostSrv, fh)
+	pluginv1.RegisterEgressServiceServer(hostSrv, fh)
+	go func() { _ = hostSrv.Serve(hostLis) }()
+	return fh, hostSrv, func(uint32) (*grpc.ClientConn, error) { return dialBuf(hostLis) }
+}
+
+// startPlugin serves p with the SDK over an in-memory listener and returns the
+// server, the client connection and the harness around it. Teardown stays with
+// Start so both servers are stopped in one place.
+func startPlugin(t testing.TB, p any, opts Options, fh *FakeHost, dialHost func(uint32) (*grpc.ClientConn, error)) (*grpc.Server, *grpc.ClientConn, *Harness) {
+	t.Helper()
+	sdkOpts := append([]pluginsdk.Option{pluginsdk.WithStrictNetwork(pluginsdk.StrictNever)}, opts.SDK...)
+	plugLis := bufconn.Listen(1 << 20)
+	plugSrv := pluginsdk.NewGRPCServer(nil)
+	if err := pluginsdk.Register(plugSrv, p, dialHost, sdkOpts...); err != nil {
+		t.Fatalf("pluginsdktest: register: %v", err)
+	}
+	go func() { _ = plugSrv.Serve(plugLis) }()
+
+	conn, err := dialBuf(plugLis)
+	if err != nil {
+		t.Fatalf("pluginsdktest: dial plugin: %v", err)
+	}
+	return plugSrv, conn, &Harness{
+		T: t, Host: fh, Conn: conn,
+		Plugin:    pluginv1.NewPluginServiceClient(conn),
+		Platform:  pluginv1.NewPlatformServiceClient(conn),
+		Hook:      pluginv1.NewHookServiceClient(conn),
+		App:       pluginv1.NewAppServiceClient(conn),
+		HTTP:      pluginv1.NewHTTPServiceClient(conn),
+		Scheduler: pluginv1.NewSchedulerServiceClient(conn),
+		Migration: pluginv1.NewMigrationServiceClient(conn),
+	}
 }
 
 // Configure sends a Configure call and returns the field errors.

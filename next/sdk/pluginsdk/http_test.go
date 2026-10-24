@@ -71,3 +71,82 @@ func TestRouterMultipleParams(t *testing.T) {
 		t.Fatalf("expected alice/project, got %s/%s", capturedUser, capturedRepo)
 	}
 }
+
+// TestRouterPatternPriority pins the choice between two patterns that both
+// match: the one with more literal segments wins, and a tie is broken by the
+// pattern text. Before the routes were compiled, the winner was whichever the
+// map iteration reached first, i.e. it could differ between runs.
+func TestRouterPatternPriority(t *testing.T) {
+	newRouter := func() *Router {
+		r := NewRouter()
+		r.Handle("GET", "/a/:id", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+			return DataResponse("param"), nil
+		})
+		r.Handle("GET", "/a/b", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+			return DataResponse("literal"), nil
+		})
+		return r
+	}
+	// Both /a/b (exact) and /a/:id (param) can serve /a/b; the literal must win
+	// regardless of registration order, so run it several times.
+	for i := 0; i < 20; i++ {
+		r := newRouter()
+		resp, err := r.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: "GET", Path: "/a/b"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(resp.GetBody()); got != `{"data":"literal"}` {
+			t.Fatalf("iteration %d: %s", i, got)
+		}
+		// /a/c still reaches the parameter route, and the parameter is filled.
+		req := &pluginv1.HTTPRequest{Method: "GET", Path: "/a/c"}
+		resp, err = r.HandleHTTP(context.Background(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(resp.GetBody()); got != `{"data":"param"}` {
+			t.Fatalf("iteration %d: %s", i, got)
+		}
+		if req.GetPathParams()["id"] != "c" {
+			t.Fatalf("path params = %v", req.GetPathParams())
+		}
+	}
+}
+
+// TestRouterOnlyTheMatchingMethod: a pattern of another method never answers.
+func TestRouterOnlyTheMatchingMethod(t *testing.T) {
+	r := NewRouter()
+	r.Handle("POST", "/rules/:id", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		return DataResponse("post"), nil
+	})
+	resp, err := r.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: "GET", Path: "/rules/1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.GetStatus() != 404 {
+		t.Fatalf("status = %d, want 404", resp.GetStatus())
+	}
+}
+
+// TestRouterReregisterReplaces: Handle on the same method and path twice keeps
+// the second handler (the map-backed router replaced it) and does not leave a
+// duplicate entry behind that a later re-sort could reorder.
+func TestRouterReregisterReplaces(t *testing.T) {
+	r := NewRouter()
+	r.Handle("GET", "/rules/:id", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		return DataResponse("first"), nil
+	})
+	r.Handle("GET", "/rules/:id", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		return DataResponse("second"), nil
+	})
+	resp, err := r.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: "GET", Path: "/rules/1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.GetBody()); got != `{"data":"second"}` {
+		t.Fatalf("body = %s, want the second handler", got)
+	}
+	if n := len(r.byMethod["GET"]); n != 1 {
+		t.Fatalf("registered %d routes, want 1", n)
+	}
+}

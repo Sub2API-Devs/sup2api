@@ -43,9 +43,7 @@ func TestBuiltinValidators(t *testing.T) {
 		good []string
 		bad  []string
 	}{
-		{"Anthropic", Anthropic, []string{"sk-ant-api03-abcdefgh12345678", "sk-ant-sid01-xyzabcdefgh1234"}, []string{"sk-ant-", "sk-openai-123", "sk ant api03 x"}},
 		{"OpenAI", OpenAI, []string{"sk-proj-abcdef123456789012", "sess-xyzabcdefgh123456"}, []string{"sk-", "apikey-123"}},
-		{"Gemini", Gemini, []string{"AIzaSyABCDEF1234567890", "AIzaXyzABCDEFGH123456"}, []string{"AIza", "GoogleAPIKey"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, s := range tc.good {
@@ -102,5 +100,65 @@ func TestNormalizeBaseURL(t *testing.T) {
 		if _, err := NormalizeBaseURL(in, strip); err == nil {
 			t.Errorf("%q accepted", in)
 		}
+	}
+}
+
+// TestModelListRequest: the four model-list callers (anthropic, openai,
+// gemini, relay) build the same request; the path and the id location are the
+// only differences, and content-type (a body header) is always dropped.
+func TestModelListRequest(t *testing.T) {
+	cfg := &Config{APIKey: "k", BaseURL: "https://api.example.com"}
+	h := map[string]string{"x-api-key": "k", "content-type": "application/json", "anthropic-version": "2023-06-01"}
+	r := ModelListRequest(cfg, "/v1/models?limit=1000", "data.#.id", "", h)
+	if r.GetMethod() != "GET" || r.GetUrl() != "https://api.example.com/v1/models?limit=1000" ||
+		r.GetIdsPath() != "data.#.id" || r.GetStripPrefix() != "" {
+		t.Fatalf("request = %v", r)
+	}
+	if _, ok := h["content-type"]; ok {
+		t.Fatal("content-type must be dropped from a GET")
+	}
+	if h["x-api-key"] != "k" || h["anthropic-version"] != "2023-06-01" {
+		t.Fatalf("headers = %v", h)
+	}
+	if got := ModelListRequest(cfg, "/v1beta/models", "models.#.name", "models/", map[string]string{}); got.GetStripPrefix() != "models/" {
+		t.Fatalf("strip prefix = %q", got.GetStripPrefix())
+	}
+}
+
+// TestTextsKeepShippedWording: the plugin-specific messages a plugin shipped
+// before Spec.Validate existed still come out verbatim, so the console keeps
+// showing what it always did.
+func TestTextsKeepShippedWording(t *testing.T) {
+	unset := Spec{AccountType: "apikey", DefaultBaseURL: "x"}
+	if r := unset.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "other"}); r.GetErrors()[0].GetMessage() != "unsupported account type / 不支持的账号类型" {
+		t.Fatalf("default message = %q", r.GetErrors()[0].GetMessage())
+	}
+
+	s := Spec{AccountType: "relay_key", RequireBaseURL: true, Texts: Texts{
+		UnsupportedAccountType: "unsupported account type %q / 不支持的账号类型",
+		KeyNotString:           "API key must be a string / api_key 必须是字符串",
+		BaseURLRequired:        "Base URL of the relay is required / 请填写中转站的 Base URL",
+	}}
+	r := s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey"})
+	if r.GetErrors()[0].GetMessage() != `unsupported account type "apikey" / 不支持的账号类型` {
+		t.Fatalf("account type message = %q", r.GetErrors()[0].GetMessage())
+	}
+	if r.GetErrors()[0].GetCode() != "unsupported" || r.GetErrors()[0].GetField() != "account_type" {
+		t.Fatalf("account type error = %v", r.GetErrors()[0])
+	}
+
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "relay_key", CredentialsJson: `{"api_key":42}`})
+	if e := r.GetErrors()[0]; e.GetCode() != "pattern" || e.GetMessage() != "API key must be a string / api_key 必须是字符串" {
+		t.Fatalf("non-string key = %v", e)
+	}
+
+	// api_key is checked before base_url, so an empty form lists them in that
+	// order (relay used to list base_url first).
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "relay_key", CredentialsJson: `{}`})
+	if len(r.GetErrors()) != 2 || r.GetErrors()[0].GetField() != "api_key" || r.GetErrors()[1].GetField() != "base_url" {
+		t.Fatalf("empty form errors = %v", r.GetErrors())
+	}
+	if got := r.GetErrors()[1].GetMessage(); got != "Base URL of the relay is required / 请填写中转站的 Base URL" {
+		t.Fatalf("required message = %q", got)
 	}
 }

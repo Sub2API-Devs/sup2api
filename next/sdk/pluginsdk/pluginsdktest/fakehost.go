@@ -283,13 +283,32 @@ func (f *FakeHost) LedgerDebit(_ context.Context, in *pluginv1.LedgerChangeReque
 
 // Dial implements a direct (unfiltered) egress tunnel.
 func (f *FakeHost) Dial(stream pluginv1.EgressService_DialServer) error {
-	first, err := stream.Recv()
+	conn, err := f.dialAndOpen(stream)
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
+	if err := stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: true, RemoteAddr: conn.RemoteAddr().String()}}}); err != nil {
+		return err
+	}
+	var sendMu sync.Mutex
+	done := make(chan struct{})
+	go f.pumpToHost(stream, conn, &sendMu, done)
+	f.pumpToConn(stream, conn, done)
+	return nil
+}
+
+// dialAndOpen reads the open frame, records the dial and opens the connection.
+// A failed dial is reported to the plugin as a DialResult and is not an error
+// for the stream.
+func (f *FakeHost) dialAndOpen(stream pluginv1.EgressService_DialServer) (net.Conn, error) {
+	first, err := stream.Recv()
+	if err != nil {
+		return nil, err
+	}
 	open := first.GetOpen()
 	if open == nil {
-		return status.Error(codes.InvalidArgument, "first frame must be open")
+		return nil, status.Error(codes.InvalidArgument, "first frame must be open")
 	}
 	f.mu.Lock()
 	f.dials = append(f.dials, open.GetAddress())
@@ -301,52 +320,58 @@ func (f *FakeHost) Dial(stream pluginv1.EgressService_DialServer) error {
 	}
 	conn, err := dial(stream.Context(), open.GetNetwork(), open.GetAddress())
 	if err != nil {
-		return stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: false, Error: err.Error()}}})
+		return nil, stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: false, Error: err.Error()}}})
 	}
-	defer conn.Close()
-	if err := stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: true, RemoteAddr: conn.RemoteAddr().String()}}}); err != nil {
-		return err
-	}
-	var sendMu sync.Mutex
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		buf := make([]byte, 32<<10)
-		for {
-			n, rerr := conn.Read(buf)
-			if n > 0 {
-				sendMu.Lock()
-				serr := stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Data{Data: append([]byte(nil), buf[:n]...)}})
-				sendMu.Unlock()
-				if serr != nil {
-					return
-				}
-			}
-			if rerr != nil {
-				msg := ""
-				if !errors.Is(rerr, io.EOF) {
-					msg = rerr.Error()
-				}
-				sendMu.Lock()
-				_ = stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Close{Close: &pluginv1.DialClose{Error: msg}}})
-				sendMu.Unlock()
+	return conn, nil
+}
+
+// pumpToHost copies what the upstream connection returns into Egress Data
+// frames, ending with one Close frame (an empty error at EOF). It stops
+// silently when the stream is gone.
+func (f *FakeHost) pumpToHost(stream pluginv1.EgressService_DialServer, conn net.Conn, sendMu *sync.Mutex, done chan<- struct{}) {
+	defer close(done)
+	buf := make([]byte, 32<<10)
+	for {
+		n, rerr := conn.Read(buf)
+		if n > 0 {
+			sendMu.Lock()
+			serr := stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Data{Data: append([]byte(nil), buf[:n]...)}})
+			sendMu.Unlock()
+			if serr != nil {
 				return
 			}
 		}
-	}()
+		if rerr != nil {
+			msg := ""
+			if !errors.Is(rerr, io.EOF) {
+				msg = rerr.Error()
+			}
+			sendMu.Lock()
+			_ = stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Close{Close: &pluginv1.DialClose{Error: msg}}})
+			sendMu.Unlock()
+			return
+		}
+	}
+}
+
+// pumpToConn copies Egress Data frames into the upstream connection until the
+// stream ends or a write fails; both close the connection and wait for the
+// read goroutine to finish. A Close frame half-closes the write side when the
+// connection supports it.
+func (f *FakeHost) pumpToConn(stream pluginv1.EgressService_DialServer, conn net.Conn, done <-chan struct{}) {
 	for {
 		fr, err := stream.Recv()
 		if err != nil {
 			_ = conn.Close()
 			<-done
-			return nil
+			return
 		}
 		switch k := fr.GetKind().(type) {
 		case *pluginv1.EgressFrame_Data:
 			if _, err := conn.Write(k.Data); err != nil {
 				_ = conn.Close()
 				<-done
-				return nil
+				return
 			}
 		case *pluginv1.EgressFrame_Close:
 			if cw, ok := conn.(interface{ CloseWrite() error }); ok {

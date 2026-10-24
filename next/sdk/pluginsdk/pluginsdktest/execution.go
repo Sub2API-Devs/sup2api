@@ -7,27 +7,27 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (h *FakeHost) ForwardUpstream(ctx context.Context, in *pluginv1.ForwardUpstreamRequest) (*pluginv1.ForwardUpstreamResponse, error) {
-	if h.ForwardUpstreamFunc == nil {
+func (f *FakeHost) ForwardUpstream(ctx context.Context, in *pluginv1.ForwardUpstreamRequest) (*pluginv1.ForwardUpstreamResponse, error) {
+	if f.ForwardUpstreamFunc == nil {
 		return nil, status.Error(codes.Unimplemented, "no ForwardUpstream handler")
 	}
-	return h.ForwardUpstreamFunc(ctx, in)
+	return f.ForwardUpstreamFunc(ctx, in)
 }
-func (h *FakeHost) RecordUsage(ctx context.Context, in *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error) {
-	if h.RecordUsageFunc == nil {
+func (f *FakeHost) RecordUsage(ctx context.Context, in *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error) {
+	if f.RecordUsageFunc == nil {
 		return nil, status.Error(codes.Unimplemented, "no RecordUsage handler")
 	}
-	return h.RecordUsageFunc(ctx, in)
+	return f.RecordUsageFunc(ctx, in)
 }
-func (h *FakeHost) ReserveAndWatch(ctx context.Context, in *pluginv1.ReserveAndWatchRequest) (*pluginv1.ExecutionReceipt, error) {
-	if h.ReserveAndWatchFunc == nil {
+func (f *FakeHost) ReserveAndWatch(ctx context.Context, in *pluginv1.ReserveAndWatchRequest) (*pluginv1.ExecutionReceipt, error) {
+	if f.ReserveAndWatchFunc == nil {
 		return nil, status.Error(codes.Unimplemented, "no ReserveAndWatch handler")
 	}
-	return h.ReserveAndWatchFunc(ctx, in)
+	return f.ReserveAndWatchFunc(ctx, in)
 }
-func (h *FakeHost) ReportTaskProgress(ctx context.Context, in *pluginv1.ReportTaskProgressRequest) (*pluginv1.ExecutionReceipt, error) {
-	if h.ReportTaskProgressFunc == nil {
+func (f *FakeHost) ReportTaskProgress(ctx context.Context, in *pluginv1.ReportTaskProgressRequest) (*pluginv1.ExecutionReceipt, error) {
+	if f.ReportTaskProgressFunc == nil {
 		return nil, status.Error(codes.Unimplemented, "no ReportTaskProgress handler")
 	}
-	return h.ReportTaskProgressFunc(ctx, in)
+	return f.ReportTaskProgressFunc(ctx, in)
 }

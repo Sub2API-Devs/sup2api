@@ -79,40 +79,49 @@ func (w *Writer[T]) run(ctx context.Context) {
 	t := time.NewTicker(w.interval)
 	defer t.Stop()
 	var batch []T
-	flush := func() {
-		if len(batch) == 0 {
+	flush := func(items []T) {
+		if len(items) == 0 {
 			return
 		}
 		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
-		if err := w.write(fctx, batch); err != nil && w.onDrop != nil {
-			w.onDrop(len(batch))
+		if err := w.write(fctx, items); err != nil && w.onDrop != nil {
+			w.onDrop(len(items))
 		}
-		batch = batch[:0]
 	}
 	for {
 		select {
 		case <-ctx.Done():
 			// Drain what is already queued, then stop.
-			for {
-				select {
-				case item := <-w.ch:
-					batch = append(batch, item)
-					if len(batch) >= w.max {
-						flush()
-					}
-				default:
-					flush()
-					return
-				}
-			}
+			batch = w.drain(batch, flush)
+			flush(batch)
+			return
 		case item := <-w.ch:
 			batch = append(batch, item)
 			if len(batch) >= w.max {
-				flush()
+				flush(batch)
+				batch = batch[:0]
 			}
 		case <-t.C:
-			flush()
+			flush(batch)
+			batch = batch[:0]
+		}
+	}
+}
+
+// drain takes every item already queued without blocking, flushing each full
+// batch, and returns what is left for the caller to flush.
+func (w *Writer[T]) drain(batch []T, flush func([]T)) []T {
+	for {
+		select {
+		case item := <-w.ch:
+			batch = append(batch, item)
+			if len(batch) >= w.max {
+				flush(batch)
+				batch = batch[:0]
+			}
+		default:
+			return batch
 		}
 	}
 }

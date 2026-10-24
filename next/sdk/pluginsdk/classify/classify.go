@@ -292,37 +292,6 @@ func CodeIn(codes ...string) Match {
 	}
 }
 
-// CodePrefix matches upstream error codes starting with prefix.
-func CodePrefix(prefix string) Match {
-	return func(in *Input) bool { return strings.HasPrefix(in.Error.Code, prefix) }
-}
-
-// TypeIn matches the given upstream error types.
-func TypeIn(types ...string) Match {
-	return func(in *Input) bool {
-		for _, t := range types {
-			if in.Error.Type == t {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-// MessageContains matches an upstream message containing one of subs
-// (case-insensitive).
-func MessageContains(subs ...string) Match {
-	return func(in *Input) bool {
-		m := strings.ToLower(in.Error.Message)
-		for _, s := range subs {
-			if strings.Contains(m, strings.ToLower(s)) {
-				return true
-			}
-		}
-		return false
-	}
-}
-
 // HasReason matches one of the machine reasons (google.rpc.ErrorInfo).
 func HasReason(reasons ...string) Match {
 	return func(in *Input) bool {
@@ -418,18 +387,6 @@ func RetryAfter(in *Input) (time.Time, string, bool) {
 		return t, "retry-after", true
 	}
 	return time.Time{}, "", false
-}
-
-// FirstReset tries the resets in order and returns the first answer.
-func FirstReset(resets ...Reset) Reset {
-	return func(in *Input) (time.Time, string, bool) {
-		for _, r := range resets {
-			if t, src, ok := r(in); ok {
-				return t, src, true
-			}
-		}
-		return time.Time{}, "", false
-	}
 }
 
 // Clamp bounds a reset to [now+1s, now+MaxCooldown].

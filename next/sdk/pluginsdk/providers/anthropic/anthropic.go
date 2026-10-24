@@ -4,6 +4,8 @@
 package anthropic
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +18,69 @@ import (
 
 // StatusOverloaded is Anthropic's "overloaded" status code.
 const StatusOverloaded = 529
+
+// Protocol ids of the built-in anthropic platform (sdk/platforms/anthropic.json).
+// They are the contract every Anthropic-compatible plugin writes its
+// accountTypes[].platforms against, and the values RequestMeta.protocol
+// carries for that platform's endpoints.
+const (
+	ProtocolMessages    = "anthropic.messages"
+	ProtocolCountTokens = "anthropic.count_tokens"
+)
+
+// DefaultAPIVersion is sent when the client did not send anthropic-version.
+const DefaultAPIVersion = "2023-06-01"
+
+// Path maps an upstream protocol id to the Anthropic-compatible path. An
+// unknown protocol (including "") is an error: callers that treat "no
+// protocol" as messages say so themselves.
+func Path(protocol string) (string, error) {
+	switch protocol {
+	case ProtocolMessages:
+		return "/v1/messages", nil
+	case ProtocolCountTokens:
+		return "/v1/messages/count_tokens", nil
+	default:
+		return "", fmt.Errorf("unsupported upstream protocol %q", protocol)
+	}
+}
+
+// Headers builds the upstream request headers of an Anthropic-compatible
+// request: x-api-key, anthropic-version (the inbound value when present,
+// otherwise defaultVersion) and content-type, plus the inbound headers named
+// in forward copied verbatim. Anthropic-compatible relays differ in which
+// client headers they accept, so the list is a parameter.
+func Headers(apiKey string, inbound map[string]string, forward []string, defaultVersion string) map[string]string {
+	h := map[string]string{
+		"x-api-key":         apiKey,
+		"anthropic-version": defaultVersion,
+		"content-type":      "application/json",
+	}
+	if v := strings.TrimSpace(inbound["anthropic-version"]); v != "" {
+		h["anthropic-version"] = v
+	}
+	for _, name := range forward {
+		if v := strings.TrimSpace(inbound[name]); v != "" {
+			h[name] = v
+		}
+	}
+	return h
+}
+
+// MessagesPingBody is the body of a minimal Messages call: one user message
+// asking the upstream to answer "ping". BuildTestRequest uses it so every
+// Anthropic-compatible plugin probes the same shape; maxTokens stays a
+// parameter because the minimum a model accepts differs (1 for Anthropic,
+// 16 for some Ark models). The result is deterministic JSON: encoding/json
+// sorts map keys.
+func MessagesPingBody(model string, maxTokens int) string {
+	body, _ := json.Marshal(map[string]any{
+		"model":      model,
+		"max_tokens": maxTokens,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+	})
+	return string(body)
+}
 
 // Policy is the shared Anthropic classify policy.
 var Policy = classify.Policy{

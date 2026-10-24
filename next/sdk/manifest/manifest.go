@@ -333,6 +333,10 @@ type AccountLifecycle struct {
 // AccountDeletion is what deleting an account of the type may keep. The
 // operator chooses per deletion; the days come from the manifest only.
 type AccountDeletion struct {
+	// RetentionDays is how long the runtime resources are kept, in days.
+	// It is inclusive of both ends: 1 to MaxRetentionDays. Values outside
+	// that range are rejected by manifest/check (code "invalid" on
+	// accountTypes[].lifecycle.deletion.retentionDays).
 	RetentionDays int `json:"retentionDays"`
 }
 

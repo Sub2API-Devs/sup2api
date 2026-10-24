@@ -1,7 +1,8 @@
 // Package apikey validates API keys in plugin ValidateCredentials: stripping
 // whitespace, checking prefixes and rejecting keys with internal whitespace or
-// obviously wrong shape. anthropic, relay and ccgateway share one validator;
-// openai and gemini have their own prefix lists.
+// obviously wrong shape. Spec.Validate is the one implementation of the
+// api_key + base_url credential form (anthropic, openai, gemini, relay and
+// volcengine use it); Spec.Texts only overrides the wording each plugin shipped.
 package apikey
 
 import (
@@ -57,24 +58,14 @@ func (v Validator) Check(s string) (string, *pluginv1.FieldError) {
 	return s, nil
 }
 
-// Anthropic accepts sk-ant-api03-* and sk-ant-sid01-* (session keys).
-var Anthropic = Validator{
-	Prefixes:  []string{"sk-ant-api03-", "sk-ant-sid01-"},
-	MinLength: 20,
-	Field:     "api_key",
-}
-
-// OpenAI accepts sk-* and sess-* (realtime session tokens).
+// OpenAI accepts sk-* and sess-* (realtime session tokens). It is the only
+// preset in force: the anthropic and relay account types declare validators of
+// their own (see their Spec), because the account forms accept any 8-512
+// printable characters (CONTRACTS §21.3) and a stricter prefix rule would
+// reject keys those forms accept.
 var OpenAI = Validator{
 	Prefixes:  []string{"sk-", "sess-"},
 	MinLength: 10,
-	Field:     "api_key",
-}
-
-// Gemini accepts AIza* keys.
-var Gemini = Validator{
-	Prefixes:  []string{"AIza"},
-	MinLength: 20,
 	Field:     "api_key",
 }
 
@@ -83,6 +74,25 @@ var Gemini = Validator{
 type Config struct {
 	APIKey  string
 	BaseURL string
+}
+
+// Texts overrides the wording of a few Spec.Validate field errors. An empty
+// field keeps the SDK text. The console renders these strings verbatim and the
+// built-in plugins shipped their own wording before this helper existed; the
+// validation rules are the same either way.
+type Texts struct {
+	// UnsupportedAccountType is the account_type message; "%q" becomes the
+	// received account type.
+	UnsupportedAccountType string
+	// KeyNotString, when set, reports a non-string api_key with code
+	// "pattern" and this message (plugins that lump it with a malformed
+	// string). Empty reports code "type" and the SDK message.
+	KeyNotString string
+	// BaseURLRequired is the message of a missing base_url when
+	// RequireBaseURL is set.
+	BaseURLRequired string
+	// BaseURLFormat is the base_url format message; "%s" is the reason.
+	BaseURLFormat string
 }
 
 // Spec describes an account type that uses api_key and optional base_url.
@@ -100,13 +110,21 @@ type Spec struct {
 	// KeyValidator checks the api_key. If nil, any 8-512 printable non-space
 	// character string is accepted.
 	KeyValidator *Validator
+	// Texts overrides the wording of a few field errors (see Texts).
+	Texts Texts
 }
 
 // Validate implements ValidateCredentials for the account type described by s.
 func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
 	var errs pluginsdk.FieldErrors
 	if in.GetAccountType() != s.AccountType {
-		errs = errs.Add("account_type", "unsupported", "unsupported account type / 不支持的账号类型")
+		msg := s.Texts.UnsupportedAccountType
+		if msg == "" {
+			msg = "unsupported account type / 不支持的账号类型"
+		} else {
+			msg = fmt.Sprintf(msg, in.GetAccountType())
+		}
+		errs = errs.Add("account_type", "unsupported", msg)
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
 	creds, err := decodeObject(in.GetCredentialsJson())
@@ -120,47 +138,8 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
 
-	// api_key
-	rawKey, _ := lookup("api_key", creds, settings)
-	key, isString := rawKey.(string)
-	key = strings.TrimSpace(key)
-	switch {
-	case rawKey == nil || (isString && key == ""):
-		errs = errs.Add("api_key", "required", "API key is required / 请填写 API Key")
-	case !isString:
-		errs = errs.Add("api_key", "type", "api_key must be a string / api_key 必须是字符串")
-	default:
-		if s.KeyValidator != nil {
-			if _, fieldErr := s.KeyValidator.Check(key); fieldErr != nil {
-				errs = append(errs, fieldErr)
-			}
-		} else if !validAPIKey(key) {
-			errs = errs.Add("api_key", "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符")
-		}
-	}
-
-	// base_url
-	var baseURL string
-	rawBase, _ := lookup("base_url", settings, creds)
-	baseStr, isStr := rawBase.(string)
-	baseStr = strings.TrimSpace(baseStr)
-	switch {
-	case rawBase == nil || (isStr && baseStr == ""):
-		if s.RequireBaseURL {
-			errs = errs.Add("base_url", "required", "Base URL is required / 请填写 Base URL")
-		} else {
-			baseURL = s.DefaultBaseURL
-		}
-	case !isStr:
-		errs = errs.Add("base_url", "type", "base_url must be a string / base_url 必须是字符串")
-	default:
-		if normalized, err := s.normalizeBaseURL(baseStr); err != nil {
-			errs = errs.Add("base_url", "format", "base_url "+err.Error()+" / base_url 格式错误")
-		} else {
-			baseURL = normalized
-		}
-	}
-
+	key, errs := s.validateKey(errs, creds, settings)
+	baseURL, errs := s.validateBaseURL(errs, creds, settings)
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
@@ -171,28 +150,86 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 	// base_url from settings into credentials would take it out of reach of
 	// the core's guardedSettings check and the console form. An empty object
 	// stays empty: "" tells the core to keep what it has.
-	normalize := func(obj map[string]any) string {
-		if len(obj) == 0 {
-			return ""
-		}
-		out := make(map[string]any, len(obj))
-		for k, v := range obj {
-			switch k {
-			case "api_key":
-				out[k] = key
-			case "base_url":
-				out[k] = baseURL
-			default:
-				out[k] = v
-			}
-		}
-		b, _ := json.Marshal(out)
-		return string(b)
-	}
 	return &pluginv1.ValidateCredentialsResponse{
-		NormalizedCredentialsJson: normalize(creds),
-		NormalizedSettingsJson:    normalize(settings),
+		NormalizedCredentialsJson: s.rewriteObject(creds, key, baseURL),
+		NormalizedSettingsJson:    s.rewriteObject(settings, key, baseURL),
 	}
+}
+
+// validateKey reads api_key from credentials then settings and returns the
+// trimmed key. It appends exactly one api_key error when the key is unusable.
+func (s Spec) validateKey(errs pluginsdk.FieldErrors, creds, settings map[string]any) (string, pluginsdk.FieldErrors) {
+	rawKey, _ := lookup("api_key", creds, settings)
+	key, isString := rawKey.(string)
+	key = strings.TrimSpace(key)
+	switch {
+	case rawKey == nil || (isString && key == ""):
+		return "", errs.Add("api_key", "required", "API key is required / 请填写 API Key")
+	case !isString:
+		if s.Texts.KeyNotString != "" {
+			return "", errs.Add("api_key", "pattern", s.Texts.KeyNotString)
+		}
+		return "", errs.Add("api_key", "type", "api_key must be a string / api_key 必须是字符串")
+	}
+	if s.KeyValidator != nil {
+		if _, fieldErr := s.KeyValidator.Check(key); fieldErr != nil {
+			return "", append(errs, fieldErr)
+		}
+	} else if !validAPIKey(key) {
+		return "", errs.Add("api_key", "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符")
+	}
+	return key, errs
+}
+
+// validateBaseURL reads base_url from settings then credentials and returns
+// the normalized URL (s.DefaultBaseURL when absent).
+func (s Spec) validateBaseURL(errs pluginsdk.FieldErrors, creds, settings map[string]any) (string, pluginsdk.FieldErrors) {
+	rawBase, _ := lookup("base_url", settings, creds)
+	baseStr, isStr := rawBase.(string)
+	baseStr = strings.TrimSpace(baseStr)
+	switch {
+	case rawBase == nil || (isStr && baseStr == ""):
+		if s.RequireBaseURL {
+			msg := s.Texts.BaseURLRequired
+			if msg == "" {
+				msg = "Base URL is required / 请填写 Base URL"
+			}
+			return "", errs.Add("base_url", "required", msg)
+		}
+		return s.DefaultBaseURL, errs
+	case !isStr:
+		return "", errs.Add("base_url", "type", "base_url must be a string / base_url 必须是字符串")
+	}
+	normalized, err := s.normalizeBaseURL(baseStr)
+	if err != nil {
+		msg := s.Texts.BaseURLFormat
+		if msg == "" {
+			msg = "base_url %s / base_url 格式错误"
+		}
+		return "", errs.Add("base_url", "format", fmt.Sprintf(msg, err.Error()))
+	}
+	return normalized, errs
+}
+
+// rewriteObject re-encodes obj with api_key and base_url normalized where the
+// key already exists; an empty object stays empty ("" keeps the core's value).
+func (s Spec) rewriteObject(obj map[string]any, key, baseURL string) string {
+	if len(obj) == 0 {
+		return ""
+	}
+	out := make(map[string]any, len(obj))
+	for k, v := range obj {
+		switch k {
+		case "api_key":
+			out[k] = key
+		case "base_url":
+			out[k] = baseURL
+		default:
+			out[k] = v
+		}
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
 }
 
 // FromAccount extracts and validates the api_key and base_url from an Account proto.
@@ -273,6 +310,23 @@ func NormalizeBaseURL(baseStr string, stripSuffixes []string) (string, error) {
 	return u.String(), nil
 }
 
+// ModelListRequest builds the GET a plugin's BuildModelsRequest returns: a
+// model listing on base_url + path, with the request's headers minus
+// content-type (nothing is sent in the body). path carries whatever page size
+// the upstream expects ("/v1/models?limit=1000"); idsPath and stripPrefix tell
+// the core where the ids are in the answer. headers is the map
+// upstreamHeaders just built; it is modified in place.
+func ModelListRequest(cfg *Config, path, idsPath, stripPrefix string, headers map[string]string) *pluginv1.BuildModelsRequestResponse {
+	delete(headers, "content-type")
+	return &pluginv1.BuildModelsRequestResponse{
+		Method:      "GET",
+		Url:         cfg.BaseURL + path,
+		Headers:     headers,
+		IdsPath:     idsPath,
+		StripPrefix: stripPrefix,
+	}
+}
+
 // ForwardHeaders copies the specified headers from inbound to out.
 // Header names are case-insensitive (normalized to lower-case).
 func ForwardHeaders(out, inbound map[string]string, headers []string) {
@@ -285,7 +339,8 @@ func ForwardHeaders(out, inbound map[string]string, headers []string) {
 
 // Helper functions
 
-// DecodeObject parses a JSON string into a map. An empty string yields an empty map.
+// DecodeObject parses a JSON string into a map. An empty string (or "null")
+// yields an empty map, which is what a form posting nothing looks like.
 func DecodeObject(raw string) (map[string]any, error) {
 	return decodeObject(raw)
 }
@@ -305,7 +360,8 @@ func decodeObject(raw string) (map[string]any, error) {
 	return m, nil
 }
 
-// Lookup searches for a key in the given maps in order and returns the first non-nil value.
+// Lookup searches the given maps in order and returns the first non-nil value
+// of key (the same precedence Spec.Validate applies).
 func Lookup(key string, objs ...map[string]any) (any, bool) {
 	return lookup(key, objs...)
 }

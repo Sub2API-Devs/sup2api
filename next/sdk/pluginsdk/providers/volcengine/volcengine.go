@@ -12,6 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/classify"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/anthropic"
 )
 
 // Ark error codes that need special handling beyond HTTP status.
@@ -25,11 +26,13 @@ const (
 	CodeClosedEndpoint = "InvalidEndpoint.ClosedEndpoint" // 400, inference endpoint closed
 )
 
-// ProtocolMessages and ProtocolCountTokens are Anthropic surface protocols;
-// the other surfaces are OpenAI-shaped.
+// ProtocolMessages and ProtocolCountTokens are the Anthropic surface
+// protocols: Ark's Messages-compatible endpoints speak the built-in anthropic
+// platform's protocol ids, not Ark-invented spellings. The other surfaces are
+// OpenAI-shaped.
 const (
-	ProtocolMessages    = "anthropic-messages"
-	ProtocolCountTokens = "anthropic-count-tokens"
+	ProtocolMessages    = anthropic.ProtocolMessages
+	ProtocolCountTokens = anthropic.ProtocolCountTokens
 )
 
 // Policy is the shared Volcengine Ark classify policy for OpenAI surfaces.

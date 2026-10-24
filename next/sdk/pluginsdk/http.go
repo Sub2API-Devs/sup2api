@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,17 +17,61 @@ type HandlerFunc func(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1
 
 // Router dispatches HTTPService calls by method and manifest route pattern
 // (HTTPRequest.route_path, falling back to path). It implements HTTP.
+//
+// Routes are compiled when registered: each method keeps its patterns sorted
+// so that the most literal pattern wins and a tie is broken by the pattern
+// text, never by map iteration order. Two patterns can therefore never
+// resolve differently between two runs.
 type Router struct {
-	routes map[string]HandlerFunc
+	routes   map[string]HandlerFunc
+	byMethod map[string][]route
+}
+
+// route is one compiled pattern of a method.
+type route struct {
+	pattern  string
+	segments []string
+	literals int // segments without a parameter, higher wins
+	handler  HandlerFunc
 }
 
 // NewRouter returns an empty router.
-func NewRouter() *Router { return &Router{routes: map[string]HandlerFunc{}} }
+func NewRouter() *Router {
+	return &Router{routes: map[string]HandlerFunc{}, byMethod: map[string][]route{}}
+}
 
 // Handle registers h for method and the manifest route path, e.g.
-// Handle("GET", "/models", h).
+// Handle("GET", "/models", h). Registering the same method and path again
+// replaces the handler, as the previous map-backed router did.
 func (r *Router) Handle(method, path string, h HandlerFunc) {
-	r.routes[strings.ToUpper(method)+" "+path] = h
+	method = strings.ToUpper(method)
+	r.routes[method+" "+path] = h
+	if r.byMethod == nil {
+		r.byMethod = map[string][]route{}
+	}
+	rt := route{pattern: path, segments: splitPath(path), handler: h}
+	for _, s := range rt.segments {
+		if !strings.HasPrefix(s, ":") {
+			rt.literals++
+		}
+	}
+	list := r.byMethod[method]
+	for i := range list {
+		if list[i].pattern == path {
+			list[i].handler = h
+			return
+		}
+	}
+	list = append(list, rt)
+	// The most literal pattern wins; ties are broken by the pattern text, so
+	// the outcome never depends on registration or map iteration order.
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].literals != list[j].literals {
+			return list[i].literals > list[j].literals
+		}
+		return list[i].pattern < list[j].pattern
+	})
+	r.byMethod[method] = list
 }
 
 // HandleHTTP implements HTTP.
@@ -40,44 +85,52 @@ func (r *Router) HandleHTTP(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		if h, ok := r.routes[method+" "+p]; ok {
 			return h(ctx, req)
 		}
-		// Try pattern match (e.g., /models/:id)
-		for pattern, h := range r.routes {
-			if !strings.HasPrefix(pattern, method+" ") {
+		// Try the compiled patterns of this method, longest literal prefix
+		// first (e.g., /models/list before /models/:id).
+		parts := splitPath(p)
+		for _, rt := range r.byMethod[method] {
+			params, ok := matchSegments(rt.segments, parts)
+			if !ok {
 				continue
 			}
-			patternPath := strings.TrimPrefix(pattern, method+" ")
-			if params := matchPath(patternPath, p); params != nil {
-				// Fill path_params for Param() helper
+			// Fill path_params for Param() helper
+			if len(params) > 0 {
 				if req.PathParams == nil {
 					req.PathParams = make(map[string]string)
 				}
 				for k, v := range params {
 					req.PathParams[k] = v
 				}
-				return h(ctx, req)
 			}
+			return rt.handler(ctx, req)
 		}
 	}
 	return ErrorResponse(http.StatusNotFound, "not_found", fmt.Sprintf("no route for %s %s", method, req.GetPath())), nil
 }
 
-// matchPath checks if path matches pattern (e.g., /models/:id matches /models/123).
-// Returns nil if no match, or a map of parameter names to values.
-func matchPath(pattern, path string) map[string]string {
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	pathParts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(patternParts) != len(pathParts) {
-		return nil
+// splitPath splits a pattern or request path into segments.
+func splitPath(p string) []string {
+	return strings.Split(strings.Trim(p, "/"), "/")
+}
+
+// matchSegments matches pre-split segments. It returns ok=false on a length or
+// literal mismatch; params is empty for a literal-only pattern.
+func matchSegments(pattern, path []string) (map[string]string, bool) {
+	if len(pattern) != len(path) {
+		return nil, false
 	}
-	params := make(map[string]string)
-	for i, pp := range patternParts {
+	var params map[string]string
+	for i, pp := range pattern {
 		if strings.HasPrefix(pp, ":") {
-			params[strings.TrimPrefix(pp, ":")] = pathParts[i]
-		} else if pp != pathParts[i] {
-			return nil
+			if params == nil {
+				params = make(map[string]string)
+			}
+			params[strings.TrimPrefix(pp, ":")] = path[i]
+		} else if pp != path[i] {
+			return nil, false
 		}
 	}
-	return params
+	return params, true
 }
 
 // ---------------------------------------------------------------- responses (CONTRACTS §3.1)
