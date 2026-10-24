@@ -24,18 +24,13 @@ import (
 // as it was.
 func sanitizePolicy(p *RequestPolicy) []string {
 	var dropped []string
-	if p.Level != "" && features.ValidateRequestLevel(p.Level) != nil {
-		dropped = append(dropped, "level="+p.Level)
+	if invalid("level", p.Level, features.ValidateRequestLevel, &dropped) {
 		p.Level = ""
 	}
-	if p.BuildBillingEntrypoint != "" && features.ValidateBillingEntrypoint(p.BuildBillingEntrypoint) != nil {
-		dropped = append(dropped, "build_billing_entrypoint="+p.BuildBillingEntrypoint)
+	if invalid("build_billing_entrypoint", p.BuildBillingEntrypoint, features.ValidateBillingEntrypoint, &dropped) {
 		p.BuildBillingEntrypoint = ""
 	}
-	p.BuildAttachmentSources, dropped = keepValid(p.BuildAttachmentSources, "build_attachment_sources", features.BuildAttachmentSources.Validate, dropped)
-	p.BuildBillingSources, dropped = keepValid(p.BuildBillingSources, "build_billing_sources", features.BuildBillingSources.Validate, dropped)
-	p.BuildInjection, dropped = keepValidInjection(p.BuildInjection, dropped)
-	return dropped
+	return sanitizeSources(&p.BuildAttachmentSources, &p.BuildBillingSources, &p.BuildInjection, dropped)
 }
 
 // sanitizeOverrides is sanitizePolicy for one layer's overrides. The identity
@@ -43,17 +38,31 @@ func sanitizePolicy(p *RequestPolicy) []string {
 // override stored for them is left alone.
 func sanitizeOverrides(o *FeatureOverrides) []string {
 	var dropped []string
-	if o.Level != nil && features.ValidateRequestLevel(*o.Level) != nil {
-		dropped = append(dropped, "level="+*o.Level)
+	if o.Level != nil && invalid("level", *o.Level, features.ValidateRequestLevel, &dropped) {
 		o.Level = nil
 	}
-	if o.BuildBillingEntrypoint != nil && features.ValidateBillingEntrypoint(*o.BuildBillingEntrypoint) != nil {
-		dropped = append(dropped, "build_billing_entrypoint="+*o.BuildBillingEntrypoint)
+	if o.BuildBillingEntrypoint != nil && invalid("build_billing_entrypoint", *o.BuildBillingEntrypoint, features.ValidateBillingEntrypoint, &dropped) {
 		o.BuildBillingEntrypoint = nil
 	}
-	o.BuildAttachmentSources, dropped = keepValid(o.BuildAttachmentSources, "build_attachment_sources", features.BuildAttachmentSources.Validate, dropped)
-	o.BuildBillingSources, dropped = keepValid(o.BuildBillingSources, "build_billing_sources", features.BuildBillingSources.Validate, dropped)
-	o.BuildInjection, dropped = keepValidInjection(o.BuildInjection, dropped)
+	return sanitizeSources(&o.BuildAttachmentSources, &o.BuildBillingSources, &o.BuildInjection, dropped)
+}
+
+// invalid reports whether valid refuses v ("" is unset, never refused) and
+// then names it in dropped as "name=value"; the caller clears it.
+func invalid(name, v string, valid func(string) error, dropped *[]string) bool {
+	if v == "" || valid(v) == nil {
+		return false
+	}
+	*dropped = append(*dropped, name+"="+v)
+	return true
+}
+
+// sanitizeSources is what a policy and an override share: the source maps
+// and the injection keep only what the vocabulary knows.
+func sanitizeSources(attachment *features.BuildAttachmentSources, billing *features.BuildBillingSources, injection **features.BuildInjection, dropped []string) []string {
+	*attachment, dropped = keepValid(*attachment, "build_attachment_sources", features.BuildAttachmentSources.Validate, dropped)
+	*billing, dropped = keepValid(*billing, "build_billing_sources", features.BuildBillingSources.Validate, dropped)
+	*injection, dropped = keepValidInjection(*injection, dropped)
 	return dropped
 }
 

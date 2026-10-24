@@ -1,4 +1,9 @@
 <script setup lang="ts">
+// The CC version dialog of one account runtime (GET/POST/PUT
+// /system/ccgateway/cli/:id): the Worker checks its packaged CLI (catalog
+// state ready / failed) and can look up a channel's latest release. A pinned
+// CLI (every packaged runtime) refuses periodic lookups, so that switch only
+// shows for an unpinned one.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -12,11 +17,8 @@ interface CLIState {
   /** The Worker's check of its packaged CLI (the field keeps its old name). */
   catalog: { installed_version: string; state: string; checked_at: string; synced_at: string; error?: string }
   auto_update: boolean
-  auto_update_mode: 'managed'
   channel: 'stable' | 'latest'
   latest_version: string
-  update_state: string
-  update_error: string
 }
 
 const props = defineProps<{ accountId: number; disabled?: boolean }>()
@@ -32,10 +34,8 @@ const state = ref<CLIState | null>(null)
 const blocked = computed(() => !manage.value || props.disabled || busy.value)
 const path = computed(() => `/system/ccgateway/cli/${props.accountId}`)
 const channels = computed(() => [{ value: 'stable', label: t('ccgateway.cli.stable') }, { value: 'latest', label: t('ccgateway.cli.latest') }])
-let timer: ReturnType<typeof setTimeout> | undefined
 let controller: AbortController | undefined
 
-function stopPolling() { clearTimeout(timer); timer = undefined }
 /** The controller reports Go's zero time for "never". */
 function when(value?: string) { return !value || value.startsWith('0001-') ? '—' : formatDateTime(value) }
 function label(value: string) { return te(`ccgateway.cli.states.${value}`) ? t(`ccgateway.cli.states.${value}`) : value }
@@ -44,13 +44,11 @@ async function request(operation: (signal: AbortSignal) => Promise<CLIState>) {
   if (busy.value) return
   busy.value = true
   error.value = ''
-  stopPolling()
   controller = new AbortController()
   try {
     const previous = state.value?.catalog.installed_version
     state.value = await operation(controller.signal)
     if (previous && previous !== state.value.catalog.installed_version) emit('changed')
-    if (open.value && state.value.catalog.state === 'starting') timer = setTimeout(load, 2000)
   } catch (e) {
     if (!controller.signal.aborted) error.value = describe(e) || t('ccgateway.cli.failed')
   } finally {
@@ -70,8 +68,8 @@ async function policy(auto: boolean, channel: string) {
   await request(signal => api.put<CLIState>(path.value, { auto_update: auto, channel }, { signal }))
 }
 
-watch(open, value => { if (value) void load(); else { stopPolling(); controller?.abort() } })
-onBeforeUnmount(() => { stopPolling(); controller?.abort() })
+watch(open, value => { if (value) void load(); else controller?.abort() })
+onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
@@ -81,7 +79,7 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
       <SHint>{{ t('ccgateway.cli.hint') }}</SHint>
       <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
       <template v-if="state">
-        <SHint v-if="state.pinned_version">{{ t('ccgateway.cliProfile.pinned', {version: state.pinned_version}) }}</SHint>
+        <SHint v-if="state.pinned_version" data-testid="cli-pinned">{{ t('ccgateway.cli.pinned', { version: state.pinned_version }) }}</SHint>
         <SDescriptions :columns="2" dense>
           <SDescItem :label="t('ccgateway.cli.installed')" :value="state.catalog.installed_version || '—'" mono />
           <SDescItem :label="t('ccgateway.cli.available')" :value="state.latest_version || '—'" mono />
@@ -89,15 +87,13 @@ onBeforeUnmount(() => { stopPolling(); controller?.abort() })
           <SDescItem :label="t('ccgateway.cli.checkedAt')"><span class="tabular-nums">{{ when(state.catalog.checked_at) }}</span></SDescItem>
           <SDescItem :label="t('ccgateway.cli.syncedAt')"><span class="tabular-nums">{{ when(state.catalog.synced_at) }}</span></SDescItem>
         </SDescriptions>
-        <SAlert v-if="state.catalog.error" tone="danger" dense><span class="break-all">{{ state.catalog.error }}</span></SAlert>
-        <SAlert v-if="state.update_error" tone="danger" dense><span class="break-all">{{ state.update_error }}</span></SAlert>
-        <SHint v-if="state.update_state !== 'idle'">{{ t('ccgateway.cli.operation') }}: {{ label(state.update_state) }}</SHint>
+        <SAlert v-if="state.catalog.error" tone="danger" dense data-testid="cli-check-error"><span class="break-all">{{ state.catalog.error }}</span></SAlert>
         <SSettingsGroup>
           <SSettingRow :label="t('ccgateway.cli.channel')" dense>
             <SSegmented :model-value="state.channel" :options="channels" size="sm" :disabled="!!blocked" :aria-label="t('ccgateway.cli.channel')" data-testid="cli-channel" @update:model-value="policy(state!.auto_update, String($event))" />
           </SSettingRow>
-          <SSettingRow :label="t('ccgateway.cli.auto')" :description="t('ccgateway.cli.autoHint')">
-            <SSwitch :model-value="state.auto_update" :disabled="!!blocked || !!state.pinned_version" :aria-label="t('ccgateway.cli.auto')" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)" />
+          <SSettingRow v-if="!state.pinned_version" :label="t('ccgateway.cli.auto')" :description="t('ccgateway.cli.autoHint')">
+            <SSwitch :model-value="state.auto_update" :disabled="!!blocked" :aria-label="t('ccgateway.cli.auto')" data-testid="cli-auto-update" @update:model-value="policy($event, state!.channel)" />
           </SSettingRow>
         </SSettingsGroup>
       </template>

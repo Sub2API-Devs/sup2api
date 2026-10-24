@@ -33,9 +33,6 @@ export default {
     fields: { platform_name: 'Platform', os_version: 'OS version', shell: 'Shell', primary_directory: 'Working directory', additional_directories: 'Additional directories', git_repository: 'Git repository', worktree: 'Worktree state and instructions', scratchpad_directory: 'Scratchpad directory', github_cli: 'GitHub tool instructions', agent_proxy: 'Agent proxy instructions' }
   },
   cleanup: {"title": "Clean up orphaned runtimes", "action": "Clean up orphaned resources", "confirm": "All accounts, including disabled accounts, and active authorization preparations are retained. Orphaned containers, networks, volumes, credentials, history and logs are permanently deleted. Shared images and gateways are retained.", "done": "Removed {deleted} runtimes; {failed} failed.", "failed": "Cleanup did not finish. Retry or check the controller."},
-  cliProfile: {
-    pinned: 'CLI is pinned to {version}. Select a packaged version in ccgateway request settings; automatic updates are disabled.'
-  },
   levels: {
     title: 'Injection level',
     hint: 'The level decides which layers apply; each layer is configured below. In every layer, what the client sends is kept (its fields converted as configured) and what it lacks is added by the rules. Layers above the level keep their settings without applying them, so switching levels loses nothing. Level 0 uses direct, the others build.',
@@ -100,12 +97,13 @@ export default {
   },
   cli: {
     title: 'CC version', hint: 'The account runs the customized CC packaged with its runtime. Its version and hash are verified at startup and it is never replaced in place; to change versions, update the runtime. "Recheck" confirms the installed CC is unchanged; if it is not, the account stops taking requests.',
-    installed: 'Installed version', available: 'Latest channel version', status: 'State', operation: 'Last check',
+    pinned: 'CLI is pinned to {version}, packaged with the runtime.',
+    installed: 'Installed version', available: 'Latest channel version', status: 'State',
     checkedAt: 'Installed version checked', syncedAt: 'Last confirmed',
     channel: 'Release channel', stable: 'Stable', latest: 'Latest', auto: 'Look up the latest channel version',
     autoHint: 'Queries the selected channel for its latest official version every 6 hours, for information only; nothing is installed.',
     check: 'Look up channel version', sync: 'Recheck installed CC', failed: 'CC version request failed',
-    states: { starting: 'Starting', ready: 'Ready', failed: 'Check failed', idle: 'Not checked', complete: 'Unchanged', running: 'Running' },
+    states: { ready: 'Ready', failed: 'Check failed' },
   },
   credentialStatus: { saved: 'Local credentials are saved. Online validity is determined by actual requests.', absent: 'No confirmed local credentials found. Online validity was not checked.', unresolved: 'Credential selection is unresolved; external credential programs are not run for status checks.', expired: 'The stored access token has expired. The native CLI will attempt refresh during an actual request.' },
   settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', cc: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
@@ -282,19 +280,19 @@ export default {
     appHint: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place (containers are not recreated).'
   },
   workers: {
-    pairedUpdate: 'Upgrade Worker + CLI 2.1.304',
-    pairedConfirmTitle: 'Upgrade Worker and CLI 2.1.304 together?',
-    pairedConfirmMessage: 'Activate Worker and CLI 2.1.304 together and check each account runtime. Containers and login identities are retained. Bootstrap older workers using the worker-only action first. Busy accounts may be skipped; review the per-account results.',
-    pairedHint: '304 policies require paired Worker + CLI activation first. Bootstrap older workers using the worker-only action, then activate the pair. Legacy native mode provides maintenance management only between these steps; model requests are temporarily unavailable. Containers are retained. Existing 302 settings are not migrated in the background. Saving CC settings selects 304 but does not upgrade running programs.',
+    pairedUpdate: 'Upgrade Worker + CLI {version}',
+    pairedConfirmTitle: 'Upgrade Worker and CLI {version} together?',
+    pairedConfirmMessage: 'Activate Worker and CLI {version} together and check each account runtime. Containers and login identities are retained. Bootstrap older workers using the worker-only action first. Busy accounts may be skipped; review the per-account results.',
+    pairedHint: 'CLI {version} is the version of the saved CC settings. Update the Worker on its own first, then activate Worker + CLI {version} together; containers are retained. Saving the settings does not upgrade running programs.',
     pairedDone: 'Worker + CLI upgrade checks completed. Review the per-account results.',
-    pairedTitle: 'Worker + CLI 2.1.304 upgrade results',
+    pairedTitle: 'Worker + CLI {version} upgrade results',
     activeCLI: 'Active CLI', online: 'Online', offline: 'Not confirmed online',
     groupTitle: 'Worker update',
     update: 'Update the worker of existing accounts',
     updating: 'Updating the workers one account at a time; with many accounts this can take a while…',
     hint: 'Updates the worker program of every existing account in place with the effective app image; use it to retry accounts that were busy or not running.',
     confirmTitle: 'Update the worker of existing accounts?',
-    confirmMessage: 'Only the worker program inside each account container is replaced and that container restarted; no container is recreated and sign-ins are kept. The restart briefly interrupts requests in progress on that account; an account handling a request is waited for at most 2 minutes, then skipped. Legacy native mode enters maintenance after this update; activate Worker + CLI 2.1.304 together to restore model requests.',
+    confirmMessage: 'Only the worker program inside each account container is replaced and that container restarted; no container is recreated and sign-ins are kept. The restart briefly interrupts requests in progress on that account; an account handling a request is waited for at most 2 minutes, then skipped.',
     done: 'The worker update finished; see the result of each account',
     failed: 'Updating the workers failed',
     title: 'Worker update results',
@@ -388,6 +386,7 @@ export default {
     draft_not_found: 'This container no longer exists (it may have been cleaned up after a long pause); start the container again',
     runtime_not_ready: 'The existing container is not ready. Synchronize its runtime before re-authorizing.',
     runtime_cleanup_failed: 'Runtime cleanup failed; retry the operation.',
+    resource_in_use: 'A container outside the account runtime still uses its network or data volume, or a resource outside it has one of its names; nothing was deleted. Remove that container or resource and the deletion is retried automatically.',
     draft_not_authorized: 'The container has not completed the Claude authorization',
     unauthorized: 'The container controller rejected the admin key',
     not_found: 'The container does not exist',
@@ -431,7 +430,9 @@ export default {
     bundle_invalid: 'An image in the plugin package does not match its checksum or cannot be read; reinstall the plugin package',
     image_load_failed: 'The Docker host could not load an image bundled in the plugin package',
     image_ref_missing: 'The controller loaded the image but reported no image reference',
-    upload_failed: 'Uploading the image to the controller failed; retry later'
+    upload_failed: 'Uploading the image to the controller failed; retry later',
+    runtime_not_retained: 'This runtime is no longer kept (it may have been removed already); refresh the list',
+    cli_version_unavailable: 'This Claude Code version cannot be selected: the account runtimes do not run it yet; upgrade Worker + CLI together first'
   },
   requestLogs: {
     title: 'Request debug logs',

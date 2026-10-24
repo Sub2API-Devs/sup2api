@@ -172,7 +172,7 @@ var layerFields = []layerField{
 	sourceField("build_attachment_sources", features.BuildAttachmentFields,
 		func(o FeatureOverrides) map[string]string { return o.BuildAttachmentSources },
 		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildAttachmentSources) }),
-	sourceField("build_billing_sources", []string{"cc_version", "cc_entrypoint"},
+	sourceField("build_billing_sources", features.BuildBillingFields,
 		func(o FeatureOverrides) map[string]string { return o.BuildBillingSources },
 		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildBillingSources) }),
 	injectionField(),
@@ -419,10 +419,9 @@ func workerPolicy(p RequestPolicy) features.WorkerPolicy {
 	if level == "" {
 		level = features.DefaultRequestLevel
 	}
+	// p is resolved: EffectiveRequestPolicy set its cli_version (the pinned
+	// one at least) and no layer overrides it.
 	wire := features.WorkerPolicy{SchemaVersion: features.PolicySchemaVersion, RelayMode: features.RelayModeForLevel(level), CLIVersion: p.CLIVersion}
-	if wire.CLIVersion == "" {
-		wire.CLIVersion = defaultRequestPolicy().CLIVersion
-	}
 	// Client is also the wire default: the wire stays sparse.
 	wire.BuildBillingSources = withoutClient(p.BuildBillingSources)
 	if features.LevelHasEnvironment(level) {

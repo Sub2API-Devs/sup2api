@@ -2,26 +2,30 @@
 // Deleted accounts whose runtime resources are not removed yet: kept for the
 // retention days the account type declares, or due (the core is removing
 // them and retries until it succeeds). Removing a kept one now, or retrying.
-import { computed, onMounted, ref } from 'vue'
+// Loads on mount and again whenever the parent bumps `revision`; settings
+// readers see the list, settings managers also remove.
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SHint, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SHint, SSectionTitle, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/format'
-import { notifyError } from '@/utils/errors'
+import { useCcgError } from './ccgError'
 
 interface RetainedRuntime {
   key: string
   account_id: number
   account_name: string
-  account_type: string
   deleted_at: string
   purge_after: string
   due: boolean
 }
 
+const props = defineProps<{ revision: number }>()
 const { t } = useI18n()
+const describe = useCcgError()
 const auth = useAuthStore()
+const manage = computed(() => auth.has('settings:manage'))
 const rows = ref<RetainedRuntime[]>([])
 const purging = ref('')
 const failed = ref(false)
@@ -29,10 +33,11 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'account', label: t('ccgateway.retained.account') },
   { key: 'deleted_at', label: t('ccgateway.retained.deletedAt') },
   { key: 'purge_after', label: t('ccgateway.retained.purgeAfter') },
-  { key: 'actions', label: '', align: 'right' },
+  ...(manage.value ? [{ key: 'actions', label: t('common.actions'), align: 'right' as const }] : []),
 ])
 
 async function load() {
+  if (!auth.has('settings:read')) return
   failed.value = false
   try {
     rows.value = (await api.get<{ runtimes: RetainedRuntime[] }>('/system/ccgateway/runtimes/retained')).runtimes
@@ -48,21 +53,21 @@ async function purge(row: RetainedRuntime) {
   try {
     await api.post(`/system/ccgateway/runtimes/${encodeURIComponent(row.key)}/purge`)
     toast(t('ccgateway.retained.purging'), 'success')
-    await load()
   } catch (e) {
-    notifyError(e)
+    toast(describe(e), 'error')
   } finally {
+    // A refused row (already removed, or no longer kept) leaves the list too.
+    await load()
     purging.value = ''
   }
 }
 
-onMounted(load)
-defineExpose({ load })
+watch(() => props.revision, load, { immediate: true })
 </script>
 
 <template>
   <div v-if="rows.length || failed" class="space-y-2" data-testid="ccgateway-retained">
-    <div class="text-sm font-medium">{{ t('ccgateway.retained.title') }}</div>
+    <SSectionTitle :title="t('ccgateway.retained.title')" class="!mb-0" />
     <SHint>{{ t('ccgateway.retained.hint') }}</SHint>
     <SHint v-if="failed" tone="danger">{{ t('ccgateway.retained.loadFailed') }}</SHint>
     <STable v-else :columns="columns" :rows="rows" dense>
@@ -75,7 +80,7 @@ defineExpose({ load })
         <span v-else class="tabular-nums">{{ formatDateTime(row.purge_after) }}</span>
       </template>
       <template #cell-actions="{ row }">
-        <SButton v-if="auth.has('settings:manage')" size="sm" variant="ghost" :loading="purging === row.key" :data-testid="`ccgateway-retained-purge-${row.account_id}`" @click="purge(row)">{{ t(row.due ? 'ccgateway.retained.retry' : 'ccgateway.retained.purge') }}</SButton>
+        <SButton size="sm" variant="ghost" :tone="row.due ? 'default' : 'danger'" :loading="purging === row.key" :data-testid="`ccgateway-retained-purge-${row.account_id}`" @click="purge(row)">{{ t(row.due ? 'ccgateway.retained.retry' : 'ccgateway.retained.purge') }}</SButton>
       </template>
     </STable>
   </div>

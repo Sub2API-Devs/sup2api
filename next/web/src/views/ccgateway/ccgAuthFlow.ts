@@ -107,7 +107,14 @@ export const CCG_REASONS = [
   'bundle_invalid',
   'image_load_failed',
   'image_ref_missing',
-  'upload_failed'
+  'upload_failed',
+  // runtimes kept after account deletion (POST .../runtimes/:key/purge)
+  'runtime_not_retained',
+  // removing a runtime (orphan cleanup, a deleted account's runtime)
+  'runtime_cleanup_failed',
+  'resource_in_use',
+  // saving a CC configuration whose cli_version the runtimes do not run (PUT remote-config)
+  'cli_version_unavailable'
 ] as const
 export type CcgReason = (typeof CCG_REASONS)[number]
 export function knownReason(code: unknown): CcgReason | null {

@@ -144,9 +144,7 @@ func accountTunnelClient(ctx context.Context, cfg Config, runtimeKey, revision, 
 		})
 		return nil
 	}
-	client := &http.Client{Transport: fixedTarget{rt: transport, scheme: "http", host: target}, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return errors.New("account tunnel redirects are disabled")
-	}}
+	client := newNoRedirectClient(fixedTarget{rt: transport, scheme: "http", host: target})
 	return client, closeAll, nil
 }
 
@@ -163,8 +161,6 @@ func pooledTunnelClient(cfg Config, runtimeKey, revision, target string) (*http.
 		}
 		return dialTunnel(ctx, cfg, runtimeKey, revision)
 	}
-	client := &http.Client{Transport: fixedTarget{rt: transport, scheme: "http", host: target}, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return errors.New("account tunnel redirects are disabled")
-	}}
+	client := newNoRedirectClient(fixedTarget{rt: transport, scheme: "http", host: target})
 	return client, func() error { transport.CloseIdleConnections(); return nil }
 }

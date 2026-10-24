@@ -161,7 +161,7 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	err := q.QueryRow(ctx, `SELECT
   a.deleted_at IS NOT NULL,
   r.retired_at IS NOT NULL,
-  COALESCE(r.purge_after > now(), false),
+  `+sqlInRetention+`,
   r.purged_at IS NOT NULL,
   a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')),
   concat_ws('|',a.id,a.type,a.proxy_id,a.deleted_at,p.updated_at,encode(a.credentials_enc,'hex'),a.settings::text,r.retired_at),
@@ -360,7 +360,10 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 		case d.Purged:
 			return nil
 		case d.PurgeRequested && !d.Retained:
-			return s.purgeAndRecord(ctx, tx, key, d)
+			if e = s.purgeDeleted(ctx, tx, key, d); e != nil {
+				return e
+			}
+			return tx.Commit(ctx)
 		case s.blockedRecently(key, d.Revision):
 			return nil
 		}
@@ -683,15 +686,9 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 			return
 		}
 	}
-	out, failure, done := s.runtimeAction(ctx, d, draft, action, c.Request.Method, path, raw)
+	out, failure := s.runtimeAction(ctx, d, draft, action, c.Request.Method, path, raw)
 	if failure != nil {
 		httpapi.Fail(c, failure)
-		return
-	}
-	if !done {
-		// A business container without GET /admin/auth/session (older
-		// image) has no session to resume.
-		httpapi.OK(c, nil)
 		return
 	}
 	if c.Request.Method != "GET" {
@@ -707,17 +704,7 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 // serveSync reconciles the runtime of d now (POST .../sync).
 func (s *Service) serveSync(c *gin.Context, ctx context.Context, d accountDesired) {
 	if e := s.Reconcile(ctx, d.Key); e != nil {
-		// The controller's own reason (syncError) is kept; a connection
-		// failure or anything unnamed is reported as such.
-		if known := core.AsError(e); known.Code == core.ErrUnavailable.Code && known.Details["reason"] != nil {
-			httpapi.Fail(c, known)
-			return
-		}
-		reason := "sync_failed"
-		if errors.Is(e, errNotConfigured) || errors.Is(e, errUnreachable) {
-			reason = "not_configured"
-		}
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, reason))
+		httpapi.Fail(c, syncFailure(e))
 		return
 	}
 	if d.Deleted {
@@ -727,6 +714,20 @@ func (s *Service) serveSync(c *gin.Context, ctx context.Context, d accountDesire
 		return
 	}
 	httpapi.OK(c, map[string]any{"synced": true})
+}
+
+// syncFailure is the answer of a failed sync: the controller's own reason
+// (syncError) is kept; a connection failure or anything unnamed is reported
+// as such.
+func syncFailure(e error) *core.Error {
+	if known := core.AsError(e); known.Code == core.ErrUnavailable.Code && known.Details["reason"] != nil {
+		return known
+	}
+	reason := "sync_failed"
+	if errors.Is(e, errNotConfigured) || errors.Is(e, errUnreachable) {
+		reason = "not_configured"
+	}
+	return reasonError(core.ErrUnavailable, reason)
 }
 
 // runtimeActionPath is the business container path of action.
@@ -764,8 +765,8 @@ func runtimeActionBody(c *gin.Context) ([]byte, *core.Error) {
 }
 
 // runtimeAction forwards action to the business container and shapes its
-// answer; done is false for a session the older image cannot report.
-func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft bool, action, method, path string, body []byte) (out any, failure *core.Error, done bool) {
+// answer.
+func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft bool, action, method, path string, body []byte) (out any, failure *core.Error) {
 	// An account's health also names the Claude Code version its Worker
 	// observed, read concurrently so the login check does not wait for it.
 	var cliVersion chan string
@@ -775,19 +776,21 @@ func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft boo
 	}
 	res, close, e := s.runtimeActionRequest(ctx, d.Key, method, path, body, d.Revision)
 	if e != nil {
-		return nil, transportError(e), false
+		return nil, transportError(e)
 	}
 	defer close()
 	defer res.Body.Close()
 	raw, e := readBounded(res.Body, 65536)
 	if e != nil {
-		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable"), false
+		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
 	if res.StatusCode != 200 {
 		if action == "session" && res.StatusCode == http.StatusNotFound {
-			return nil, nil, false
+			// A business container without GET /admin/auth/session (older
+			// image) has no session to resume.
+			return nil, nil
 		}
-		return nil, runtimeError(res.StatusCode, raw), false
+		return nil, runtimeError(res.StatusCode, raw)
 	}
 	switch action {
 	case "health":
@@ -806,9 +809,9 @@ func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft boo
 		out, e = safeResult("/auth/"+action, raw)
 	}
 	if e != nil {
-		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable"), false
+		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
-	return out, nil, true
+	return out, nil
 }
 
 // noteSubscription keeps the account's subscription type current from its
@@ -859,41 +862,13 @@ func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesi
 		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": reasonAccountDeleted})
 		return
 	}
-	res, close, e := s.runtimeRequest(ctx, d.Key, "GET", "status", nil, d.Revision)
-	if e != nil {
-		httpapi.Fail(c, transportError(e))
-		return
-	}
-	defer close()
-	defer res.Body.Close()
-	raw, e := readBounded(res.Body, 65536)
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
-		return
-	}
-	if res.StatusCode != 200 {
-		httpapi.Fail(c, runtimeError(res.StatusCode, raw))
-		return
-	}
-	var status struct {
-		Container            string `json:"container"`
-		Status               string `json:"status"`
-		Revision             string `json:"revision"`
-		CurrentImage         string `json:"current_image"`
-		TargetImage          string `json:"target_image"`
-		ImageUpdateAvailable bool   `json:"image_update_available"`
-		TargetImageAvailable bool   `json:"target_image_available"`
-	}
-	if json.Unmarshal(raw, &status) != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
+	status, failure := s.runtimeStatus(ctx, d)
+	if failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
 	if draft {
-		out := "creating"
-		if status.Status == "ready" && status.Revision == d.Revision {
-			out = "ready"
-		}
-		httpapi.OK(c, map[string]string{"key": d.Key, "container": status.Container, "status": out})
+		httpapi.OK(c, draftStatus(d, status))
 		return
 	}
 	if status.Revision != d.Revision {
@@ -901,4 +876,47 @@ func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesi
 	}
 	httpapi.OK(c, map[string]any{"account_id": accountID, "key": d.Key, "container": status.Container, "status": status.Status, "revision": status.Revision,
 		"current_image": status.CurrentImage, "target_image": status.TargetImage, "image_update_available": status.ImageUpdateAvailable, "target_image_available": status.TargetImageAvailable})
+}
+
+// observedStatus is the controller's GET /accounts/<key>/status answer.
+type observedStatus struct {
+	Container            string `json:"container"`
+	Status               string `json:"status"`
+	Revision             string `json:"revision"`
+	CurrentImage         string `json:"current_image"`
+	TargetImage          string `json:"target_image"`
+	ImageUpdateAvailable bool   `json:"image_update_available"`
+	TargetImageAvailable bool   `json:"target_image_available"`
+}
+
+// runtimeStatus reads the controller's status of the runtime of d.
+func (s *Service) runtimeStatus(ctx context.Context, d accountDesired) (observedStatus, *core.Error) {
+	var status observedStatus
+	res, close, e := s.runtimeRequest(ctx, d.Key, "GET", "status", nil, d.Revision)
+	if e != nil {
+		return status, transportError(e)
+	}
+	defer close()
+	defer res.Body.Close()
+	raw, e := readBounded(res.Body, 65536)
+	if e != nil {
+		return status, reasonError(core.ErrUnavailable, "runtime_unavailable")
+	}
+	if res.StatusCode != 200 {
+		return status, runtimeError(res.StatusCode, raw)
+	}
+	if json.Unmarshal(raw, &status) != nil {
+		return status, reasonError(core.ErrUnavailable, "runtime_unavailable")
+	}
+	return status, nil
+}
+
+// draftStatus is a draft's status: creating until its runtime is ready at
+// the draft's revision.
+func draftStatus(d accountDesired, status observedStatus) map[string]string {
+	phase := "creating"
+	if status.Status == "ready" && status.Revision == d.Revision {
+		phase = "ready"
+	}
+	return map[string]string{"key": d.Key, "container": status.Container, "status": phase}
 }

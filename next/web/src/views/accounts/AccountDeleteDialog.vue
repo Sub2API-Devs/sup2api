@@ -1,50 +1,48 @@
 <script setup lang="ts">
 // Deleting an account. A type whose plugin can keep the account's runtime
 // resources for a while (lifecycle.deletion.retentionDays) offers that here;
-// the days come from the manifest, the core refuses any other choice.
-import { computed, ref, watch } from 'vue'
+// the days come from the manifest, the core refuses any other choice. The
+// dialog stays open while the request runs.
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SButton, SHint, SModal, SRadioGroup, toast } from '@sub2api/ui'
-import type { Account, AccountType } from '@/api/types'
-import { notifyError } from '@/utils/errors'
+import { SButton, SHint, SModal, SRadioGroup } from '@sub2api/ui'
+import type { Account } from '@/api/types'
+import { deleteResource } from '@/composables/crud'
 
-const props = defineProps<{ open: boolean; account: Account | null; accountType?: AccountType | null }>()
+const props = defineProps<{ open: boolean; account: Account | null; retentionDays: number }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'deleted'): void }>()
 const { t } = useI18n()
+const messageId = useId()
+const hintId = useId()
 
-const retention = computed(() => props.accountType?.lifecycle?.deletion?.retentionDays ?? 0)
 const keep = ref<'now' | 'retain'>('now')
 const busy = ref(false)
 const choices = computed(() => [
   { value: 'now', label: t('accounts.deleteResources.now') },
-  { value: 'retain', label: t('accounts.deleteResources.retain', { days: retention.value }) },
+  { value: 'retain', label: t('accounts.deleteResources.retain', { days: props.retentionDays }) },
 ])
+const describedby = computed(() => (props.retentionDays > 0 ? `${messageId} ${hintId}` : messageId))
 watch(() => props.open, open => { if (open) keep.value = 'now' })
 
 async function remove() {
   if (!props.account || busy.value) return
   busy.value = true
-  try {
-    await api.del(`/accounts/${props.account.id}${keep.value === 'retain' ? '?retain_resources=1' : ''}`)
-    toast(t('common.deleted'), 'success')
-    emit('update:open', false)
-    emit('deleted')
-  } catch (e) {
-    notifyError(e)
-  } finally {
-    busy.value = false
-  }
+  const query = keep.value === 'retain' ? { retain_resources: 1 } : undefined
+  const deleted = await deleteResource(`/accounts/${props.account.id}`, query)
+  busy.value = false
+  if (!deleted) return
+  emit('update:open', false)
+  emit('deleted')
 }
 </script>
 
 <template>
-  <SModal :open="open" :title="t('common.delete')" width="sm" @update:open="v => emit('update:open', v)">
+  <SModal :open="open" :title="t('common.delete')" width="sm" :persistent="busy" :closable="!busy" :describedby="describedby" @update:open="v => emit('update:open', v)">
     <div class="space-y-3">
-      <p>{{ t('common.confirmDelete', { name: account?.name ?? '' }) }}</p>
-      <template v-if="retention > 0">
+      <p :id="messageId">{{ t('common.confirmDelete', { name: account?.name ?? '' }) }}</p>
+      <template v-if="retentionDays > 0">
         <SRadioGroup v-model="keep" :options="choices" :aria-label="t('accounts.deleteResources.label')" data-testid="account-delete-resources" />
-        <SHint>{{ keep === 'retain' ? t('accounts.deleteResources.retainHint', { days: retention }) : t('accounts.deleteResources.nowHint') }}</SHint>
+        <SHint :id="hintId">{{ keep === 'retain' ? t('accounts.deleteResources.retainHint', { days: retentionDays }) : t('accounts.deleteResources.nowHint') }}</SHint>
       </template>
     </div>
     <template #footer>

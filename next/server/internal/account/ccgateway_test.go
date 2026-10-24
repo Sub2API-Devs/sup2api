@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,6 +57,12 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 		e.t.Fatal(err)
 	}
 	e.svc.d.CCGateway = ccg
+	// Registered like production (app.go): CCGateway is the ccgateway
+	// accounts' lifecycle resource.
+	if e.svc.d.LifecycleResources == nil {
+		e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{}
+	}
+	e.svc.d.LifecycleResources["ccgateway"] = ccg
 	return ccg
 }
 
@@ -397,6 +404,40 @@ func TestPurgePluginAccountsMarksRuntimeCleanup(t *testing.T) {
 		if marked, in, purged := e.runtimeDeletion(id); !marked || purged || in > 0 {
 			t.Fatalf("account %d: marked=%v purge in %v purged=%v", id, marked, in, purged)
 		}
+	}
+}
+
+// TestPurgePluginAccountsDropsCCGatewayRequestCache: the node that purged a
+// plugin's accounts drops what CCGateway's request path kept of them at once,
+// like a single account change, instead of serving the deleted account until
+// the bus message comes back or the cache expires (code-quality audit
+// 2026-10-24 K6).
+func TestPurgePluginAccountsDropsCCGatewayRequestCache(t *testing.T) {
+	e := setup(t)
+	// The connection lookup fails: the request ends after the account was
+	// read (and kept), before any Worker is reached.
+	ccg := e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+	id := e.mkRawAccount("ccgateway", "managed", "cached", "unused", true)
+	call := func() (*http.Response, error) {
+		req, _ := http.NewRequest("POST", ccgateway.VirtualURL, strings.NewReader(`{}`))
+		return ccg.ModelClientForRequest(ccgateway.ModelRequestContext{AccountID: id}).Do(req)
+	}
+	if res, err := call(); err == nil {
+		res.Body.Close()
+		t.Fatalf("connection lookup should fail: %d", res.StatusCode)
+	}
+	if n, err := e.svc.PurgePluginAccounts(context.Background(), "ccgateway"); err != nil || n != 1 {
+		t.Fatalf("purge: %d %v", n, err)
+	}
+	res, err := call()
+	if err != nil {
+		t.Fatalf("the kept (not deleted) account was used: %v", err)
+	}
+	defer res.Body.Close()
+	var body strings.Builder
+	_, _ = io.Copy(&body, res.Body)
+	if res.StatusCode != http.StatusServiceUnavailable || !strings.Contains(body.String(), "deleted") {
+		t.Fatalf("deleted account not refused: %d %s", res.StatusCode, body.String())
 	}
 }
 

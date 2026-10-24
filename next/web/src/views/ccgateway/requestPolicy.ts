@@ -215,7 +215,9 @@ export function defaultRequestPolicy(): RequestPolicy {
     request_identity_sources: {},
     level: defaultRequestLevel,
     // The packaged CLI the runtimes run (core: PinnedCLIVersion); a saved
-    // policy keeps its own, which the core checks against the runtimes.
+    // policy keeps its own, which the core checks against the runtimes. The
+    // core's GET always answers one; this only fills a policy read without it
+    // (recorded in companions/contracts/testdata/web-policy-payloads.json).
     cli_version: '2.1.304',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },

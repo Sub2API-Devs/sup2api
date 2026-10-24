@@ -39,21 +39,24 @@ describe('CC CLI update controls', () => {
     expect(wrapper.text()).toContain('2.1.297')
     wrapper.unmount()
   })
-  it('a pinned CLI keeps the channel lookup off', async () => {
+  it('a pinned CLI says so and hides the channel lookup switch the Worker refuses', async () => {
     mocks.get.mockResolvedValue({ ...state(), pinned_version: '2.1.304' })
     const wrapper = await render()
-    expect(wrapper.text()).toContain('2.1.304')
-    expect(wrapper.get('[data-testid="cli-auto-update"] [role="switch"], [role="switch"][data-testid="cli-auto-update"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="cli-pinned"]').text()).toBe('CLI 固定为 2.1.304，随运行组件打包。')
+    expect(wrapper.find('[data-testid="cli-auto-update"]').exists()).toBe(false)
     wrapper.unmount()
   })
-  it('a failed recheck shows why', async () => {
-    mocks.post.mockResolvedValue({ ...state(), catalog: { ...state().catalog, state: 'failed', error: 'Claude Code changed from 2.1.304 to 2.1.305; reconcile the runtime' }, update_state: 'failed' })
+  it('a failed recheck shows why once', async () => {
+    // The Worker reports the same failure as catalog.error and update_error.
+    const why = 'Claude Code changed from 2.1.304 to 2.1.305; reconcile the runtime'
+    mocks.post.mockResolvedValue({ ...state(), catalog: { ...state().catalog, state: 'failed', error: why }, update_state: 'failed', update_error: why })
     const wrapper = await render()
     await wrapper.findAll('button').find(button => button.text() === '重新检查本机 CC')!.trigger('click')
     await flushPromises()
     expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/cli/22', { action: 'sync' }, expect.anything())
     expect(wrapper.text()).toContain('检查未通过')
-    expect(wrapper.text()).toContain('2.1.305')
+    expect(wrapper.findAll('[data-testid="cli-check-error"]')).toHaveLength(1)
+    expect(wrapper.text().split('2.1.305')).toHaveLength(2)
     wrapper.unmount()
   })
   it('keeps the original auto-update state when saving fails', async () => {

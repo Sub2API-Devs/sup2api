@@ -261,38 +261,27 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	}
 
 	// 0. Docker and the gateway port, before anything is replaced. A domain
-	// over HTTPS gets automatic certificates (system roots, nothing pinned).
+	// over HTTPS gets automatic certificates (system roots, nothing pinned);
+	// HTTPS to an IP pins the root of the gateway's internal CA.
 	domain := scheme == "https" && net.ParseIP(host) == nil
+	pinCA := scheme == "https" && !domain
 	port, err := s.gatewayPort(ctx, target, scheme, in.Port, domain)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	var caddy string
-	if scheme == "http" {
-		caddy, e = caddyfileHTTP(port)
-	} else {
-		caddy, e = caddyfile(host, port, in.Email)
-	}
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_host"))
+	caddy, failure := installCaddyfile(scheme, host, port, in.Email)
+	if failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
-	// 1. The controller. The legacy flow skips a controller that is current
-	// and can tunnel already; a new key always needs a new controller.
-	replace := true
-	if legacy {
-		v, h := s.runtimeStateHealth(ctx, target)
-		replace = !v.UpToDate || !h.has("tunnel")
+	// 1. The controller.
+	if target, err = s.installController(ctx, target, uid, legacy); err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
-	if replace {
-		if target, err = s.installRuntime(ctx, target, uid, true); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-	}
-	// 2. The gateway and 3. the root of its internal CA for HTTPS to an IP.
-	ca, err := s.startGateway(ctx, target, gateway, caddy, scheme == "https" && net.ParseIP(host) != nil)
+	// 2. The gateway and 3. the root of its internal CA.
+	ca, err := s.startGateway(ctx, target, gateway, caddy, pinCA)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -307,28 +296,10 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	if domain && s.dnsMismatch(ctx, host, target) {
 		warnings = append(warnings, "dns_mismatch")
 	}
-	// 5. Connect, unless the configuration was saved by anyone since it was
-	// read.
-	fields := []string{"mode", "scheme", "host", "port", "controller_ca", "ssh"}
-	if !legacy {
-		fields = []string{"mode", "scheme", "host", "port", "controller_ca", "admin_key", "ssh"}
-	}
-	saved, e := s.updateConfigAt(ctx, uid, fields, version, func(cur *Config) error {
-		cur.Mode, cur.Scheme, cur.Host, cur.Port, cur.ControllerCA, cur.AdminKey = "controller", scheme, host, port, ca, panel.AdminKey
-		cur.BasePath = ""
-		cur.AccountRuntimes = true
-		cur.clearSSH()
-		if cur.APIKey == cur.AdminKey {
-			cur.APIKey = ""
-		}
-		return validateControllerConfig(*cur)
-	})
-	if errors.Is(e, errConfigChanged) {
-		httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
-		return
-	}
-	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+	// 5. Connect.
+	saved, failure := s.connectInstalled(ctx, uid, legacy, version, panel)
+	if failure != nil {
+		httpapi.Fail(c, failure)
 		return
 	}
 	s.record(c, "controller.install")
@@ -338,6 +309,60 @@ func (s *Service) controllerInstall(c *gin.Context) {
 	}
 	httpapi.OK(c, view)
 	s.kickAll(ctx)
+}
+
+// installController installs the controller of an installation. The legacy
+// flow keeps a controller that is current and can tunnel already; a new key
+// always needs a new controller.
+func (s *Service) installController(ctx context.Context, target Config, uid int64, legacy bool) (Config, *core.Error) {
+	if legacy {
+		if v, h := s.runtimeStateHealth(ctx, target); v.UpToDate && h.has("tunnel") {
+			return target, nil
+		}
+	}
+	return s.installRuntime(ctx, target, uid, true)
+}
+
+// installCaddyfile is the gateway configuration of an installation.
+func installCaddyfile(scheme, host string, port int, email string) (string, *core.Error) {
+	var caddy string
+	var e error
+	if scheme == "http" {
+		caddy, e = caddyfileHTTP(port)
+	} else {
+		caddy, e = caddyfile(host, port, email)
+	}
+	if e != nil {
+		return "", reasonError(core.ErrInvalidArgument, "invalid_host")
+	}
+	return caddy, nil
+}
+
+// connectInstalled saves the installed control panel as the connection,
+// unless the configuration was saved by anyone since it was read (version).
+// The legacy flow keeps the saved management key.
+func (s *Service) connectInstalled(ctx context.Context, uid int64, legacy bool, version []byte, panel Config) (Config, *core.Error) {
+	fields := []string{"mode", "scheme", "host", "port", "controller_ca", "admin_key", "ssh"}
+	if legacy {
+		fields = []string{"mode", "scheme", "host", "port", "controller_ca", "ssh"}
+	}
+	saved, e := s.updateConfigAt(ctx, uid, fields, version, func(cur *Config) error {
+		cur.Mode, cur.Scheme, cur.Host, cur.Port, cur.ControllerCA, cur.AdminKey = "controller", panel.Scheme, panel.Host, panel.Port, panel.ControllerCA, panel.AdminKey
+		cur.BasePath = ""
+		cur.AccountRuntimes = true
+		cur.clearSSH()
+		if cur.APIKey == cur.AdminKey {
+			cur.APIKey = ""
+		}
+		return validateControllerConfig(*cur)
+	})
+	if errors.Is(e, errConfigChanged) {
+		return saved, reasonError(core.ErrConflict, "config_changed")
+	}
+	if e != nil {
+		return saved, reasonError(core.ErrUnavailable, "install_failed")
+	}
+	return saved, nil
 }
 
 // installTarget is where an installation's scripts run (method ssh, local, or

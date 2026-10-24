@@ -130,24 +130,31 @@ func (s *Service) deliverAccountLifecycle(ctx context.Context, id int64, pluginK
 	if reader, ok := resource.(core.AccountSynchronizationReader); err == nil && ok {
 		state, err = reader.AccountSynchronization(ctx, id)
 	}
-	if err != nil {
+	switch {
+	case err == nil:
+	case phase == "deleted":
+		state, err = deletedCleanupFailure(ctx, id, pluginKey, err), nil
+	default:
 		state = core.AccountSynchronization{Status: "failed", Code: "runtime_sync_failed"}
-		if phase == "deleted" {
-			// The cleanup intent is in the database already and every
-			// reconcile pass retries it, so a failing controller must not
-			// hold back the plugin's other lifecycle events: record why
-			// (e.g. resource_in_use) and move on.
-			if reason, _ := core.AsError(err).Details["reason"].(string); reason != "" {
-				state.Code = reason
-			}
-			slog.WarnContext(ctx, "account lifecycle: deleted account resource cleanup failed, left to reconciliation", "account_id", id, "plugin_key", pluginKey, "code", state.Code, "err", err)
-			err = nil
-		}
 	}
 	if saveErr := s.saveLifecycleStatus(ctx, id, account.UpdatedAt, generation, state); saveErr != nil {
 		return saveErr
 	}
 	return err
+}
+
+// deletedCleanupFailure is the state of a deleted account whose resource
+// cleanup failed. The cleanup intent is in the database already and every
+// reconcile pass retries it, so a failing controller must not hold back the
+// plugin's other lifecycle events: the reason (e.g. resource_in_use) is
+// recorded and logged, and the event is done.
+func deletedCleanupFailure(ctx context.Context, id int64, pluginKey string, err error) core.AccountSynchronization {
+	state := core.AccountSynchronization{Status: "failed", Code: "runtime_sync_failed"}
+	if reason, _ := core.AsError(err).Details["reason"].(string); reason != "" {
+		state.Code = reason
+	}
+	slog.WarnContext(ctx, "account lifecycle: deleted account resource cleanup failed, left to reconciliation", "account_id", id, "plugin_key", pluginKey, "code", state.Code, "err", err)
+	return state
 }
 
 func valueOr[T any](value *T, previous T) T {

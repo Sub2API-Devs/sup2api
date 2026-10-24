@@ -39,12 +39,12 @@ function transport(workers?: unknown) {
   }
 }
 
-async function render(props: Record<string, unknown>) {
+async function render(props: Record<string, unknown> & { cliVersion: string }) {
   const w = mount(RuntimeInstall, { props, global: { plugins: [i18n] } })
   await flushPromises()
   return w
 }
-const configured = (mode: string) => ({ mode, accountRuntimes: true, hasAdminKey: true })
+const configured = (mode: string) => ({ mode, accountRuntimes: true, hasAdminKey: true, cliVersion: '2.1.304' })
 /** Unfolds "advanced: upload an image by hand". */
 async function openUpload(w: { find: (s: string) => { exists: () => boolean }; get: (s: string) => { trigger: (e: string) => Promise<void> } }) {
   if (!w.find('[data-testid="image-upload-file"]').exists()) await w.get('[data-testid="ccgateway-image-upload"] button').trigger('click')
@@ -132,19 +132,31 @@ describe('CCGateway worker update in place', () => {
     w.unmount()
   })
 
-  it('requests paired Worker and CLI activation explicitly and displays per-account outcomes', async () => {
+  it('requests paired Worker and CLI activation of the saved version and displays per-account outcomes', async () => {
     const paired = report()
-    mocks.post.mockResolvedValue({ ...paired, components: ['worker', 'cli'], cli_version: '2.1.304', results: paired.results.map(row => ({ ...row, cli_version: '2.1.304', cli_patch: 'ccgateway-v12-feature-policy', cli_sha256: 'c'.repeat(64), online: true })) })
-    const w = await render({ ...configured('controller'), cliVersion: '2.1.304' })
-    expect(w.get('[data-testid="ccgateway-workers-cli-hint"]').text()).toContain('存量 302 配置不在后台自动迁移')
-    await w.get('[data-testid="ccgateway-workers-cli-update"]').trigger('click')
+    mocks.post.mockResolvedValue({ ...paired, components: ['worker', 'cli'], cli_version: '2.1.310', results: paired.results.map(row => ({ ...row, cli_version: '2.1.310', cli_patch: 'ccgateway-v12-feature-policy', cli_sha256: 'c'.repeat(64), online: true })) })
+    const w = await render({ ...configured('controller'), cliVersion: '2.1.310' })
+    const button = w.get('[data-testid="ccgateway-workers-cli-update"]')
+    expect(button.text()).toBe('升级 Worker + CLI 2.1.310')
+    const hint = w.get('[data-testid="ccgateway-workers-cli-hint"]').text()
+    expect(hint).toContain('CLI 2.1.310 是已保存的 CC 配置使用的版本')
+    expect(hint).not.toMatch(/302|304|native/)
+    await button.trigger('click')
     await flushPromises()
+    expect(mocks.confirm.mock.calls[0][0].title).toBe('成对升级 Worker 与 CLI 2.1.310？')
     expect(mocks.confirm.mock.calls[0][0].message).toContain('不重建账号容器')
-    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/workers', { components: ['worker', 'cli'], cli_version: '2.1.304' }, { signal: expect.any(AbortSignal) })
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/workers', { components: ['worker', 'cli'], cli_version: '2.1.310' }, { signal: expect.any(AbortSignal) })
     expect(rows(w)).toHaveLength(7)
-    expect(w.get('[data-testid="ccgateway-workers-result"]').text()).toContain('Worker + CLI 2.1.304')
+    expect(w.get('[data-testid="ccgateway-workers-result"]').text()).toContain('Worker + CLI 2.1.310')
     expect(w.get('[data-testid="ccgateway-worker-cli"]').text()).toContain('ccgateway-v12-feature-policy')
     expect(w.get('[data-testid="ccgateway-worker-cli"]').text()).toContain('cccccccccccc')
+    w.unmount()
+  })
+
+  it('offers no paired update while the saved CLI version is unknown', async () => {
+    const w = await render({ ...configured('controller'), cliVersion: '' })
+    expect(w.get<HTMLButtonElement>('[data-testid="ccgateway-workers-cli-update"]').element.disabled).toBe(true)
+    expect(w.get<HTMLButtonElement>('[data-testid="ccgateway-workers-update"]').element.disabled).toBe(false)
     w.unmount()
   })
 
@@ -177,7 +189,7 @@ describe('CCGateway worker update in place', () => {
       { mode: 'disabled', accountRuntimes: true, hasAdminKey: true },
       { mode: 'controller', accountRuntimes: true, hasAdminKey: false }
     ]) {
-      const w = await render(props)
+      const w = await render({ ...props, cliVersion: '2.1.304' })
       expect(w.find('[data-testid="ccgateway-workers-update"]').exists()).toBe(false)
       w.unmount()
     }

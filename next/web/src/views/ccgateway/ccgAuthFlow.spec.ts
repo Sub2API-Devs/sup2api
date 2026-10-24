@@ -120,6 +120,9 @@ describe('CCGateway authorization flow', () => {
     expect(reasonDisplay(err())).toBeNull()
     expect(knownReason('draft_not_found')).toBe('draft_not_found')
     expect(knownReason('nope')).toBeNull()
+    // Reasons of the retained-runtime purge and of a refused cli_version save.
+    expect(knownReason('runtime_not_retained')).toBe('runtime_not_retained')
+    expect(knownReason('cli_version_unavailable')).toBe('cli_version_unavailable')
     expect(knownStatus('pending')).toBe('pending')
     expect(knownStatus('weird')).toBeNull()
   })

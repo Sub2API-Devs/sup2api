@@ -222,7 +222,7 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.RelayMode != "" && p.RelayMode != "build" && p.RelayMode != "direct" {
 		return errors.New("invalid relay_mode: must be build or direct")
 	}
-	if p.CLIVersion != "" && !cliReleasePattern.MatchString(p.CLIVersion) {
+	if p.CLIVersion != "" && !features.ValidCLIVersion(p.CLIVersion) {
 		return errors.New("invalid cli_version")
 	}
 	if err := features.ValidateEraseClientAttachments(p.EraseClientAttachments); err != nil {

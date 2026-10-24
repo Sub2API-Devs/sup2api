@@ -19,6 +19,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// keptConfig is the request cache's configuration entry: cfg read at at.
+func keptConfig(cfg Config, at time.Time) map[configKey]cacheEntry[Config] {
+	return map[configKey]cacheEntry[Config]{{}: {v: cfg, at: at}}
+}
+
 // cachePanel is a fake control panel for any runtime key: GET .../connection
 // and the .../tunnel Upgrade both answer 409 unless the revision is the
 // applied one, like the controller.
@@ -228,8 +233,8 @@ func (b *recordingBus) Subscribe(string, func([]byte)) func() { return func() {}
 func TestConfigChangedReachesOtherNodes(t *testing.T) {
 	bus := &recordingBus{}
 	s := &Service{Bus: bus}
-	s.cache.cfg = &cachedConfig{c: Config{Mode: "controller"}}
-	s.cache.desired = map[int64]cachedDesired{7: {}}
+	s.cache.cfg = keptConfig(Config{Mode: "controller"}, time.Now())
+	s.cache.desired = map[int64]cacheEntry[accountDesired]{7: {}}
 	s.configChanged(context.Background())
 	if s.cache.cfg != nil || s.cache.desired != nil {
 		t.Fatal("request cache kept after a configuration save")
@@ -239,14 +244,14 @@ func TestConfigChangedReachesOtherNodes(t *testing.T) {
 	}
 	// What another node receives.
 	other := &Service{}
-	other.cache.cfg = &cachedConfig{c: Config{Mode: "controller"}}
+	other.cache.cfg = keptConfig(Config{Mode: "controller"}, time.Now())
 	other.onConfigChanged([]byte(`{"type":"ccgateway"}`))
 	if other.cache.cfg != nil {
 		t.Fatal("other node kept its configuration")
 	}
 	// An account change keeps the configuration and drops the account.
-	other.cache.cfg = &cachedConfig{c: Config{Mode: "controller"}}
-	other.cache.desired = map[int64]cachedDesired{7: {}, 8: {}}
+	other.cache.cfg = keptConfig(Config{Mode: "controller"}, time.Now())
+	other.cache.desired = map[int64]cacheEntry[accountDesired]{7: {}, 8: {}}
 	other.onAccountChanged([]byte(`{"account_id":7}`))
 	if other.cache.cfg == nil || len(other.cache.desired) != 1 {
 		t.Fatal("account change dropped the wrong entries")
@@ -374,7 +379,9 @@ func TestRouteFollowsTheControllerWithoutTheBus(t *testing.T) {
 	// missed the message. Once its configuration expired it asks the new one.
 	store(newServer)
 	s.cache.mu.Lock()
-	s.cache.cfg.at = time.Now().Add(-time.Hour)
+	expired := s.cache.cfg[configKey{}]
+	expired.at = time.Now().Add(-time.Hour)
+	s.cache.cfg[configKey{}] = expired
 	s.cache.mu.Unlock()
 	call()
 	if connections, _ := oldPanel.counts(); connections != 1 {

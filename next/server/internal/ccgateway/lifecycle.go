@@ -40,6 +40,9 @@ func (s *Service) PrepareAccount(ctx context.Context, p core.AccountPreparation)
 	return nil
 }
 
+// AccountPreparationAction runs one action on a preparation's draft runtime
+// like the draft endpoints do (serveRuntime): the account service checked
+// the action, the method and the body.
 func (s *Service) AccountPreparationAction(ctx context.Context, p core.AccountPreparation, method, action string, payload json.RawMessage) (any, error) {
 	ok, err := s.touchDraftOf(ctx, p.Key, &p.CreatedBy, accountDraft)
 	if err != nil || !ok {
@@ -49,55 +52,28 @@ func (s *Service) AccountPreparationAction(ctx context.Context, p core.AccountPr
 	if err != nil {
 		return nil, err
 	}
-	if action == "sync" {
+	switch action {
+	case "sync":
 		if err := s.Reconcile(ctx, p.Key); err != nil {
-			return nil, transportError(err)
+			return nil, syncFailure(err)
 		}
 		return map[string]bool{"synced": true}, nil
-	}
-	paths := map[string]string{"status": "status", "health": "admin/status", "session": "admin/auth/session", "start": "admin/auth/start", "complete": "admin/auth/complete", "cancel": "admin/auth/cancel"}
-	path, ok := paths[action]
-	if !ok {
-		return nil, core.ErrNotFound
-	}
-	response, close, err := s.runtimeActionRequest(ctx, p.Key, method, path, payload, desired.Revision)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	defer close()
-	defer response.Body.Close()
-	raw, err := readBounded(response.Body, 65536)
-	if err != nil {
-		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
-	}
-	if action == "session" && response.StatusCode == 404 {
-		return nil, nil
-	}
-	if response.StatusCode != 200 {
-		return nil, runtimeError(response.StatusCode, raw)
-	}
-	if action == "session" {
-		return sessionResult(raw)
-	}
-	if action == "status" {
-		var status struct {
-			Container string `json:"container"`
-			Status    string `json:"status"`
-			Revision  string `json:"revision"`
+	case "status":
+		status, failure := s.runtimeStatus(ctx, desired)
+		if failure != nil {
+			return nil, failure
 		}
-		if json.Unmarshal(raw, &status) != nil {
-			return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
-		}
-		phase := "creating"
-		if status.Status == "ready" && status.Revision == desired.Revision {
-			phase = "ready"
-		}
-		return map[string]string{"key": p.Key, "container": status.Container, "status": phase}, nil
+		return draftStatus(desired, status), nil
 	}
-	if action == "health" {
-		return safeResult("/status", raw)
+	path, failure := runtimeActionPath(action, desired, true)
+	if failure != nil {
+		return nil, failure
 	}
-	return safeResult("/auth/"+action, raw)
+	out, failure := s.runtimeAction(ctx, desired, true, action, method, path, payload)
+	if failure != nil {
+		return nil, failure
+	}
+	return out, nil
 }
 
 func (s *Service) UpdateAccountPreparation(ctx context.Context, tx pgx.Tx, p core.AccountPreparation) error {

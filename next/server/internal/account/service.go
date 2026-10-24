@@ -5,7 +5,6 @@ package account
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -209,17 +208,19 @@ func (s *Service) invalidate() {
 
 // changed invalidates local caches and tells the other nodes.
 func (s *Service) changed(ctx context.Context, id int64) {
-	s.invalidate()
-	// CCGateway keeps what its request path read of the account (its
-	// desired state and CC feature policy): this node drops it at once.
-	s.d.CCGateway.AccountChanged(id)
-	if s.d.Bus == nil {
-		return
-	}
-	b, _ := json.Marshal(map[string]int64{"account_id": id})
-	if err := s.d.Bus.Publish(ctx, core.ChannelAccountChanged, b); err != nil {
+	s.invalidateNode(id)
+	if err := core.PublishAccountChanged(ctx, s.d.Bus, id); err != nil {
 		slog.WarnContext(ctx, "account: publish account:changed", "err", err)
 	}
+}
+
+// invalidateNode drops what this node keeps of account id (0: of every
+// account), so the node that changed it does not depend on receiving its
+// own account:changed: the directory snapshots, and what CCGateway's request
+// path read (the desired state and CC feature policy).
+func (s *Service) invalidateNode(id int64) {
+	s.invalidate()
+	s.d.CCGateway.AccountChanged(id)
 }
 
 func (s *Service) gen() core.Generation {

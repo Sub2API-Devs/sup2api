@@ -2,10 +2,10 @@ package ccgateway
 
 import (
 	"context"
-	"regexp"
 	"slices"
 	"sync"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -14,10 +14,6 @@ import (
 // It is the only place the core spells a CLI version; everything else follows
 // the stored cli_version and the Worker's declared capabilities.
 const PinnedCLIVersion = "2.1.304"
-
-// cliReleasePattern is a release version as the controller's CLI profile
-// accepts it (cli_profiles.VERSION).
-var cliReleasePattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
 
 // cliVersionChecks bounds the Worker reads of one cli_version check.
 const cliVersionChecks = 8
@@ -34,7 +30,7 @@ const cliVersionChecks = 8
 // Runtimes that cannot answer (pending, blocked, an older Worker) are not
 // counted either way.
 func (s *Service) admitCLIVersion(ctx context.Context, cfg Config, version string) error {
-	if !cliReleasePattern.MatchString(version) {
+	if !features.ValidCLIVersion(version) {
 		return nil // validateRequestPolicy names the malformed value
 	}
 	confirmed, others, err := s.runtimeCLIVersions(ctx, cfg, version)

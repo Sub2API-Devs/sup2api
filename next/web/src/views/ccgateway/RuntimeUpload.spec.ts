@@ -28,7 +28,7 @@ function transport() {
 }
 
 async function render(mode: string) {
-  const w = mount(RuntimeInstall, { props: { mode }, global: { plugins: [i18n] } })
+  const w = mount(RuntimeInstall, { props: { mode, cliVersion: '2.1.304' }, global: { plugins: [i18n] } })
   await flushPromises()
   return w
 }

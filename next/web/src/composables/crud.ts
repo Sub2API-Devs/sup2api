@@ -1,5 +1,5 @@
 import { computed, ref, type ComputedRef } from 'vue'
-import { api } from '@sub2api/host'
+import { api, type Query } from '@sub2api/host'
 import { confirm, toast, type SelectOption } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -9,11 +9,10 @@ import { notifyError } from '@/utils/errors'
 
 const t = i18n.global.t
 
-/** Asks `message`, DELETEs `path`, toasts "Deleted" and runs `done`. Resolves true once deleted. */
-export async function deleteWithConfirm(path: string, message: string, done?: () => unknown): Promise<boolean> {
-  if (!(await confirm({ title: t('common.delete'), message, danger: true }))) return false
+/** DELETEs `path` (with `query`), toasts "Deleted" and runs `done`; a failure is toasted. Resolves true once deleted. */
+export async function deleteResource(path: string, query?: Query, done?: () => unknown): Promise<boolean> {
   try {
-    await api.del(path)
+    await api.del(path, query)
     toast(t('common.deleted'), 'success')
     await done?.()
     return true
@@ -21,6 +20,12 @@ export async function deleteWithConfirm(path: string, message: string, done?: ()
     notifyError(e)
     return false
   }
+}
+
+/** Asks `message`, then {@link deleteResource}. Resolves true once deleted. */
+export async function deleteWithConfirm(path: string, message: string, done?: () => unknown): Promise<boolean> {
+  if (!(await confirm({ title: t('common.delete'), message, danger: true }))) return false
+  return deleteResource(path, undefined, done)
 }
 
 /** PATCHes `path` with the opposite of `status` (active ⇄ disabled), toasts and runs `done`. */

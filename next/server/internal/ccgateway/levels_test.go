@@ -227,8 +227,8 @@ func TestModelRequestNeedsTheLevelsCapability(t *testing.T) {
 		global := defaultRequestPolicy()
 		global.Level, global.CLIVersion = features.LevelMicro, "2.1.302"
 		svc := &Service{}
-		svc.cache.cfg = &cachedConfig{c: Config{Mode: "local", APIKey: "worker-key", RequestPolicy: &global,
-			CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, Overrides: FeatureOverrides{Level: featureString(features.LevelNone)}}}}, at: time.Now()}
+		svc.cache.cfg = keptConfig(Config{Mode: "local", APIKey: "worker-key", RequestPolicy: &global,
+			CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, Overrides: FeatureOverrides{Level: featureString(features.LevelNone)}}}}, time.Now())
 		req, err := http.NewRequestWithContext(context.Background(), "POST", VirtualURL, strings.NewReader(`{}`))
 		require.NoError(t, err)
 		res, err := svc.ModelClientForRequest(ModelRequestContext{GroupID: 7}).Do(req)

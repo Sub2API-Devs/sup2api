@@ -37,6 +37,8 @@ const plugins = usePluginStore()
 const own = useOwnership()
 const accountTypes = useAccountTypes()
 accountTypes.load()
+/** The account type of `a` (undefined until the types load or for an orphaned type). */
+const typeOf = (a?: Pick<Account, 'plugin_key' | 'type'> | null) => (a ? accountTypes.find(a.plugin_key, a.type) : undefined)
 const { groups } = useGroupsLookup()
 
 // Ownership (CONTRACTS §21): all-level keys see every account, own-level keys
@@ -201,7 +203,7 @@ async function openEdit(a: Pick<Account, 'id'>) {
     const full = await api.get<Account>(`/accounts/${a.id}`)
     editing.value = full
     await accountTypes.load()
-    pickedType.value = accountTypes.find(full.plugin_key, full.type) || null
+    pickedType.value = typeOf(full) || null
   } catch (e) {
     notifyError(e)
     editorOpen.value = false
@@ -242,7 +244,7 @@ watch(
 // ---------------------------------------------------------------- test (model test dialog, CONTRACTS: POST /accounts/:id/test)
 const testOpen = ref(false)
 const testTarget = ref<Account | null>(null)
-const testTargetType = computed(() => (testTarget.value ? accountTypes.find(testTarget.value.plugin_key, testTarget.value.type) || null : null))
+const testTargetType = computed(() => typeOf(testTarget.value) || null)
 
 function openTest(a: Account) {
   testTarget.value = a
@@ -350,7 +352,7 @@ function tabLabel(pluginKey: string, name: string) {
   return translated !== msgKey ? translated : `${pluginKey} · ${name}`
 }
 const detailSlot = computed(() => plugins.slotEntries('account.detail.tabs').find((e) => `${e.pluginKey}:${e.name}` === detailTab.value))
-const detailType = computed(() => (detail.value ? accountTypes.find(detail.value.plugin_key, detail.value.type) : undefined))
+const detailType = computed(() => typeOf(detail.value))
 
 async function openDetail(a: Account) {
   detailTab.value = 'overview'
@@ -441,7 +443,7 @@ async function refreshCreds(a: Account) {
 // ---------------------------------------------------------------- row actions
 const togglingEnabled = ref(new Set<number>())
 async function toggleEnabled(a: Account, v: boolean) {
-  if (togglingEnabled.value.has(a.id) || !canUpdate(a) || !accountControl(accountTypes.find(a.plugin_key, a.type), 'schedulable').configurable) return
+  if (togglingEnabled.value.has(a.id) || !canUpdate(a) || !accountControl(typeOf(a), 'schedulable').configurable) return
   togglingEnabled.value.add(a.id)
   try {
     const updated = await api.patch<Account>(`/accounts/${a.id}`, { status: v ? 'active' : 'disabled', schedulable: v })
@@ -455,7 +457,7 @@ async function toggleEnabled(a: Account, v: boolean) {
 
 const deleteOpen = ref(false)
 const deleteTarget = ref<Account | null>(null)
-const deleteTargetType = computed(() => (deleteTarget.value ? accountTypes.find(deleteTarget.value.plugin_key, deleteTarget.value.type) || null : null))
+const deleteRetentionDays = computed(() => typeOf(deleteTarget.value)?.lifecycle?.deletion?.retentionDays ?? 0)
 function remove(a: Account) {
   deleteTarget.value = a
   deleteOpen.value = true
@@ -630,7 +632,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
           <SSwitch
             v-if="canUpdate(row) && !row.orphaned"
             :model-value="row.status !== 'disabled'"
-            :disabled="togglingEnabled.has(row.id) || !accountControl(accountTypes.find(row.plugin_key, row.type), 'schedulable').configurable"
+            :disabled="togglingEnabled.has(row.id) || !accountControl(typeOf(row), 'schedulable').configurable"
             :aria-label="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
             :title="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
             data-testid="account-schedulable-switch"
@@ -664,7 +666,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
 
     <!-- test -->
     <AccountModelTest v-model:open="testOpen" :account="testTarget" :account-type="testTargetType" @tested="onTested" @updated="onTestUpdated" />
-    <AccountDeleteDialog v-model:open="deleteOpen" :account="deleteTarget" :account-type="deleteTargetType" @deleted="list.reload" />
+    <AccountDeleteDialog v-model:open="deleteOpen" :account="deleteTarget" :retention-days="deleteRetentionDays" @deleted="list.reload" />
 
     <!-- reveal -->
     <SModal v-model:open="revealOpen" :title="t('accounts.revealCredentials')" width="lg" @close="revealed = null">

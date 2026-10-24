@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -16,11 +17,7 @@ var _ core.PluginAccountPurger = (*Service)(nil)
 // deletionResource is the resource recording a deleted account's cleanup
 // intent for accounts of pluginKey, nil when the plugin has none.
 func (s *Service) deletionResource(pluginKey string) core.AccountDeletionResource {
-	resource := s.d.LifecycleResources[pluginKey]
-	if resource == nil && pluginKey == "ccgateway" && s.d.CCGateway != nil {
-		resource = s.d.CCGateway
-	}
-	deletion, _ := resource.(core.AccountDeletionResource)
+	deletion, _ := s.d.LifecycleResources[pluginKey].(core.AccountDeletionResource)
 	return deletion
 }
 
@@ -36,6 +33,30 @@ func (s *Service) retentionDays(pluginKey, typ string) int {
 		return 0
 	}
 	return days
+}
+
+// markResourcesDeleted records, with the deletion resource of the account's
+// plugin, the cleanup of deleted account id's resources: at once, or with
+// retain at the end of the retention days its type declares. It returns that
+// end (nil: at once). Retaining needs both a resource and retention days.
+func (s *Service) markResourcesDeleted(ctx context.Context, tx pgx.Tx, id int64, pluginKey, typ string, retain bool) (*time.Time, error) {
+	deletion := s.deletionResource(pluginKey)
+	var options core.AccountDeletionOptions
+	if retain {
+		days := s.retentionDays(pluginKey, typ)
+		if days == 0 || deletion == nil {
+			return nil, core.ErrInvalidArgument.WithMessage("This account type does not keep resources after deletion; delete without retain_resources.")
+		}
+		var until time.Time
+		if err := tx.QueryRow(ctx, `SELECT now() + make_interval(days => $1)`, days).Scan(&until); err != nil {
+			return nil, err
+		}
+		options.RetainUntil = &until
+	}
+	if deletion == nil {
+		return nil, nil
+	}
+	return options.RetainUntil, deletion.MarkAccountDeleted(ctx, tx, id, options)
 }
 
 // PurgePluginAccounts implements core.PluginAccountPurger (CONTRACTS §14.3):
@@ -106,10 +127,10 @@ func (s *Service) PurgePluginAccounts(ctx context.Context, pluginKey string) (in
 	return len(ids), nil
 }
 
-// purged invalidates local caches and broadcasts one account:changed for a
-// bulk deletion.
+// purged invalidates local caches (CCGateway's request path included) and
+// broadcasts one account:changed for a bulk deletion.
 func (s *Service) purged(ctx context.Context, pluginKey string, n int) {
-	s.invalidate()
+	s.invalidateNode(0)
 	if s.d.Bus == nil {
 		return
 	}

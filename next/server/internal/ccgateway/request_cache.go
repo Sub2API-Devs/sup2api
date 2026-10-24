@@ -59,29 +59,50 @@ type requestCache struct {
 	mu sync.Mutex
 	// gen changes with every invalidation; a value read before it changed
 	// is not stored.
-	gen     uint64
-	cfg     *cachedConfig
-	desired map[int64]cachedDesired
+	gen uint64
+	// cfg holds the configuration under the one key configKey.
+	cfg     map[configKey]cacheEntry[Config]
+	desired map[int64]cacheEntry[accountDesired]
 	// features holds each account's CC feature policy (audit A7); it changes
 	// with the account, so account:changed drops it with the desired state.
-	features map[int64]cachedFeatures
+	features map[int64]cacheEntry[AccountFeaturePolicy]
 	// routes is keyed by runtime key and holds the route of one revision.
 	routes map[string]*accountRoute
 }
 
-type cachedFeatures struct {
-	p  AccountFeaturePolicy
+// configKey is the key of the one cached configuration.
+type configKey struct{}
+
+// cacheEntry is a value the request path read, and when.
+type cacheEntry[V any] struct {
+	v  V
 	at time.Time
 }
 
-type cachedConfig struct {
-	c  Config
-	at time.Time
-}
-
-type cachedDesired struct {
-	d  accountDesired
-	at time.Time
+// readThrough is (*m)[k] while it is younger than requestCacheTTL, else what
+// load reads, kept unless the cache was invalidated meanwhile; cached
+// reports whether it came from the cache. load runs without the lock.
+func readThrough[K comparable, V any](c *requestCache, m *map[K]cacheEntry[V], k K, load func() (V, error)) (v V, cached bool, err error) {
+	c.mu.Lock()
+	if e, ok := (*m)[k]; ok && time.Since(e.at) < requestCacheTTL {
+		c.mu.Unlock()
+		return e.v, true, nil
+	}
+	gen := c.gen
+	c.mu.Unlock()
+	v, err = load()
+	if err != nil {
+		return v, false, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.gen == gen {
+		if *m == nil {
+			*m = map[K]cacheEntry[V]{}
+		}
+		(*m)[k] = cacheEntry[V]{v: v, at: time.Now()}
+	}
+	return v, false, nil
 }
 
 // accountRoute is how this node reaches one runtime at one revision. client
@@ -142,51 +163,14 @@ func (r *accountRoute) close() {
 
 // requestConfig is Load for the request path.
 func (s *Service) requestConfig(ctx context.Context) (Config, error) {
-	c := &s.cache
-	c.mu.Lock()
-	if c.cfg != nil && time.Since(c.cfg.at) < requestCacheTTL {
-		cfg := c.cfg.c
-		c.mu.Unlock()
-		return cfg, nil
-	}
-	gen := c.gen
-	c.mu.Unlock()
-	cfg, err := s.Load(ctx)
-	if err != nil {
-		return cfg, err
-	}
-	c.mu.Lock()
-	if c.gen == gen {
-		c.cfg = &cachedConfig{c: cfg, at: time.Now()}
-	}
-	c.mu.Unlock()
-	return cfg, nil
+	cfg, _, err := readThrough(&s.cache, &s.cache.cfg, configKey{}, func() (Config, error) { return s.Load(ctx) })
+	return cfg, err
 }
 
 // requestDesired is desired (without credentials) for the request path;
 // cached reports whether it came from the cache.
 func (s *Service) requestDesired(ctx context.Context, id int64) (d accountDesired, cached bool, err error) {
-	c := &s.cache
-	c.mu.Lock()
-	if e, ok := c.desired[id]; ok && time.Since(e.at) < requestCacheTTL {
-		c.mu.Unlock()
-		return e.d, true, nil
-	}
-	gen := c.gen
-	c.mu.Unlock()
-	d, err = s.desired(ctx, id, false)
-	if err != nil {
-		return d, false, err
-	}
-	c.mu.Lock()
-	if c.gen == gen {
-		if c.desired == nil {
-			c.desired = map[int64]cachedDesired{}
-		}
-		c.desired[id] = cachedDesired{d: d, at: time.Now()}
-	}
-	c.mu.Unlock()
-	return d, false, nil
+	return readThrough(&s.cache, &s.cache.desired, id, func() (accountDesired, error) { return s.desired(ctx, id, false) })
 }
 
 // route returns the route of runtime key at revision, asking the controller
@@ -260,27 +244,8 @@ func (s *Service) openRoute(ctx context.Context, cfg Config, r *accountRoute) (*
 // said forwarding no longer reads the database, the account policy was the
 // exception).
 func (s *Service) requestAccountFeatures(ctx context.Context, id int64) (AccountFeaturePolicy, error) {
-	c := &s.cache
-	c.mu.Lock()
-	if e, ok := c.features[id]; ok && time.Since(e.at) < requestCacheTTL {
-		c.mu.Unlock()
-		return e.p, nil
-	}
-	gen := c.gen
-	c.mu.Unlock()
-	p, err := LoadAccountFeaturePolicy(ctx, s.DB.Pool, id)
-	if err != nil {
-		return p, err
-	}
-	c.mu.Lock()
-	if c.gen == gen {
-		if c.features == nil {
-			c.features = map[int64]cachedFeatures{}
-		}
-		c.features[id] = cachedFeatures{p: p, at: time.Now()}
-	}
-	c.mu.Unlock()
-	return p, nil
+	p, _, err := readThrough(&s.cache, &s.cache.features, id, func() (AccountFeaturePolicy, error) { return LoadAccountFeaturePolicy(ctx, s.DB.Pool, id) })
+	return p, err
 }
 
 // routeHealth is the Worker health r last read, nil when there is none or it
@@ -307,7 +272,7 @@ func (s *Service) forgetAccount(id int64, key string) {
 	c.mu.Lock()
 	c.gen++
 	if d, ok := c.desired[id]; ok && key == "" {
-		key = d.d.Key
+		key = d.v.Key
 	}
 	delete(c.desired, id)
 	delete(c.features, id)
@@ -320,12 +285,17 @@ func (s *Service) forgetAccount(id int64, key string) {
 
 // AccountChanged follows a committed change of account id on this node (the
 // account service calls it next to publishing account:changed, so the node
-// that saved does not depend on receiving its own message).
+// that saved does not depend on receiving its own message). id 0 is a bulk
+// change (a plugin's accounts purged): every account is read again, like a
+// message without an id (onAccountChanged).
 func (s *Service) AccountChanged(id int64) {
-	if s == nil || id <= 0 {
-		return
+	switch {
+	case s == nil || id < 0:
+	case id == 0:
+		s.invalidateRequests(true)
+	default:
+		s.forgetAccount(id, "")
 	}
-	s.forgetAccount(id, "")
 }
 
 // workerChanged follows an in-place Worker update of runtime key (of
@@ -334,11 +304,10 @@ func (s *Service) AccountChanged(id int64) {
 // are told through account:changed.
 func (s *Service) workerChanged(ctx context.Context, id int64, key string) {
 	s.forgetAccount(id, key)
-	if s.Bus == nil || id <= 0 {
+	if id <= 0 {
 		return
 	}
-	b, _ := json.Marshal(map[string]int64{"account_id": id})
-	if err := s.Bus.Publish(context.WithoutCancel(ctx), core.ChannelAccountChanged, b); err != nil {
+	if err := core.PublishAccountChanged(context.WithoutCancel(ctx), s.Bus, id); err != nil {
 		slog.WarnContext(ctx, "CCGateway: publish account:changed", "err", err)
 	}
 }

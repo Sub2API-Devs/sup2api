@@ -30,6 +30,11 @@ func Created(c *gin.Context, data any) {
 	c.JSON(http.StatusCreated, gin.H{"data": data})
 }
 
+// Accepted renders {"data": data} with 202: the work runs in the background.
+func Accepted(c *gin.Context, data any) {
+	c.JSON(http.StatusAccepted, gin.H{"data": data})
+}
+
 // List renders {"data": items, "page": {...}}.
 func List(c *gin.Context, items any, p Page) {
 	c.JSON(http.StatusOK, gin.H{"data": items, "page": p})

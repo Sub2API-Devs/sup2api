@@ -4,7 +4,7 @@ const { del, patch, toast, confirm } = vi.hoisted(() => ({ del: vi.fn(), patch: 
 vi.mock('@sub2api/host', async (orig) => ({ ...(await orig<typeof import('@sub2api/host')>()), api: { del, patch } }))
 vi.mock('@sub2api/ui', async (orig) => ({ ...(await orig<typeof import('@sub2api/ui')>()), toast, confirm }))
 import { ApiError } from '@sub2api/host'
-import { deleteWithConfirm, toggleStatus, useRowSwitch } from './crud'
+import { deleteResource, deleteWithConfirm, toggleStatus, useRowSwitch } from './crud'
 
 describe('row actions', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -17,9 +17,18 @@ describe('row actions', () => {
     confirm.mockResolvedValueOnce(true)
     del.mockResolvedValueOnce(undefined)
     expect(await deleteWithConfirm('/x/1', 'sure?', done)).toBe(true)
-    expect(del).toHaveBeenCalledWith('/x/1')
+    expect(del).toHaveBeenCalledWith('/x/1', undefined)
     expect(done).toHaveBeenCalledOnce()
     expect(toast).toHaveBeenCalledWith(expect.any(String), 'success')
+  })
+
+  it('deletes with a query and toasts a failure', async () => {
+    del.mockResolvedValueOnce(undefined)
+    expect(await deleteResource('/x/1', { keep: 1 })).toBe(true)
+    expect(del).toHaveBeenCalledWith('/x/1', { keep: 1 })
+    del.mockRejectedValueOnce(new ApiError(500, { code: 'internal', message: 'boom' }))
+    expect(await deleteResource('/x/1')).toBe(false)
+    expect(toast).toHaveBeenCalledWith('boom', 'error')
   })
 
   it('flips the status', async () => {

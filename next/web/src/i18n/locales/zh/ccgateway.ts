@@ -33,9 +33,6 @@ export default {
     fields: { platform_name: '平台名称', os_version: '系统版本', shell: 'Shell', primary_directory: '工作目录', additional_directories: '额外工作目录', git_repository: 'Git 仓库状态', worktree: 'Worktree 状态与说明', scratchpad_directory: '临时目录', github_cli: 'GitHub 工具说明', agent_proxy: 'Agent 代理说明' }
   },
   cleanup: {"title": "清理孤立运行环境", "action": "清理孤立资源", "confirm": "将核对系统中的全部账号（包括禁用账号）及有效授权草稿。不存在对应账号或草稿的专属容器、网络、数据卷、授权、历史和日志将被永久删除；共享镜像与共享出口保留。", "done": "已清理 {deleted} 个运行环境，{failed} 个失败。", "failed": "清理未完成，请重试或检查控制器状态。"},
-  cliProfile: {
-    pinned: 'CLI 已固定为 {version}；请在 ccgateway 请求配置中选择镜像内提供的版本，自动更新关闭。'
-  },
   levels: {
     title: '注入等级',
     hint: '等级决定哪几层生效，每层的细节在下面单独配置。每一层：客户端带了就保留（按配置转换字段），没带就按规则补。超出等级的层保留配置但不生效，切换等级不会丢失。0 注入用 direct，其余用 build。',
@@ -100,12 +97,13 @@ export default {
   },
   cli: {
     title: 'CC 版本', hint: '账号使用随运行组件打包的定制 CC，启动时校验版本与哈希，不在原地替换；换版本请更新运行组件。「重新检查」确认本机 CC 未被改动，检查不通过时账号暂停接收请求。',
-    installed: '已安装版本', available: '渠道最新版本', status: '状态', operation: '最近一次检查',
+    pinned: 'CLI 固定为 {version}，随运行组件打包。',
+    installed: '已安装版本', available: '渠道最新版本', status: '状态',
     checkedAt: '本机版本检查时间', syncedAt: '最近确认一致时间',
     channel: '版本渠道', stable: '稳定版', latest: '最新版', auto: '定期查看渠道最新版本',
     autoHint: '启用后每 6 小时查询所选渠道的最新官方版本，仅用于提示，不安装。',
     check: '查看渠道版本', sync: '重新检查本机 CC', failed: 'CC 版本请求失败',
-    states: { starting: '初始化中', ready: '就绪', failed: '检查未通过', idle: '未检查', complete: '一致', running: '执行中' },
+    states: { ready: '就绪', failed: '检查未通过' },
   },
   credentialStatus: { saved: '本地凭据已保存，在线有效性以实际请求为准。', absent: '未发现可确认的本地凭据，未进行在线验证。', unresolved: '凭据来源尚未确定；不会执行外部凭据程序来检查状态。', expired: '已保存的访问令牌已过期，等待原生 CLI 在实际请求时刷新。' },
   settingsTabs: { label: '设置分类', connection: '连接与授权', network: '网络配置', cc: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
@@ -282,19 +280,19 @@ export default {
     appHint: '上传后新账号使用新镜像，现有账号原地更新 worker 程序（不重建容器）。'
   },
   workers: {
-    pairedUpdate: '升级 Worker + CLI 2.1.304',
-    pairedConfirmTitle: '成对升级 Worker 与 CLI 2.1.304？',
-    pairedConfirmMessage: '将对各账号执行 Worker 与 CLI 2.1.304 成对激活并核对健康状态，不重建账号容器、不改变登录身份。旧 Worker 请先使用单独的 worker 更新完成程序升级，再执行成对激活。有活动请求的账号可能跳过；请查看逐账号结果。',
-    pairedHint: '304 策略需先完成 Worker + CLI 成对激活。旧 Worker 先点左侧更新程序，再成对激活；旧 native 模式在这两步之间仅提供维护管理，模型请求暂不可用。不重建账号容器。存量 302 配置不在后台自动迁移，保存 CC 配置才切换目标 304；保存配置不会自动升级运行程序。',
+    pairedUpdate: '升级 Worker + CLI {version}',
+    pairedConfirmTitle: '成对升级 Worker 与 CLI {version}？',
+    pairedConfirmMessage: '将对各账号执行 Worker 与 CLI {version} 成对激活并核对健康状态，不重建账号容器、不改变登录身份。旧 Worker 请先使用单独的 worker 更新完成程序升级，再执行成对激活。有活动请求的账号可能跳过；请查看逐账号结果。',
+    pairedHint: 'CLI {version} 是已保存的 CC 配置使用的版本。先单独更新 Worker，再成对激活 Worker + CLI {version}；不重建账号容器。保存配置不会自动升级运行程序。',
     pairedDone: 'Worker + CLI 升级检查已完成，请查看各账号结果',
-    pairedTitle: 'Worker + CLI 2.1.304 成对升级结果',
+    pairedTitle: 'Worker + CLI {version} 成对升级结果',
     activeCLI: '实际 CLI', online: '在线', offline: '未确认在线',
     groupTitle: 'Worker 更新',
     update: '更新现有账号的 worker',
     updating: '正在逐个更新账号的 worker，账号较多时可能需要较长时间…',
     hint: '用当前生效的业务容器镜像原地更新所有现有账号的 worker 程序，可用于重试“正在处理请求”或“容器未运行”的账号。',
     confirmTitle: '更新现有账号的 worker？',
-    confirmMessage: '只替换各账号容器内的 worker 程序并重启该容器，不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求的账号会等待最多 2 分钟，仍忙则跳过。旧 native 模式升级后进入维护状态，需要继续成对激活 Worker + CLI 2.1.304 才能恢复模型请求。',
+    confirmMessage: '只替换各账号容器内的 worker 程序并重启该容器，不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求的账号会等待最多 2 分钟，仍忙则跳过。',
     done: 'worker 更新已完成，请查看各账号结果',
     failed: 'worker 更新失败',
     title: 'worker 更新结果',
@@ -388,6 +386,7 @@ export default {
     draft_not_found: '这个容器已不存在（可能因长时间未操作被自动清理），请重新启动容器',
     runtime_not_ready: '原账号容器尚未就绪，请先同步运行环境再重新授权',
     runtime_cleanup_failed: '运行环境清理失败，可重试',
+    resource_in_use: '有账号运行环境以外的容器仍在使用它的网络或数据卷，或占用了它的名字；什么都没删除。移除那个容器或资源后会自动重试',
     draft_not_authorized: '容器尚未完成 Claude 授权',
     unauthorized: '容器控制器拒绝了管理密钥',
     not_found: '容器不存在',
@@ -431,7 +430,9 @@ export default {
     bundle_invalid: '插件包内的镜像文件与校验和不符或无法读取，请重新安装插件包',
     image_load_failed: 'Docker 主机无法加载插件包内的镜像',
     image_ref_missing: '控制器加载镜像后没有报告镜像引用',
-    upload_failed: '镜像上传到控制器失败，请稍后重试'
+    upload_failed: '镜像上传到控制器失败，请稍后重试',
+    runtime_not_retained: '该运行环境已不在保留期内（可能已被清理），请刷新列表',
+    cli_version_unavailable: '无法选用该 Claude Code 版本：账号运行环境尚未运行它，请先成对升级 Worker + CLI'
   },
   requestLogs: {
     title: '请求调试日志',

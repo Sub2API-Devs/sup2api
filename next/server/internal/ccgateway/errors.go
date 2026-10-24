@@ -39,7 +39,7 @@ var reasonMessages = map[string]string{
 	"draft_not_found":         "The draft runtime does not exist, was saved already, expired or belongs to someone else.",
 	"draft_not_authorized":    "Claude Code is not signed in in this runtime yet.",
 	// Deleting a runtime (account deletion, retired runtimes).
-	reasonResourceInUse:      "A container outside the account runtime still uses its network or data volume; nothing was deleted. Remove that container, the deletion is retried automatically.",
+	reasonResourceInUse:      "A container outside the account runtime still uses its network or data volume, or a resource outside it has one of its names; nothing was deleted. Remove that container or resource, the deletion is retried automatically.",
 	"runtime_cleanup_failed": "The controller could not delete the account runtime; the deletion is retried automatically.",
 	"runtime_not_retained":   "The runtime is not one of a deleted account kept for its retention period.",
 	// Runtime installation (§49.16).
@@ -101,8 +101,9 @@ func reasonError(base *core.Error, reason string) *core.Error {
 // generic sync_failed.
 func syncError(status int, raw []byte) *core.Error {
 	code, msg := parseRuntimeError(raw)
+	details := map[string]any{"status": status}
 	if code == "" {
-		return reasonError(core.ErrUnavailable, "sync_failed").WithDetails(map[string]any{"reason": "sync_failed", "status": status})
+		return reasonError(core.ErrUnavailable, "sync_failed").WithDetails(details)
 	}
 	e := reasonError(core.ErrUnavailable, code)
 	if reasonMessages[code] == "" {
@@ -111,7 +112,7 @@ func syncError(status int, raw []byte) *core.Error {
 		}
 		e = e.WithMessage(msg)
 	}
-	return e.WithDetails(map[string]any{"reason": code, "status": status})
+	return e.WithDetails(details)
 }
 
 // transportError maps a failed controller call.

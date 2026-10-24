@@ -129,3 +129,21 @@ func TestSavedCLIVersionMustBeWhatTheRuntimesRun(t *testing.T) {
 	require.Equal(t, 200, code, out)
 	require.Equal(t, PinnedCLIVersion, stored())
 }
+
+// TestSaveReportsStoredConfigFaults: a stored configuration that cannot be
+// read (here it no longer decrypts) is a server fault, 500 internal, whether
+// or not the body changes cli_version. It used to be 400 invalid_argument,
+// and with a changed cli_version a failed read before the transaction could
+// end as 409 config_changed (code-quality audit 2026-10-24 K4).
+func TestSaveReportsStoredConfigFaults(t *testing.T) {
+	f := newRuntimeFixture(t, newFakeController(t).ServeHTTP)
+	admin := f.user("stored-fault@test")
+	_, err := f.db.Pool.Exec(context.Background(), `INSERT INTO settings(key,value) VALUES($1,'{"cipher":"AAAA"}')
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey)
+	require.NoError(t, err)
+	for _, policy := range []string{``, `,"cli_version":"2.1.305"`} {
+		code, out := f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_policy":{"schema_version":1,"unknown_field":"reject"`+policy+`}}`)
+		require.Equal(t, 500, code, out)
+		require.Equal(t, "internal", out["error"].(map[string]any)["code"], out)
+	}
+}

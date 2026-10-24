@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -108,6 +109,17 @@ const (
 	ChannelAccountChanged = "account:changed"
 	ChannelConfigChanged  = "config:changed"
 )
+
+// PublishAccountChanged announces on account:changed that account id
+// changed ({"account_id": id}); a nil bus announces nothing. A message
+// without an account id (a bulk change) means every account.
+func PublishAccountChanged(ctx context.Context, bus Bus, id int64) error {
+	if bus == nil {
+		return nil
+	}
+	payload, _ := json.Marshal(map[string]int64{"account_id": id})
+	return bus.Publish(ctx, ChannelAccountChanged, payload)
+}
 
 // Slots is the distributed concurrency limiter. Members are prefixed with
 // the boot id so slots of dead nodes can be reclaimed safely.

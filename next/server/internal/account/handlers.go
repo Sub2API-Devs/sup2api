@@ -1426,15 +1426,8 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	// retain_resources=1 keeps the account's resources (stopped) for the
-	// retention days its type declares (lifecycle.deletion.retentionDays).
-	retain := false
-	switch c.Query("retain_resources") {
-	case "":
-	case "1":
-		retain = true
-	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("retain_resources must be 1 or omitted."))
+	retain, ok := parseRetain(c)
+	if !ok {
 		return
 	}
 	scope := core.OwnerScope(ctx, "account:delete")
@@ -1452,27 +1445,13 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
 			return err
 		}
-		deletion := s.deletionResource(pk)
-		var options core.AccountDeletionOptions
-		if retain {
-			days := s.retentionDays(pk, typ)
-			if days == 0 || deletion == nil {
-				return core.ErrInvalidArgument.WithMessage("This account type does not keep resources after deletion; delete without retain_resources.")
-			}
-			var until time.Time
-			if err := tx.QueryRow(ctx, `SELECT now() + make_interval(days => $1)`, days).Scan(&until); err != nil {
-				return err
-			}
-			options.RetainUntil = &until
-		}
-		if deletion != nil {
-			if err := deletion.MarkAccountDeleted(ctx, tx, id, options); err != nil {
-				return err
-			}
+		retainUntil, err := s.markResourcesDeleted(ctx, tx, id, pk, typ, retain)
+		if err != nil {
+			return err
 		}
 		detail := map[string]any{"name": name}
-		if options.RetainUntil != nil {
-			detail["retain_until"] = options.RetainUntil.UTC().Format(time.RFC3339)
+		if retainUntil != nil {
+			detail["retain_until"] = retainUntil.UTC().Format(time.RFC3339)
 		}
 		if err := audit.Audit(ctx, tx, uid, "account.delete", "account", itoa(id), detail); err != nil {
 			return err
@@ -1490,6 +1469,21 @@ func (s *Service) delete(c *gin.Context) {
 	s.evictBalanceCache(ctx, id)
 	s.changed(ctx, id)
 	httpapi.NoContent(c)
+}
+
+// parseRetain reads retain_resources: 1 keeps the account's resources
+// (stopped) for the retention days its type declares
+// (lifecycle.deletion.retentionDays); omitted deletes them at once. Anything
+// else is answered as invalid (ok false).
+func parseRetain(c *gin.Context) (retain, ok bool) {
+	switch c.Query("retain_resources") {
+	case "":
+		return false, true
+	case "1":
+		return true, true
+	}
+	httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("retain_resources must be 1 or omitted."))
+	return false, false
 }
 
 // ---------------------------------------------------------------- reveal

@@ -194,7 +194,7 @@ type outcome struct {
 func (o *outcome) values() (*http.Response, bool, error) { return o.res, o.stale, o.err }
 
 func (a *attempt) fail(e error) *outcome {
-	a.cancel()
+	a.end()
 	return &outcome{err: e}
 }
 
@@ -204,8 +204,18 @@ func (a *attempt) fail(e error) *outcome {
 // down for the stated reason and the client reads it, instead of "upstream
 // connection failed".
 func (a *attempt) refuse(reason, message string) *outcome {
-	a.cancel()
+	a.end()
 	return &outcome{res: coreRefusal(a.req, reason, message)}
+}
+
+// end ends an attempt that sends nothing: it closes the connection once one
+// is open (finish), and the context.
+func (a *attempt) end() {
+	if a.finish != nil {
+		a.finish()
+		return
+	}
+	a.cancel()
 }
 
 // notSynchronized: the runtime is not at the revision the core wants. The
@@ -307,11 +317,9 @@ func (a *attempt) clone(body io.ReadCloser, path string) *http.Request {
 func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	policy, err := a.t.s.resolvedWorkerPolicy(a.ctx, a.cfg, a.t.accountID, a.t.groupID)
 	if err != nil {
-		a.finish()
-		return &outcome{err: err}
+		return a.fail(err)
 	}
 	if err := policy.Validate(); err != nil {
-		a.finish()
 		return a.refuse("invalid_request_policy", "The CC feature policy is invalid: "+err.Error()+".")
 	}
 	// Every policy carries a request level (request_levels_v1), so each model
@@ -325,7 +333,6 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 				_ = a.close()
 				return a.notSynchronized()
 			}
-			a.finish()
 			return a.refuse("configuration_error", core.AsError(err).Message)
 		}
 	}

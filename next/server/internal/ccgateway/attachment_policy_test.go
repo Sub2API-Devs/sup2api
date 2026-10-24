@@ -82,7 +82,7 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 			policy.RelayMode = tc.mode
 			policy.BuildAttachmentSources = features.BuildAttachmentSources{"os_version": "worker"}
 			svc := &Service{}
-			svc.cache.cfg = &cachedConfig{c: Config{Mode: "local", APIKey: "worker-key", RequestPolicy: &policy}, at: time.Now()}
+			svc.cache.cfg = keptConfig(Config{Mode: "local", APIKey: "worker-key", RequestPolicy: &policy}, time.Now())
 			req, err := http.NewRequestWithContext(context.Background(), "POST", VirtualURL, strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}]}`))
 			require.NoError(t, err)
 			req.Header.Set("Authorization", "Bearer inbound-not-upstream")

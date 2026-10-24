@@ -91,7 +91,8 @@ const { t } = useI18n()
 const router = useRouter()
 const { blockedTitle } = useCcgText()
 const auth = useAuthStore()
-const retained = ref<InstanceType<typeof RetainedRuntimes>>()
+/** Bumped by reload(): the retained list below reloads with the table. */
+const retainedRevision = ref(0)
 const own = useOwnership()
 const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
 // Reading the logs: settings or account readers, not own-level ones (§7).
@@ -149,7 +150,6 @@ async function inspect(r: Row) {
 async function load() {
   loading.value = true
   error.value = ''
-  void retained.value?.load()
   try {
     const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
     rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
@@ -163,6 +163,11 @@ async function load() {
   await runPool(rows.value, 4, (r) => inspect(r))
 }
 onMounted(load)
+/** A later load (refresh, after a cleanup) also reloads the retained list, which loads itself on mount. */
+function reload() {
+  retainedRevision.value++
+  return load()
+}
 
 async function cleanupOrphans() {
   if (cleaning.value || !auth.has('settings:manage')) return
@@ -173,7 +178,7 @@ async function cleanupOrphans() {
     // active authorization preparations. The visible table is not authoritative.
     const report = await api.post<{ deleted: number; failed: number }>('/system/ccgateway/runtime/cleanup', {}, { signal: AbortSignal.timeout(330000) })
     toast(t('ccgateway.cleanup.done', report), report.failed ? 'error' : 'success')
-    await load()
+    await reload()
   } catch {
     toast(t('ccgateway.cleanup.failed'), 'error')
   } finally {
@@ -348,7 +353,7 @@ async function refreshAuth(r: Row) {
   <SCard :title="t('ccgateway.runtimes.title')" :subtitle="t('ccgateway.runtimes.hint')">
     <template #actions>
       <SButton v-if="auth.has('settings:manage')" size="sm" :loading="cleaning" :disabled="loading" data-testid="ccgateway-cleanup" @click="cleanupOrphans">{{ t('ccgateway.cleanup.action') }}</SButton>
-      <SButton size="sm" icon="refresh" icon-only :loading="loading" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load" />
+      <SButton size="sm" icon="refresh" icon-only :loading="loading" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="reload" />
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>
     <div class="space-y-3">
@@ -411,7 +416,7 @@ async function refreshAuth(r: Row) {
           </div>
         </template>
       </STable>
-      <RetainedRuntimes v-if="auth.has('settings:read')" ref="retained" />
+      <RetainedRuntimes :revision="retainedRevision" />
     </div>
     <SModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning">
       <div class="space-y-3" data-testid="request-log-full-dialog">

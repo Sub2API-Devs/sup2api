@@ -20,8 +20,21 @@ import (
 const cleanupFeature = "runtime-cleanup-v1"
 
 // reasonResourceInUse: the controller kept a runtime because a container
-// outside it still uses one of its networks or its data volume (409).
+// outside it still uses one of its networks or its data volume, or a
+// resource outside it has one of its names (409).
 const reasonResourceInUse = "resource_in_use"
+
+// The retention of a deleted account's runtime, over a runtime row r joined
+// to its account a. One place, so every query agrees on it.
+const (
+	// sqlPendingPurge: the runtime of a deleted account, not purged yet.
+	sqlPendingPurge = `a.deleted_at IS NOT NULL AND r.retired_at IS NOT NULL AND r.purged_at IS NULL`
+	// sqlInRetention: still kept (until purge_after). A row an older core
+	// marked has no purge_after and is due.
+	sqlInRetention = `COALESCE(r.purge_after > now(), false)`
+	// sqlPurgeAt is when it is (or was) due: purge_after, else the retirement.
+	sqlPurgeAt = `COALESCE(r.purge_after, r.retired_at)`
+)
 
 // Preserve the account mapping as a durable deletion job. A retired timestamp
 // on an attached, deleted account means purge requested: at purge_after (now,
@@ -79,23 +92,29 @@ func (s *Service) cleanupConfig(ctx context.Context) (Config, error) {
 
 // A deleted account is different from a disabled account: remove its owned
 // containers, networks and data. Failed calls stay eligible for reconciliation.
+// The controller must declare runtime cleanup (an older one would keep the
+// data); a 404 is a failure, the controller knows every account runtime.
 func (s *Service) purgeRuntime(ctx context.Context, key string) error {
-	cfg, err := s.cleanupConfig(ctx)
-	if err != nil {
+	if _, err := s.cleanupConfig(ctx); err != nil {
 		return err
 	}
-	header := http.Header{"X-Ccg-Delete-Account": []string{key}, "X-Ccg-Delete-Data": []string{"1"}}
-	res, close, err := s.controllerCall(ctx, cfg, http.MethodDelete, "/accounts/"+key, nil, 0, header)
+	return s.deleteRuntime(ctx, key, false, "X-CCG-Delete-Account", key, "X-CCG-Delete-Data", "1")
+}
+
+// deleteRuntime sends DELETE /accounts/<key> with the extra header pairs;
+// notFoundRemoved counts a 404 as removed. A refusal is deleteFailure.
+func (s *Service) deleteRuntime(ctx context.Context, key string, notFoundRemoved bool, header ...string) error {
+	res, close, err := s.runtimeRequest(ctx, key, http.MethodDelete, "", nil, "", header...)
 	if err != nil {
 		return err
 	}
 	defer close()
 	defer res.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(res.Body, 65536))
-	if res.StatusCode != http.StatusOK {
-		return deleteFailure(res.StatusCode, raw, "runtime_cleanup_failed")
+	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+	if res.StatusCode == http.StatusOK || (notFoundRemoved && res.StatusCode == http.StatusNotFound) {
+		return nil
 	}
-	return nil
+	return deleteFailure(res.StatusCode, raw, "runtime_cleanup_failed")
 }
 
 // deleteFailure is the error of a refused DELETE /accounts/<key>: the
@@ -109,23 +128,18 @@ func deleteFailure(status int, raw []byte, fallback string) *core.Error {
 	return reasonError(core.ErrUnavailable, reason).WithDetails(map[string]any{"status": status})
 }
 
-// purgeAndRecord purges the runtime of deleted account d (Reconcile holds its
-// lock in tx) and records purged_at in tx, so no node purges it again. A
-// failure leaves the row for the next pass and is logged with its reason.
-func (s *Service) purgeAndRecord(ctx context.Context, tx pgx.Tx, key string, d accountDesired) error {
+// purgeDeleted purges the runtime of deleted account d and records purged_at
+// in tx (Reconcile holds the runtime's lock in it and commits), so no node
+// purges it again. A failure leaves the row for the next pass and is logged
+// with its reason.
+func (s *Service) purgeDeleted(ctx context.Context, tx pgx.Tx, key string, d accountDesired) error {
 	if err := s.purgeRuntime(ctx, key); err != nil {
 		slog.WarnContext(ctx, "CCGateway: deleted account runtime not purged", "key", key, "account", d.AccountID, "reason", reasonOf(core.AsError(err)), "err", err)
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET purged_at=now() WHERE key=$1 AND account_id=$2 AND purged_at IS NULL`, key, d.AccountID); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
-	s.markBlocked(key, d.Revision)
 	slog.InfoContext(ctx, "CCGateway: deleted account runtime purged", "key", key, "account", d.AccountID)
-	return nil
+	_, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET purged_at=now() WHERE key=$1 AND account_id=$2 AND purged_at IS NULL`, key, d.AccountID)
+	return err
 }
 
 // Read the authoritative list after the controller inventory. Pagination and
@@ -140,7 +154,7 @@ SELECT COALESCE(r.key,a.id::text) FROM accounts a LEFT JOIN ccgateway_runtimes r
  WHERE a.plugin_key='ccgateway' AND a.deleted_at IS NULL
 UNION SELECT r.key FROM ccgateway_runtimes r WHERE r.account_id IS NULL AND r.retired_at IS NULL
 UNION SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at >= now()-$1::bigint*interval '1 second'
-UNION SELECT key FROM ccgateway_runtimes WHERE account_id IS NOT NULL AND purged_at IS NULL AND purge_after > now()`,
+UNION SELECT r.key FROM ccgateway_runtimes r WHERE r.account_id IS NOT NULL AND r.purged_at IS NULL AND `+sqlInRetention,
 		int64(retiredGrace/time.Second))
 	if err != nil {
 		return nil, err
@@ -235,9 +249,9 @@ type retainedRuntime struct {
 // purge_after and is due since it was retired. Times are RFC3339 (UTC).
 func (s *Service) retainedRuntimes(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	rows, err := s.DB.Pool.Query(c.Request.Context(), `SELECT r.key,a.id,a.name,a.type,a.deleted_at,COALESCE(r.purge_after,r.retired_at),COALESCE(r.purge_after,r.retired_at) <= now()
+	rows, err := s.DB.Pool.Query(c.Request.Context(), `SELECT r.key,a.id,a.name,a.type,a.deleted_at,`+sqlPurgeAt+`,`+sqlPurgeAt+` <= now()
   FROM ccgateway_runtimes r JOIN accounts a ON a.id=r.account_id
-  WHERE a.plugin_key='ccgateway' AND a.deleted_at IS NOT NULL AND r.retired_at IS NOT NULL AND r.purged_at IS NULL
+  WHERE a.plugin_key='ccgateway' AND `+sqlPendingPurge+`
   ORDER BY 6,r.key`)
 	if err != nil {
 		httpapi.Fail(c, core.ErrUnavailable)
@@ -280,7 +294,7 @@ func (s *Service) runtimePurge(c *gin.Context) {
 	var accountID int64
 	found, retained := false, false
 	err := s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT a.id, a.deleted_at IS NOT NULL AND r.retired_at IS NOT NULL AND r.purged_at IS NULL
+		err := tx.QueryRow(ctx, `SELECT a.id, `+sqlPendingPurge+`
   FROM ccgateway_runtimes r JOIN accounts a ON a.id=r.account_id WHERE r.key=$1 AND a.plugin_key='ccgateway' FOR UPDATE OF r`, key).Scan(&accountID, &retained)
 		if store.IsNoRows(err) {
 			return nil
@@ -307,6 +321,6 @@ func (s *Service) runtimePurge(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrConflict, "runtime_not_retained"))
 	default:
 		s.Kick(key)
-		c.JSON(http.StatusAccepted, gin.H{"data": map[string]any{"accepted": true, "key": key, "account_id": accountID}})
+		httpapi.Accepted(c, map[string]any{"accepted": true, "key": key, "account_id": accountID})
 	}
 }

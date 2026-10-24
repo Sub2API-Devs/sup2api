@@ -12,6 +12,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -367,7 +368,9 @@ func mergeConfig(c, old Config) (Config, error) {
 // one must be a group id with valid overrides.
 func mergeFeatureGroups(c *Config, old Config) error {
 	if c.CCFeatureGroups == nil {
-		c.CCFeatureGroups = old.CCFeatureGroups
+		// A copy: pruneFeatureGroups deletes from the saved map, and old
+		// must stay what was stored.
+		c.CCFeatureGroups = maps.Clone(old.CCFeatureGroups)
 	}
 	for key, group := range c.CCFeatureGroups {
 		id, err := strconv.ParseInt(key, 10, 64)
@@ -637,22 +640,25 @@ func pruneFeatureGroups(ctx context.Context, tx pgx.Tx, saved *Config, named map
 }
 
 // admitSavedCLIVersion checks the cli_version a PUT remote-config body
-// changes (admitCLIVersion) and answers the request when it is refused;
-// admitted is the version checked ("" when the body keeps the stored one).
-func (s *Service) admitSavedCLIVersion(c *gin.Context, in Config) (admitted string, ok bool) {
+// changes (admitCLIVersion); admitted is the version checked ("" when the
+// body keeps the stored one). A stored configuration that cannot be read is
+// that error, not a later config_changed.
+func (s *Service) admitSavedCLIVersion(ctx context.Context, in Config) (admitted string, err error) {
 	requested := requestedCLIVersion(in)
 	if requested == "" {
-		return "", true
+		return "", nil
 	}
-	current, err := s.Load(c.Request.Context())
-	if err != nil || requested == current.EffectiveRequestPolicy().CLIVersion {
-		return "", true // a stored configuration that cannot be read fails the save itself
+	current, err := s.Load(ctx)
+	if err != nil {
+		return "", err
 	}
-	if err := s.admitCLIVersion(c.Request.Context(), current, requested); err != nil {
-		httpapi.Fail(c, err)
-		return "", false
+	if requested == current.EffectiveRequestPolicy().CLIVersion {
+		return "", nil
 	}
-	return requested, true
+	if err := s.admitCLIVersion(ctx, current, requested); err != nil {
+		return "", err
+	}
+	return requested, nil
 }
 
 // mergeStored is one save under the settings row lock: the stored
@@ -712,13 +718,14 @@ func (s *Service) save(c *gin.Context) {
 	// A changed Claude Code version is checked against what the runtimes run
 	// before anything is written (audit B3): asking the Workers takes a while
 	// and must not hold the settings row.
-	admitted, ok := s.admitSavedCLIVersion(c, in)
-	if !ok {
+	admitted, e := s.admitSavedCLIVersion(c.Request.Context(), in)
+	if e != nil {
+		httpapi.Fail(c, e)
 		return
 	}
 	var saved Config
 	var runtimeChanged bool
-	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
+	e = s.DB.Tx(ctx, func(tx pgx.Tx) error {
 		_, e := store.UpdateSettingJSONTx(ctx, tx, settingKey, updatedBy, func(raw json.RawMessage) (json.RawMessage, error) {
 			var old Config
 			var e error
@@ -736,12 +743,9 @@ func (s *Service) save(c *gin.Context) {
 	})
 	if e != nil {
 		// Validation and conflicts carry their own message; anything else
-		// (storage, encryption) is internal and stays generic.
-		if code := core.AsError(e).Code; code == core.ErrConflict.Code || code == core.ErrInvalidArgument.Code {
-			httpapi.Fail(c, e)
-			return
-		}
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved."))
+		// (storage, encryption) is a server fault: Fail renders it as a
+		// generic internal error and logs the cause.
+		httpapi.Fail(c, e)
 		return
 	}
 	if runtimeChanged {

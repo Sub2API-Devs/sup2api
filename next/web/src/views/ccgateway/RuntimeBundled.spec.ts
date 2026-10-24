@@ -36,7 +36,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (k: string) => k =
 vi.mock('@sub2api/ui', async original => ({ ...(await original<object>()), confirm: mocks.confirm, toast: mocks.toast }))
 
 async function render(mode = 'controller') {
-  const w = mount(RuntimeInstall, { props: { mode, accountRuntimes: true, hasAdminKey: true }, global: { plugins: [i18n] } })
+  const w = mount(RuntimeInstall, { props: { mode, accountRuntimes: true, hasAdminKey: true, cliVersion: '2.1.304' }, global: { plugins: [i18n] } })
   await flushPromises()
   return w
 }

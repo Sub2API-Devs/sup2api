@@ -281,11 +281,31 @@ export interface AccountType {
   default_model_mapping?: Record<string, string>
   common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
-  lifecycle?: { preparation?: boolean; required?: boolean; actions?: Array<{ id: string; label: LText; icon?: string }>; deletion?: { retentionDays: number } }
+  lifecycle?: AccountLifecycle
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
   endpoints: AccountTypeEndpoint[]
+}
+
+/** manifest.AccountLifecycle: preparation, required lifecycle, row actions and deletion. */
+export interface AccountLifecycle {
+  preparation?: boolean
+  required?: boolean
+  actions?: AccountLifecycleAction[]
+  deletion?: AccountDeletion
+}
+
+/** manifest.AccountLifecycleAction: a plugin action on the account row. */
+export interface AccountLifecycleAction {
+  id: string
+  label: LText
+  icon?: string
+}
+
+/** manifest.AccountDeletion: runtime resources may be kept 1..30 days after the account is deleted. */
+export interface AccountDeletion {
+  retentionDays: number
 }
 
 export interface Account {

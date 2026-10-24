@@ -338,17 +338,7 @@ func (s *Service) deleteRemote(ctx context.Context, key string, retired bool) er
 	default:
 		return errors.New("only draft and retired runtimes are deleted")
 	}
-	res, close, e := s.runtimeRequest(ctx, key, "DELETE", "", nil, "", header...)
-	if e != nil {
-		return e
-	}
-	defer close()
-	defer res.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
-		return deleteFailure(res.StatusCode, raw, "runtime_cleanup_failed")
-	}
-	return nil
+	return s.deleteRuntime(ctx, key, true, header...)
 }
 
 // CheckDraft is the POST /accounts check of "ccgateway_runtime" (CONTRACTS

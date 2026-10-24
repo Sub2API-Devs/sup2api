@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -73,7 +74,7 @@ func (o workerUpdateOptions) validate() error {
 	// Any release version: the controller takes the pair from the image's
 	// CLI manifest and refuses a version the image does not package
 	// (runtime_updates.release_entry), so the core does not pin one here.
-	if o.paired() && cliReleasePattern.MatchString(o.CLIVersion) {
+	if o.paired() && features.ValidCLIVersion(o.CLIVersion) {
 		return nil
 	}
 	return errors.New("components must be worker-only, or worker and cli with a cli_version (x.y.z)")

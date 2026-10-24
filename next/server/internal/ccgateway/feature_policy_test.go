@@ -72,6 +72,10 @@ func TestFeatureConfigRevisionAndOmission(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, old.FeatureRevision, got.FeatureRevision)
 	require.Equal(t, old.CCFeatureGroups, got.CCFeatureGroups)
+	// Omitted groups are a copy: pruning the saved ones (pruneFeatureGroups)
+	// leaves the stored ones as they were (code-quality audit 2026-10-24 K14).
+	delete(got.CCFeatureGroups, "7")
+	require.Contains(t, old.CCFeatureGroups, "7")
 	require.Equal(t, p.BuildBillingSources, got.RequestPolicy.BuildBillingSources)
 	draft := got
 	draft.CCFeatureGroups = map[string]GroupFeaturePolicy{}
