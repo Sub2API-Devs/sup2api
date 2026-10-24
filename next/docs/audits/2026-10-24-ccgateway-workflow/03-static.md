@@ -69,6 +69,7 @@
 | count_tokens | 插件不声明 → 核心 404，不到 Worker | manifest 无 count_tokens；`ccgateway.go:147-151` |
 | 资源（Files/Skills） | 独立管理 HTTP（Worker resource broker），不走 CLI | `engine/resource_http.go:63-110` |
 | helper history | 核心仍 `EnableHelperHistory: true` 且会探测；Worker 的 requirement 路由**已删除**（404→`DeferToOrdinary`），`/admin/features` 也不再声明 `helper_history_schema_versions`，所以只有库里已有 `KnownReady` 链的会话会在发送前 400。见 §4-R8 | `server/internal/app/phases.go:290`；`helper_history_request.go:87-120,261-320`；`engine/helper_history_requirement_test.go`（断言 404）；`worker/internal/server/features.go:51-57` |
+| 出口报文记录 | **不存在**：请求日志只有 `request.body`/`request-headers.json`/`build-components.json`/`events.jsonl`/`response.*`；`upstream*` 文件类型只属已删除的 legacy relay。出口只能「同镜像 + 同 CLI 回放同一份入站 body/头」取证 | `engine/request_log_diagnostic.go:65`；`engine/request_log_viewer.go:416-427` |
 
 ---
 
