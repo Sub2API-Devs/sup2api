@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateRequestPolicy, runtimeContext } from '../request-policy.js';
+import { validateRequestPolicy, validateDirectPolicy, runtimeContext } from '../request-policy.js';
 import { prepareBuildInput } from '../request-input.js';
 
 test('304 policy rejects unknown fields, contract, and manual billing values', () => {
@@ -25,6 +25,16 @@ test('304 policy rejects unknown fields, contract, and manual billing values', (
   assert.deepEqual(copy, value);
   copy.build_attachment_sources.shell = 'client';
   assert.equal(value.build_attachment_sources.shell, 'worker');
+});
+
+// Direct's policy is validated the same way; the content policy takes both
+// as given (one validation per request).
+test('304 direct policy takes only the billing choices', () => {
+  assert.equal(validateDirectPolicy(undefined), undefined);
+  for (const raw of ['null', '[]', 'not json', '{"build_billing_entrypoint":"cli; cch=1"}', '{"build_billing_sources":{"cc_version":"erase"}}',
+    '{"build_billing_sources":null}', '{"build_attachment_sources":{"platform_name":"worker"}}']) assert.throws(() => validateDirectPolicy(raw), raw);
+  assert.deepEqual(validateDirectPolicy('{"build_billing_entrypoint":"cli","build_billing_sources":{"cc_version":"worker"},"build_identity_lines":{"cli":"none"}}'),
+    { build_billing_entrypoint: 'cli', build_billing_sources: { cc_version: 'worker' } });
 });
 
 test('runtime facts cannot claim a different startup directory', () => {

@@ -1,8 +1,9 @@
 // Explicit build components -> CC records. Attachment extraction belongs to
 // the gateway. Never infer a record's type or role from tags in ordinary text.
 import { object, toBlocks } from './shared.js';
+import { buildInputError } from './request-parameters.js';
 
-const fail = message => { throw new Error(`request --build: ${message}`); };
+const fail = message => { throw buildInputError(message); };
 const record = (type, fields) => ({ type, uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), ...fields });
 const gatewayContext = (text, renderedRole) => record('attachment', {
   attachment: { type: 'hook_additional_context', hookName: 'gateway', hookEvent: 'UserPromptSubmit', content: [text] },
@@ -48,8 +49,8 @@ function parseComponents(components, preserveContent) {
   if (!Array.isArray(components.messages) || !components.messages.length) fail('messages must be a non-empty array');
   if (components.stream !== undefined && typeof components.stream !== 'boolean') fail('stream must be boolean');
   const parameters = structuredClone(components.parameters ?? {});
+  // Its keys are checked once, by validateBuildParameters (request-parameters.js).
   if (!object(parameters)) fail('parameters must be an object');
-  for (const key of ['model', 'system', 'messages', 'tools', 'stream']) if (Object.hasOwn(parameters, key)) fail(`parameters.${key} cannot replace a build component`);
   if (parameters.betas !== undefined && (!Array.isArray(parameters.betas) || !parameters.betas.every(b => typeof b === 'string'))) fail('parameters.betas must be an array of strings');
   let systemPrompt = [], systemBlocks;
   if (typeof components.systemPrompt === 'string') {
@@ -230,6 +231,9 @@ function splitTools(tools) {
   return { customTools, extraToolSchemas };
 }
 
+// prepareBuildInput resolves the components: the request's fields, its
+// messages as CC records (the Worker's references resolved, attachments
+// placed), the system prompt and the tools.
 export function prepareBuildInput(components, renderAttachment, { preserveContent = false } = {}) {
   const { parameters, systemPrompt, systemBlocks } = parseComponents(components, preserveContent);
   const messages = expandReferences(components, renderAttachment, preserveContent);
@@ -240,6 +244,28 @@ export function prepareBuildInput(components, renderAttachment, { preserveConten
   return { request, messages, systemPrompt, systemBlocks, customTools, extraToolSchemas };
 }
 
+// wireMessages are the records as wire messages: a record's own wire message,
+// or what CC's renderer (aBe) makes of an attachment, in the role it was
+// placed with.
+export function wireMessages(records, renderAttachment) {
+  return records.flatMap(row => {
+    if (row.type !== 'attachment') return [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)];
+    const rendered = renderAttachment(row);
+    if (!rendered.isKnownType) throw Error('Unknown CC attachment type');
+    return rendered.messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: structuredClone(item.message.content) }));
+  });
+}
+
+// wireRecords are wire messages (references already resolved) as CC records,
+// each keeping its wire message; every tool_use must be answered.
+export function wireRecords(messages, model) {
+  if (!messages.length) fail('messages must be a non-empty array');
+  const none = () => fail('attachment reference is missing, duplicated or has the wrong kind');
+  const records = messages.map((message, index) => messageRecord(message, index, { model, take: none, reminder: none, preserveContent: true }));
+  validateToolPairs(records);
+  return records;
+}
+
 // fingerprintMessages gives CC's attribution fingerprint (RIs) the message it
 // reads in a native session: the first user prompt. Native attachments are
 // separate isMeta records there, so RIs never sees them; a wire user message
@@ -247,8 +273,13 @@ export function prepareBuildInput(components, renderAttachment, { preserveConten
 // with the native reminder tag) and tool results are skipped here. Without
 // this every conversation hashed the same reminder characters.
 export function fingerprintMessages(messages, reminderOpen) {
+  return [{ type: 'user', message: { role: 'user', content: firstPromptText(messages, reminderOpen) } }];
+}
+
+// firstPromptText is the text of the first user prompt: the first text block
+// of a user message that is not a reminder, or '' without one.
+export function firstPromptText(messages, reminderOpen) {
   const prompt = block => block?.type === 'text' && typeof block.text === 'string' && !block.text.trimStart().startsWith(reminderOpen);
-  const text = messages.filter(message => message?.role === 'user')
+  return messages.filter(message => message?.role === 'user')
     .map(message => toBlocks(message.content)).find(blocks => Array.isArray(blocks) && blocks.some(prompt))?.find(prompt)?.text ?? '';
-  return [{ type: 'user', message: { role: 'user', content: text } }];
 }

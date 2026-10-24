@@ -19,10 +19,10 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{}});',
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         let body,offset=0;
-        export const checkModelRequest=()=>null;
+        export const checkModelRequest=()=>null;export const defaultTimeout=600000;
         export const openModelRequest=async()=>{body=await fs.readFile('fixture.body');return {id:'x',ok:false,status:400,headers:{'content-type':'application/octet-stream'}}};
         export const cancelModelResponse=async()=>{};
-        export const readModelResponse=async(id,owner,signal,binary)=>{
+        export const readModelResponse=async(response,signal,binary)=>{
           if(!binary)throw Error('HTTP errors must use byte reads');
           if(process.env.CCG_FIXTURE_FAIL && offset>0)throw Object.assign(Error('read ECONNRESET'),{code:'ECONNRESET',stack:'private detail'});
           const bytes=body.subarray(offset,offset+40000);offset+=bytes.length;

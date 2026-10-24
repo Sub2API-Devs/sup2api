@@ -148,10 +148,10 @@ const boundaryCases = [
   {case_id:'PA-BOUNDARY-OUTPUT-CONFIG', input:'message role system output_config/clear_at versus parameters.output_config', classification:'separate_lifecycle_and_generation_channels', assertion:'message lifecycle remains wire-preserved while top-level effort/format is model-normalized; clear_at outside never/next_user_message is rejected'},
 ];
 const tests = [];
-for (const file of ['request-build.test.mjs','request-input.test.mjs','request-options.test.mjs','model-request.test.mjs','official-client-replay.cjs','worker-policy-matrix.cjs']) {
+for (const file of ['request-input.test.mjs','request-options.test.mjs','model-request.test.mjs','official-client-replay.cjs','worker-policy-matrix.cjs']) {
   const full = path.join(mods,'test',file); if (!fs.existsSync(full)) continue;
   const doc=load(full); const titles=find(doc,n=>n.type==='CallExpression'&&['test','it'].includes(n.callee?.name)&&n.arguments[0]?.type==='StringLiteral').map(({node})=>({title:node.arguments[0].value,evidence:evidence(doc,node,false)}));
-  tests.push({file:path.relative(root,full).split(path.sep).join('/'),source_sha256:doc.hash,titles,execution_status:'not_run_by_this_analysis',note:file==='request-build.test.mjs'?'Existing test copies generic request-build.js and replaces Kvt with a fixture; not direct evidence of real304 native parameter gates.':'Inventory only; cases require executed assertion evidence.'});
+  tests.push({file:path.relative(root,full).split(path.sep).join('/'),source_sha256:doc.hash,titles,execution_status:'not_run_by_this_analysis',note:'Inventory only; cases require executed assertion evidence.'});
 }
 const result = {
   schema:'ccgateway.assembly-audit.parameters.v1', baseline:{version:'2.1.304',binary_sha256:profile.binarySHA256,profile:path.relative(root,path.join(mods,'profiles/linux-x64-2.1.304.json'))},

@@ -93,11 +93,7 @@ export function authenticatedRequestHeaders(nativeHeaders, policy) {
   if (!/^Bearer \S+$/i.test(headers.get('authorization') ?? '') || headers.has('x-api-key')) {
     throw Error('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY');
   }
-  headers.set('anthropic-version', policy.version ?? '2023-06-01');
-  const tokens = normalizeBetas(policy.betas, policy.oauthBeta);
-  if (tokens.length) headers.set('anthropic-beta', tokens.join(','));
-  else headers.delete('anthropic-beta');
-  return headers;
+  return setProtocolHeaders(headers, normalizeBetas(policy.betas, policy.oauthBeta), policy.version ?? '2023-06-01');
 }
 
 // An API key is not a login: the login's beta goes only with a login, as
@@ -107,9 +103,14 @@ export function apiKeyRequestHeaders(nativeHeaders, { apiKey, betas, oauthBeta, 
   if (!apiKey || headers.get('x-api-key') !== apiKey || headers.has('authorization')) {
     throw Error('Request requires the configured API-key authentication route');
   }
-  headers.set('anthropic-version', version);
-  const tokens = normalizeBetas(betas).filter(beta => beta !== oauthBeta);
-  if (tokens.length) headers.set('anthropic-beta', tokens.join(','));
+  return setProtocolHeaders(headers, normalizeBetas(betas).filter(beta => beta !== oauthBeta), version);
+}
+
+// setProtocolHeaders writes the request's betas (none: no header) and, when
+// given, its API version.
+export function setProtocolHeaders(headers, betas, version) {
+  if (version !== undefined) headers.set('anthropic-version', version);
+  if (betas.length) headers.set('anthropic-beta', betas.join(','));
   else headers.delete('anthropic-beta');
   return headers;
 }

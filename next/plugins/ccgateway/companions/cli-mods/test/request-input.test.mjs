@@ -66,7 +66,6 @@ test('extracted references preserve system blocks and native rendered reminder p
 test('HTTP body fields and component overrides are rejected by build mode', () => {
   const base = { model: 'fixture', messages: [{ role: 'user', content: 'x' }] };
   assert.throws(() => prepareBuildInput({ ...base, max_tokens: 42 }), /unknown component/);
-  assert.throws(() => prepareBuildInput({ ...base, parameters: { messages: [] } }), /cannot replace/);
   assert.throws(() => prepareBuildInput({ ...base, attachments: [{ afterMessage: 3, text: 'x' }] }), /afterMessage/);
   const tool = { name: 'NativeName', description: 'test', inputSchema: { type: 'object' }, strict: true };
   assert.deepEqual(prepareBuildInput({ ...base, tools: [tool] }).customTools[0], { name: tool.name, description: tool.description, input_schema: tool.inputSchema, strict: true });

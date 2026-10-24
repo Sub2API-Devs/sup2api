@@ -35,7 +35,7 @@ test('a billing header anywhere makes the request Claude Code\'s own', () => {
 // tools and attachment placement are taken around the client's request.
 async function fixture(probeBody) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-304-injection-'));
-  await installSupport(dir, ['request-input', 'request-options', 'request-policy', 'content-policy', 'request-parameters', 'request-build']);
+  await installSupport(dir, ['request-input', 'request-options', 'request-policy', 'content-policy', 'request-parameters', 'request-build', 'native-tools']);
   const header = JSON.stringify(vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;');
   for (const [name, source] of Object.entries({
     'package.json': '{"type":"module"}',
@@ -50,7 +50,6 @@ async function fixture(probeBody) {
     'chunk-eanw7pgv.js': `export const m4t=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
     'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE';`,
     'chunk-7p6jp6kj.js': 'export const Al=()=>({});', 'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
-    'ccgateway-native-tools.js': 'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{name:tool.name});export const findNative=(_session,name)=>registry.get(name);',
   })) await fs.writeFile(path.join(dir, name), source);
   return { dir, adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-rncrmfyt.js'))), session: await import(pathToFileURL(path.join(dir, 'chunk-72vwyp9d.js'))) };
 }
@@ -132,6 +131,12 @@ test('CC\'s cache markers give way when the request would carry more than four',
     request.messages[0].content.push(marked('d'));
     out = await f.adapter.buildRequest(request, {}, signal());
     assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [false, false]);
+    // Only CC's prompt blocks give way, found by position: the client's own
+    // identity line keeps its marker (here the client's five markers exceed
+    // the limit on their own, as the client sent them).
+    request.systemPrompt = [{ type: 'text', text: 'LINE', cache_control: { type: 'ephemeral' } }, { type: 'text', text: 'own' }];
+    out = await f.adapter.buildRequest(request, {}, signal());
+    assert.deepEqual(out.body.system.map(b => [b.text, b.cache_control !== undefined]), [['LINE', true], ['STATIC', false], ['DYNAMIC', false]]);
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });
 

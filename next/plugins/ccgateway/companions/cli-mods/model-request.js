@@ -1,12 +1,16 @@
-// Host-side raw Messages transport. The caller supplies CC's authenticated
-// client factory; credentials and fetch policy stay inside that factory.
+// The request command's raw Messages transport. The caller supplies CC's
+// authenticated client factory; credentials and fetch policy stay inside it.
 import { authenticatedRequestHeaders, normalizeBetas } from './request-options.js';
-const streams = new Map();
 const forbiddenHeaders = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'cookie', 'connection', 'content-length', 'transfer-encoding']);
-const defaultTimeout = 600000;
+// The deadline of a request without --timeout-ms, and Claude Code's own
+// client timeout.
+export const defaultTimeout = 600000;
+// A response handle's stream state, kept off its JSON.
+const stream = Symbol('ccgateway.model-response');
 
+// checkModelRequest is the reason a request cannot be sent, or undefined.
 export function checkModelRequest(options) {
-  if (!options || typeof options !== 'object' || !options.body || typeof options.body !== 'object' || Array.isArray(options.body)) return 'takes { body: a Messages JSON object, headers?, timeoutMs? }';
+  if (!options || typeof options !== 'object' || !options.body || typeof options.body !== 'object' || Array.isArray(options.body)) return 'the request body must be a Messages JSON object';
   if (typeof options.body.model !== 'string' || !options.body.model.trim()) return 'body.model must be a non-empty string';
   if (options.rawBody !== undefined && typeof options.rawBody !== 'string') return 'rawBody must be JSON text';
   if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 2147483647)) return 'timeoutMs must be a positive 32-bit integer';
@@ -19,27 +23,22 @@ export function checkModelRequest(options) {
   }
 }
 
-function owned(id, owner) {
-  const entry = streams.get(id);
-  if (!entry || entry.owner !== owner) throw new Error('model response is closed or belongs to another mod');
-  return entry;
-}
-
 async function close(entry, reason) {
   if (entry.closed) return;
   entry.closed = true;
-  streams.delete(entry.id);
   clearTimeout(entry.timer);
   entry.signal?.removeEventListener('abort', entry.onAbort);
   if (reason !== undefined) entry.controller.abort(reason);
   try { await entry.reader?.cancel(reason); } catch { /* Closing is idempotent. */ }
 }
 
-export async function openModelRequest(options, owner, signal, createClient, transportFetch) {
+// openModelRequest sends the request; the response it returns is read with
+// readModelResponse and closed with cancelModelResponse.
+export async function openModelRequest(options, signal, createClient, transportFetch) {
   const error = checkModelRequest(options);
   if (error) throw new Error(error);
   if (signal?.aborted) throw new Error('model request aborted');
-  const entry = { id: crypto.randomUUID(), owner, controller: new AbortController(), signal, closed: false, busy: false, decoder: new TextDecoder(), pending: new Uint8Array() };
+  const entry = { controller: new AbortController(), signal, closed: false, busy: false, decoder: new TextDecoder(), pending: new Uint8Array() };
   entry.onAbort = () => { void close(entry, signal.reason ?? new Error('model request aborted')); };
   signal?.addEventListener('abort', entry.onAbort, { once: true });
   entry.timer = setTimeout(() => { void close(entry, new Error('model request timed out')); }, options.timeoutMs ?? defaultTimeout);
@@ -85,8 +84,7 @@ export async function openModelRequest(options, owner, signal, createClient, tra
     if (entry.closed) { await response.body?.cancel(); throw new Error('model request aborted'); }
     await errorResponse?.body?.cancel().catch(() => {});
     entry.reader = response.body?.getReader();
-    streams.set(entry.id, entry);
-    return { id: entry.id, status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), ok: response.ok, ...(request && { request }) };
+    return { [stream]: entry, status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), ok: response.ok, ...(request && { request }) };
   } catch (error) {
     await close(entry, error);
     await errorResponse?.body?.cancel().catch(() => {});
@@ -94,8 +92,9 @@ export async function openModelRequest(options, owner, signal, createClient, tra
   }
 }
 
-export async function readModelResponse(id, owner, signal, binary = false) {
-  const entry = owned(id, owner);
+export async function readModelResponse(response, signal, binary = false) {
+  const entry = response[stream];
+  if (entry.closed) throw new Error('model response is closed');
   if (entry.busy) throw new Error('model response already has an active reader');
   entry.busy = true;
   const abort = () => { void close(entry, signal.reason ?? new Error('model response aborted')); };
@@ -119,10 +118,6 @@ export async function readModelResponse(id, owner, signal, binary = false) {
   finally { entry.busy = false; signal?.removeEventListener('abort', abort); }
 }
 
-export async function cancelModelResponse(id, owner) {
-  const entry = streams.get(id);
-  if (!entry) return { closed: true };
-  if (entry.owner !== owner) throw new Error('model response belongs to another mod');
-  await close(entry, new Error('model response cancelled'));
-  return { closed: true };
+export async function cancelModelResponse(response) {
+  await close(response[stream], new Error('model response cancelled'));
 }

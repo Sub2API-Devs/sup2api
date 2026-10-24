@@ -15,7 +15,7 @@ const scope = [
   [native + 'chunk-2gh4h0fv.js', ['RIs']],
   [native + 'chunk-38xgev2z.js', ['sF']],
   [native + 'chunk-5vqpbzgd.js', ['B1e']],
-  [mods + 'request-build-2.1.304.js', ['buildRequest']],
+  [mods + 'request-build.js', ['buildRequest']],
   [mods + 'request-input.js', ['prepareBuildInput', 'systemRecord']],
   [mods + 'content-policy.js', ['applyContentPolicy', 'mergeBillingAttribution', 'environmentRegions', 'identify', 'recognizedUser', 'fenceAfter']],
   [mods + 'request-command.js', ['runRequestCommand']],

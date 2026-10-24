@@ -93,9 +93,13 @@ export function applyDirectBilling(raw, body, { policy = {}, billingHeader, nati
   }
   if (items.every((item, i) => item.index === i && item.text === undefined) && items.length === blocks.length) return raw;
   if (!system) {
-    // No system: it goes first in the body, after the opening brace.
+    // No system: it goes where Claude Code sends it, after messages (model,
+    // messages, system, ...), else after model, else first.
+    const json = '"system":' + JSON.stringify(items.map(item => item.block));
+    const after = member(top, 'messages') ?? member(top, 'model');
+    if (after) return raw.slice(0, after.end) + ',' + json + raw.slice(after.end);
     const open = skipWs(raw, 0);
-    return raw.slice(0, open + 1) + '"system":' + JSON.stringify(items.map(item => item.block)) + ',' + raw.slice(open + 1);
+    return raw.slice(0, open + 1) + json + (top.length ? ',' : '') + raw.slice(open + 1);
   }
   const list = elements(raw, system.start), edits = [];
   let pending = [], order = 0;

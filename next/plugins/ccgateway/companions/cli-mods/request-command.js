@@ -4,10 +4,10 @@ import { sF, _ke, mle } from './chunk-38xgev2z.js';
 import { Al } from './chunk-7p6jp6kj.js';
 import { mBr } from './chunk-4qs43hr1.js';
 import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
-import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse } from './ccgateway-model-request.js';
+import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, normalizeBetas } from './ccgateway-request-options.js';
-import { validateDirectPolicy, defaultEntrypoint } from './ccgateway-request-policy.js';
+import { validateDirectPolicy } from './ccgateway-request-policy.js';
 import { readRequestAgent, resolveAgentContext, keepClientUserAgent } from './ccgateway-request-agent.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
@@ -39,7 +39,6 @@ Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 // native bindings (request-entry.inc.js); without them the request is CC's
 // native main thread and direct forwards the body unchanged.
 export async function runRequestCommand(args, natives = {}) {
-  const { oauthBeta, agentNative } = natives;
   const controller = new AbortController(), signal = controller.signal;
   // phase names the step that failed, for the error frame (request-error.js).
   const state = { phase: 'input', responseStarted: false };
@@ -66,35 +65,15 @@ export async function runRequestCommand(args, natives = {}) {
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     const rawBody = await readInput(options.input, signal);
     const body = parseRequestJSON(rawBody, options.mode);
+    // checkModelRequest also bounds --timeout-ms.
     const invalid = checkModelRequest({ body, headers: options.headers, timeoutMs: options.timeoutMs });
     if (invalid) throw Error(invalid);
-    const timeout = options.timeoutMs ?? 600000;
-    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2147483647) throw Error('--timeout-ms must be a positive 32-bit integer');
+    const timeout = options.timeoutMs ?? defaultTimeout;
     deadline = setTimeout(() => { timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
     deadline.unref?.();
-    let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout };
-    // The Worker's agent context makes CC build the client's kind of request
-    // (request-agent.js); without it the request is CC's native main thread.
-    let resolveAgent, agent;
-    if (process.env.CCG_REQUEST_AGENT && agentNative) {
-      const context = readRequestAgent();
-      resolveAgent = facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders });
-    }
-    if (options.mode === 'direct') {
-      if (resolveAgent) agent = resolveAgent({ billing: agentNative.requestBilling(body.system), prompt: agentNative.prompt(messagesOf(body)) });
-      outgoing = await prepareDirect(state, outgoing, agent, natives);
-    } else if (options.mode === 'build') {
-      ({ outgoing, agent } = await prepareBuild(state, body, options.headers, signal, resolveAgent, { ...natives, apiKey, timeout }));
-    }
-    if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
-    // A request sent with the client's own header keeps the client's User-Agent
-    // (build reads the client's system from its components).
-    keepClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? body.systemPrompt : body.system), agentNative?.leadingBilling(outgoing.body.system));
-    const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
-    if (betas.length && !mBr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
-    outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+    const { outgoing, agent } = await prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives);
     state.phase = 'transport';
-    response = await openModelRequest(outgoing, 'cli-request', signal, init => openClient(init, apiKey, agent), mle);
+    response = await openModelRequest(outgoing, signal, init => openClient(init, apiKey, agent), mle);
     if (!response.ok) {
       await writeHttpError(state, response, options.meta, signal);
       return 2;
@@ -109,7 +88,7 @@ export async function runRequestCommand(args, natives = {}) {
     return interrupted ? 130 : 1;
   } finally {
     clearTimeout(deadline);
-    if (response) await cancelModelResponse(response.id, 'cli-request');
+    if (response) await cancelModelResponse(response);
     process.off('SIGINT', interrupt);
     process.off('SIGTERM', interrupt);
     process.stdout.off('error', failedOutput);
@@ -119,6 +98,34 @@ export async function runRequestCommand(args, natives = {}) {
 }
 
 const messagesOf = body => Array.isArray(body.messages) ? body.messages : [];
+
+// prepareOutgoing is the request to send, as the mode makes it, and the
+// client's kind of request (request-agent.js) it is sent as.
+async function prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives) {
+  const { oauthBeta, agentNative } = natives;
+  const resolveAgent = agentResolver(agentNative);
+  let outgoing = { body, rawBody, headers: options.headers, timeoutMs: timeout }, agent;
+  if (options.mode === 'direct') {
+    agent = resolveAgent?.({ billing: agentNative.requestBilling(body.system), prompt: agentNative.prompt(messagesOf(body)) });
+    outgoing = await prepareDirect(state, outgoing, agent, natives);
+  } else ({ outgoing, agent } = await prepareBuild(state, body, options.headers, signal, resolveAgent, { ...natives, apiKey, timeout }));
+  if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
+  // A request sent with the client's own header keeps the client's User-Agent
+  // (build reads the client's system from its components).
+  keepClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? body.systemPrompt : body.system), agentNative?.leadingBilling(outgoing.body.system));
+  const betas = normalizeBetas(outgoing.headers?.['anthropic-beta']);
+  if (betas.length && !mBr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
+  outgoing.headerPolicy = { apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+  return { outgoing, agent };
+}
+
+// agentResolver resolves the client's kind of request from the Worker's agent
+// context; without one the request is CC's native main thread (undefined).
+function agentResolver(agentNative) {
+  if (!process.env.CCG_REQUEST_AGENT || !agentNative) return undefined;
+  const context = readRequestAgent();
+  return facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders });
+}
 
 // readInput is the request JSON text, from a file or stdin, without a BOM.
 async function readInput(input, signal) {
@@ -147,9 +154,9 @@ async function prepareDirect(state, outgoing, agent, { directBuild, agentNative 
   // User-Agent both read it. A main thread's header names its prompt's turn,
   // as CC's query loop counts it (the terminal entrypoint is a human typing).
   const main = !agent || agent.requestClass === 'main';
-  const entrypoint = (agentNative ? agentNative.entrypoint(body.system, policy) : policy.build_billing_entrypoint) ?? defaultEntrypoint;
+  const entrypoint = agentNative.entrypoint(body.system, policy);
   setEntrypointOnRequests(entrypoint);
-  const turn = main ? agentNative?.turn(messagesOf(body), entrypoint === 'cli') : undefined;
+  const turn = main ? agentNative.turn(messagesOf(body), entrypoint === 'cli') : undefined;
   const sent = await directBuild(rawBody, body, { policy, agentContext: agent?.agentContext, promptId: agent?.promptId, ...turn });
   return sent === rawBody ? outgoing : { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
 }
@@ -191,7 +198,7 @@ async function readErrorBody(state, response, meta, signal) {
     if (meta) file = await fs.open(meta + '.error-body', 'wx', 0o600);
     for (let done = false; !done;) {
       state.phase = 'transport';
-      const part = await readModelResponse(response.id, 'cli-request', signal, true);
+      const part = await readModelResponse(response, signal, true);
       const bytes = Buffer.from(part.bytes);
       size += bytes.length;
       if (previewBytes < maxErrorBody) {
@@ -223,7 +230,7 @@ async function writeHttpError(state, response, meta, signal) {
 async function streamResponse(state, response, signal) {
   for (let done = false; !done;) {
     state.phase = 'transport';
-    const part = await readModelResponse(response.id, 'cli-request', signal);
+    const part = await readModelResponse(response, signal);
     state.phase = 'output';
     if (part.text) { state.responseStarted = true; await write(process.stdout, part.text, signal); }
     done = part.done;

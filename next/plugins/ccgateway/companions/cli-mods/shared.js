@@ -11,6 +11,12 @@ export const toBlocks = content => typeof content === 'string' ? [{ type: 'text'
 // for a block without one).
 export const systemTexts = system => typeof system === 'string' ? [system] : Array.isArray(system) ? system.map(block => block?.text) : [];
 
+// The policy's field names: the environment fields build may take from the
+// Worker or erase (build_attachment_sources), and the billing header fields
+// the Worker may own (build_billing_sources).
+export const environmentFields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'];
+export const billingFields = ['cc_version', 'cc_entrypoint'];
+
 // UUIDs: any version, either case; and the lowercase version 4 form.
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

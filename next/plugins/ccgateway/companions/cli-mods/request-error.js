@@ -62,3 +62,8 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
 export function encodeErrorFrame(frame) {
   return errorPrefix + JSON.stringify(frame) + '\n';
 }
+
+// policyDeniedFrame is the frame for a request CC's own fast-path policy refuses.
+export function policyDeniedFrame() {
+  return { protocol: errorProtocol, source: 'input', status: 403, error: { type: 'permission_error', code: 'cli_policy_denied', message: 'CC policy denied this request' } };
+}

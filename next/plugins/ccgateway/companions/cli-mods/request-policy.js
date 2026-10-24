@@ -1,12 +1,5 @@
 import path from 'node:path';
-import { object } from './shared.js';
-
-const environmentFields = [
-  'platform_name', 'os_version', 'shell', 'primary_directory',
-  'additional_directories', 'git_repository', 'worktree',
-  'scratchpad_directory', 'github_cli', 'agent_proxy',
-];
-const billingFields = ['cc_version', 'cc_entrypoint'];
+import { object, environmentFields, billingFields } from './shared.js';
 
 // The cc_entrypoint values build may write and, per entrypoint, the identity
 // lines real clients send with it, the default first (contracts

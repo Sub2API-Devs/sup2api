@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix, maxErrorBody } from '../request-error.js';
+import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix, maxErrorBody, policyDeniedFrame } from '../request-error.js';
 
 test('HTTP error frame preserves status, provider code, JSON bytes and safe headers', () => {
   const body = '{ "type":"error", "error":{"type":"rate_limit_error","code":"provider_quota","message":"line1\\nline2"},"request_id":"r" }\n';
@@ -116,4 +116,10 @@ test('interruption keeps the type consistent with its 502 status', () => {
     assert.equal(frame.error.type, 'api_error');
     assert.equal(frame.error.code, 'cli_interrupted');
   }
+});
+
+// The entry's refusal when CC's fast-path policy denies the request.
+test('a policy refusal is a 403 input frame', () => {
+  const frame = '{"protocol":"ccgateway.request.error.v1","source":"input","status":403,"error":{"type":"permission_error","code":"cli_policy_denied","message":"CC policy denied this request"}}';
+  assert.equal(encodeErrorFrame(policyDeniedFrame()), `${errorPrefix}${frame}\n`);
 });

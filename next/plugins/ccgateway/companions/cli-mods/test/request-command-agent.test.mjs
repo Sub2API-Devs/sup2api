@@ -28,8 +28,8 @@ test('the client factory and direct billing get the client kind of request', asy
       // stays), the agent context is resolved as the real build does.
       'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''})});",
       'ccgateway-model-request.js': `
-        export const checkModelRequest=()=>null;
-        export const openModelRequest=async(outgoing,owner,signal,factory)=>{(await import('node:fs')).writeFileSync('outgoing.json',JSON.stringify(outgoing.headers??{}));await factory({});return {id:'x',ok:true,status:200,headers:{}}};
+        export const checkModelRequest=()=>null;export const defaultTimeout=600000;
+        export const openModelRequest=async(outgoing,signal,factory)=>{(await import('node:fs')).writeFileSync('outgoing.json',JSON.stringify(outgoing.headers??{}));await factory({});return {id:'x',ok:true,status:200,headers:{}}};
         export const cancelModelResponse=async()=>{};
         export const readModelResponse=async()=>({done:true,text:''});`,
       'run.mjs': `import fs from 'node:fs';

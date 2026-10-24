@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { applyDirectBilling } from '../direct-billing.js';
 import { vocabulary } from './vocabulary.mjs';
 
@@ -27,8 +28,22 @@ test('a missing header goes first; nothing else is added and the rest of the bod
   // The configured entrypoint is the one written.
   assert.deepEqual(system(send(raw, { build_billing_entrypoint: 'claude-vscode' })).map(b => b.text), [native.replace('sdk-cli', 'claude-vscode'), 'Be brief.']);
   // No system at all, and an empty one.
-  assert.equal(send('{"model":"m","messages":[]}'), `{"system":[${JSON.stringify({ type: 'text', text: native })}],"model":"m","messages":[]}`);
+  assert.equal(send('{"model":"m","messages":[]}'), `{"model":"m","messages":[],"system":[${JSON.stringify({ type: 'text', text: native })}]}`);
   assert.deepEqual(system(send('{"model":"m","system":[],"messages":[]}')).map(b => b.text), [native]);
+});
+
+// A system direct adds goes where Claude Code 2.1.304 sends it: model,
+// messages, system, then the rest (official-request-2.1.304.json); the
+// client's own keys keep their order and bytes.
+test('a system direct adds follows messages, in the official key order', () => {
+  const official = JSON.parse(fs.readFileSync(new URL('./fixtures/official-request-2.1.304.json', import.meta.url), 'utf8'));
+  const { system: _, ...client } = official;
+  const out = send(JSON.stringify(client));
+  assert.deepEqual(Object.keys(JSON.parse(out)), Object.keys(official));
+  assert.equal(out, JSON.stringify(client).replace(/(,"tools":)/, `,"system":${JSON.stringify([{ type: 'text', text: native }])}$1`));
+  // The client's spacing stays; messages before model still has it follow messages.
+  assert.equal(send('{ "messages" : [ ] , "model":"m" }'), `{ "messages" : [ ],"system":${JSON.stringify([{ type: 'text', text: native }])} , "model":"m" }`);
+  assert.deepEqual(Object.keys(JSON.parse(send('{"model":"m","max_tokens":1}'))), ['model', 'system', 'max_tokens']);
 });
 
 test('a header missing a field gets the native value in place', () => {

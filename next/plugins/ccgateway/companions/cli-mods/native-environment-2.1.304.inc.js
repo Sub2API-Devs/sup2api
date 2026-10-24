@@ -105,7 +105,7 @@ export function ccgatewayEnvironmentVocabulary() {
 }
 
 // The pieces build adds to a request that is not Claude Code's
-// (request-build-2.1.304.js injectLayers). The system prompt is the one the
+// (request-build.js injectLayers). The system prompt is the one the
 // non-interactive main thread sends (xh): the default prompt for the tools it
 // will carry (wx) through r1e, which adds the tool-dependent sections, and the
 // appended prompt (the client's own system, as --append-system-prompt) after

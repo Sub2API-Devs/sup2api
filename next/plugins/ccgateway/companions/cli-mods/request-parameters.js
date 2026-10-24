@@ -1,11 +1,11 @@
-// External 2.1.304 build boundary only. Interactive CLI defaults and the older
-// adapters do not import this module.
+// The build's generation parameters, imported only by build (request-build.js
+// and request-input.js); interactive CLI defaults never read this module.
 import { object } from './shared.js';
 
+// buildInputError is the error for invalid build input.
+export const buildInputError = (message, fields) => Object.assign(new Error(`request --build: ${message}`), { status: 400, code: 'invalid_request_error', ...fields });
 const has = (value, key) => Object.hasOwn(value, key);
-const fail = (field, reason) => {
-  throw Object.assign(new Error(`request --build: ${field} ${reason}`), { status: 400, code: 'invalid_request_error', field });
-};
+const fail = (field, reason) => { throw buildInputError(`${field} ${reason}`, { field }); };
 const componentKeys = new Set(['model', 'system', 'messages', 'tools', 'stream', 'systemPrompt', 'attachments']);
 const envelopeKeys = new Set(['requestPolicy', 'runtimeContext']);
 // These fields have explicit adapter/native ownership. In particular a native
@@ -51,8 +51,8 @@ export function wireToolDefinitions(tools) {
   });
 }
 
+// mergeAdditionalParameters takes parameters validateBuildParameters accepted.
 export function mergeAdditionalParameters(built, parameters) {
-  validateBuildParameters(parameters);
   if (!object(built)) throw new Error('Native builder did not produce a request object');
   const supplied = parameters ?? {};
   // Object.fromEntries/spread create own data properties even for JSON keys such

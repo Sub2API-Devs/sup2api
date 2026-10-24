@@ -4,13 +4,12 @@ import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { Al } from './chunk-7p6jp6kj.js';
 import { m4t as nativeToolPool } from './chunk-eanw7pgv.js';
 import { t1n as isIdentityLine } from './chunk-t61vswm2.js';
-import { registerNative, findNative } from './ccgateway-native-tools.js';
-import { prepareBuildInput, fingerprintMessages } from './ccgateway-request-input.js';
-import { normalizeBetas } from './ccgateway-request-options.js';
+import { requestTool } from './ccgateway-native-tools.js';
+import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
+import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-options.js';
 import { getRootSession, setEntrypointOnRequests } from './chunk-72vwyp9d.js';
-import { mBr } from './chunk-4qs43hr1.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
-import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices, defaultEntrypoint } from './ccgateway-request-policy.js';
+import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
 import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters } from './ccgateway-request-parameters.js';
 import { toBlocks } from './ccgateway-shared.js';
 
@@ -89,7 +88,7 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   return {
     // With the prompt the client's system is in it (its own line in front),
     // as CC's appended prompt when it had any.
-    system: prompt ? [...lines, ...system] : undefined, appended: own.length > 0,
+    system: prompt ? [...lines, ...system] : undefined, ownLines: lines.length, appended: own.length > 0,
     // Every tool the probe sends is for the chosen ones.
     tools: names.length ? built.tools ?? [] : [],
     betas: built.betas ?? [],
@@ -100,15 +99,14 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
 
 // Upstream takes at most four cache breakpoints. CC's own markers on the
 // injected prompt give way first, the dynamic block's before the static one.
+// The prompt is the system's blocks from `at` on (after the client's own
+// identity lines), so a client block keeps its marker whatever its text.
 const maxBreakpoints = 4;
-function limitBreakpoints(body, injected) {
+function limitBreakpoints(body, at) {
   const marked = block => block !== null && typeof block === 'object' && block.cache_control !== undefined;
   const count = [...body.system ?? [], ...body.tools ?? [], ...(body.messages ?? []).flatMap(message => Array.isArray(message.content) ? message.content : [])].filter(marked).length;
-  let excess = count - maxBreakpoints;
-  for (const text of injected.filter(marked).map(block => block.text).reverse()) {
-    if (excess <= 0) break;
-    const block = body.system.find(item => item.text === text && marked(item));
-    if (block) { delete block.cache_control; excess--; }
+  for (let i = body.system.length - 1, excess = count - maxBreakpoints; i >= at && excess > 0; i--) {
+    if (marked(body.system[i])) { delete body.system[i].cache_control; excess--; }
   }
   return body;
 }
@@ -132,29 +130,12 @@ function placeLayers(messages, layers) {
   return [...messages.slice(0, at), ...structuredClone(layers.before), first, ...structuredClone(layers.after), ...messages.slice(at + 1)];
 }
 
-// snapshotAttachments resolves typed payloads using CC's own renderer, and
-// preserves the caller's explicit role on the resulting text snapshot. This is
-// not type inference.
-function snapshotAttachments(records) {
-  for (const row of records) {
-    if (row.type !== 'attachment' || row.rendered !== undefined) continue;
-    const rendered = aBe(row);
-    if (!rendered.isKnownType) throw new Error(`Unknown CC attachment type: ${row.attachment.type}`);
-    const text = rendered.messages.every(m => typeof m.message.content === 'string' || m.message.content.every(b => b.type === 'text'));
-    if (rendered.messages.length && text) row.rendered = rendered.messages.map(m => ({ content: m.message.content }));
-  }
-}
-
-// The client's custom tools, registered as native tools for CC's own policy;
-// the wire keeps the client's definitions (ccgatewayRequestDefinition).
-function registerClientTools(session, customTools) {
-  return customTools.map(tool => {
-    registerNative(session, 'ccgateway-request', { name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading });
-    const registered = findNative(session, tool.name);
-    registered.ccgatewayRequestDefinition = tool;
-    return registered;
-  });
-}
+// The client's custom tools as CC tools, for CC's own policy; the wire keeps
+// the client's definitions (ccgatewayRequestDefinition).
+const clientTools = customTools => customTools.map(tool => ({
+  ...requestTool({ name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading }),
+  ccgatewayRequestDefinition: tool,
+}));
 
 // The client's thinking as CC's thinking configuration, which CC's model rules
 // turn back into the request's.
@@ -163,11 +144,12 @@ const thinkingConfigFor = thinking => thinking?.type === 'enabled'
   : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
     : { type: 'disabled', mechanical: true };
 
-// resolveAgent (request-agent.js, bound to the Worker context) picks the kind of
-// request CC builds from the client's leading billing header and first prompt;
-// without it the request is CC's native main thread.
+// buildRequest has CC build the request from the components. resolveAgent
+// (request-agent.js, bound to the Worker context) picks the kind of request CC
+// builds from the client's leading billing header and first prompt; without
+// it the request is CC's native main thread.
 export async function buildRequest(components, headers, signal, resolveAgent) {
-  const { applyContentPolicy, mergeBillingAttribution, billingEntrypoint, requestEntrypoint, requestBilling, hasBilling, setLeadingBillingField } = nativeContentPolicy();
+  const billing = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
@@ -177,67 +159,78 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   // or the configured one), is set the way CC sets it for a request
   // (setEntrypointOnRequests): the native header (PAs) and the User-Agent
   // (dN) both read it, so the two agree as they do in Claude Code.
-  const entrypoint = requestEntrypoint(initial.systemBlocks, policy) ?? defaultEntrypoint;
+  const entrypoint = billing.requestEntrypoint(initial.systemBlocks, policy);
   setEntrypointOnRequests(entrypoint);
-  // Policy sees the exact resolved carriers, before the native builder computes
-  // the fingerprint. It never receives or overlays generation parameters.
-  const rawMessages = initial.messages.flatMap(row => {
-    if (row.type !== 'attachment') return [structuredClone(row.ccgatewayWireSystem ?? row.ccgatewayWireMessage ?? row.message)];
-    const rendered = aBe(row);
-    if (!rendered.isKnownType) throw Error('Unknown CC attachment type');
-    return rendered.messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: structuredClone(item.message.content) }));
-  });
-  const transformed = await applyContentPolicy({ system: initial.systemBlocks, messages: rawMessages }, policy, {
-    readEnvironment: fields => ccgatewayEnvironment(context, fields),
-  }, contentDiagnostic);
-  const input = prepareBuildInput({ ...external, systemPrompt: transformed.system, messages: transformed.messages, attachments: [] }, aBe, { preserveContent: true });
-  const body = input.request, session = getRootSession();
-  const fingerprint = fingerprintMessages(transformed.messages, KF);
+  const content = await convertContent(initial, policy, context);
+  const records = wireRecords(content.messages, external.model), session = getRootSession();
+  const fingerprint = fingerprintMessages(content.messages, KF);
   // The client's own header, wherever it is, makes the request Claude Code's
   // (hasBilling decides the same): its kind and IDs come from that header.
-  const clientBilling = requestBilling(initial.systemBlocks);
+  const clientBilling = billing.requestBilling(initial.systemBlocks);
   const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content });
-  if (!agent || agent.requestClass === 'main') markPrompt(input.messages, agent?.promptId, entrypoint);
-  let nativeBilling;
-  const clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
-  if (clientBetas.length && !mBr(clientBetas)) throw Error('Experimental betas are disabled by the active CC policy');
-  snapshotAttachments(input.messages);
-  const tools = registerClientTools(session, input.customTools);
-  const thinkingConfig = thinkingConfigFor(body.thinking);
-  const options = {
+  if (!agent || agent.requestClass === 'main') markPrompt(records, agent?.promptId, entrypoint);
+  const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
+  const tools = clientTools(initial.customTools);
+  const native = {};
+  const options = buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; } });
+  // A request with a billing header is Claude Code's own and only has its
+  // fields and attachments converted; one without gets the chosen layers.
+  const layers = billing.hasBilling(initial.systemBlocks) ? null
+    : await injectLayers(policy.build_injection, { model: body.model, context, clientSystem: content.system, clientTools: tools,
+      clientToolNames: new Set((external.tools ?? []).map(tool => tool?.name)), messages: content.messages, clientRecords: records, session, options, signal });
+  if (layers) applyLayers(options, layers, content.messages);
+  const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(body.thinking), tools, signal, options }, signal, 'CC request builder did not produce a request');
+  return finishBuilt(built, { body, headers, external, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers });
+}
+
+// convertContent applies the content policy to the system and messages as the
+// wire carries them, before the native builder computes the fingerprint. It
+// never receives or overlays generation parameters.
+function convertContent(initial, policy, context) {
+  return nativeContentPolicy().applyContentPolicy({ system: initial.systemBlocks, messages: wireMessages(initial.messages, aBe) }, policy, {
+    readEnvironment: fields => ccgatewayEnvironment(context, fields),
+  }, contentDiagnostic);
+}
+
+// buildOptions are CC's query options for the client's request.
+function buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools, captureBilling }) {
+  return {
     model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? Al(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
     getToolPermissionContext: async () => ccgatewayPermissionContext(),
     agents: [], allowedAgentTypes: [], mcpClients: [],
-    extraToolSchemas: input.extraToolSchemas, toolChoice: body.tool_choice,
+    extraToolSchemas: initial.extraToolSchemas, toolChoice: body.tool_choice,
     maxOutputTokensOverride: body.max_tokens, effortValue: body.output_config?.effort,
     temperatureOverride: body.temperature, outputFormat: body.output_config?.format,
     enablePromptCaching: false, skipMessageCacheMarkers: true,
     // Native model rules own generation parameters; never overlay the input
     // body onto their result (in particular thinking and tool_choice).
     ccgatewayBuildOnly: true,
-    ccgatewayRequestBetas: clientBetas, ccgatewaySystemBlocks: input.systemBlocks,
-    ccgatewayWireMessages: transformed.messages,
-    ccgatewayWireTools: wireToolDefinitions(external.tools),
-    ccgatewayCaptureBilling: value => { nativeBilling = value; },
+    ccgatewayRequestBetas: clientBetas, ccgatewaySystemBlocks: structuredClone(content.system),
+    ccgatewayWireMessages: content.messages,
+    ccgatewayWireTools: wireToolDefinitions(tools),
+    ccgatewayCaptureBilling: captureBilling,
     ccgatewayFingerprintMessages: fingerprint,
   };
-  // A request with a billing header is Claude Code's own and only has its
-  // fields and attachments converted; one without gets the chosen layers.
-  const layers = hasBilling(initial.systemBlocks) ? null
-    : await injectLayers(policy.build_injection, { model: body.model, context, clientSystem: input.systemBlocks, clientTools: tools,
-      clientToolNames: new Set((external.tools ?? []).map(tool => tool?.name)), messages: transformed.messages, clientRecords: input.messages, session, options, signal });
-  if (layers) {
-    if (layers.system) options.ccgatewaySystemBlocks = layers.system;
-    options.ccgatewayWireMessages = placeLayers(transformed.messages, layers);
-    if (layers.tools.length) options.ccgatewayWireTools = [...layers.tools, ...options.ccgatewayWireTools ?? []];
-  }
-  let built = await collectBuilt({ messages: input.messages, systemPrompt: input.systemPrompt, thinkingConfig, tools, signal, options }, signal, 'CC request builder did not produce a request');
+}
+
+// applyLayers puts the injected layers into the request CC builds.
+function applyLayers(options, layers, messages) {
+  if (layers.system) options.ccgatewaySystemBlocks = layers.system;
+  options.ccgatewayWireMessages = placeLayers(messages, layers);
+  if (layers.tools.length) options.ccgatewayWireTools = [...layers.tools, ...options.ccgatewayWireTools ?? []];
+}
+
+// finishBuilt completes CC's request: the parameters CC does not own, the
+// cache breakpoint limit, the billing header, the identity line choice, the
+// betas and stream.
+function finishBuilt(native, { body, headers, external, policy, nativeBilling, agent, clientBilling, clientBetas, layers }) {
+  const { mergeBillingAttribution, billingEntrypoint, setLeadingBillingField } = nativeContentPolicy();
   // Preserve only parameters which the native builder does not own. Its
   // normalized model/thinking/tool choice/metadata and output effort/format
   // remain authoritative, including intentional omission of those fields.
-  built = mergeAdditionalParameters(built, external.parameters);
-  if (layers?.system) built = limitBreakpoints(built, layers.system);
+  const built = mergeAdditionalParameters(native, external.parameters);
+  if (layers?.system) limitBreakpoints(built, layers.ownLines);
   built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
   // The client's header names its prompt; it must match the mapped prompt header.
   if (agent?.billingPromptId) built.system = setLeadingBillingField(built.system, 'cc_prompt_id', agent.billingPromptId);
@@ -247,13 +240,11 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   // request is left as it is (2026-10-23): its side requests have no line.
   const identityLine = clientBilling !== null ? { line: 'none', fallback: identityLineFor(policy, billingEntrypoint(built.system)).fallback }
     : identityLineFor(policy, billingEntrypoint(built.system), { appended: layers?.appended === true });
-  const outgoingHeaders = new Headers(headers);
-  const betas = normalizeBetas(clientBetas, built.betas, layers?.betas);
+  const outgoingHeaders = setProtocolHeaders(new Headers(headers), normalizeBetas(clientBetas, built.betas, layers?.betas));
   delete built.betas;
-  if (betas.length) outgoingHeaders.set('anthropic-beta', betas.join(','));
-  else outgoingHeaders.delete('anthropic-beta');
-  // The client's stream keeps the native builder's key position; a client
-  // that sent none gets none (absent means false upstream).
-  const outgoing = 'stream' in body ? { ...built, stream: body.stream } : (({ stream: _native, ...rest }) => rest)(built);
-  return { body: outgoing, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
+  // The native body has no stream; the client's goes last, where Claude Code
+  // sends it, and a client that sent none gets none (absent means false).
+  delete built.stream;
+  if ('stream' in body) built.stream = body.stream;
+  return { body: built, headers: Object.fromEntries(outgoingHeaders), identityLine, agent };
 }

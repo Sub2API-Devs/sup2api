@@ -36,7 +36,7 @@ function nativeVocabulary() {
   vm.runInContext(fs.readFileSync(new URL('../native-environment-2.1.304.inc.js', import.meta.url), 'utf8').replace(/^export /gm, ''), context);
   vm.runInContext(declarations('chunk-7y2kvacy.js', ['oJe']), context);
   vm.runInContext(declarations('chunk-jkcb7qdd.js', ['KF']), context);
-  // The same assembly as request-build-2.1.304.js.
+  // The same assembly as request-build.js.
   return JSON.parse(JSON.stringify(vm.runInContext('({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] })', context)));
 }
 

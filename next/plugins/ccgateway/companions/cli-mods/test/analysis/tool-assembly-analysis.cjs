@@ -330,7 +330,7 @@ async function runToolAssemblyAnalysis(options = {}) {
   const ct = evaluateFunction(identity.raw(identity.declaration('Ct')), 'Ct');
   const searchName = evaluateExpression(constants.raw(constants.declaration('Ai').init));
   assert.equal(searchName, 'ToolSearch');
-  const registryAPI = evaluateSupport(registry, ['registerNative', 'findNative', 'isNative', 'nativeDefinition']);
+  const registryAPI = evaluateSupport(registry, ['requestTool', 'isNative', 'nativeDefinition']);
   const inputAPI = evaluateSupport(input, ['prepareBuildInput']);
   const fh = evaluateFunction(patchedCore.raw(patchedFH), 'FH', {
     ccgIsNative: registryAPI.isNative, ccgDefinition: registryAPI.nativeDefinition,
@@ -339,12 +339,10 @@ async function runToolAssemblyAnalysis(options = {}) {
   const customInputs = [{ name: 'ToolSearch', description: 'search', inputSchema: { type: 'object' } },
     { name: 'DeferredFixture', description: 'deferred', inputSchema: { type: 'object' }, defer_loading: true }];
   const prepared = inputAPI.prepareBuildInput({ model: 'claude-sonnet-4-5', messages: [{ role: 'user', content: 'hello' }], tools: customInputs }, null, { preserveContent: true });
-  const registered = prepared.customTools.map(tool => {
-    registryAPI.registerNative('audit-session', 'ccgateway-request', { name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading });
-    const found = registryAPI.findNative('audit-session', tool.name);
-    found.ccgatewayRequestDefinition = tool;
-    return found;
-  });
+  const registered = prepared.customTools.map(tool => ({
+    ...registryAPI.requestTool({ name: tool.name, description: tool.description ?? '', inputSchema: tool.input_schema, isDeferred: tool.defer_loading }),
+    ccgatewayRequestDefinition: tool,
+  }));
   const candidateNames = registered.filter(classify).map(tool => tool.name);
   const guardSource = core.raw(guard), srSource = core.raw(sr.init);
   const filterOff = core.raw(searchOff.right), filterOn = core.raw(searchOn.right);
@@ -398,9 +396,7 @@ async function runToolAssemblyAnalysis(options = {}) {
   await test('native.underlying_v1_dedup', ['new', 'untouched'], () => dedupFunction([
     { name: 'old' }, { name: 'new', fixtureWrapper: true, underlyingV1ToolName: 'old' }, { name: 'untouched' },
   ]).map(t => t.name), ['LM stub marks only the fixture wrapper; actual szn removal executed']);
-  registryAPI.registerNative('cache', 'audit', { name: 'Zebra', description: 'cache', inputSchema: { type: 'object' } });
-  const cached = registryAPI.findNative('cache', 'Zebra');
-  cached.ccgatewayRequestDefinition = mixed.customTools[0];
+  const cached = { ...registryAPI.requestTool({ name: 'Zebra', description: 'cache', inputSchema: { type: 'object' } }), ccgatewayRequestDefinition: mixed.customTools[0] };
   const cachedOutput = await fh(cached, { withoutToolDescribeHooks: true, deferLoading: false });
   contract('tools.custom_cache_control_preserved', { type: 'ephemeral', ttl: '5m' }, cachedOutput.cache_control,
     ['tools.FH_patched_custom'], 'Actual patched FH early return; no native cache options supplied.');

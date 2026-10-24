@@ -242,7 +242,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   const cli = compact(fs.readFileSync(path.join(output, 'cli.js'), 'utf8'));
   const lines = '\\{official_cli:ccgPrefix\\(\\{isNonInteractive:!1,hasAppendSystemPrompt:!1\\}\\),official_cli_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!0\\}\\),agent_sdk:ccgPrefix\\(\\{isNonInteractive:!0,hasAppendSystemPrompt:!1\\}\\)\\}';
   assert.match(cli, new RegExp('\\{yBe:ccgNativeMetadata,t1n:ccgIsPrefix,n1n:ccgPrefix,PAs:ccgHead\\}=await import\\("\\./chunk-t61vswm2\\.js"\\).*let\\{B1s:ccgIsBilling,oJe:ccgHeader\\}=await import\\("\\./chunk-7y2kvacy\\.js"\\).*prefixBuild:\\(b,c\\)=>ccgPrefixBuild\\(b,c,' + lines + ',ccgIsPrefix,ccgIsBilling\\),directBuild:ccgDirect'));
-  assert(cli.includes('nativeBilling:()=>ccgHead([],void 0,{fingerprint:fingerprint(prompt(Array.isArray(body.messages)?body.messages:[],reminder)),agentContext:o.agentContext??agent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};'));
+  assert(cli.includes('nativeBilling:()=>ccgHead([],void 0,{fingerprint:ccgFingerprint(ccgPromptRecords(Array.isArray(body.messages)?body.messages:[],ccgReminder)),agentContext:o.agentContext??ccgMainAgent(),promptId:o.promptId,turnOrigin:o.turnOrigin,turnPosition:o.turnPosition})[0]??""})};'));
   assert(cli.includes('PAs:ccgHead}=await import("./chunk-t61vswm2.js")') && !cli.includes('kLo:header'));
   assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1"]/);
   // The loop header names and the layer wording come from the native core,
@@ -270,7 +270,19 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(transport.startsWith('import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n'));
   assert.equal(transport.split('"User-Agent":ccgatewayClientUserAgent()??dN()').length, 2);
   assert(!transport.includes('"User-Agent":dN()'));
-  assert(cli.includes('leadingBilling:s=>ccgBilling.leadingBilling(s),entrypoint:(s,p)=>ccgBilling.requestEntrypoint(s,p),'));
+  assert(cli.includes('leadingBilling:system=>ccgBilling.leadingBilling(system),entrypoint:(system,requestPolicy)=>ccgBilling.requestEntrypoint(system,requestPolicy),'));
+  // A request CC's fast-path policy refuses gets the shared error frame.
+  assert(cli.includes('let{encodeErrorFrame:ccgErrorFrame,policyDeniedFrame:ccgDenied}=await import("./ccgateway-request-error.js");process.stderr.write(ccgErrorFrame(ccgDenied()));'));
+  // The Mod tool-execution chain is gone: only FH reads the client tools.
+  const coreText = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  assert.equal(coreText.split('./ccgateway-native-tools.js').length, 2);
+  assert(coreText.includes('import {isNative as ccgIsNative,nativeDefinition as ccgDefinition} from "./ccgateway-native-tools.js";'));
+  for (const name of ['ccgRegister', 'ccgRevision', 'ccgMerge', 'ccgFind', 'ccgDispatch']) assert(!coreText.includes(name), name);
+  for (const file of ['chunk-0q47gehe.js', 'chunk-8w3jrzn0.js', 'chunk-g8r6rccx.js', 'chunk-qygf2xvn.js', 'chunk-gzc5bc6y.js']) {
+    assert(!patchManifest.files[file], file);
+    assert.equal(sha(fs.readFileSync(path.join(output, file))), sha(fs.readFileSync(path.join(baseline, file))), file);
+  }
+  for (const name of ['Ten', 'N_e', 'mIt', 'bz', 'GYr']) assert.equal(nativeFunction(output, 'chunk-rncrmfyt.js', name), nativeFunction(baseline, 'chunk-rncrmfyt.js', name), name);
   for (const name of ['ccgateway-request-command.js', 'ccgateway-request-build.js']) {
     assert(fs.readFileSync(path.join(output, name), 'utf8').includes("setEntrypointOnRequests } from './chunk-72vwyp9d.js'"), name);
   }

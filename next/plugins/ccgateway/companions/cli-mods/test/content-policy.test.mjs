@@ -112,7 +112,6 @@ test('unavailable facts fail only when actually needed and diagnostics contain n
 test('null and invalid text reject instead of duplicating the previous block', async () => {
   const input = request(reminder(environment(['Platform: win32']))); input.messages[0].content.push({ type: 'text', text: null });
   await assert.rejects(applyContentPolicy(input, policy({ platform_name: 'worker' }), server), e => e.status === 400);
-  for (const value of [{ build_billing_sources: { cc_version: 'erase' } }, { build_attachment_sources: null }, { build_attachment_sources: { user_email: 'worker' } }]) await assert.rejects(applyContentPolicy(request('hello'), value), e => e.status === 400);
 });
 
 test('billing replaces only selected values, preserves unknowns, whitespace and cache attributes', () => {
@@ -199,7 +198,6 @@ test('billing writes the configured entrypoint wherever the native one would go'
   const client = [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=cli;' }];
   assert.deepEqual(mergeBillingAttribution(client, policy, billing), client);
   assert.equal(mergeBillingAttribution(client, { ...policy, build_billing_sources: { cc_entrypoint: 'worker' } }, billing)[0].text, 'x-anthropic-billing-header: cc_version=9.9.9.own; cc_entrypoint=claude-vscode;');
-  assert.throws(() => mergeBillingAttribution(client, { build_billing_entrypoint: 'cli; cch=1' }, billing), e => e.status === 400);
 });
 
 test('the request entrypoint is read from the header that opens the system', () => {
@@ -224,11 +222,11 @@ test('the request entrypoint is the client header value unless the Worker owns t
   assert.equal(requestEntrypoint(own, {}), 'claude-desktop-3p');
   assert.equal(requestEntrypoint(own, { build_billing_entrypoint: 'sdk-ts' }), 'claude-desktop-3p', 'the configured one fills, it does not replace');
   assert.equal(requestEntrypoint(own, { build_billing_entrypoint: 'sdk-ts', build_billing_sources: { cc_entrypoint: 'worker' } }), 'sdk-ts');
-  assert.equal(requestEntrypoint(own, { build_billing_sources: { cc_entrypoint: 'worker' } }), undefined, 'the caller supplies the default');
-  // No usable leading header: the configured one, or nothing.
+  assert.equal(requestEntrypoint(own, { build_billing_sources: { cc_entrypoint: 'worker' } }), 'sdk-cli', 'by default, the request process entrypoint');
+  // No usable leading header: the configured one, or the default.
   for (const system of [undefined, 'prompt', [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=1;' }], [{ type: 'text', text: 'prompt' }, own[0]]]) {
     assert.equal(requestEntrypoint(system, { build_billing_entrypoint: 'cli' }), 'cli', JSON.stringify(system));
-    assert.equal(requestEntrypoint(system, {}), undefined, JSON.stringify(system));
+    assert.equal(requestEntrypoint(system, {}), 'sdk-cli', JSON.stringify(system));
   }
   assert.equal(createBillingPolicy(vocabulary.billingHeader).requestEntrypoint(own, {}), 'claude-desktop-3p', 'direct reads the same value');
 });
@@ -410,6 +408,13 @@ test('matrix: each of 10 fields × 3 sources × 5 carriers changes exactly its g
   }
 });
 
+// The content conversion, then the billing merge, as build runs them.
+async function convert(input, policy, { billing: nativeBilling, ...native }) {
+  const output = await applyContentPolicy(input, policy, native);
+  output.system = mergeBillingAttribution(output.system, policy, nativeBilling);
+  return output;
+}
+
 test('matrix: every environment field pair × 9 source pairs × 4 billing policies (1620 cases)', async () => {
   let cases = 0;
   for (let a = 0; a < matrixOrder.length; a++) for (let b = a + 1; b < matrixOrder.length; b++) {
@@ -425,10 +430,10 @@ test('matrix: every environment field pair × 9 source pairs × 4 billing polici
           reads++; assert.deepEqual(new Set(needed), new Set(Object.keys(selected).filter(field => selected[field] === 'worker')));
           return nativeFullWorker;
         } };
-        const actual = await applyContentPolicy(input, selectedPolicy, native);
+        const actual = await convert(input, selectedPolicy, native);
         assert.deepEqual(actual, matrixRequest(goldenEnvironment(selected), 'user_blocks', expectedBilling), JSON.stringify(selectedPolicy));
         assert.equal(reads, first === 'worker' || second === 'worker' ? 1 : 0);
-        assert.deepEqual(await applyContentPolicy(actual, selectedPolicy, native), actual, 'same snapshot must be idempotent');
+        assert.deepEqual(await convert(actual, selectedPolicy, native), actual, 'same snapshot must be idempotent');
         cases++;
       }
     }
@@ -445,9 +450,9 @@ test('matrix: all 12 settings change on adjacent and concurrent requests without
   const expected = settings.map(p => matrixRequest(goldenEnvironment(p.build_attachment_sources), 'user_blocks',
     p.build_billing_sources.cc_version === 'worker' ? matrixBilling.replace('0.0.0.client', '2.1.304.abc').replace('client-entry', 'sdk-cli') : matrixBilling));
   for (const [i, p] of settings.entries()) {
-    assert.deepEqual(await applyContentPolicy(input, p, { readEnvironment: async () => nativeFullWorker, billing }), expected[i]);
+    assert.deepEqual(await convert(input, p, { readEnvironment: async () => nativeFullWorker, billing }), expected[i]);
   }
-  assert.deepEqual(await Promise.all(settings.map(p => applyContentPolicy(input, p, {
+  assert.deepEqual(await Promise.all(settings.map(p => convert(input, p, {
     readEnvironment: async () => { await new Promise(resolve => setTimeout(resolve, 2)); return nativeFullWorker; }, billing,
   }))), expected);
 });

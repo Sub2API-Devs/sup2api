@@ -106,7 +106,7 @@ test('304 wire tools retain order, missing description, attributes and absent ve
 
 async function adapterFixture() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-304-params-'));
-  await installSupport(dir, ['request-input','request-options','request-policy','content-policy','request-parameters','request-build']);
+  await installSupport(dir, ['request-input','request-options','request-policy','content-policy','request-parameters','request-build','native-tools']);
   for (const [name, source] of Object.entries({
     'package.json':'{"type":"module"}',
     'chunk-rncrmfyt.js': `export let calls=0,captured; export const aBe=()=>{throw Error('unexpected attachment')}; export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)}); export const ccgatewayDefaultPrompt=()=>{throw Error('unexpected prompt')}; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=()=>{throw Error('unexpected attachments')}; export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)}); export async function* jOt(input){calls++;captured=input;yield {type:'ccgateway_request',body:{model:'native-model',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools},max_tokens:4096,tool_choice:{type:'auto'},metadata:{user_id:'native'},output_config:{effort:'low'},betas:['native-beta']}}}`,
@@ -114,7 +114,6 @@ async function adapterFixture() {
     'chunk-jkcb7qdd.js':`export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
     'chunk-eanw7pgv.js':'export const m4t=()=>[];', 'chunk-t61vswm2.js':'export const t1n=()=>false;',
     'chunk-7p6jp6kj.js':'export const Al=()=>({});', 'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};', 'chunk-4qs43hr1.js':'export const mBr=()=>true;',
-    'ccgateway-native-tools.js':'const registry=new Map();export const registerNative=(_session,_owner,tool)=>registry.set(tool.name,{});export const findNative=(_session,name)=>registry.get(name);',
   })) await fs.writeFile(path.join(dir,name),source);
   return { dir, adapter: await import(pathToFileURL(path.join(dir,'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir,'chunk-rncrmfyt.js'))) };
 }
@@ -138,16 +137,18 @@ test('304 adapter transmits extensions and complete wire tools without undoing n
 });
 
 // stream reaches the upstream exactly as the client sent it: absent stays
-// absent (the API's default is false), a sent value keeps its native position.
+// absent (the API's default is false), a sent value is the last key, where
+// Claude Code sends it (official-request-2.1.304.json).
 test('304 adapter sends stream only when the client did', async () => {
   const fixture=await adapterFixture();
   try {
-    const base={model:'fixture',messages:[{role:'user',content:'fixture'}],parameters:{max_tokens:16}};
+    const base={model:'fixture',messages:[{role:'user',content:'fixture'}],parameters:{max_tokens:16,top_p:0.5}};
     const absent=await fixture.adapter.buildRequest(structuredClone(base),{},new AbortController().signal);
     assert.ok(!Object.hasOwn(absent.body,'stream'), JSON.stringify(absent.body));
     for (const stream of [true,false]) {
       const sent=await fixture.adapter.buildRequest({...structuredClone(base),stream},{},new AbortController().signal);
       assert.equal(sent.body.stream,stream);
+      assert.equal(Object.keys(sent.body).at(-1),'stream');
     }
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });

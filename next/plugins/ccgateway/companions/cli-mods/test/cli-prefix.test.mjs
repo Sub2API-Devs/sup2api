@@ -119,7 +119,7 @@ test('claude request adds the line to OAuth build; direct changes only with the 
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body:{model:body.model,system:[{type:"text",text:"built"}]},headers:{},identityLine:{line:"official_cli",fallback:"official_cli"}});',
       // Records exactly what would be sent, then answers with an HTTP error.
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
-        export const checkModelRequest=()=>null;
+        export const checkModelRequest=()=>null;export const defaultTimeout=600000;
         export const openModelRequest=async o=>{const b=o.rawBody??o.body;
           await fs.writeFile('sent.json',typeof b==='string'?b:JSON.stringify(b));
           await fs.writeFile('keys.json',JSON.stringify(Object.keys(o)));return {id:'x',ok:false,status:400,headers:{}}};
@@ -130,7 +130,9 @@ test('claude request adds the line to OAuth build; direct changes only with the 
         const lines=${JSON.stringify(named)},isPrefix=v=>Object.values(lines).includes(v),isBilling=b=>String(b.text).startsWith(${JSON.stringify(vocabulary.billingHeader)});
         // Direct's billing stand-in records what it was given.
         const directBuild=async(raw,body,o)=>raw.replace('"system":','"direct":'+JSON.stringify(o)+',"system":');
-        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBuild:(b,c)=>applyBuildCliPrefix(b,c,lines,isPrefix,isBilling),directBuild});`,
+        // The entry gives direct its native bindings with it; these record nothing.
+        const agentNative={entrypoint:(system,policy)=>policy.build_billing_entrypoint??'sdk-cli',turn:()=>({}),leadingBilling:()=>null};
+        process.exitCode=await runRequestCommand(process.argv.slice(2),{prefixBuild:(b,c)=>applyBuildCliPrefix(b,c,lines,isPrefix,isBilling),directBuild,agentNative});`,
     })) await fsp.writeFile(path.join(dir, name), code);
     const input = '{"model":"fixture","system":"Be brief.","metadata":{"user_id":"client"},"messages":[{"role":"user","content":"hi"}]}';
     const run = (mode, apiKey, directPolicy) => new Promise((resolve, reject) => {
