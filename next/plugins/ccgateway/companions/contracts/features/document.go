@@ -3,9 +3,9 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-// Feature and Document are the wire shapes of a catalog. The catalog values
-// themselves are produced by RequestCatalog / RequestRuntimeCatalog: the only
-// request paths a Worker speaks. A native-era source catalog no longer exists.
+// Feature and Document are the catalog's wire shapes. The catalog values are
+// produced by RequestCatalog / RequestRuntimeCatalog; there is no source
+// catalog of entries in this package.
 
 // PolicySchemaVersion is the request policy schema this build writes and reads.
 const PolicySchemaVersion = 1

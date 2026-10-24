@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+// A legal complete stream may carry no content block at all (a pure refusal).
+// Its content must stay an empty array: a nil slice marshals as null, which
+// loses the empty continuation ClaimForResponse needs.
+func TestMessageFromEventsZeroContentBlocks(t *testing.T) {
+	events := [][]byte{
+		[]byte(`{"type":"message_start","message":{"id":"msg_empty","type":"message","role":"assistant","model":"source","content":[]}}`),
+		[]byte(`{"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","fallback_credit_token":"empty-token"}}}`),
+		[]byte(`{"type":"message_stop"}`),
+	}
+	raw, err := MessageFromEvents(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"content":[]`)) || bytes.Contains(raw, []byte(`"content":null`)) {
+		t.Fatal("zero content blocks lost the empty array", string(raw))
+	}
+}
+
 func TestMessageFromEventsExactContent(t *testing.T) {
 	events := [][]byte{
 		[]byte(`{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"source","content":[],"usage":{"input_tokens":9007199254740993}}}`),

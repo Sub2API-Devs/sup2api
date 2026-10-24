@@ -421,6 +421,9 @@ func (d *requestDiagnostic) finish() {
 
 // writeMetadata closes the recorded response and writes the completion
 // metadata. It returns the metadata bytes the viewer indexes. Caller holds d.mu.
+// It is not a pure extraction from finish: it saves through saveLocked, so it
+// consumes the request's byte budget and may mark the log discarded, and the
+// bytes it returns are the final metadata after any truncation.
 func (d *requestDiagnostic) writeMetadata() []byte {
 	if d.response != nil {
 		if err := d.response.Close(); err != nil {

@@ -150,6 +150,43 @@ func TestExplicitBindHostSurvivesPortOverride(t *testing.T) {
 	}
 }
 
+// parseBind is the listener's only safety check, so every branch is pinned
+// here rather than through Load.
+func TestParseBindBranches(t *testing.T) {
+	for _, tc := range []struct {
+		bind    string
+		host    string
+		port    int
+		wantErr string
+	}{
+		{"", "", 8788, ""},
+		{":8788", "", 8788, ""},
+		{"127.0.0.1:8788", "127.0.0.1", 8788, ""},
+		{"localhost:9001", "127.0.0.1", 9001, ""},
+		{"[::1]:9001", "::1", 9001, ""},
+		{"0.0.0.0:8788", "0.0.0.0", 8788, ""},
+		{"localhost:0", "", 0, "invalid CCG_BIND port"},
+		{"localhost:65536", "", 0, "invalid CCG_BIND port"},
+		{"127.0.0.1:", "", 0, "invalid CCG_BIND port"},
+		{"8.8.8.8:8788", "", 0, "CCG_BIND host must be loopback or unspecified; the internal relay requires loopback"},
+		{"bad", "", 0, "invalid CCG_BIND"},
+	} {
+		t.Run(tc.bind, func(t *testing.T) {
+			t.Setenv("CCG_BIND", tc.bind)
+			host, port, err := parseBind()
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Fatalf("bind %q: err=%v, want %q", tc.bind, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || host != tc.host || port != tc.port {
+				t.Fatalf("bind %q: %s:%d %v", tc.bind, host, port, err)
+			}
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string

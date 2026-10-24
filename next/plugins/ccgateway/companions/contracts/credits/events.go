@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -12,22 +11,21 @@ import (
 // unsupported stream. Callers never see which check failed.
 var errCreditStream = errors.New("invalid or unsupported credit response stream")
 
-// deltaTextFields maps a string delta type to the block field that carries its
-// text. deltaBlockTypes maps the same type to the block type it may extend.
-var (
-	deltaTextFields = map[string]string{
-		"text_delta":       "text",
-		"thinking_delta":   "thinking",
-		"signature_delta":  "signature",
-		"compaction_delta": "content",
+// deltaField names the block field a string delta appends to and the block
+// type it may extend. Every other delta is unsupported.
+func deltaField(kind string) (key, blockType string) {
+	switch kind {
+	case "text_delta":
+		return "text", "text"
+	case "thinking_delta":
+		return "thinking", "thinking"
+	case "signature_delta":
+		return "signature", "thinking"
+	case "compaction_delta":
+		return "content", "compaction"
 	}
-	deltaBlockTypes = map[string]string{
-		"text_delta":       "text",
-		"thinking_delta":   "thinking",
-		"signature_delta":  "thinking",
-		"compaction_delta": "compaction",
-	}
-)
+	return "", ""
+}
 
 // creditStream is the incremental state of one Messages response assembled
 // from SSE events.
@@ -45,7 +43,9 @@ type creditStream struct {
 // matching. Inputs may be JSON event payloads or complete SSE frames. It never
 // repairs an incomplete stream or discards an unknown content delta.
 func MessageFromEvents(events [][]byte) ([]byte, error) {
-	stream := &creditStream{open: -1}
+	// blocks starts non-nil: a complete stream with no content block answers
+	// "content":[], and ClaimForResponse reads that as an empty continuation.
+	stream := &creditStream{open: -1, blocks: []any{}}
 	total := 0
 	for _, raw := range events {
 		total += len(raw)
@@ -70,7 +70,7 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 			return nil, errCreditStream
 		}
 		if err := stream.apply(event); err != nil {
-			return nil, errCreditStream
+			return nil, err
 		}
 	}
 	if !stream.ended {
@@ -179,8 +179,8 @@ func (s *creditStream) onContentBlockDelta(event map[string]any) error {
 // onStringDelta appends a text-like delta to the open block. signature_delta
 // replaces the signature instead of appending.
 func (s *creditStream) onStringDelta(block, delta map[string]any, kind string) error {
-	key, expected := deltaTextFields[kind], deltaBlockTypes[kind]
-	if block["type"] != expected || !validStringDeltaFields(delta, kind, key) {
+	key, expected := deltaField(kind)
+	if key == "" || block["type"] != expected || !validStringDeltaFields(delta, kind, key) {
 		return errCreditStream
 	}
 	part, ok := delta[key].(string)
@@ -273,7 +273,7 @@ func (s *creditStream) onMessageDelta(event map[string]any) error {
 		s.stopped = true
 	}
 	if err := mergeCreditFacts(s.message, delta); err != nil {
-		return errCreditStream
+		return err
 	}
 	if usage, exists := event["usage"]; exists {
 		incoming, ok := usage.(map[string]any)
@@ -292,7 +292,7 @@ func (s *creditStream) onMessageDelta(event map[string]any) error {
 	for key, value := range event {
 		if key != "type" && key != "delta" && key != "usage" {
 			if err := mergeCreditFacts(s.message, map[string]any{key: value}); err != nil {
-				return errCreditStream
+				return err
 			}
 		}
 	}
@@ -307,7 +307,7 @@ func (s *creditStream) onMessageStop(event map[string]any) error {
 	for key, value := range event {
 		if key != "type" {
 			if err := mergeCreditFacts(s.message, map[string]any{key: value}); err != nil {
-				return errCreditStream
+				return err
 			}
 		}
 	}
@@ -361,7 +361,7 @@ func mergeCreditFacts(message, delta map[string]any) error {
 	for key, value := range delta {
 		switch key {
 		case "id", "type", "model", "role", "content", "usage":
-			return fmt.Errorf("response identity overwrite")
+			return errCreditStream
 		}
 		if strings.HasPrefix(key, "stop_") && value == nil {
 			if message[key] != nil {

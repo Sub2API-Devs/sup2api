@@ -412,10 +412,11 @@ func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
 	return filepath.Join(s.root, id)
 }
 
-// logFileKind groups content files for the viewer. Only files that still have
-// a writer are classified: cli-* and upstream* stopped being written when the
-// managed CLI updater and the legacy relay went away, and response-meta.json
-// lives in the request's temporary directory, not here.
+// logFileKind groups content files for the viewer. `cli-*` is kept for logs
+// written up to plugin 0.1.86, whose traceReader still wrote cli-stdout.jsonl;
+// `upstream*` was only written by the removed legacy relay. Both labels stay
+// until those logs age out, and response-meta.json lives in the request's
+// temporary directory, not here.
 func logFileKind(name string) string {
 	switch {
 	case name == "request.body":
@@ -424,6 +425,8 @@ func logFileKind(name string) string {
 		return "response"
 	case strings.HasPrefix(name, "resource-"):
 		return "upstream"
+	case strings.HasPrefix(name, "cli-"):
+		return "cli"
 	case strings.HasPrefix(name, "history"):
 		return "history"
 	case strings.HasSuffix(name, ".json"):

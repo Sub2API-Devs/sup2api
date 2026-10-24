@@ -66,6 +66,20 @@ func listLogs(t *testing.T, store *requestLogStore, body string) viewerList {
 	return out
 }
 
+// cli-stdout.jsonl is written by Worker 0.1.86 and earlier; it must stay in
+// its own group so a current console still labels those directories right.
+func TestRequestLogFileKinds(t *testing.T) {
+	for name, want := range map[string]string{
+		"request.body": "request", "response.body": "response", "resource-config.json": "upstream",
+		"cli-stdout.jsonl": "cli", "cli-stderr.jsonl": "cli", "history.jsonl": "history",
+		"build-components.json": "build", "notes.txt": "other",
+	} {
+		if got := logFileKind(name); got != want {
+			t.Fatalf("%s: %s, want %s", name, got, want)
+		}
+	}
+}
+
 func TestRequestLogQueryOrdersFiltersAndPages(t *testing.T) {
 	store, _ := newRequestLogStore(t.TempDir())
 	first := viewerRequest(t, store, "rid-retried", 529)

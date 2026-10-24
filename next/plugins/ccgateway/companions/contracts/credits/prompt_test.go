@@ -41,6 +41,27 @@ func TestCreditPromptBoundaries(t *testing.T) {
 	}
 }
 
+// A refusal with no content block still mints a claim: the assembled stream
+// must carry "content":[] so the continuation digest over an empty echo works.
+func TestCreditZeroBlockRefusalStillClaims(t *testing.T) {
+	body := []byte(`{"model":"primary","messages":[{"role":"user","content":"question"}]}`)
+	raw, err := MessageFromEvents([][]byte{
+		[]byte(`{"type":"message_start","message":{"id":"msg_empty","type":"message","role":"assistant","model":"primary","content":[]}}`),
+		[]byte(`{"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"fallback_credit_token":"synthetic-credit"}}}`),
+		[]byte(`{"type":"message_stop"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim, err := ClaimForResponse(body, raw, nil)
+	if err != nil || claim == nil {
+		t.Fatal("zero-block refusal lost its claim", claim, err)
+	}
+	if len(claim.Digests) != 2 || claim.SourceModel != "primary" {
+		t.Fatal("claim shape", claim)
+	}
+}
+
 func TestCreditContinuationClaim(t *testing.T) {
 	body := []byte(`{"model":"primary","messages":[{"role":"user","content":"question"}]}`)
 	response := []byte(`{"model":"primary","stop_reason":"refusal","stop_details":{"fallback_credit_token":"synthetic-credit","fallback_has_prefill_claim":true},"content":[{"type":"thinking","thinking":"opaque","signature":"sig"},{"type":"fallback","from":{"model":"a"},"to":{"model":"b"}},{"type":"text","text":"partial \n"},{"type":"tool_use","id":"uncompleted","name":"lookup","input":{}}]}`)
