@@ -18,6 +18,11 @@ const cancellationFirstEvent = "event: message_start\ndata: {}\n\n"
 // Invoked by TestMain as a real subprocess on Windows and Linux. Waiting modes
 // only finish on cancellation; capture mode records one request and exits.
 func requestCancellationPeer() {
+	// A fixture peer answers with a recorded upstream answer (request_credit_test.go).
+	if fixture := os.Getenv("CCG_TEST_REQUEST_FIXTURE"); fixture != "" {
+		requestFixturePeer(fixture)
+		return
+	}
 	if os.Getenv("CCG_TEST_REQUEST_PEER") == "capture" {
 		raw, _ := io.ReadAll(os.Stdin)
 		file, err := os.OpenFile(os.Getenv("CCG_TEST_REQUEST_READY"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)

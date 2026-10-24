@@ -49,7 +49,8 @@ type requestPlan struct {
 	input    []byte   // the CLI's stdin: the body (direct) or the build envelope
 	identity *requestIdentity
 	agent    *requestAgent
-	direct   []byte // CCG_DIRECT_POLICY; nil leaves direct a passthrough
+	direct   []byte         // CCG_DIRECT_POLICY; nil leaves direct a passthrough
+	credit   *requestCredit // the core tracks this request's fallback credit
 }
 
 // requestRefusal is the Worker's own answer before the CLI runs.
@@ -73,6 +74,18 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	if refusal != nil {
 		refusal.write(w, d)
 		return
+	}
+	// A tracked request holds the resource authority until it finishes (the
+	// issuer the core bound it to cannot change under it) and answers with
+	// that issuer. Its identity step takes its own slot, before the request's.
+	credit, refusal := g.admitCredit(w, r)
+	if refusal != nil {
+		refusal.write(w, d)
+		return
+	}
+	if credit != nil {
+		defer credit.release()
+		plan.credit = credit
 	}
 	// The slot is taken before the body is read or transformed (audit C3): a
 	// Worker at its limit refuses at once instead of after up to 32 MiB. What
@@ -123,6 +136,11 @@ func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requ
 		return refusal
 	}
 	d.prepareSecrets(raw, r.Header.Values("anthropic-beta")...)
+	// The redemption the client sent is bound to the headers the core admitted
+	// (request_credit.go); the client's own body is kept for its claim.
+	if refusal = plan.admitCreditBody(raw, r.Header); refusal != nil {
+		return refusal
+	}
 	plan.env = g.Runner.baseEnv()
 	if refusal = g.resolveRequestContext(plan, raw, r.Header, d); refusal != nil {
 		return refusal
@@ -360,7 +378,7 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	if building(p) {
 		cmd.Dir = runner.WorkingDirectory
 	}
-	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d}
+	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit}
 	run.stderr = &requestErrorReader{diagnostic: d}
 	cmd.Stdout, cmd.Stderr = run.output, run.stderr
 	d.trace("request_command", Object{"mode": p.mode, "configured_mode": g.RequestMode, "probe": p.probe, "cli_version": runner.Version})
@@ -453,6 +471,9 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 		}
 	}
 	switch {
+	case c.output.overflow:
+		// Nothing is committed yet: the tracked answer was still buffered.
+		c.fail(w, d, localRequestError(502, "api_error", "credit_receipt_too_large", "CC response exceeds the fallback credit receipt limit"))
 	case frame == nil && errors.Is(c.ctx.Err(), context.DeadlineExceeded):
 		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request timed out")
 		frame.Source = requestfailure.SourceTimeout
@@ -474,10 +495,19 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 		c.fail(w, d, frame)
 	case frame != nil || c.stderr.invalid:
 		c.fail(w, d, localRequestError(502, "api_error", "cli_error_protocol", "CLI returned an invalid error protocol result"))
-	case c.err == nil && c.output.start() == nil:
+	case c.err == nil && c.output.answer() == nil:
 	default:
 		c.fail(w, d, localRequestError(502, "api_error", "cli_process_error", "CLI request failed without a valid structured error"))
 	}
+}
+
+// answer commits the CLI's successful response: a tracked one with its credit
+// receipt, an untracked one that has already streamed.
+func (o *requestCommandOutput) answer() error {
+	if o.credit != nil {
+		return o.finish()
+	}
+	return o.start()
 }
 
 // fail records frame and answers with it, or aborts a response already
@@ -497,44 +527,66 @@ type requestCommandOutput struct {
 	started    bool
 	status     int
 	diagnostic *requestDiagnostic
+	// A tracked response is buffered until its credit claim is known.
+	credit   *requestCredit
+	body     bytes.Buffer
+	overflow bool
 }
 
-func (o *requestCommandOutput) start() error {
-	if o.started {
-		return nil
-	}
+// response is the upstream answer the CLI recorded: its status and headers.
+func (o *requestCommandOutput) response() (int, http.Header, error) {
 	raw, err := os.ReadFile(o.meta)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	var meta struct {
 		Status  int               `json:"status"`
 		Headers map[string]string `json:"headers"`
 	}
 	if err = json.Unmarshal(raw, &meta); err != nil {
-		return err
+		return 0, nil, err
 	}
 	if meta.Status < 200 || meta.Status > 599 {
-		return errors.New("invalid upstream status")
+		return 0, nil, errors.New("invalid upstream status")
 	}
 	h := http.Header{}
 	for key, value := range meta.Headers {
 		h.Set(key, value)
 	}
+	return meta.Status, h, nil
+}
+
+func (o *requestCommandOutput) start() error {
+	if o.started {
+		return nil
+	}
+	status, h, err := o.response()
+	if err != nil {
+		return err
+	}
+	o.commit(status, h)
+	return nil
+}
+
+// commit answers with status and the provider's own headers. The issuer the
+// credit admission put on the answer stays on it.
+func (o *requestCommandOutput) commit(status int, h http.Header) {
 	httpfacts.Apply(o.writer.Header(), h)
 	if ct := h.Get("Content-Type"); ct != "" {
 		o.writer.Header().Set("Content-Type", ct)
 	}
-	o.writer.WriteHeader(meta.Status)
-	o.status = meta.Status
+	o.writer.WriteHeader(status)
+	o.status = status
 	if o.diagnostic != nil {
-		o.diagnostic.setHTTPStatus(meta.Status)
+		o.diagnostic.setHTTPStatus(status)
 	}
 	o.started = true
-	return nil
 }
 
 func (o *requestCommandOutput) Write(p []byte) (int, error) {
+	if o.credit != nil {
+		return o.bufferCredit(p)
+	}
 	if err := o.start(); err != nil {
 		return 0, err
 	}
