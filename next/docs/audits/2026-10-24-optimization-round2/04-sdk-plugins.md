@@ -344,7 +344,7 @@ staticcheck 报 6 条（1 条 ST1016、1 条 U1000、1 条 SA4000、3 条测试�
 | G10 | **完成** | guard/moderation 的 `truncateRunes`/`truncateBytes` 删除，改调 `textutil` | 无 |
 | G11 | **完成（含不确定性的修复）** | `Router.Handle` 预编译为「method → 按字面量数降序、pattern 文本升序」的切片，`HandleHTTP` 只扫同 method 的项，不再遍历 map；重复注册同一 method+path 仍是替换（与原 map 行为一致）而非留下两条。新增 `TestRouterPatternPriority`（20 轮断言 `/a/b` 恒胜 `/a/:id` 且参数路由仍可达）、`TestRouterOnlyTheMatchingMethod`、`TestRouterReregisterReplaces` | 理论上有（歧义路由的选择变确定）；现有插件无歧义路由，实际无变化 |
 | G12 | **完成** | 删除 `classify.TypeIn`/`MessageContains`/`CodePrefix`/`FirstReset`、`apikey.Anthropic`/`Gemini`；`pluginsdk.BadRequest` 接线到 volcengine 的 `badRequest`。`pkgsig.Digest` **保留**：它是 `Sign`/`Verify` 的构成部分且是公开 API | 无 |
-| G13 | **完成** | `ui()` 拆 `uiSections`/`uiMenus`/`uiPages`/`uiSlots`/`uiNative`，并搬进 `ui.go`；`platforms()` 的冲突检测提为 `endpointConflicts`；`accountTypes()` 的平台循环提为 `accountPlatform`；`validate.go` 按域分文件：`platforms_check.go`、`account_check.go`、`routes_check.go`（`validate.go` 1537 → 686 行）。纯搬移：全部声明逐一比对与原文件一致，field 路径与 code 未改 | 无 |
+| G13 | **完成** | `ui()` 拆 `uiSections`/`uiMenus`/`uiPages`/`uiSlots`/`uiNative`，并搬进 `ui.go`；`platforms()` 的冲突检测提为 `endpointConflicts`；`accountTypes()` 的平台循环提为 `accountPlatform`；`validate.go` 按域分文件：`platforms_check.go`、`account_check.go`、`routes_check.go`（`validate.go` 1493 → 686 行）。纯搬移：全部声明逐一比对与原文件一致，field 路径与 code 未改 | 无 |
 | G14 | **完成** | `newRuntime` 拆 `parseManifest` / `resolveIdentity` / `resolveCapabilities` | 无 |
 | G15 | **完成** | `FakeHost` 接收者统一为 `f`（ST1016 清零）；`Dial` 拆 `dialAndOpen`/`pumpToHost`/`pumpToConn`；`harness.Start` 拆 `startHost`/`startPlugin` | 无 |
 | G16 | **完成** | `batch.run` 的内层 drain 提为 `drain(batch, flush) []T`，`flush` 改为显式接收要写的切片（不再靠闭包隐式共享变量）；`Stop` 的 goroutine + 5 秒超时不变 | 无 |
@@ -376,7 +376,7 @@ staticcheck 报 6 条（1 条 ST1016、1 条 U1000、1 条 SA4000、3 条测试�
 
 | 模块 | gofmt | build | GOOS=linux vet | staticcheck | go test |
 |---|---|---|---|---|---|
-| next/sdk | 干净 | OK | OK | 仅 `egress.go` 的 SA1019（`Transport.Dial`/`DialTLS` 弃用，既有代码，未在本轮范围） | 11 包全 ok |
+| next/sdk | 干净 | OK | OK | 手写代码仅 `egress.go` 的 2 条 SA1019（`Transport.Dial`/`DialTLS` 弃用，既有代码，未在本轮范围）；`gen/pluginv1` 另有 144 条 SA1019（protobuf 生成代码，不属手写范围） | 11 包全 ok |
 | next/plugins/anthropic | 干净 | OK | OK | 干净 | ok（10 个 PASS，0 SKIP） |
 | next/plugins/openai | 干净 | OK | OK | 干净 | ok（10 个 PASS，0 SKIP） |
 | next/plugins/gemini | 干净 | OK | OK | 干净 | ok（9 个 PASS，0 SKIP） |
@@ -398,6 +398,7 @@ PG 测试未静默跳过：`pluginsdktest.NewSchema` 走 `sdk/testpg`（`TEST_DA
 2. **relay（G1）** — `api_key` 与 `base_url` 都缺时，`details.fields` 的顺序由 `[base_url, api_key]` 变为 `[api_key, base_url]`。
 3. **growth（G26）** — 查询失败从「静默返回 0/空」变为 503。
 4. **SDK Router（G11）** — 两个 pattern 同时命中时选择变确定（字面量多者优先，其次 pattern 文本升序）。现有插件无歧义路由，实际无影响，但第三方插件若曾依赖 map 迭代顺序会感知到。
+5. **openai（G1，复核轮补录）** — 显式提交 `base_url: ""` 由「`format` 错误」变为「归一化为默认地址」（CONTRACTS §21.3：空值由插件归一化为默认），与 anthropic/gemini 一致。控制台清空输入时不发该键，故影响限于直接提交空串的 API 调用方。
 
 无变化但值得记录的确认项：openai 非字符串 `api_key` 仍是 `code: "pattern"` + `API key must be a string`；所有字段错误文案（含中英双语）逐字保留；payment 的错误文案与 `out_trade_no` 前缀未动；manifest 的 field 路径与 code 未动；签名路径（`pkgsig`、`tools/sign.go`、索引 JSON）未动；claude-oauth 的 `ClassifyError` 与 quota/balance 响应形状未动（G7 推迟）。
 

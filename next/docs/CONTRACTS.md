@@ -4032,7 +4032,7 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - Worker 在准入前（`parsePassthroughRequest`）处理顶层 `system` 与 `user`／`system` 消息的文本块，之后的历史、计划原始请求与 fallback 看到同一份擦除结果；没有匹配时不重新序列化，原始请求逐字节不变。
 - 只按 Claude Code 2.1.288–2.1.296 渲染的整段／整行识别，正文中的提及不动；图片、工具结果等非文本块不处理；擦除后为空的文本块删除、只剩附件的 system 消息删除，但 user 消息不会被擦空（整条保留，决策记为 `keep_whole_message`）。规则只取决于策略，每轮擦除相同文本，提示缓存前缀稳定。
 - 决策记录 `AttachmentDecisions`（`decision: erase`，含类型、位置、次数与原文摘要）。其他 CLI 版本或被代理改写格式的客户端可能不匹配，结果是不擦除而非报错。
-- 设置页"CC 特性 → 运行设置"按类型选择（见 §53.16）；特性目录 `F-CLIENT-ATTACHMENT-ERASE`。
+- 设置页"CC 特性 → 运行设置"按类型选择（见 §53.16）；特性目录 `F-CLIENT-ATTACHMENT-ERASE`（2026-10-24 随旧目录删除，现行目录项为 `F-BUILD-ATTACHMENTS`）。
 
 ### 53.16 客户端附件换成网关渲染（`replace_client_attachments`，2026-10-14，用户要求）
 
@@ -4043,7 +4043,7 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 - 网关文字来自 Mod：Worker 用与实际执行相同的 CLI、工作目录（`cache/workspace`）、基础环境与 Mod，按 `--model`、`--add-dir`（`additional_directories`）、1M 上下文（`context-1m-2025-08-07`）跑一次"渲染运行"；`ANTHROPIC_BASE_URL` 指向 Worker 自己的回环端点 `/ccg-attachment-render/<id>/`（仅回环、仅登记过的 id），不访问上游、不计用量。Mod 配置 `report_attachments: true` 时在 `prompt.attachment` 里把 origin `engine` 的上述类型渲染结果以 `gateway_attachment` 事件上报（类型须在词表内、非空、≤64 KiB）。日期不经 `prompt.attachment`：Worker 从渲染运行发往回环端点的第一个模型请求里按日期识别规则取出 Claude Code 写入的那一行（如 `Today's date is 2026-10-15.`）。
 - 渲染结果按（CLI 版本、模型、额外目录、1M 上下文；选了 `date` 或 `session_context` 时再加 Worker 当天日期）缓存，Worker 进程内首次结果一直使用，每轮相同文字，提示缓存前缀稳定，日期类次日重新渲染；渲染失败不缓存，本次请求该类型保留客户端原文（诊断 `gateway_attachments_unavailable`），下次请求重试。渲染成功但 Worker 的 Claude Code 没有产生某个选中类型（如没有 CLAUDE.md、git、账号邮箱时的会话上下文）时，客户端的该类附件被去掉（服务端没有这段）。没有请求替换时不运行、不取 CLI 版本。
 - 替换与擦除在同一次遍历（§53.15 的识别规则）中原位进行：只替换匹配的整段，保留其后的换行与前后文字；`environment` 只替换"# Environment"段，客户端的"# Environment update"（切换目录）没有对应的网关文字，一并擦除；`date` 同理只替换"Today's date is …"一行，"The date has changed…"一并擦除。决策记录 `decision: replace_gateway`。
-- 设置页每类一个选择：客户端／服务端／擦除（2026-10-15 用户要求五类都三选一，原"保留客户端／使用网关"改称"客户端／服务端"）。特性目录 `F-CLIENT-ATTACHMENT-REPLACE`。需 ccgateway 插件 0.1.49 起。
+- 设置页每类一个选择：客户端／服务端／擦除（2026-10-15 用户要求五类都三选一，原"保留客户端／使用网关"改称"客户端／服务端"）。特性目录 `F-CLIENT-ATTACHMENT-REPLACE`（2026-10-24 随旧目录删除，现行目录项为 `F-BUILD-ATTACHMENTS`）。需 ccgateway 插件 0.1.49 起。
 
 - ccgateway **0.1.56** 起，环境在设置页分为 `working_directory`（主目录、额外目录及 git 仓库标记）、`platform`（Platform、Shell、OS Version）、`environment_update`（Environment update 消息），分别选择客户端／服务端／擦除。前两项只匹配标准 Environment 区块中的对应字段，未知字段保留；服务端值从同一次 CLI 环境渲染拆出，保留客户端字段位置与换行，不改真实容器目录或操作系统。环境更新独立处理；服务端初始渲染没有更新消息时移除客户端更新。
 - 已保存的 `environment` 仍保持整组行为；编辑器加载时展开成三个相同选项，保存时只写细分类型。整组与细分跨擦除／替换列表视为冲突并拒绝。新词表仍为策略 schema 1，**必须先更新 Worker 至 0.1.56 再保存细分策略**；旧 Worker 不支持新类型会返回策略错误。没有配置的字段继续保留客户端原文。
