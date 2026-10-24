@@ -11,9 +11,10 @@ import socket
 import threading
 from http.server import BaseHTTPRequestHandler
 
-from common import (ACCOUNT_PORT, KEY_PATTERN, ActivationFailed, BadRequest, ContainerChanged, DiskQuotaUnavailable,
-                    ImagePullFailed, InvalidCLIProfile, InvalidImage, NotDraft, ResourceInUse, RuntimeBusy,
-                    RuntimeNotFound, UnsupportedContainer, UpgradeInProgress, error_answer, worker_session)
+from common import (KEY_PATTERN, ActivationFailed, BadRequest, ContainerChanged, DiskQuotaUnavailable, ImagePullFailed,
+                    InvalidCLIProfile, InvalidImage, NotDraft, OwnershipMismatch, ResourceInUse, RuntimeBusy,
+                    RuntimeNotFound, UnsupportedContainer, UpgradeInProgress, error_answer, worker_request,
+                    worker_session)
 from images import UploadError, MAX_CHUNK
 
 log = logging.getLogger('ccgateway.controller')
@@ -35,19 +36,17 @@ PASS_THROUGH_METHODS = {'admin/request-logs': ('GET', 'PUT'), 'admin/request-log
 # Paths the controller answers itself; any other method on them is 405.
 LOCAL_PATHS = (None, 'config', 'status', 'connection', 'egress')
 # The failures each group of endpoints names; anything else is 503
-# runtime_unavailable with its traceback in the log.
-REQUEST_ERRORS = (BadRequest, ImagePullFailed, InvalidCLIProfile, DiskQuotaUnavailable, ActivationFailed,
+# runtime_unavailable with its traceback in the log. Only deleting a runtime
+# names a same-name resource of someone else (409 resource_in_use: nothing
+# was deleted); elsewhere it stays unnamed.
+REQUEST_ERRORS = (BadRequest, NotDraft, ImagePullFailed, InvalidCLIProfile, DiskQuotaUnavailable, ActivationFailed,
                   ResourceInUse, RuntimeBusy)
+DELETE_ERRORS = REQUEST_ERRORS + (OwnershipMismatch,)
 MANAGEMENT_ERRORS = (BadRequest, InvalidImage, ImagePullFailed, UpgradeInProgress, RuntimeBusy)
 WORKER_ERRORS = (BadRequest, InvalidImage, RuntimeNotFound, UnsupportedContainer, ImagePullFailed, ContainerChanged,
                  RuntimeBusy)
+TUNNEL_ERRORS = (BadRequest, RuntimeBusy)
 DROPPED = (BrokenPipeError, ConnectionResetError)
-
-
-def upstream_headers(secret):
-    """Headers of a pass-through call to the account's Worker: its admin key
-    only. Nothing of the caller's request (credentials included) is forwarded."""
-    return {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -135,25 +134,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_tunnel(aid)  # GET without a body; never read one
         if path == 'worker':
             return self.handle_worker(aid)
-        body = self.read_account_body()
-        if body is None:
-            return None
         try:
-            return self.account_request(aid, path, body)
+            return self.account_request(aid, path, self.read_body(MAX_ACCOUNT_BODY))
         except Exception as e:
-            return self.answer_error(e, REQUEST_ERRORS)
+            return self.answer_error(e, DELETE_ERRORS if path is None and self.command == 'DELETE' else REQUEST_ERRORS)
 
     do_GET = do_POST = do_PUT = do_DELETE = handle_request
-
-    def read_account_body(self):
-        try:
-            n = int(self.headers.get('Content-Length', '0'))
-        except ValueError:
-            n = -1
-        if n < 0 or n > MAX_ACCOUNT_BODY or self.headers.get('Transfer-Encoding'):
-            self.fail(400, 'invalid_request', close=True)
-            return None
-        return self.rfile.read(n)
 
     def account_request(self, aid, path, body):
         manager = self.server.manager
@@ -180,23 +166,14 @@ class Handler(BaseHTTPRequestHandler):
         purge = self.headers.get('X-CCG-Delete-Data', '') == '1'
         if purge and not account:
             raise BadRequest('full deletion requires account confirmation')
-        try:
-            return self.reply(200, self.server.manager.delete(aid, account=account, purge=purge))
-        except NotDraft:
-            return self.fail(405, 'method_not_allowed')
+        return self.reply(200, self.server.manager.delete(aid, account=account, purge=purge))
 
     def put_config(self, aid, body):
-        manager = self.server.manager
         try:
-            try:
-                desired = json.loads(body)
-            except ValueError as e:
-                raise BadRequest('invalid JSON') from e
-            result = manager.apply(aid, desired)
-        except Exception:
-            manager.online.pop(aid, None)
-            raise
-        return self.reply(200, result)
+            desired = json.loads(body)
+        except ValueError:
+            desired = None  # apply answers 400 invalid_request and drops readiness, as for any refused configuration
+        return self.reply(200, self.server.manager.apply(aid, desired))
 
     def get_status(self, aid, body):
         return self.reply(200, self.server.manager.public(aid))
@@ -227,30 +204,25 @@ class Handler(BaseHTTPRequestHandler):
         target = self.worker_target(aid, path)
         if target is None:
             return None
-        address, secret = target
         # No configuration writes on the request path. Concurrent streams
         # do not hold the account reconciliation lock.
         with worker_session() as session:
-            with session.request(self.command, f'http://{address}:{ACCOUNT_PORT}/{path}', data=body,
-                                 headers=upstream_headers(secret), stream=True, timeout=(5, 240),
-                                 allow_redirects=False) as response:
+            with worker_request(session, target, self.command, path, data=body, stream=True,
+                                timeout=(5, 240)) as response:
                 self.relay(path, response)
         return None
 
     def worker_target(self, aid, path):
-        """(app address, admin key) when the runtime is ready at the caller's
-        revision; otherwise answers 409 and returns None."""
-        manager = self.server.manager
-        with manager.request_guard(aid):
-            state = manager.state(aid)
-            revision = self.headers.get('X-CCG-Revision', '')
-            if not state or not revision or manager.readiness(aid, state) != revision:
-                self.fail(409, 'not_synchronized')
-                return None
-            if (path.startswith('admin/auth/') or path == 'admin/usage') and state.get('auth_mode') == 'api_key':
-                self.fail(409, 'api_key_account')
-                return None
-            return state['app_ip'], state['admin_key']
+        """The runtime's state when it is ready at the caller's revision;
+        otherwise answers 409 and returns None."""
+        state = self.server.manager.ready_state(aid, self.headers.get('X-CCG-Revision', ''))
+        if state is None:
+            self.fail(409, 'not_synchronized')
+            return None
+        if (path.startswith('admin/auth/') or path == 'admin/usage') and state.get('auth_mode') == 'api_key':
+            self.fail(409, 'api_key_account')
+            return None
+        return state
 
     def relay(self, path, response):
         self.send_response(response.status_code)
@@ -274,18 +246,22 @@ class Handler(BaseHTTPRequestHandler):
     def handle_management(self, route):
         self.request_path = route[0]
         try:
-            try:
-                if route.re is RUNTIME_ROUTE:
-                    return self.runtime_endpoint(route[1])
-                return self.upload_endpoint(route[1], route[2])
-            except UploadError as e:
-                self.close_connection = True
-                if not self.response_started:
-                    self.reply(e.status, e.body())
-            except Exception as e:
-                self.answer_error(e, MANAGEMENT_ERRORS, DROPPED + (TimeoutError,))
+            self.management_request(route)
         except OSError:
-            self.close_connection = True  # the client went away; nothing to answer
+            self.close_connection = True  # the client went away while its error was answered
+        return None
+
+    def management_request(self, route):
+        try:
+            if route.re is RUNTIME_ROUTE:
+                return self.runtime_endpoint(route[1])
+            return self.upload_endpoint(route[1], route[2])
+        except UploadError as e:
+            self.close_connection = True
+            if not self.response_started:
+                self.reply(e.status, e.body())
+        except Exception as e:
+            self.answer_error(e, MANAGEMENT_ERRORS, DROPPED + (TimeoutError,))
         return None
 
     def runtime_endpoint(self, kind):
@@ -333,18 +309,22 @@ class Handler(BaseHTTPRequestHandler):
     # In-place worker update (CONTRACTS §53.7).
 
     def handle_worker(self, aid):
-        """POST /accounts/<key>/worker."""
+        """POST /accounts/<key>/worker: {"image"} replaces the Worker program,
+        {"image", "components", "cli_version"} activates a Worker+CLI pair."""
+        manager = self.server.manager
         try:
             if self.command != 'POST':
                 return self.fail(405, 'method_not_allowed', close=True)
-            return self.reply(200, self.server.manager.update_worker(aid, self.read_json()))
+            desired = self.read_json()
+            paired = isinstance(desired, dict) and 'components' in desired
+            return self.reply(200, (manager.update_runtime if paired else manager.update_worker)(aid, desired))
         except Exception as e:
             return self.answer_error(e, WORKER_ERRORS)
 
     # Byte tunnel (CONTRACTS §53.5).
 
     def handle_tunnel(self, aid):
-        """GET /accounts/<key>/tunnel: raw bytes to <app_ip>:8787."""
+        """GET /accounts/<key>/tunnel: raw bytes to the account Worker's port."""
         self.close_connection = True  # the connection never returns to HTTP
         if self.command != 'GET':
             return self.fail(405, 'method_not_allowed')
@@ -354,10 +334,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(400, 'invalid_request')
         try:
             target = self.server.manager.connection(aid, self.headers.get('X-CCG-Revision', ''))
-        except BadRequest:
-            return self.fail(400, 'invalid_request')
-        except Exception:
-            return self.fail(503, 'runtime_unavailable')
+        except Exception as e:
+            return self.answer_error(e, TUNNEL_ERRORS)
         if target is None:
             return self.fail(409, 'not_synchronized')
         try:

@@ -7,11 +7,12 @@ import posixpath
 import docker
 
 import cleanup
-from common import BadRequest, UpgradeInProgress, check_business_image, valid_image, write_private
+from common import (DOCKER_SOCKET, BadRequest, UpgradeInProgress, check_business_image, valid_image,
+                    write_private)
+from shared_egress import SCHEMA as SHARED_EGRESS_SCHEMA
 
 FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1',
             'shared-egress-v1', 'cli-profile-v1', 'runtime-cleanup-v1', 'account-disk-quota-v1', 'runtime-purge-v2')
-DOCKER_SOCKET = '/var/run/docker.sock'
 
 
 class RuntimeAdmin:
@@ -51,11 +52,7 @@ class RuntimeAdmin:
         if not posixpath.isabs(self.env_file) or env_dir == '/':
             raise RuntimeError('invalid runtime environment file path')
         with self.upgrade_lock:
-            image = self.ensure_image(ref)
-            if (self.root / 'shared-egress' / 'state.json').exists():
-                if image.attrs.get('Config', {}).get('Labels', {}).get('io.sup2api.ccgateway.shared-egress') != '1':
-                    if self.shared.data['bindings']:
-                        raise BadRequest('migrate shared accounts back before controller downgrade')
+            self._check_downgrade(self.ensure_image(ref))
             helper_name = self.controller_name + '-upgrade'
             with contextlib.suppress(docker.errors.NotFound):
                 helper = self.docker.containers.get(helper_name)
@@ -71,6 +68,13 @@ class RuntimeAdmin:
                 volumes={DOCKER_SOCKET: {'bind': DOCKER_SOCKET, 'mode': 'rw'},
                          env_dir: {'bind': env_dir, 'mode': 'rw'}})
         return {'accepted': True}
+
+    def _check_downgrade(self, image):
+        """A controller image without the shared gateway cannot take over accounts bound to it."""
+        if ((image.attrs.get('Config') or {}).get('Labels') or {}).get(SHARED_EGRESS_SCHEMA) == '1':
+            return
+        if self.shared_bindings():
+            raise BadRequest('migrate shared accounts back before controller downgrade')
 
     def cleanup_inventory(self):
         return cleanup.inventory(self)

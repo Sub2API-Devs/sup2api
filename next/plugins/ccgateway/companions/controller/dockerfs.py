@@ -11,6 +11,9 @@ import secrets
 import tarfile
 import time
 
+import docker
+import requests
+
 from common import IMAGE_LABEL, SHA256_HEX, UnsupportedContainer
 
 WORKER_SOURCE = '/usr/local/bin/worker'  # the program inside a worker image
@@ -137,7 +140,8 @@ def swap(container, tmp, target):
         raise RuntimeError('replace failed')
 
 
-def read_file(container, path, limit):
+def read_file(container, path, limit=WORKER_MAX_BYTES):
+    """The content of regular file path in the container (docker.errors.NotFound when absent)."""
     chunks, _ = container.get_archive(path)
     return read_single_file(chunks, limit)
 
@@ -148,6 +152,18 @@ def write_file(container, path, raw):
         raise RuntimeError('runtime file copy failed')
     if read_file(container, path, max(len(raw), 65536)) != raw:
         raise RuntimeError('runtime file verification failed')
+
+
+@contextlib.contextmanager
+def image_container(client, ref):
+    """A never-started, network-less container of image ref to read files
+    from; removed afterwards (a failed removal never hides the real error)."""
+    temp = client.containers.create(ref, entrypoint=['true'], network_disabled=True)
+    try:
+        yield temp
+    finally:
+        with contextlib.suppress(docker.errors.DockerException, requests.exceptions.RequestException):
+            temp.remove(force=True)
 
 
 def digest(data):

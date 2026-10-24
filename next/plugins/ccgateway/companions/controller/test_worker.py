@@ -11,14 +11,17 @@ import os
 from pathlib import Path
 import posixpath
 import tarfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import docker
 
+import dockerfs
 import manager
 import worker_update
-from manager import ContainerChanged, InvalidImage, RuntimeNotFound, UnsupportedContainer, ROUTE
+from common import ContainerChanged, InvalidImage, RuntimeNotFound, UnsupportedContainer
+from http_api import ROUTE
 from test_manager import FakeContainer, LABEL, REV
 from test_uploads import ServerBase
 
@@ -70,7 +73,7 @@ class WorkerContainer(FakeContainer):
 
     def program(self):
         try:
-            return self.files.get(manager.worker_target(self)[0], (None,))[0]
+            return self.files.get(dockerfs.worker_target(self)[0], (None,))[0]
         except UnsupportedContainer:
             return None
 
@@ -81,7 +84,7 @@ class WorkerContainer(FakeContainer):
             self.status = 'exited'
 
     def restart(self, timeout=None):
-        assert timeout == manager.WORKER_RESTART_TIMEOUT
+        assert timeout == worker_update.WORKER_RESTART_TIMEOUT
         self.restarts += 1
         if self.restart_hook:
             self.restart_hook(self)
@@ -100,7 +103,7 @@ class WorkerContainer(FakeContainer):
         if self.status != 'running':
             raise docker.errors.APIError('container is not running')
         self.execs.append((list(cmd), user))
-        if cmd == ['node', '-e', manager.WORKER_HEALTH_SCRIPT]:
+        if cmd == ['node', '-e', worker_update.WORKER_HEALTH_SCRIPT]:
             return (1 if self.running_program in self.client.unhealthy else 0), b''
         name, args = cmd[0], cmd[1:]
         if name == 'sha256sum':
@@ -418,7 +421,7 @@ class WorkerUpdateTests(WorkerBase):
             return original(aid, identity)
         with patch.object(self.m, 'business_firewall', side_effect=lambda *a: order.append('firewall')), \
                 patch.object(self.m, '_worker_healthy', side_effect=healthy), \
-                patch.object(self.m, '_reactivate', return_value=True):
+                patch.object(self.m, 'reactivate', return_value=True):
             self.assertEqual(self.update()['status'], 'updated')
         self.assertEqual(order, ['firewall', 'health'])
 
@@ -454,16 +457,27 @@ class WorkerUpdateTests(WorkerBase):
 
 class ProgramArchiveTests(unittest.TestCase):
     def test_read_single_file(self):
-        self.assertEqual(manager.read_single_file(iter([tar_of([('worker', NEW, None)])])), NEW)
+        self.assertEqual(dockerfs.read_single_file(iter([tar_of([('worker', NEW, None)])])), NEW)
         for raw in (tar_of([('worker', None, None)]), tar_of([('worker', None, 'x')]),
                     tar_of([('worker', NEW, None), ('other', OLD, None)]), tar_of([]), b'not a tar' * 100):
             with self.assertRaises(ValueError):
-                manager.read_single_file(iter([raw]))
+                dockerfs.read_single_file(iter([raw]))
         with self.assertRaises(ValueError):
-            manager.read_single_file(iter([tar_of([('worker', NEW, None)])]), limit=10)
+            dockerfs.read_single_file(iter([tar_of([('worker', NEW, None)])]), limit=10)
+
+    def test_image_container_removal_failure_keeps_the_real_error(self):
+        # audit P6: a failed removal of the temporary container used to
+        # replace the error that explains why the image is unusable.
+        class Temp:
+            def remove(self, force=False):
+                raise docker.errors.APIError('removal failed')
+        client = SimpleNamespace(containers=SimpleNamespace(create=lambda *args, **kwargs: Temp()))
+        with self.assertRaises(InvalidImage):
+            with dockerfs.image_container(client, 'app:new'):
+                raise InvalidImage('image has no worker program')
 
     def test_tar_file_is_root_0755(self):
-        with tarfile.open(fileobj=io.BytesIO(manager.tar_file('worker.next-x', NEW))) as tar:
+        with tarfile.open(fileobj=io.BytesIO(dockerfs.tar_file('worker.next-x', NEW))) as tar:
             [m] = tar.getmembers()
             self.assertEqual((m.name, m.mode, m.uid, m.gid, m.isreg()), ('worker.next-x', 0o755, 0, 0, True))
             self.assertEqual(tar.extractfile(m).read(), NEW)
@@ -474,8 +488,8 @@ class ProgramArchiveTests(unittest.TestCase):
 
             def top(self, ps_args):
                 return {'Titles': ['PID', 'COMMAND'], 'Processes': [['1', p] for p in self.procs]}
-        self.assertTrue(manager.worker_idle(C(), 'ccgateway-worker'))
-        self.assertFalse(manager.worker_idle(C(), 'worker'))
+        self.assertTrue(dockerfs.worker_idle(C(), 'ccgateway-worker'))
+        self.assertFalse(dockerfs.worker_idle(C(), 'worker'))
 
     def test_route(self):
         self.assertEqual(ROUTE.fullmatch('/accounts/21/worker')[2], 'worker')

@@ -1,11 +1,12 @@
 """Owned runtime inventory and identity-checked, authoritative keep-list cleanup."""
+import contextlib
 import hashlib
 import json
 import logging
 
 import docker
 
-from common import KEY, LABEL, SHA256_HEX, BadRequest, ResourceInUse, check
+from common import KEY, LABEL, SHA256_HEX, BadRequest, OwnershipMismatch, ResourceInUse, check
 
 MAX_KEYS = 20000
 
@@ -18,20 +19,18 @@ def resource_row(kind, role, item):
 
 
 def docker_resources(manager, key):
-    """Identity rows of the runtime's containers, networks and volume."""
+    """Identity rows of the runtime's containers, networks and volume; a
+    same-name resource of someone else raises OwnershipMismatch."""
     resources = []
-    for kind, collection, roles in [('container', manager.docker.containers, ('app', 'egress')),
-                                    ('network', manager.docker.networks, ('net', 'uplink')),
+    for role in ('app', 'egress'):
+        with contextlib.suppress(docker.errors.NotFound):
+            resources.append(resource_row('container', role, manager.owned(key, role)))
+    for kind, collection, roles in [('network', manager.docker.networks, ('net', 'uplink')),
                                     ('volume', manager.docker.volumes, ('data',))]:
         for role in roles:
-            try:
-                item = collection.get(manager.name(key, role))
-            except docker.errors.NotFound:
-                continue
-            labels = item.labels if kind == 'container' else item.attrs.get('Labels') or {}
-            if labels.get(LABEL) != key:
-                raise ValueError('resource ownership mismatch')
-            resources.append(resource_row(kind, role, item))
+            item = manager.owned_resource(collection, key, role)
+            if item is not None:
+                resources.append(resource_row(kind, role, item))
     # Other containers of the runtime (a rollback copy left by a manual
     # migration): a runtime with only such a container is still found.
     exact = {manager.name(key, role) for role in ('app', 'egress')}
@@ -60,13 +59,32 @@ def snapshot(manager, key):
         if backup.is_symlink():
             raise ValueError('runtime backup is a symlink')
         resources.append(['backup', hashlib.sha256(backup.read_bytes()).hexdigest()])
-    if (manager.root / 'shared-egress' / 'state.json').exists():
-        binding = manager.shared.data['bindings'].get(key)
-        if binding is not None:
-            resources.append(['shared_binding', binding])
+    binding = manager.shared_bindings().get(key)
+    if binding is not None:
+        resources.append(['shared_binding', binding])
     if not resources:
         return None
     return hashlib.sha256(json.dumps(resources, sort_keys=True).encode()).hexdigest()
+
+
+def unreadable_identity(key):
+    """The identity of a runtime whose snapshot failed: no snapshot hashes to
+    it (a snapshot is the digest of a JSON list), so cleanup never deletes
+    the runtime on it and reports it failed instead."""
+    return hashlib.sha256(b'unreadable runtime ' + key.encode()).hexdigest()
+
+
+def inventory_row(manager, key):
+    """{key, identity} of one runtime, None when nothing of it exists. A
+    failure is this runtime's alone (audit P4): it is listed anyway, with an
+    identity no snapshot matches, so the operator sees it fail in cleanup."""
+    try:
+        with manager.guard(key):
+            identity = snapshot(manager, key)
+    except Exception as e:
+        log.warning('cleanup inventory key=%s: %s: %s', key, type(e).__name__, str(e)[:300])
+        identity = unreadable_identity(key)
+    return {'key': key, 'identity': identity} if identity else None
 
 
 def inventory(manager):
@@ -74,27 +92,20 @@ def inventory(manager):
     backups = manager.root / 'backups'
     if backups.is_dir() and not backups.is_symlink():
         keys.update(p.stem for p in backups.glob('*.json') if KEY.fullmatch(p.stem) and not p.is_symlink())
-    if (manager.root / 'shared-egress' / 'state.json').exists():
-        keys.update(key for key in manager.shared.data['bindings'] if KEY.fullmatch(key))
+    keys.update(key for key in manager.shared_bindings() if KEY.fullmatch(key))
     for item in manager.docker.containers.list(all=True, filters={'label': LABEL}, ignore_removed=True):
         key = item.labels.get(LABEL, '')
         if isinstance(key, str) and KEY.fullmatch(key) and manager.container_of(key, item.name):
             keys.add(key)
-    for kind, items, roles in [('network', manager.docker.networks.list(), ('net', 'uplink')),
-                               ('volume', manager.docker.volumes.list(), ('data',))]:
+    for items, roles in [(manager.docker.networks.list(), ('net', 'uplink')), (manager.docker.volumes.list(), ('data',))]:
         for item in items:
             key = (item.attrs.get('Labels') or {}).get(LABEL, '')
             if isinstance(key, str) and KEY.fullmatch(key) and item.name in {manager.name(key, role) for role in roles}:
                 keys.add(key)
     if len(keys) > MAX_KEYS:
         raise ValueError('runtime inventory too large')
-    rows = []
-    for key in sorted(keys):
-        with manager.guard(key):
-            identity = snapshot(manager, key)
-            if identity:
-                rows.append({'key': key, 'identity': identity})
-    return {'runtimes': rows}
+    rows = (inventory_row(manager, key) for key in sorted(keys))
+    return {'runtimes': [row for row in rows if row]}
 
 
 def cleanup(manager, desired):
@@ -135,5 +146,7 @@ def clean_one(manager, row):
             return {'key': key, 'status': 'deleted'}
     except Exception as e:
         log.warning('cleanup key=%s failed: %s: %s', key, type(e).__name__, str(e)[:300])
-        reason = 'resource_in_use' if isinstance(e, ResourceInUse) else 'resource_cleanup_failed'
+        # A foreign user of a resource, or a foreign resource with one of
+        # its names: nothing of the runtime was deleted.
+        reason = 'resource_in_use' if isinstance(e, (ResourceInUse, OwnershipMismatch)) else 'resource_cleanup_failed'
         return {'key': key, 'status': 'failed', 'reason': reason}

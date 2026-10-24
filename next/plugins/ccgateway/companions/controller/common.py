@@ -35,6 +35,7 @@ NETWORK_LABEL = 'io.sup2api.ccgateway.network'
 DISK_QUOTA_LABEL = 'io.sup2api.ccgateway.disk-quota-bytes'
 
 ACCOUNT_PORT = 8787  # every account container listens here on its private network
+DOCKER_SOCKET = '/var/run/docker.sock'
 PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
               'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
@@ -103,6 +104,17 @@ class ResourceInUse(RuntimeError):
         super().__init__('runtime resources in use by ' + ', '.join(self.names))
 
 
+class OwnershipMismatch(ValueError):
+    """A container, network or volume carries one of the runtime's names but
+    not its account label: someone else's. Never touched; deleting the
+    runtime answers 409 resource_in_use (nothing was deleted), any other
+    endpoint 503 runtime_unavailable as before."""
+
+    def __init__(self, name):
+        self.names = [name]
+        super().__init__(f'{name}: ownership mismatch (not this runtime\'s)')
+
+
 # How each named failure is answered: (status, error code). Checked in order,
 # so a subclass must come before its base class. Anything else is 503
 # runtime_unavailable (a Docker error, a programming error).
@@ -115,6 +127,7 @@ ERRORS = (
     (UnsupportedContainer, 409, 'unsupported_container'),
     (UpgradeInProgress, 409, 'upgrade_in_progress'),
     (ResourceInUse, 409, 'resource_in_use'),
+    (OwnershipMismatch, 409, 'resource_in_use'),
     (ImagePullFailed, 503, 'image_pull_failed'),
     (DiskQuotaUnavailable, 503, 'disk_quota_unavailable'),
     (ContainerChanged, 503, 'container_changed'),
@@ -200,6 +213,23 @@ def worker_session():
     session = requests.Session()
     session.trust_env = False
     return session
+
+
+def admin_headers(state):
+    """Headers of a controller call to the account's Worker: its admin key
+    only. Nothing of the caller's request (credentials included) is forwarded."""
+    return {'Authorization': 'Bearer ' + state['admin_key'], 'Content-Type': 'application/json'}
+
+
+def worker_request(session, state, method, path, **kwargs):
+    """method <path> on the account Worker's admin port with its admin key; never follows a redirect."""
+    return session.request(method, f'http://{state["app_ip"]}:{ACCOUNT_PORT}/{path}', headers=admin_headers(state),
+                           allow_redirects=False, **kwargs)
+
+
+def resolv_conf(gateway):
+    """The account container's /etc/resolv.conf: only its internal DNS address."""
+    return f'nameserver {gateway}\noptions timeout:2 attempts:2\n'
 
 
 def is_elf(data):

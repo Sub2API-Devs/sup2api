@@ -8,7 +8,7 @@ import tempfile
 import time
 
 import docker
-from manager import container_identity
+from dockerfs import container_identity
 from offline_migrate_account import OfflineMigration, ACTIVE, ROOT, WORKER, sha, trusted, tar_entries, atomic_private
 
 

@@ -15,9 +15,9 @@ import time
 from types import SimpleNamespace
 
 import docker
-from common import KEY, LABEL, BadRequest, boot_id, container_env, read_json, write_private
+from common import ACCOUNT_PORT, KEY, LABEL, BadRequest, boot_id, container_env, read_json, resolv_conf, write_private
 from dockerfs import container_identity, worker_idle, worker_target
-from network import PRIVATE_DESTINATIONS, proxy_outbound
+from network import PRIVATE_DESTINATIONS, first_subnet, proxy_outbound
 
 log = logging.getLogger('ccgateway.controller.shared_egress')
 
@@ -214,7 +214,7 @@ class SharedEgress:
         if entry:
             gateway = entry['IPAddress']
         else:
-            subnet = ipaddress.ip_network(net.attrs['IPAM']['Config'][0]['Subnet'])
+            subnet = first_subnet(net)
             used = {v['IPv4Address'].split('/')[0] for v in net.attrs.get('Containers', {}).values()}
             used.update([str(subnet[1]), state['app_ip'], state['gateway_ip']])
             gateway = next(str(ip) for ip in subnet.hosts() if str(ip) not in used)
@@ -303,8 +303,13 @@ class SharedEgress:
                     and b.get('active') and b.get('revision') == state.get('revision')
                     and b.get('container_id') == app.id and b.get('ip') == state.get('app_ip'))
 
+    def endpoint(self, aid):
+        """[address, port] the account's outbound is pinned to; None for direct or no binding."""
+        binding = self.data['bindings'].get(aid) or {}
+        return (self.data['nodes'].get(binding.get('tag')) or {}).get('endpoint')
+
     def apply(self, aid, state, desired):
-        self.m.online.pop(aid, None)
+        self.m.go_offline(aid)
         state['status'] = 'syncing'
         self.m.save(aid, state)
         try:
@@ -315,7 +320,7 @@ class SharedEgress:
             state.update(gateway_ip=gateway, egress_backend=SHARED)
             self.m.save(aid, state)
             self.resolv(aid, gateway)
-            self.m._activate(aid, state, app, c, desired['revision'])
+            self.m.activate(aid, state, app, c, desired['revision'])
         except Exception:
             state['status'] = 'egress_error'
             self.m.save(aid, state)
@@ -325,10 +330,11 @@ class SharedEgress:
         return self.m.public(aid)
 
     def resolv(self, aid, gateway):
-        # Keep inode: this file can already be bind-mounted into a running app.
+        # Keep inode: this file can already be bind-mounted into a running app
+        # (Manager._record_runtime writes a new file for a new container).
         path = self.m.dir(aid) / 'resolv.conf'
         with path.open('w') as f:
-            f.write(f'nameserver {gateway}\noptions timeout:2 attempts:2\n')
+            f.write(resolv_conf(gateway))
             f.flush()
             os.fsync(f.fileno())
         path.chmod(0o644)
@@ -369,7 +375,7 @@ class SharedEgress:
     def status(self, aid):
         state = self.m.state(aid) or {}
         return {'backend': state.get('egress_backend', LEGACY),
-                'migration': state.get('egress_migration'), 'ready': self.m.public(aid)['status'] == 'ready'}
+                'migration': state.get('egress_migration'), 'ready': self.m.is_ready(aid, state)}
 
     def collect(self):
         # Conservative drain accounting: only reclaim unused objects when the
@@ -402,7 +408,7 @@ class SharedEgress:
             cap_drop=['ALL'], security_opt=['no-new-privileges:true'])
         for line in output.decode().splitlines():
             fields = line.split()
-            if len(fields) < 4 or not fields[-2].endswith(':8787'):
+            if len(fields) < 4 or not fields[-2].endswith(f':{ACCOUNT_PORT}'):
                 return False
         return True
 
@@ -438,7 +444,7 @@ class SharedEgress:
     def _back_while_stopped(self, aid, state):
         """A stopped or blocked shared account returns to its own egress
         without running anything; the next apply revalidates it."""
-        self.m.online.pop(aid, None)
+        self.m.go_offline(aid)
         self.remove(aid, disconnect=True)
         state.update(egress_backend=LEGACY, gateway_ip=state['legacy_gateway_ip'], revision='')
         state.pop('egress_migration', None)
@@ -453,13 +459,13 @@ class SharedEgress:
         if (app.status != 'running' and not recovering) or state.get('status') == 'blocked':
             raise BadRequest('only running enabled runtimes can migrate')
         _, base = worker_target(app)
-        if app.status == 'running' and self.m._wait_idle(aid, container_identity(app), base) is None:
+        if app.status == 'running' and self.m.wait_idle(aid, container_identity(app), base) is None:
             return {'backend': current, 'status': 'busy'}
         desired = self.desired(aid)
         if not desired.get('enabled', True):
             raise BadRequest('runtime disabled')
         move = SimpleNamespace(aid=aid, target=target, current=current, app=app, base=base, state=state,
-                               desired=desired, was_online=self.m.online.pop(aid, None))
+                               desired=desired, was_online=self.m.go_offline(aid))
         move.gateway = self._prepare(move)
         return move
 
@@ -479,12 +485,8 @@ class SharedEgress:
             if move.current == LEGACY:
                 with contextlib.suppress(Exception):
                     self.remove(aid, disconnect=True)
-                self._restore_online(move)
+                self.m.restore_online(aid, move.was_online)
             raise
-
-    def _restore_online(self, move):
-        if move.was_online:
-            self.m.online[move.aid] = move.was_online
 
     def _cut_over(self, move):
         aid, app, state = move.aid, move.app, move.state
@@ -519,7 +521,7 @@ class SharedEgress:
         self.m.save(move.aid, move.state)
         if move.current == LEGACY and move.target == SHARED:
             self.remove(move.aid, disconnect=True)
-        self._restore_online(move)
+        self.m.restore_online(move.aid, move.was_online)
         return {'backend': move.current, 'status': 'busy'}
 
     def _finish_journal(self, aid):
@@ -530,7 +532,7 @@ class SharedEgress:
 
     def _failed(self, move):
         aid, state = move.aid, move.state
-        self.m.online.pop(aid, None)
+        self.m.go_offline(aid)
         state['egress_migration']['phase'] = 'failed'
         self.m.save(aid, state)
         if not (move.current == LEGACY and move.target == SHARED):
@@ -546,7 +548,7 @@ class SharedEgress:
             self.m.apply(aid, self.with_auth(move.app, move.desired))
             self._finish_journal(aid)
         except Exception:
-            self.m.online.pop(aid, None)
+            self.m.go_offline(aid)
 
     def with_auth(self, app, desired):
         # Core auth material already belongs to this exact container. Do not invent OAuth
@@ -571,7 +573,7 @@ class SharedEgress:
                     self._recover_one(key, state)
                 except Exception as e:
                     log.warning('shared egress recover key=%s: %s: %s', key, type(e).__name__, str(e)[:300])
-                    self.m.online.pop(key, None)
+                    self.m.go_offline(key)
 
     def _recover_one(self, key, state):
         if state.get('egress_migration'):
@@ -581,7 +583,7 @@ class SharedEgress:
             return  # failed new configurations follow the core's retry policy
         if self.m.owned(key, 'app').status != 'running':
             return
-        if self.m.public(key)['status'] != 'ready' or not self.healthy(key, state):
+        if not self.m.is_ready(key, state) or not self.healthy(key, state):
             self.apply(key, state, self.desired(key))
 
     def run(self):

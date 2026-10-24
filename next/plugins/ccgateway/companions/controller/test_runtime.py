@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from test_manager import FakeContainer
 from test_uploads import ServerBase

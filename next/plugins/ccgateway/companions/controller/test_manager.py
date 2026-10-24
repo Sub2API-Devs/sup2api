@@ -18,7 +18,9 @@ from http.server import ThreadingHTTPServer
 import docker
 
 import manager
-from manager import Manager, Handler, LABEL, AUTH_LABEL, IMAGE_LABEL, ROUTE, NotDraft, BadRequest, check
+from common import AUTH_LABEL, IMAGE_LABEL, LABEL, BadRequest, NotDraft, check
+from http_api import ROUTE, Handler
+from manager import Manager
 
 DRAFT_KEY = 'd0123456789abcdef'
 OTHER_DRAFT = 'dfedcba9876543210'
@@ -87,7 +89,7 @@ class FakeContainers:
         return c
 
     def list(self, all=False, filters=None, **kwargs):
-        """The label and volume filters of the Docker API (volume: by name)."""
+        """The label, volume and name filters of the Docker API (volume: by name)."""
         out = []
         for c in self.items.values():
             if not all and c.status != 'running':
@@ -95,6 +97,8 @@ class FakeContainers:
             if 'label' in (filters or {}) and not label_filter_matches(c.labels, filters['label']):
                 continue
             if 'volume' in (filters or {}) and filters['volume'] not in (getattr(c, 'kwargs', {}).get('volumes') or {}):
+                continue
+            if 'name' in (filters or {}) and filters['name'] not in c.name:
                 continue
             out.append(c)
         return out
@@ -733,9 +737,54 @@ class ManagerTests(Base):
 
     def test_delete_refuses_foreign_resources(self):
         self.fake.containers.create('app:test', name=f'ccg-{DRAFT_KEY}-app', labels={LABEL: 'someone-else'})
-        with self.assertRaises(ValueError):
+        with self.assertRaises(manager.OwnershipMismatch):
             self.m.delete(DRAFT_KEY)
         self.assertIn(f'ccg-{DRAFT_KEY}-app', self.fake.containers.items)
+
+    def test_delete_tolerates_a_network_removed_meanwhile(self):
+        # The network vanishes between the plan and its removal (another
+        # cleanup, an operator): deleting stays idempotent (audit P10).
+        self.apply('21')
+        network = self.fake.networks.items['ccg-21-uplink']
+
+        def gone(*args, **kwargs):
+            raise docker.errors.NotFound('network ccg-21-uplink not found')
+
+        def vanish(aid):
+            self.fake.networks.items.pop(network.name)
+            network.reload = network.remove = gone
+        with patch.object(self.m, '_detach_shared', side_effect=vanish):
+            removed = self.m.delete('21', account=True, purge=True)['removed']
+        self.assertEqual(removed['networks'], ['ccg-21-net'])
+        self.assertTrue(removed['volume'])
+
+    def test_delete_removes_ended_helpers_in_the_runtime_namespace_or_directory(self):
+        # helper() / network_idle join the app's network namespace and
+        # sing-box check mounts the runtime directory; older controllers left
+        # failed ones behind in "Created" (audit P11).
+        self.apply('21')
+        self.apply('22')
+        app, d = self.app('21'), str(self.m.dir('21'))
+
+        def leftover(name, network_mode='none', source=None, status='created'):
+            c = self.fake.containers.create('egress:test', name='ccg-oneshot-' + name)
+            c.attrs.update(HostConfig={'NetworkMode': network_mode}, Mounts=[{'Source': source}] if source else [])
+            c.status = status
+            return c
+        in_namespace = leftover('0000000000000001', network_mode='container:' + app.id)
+        on_directory = leftover('0000000000000002', source=d + '/app.nft')
+        on_config = leftover('0000000000000003', source=d)
+        running = leftover('0000000000000004', network_mode='container:' + app.id, status='running')
+        other_runtime = leftover('0000000000000005', network_mode='container:' + self.app('22').id)
+        similar_path = leftover('0000000000000006', source=d + '0/app.nft')
+        foreign = self.fake.containers.create('busybox', name='debug-shell')
+        foreign.attrs['HostConfig'] = {'NetworkMode': 'container:' + app.id}
+        removed = self.m.delete('21', account=True, purge=True)['removed']['containers']
+        for c in (in_namespace, on_directory, on_config):
+            self.assertIn(c.name, removed)
+            self.assertTrue(c.removed)
+        for c in (running, other_runtime, similar_path, foreign):
+            self.assertFalse(c.removed, c.name)
 
     def rollback_copy(self, aid, prefix='ccg', tag='rollback-cli16x'):
         """What migrate-cli-16x.py leaves: the stopped original app container,
@@ -1017,6 +1066,23 @@ class HandlerTests(Base):
         self.assertIn('debug-shell', logs.output[0])
         self.assertIn('ccg-21-app', self.fake.containers.items)
         self.assertIn('ccg-21-data', self.fake.volumes.items)
+
+    def test_delete_with_a_same_name_foreign_resource_is_a_conflict(self):
+        # 409 resource_in_use (nothing deleted) instead of 503 with a
+        # traceback (audit P4); other endpoints answer as before.
+        self.apply('21')
+        self.fake.volumes.items['ccg-21-data'].attrs['Labels'][LABEL] = '99'
+        with self.assertLogs('ccgateway.controller', level='WARNING') as logs:
+            self.assertEqual(self.call('DELETE', '/accounts/21', headers={'X-CCG-Delete-Account': '21', 'X-CCG-Delete-Data': '1'}),
+                             (409, {'error': 'resource_in_use'}))
+        self.assertIn('409 resource_in_use: OwnershipMismatch: ccg-21-data', logs.output[0])
+        self.assertFalse(logs.records[0].exc_info, 'a named failure: no traceback')
+        self.assertIn('ccg-21-app', self.fake.containers.items)
+        self.assertIn('ccg-21-data', self.fake.volumes.items)
+        self.fake.containers.create('busybox', name='ccg-22-app', labels={LABEL: '99'})
+        with self.assertLogs('ccgateway.controller', level='WARNING'):
+            self.assertEqual(self.call('PUT', '/accounts/22/config', json.dumps({'revision': REV, 'proxy': {'protocol': 'http'}})),
+                             (503, {'error': 'runtime_unavailable'}))
 
     def test_cleanup_http_requires_auth_and_complete_snapshot(self):
         self.apply('21')

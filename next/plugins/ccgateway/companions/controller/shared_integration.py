@@ -6,7 +6,8 @@ import time
 import socket
 from unittest.mock import patch
 
-from manager import Manager, tar_file
+from dockerfs import tar_file
+from manager import Manager
 
 
 def main():
@@ -88,7 +89,7 @@ def main():
             assert any(e['label'] == label and e['host'] != '1.1.1.1' for e in events), events
             assert m.public(other)['status'] == 'ready'
             other_app = m.owned(other, 'app')
-            m._activate(other, m.state(other), other_app, c, desired['revision'])
+            m.activate(other, m.state(other), other_app, c, desired['revision'])
             print(json.dumps({'test': 'authenticated_proxy_and_dns', 'protocol': protocol, 'passed': True}), flush=True)
             if protocol == 'http':
                 app = m.owned(aid, 'app')
@@ -142,14 +143,14 @@ def main():
     assert result['ready'], result
     assert m.owned(aid, 'app').id == identity
     print(json.dumps({'test': 'rollback', 'result': result}), flush=True)
-    original_activate = m._activate
+    original_activate = m.activate
     attempts = []
     def fail_once(*args):
         attempts.append(True)
         if len(attempts) == 1:
             raise RuntimeError('injected migration probe failure')
         return original_activate(*args)
-    with patch.object(m, '_activate', side_effect=fail_once):
+    with patch.object(m, 'activate', side_effect=fail_once):
         try:
             for _ in range(15):
                 outcome = m.shared.migrate(aid, 'shared_xray')

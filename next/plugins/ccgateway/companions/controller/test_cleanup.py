@@ -1,9 +1,8 @@
-import json
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from test_manager import Base, LABEL, DRAFT_KEY, OTHER_DRAFT
-from manager import BadRequest
+from common import BadRequest
 
 
 class CleanupTests(Base):
@@ -87,10 +86,32 @@ class CleanupTests(Base):
         snapshot = self.inventory()
         self.fake.volumes.items['ccg-21-data'].attrs['Labels'][LABEL] = '22'
         result = self.cleanup([], snapshot)
-        self.assertEqual(result['failed'], 1)
+        self.assertEqual(result['results'], [{'key': '21', 'status': 'failed', 'reason': 'resource_in_use'}])
         self.assertIn('ccg-21-app', self.fake.containers.items)
         self.assertIn('ccg-21-egress', self.fake.containers.items)
         self.assertIn('ccg-21-net', self.fake.networks.items)
+
+    def test_one_unreadable_runtime_does_not_fail_the_inventory(self):
+        # A same-name container of someone else next to runtime 23's
+        # directory: the inventory used to fail as a whole (audit P4).
+        self.apply('21')
+        self.m.dir('23').mkdir()
+        foreign = self.fake.containers.create('busybox', name='ccg-23-app', labels={LABEL: '99'})
+        with self.assertLogs('ccgateway.controller.cleanup', level='WARNING'):
+            snapshot = self.inventory()
+        self.assertEqual([row['key'] for row in snapshot], ['21', '23'])
+        result = self.cleanup([], snapshot)
+        self.assertEqual(result['results'], [{'key': '21', 'status': 'deleted'},
+                                             {'key': '23', 'status': 'failed', 'reason': 'resource_in_use'}])
+        self.assertIn(foreign.name, self.fake.containers.items)
+        self.assertTrue(self.m.dir('23').exists())
+        # Once the foreign container is gone the runtime is listed normally;
+        # the identity listed before never matches it.
+        foreign.remove()
+        self.assertEqual(self.cleanup([], snapshot)['results'],
+                         [{'key': '21', 'status': 'absent'}, {'key': '23', 'status': 'changed'}])
+        self.assertEqual(self.cleanup([])['deleted'], 1)
+        self.assertFalse(self.m.dir('23').exists())
 
     def test_invalid_or_incomplete_request_does_not_delete(self):
         self.apply('21')

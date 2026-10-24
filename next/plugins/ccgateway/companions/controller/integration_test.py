@@ -3,17 +3,17 @@ Run as root on a dedicated Linux test host. Needs images already built.
 """
 import concurrent.futures
 import json
-import os
 from pathlib import Path
 import socketserver
 import socket
 import select
 import threading
-import time
 import uuid
 from http.server import ThreadingHTTPServer
 import requests
-from manager import Manager, Handler, LABEL
+from common import LABEL
+from http_api import Handler
+from manager import Manager
 
 
 class Proxy(socketserver.StreamRequestHandler):

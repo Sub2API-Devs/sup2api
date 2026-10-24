@@ -1,7 +1,6 @@
 """Authenticated HTTP, HTTPS and SOCKS5 forwarders for isolated integration tests."""
 import base64
 import json
-import os
 import select
 import socket
 import socketserver

@@ -23,19 +23,13 @@ class Container:
         self.files = {'/usr/local/bin/worker': b'old worker', ru.ACTIVE: PRIOR}
         self.restart_count = 0
         self.info_ok = True
+        self.execs = []
 
     def exec_run(self, args, **_):
+        self.execs.append(list(args))
         if args[:3] == ['node', '-e', ru.INFO_SCRIPT] and not self.info_ok:
             return 1, b'unsupported CLI'
         return 0, b''
-
-    def put_archive(self, folder, payload):
-        name, data = payload
-        self.files[folder + '/' + name] = data
-        return True
-
-    def get_archive(self, path):
-        return self.files[path], {}
 
 
 class Manager:
@@ -45,21 +39,20 @@ class Manager:
         self.state_value = {'revision': 'revision', 'app_ip': '127.0.0.1', 'admin_key': 'secret'}
         self.health = [True]
         self.idle = True
-        self.swaps = []
+        self.backups = []
 
     def guard(self, aid):
         return contextlib.nullcontext()
 
-    def owned(self, *_):
-        return self.container
+    def running_worker(self, aid):
+        c = self.container
+        return types.SimpleNamespace(container=c, identity=c.id, target='/usr/local/bin/worker', base='worker',
+                                     previous=digest(c.files['/usr/local/bin/worker']))
 
-    def _same(self, aid, identity):
+    def same_container(self, aid, identity):
         if identity != self.container.id:
             raise RuntimeError('container changed')
         return self.container
-
-    def _sha256(self, c, path):
-        return digest(c.files[path])
 
     def state(self, aid):
         return json.loads(json.dumps(self.state_value))
@@ -67,34 +60,29 @@ class Manager:
     def save(self, aid, state):
         self.state_value = json.loads(json.dumps(state))
 
-    def _backup_worker(self, aid, c, path, _):
+    def go_offline(self, aid):
+        return self.online.pop(aid, None)
+
+    def online_at(self, aid, revision):
+        return bool(revision) and self.online.get(aid) == revision
+
+    def backup_worker(self, aid, c, path, _):
+        self.backups.append(c.files[path])
         return c.files[path]
 
-    def _wait_idle(self, *_):
+    def wait_idle(self, *_):
         return self.container if self.idle else None
 
-    def _stage(self, c, target, data, sha):
+    def restore_worker(self, aid, identity, target, data, sha):
         assert digest(data) == sha
-        c.files[target + '.next'] = data
-        return target + '.next'
+        self.same_container(aid, identity).files[target] = data
 
-    def _swap(self, c, staged, target):
-        self.swaps.append(target)
-        c.files[target] = c.files.pop(staged)
-
-    def _discard(self, c, path):
-        c.files.pop(path, None)
-
-    def _restore(self, aid, identity, target, data, sha):
-        assert digest(data) == sha
-        self._same(aid, identity).files[target] = data
-
-    def _restart_healthy(self, aid, identity):
-        self._same(aid, identity).restart_count += 1
+    def restart_healthy(self, aid, identity):
+        self.same_container(aid, identity).restart_count += 1
         return self.health.pop(0)
 
-    def _reactivate(self, aid, identity, revision):
-        self._same(aid, identity)
+    def reactivate(self, aid, identity, revision):
+        self.same_container(aid, identity)
         self.online[aid] = revision
         return True
 
@@ -106,15 +94,27 @@ class RuntimePairTests(unittest.TestCase):
         self.entry = {'path': '2.1.304/claude', 'sha256': digest(b'\x7fELFcli'),
                       'patch': 'ccgateway-v12-feature-policy', 'modes': ['direct', 'build']}
         self.args = {'image': 'trusted:release', 'components': ['worker', 'cli'], 'cli_version': '2.1.304'}
+        self.swaps = []
         # runtime_updates imports these from common/dockerfs; the fake
-        # container keeps (name, data) archives and unwrapped bytes.
+        # container keeps plain files.
         docker = types.SimpleNamespace(errors=types.SimpleNamespace(NotFound=KeyError))
+
+        def stage(c, target, data, sha):
+            assert digest(data) == sha
+            c.files[target + '.next'] = data
+            return target + '.next'
+
+        def swap(c, staged, target):
+            self.swaps.append(target)
+            c.files[target] = c.files.pop(staged)
+
+        def write_file(c, path, raw):
+            c.files[path] = raw
         self.patches = [
             patch.multiple('runtime_updates', check=lambda x: None,
-                           valid_image=lambda x: isinstance(x, str) and ':' in x,
-                           container_identity=lambda x: x.id, worker_target=lambda x: ('/usr/local/bin/worker', 'worker'),
-                           worker_idle=lambda *_: True, tar_file=lambda n, b: (n, b),
-                           read_single_file=lambda data, *_: data, docker=docker),
+                           valid_image=lambda x: isinstance(x, str) and ':' in x, worker_idle=lambda *_: True,
+                           read_file=lambda c, path, *_: c.files[path], write_file=write_file,
+                           stage=stage, swap=swap, discard=lambda c, path: c.files.pop(path, None), docker=docker),
             patch.object(self.update, 'package', return_value=(b'new worker', b'\x7fELFcli', self.entry)),
             patch.object(self.update, 'healthy', return_value=True),
             patch('runtime_updates.maintenance', return_value={'lease': 'a' * 48, 'active_requests': 0, 'paused': True}),
@@ -133,8 +133,9 @@ class RuntimePairTests(unittest.TestCase):
         pointer = json.loads(original.files[ru.ACTIVE])
         self.assertEqual(pointer['version'], '2.1.304')
         self.assertEqual(self.m.state_value['active_runtime']['container_id'], original.id)
-        self.assertEqual(self.m.swaps, [ru.ACTIVE, '/usr/local/bin/worker', ru.ACTIVE])
+        self.assertEqual(self.swaps, [ru.ACTIVE, '/usr/local/bin/worker', ru.ACTIVE])
         self.assertNotIn('maintenance_lease', pointer)
+        self.assertEqual(self.m.backups, [b'old worker'])
 
     def test_unhealthy_pair_rolls_back_both_files_and_state(self):
         self.m.health = [False, True]
@@ -157,8 +158,15 @@ class RuntimePairTests(unittest.TestCase):
         self.m.idle = False
         result = self.update.update('21', self.args)
         self.assertEqual(result, {'status': 'busy'})
-        self.assertEqual(self.m.swaps, [])
+        self.assertEqual(self.swaps, [])
         self.assertEqual(self.m.container.restart_count, 0)
+        # Retried busy answers must not rotate older program backups out (P15).
+        self.assertEqual(self.m.backups, [])
+
+    def test_staged_cli_is_checked_for_the_required_capabilities(self):
+        self.update.update('21', self.args)
+        [info] = [args for args in self.m.container.execs if args[:3] == ['node', '-e', ru.INFO_SCRIPT]]
+        self.assertEqual(json.loads(info[-1]), list(ru.REQUIRED))
 
     def test_cli_verification_failure_leaves_current_pair(self):
         self.m.container.info_ok = False
@@ -177,7 +185,7 @@ class RuntimePairTests(unittest.TestCase):
         self.update.package.assert_not_called()
 
     def test_reactivation_failure_after_resume_never_rolls_back_or_restarts(self):
-        with patch.object(self.m,'_reactivate',side_effect=RuntimeError('container changed after resume')):
+        with patch.object(self.m,'reactivate',side_effect=RuntimeError('container changed after resume')):
             result=self.update.update('21',self.args)
         self.assertEqual(result['status'],'updated')
         self.assertFalse(result['online'])
@@ -187,7 +195,7 @@ class RuntimePairTests(unittest.TestCase):
 
     def test_incomplete_rollback_does_not_resume_mixed_pair(self):
         self.m.health=[False]
-        with patch.object(self.m,'_restore',side_effect=RuntimeError('disk unavailable')):
+        with patch.object(self.m,'restore_worker',side_effect=RuntimeError('disk unavailable')):
             with self.assertRaisesRegex(RuntimeError,'disk unavailable'):
                 self.update.update('21',self.args)
         self.assertFalse(any(call.args[1]=='resume' for call in ru.maintenance.call_args_list))
@@ -196,12 +204,12 @@ class RuntimePairTests(unittest.TestCase):
 
     def test_rollback_stays_paused_across_restart_until_health_is_confirmed(self):
         self.m.health=[False,True]
-        original=self.m._restart_healthy
+        original=self.m.restart_healthy
         def restart(*args):
             self.assertIn('maintenance_lease',json.loads(self.m.container.files[ru.ACTIVE]))
             self.assertFalse(any(call.args[1]=='resume' for call in ru.maintenance.call_args_list))
             return original(*args)
-        with patch.object(self.m,'_restart_healthy',side_effect=restart):
+        with patch.object(self.m,'restart_healthy',side_effect=restart):
             result=self.update.update('21',self.args)
         self.assertEqual(result['status'],'rolled_back')
         self.assertEqual(self.m.container.files[ru.ACTIVE],PRIOR)

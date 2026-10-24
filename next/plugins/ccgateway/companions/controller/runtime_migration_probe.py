@@ -9,11 +9,11 @@ import pathlib
 import secrets
 import tarfile
 import tempfile
-import time
 import types
 import unittest.mock
 
 import docker
+import dockerfs
 import manager
 import runtime_updates
 
@@ -79,7 +79,7 @@ class ProbeManager(manager.Manager):
         self.owned(aid, "app")
         return {"revision": ""}
 
-    def _reactivate(self, *_):
+    def reactivate(self, *_):
         raise AssertionError("No real routing or egress is allowed in this probe")
 
 
@@ -140,9 +140,9 @@ def main():
                 created.append(c)
                 return c
             m.docker = types.SimpleNamespace(images=client.images, containers=types.SimpleNamespace(create=labelled_create))
-            identity = manager.container_identity(m.owned(key, "app"))
+            identity = dockerfs.container_identity(m.owned(key, "app"))
             assert m._worker_healthy(key, identity), "old Worker must boot"
-            old_worker = manager.read_single_file(app.get_archive("/usr/local/bin/worker")[0])
+            old_worker = dockerfs.read_file(app, "/usr/local/bin/worker")
             old_worker_sha = digest(old_worker)
             code, info = app.exec_run(["/usr/local/bin/claude", "--ccgateway-info"])
             old_info = json.loads(info)
@@ -157,7 +157,7 @@ def main():
 
             assert http("/admin/runtime")["status"] == 404
             initial = m.update_worker(key, {"image": source_tag})
-            assert initial["status"] == "updated" and m._sha256(app, "/usr/local/bin/worker") == WORKER_SHA
+            assert initial["status"] == "updated" and dockerfs.sha256_in(app, "/usr/local/bin/worker") == WORKER_SHA
             assert http("/admin/runtime")["status"] == 200
             report["phases"].append({"name": "old-302-worker-bootstrap", "status": "pass"})
 
@@ -181,24 +181,24 @@ def main():
                 assert failure["status"] == "rolled_back"
                 assert http("/health")["body"]["cli_version"] == "2.1.302"
                 assert http("/admin/runtime")["body"]["paused"] is False
-                assert m._sha256(app, "/usr/local/bin/worker") == WORKER_SHA
-                rollback_pointer = manager.read_single_file(app.get_archive(runtime_updates.ACTIVE)[0])
+                assert dockerfs.sha256_in(app, "/usr/local/bin/worker") == WORKER_SHA
+                rollback_pointer = dockerfs.read_file(app, runtime_updates.ACTIVE, 65536)
                 report["phases"].append({"name": "failed-304-health-restores-bootstrap-302", "status": "pass"})
                 success = update.update(key, desired)
                 assert success["status"] == "updated"
                 health = http("/health")["body"]
                 assert health["cli_version"] == "2.1.304" and health["cli_sha256"] == CLI_SHA
                 assert http("/admin/runtime")["body"]["paused"] is False
-                assert manager.container_identity(m.owned(key, "app")) == identity
+                assert dockerfs.container_identity(m.owned(key, "app")) == identity
                 report["phases"].append({"name": "paired-304-same-container", "status": "pass"})
                 # Exact original Worker rollback while the account remains
                 # unrouted; old Worker ignores the active-runtime pointer.
                 pause = local_maintenance(m.state(key), "pause")
                 assert pause and pause["paused"]
-                runtime_updates.RuntimeUpdates.write(app, runtime_updates.ACTIVE, rollback_pointer)
-                m._restore(key, identity, "/usr/local/bin/worker", old_worker, old_worker_sha)
-                assert m._restart_healthy(key, identity)
-                assert m._sha256(app, "/usr/local/bin/worker") == old_worker_sha
+                dockerfs.write_file(app, runtime_updates.ACTIVE, rollback_pointer)
+                m.restore_worker(key, identity, "/usr/local/bin/worker", old_worker, old_worker_sha)
+                assert m.restart_healthy(key, identity)
+                assert dockerfs.sha256_in(app, "/usr/local/bin/worker") == old_worker_sha
                 assert http("/health")["body"]["cli_version"] == "2.1.302"
                 assert http("/admin/runtime")["status"] == 404
                 report["phases"].append({"name": "explicit-original-worker-rollback", "status": "pass"})

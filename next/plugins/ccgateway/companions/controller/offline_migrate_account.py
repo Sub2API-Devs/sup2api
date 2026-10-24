@@ -16,7 +16,7 @@ import secrets
 import tarfile
 
 import docker
-from manager import container_identity
+from dockerfs import container_identity
 from runtime_updates import release_entry
 
 ROOT = "/opt/ccgateway/cli"

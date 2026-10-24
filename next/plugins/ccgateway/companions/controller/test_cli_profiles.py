@@ -1,9 +1,8 @@
-import json
 import os
 from unittest.mock import patch
-from test_manager import Base, REV, BadRequest
-from manager import container_identity, InvalidCLIProfile
-from cli_profiles import validate_profile, resolve_profile
+from test_manager import Base, BadRequest
+from common import InvalidCLIProfile
+from dockerfs import container_identity
 
 PROFILE = {'version':'2.1.302','request_mode':'direct','disable_auto_update':True}
 

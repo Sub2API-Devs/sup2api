@@ -50,6 +50,11 @@ def allocate_subnet(policy, occupied):
     return ipaddress.ip_network((int(pool.network_address) + index * size, prefix))
 
 
+def first_subnet(network):
+    """The first IPAM subnet of a Docker network."""
+    return ipaddress.ip_network(network.attrs['IPAM']['Config'][0]['Subnet'])
+
+
 def allocate_addresses(subnet, allocation, count=2):
     # Network address, Docker bridge gateway .1, and broadcast are reserved.
     offsets = list(range(2, subnet.num_addresses - 1))

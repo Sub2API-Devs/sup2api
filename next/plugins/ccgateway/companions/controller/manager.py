@@ -17,7 +17,8 @@ Modules (none imports this one, so there is no import cycle):
   shared_egress   the shared Xray gateway; cleanup: orphan inventory
   network / images / cli_profiles / upgrade
 This module: the account runtime lifecycle (Manager) and the entry point
-`python manager.py`.
+`python manager.py`. Tests and the manual scripts import names from the
+module that defines them.
 """
 import contextlib
 import fcntl
@@ -43,23 +44,20 @@ import docker
 import requests
 
 from cli_profiles import validate_profile, resolve_profile
-# Several names below are only re-exported: tests and the manual scripts in
-# this directory (integration_test.py, *_probe.py, offline_migrate_account.py)
-# import them from manager.
-from common import (ACCOUNT_PORT, AUTH_LABEL, CONTROLLER_NAME, DISK_QUOTA_LABEL, DRAFT, IMAGE_LABEL, KEY, KEY_PATTERN,
-                    LABEL, NETWORK_LABEL, REVISION, SHA256_HEX, ActivationFailed, BadRequest, ContainerChanged,
-                    DiskQuotaUnavailable, ImagePullFailed, InvalidCLIProfile, InvalidImage, NotDraft, ResourceInUse,
-                    RuntimeBusy, RuntimeNotFound, UnsupportedContainer, UpgradeInProgress, absent_ok, boot_id, check,
-                    check_business_image, read_json, rfc3339, valid_image, worker_session, write_private,
-                    write_private_bytes)
-from dockerfs import (WORKER_DIR, WORKER_MAX_BYTES, WORKER_NAMES, WORKER_SOURCE, container_identity, image_of,
-                      read_single_file, tar_file, worker_idle, worker_target)
-from http_api import Handler, ROUTE, RUNTIME_ROUTE, UPLOAD_ROUTE, upstream_headers
+from common import (ACCOUNT_PORT, AUTH_LABEL, CONTROLLER_NAME, DISK_QUOTA_LABEL, DRAFT, IMAGE_LABEL, KEY, LABEL,
+                    NETWORK_LABEL, REVISION, ActivationFailed, BadRequest, DiskQuotaUnavailable, ImagePullFailed,
+                    InvalidCLIProfile, NotDraft, OwnershipMismatch, ResourceInUse, RuntimeBusy, absent_ok, boot_id, check,
+                    check_business_image, read_json, resolv_conf, rfc3339, valid_image, worker_request,
+                    worker_session, write_private)
+from dockerfs import container_identity, image_of
+from http_api import Handler
 from images import Uploads
-from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
-from runtime_admin import FEATURES, RuntimeAdmin
+from network import (configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses,
+                     first_subnet)
+from runtime_admin import RuntimeAdmin
+from runtime_updates import RuntimeUpdates
 from shared_egress import OWNER as SHARED_OWNER, SharedEgress
-from worker_update import (WORKER_HEALTH_SCRIPT, WORKER_RESTART_TIMEOUT, WorkerUpdates)
+from worker_update import WorkerUpdates
 
 log = logging.getLogger('ccgateway.controller')
 
@@ -93,6 +91,7 @@ PROXY_RECHECK_SECONDS = 300
 # Container names of a runtime after <prefix>-<key>-: its role, optionally
 # with a suffix (a rollback copy of a manual migration keeps label and volume).
 ACCOUNT_CONTAINER_ROLE = re.compile(r'(?:app|egress)(?:-[A-Za-z0-9_.-]+)?')
+MISSING = object()  # read_json default: the file does not exist
 DEFAULT_ACCOUNT_DISK_GIB = 10
 DEFAULT_ENV_FILE = '/opt/ccgateway-runtime.env'
 DEFAULT_CONTROLLER_NAME = 'ccg-controller'
@@ -153,10 +152,6 @@ def auth_fingerprint(salt, auth):
     return hmac.new(salt.encode(), json.dumps(identity, sort_keys=True).encode(), hashlib.sha256).hexdigest()
 
 
-def first_subnet(network):
-    return ipaddress.ip_network(network.attrs['IPAM']['Config'][0]['Subnet'])
-
-
 class Manager(RuntimeAdmin, WorkerUpdates):
     def __init__(self, root, app_image, egress_image, prefix='ccg', probe_url='https://www.gstatic.com/generate_204'):
         if not re.fullmatch(r'[a-z][a-z0-9-]{0,24}', prefix):
@@ -210,16 +205,17 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     def _restore_runtime_images(self):
         runtime = self.root / 'runtime.json'
-        with contextlib.suppress(FileNotFoundError):
-            try:
-                saved = json.loads(runtime.read_text())
-            except ValueError:
-                saved = None
-            if (isinstance(saved, dict) and saved.get('env') == self.env_images
-                    and valid_image(saved.get('app')) and valid_image(saved.get('egress'))):
-                self.app_image, self.egress_image = saved['app'], saved['egress']
-            else:
-                runtime.unlink()  # stale, old format or damaged: the environment applies
+        try:
+            saved = read_json(runtime, MISSING)
+        except ValueError:
+            saved = None  # damaged
+        if saved is MISSING:
+            return
+        if (isinstance(saved, dict) and saved.get('env') == self.env_images
+                and valid_image(saved.get('app')) and valid_image(saved.get('egress'))):
+            self.app_image, self.egress_image = saved['app'], saved['egress']
+            return
+        runtime.unlink(missing_ok=True)  # stale, old format or damaged: the environment applies
 
     @property
     def shared(self):
@@ -242,20 +238,24 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         return f'{self.prefix}-{check(aid)}-{role}'
 
     def owned(self, aid, role):
+        """The container <prefix>-<key>-<role> (docker.errors.NotFound when
+        absent); OwnershipMismatch when the name is taken by someone else's."""
         c = self.docker.containers.get(self.name(aid, role))
-        if c.labels.get(LABEL) != aid:
-            raise ValueError('container ownership mismatch')
-        return c
+        return self._ours(aid, c, c.labels)
 
     def owned_resource(self, collection, aid, role):
         """The network or volume <prefix>-<key>-<role>, None when absent;
-        ValueError when the name is taken by someone else's resource."""
+        OwnershipMismatch when the name is taken by someone else's resource."""
         try:
             item = collection.get(self.name(aid, role))
         except docker.errors.NotFound:
             return None
-        if (item.attrs.get('Labels') or {}).get(LABEL) != aid:
-            raise ValueError(f'{role} ownership mismatch')
+        return self._ours(aid, item, item.attrs.get('Labels') or {})
+
+    @staticmethod
+    def _ours(aid, item, labels):
+        if labels.get(LABEL) != aid:
+            raise OwnershipMismatch(item.name)
         return item
 
     def state(self, aid):
@@ -269,8 +269,30 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         migration and the proxy recheck read it back."""
         write_private(self.dir(aid) / 'egress-desired.json', json.dumps({k: v for k, v in desired.items() if k != 'auth'}))
 
+    def shared_bindings(self):
+        """The shared gateway's account bindings; {} while it has never been
+        used (without creating its state)."""
+        if not (self.root / 'shared-egress' / 'state.json').exists():
+            return {}
+        return self.shared.data['bindings']
+
+    # Readiness: online[key] is the revision a runtime is ready at, in memory
+    # only; readiness() checks it against the containers.
+
+    def go_offline(self, aid):
+        """Drop readiness; the revision it was online at, or None."""
+        return self.online.pop(aid, None)
+
+    def restore_online(self, aid, revision):
+        """Readiness back at revision after an operation that was abandoned before it changed anything."""
+        if revision:
+            self.online[aid] = revision
+
+    def online_at(self, aid, revision):
+        return bool(revision) and self.online.get(aid) == revision
+
     def drop_readiness(self, aid):
-        self.online.pop(aid, None)
+        self.go_offline(aid)
         self.boots.pop(aid, None)
 
     # Images, one-shot helpers, networks, volumes.
@@ -349,8 +371,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         """Native Docker local-volume project quota. Never replace saved data."""
         volume = self._data_volume(aid, allow_unbounded)
         labels = volume.attrs.get('Labels') or {}
-        if labels.get(LABEL) != aid:
-            raise ValueError('volume ownership mismatch')
+        self._ours(aid, volume, labels)
         size = (volume.attrs.get('Options') or {}).get('size')
         if not size and DISK_QUOTA_LABEL not in labels and allow_unbounded:
             return volume, 0
@@ -429,9 +450,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             if self.owned(aid, 'app').status != 'running':
                 return
             with worker_session() as session:
-                response = session.request('PUT', f'http://{state["app_ip"]}:{ACCOUNT_PORT}/admin/environment',
-                    json=desired, headers={'Authorization': 'Bearer ' + state['admin_key']},
-                    timeout=(3, 10), allow_redirects=False)
+                response = worker_request(session, state, 'PUT', 'admin/environment', json=desired, timeout=(3, 10))
                 if response.status_code != 200:
                     return
                 view = response.json()
@@ -559,7 +578,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     def _remove_replaced(self, aid, state, existing, policy):
         if existing:
-            self.online.pop(aid, None)
+            self.go_offline(aid)
             absent_ok(existing.remove, force=True)
         if state and state.get('network') == policy:
             return
@@ -584,7 +603,9 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     def _record_runtime(self, aid, state, salt, policy, addresses, plan):
         d = self.dir(aid)
-        write_private(d / 'resolv.conf', f'nameserver {addresses.gateway_ip}\noptions timeout:2 attempts:2\n')
+        # A new file (new inode): only containers created after this see it.
+        # SharedEgress.resolv writes in place instead (already bind-mounted).
+        write_private(d / 'resolv.conf', resolv_conf(addresses.gateway_ip))
         # resolv.conf contains only the ordinary internal DNS address.
         os.chmod(d / 'resolv.conf', 0o644)
         state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': salt,
@@ -629,16 +650,29 @@ class Manager(RuntimeAdmin, WorkerUpdates):
     # Apply: PUT /accounts/<key>/config.
 
     def apply(self, aid, desired):
+        """PUT config. A refused or failed configuration also drops readiness:
+        the runtime is not at what the core asked for."""
         with self.guard(aid):
-            revision, policy, direct = self._validate_desired(aid, desired)
-            state = self.state(aid)
-            if state:
-                self.save_desired(aid, desired)
-            if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
-                return self.block(aid)
-            if state and state.get('egress_backend') == 'shared_xray':
-                return self._apply_shared(aid, state, desired, policy, revision)
-            return self._apply_dedicated(aid, state, desired, policy, revision, direct)
+            try:
+                return self._apply(aid, desired)
+            except Exception:
+                self.go_offline(aid)
+                raise
+
+    def _apply(self, aid, desired):
+        revision, policy, direct = self._validate_desired(aid, desired)
+        state = self.state(aid)
+        if state:
+            self.save_desired(aid, desired)
+        if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
+            return self.block(aid)
+        if state and state.get('egress_backend') == 'shared_xray':
+            return self._apply_shared(aid, state, desired, policy, revision)
+        return self._apply_dedicated(aid, state, desired, policy, revision, direct)
+
+    def update_runtime(self, aid, desired):
+        """POST /accounts/<key>/worker with components: the paired Worker+CLI activation."""
+        return RuntimeUpdates(self).update(aid, desired)
 
     def _validate_desired(self, aid, desired):
         if (self.state(aid) or {}).get('migration_failed'):
@@ -665,7 +699,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             raise BadRequest('migrate back before changing network allocation')
         if state.get('egress_migration') and state['egress_migration'].get('phase') == 'failed':
             raise BadRequest('resume or rollback failed egress migration')
-        if self.public(aid)['revision'] == revision:
+        if self.readiness(aid, state) == revision:
             return self.public(aid)
         self.shared.remove(aid)
         state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
@@ -681,18 +715,16 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
         if not had_state:
             self.save_desired(aid, desired)
-        if self.public(aid)['revision'] == revision:
-            app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
-            if app.status == 'running' and egress.status == 'running':
-                return self.public(aid)
-        self.online.pop(aid, None)
+        if self.readiness(aid, state) == revision:
+            return self.public(aid)  # readiness checked that app and egress still run
+        self.go_offline(aid)
         state['status'] = 'syncing'
         self.save(aid, state)
         egress = self._egress(aid, state, desired, direct, egress_image, old is not None)
         app = self.owned(aid, 'app')
         if app.status != 'running':
             app.start()
-        self._activate(aid, state, app, egress, revision)
+        self.activate(aid, state, app, egress, revision)
         return self.public(aid)
 
     def _egress(self, aid, state, desired, direct, egress_image, had_egress):
@@ -741,7 +773,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         Docker gives it a fresh namespace."""
         self.helper(aid, app, NFT_REPLACE + f'ip route replace default via {gateway_ip}', business_rules(gateway_ip))
 
-    def _activate(self, aid, state, app, egress, revision):
+    def activate(self, aid, state, app, egress, revision):
         """Business firewall and default route, egress readiness, proxied probe,
         then readiness at revision. Shared by apply and the in-place worker
         update (a container restart rebuilds the account network namespace)."""
@@ -768,7 +800,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         self.online[aid] = revision
 
     def block(self, aid):
-        self.online.pop(aid, None)
+        self.go_offline(aid)
         state = self.state(aid)
         if state:
             for role in ('app', 'egress'):
@@ -790,15 +822,16 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         Every container of the runtime goes, also copies a manual migration
         left behind (<prefix>-<key>-app-rollback-<tag>, same label and volume),
         which used to keep the volume busy forever. Everything is checked
-        before anything is removed: a same-name resource of someone else is a
-        ValueError, a container outside the runtime that still uses one of its
-        networks or the volume to be removed is ResourceInUse (409)."""
+        before anything is removed: a same-name resource of someone else is
+        OwnershipMismatch, a container outside the runtime that still uses one
+        of its networks or the volume to be removed is ResourceInUse (both
+        409 resource_in_use)."""
         check(aid)
         if not DRAFT.fullmatch(aid) and not account:
             raise NotDraft('only draft runtimes can be deleted')
         remove_volume = not account or purge
         with self.guard(aid):
-            containers, networks, volume = self._deletion_plan(aid, remove_volume)
+            plan = self._deletion_plan(aid, remove_volume)
             self._detach_shared(aid)
             state = self.state(aid)
             if account and not purge and state:
@@ -806,7 +839,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                 backup.mkdir(mode=0o700, exist_ok=True)
                 write_private(backup / (aid + '.json'), json.dumps(state))
             self.drop_readiness(aid)
-            removed = self._remove_resources(aid, containers, networks, volume if remove_volume else None)
+            removed = self._remove_resources(aid, plan)
             d = self.dir(aid)
             if d.is_dir() and not d.is_symlink():
                 shutil.rmtree(d)
@@ -815,21 +848,25 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                     (self.root / 'backups' / (aid + '.json')).unlink()
         return {'deleted': True, 'removed': removed}
 
-    def _remove_resources(self, aid, containers, networks, volume):
+    def _remove_resources(self, aid, plan):
         """Containers first (they hold the networks and the volume), then the
-        networks, then the volume when given (retired account data is kept for
-        manual recovery unless purged; a draft's volume always goes)."""
+        networks, then the volume when planned (retired account data is kept
+        for manual recovery unless purged; a draft's volume always goes). A
+        resource that is gone already is skipped."""
         removed = {'containers': [], 'networks': [], 'volume': False}
-        for container in containers:
+        for container in plan.containers:
             if absent_ok(container.remove, force=True):
                 log.info('delete key=%s removed container %s', aid, container.name)
                 removed['containers'].append(container.name)
-        for network in networks:
-            self._disconnect_shared_gateway(network)
+        for network in plan.networks:
+            if not absent_ok(network.reload):
+                continue
+            if plan.gateway in (network.attrs.get('Containers') or {}):
+                absent_ok(network.disconnect, plan.gateway, force=True)
             if absent_ok(network.remove):
                 removed['networks'].append(network.name)
-        if volume is not None:
-            removed['volume'] = absent_ok(volume.remove, force=True)
+        if plan.volume is not None:
+            removed['volume'] = absent_ok(plan.volume.remove, force=True)
         return removed
 
     def account_containers(self, aid):
@@ -848,37 +885,52 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         return name.startswith(head) and bool(ACCOUNT_CONTAINER_ROLE.fullmatch(name[len(head):]))
 
     def _deletion_plan(self, aid, remove_volume):
-        """(containers, networks, volume) of the runtime; nothing is changed."""
+        """What delete removes: containers, networks, the volume (None when
+        kept) and the shared gateway's id (kept, only disconnected). Nothing
+        is changed here."""
         for role in ('app', 'egress'):
             absent_ok(self.owned, aid, role)  # a same-name foreign container raises
         containers = self.account_containers(aid)
         networks = [n for n in (self.owned_resource(self.docker.networks, aid, role) for role in ('net', 'uplink')) if n]
-        volume = self.owned_resource(self.docker.volumes, aid, 'data')
+        volume = self.owned_resource(self.docker.volumes, aid, 'data')  # a foreign one raises, even when kept
+        volume = volume if remove_volume else None
         ours, gateway = {c.id for c in containers}, self._shared_gateway_id()
         foreign = set()
         for network in networks:
             foreign.update(endpoint.get('Name') or cid for cid, endpoint in (network.attrs.get('Containers') or {}).items()
                            if cid not in ours and cid != gateway)
-        if volume is not None and remove_volume:
-            for c in self.docker.containers.list(all=True, filters={'volume': volume.name}, ignore_removed=True):
-                if c.id in ours:
-                    continue
-                if self._stale_helper(c):
-                    containers.append(c)  # this controller's own leftover one-shot helper
-                else:
-                    foreign.add(c.name)
+        users = self.docker.containers.list(all=True, filters={'volume': volume.name}, ignore_removed=True) if volume else []
+        foreign.update(c.name for c in users if c.id not in ours and not self._stale_helper(c))
         if foreign:
             raise ResourceInUse(foreign)
-        return containers, networks, volume
+        # This controller's own leftover one-shot helpers go too, first (they
+        # depend on the others): on the volume, in a container's network
+        # namespace or on the runtime directory.
+        helpers = {c.id: c for c in users + self._namespace_helpers(aid, ours) if c.id not in ours and self._stale_helper(c)}
+        return SimpleNamespace(containers=list(helpers.values()) + containers, networks=networks, volume=volume,
+                               gateway=gateway)
 
     def _stale_helper(self, container):
         """A one-shot helper of this controller that never ran or has ended
         (older controllers left failed ones behind in "Created")."""
         return container.name.startswith(f'{self.prefix}-oneshot-') and container.status in ('created', 'exited', 'dead')
 
+    def _namespace_helpers(self, aid, ours):
+        """This controller's ended one-shot helpers that joined the network
+        namespace of a container in ours (helper(), SharedEgress.network_idle)
+        or mounted the runtime directory or a file in it (sing-box check). A
+        running one is left alone: it ends by itself."""
+        d = str(self.dir(aid))
+
+        def uses_runtime(c):
+            joined = ((c.attrs.get('HostConfig') or {}).get('NetworkMode') or '').removeprefix('container:')
+            sources = [m.get('Source') or '' for m in c.attrs.get('Mounts') or []]
+            return joined in ours or any(s == d or s.startswith(d + '/') for s in sources)
+        found = self.docker.containers.list(all=True, filters={'name': f'{self.prefix}-oneshot-'}, ignore_removed=True)
+        return [c for c in found if self._stale_helper(c) and uses_runtime(c)]
+
     def _detach_shared(self, aid):
-        if ((self.state(aid) or {}).get('egress_backend') == 'shared_xray'
-                or ((self.root / 'shared-egress' / 'state.json').exists() and aid in self.shared.data['bindings'])):
+        if (self.state(aid) or {}).get('egress_backend') == 'shared_xray' or aid in self.shared_bindings():
             self.shared.remove(aid, disconnect=True)
 
     def _shared_gateway_id(self):
@@ -889,12 +941,6 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         except docker.errors.NotFound:
             return None
         return gateway.id if gateway.labels.get(SHARED_OWNER) == self.prefix else None
-
-    def _disconnect_shared_gateway(self, network):
-        gateway = self._shared_gateway_id()
-        network.reload()
-        if gateway and gateway in (network.attrs.get('Containers') or {}):
-            absent_ok(network.disconnect, gateway, force=True)
 
     # Readiness and the request path.
 
@@ -930,14 +976,19 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             if state.get('egress_backend') == 'shared_xray':
                 containers = [self.owned(aid, 'app'), self.shared.container()]
                 if not self.shared.healthy(aid, state):
-                    self.online.pop(aid, None)
+                    self.go_offline(aid)
             else:
                 containers = [self.owned(aid, role) for role in ('app', 'egress')]
             if any(c.status != 'running' for c in containers) or tuple(boot_id(c) for c in containers) != self.boots.get(aid):
-                self.online.pop(aid, None)
+                self.go_offline(aid)
         except docker.errors.NotFound:
-            self.online.pop(aid, None)
+            self.go_offline(aid)
         return self.online.get(aid, '')
+
+    def is_ready(self, aid, state):
+        """Whether the containers are online at the revision state records (public status 'ready')."""
+        revision = state.get('revision')
+        return bool(revision) and self.readiness(aid, state) == revision
 
     def public(self, aid):
         state = self.state(aid) or {}
@@ -971,15 +1022,23 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         finally:
             guard.release()
 
-    def connection(self, aid, revision):
-        # Private control-plane response, never a public account/UI payload.
-        # The same check guards the byte tunnel (GET .../tunnel).
+    def ready_state(self, aid, revision):
+        """The runtime's state when it is online at the caller's revision,
+        else None. The request-path gate of connection, tunnel and the admin
+        pass-through (request_guard: never waits longer than the core)."""
         with self.request_guard(aid):
             state = self.state(aid)
             if not state or not revision or self.readiness(aid, state) != revision:
                 return None
-            return {'app_ip': state['app_ip'], 'port': ACCOUNT_PORT,
-                    'api_key': state['api_key'], 'revision': revision}
+            return state
+
+    def connection(self, aid, revision):
+        # Private control-plane response, never a public account/UI payload.
+        # The same check guards the byte tunnel (GET .../tunnel).
+        state = self.ready_state(aid, revision)
+        if state is None:
+            return None
+        return {'app_ip': state['app_ip'], 'port': ACCOUNT_PORT, 'api_key': state['api_key'], 'revision': revision}
 
     # Proxy host names that moved (audit B9).
 
@@ -1005,8 +1064,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     def _pinned_address(self, aid, state):
         if state.get('egress_backend') == 'shared_xray':
-            binding = self.shared.data['bindings'].get(aid) or {}
-            endpoint = (self.shared.data['nodes'].get(binding.get('tag')) or {}).get('endpoint')
+            endpoint = self.shared.endpoint(aid)
             return endpoint[0] if endpoint else None
         return json.loads((self.dir(aid) / 'sing-box.json').read_text())['outbounds'][0]['server']
 

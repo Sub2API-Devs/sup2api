@@ -22,9 +22,8 @@ import urllib.request
 
 import docker
 
-from common import CONTROLLER_NAME, valid_image
+from common import CONTROLLER_NAME, DOCKER_SOCKET, valid_image
 
-DOCKER_SOCKET = '/var/run/docker.sock'
 HEALTH_WAIT = 60
 HEALTH_INTERVAL = 2
 

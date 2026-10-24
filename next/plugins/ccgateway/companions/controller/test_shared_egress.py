@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from manager import BadRequest
+from common import BadRequest
 from shared_egress import node, routes, firewall, inbound, SHARED, LEGACY
 from test_manager import REV
 from test_worker import WorkerBase
