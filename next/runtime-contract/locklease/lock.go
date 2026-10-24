@@ -62,43 +62,55 @@ func KeepLock(ctx context.Context, lk Lock) (context.Context, context.CancelFunc
 			if !wait(left / 2) {
 				return
 			}
-			for {
-				// An extend still in flight when the validity runs out is
-				// too late whatever it returns: the lock may already be
-				// someone else's. Bounding the call by until is what makes
-				// "cancelled as soon as Until passes" hold when Redis hangs.
-				ectx, ecancel := context.WithDeadline(lctx, until)
-				ok, err := lk.Extend(ectx)
-				ecancel()
-				if ok {
-					break
-				}
-				if lctx.Err() != nil {
-					return
-				}
-				if err == nil {
-					cancel(ErrLockLost)
-					return
-				}
-				// Unknown outcome: retry while the lock is still ours, but
-				// never sleep past its validity.
-				left := time.Until(until)
-				if left <= 0 {
-					cancel(ErrLockLost)
-					return
-				}
-				if !wait(min(max(left/4, 50*time.Millisecond), left)) {
-					return
-				}
-				if time.Until(until) <= 0 {
-					cancel(ErrLockLost)
-					return
-				}
+			renewed, lost := renewOnce(lctx, lk, until, wait)
+			if lost {
+				cancel(ErrLockLost)
+				return
+			}
+			if !renewed {
+				return
 			}
 		}
 	}()
 	return lctx, func() {
 		cancel(context.Canceled)
 		<-done
+	}
+}
+
+// renewOnce extends lk, retrying transient Extend errors while until still
+// bounds the lock. renewed reports a successful extension; lost reports that the
+// lock is gone and must cancel the guarded context. Neither being set means the
+// caller's context ended first and renewal should simply stop.
+func renewOnce(lctx context.Context, lk Lock, until time.Time, wait func(time.Duration) bool) (renewed, lost bool) {
+	for {
+		// An extend still in flight when the validity runs out is too late
+		// whatever it returns: the lock may already be someone else's.
+		// Bounding the call by until is what makes "cancelled as soon as
+		// Until passes" hold when Redis hangs.
+		ectx, ecancel := context.WithDeadline(lctx, until)
+		ok, err := lk.Extend(ectx)
+		ecancel()
+		if ok {
+			return true, false
+		}
+		if lctx.Err() != nil {
+			return false, false
+		}
+		if err == nil {
+			return false, true
+		}
+		// Unknown outcome: retry while the lock is still ours, but never
+		// sleep past its validity.
+		left := time.Until(until)
+		if left <= 0 {
+			return false, true
+		}
+		if !wait(min(max(left/4, 50*time.Millisecond), left)) {
+			return false, false
+		}
+		if time.Until(until) <= 0 {
+			return false, true
+		}
 	}
 }

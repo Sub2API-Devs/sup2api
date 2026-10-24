@@ -238,10 +238,6 @@ func parseAssistantContent(raw json.RawMessage) (string, error) {
 	}
 
 	var b strings.Builder
-	write := func(v string) error {
-		_, err := b.WriteString(v)
-		return err
-	}
 	for _, p := range parts {
 		typ, _ := p["type"].(string)
 		text, _ := p["text"].(string)
@@ -249,37 +245,30 @@ func parseAssistantContent(raw json.RawMessage) (string, error) {
 
 		switch typ {
 		case "thinking", "reasoning":
+			// A reasoning part carries its text in thinking, or in text when the
+			// producer used a plain text part. thinking wins when both are set.
+			if thinking == "" {
+				thinking = text
+			}
 			if thinking != "" {
-				if err := write("<thinking>"); err != nil {
-					return "", err
-				}
-				if err := write(thinking); err != nil {
-					return "", err
-				}
-				if err := write("</thinking>"); err != nil {
-					return "", err
-				}
-			} else if text != "" {
-				if err := write("<thinking>"); err != nil {
-					return "", err
-				}
-				if err := write(text); err != nil {
-					return "", err
-				}
-				if err := write("</thinking>"); err != nil {
-					return "", err
-				}
+				writeThinkingTag(&b, thinking)
 			}
 		default:
 			if text != "" {
-				if err := write(text); err != nil {
-					return "", err
-				}
+				b.WriteString(text)
 			}
 		}
 	}
 
 	return b.String(), nil
+}
+
+// writeThinkingTag wraps reasoning text in the tag the Responses upstream reads
+// it back from. strings.Builder never fails, so it needs no error return.
+func writeThinkingTag(b *strings.Builder, text string) {
+	b.WriteString("<thinking>")
+	b.WriteString(text)
+	b.WriteString("</thinking>")
 }
 
 // chatToolToResponses converts a tool result message (role=tool) into a

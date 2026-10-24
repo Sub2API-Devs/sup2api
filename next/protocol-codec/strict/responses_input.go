@@ -100,27 +100,6 @@ func (p *Plan) responsesInput(in, out object) error {
 	if e != nil {
 		return e
 	}
-	role := ""
-	blocks := []any{}
-	flush := func(path string) error {
-		if role == "" {
-			return nil
-		}
-		e := c.add(role, blocks, path)
-		role = ""
-		blocks = nil
-		return e
-	}
-	appendRole := func(next string, b []any, path string) error {
-		if role != "" && role != next {
-			if e := flush(path); e != nil {
-				return e
-			}
-		}
-		role = next
-		blocks = append(blocks, b...)
-		return nil
-	}
 	for i, x := range a {
 		path := pos("input", i)
 		item, e := asObject(x, path)
@@ -134,130 +113,155 @@ func (p *Plan) responsesInput(in, out object) error {
 			}
 			typ = "message"
 		}
-		switch typ {
-		case "message":
-			if e = keys(item, path, "type", "role", "content", "id", "status"); e != nil {
-				return e
-			}
-			r, e := requiredString(item, "role", path)
-			if e != nil {
-				return e
-			}
-			if e = validateItemIdentity(item, path); e != nil {
-				return e
-			}
-			if r == "system" {
-				if i != 0 || c.system != nil {
-					return fail(path, "system position/conflict cannot be preserved")
-				}
-				b, e := textParts(item["content"], path+".content", false)
-				if e != nil {
-					return e
-				}
-				c.system = b
-				continue
-			}
-			if r != "user" && r != "assistant" {
-				return fail(path+".role", "role has no verified equivalent")
-			}
-			content := item["content"]
-			if r == "assistant" {
-				var err error
-				content, err = restoreRefusalParts(content, path+".content")
-				if err != nil {
-					return err
-				}
-			}
-			b, e := textParts(content, path+".content", r == "user")
-			if e != nil {
-				return e
-			}
-			if e = appendRole(r, b, path); e != nil {
-				return e
-			}
-		case "function_call":
-			if e = keys(item, path, "type", "id", "status", "call_id", "name", "arguments"); e != nil {
-				return e
-			}
-			if e = validateItemIdentity(item, path); e != nil {
-				return e
-			}
-			id, e := requiredString(item, "call_id", path)
-			if e != nil {
-				return e
-			}
-			b, e := functionBlock(item, id, path)
-			if e != nil {
-				return e
-			}
-			if e = appendRole("assistant", []any{b}, path); e != nil {
-				return e
-			}
-		case "function_call_output":
-			if e = keys(item, path, "type", "id", "status", "call_id", "output"); e != nil {
-				return e
-			}
-			if e = validateItemIdentity(item, path); e != nil {
-				return e
-			}
-			id, e := requiredString(item, "call_id", path)
-			if e != nil {
-				return e
-			}
-			b, e := textParts(item["output"], path+".output", false)
-			if e != nil {
-				return e
-			}
-			if e = appendRole("user", []any{object{"type": "tool_result", "tool_use_id": id, "content": b}}, path); e != nil {
-				return e
-			}
-		case "reasoning":
-			if e = keys(item, path, "type", "id", "status", "summary", "encrypted_content"); e != nil {
-				return e
-			}
-			if e = validateItemIdentity(item, path); e != nil {
-				return e
-			}
-			s, e := requiredString(item, "encrypted_content", path)
-			if e != nil {
-				return e
-			}
-			b, e := decodeThinking(s, path+".encrypted_content")
-			if e != nil {
-				return e
-			}
-			if v, ok := item["summary"]; ok {
-				parts, e := list(v, path+".summary")
-				if e != nil {
-					return e
-				}
-				if len(parts) > 1 {
-					return fail(path+".summary", "summary does not match opaque block")
-				}
-				if len(parts) == 1 {
-					o, e := asObject(parts[0], path+".summary[0]")
-					if e != nil {
-						return e
-					}
-					if e = keys(o, path+".summary[0]", "type", "text"); e != nil {
-						return e
-					}
-					if o["type"] != "summary_text" || o["text"] != b["thinking"] {
-						return fail(path+".summary", "summary differs from bound reasoning")
-					}
-				}
-			}
-			if e = appendRole("assistant", []any{b}, path); e != nil {
-				return e
-			}
-		default:
-			return fail(path+".type", "input item has no verified equivalent")
+		if e = p.inputItem(c, typ, item, path, i); e != nil {
+			return e
 		}
 	}
-	if e = flush("input"); e != nil {
+	if e = c.flushRole("input"); e != nil {
 		return e
 	}
 	return c.finish(out)
+}
+
+// inputItem validates one Responses input item and appends its blocks to the
+// conversation being accumulated.
+func (p *Plan) inputItem(c *conversation, typ string, item object, path string, index int) error {
+	switch typ {
+	case "message":
+		return p.inputMessageItem(c, item, path, index)
+	case "function_call":
+		return p.inputFunctionCallItem(c, item, path)
+	case "function_call_output":
+		return p.inputFunctionCallOutputItem(c, item, path)
+	case "reasoning":
+		return p.inputReasoningItem(c, item, path)
+	default:
+		return fail(path+".type", "input item has no verified equivalent")
+	}
+}
+
+func (p *Plan) inputMessageItem(c *conversation, item object, path string, index int) error {
+	if e := keys(item, path, "type", "role", "content", "id", "status"); e != nil {
+		return e
+	}
+	r, e := requiredString(item, "role", path)
+	if e != nil {
+		return e
+	}
+	if e = validateItemIdentity(item, path); e != nil {
+		return e
+	}
+	if r == "system" {
+		if index != 0 || c.system != nil {
+			return fail(path, "system position/conflict cannot be preserved")
+		}
+		b, e := textParts(item["content"], path+".content", false)
+		if e != nil {
+			return e
+		}
+		c.system = b
+		return nil
+	}
+	if r != "user" && r != "assistant" {
+		return fail(path+".role", "role has no verified equivalent")
+	}
+	content := item["content"]
+	if r == "assistant" {
+		content, e = restoreRefusalParts(content, path+".content")
+		if e != nil {
+			return e
+		}
+	}
+	b, e := textParts(content, path+".content", r == "user")
+	if e != nil {
+		return e
+	}
+	return c.addRole(r, b, path)
+}
+
+func (p *Plan) inputFunctionCallItem(c *conversation, item object, path string) error {
+	if e := keys(item, path, "type", "id", "status", "call_id", "name", "arguments"); e != nil {
+		return e
+	}
+	if e := validateItemIdentity(item, path); e != nil {
+		return e
+	}
+	id, e := requiredString(item, "call_id", path)
+	if e != nil {
+		return e
+	}
+	b, e := functionBlock(item, id, path)
+	if e != nil {
+		return e
+	}
+	return c.addRole("assistant", []any{b}, path)
+}
+
+func (p *Plan) inputFunctionCallOutputItem(c *conversation, item object, path string) error {
+	if e := keys(item, path, "type", "id", "status", "call_id", "output"); e != nil {
+		return e
+	}
+	if e := validateItemIdentity(item, path); e != nil {
+		return e
+	}
+	id, e := requiredString(item, "call_id", path)
+	if e != nil {
+		return e
+	}
+	b, e := textParts(item["output"], path+".output", false)
+	if e != nil {
+		return e
+	}
+	return c.addRole("user", []any{object{"type": "tool_result", "tool_use_id": id, "content": b}}, path)
+}
+
+func (p *Plan) inputReasoningItem(c *conversation, item object, path string) error {
+	if e := keys(item, path, "type", "id", "status", "summary", "encrypted_content"); e != nil {
+		return e
+	}
+	if e := validateItemIdentity(item, path); e != nil {
+		return e
+	}
+	s, e := requiredString(item, "encrypted_content", path)
+	if e != nil {
+		return e
+	}
+	b, e := decodeThinking(s, path+".encrypted_content")
+	if e != nil {
+		return e
+	}
+	if v, ok := item["summary"]; ok {
+		if e = inputSummaryMatchesSummary(v, b, path); e != nil {
+			return e
+		}
+	}
+	return c.addRole("assistant", []any{b}, path)
+}
+
+// inputSummaryMatchesSummary checks that a summary, when present, is the single
+// summary_text that mirrors the bound thinking block.
+func inputSummaryMatchesSummary(summary any, block object, path string) error {
+	parts, e := list(summary, path+".summary")
+	if e != nil {
+		return e
+	}
+	if len(parts) > 1 {
+		return fail(path+".summary", "summary does not match opaque block")
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	o, e := asObject(parts[0], path+".summary[0]")
+	if e != nil {
+		return e
+	}
+	if e = keys(o, path+".summary[0]", "type", "text"); e != nil {
+		return e
+	}
+	if o["type"] != "summary_text" || o["text"] != block["thinking"] {
+		return fail(path+".summary", "summary differs from bound reasoning")
+	}
+	return nil
 }
 
 func restoreRefusalParts(value any, path string) (any, error) {

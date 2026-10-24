@@ -95,7 +95,9 @@ func TestPrepareRejectsBadDigestBeforeInstalling(t *testing.T) {
 }
 func TestDownloadDoesNotFollowRedirect(t *testing.T) {
 	m := Manager{AllowHTTP: true}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "http://127.0.0.1:1/private", 302) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1:1/private", http.StatusFound)
+	}))
 	defer server.Close()
 	if _, e := m.FetchManifest(context.Background(), server.URL); e == nil || !strings.Contains(e.Error(), "redirect") {
 		t.Fatalf("unexpected redirect outcome %v", e)

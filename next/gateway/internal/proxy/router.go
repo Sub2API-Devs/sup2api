@@ -100,9 +100,6 @@ func keepAliveTransport(c *tls.Config) *http.Transport {
 	}
 }
 
-func singleSendTransport(c *tls.Config) *http.Transport {
-	return &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext, TLSClientConfig: c, TLSHandshakeTimeout: 15 * time.Second, DisableKeepAlives: true, DisableCompression: true, ForceAttemptHTTP2: false, TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{}, ResponseHeaderTimeout: 0}
-}
 func (r *Router) SetRoute(v Route) error {
 	if v.Mode != "maintenance" && v.Mode != "candidate" && v.Mode != "local-serving" && v.Mode != "forward-only" {
 		return errors.New("invalid route mode")
@@ -374,7 +371,7 @@ func (r *Router) clientScheme(q *http.Request) string {
 }
 func unavailable(w http.ResponseWriter) {
 	w.Header().Set("Retry-After", "1")
-	http.Error(w, "temporarily unavailable", 503)
+	http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
 }
 func ServerTLS(cert tls.Certificate, ca *x509.CertPool) *tls.Config {
 	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}, NextProtos: []string{"http/1.1"}}

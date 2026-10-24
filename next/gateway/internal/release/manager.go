@@ -259,16 +259,20 @@ func (m *Manager) prepare(ctx context.Context, s rc.SignedManifest, bundleURL st
 func validPath(v string) bool {
 	return v != "" && len(v) <= 4096 && v != "." && path.Clean(v) == v && !strings.HasPrefix(v, "/") && !strings.Contains(v, "\\") && !strings.Contains(v, ":") && v != ".." && !strings.HasPrefix(v, "../")
 }
-func extract(ctx context.Context, blob, root string, files []rc.File) error {
+
+// validateDeclarations checks the signed file list before any archive byte is
+// read, and returns the per-path declarations plus the declared directory set.
+// Every condition here is a security boundary: do not relax it.
+func validateDeclarations(files []rc.File) (map[string]rc.File, map[string]bool, error) {
 	declared := map[string]rc.File{}
 	directories := map[string]bool{}
 	var total int64
 	for _, f := range files {
 		if !validPath(f.Path) || !ValidDigest(f.SHA256) || f.Size < 0 || f.Size > 16<<30 || f.Mode&^0777 != 0 {
-			return errors.New("invalid file declaration")
+			return nil, nil, errors.New("invalid file declaration")
 		}
 		if _, ok := declared[f.Path]; ok {
-			return errors.New("duplicate file declaration")
+			return nil, nil, errors.New("duplicate file declaration")
 		}
 		declared[f.Path] = f
 		for dir := path.Dir(f.Path); dir != "."; dir = path.Dir(dir) {
@@ -276,8 +280,16 @@ func extract(ctx context.Context, blob, root string, files []rc.File) error {
 		}
 		total += f.Size
 		if total > 64<<30 {
-			return errors.New("release unpacked size exceeds limit")
+			return nil, nil, errors.New("release unpacked size exceeds limit")
 		}
+	}
+	return declared, directories, nil
+}
+
+func extract(ctx context.Context, blob, root string, files []rc.File) error {
+	declared, directories, err := validateDeclarations(files)
+	if err != nil {
+		return err
 	}
 	f, e := os.Open(blob)
 	if e != nil {
@@ -538,37 +550,13 @@ func (m *Manager) GC(ctx context.Context) error {
 	}
 
 	// Remove old release directories.
-	entries, err := os.ReadDir(filepath.Join(m.Root, "releases"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := pruneDir(ctx, filepath.Join(m.Root, "releases"), keep, true); err != nil {
 		return err
-	}
-	for _, e := range entries {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if !e.IsDir() || !ValidDigest(e.Name()) || keep[e.Name()] {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(m.Root, "releases", e.Name())); err != nil {
-			return err
-		}
 	}
 
 	// Remove old manifests.
-	entries, err = os.ReadDir(filepath.Join(m.Root, "manifests"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := pruneDir(ctx, filepath.Join(m.Root, "manifests"), keep, false); err != nil {
 		return err
-	}
-	for _, e := range entries {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if e.IsDir() || !ValidDigest(e.Name()) || keep[e.Name()] {
-			continue
-		}
-		if err := os.Remove(filepath.Join(m.Root, "manifests", e.Name())); err != nil {
-			return err
-		}
 	}
 
 	// Find which blobs are still needed.
@@ -594,7 +582,15 @@ func (m *Manager) GC(ctx context.Context) error {
 	}
 
 	// Remove old blobs.
-	entries, err = os.ReadDir(filepath.Join(m.Root, "blobs", "sha256"))
+	return pruneDir(ctx, filepath.Join(m.Root, "blobs", "sha256"), keepBlobs, false)
+}
+
+// pruneDir removes every digest-named entry of dir that is not in keep. With
+// wantDir it only touches directories (removing them recursively); otherwise it
+// only touches files. A missing directory is not an error, and cancellation is
+// observed between entries.
+func pruneDir(ctx context.Context, dir string, keep map[string]bool, wantDir bool) error {
+	entries, err := os.ReadDir(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -602,14 +598,18 @@ func (m *Manager) GC(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if e.IsDir() || !ValidDigest(e.Name()) || keepBlobs[e.Name()] {
+		if e.IsDir() != wantDir || !ValidDigest(e.Name()) || keep[e.Name()] {
 			continue
 		}
-		if err := os.Remove(filepath.Join(m.Root, "blobs", "sha256", e.Name())); err != nil {
+		if wantDir {
+			err = os.RemoveAll(filepath.Join(dir, e.Name()))
+		} else {
+			err = os.Remove(filepath.Join(dir, e.Name()))
+		}
+		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 

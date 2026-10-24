@@ -283,14 +283,30 @@ var keyMarker = regexp.MustCompile(`-(status|delay)-(\d+)`)
 func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 	b := behaviour{usage: DefaultUsage, chunkDelay: 20 * time.Millisecond, text: "Hello from mock-upstream."}
 	key := requestKey(r)
-	// 4. body metadata (lowest precedence, applied first)
+	// Precedence, lowest applied first: body metadata < key markers < control
+	// rule < explicit headers.
+	applyBodyMeta(meta, &b)
+	applyKeyMarkers(key, &b)
+	s.mu.Lock()
+	applyRule(s.rules, key, &b)
+	s.mu.Unlock()
+	applyHeaderOverrides(r, &b)
+	return b
+}
+
+// applyBodyMeta applies the lowest-precedence overrides from body metadata.
+func applyBodyMeta(meta map[string]any, b *behaviour) {
 	if v, ok := meta["mock_status"].(float64); ok {
 		b.status = int(v)
 	}
 	if v, ok := meta["mock_delay_ms"].(float64); ok {
 		b.delay = time.Duration(v) * time.Millisecond
 	}
-	// 3. markers in the key
+}
+
+// applyKeyMarkers applies status/delay markers embedded in the API key, e.g.
+// "sk-x-status-500-delay-100".
+func applyKeyMarkers(key string, b *behaviour) {
 	for _, m := range keyMarker.FindAllStringSubmatch(key, -1) {
 		n, _ := strconv.Atoi(m[2])
 		if m[1] == "status" {
@@ -299,33 +315,40 @@ func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 			b.delay = time.Duration(n) * time.Millisecond
 		}
 	}
-	// 2. control rule
-	s.mu.Lock()
-	if rule := s.rules[key]; rule != nil {
-		if rule.Status != 0 {
-			b.status = rule.Status
-		}
-		if rule.DelayMS != 0 {
-			b.delay = time.Duration(rule.DelayMS) * time.Millisecond
-		}
-		if rule.ChunkDelayMS != 0 {
-			b.chunkDelay = time.Duration(rule.ChunkDelayMS) * time.Millisecond
-		}
-		if rule.Usage != nil {
-			b.usage = *rule.Usage
-		}
-		if rule.Text != "" {
-			b.text = rule.Text
-		}
-		if rule.Remaining > 0 {
-			rule.Remaining--
-			if rule.Remaining == 0 {
-				delete(s.rules, key)
-			}
+}
+
+// applyRule applies the control rule stored for key, consuming one use of a
+// rule that has a remaining count. The caller holds the server lock.
+func applyRule(rules map[string]*controlRule, key string, b *behaviour) {
+	rule := rules[key]
+	if rule == nil {
+		return
+	}
+	if rule.Status != 0 {
+		b.status = rule.Status
+	}
+	if rule.DelayMS != 0 {
+		b.delay = time.Duration(rule.DelayMS) * time.Millisecond
+	}
+	if rule.ChunkDelayMS != 0 {
+		b.chunkDelay = time.Duration(rule.ChunkDelayMS) * time.Millisecond
+	}
+	if rule.Usage != nil {
+		b.usage = *rule.Usage
+	}
+	if rule.Text != "" {
+		b.text = rule.Text
+	}
+	if rule.Remaining > 0 {
+		rule.Remaining--
+		if rule.Remaining == 0 {
+			delete(rules, key)
 		}
 	}
-	s.mu.Unlock()
-	// 1. explicit headers
+}
+
+// applyHeaderOverrides applies the highest-precedence x-mock-* headers.
+func applyHeaderOverrides(r *http.Request, b *behaviour) {
 	if v := r.Header.Get("x-mock-status"); v != "" {
 		b.status, _ = strconv.Atoi(v)
 	}
@@ -358,7 +381,6 @@ func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 			}
 		}
 	}
-	return b
 }
 
 // ------------------------------------------------------------------ API
@@ -372,24 +394,17 @@ type messagesRequest struct {
 }
 
 func (s *server) messages(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
+	body := readBody(r)
 	var req messagesRequest
 	if err := json.Unmarshal(body, &req); err != nil {
+		// begin assumes the body parsed, so the unparsed case records on its own.
 		id := s.record(r, body, "", false, "")
 		s.setStatus(id, 400)
 		anthropicError(w, 400, "invalid_request_error", "invalid JSON body")
 		return
 	}
-	uid, _ := req.Metadata["user_id"].(string)
-	id := s.record(r, body, req.Model, req.Stream, uid)
-	b := s.resolve(r, req.Metadata)
-	if !sleep(r, b.delay) {
-		s.setStatus(id, 499)
-		return
-	}
-	if b.status >= 400 {
-		s.setStatus(id, b.status)
-		writeMockError(w, b.status)
+	id, b, ok := s.begin(w, r, body, req.Model, req.Stream, req.Metadata, formatAnthropic)
+	if !ok {
 		return
 	}
 	if req.Model == "" {
@@ -428,48 +443,35 @@ func usageJSON(u Usage, output int64) map[string]any {
 }
 
 func (s *server) stream(w http.ResponseWriter, r *http.Request, model, msgID string, b behaviour) {
-	fl, _ := w.(http.Flusher)
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(200)
-	send := func(event string, data any) bool {
-		raw, _ := json.Marshal(data)
-		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, raw); err != nil {
-			return false
-		}
-		if fl != nil {
-			fl.Flush()
-		}
-		return sleep(r, b.chunkDelay)
-	}
-	if !send("message_start", map[string]any{"type": "message_start", "message": map[string]any{
+	sw := startSSE(w, r, b.chunkDelay)
+	if !sw.send("message_start", map[string]any{"type": "message_start", "message": map[string]any{
 		"id": msgID, "type": "message", "role": "assistant", "model": model, "content": []any{},
 		"stop_reason": nil, "stop_sequence": nil, "usage": usageJSON(b.usage, 1),
 	}}) {
 		return
 	}
-	if !send("content_block_start", map[string]any{"type": "content_block_start", "index": 0,
+	if !sw.send("content_block_start", map[string]any{"type": "content_block_start", "index": 0,
 		"content_block": map[string]any{"type": "text", "text": ""}}) {
 		return
 	}
-	if !send("ping", map[string]any{"type": "ping"}) {
+	if !sw.send("ping", map[string]any{"type": "ping"}) {
 		return
 	}
 	for _, part := range chunks(b.text) {
-		if !send("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0,
+		if !sw.send("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0,
 			"delta": map[string]any{"type": "text_delta", "text": part}}) {
 			return
 		}
 	}
-	if !send("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0}) {
+	if !sw.send("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0}) {
 		return
 	}
-	if !send("message_delta", map[string]any{"type": "message_delta",
+	if !sw.send("message_delta", map[string]any{"type": "message_delta",
 		"delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil},
 		"usage": map[string]any{"output_tokens": b.usage.OutputTokens}}) {
 		return
 	}
-	send("message_stop", map[string]any{"type": "message_stop"})
+	sw.send("message_stop", map[string]any{"type": "message_stop"})
 }
 
 // chunks splits text into word-sized deltas (at least one).

@@ -2,7 +2,6 @@ package strict
 
 import (
 	"encoding/json"
-	"fmt"
 	codec "github.com/Sub2API-Devs/sup2api/next/protocol-codec"
 	"time"
 )
@@ -64,30 +63,11 @@ func (p *Plan) response(m object, created int64) (object, error) {
 	base := codec.AnthropicToResponsesResponse(&typed)
 	base.CreatedAt = created
 	base.Output = nil
-	outItems := []any{}
-	used := map[string]bool{}
-	for i, x := range blocks {
-		b, e := asObject(x, pos("response.content", i))
-		if e != nil {
-			return nil, e
-		}
-		if e = validateOutputBlock(b, pos("response.content", i)); e != nil {
-			return nil, e
-		}
-		if b["type"] == "tool_use" {
-			tid := b["id"].(string)
-			if used[tid] {
-				return nil, fail("response.content", "duplicate tool ID")
-			}
-			used[tid] = true
-		}
-		item, e := p.outputItem(b, model, id, i, reason)
-		if e != nil {
-			return nil, e
-		}
-		outItems = append(outItems, item)
+	outItems, toolIDs, e := p.convertResponseBlocks(blocks, model, id, reason)
+	if e != nil {
+		return nil, e
 	}
-	if reason == "tool_use" && len(used) == 0 {
+	if reason == "tool_use" && len(toolIDs) == 0 {
 		return nil, fail("response.stop_reason", "tool_use has no tool call")
 	}
 	encoded, _ := json.Marshal(base)
@@ -101,10 +81,54 @@ func (p *Plan) response(m object, created int64) (object, error) {
 	if p.protocol == "openai.responses" {
 		return result, nil
 	}
-	// The shared Responses -> Chat mapper is safe for the admitted text/function subset.
+	out, e := projectToChat(result, m, model, id, created)
+	if e != nil {
+		return nil, e
+	}
+	if reason == "refusal" {
+		refusalChatOverride(out, blocks)
+	}
+	return out, nil
+}
+
+// convertResponseBlocks validates each Anthropic content block and projects it
+// to its Responses output item. toolIDs carries the tool_use ids seen, so the
+// caller can reject a tool_use stop reason without a call.
+func (p *Plan) convertResponseBlocks(blocks []any, model, id, reason string) ([]any, map[string]bool, error) {
+	outItems := []any{}
+	used := map[string]bool{}
+	for i, x := range blocks {
+		b, e := asObject(x, pos("response.content", i))
+		if e != nil {
+			return nil, nil, e
+		}
+		if e = validateOutputBlock(b, pos("response.content", i)); e != nil {
+			return nil, nil, e
+		}
+		if b["type"] == "tool_use" {
+			tid := b["id"].(string)
+			if used[tid] {
+				return nil, nil, fail("response.content", "duplicate tool ID")
+			}
+			used[tid] = true
+		}
+		item, e := p.outputItem(b, model, id, i, reason)
+		if e != nil {
+			return nil, nil, e
+		}
+		outItems = append(outItems, item)
+	}
+	return outItems, used, nil
+}
+
+// projectToChat maps an admitted Responses result onto the Chat Completions
+// shape. The shared Responses -> Chat mapper is safe for the admitted
+// text/function subset. Provider details still come from the raw upstream
+// message m, not from the converted result.
+func projectToChat(result object, m object, model, id string, created int64) (object, error) {
 	var res codec.ResponsesResponse
-	encoded, _ = json.Marshal(result)
-	if e = json.Unmarshal(encoded, &res); e != nil {
+	encoded, _ := json.Marshal(result)
+	if e := json.Unmarshal(encoded, &res); e != nil {
 		return nil, e
 	}
 	chat := codec.ResponsesToChatCompletions(&res, model)
@@ -113,22 +137,25 @@ func (p *Plan) response(m object, created int64) (object, error) {
 	encoded, _ = json.Marshal(chat)
 	out, _ := decodeObject(encoded, "chat")
 	out["provider_details"] = providerDetails(m)
-	if reason == "refusal" {
-		choices := out["choices"].([]any)
-		choice := choices[0].(object)
-		msg := choice["message"].(object)
-		refusal := ""
-		for _, x := range blocks {
-			b := x.(object)
-			if b["type"] == "text" {
-				refusal += b["text"].(string)
-			}
-		}
-		msg["refusal"] = refusal
-		msg["content"] = nil
-		choice["finish_reason"] = "stop"
-	}
 	return out, nil
+}
+
+// refusalChatOverride folds the refusal text into the Chat message, whose shape
+// has no refusal block.
+func refusalChatOverride(out object, blocks []any) {
+	choices := out["choices"].([]any)
+	choice := choices[0].(object)
+	msg := choice["message"].(object)
+	refusal := ""
+	for _, x := range blocks {
+		b := x.(object)
+		if b["type"] == "text" {
+			refusal += b["text"].(string)
+		}
+	}
+	msg["refusal"] = refusal
+	msg["content"] = nil
+	choice["finish_reason"] = "stop"
 }
 func validatedUsage(v any) (object, error) {
 	u, e := asObject(v, "response.usage")
@@ -208,7 +235,7 @@ func validateOutputBlock(b object, path string) error {
 	return nil
 }
 func (p *Plan) outputItem(b object, model, id string, index int, reason string) (object, error) {
-	itemID := fmt.Sprintf("%s_item_%d", id, index)
+	itemID := streamItemID(id, index)
 	if b["type"] == "thinking" || b["type"] == "redacted_thinking" {
 		if p.protocol == "openai.chat" {
 			return nil, fail("response.content", "Chat has no negotiated signed-thinking envelope; use Responses")

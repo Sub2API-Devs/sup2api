@@ -190,6 +190,14 @@ func (u *UpdateService) verifiedRelease(ctx context.Context, repo string, g gith
 	return Release{Digest: digest, Manifest: manifest, Signed: signed, BundleBase: base}, nil
 }
 
+// updateCacheKey identifies a completed check: the same source and baseline seen
+// at the same revision may be answered from the cached result.
+type updateCacheKey struct {
+	repository string
+	revision   int64
+	baseline   string
+}
+
 func (s *Store) checkUpdate(ctx context.Context, force bool) (updateCheck, error) {
 	out := updateCheck{}
 	source, err := s.updateSource(ctx)
@@ -215,68 +223,100 @@ func (s *Store) checkUpdate(ctx context.Context, force bool) (updateCheck, error
 	u := s.Updates
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	key := updateCacheKey{repository: source.Repository, revision: source.Revision, baseline: baseline}
 	ttl := 5 * time.Minute
 	if force || u.cached.Reason != "" {
 		ttl = 30 * time.Second
 	}
-	if u.cached.Repository == source.Repository && u.sourceRevision == source.Revision && u.baseline == baseline && time.Since(u.cached.CheckedAt) < ttl {
-		out = u.cached
-		out.Cached = true
-		return out, nil
+	if cached, ok := u.cacheValid(key, ttl); ok {
+		cached.Cached = true
+		return cached, nil
 	}
 	out.CheckedAt = time.Now().UTC()
 	latest, err := u.fetch(ctx, source.Repository, "")
-	if err == nil {
-		out.Tag = latest.Tag
-		out.LatestVersion = strings.TrimPrefix(latest.Tag, "v")
-		out.ReleaseURL = "https://github.com/" + source.Repository + "/releases/tag/" + url.PathEscape(latest.Tag)
-		out.PublishedAt, out.Notes = latest.PublishedAt, latest.Body
-		a, ae := semver.NewVersion(out.CurrentVersion)
-		b, be := semver.NewVersion(out.LatestVersion)
-		if ae == nil && be == nil {
-			out.HasUpdate = b.GreaterThan(a)
-		}
-		var target Release
-		target, err = u.verifiedRelease(ctx, source.Repository, latest)
-		if err == nil {
-			out.ManifestAsset = updateManifestAsset
-			if target.Digest == baseline {
-				out.Compatible = true
-			} else if strings.TrimPrefix(current.Manifest.CoreVersion, "v") == strings.TrimPrefix(target.Manifest.CoreVersion, "v") {
-				out.Reason = "latest release uses the installed version number with a different signed identity"
-			} else if blockers := Compatibility(current, target); len(blockers) > 0 {
-				out.Reason = strings.Join(blockers, "; ")
-			} else {
-				out.Compatible = true
-			}
-		}
-	}
-	if err != nil {
-		out.Reason = err.Error()
-	}
+	out = u.describeLatest(ctx, out, current, latest, baseline, err)
 	if ctx.Err() != nil {
 		return out, ctx.Err()
 	}
 	// Re-read source after network I/O so a concurrent source change is not
 	// reported as a fresh result for the new repository.
-	now, sourceErr := s.updateSource(ctx)
-	if sourceErr != nil {
-		return out, sourceErr
-	}
-	if now.Repository != source.Repository || now.Revision != source.Revision {
-		return updateCheck{}, ErrConflict
-	}
-	_, currentBaseline, _, err := s.ClusterState(ctx)
+	conflict, err := s.revalidateUpdateSource(ctx, key)
 	if err != nil {
 		return out, err
 	}
-	if currentBaseline != baseline {
+	if conflict {
 		return updateCheck{}, ErrConflict
 	}
 	u.cached = out
-	u.baseline = baseline
-	u.sourceRevision = source.Revision
+	u.baseline = key.baseline
+	u.sourceRevision = key.revision
 	return out, nil
+}
+
+// cacheValid reports whether the cached check still answers key, given its TTL.
+func (u *UpdateService) cacheValid(key updateCacheKey, ttl time.Duration) (updateCheck, bool) {
+	if u.cached.Repository != key.repository || u.sourceRevision != key.revision || u.baseline != key.baseline {
+		return updateCheck{}, false
+	}
+	if time.Since(u.cached.CheckedAt) >= ttl {
+		return updateCheck{}, false
+	}
+	return u.cached, true
+}
+
+// describeLatest fills the fields describing the newest GitHub release and the
+// compatibility verdict. fetchErr is the fetch result; a manifest verification
+// failure replaces it, which is why the verdict is decided here.
+func (u *UpdateService) describeLatest(ctx context.Context, out updateCheck, current Release, latest githubRelease, baseline string, fetchErr error) updateCheck {
+	if fetchErr != nil {
+		out.Reason = fetchErr.Error()
+		return out
+	}
+	out.Tag = latest.Tag
+	out.LatestVersion = strings.TrimPrefix(latest.Tag, "v")
+	out.ReleaseURL = "https://github.com/" + out.Repository + "/releases/tag/" + url.PathEscape(latest.Tag)
+	out.PublishedAt, out.Notes = latest.PublishedAt, latest.Body
+	a, ae := semver.NewVersion(out.CurrentVersion)
+	b, be := semver.NewVersion(out.LatestVersion)
+	if ae == nil && be == nil {
+		out.HasUpdate = b.GreaterThan(a)
+	}
+	target, err := u.verifiedRelease(ctx, out.Repository, latest)
+	if err != nil {
+		out.Reason = err.Error()
+		return out
+	}
+	out.ManifestAsset = updateManifestAsset
+	if target.Digest == baseline {
+		out.Compatible = true
+	} else if strings.TrimPrefix(current.Manifest.CoreVersion, "v") == strings.TrimPrefix(target.Manifest.CoreVersion, "v") {
+		out.Reason = "latest release uses the installed version number with a different signed identity"
+	} else if blockers := Compatibility(current, target); len(blockers) > 0 {
+		out.Reason = strings.Join(blockers, "; ")
+	} else {
+		out.Compatible = true
+	}
+	return out
+}
+
+// revalidateUpdateSource re-reads the source and baseline after network I/O and
+// reports whether either changed while the check was running.
+func (s *Store) revalidateUpdateSource(ctx context.Context, key updateCacheKey) (bool, error) {
+	now, err := s.updateSource(ctx)
+	if err != nil {
+		return false, err
+	}
+	if now.Repository != key.repository || now.Revision != key.revision {
+		return true, nil
+	}
+	_, currentBaseline, _, err := s.ClusterState(ctx)
+	if err != nil {
+		return false, err
+	}
+	if currentBaseline != key.baseline {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (s *Store) importGitHub(ctx context.Context, repository, tag string) (Release, error) {

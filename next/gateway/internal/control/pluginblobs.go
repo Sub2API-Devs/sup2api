@@ -62,6 +62,11 @@ func ManagementHandler(store *Store, blobs *pluginblob.Service) http.Handler {
 			}
 		}
 		planID, planStatus, blockedReason, err := store.PlanStatus(ctx)
+		if err != nil {
+			// Keep the endpoint's historical 200 + zero gauges, but stop hiding the failure.
+			slog.Warn("plan status unavailable for metrics", "error", err)
+			planID, planStatus, blockedReason = "", "", ""
+		}
 		planActive := 0
 		if planStatus == "running" || planStatus == "paused" {
 			planActive = 1

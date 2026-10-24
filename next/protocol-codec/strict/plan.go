@@ -209,13 +209,51 @@ func (p *Plan) controls(in, out object) error {
 	if err := keys(in, "request", names...); err != nil {
 		return err
 	}
-	if v, ok := in["stream"]; ok {
-		b, e := boolean(v, "stream")
-		if e != nil {
-			return e
-		}
-		out["stream"] = b
+	if err := p.applyStream(in, out); err != nil {
+		return err
 	}
+	n, err := p.maxTokens(in)
+	if err != nil {
+		return err
+	}
+	out["max_tokens"] = n
+	if err := applySampling(in, out); err != nil {
+		return err
+	}
+	if err := applySingleCompletion(in); err != nil {
+		return err
+	}
+	if err := applyStore(in); err != nil {
+		return err
+	}
+	if err := applyInclude(in); err != nil {
+		return err
+	}
+	if err := applyStop(in, out); err != nil {
+		return err
+	}
+	if err := p.applyStreamOptions(in); err != nil {
+		return err
+	}
+	return outputFormat(in, out, p.protocol)
+}
+
+func (p *Plan) applyStream(in, out object) error {
+	v, ok := in["stream"]
+	if !ok {
+		return nil
+	}
+	b, e := boolean(v, "stream")
+	if e != nil {
+		return e
+	}
+	out["stream"] = b
+	return nil
+}
+
+// maxTokens resolves the caller's token limit. Chat requests may use either of
+// two names; disagreement between them is rejected instead of picked silently.
+func (p *Plan) maxTokens(in object) (int64, error) {
 	maxKey := "max_output_tokens"
 	if p.protocol == "openai.chat" {
 		maxKey = "max_completion_tokens"
@@ -224,15 +262,18 @@ func (p *Plan) controls(in, out object) error {
 		}
 		if a, ok := in["max_tokens"]; ok {
 			if b, yes := in["max_completion_tokens"]; yes && !same(a, b) {
-				return fail("max_tokens", "conflicts with max_completion_tokens")
+				return 0, fail("max_tokens", "conflicts with max_completion_tokens")
 			}
 		}
 	}
 	n, err := integer(in[maxKey], maxKey, 1, 2147483647)
 	if err != nil {
-		return fail(maxKey, "explicit positive token limit required; no implicit conversion default")
+		return 0, fail(maxKey, "explicit positive token limit required; no implicit conversion default")
 	}
-	out["max_tokens"] = n
+	return n, nil
+}
+
+func applySampling(in, out object) error {
 	for _, k := range []string{"temperature", "top_p"} {
 		if v, ok := in[k]; ok {
 			j, ok := v.(json.Number)
@@ -246,65 +287,95 @@ func (p *Plan) controls(in, out object) error {
 			out[k] = v
 		}
 	}
-	if v, ok := in["n"]; ok {
-		if _, e := integer(v, "n", 1, 1); e != nil {
-			return fail("n", "only one completion has an equivalent")
+	return nil
+}
+
+func applySingleCompletion(in object) error {
+	v, ok := in["n"]
+	if !ok {
+		return nil
+	}
+	if _, e := integer(v, "n", 1, 1); e != nil {
+		return fail("n", "only one completion has an equivalent")
+	}
+	return nil
+}
+
+func applyStore(in object) error {
+	v, ok := in["store"]
+	if !ok {
+		return nil
+	}
+	b, e := boolean(v, "store")
+	if e != nil {
+		return e
+	}
+	if b {
+		return fail("store", "response storage not implemented by this adapter")
+	}
+	return nil
+}
+
+func applyInclude(in object) error {
+	v, ok := in["include"]
+	if !ok {
+		return nil
+	}
+	a, e := list(v, "include")
+	if e != nil {
+		return e
+	}
+	for _, x := range a {
+		if x != "reasoning.encrypted_content" {
+			return fail("include", "only reasoning.encrypted_content is available")
 		}
 	}
-	if v, ok := in["store"]; ok {
-		b, e := boolean(v, "store")
+	return nil
+}
+
+func applyStop(in, out object) error {
+	v, ok := in["stop"]
+	if !ok {
+		return nil
+	}
+	a := []any{}
+	if s, yes := v.(string); yes {
+		a = append(a, s)
+	} else {
+		var e error
+		a, e = list(v, "stop")
 		if e != nil {
 			return e
 		}
-		if b {
-			return fail("store", "response storage not implemented by this adapter")
+	}
+	for _, x := range a {
+		if _, ok := x.(string); !ok {
+			return fail("stop", "expected strings")
 		}
 	}
-	if v, ok := in["include"]; ok {
-		a, e := list(v, "include")
+	out["stop_sequences"] = a
+	return nil
+}
+
+func (p *Plan) applyStreamOptions(in object) error {
+	v, ok := in["stream_options"]
+	if !ok {
+		return nil
+	}
+	o, e := asObject(v, "stream_options")
+	if e != nil {
+		return e
+	}
+	if e = keys(o, "stream_options", "include_usage"); e != nil {
+		return e
+	}
+	if x, yes := o["include_usage"]; yes {
+		p.includeUsage, e = boolean(x, "stream_options.include_usage")
 		if e != nil {
 			return e
 		}
-		for _, x := range a {
-			if x != "reasoning.encrypted_content" {
-				return fail("include", "only reasoning.encrypted_content is available")
-			}
-		}
 	}
-	if v, ok := in["stop"]; ok {
-		a := []any{}
-		if s, yes := v.(string); yes {
-			a = append(a, s)
-		} else {
-			var e error
-			a, e = list(v, "stop")
-			if e != nil {
-				return e
-			}
-		}
-		for _, x := range a {
-			if _, ok := x.(string); !ok {
-				return fail("stop", "expected strings")
-			}
-		}
-		out["stop_sequences"] = a
-	}
-	if v, ok := in["stream_options"]; ok {
-		o, e := asObject(v, "stream_options")
-		if e != nil {
-			return e
-		}
-		if e = keys(o, "stream_options", "include_usage"); e != nil {
-			return e
-		}
-		if x, yes := o["include_usage"]; yes {
-			p.includeUsage, e = boolean(x, "stream_options.include_usage")
-			if e != nil {
-				return e
-			}
-		}
-	}
-	return outputFormat(in, out, p.protocol)
+	return nil
 }
 func outputFormat(in, out object, protocol string) error {
 	v, has := in["response_format"]

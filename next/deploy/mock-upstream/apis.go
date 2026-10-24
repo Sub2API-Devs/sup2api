@@ -230,19 +230,8 @@ func (s *server) responses(w http.ResponseWriter, r *http.Request) {
 	created := time.Now().Unix()
 	w.Header().Set("x-request-id", fmt.Sprintf("req_mock_%d", id))
 	w.Header().Set("x-mock-request-id", strconv.FormatInt(id, 10))
-	textPart := func(text string) map[string]any {
-		return map[string]any{"type": "output_text", "text": text, "annotations": []any{}}
-	}
-	item := func(status string, content []any) map[string]any {
-		return map[string]any{"type": "message", "id": msgID, "status": status, "role": "assistant", "content": content}
-	}
-	response := func(status string, output []any, usage any) map[string]any {
-		return map[string]any{
-			"id": respID, "object": "response", "created_at": created, "status": status, "model": req.Model,
-			"output": output, "usage": usage,
-		}
-	}
-	final := response("completed", []any{item("completed", []any{textPart(b.text)})}, openaiResponsesUsage(b.usage))
+	final := responsesEnvelope(respID, created, req.Model, "completed",
+		[]any{responsesMessageItem(msgID, "completed", []any{responsesTextPart(b.text)})}, openaiResponsesUsage(b.usage))
 	if !req.Stream {
 		writeJSON(w, 200, final)
 		return
@@ -255,10 +244,10 @@ func (s *server) responses(w http.ResponseWriter, r *http.Request) {
 		seq++
 		return sw.send(typ, fields)
 	}
-	if !ev("response.created", map[string]any{"response": response("in_progress", []any{}, nil)}) ||
-		!ev("response.in_progress", map[string]any{"response": response("in_progress", []any{}, nil)}) ||
-		!ev("response.output_item.added", map[string]any{"output_index": 0, "item": item("in_progress", []any{})}) ||
-		!ev("response.content_part.added", map[string]any{"item_id": msgID, "output_index": 0, "content_index": 0, "part": textPart("")}) {
+	if !ev("response.created", map[string]any{"response": responsesEnvelope(respID, created, req.Model, "in_progress", []any{}, nil)}) ||
+		!ev("response.in_progress", map[string]any{"response": responsesEnvelope(respID, created, req.Model, "in_progress", []any{}, nil)}) ||
+		!ev("response.output_item.added", map[string]any{"output_index": 0, "item": responsesMessageItem(msgID, "in_progress", []any{})}) ||
+		!ev("response.content_part.added", map[string]any{"item_id": msgID, "output_index": 0, "content_index": 0, "part": responsesTextPart("")}) {
 		return
 	}
 	for _, part := range chunks(b.text) {
@@ -267,11 +256,30 @@ func (s *server) responses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !ev("response.output_text.done", map[string]any{"item_id": msgID, "output_index": 0, "content_index": 0, "text": b.text}) ||
-		!ev("response.content_part.done", map[string]any{"item_id": msgID, "output_index": 0, "content_index": 0, "part": textPart(b.text)}) ||
-		!ev("response.output_item.done", map[string]any{"output_index": 0, "item": item("completed", []any{textPart(b.text)})}) {
+		!ev("response.content_part.done", map[string]any{"item_id": msgID, "output_index": 0, "content_index": 0, "part": responsesTextPart(b.text)}) ||
+		!ev("response.output_item.done", map[string]any{"output_index": 0, "item": responsesMessageItem(msgID, "completed", []any{responsesTextPart(b.text)})}) {
 		return
 	}
 	ev("response.completed", map[string]any{"response": final})
+}
+
+// responsesTextPart is the output_text part shared by the SSE and WebSocket
+// Responses mocks.
+func responsesTextPart(text string) map[string]any {
+	return map[string]any{"type": "output_text", "text": text, "annotations": []any{}}
+}
+
+// responsesMessageItem is the assistant message item shared by both mocks.
+func responsesMessageItem(id, status string, content []any) map[string]any {
+	return map[string]any{"type": "message", "id": id, "status": status, "role": "assistant", "content": content}
+}
+
+// responsesEnvelope is the response object shared by both mocks.
+func responsesEnvelope(id string, created int64, model, status string, output []any, usage any) map[string]any {
+	return map[string]any{
+		"id": id, "object": "response", "created_at": created, "status": status, "model": model,
+		"output": output, "usage": usage,
+	}
 }
 
 func (s *server) embeddings(w http.ResponseWriter, r *http.Request) {
@@ -415,16 +423,9 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respID := fmt.Sprintf("mock-%d-%06d", id, rand.IntN(1000000))
-	candidate := func(text string, finish string) []any {
-		c := map[string]any{"content": map[string]any{"role": "model", "parts": []any{map[string]any{"text": text}}}, "index": 0}
-		if finish != "" {
-			c["finishReason"] = finish
-		}
-		return []any{c}
-	}
 	if !stream {
 		writeJSON(w, 200, map[string]any{
-			"candidates":    candidate(b.text, "STOP"),
+			"candidates":    geminiCandidate(b.text, "STOP"),
 			"usageMetadata": geminiUsage(b.usage, b.usage.OutputTokens, b.usage.ThoughtsTokens),
 			"modelVersion":  model, "responseId": respID,
 		})
@@ -439,7 +440,7 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 			out, thoughts, finish = b.usage.OutputTokens, b.usage.ThoughtsTokens, "STOP"
 		}
 		events[i] = map[string]any{
-			"candidates": candidate(part, finish), "usageMetadata": geminiUsage(b.usage, out, thoughts),
+			"candidates": geminiCandidate(part, finish), "usageMetadata": geminiUsage(b.usage, out, thoughts),
 			"modelVersion": model, "responseId": respID,
 		}
 	}
@@ -452,7 +453,21 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// Without alt=sse Google streams one JSON array.
+	geminiStreamJSON(w, r, events, b.chunkDelay)
+}
+
+// geminiCandidate builds the single candidate array of a Gemini response.
+func geminiCandidate(text, finish string) []any {
+	c := map[string]any{"content": map[string]any{"role": "model", "parts": []any{map[string]any{"text": text}}}, "index": 0}
+	if finish != "" {
+		c["finishReason"] = finish
+	}
+	return []any{c}
+}
+
+// geminiStreamJSON writes the streaming events as one JSON array, which is how
+// Google streams without alt=sse.
+func geminiStreamJSON(w http.ResponseWriter, r *http.Request, events []map[string]any, chunkDelay time.Duration) {
 	fl, _ := w.(http.Flusher)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
@@ -468,7 +483,7 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 		if fl != nil {
 			fl.Flush()
 		}
-		if !sleep(r, b.chunkDelay) {
+		if !sleep(r, chunkDelay) {
 			return
 		}
 	}

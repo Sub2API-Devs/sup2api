@@ -74,16 +74,6 @@ func (s *server) responsesTurn(ctx context.Context, conn *websocket.Conn, r *htt
 	respID := fmt.Sprintf("resp_mock_%d_%06d", id, rand.IntN(1000000))
 	msgID := fmt.Sprintf("msg_mock_%d", id)
 	created := time.Now().Unix()
-	textPart := func(text string) map[string]any {
-		return map[string]any{"type": "output_text", "text": text, "annotations": []any{}}
-	}
-	item := func(status string, content []any) map[string]any {
-		return map[string]any{"type": "message", "id": msgID, "status": status, "role": "assistant", "content": content}
-	}
-	response := func(status string, output []any, usage any) map[string]any {
-		return map[string]any{"id": respID, "object": "response", "created_at": created, "status": status, "model": req.Model,
-			"output": output, "usage": usage}
-	}
 	seq := 0
 	ev := func(typ string, fields map[string]any) bool {
 		fields["type"] = typ
@@ -95,8 +85,11 @@ func (s *server) responsesTurn(ctx context.Context, conn *websocket.Conn, r *htt
 		pause(b.chunkDelay)
 		return true
 	}
-	if !ev("response.created", map[string]any{"response": response("in_progress", []any{}, nil)}) ||
-		!ev("response.in_progress", map[string]any{"response": response("in_progress", []any{}, nil)}) {
+	inProgress := func() map[string]any {
+		return responsesEnvelope(respID, created, req.Model, "in_progress", []any{}, nil)
+	}
+	if !ev("response.created", map[string]any{"response": inProgress()}) ||
+		!ev("response.in_progress", map[string]any{"response": inProgress()}) {
 		return false
 	}
 	for _, part := range chunks(b.text) {
@@ -104,8 +97,8 @@ func (s *server) responsesTurn(ctx context.Context, conn *websocket.Conn, r *htt
 			return false
 		}
 	}
-	return ev("response.completed", map[string]any{"response": response("completed",
-		[]any{item("completed", []any{textPart(b.text)})}, openaiResponsesUsage(b.usage))})
+	return ev("response.completed", map[string]any{"response": responsesEnvelope(respID, created, req.Model, "completed",
+		[]any{responsesMessageItem(msgID, "completed", []any{responsesTextPart(b.text)})}, openaiResponsesUsage(b.usage))})
 }
 
 func openaiErrorType(status int) string {

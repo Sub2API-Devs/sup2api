@@ -28,7 +28,6 @@ type Engine struct {
 	heartbeat     sync.Mutex
 	offloading    bool
 	progress      atomic.Uint64
-	localReady    atomic.Bool
 	lastBlocked   sync.Mutex
 	lastBlockedAt map[string]time.Time
 }
@@ -99,11 +98,6 @@ func (e *Engine) commitProgress(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// LocalReady reports whether this node is ready to serve requests locally, based
-// on the most recent heartbeat observation. The router calls this for every new
-// request; reading an atomic bool avoids calling the core status API each time.
-func (e *Engine) LocalReady() bool { return e.localReady.Load() }
-
 func (e *Engine) Heartbeat(ctx context.Context) error {
 	e.heartbeat.Lock()
 	defer e.heartbeat.Unlock()
@@ -134,8 +128,6 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 	if err != nil {
 		n.Error = err.Error()
 	}
-	// Update atomic ready state for router's LocalReady callback to read.
-	e.localReady.Store(st.Ready && mode == "local")
 	if e.CPU != nil {
 		if cpu, ok := e.CPU(); ok {
 			n.CPUPercent = &cpu
@@ -191,7 +183,7 @@ func (e *Engine) resumeForward(ctx context.Context, nodes []Node) {
 		return
 	}
 	for _, n := range nodes {
-		if n.ID == primary && n.Enabled && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
+		if n.ID == primary && n.Enabled && n.ServingLocal(time.Now()) {
 			_ = e.Runtime.Redirect(ctx, n)
 		}
 	}
@@ -234,33 +226,7 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 	}
 	steps := Steps(p)
 	if p.Cursor >= len(steps) {
-		var verified int
-		if err = e.requireFreshNodes(ctx, p.Nodes); err != nil {
-			return err
-		}
-		if err = tx.QueryRow(ctx, `SELECT count(*) FROM updater.nodes WHERE cluster_id=$1 AND node_id=ANY($2) AND ready AND mode='local' AND release_digest=$3`, e.Store.Cluster, p.Nodes, p.ReleaseDigest).Scan(&verified); err != nil {
-			return err
-		}
-		if verified != len(p.Nodes) {
-			reason := "waiting for all planned nodes to verify the target release"
-			// Release the plan row lock before recording diagnostics through the pool.
-			_ = tx.Rollback(ctx)
-			_ = e.recordBlockedReason(ctx, p.ID, reason)
-			return errors.New(reason)
-		}
-		_, err = tx.Exec(ctx, `UPDATE updater.clusters SET baseline=$2,revision=revision+1 WHERE cluster_id=$1`, e.Store.Cluster, p.ReleaseDigest)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status='completed',updated_at=now() WHERE id=$1`, p.ID)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'completed','all node steps acknowledged')`, p.ID)
-		if err != nil {
-			return err
-		}
-		return e.commitProgress(ctx, tx)
+		return e.completePlan(ctx, tx, p)
 	}
 	st := steps[p.Cursor]
 	if st.Action == "maintenance" || st.Action == "start-primary" {
@@ -271,51 +237,94 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 			return err
 		}
 	}
-	var state string
-	err = tx.QueryRow(ctx, `SELECT status FROM updater.steps WHERE upgrade_id=$1 AND step_id=$2`, p.ID, p.Cursor).Scan(&state)
-	if err == nil {
-		if state != "done" && st.Action == "stop" {
-			var safetyStopped bool
-			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.nodes n JOIN updater.stop_confirmations c ON c.cluster_id=n.cluster_id AND c.node_id=n.node_id AND c.shell_boot_id=n.shell_boot_id WHERE n.cluster_id=$1 AND n.node_id=$2 AND NOT n.enabled AND n.stopped AND c.upgrade_id=$3 AND c.step_id=$4)`, e.Store.Cluster, st.NodeID, p.ID, st.ID).Scan(&safetyStopped); err != nil {
-				return err
-			}
-			if safetyStopped && e.requireFreshNodes(ctx, []string{st.NodeID}) == nil {
-				if _, err = tx.Exec(ctx, `UPDATE updater.steps SET status='done',error='',updated_at=now() WHERE upgrade_id=$1 AND step_id=$2`, p.ID, st.ID); err != nil {
-					return err
-				}
-				state = "done"
-			}
-		}
-		if state == "done" {
-			_, err = tx.Exec(ctx, `UPDATE updater.upgrades SET cursor=cursor+1,updated_at=now() WHERE id=$1`, p.ID)
-			if err != nil {
-				return err
-			}
-			return e.commitProgress(ctx, tx)
-		}
-		return tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if exists, err := e.settleExistingStep(ctx, tx, p, st); exists || err != nil {
 		return err
 	}
+	return e.insertNextStep(ctx, tx, p, st)
+}
+
+// completePlan closes a plan whose cursor reached the end: every planned node
+// must be observed serving the target release before the baseline moves.
+func (e *Engine) completePlan(ctx context.Context, tx pgx.Tx, p Plan) error {
+	if err := e.requireFreshNodes(ctx, p.Nodes); err != nil {
+		return err
+	}
+	var verified int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM updater.nodes WHERE cluster_id=$1 AND node_id=ANY($2) AND ready AND mode='local' AND release_digest=$3`, e.Store.Cluster, p.Nodes, p.ReleaseDigest).Scan(&verified); err != nil {
+		return err
+	}
+	if verified != len(p.Nodes) {
+		reason := "waiting for all planned nodes to verify the target release"
+		// Release the plan row lock before recording diagnostics through the pool.
+		_ = tx.Rollback(ctx)
+		_ = e.recordBlockedReason(ctx, p.ID, reason)
+		return errors.New(reason)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE updater.clusters SET baseline=$2,revision=revision+1 WHERE cluster_id=$1`, e.Store.Cluster, p.ReleaseDigest); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE updater.upgrades SET status='completed',updated_at=now() WHERE id=$1`, p.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'completed','all node steps acknowledged')`, p.ID); err != nil {
+		return err
+	}
+	return e.commitProgress(ctx, tx)
+}
+
+// settleExistingStep handles a step row that already exists: it may be
+// acknowledged as done (advancing the cursor) or still be running, which is left
+// alone and committed. exists reports that there was a row, so the caller must
+// not create the step; the transaction is finished either way.
+func (e *Engine) settleExistingStep(ctx context.Context, tx pgx.Tx, p Plan, st Step) (exists bool, err error) {
+	var state string
+	err = tx.QueryRow(ctx, `SELECT status FROM updater.steps WHERE upgrade_id=$1 AND step_id=$2`, p.ID, p.Cursor).Scan(&state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	if state != "done" && st.Action == "stop" {
+		var safetyStopped bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.nodes n JOIN updater.stop_confirmations c ON c.cluster_id=n.cluster_id AND c.node_id=n.node_id AND c.shell_boot_id=n.shell_boot_id WHERE n.cluster_id=$1 AND n.node_id=$2 AND NOT n.enabled AND n.stopped AND c.upgrade_id=$3 AND c.step_id=$4)`, e.Store.Cluster, st.NodeID, p.ID, st.ID).Scan(&safetyStopped); err != nil {
+			return true, err
+		}
+		if safetyStopped && e.requireFreshNodes(ctx, []string{st.NodeID}) == nil {
+			if _, err = tx.Exec(ctx, `UPDATE updater.steps SET status='done',error='',updated_at=now() WHERE upgrade_id=$1 AND step_id=$2`, p.ID, st.ID); err != nil {
+				return true, err
+			}
+			state = "done"
+		}
+	}
+	if state == "done" {
+		if _, err = tx.Exec(ctx, `UPDATE updater.upgrades SET cursor=cursor+1,updated_at=now() WHERE id=$1`, p.ID); err != nil {
+			return true, err
+		}
+		return true, e.commitProgress(ctx, tx)
+	}
+	return true, tx.Commit(ctx)
+}
+
+// insertNextStep creates the current step's row. A plan step aimed at a disabled
+// node pauses the whole plan instead.
+func (e *Engine) insertNextStep(ctx context.Context, tx pgx.Tx, p Plan, st Step) error {
 	if st.Action != "stop" {
 		var enabled bool
-		if err = tx.QueryRow(ctx, `SELECT enabled FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, e.Store.Cluster, st.NodeID).Scan(&enabled); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT enabled FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, e.Store.Cluster, st.NodeID).Scan(&enabled); err != nil {
 			return err
 		}
 		if !enabled {
-			if _, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status='paused',error=$2 WHERE id=$1`, p.ID, "planned node is disabled: "+st.NodeID); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE updater.upgrades SET status='paused',error=$2 WHERE id=$1`, p.ID, "planned node is disabled: "+st.NodeID); err != nil {
 				return err
 			}
 			return e.commitProgress(ctx, tx)
 		}
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO updater.steps(upgrade_id,step_id,node_id,action,target_digest,peer_node) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, p.ID, st.ID, st.NodeID, st.Action, st.TargetDigest, st.PeerNode)
-	if err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO updater.steps(upgrade_id,step_id,node_id,action,target_digest,peer_node) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, p.ID, st.ID, st.NodeID, st.Action, st.TargetDigest, st.PeerNode); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'step', $2)`, p.ID, st.NodeID+": "+st.Action)
-	if err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'step', $2)`, p.ID, st.NodeID+": "+st.Action); err != nil {
 		return err
 	}
 	return e.commitProgress(ctx, tx)
@@ -447,7 +456,7 @@ func (e *Engine) Execute(ctx context.Context, st Step) error {
 		}
 		for _, n := range nodes {
 			if n.ID == st.PeerNode {
-				if !n.Ready || n.Mode != "local" || time.Since(n.LastSeen) > 20*time.Second {
+				if !n.ServingLocal(time.Now()) {
 					return e.Runtime.Maintenance(ctx)
 				}
 				return e.Runtime.Redirect(ctx, n)
@@ -547,33 +556,13 @@ func (e *Engine) Admit(ctx context.Context, digest string) error {
 	return nil
 }
 
-// followersStopped verifies live process-group absence, including new nodes.
+// checkPeer verifies the node's shell identity before a coordination pass. A
+// revoke seen by authoritative PG stops the local core; a transient Redis
+// registration miss alone does not.
 func (e *Engine) checkPeer(ctx context.Context) error {
 	if err := e.Store.ValidateNode(ctx, e.Node.ID, e.Node.ShellBootID); err != nil {
-		var revoked bool
-		// Only an authoritative PG identity mismatch triggers draining. A transient
-		// Redis registration miss must not restart or drain an otherwise valid core.
-		if queryErr := e.Store.DB.QueryRow(ctx, `SELECT NOT enabled OR shell_boot_id<>$3 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, e.Store.Cluster, e.Node.ID, e.Node.ShellBootID).Scan(&revoked); queryErr == nil && revoked {
-			_ = e.Runtime.Maintenance(ctx)
-			bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
-			defer cancel()
-			if stopErr := e.Runtime.DrainStop(bounded, "node-identity-revoked"); stopErr == nil {
-				if stopped, checkErr := e.Runtime.Stopped(bounded); checkErr == nil && stopped {
-					// Disabled identities cannot authenticate or receive ordinary work, but
-					// may still report this safety fact for their own unchanged shell boot.
-					tag, reportErr := e.Store.DB.Exec(bounded, `UPDATE updater.nodes SET ready=false,stopped=true,mode='maintenance',last_seen=now() WHERE cluster_id=$1 AND node_id=$2 AND shell_boot_id=$3`, e.Store.Cluster, e.Node.ID, e.Node.ShellBootID)
-					if reportErr == nil && tag.RowsAffected() == 1 {
-						if nodes, readErr := e.Store.Nodes(bounded); readErr == nil {
-							for _, n := range nodes {
-								if n.ID == e.Node.ID && n.ShellBootID == e.Node.ShellBootID {
-									_ = e.Store.ReportTelemetry(bounded, n)
-								}
-							}
-						}
-						_ = e.Store.RecordStop(bounded, e.Node)
-					}
-				}
-			}
+		if e.identityRevoked(ctx) {
+			e.stopRevokedIdentity(ctx)
 		}
 		return err
 	}
@@ -581,6 +570,47 @@ func (e *Engine) checkPeer(ctx context.Context) error {
 		return e.PeerCheck(ctx)
 	}
 	return nil
+}
+
+// identityRevoked reports the authoritative PG answer. Only an identity mismatch
+// there triggers draining. A transient Redis registration miss must not restart
+// or drain an otherwise valid core.
+func (e *Engine) identityRevoked(ctx context.Context) bool {
+	var revoked bool
+	err := e.Store.DB.QueryRow(ctx, `SELECT NOT enabled OR shell_boot_id<>$3 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, e.Store.Cluster, e.Node.ID, e.Node.ShellBootID).Scan(&revoked)
+	return err == nil && revoked
+}
+
+// stopRevokedIdentity drains a revoked core and reports the stop for this
+// unchanged shell boot. Errors are deliberately not surfaced: the caller is
+// already returning the identity failure and the next pass retries.
+func (e *Engine) stopRevokedIdentity(ctx context.Context) {
+	_ = e.Runtime.Maintenance(ctx)
+	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := e.Runtime.DrainStop(bounded, "node-identity-revoked"); err != nil {
+		return
+	}
+	stopped, err := e.Runtime.Stopped(bounded)
+	if err != nil || !stopped {
+		return
+	}
+	// Disabled identities cannot authenticate or receive ordinary work, but
+	// may still report this safety fact for their own unchanged shell boot.
+	tag, err := e.Store.DB.Exec(bounded, `UPDATE updater.nodes SET ready=false,stopped=true,mode='maintenance',last_seen=now() WHERE cluster_id=$1 AND node_id=$2 AND shell_boot_id=$3`, e.Store.Cluster, e.Node.ID, e.Node.ShellBootID)
+	if err != nil || tag.RowsAffected() != 1 {
+		return
+	}
+	nodes, err := e.Store.Nodes(bounded)
+	if err != nil {
+		return
+	}
+	for _, n := range nodes {
+		if n.ID == e.Node.ID && n.ShellBootID == e.Node.ShellBootID {
+			_ = e.Store.ReportTelemetry(bounded, n)
+		}
+	}
+	_ = e.Store.RecordStop(bounded, e.Node)
 }
 func (e *Engine) followersStopped(ctx context.Context) error {
 	primary, _, _, err := e.Store.ClusterState(ctx)
@@ -592,7 +622,7 @@ func (e *Engine) followersStopped(ctx context.Context) error {
 		return err
 	}
 	for _, n := range nodes {
-		if n.ID != primary && (n.LastSeen.IsZero() || time.Since(n.LastSeen) >= 20*time.Second) {
+		if n.ID != primary && !n.Fresh(time.Now()) {
 			return errors.New("waiting for fresh follower observations")
 		}
 	}
@@ -680,7 +710,7 @@ func (e *Engine) start(ctx context.Context, planID, digest string, bootstrap boo
 			}
 			ready := false
 			for _, n := range nodes {
-				if n.ID == primary && n.Ready && n.Mode == "local" && n.ReleaseDigest == digest && time.Since(n.LastSeen) < 20*time.Second {
+				if n.ID == primary && n.ReleaseDigest == digest && n.ServingLocal(time.Now()) {
 					ready = true
 				}
 			}
@@ -710,100 +740,8 @@ func (e *Engine) Recover(ctx context.Context, bootstrap bool) error {
 	if err != nil {
 		return err
 	}
-	var active *Plan
-	for i := range plans {
-		if plans[i].Status == "running" || plans[i].Status == "paused" {
-			active = &plans[i]
-			break
-		}
-	}
-	if active != nil {
-		p := *active
-		if p.Strategy != PrimaryFirst {
-			if err = e.Runtime.Maintenance(ctx); err != nil {
-				return err
-			}
-			return e.stop(ctx, "legacy-plan-recovery")
-		}
-		member := false
-		for _, id := range p.Nodes {
-			if id == e.Node.ID {
-				member = true
-			}
-		}
-		stopped, startIssued, localDone, disrupted := false, false, false, false
-		for _, st := range p.Steps {
-			if st.Action == "maintenance" {
-				disrupted = true
-			}
-			if st.NodeID != e.Node.ID {
-				continue
-			}
-			switch st.Action {
-			case "stop":
-				stopped = true
-				startIssued = false
-				localDone = false
-			case "start", "start-primary":
-				startIssued = true
-			case "local":
-				localDone = st.Status == "done"
-			}
-		}
-		if !member || (stopped && !startIssued) || (startIssued && !localDone) {
-			if e.Node.ID != primary {
-				nodes, _ := e.Store.Nodes(ctx)
-				forward := false
-				for _, n := range nodes {
-					if n.ID == primary && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
-						if e.Runtime.Redirect(ctx, n) == nil {
-							forward = true
-						}
-					}
-				}
-				if !forward {
-					if err = e.Runtime.Maintenance(ctx); err != nil {
-						return err
-					}
-				}
-			} else {
-				if err = e.Runtime.Maintenance(ctx); err != nil {
-					return err
-				}
-			}
-			// Prepared candidates are owned by issued start/admit work. Between
-			// steps they stay closed; a paused plan cannot autonomously admit them.
-			if startIssued && member {
-				return nil
-			}
-			return e.stop(ctx, "active-plan-recovery")
-		}
-		if localDone {
-			return e.startStable(ctx, p.ReleaseDigest, false, e.Node.ID == primary)
-		}
-		if disrupted {
-			if err = e.Runtime.Maintenance(ctx); err != nil {
-				return err
-			}
-			return e.stop(ctx, "migration-barrier")
-		}
-		state, _, statusErr := e.Runtime.Status(ctx)
-		if statusErr == nil && state.Ready {
-			return nil
-		}
-		if e.Node.ID != primary {
-			nodes, _ := e.Store.Nodes(ctx)
-			for _, n := range nodes {
-				if n.ID == primary && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
-					_ = e.Runtime.Redirect(ctx, n)
-					return e.stop(ctx, "active-plan-recovery")
-				}
-			}
-		}
-		if err = e.Runtime.Maintenance(ctx); err != nil {
-			return err
-		}
-		return e.stop(ctx, "active-plan-recovery")
+	if active := activePlan(plans); active != nil {
+		return e.recoverActivePlan(ctx, *active, primary)
 	}
 	if bootstrap {
 		var admitted bool
@@ -813,6 +751,116 @@ func (e *Engine) Recover(ctx context.Context, bootstrap bool) error {
 		bootstrap = !admitted && e.Node.ID == primary
 	}
 	return e.startStable(ctx, baseline, bootstrap, e.Node.ID == primary)
+}
+
+// activePlan returns the plan a restart must respect: the oldest running or
+// paused plan, or nil when nothing is in flight.
+func activePlan(plans []Plan) *Plan {
+	for i := range plans {
+		if plans[i].Status == "running" || plans[i].Status == "paused" {
+			return &plans[i]
+		}
+	}
+	return nil
+}
+
+// recoverActivePlan restarts this node into the state an in-flight plan assigns
+// it. Each branch either forwards to the primary, stops, or resumes stable
+// serving; the durable plan, not memory, decides which.
+func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) error {
+	if p.Strategy != PrimaryFirst {
+		return e.enterMaintenanceAndStop(ctx, "legacy-plan-recovery")
+	}
+	member := false
+	for _, id := range p.Nodes {
+		if id == e.Node.ID {
+			member = true
+		}
+	}
+	stopped, startIssued, localDone, disrupted := scanNodeSteps(p, e.Node.ID)
+	if !member || (stopped && !startIssued) || (startIssued && !localDone) {
+		forwarded := false
+		if e.Node.ID != primary {
+			if _, ok := e.redirectToPrimary(ctx, primary); ok {
+				forwarded = true
+			}
+		}
+		if !forwarded {
+			if err := e.Runtime.Maintenance(ctx); err != nil {
+				return err
+			}
+		}
+		// Prepared candidates are owned by issued start/admit work. Between
+		// steps they stay closed; a paused plan cannot autonomously admit them.
+		if startIssued && member {
+			return nil
+		}
+		return e.stop(ctx, "active-plan-recovery")
+	}
+	if localDone {
+		return e.startStable(ctx, p.ReleaseDigest, false, e.Node.ID == primary)
+	}
+	if disrupted {
+		return e.enterMaintenanceAndStop(ctx, "migration-barrier")
+	}
+	state, _, statusErr := e.Runtime.Status(ctx)
+	if statusErr == nil && state.Ready {
+		return nil
+	}
+	if e.Node.ID != primary {
+		if attempted, _ := e.redirectToPrimary(ctx, primary); attempted {
+			return e.stop(ctx, "active-plan-recovery")
+		}
+	}
+	return e.enterMaintenanceAndStop(ctx, "active-plan-recovery")
+}
+
+// scanNodeSteps reads the plan's steps that concern nodeID.
+func scanNodeSteps(p Plan, nodeID string) (stopped, startIssued, localDone, disrupted bool) {
+	for _, st := range p.Steps {
+		if st.Action == "maintenance" {
+			disrupted = true
+		}
+		if st.NodeID != nodeID {
+			continue
+		}
+		switch st.Action {
+		case "stop":
+			stopped = true
+			startIssued = false
+			localDone = false
+		case "start", "start-primary":
+			startIssued = true
+		case "local":
+			localDone = st.Status == "done"
+		}
+	}
+	return stopped, startIssued, localDone, disrupted
+}
+
+// redirectToPrimary routes this node's serving through the primary when the
+// primary is fresh. attempted reports that a fresh primary was found, so a
+// redirect was tried whether or not it succeeded; ok reports that it worked.
+func (e *Engine) redirectToPrimary(ctx context.Context, primary string) (attempted, ok bool) {
+	nodes, _ := e.Store.Nodes(ctx)
+	for _, n := range nodes {
+		if n.ID == primary && n.ServingLocal(time.Now()) {
+			attempted = true
+			if e.Runtime.Redirect(ctx, n) == nil {
+				ok = true
+			}
+		}
+	}
+	return attempted, ok
+}
+
+// enterMaintenanceAndStop stops the core in maintenance for reason, which is
+// recorded in the stop confirmation and therefore differs per call site.
+func (e *Engine) enterMaintenanceAndStop(ctx context.Context, reason string) error {
+	if err := e.Runtime.Maintenance(ctx); err != nil {
+		return err
+	}
+	return e.stop(ctx, reason)
 }
 func (e *Engine) startStable(ctx context.Context, digest string, bootstrap, coordinate bool) error {
 	if err := e.Store.withChange(ctx, func(ctx context.Context) error {
@@ -906,7 +954,7 @@ func (e *Engine) requireFreshNodes(ctx context.Context, ids []string) error {
 	}
 	fresh := make(map[string]bool, len(nodes))
 	for _, n := range nodes {
-		fresh[n.ID] = !n.LastSeen.IsZero() && time.Since(n.LastSeen) < 20*time.Second
+		fresh[n.ID] = n.Fresh(time.Now())
 	}
 	for _, id := range ids {
 		if !fresh[id] {

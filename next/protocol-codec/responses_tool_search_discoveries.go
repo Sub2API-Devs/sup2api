@@ -61,45 +61,58 @@ func promotedResponsesToolSearchDiscoveries(tools, input []any) ([]any, error) {
 		if _, err := json.Marshal(discoveries); err != nil {
 			continue
 		}
-		for _, rawDiscovery := range discoveries {
-			discovery, ok := rawDiscovery.(map[string]any)
+		found, err := admitToolDiscoveries(known, discoveries)
+		if err != nil {
+			return nil, err
+		}
+		promoted = append(promoted, found...)
+	}
+	return promoted, nil
+}
+
+// admitToolDiscoveries promotes the tools declared by one tool_search_output
+// item. A name already declared identically is skipped; a conflicting one is an
+// error the upstream cannot disambiguate.
+func admitToolDiscoveries(known map[string]responsesDiscoveredToolIdentity, discoveries []any) ([]any, error) {
+	promoted := make([]any, 0, len(discoveries))
+	for _, rawDiscovery := range discoveries {
+		discovery, ok := rawDiscovery.(map[string]any)
+		if !ok {
+			continue
+		}
+		typ := strings.TrimSpace(stringValue(discovery["type"]))
+		switch typ {
+		case "function", "custom":
+			copy, identity, ok := responsesDirectToolDiscovery(discovery, typ)
 			if !ok {
 				continue
 			}
-			typ := strings.TrimSpace(stringValue(discovery["type"]))
-			switch typ {
-			case "function", "custom":
-				copy, identity, ok := responsesDirectToolDiscovery(discovery, typ)
-				if !ok {
-					continue
-				}
-				appendTool, err := admitResponsesDiscoveredTool(known, identity.name, identity)
+			appendTool, err := admitResponsesDiscoveredTool(known, identity.name, identity)
+			if err != nil {
+				return nil, err
+			}
+			if appendTool {
+				promoted = append(promoted, copy)
+			}
+		case "namespace":
+			copy, identities, ok := responsesNamespaceToolDiscovery(discovery)
+			if !ok {
+				continue
+			}
+			children := make([]any, 0, len(identities))
+			for _, candidate := range identities {
+				appendTool, err := admitResponsesDiscoveredTool(known, candidate.flat, candidate.identity)
 				if err != nil {
 					return nil, err
 				}
 				if appendTool {
-					promoted = append(promoted, copy)
+					children = append(children, candidate.child)
 				}
-			case "namespace":
-				copy, identities, ok := responsesNamespaceToolDiscovery(discovery)
-				if !ok {
-					continue
-				}
-				children := make([]any, 0, len(identities))
-				for _, candidate := range identities {
-					appendTool, err := admitResponsesDiscoveredTool(known, candidate.flat, candidate.identity)
-					if err != nil {
-						return nil, err
-					}
-					if appendTool {
-						children = append(children, candidate.child)
-					}
-				}
-				if len(children) > 0 {
-					copy["tools"] = children
-					delete(copy, "children")
-					promoted = append(promoted, copy)
-				}
+			}
+			if len(children) > 0 {
+				copy["tools"] = children
+				delete(copy, "children")
+				promoted = append(promoted, copy)
 			}
 		}
 	}

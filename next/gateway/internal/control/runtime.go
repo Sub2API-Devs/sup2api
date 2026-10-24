@@ -119,7 +119,7 @@ func (r *LocalRuntime) RefreshForward(ctx context.Context, nodes []Node) error {
 		return nil
 	}
 	for _, n := range nodes {
-		if n.PeerURL == current.PeerURL && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
+		if n.PeerURL == current.PeerURL && n.ServingLocal(time.Now()) {
 			if n.CoreBootID != current.CoreBootID || n.RouteRevision != current.PeerRevision {
 				return r.redirectLocked(ctx, n)
 			}

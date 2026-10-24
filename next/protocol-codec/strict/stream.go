@@ -50,7 +50,13 @@ func (s *Stream) chat(delta object, finish, usage any) []Event {
 	}
 	return s.emit("", o)
 }
-func (s *Stream) itemID(i int) string { return fmt.Sprintf("%s_item_%d", s.m["id"], i) }
+
+// streamItemID is the single definition of the Responses item id this adapter
+// mints for output index i of the message id. Both the streamed events and the
+// buffered response use it so a client can correlate them.
+func streamItemID(id any, index int) string { return fmt.Sprintf("%s_item_%d", id, index) }
+
+func (s *Stream) itemID(i int) string { return streamItemID(s.m["id"], i) }
 func (s *Stream) partEvent(name string, i int, fields object) []Event {
 	o := object{"type": name, "item_id": s.itemID(i), "output_index": i}
 	for k, v := range fields {
@@ -97,6 +103,10 @@ func (s *Stream) Event(ev Event) (events []Event, err error) {
 	s.pending = nil
 	return out, nil
 }
+
+// process validates one upstream SSE event and dispatches it to the handler for
+// its type. Handlers own their event's conversion; process keeps the terminal
+// guards and the single place that marks the stream failed on error.
 func (s *Stream) process(ev Event) (events []Event, err error) {
 	if s.failed || s.done {
 		return nil, fail("stream", "event after failure or terminal")
@@ -121,202 +131,230 @@ func (s *Stream) process(ev Event) (events []Event, err error) {
 	case "ping":
 		return nil, keys(o, "ping", "type")
 	case "error":
-		s.failed = true
-		details, err := asObject(o["error"], "stream.error")
-		if err != nil {
-			return nil, err
-		}
-		if _, err = requiredString(details, "type", "stream.error"); err != nil {
-			return nil, err
-		}
-		if _, err = requiredString(details, "message", "stream.error"); err != nil {
-			return nil, err
-		}
-		return s.emit("error", object{"type": "error", "error": o["error"]}), nil
+		return s.handleError(o)
 	case "message_start":
-		if s.m != nil {
-			return nil, fail("stream", "duplicate start")
-		}
-		if e = keys(o, "start", "type", "message"); e != nil {
-			return nil, e
-		}
-		m, e := asObject(o["message"], "start.message")
-		if e != nil {
-			return nil, e
-		}
-		if m["type"] != "message" || m["role"] != "assistant" {
-			return nil, fail("start.message", "expected assistant message")
-		}
-		for _, key := range []string{"id", "model"} {
-			if _, e = requiredString(m, key, "start.message"); e != nil {
-				return nil, e
-			}
-		}
-		a, e := list(m["content"], "start.content")
-		if e != nil || len(a) != 0 {
-			return nil, fail("start.content", "expected empty content")
-		}
-		if _, e = validatedUsage(m["usage"]); e != nil {
-			return nil, e
-		}
-		s.m = m
-		if s.p.protocol == "openai.chat" {
-			return s.chat(object{"role": "assistant"}, nil, nil), nil
-		}
-		return s.emit("response.created", object{"type": "response.created", "response": object{"id": m["id"], "object": "response", "created_at": s.created, "model": m["model"], "status": "in_progress", "output": []any{}}}), nil
+		return s.handleMessageStart(o)
 	case "content_block_start":
-		if s.m == nil || s.reason != "" {
-			return nil, fail("stream", "block outside message")
-		}
-		if e = keys(o, "block_start", "type", "index", "content_block"); e != nil {
-			return nil, e
-		}
-		i, e := integer(o["index"], "index", 0, 100000)
-		if e != nil || int(i) != len(s.blocks) {
-			return nil, fail("index", "nonsequential block")
-		}
-		b, e := asObject(o["content_block"], "block")
-		if e != nil {
-			return nil, e
-		}
-		if b["type"] == "thinking" {
-			if e = keys(b, "block", "type", "thinking", "signature"); e != nil {
-				return nil, e
-			}
-			if _, ok := b["thinking"].(string); !ok {
-				return nil, fail("block.thinking", "expected string")
-			}
-			if _, e = optionalString(b, "signature", "block"); e != nil {
-				return nil, e
-			}
-		} else if e = validateOutputBlock(b, "block"); e != nil {
-			return nil, e
-		}
-		if s.p.protocol == "openai.chat" && (b["type"] == "thinking" || b["type"] == "redacted_thinking") {
-			return nil, fail("block", "Chat cannot preserve signed reasoning; use Responses")
-		}
-		sb := &streamBlock{block: b, open: true, toolIndex: s.tools}
-		if b["type"] == "tool_use" {
-			s.tools++
-		}
-		s.blocks = append(s.blocks, sb)
-		return s.start(int(i), sb), nil
+		return s.handleContentBlockStart(o)
 	case "content_block_delta":
-		if e = keys(o, "block_delta", "type", "index", "delta"); e != nil {
-			return nil, e
-		}
-		i, b, e := s.open(o)
-		if e != nil {
-			return nil, e
-		}
-		d, e := asObject(o["delta"], "delta")
-		if e != nil {
-			return nil, e
-		}
-		return s.delta(i, b, d)
+		return s.handleContentBlockDelta(o)
 	case "content_block_stop":
-		if e = keys(o, "block_stop", "type", "index"); e != nil {
-			return nil, e
-		}
-		i, b, e := s.open(o)
-		if e != nil {
-			return nil, e
-		}
-		if b.hasArgs {
-			a, e := decodeObject([]byte(b.args), "tool.arguments")
-			if e != nil {
-				return nil, e
-			}
-			b.block["input"] = a
-		}
-		if e = validateOutputBlock(b.block, "block"); e != nil {
-			return nil, e
-		}
-		b.open = false
-		return s.stop(i, b)
+		return s.handleContentBlockStop(o)
 	case "message_delta":
-		if s.m == nil || s.reason != "" {
-			return nil, fail("message_delta", "unexpected delta")
-		}
-		for _, b := range s.blocks {
-			if b.open {
-				return nil, fail("message_delta", "open block")
-			}
-		}
-		d, e := asObject(o["delta"], "message_delta.delta")
-		if e != nil {
-			return nil, e
-		}
-		s.reason, e = requiredString(d, "stop_reason", "message_delta.delta")
-		if e != nil {
-			return nil, e
-		}
-		s.m["stop_reason"] = s.reason
-		if e = s.mergeFacts(d); e != nil {
-			return nil, e
-		}
-		for k, v := range o {
-			if k != "type" && k != "delta" && k != "usage" {
-				if e = s.mergeFacts(object{k: v}); e != nil {
-					return nil, e
-				}
-			}
-		}
-		if v, ok := d["stop_sequence"]; ok {
-			s.m["stop_sequence"] = v
-		}
-		u, e := asObject(o["usage"], "message_delta.usage")
-		if e != nil {
-			return nil, e
-		}
-		prior := s.m["usage"].(object)
-		for k, v := range u {
-			prior[k] = v
-		}
-		if _, e = validatedUsage(prior); e != nil {
-			return nil, e
-		}
-		return nil, nil
+		return s.handleMessageDelta(o)
 	case "message_stop":
-		if s.m == nil || s.reason == "" {
-			return nil, fail("message_stop", "missing terminal reason")
-		}
-		for k, v := range o {
-			if k != "type" {
-				if e = s.mergeFacts(object{k: v}); e != nil {
-					return nil, e
-				}
-			}
-		}
-		a := []any{}
-		for _, b := range s.blocks {
-			if b.open {
-				return nil, fail("message_stop", "open block")
-			}
-			a = append(a, b.block)
-		}
-		s.m["content"] = a
-		result, e := s.p.response(s.m, s.created)
-		if e != nil {
-			return nil, e
-		}
-		s.done = true
-		if s.p.protocol == "openai.chat" {
-			finish := result["choices"].([]any)[0].(object)["finish_reason"]
-			out := s.chatFinal(finish, result["provider_details"])
-			if s.p.includeUsage {
-				out = append(out, s.chat(nil, nil, result["usage"])...)
-			}
-			return append(out, Event{Data: []byte("[DONE]")}), nil
-		}
-		name := "response.completed"
-		if result["status"] == "incomplete" {
-			name = "response.incomplete"
-		}
-		return s.emit(name, object{"type": name, "response": result}), nil
+		return s.handleMessageStop(o)
 	default:
 		return nil, fail("stream.type", "unsupported event")
 	}
+}
+
+func (s *Stream) handleError(o object) ([]Event, error) {
+	s.failed = true
+	details, err := asObject(o["error"], "stream.error")
+	if err != nil {
+		return nil, err
+	}
+	if _, err = requiredString(details, "type", "stream.error"); err != nil {
+		return nil, err
+	}
+	if _, err = requiredString(details, "message", "stream.error"); err != nil {
+		return nil, err
+	}
+	return s.emit("error", object{"type": "error", "error": o["error"]}), nil
+}
+
+func (s *Stream) handleMessageStart(o object) ([]Event, error) {
+	if s.m != nil {
+		return nil, fail("stream", "duplicate start")
+	}
+	if err := keys(o, "start", "type", "message"); err != nil {
+		return nil, err
+	}
+	m, err := asObject(o["message"], "start.message")
+	if err != nil {
+		return nil, err
+	}
+	if m["type"] != "message" || m["role"] != "assistant" {
+		return nil, fail("start.message", "expected assistant message")
+	}
+	for _, key := range []string{"id", "model"} {
+		if _, err = requiredString(m, key, "start.message"); err != nil {
+			return nil, err
+		}
+	}
+	a, err := list(m["content"], "start.content")
+	if err != nil || len(a) != 0 {
+		return nil, fail("start.content", "expected empty content")
+	}
+	if _, err = validatedUsage(m["usage"]); err != nil {
+		return nil, err
+	}
+	s.m = m
+	if s.p.protocol == "openai.chat" {
+		return s.chat(object{"role": "assistant"}, nil, nil), nil
+	}
+	return s.emit("response.created", object{"type": "response.created", "response": object{"id": m["id"], "object": "response", "created_at": s.created, "model": m["model"], "status": "in_progress", "output": []any{}}}), nil
+}
+
+func (s *Stream) handleContentBlockStart(o object) ([]Event, error) {
+	if s.m == nil || s.reason != "" {
+		return nil, fail("stream", "block outside message")
+	}
+	if err := keys(o, "block_start", "type", "index", "content_block"); err != nil {
+		return nil, err
+	}
+	i, err := integer(o["index"], "index", 0, 100000)
+	if err != nil || int(i) != len(s.blocks) {
+		return nil, fail("index", "nonsequential block")
+	}
+	b, err := asObject(o["content_block"], "block")
+	if err != nil {
+		return nil, err
+	}
+	if b["type"] == "thinking" {
+		if err = keys(b, "block", "type", "thinking", "signature"); err != nil {
+			return nil, err
+		}
+		if _, ok := b["thinking"].(string); !ok {
+			return nil, fail("block.thinking", "expected string")
+		}
+		if _, err = optionalString(b, "signature", "block"); err != nil {
+			return nil, err
+		}
+	} else if err = validateOutputBlock(b, "block"); err != nil {
+		return nil, err
+	}
+	if s.p.protocol == "openai.chat" && (b["type"] == "thinking" || b["type"] == "redacted_thinking") {
+		return nil, fail("block", "Chat cannot preserve signed reasoning; use Responses")
+	}
+	sb := &streamBlock{block: b, open: true, toolIndex: s.tools}
+	if b["type"] == "tool_use" {
+		s.tools++
+	}
+	s.blocks = append(s.blocks, sb)
+	return s.start(int(i), sb), nil
+}
+
+func (s *Stream) handleContentBlockDelta(o object) ([]Event, error) {
+	if err := keys(o, "block_delta", "type", "index", "delta"); err != nil {
+		return nil, err
+	}
+	i, b, err := s.open(o)
+	if err != nil {
+		return nil, err
+	}
+	d, err := asObject(o["delta"], "delta")
+	if err != nil {
+		return nil, err
+	}
+	return s.delta(i, b, d)
+}
+
+func (s *Stream) handleContentBlockStop(o object) ([]Event, error) {
+	if err := keys(o, "block_stop", "type", "index"); err != nil {
+		return nil, err
+	}
+	i, b, err := s.open(o)
+	if err != nil {
+		return nil, err
+	}
+	if b.hasArgs {
+		a, err := decodeObject([]byte(b.args), "tool.arguments")
+		if err != nil {
+			return nil, err
+		}
+		b.block["input"] = a
+	}
+	if err = validateOutputBlock(b.block, "block"); err != nil {
+		return nil, err
+	}
+	b.open = false
+	return s.stop(i, b)
+}
+
+func (s *Stream) handleMessageDelta(o object) ([]Event, error) {
+	if s.m == nil || s.reason != "" {
+		return nil, fail("message_delta", "unexpected delta")
+	}
+	for _, b := range s.blocks {
+		if b.open {
+			return nil, fail("message_delta", "open block")
+		}
+	}
+	d, err := asObject(o["delta"], "message_delta.delta")
+	if err != nil {
+		return nil, err
+	}
+	s.reason, err = requiredString(d, "stop_reason", "message_delta.delta")
+	if err != nil {
+		return nil, err
+	}
+	s.m["stop_reason"] = s.reason
+	if err = s.mergeFacts(d); err != nil {
+		return nil, err
+	}
+	for k, v := range o {
+		if k != "type" && k != "delta" && k != "usage" {
+			if err = s.mergeFacts(object{k: v}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if v, ok := d["stop_sequence"]; ok {
+		s.m["stop_sequence"] = v
+	}
+	u, err := asObject(o["usage"], "message_delta.usage")
+	if err != nil {
+		return nil, err
+	}
+	prior := s.m["usage"].(object)
+	for k, v := range u {
+		prior[k] = v
+	}
+	if _, err = validatedUsage(prior); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (s *Stream) handleMessageStop(o object) ([]Event, error) {
+	if s.m == nil || s.reason == "" {
+		return nil, fail("message_stop", "missing terminal reason")
+	}
+	for k, v := range o {
+		if k != "type" {
+			if err := s.mergeFacts(object{k: v}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	a := []any{}
+	for _, b := range s.blocks {
+		if b.open {
+			return nil, fail("message_stop", "open block")
+		}
+		a = append(a, b.block)
+	}
+	s.m["content"] = a
+	result, err := s.p.response(s.m, s.created)
+	if err != nil {
+		return nil, err
+	}
+	s.done = true
+	if s.p.protocol == "openai.chat" {
+		finish := result["choices"].([]any)[0].(object)["finish_reason"]
+		out := s.chatFinal(finish, result["provider_details"])
+		if s.p.includeUsage {
+			out = append(out, s.chat(nil, nil, result["usage"])...)
+		}
+		return append(out, Event{Data: []byte("[DONE]")}), nil
+	}
+	name := "response.completed"
+	if result["status"] == "incomplete" {
+		name = "response.incomplete"
+	}
+	return s.emit(name, object{"type": name, "response": result}), nil
 }
 func (s *Stream) Flush() ([]Event, error) {
 	if s.failed || !s.done {

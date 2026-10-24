@@ -583,20 +583,7 @@ func (r *ResponsesClientToolStreamRestorer) Restore(event ResponsesStreamEvent) 
 	switch event.Type {
 	case "response.output_item.added":
 		if call := r.recordItem(event); call != nil {
-			if call.kind == "custom" {
-				event.Item.Type = "custom_tool_call"
-				event.Item.Input = ""
-				event.Item.Arguments = ""
-				event.Item.Namespace = ""
-			} else {
-				event.Item.Type = "tool_search_call"
-				event.Item.Name = ""
-				event.Item.Arguments = "{}"
-				event.Item.Namespace = ""
-			}
-			if call.clientItemID != "" {
-				event.Item.ID = call.clientItemID
-			}
+			restoreOutputItem(&event, call, false)
 		}
 		emit(r.restoreNamespaceEvent(event))
 	case "response.function_call_arguments.delta":
@@ -623,23 +610,7 @@ func (r *ResponsesClientToolStreamRestorer) Restore(event ResponsesStreamEvent) 
 		emit(r.restoreNamespaceEvent(event))
 	case "response.output_item.done":
 		if call := r.recordItem(event); call != nil {
-			if call.kind == "custom" {
-				event.Item.Type = "custom_tool_call"
-				event.Item.Input = extractCustomToolCallInput(call.arguments.String())
-				event.Item.Arguments = ""
-				event.Item.Namespace = ""
-			} else {
-				event.Item.Type = "tool_search_call"
-				event.Item.Name = ""
-				event.Item.Arguments = call.arguments.String()
-				if strings.TrimSpace(event.Item.Arguments) == "" {
-					event.Item.Arguments = "{}"
-				}
-				event.Item.Namespace = ""
-			}
-			if call.clientItemID != "" {
-				event.Item.ID = call.clientItemID
-			}
+			restoreOutputItem(&event, call, true)
 			delete(r.calls, call.itemID)
 			delete(r.calls, call.callID)
 			delete(r.byOutput, call.outputIdx)
@@ -653,6 +624,38 @@ func (r *ResponsesClientToolStreamRestorer) Restore(event ResponsesStreamEvent) 
 		emit(r.restoreNamespaceEvent(event))
 	}
 	return out
+}
+
+// restoreOutputItem rewrites a lowered proxy function item back into the
+// client-facing custom_tool_call / tool_search_call shape. done selects the
+// arguments source: the added event always announces "{}", while the done event
+// carries the buffered arguments (falling back to "{}" when empty).
+func restoreOutputItem(event *ResponsesStreamEvent, call *responsesClientToolStreamCall, done bool) {
+	if call.kind == "custom" {
+		event.Item.Type = "custom_tool_call"
+		if done {
+			event.Item.Input = extractCustomToolCallInput(call.arguments.String())
+		} else {
+			event.Item.Input = ""
+		}
+		event.Item.Arguments = ""
+		event.Item.Namespace = ""
+	} else {
+		event.Item.Type = "tool_search_call"
+		event.Item.Name = ""
+		if done {
+			event.Item.Arguments = call.arguments.String()
+			if strings.TrimSpace(event.Item.Arguments) == "" {
+				event.Item.Arguments = "{}"
+			}
+		} else {
+			event.Item.Arguments = "{}"
+		}
+		event.Item.Namespace = ""
+	}
+	if call.clientItemID != "" {
+		event.Item.ID = call.clientItemID
+	}
 }
 
 // RestoreEvent restores one Responses SSE JSON data payload. Custom tool

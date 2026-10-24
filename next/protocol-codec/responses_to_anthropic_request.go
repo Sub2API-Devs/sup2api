@@ -164,89 +164,33 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			}
 
 		case item.Type == "function_call":
-			// function_call → assistant message with tool_use block
-			input := json.RawMessage("{}")
-			if item.Arguments != "" {
-				input = json.RawMessage(item.Arguments)
-			}
-			block := AnthropicContentBlock{
-				Type:  "tool_use",
-				ID:    fromResponsesCallIDToAnthropic(item.CallID),
-				Name:  item.Name,
-				Input: input,
-			}
-			blockJSON, _ := json.Marshal([]AnthropicContentBlock{block})
-			messages = append(messages, AnthropicMessage{
-				Role:    "assistant",
-				Content: blockJSON,
-			})
+			messages = append(messages, convertFunctionCallItemToAnthropic(item))
 
 		case item.Type == "function_call_output":
-			// function_call_output → user message with tool_result block
-			contentJSON := responsesFunctionOutputToAnthropicContent(item)
-			block := AnthropicContentBlock{
-				Type:      "tool_result",
-				ToolUseID: fromResponsesCallIDToAnthropic(item.CallID),
-				Content:   contentJSON,
-			}
-			blockJSON, _ := json.Marshal([]AnthropicContentBlock{block})
-			messages = append(messages, AnthropicMessage{
-				Role:    "user",
-				Content: blockJSON,
-			})
+			messages = append(messages, convertFunctionCallOutputItemToAnthropic(item))
 
 		case item.Type == "reasoning":
-			// Only decode marked Anthropic bridge envelopes, not arbitrary
-			// OpenAI ciphertext. The upstream remains responsible for signature validation.
-			if preserveThinking && strings.HasPrefix(item.EncryptedContent, anthropicThinkingEnvelopePrefix) {
-				raw, err := base64.RawStdEncoding.DecodeString(strings.TrimPrefix(item.EncryptedContent, anthropicThinkingEnvelopePrefix))
-				if err != nil {
-					return nil, nil, fmt.Errorf("invalid Anthropic thinking envelope: %w", err)
-				}
-				var block AnthropicContentBlock
-				if err := json.Unmarshal(raw, &block); err != nil {
-					return nil, nil, fmt.Errorf("invalid Anthropic thinking block: %w", err)
-				}
-				if (block.Type != "thinking" || block.Signature == "") && (block.Type != "redacted_thinking" || block.Data == "") {
-					return nil, nil, fmt.Errorf("invalid Anthropic signed thinking block")
-				}
-				content, err := json.Marshal([]AnthropicContentBlock{block})
-				if err != nil {
-					return nil, nil, err
-				}
-				messages = append(messages, AnthropicMessage{Role: "assistant", Content: content})
+			message, ok, err := convertReasoningItemToAnthropic(item, preserveThinking)
+			if err != nil {
+				return nil, nil, err
+			}
+			if ok {
+				messages = append(messages, message)
 			}
 
 		case item.Role == "user":
-			content, err := convertResponsesUserToAnthropicContent(item.Content)
+			content, err := convertRoleItemToAnthropic(item, "user")
 			if err != nil {
 				return nil, nil, err
 			}
-			// 内容里只有网关不认识的分片时，sanitize 会得到空串。Anthropic 拒收
-			// 空内容消息（"all messages must have non-empty content"），整条丢掉
-			// 比发一条必然 400 的消息更可用。
-			if anthropicContentIsEmpty(content) {
-				continue
-			}
-			messages = append(messages, AnthropicMessage{
-				Role:    "user",
-				Content: content,
-			})
+			messages = appendIfNotEmptyAnthropic(messages, "user", content, false)
 
 		case item.Role == "assistant":
-			content, err := convertResponsesAssistantToAnthropicContent(item.Content)
+			content, err := convertRoleItemToAnthropic(item, "assistant")
 			if err != nil {
 				return nil, nil, err
 			}
-			// 同上：分片全不认识时会退化成单个空 text 块，而 Anthropic 拒收
-			// 空文本块（"text content blocks must contain non-whitespace text"）。
-			if anthropicContentIsEmpty(content) || anthropicContentIsOnlyBlankText(content) {
-				continue
-			}
-			messages = append(messages, AnthropicMessage{
-				Role:    "assistant",
-				Content: content,
-			})
+			messages = appendIfNotEmptyAnthropic(messages, "assistant", content, true)
 
 		default:
 			// 未知 role/type —— 尽量当作 user 消息保留其中的文本/图片。
@@ -256,17 +200,11 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			if item.Content == nil {
 				continue
 			}
-			content, err := convertResponsesUserToAnthropicContent(item.Content)
+			content, err := convertRoleItemToAnthropic(item, "user")
 			if err != nil {
 				return nil, nil, err
 			}
-			if anthropicContentIsEmpty(content) {
-				continue
-			}
-			messages = append(messages, AnthropicMessage{
-				Role:    "user",
-				Content: content,
-			})
+			messages = appendIfNotEmptyAnthropic(messages, "user", content, false)
 		}
 	}
 
@@ -285,6 +223,89 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	}
 
 	return system, messages, nil
+}
+
+// convertFunctionCallItemToAnthropic maps a Responses function_call item to an
+// assistant message carrying one tool_use block.
+func convertFunctionCallItemToAnthropic(item ResponsesInputItem) AnthropicMessage {
+	input := json.RawMessage("{}")
+	if item.Arguments != "" {
+		input = json.RawMessage(item.Arguments)
+	}
+	block := AnthropicContentBlock{
+		Type:  "tool_use",
+		ID:    fromResponsesCallIDToAnthropic(item.CallID),
+		Name:  item.Name,
+		Input: input,
+	}
+	blockJSON, _ := json.Marshal([]AnthropicContentBlock{block})
+	return AnthropicMessage{Role: "assistant", Content: blockJSON}
+}
+
+// convertFunctionCallOutputItemToAnthropic maps a Responses function_call_output
+// item to a user message carrying one tool_result block.
+func convertFunctionCallOutputItemToAnthropic(item ResponsesInputItem) AnthropicMessage {
+	contentJSON := responsesFunctionOutputToAnthropicContent(item)
+	block := AnthropicContentBlock{
+		Type:      "tool_result",
+		ToolUseID: fromResponsesCallIDToAnthropic(item.CallID),
+		Content:   contentJSON,
+	}
+	blockJSON, _ := json.Marshal([]AnthropicContentBlock{block})
+	return AnthropicMessage{Role: "user", Content: blockJSON}
+}
+
+// convertReasoningItemToAnthropic restores an assistant thinking block from a
+// marked Anthropic bridge envelope. ok is false for reasoning items this bridge
+// did not produce: arbitrary OpenAI ciphertext is never decoded.
+func convertReasoningItemToAnthropic(item ResponsesInputItem, preserveThinking bool) (AnthropicMessage, bool, error) {
+	// Only decode marked Anthropic bridge envelopes, not arbitrary
+	// OpenAI ciphertext. The upstream remains responsible for signature validation.
+	if !preserveThinking || !strings.HasPrefix(item.EncryptedContent, anthropicThinkingEnvelopePrefix) {
+		return AnthropicMessage{}, false, nil
+	}
+	raw, err := base64.RawStdEncoding.DecodeString(strings.TrimPrefix(item.EncryptedContent, anthropicThinkingEnvelopePrefix))
+	if err != nil {
+		return AnthropicMessage{}, false, fmt.Errorf("invalid Anthropic thinking envelope: %w", err)
+	}
+	var block AnthropicContentBlock
+	if err := json.Unmarshal(raw, &block); err != nil {
+		return AnthropicMessage{}, false, fmt.Errorf("invalid Anthropic thinking block: %w", err)
+	}
+	if (block.Type != "thinking" || block.Signature == "") && (block.Type != "redacted_thinking" || block.Data == "") {
+		return AnthropicMessage{}, false, fmt.Errorf("invalid Anthropic signed thinking block")
+	}
+	content, err := json.Marshal([]AnthropicContentBlock{block})
+	if err != nil {
+		return AnthropicMessage{}, false, err
+	}
+	return AnthropicMessage{Role: "assistant", Content: content}, true, nil
+}
+
+// convertRoleItemToAnthropic converts the content of a user or assistant item
+// with that role's whitelist.
+func convertRoleItemToAnthropic(item ResponsesInputItem, role string) (json.RawMessage, error) {
+	if role == "assistant" {
+		return convertResponsesAssistantToAnthropicContent(item.Content)
+	}
+	return convertResponsesUserToAnthropicContent(item.Content)
+}
+
+// appendIfNotEmptyAnthropic drops content Anthropic would reject: an entirely
+// empty message, or — when rejectBlankText is set — one reduced to a lone blank
+// text block. User items only check emptiness; assistant items check both.
+func appendIfNotEmptyAnthropic(messages []AnthropicMessage, role string, content json.RawMessage, rejectBlankText bool) []AnthropicMessage {
+	// 内容里只有网关不认识的分片时，sanitize 会得到空串。Anthropic 拒收
+	// 空内容消息（"all messages must have non-empty content"），整条丢掉
+	// 比发一条必然 400 的消息更可用。assistant 还可能退化成全空白文本块，同样拒收
+	// （"text content blocks must contain non-whitespace text"）。
+	if anthropicContentIsEmpty(content) {
+		return messages
+	}
+	if rejectBlankText && anthropicContentIsOnlyBlankText(content) {
+		return messages
+	}
+	return append(messages, AnthropicMessage{Role: role, Content: content})
 }
 
 func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.RawMessage {
@@ -356,17 +377,18 @@ func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.Raw
 // Responses→Chat path.
 func normalizeAnthropicToolPairing(messages []AnthropicMessage) []AnthropicMessage {
 	// Index every tool_result block by its tool_use id (last wins on dup).
-	results := make(map[string]AnthropicContentBlock)
+	// Only the indexing is shared with the Chat normalizer; the rebuild below is
+	// specific to Anthropic's block array shape.
+	var userBlocks []AnthropicContentBlock
 	for _, m := range messages {
 		if m.Role != "user" {
 			continue
 		}
-		for _, b := range parseContentBlocks(m.Content) {
-			if b.Type == "tool_result" && b.ToolUseID != "" {
-				results[b.ToolUseID] = b
-			}
-		}
+		userBlocks = append(userBlocks, parseContentBlocks(m.Content)...)
 	}
+	results := indexLastBy(userBlocks, func(b AnthropicContentBlock) (string, bool) {
+		return b.ToolUseID, b.Type == "tool_result" && b.ToolUseID != ""
+	})
 
 	out := make([]AnthropicMessage, 0, len(messages))
 	for _, m := range messages {

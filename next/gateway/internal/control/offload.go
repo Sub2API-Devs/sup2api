@@ -63,7 +63,7 @@ func offloadTargets(set Offload, self Node, nodes []Node, was bool) []Node {
 	var out []Node
 	for _, n := range nodes {
 		if n.ID != self.ID && n.Enabled && n.Mode == "local" && n.Ready && !n.Offloading && n.CPUPercent != nil && *n.CPUPercent < low &&
-			n.ReleaseDigest == self.ReleaseDigest && n.CoreBootID != "" && n.RouteRevision != 0 && time.Since(n.LastSeen) < 20*time.Second {
+			n.ReleaseDigest == self.ReleaseDigest && n.CoreBootID != "" && n.RouteRevision != 0 && n.Fresh(time.Now()) {
 			out = append(out, n)
 		}
 	}

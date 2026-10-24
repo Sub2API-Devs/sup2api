@@ -33,6 +33,28 @@ type Node struct {
 	// cleared after it stopped; receivers authorize offloaded forwards by it.
 	Offloading bool `json:"offloading"`
 }
+
+// nodeFreshness is the age beyond which a heartbeat observation is stale. Every
+// routing and admission decision that needs a live node reads it through
+// Node.Fresh/ServingLocal so the window cannot drift between call sites.
+const nodeFreshness = 20 * time.Second
+
+// Fresh reports whether the node's last heartbeat observation is recent enough
+// to be trusted. It deliberately ignores Readiness, Mode and Enabled: callers
+// that only need liveness (for example follower observation checks) add those
+// conditions themselves.
+func (n Node) Fresh(now time.Time) bool {
+	return !n.LastSeen.IsZero() && now.Sub(n.LastSeen) < nodeFreshness
+}
+
+// ServingLocal reports whether the node is fresh, ready and serving its own core
+// locally. It deliberately ignores Enabled: several callers route to a node
+// regardless of scheduling state, and folding Enabled in would change where
+// requests for disabled nodes are forwarded.
+func (n Node) ServingLocal(now time.Time) bool {
+	return n.Fresh(now) && n.Ready && n.Mode == "local"
+}
+
 type Release struct {
 	Digest     string            `json:"digest"`
 	Manifest   rc.Manifest       `json:"manifest"`

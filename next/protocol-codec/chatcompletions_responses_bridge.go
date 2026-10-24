@@ -176,24 +176,19 @@ func EffectiveResponsesTools(req *ResponsesRequest) ([]ResponsesTool, error) {
 
 // CustomToolNames 收集 Responses 请求中 custom/freeform 工具的名字。chat 桥回程时
 // 需要据此把模型对这些工具的调用还原为 custom_tool_call 项（codex 只按该类型路由）。
-func CustomToolNames(tools []ResponsesTool) map[string]bool {
-	var out map[string]bool
-	for _, tool := range tools {
-		if tool.Type == "custom" && tool.Name != "" {
-			if out == nil {
-				out = make(map[string]bool)
-			}
-			out[tool.Name] = true
-		}
-	}
-	return out
-}
+func CustomToolNames(tools []ResponsesTool) map[string]bool { return toolNamesByType(tools, "custom") }
 
 // FunctionToolNames collects explicitly declared top-level function tools.
 func FunctionToolNames(tools []ResponsesTool) map[string]bool {
+	return toolNamesByType(tools, "function")
+}
+
+// toolNamesByType collects the non-empty names of tools of one type. The result
+// is nil when there are none, matching the callers that treat nil as absent.
+func toolNamesByType(tools []ResponsesTool, typ string) map[string]bool {
 	var out map[string]bool
 	for _, tool := range tools {
-		if tool.Type == "function" && tool.Name != "" {
+		if tool.Type == typ && tool.Name != "" {
 			if out == nil {
 				out = make(map[string]bool)
 			}
@@ -401,31 +396,12 @@ func normalizeResponsesDerivedChatMessageRoles(messages []ChatMessage) []ChatMes
 // buildChatMessagesFromItems walks the Responses input items and appends the
 // corresponding Chat messages.
 func buildChatMessagesFromItems(messages []ChatMessage, rawItems []json.RawMessage, opts *ResponsesToChatOptions) ([]ChatMessage, toolOutputMediaByCallID, error) {
-	// pendingReasoning holds the reasoning text from a reasoning item until the
-	// assistant message it belongs to is emitted. DeepSeek's thinking mode
-	// requires the reasoning_content that produced a tool call to be passed back
-	// on that assistant message; dropping it yields a 400. It only survives
-	// across an assistant message (so a following tool call in the same turn
-	// still receives it); any other role ends the thinking span.
-	var pendingReasoning string
-	// lastTurnReasoning is the most recent reasoning text of the current turn,
-	// surviving tool outputs. DeepSeek emits reasoning only once per turn, so
-	// chained tool calls (reasoning → call A → output A → call B) leave call B's
-	// assistant message without reasoning_content and DeepSeek 400s the history;
-	// replaying the turn's reasoning on B's message satisfies the contract. Only
-	// a user-side item ends the turn and clears it.
-	var lastTurnReasoning string
-	mediaByCallID := make(toolOutputMediaByCallID)
-	invalidFunctionCallIDs := make(map[string]struct{})
-	invalidEmptyFunctionCallOutputs := 0
-
-	reasoningForAssistant := func() string {
-		if pendingReasoning != "" {
-			return pendingReasoning
-		}
-		return lastTurnReasoning
+	b := &chatItemBuilder{
+		messages:               messages,
+		opts:                   opts,
+		mediaByCallID:          make(toolOutputMediaByCallID),
+		invalidFunctionCallIDs: make(map[string]struct{}),
 	}
-
 	for _, raw := range rawItems {
 		raw = bytesTrimSpace(raw)
 		if len(raw) == 0 || string(raw) == "null" {
@@ -436,178 +412,18 @@ func buildChatMessagesFromItems(messages []ChatMessage, rawItems []json.RawMessa
 		if err := json.Unmarshal(raw, &item); err != nil {
 			var text string
 			if textErr := json.Unmarshal(raw, &text); textErr == nil {
-				content, _ := json.Marshal(text)
-				messages = append(messages, ChatMessage{Role: "user", Content: content})
-				pendingReasoning = ""
-				lastTurnReasoning = ""
+				b.appendUserText(text)
 				continue
 			}
 			return nil, nil, fmt.Errorf("parse responses input item: %w", err)
 		}
 
-		role := chatCompletionsBridgeRole(rawString(item["role"]))
 		itemType := rawString(item["type"])
-		switch itemType {
-		case "reasoning":
-			if txt := extractResponsesReasoningText(item); txt != "" {
-				pendingReasoning = txt
-			} else if opts != nil && opts.ReasoningContentByID != nil {
-				// No plaintext summary (encrypted-only reasoning, e.g. after codex
-				// remote compaction): fall back to the gateway-side cache keyed
-				// by the reasoning item id, which always round-trips in history.
-				if id := rawString(item["id"]); id != "" {
-					if cached := opts.ReasoningContentByID(id); cached != "" {
-						pendingReasoning = cached
-					}
-				}
-			}
-			if pendingReasoning != "" {
-				lastTurnReasoning = pendingReasoning
-			}
-			continue
-		case "function_call":
-			arguments := rawString(item["arguments"])
-			if strings.TrimSpace(arguments) == "" {
-				arguments = "{}"
-			}
-			callID := rawString(item["call_id"])
-			if !json.Valid([]byte(arguments)) {
-				// A previous streamed turn can leave a truncated function_call in
-				// Codex history (for example after an upstream SSE parse failure or
-				// an output-limit interruption). Do not forward that item to a
-				// Chat Completions provider, which rejects the entire request. Its
-				// matching output is skipped below as well, allowing the next user
-				// turn to self-heal instead of repeatedly replaying the poison.
-				if callID != "" {
-					invalidFunctionCallIDs[callID] = struct{}{}
-				} else {
-					invalidEmptyFunctionCallOutputs++
-				}
-				pendingReasoning = ""
-				continue
-			}
-			name := rawString(item["name"])
-			// namespace 子工具的历史调用带 namespace 字段，需与请求方向的摊平
-			// 命名（namespaceChildrenToChatTools）保持一致。
-			if ns := rawString(item["namespace"]); ns != "" {
-				name = flattenNamespaceToolName(ns, name)
-			}
-			toolCall := ChatToolCall{
-				ID:   callID,
-				Type: "function",
-				Function: ChatFunctionCall{
-					Name:      name,
-					Arguments: arguments,
-				},
-			}
-			messages = appendAssistantToolCall(messages, toolCall, reasoningForAssistant())
-			pendingReasoning = ""
-			continue
-		case "tool_search_call":
-			// tool_search 调用的 arguments 是 JSON 对象（如 {"query": ...}），
-			// 原文即为降级 function 调用的 arguments 字符串。
-			arguments := strings.TrimSpace(string(bytesTrimSpace(item["arguments"])))
-			if s := rawString(item["arguments"]); s != "" {
-				arguments = s
-			}
-			if arguments == "" || arguments == "null" {
-				arguments = "{}"
-			}
-			toolCall := ChatToolCall{
-				ID:   rawString(item["call_id"]),
-				Type: "function",
-				Function: ChatFunctionCall{
-					Name:      toolSearchProxyName,
-					Arguments: arguments,
-				},
-			}
-			messages = appendAssistantToolCall(messages, toolCall, reasoningForAssistant())
-			pendingReasoning = ""
-			continue
-		case "custom_tool_call":
-			// custom/freeform 工具的历史调用：input 自由文本包进降级 function 工具
-			// 的 {"input": ...} 参数，与请求方向的工具降级（customToolInputSchema）
-			// 保持一致，模型才能把历史与当前工具定义对上。
-			arguments, _ := json.Marshal(map[string]string{"input": rawString(item["input"])})
-			toolCall := ChatToolCall{
-				ID:   rawString(item["call_id"]),
-				Type: "function",
-				Function: ChatFunctionCall{
-					Name:      rawString(item["name"]),
-					Arguments: string(arguments),
-				},
-			}
-			messages = appendAssistantToolCall(messages, toolCall, reasoningForAssistant())
-			pendingReasoning = ""
-			continue
-		case "function_call_output", "custom_tool_call_output", "tool_search_output":
-			outputRaw := bytesTrimSpace(item["output"])
-			if itemType == "tool_search_output" && (len(outputRaw) == 0 || string(outputRaw) == "null") {
-				// Newer clients return discoveries in tools[] without a separate
-				// output field. Keep that useful result in Chat tool history.
-				outputRaw = bytesTrimSpace(item["tools"])
-			}
-			callID := rawString(item["call_id"])
-			if callID == "" && invalidEmptyFunctionCallOutputs > 0 {
-				invalidEmptyFunctionCallOutputs--
-				pendingReasoning = ""
-				continue
-			}
-			if _, skipped := invalidFunctionCallIDs[callID]; skipped {
-				pendingReasoning = ""
-				continue
-			}
-			delete(mediaByCallID, callID)
-
-			outputText, media, rewritten := extractToolOutputMedia(outputRaw)
-			if rewritten {
-				if callID != "" {
-					mediaByCallID[callID] = media
-				}
-			} else {
-				outputText = rawString(outputRaw)
-				if outputText == "" && len(outputRaw) > 0 && string(outputRaw) != "null" && string(outputRaw) != `""` {
-					// 对象/数组形式的输出（如 tool_search 的结果列表）整体字符串化。
-					outputText = string(outputRaw)
-				}
-			}
-			content, _ := json.Marshal(outputText)
-			messages = append(messages, ChatMessage{
-				Role:       "tool",
-				ToolCallID: callID,
-				Content:    content,
-			})
-			pendingReasoning = ""
-			continue
-		case "agent_message":
-			// Codex multi_agent_v2 用 agent_message 在父线程与子智能体之间传递任务和回复：
-			// input_text 是信封（消息类型、任务名、发送者），正文放在 encrypted_content 片段里
-			// （自定义 provider 下为明文）。chat 上游没有对应条目，按原顺序拼成一条 user 消息，
-			// 否则子智能体收不到任务却仍返回 200。
-			text := agentMessageText(item["content"])
-			if text == "" {
-				pendingReasoning = ""
-				continue
-			}
-			content, _ := json.Marshal(text)
-			messages = append(messages, ChatMessage{Role: "user", Content: content})
-			pendingReasoning = ""
-			lastTurnReasoning = ""
-			continue
-		case "input_text", "text":
-			content, _ := json.Marshal(rawString(item["text"]))
-			messages = append(messages, ChatMessage{Role: "user", Content: content})
-			pendingReasoning = ""
-			lastTurnReasoning = ""
-			continue
-		case "input_image":
-			content, err := chatContentFromSingleResponsesPart(itemType, item)
-			if err != nil {
-				return nil, nil, err
-			}
-			messages = append(messages, ChatMessage{Role: "user", Content: content})
-			pendingReasoning = ""
-			lastTurnReasoning = ""
+		handled, err := b.dispatch(itemType, item)
+		if err != nil {
+			return nil, nil, err
+		}
+		if handled {
 			continue
 		}
 
@@ -618,39 +434,282 @@ func buildChatMessagesFromItems(messages []ChatMessage, rawItems []json.RawMessa
 		// tool_calls message and its tool reply, which DeepSeek rejects
 		// ("insufficient tool messages following tool_calls message"). Skip them.
 		if itemType != "" && itemType != "message" {
-			pendingReasoning = ""
+			b.endThinkingSpan()
 			continue
 		}
-
-		content := item["content"]
-		if len(bytesTrimSpace(content)) == 0 {
-			if text := rawString(item["text"]); text != "" {
-				content, _ = json.Marshal(text)
-			}
-		}
-		chatContent, err := responsesContentToChatContent(content, role)
-		if err != nil {
+		if err := b.appendMessageItem(item); err != nil {
 			return nil, nil, err
 		}
-		msg := ChatMessage{Role: role, Content: chatContent}
-		// DeepSeek thinking mode requires the reasoning_content from a prior
-		// reasoning-only / plain-text assistant turn to be passed back on its
-		// assistant message; dropping it yields 400 "The `reasoning_content` in
-		// the thinking mode must be passed back to the API" on the next turn.
-		// A following function_call in the same turn still receives it because
-		// appendAssistantToolCall merges into this message and only fills
-		// ReasoningContent when it is still empty.
-		if role == "assistant" {
-			msg.ReasoningContent = reasoningForAssistant()
-			pendingReasoning = ""
-		} else {
-			pendingReasoning = ""
-			lastTurnReasoning = ""
-		}
-		messages = append(messages, msg)
 	}
 
-	return messages, mediaByCallID, nil
+	return b.messages, b.mediaByCallID, nil
+}
+
+// chatItemBuilder accumulates Chat messages from Responses input items and owns
+// the reasoning state machine that spans consecutive items.
+type chatItemBuilder struct {
+	messages []ChatMessage
+	opts     *ResponsesToChatOptions
+	// pendingReasoning holds the reasoning text from a reasoning item until the
+	// assistant message it belongs to is emitted. DeepSeek's thinking mode
+	// requires the reasoning_content that produced a tool call to be passed back
+	// on that assistant message; dropping it yields a 400. It only survives
+	// across an assistant message (so a following tool call in the same turn
+	// still receives it); any other role ends the thinking span.
+	pendingReasoning string
+	// lastTurnReasoning is the most recent reasoning text of the current turn,
+	// surviving tool outputs. DeepSeek emits reasoning only once per turn, so
+	// chained tool calls (reasoning → call A → output A → call B) leave call B's
+	// assistant message without reasoning_content and DeepSeek 400s the history;
+	// replaying the turn's reasoning on B's message satisfies the contract. Only
+	// a user-side item ends the turn and clears it.
+	lastTurnReasoning               string
+	mediaByCallID                   toolOutputMediaByCallID
+	invalidFunctionCallIDs          map[string]struct{}
+	invalidEmptyFunctionCallOutputs int
+}
+
+func (b *chatItemBuilder) reasoningForAssistant() string {
+	if b.pendingReasoning != "" {
+		return b.pendingReasoning
+	}
+	return b.lastTurnReasoning
+}
+
+// endThinkingSpan clears only the reasoning awaiting an assistant message; the
+// turn's reasoning survives so a later tool call in the same turn still gets it.
+func (b *chatItemBuilder) endThinkingSpan() { b.pendingReasoning = "" }
+
+// endTurn clears the whole turn. Only user-side items may call it: the assistant
+// and tool paths must keep lastTurnReasoning alive across a turn's tool calls.
+func (b *chatItemBuilder) endTurn() {
+	b.pendingReasoning = ""
+	b.lastTurnReasoning = ""
+}
+
+func (b *chatItemBuilder) appendUserText(text string) {
+	content, _ := json.Marshal(text)
+	b.messages = append(b.messages, ChatMessage{Role: "user", Content: content})
+	b.endTurn()
+}
+
+func (b *chatItemBuilder) appendUserContent(content json.RawMessage) {
+	b.messages = append(b.messages, ChatMessage{Role: "user", Content: content})
+	b.endTurn()
+}
+
+// dispatch routes one decoded input item to its handler. handled is false for
+// item types this builder does not convert, leaving the caller to decide.
+func (b *chatItemBuilder) dispatch(itemType string, item map[string]json.RawMessage) (bool, error) {
+	switch itemType {
+	case "reasoning":
+		b.appendReasoningItem(item)
+		return true, nil
+	case "function_call":
+		b.appendFunctionCallItem(item)
+		return true, nil
+	case "tool_search_call":
+		b.appendToolSearchCallItem(item)
+		return true, nil
+	case "custom_tool_call":
+		b.appendCustomToolCallItem(item)
+		return true, nil
+	case "function_call_output", "custom_tool_call_output", "tool_search_output":
+		b.appendToolOutputItem(itemType, item)
+		return true, nil
+	case "agent_message":
+		b.appendAgentMessageItem(item)
+		return true, nil
+	case "input_text", "text":
+		b.appendUserText(rawString(item["text"]))
+		return true, nil
+	case "input_image":
+		content, err := chatContentFromSingleResponsesPart(itemType, item)
+		if err != nil {
+			return true, err
+		}
+		b.appendUserContent(content)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (b *chatItemBuilder) appendReasoningItem(item map[string]json.RawMessage) {
+	if txt := extractResponsesReasoningText(item); txt != "" {
+		b.pendingReasoning = txt
+	} else if b.opts != nil && b.opts.ReasoningContentByID != nil {
+		// No plaintext summary (encrypted-only reasoning, e.g. after codex
+		// remote compaction): fall back to the gateway-side cache keyed
+		// by the reasoning item id, which always round-trips in history.
+		if id := rawString(item["id"]); id != "" {
+			if cached := b.opts.ReasoningContentByID(id); cached != "" {
+				b.pendingReasoning = cached
+			}
+		}
+	}
+	if b.pendingReasoning != "" {
+		b.lastTurnReasoning = b.pendingReasoning
+	}
+}
+
+func (b *chatItemBuilder) appendFunctionCallItem(item map[string]json.RawMessage) {
+	arguments := rawString(item["arguments"])
+	if strings.TrimSpace(arguments) == "" {
+		arguments = "{}"
+	}
+	callID := rawString(item["call_id"])
+	if !json.Valid([]byte(arguments)) {
+		// A previous streamed turn can leave a truncated function_call in
+		// Codex history (for example after an upstream SSE parse failure or
+		// an output-limit interruption). Do not forward that item to a
+		// Chat Completions provider, which rejects the entire request. Its
+		// matching output is skipped below as well, allowing the next user
+		// turn to self-heal instead of repeatedly replaying the poison.
+		if callID != "" {
+			b.invalidFunctionCallIDs[callID] = struct{}{}
+		} else {
+			b.invalidEmptyFunctionCallOutputs++
+		}
+		b.endThinkingSpan()
+		return
+	}
+	name := rawString(item["name"])
+	// namespace 子工具的历史调用带 namespace 字段，需与请求方向的摊平
+	// 命名（namespaceChildrenToChatTools）保持一致。
+	if ns := rawString(item["namespace"]); ns != "" {
+		name = flattenNamespaceToolName(ns, name)
+	}
+	b.messages = appendAssistantToolCall(b.messages, ChatToolCall{
+		ID:   callID,
+		Type: "function",
+		Function: ChatFunctionCall{
+			Name:      name,
+			Arguments: arguments,
+		},
+	}, b.reasoningForAssistant())
+	b.endThinkingSpan()
+}
+
+func (b *chatItemBuilder) appendToolSearchCallItem(item map[string]json.RawMessage) {
+	// tool_search 调用的 arguments 是 JSON 对象（如 {"query": ...}），
+	// 原文即为降级 function 调用的 arguments 字符串。
+	arguments := strings.TrimSpace(string(bytesTrimSpace(item["arguments"])))
+	if s := rawString(item["arguments"]); s != "" {
+		arguments = s
+	}
+	if arguments == "" || arguments == "null" {
+		arguments = "{}"
+	}
+	b.messages = appendAssistantToolCall(b.messages, ChatToolCall{
+		ID:   rawString(item["call_id"]),
+		Type: "function",
+		Function: ChatFunctionCall{
+			Name:      toolSearchProxyName,
+			Arguments: arguments,
+		},
+	}, b.reasoningForAssistant())
+	b.endThinkingSpan()
+}
+
+func (b *chatItemBuilder) appendCustomToolCallItem(item map[string]json.RawMessage) {
+	// custom/freeform 工具的历史调用：input 自由文本包进降级 function 工具
+	// 的 {"input": ...} 参数，与请求方向的工具降级（customToolInputSchema）
+	// 保持一致，模型才能把历史与当前工具定义对上。
+	arguments, _ := json.Marshal(map[string]string{"input": rawString(item["input"])})
+	b.messages = appendAssistantToolCall(b.messages, ChatToolCall{
+		ID:   rawString(item["call_id"]),
+		Type: "function",
+		Function: ChatFunctionCall{
+			Name:      rawString(item["name"]),
+			Arguments: string(arguments),
+		},
+	}, b.reasoningForAssistant())
+	b.endThinkingSpan()
+}
+
+func (b *chatItemBuilder) appendToolOutputItem(itemType string, item map[string]json.RawMessage) {
+	outputRaw := bytesTrimSpace(item["output"])
+	if itemType == "tool_search_output" && (len(outputRaw) == 0 || string(outputRaw) == "null") {
+		// Newer clients return discoveries in tools[] without a separate
+		// output field. Keep that useful result in Chat tool history.
+		outputRaw = bytesTrimSpace(item["tools"])
+	}
+	callID := rawString(item["call_id"])
+	if callID == "" && b.invalidEmptyFunctionCallOutputs > 0 {
+		b.invalidEmptyFunctionCallOutputs--
+		b.endThinkingSpan()
+		return
+	}
+	if _, skipped := b.invalidFunctionCallIDs[callID]; skipped {
+		b.endThinkingSpan()
+		return
+	}
+	delete(b.mediaByCallID, callID)
+
+	outputText, media, rewritten := extractToolOutputMedia(outputRaw)
+	if rewritten {
+		if callID != "" {
+			b.mediaByCallID[callID] = media
+		}
+	} else {
+		outputText = rawString(outputRaw)
+		if outputText == "" && len(outputRaw) > 0 && string(outputRaw) != "null" && string(outputRaw) != `""` {
+			// 对象/数组形式的输出（如 tool_search 的结果列表）整体字符串化。
+			outputText = string(outputRaw)
+		}
+	}
+	content, _ := json.Marshal(outputText)
+	b.messages = append(b.messages, ChatMessage{
+		Role:       "tool",
+		ToolCallID: callID,
+		Content:    content,
+	})
+	b.endThinkingSpan()
+}
+
+func (b *chatItemBuilder) appendAgentMessageItem(item map[string]json.RawMessage) {
+	// Codex multi_agent_v2 用 agent_message 在父线程与子智能体之间传递任务和回复：
+	// input_text 是信封（消息类型、任务名、发送者），正文放在 encrypted_content 片段里
+	// （自定义 provider 下为明文）。chat 上游没有对应条目，按原顺序拼成一条 user 消息，
+	// 否则子智能体收不到任务却仍返回 200。
+	text := agentMessageText(item["content"])
+	if text == "" {
+		b.endThinkingSpan()
+		return
+	}
+	content, _ := json.Marshal(text)
+	b.messages = append(b.messages, ChatMessage{Role: "user", Content: content})
+	b.endTurn()
+}
+
+func (b *chatItemBuilder) appendMessageItem(item map[string]json.RawMessage) error {
+	role := chatCompletionsBridgeRole(rawString(item["role"]))
+	content := item["content"]
+	if len(bytesTrimSpace(content)) == 0 {
+		if text := rawString(item["text"]); text != "" {
+			content, _ = json.Marshal(text)
+		}
+	}
+	chatContent, err := responsesContentToChatContent(content, role)
+	if err != nil {
+		return err
+	}
+	msg := ChatMessage{Role: role, Content: chatContent}
+	// DeepSeek thinking mode requires the reasoning_content from a prior
+	// reasoning-only / plain-text assistant turn to be passed back on its
+	// assistant message; dropping it yields 400 "The `reasoning_content` in
+	// the thinking mode must be passed back to the API" on the next turn.
+	// A following function_call in the same turn still receives it because
+	// appendAssistantToolCall merges into this message and only fills
+	// ReasoningContent when it is still empty.
+	if role == "assistant" {
+		msg.ReasoningContent = b.reasoningForAssistant()
+		b.endThinkingSpan()
+	} else {
+		b.endTurn()
+	}
+	b.messages = append(b.messages, msg)
+	return nil
 }
 
 // agentMessageText 按原顺序拼接 agent_message 里 input_text 与 encrypted_content 片段的文本。
@@ -856,12 +915,11 @@ func normalizeChatMessages(messages []ChatMessage) []ChatMessage {
 
 func normalizeChatMessagesWithToolOutputMedia(messages []ChatMessage, mediaByCallID toolOutputMediaByCallID) []ChatMessage {
 	// Index every tool reply by its tool_call_id (last wins on duplicates).
-	replies := make(map[string]ChatMessage)
-	for _, m := range messages {
-		if m.Role == "tool" && m.ToolCallID != "" {
-			replies[m.ToolCallID] = m
-		}
-	}
+	// Only the indexing is shared with the Anthropic normalizer; the rebuild
+	// below trims Chat ToolCalls and is deliberately not merged with it.
+	replies := indexLastBy(messages, func(m ChatMessage) (string, bool) {
+		return m.ToolCallID, m.Role == "tool" && m.ToolCallID != ""
+	})
 
 	out := make([]ChatMessage, 0, len(messages))
 	for _, m := range messages {
