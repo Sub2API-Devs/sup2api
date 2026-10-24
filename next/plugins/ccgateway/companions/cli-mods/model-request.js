@@ -67,22 +67,31 @@ function captureErrorResponse(options, transportFetch) {
   return captured;
 }
 
-// Claude Code sends Messages through the SDK's beta resource, whose path
-// carries ?beta=true (native beta.messages.create).
-export const messagesPath = '/v1/messages?beta=true';
+// Build sends through the SDK's own beta Messages call (chunk-38xgev2z.js
+// Ps.create): the path with ?beta=true, the betas header, the non-streaming
+// timeout rule and x-stainless-helper are the SDK's. Direct sends raw bytes, so
+// it posts to the endpoint that call uses; patch-cli-2.1.304.cjs reads the path
+// from that native create (AST) and fills it here, so no copy is written down.
+export const messagesPath = /*CCGATEWAY_MESSAGES_PATH*/ '';
 
-// sendOnce is the client's one POST of the request; the deadline of openEntry
-// bounds the whole exchange, and the client's own timeout (sent as
-// x-stainless-timeout) stays Claude Code's default, as a native request
-// carries it, unless the deadline is shorter.
+// sendOnce is the client's one send: build as the SDK's beta Messages call (the
+// caller built an object body), direct as its raw bytes to the same endpoint.
+// The deadline of openEntry bounds the whole exchange, and the client's own
+// timeout (sent as x-stainless-timeout) stays Claude Code's default, as a
+// native request carries it, unless the deadline is shorter. Passing it
+// explicitly keeps the native non-streaming timeout rule out of a build's way.
 function sendOnce(client, options, entry) {
   const headers = new Headers(options.headers);
-  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-  const body = options.rawBody ?? options.body;
-  return client.post(messagesPath, {
-    body, stream: options.body.stream === true,
+  const request = {
     headers, signal: entry.controller.signal,
     maxRetries: 0, timeout: Math.min(options.timeoutMs ?? defaultTimeout, defaultTimeout),
+  };
+  // Build hands the SDK an object body; direct's raw JSON bytes go to the
+  // endpoint the beta Messages call posts to.
+  if (options.nativeCreate === true) return client.beta.messages.create(options.body, request).asResponse();
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  return client.post(messagesPath, {
+    body: options.rawBody, stream: options.body.stream === true, ...request,
   }).asResponse();
 }
 

@@ -33,7 +33,7 @@ test('a billing header anywhere makes the request Claude Code\'s own', () => {
 
 // The probe is CC's own request for the chosen layers; its prompt blocks,
 // tools and attachment placement are taken around the client's request.
-async function fixture(probeBody) {
+async function fixture(probeBody, { captureHeader = false } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-304-injection-'));
   await installSupport(dir, ['request-input', 'request-options', 'request-policy', 'content-policy', 'request-parameters', 'request-build', 'native-tools']);
   const header = JSON.stringify(vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;');
@@ -42,16 +42,18 @@ async function fixture(probeBody) {
     'chunk-rncrmfyt.js': `export const calls=[]; export const ccgatewaySystemRecord=content=>({type:'api_system',message:{role:'system',content},uuid:'fixture',timestamp:'fixture'}); export const aBe=()=>({isKnownType:true,messages:[]}); export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)});
       export const ccgatewayDefaultPrompt=async(tools,model,appended)=>['PROMPT for '+tools.map(t=>t.name).join(','),...appended.length?['APPEND '+appended.join('\\n\\n')]:[]]; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type})); export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)});
       export async function* jOt(input){calls.push(input); const probe=input.options.ccgatewayNativeProbe===true;
+        if(!probe&&${captureHeader})input.options.ccgatewayCaptureBilling?.(${header});
+        input.options.ccgatewayCapturePrefix?.(input.options.recordedCliPrefix===undefined?null:input.options.recordedCliPrefix);
         const body=probe?${JSON.stringify(probeBody)}:{model:'m',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools}};
         if(probe) body.system=[{type:'text',text:${header}},{type:'text',text:'LINE'},...body.system];
         yield {type:'ccgateway_request',body}}`,
-    'chunk-7y2kvacy.js': `export const oJe=${JSON.stringify(vocabulary.billingHeader)};`,
+    'chunk-7y2kvacy.js': `export const oJe=${JSON.stringify(vocabulary.billingHeader)}; export const B1s=block=>typeof block?.text==='string'&&block.text.startsWith(oJe);`,
     'chunk-jkcb7qdd.js': `export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
     'chunk-eanw7pgv.js': `export const m4t=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
-    'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE';`,
+    'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE'; export const n1n=options=>options?.recorded!==void 0?options.recorded:'LINE';`,
     'chunk-7p6jp6kj.js': 'export const Al=()=>({});', 'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
   })) await fs.writeFile(path.join(dir, name), source);
-  return { dir, adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-rncrmfyt.js'))), session: await import(pathToFileURL(path.join(dir, 'chunk-72vwyp9d.js'))) };
+  return { dir, header: JSON.parse(header), adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-rncrmfyt.js'))), session: await import(pathToFileURL(path.join(dir, 'chunk-72vwyp9d.js'))) };
 }
 const injectAll = { contract_version: 2, build_injection: { system_prompt: true, attachments: { environment: true, date: true }, tools: { Read: true, Bash: true } } };
 const client = (system, policy = injectAll) => ({ model: 'm', systemPrompt: system, messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'again' }],
@@ -76,8 +78,9 @@ test('a request without a billing header gets the probe\'s prompt, tools and att
     assert.deepEqual(probe.messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['environment', 'date']);
     assert.equal(probe.options.enablePromptCaching, undefined);
     // The client's system is in CC's prompt, so the system is the probe's
-    // blocks (the billing header and identity line are added later).
-    assert.deepEqual(out.body.system, [{ type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral', ttl: '1h', scope: 'global' } }, { type: 'text', text: 'DYNAMIC', cache_control: { type: 'ephemeral', ttl: '1h' } }]);
+    // blocks, with Claude Code's line in front (added later by the command in
+    // v25; the builder records it now).
+    assert.deepEqual(out.body.system, [{ type: 'text', text: 'LINE' }, { type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral', ttl: '1h', scope: 'global' } }, { type: 'text', text: 'DYNAMIC', cache_control: { type: 'ephemeral', ttl: '1h' } }]);
     assert.deepEqual(out.body.tools.map(t => t.name), ['Bash', 'Read', 'lookup']);
     assert.deepEqual(out.body.messages, [
       { role: 'user', content: [{ type: 'text', text: '<system-reminder>\nENV\n</system-reminder>' }, { type: 'text', text: 'hi' }] },
@@ -127,10 +130,10 @@ test('CC\'s cache markers give way when the request would carry more than four',
     const request = client('s', { contract_version: 2, build_injection: { system_prompt: true } });
     request.messages = [{ role: 'user', content: [marked('a'), marked('b')] }, { role: 'assistant', content: 'ok' }, { role: 'user', content: [marked('c')] }];
     let out = await f.adapter.buildRequest(request, {}, signal());
-    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [true, false]);
+    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [false, true, false]);
     request.messages[0].content.push(marked('d'));
     out = await f.adapter.buildRequest(request, {}, signal());
-    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [false, false]);
+    assert.deepEqual(out.body.system.map(b => b.cache_control !== undefined), [false, false, false]);
     // Only CC's prompt blocks give way, found by position: the client's own
     // identity line keeps its marker (here the client's five markers exceed
     // the limit on their own, as the client sent them).
@@ -208,5 +211,34 @@ test('the identity line follows the request', async () => {
       out = await f.adapter.buildRequest(client(system, prompt), {}, signal());
       assert.equal(out.identityLine.line, 'none', 'Claude Code\'s own request keeps its system');
     }
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// The builder records the line (recordedCliPrefix) and the patched PAs capture
+// hands build the text it put there; build places it where PAs does, after the
+// attribution header. An API-key build adds no line.
+test('the recorded line goes after the attribution header, and only OAuth build adds one', async () => {
+  const f = await fixture({ system: [], tools: [], messages: [] }, { captureHeader: true });
+  try {
+    const request = client('system', { contract_version: 2 });
+    let out = await f.adapter.buildRequest(request, {}, signal());
+    assert.deepEqual(out.body.system.map(block => block.text), [f.header, 'LINE', 'system']);
+    assert.equal(f.native.calls.at(-1).options.recordedCliPrefix, 'LINE');
+    out = await f.adapter.buildRequest(request, {}, signal(), undefined, { apiKey: true });
+    assert.deepEqual(out.body.system.map(block => block.text), [f.header, 'system']);
+    assert.equal(f.native.calls.at(-1).options.recordedCliPrefix, null, 'an API-key request records no line');
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// Without a header in front of the system, the entrypoint's own line opens the
+// request; a client line is never replaced or duplicated.
+test('a system without a header opens with the line, and a client line stays', async () => {
+  const f = await fixture({ system: [], tools: [], messages: [] });
+  try {
+    let out = await f.adapter.buildRequest(client('system', { contract_version: 2 }), {}, signal());
+    assert.deepEqual(out.body.system.map(block => block.text), ['LINE', 'system']);
+    out = await f.adapter.buildRequest(client([{ type: 'text', text: 'LINE' }, { type: 'text', text: 'own' }], { contract_version: 2 }), {}, signal());
+    assert.deepEqual(out.body.system.map(block => block.text), ['LINE', 'own']);
+    assert.equal(f.native.calls.at(-1).options.recordedCliPrefix, null, 'the client line is kept as it is');
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestTool, isNative, nativeDefinition } from '../native-tools.js';
+import { requestTool, isNative } from '../native-tools.js';
 
 const spec = (name, description = 'client definition') => ({ name, description, inputSchema: { type: 'object', properties: { script: { type: 'string' } } } });
 
@@ -15,15 +15,15 @@ test('a client tool is a CC tool that CC recognizes and that never runs', () => 
   assert.deepEqual(tool.inputSchema.safeParse({ script: 42 }), { success: true, data: { script: 42 } });
 });
 
-test('a client tool snapshots its schema and gives CC its definition', async () => {
+test('a client tool snapshots its schema and gives CC its own tool description', async () => {
   const definition = spec('MyTool');
   const tool = requestTool({ ...definition, isDeferred: true });
   definition.inputSchema.properties.script.type = 'number';
   assert.equal(tool.inputJSONSchema.properties.script.type, 'string');
   assert.equal(tool.isDeferred, true);
   assert.equal(await tool.description(), 'client definition');
-  assert.deepEqual(nativeDefinition(tool, {}), { name: 'MyTool', description: 'client definition', input_schema: tool.inputJSONSchema });
-  assert.deepEqual(nativeDefinition(tool, { deferLoading: true, cacheControl: { type: 'ephemeral' } }),
-    { name: 'MyTool', description: 'client definition', input_schema: tool.inputJSONSchema, defer_loading: true, cache_control: { type: 'ephemeral' } });
+  // The wire definition is the client's own (request-build keeps it on the CC
+  // tool as ccgatewayRequestDefinition); this module assembles none.
+  assert.equal(Object.hasOwn(tool, 'ccgatewayRequestDefinition'), false);
   assert.deepEqual(requestTool({ name: 'Bare', description: '' }).inputJSONSchema, { type: 'object' });
 });

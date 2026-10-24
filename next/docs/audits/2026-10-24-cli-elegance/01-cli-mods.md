@@ -247,9 +247,9 @@
 ### 未做、留作下一轮（需要官方客户端对拍）
 
 - 第 4 条（前提不成立，本身不做）。
-- 第 5 条（身份行走原生 `recordedCliPrefix`）。
-- 第 8 条（build 改用原生 `client.beta.messages.create`）。
-- 第 17 条（`FH` 覆写原生结果）。
+- 第 5 条（身份行走原生 `recordedCliPrefix`）。**2026-10-24 第二轮已做，见下。**
+- 第 8 条（build 改用原生 `client.beta.messages.create`）。**2026-10-24 第二轮已做，见下。**
+- 第 17 条（`FH` 覆写原生结果）。**2026-10-24 第二轮已做（改为客户端定义逐字返回），见下。**
 - 第 21 条（`_oo` 的 `ccgatewayProxyText`）：复核结论是删除会让未请求的代理提示进入快照并可触发 blocked→503，需对拍。
 
 另外两项按报告"视可行性"处理成别的形态：第 7 条用按需表而不是无条件 `Wkt`；第 22 条用原生 body 对账测试而不是补丁期生成名单（理由同上）。
@@ -258,4 +258,63 @@
 
 - `cd next/plugins/ccgateway/companions/cli-mods && npm test`：**179/179 通过、0 跳过**。原生相关测试（`patch-wire-preservation-304`、`patch-imports-304`、`native-environment`、`native-vocabulary`、`cli-prefix` 末项、`billing-fingerprint-oracle`、`request-parameters-304` 的 body 字段对账、`request-policy` 的 Go 契约对账）全部真跑。
 - 重新打补丁（输出目录先清空）：`node next/plugins/ccgateway/companions/cli-mods/patch-cli.cjs artifacts/claude-2.1.304/linux-restored artifacts/claude-2.1.304/patched-v25` 成功；manifest 的 `extension` 仍为 `ccgateway-v25-beta-order`，`files` 7 个、`supportFiles` 21 个（含新增的 `ccgateway-request-betas.js`、`ccgateway-request-entry.js`、`ccgateway-request-natives.js`、`ccgateway-request-headers.js`）。
+- 未编译 ELF、未提交、未推送。
+
+---
+
+## 第二轮：第 3 节剩余三条（出口可能变的三条）
+
+2026-10-24，按用户指示做第 5、8、17 条——它们的方向都是"把决定权还给原生"。profile 的 `extension` 升为 `ccgateway-v26-native-assembly`；工作树未提交、未推送；ELF 未编译。
+
+### 第 5 条（a1）身份行走原生 `recordedCliPrefix`
+
+**原生核实（先读源码再改）：**
+
+- **读取点唯一。** `chunk-rncrmfyt.js` 的 `qmn` 里 `cW=n1n({isNonInteractive:J.isNonInteractiveSession,hasAppendSystemPrompt:J.hasAppendSystemPrompt,recorded:J.recordedCliPrefix})`；`jOt → ugn → qmn` 把 build 的 options 原样透传（`qmn(e,n,r,s,h,{modelFacts:y,...S})`，`J` 由 `S` 得来），所以 build 的 `buildOptions` 加 `recordedCliPrefix` 确实会被读到。core 没有第二处读它（`chunk-gzc5bc6y.js` 里的同名键属于主循环的 prompt 快照，不在 build 路径）。
+- **`n1n` 对 null/字符串：** 先判 `Pe()==="vertex"` 返回交互行；否则 `e?.recorded!==void 0` 时**原样返回 recorded**（`null` 也返回 `null`）；`recorded` 为 `undefined` 时才按 `isNonInteractive`/`hasAppendSystemPrompt` 三选一。
+- **`PAs` 的位置：** `[header, line, ...prompt].filter(Boolean)`，即"计费头之后、提示词之前"；`null`（或空串）被 `.filter(Boolean)` 丢掉，等于不插行。所以"有行/无行"原生能表达。
+- **"none / fallback"映射：** `none` = `recorded:null`（原生 filter 丢弃）。`fallback`（系统首块既不是计费头也不是身份行时仍须有一行，否则上游 429）**不是原生概念**：`n1n` 只会给三行之一或 null，`PAs` 不会替"首块不是头"补行。这一小段保留在 build 里。
+
+**落地（含一处必须保留的原因）：**
+
+- 给 build 的 query options 加 `recordedCliPrefix`（`request-build.js` 的 `identityRequest`）：`null` 或 `n1n` 渲染出的行文本。`null` 的情形=API key 构建、客户端自己的请求（system 带计费头，`clientBilling !== null`）、system 里已经有 CC 的身份行（不重复插）。
+- 原生 `PAs` 拼出的 system 在 build 里会被 wire 短路替换成 `J.ccgatewaySystemBlocks`（补丁 `system:...J.ccgatewaySystemBlocks:jh.system`；这是 §4"外部 system 原样"规则，本轮不动），所以不能直接让 PAs 的 system 上线。补丁在 `PAs` 里新增一行 `r.ccgatewayCapturePrefix?.(n)`，把原生实际用的那一行（`n`，即 `n1n` 的输出）交回 build；build 在 `mergeBillingAttribution` 之后按 PAs 的同一位置插入它（有计费头→其后，否则最前），`request-build.js applyIdentityLine`。
+- 删除：`request-identity.js` 的 `applyBuildCliPrefix`/`prefixPosition`/`checkedPrefix`、`request-natives.js` 的 `identityLines` 表与 `prefixBuild`、`request-entry.js`/`request-command.js` 的 `prefixBuild` 透传，以及"命令在 build 之后插行"这一步。行文本仍只由 `n1n` 渲染（`identityLineText`：三个契约名对应三组原生输入，`request-build.js`）。
+- 选择哪一行仍是 `request-policy.js identityLineFor`（Worker 契约）；原生负责渲染文本、`PAs` 负责位置、`recordedCliPrefix` 负责"有/无"。
+
+**预计出口：不变。** 行文本、行位置（计费头之后、客户端首块之前）、以及"客户端已有的行不覆盖不重复"、"API key 不加行"、"无计费头时用 fallback 行兜底"都与 v25 相同（`request-injection.test.mjs` 覆盖：有头→头后、无头→最前、客户端行保留、API key 无行）。判定条件与 v25 的 `prefixPosition` 一一对应：有计费头时"任一块已是身份行→不加"，否则"首块是身份行→不加，否则最前"，因此没有已知的出口差异。
+
+### 第 8 条（b4-i）build 改用原生 `client.beta.messages.create(...).asResponse()`
+
+**原生核实：** `chunk-38xgev2z.js` 的 `Ps.create(r,n)`：
+
+- 路径写死为 `this._client.post("/v1/messages?beta=true", ...)`；
+- `betas`/`user_profile_id`/`workspace_id` 从**请求参数对象**（body）里取出并变成头，不留在 body；
+- `x-stainless-helper` 只在 tools/messages 带 SDK 的 `Symbol.for("anthropic.sdk.stainlessHelper")` 时出现（`Ho`/`Ui`），JSON 反序列化来的对象永远没有；
+- 非流式超时：`v = n?.timeout ?? client._options.timeout`；`!body.stream && v == null` 时才 `calculateNonstreamingTimeout(max_tokens, gs[model])`，该函数在 `max_tokens` 超过 600 s 预算时直接抛 "Streaming is required…"；
+- `stream` 取自 body（`s.stream ?? false`），body 经 `qu()`（把 `output_format` 挪进 `output_config.format`，两者同现则抛错）后浅拷贝交给 `client.post`。
+
+**落地：** `model-request.js sendOnce` 对 build（`nativeCreate`）调 `client.beta.messages.create(options.body, {headers, signal, maxRetries:0, timeout})`，direct 继续 `client.post` 发原始字节。不向 create 传 `betas`——最终 `anthropic-beta` 仍由 `request-headers.js`/fetch 边界统一写，顺序不变。`messagesPath` 不再是字面量：补丁期用 AST 在 `chunk-38xgev2z.js` 找到唯一一条 POST 到 beta Messages 端点（`/v1/messages?beta=true`，batches/count_tokens 是别的路径）的字符串，填进 `model-request.js` 的 `/*CCGATEWAY_MESSAGES_PATH*/` 标记；direct 用它。
+
+**预计出口：**
+
+- 普通 build 请求**不变**：URL/查询相同；body 的 JSON 字节相同（无 `output_format` 时 `qu` 原样返回，`create` 只剥离上述三个参数）；`anthropic-beta` 的值与顺序相同（我们不传 betas）；`content-type: application/json` 由 SDK 的 JSON 序列化器给出（与之前手写同值）；`X-Stainless-Timeout` 同为 `min(timeoutMs,600000)`（显式 timeout，原生非流式规则不触发）；**无** `x-stainless-helper`（JSON 工具没有 symbol）。
+- 会有三处变化，方向都是更像官方 SDK：① 客户端 `parameters.output_format` 会被原生 `qu()` 挪到 `output_config.format`（若同时给了 `output_config.format` 则本地报错）；② `parameters.user_profile_id` / `workspace_id` 会从 body 移到请求头；③ 模型为 `claude-mythos-preview` 或 `claude-opus-4-6` 且 thinking 为 enabled 时，SDK 向 stderr 打一条弃用警告（Worker 只认已知前缀，会丢弃）。
+- 这些都需要与官方客户端对拍确认后再上线。
+
+### 第 17 条（a4）`FH` 补丁：客户端定义逐字返回（未采用"原生结果 + 合并"）
+
+**原生核实：** `FH` 尾部组装 `qn={name, description, input_schema, ...eager_input_streaming, ...strict}`，再按 `n.deferLoading`/`n.cacheControl` 加 `defer_loading`/`cache_control`，按工具名加 `citations`，最后按供应商剥离；描述来自 `CVo`/`Jxe`（有 `dsi` 钩子时还会改）。如果"先跑原生 FH，再把 `e.ccgatewayRequestDefinition` 覆写上去"：
+
+- `{...native, ...clientDefinition}` 会保留客户端没发的原生字段（`strict`、`eager_input_streaming`、`citations` 等），并且同名键的位置由原生决定——定义不再是客户端原样；
+- 原生还会为合成工具跑描述生成、schema 归一化与工具定义缓存登记，结果随后被完全覆盖，纯属浪费，且对任意客户端 schema 有抛错风险。
+
+**判断与落地：** 客户端工具的定义是客户端的数据，必须逐字原样（键顺序、字段）发出；只有 CC 自己的工具（注入层）才用原生定义。因此 `FH` 的 `ccgIsNative(e)` 分支直接 `return structuredClone(e.ccgatewayRequestDefinition)`，不跑原生描述/缓存/供应商逻辑；删除 `native-tools.js` 的 `nativeDefinition` 与补丁里 `dsi`/原生字段的复刻，core 只导入 `isNative`。注入层里 CC 自己的工具走原生 `FH`，不受影响。
+
+**预计出口：不变。** build 的 wire tools 本来就被 `J.ccgatewayWireTools`（客户端定义）替换，`FH` 的结果只喂原生策略/搜索/遥测；客户端工具的定义一直由 `wireToolDefinitions` 逐字发出（键序与字段不变）。
+
+### 第二轮验证
+
+- `cd next/plugins/ccgateway/companions/cli-mods && npm test`：**178/178 通过、0 跳过**（`applyBuildCliPrefix` 的旧单测并入 `request-injection.test.mjs` 的 build 级用例；`model-request.test.mjs` 分 build/direct 两条路径）。原生相关测试全部真跑。
+- 重新打补丁（输出目录先清空）：`rm -rf artifacts/claude-2.1.304/patched-v26 && node next/plugins/ccgateway/companions/cli-mods/patch-cli.cjs artifacts/claude-2.1.304/linux-restored artifacts/claude-2.1.304/patched-v26` 成功；`extension=ccgateway-v26-native-assembly`，`files` 7 个、`supportFiles` 21 个（无新增模块）。
 - 未编译 ELF、未提交、未推送。

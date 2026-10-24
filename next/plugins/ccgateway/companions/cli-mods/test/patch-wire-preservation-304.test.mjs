@@ -225,7 +225,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v25-beta-order');
+  assert.equal(patchManifest.extension, 'ccgateway-v26-native-assembly');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
@@ -252,23 +252,24 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(entry.includes("await import('./chunk-3nrrbnwj.js')"));
   assert(entry.includes("await import('./ccgateway-request-command.js')"));
   assert(entry.includes("await import('./ccgateway-request-natives.js')"));
-  assert(entry.includes('runRequestCommand(args, { agentNative, directBuild, identityBuild, prefixBuild, oauthBeta })'));
+  assert(entry.includes('runRequestCommand(args, { agentNative, directBuild, identityBuild, oauthBeta })'));
   // The native bindings are read once, from hash-bound modules: the identity
-  // lines and attribution header, the billing header, the login's beta, the
-  // attribution fingerprint, the query source naming and the layer vocabulary.
+  // (yBe) and attribution header (PAs), the billing header (oJe), the login's
+  // beta, the attribution fingerprint, the query source naming and the layer
+  // vocabulary.
   const natives = fs.readFileSync(path.join(output, 'ccgateway-request-natives.js'), 'utf8');
   for (const line of [
     "import { gTe as oauthAuth } from './chunk-4qs43hr1.js';",
-    "import { yBe as nativeIdentity, t1n as isIdentityLine, n1n as identityLine, PAs as attributionHeader } from './chunk-t61vswm2.js';",
-    "import { B1s as isBillingHeader, oJe as billingHeader } from './chunk-7y2kvacy.js';",
+    "import { yBe as nativeIdentity, PAs as attributionHeader } from './chunk-t61vswm2.js';",
+    "import { oJe as billingHeader } from './chunk-7y2kvacy.js';",
     "import { KF as reminderOpen } from './chunk-jkcb7qdd.js';",
     "import { RIs as attributionFingerprint } from './chunk-2gh4h0fv.js';",
     "import { Al as mainAgentContext } from './chunk-7p6jp6kj.js';",
     "import { Zoe as querySourceFor } from './chunk-m5q1b1c4.js';",
     "import { ccgatewayLayerVocabulary, ccgatewayPromptTurn } from './chunk-rncrmfyt.js';",
   ]) assert(natives.includes(line), line);
-  assert(natives.includes('official_cli: identityLine({ isNonInteractive: false, hasAppendSystemPrompt: false })'));
-  assert(natives.includes('agent_sdk: identityLine({ isNonInteractive: true, hasAppendSystemPrompt: false })'));
+  assert(!natives.includes('prefixBuild'));
+  assert(!natives.includes('identityLine'), 'the line is rendered by n1n inside the builder');
   assert(!natives.includes('kLo:header'));
   assert.match(natives, /fingerprint: attributionFingerprint\(fingerprintMessages\(Array\.isArray\(body\.messages\) \? body\.messages : \[\], reminderOpen\)\)/);
   assert(natives.includes('export const oauthBeta = oauthAuth.header;'));
@@ -302,11 +303,28 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(transport.startsWith('import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n'));
   assert.equal(transport.split('"User-Agent":ccgatewayClientUserAgent()??dN()').length, 2);
   assert(!transport.includes('"User-Agent":dN()'));
-  // The Mod tool-execution chain is gone: only FH reads the client tools.
+  // The Mod tool-execution chain is gone: only FH reads the client tools, and
+  // it hands back the client's own definition as it is.
   const coreText = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
   assert.equal(coreText.split('./ccgateway-native-tools.js').length, 2);
-  assert(coreText.includes('import {isNative as ccgIsNative,nativeDefinition as ccgDefinition} from "./ccgateway-native-tools.js";'));
+  assert(coreText.includes('import {isNative as ccgIsNative} from "./ccgateway-native-tools.js";'));
+  assert(coreText.includes('if(ccgIsNative(e))return structuredClone(e.ccgatewayRequestDefinition);'));
+  assert(!coreText.includes('ccgDefinition'));
+  // The identity line comes from the builder's recordedCliPrefix, and the
+  // patched PAs hands build the line it put in front of the prompt.
+  assert(coreText.includes('recorded:J.recordedCliPrefix'));
+  assert(fs.readFileSync(path.join(output, 'chunk-t61vswm2.js'), 'utf8').includes('r.ccgatewayCapturePrefix?.(n);'));
   for (const name of ['ccgRegister', 'ccgRevision', 'ccgMerge', 'ccgFind', 'ccgDispatch']) assert(!coreText.includes(name), name);
+  // Direct's endpoint is the native beta Messages post's own, read by AST and
+  // filled into the transport; the repository source holds no copy of it.
+  const transportSupport = fs.readFileSync(path.join(output, 'ccgateway-model-request.js'), 'utf8');
+  assert.match(transportSupport, /export const messagesPath = \/\*CCGATEWAY_MESSAGES_PATH\*\/ ["']\/v1\/messages\?beta=true["'];/);
+  assert(transportSupport.includes('client.beta.messages.create(options.body, request).asResponse()'));
+  assert(!fs.readFileSync(path.join(mods, 'model-request.js'), 'utf8').includes("'/v1/messages?beta=true'"));
+  const nativeTransport = fs.readFileSync(path.join(baseline, 'chunk-38xgev2z.js'), 'utf8');
+  const nativePath = one(find(parser.parse(nativeTransport, { sourceType: 'module' }),
+    n => n.type === 'StringLiteral' && n.value === '/v1/messages?beta=true'), 'native beta Messages path');
+  assert.equal(nativePath.value, '/v1/messages?beta=true');
   for (const file of ['chunk-0q47gehe.js', 'chunk-8w3jrzn0.js', 'chunk-g8r6rccx.js', 'chunk-qygf2xvn.js', 'chunk-gzc5bc6y.js']) {
     assert(!patchManifest.files[file], file);
     assert.equal(sha(fs.readFileSync(path.join(output, file))), sha(fs.readFileSync(path.join(baseline, file))), file);

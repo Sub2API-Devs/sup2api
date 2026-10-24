@@ -13,7 +13,7 @@ import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
 import { createContentPolicy } from '../content-policy.js';
 import { vocabulary } from './vocabulary.mjs';
-import { applyBuildMetadata, applyBuildCliPrefix } from '../request-identity.js';
+import { applyBuildMetadata } from '../request-identity.js';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../contracts/testdata/worker-cli-requests.json', import.meta.url), 'utf8'));
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
@@ -74,12 +74,15 @@ for (const c of fixture.cases) {
         : render(row).messages.map(item => ({ role: row.renderedRole ?? item.message.role, content: item.message.content })));
       const content = createContentPolicy(vocabulary);
       const transformed = await content.applyContentPolicy({ system: initial.systemBlocks, messages }, policy, native);
-      // The header and the identity line it selects, as request-build and the
-      // request command apply them (lines stand in for CC's own n1n three).
+      // The header, then the identity line it selects: build records the line
+      // its entrypoint chooses (request-build.js identityRequest) and puts it
+      // after the header, as PAs does. The native n1n is the line's only source;
+      // these stand in for it by echoing the recorded choice.
       const system = content.mergeBillingAttribution(transformed.system, policy, native.billing);
       const lines = { official_cli: 'Interactive line.', official_cli_sdk: 'SDK appended line.', agent_sdk: 'SDK line.' };
-      const opened = applyBuildCliPrefix({ system }, identityLineFor(policy, content.billingEntrypoint(system)), lines,
-        value => Object.values(lines).includes(value), block => block.text.startsWith(vocabulary.billingHeader)).system;
+      const chosen = identityLineFor(policy, content.billingEntrypoint(system));
+      const recorded = chosen.line === 'none' ? null : lines[chosen.line];
+      const opened = recorded === null ? system : [system[0], { type: 'text', text: recorded }, ...system.slice(1)];
       if (c.name === 'build-identity-lines') {
         // The client's cli header keeps its entrypoint, and the line adapts to
         // it (2026-10-23): identity lines an older core sends are not used.

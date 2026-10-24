@@ -141,6 +141,8 @@ async function prepareOutgoing(ctx, incoming) {
     outgoing = await prepareDirect(ctx, outgoing, agent);
     clientBetas = normalizeBetas(options.headers['anthropic-beta']);
   } else ({ outgoing, agent, clientBetas, addedBetas } = await prepareBuild(ctx, incoming.body, resolveAgent));
+  // Build is sent through CC's own beta Messages call; direct as raw bytes.
+  outgoing.nativeCreate = options.mode === 'build';
   if (agent?.headers) outgoing.headers = { ...outgoing.headers, ...agent.headers };
   // A request sent with the client's own header keeps the client's User-Agent
   // (build reads the client's system from its components).
@@ -205,18 +207,16 @@ async function prepareDirect(ctx, outgoing, agent) {
 
 // prepareBuild has CC build the request from the components. It returns the
 // client's betas and the ones the build adds, so the command places them once.
+// The identity line choice is build's (its body already carries the line);
+// it is not part of the request sent.
 async function prepareBuild(ctx, body, resolveAgent) {
   ctx.state.phase = 'build';
   const { buildRequest } = await import('./ccgateway-request-build.js');
-  const { identityLine, agent, clientBetas, addedBetas, ...built } = await buildRequest(body, ctx.options.headers, ctx.signal, resolveAgent);
+  const { identityLine: _line, agent, clientBetas, addedBetas, ...built } = await buildRequest(body, ctx.options.headers, ctx.signal, resolveAgent, { apiKey: Boolean(ctx.apiKey) });
   const outgoing = { ...built, timeoutMs: ctx.options.timeoutMs ?? defaultTimeout };
   // Build always invents metadata; the identity source decides what the
   // upstream request really carries, and a client that sent none gets none.
   if (ctx.natives.identityBuild) outgoing.body = ctx.natives.identityBuild(outgoing.body, body.parameters?.metadata);
-  // OAuth only: upstream requires the header or Claude Code's identity line
-  // first; the line follows the request's entrypoint. Direct is a pure
-  // passthrough and changes nothing (2026-10-21 decision).
-  if (!ctx.apiKey && ctx.natives.prefixBuild) outgoing.body = ctx.natives.prefixBuild(outgoing.body, identityLine);
   return { outgoing, agent, clientBetas, addedBetas };
 }
 

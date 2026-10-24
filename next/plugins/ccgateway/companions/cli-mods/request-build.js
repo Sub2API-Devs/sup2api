@@ -1,9 +1,9 @@
 import { jOt, aBe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewaySystemRecord } from './chunk-rncrmfyt.js';
-import { oJe } from './chunk-7y2kvacy.js';
+import { oJe, B1s as isBillingHeader } from './chunk-7y2kvacy.js';
 import { KF, lKe } from './chunk-jkcb7qdd.js';
 import { Al } from './chunk-7p6jp6kj.js';
 import { m4t as nativeToolPool } from './chunk-eanw7pgv.js';
-import { t1n as isIdentityLine } from './chunk-t61vswm2.js';
+import { n1n as identityLine, t1n as isIdentityLine } from './chunk-t61vswm2.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
 import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
@@ -76,7 +76,7 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
   const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
     // CC's cache markers on its prompt, as CC decides them.
-    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined } },
+    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined, ccgatewayCapturePrefix: undefined, recordedCliPrefix: undefined } },
   signal, 'CC request builder did not produce the injected layers');
   // The billing header and the identity line are the other layers' (merged
   // after build), so only the prompt blocks are taken.
@@ -144,11 +144,71 @@ const thinkingConfigFor = thinking => thinking?.type === 'enabled'
   : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
     : { type: 'disabled', mechanical: true };
 
+// identityLineInputs are the selector's own inputs for the contract's line
+// names (request-policy.js identityLineChoices): n1n renders the text, so no
+// wording lives here.
+const identityLineInputs = {
+  official_cli: { isNonInteractive: false, hasAppendSystemPrompt: false },
+  official_cli_sdk: { isNonInteractive: true, hasAppendSystemPrompt: true },
+  agent_sdk: { isNonInteractive: true, hasAppendSystemPrompt: false },
+};
+function identityLineText(name) {
+  const inputs = identityLineInputs[name];
+  if (!inputs) throw new Error(`Unknown Claude Code identity line: ${name}`);
+  return identityLine(inputs);
+}
+
+// identityRequest is the line the request gets once build has filled its
+// header (request-policy.js identityLineFor) and the value the builder records
+// for it (recordedCliPrefix): null leaves the system without a line, which is
+// what an API-key build, a request that is Claude Code's own (it carries a
+// billing header), and a system that already carries one of CC's lines get.
+// Otherwise the builder records the chosen line's text, and CC's own attribution
+// assembly (PAs) puts it after the header, before the prompt; the patched body
+// captures it there.
+function identityRequest(policy, entrypoint, { clientBilling, appended, system, apiKey }) {
+  const chosen = identityLineFor(policy, entrypoint, { appended });
+  const own = clientBilling !== null;
+  const line = own ? 'none' : chosen.line;
+  const carried = (Array.isArray(system) ? system : []).some(block => block?.type === 'text' && isIdentityLine(block.text));
+  return {
+    entrypoint: chosen.entrypoint, line, fallback: chosen.fallback, lineEnabled: !apiKey,
+    recorded: apiKey || own || carried ? null : identityLineText(line),
+  };
+}
+
+// applyIdentityLine puts the line where PAs did: after the billing header when
+// one opens the system, else first. rendered is the text CC's own selector
+// produced (captured from PAs), or null when the builder recorded none. A
+// client's own line is never replaced or duplicated, and a request that is
+// Claude Code's own keeps its system as it is; when no header could be filled
+// in front of such a system, the entrypoint's own line opens it (upstream
+// takes a header or a line first, 2026-10-21).
+function applyIdentityLine(built, identity, rendered) {
+  if (!identity.lineEnabled) return built;
+  const blocks = Array.isArray(built.system) ? built.system : toBlocks(built.system);
+  if (!Array.isArray(blocks)) return built;
+  const first = blocks[0], text = first?.type === 'text' ? first.text : undefined;
+  if (text !== undefined && isBillingHeader(first)) {
+    if (blocks.some(block => block?.type === 'text' && isIdentityLine(block.text))) return built;
+    if (identity.line === 'none' || rendered === null) return built;
+    if (!isIdentityLine(rendered)) throw new Error('Missing native Claude Code system line');
+    built.system = [blocks[0], { type: 'text', text: rendered }, ...blocks.slice(1)];
+    return built;
+  }
+  if (text !== undefined && isIdentityLine(text)) return built;
+  const line = identity.line === 'none' ? identityLineText(identity.fallback) : rendered ?? identityLineText(identity.line);
+  if (!isIdentityLine(line)) throw new Error('Missing native Claude Code system line');
+  built.system = [{ type: 'text', text: line }, ...blocks];
+  return built;
+}
+
 // buildRequest has CC build the request from the components. resolveAgent
 // (request-agent.js, bound to the Worker context) picks the kind of request CC
 // builds from the client's leading billing header and first prompt; without
-// it the request is CC's native main thread.
-export async function buildRequest(components, headers, signal, resolveAgent) {
+// it the request is CC's native main thread. apiKey says whether build adds
+// Claude Code's identity line (OAuth only, 2026-10-21).
+export async function buildRequest(components, headers, signal, resolveAgent, { apiKey = false } = {}) {
   const billing = nativeContentPolicy();
   const { requestPolicy, runtimeContext: suppliedContext, ...external } = components;
   validateBuildParameters(external.parameters);
@@ -172,15 +232,19 @@ export async function buildRequest(components, headers, signal, resolveAgent) {
   const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   const tools = clientTools(initial.customTools);
   const native = {};
-  const options = buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; } });
+  const options = buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; }, capturePrefix: value => { native.prefix = value; } });
   // A request with a billing header is Claude Code's own and only has its
   // fields and attachments converted; one without gets the chosen layers.
   const layers = billing.hasBilling(initial.systemBlocks) ? null
     : await injectLayers(policy.build_injection, { model: body.model, context, clientSystem: content.system, clientTools: tools,
       clientToolNames: new Set((external.tools ?? []).map(tool => tool?.name)), messages: content.messages, clientRecords: records, session, options, signal });
   if (layers) applyLayers(options, layers, content.messages);
+  // The line the builder records (n1n through recordedCliPrefix) and the
+  // patched body puts in front of the prompt, as PAs does.
+  const identity = identityRequest(policy, entrypoint, { clientBilling, appended: layers?.appended === true, system: content.system, apiKey });
+  options.recordedCliPrefix = identity.recorded;
   const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(body.thinking), tools, signal, options }, signal, 'CC request builder did not produce a request');
-  return finishBuilt(built, { body, headers, external, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers });
+  return finishBuilt(built, { body, headers, external, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity });
 }
 
 // convertContent applies the content policy to the system and messages as the
@@ -193,7 +257,7 @@ function convertContent(initial, policy, context) {
 }
 
 // buildOptions are CC's query options for the client's request.
-function buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools, captureBilling }) {
+function buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools, captureBilling, capturePrefix }) {
   return {
     model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? Al(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
@@ -210,6 +274,7 @@ function buildOptions(body, initial, content, { agent, clientBetas, fingerprint,
     ccgatewayWireMessages: content.messages,
     ccgatewayWireTools: wireToolDefinitions(tools),
     ccgatewayCaptureBilling: captureBilling,
+    ccgatewayCapturePrefix: prefix => { capturePrefix(prefix); },
     ccgatewayFingerprintMessages: fingerprint,
   };
 }
@@ -222,10 +287,10 @@ function applyLayers(options, layers, messages) {
 }
 
 // finishBuilt completes CC's request: the parameters CC does not own, the
-// cache breakpoint limit, the billing header, the identity line choice, the
-// betas and stream.
-function finishBuilt(native, { body, headers, external, policy, nativeBilling, agent, clientBilling, clientBetas, layers }) {
-  const { mergeBillingAttribution, billingEntrypoint, setLeadingBillingField } = nativeContentPolicy();
+// cache breakpoint limit, the billing header, the identity line, the betas and
+// stream.
+function finishBuilt(native, { body, headers, external, policy, nativeBilling, agent, clientBilling, clientBetas, layers, identity }) {
+  const { mergeBillingAttribution, setLeadingBillingField } = nativeContentPolicy();
   // Preserve only parameters which the native builder does not own. Its
   // normalized model/thinking/tool choice/metadata and output effort/format
   // remain authoritative, including intentional omission of those fields.
@@ -234,12 +299,11 @@ function finishBuilt(native, { body, headers, external, policy, nativeBilling, a
   built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
   // The client's header names its prompt; it must match the mapped prompt header.
   if (agent?.billingPromptId) built.system = setLeadingBillingField(built.system, 'cc_prompt_id', agent.billingPromptId);
-  // A request that is not Claude Code's gets the identity line for the
-  // entrypoint its header now carries (with the appended line when build gave
-  // it CC's prompt with the client's system appended). Claude Code's own
-  // request is left as it is (2026-10-23): its side requests have no line.
-  const identityLine = clientBilling !== null ? { line: 'none', fallback: identityLineFor(policy, billingEntrypoint(built.system)).fallback }
-    : identityLineFor(policy, billingEntrypoint(built.system), { appended: layers?.appended === true });
+  // The line the native selector chose and PAs put after the header; without a
+  // header in front, the entrypoint's own line opens the request (upstream
+  // takes a header or a line first, 2026-10-21).
+  applyIdentityLine(built, identity, native.prefix === undefined ? identity.recorded : native.prefix);
+  const identityLine = { entrypoint: identity.entrypoint, line: identity.line, fallback: identity.fallback };
   // The beta list the request ends up with: the client's own, then what this
   // build adds (the native builder's, the injected layers'). The request
   // command places the added ones once (request-betas.js) and writes them.

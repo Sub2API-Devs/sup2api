@@ -1,7 +1,7 @@
 // The client's custom tools as CC tools: build makes one for each, so CC's own
-// policy (permissions, deferral, tool search) sees it, and the patched FH
-// sends the client's own definition (ccgatewayRequestDefinition) for it. The
-// request command never runs a tool; the client does.
+// policy (permissions, deferral, tool search) sees it, while the definition CC
+// sends for it stays the client's own (ccgatewayRequestDefinition, request-build
+// and the patched FH). The request command never runs a tool; the client does.
 const marker = Symbol('ccgateway.request-tool');
 const passthrough = { safeParse: data => ({ success: true, data }), parse: data => data };
 
@@ -22,13 +22,3 @@ export function requestTool(spec) {
 }
 
 export const isNative = tool => tool?.[marker] === true;
-
-// nativeDefinition is the tool's definition as CC sends one (FH).
-export function nativeDefinition(tool, options) {
-  return {
-    name: tool.name, description: tool.descriptionText,
-    input_schema: tool.inputJSONSchema,
-    ...(options.deferLoading ? { defer_loading: true } : {}),
-    ...(options.cacheControl ? { cache_control: options.cacheControl } : {}),
-  };
-}

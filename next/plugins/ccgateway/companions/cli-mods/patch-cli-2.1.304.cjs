@@ -129,6 +129,27 @@ function fillBetaModule(text, betas) {
   const imports = [...bySource].map(([from, list]) => `import { ${list.join(',')} } from "${from}";`).join('\n');
   return once(once(text, '//CCGATEWAY_BETA_IMPORTS', imports), '/*CCGATEWAY_BETA_LIST*/', () => names.join(','));
 }
+// betaMessagesPath is the endpoint the native SDK's beta Messages create posts.
+// It is located by its own path (the only POST to the beta Messages endpoint;
+// batches and count_tokens are other paths), and the value model-request.js
+// gets is this native literal, never a copy written here. Build goes through
+// the native create; direct sends raw bytes through client.post, so it needs
+// the endpoint.
+function betaMessagesPath() {
+  const file = 'chunk-38xgev2z.js';
+  const posts = nodes(tree(file), n => n.type === 'CallExpression' && n.callee?.type === 'MemberExpression'
+    && n.callee.object?.type === 'MemberExpression' && n.callee.object.property?.name === '_client'
+    && n.callee.property?.name === 'post' && n.arguments?.[0]?.type === 'StringLiteral'
+    && /^\/v1\/messages\?beta=true$/.test(n.arguments[0].value));
+  if (posts.length !== 1) throw Error(`Expected one POST to the beta Messages endpoint in ${file}`);
+  const literal = posts[0].arguments[0];
+  return files.get(file).slice(literal.start, literal.end);
+}
+// fillMessagesPath writes that endpoint into model-request.js (the marker there
+// is never a path of ours).
+function fillMessagesPath(text, literal) {
+  return once(text, "/*CCGATEWAY_MESSAGES_PATH*/ ''", '/*CCGATEWAY_MESSAGES_PATH*/ ' + literal);
+}
 // nativeSystemRecordExport makes the native api_system record factory (ile)
 // available to request-input.js, which reuses it instead of copying the record
 // shape.
@@ -172,8 +193,11 @@ for (const file of ['chunk-yqea5hk4.js', 'chunk-sx3g9k86.js']) {
   surround(file, { imports: 'import {getContainerResources as ccgContainerResources} from "./ccgateway-container-resources.js";\n' });
 }
 // The client's custom tools are registered as CC tools (native-tools.js), so
-// CC's own policy sees them; their wire definitions stay the client's.
-edit(core, 'FH', t => once(t, 'async function FH(e,n){', 'async function FH(e,n){if(ccgIsNative(e)){let description=await e.description();if(!n.withoutToolDescribeHooks)description=(await dsi(e,description,n.deferLoading===true)).description;return {...e.ccgatewayRequestDefinition,...ccgDefinition(e,n),description}}'));
+// CC's own policy sees them; their definitions stay the client's, verbatim: a
+// tool definition is the client's data, and CC's own assembly (strict/eager
+// fields, description hooks, provider stripping) applies only to CC's tools,
+// which never enter this branch.
+edit(core, 'FH', t => once(t, 'async function FH(e,n){', 'async function FH(e,n){if(ccgIsNative(e))return structuredClone(e.ccgatewayRequestDefinition);'));
 edit(core, 'qmn', t => {
   // A probe run (request-build injectLayers) is CC's native request for the
   // layers given to a request that is not CC's: it keeps the native system,
@@ -195,7 +219,7 @@ edit(core, 'qmn', t => {
   // RIs hashes the first user prompt; external wire messages carry native
   // attachments as reminder blocks, which request-build skips (fingerprintMessages).
   t = once(t, 'let tF=RIs(Aa),', 'let tF=RIs(J.ccgatewayBuildOnly===true?J.ccgatewayFingerprintMessages:Aa),');
-  t = once(t, 'fingerprint:tF,agentContext:J.agentContext,', 'fingerprint:tF,ccgatewayCaptureBilling:J.ccgatewayBuildOnly===true?J.ccgatewayCaptureBilling:void 0,agentContext:J.agentContext,');
+  t = once(t, 'fingerprint:tF,agentContext:J.agentContext,', 'fingerprint:tF,ccgatewayCaptureBilling:J.ccgatewayBuildOnly===true?J.ccgatewayCaptureBilling:void 0,ccgatewayCapturePrefix:J.ccgatewayBuildOnly===true?J.ccgatewayCapturePrefix:void 0,agentContext:J.agentContext,');
   return once(t, 'let eo=HTe(()=>sF({maxRetries:0,', 'if(J.ccgatewayBuildOnly===true){yield{type:"ccgateway_request",body:uXn({model:J.model,fastMode:false})};return}let eo=HTe(()=>sF({maxRetries:0,');
 });
 // External wire history has already been validated. Native repair, reminder
@@ -215,14 +239,16 @@ edit('chunk-38xgev2z.js', 'sF', t => {
 // other request gets CC's (dN), for the entrypoint set on the request.
 edit('chunk-38xgev2z.js', 'nl', t => once(t, '"User-Agent":dN()', '"User-Agent":ccgatewayClientUserAgent()??dN()'));
 surround('chunk-38xgev2z.js', { imports: 'import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n' });
-// Capture the generated attribution BEFORE system grouping can replace it with
-// the client's billing block. The native function retains its opt-out rules.
-edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);'));
+// Capture the generated attribution and the identity line BEFORE system
+// grouping can replace them with the client's blocks. The native function
+// retains its opt-out rules, and the line is the one n1n selected for
+// recordedCliPrefix (null when the request carries none).
+edit('chunk-t61vswm2.js', 'PAs', t => once(t, 'd=ki([s,n,...e].filter(Boolean));', 'd=ki([s,n,...e].filter(Boolean));r.ccgatewayCaptureBilling?.(s);r.ccgatewayCapturePrefix?.(n);'));
 // The environment snapshot renders the proxy note the request asked for, and
 // none when it did not (ccgatewayEnvironment's ccgatewayProxyText): the note
 // is otherwise the process's own and would reach the content policy unasked.
 edit(core, '_oo', t => once(t, 'l1(e)?ule(e):foo()', 'Object.hasOwn(e,"ccgatewayProxyText")?e.ccgatewayProxyText:l1(e)?ule(e):foo()'));
-const nativeTools = 'import {isNative as ccgIsNative,nativeDefinition as ccgDefinition} from "./ccgateway-native-tools.js";\n';
+const nativeTools = 'import {isNative as ccgIsNative} from "./ccgateway-native-tools.js";\n';
 // The client's system blocks are joined the way the CLI joins two appended
 // prompts (pr in the main module, for --append-system-prompt-file with
 // --append-system-prompt): the function itself, taken from the hash-bound
@@ -254,6 +280,10 @@ for (const input of supportInputs) {
 const betaEntry = support.get('ccgateway-request-betas.js');
 if (!betaEntry) throw Error('Expected the request beta support module');
 betaEntry.text = fillBetaModule(betaEntry.text, builderBetas);
+// model-request.js's direct endpoint is the native beta Messages post's own.
+const modelEntry = support.get('ccgateway-model-request.js');
+if (!modelEntry) throw Error('Expected the request transport support module');
+modelEntry.text = fillMessagesPath(modelEntry.text, betaMessagesPath());
 checkImports();
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
 const manifest = { baseline: 'linux-x64-glibc/2.1.304', extension: profile.extension, capabilities, files: {}, supportFiles: {} };

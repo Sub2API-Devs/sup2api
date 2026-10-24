@@ -16,8 +16,8 @@ const chunks = {
   'chunk-3nrrbnwj.js': `import fs from 'node:fs';
     export const loadFastPathPolicy = async settings => { fs.writeFileSync(process.env.CCG_FIXTURE_DIR + '/policy.json', JSON.stringify(settings ?? null)); return process.env.CCG_FIXTURE_REFUSED === '1'; };`,
   'chunk-4qs43hr1.js': 'export const gTe = Object.freeze({ name: "oauth_auth", header: "oauth-fixture" }); export const mBr = betas => betas; export const _ke = class {}; export const sF = async () => new _ke(); export const mle = () => {};',
-  'chunk-t61vswm2.js': 'export const yBe = () => ({ user_id: "native" }); export const t1n = () => true; export const n1n = options => JSON.stringify(options); export const PAs = () => ["native-header"];',
-  'chunk-7y2kvacy.js': 'export const B1s = () => false; export const oJe = "x-anthropic-billing-header:";',
+  'chunk-t61vswm2.js': 'export const yBe = () => ({ user_id: "native" }); export const PAs = () => ["native-header"];',
+  'chunk-7y2kvacy.js': 'export const oJe = "x-anthropic-billing-header:";',
   'chunk-jkcb7qdd.js': 'export const KF = "<system-reminder>"; export const lKe = "</system-reminder>";',
   'chunk-2gh4h0fv.js': 'export const RIs = messages => "fingerprint";',
   'chunk-7p6jp6kj.js': 'export const Al = () => ({}); export const S8n = () => [];',
@@ -29,7 +29,7 @@ const chunks = {
     export const runRequestCommand = async (args, natives) => {
       fs.writeFileSync(process.env.CCG_FIXTURE_DIR + '/command.json', JSON.stringify({ args, natives: Object.keys(natives).sort(), oauthBeta: natives.oauthBeta,
         agentNative: Object.keys(natives.agentNative).sort(),
-        identityBuild: typeof natives.identityBuild, prefixBuild: typeof natives.prefixBuild, directBuild: typeof natives.directBuild }));
+        identityBuild: typeof natives.identityBuild, directBuild: typeof natives.directBuild }));
       return 0;
     };`,
 };
@@ -59,11 +59,10 @@ test('the entry asks CC\'s fast-path policy, then runs the command with its nati
     assert.deepEqual(await f.read('policy.json'), settings, 'the settings source CC gives the policy');
     const command = await f.read('command.json');
     assert.deepEqual(command.args, ['--build', 'body.json']);
-    assert.deepEqual(command.natives, ['agentNative', 'directBuild', 'identityBuild', 'oauthBeta', 'prefixBuild']);
+    assert.deepEqual(command.natives, ['agentNative', 'directBuild', 'identityBuild', 'oauthBeta']);
     assert.equal(command.oauthBeta, 'oauth-fixture', 'the login\'s beta is the native one');
     assert.deepEqual(command.agentNative, ['entrypoint', 'leadingBilling', 'loopHeaders', 'prompt', 'querySourceFor', 'requestBilling', 'turn']);
     assert.equal(command.identityBuild, 'function');
-    assert.equal(command.prefixBuild, 'function');
     assert.equal(command.directBuild, 'function');
   } finally { delete process.env.CCG_FIXTURE_DIR; await fs.rm(f.dir, { recursive: true, force: true }); }
 });

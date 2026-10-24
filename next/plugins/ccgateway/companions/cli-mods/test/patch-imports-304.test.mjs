@@ -34,7 +34,7 @@ async function edit(file, from, to) {
 
 test('the patcher refuses an import the CLI does not export or the profile does not bind', { skip: nativeSkip('patcher import checks') }, async () => {
   const [missingExport, unbound] = await Promise.all([
-    patchCopy(copy => edit(path.join(copy, 'request-build.js'), "import { oJe } from './chunk-7y2kvacy.js';", "import { oJe, ccgMissing } from './chunk-7y2kvacy.js';")),
+    patchCopy(copy => edit(path.join(copy, 'request-build.js'), "import { oJe, B1s as isBillingHeader } from './chunk-7y2kvacy.js';", "import { oJe, B1s as isBillingHeader, ccgMissing } from './chunk-7y2kvacy.js';")),
     patchCopy(async copy => {
       const file = path.join(copy, 'profiles/linux-x64-2.1.304.json');
       const profile = JSON.parse(await fs.readFile(file, 'utf8'));

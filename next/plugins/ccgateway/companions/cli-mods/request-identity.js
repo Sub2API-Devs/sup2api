@@ -85,47 +85,22 @@ export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
 
 // Claude Code opens every system prompt with its own line, after the
 // attribution header when there is one: 2.1.304 PAs builds
-// [header, n1n(), ...prompt], n1n picks the line and t1n recognizes all of
-// them. Upstream refuses OAuth Sonnet/Opus requests whose first system block
-// is neither the header nor such a line with 429 rate_limit_error "Error"
-// (verified 2026-10-21; a line merged into a longer block or placed after the
-// prompt does not count). The header alone is enough (2026-10-22), so the line
-// is for looking like the client the entrypoint names: build inserts the one
-// chosen for the request's entrypoint (request-policy.js identityLineFor) where
-// Claude Code puts it, or none, unless the first block is not the header, where
-// the entrypoint's default line keeps the request acceptable. Direct forwards
-// the body unchanged. The lines and the checks are the CLI's, never a copy:
-// lines are n1n's three (patch-cli-2.1.304.cjs), isPrefix is t1n and isBilling
-// is B1s, CC's test for its attribution header block.
-const blockText = block => block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
+// [header, n1n(), ...prompt], the line chosen by n1n from three inputs
+// (interactive; non-interactive with and without an appended prompt). Upstream
+// refuses OAuth Sonnet/Opus requests whose first system block is neither the
+// header nor such a line with 429 rate_limit_error "Error" (verified
+// 2026-10-21; a line merged into a longer block or placed after the prompt does
+// not count). The header alone is enough (2026-10-22), so the line is for
+// looking like the client the entrypoint names.
+//
+// Build gets its line the native way: its query options record the chosen
+// line's text (recordedCliPrefix), n1n returns it, and PAs puts it where it
+// puts its own (request-build.js identityRequest; patch-cli-2.1.304.cjs
+// captures the rendered line from PAs). Nothing about where a line goes is
+// decided here. Direct forwards the body unchanged.
+//
+// The lines themselves are n1n's, never a copy: request-build.js renders them
+// by passing n1n its three inputs, and the checks are t1n and B1s (CC's own
+// tests for a line and for its attribution header block).
 // Without a choice (no policy) the line is the one `claude -p` sends, matching
 // the request process's sdk-cli entrypoint.
-const defaultChoice = { line: 'agent_sdk', fallback: 'agent_sdk' };
-
-function checkedPrefix(lines, name, isPrefix) {
-  const prefix = lines?.[name];
-  if (typeof prefix !== 'string' || !isPrefix(prefix)) throw Error('Missing native Claude Code system line');
-  return prefix;
-}
-
-// prefixPosition is the index the line goes to, or -1 when the system already
-// opens with it, directly or after the attribution header.
-function prefixPosition(blocks, isPrefix, isBilling) {
-  const first = blockText(blocks[0]);
-  if (first !== undefined && isBilling(blocks[0])) return blocks.some(block => isPrefix(blockText(block))) ? -1 : 1;
-  return isPrefix(first) ? -1 : 0;
-}
-
-// applyBuildCliPrefix puts the chosen line into the built request, whose
-// system is the client's. A client line is never replaced.
-export function applyBuildCliPrefix(built, choice, lines, isPrefix, isBilling) {
-  const { line, fallback } = choice ?? defaultChoice;
-  if (built.system === undefined) built.system = [{ type: 'text', text: checkedPrefix(lines, fallback, isPrefix) }];
-  else if (Array.isArray(built.system)) {
-    const at = prefixPosition(built.system, isPrefix, isBilling);
-    // After the header the line is optional; anywhere else it is required.
-    const name = line === 'none' ? at === 0 ? fallback : undefined : line;
-    if (at >= 0 && name) built.system = [...built.system.slice(0, at), { type: 'text', text: checkedPrefix(lines, name, isPrefix) }, ...built.system.slice(at)];
-  }
-  return built;
-}

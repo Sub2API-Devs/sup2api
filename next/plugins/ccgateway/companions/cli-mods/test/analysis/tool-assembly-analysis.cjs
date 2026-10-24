@@ -272,7 +272,7 @@ async function runToolAssemblyAnalysis(options = {}) {
     'Native schema generation uses recorded entries/descriptions, strict/eager fields, defer/cache options, provider stripping and description hooks.',
     ['recorded_entry', 'strict_model', 'cache_control', 'eager_input_streaming', 'provider_strip'], { evidence: core.location(nativeFH, false) });
   branch('tools.FH_patched_custom', patchedCore, patchedFH.body.body[0],
-    'Patched registered-custom branch returns original definition plus nativeDefinition early, bypassing native FH provider/cache/record logic.',
+    'Patched registered-custom branch returns the client\'s own definition verbatim early, bypassing native FH provider/cache/record logic.',
     ['custom_attributes_preserved', 'raw_deferred_flag_survives_false_native_deferLoading']);
   branch('tools.provider_schema_filter', provider, provider.declaration('tzs'),
     'Foundry feature refusals can remove the deferred placeholder and strip defer_loading/strict. This VM coverage is not proof that the current request entry supports Foundry.',
@@ -330,10 +330,10 @@ async function runToolAssemblyAnalysis(options = {}) {
   const ct = evaluateFunction(identity.raw(identity.declaration('Ct')), 'Ct');
   const searchName = evaluateExpression(constants.raw(constants.declaration('Ai').init));
   assert.equal(searchName, 'ToolSearch');
-  const registryAPI = evaluateSupport(registry, ['requestTool', 'isNative', 'nativeDefinition']);
+  const registryAPI = evaluateSupport(registry, ['requestTool', 'isNative']);
   const inputAPI = evaluateSupport(input, ['prepareBuildInput']);
   const fh = evaluateFunction(patchedCore.raw(patchedFH), 'FH', {
-    ccgIsNative: registryAPI.isNative, ccgDefinition: registryAPI.nativeDefinition,
+    ccgIsNative: registryAPI.isNative,
     dsi: async (_tool, description) => ({ description }),
   });
   const customInputs = [{ name: 'ToolSearch', description: 'search', inputSchema: { type: 'object' } },
@@ -376,7 +376,7 @@ async function runToolAssemblyAnalysis(options = {}) {
     'Actual support-module descriptor + native extracted classifier/guard/filter; model support and initial search decision forced enabled, all conversation state absent like the adapter.');
   const emittedDeferred = await fh(registered[1], { withoutToolDescribeHooks: true, deferLoading: false });
   await test('patched.FH.original_defer_loading_survives_false_native_flag', true, () => emittedDeferred.defer_loading,
-    ['actual patched FH early-return branch and nativeDefinition', 'hooks disabled as in adapter']);
+    ['actual patched FH client-definition branch', 'hooks disabled as in adapter']);
   contract('tools.deferred_catalog_has_search', true, missingSearch.names.includes('ToolSearch') || emittedDeferred.defer_loading !== true,
     ['tools.FH_patched_custom', 'tools.search_off_filter'], 'defer_loading=true remains on a tool while ToolSearch is absent.');
 

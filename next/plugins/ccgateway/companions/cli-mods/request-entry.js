@@ -16,6 +16,6 @@ export async function runRequest(args, settings) {
     return 1;
   }
   const { runRequestCommand } = await import('./ccgateway-request-command.js');
-  const { agentNative, directBuild, identityBuild, prefixBuild, oauthBeta } = await import('./ccgateway-request-natives.js');
-  return runRequestCommand(args, { agentNative, directBuild, identityBuild, prefixBuild, oauthBeta });
+  const { agentNative, directBuild, identityBuild, oauthBeta } = await import('./ccgateway-request-natives.js');
+  return runRequestCommand(args, { agentNative, directBuild, identityBuild, oauthBeta });
 }
