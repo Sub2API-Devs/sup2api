@@ -131,7 +131,7 @@
 
 主路径（长期可用）：`artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`（8 个文件，728 KiB，artifacts 不进 git，**令牌已打码**为 `Bearer REDACTED`/`REDACTED`）。wf-prod31 侧另有一份同字节副本（`.../wf-2026-10-24/prod31/baseline/`）。
 
-ovh `/tmp/ccg-audit-wf-baseline/` 曾放同一份：测完后该目录被一次清理删除（归属未定，不是任何单一 agent 明确执行的操作），用本地副本恢复并逐字节核对（8/8 文件、24 个保序头、`/v1/messages?beta=true`、令牌仍打码）后，又被同前缀的其他会话清理再次删除（同期 `/tmp` 出现 `ccg-audit-wf-lib.py`、`ccg-audit-wf-probe01.py` 等探针脚本）。`/tmp` 是共享且易被清理的，因此**不再在 /tmp 保留副本，以本地路径为准**；需要线上副本时用 `scp artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/*.json ovh:/tmp/ccg-audit-wf-baseline/` 重建。
+ovh `/tmp/ccg-audit-wf-baseline/` 曾放同一份：测完后该目录被一次清理删除（归属未定，不是任何单一 agent 明确执行的操作），用本地副本恢复并逐字节核对（8/8 文件、24 个保序头、`/v1/messages?beta=true`、令牌仍打码）后，又被同前缀的其他会话清理再次删除（同期 `/tmp` 还有 `ccg-audit-wf-lib.py`、`ccg-audit-wf-probe01.py`，那是 wf-prod31 的临时 beta 探针脚本，跑完已删，与本目录无关）。`/tmp` 是共享且易被清理的，因此**不再在 /tmp 保留副本，以本地路径为准**；需要线上副本时用 `scp artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/*.json ovh:/tmp/ccg-audit-wf-baseline/` 重建。
 
 格式：每个文件一个场景，`{"scenario","source","note","captured_at","requests":[{index,method,url,headers:[[name,value],…保序],body}]}`。
 

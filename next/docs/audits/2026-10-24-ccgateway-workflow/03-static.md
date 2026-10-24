@@ -260,7 +260,7 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 
 ## 6. 给动态验证队友的检查清单（建议逐条勾）
 
-> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考。本清单已在 2026-10-24 由 `wf-offline`（v23，30 场景）与 `wf-prod31` 逐条执行，结果与归因见 §7。基线 A 的长期引用用仓库内副本 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`；`/tmp/ccg-audit-wf-baseline/` 会被其他会话的同前缀清理带走，不要引用。
+> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考。本清单已在 2026-10-24 由 `wf-offline`（v23，30 场景）与 `wf-prod31` 逐条执行，结果与归因见 §7。基线 A 的长期引用用仓库内副本 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`；ovh `/tmp/ccg-audit-wf-baseline/` 已被收尾清理、不再保留，不要引用。
 
 ### 6.1 wf-offline（docker 离线对拍：官方客户端直连 vs 经 Worker）
 
