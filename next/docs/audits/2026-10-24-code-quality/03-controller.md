@@ -1,0 +1,76 @@
+# 03 — CCGateway 控制器（Python）代码质量审核
+
+范围：`git diff f546fa31a..HEAD -- next/plugins/ccgateway/companions/controller`（拆出 common / dockerfs / http_api / worker_update / runtime_admin，manager 瘦身，delete 按标签+前缀删除并以 409 resource_in_use 拒绝，删除 cli_updates）。只读审核；`test_manager test_cleanup test_worker test_runtime_updates test_shared_egress test_tunnel` 共 139 个测试当前全部通过。
+
+## 摘要
+
+- 拆分方向是对的（common 无内部依赖，import 环已消除），但**复用没有做到位**：`dockerfs.read_file/write_file` 是死代码，同样的逻辑在 runtime_updates / worker_update 里又内联写了 6 遍；临时容器取文件、"运行中 Worker 前置检查"、调用 Worker 管理接口这几段也各有 2–3 份。
+- **解耦不彻底**：`RuntimeUpdates` 和 `SharedEgress` 大量调用 Manager 的私有方法（`m._same/_stage/_swap/_restore/_activate…`），worker_update 和 runtime_updates 互相依赖；就绪状态 `online` 字典被 4 个模块直接 `pop`/赋值；`shared.data['bindings']` 连同"state.json 是否存在"的判断被复制了 5 处。
+- **删除/清理**：没有发现会删掉别的账号或外部资源的路径（容器同时按标签和 `<prefix>-<key>-(app|egress)[-suffix]` 匹配，网络和卷按精确名称并校验标签，外部占用一律 409）。剩下的问题：同名的外部资源会走成 503 并打 traceback，而且会让整份清理清单失败；网络 reload 时如果网络已经不存在会直接报错；挂在 app 网络命名空间上的旧 one-shot 残留不会被回收。
+- 其余是简洁性问题：manager 里有 11 个没人用的转出导出名，`REQUIRED` 是死常量，`NotDraft` 在错误表里的那一行实际不会生效，几处嵌套超过 3 层。
+
+## 问题表（按价值排序）
+
+| id | file:line | 准则 | 问题 | 具体修法 | 风险 | 行为变化 |
+|---|---|---|---|---|---|---|
+| P1 | dockerfs.py:140-150；runtime_updates.py:122-124, 137-143, 148-150；worker_update.py:48-49, 79-81, 143-147 | 复用 / 简洁 | `dockerfs.read_file`/`write_file` 没有任何调用方，`RuntimeUpdates.write` 是它的逐字副本，另有 5 处内联了 `get_archive` + `read_single_file`。 | 删除 `RuntimeUpdates.write`，所有读写改用 `dockerfs.read_file(container, path, limit)` / `dockerfs.write_file(...)`（`_restore` 停机分支也用 `write_file`），`runtime_migration_probe.py:198` 同步改调。 | 低 | 否 |
+| P2 | runtime_updates.py:176, 211, 227, 239-240, 271-334；worker_update.py:22, 36-40, 170-171；shared_egress.py:318, 456 | 解耦 / 抽象 | `RuntimeUpdates` 和 `SharedEgress` 直接调用 Manager 的十几个私有方法；`WorkerUpdates` 里的 `_sha256/_stage/_swap/_discard = staticmethod(dockerfs.*)` 只是给它们和测试假对象留的接缝；worker_update 引入 RuntimeUpdates，RuntimeUpdates 又反过来调用 WorkerUpdates，两边互相依赖。 | RuntimeUpdates 直接 `import dockerfs` 调用 `stage/swap/discard/sha256_in`，删掉这 4 个 staticmethod 别名；共用步骤改成公开名（`same_container`、`wait_idle`、`backup_worker`、`restore_worker`、`restart_healthy`、`reactivate`、`activate`）；"带 components 走成对激活"的分派移到 `http_api.handle_worker`，`update_worker` 只管单 Worker。 | 中（测试假 manager 要跟着改名） | 否 |
+| P3 | http_api.py:196-198；worker_update.py:165, 202-205；runtime_updates.py:248, 280；shared_egress.py:307, 441, 462, 487, 533, 549, 574 | 解耦 | 就绪表 `online` 被 4 个模块直接 `pop`/赋值；worker_update 调用 `self.public(aid)` 只是为了利用它"顺带丢掉过期就绪"的副作用；HTTP 层 `put_config` 也替 Manager 清就绪。 | Manager 提供 `go_offline(aid)`、`restore_online(aid, revision)`、`online_at(aid, revision) -> bool`；worker_update 改成 `self.readiness(aid, state)`；`put_config` 里的清就绪挪进 `Manager.apply` 的 `except`。 | 低 | 否 |
+| P4 | manager.py:244-259, 853-856；cleanup.py:32-33, 92-96；http_api.py:39-40 | Bug | 同名外部资源（容器/网络/卷）抛的是裸 `ValueError`：DELETE 会回 503 runtime_unavailable 并打 traceback，核心会一直重试；`cleanup.inventory` 不按 key 隔离异常，只要有一个这样的 key，整份清理清单就失败。 | common 新增 `OwnershipMismatch(ValueError)`，在 `ERRORS` 里映射为 409（`resource_in_use` 或新的 `resource_conflict`），并加入 `REQUEST_ERRORS`；`inventory` 对单个 key 捕获异常，记日志后跳过（或在该行标 `conflict`）。 | 中（改变线上错误码，契约要同步） | 是 |
+| P5 | worker_update.py:180-193；runtime_updates.py:218-232 | 复用 / Bug | "取 app 容器 → 判断是否运行 → identity → worker_target → 当前 SHA"这段前置检查写了两份；成对激活只把 `NotFound` 转成 404，标签不符时的 `ValueError` 变成 503 加 traceback，单 Worker 路径则会转成 404。 | 抽出 `WorkerUpdates.running_worker(aid)`，返回 `SimpleNamespace(container, identity, target, base, previous)`，未运行时返回 `None`，两处共用。 | 低 | 是（成对路径标签不符时回 404） |
+| P6 | worker_update.py:42-55；runtime_updates.py:117-135 | 复用 / Bug | "建一个不启动的临时容器、读文件、删除"写了两份；`package()` 的 `finally: temp.remove(force=True)` 没有吞异常，删除失败会盖掉原本的 `InvalidImage`/`ValueError`。 | dockerfs 新增上下文管理器 `image_container(client, ref)`，在里面 create，退出时 `suppress(DockerException)` 再 remove；`worker_program` 和 `package` 都改用它加 `read_file`。 | 低 | 是（删除失败不再覆盖原错误） |
+| P7 | manager.py:880-881, 1008-1009；cleanup.py:63-66, 77-78；runtime_admin.py:209-212 | 解耦 / 复用 | 有 5 处先判断 `(root/'shared-egress'/'state.json').exists()`，再直接读 `shared.data['bindings']`/`['nodes']`；runtime_admin 还把 `'io.sup2api.ccgateway.shared-egress'` 写成了字面量（就是 `shared_egress.SCHEMA`）。 | Manager 提供 `shared_bindings()`：没有状态文件时返回 `{}`，且不实例化 SharedEgress；SharedEgress 提供 `binding(aid)`/`node(tag)`；runtime_admin 改为 `from shared_egress import SCHEMA`。 | 低 | 否 |
+| P8 | manager.py:431-434；runtime_updates.py:79-94（84 行把 `:8787` 写死）；http_api.py:47-50, 233-236 | 复用 | "调用账号 Worker 管理接口"（拼 URL、带 Bearer admin key、不跟随重定向）写了三份，`maintenance` 还绕过了 `ACCOUNT_PORT`。 | common 新增 `worker_url(state, path)` 和 `admin_headers(state)`（把 `upstream_headers` 挪过来），三处共用。 | 低 | 否 |
+| P9 | manager.py:668-669, 684-687；shared_egress.py:372, 584 | 简洁 | 用 `public(aid)` 做就绪判断（每次都要再读一次 state，还可能查一次镜像），`_apply_shared` 连着调用两次；`_apply_dedicated` 在判断之后又 `owned()` 两个容器检查 running，这一步 `readiness()` 已经做过。 | 判断改为 `self.readiness(aid, state) == revision`，命中后只 `return self.public(aid)` 一次；删掉 685-686 行多余的 owned/status 检查。 | 低 | 否 |
+| P10 | manager.py:827-829, 893-897 | Bug（删除幂等） | `_disconnect_shared_gateway` 对每个网络都重新查一次网关，而且 `network.reload()` 遇到已经不存在的网络会抛 `NotFound`，和旁边 `absent_ok(network.remove)` 想要的幂等不一致。 | `_deletion_plan` 返回已经算好的 `gateway` id 并传下去；改成 `if not absent_ok(network.reload): continue`。 | 低 | 是（网络已消失时不再失败） |
+| P11 | manager.py:862-869 | Bug（残留） | 删除只回收"挂了数据卷"的 one-shot 残留；以 `network_mode='container:<app>'` 加入 app 命名空间的 helper（`helper()`、`shared_egress.network_idle`）和挂载运行目录的 `sing-box check`，在旧控制器留下 Created 状态后会永久残留。 | `_deletion_plan` 另外列出 `{prefix}-oneshot-*` 容器，凡是 `HostConfig.NetworkMode == 'container:'+id`（id 属于 ours）且满足 `_stale_helper` 的，一并删除。 | 低 | 是 |
+| P12 | http_api.py:355-360, 183-186；common.py:113 | 简洁 / 抽象 | 隧道接口自己写 `except Exception: fail(503)`，绕过了 `answer_error`，失败不留日志；`NotDraft` 在 `ERRORS` 里有一行，但没有任何 `named` 集合包含它，靠 `delete_runtime` 本地 try/except 兜底，表里那一行等于死的。 | 把 `NotDraft` 加入 `REQUEST_ERRORS`，删掉 `delete_runtime` 的 try；隧道改为 `except Exception as e: return self.answer_error(e, (BadRequest, RuntimeBusy))`。 | 低 | 是（只是多了日志，状态码不变） |
+| P13 | manager.py:974-982；http_api.py:240-253 | 复用 | "state 存在、revision 非空且 `readiness == revision`"这道门在 `connection()` 和 `worker_target()` 里各写了一次。 | Manager 新增 `ready_state(aid, revision)`：在 `request_guard` 内返回 state，否则返回 None；两处都调用它，再各取自己需要的 key。 | 低 | 否 |
+| P14 | http_api.py:148-156 对比 100-105 | 复用 | `read_account_body` 重复了 `read_body`，而且用 `int()` 解析，会接受 `'+5'`、`' 5'`、`'1_000'` 这类 Content-Length。 | 改为 `self.read_body(MAX_ACCOUNT_BODY)`，在 `handle_request` 里把 `BadRequest` 转成 `fail(400,'invalid_request',close=True)`，删除 `read_account_body`。 | 低 | 是（拒绝不规范的 Content-Length） |
+| P15 | runtime_updates.py:239-241 对比 worker_update.py:194-197 | Bug（顺序） | 成对激活先备份、再等空闲，每次回 busy 的重试都会多写一个备份，并按"只留最新 5 个"轮换掉更早版本的程序备份；单 Worker 路径的顺序是对的。 | 把 `pair.old = m._backup_worker(...)` 移到 `_wait_idle` 成功之后（`maintenance('pause')` 之前）。 | 低 | 是 |
+| P16 | manager.py:46-62 | 简洁 | 为了"转出导出"引入的名字里，有 11 个在任何地方都没有使用：`KEY_PATTERN, SHA256_HEX, UpgradeInProgress, write_private_bytes, WORKER_DIR, WORKER_MAX_BYTES, WORKER_NAMES, WORKER_SOURCE, RUNTIME_ROUTE, UPLOAD_ROUTE, FEATURES`；其余大多只给测试和脚本用。 | 删掉没用的；测试和脚本改为从定义处导入（common / dockerfs / http_api / worker_update），之后可以把这整块导入缩成 manager 真正用到的部分。 | 低 | 否 |
+| P17 | runtime_updates.py:22-23, 39, 57 | 简洁 / 复用 | `REQUIRED` 是死常量；同一份能力清单分别硬编码在 `INFO_SCRIPT` 和 `HEALTH_SCRIPT` 的 JS 字符串里。 | 把 `json.dumps(REQUIRED)`（和健康检查用的能力元组）作为 argv 传给脚本，脚本里读 `JSON.parse(process.argv[n])`。 | 低 | 否 |
+| P18 | runtime_admin.py:207-218；http_api.py:274-289；manager.py:211-222 | 低嵌套 | `upgrade_controller` 的 with/if/if/if 嵌套了 4 层；`handle_management` 是双层 try；`_restore_runtime_images` 是 suppress 里再套 try。 | 抽出 `_check_downgrade(image)` 并提前 return；`handle_management` 把 `except OSError` 并进同一个 try 的 except 链；`_restore_runtime_images` 用 `read_json` 加一个 `except ValueError`。 | 低 | 否 |
+| P19 | manager.py:587 对比 shared_egress.py:327-334；shared_egress.py:217 对比 manager.py:156；runtime_admin.py:168 对比 upgrade.py `DOCKER_SOCKET` | 复用 | 零散重复：resolv.conf 的内容、取第一个子网（`first_subnet`）、`DOCKER_SOCKET` 常量各有两份。 | common 新增 `resolv_conf(gateway)` 和 `DOCKER_SOCKET`；`first_subnet` 挪到 network.py 后两处共用。（resolv 的两种写法要保留：一个换 inode，一个原地写，注释写清原因。） | 低 | 否 |
+| P20 | shared_egress.py:179 | 抽象 | 共享网关借用 `ensure_network('d0000000000000000', 'xray-uplink', …)`：用一个伪造的草稿 key 套账号网络的命名和标签，落在草稿 key 空间里（目前 delete/cleanup 只认 net/uplink 角色，不会误删，但这条约束是隐含的）。 | 给 Manager 加 `ensure_named_network(name, labels, policy, internal)`，账号网络和共享网关都调用它；共享网络改用 `SHARED_OWNER` 标签，而不是账号 `LABEL`。 | 中（已有网络的名称/标签会变，需要迁移或兼容） | 是 |
+
+## 删除路径复核结论
+
+- **会不会误删别人的东西**：不会。容器同时要求 `LABEL == key` 并且名字匹配 `<prefix>-<key>-(app|egress)(-suffix)?`；网络和卷按精确名称校验标签；共享网关只有 `OWNER == prefix` 时才排除在外；其他外部占用（包括运行中的 one-shot）一律 409，什么都不删。
+- **残留**：见 P11（命名空间型 one-shot）。另外 `self.locks` 永远不回收，草稿 key 是随机生成的，锁表会慢慢增长；这是旧问题，不在本次 diff 范围内，未列入表中。
+- **幂等**：见 P10。
+
+## 处理结果（2026-10-24）
+
+逐条核对过代码，20 条的描述都成立；只有 P18 里 `handle_management` 的建议修法会改变行为（见下）。没有提交。全部测试 `test_cleanup test_cli_profiles test_headers test_manager test_network test_runtime test_runtime_updates test_shared_egress test_tunnel test_upgrade test_uploads test_worker` 共 190 个通过（原 184 个，新增 6 个），全部 `.py` 都能 `py_compile`，pyflakes 无告警。没有新增模块，Dockerfile 不用改。
+
+| id | 结果 | 做法 / 原因 |
+|---|---|---|
+| P1 | 已修 | `dockerfs.read_file(container, path, limit=WORKER_MAX_BYTES)` / `write_file` 成为唯一读写入口；删掉 `RuntimeUpdates.write`；`package`、`prior_selection`、`legacy_selection`、`_stage_release`、`_roll_back`、`worker_program`、`backup_worker`、`restore_worker`（停机分支改用 `write_file`）以及 `runtime_migration_probe.py` 都改调它。 |
+| P2 | 已修 | 删掉 `_sha256/_stage/_swap/_discard` 这四个 staticmethod 别名，两边都直接调 `dockerfs`。共用步骤改成公开名：`running_worker`、`same_container`、`wait_idle`、`backup_worker`、`restore_worker`、`restart_healthy`、`reactivate`、`activate`。worker_update 不再引入 runtime_updates；带 `components` 的请求在 `http_api.handle_worker` 分派到 `Manager.update_runtime`，`update_worker` 只处理单个 Worker。测试假对象和两个探针脚本跟着改名。 |
+| P3 | 已修 | Manager 新增 `go_offline(aid)`（返回原来的 revision）、`restore_online(aid, revision)`、`online_at(aid, revision)`；shared_egress、runtime_updates、worker_update、http_api 不再直接碰 `online`。worker_update 改用 `readiness(aid, state) == revision`。`put_config` 不再替 Manager 清就绪：`Manager.apply` 出错时自己 `go_offline`；JSON 解析失败时把 `None` 交给 `apply`，仍然是 400 invalid_request，也照旧清就绪，行为不变。 |
+| P4 | 已修，**线上契约有变化** | common 新增 `OwnershipMismatch(ValueError)`，`owned`/`owned_resource`/`account_volume` 统一用 `_ours` 抛出。**只有** `DELETE /accounts/<key>` 把它答成 409 `resource_in_use`（`DELETE_ERRORS`），不打 traceback；PUT config 等其他接口仍是 503 `runtime_unavailable`，这些接口线上行为不变。这和核心的处理一致：核心 `deleteFailure` 把 409 `resource_in_use` 映射为自己的 `resource_in_use`（ErrUnavailable，自动重试，同时说明"什么都没删、是外部资源挡住了"），其余映射为 `runtime_cleanup_failed`，两者的重试方式相同，所以只是原因写得更准确。清理接口：`inventory` 对每个 key 单独捕获异常，记 WARN 日志，然后照样列出这个 key，但给它一个任何快照都对不上的 identity（`unreadable_identity`），这样它不会被删，而会在清理结果里显示为 `failed`，不会让整份清单失败；`clean_one` 遇到 `OwnershipMismatch` 时的原因也记为 `resource_in_use`（原来是 `resource_cleanup_failed`）。`cleanup.docker_resources` 改为复用 `owned`/`owned_resource`。 |
+| P5 | 已修 | 新增 `WorkerUpdates.running_worker(aid)`，返回 `SimpleNamespace(container, identity, target, base, previous)`，未运行时返回 None，两条路径共用。成对激活遇到标签不符时，现在和单 Worker 路径一样回 404 `not_found`（原来是 503 加 traceback）。 |
+| P6 | 已修 | 新增 `dockerfs.image_container(client, ref)` 上下文管理器，删除失败时不再盖掉原来的错误；`worker_program` 和 `package` 都改用它。新增测试 `test_image_container_removal_failure_keeps_the_real_error`。 |
+| P7 | 已修 | `Manager.shared_bindings()`：没有状态文件时返回 `{}`，而且不创建 SharedEgress；`SharedEgress.endpoint(aid)` 取代 `_pinned_address` 里那两层 `data[...]`；runtime_admin 改用 `shared_egress.SCHEMA`。用到这几处的 5 个地方都已替换。 |
+| P8 | 已修 | common 新增 `admin_headers(state)`（取代 `upstream_headers`）和 `worker_request(session, state, method, path, **kw)`（统一使用 `ACCOUNT_PORT`、不跟随重定向）；`maintenance`、`_sync_environment`、`pass_through` 三处共用。两个健康检查脚本和 `network_idle` 里写死的 8787 也改成 `ACCOUNT_PORT`。 |
+| P9 | 已修 | `_apply_shared`/`_apply_dedicated` 改为判断 `readiness(aid, state) == revision`，命中后只调一次 `public`，并删掉多余的 owned/status 检查（`readiness` 已经确认两个容器都在运行）。`SharedEgress.status` 和 `_recover_one` 改用新的 `Manager.is_ready(aid, state)`。 |
+| P10 | 已修（bug） | `_deletion_plan` 返回 `SimpleNamespace(containers, networks, volume, gateway)`，网关 id 只查一次；`_remove_resources` 遇到已经不存在的网络时 `absent_ok(network.reload)` 返回 False，直接跳过；`_disconnect_shared_gateway` 已删除。新增测试 `test_delete_tolerates_a_network_removed_meanwhile`。 |
+| P11 | 已修（bug） | `_namespace_helpers`：列出 `<prefix>-oneshot-*` 容器，凡是已结束（created/exited/dead）、并且 `HostConfig.NetworkMode == container:<我们某个容器的 id>`，或者某个挂载的 Source 是运行目录或目录下的文件（精确匹配目录本身或 `目录/` 前缀，`/root/210` 不会被当成 `/root/21`）的，都一并删除，而且排在其他容器前面删。运行中的 helper 不动，也不会挡住删除（和原来一样）；别的账号的 helper、外来容器都不动。新增测试 `test_delete_removes_ended_helpers_in_the_runtime_namespace_or_directory`。 |
+| P12 | 已修 | `NotDraft` 加入 `REQUEST_ERRORS`，删掉 `delete_runtime` 里的 try；隧道接口改为 `answer_error(e, TUNNEL_ERRORS)`，状态码不变，失败现在会留日志。 |
+| P13 | 已修 | 新增 `Manager.ready_state(aid, revision)`（在 `request_guard` 内检查）；`connection()` 和 `Handler.worker_target()` 都用它。 |
+| P14 | 已修，行为有变化 | 删掉 `read_account_body`，改为 `read_body(MAX_ACCOUNT_BODY)`，`BadRequest` 由原来的 `answer_error` 答成 400 `invalid_request` 并关闭连接；`+5`、` 5`、`1_000` 这类 Content-Length 现在会被拒绝，同时多一行日志。 |
+| P15 | 已修（bug） | 成对激活改为先 `wait_idle`、成功后再 `backup_worker`，然后 `maintenance('pause')`。新增断言：busy 时不产生备份；成功时只备份一次。 |
+| P16 | 已修 | manager 只导入自己真正用到的名字；测试和脚本改为从定义处导入（common / dockerfs / http_api / worker_update）。顺手删掉了测试和脚本里 pyflakes 报出的其他未使用导入。 |
+| P17 | 已修 | `REQUIRED`（CLI 能力）和新增的 `HEALTH_REQUIRED`（Worker /health 能力）以 JSON 形式作为最后一个 argv 传给 `INFO_SCRIPT`/`HEALTH_SCRIPT`。另外：`INFO_SCRIPT` 里 `argv[5]==='legacy'` 的分支实际不会走到（调用方从来不传），已删除。新增测试 `test_staged_cli_is_checked_for_the_required_capabilities`。 |
+| P18 | 已修，但改法与建议不同 | `upgrade_controller` 抽出 `_check_downgrade(image)`，提前 return；`_restore_runtime_images` 改用 `read_json(path, MISSING)`，加一个 `except ValueError`，不再有嵌套。`handle_management` **没有**按建议把 `except OSError` 并进同一条 except 链：外层 try 捕获的是在 except 分支里写错误应答时抛出的 OSError，并成一条链之后就捕获不到了。所以改为拆成 `handle_management`（只处理 OSError）和 `management_request` 两个方法，每个只有一层 try。 |
+| P19 | 已修 | common 新增 `resolv_conf(gateway)` 和 `DOCKER_SOCKET`（runtime_admin 和 upgrade 共用）；`first_subnet` 挪到 network.py，shared_egress.attach 也改用它。两种写 resolv.conf 的方式都保留（新文件换 inode / 原地写），两处都加了注释说明原因。 |
+| P20 | 未做 | 改名或改标签会改变已有共享网关网络的名字和标签，需要迁移或兼容旧名，风险是中等，超出这次"行为不变"的范围。已核实当前是安全的：`ccg-d0000000000000000-xray-uplink` 的角色不是 net/uplink，inventory 和 delete 都不会认出它，即使核心删除草稿 key `d0000000000000000` 也碰不到它。建议以后单独做，需要附带迁移。 |
+
+需要同步的文档（这次没改，交给文档负责人）：
+
+- CONTRACTS §49.14 `DELETE /accounts/<key>` 的"归属"条：把"同名但标签不符的资源 → 503 `runtime_unavailable`"改为"→ 409 `resource_in_use`，什么都不删（只有 DELETE 这样答，其他接口仍是 503）"；"先检查、再删除"条补一句：本控制器遗留的已结束 one-shot 助手，包括加入 app/egress 网络命名空间的和挂载运行目录的，都一并删除，运行中的不动。
+- CONTRACTS 清理接口（`GET/POST /runtime/cleanup`）：清单里某个运行环境读不出快照时（例如同名外部资源），照样列出，但给的 identity 不会和任何快照匹配，清理结果里显示为 `failed`，原因是 `resource_in_use` 或 `resource_cleanup_failed`；同名外部资源的原因现在是 `resource_in_use`。
+- CONTRACTS 控制器错误码一节：账号接口的 Content-Length 必须是纯十进制数字，否则 400 `invalid_request`。
+- 核心（不归本次修改）：errors.go 里 `resource_in_use` 的说明文字只提到"外部容器连着网络或挂着数据卷"，可以补上"或有外部资源占用了运行环境的名字"。
+- 控制器 README（另一个会话负责）：已检查过，里面没有提到这次改名的私有方法、转出导出名或 `upstream_headers`，不用改。

@@ -127,7 +127,7 @@
 
 ## 7. CLI 流程
 
-build（`request-build-2.1.304.js`）。等级由核心决定下发哪些项，CLI 只按收到的项做：
+build（`request-build.js`）。等级由核心决定下发哪些项，CLI 只按收到的项做：
 
 ```text
 validate(policy)
@@ -172,7 +172,7 @@ direct（`direct-billing.js`）只处理开头的计费头：
 - **核心**：`next/server/internal/ccgateway/` 下的 `request_policy.go`、`feature_policy.go`（覆盖、合并、解析、`resolvedWorkerPolicy`）、`config.go` `mergeConfig`、`runtime_features.go`、`client.go`。账号策略在表 `ccgateway_account_feature_policies`（`overrides` jsonb）。
 - **contracts**：`features/attachments.go`、`identity_line.go`、`injection.go`、`request_modes.go`；夹具 `testdata/web-policy-payloads.json`、`worker-cli-requests.json`。
 - **Worker**：`request_command.go`（`buildRequestPolicy`、direct 策略）、`cli_pinned.go`（能力）。模式仍由 `relay_mode` 决定，`main.go` 不用改。
-- **CLI**：`request-policy.js`、`request-build-2.1.304.js`、`direct-billing.js`、`request-agent.js`、`content-policy.js`、`native-environment-2.1.304.inc.js`、`patch-cli-2.1.304.cjs`。
+- **CLI**：`request-policy.js`、`request-build.js`、`direct-billing.js`、`request-agent.js`、`content-policy.js`、`native-environment-2.1.304.inc.js`、`patch-cli-2.1.304.cjs`。
 - **控制器**：`runtime_updates.py` 里写死的能力门槛。
 
 ## 10. 实施分工

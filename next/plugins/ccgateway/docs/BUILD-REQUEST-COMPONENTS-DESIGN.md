@@ -212,7 +212,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 ### 5.6 识别用的文字全部取自原生 CC
 
-`content-policy.js` 里没有 CC 的措辞，只导出 `createContentPolicy(vocabulary)`。词表由 `request-build-2.1.304.js` 在运行时从打过补丁的 CLI 取得：
+`content-policy.js` 里没有 CC 的措辞，只导出 `createContentPolicy(vocabulary)`。词表由 `request-build.js` 在运行时从打过补丁的 CLI 取得：
 
 | 词表项 | 原生来源（2.1.304） |
 |---|---|
@@ -230,7 +230,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 ## 6. 原生构造器与最终 body
 
-`buildRequest`（`cli-mods/request-build-2.1.304.js`）流程：
+`buildRequest`（`cli-mods/request-build.js`）流程：
 
 1. 校验 `parameters`、`requestPolicy`、`runtimeContext`；`prepareBuildInput(external, aBe, {preserveContent: true})` 得到 `initial`，供策略读取。
 2. 算出请求入口（`requestEntrypoint`）并调原生 `setEntrypointOnRequests`，原生计费头与 UA 读同一个值。

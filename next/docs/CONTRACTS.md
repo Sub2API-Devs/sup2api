@@ -3154,8 +3154,8 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 | `api_key_account` | 400 | `apikey` 账号不做 OAuth 授权 |
 | `draft_not_found` | 404 / 400 | 草稿接口 404；`POST /accounts` 400 |
 | `draft_not_authorized` | 400 | `POST /accounts` 时草稿未登录或无法确认 |
-| `resource_in_use` | 503 | 删除运行环境时控制器回 409：运行环境之外的容器仍连在它的网络上或挂着它的数据卷，控制器什么都没删；核心之后自动重试（§49.14、§49.23）。出现在草稿 `DELETE`、已删除账号的 `sync`，以及账号生命周期同步状态的 `code` |
-| `runtime_cleanup_failed` | 503 | 控制器删除运行环境的其他失败（含同名资源不属于该运行环境）；核心之后自动重试 |
+| `resource_in_use` | 503 | 删除运行环境时控制器回 409：运行环境之外的容器仍连在它的网络上或挂着它的数据卷，或有外部同名资源占用运行环境的名字，控制器什么都没删；核心之后自动重试（§49.14、§49.23）。出现在草稿 `DELETE`、已删除账号的 `sync`，以及账号生命周期同步状态的 `code` |
+| `runtime_cleanup_failed` | 503 | 控制器删除运行环境的其他失败；核心之后自动重试。2026-10-24 之前的控制器遇到同名资源不属于该运行环境时回 503，核心看到的也是这个 |
 | `runtime_not_retained` | 409 | `POST /system/ccgateway/runtimes/:key/purge`：该 key 不是待清除的已删除账号运行环境（账号未删除或已清除，§49.23） |
 
 透传规则：
@@ -3164,6 +3164,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 - 控制器 409 → 503 `not_synchronized`（代码为 `api_key_account` 时 400 `api_key_account`）。删除运行环境（`DELETE /accounts/<key>`）例外：409 `resource_in_use` → 503 `resource_in_use`，其他非 200（404 视为已删除的情形除外）→ 503 `runtime_cleanup_failed`，`details.status` 为控制器的 HTTP 状态。
 - 其他非 200 → 503，`details.reason` 为控制器给出的代码（例如 `image_pull_failed`、`runtime_unavailable`、`unauthorized`），没有代码时 `runtime_unavailable`。
 - `GET session` 遇到 404（旧镜像没有该端点）返回 `null`。
+- 通用账号准备接口（`/account-preparations/:key/:action`，ccgateway 的 `AccountPreparationAction`）与草稿、账号接口共用同一套实现与错误（2026-10-24 起，审核 K1）：`sync` 失败时 `details.reason` 与账号的 `sync` 一致，优先用控制器给的 reason，没有就是 `sync_failed`，连不上控制器为 `not_configured`（以前兜底是 `runtime_unavailable`）；`health`/`session` 等动作的答复无法解析时为 503 `runtime_unavailable`（以前可能是 500）；`status` 与 `GET drafts/:key/status` 用同一个算法。
 
 核心不再在 Redis 里存登录会话，也不再匹配任何报错文字。CCGateway 其他接口（`remote-*`、共享容器的 `auth/*`、`proxy`、`connect`）的 message 也改成了英文。
 
@@ -3194,14 +3195,16 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 - 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`、`GET /accounts/<key>/admin/usage` 和 `POST /accounts/<key>/admin/auth/refresh`（控制器 ccgateway 0.1.53 起）。
 - `DELETE /accounts/<key>`：完整删除一个运行环境，幂等，什么都没有时也 `200`。应答 `{"deleted":true,"removed":{"containers":[<名字>...],"networks":[<名字>...],"volume":bool}}`，列出这次实际删掉的资源。
-  - **归属**：运行环境的容器 = 带标签 `io.sup2api.ccgateway.account=<key>`、且名字为 `<控制器前缀>-<key>-app|egress[-<后缀>]` 的全部容器（停止的也算），包括人工迁移留下的 `-app-rollback-<tag>` 副本；另一个控制器实例（不同前缀、同一 key）的容器不算。网络 `<前缀>-<key>-net|uplink` 与卷 `<前缀>-<key>-data` 按精确名字查找并核对同一标签；同名但标签不符的资源 → 503 `runtime_unavailable`，什么都不删。
-  - **先检查、再删除**：运行环境之外的容器仍连在它的网络上，或（要删卷时）仍挂着它的卷 → 409 `resource_in_use`，什么都不删；外来容器的名字只写进控制器日志，应答体只有 `{"error":"resource_in_use"}`。共享出口网关不算外来；本控制器遗留的已结束 one-shot 助手容器一并删除。
+  - **归属**：运行环境的容器 = 带标签 `io.sup2api.ccgateway.account=<key>`、且名字为 `<控制器前缀>-<key>-app|egress[-<后缀>]` 的全部容器（停止的也算），包括人工迁移留下的 `-app-rollback-<tag>` 副本；另一个控制器实例（不同前缀、同一 key）的容器不算。网络 `<前缀>-<key>-net|uplink` 与卷 `<前缀>-<key>-data` 按精确名字查找并核对同一标签；同名但标签不符的资源 → 409 `resource_in_use`，什么都不删，不打堆栈（2026-10-24 起，审核 P4；以前是 503 `runtime_unavailable`）。只有 `DELETE` 这样答；`PUT config` 等其他账号接口遇到同名外部资源仍是 503 `runtime_unavailable`。
+  - **先检查、再删除**：运行环境之外的容器仍连在它的网络上，或（要删卷时）仍挂着它的卷 → 409 `resource_in_use`，什么都不删；外来容器的名字只写进控制器日志，应答体只有 `{"error":"resource_in_use"}`。共享出口网关不算外来。本控制器遗留的、已结束（`created`/`exited`/`dead`）的 one-shot 助手（名字为 `<前缀>-oneshot-*`）一并删除，并且排在其他容器之前：挂着它的卷的；加入它某个容器网络命名空间的（`HostConfig.NetworkMode` 为 `container:<该运行环境容器的 id>`）；挂载了运行目录本身或目录下文件的（按目录精确匹配或 `目录/` 前缀，`/root/210` 不算 `/root/21`）（2026-10-24 起，审核 P11，以前只回收挂着卷的）。运行中的命名空间或目录助手不动，也不挡住删除；别的运行环境的助手和外来容器都不动。网络在删除途中已经消失时跳过，不报错（审核 P10）。
   - **顺序**：解除共享出口绑定 → 清掉内存中的就绪记录 → 容器 → 网络（先断开共享出口网关）→ 数据卷（按下述请求头）→ 状态目录（`state.json`、`sing-box.json`、`firewall.nft` 等）→ 恢复备份。子网与 app/egress/网关地址由控制器按现存 Docker 网络分配，网络删除即释放。
   - **请求头**：草稿 key 直接删，卷一并删除。数字 key 只在 `X-CCG-Delete-Account: <同一 key>` 时删除，否则 405 `method_not_allowed`。`X-CCG-Delete-Data: 1` 同时删除数据卷和恢复备份，必须与 `X-CCG-Delete-Account` 一起出现，否则 400 `invalid_request`；只带 `X-CCG-Delete-Account` 时保留数据卷，并把状态写入 `backups/<key>.json` 供人工恢复。核心清除已删除账号和退役运行环境时都带两个头（§49.23）。
   - `/health` 的 `features` 含 `runtime-purge-v2` 表示控制器支持以上语义（按标签加名字前缀找容器、409 `resource_in_use`、`removed`）。核心只要求 `runtime-cleanup-v1`，不按 `runtime-purge-v2` 门控；旧控制器删不掉回滚副本或被外来容器占用的卷时，核心看到的是 `runtime_cleanup_failed`。
 - `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
+- 孤立资源清理 `GET /runtime/cleanup` → `{"runtimes":[{key,identity}]}`（`identity` 为该运行环境资源快照的摘要），`POST /runtime/cleanup {keep_keys,candidates}` 只删除快照仍等于 `identity` 的候选，结果 `status` 为 `kept`/`absent`/`changed`/`deleted`/`failed`。某个运行环境的快照读不出来时（例如同名外部资源），清单不再整份失败（2026-10-24 起，审核 P4）：控制器记一行 WARN，照样列出这个 key，但给一个不会和任何快照相等的 identity，所以它永远不会被删除；POST 时快照仍读不出则显示为 `failed`，原因是 `resource_in_use`（同名外部资源或外来容器占用，以前是 `resource_cleanup_failed`）或 `resource_cleanup_failed`（其他失败），之后能读出则显示为 `changed`。
 - app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
 - 错误 `{"error":"<code>"}`：`unauthorized`、`not_found`、`invalid_request`（400）、`not_synchronized` / `resource_in_use`（409）、`api_key_account`、`image_pull_failed` / `runtime_unavailable`（503）、`method_not_allowed`。
+- 账号接口（`/accounts/<key>/...`）的请求体：`Content-Length` 缺省按 0；有的话必须是纯十进制数字（至多 12 位，且不超过该接口的上限，一般账号接口为 32 MiB），并且不能带 `Transfer-Encoding`，否则 400 `invalid_request` 并关闭连接（2026-10-24 起，审核 P14；以前用 `int()` 解析，会接受 `+5`、` 5`、`1_000`）。
 
 ### 49.15 已知问题与部署顺序
 
@@ -3764,7 +3767,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
   Upgrade: ccg-tunnel
   ```
 
-  只接受 `101` 且 `Upgrade: ccg-tunnel`；`409` → 按 `not_synchronized` 处理，其他 → 连接失败。101 之后该 TLS 连接即为到 `app_ip:8787` 的原始 TCP 字节流，核心在其上照原样跑 HTTP/1.1（`http://<app_ip>:8787/...`，请求头与 SSH direct-tcpip 路径逐字节一致）。`http.Transport.DialContext` 只允许拨这一个目标，每次拨号新建一条隧道。
+  只接受 `101` 且 `Upgrade: ccg-tunnel`；`409` → 按 `not_synchronized` 处理，其他 → 连接失败。101 之后该 TLS 连接即为到 `app_ip:8787` 的原始 TCP 字节流，核心在其上照原样跑 HTTP/1.1（`http://<app_ip>:8787/...`，请求头与 SSH direct-tcpip 路径逐字节一致）。`http.Transport.DialContext` 只允许拨这一个目标，每次拨号新建一条隧道。隧道上的 HTTP 客户端与 local 路由一样不跟随重定向：Worker 回 3xx 时作为普通响应交回调用方（2026-10-24 起，审核 K13；以前隧道上的 3xx 被当作传输错误）。
 - `remote-test`：控制面板模式下调用 `GET /health`，输出 `controller <version>`、三个镜像引用和 `features`；`remote-action` → 400。
 
 ### 53.5 控制器接口变化
@@ -4097,21 +4100,24 @@ CCGateway 请求链路上的错误答复分三类来源，由 `contracts/request
 
 - **插件分类**（`classify.go`）：`requestfailure.Local(source)` 为真时一律 `LocalFailure`；429 按并发限制短冷却；401/403/409/5xx 短冷却并切换，理由写 `gateway refused the request (<reason>: <message>)`，**不再因 Worker 401 停用账号**；其余 4xx 原样回客户端。之前核心的配置类失败以 error 返回，被当作传输错误（10 秒冷却 + 客户端 502 "upstream connection failed"），能力细节只剩一句话。
 - **账号测试**（`account/testreq.go`）：本地来源的 `error_code` 取 Reason 头，`error_source` 为 `core`/`gateway`。
-- **保存配置**（`save`）：`mergeConfig` 的校验文案原样返回（400 `invalid_argument`），只有存储/加密失败才是笼统文案；分组被删除后残留的 `cc_feature_groups` 键在下一次保存时自动清掉（`pruneFeatureGroups`）。
+- **保存配置**（`save`）：`mergeConfig` 的校验文案原样返回（400 `invalid_argument`），版本冲突保留自己的码；存储或加密失败，以及已存配置无法读取（例如无法解密），是服务端故障，为 500 `internal`（笼统文案，原因记日志）。2026-10-24 起（审核 K4）：以前这些情形是 400 `invalid_argument`；带 `cli_version` 保存时，校验版本前读不到已存配置也直接报这个 500，不再放行到事务里被说成 409 `config_changed`。分组被删除后残留的 `cc_feature_groups` 键在下一次保存时自动清掉（`pruneFeatureGroups`）。
 - **PUT config 的原因**（`putConfig`）：控制器的错误码（`cli_profile_unavailable`、`disk_quota_unavailable`、`image_pull_failed`，激活失败的 `proxy_check_failed`/`egress_not_ready`…）经 `syncError` 成为 `details.reason`，`POST …/sync` 与对账日志都带它；控制器自己每个失败请求在 stderr 记一行（方法、key、路径、异常类型与消息、回给核心的码；未命名异常带堆栈），不记请求体与头。
 
 ### 53.21 Worker 只运行 CLI 的请求命令（2026-10-24，审核 C1/C5）
 
 native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历史缓存、Mod 回环、托管安装官方 CLI）从 engine 删除；§53.11、§53.14–53.16 描述的 Worker 行为随之失效，只作历史。现在：
 
-- **唯一答复方式**：`/v1/messages` 与 `/v1/ccgateway/probe` 每次运行一次打包 CLI 的 `request --build|--direct`。`RequestMode` 为空（只可能是代码错误）时回 500 `Worker has no request mode`，不退回任何其他执行方式。
-- **就绪**：只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验；不再在启动时与每 10 分钟跑 7 次 `claude -p` 工具目录探针，`/v1/messages` 不再因探针失败 503（C1）。`/admin/cli` 的 `sync` 改为重新读取 CLI 版本：与启动时不同或读不到时，业务请求 503 并在 `catalog.error` 说明，恢复后自动放行。
-- **`/admin/cli` 视图**：字段形状不变（核心 `cliCatalogState` 与控制台按此解析）；`catalog` 由版本检查填写，`catalog_version` 等于已装版本，`tool_count`/`variant_count` 恒为 0，`updating` 恒为 false。`begin-install`/`validate-install`/`finish-install` 一律 409 `configuration_error`（官方 CLI 没有 `request` 命令，装上会使 Worker 无法应答）；`check` 仍查询发布渠道的最新版本。`/admin/cli/catalog` 已删除。
+- **唯一答复方式**：`/v1/messages` 与 `/v1/ccgateway/probe` 每次运行一次打包 CLI 的 `request --build|--direct`。请求模式的默认值（build）只在 Worker 读配置（`config.Load`）时设一次，配置校验、`NewRuntime` 都拒绝空模式，所以 Worker 不会以空模式启动；`Gateway.ServeHTTP` 鉴权后直接进入请求命令，原先空模式时回 500 `Worker has no request mode` 的分支已删除（2026-10-24，审核 W13）。
+- **就绪**：只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验；不再在启动时与每 10 分钟跑 7 次 `claude -p` 工具目录探针，`/v1/messages` 不再因探针失败 503（C1）。`/admin/cli` 的 `sync` 改为重新读取 CLI 版本：与启动时不同或读不到时，业务请求 503 并在 `catalog.error` 说明，恢复后自动放行。读不到 `--ccgateway-info` 的 CLI 不会启动可服务的 Worker：固定版本的本来就启动失败，2026-10-24 起（审核 W3）未固定版本的也启动失败（以前会照常启动并报健康，之后每个请求 409）；唯一的例外是未固定版本的维护专用 Worker（`MaintenanceOnly`），它照常启动，能力为空。配置的请求模式只在这一处核对：CLI 没有声明 `request_<模式>` 时启动失败（维护专用 Worker 不核对）。
+- **`/admin/cli` 视图**：字段形状不变（核心 `cliCatalogState` 与控制台按此解析）；`catalog` 由版本检查填写，`catalog_version` 等于已装版本，`tool_count`/`variant_count` 恒为 0，`updating` 恒为 false。`begin-install`/`validate-install`/`finish-install` 和其他未知动作一样回 400 `invalid_request_error`（`Unknown CLI action`）（2026-10-24 起，审核 W20；以前是 409 `configuration_error`；核心只转发 `check`/`sync`，控制器只透传，与 core 0.1.185 兼容）；`check` 仍查询发布渠道的最新版本。固定版本的 Worker 只在内存里关闭自动检查，不再每次启动都重写 `cli-update.json`。`/admin/cli/catalog` 已删除。
 - **模式切换**：策略头的 `relay_mode` 与容器模式不同时，要求 CLI 声明 `request_<mode>`；`cli_version` 与 Worker 的 CLI 不同 409。两项都在请求命令唯一一次解析策略头时检查（不再在 `Gateway.ServeHTTP` 预解析一次，C8）。
 - **build 只走内容保留（v2）**：CLI 未声明 `build_content_preservation_v1` 时 build 409；Worker 不再自己抽取 reminder、不再用本机事实改写环境段（v1）。客户端的块原样进入信封，环境段来源由 CLI 的内容适配器处理（`build_attachment_sources_v2`）。
+- **`build_attachment_sources_v1` 只是 v2 的别名**：Worker 只在 CLI 声明 `build_attachment_sources_v2` 时才在 `/healthz.capabilities` 里同时报 v1，给按 v1 预检 worker 来源的核心看；build 闸门仍要求 v2，所以"报了 v1"与"闸门放行"一致（2026-10-24 起，审核 W2；以前条件是"没有内容保留或支持 v2"，没有内容保留、根本做不了 build 的 CLI 也会报 v1）。生产 CLI 两项都有，`/healthz` 输出不变。
+- **CC 上下文头表只有一份**：转发给 Worker、再交给 CLI 的 CC 上下文头（请求类别、agent/父 agent ID、agent 类型、prompt ID、上一轮工具耗时、四个压缩标记头）及各自的格式定义在 `contracts/features.AgentContextHeaders`，客户端 CC 形状的 User-Agent 为 `features.ClientUserAgent`，请求 ID 格式为 `features.RequestIDPattern`（`agent_context.go`）。插件按这张表（小写头名）转发，engine 按同一张表读取，插件的 manifest 头测试也读它（2026-10-24 起，审核 W1；以前插件与 engine 各写一份）。头的内容与格式没有变化，manifest 不用改。
 - **HTTP 错误只认帧**：CLI 的上游 HTTP 错误只以 stderr 错误帧交回；旧 CLI 的"exit 2 + meta + stdout"契约删除。
 - **令牌被拒**：CLI 帧报告上游 HTTP 401 时，Worker 记下存储的访问令牌（`noteAuthenticationRefused`），用量查询据此报告该令牌不可用直到它改变。此前这只在 native 路径写入，请求模式自 2026-10-19 起一直缺失。
-- **Worker 配置**：`WORKER_PLUGIN_PATH`、`CCG_NATIVE_TOOLS`、`CACHE_DIR`、`MAX_CACHE_SIZE`、`HISTORY_RETENTION` 不再读取；`engine.Options` 去掉 `Plugin`、`CacheDir`、`CacheLimit`、`NativeTools`、`InternalBaseURL`。独立入口 `companions/main.go` 与根 Dockerfile 删除，账号部署只用 `worker/Dockerfile`。
+- **Worker 配置**：`WORKER_PLUGIN_PATH`、`CCG_NATIVE_TOOLS`、`CACHE_DIR`、`MAX_CACHE_SIZE`、`HISTORY_RETENTION` 不再读取；`engine.Options` 去掉 `Plugin`、`CacheDir`、`CacheLimit`、`NativeTools`、`InternalBaseURL`。独立入口 `companions/main.go` 与根 Dockerfile 删除，账号部署只用 `worker/Dockerfile`。2026-10-24 起（审核 W12）`LOG_LEVEL`、`HEALTH_TIMEOUT` 也删除（以前读入后没有任何地方使用）。
+- **CLI v23**：请求命令用不到的 Mod 工具执行链（`kind: "native"` 工具注册、工具池合并、响应规范化与 `tool.call` 分发）从补丁里删除，`--ccgateway-info` 不再声明 `native_tools`、`mods_dispatch` 两项能力（核心与 Worker 从不检查它们）；`claude -p` 等普通 CLI 路径恢复官方行为。当前能力列表只在 `cli-mods/profiles/linux-x64-2.1.304.json`，含义见 `cli-mods/README.md` 与 BUILD-REQUEST-COMPONENTS-DESIGN §10（2026-10-24，审核 J1）。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

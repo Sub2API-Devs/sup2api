@@ -43,7 +43,7 @@
 
 ## 3 单次 build 流程
 
-[304 构建适配器](../plugins/ccgateway/companions/cli-mods/request-build-2.1.304.js) 按以下顺序执行：
+[304 构建适配器](../plugins/ccgateway/companions/cli-mods/request-build.js) 按以下顺序执行：
 
 1. 验证 Worker 的内部 `requestPolicy` 和可信 `runtimeContext`，从参数空间分离，禁止泄漏给上游。
 2. 显式还原客户端 system/messages；校验文本类型及合法工具配对。
@@ -199,7 +199,7 @@
 | 无效 max_tokens／thinking 发送上游 | Worker 与 304 独立 CLI 入口均提前校验；build 还拒绝被 JSON 数值转换错误舍入成整数的 token；direct 继续保留原始正文 |
 | 默认 enabled thinking 缺少独立预期 | 从原版 AST 提取判断分支，验证当前 firstParty／Sonnet 4.6 fixture 输出 adaptive＋display updates，预算按原生规则省略。没有更改原生 thinking 实现 |
 
-关键实现：[304 adapter](../plugins/ccgateway/companions/cli-mods/request-build-2.1.304.js)、[参数边界](../plugins/ccgateway/companions/cli-mods/request-parameters.js)、[304 patcher](../plugins/ccgateway/companions/cli-mods/patch-cli-2.1.304.cjs)、[Worker 校验](../plugins/ccgateway/companions/engine/request_components.go)、[组件组装](../plugins/ccgateway/companions/engine/request_command.go)。
+关键实现：[304 adapter](../plugins/ccgateway/companions/cli-mods/request-build.js)、[参数边界](../plugins/ccgateway/companions/cli-mods/request-parameters.js)、[304 patcher](../plugins/ccgateway/companions/cli-mods/patch-cli-2.1.304.cjs)、[Worker 校验](../plugins/ccgateway/companions/engine/request_components.go)、[组件组装](../plugins/ccgateway/companions/engine/request_command.go)。
 
 | 验证 | 结果 |
 |---|---|

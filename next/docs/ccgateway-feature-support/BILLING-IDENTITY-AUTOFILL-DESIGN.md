@@ -101,7 +101,7 @@
   - 契约 `contracts/features/identity_line.go`（入口、可选范围、默认、能力）。
   - 核心 `request_policy.go`、`feature_policy.go`（字段、继承、来源、稀疏下发）、`runtime_features.go`/`client.go`（能力）、`config.go`（全局保存时缺省保留）。
   - Worker `engine/request_command.go`（校验、能力 409、写进 CLI 信封）、`cli_pinned.go`（声明能力）。
-  - CLI `request-policy.js`（键、范围、`identityLineFor`）、`content-policy.js`（服务端入口替换原生整行里的 `cc_entrypoint`，`billingEntrypoint` 读请求入口）、`request-build-2.1.304.js`、`request-command.js`、`request-identity.js`（按选择插入）、`patch-cli-2.1.304.cjs`（`n1n` 三组参数生成三句、能力、标签 v17）。
+  - CLI `request-policy.js`（键、范围、`identityLineFor`）、`content-policy.js`（服务端入口替换原生整行里的 `cc_entrypoint`，`billingEntrypoint` 读请求入口）、`request-build.js`、`request-command.js`、`request-identity.js`（按选择插入）、`patch-cli-2.1.304.cjs`（`n1n` 三组参数生成三句、能力、标签 v17）。
   - 前端：计费头卡片加「服务端入口」下拉；新增「身份行」卡片，每个入口一个下拉，只列该入口的可选句和「不补」。
 - 本地：cli-mods 136 项、engine、核心 ccgateway 与 account（含 PG）、前端 623 项、类型检查都通过；两份跨层契约夹具已重新生成并加了这两个字段的用例。v17 ELF sha256 `7310508b…47233c4`。
 - 30 号实测（v17 ELF 一次性放进容器，测完删除）。先用 unix socket 假上游看发出的 system，再打真实上游：
