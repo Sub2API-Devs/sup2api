@@ -14,7 +14,7 @@
    - **请求行缺 `?beta=true`**：官方 `beta.messages.create` 打的是 `/v1/messages?beta=true`，我们的 `model-request.js` 直接 `client.post('/v1/messages')`；history 抓包 26/26 vs 74/74，`01-offline` 49/49 A 对 54/54 B，`02-prod31` 同。见 §4-D1。
    - **非 CC 请求自己补的计费头 `cch=00000`**（官方运行时才算 5 位十六进制）；CC 请求保留客户端自己的 cch（两种模式都实测逐请求相等），不受影响。见 §4-D2。
 4. **文档有若干处已过期**（`stream`/`system` 缺省填充、HEAD 与工作树的差别、stream:false），见 §5；两条已被 `01-offline` 实测确认（出口无 `stream` 键）。
-5. **一个会影响真实请求的契约缺口（P1）**：请求头带 `fallback-credit-2026-06-01|2026-07-01` 或 `server-side-fallback-2026-07-01` 之一（不需要 token）→ 上游 200 后核心仍报错、客户端拿 502，`02-prod31` 两次复现，见 §4-D3。影响面是「任何主动带这几个 beta 的用户」，不是只有兑换场景。
+5. **一个会影响真实请求的契约缺口（P1）**：请求头带 `fallback-credit-2026-06-01|2026-07-01` 或 `server-side-fallback-2026-07-01` 之一（不需要 token）→ 上游 200 后核心仍报错、客户端拿 502，`02-prod31` 两次复现，见 §4-D3。影响面是「任何主动带这几个 beta 的用户」，不是只有兑换场景。同一功能的第四个名字 `server-side-fallback-2026-06-01` 实测却 200 通过（名单不一致，A2b）。
 6. 下面 §3 的表是本文的主要产出；§6 是给动态验证队友的期望清单（两轮实测结果已在 §7 归因）。
 
 ---
@@ -138,7 +138,7 @@
 | `tool_choice` | 原生重算（客户端值作为 `toolChoice` 选项） | 客户端 | `request-build.js:202`；`patch-cli:115` |
 | `max_tokens` | 原生重算（`maxOutputTokensOverride`） | 客户端 | `request-build.js:203` |
 | `thinking` | 原生重算（由 `thinkingConfigFor` 映射回） | 客户端 | `request-build.js:142-145,182` |
-| `temperature` | 原生重算（`temperatureOverride`，模型规则可省略） | 客户端 | `request-build.js:204` |
+| `temperature` | 原生重算（`temperatureOverride`；**模型规则决定是否发出**：sonnet/haiku 发默认值，opus-4-8 连客户端显式值也丢弃） | 客户端 | `request-build.js:204`；A6b 实测 |
 | `metadata` | **账号替换**：build 有客户端身份→按账号密钥映射（`replace`）；没有→删掉原生 metadata | 客户端原样 | `request-identity.js:66-78`；`request_identity.go:120-129,295-337` |
 | `context_management` | 客户端（参数并回，覆盖原生） | 客户端 | `request-parameters.js:14,55-73` |
 | `output_config.effort/format` | 原生重算 | 客户端 | `request-build.js:203-204`；`request-parameters.js:63-71` |
@@ -260,7 +260,7 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 
 ## 6. 给动态验证队友的检查清单（建议逐条勾）
 
-> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考。本清单已在 2026-10-24 由 `wf-offline`（v23，30 场景）与 `wf-prod31` 逐条执行，结果与归因见 §7。
+> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考。本清单已在 2026-10-24 由 `wf-offline`（v23，30 场景）与 `wf-prod31` 逐条执行，结果与归因见 §7。基线 A 的长期引用用仓库内副本 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`；`/tmp/ccg-audit-wf-baseline/` 会被其他会话的同前缀清理带走，不要引用。
 
 ### 6.1 wf-offline（docker 离线对拍：官方客户端直连 vs 经 Worker）
 
@@ -305,7 +305,7 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 | P6 | 请求日志 | Worker `request-headers.json` 应看到 `X-CCGateway-Request-Policy`、`x-ccgateway-session-scope`、`x-request-id`、`x-api-key`、13 个透传头；上游抓包中这些**都不出现** |
 | P7 | URL query | 记录 Worker→上游是否 `/v1/messages`（预期是，见 D1） |
 | P8 | helper history | 查 `provider_helper_records`（该用户/分组）是否有未过期链；如有，用一个能匹配其前缀的对话复测是否稳定 400（R8）。实测：2026-10-24 生产库为 0，现网不触发 |
-| P9 | fallback credit | ~~若线上有兑换码/credit 场景~~ → **改为无条件必测**：只要请求头带 `fallback-credit-2026-06-01`/`-07-01`/`server-side-fallback-2026-07-01` 之一（不需要 token）就应复现 502（D3，已由 prod31 确认两次） |
+| P9 | fallback credit | **无条件必测**：请求头带 `fallback-credit-2026-06-01`/`-07-01`/`server-side-fallback-2026-07-01` 之一（不需要 token）→ 502（D3，prod31 已确认两次）；只带 `server-side-fallback-2026-06-01` → **200**（A2b，已实测） |
 | P10 | 资源引用 | 带 files/skills 引用的一条请求是否 200，响应里新注册的文件是否出现（D3 后果 2） |
 | P11 | 取消/超时 | 客户端取消 → 499 诊断、不伪造响应；Worker 超时 → 504 `timeout_error`（与请求头无关，确认 `x-stainless-timeout` 仍是 600） |
 
@@ -333,10 +333,12 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 |---|---|---|---|---|
 | A1 | 出口请求行 `/v1/messages`，官方 `/v1/messages?beta=true`（offline 49/49 对 54/54；prod31 全量） | **CLI 补丁**（固定写死路径） | `cli-mods/model-request.js:78` `client.post('/v1/messages', …)`（应走 `beta.messages.create` 或显式 query） | D1 ✓ 成立（升级为两轮双证） |
 | A2 | 带 fallback-credit beta 的普通 Messages（无 token）：上游真实 200，客户端 502 `upstream_error` / "upstream response could not be converted"（prod31 g，两次一致，白打上游一次） | **核心 + Worker 契约缺口**：核心设 `X-CCGateway-Fallback-Credit-Track` + principal/generation、随后校验响应身份头；Worker 请求命令路径既不读入站头也不回写响应头 | 核心 `server/internal/gateway/fallback_credit.go:34-52`（`credits.Enabled` 命中即进入）、`:137-140`（设头）、`:149-193`（`observeFallbackCredit` 的 `ValidateIdentityHeaders` 失败 → 转换失败分支 `forward.go:65,113-118`）；名单见 `contracts/credits/prompt.go:28-38`；Worker 侧无消费者（engine 非测试代码 grep 为空） | D3 ✓ **成立，P2→P1**（未预判到「上游已计费」与「无需 token」两点） |
+| A2b | 名单不对称（prod31 各 1 次真实请求）：只带 `server-side-fallback-2026-06-01` → 200 通过；只带 `fallback-credit-2026-07-01` → 上游 200 + 客户端 502 | **契约不一致**（同一功能四个 beta 三种行为） | `contracts/features/betas.go:18-21`（四个都 `forward`）vs `contracts/credits/prompt.go:28-38`（`Enabled` 只认三个）；`fallback_credit.go:34-52` 决定是否进 credit 路径 | §7.2 清理项（新增，实测决定性验证） |
 | A3 | 生产库无未过期 helper history 链；链路无辅助请求 → R8 现网不成立 | 机制仍在（核心 `EnableHelperHistory: true` + Worker 不再声明 schema） | `server/internal/app/phases.go:290`；`server/internal/gateway/helper_history_request.go:111-120,261-320`；`plugins/ccgateway/companions/worker/internal/server/features.go:51-57` | R8 ✓ 机制正确，现网不触发 |
 | A4 | 出口 24 个头名称与顺序与官方完全相同；`user-agent` 原样（含 `, agent-sdk/0.2.71`） | 原生 `sF`/`nl()` + 补丁 `keepClientUserAgent` | `patch-cli-2.1.304.cjs:136`；`request-agent.js:122-129`；`request-command.js:131-134` | §3.2 断言 ✓ |
-| A5 | `anthropic-beta` 集合相同、**顺序不同**（`oauth-2025-04-20`、`extended-cache-ttl-2025-04-11` 追加在末尾） | **CLI 补丁**（beta 合并用 Set 插入序） | `request-options.js:2-17`（`normalizeBetas`）+ `:96`（`normalizeBetas(policy.betas, policy.oauthBeta)`）+ `request-build.js:243`；原生 `g1t` 推送位置见 `chunk-rncrmfyt.js` 的 `if(gW==="1h"&&Py()&&!zr.includes(g1t))zr.push(g1t)` | R2/R3 方向 ✓，本轮首次由生产链路确认（原判 P3） |
-| A6 | 非 CC 请求：出口计费头 `cch=00000`；system 变 `[计费头, 身份行, 原 system]`；补 `thinking:disabled`、`temperature:1`；beta 只有注入所需 4 项 | 设计+已知边界（官方运行时才算 cch） | `request-build.js:234`（`mergeBillingAttribution`）；`content-policy.js:369-399`；`request-build.js:198-215`（`buildOptions` 的原生默认） | D2 ✓；其余 §3.3/§3.4 已描述 |
+| A5 | `anthropic-beta` 集合相同、**顺序不同**（`oauth-2025-04-20`、`extended-cache-ttl-2025-04-11` 追加在末尾） | **CLI 补丁**（beta 合并用 Set 插入序） | `request-options.js:2-17`（`normalizeBetas`）+ `:96`（`normalizeBetas(policy.betas, policy.oauthBeta)`）+ `request-build.js:243`；原生 `g1t` 推送位置见 `chunk-rncrmfyt.js` 的 `if(gW==="1h"&&Py()&&!zr.includes(g1t))zr.push(g1t)` | R2/R3 方向 ✓，本轮首次由生产链路确认（原判 P3）。**有限定条件（见 R2）**：仅在「OAuth 账号 + 非 OAuth 形状客户端」时出现；客户端自带 `oauth`/`extended-cache-ttl` 时顺序逐位相同（offline pass17 五十余请求反证） |
+| A6 | 非 CC 请求：出口计费头 `cch=00000`；system 变 `[计费头, 身份行, 原 system]`；beta 只有注入所需 4 项；`thinking` 补 `{type:disabled}` | 设计+已知边界（官方运行时才算 cch）；`thinking`/`temperature` 归原生模型规则 | `request-build.js:234`（`mergeBillingAttribution`）；`content-policy.js:369-399`；`request-build.js:198-215`（`buildOptions` 的原生默认） | D2 ✓；其余 §3.3/§3.4 已描述。**注意 `temperature` 是模型相关的**（见 A6b） |
+| A6b | 非 CC 请求的 `temperature` 随模型而变：sonnet-4-6 / haiku-4-5 出口有 `temperature:1`（客户端显式 0.3 时 sonnet 保留 0.3）；**opus-4-8 出口一律没有该键**——客户端显式发 0.5 也被丢弃，而同一请求走 direct 保留 0.5；`top_p`/`stop_sequences`/`service_tier` 仍原样并回 | **原生模型规则**（`temperatureOverride` 由模型决定是否发），非 bug | `request-build.js:204`（`temperatureOverride: body.temperature`）+ 原生 `qmn` 的 `hse` 判定；`top_p` 走 `request-parameters.js:14,60-61` 并回 | 设计（REQUEST-MODES §1.1：temperature 归原生），**不可写成「无条件补 temperature:1」**；证据 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/results/`：`pass18/req-02`（opus build，无 temperature、`top_p` 保留）、`pass18/req-03`（sonnet build，`temperature:1`）、`pass18/req-04`（opus direct，`0.5` 保留）、`pass18b/req-01,05`（sonnet `0.3` 保留）、`pass18b/req-03`（haiku `1`）、`pass18b/req-04`（opus build，无 temperature） |
 | A7 | 出口 `stream` 键在客户端未发时**不存在**（build 与 direct） | 代码已是新行为，**文档过期** | `request_components.go:41-59`；`request-input.js:243`；`request-build.js:246-248` | D5/D6 ✓ 实测确认 |
 | A8 | S5 beta 分两行：**两行都保留** | Worker 用 `Header.Values` 全量拼接（我此前只看了核心的 `GetHeader`） | `request_command.go:393-395`（`h.Values("anthropic-beta")`） | R7 **撤回**（见 §4.3 R7） |
 | A9 | S3 大写 UUID session：出口 session 与 metadata 一起换成 CLI 映射值，头与 body 仍相等 | Worker/CLI 的 session 采纳规则 + 身份映射 | `engine/ids.go:13-16`；`request-identity.js:8-31`；`request_identity.go:295-337` | R4 **撤回**（不变式保住） |

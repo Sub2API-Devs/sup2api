@@ -88,6 +88,7 @@
 4. 附件转换（low 起）：`platform_name`/`os_version` 用 worker 时换成 Worker 容器的值（`Platform: linux`、`OS Version: Linux 6.12.95+deb13-amd64` 与官方容器相同，看不出差别；`primary_directory: worker` 换成 Worker 的 `/t/workdir`，可看出）；`erase` 时对应行整行删除（`git_repository: erase` → `- Is a git repository: false` 消失；全部十项 `erase` 时十行全消失，只剩后续段落）。符合设计。
 5. 非 CC 请求的注入：micro = 计费头+身份行，low = 再补环境附件，high = 再补静态/动态提示词与 `Bash,Edit,Read,Write`；客户端 system 并入动态块尾部；同名工具保留客户端定义（`plain-tools-high` 里客户端的 `Bash` 定义原样保留，只补了 `Edit,Read,Write` 并排在客户端工具前）—— 与 03-static 与注入等级设计一致。
 6. 非 CC direct：只把 `system` 字符串变成 `[计费头, 客户端 system]` 块数组，其余逐字节。
+6b. 非 CC build 的生成参数（pass18/pass18b）：`thinking` 补 `{"type":"disabled"}`；`temperature` 按原生模型规则补 —— **sonnet-4-6 与 haiku-4-5 补 `1`，opus-4-8 不补**；客户端显式发的 `temperature` 在 `sonnet-4-6` 上原样保留（0.3→0.3），在 `opus-4-8` 上被原生规则**丢掉**（输入 0.5 → 出口无该键，direct 则保留 0.5）。`top_p`/`stop_sequences`/`service_tier` 原样并回（pass18 req-02）。设计写明「temperature/thinking/output_config.effort 交原生模型规则决定」（REQUEST-MODES §1.1），所以这是设计内行为，但「opus 上客户端 temperature 被丢弃」值得写进文档。
 7. `session-id`/`prompt-id` 在 build 映射后仍是合法 v4，且头与 body 一致。
 8. `x-stainless-*` 取自 Worker 容器（同一 Linux 镜像，所以与 A 同值；真实生产里客户端是 Windows/macOS 时该段会不同）—— 已知边界（static R6）。
 9. Worker 自己加 `Cache-Control: no-store`，但被核心的白名单挡在客户端之外（无影响，仅记录）。
@@ -128,9 +129,9 @@
 
 ## 4. 基线 A 文件（给 wf-prod31）
 
-路径：ovh `/tmp/ccg-audit-wf-baseline/`（共 8 个文件，728 KiB，**令牌已打码**为 `Bearer REDACTED`/`REDACTED`）。本地另有一份同字节副本在 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`（artifacts 不进 git），wf-prod31 侧也有一份（`.../wf-2026-10-24/prod31/baseline/`）。
+主路径（长期可用）：`artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`（8 个文件，728 KiB，artifacts 不进 git，**令牌已打码**为 `Bearer REDACTED`/`REDACTED`）。wf-prod31 侧另有一份同字节副本（`.../wf-2026-10-24/prod31/baseline/`）。
 
-`/tmp` 是共享目录：测完时该目录曾被一次清理删除（归属未定，不是任何单一 agent 明确执行的操作），随后用本地副本恢复到原位，并逐字节核对（8/8 文件、24 个保序头、`/v1/messages?beta=true`、令牌仍打码）。`/tmp` 会被重启清空，长期引用请以本地副本为准。
+ovh `/tmp/ccg-audit-wf-baseline/` 曾放同一份：测完后该目录被一次清理删除（归属未定，不是任何单一 agent 明确执行的操作），用本地副本恢复并逐字节核对（8/8 文件、24 个保序头、`/v1/messages?beta=true`、令牌仍打码）后，又被同前缀的其他会话清理再次删除（同期 `/tmp` 出现 `ccg-audit-wf-lib.py`、`ccg-audit-wf-probe01.py` 等探针脚本）。`/tmp` 是共享且易被清理的，因此**不再在 /tmp 保留副本，以本地路径为准**；需要线上副本时用 `scp artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/*.json ovh:/tmp/ccg-audit-wf-baseline/` 重建。
 
 格式：每个文件一个场景，`{"scenario","source","note","captured_at","requests":[{index,method,url,headers:[[name,value],…保序],body}]}`。
 
