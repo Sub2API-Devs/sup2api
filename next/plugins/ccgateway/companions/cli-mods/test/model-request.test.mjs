@@ -6,6 +6,12 @@ const options = { body: { model: 'fixture', messages: [], unknown: { keep: true 
 const factory = response => async () => ({ post: () => ({ asResponse: async () => response }) });
 const unusedFetch = () => assert.fail('unexpected network access');
 
+test('the request goes to the beta Messages path, as Claude Code sends it', async () => {
+  let path;
+  await openModelRequest(options, undefined, async () => ({ post: p => { path = p; return { asResponse: async () => new Response('{}') }; } }), unusedFetch);
+  assert.equal(path, '/v1/messages?beta=true');
+});
+
 test('binary error reads preserve invalid UTF-8, NUL and bodies larger than 64 KiB', async () => {
   const bytes = Buffer.concat([Buffer.from([0xff, 0, 0x80]), Buffer.alloc(150000, 0x61)]);
   const response = await openModelRequest(options, undefined, factory(new Response(bytes, { status: 400 })), unusedFetch);

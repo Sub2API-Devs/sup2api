@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v23-bound-imports",
+  "extension": "ccgateway-v24-beta-path",
   "capabilities": [
     "request_direct",
     "request_build",

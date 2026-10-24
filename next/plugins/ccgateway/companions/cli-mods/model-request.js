@@ -67,6 +67,10 @@ function captureErrorResponse(options, transportFetch) {
   return captured;
 }
 
+// Claude Code sends Messages through the SDK's beta resource, whose path
+// carries ?beta=true (native beta.messages.create).
+export const messagesPath = '/v1/messages?beta=true';
+
 // sendOnce is the client's one POST of the request; the deadline of openEntry
 // bounds the whole exchange, and the client's own timeout (sent as
 // x-stainless-timeout) stays Claude Code's default, as a native request
@@ -75,7 +79,7 @@ function sendOnce(client, options, entry) {
   const headers = new Headers(options.headers);
   if (!headers.has('content-type')) headers.set('content-type', 'application/json');
   const body = options.rawBody ?? options.body;
-  return client.post('/v1/messages', {
+  return client.post(messagesPath, {
     body, stream: options.body.stream === true,
     headers, signal: entry.controller.signal,
     maxRetries: 0, timeout: Math.min(options.timeoutMs ?? defaultTimeout, defaultTimeout),

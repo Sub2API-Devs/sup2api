@@ -225,7 +225,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v23-bound-imports');
+  assert.equal(patchManifest.extension, 'ccgateway-v24-beta-path');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
   assert(patchManifest.capabilities.includes('request_identity_v1'));
