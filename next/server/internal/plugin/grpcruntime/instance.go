@@ -274,9 +274,7 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 			i.killProc(p, false)
 		}
 	}()
-	if err := i.dispenseClients(p); err != nil {
-		return nil, err
-	}
+	i.dispenseClients(p)
 	if err := i.verifyInfo(ctx, p); err != nil {
 		return nil, err
 	}
@@ -386,10 +384,9 @@ func (i *Instance) newPluginClient(ctx context.Context, spec core.LaunchSpec, ru
 }
 
 // dispenseClients wires the eight service clients of the shared connection.
-func (i *Instance) dispenseClients(p *proc) error {
-	if p.conn == nil {
-		return errors.New("dispense: no connection")
-	}
+// p.conn is never nil here: newPluginClient only returns a proc after Dispense
+// handed it a client with a connection.
+func (i *Instance) dispenseClients(p *proc) {
 	var conn grpc.ClientConnInterface = p.conn
 	p.plugin = pluginv1.NewPluginServiceClient(conn)
 	p.platform = pluginv1.NewPlatformServiceClient(conn)
@@ -399,7 +396,6 @@ func (i *Instance) dispenseClients(p *proc) error {
 	p.http = pluginv1.NewHTTPServiceClient(conn)
 	p.sched = pluginv1.NewSchedulerServiceClient(conn)
 	p.migration = pluginv1.NewMigrationServiceClient(conn)
-	return nil
 }
 
 // verifyInfo checks GetInfo against the package identity and protocol.

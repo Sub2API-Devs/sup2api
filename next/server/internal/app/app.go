@@ -46,16 +46,22 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 
 	// ------------------------------------------------------------ core services
-	if err := b.buildCoreServices(); err != nil {
+	trust, err := b.buildCoreServices()
+	if err != nil {
 		return err
 	}
 
 	// ------------------------------------------------------------ plugin runtime
-	if err := b.startPluginRuntime(); err != nil {
+	if err := b.startPluginRuntime(trust); err != nil {
 		return err
 	}
-	if err := b.startBackground(); err != nil {
-		return err
+	// A managed core builds the background pair now (the console holds it) and
+	// starts it on admission; a standalone core starts it right away.
+	b.buildBackground()
+	if managed == nil {
+		if err := b.startBackground(); err != nil {
+			return err
+		}
 	}
 
 	// ------------------------------------------------------------ HTTP

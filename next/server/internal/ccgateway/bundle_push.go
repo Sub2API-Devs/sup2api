@@ -238,7 +238,7 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, wanted, current)
 	// The worker updates may have used up the time: what follows still runs
 	// (bounded on its own).
-	tail, cancelTail := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	tail, cancelTail := tailContext(ctx)
 	defer cancelTail()
 	if switched {
 		s.kickAll(tail)
@@ -279,13 +279,21 @@ func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle,
 	return results, workers, cfg, switched
 }
 
+// bundledRoles reads the optional {"roles":[...]} body. Like every other
+// console endpoint of this module it rejects unknown fields and trailing
+// JSON; an absent (or empty) body means "every role".
 func bundledRoles(c *gin.Context) (map[string]bool, bool) {
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	var in struct {
 		Roles *[]string `json:"roles"`
 	}
-	if e != nil || (len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &in) != nil) {
+	if e != nil {
 		return nil, false
+	}
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null")) {
+		if decodeStrictJSON(raw, &in) != nil {
+			return nil, false
+		}
 	}
 	if in.Roles == nil {
 		return map[string]bool{"app": true, "egress": true, "controller": true}, true

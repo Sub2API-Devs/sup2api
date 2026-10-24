@@ -668,7 +668,8 @@ func TestRuntimeBundledFailures(t *testing.T) {
 	if left != 0 {
 		t.Fatalf("%d uploads left behind", left)
 	}
-	for name, body := range map[string]string{"gateway": `{"roles":["gateway"]}`, "empty": `{"roles":[]}`, "json": `{`} {
+	for name, body := range map[string]string{"gateway": `{"roles":["gateway"]}`, "empty": `{"roles":[]}`, "json": `{`,
+		"unknown field": `{"roles":["app"],"extra":true}`, "trailing": `{"roles":["app"]}{}`} {
 		if code, out := f.request(admin, "POST", "/system/ccgateway/runtime/bundled", body); code != 400 || reason(out) != "invalid_request" {
 			t.Errorf("%s: %d %v", name, code, out)
 		}

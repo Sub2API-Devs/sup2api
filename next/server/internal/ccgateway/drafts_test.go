@@ -342,3 +342,26 @@ func TestSweepRemovesAbandonedDrafts(t *testing.T) {
 		t.Fatalf("sweep with runtimes off: %d %v", n, err)
 	}
 }
+
+// TestSweepStopsWhenTheDraftQueryFails: a database that cannot be read ends the
+// sweep. The retired and orphan passes must not run on it - the earlier split of
+// the sweep reported the query error as an ordinary failure and went on, listing
+// the controller and possibly deleting runtimes there.
+func TestSweepStopsWhenTheDraftQueryFails(t *testing.T) {
+	ctl := newFakeController(t)
+	f := newRuntimeFixture(t, ctl.ServeHTTP)
+	ctx := context.Background()
+	if _, err := f.db.Pool.Exec(ctx, `ALTER TABLE ccgateway_runtimes RENAME TO ccgateway_runtimes_unreadable`); err != nil {
+		t.Fatal(err)
+	}
+	ctl.mu.Lock()
+	before := len(ctl.calls)
+	ctl.mu.Unlock()
+	n, err := f.s.SweepDrafts(ctx)
+	if err == nil || n != 0 {
+		t.Fatalf("sweep on an unreadable table: %d %v", n, err)
+	}
+	if seen := ctl.seen(""); len(seen) != before {
+		t.Fatalf("the sweep continued after its query failed: %v", seen[before:])
+	}
+}

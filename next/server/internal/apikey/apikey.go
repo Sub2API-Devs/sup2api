@@ -314,7 +314,7 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 		return
 	}
 	n := len(args)
-	rows, err := s.db.Pool.Query(ctx, selectKey+where+` ORDER BY k.id DESC LIMIT $`+itoa(n+1)+` OFFSET $`+itoa(n+2),
+	rows, err := s.db.Pool.Query(ctx, selectKey+where+` ORDER BY k.id DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2),
 		append(args, size, (page-1)*size)...)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -344,8 +344,6 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 	}
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }
 
 func (s *Service) listMine(c *gin.Context) {
 	uid, _ := core.UserID(c.Request.Context())

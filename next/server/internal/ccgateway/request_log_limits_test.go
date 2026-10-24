@@ -29,6 +29,10 @@ func TestRequestLogLimitsProjection(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if err != nil {
+				// A failure is never a half-filled state the caller could use.
+				if out != nil {
+					t.Fatalf("error returned a value: %#v", out)
+				}
 				return
 			}
 			st, ok := out.(requestLogState)

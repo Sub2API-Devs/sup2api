@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Price sync source kinds (CONTRACTS §17).
@@ -437,12 +438,7 @@ func (s *Service) fetchSource(ctx context.Context, src *PriceSource) (*fetched, 
 	return out, nil
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
+func truncate(s string, n int) string { return x.TruncateEllipsis(s, n) }
 
 // compile generates (when needed) and compiles the expression.
 func (p *syncPrice) compile() error {

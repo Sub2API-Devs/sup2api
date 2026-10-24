@@ -23,21 +23,14 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
-	observer "github.com/Sub2API-Devs/sup2api/next/server/internal/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/egress"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/providerresources"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -67,7 +60,6 @@ type boot struct {
 	// core services
 	events  *event.Publisher
 	reg     *registry.Registry
-	trust   *pkg.TrustStore
 	pkgs    *registry.Packages
 	bill    *billing.Service
 	work    *background.Executor
@@ -83,39 +75,38 @@ type boot struct {
 
 	converters   *convert.Registry
 	limiter      *account.Limiter
-	packageStore blobs.Store
 	packageSrc   *blobs.Source
 	marketClient *http.Client
-	packageHTTP  *http.Client
 
 	// how this node may work and coordinate (nil on a standalone node)
 	canWork       func() bool
 	canCoordinate func() bool
 
+	// request path pieces the HTTP phase and the admission hooks share
+	runtimeState
+
 	// plugin runtime
-	egress       *egress.Provider
-	schemas      *dbschema.Manager
-	rt           *grpcruntime.Runtime
-	gate         *requestGate
-	resources    *providerresources.Service
-	helpers      *helperhistory.Service
-	observations *observer.Hub
-	gw           *gateway.Gateway
-	mutations    *cluster.PluginMutations
-	defaults     *install.DefaultsApplier
-	ctl          *rollout.Controller
-	inst         *install.Service
-	mkt          *market.Service
-	builtinReady *atomic.Bool
-	jobs         *job.Scheduler
-	dlv          *delivery.Service
-	startOnce    sync.Once
-	startErr     error
+	gw   *gateway.Gateway
+	ctl  *rollout.Controller
+	inst *install.Service
+	mkt  *market.Service
+	jobs *job.Scheduler
+	dlv  *delivery.Service
 
 	// HTTP
 	sharedAssets *webui.SharedAssets
 	engine       *gin.Engine
 	router       *httpapi.Router
+}
+
+// runtimeState is the part of the process whose lifecycle admission controls:
+// the request gate, the builtin readiness flag and the one-shot background
+// start. Keeping them together says which phase owns the transition.
+type runtimeState struct {
+	gate         *requestGate
+	builtinReady *atomic.Bool
+	startOnce    sync.Once
+	startErr     error
 }
 
 // teardown is the shutdown stack: functions run in reverse registration

@@ -273,10 +273,12 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	}
 	s.serving = serving
 	st := NodePluginState{Serving: serving, Standby: standby, Fallback: fallback}
-	running, retryOK := collectInstances(s, c, &st)
+	var running []Instance
+	var retryOK []bool
+	st.Instances, running, retryOK = collectInstances(s, c.o.LoadRetry)
 	if ro != nil {
 		st.RolloutID = ro.id
-		rolloutNodeState(ro, &st, want, standby, standbyBlocked, func(v string) (string, string) { return s.entryState(v) })
+		s.rolloutNodeState(ro, &st, want, standby, standbyBlocked)
 	}
 	switch {
 	case st.Rollout != "":
@@ -331,10 +333,10 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	return st
 }
 
-// collectInstances fills st.Instances (sorted by version) and returns the
-// running instances with, per instance, whether a resource restart may be
-// tried now.
-func collectInstances(s *slot, c *Controller, st *NodePluginState) (running []Instance, retryOK []bool) {
+// collectInstances returns the per-version instance states of a slot (sorted
+// by version), the running instances and, per running instance, whether a
+// resource restart may be tried now.
+func collectInstances(s *slot, loadRetry time.Duration) (instances []InstanceState, running []Instance, retryOK []bool) {
 	versions := make([]string, 0, len(s.entries))
 	for v := range s.entries {
 		versions = append(versions, v)
@@ -350,13 +352,13 @@ func collectInstances(s *slot, c *Controller, st *NodePluginState) (running []In
 				is.Error = e.restartErr
 			}
 			running = append(running, e.inst)
-			retryOK = append(retryOK, e.restartErr == "" || time.Since(e.restartFailAt) >= c.o.LoadRetry)
+			retryOK = append(retryOK, e.restartErr == "" || time.Since(e.restartFailAt) >= loadRetry)
 		} else {
 			is.State, is.Error = stateFailed, e.loadErr
 		}
-		st.Instances = append(st.Instances, is)
+		instances = append(instances, is)
 	}
-	return running, retryOK
+	return instances, running, retryOK
 }
 
 // entryState maps the local entry of one version to the node state.
@@ -381,7 +383,7 @@ func (s *slot) entryState(v string) (string, string) {
 // rolloutNodeState fills st.Rollout and st.Error for an open rollout. A node
 // reports itself ready for the preparing phase once the standby runs (or
 // there is none), and active only when it serves the target version.
-func rolloutNodeState(ro *rolloutRow, st *NodePluginState, want, standby, standbyBlocked string, entryState func(string) (string, string)) {
+func (s *slot) rolloutNodeState(ro *rolloutRow, st *NodePluginState, want, standby, standbyBlocked string) {
 	switch ro.phase {
 	case PhasePreparing:
 		switch {
@@ -390,13 +392,13 @@ func rolloutNodeState(ro *rolloutRow, st *NodePluginState, want, standby, standb
 		case standbyBlocked != "":
 			st.Rollout, st.Error = NodePending, standbyBlocked
 		default:
-			st.Rollout, st.Error = entryState(standby)
+			st.Rollout, st.Error = s.entryState(standby)
 		}
 	case PhaseActivating:
 		if want == "" {
 			st.Rollout = NodeActive
 		} else {
-			state, msg := entryState(want)
+			state, msg := s.entryState(want)
 			if state == NodeReady {
 				state = NodeActive
 			}

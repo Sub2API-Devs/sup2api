@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Billing statuses of usage_logs.
@@ -345,16 +346,7 @@ func pluginDetailJSON(raw core.RawJSON) []byte {
 	return raw
 }
 
-func trunc(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	// Do not cut a UTF-8 sequence in half.
-	for n > 0 && s[n]&0xC0 == 0x80 {
-		n--
-	}
-	return s[:n]
-}
+func trunc(s string, n int) string { return x.Truncate(s, n) }
 
 func jsonOr(v any, empty string) []byte {
 	b, err := json.Marshal(v)

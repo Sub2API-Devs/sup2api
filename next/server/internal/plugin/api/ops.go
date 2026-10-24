@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // ---------------------------------------------------------------- nodes
@@ -283,10 +284,9 @@ const backlogCap = 100000
 
 // likePatterns converts subscribe patterns to exact types and LIKE patterns.
 func likePatterns(subs []string) (exact, like []string) {
-	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	for _, s := range subs {
 		if strings.HasSuffix(s, "*") {
-			like = append(like, esc.Replace(strings.TrimSuffix(s, "*"))+"%")
+			like = append(like, store.Like(strings.TrimSuffix(s, "*"))+"%")
 		} else {
 			exact = append(exact, s)
 		}

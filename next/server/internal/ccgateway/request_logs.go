@@ -212,18 +212,21 @@ type requestLogUsage struct {
 	Requests     *int64 `json:"requests,omitempty"`
 }
 
+// requestLogLimits is the per-tier limit block a Worker reports.
+type requestLogLimits struct {
+	Summary *requestLogTier `json:"summary,omitempty"`
+	Full    *requestLogTier `json:"full,omitempty"`
+}
+
 // requestLogLevelState is the shape of a Worker that reports levels. The
 // legacy top-level fields (full tier values) are kept for old consumers.
 type requestLogLevelState struct {
 	requestLogState
-	Level     string   `json:"level"`
-	FullUntil *string  `json:"full_until"`
-	Levels    []string `json:"levels"`
-	Limits    struct {
-		Summary *requestLogTier `json:"summary,omitempty"`
-		Full    *requestLogTier `json:"full,omitempty"`
-	} `json:"limits"`
-	Usage *requestLogUsage `json:"usage,omitempty"`
+	Level     string           `json:"level"`
+	FullUntil *string          `json:"full_until"`
+	Levels    []string         `json:"levels"`
+	Limits    requestLogLimits `json:"limits"`
+	Usage     *requestLogUsage `json:"usage,omitempty"`
 	// Viewer: the Worker serves the log reads (REQUEST-LOG-VIEWER-DESIGN.md).
 	Viewer bool `json:"viewer"`
 }
@@ -238,16 +241,21 @@ func validUsage(n *int64) bool {
 
 // decodeRequestLogState returns requestLogState for an old Worker (no
 // "levels") and requestLogLevelState otherwise. Unknown fields are dropped.
+// A failure returns no value: callers answer 503 without looking at the
+// shape.
 func decodeRequestLogState(raw []byte) (any, error) {
 	legacy, err := decodeLegacyState(raw)
 	if err != nil {
 		return nil, err
 	}
 	out, hasLevels, err := decodeLevelState(raw, legacy)
-	if err != nil || !hasLevels {
-		return legacy, err
+	if err != nil {
+		return nil, err
 	}
-	return *out, nil
+	if !hasLevels {
+		return legacy, nil
+	}
+	return out, nil
 }
 
 // decodeLegacyState reads and validates the fields every Worker reports.
@@ -271,51 +279,48 @@ func decodeLegacyState(raw []byte) (requestLogState, error) {
 
 // decodeLevelState reads the level model when the Worker reports one.
 // hasLevels=false means an old Worker without the extension.
-func decodeLevelState(raw []byte, legacy requestLogState) (*requestLogLevelState, bool, error) {
+func decodeLevelState(raw []byte, legacy requestLogState) (requestLogLevelState, bool, error) {
 	var probe struct {
 		Levels json.RawMessage `json:"levels"`
 	}
 	_ = json.Unmarshal(raw, &probe)
 	if len(probe.Levels) == 0 || bytes.Equal(bytes.TrimSpace(probe.Levels), []byte("null")) {
-		return nil, false, nil
+		return requestLogLevelState{}, false, nil
 	}
 	var in struct {
-		Level     *string  `json:"level"`
-		FullUntil *string  `json:"full_until"`
-		Levels    []string `json:"levels"`
-		Limits    *struct {
-			Summary *requestLogTier `json:"summary"`
-			Full    *requestLogTier `json:"full"`
-		} `json:"limits"`
-		Usage  *requestLogUsage `json:"usage"`
-		Viewer bool             `json:"viewer"`
+		Level     *string           `json:"level"`
+		FullUntil *string           `json:"full_until"`
+		Levels    []string          `json:"levels"`
+		Limits    *requestLogLimits `json:"limits"`
+		Usage     *requestLogUsage  `json:"usage"`
+		Viewer    bool              `json:"viewer"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return nil, false, err
+		return requestLogLevelState{}, false, err
 	}
-	out := &requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer}
+	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer}
 	if len(in.Levels) == 0 || len(in.Levels) > len(requestLogLevels) {
-		return nil, false, errors.New("invalid request log levels")
+		return requestLogLevelState{}, false, errors.New("invalid request log levels")
 	}
 	seen := map[string]bool{}
 	for _, l := range in.Levels {
 		if !requestLogLevels[l] || seen[l] {
-			return nil, false, errors.New("invalid request log levels")
+			return requestLogLevelState{}, false, errors.New("invalid request log levels")
 		}
 		seen[l] = true
 	}
 	out.Levels = in.Levels
 	if in.Level == nil || !seen[*in.Level] {
-		return nil, false, errors.New("invalid request log level")
+		return requestLogLevelState{}, false, errors.New("invalid request log level")
 	}
 	out.Level = *in.Level
 	if *legacy.Enabled != (out.Level != requestLogOff) {
-		return nil, false, errors.New("request log enabled and level disagree")
+		return requestLogLevelState{}, false, errors.New("request log enabled and level disagree")
 	}
 	if in.FullUntil != nil {
 		t, err := time.Parse(time.RFC3339, *in.FullUntil)
 		if err != nil {
-			return nil, false, errors.New("invalid request log full_until")
+			return requestLogLevelState{}, false, errors.New("invalid request log full_until")
 		}
 		// Only the full level has an expiry.
 		if out.Level == requestLogFull {
@@ -324,16 +329,16 @@ func decodeLevelState(raw []byte, legacy requestLogState) (*requestLogLevelState
 		}
 	}
 	if out.Level == requestLogFull && out.FullUntil == nil {
-		return nil, false, errors.New("the full request log level has no expiry")
+		return requestLogLevelState{}, false, errors.New("the full request log level has no expiry")
 	}
 	if err := validateLogTierLimits(in.Limits); err != nil {
-		return nil, false, err
+		return requestLogLevelState{}, false, err
 	}
 	if in.Limits != nil {
 		out.Limits.Summary, out.Limits.Full = in.Limits.Summary, in.Limits.Full
 	}
 	if err := validateLogUsage(in.Usage); err != nil {
-		return nil, false, err
+		return requestLogLevelState{}, false, err
 	}
 	out.Usage = in.Usage
 	return out, true, nil
@@ -351,10 +356,7 @@ func validateLogLimits(limits ...*int64) error {
 
 // validateLogTierLimits checks the per-tier limits when the Worker reports
 // them.
-func validateLogTierLimits(limits *struct {
-	Summary *requestLogTier `json:"summary"`
-	Full    *requestLogTier `json:"full"`
-}) error {
+func validateLogTierLimits(limits *requestLogLimits) error {
 	if limits == nil {
 		return nil
 	}

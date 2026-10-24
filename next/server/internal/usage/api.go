@@ -153,28 +153,11 @@ func (r *Record) hideUpstream() {
 	}
 }
 
-type filter struct {
-	where []string
-	args  []any
-}
-
-func (f *filter) add(cond string, v any) {
-	f.args = append(f.args, v)
-	f.where = append(f.where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(f.args))))
-}
-
-func (f *filter) sql() string {
-	if len(f.where) == 0 {
-		return ""
-	}
-	return " WHERE " + strings.Join(f.where, " AND ")
-}
-
 // parseFilter reads the common query parameters. self restricts to userID.
-func parseFilter(c *gin.Context, self *int64) (*filter, error) {
-	f := &filter{}
+func parseFilter(c *gin.Context, self *int64) (*store.Filter, error) {
+	var f store.Filter
 	if self != nil {
-		f.add("u.user_id = ?", *self)
+		f.And("u.user_id = ?", *self)
 	}
 	ids := []struct{ q, col string }{{"api_key_id", "u.api_key_id"}, {"group_id", "u.group_id"}}
 	if self == nil {
@@ -186,13 +169,13 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			if err != nil || id <= 0 {
 				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q)
 			}
-			f.add(x.col+" = ?", id)
+			f.And(x.col+" = ?", id)
 		}
 	}
 	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"},
 		{"client_request_id", "u.client_request_id"}, {"protocol", "u.protocol"}, {"endpoint", "u.endpoint"}, {"error_type", "u.error_type"}} {
 		if v := c.Query(x.q); v != "" {
-			f.add(x.col+" = ?", v)
+			f.And(x.col+" = ?", v)
 		}
 	}
 	if self == nil {
@@ -204,10 +187,10 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 				Message: "account_type filters by (plugin_key, account_type); pass plugin_key too"})
 		}
 		if pk != "" {
-			f.add("u.plugin_key = ?", pk)
+			f.And("u.plugin_key = ?", pk)
 		}
 		if at != "" {
-			f.add("u.account_type = ?", at)
+			f.And("u.account_type = ?", at)
 		}
 	}
 	for _, name := range []string{"success", "stream"} {
@@ -216,7 +199,7 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			if err != nil {
 				return nil, core.ErrInvalidArgument.WithMessage("invalid " + name)
 			}
-			f.add("u."+name+" = ?", b)
+			f.And("u."+name+" = ?", b)
 		}
 	}
 	if v := c.Query("status_code"); v != "" {
@@ -224,14 +207,14 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 		if err != nil || (status != 0 && (status < 100 || status > 599)) {
 			return nil, core.ErrInvalidArgument.WithMessage("invalid status_code")
 		}
-		f.add("u.status_code = ?", status)
+		f.And("u.status_code = ?", status)
 	}
 	if v := c.Query("client_ip"); v != "" {
 		ip, err := netip.ParseAddr(v)
 		if err != nil || ip.Zone() != "" {
 			return nil, core.ErrInvalidArgument.WithMessage("invalid client_ip")
 		}
-		f.add("u.client_ip = ?", ip.Unmap().String())
+		f.And("u.client_ip = ?", ip.Unmap().String())
 	}
 	contains := []struct{ q, cond string }{
 		{"model_contains", "u.model ILIKE ? ESCAPE E'\\\\'"},
@@ -243,22 +226,22 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			struct{ q, cond string }{"account_name", "EXISTS (SELECT 1 FROM accounts fa WHERE fa.id=u.account_id AND fa.name ILIKE ? ESCAPE E'\\\\')"})
 		for _, name := range []string{"node_id", "upstream_model", "upstream_protocol"} {
 			if v := c.Query(name); v != "" {
-				f.add("u."+name+" = ?", v)
+				f.And("u."+name+" = ?", v)
 			}
 		}
 	}
-	if err := addContainsFilters(c, f, contains); err != nil {
+	if err := addContainsFilters(c, &f, contains); err != nil {
 		return nil, err
 	}
-	if err := addTimeRange(c, f); err != nil {
+	if err := addTimeRange(c, &f); err != nil {
 		return nil, err
 	}
-	return f, nil
+	return &f, nil
 }
 
 // addContainsFilters adds the ILIKE filters. Each value is trimmed, capped and
 // escaped for the pattern, so a user cannot smuggle wildcards.
-func addContainsFilters(c *gin.Context, f *filter, contains []struct{ q, cond string }) error {
+func addContainsFilters(c *gin.Context, f *store.Filter, contains []struct{ q, cond string }) error {
 	for _, x := range contains {
 		v := strings.TrimSpace(c.Query(x.q))
 		if v == "" {
@@ -267,15 +250,14 @@ func addContainsFilters(c *gin.Context, f *filter, contains []struct{ q, cond st
 		if len(v) > 256 {
 			return core.ErrInvalidArgument.WithMessage("invalid " + x.q)
 		}
-		v = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(v)
-		f.add(x.cond, "%"+v+"%")
+		f.And(x.cond, "%"+store.Like(v)+"%")
 	}
 	return nil
 }
 
 // addTimeRange adds the RFC 3339 created_at bounds, rejecting an empty or
 // inverted range.
-func addTimeRange(c *gin.Context, f *filter) error {
+func addTimeRange(c *gin.Context, f *store.Filter) error {
 	var from time.Time
 	for _, x := range []struct{ q, cond string }{{"from", "u.created_at >= ?"}, {"to", "u.created_at < ?"}} {
 		v := c.Query(x.q)
@@ -291,7 +273,7 @@ func addTimeRange(c *gin.Context, f *filter) error {
 		} else if !from.IsZero() && !t.After(from) {
 			return core.ErrInvalidArgument.WithMessage("to must be after from")
 		}
-		f.add(x.cond, t)
+		f.And(x.cond, t)
 	}
 	return nil
 }
@@ -325,11 +307,9 @@ func (s *Service) list(c *gin.Context, self *int64) {
 				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid cursor"))
 				return
 			}
-			f.args = append(f.args, at, id)
-			n := len(f.args)
-			f.where = append(f.where, "(u.created_at, u.id) < ($"+strconv.Itoa(n-1)+", $"+strconv.Itoa(n)+")")
+			f.And("(u.created_at, u.id) < (?, ?)", at, id)
 		}
-	} else if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.sql(), f.args...).Scan(&total); err != nil {
+	} else if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.Cond(), f.Args()...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -337,9 +317,10 @@ func (s *Service) list(c *gin.Context, self *int64) {
 	if keyset {
 		limit, offset = size+1, 0 // one extra row tells whether there is more
 	}
-	args := append(f.args, limit, offset)
-	rows, err := s.db.Pool.Query(ctx, `SELECT `+recordColumns+recordJoins+f.sql()+
-		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	n := f.Len()
+	args := append(f.Args(), limit, offset)
+	rows, err := s.db.Pool.Query(ctx, `SELECT `+recordColumns+recordJoins+f.Cond()+
+		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -497,7 +478,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		return
 	}
 	if c.Query("from") == "" {
-		f.add("u.created_at >= ?", time.Now().AddDate(0, 0, -30))
+		f.And("u.created_at >= ?", time.Now().AddDate(0, 0, -30))
 	}
 	var key, join, extra string
 	order, lastAt := ` ORDER BY k`, `NULL::timestamptz`
@@ -528,15 +509,18 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	// The estimate markers are matched by value, not by key: 'reconcile' also
 	// takes "retrying" (the row is reserved again, not final) and "refunded"
 	// (the row is free), neither of which is an estimate in the revenue.
-	f.args = append(f.args, core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
-	est := fmt.Sprintf(`u.anomalies->>'%s' IN ($%d, $%d)`, core.AnomalyReconcile, len(f.args)-2, len(f.args)-1)
+	// They are appended after the filter's own arguments, and their text uses
+	// a placeholder more than once, so the numbers are computed from Len.
+	base := f.Len()
+	est := fmt.Sprintf(`u.anomalies->>'%s' IN ($%d, $%d)`, core.AnomalyReconcile, base+1, base+2)
 	// One value in the column is a fact, not an anomaly: usage_extract
 	// "plugin" says the plugin answered, which on a plugin-metered platform is
 	// every request. Counting it would make this column read "everything is
 	// wrong" exactly where nothing is; "fallback" (the plugin did not answer)
 	// still counts.
 	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
-		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, len(f.args))
+		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, base+3)
+	args := append(f.Args(), core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
 	// Match expr.Normalize's inclusive/exclusive input convention, including
 	// both cache-write buckets. Do not guess missing historical semantics from
 	// the client protocol: the gateway may have converted it.
@@ -556,7 +540,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		       count(*) FILTER (WHERE `+est+`),
 		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
 		       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END
-		FROM usage_logs u`+join+f.sql()+` GROUP BY k`+order, f.args...)
+		FROM usage_logs u`+join+f.Cond()+` GROUP BY k`+order, args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

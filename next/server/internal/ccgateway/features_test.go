@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -49,9 +50,24 @@ func TestFeatureCatalogAuthorizationAndNoRuntimeDependency(t *testing.T) {
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			want := features.RequestCatalog("request_build")
-			if response.Data.RuntimeVerified || response.Data.CatalogVersion != want.CatalogVersion || response.Data.PolicySchemaVersion != features.PolicySchemaVersion || len(response.Data.Features) == 0 {
-				t.Fatalf("invalid catalog: %+v", response.Data)
+			// The catalog is pinned by value: a feature that disappears (or a
+			// version that changes) has to change this test too, so the
+			// endpoint can never silently lose an entry.
+			if response.Data.RuntimeVerified {
+				t.Fatal("a catalog is not runtime evidence")
+			}
+			if response.Data.CatalogVersion != "2026-10-20.request-attachments-v1" || response.Data.PolicySchemaVersion != 1 {
+				t.Fatalf("catalog identity: %+v", response.Data)
+			}
+			ids := []string{}
+			for _, f := range response.Data.Features {
+				ids = append(ids, f.ID)
+			}
+			if !slices.Equal(ids, []string{"F-REQUEST-MODES", "F-BUILD-ATTACHMENTS"}) {
+				t.Fatalf("catalog features: %v", ids)
+			}
+			if response.Data.Features[1].Status != "supported" || len(response.Data.Features[1].Mechanisms) == 0 {
+				t.Fatalf("build attachments entry lost its content: %+v", response.Data.Features[1])
 			}
 		})
 	}

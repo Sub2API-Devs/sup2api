@@ -374,54 +374,65 @@ func (x *resourceCall) list() {
 }
 
 func (x *resourceCall) existing(id string, content bool) {
-	r, ref, binding, ctx, release, ok := x.prepareExisting(id, content)
+	e, release, ok := x.prepareExisting(id, content)
 	if !ok {
 		return
 	}
 	defer release()
 	if x.c.Request.Method == http.MethodDelete {
-		x.existingDelete(id, r, ref, binding, ctx)
+		x.existingDelete(id, e)
 		return
 	}
-	x.existingGet(id, content, r, ref, binding, ctx)
+	x.existingGet(id, content, e)
+}
+
+// existingResource is one stored file a GET or DELETE acts on: the ready row,
+// its still-matching issuer identity and the request context of the account
+// lease that serves it.
+type existingResource struct {
+	row     core.ProviderResource
+	ref     core.AccountRef
+	binding core.ResourceBinding
+	ctx     context.Context
 }
 
 // prepareExisting resolves everything a GET or DELETE of one resource needs
-// before the request: the ready row, its still-matching issuer identity and a
-// lease on the account. ok=false means the response was already written.
-func (x *resourceCall) prepareExisting(id string, content bool) (core.ProviderResource, core.AccountRef, core.ResourceBinding, context.Context, func(), bool) {
+// before the request. ok=false means the response was already written; the
+// returned release is the caller's to defer.
+func (x *resourceCall) prepareExisting(id string, content bool) (existingResource, func(), bool) {
 	r, err := x.g.d.Resources.Get(x.c.Request.Context(), x.owner, id)
 	if err != nil {
 		x.fail(core.ErrNotFound)
-		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+		return existingResource{}, nil, false
 	}
 	expired := !r.ExpiresAt.IsZero() && !r.ExpiresAt.After(x.g.now())
 	metadataGone := expired && !r.ExpiresAt.Add(30*24*time.Hour).After(x.g.now())
 	if r.PluginKey != "ccgateway" || r.Kind != "file" || r.State != "ready" || content && expired || metadataGone {
 		x.fail(core.ErrNotFound)
-		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+		return existingResource{}, nil, false
 	}
 	ref, ok := x.account(r.Binding.AccountID)
 	if !ok {
 		x.fail(core.ErrNotFound)
-		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+		return existingResource{}, nil, false
 	}
 	binding, err := x.g.d.ResourceTransport.Identity(x.c.Request.Context(), ref.ID)
 	if err != nil || binding != r.Binding {
 		x.fail(core.ErrConflict.WithMessage("file issuer identity is no longer available"))
-		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+		return existingResource{}, nil, false
 	}
 	ctx, release, err := x.lease(ref)
 	if err != nil {
 		x.fail(err)
-		return r, core.AccountRef{}, core.ResourceBinding{}, nil, nil, false
+		return existingResource{}, nil, false
 	}
-	return r, ref, binding, ctx, release, true
+	return existingResource{row: r, ref: ref, binding: binding, ctx: ctx}, release, true
 }
 
 // existingDelete deletes the file upstream and records the outcome. The
 // reservation's operation id, not the row's, identifies the deletion.
-func (x *resourceCall) existingDelete(id string, r core.ProviderResource, ref core.AccountRef, binding core.ResourceBinding, ctx context.Context) {
+func (x *resourceCall) existingDelete(id string, e existingResource) {
+	r, ref, binding, ctx := e.row, e.ref, e.binding, e.ctx
 	reservation, err := x.g.d.Resources.BeginDelete(ctx, x.owner, id, binding)
 	if err != nil {
 		x.fail(err)
@@ -461,7 +472,8 @@ func (x *resourceCall) existingDelete(id string, r core.ProviderResource, ref co
 }
 
 // existingGet fetches the file content or its metadata from upstream.
-func (x *resourceCall) existingGet(id string, content bool, r core.ProviderResource, ref core.AccountRef, binding core.ResourceBinding, ctx context.Context) {
+func (x *resourceCall) existingGet(id string, content bool, e existingResource) {
+	r, ref, binding, ctx := e.row, e.ref, e.binding, e.ctx
 	method := x.c.Request.Method
 	path := "/v1/files/" + url.PathEscape(r.RemoteID)
 	if content {

@@ -3,9 +3,10 @@ package gateway
 import (
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // globMatch matches '*' (any run, including '/') and '?' (one byte).
@@ -104,18 +105,16 @@ func extractPromptText(body []byte, paths []string, limit int) string {
 	return truncateUTF8(b.String(), limit)
 }
 
-// truncateUTF8 cuts s to at most n bytes without splitting a rune.
+// truncateUTF8 cuts s to at most n bytes without splitting a rune. A
+// non-positive limit is returned unchanged, as before.
 func truncateUTF8(s string, n int) string {
-	if n <= 0 || len(s) <= n {
+	if n <= 0 {
 		return s
 	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
+	return x.Truncate(s, n)
 }
 
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+func itoa(n int64) string { return x.Itoa64(n) }
 
 // maxClientRequestID bounds usage_logs.client_request_id (varchar(128)).
 const maxClientRequestID = 128

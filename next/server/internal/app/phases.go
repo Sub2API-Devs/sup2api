@@ -110,16 +110,16 @@ func (b *boot) startCluster() error {
 
 // buildCoreServices builds and starts the modules the request path depends on:
 // billing, usage settlement, authz/iam, the account and proxy directories and
-// the ccgateway controller.
-func (b *boot) buildCoreServices() error {
+// the ccgateway controller. The trust store is returned for the plugin runtime
+// phase instead of being kept on the boot.
+func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	cfg := b.cfg
 	b.events = event.NewPublisher(b.db)
 	b.reg = registry.New()
 	trust, err := pkg.NewTrustStore(cfg.Plugins.OfficialRootKeys, cfg.Plugins.AllowUnsigned)
 	if err != nil {
-		return fmt.Errorf("plugin trust: %w", err)
+		return nil, fmt.Errorf("plugin trust: %w", err)
 	}
-	b.trust = trust
 	if !cfg.Plugins.VerifySignatures {
 		trust.SetVerifySignatures(false)
 		b.log.Warn("plugin signature verification is disabled (SUB2API_PLUGIN_VERIFY_SIGNATURES=false)")
@@ -127,17 +127,17 @@ func (b *boot) buildCoreServices() error {
 	// Package bytes are not in PostgreSQL. Under the shell they are kept by
 	// the primary and fetched over the node network; market packages are
 	// downloaded by each node. Without a shell only one node is supported.
-	b.packageStore = blobs.Dir(filepath.Join(cfg.Plugins.DataDir, "blobs"))
+	packageStore := blobs.Store(blobs.Dir(filepath.Join(cfg.Plugins.DataDir, "blobs")))
 	if cfg.Managed.Enabled && cfg.Managed.UpdaterSocket != "" {
-		b.packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, cfg.Plugins.MaxPackageBytes)
+		packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, cfg.Plugins.MaxPackageBytes)
 	}
 	b.marketClient = &http.Client{Timeout: 60 * time.Second}
 	// Packages may be 1 GiB (CONTRACTS §53.10): downloads get more time than
 	// index requests.
-	b.packageHTTP = &http.Client{Timeout: market.PackageDownloadTimeout}
-	b.packageSrc = &blobs.Source{Store: b.packageStore, MaxBytes: cfg.Plugins.MaxPackageBytes,
+	packageHTTP := &http.Client{Timeout: market.PackageDownloadTimeout}
+	b.packageSrc = &blobs.Source{Store: packageStore, MaxBytes: cfg.Plugins.MaxPackageBytes,
 		Download: func(ctx context.Context, url string, limit int64) ([]byte, error) {
-			return market.Fetch(ctx, b.packageHTTP, url, limit)
+			return market.Fetch(ctx, packageHTTP, url, limit)
 		}}
 	// Nodes re-verify package signatures before unpacking, so revoked keys
 	// and publishers stop loading everywhere.
@@ -161,13 +161,13 @@ func (b *boot) buildCoreServices() error {
 
 	az := authz.New(authz.Deps{DB: b.db, Bus: b.cl.Bus, Plugins: b.reg})
 	if err := az.Start(b.ctx); err != nil {
-		return fmt.Errorf("authz: %w", err)
+		return nil, fmt.Errorf("authz: %w", err)
 	}
 	b.az = az
 	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az})
 	if b.managed == nil || b.managed.prepare.Bootstrap {
 		if err := b.idm.Bootstrap(b.ctx); err != nil {
-			return fmt.Errorf("bootstrap admin: %w", err)
+			return nil, fmt.Errorf("bootstrap admin: %w", err)
 		}
 	}
 
@@ -233,12 +233,13 @@ func (b *boot) buildCoreServices() error {
 		Slots: b.cl.Slots, Limiter: b.limiter,
 		AllowPrivateUpstream: cfg.AllowPrivateUpstream, NodeID: cfg.NodeID, Logger: b.log,
 	})
-	return nil
+	return trust, nil
 }
 
 // startPluginRuntime builds egress, the plugin runtime, the resource stores,
-// the gateway and the install/rollout services, and starts their loops.
-func (b *boot) startPluginRuntime() error {
+// the gateway and the install/rollout services, and starts their loops. trust
+// comes from buildCoreServices: it is not boot state.
+func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	cfg := b.cfg
 	pgAddr, err := databaseAddr(cfg.DatabaseURL)
 	if err != nil {
@@ -254,15 +255,15 @@ func (b *boot) startPluginRuntime() error {
 	if cfg.Plugins.EgressAllowPrivate {
 		b.log.Warn("plugins may reach private network addresses (SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE=true); tests and development only")
 	}
-	b.egress = egress.New(b.db, egress.Options{NodeID: cfg.NodeID, DatabaseAddrs: []string{pgAddr}, CoreAddrs: coreAddrs,
+	egress := egress.New(b.db, egress.Options{NodeID: cfg.NodeID, DatabaseAddrs: []string{pgAddr}, CoreAddrs: coreAddrs,
 		AllowPrivate: cfg.Plugins.EgressAllowPrivate, Events: b.events, Logger: b.log})
-	b.stopper.add("egress", func(context.Context) { b.egress.Close() })
+	b.stopper.add("egress", func(context.Context) { egress.Close() })
 	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Landlock: cfg.Plugins.Landlock, Logger: b.log})
-	b.schemas = dbschema.New(b.db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
+	schemas := dbschema.New(b.db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Locker: b.cl.Locker, Cipher: b.cipher, Node: b.cl.Registry, Launcher: launcher,
-		Egress: b.egress, Authorizer: b.az, Ledger: b.bill, Schemas: b.schemas, Accounts: b.acc,
+		Egress: egress, Authorizer: b.az, Ledger: b.bill, Schemas: schemas, Accounts: b.acc,
 		HostVersion: b.version, DataDir: cfg.Plugins.DataDir, RunDir: cfg.Plugins.RunDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: b.log,
@@ -270,7 +271,6 @@ func (b *boot) startPluginRuntime() error {
 	if err != nil {
 		return fmt.Errorf("plugin runtime: %w", err)
 	}
-	b.rt = rt
 
 	// The request gate admits HTTP traffic; WebSocket sessions also watch it to
 	// end themselves on drain, which http.Server.Shutdown cannot do for them.
@@ -278,32 +278,32 @@ func (b *boot) startPluginRuntime() error {
 	if b.managed != nil {
 		b.gate.stop()
 	}
-	b.resources = providerresources.New(b.db, providerresources.Options{})
-	b.helpers = helperhistory.New(b.db, b.cipher, helperhistory.Options{})
-	stopHelperHistory := startHelperHistoryMaintenance(b.ctx, b.settler, b.helpers, b.canWork)
+	resources := providerresources.New(b.db, providerresources.Options{})
+	helpers := helperhistory.New(b.db, b.cipher, helperhistory.Options{})
+	stopHelperHistory := startHelperHistoryMaintenance(b.ctx, b.settler, helpers, b.canWork)
 	b.stopper.add("helper-history", stopHelperHistory)
-	b.observations = observer.New(b.reg, b.stats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
+	observations := observer.New(b.reg, b.stats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
 		Phases: []string{observation.UsageFinalized}, Metrics: []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage}, Client: account.StatsConsumer{}})
-	b.stopper.add("observations", b.observations.Close)
+	b.stopper.add("observations", observations.Close)
 	b.gw = gateway.New(gateway.Deps{
 		CCGateway:     b.ccg,
-		HelperHistory: b.helpers, EnableHelperHistory: true,
-		Resources: b.resources, Skills: b.resources, Credits: fallbackcredits.New(b.db, 4096), ResourceTransport: b.ccg.ResourceTransport(),
+		HelperHistory: helpers, EnableHelperHistory: true,
+		Resources: resources, Skills: resources, Credits: fallbackcredits.New(b.db, 4096), ResourceTransport: b.ccg.ResourceTransport(),
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Node: b.cl.Registry, Registry: b.reg,
 		Auth: b.keys, Pricer: b.bill, Balance: b.bill, Slots: b.cl.Slots,
-		Accounts: b.acc, Proxies: b.prx, Settler: b.settler, Observations: b.observations, Tasks: b.settler, Limiter: b.limiter, Quota: b.acc, Config: cfg, Converters: b.converters,
+		Accounts: b.acc, Proxies: b.prx, Settler: b.settler, Observations: observations, Tasks: b.settler, Limiter: b.limiter, Quota: b.acc, Config: cfg, Converters: b.converters,
 		Draining: b.gate.isDraining,
 	})
 
-	b.mutations = &cluster.PluginMutations{DB: b.db, Locker: b.cl.Locker}
+	mutations := &cluster.PluginMutations{DB: b.db, Locker: b.cl.Locker}
 	if b.managed != nil {
-		b.mutations.AllowBootstrap = b.managed.bootstrapAllowed
+		mutations.AllowBootstrap = b.managed.bootstrapAllowed
 	}
-	b.defaults = install.NewDefaultsApplier(b.az)
-	ctl, err := rollout.New(rollout.Options{Mutations: b.mutations,
+	defaults := install.NewDefaultsApplier(b.az)
+	ctl, err := rollout.New(rollout.Options{Mutations: mutations,
 		CanCoordinate: b.canCoordinate,
 		DB:            b.db, Node: b.cl.Registry, Bus: b.cl.Bus, Packages: b.pkgs, Registry: b.reg,
-		Runtime: rollout.FromGRPC(rt), Schemas: b.schemas, Defaults: b.defaults, Perms: b.az, Events: b.events, Logger: b.log,
+		Runtime: rollout.FromGRPC(rt), Schemas: schemas, Defaults: defaults, Perms: b.az, Events: b.events, Logger: b.log,
 	})
 	if err != nil {
 		return fmt.Errorf("rollout: %w", err)
@@ -318,9 +318,9 @@ func (b *boot) startPluginRuntime() error {
 	b.stopper.add("settler", b.settler.Stop)
 	b.stopper.add("helper-history", stopHelperHistory)
 
-	b.inst = install.New(install.Deps{Mutations: b.mutations,
-		DB: b.db, Trust: b.trust, Authz: b.az, Permissions: b.az, Defaults: b.defaults,
-		Rollout: ctl, Schemas: b.schemas, Bus: b.cl.Bus, Accounts: b.acc, KV: rt, Nodes: b.cl.Registry, Packages: b.packageSrc,
+	b.inst = install.New(install.Deps{Mutations: mutations,
+		DB: b.db, Trust: trust, Authz: b.az, Permissions: b.az, Defaults: defaults,
+		Rollout: ctl, Schemas: schemas, Bus: b.cl.Bus, Accounts: b.acc, KV: rt, Nodes: b.cl.Registry, Packages: b.packageSrc,
 	}, install.Options{HostVersion: b.version, Plugins: cfg.Plugins})
 	b.mkt = market.New(b.db, b.inst, b.marketClient, cfg.Plugins.MaxPackageBytes)
 	if b.managed == nil || b.managed.prepare.Bootstrap {
@@ -366,9 +366,14 @@ func (b *boot) startBuiltins() error {
 	return nil
 }
 
-// startBackground starts the job scheduler and the event delivery loop; a
-// managed core starts them on admission instead.
-func (b *boot) startBackground() error {
+// buildBackground constructs the job scheduler and the event delivery loop and
+// registers their teardown. It is idempotent so the boot path and admission
+// share one pair of instances: registerRoutes hands the console the scheduler
+// built here, and admission starts that same scheduler.
+func (b *boot) buildBackground() {
+	if b.jobs != nil {
+		return
+	}
 	b.jobs = job.New(b.db, b.cl.Locker, b.reg, b.log, b.cfg.NodeID, job.Options{Executor: b.work})
 	b.stopper.add("jobs", func(c context.Context) { _ = b.jobs.Stop(c) })
 	b.dlv = delivery.New(b.db, b.cl.Locker, b.cl.Bus, b.reg, b.log, b.cfg.NodeID, delivery.Options{CanRun: b.canWork, Subscriptions: b.acc.LifecycleSubscriptions})
@@ -376,19 +381,20 @@ func (b *boot) startBackground() error {
 	// Extraction goroutines still call plugins and submit usage after their
 	// HTTP handler returns. Join them before stopping either dependency.
 	b.stopper.add("gateway", func(context.Context) { b.gw.Close() })
-	if b.managed != nil {
-		return nil
-	}
-	run := func() error {
-		b.startOnce.Do(func() {
-			if b.startErr = b.jobs.Start(b.ctx); b.startErr == nil {
-				b.startErr = b.dlv.Start(b.ctx)
-			}
-		})
-		return b.startErr
-	}
-	if err := run(); err != nil {
-		return fmt.Errorf("background startup: %w", err)
+}
+
+// startBackground starts the scheduler and delivery loop built by
+// buildBackground, once. It is what admission runs (m.start) on a managed
+// core, and what run() calls directly on a standalone one.
+func (b *boot) startBackground() error {
+	b.buildBackground()
+	b.startOnce.Do(func() {
+		if b.startErr = b.jobs.Start(b.ctx); b.startErr == nil {
+			b.startErr = b.dlv.Start(b.ctx)
+		}
+	})
+	if b.startErr != nil {
+		return fmt.Errorf("background startup: %w", b.startErr)
 	}
 	return nil
 }

@@ -86,17 +86,12 @@ func (s *Service) registerPriceRoutes(r *httpapi.Router) {
 func (s *Service) listPrices(c *gin.Context) {
 	ctx := c.Request.Context()
 	page, size := httpapi.Pagination(c)
-	var where []string
-	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
-	}
+	var f store.Filter
 	if v := c.Query("mode"); v != "" {
-		add("mp.mode = ?", v)
+		f.And("mp.mode = ?", v)
 	}
 	if v := c.Query("source"); v != "" {
-		add("mp.source = ?", v)
+		f.And("mp.source = ?", v)
 	}
 	if v := c.Query("sync_source_id"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
@@ -104,26 +99,25 @@ func (s *Service) listPrices(c *gin.Context) {
 			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "sync_source_id", Code: "invalid", Message: "must be an integer"}))
 			return
 		}
-		add("mp.sync_source_id = ?", id)
+		f.And("mp.sync_source_id = ?", id)
 	}
 	if v := c.Query("enabled"); v != "" {
-		add("mp.enabled = ?", v == "true" || v == "1")
+		f.And("mp.enabled = ?", v == "true" || v == "1")
 	}
 	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		add("(mp.model ILIKE ? OR mp.note ILIKE ?)", "%"+escapeLike(v)+"%")
+		pattern := "%" + store.Like(v) + "%"
+		f.And("(mp.model ILIKE ? OR mp.note ILIKE ?)", pattern, pattern)
 	}
-	cond := ""
-	if len(where) > 0 {
-		cond = " WHERE " + strings.Join(where, " AND ")
-	}
+	cond := f.Cond()
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*)`+priceFrom+cond, args...).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*)`+priceFrom+cond, f.Args()...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	args = append(args, size, (page-1)*size)
+	n := f.Len()
+	args := append(f.Args(), size, (page-1)*size)
 	rows, err := s.db.Pool.Query(ctx, `SELECT `+priceColumns+priceFrom+cond+
-		` ORDER BY mp.model, mp.id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+		` ORDER BY mp.model, mp.id LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -143,10 +137,6 @@ func (s *Service) listPrices(c *gin.Context) {
 		return
 	}
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
-}
-
-func escapeLike(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 func (s *Service) showPrice(c *gin.Context) {

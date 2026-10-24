@@ -262,13 +262,17 @@ func (s *Service) uploadLoad(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	var workers *workersReport
 	if in.Apply {
-		var cancelTail context.CancelFunc
-		if cfg, workers, ctx, cancelTail, ok = s.applyLoadedImage(c, ctx, uid, in.Role, ref); !ok {
+		if cfg, workers, ok = s.applyLoadedImage(c, ctx, uid, in.Role, ref); !ok {
 			return
 		}
-		if cancelTail != nil {
+		if workers != nil {
+			// The worker updates may have used up the load's time: what follows
+			// still runs (bounded on its own).
+			tail, cancelTail := tailContext(ctx)
 			defer cancelTail()
+			ctx = tail
 		}
+		s.kickAll(ctx)
 	}
 	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.upload", "system", "ccgateway", map[string]any{"role": in.Role, "apply": in.Apply, "ref": ref}); e != nil {
 		slog.Error("CCGateway audit failed", "action", "runtime.upload")
@@ -281,14 +285,8 @@ func (s *Service) uploadLoad(c *gin.Context) {
 }
 
 // decodeLoadRequest reads the small load body and validates the role.
-func decodeLoadRequest(c *gin.Context) (struct {
-	Role  string `json:"role"`
-	Apply bool   `json:"apply"`
-}, bool) {
-	var in struct {
-		Role  string `json:"role"`
-		Apply bool   `json:"apply"`
-	}
+func decodeLoadRequest(c *gin.Context) (loadRequest, bool) {
+	var in loadRequest
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
 	if !httpapi.BindJSON(c, &in) {
 		return in, false
@@ -298,6 +296,19 @@ func decodeLoadRequest(c *gin.Context) (struct {
 		return in, false
 	}
 	return in, true
+}
+
+// loadRequest is the body of POST /system/ccgateway/runtime/uploads/:id/load.
+type loadRequest struct {
+	Role  string `json:"role"`
+	Apply bool   `json:"apply"`
+}
+
+// tailContext bounds the work that still runs after a long controller
+// operation (audit, runtime state) on its own, so it is not cut off when the
+// caller's detached budget is used up.
+func tailContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 }
 
 // sanitizeLoadedImages keeps images and tags that pass the format limits and
@@ -325,10 +336,9 @@ func sanitizeLoadedImages(c *gin.Context, sha string, loaded []loadedImage) ([]l
 
 // applyLoadedImage makes ref the role's image: configuration first, then the
 // controller switch. ok=false means the response was already written. The
-// returned context (and its cancel, which the caller defers) carries the 2
-// minute tail budget the switch may need, so the audit and the runtime read
-// after it still run.
-func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string) (Config, *workersReport, context.Context, context.CancelFunc, bool) {
+// caller keeps its own ctx: a tail context for the audit and the runtime read
+// is its business (tailContext).
+func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string) (Config, *workersReport, bool) {
 	saved, e := s.updateConfig(ctx, uid, []string{"images"}, func(cur *Config) error {
 		if cur.Mode != "controller" {
 			return errConfigChanged
@@ -350,23 +360,16 @@ func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int6
 	})
 	if errors.Is(e, errConfigChanged) {
 		httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
-		return Config{}, nil, ctx, nil, false
+		return Config{}, nil, false
 	}
 	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-		return Config{}, nil, ctx, nil, false
+		return Config{}, nil, false
 	}
 	report, err := s.switchImage(ctx, saved, role, ref)
 	if err != nil {
 		httpapi.Fail(c, err)
-		return Config{}, nil, ctx, nil, false
+		return Config{}, nil, false
 	}
-	var cancelTail context.CancelFunc
-	if report != nil {
-		// The worker updates may have used up the load's time: what follows
-		// still runs (bounded on its own).
-		ctx, cancelTail = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-	}
-	s.kickAll(ctx)
-	return saved, report, ctx, cancelTail, true
+	return saved, report, true
 }

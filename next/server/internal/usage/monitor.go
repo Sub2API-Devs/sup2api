@@ -62,8 +62,8 @@ func (s *Service) outcomeTx(ctx context.Context, e *settleEntry, fn func(pgx.Tx)
 	return err
 }
 
-func (s *Service) askMonitor(ctx context.Context, e *settleEntry, row *reservedRowState, client core.PlatformPlugin, entry *pluginv1.ReconcileEntry, acct *pluginv1.Account, proxyID *int64) (*pluginv1.ReconcileResult, error) {
-	monitor, ok := client.(core.MonitorPlugin)
+func (s *Service) askMonitor(ctx context.Context, e *settleEntry, row *reservedRowState, call observationCall) (*pluginv1.ReconcileResult, error) {
+	monitor, ok := call.client.(core.MonitorPlugin)
 	if !ok {
 		return nil, errors.New("platform.monitor.v1 has no Monitor implementation")
 	}
@@ -75,7 +75,7 @@ func (s *Service) askMonitor(ctx context.Context, e *settleEntry, row *reservedR
 	}
 	var deferred atomic.Bool
 	execute := func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
-		return s.fetchExecutionHTTP(ctx, in, proxyID, func(ctx context.Context) error {
+		return s.fetchExecutionHTTP(ctx, in, call.proxyID, func(ctx context.Context) error {
 			if s.rec.Limiter != nil {
 				ok, err := s.rec.Limiter.TryHit(ctx, e.account, "monitor:"+row.p.RequestID)
 				if err != nil || !ok {
@@ -112,7 +112,7 @@ func (s *Service) askMonitor(ctx context.Context, e *settleEntry, row *reservedR
 		e.reported = true
 		return &pluginv1.ExecutionReceipt{TaskId: taskID}, nil
 	}
-	err := monitor.Monitor(ctx, &pluginv1.PollRequest{Entry: entry, Account: acct}, execute, report)
+	err := monitor.Monitor(ctx, &pluginv1.PollRequest{Entry: call.entry, Account: call.acct}, execute, report)
 	if deferred.Load() && !e.reported {
 		return nil, errTaskDeferred
 	}

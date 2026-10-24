@@ -23,18 +23,18 @@ func TestParseFilterClientRequestID(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		sql := f.sql()
+		sql := f.Cond()
 		if !strings.Contains(sql, "u.client_request_id = $") || !strings.Contains(sql, "u.request_id = $") {
 			t.Fatalf("self=%v sql: %s", self != nil, sql)
 		}
 		found := false
-		for _, a := range f.args {
+		for _, a := range f.Args() {
 			if a == "abc-123" {
 				found = true
 			}
 		}
 		if !found {
-			t.Fatalf("args: %v", f.args)
+			t.Fatalf("args: %v", f.Args())
 		}
 	}
 }

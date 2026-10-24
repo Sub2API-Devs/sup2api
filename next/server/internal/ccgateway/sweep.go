@@ -69,45 +69,11 @@ func (s *Service) SweepDrafts(ctx context.Context) (int, error) {
 		ctx, cancel = core.KeepLock(ctx, lk)
 		defer cancel()
 	}
-	n, e := s.removeExpiredDrafts(ctx)
-	removed := n
-	firstErr := e
-	// Both remaining sweeps share the same first-error rule; each one is still
-	// called after a cancelled draft pass, as before.
-	n, e = s.sweepRetired(ctx)
-	removed += n
-	if firstErr == nil {
-		firstErr = e
-	}
-	if ctx.Err() != nil {
-		return removed, ctx.Err()
-	}
-	n, e = s.sweepOrphans(ctx)
-	removed += n
-	if firstErr == nil {
-		firstErr = e
-	}
-	return removed, firstErr
-}
-
-// removeExpiredDrafts removes the drafts that were idle too long or exist too
-// long, on the controller and in the table.
-func (s *Service) removeExpiredDrafts(ctx context.Context) (int, error) {
-	rows, e := s.DB.Pool.Query(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at IS NULL
-		AND (last_seen_at < now() - $1::bigint * interval '1 second' OR created_at < now() - $2::bigint * interval '1 second')
-		ORDER BY key`, int64(draftIdle/time.Second), int64(draftMaxAge/time.Second))
+	// A failed query on the draft pass is a hard failure: nothing else runs,
+	// so a database that cannot be read never turns into remote deletions.
+	// Per-key errors below are collected instead and the pass continues.
+	expired, e := s.expiredDraftKeys(ctx)
 	if e != nil {
-		return 0, e
-	}
-	var expired []string
-	for rows.Next() {
-		var key string
-		if rows.Scan(&key) == nil && isDraftKey(key) {
-			expired = append(expired, key)
-		}
-	}
-	rows.Close()
-	if e = rows.Err(); e != nil {
 		return 0, e
 	}
 	removed := 0
@@ -129,7 +95,42 @@ func (s *Service) removeExpiredDrafts(ctx context.Context) (int, error) {
 			return removed, ctx.Err()
 		}
 	}
+	n, e := s.sweepRetired(ctx)
+	removed += n
+	if firstErr == nil {
+		firstErr = e
+	}
+	if ctx.Err() != nil {
+		return removed, ctx.Err()
+	}
+	n, e = s.sweepOrphans(ctx)
+	removed += n
+	if firstErr == nil {
+		firstErr = e
+	}
 	return removed, firstErr
+}
+
+// expiredDraftKeys lists the drafts that were idle too long or exist too long.
+func (s *Service) expiredDraftKeys(ctx context.Context) ([]string, error) {
+	rows, e := s.DB.Pool.Query(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at IS NULL
+		AND (last_seen_at < now() - $1::bigint * interval '1 second' OR created_at < now() - $2::bigint * interval '1 second')
+		ORDER BY key`, int64(draftIdle/time.Second), int64(draftMaxAge/time.Second))
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var expired []string
+	for rows.Next() {
+		var key string
+		if rows.Scan(&key) == nil && isDraftKey(key) {
+			expired = append(expired, key)
+		}
+	}
+	if e = rows.Err(); e != nil {
+		return nil, e
+	}
+	return expired, nil
 }
 
 // sweepRetired deletes the runtimes retired more than retiredGrace ago: under

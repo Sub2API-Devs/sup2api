@@ -198,6 +198,9 @@ func (s *Service) runtimeCleanup(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	// Not installLock: cleanup has always answered a locker error with a plain
+	// ErrUnavailable (no reason), unlike every other operation that takes the
+	// same lock. The different answer is kept on purpose (plan §8).
 	ctx, release, locked, err := s.lockInstall(ctx)
 	if err != nil {
 		httpapi.Fail(c, core.ErrUnavailable)

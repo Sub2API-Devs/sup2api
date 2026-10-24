@@ -401,13 +401,24 @@ func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRo
 	if e.task != nil {
 		entry.TaskKind = e.task.kind
 	}
+	call := observationCall{client: client, entry: entry, acct: acct, proxyID: proxyID}
 	if monitor {
-		return s.askMonitor(ctx, e, row, client, entry, acct, proxyID)
+		return s.askMonitor(ctx, e, row, call)
 	}
 	if poll {
-		return s.askPoll(ctx, e, row, client, entry, acct, proxyID)
+		return s.askPoll(ctx, e, row, call)
 	}
-	return s.buildAndAsk(ctx, e, row, client, entry, acct, proxyID)
+	return s.buildAndAsk(ctx, e, row, call)
+}
+
+// observationCall is one observation sent to a plugin: the platform client,
+// the entry describing the request, and the account (with the proxy the core's
+// own HTTP request goes through) the plugin may act for.
+type observationCall struct {
+	client  core.PlatformPlugin
+	entry   *pluginv1.ReconcileEntry
+	acct    *pluginv1.Account
+	proxyID *int64
 }
 
 // pluginObservationContract reports which observation protocols the plugin
@@ -430,15 +441,15 @@ func pluginObservationContract(gen core.Generation, pluginKey string) (poll, mon
 
 // askPoll asks a platform.poll.v1 plugin. A limiter refusal during a fetch is
 // reported as deferred so the task is requeued rather than billed wrongly.
-func (s *Service) askPoll(ctx context.Context, e *settleEntry, row *reservedRowState, client core.PlatformPlugin, entry *pluginv1.ReconcileEntry, acct *pluginv1.Account, proxyID *int64) (*pluginv1.ReconcileResult, error) {
-	p, ok := client.(core.PollPlugin)
+func (s *Service) askPoll(ctx context.Context, e *settleEntry, row *reservedRowState, call observationCall) (*pluginv1.ReconcileResult, error) {
+	p, ok := call.client.(core.PollPlugin)
 	if !ok {
 		return nil, errors.New("platform.poll.v1 has no Poll implementation")
 	}
 	r := s.rec
 	var deferred atomic.Bool
-	result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: entry, Account: acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
-		return s.fetchExecutionHTTP(ctx, in, proxyID, func(ctx context.Context) error {
+	result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: call.entry, Account: call.acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+		return s.fetchExecutionHTTP(ctx, in, call.proxyID, func(ctx context.Context) error {
 			if r.Limiter != nil {
 				ok, err := r.Limiter.TryHit(ctx, e.account, "poll:"+row.p.RequestID)
 				if err != nil || !ok {
@@ -457,9 +468,9 @@ func (s *Service) askPoll(ctx context.Context, e *settleEntry, row *reservedRowS
 
 // buildAndAsk asks a plugin through the Build+Parse protocol: the core sends
 // the HTTP request itself and hands the response back for parsing.
-func (s *Service) buildAndAsk(ctx context.Context, e *settleEntry, row *reservedRowState, client core.PlatformPlugin, entry *pluginv1.ReconcileEntry, acct *pluginv1.Account, proxyID *int64) (*pluginv1.ReconcileResult, error) {
+func (s *Service) buildAndAsk(ctx context.Context, e *settleEntry, row *reservedRowState, call observationCall) (*pluginv1.ReconcileResult, error) {
 	r := s.rec
-	built, err := client.BuildReconcileRequest(ctx, &pluginv1.BuildReconcileRequestRequest{Entry: entry, Account: acct})
+	built, err := call.client.BuildReconcileRequest(ctx, &pluginv1.BuildReconcileRequestRequest{Entry: call.entry, Account: call.acct})
 	if err != nil {
 		return nil, fmt.Errorf("BuildReconcileRequest: %w", err)
 	}
@@ -472,9 +483,9 @@ func (s *Service) buildAndAsk(ctx context.Context, e *settleEntry, row *reserved
 			return nil, errTaskDeferred
 		}
 	}
-	status, headers, body, transportErr, truncated := s.fetchReconcile(ctx, built, proxyID)
-	res, err := client.ParseReconcileResponse(ctx, &pluginv1.ParseReconcileResponseRequest{
-		Entry: entry, Account: acct, Status: int32(status), Headers: headers,
+	status, headers, body, transportErr, truncated := s.fetchReconcile(ctx, built, call.proxyID)
+	res, err := call.client.ParseReconcileResponse(ctx, &pluginv1.ParseReconcileResponseRequest{
+		Entry: call.entry, Account: call.acct, Status: int32(status), Headers: headers,
 		Body: body, TransportError: transportErr, Truncated: truncated,
 	})
 	if err != nil {

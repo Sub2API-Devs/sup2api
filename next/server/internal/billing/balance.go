@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
@@ -66,37 +67,33 @@ func (s *Service) myLedger(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
 	page, size := httpapi.Pagination(c)
-	var where []string
-	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
-	}
-	add("l.user_id = ?", uid)
+	var f store.Filter
+	f.And("l.user_id = ?", uid)
 	if v := c.Query("kind"); v != "" {
-		add("l.kind = ?", v)
+		f.And("l.kind = ?", v)
 	}
-	for _, f := range []struct{ q, cond string }{{"from", "l.created_at >= ?"}, {"to", "l.created_at < ?"}} {
-		if v := c.Query(f.q); v != "" {
+	for _, x := range []struct{ q, cond string }{{"from", "l.created_at >= ?"}, {"to", "l.created_at < ?"}} {
+		if v := c.Query(x.q); v != "" {
 			t, err := time.Parse(time.RFC3339, v)
 			if err != nil {
-				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+f.q))
+				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+x.q))
 				return
 			}
-			add(f.cond, t)
+			f.And(x.cond, t)
 		}
 	}
-	cond := " WHERE " + strings.Join(where, " AND ")
+	cond := f.Cond()
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger l`+cond, args...).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger l`+cond, f.Args()...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	args = append(args, size, (page-1)*size)
+	n := f.Len()
+	args := append(f.Args(), size, (page-1)*size)
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT l.id, l.delta, l.balance_after, l.kind, l.note, l.created_at
 		FROM balance_ledger l`+cond+`
-		ORDER BY l.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+		ORDER BY l.id DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -135,43 +132,36 @@ func (s *Service) allLedger(c *gin.Context) {
 func (s *Service) listLedger(c *gin.Context, userID *int64) {
 	ctx := c.Request.Context()
 	page, size := httpapi.Pagination(c)
-	var where []string
-	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
-	}
+	var f store.Filter
 	if userID != nil {
-		add("l.user_id = ?", *userID)
+		f.And("l.user_id = ?", *userID)
 	}
 	if v := c.Query("kind"); v != "" {
-		add("l.kind = ?", v)
+		f.And("l.kind = ?", v)
 	}
-	for _, f := range []struct{ q, cond string }{{"from", "l.created_at >= ?"}, {"to", "l.created_at < ?"}} {
-		if v := c.Query(f.q); v != "" {
+	for _, x := range []struct{ q, cond string }{{"from", "l.created_at >= ?"}, {"to", "l.created_at < ?"}} {
+		if v := c.Query(x.q); v != "" {
 			t, err := time.Parse(time.RFC3339, v)
 			if err != nil {
-				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+f.q))
+				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+x.q))
 				return
 			}
-			add(f.cond, t)
+			f.And(x.cond, t)
 		}
 	}
-	cond := ""
-	if len(where) > 0 {
-		cond = " WHERE " + strings.Join(where, " AND ")
-	}
+	cond := f.Cond()
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger l`+cond, args...).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger l`+cond, f.Args()...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	args = append(args, size, (page-1)*size)
+	n := f.Len()
+	args := append(f.Args(), size, (page-1)*size)
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT l.id, l.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), l.delta, l.balance_after, l.kind,
 		       l.ref_type, l.ref_id, l.idempotency_key, l.operator_id, l.plugin_key, l.note, l.created_at
 		FROM balance_ledger l LEFT JOIN users u ON u.id = l.user_id`+cond+`
-		ORDER BY l.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+		ORDER BY l.id DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
