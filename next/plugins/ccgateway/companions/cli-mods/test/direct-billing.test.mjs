@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { applyDirectBilling } from '../direct-billing.js';
+import { installSupport, supportModules } from './support.mjs';
 import { vocabulary } from './vocabulary.mjs';
 
 // A stand-in for the CLI's own header line (kLo, the main thread's: prompt ID
@@ -96,4 +101,30 @@ test('without a native header or with an unusable system the body is forwarded',
   // A leading header the client wrote unusably (a repeated field) stays.
   const repeated = `{"model":"m","system":[{"type":"text","text":"${H} cc_version=1; cc_version=2;"}],"messages":[]}`;
   assert.equal(send(repeated), repeated);
+});
+
+// The installed form is the one the CLI runs: installSupport puts the modules
+// in as ccgateway-<name>.js with their imports renamed, so direct-billing's
+// raw-json dependency comes along without the test naming it.
+test('installed direct billing imports the installed raw-json and shared modules', async () => {
+  assert(supportModules.includes('raw-json') && supportModules.includes('direct-billing'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ccg-direct-billing-'));
+  try {
+    await fsp.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
+    await installSupport(dir, ['direct-billing']);
+    const installed = await fsp.readFile(path.join(dir, 'ccgateway-direct-billing.js'), 'utf8');
+    assert.match(installed, /from '\.\/ccgateway-raw-json\.js'/);
+    assert.match(installed, /from '\.\/ccgateway-content-policy\.js'/);
+    assert.match(installed, /from '\.\/ccgateway-shared\.js'/);
+    assert.doesNotMatch(installed, /from '\.\/(raw-json|content-policy|shared)\.js'/);
+    for (const name of ['raw-json', 'content-policy', 'shared', 'request-policy']) {
+      assert(await fsp.stat(path.join(dir, 'ccgateway-' + name + '.js')), name);
+    }
+    const { applyDirectBilling: installedBilling } = await import(pathToFileURL(path.join(dir, 'ccgateway-direct-billing.js')));
+    const raw = `{"model":"m","messages":[],"system":[{"type":"text","text":"${H} cc_version=1; cc_entrypoint=cli;"}]}`;
+    const options = { policy: {}, billingHeader: H, nativeBilling: () => native };
+    assert.equal(installedBilling(raw, JSON.parse(raw), options), applyDirectBilling(raw, JSON.parse(raw), options));
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
 });

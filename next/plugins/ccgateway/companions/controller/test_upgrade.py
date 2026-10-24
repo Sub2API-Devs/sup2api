@@ -9,6 +9,7 @@ import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 
 import docker
 
@@ -199,6 +200,25 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual((env['CCG_CONTROLLER_NAME'], env['CCG_CONTROLLER_PORT'], env['CCG_RUNTIME_ENV_FILE']),
                          ('ccg-e2e', '9898', self.env_file))
         self.assertEqual(set(self.health_calls), {('9898', 'k' * 64)})
+
+    def test_prev_gone_before_start_still_runs_the_new_controller(self):
+        # An upgrade interrupted after the rename and before the removal leaves
+        # no <prev> for start_controller to stop; that is a valid state, so the
+        # new image is run anyway (rename -> stop -> run keeps its order for the
+        # normal case).
+        self.client.add('ccg-e2e')
+        real = upgrade.swap_controller
+
+        def swap_then_lose_prev(client, name, prev):
+            real(client, name, prev)
+            self.client.items.pop(prev, None)
+
+        with patch.object(upgrade, 'swap_controller', side_effect=swap_then_lose_prev):
+            self.assertEqual(self.run_upgrade(self.health(NEW)), ('done', ''))
+        self.assertEqual([entry for entry in self.client.log if entry[0] in ('stop', 'run')],
+                         [('run', 'ccg-e2e', NEW)])
+        self.assertEqual(self.client.items['ccg-e2e'].image, NEW)
+        self.assertIn('CCG_CONTROLLER_IMAGE=' + NEW + '\n', self.env_text())
 
     def test_parse_env_matches_env_file_rules(self):
         self.assertEqual(upgrade.parse_env('A=1\n  B=x=y \n#C=3\n\nD\nE F=1\n'), {'A': '1', 'B': 'x=y '})

@@ -98,10 +98,13 @@ def singbox_dns(with_detour):
     has no detour: sing-box refuses to start with a DNS detour to an empty
     direct outbound (sing-box check accepts it); without one it dials
     directly."""
+    # Keep detour before tls: sing-box.json is written with json.dumps and must
+    # stay byte-identical to what earlier controllers wrote.
     server = {'type': 'https', 'tag': 'remote-dns', 'server': '1.1.1.1',
-              'path': '/dns-query', 'tls': {'enabled': True, 'server_name': 'cloudflare-dns.com'}}
-    if with_detour:
-        server['detour'] = 'account-proxy'
+              'path': '/dns-query', 'detour': 'account-proxy',
+              'tls': {'enabled': True, 'server_name': 'cloudflare-dns.com'}}
+    if not with_detour:
+        del server['detour']
     return {'servers': [server], 'final': 'remote-dns', 'strategy': 'ipv4_only'}
 
 

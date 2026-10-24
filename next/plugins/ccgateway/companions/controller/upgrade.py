@@ -138,7 +138,11 @@ def start_controller(client, image, prev, name, env, root):
     """The previous controller stopped, the new image run with the install
     parameters (= docker run -d --name <name> --restart unless-stopped
     --network host --env-file <env> -v /var/run/docker.sock:/var/run/docker.sock
-    -v <root>:<root> --log-opt max-size=20m --log-opt max-file=3 <image>)."""
+    -v <root>:<root> --log-opt max-size=20m --log-opt max-file=3 <image>).
+
+    A missing previous controller is a valid interrupted-upgrade state: the
+    interruption came after the rename to <prev> and before its removal, so
+    there is nothing left to stop; the new controller is run either way."""
     old = container(client, prev)
     if old is not None:
         old.stop()

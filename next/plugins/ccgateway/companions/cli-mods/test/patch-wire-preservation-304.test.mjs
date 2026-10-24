@@ -288,6 +288,8 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   }
   // Installed support modules import each other by their installed names.
   assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-content-policy\.js'/);
+  assert(patchManifest.supportFiles['ccgateway-raw-json.js']);
+  assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-raw-json\.js'/);
   assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);
   // The attribution fingerprint hashes the first user prompt of the external
   // messages, not their reminder blocks.
