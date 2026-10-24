@@ -51,12 +51,14 @@ type authSession struct {
 type authManager struct {
 	requestLogs          *requestLogStore
 	authorizationChanged func() error
-	mu                   sync.Mutex
-	session              *authSession
-	cli, key             string
-	env                  []string
-	proxy                *ProxyConfigStore
-	overrides            *EnvironmentOverrides // account locale/timezone (PUT /admin/environment)
+	// mu is the account authority: authorization changes and resource
+	// operations hold it alone; tracked requests share it (request_credit.go).
+	mu        sync.RWMutex
+	session   *authSession
+	cli, key  string
+	env       []string
+	proxy     *ProxyConfigStore
+	overrides *EnvironmentOverrides // account locale/timezone (PUT /admin/environment)
 	// version is the CLI version (usage request user agent); usageURL
 	// overrides the Anthropic usage endpoint in tests.
 	version, usageURL string

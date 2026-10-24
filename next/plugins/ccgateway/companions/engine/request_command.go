@@ -75,9 +75,10 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		refusal.write(w, d)
 		return
 	}
-	// A tracked request holds the resource authority until it finishes (the
-	// issuer the core bound it to cannot change under it) and answers with
-	// that issuer. Its identity step takes its own slot, before the request's.
+	// A tracked request shares the resource authority until the provider
+	// answers (the issuer the core bound it to cannot change before the CLI
+	// sent it) and answers with that issuer. Its identity step takes its own
+	// slot, before the request's.
 	credit, refusal := g.admitCredit(w, r)
 	if refusal != nil {
 		refusal.write(w, d)
@@ -471,15 +472,12 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 		}
 	}
 	switch {
-	case c.output.overflow:
-		// Nothing is committed yet: the tracked answer was still buffered.
-		c.fail(w, d, localRequestError(502, "api_error", "credit_receipt_too_large", "CC response exceeds the fallback credit receipt limit"))
 	case frame == nil && errors.Is(c.ctx.Err(), context.DeadlineExceeded):
 		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request timed out")
 		frame.Source = requestfailure.SourceTimeout
 		c.fail(w, d, frame)
 	case c.output.started:
-		if c.err == nil && frame == nil {
+		if c.err == nil && frame == nil && c.output.answer() == nil {
 			return
 		}
 		if frame == nil {
@@ -501,8 +499,8 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 	}
 }
 
-// answer commits the CLI's successful response: a tracked one with its credit
-// receipt, an untracked one that has already streamed.
+// answer completes the CLI's successful response: a tracked one with its credit
+// receipt, an untracked one by committing it if no byte did.
 func (o *requestCommandOutput) answer() error {
 	if o.credit != nil {
 		return o.finish()
@@ -522,15 +520,16 @@ func (c *cliRun) fail(w http.ResponseWriter, d *requestDiagnostic, frame *reques
 }
 
 type requestCommandOutput struct {
-	writer     http.ResponseWriter
-	meta       string
-	started    bool
-	status     int
-	diagnostic *requestDiagnostic
-	// A tracked response is buffered until its credit claim is known.
-	credit   *requestCredit
-	body     bytes.Buffer
-	overflow bool
+	writer      http.ResponseWriter
+	meta        string
+	started     bool
+	status      int
+	diagnostic  *requestDiagnostic
+	contentType string
+	// A tracked response keeps a copy for its credit claim (request_credit.go).
+	credit         *requestCredit
+	creditCopy     bytes.Buffer
+	creditOverflow bool
 }
 
 // response is the upstream answer the CLI recorded: its status and headers.
@@ -569,8 +568,13 @@ func (o *requestCommandOutput) start() error {
 }
 
 // commit answers with status and the provider's own headers. The issuer the
-// credit admission put on the answer stays on it.
+// credit admission put on the answer stays on it. The provider has answered, so
+// a tracked request hands its shared authority back.
 func (o *requestCommandOutput) commit(status int, h http.Header) {
+	if o.credit != nil {
+		o.credit.release()
+	}
+	o.contentType = h.Get("Content-Type")
 	httpfacts.Apply(o.writer.Header(), h)
 	if ct := h.Get("Content-Type"); ct != "" {
 		o.writer.Header().Set("Content-Type", ct)
@@ -584,11 +588,11 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 }
 
 func (o *requestCommandOutput) Write(p []byte) (int, error) {
-	if o.credit != nil {
-		return o.bufferCredit(p)
-	}
 	if err := o.start(); err != nil {
 		return 0, err
+	}
+	if o.credit != nil {
+		o.keepCredit(p)
 	}
 	n, err := o.writer.Write(p)
 	if err == nil {

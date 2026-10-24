@@ -83,11 +83,21 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// The managed authorization writer and resource operation share a lock;
 	// a controlled reauthorization cannot switch issuer between profile and IO.
-	if err := lockResourceAuthority(ctx, &b.authority.mu); err != nil {
+	// An identity probe only reads the issuer, so it shares the authority like
+	// a tracked request: the core's probe for a second tracked request does not
+	// wait for the first (2026-10-25 audit P2-2).
+	// A wait that ends without either is answered, never an empty 200.
+	lock, unlock := b.authority.mu.TryLock, b.authority.mu.Unlock
+	if identityOnly {
+		lock, unlock = b.authority.mu.TryRLock, b.authority.mu.RUnlock
+	}
+	if err := lockResourceAuthority(ctx, lock); err != nil {
+		apiError(w, 503, "api_error", "Resource authority unavailable")
 		return
 	}
-	defer b.authority.mu.Unlock()
+	defer unlock()
 	if err := waitResourceSlot(ctx, b.g.Slots); err != nil {
+		apiError(w, 503, "api_error", "Worker resource slot unavailable")
 		return
 	}
 	defer func() { <-b.g.Slots }()

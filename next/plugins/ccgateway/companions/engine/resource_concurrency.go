@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"sync"
 	"time"
 )
 
@@ -10,11 +9,12 @@ import (
 // request waiting for authority must never consume a slot needed by the model
 // request that already owns that authority. Polling TryLock also lets canceled
 // waiters release their upload spool without waiting for a long model turn.
-func lockResourceAuthority(ctx context.Context, mutex *sync.Mutex) error {
+// tryLock is the authority's TryLock, or its TryRLock for a shared hold.
+func lockResourceAuthority(ctx context.Context, tryLock func() bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if mutex.TryLock() {
+	if tryLock() {
 		return nil
 	}
 	resourceWaiting(ctx, "authority")
@@ -28,7 +28,7 @@ func lockResourceAuthority(ctx context.Context, mutex *sync.Mutex) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if mutex.TryLock() {
+			if tryLock() {
 				return nil
 			}
 		}

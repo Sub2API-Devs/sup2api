@@ -146,6 +146,7 @@ func TestCreditReceiptAnswersTrackedResponse(t *testing.T) {
 			require.Equal(t, identity.PrincipalID, response.Header().Get(resources.PrincipalHeader))
 			require.Equal(t, identity.Generation, response.Header().Get(resources.GenerationHeader))
 			require.Empty(t, response.Header().Get(credits.ReadyHeader), "no claim was issued")
+			require.Empty(t, response.Result().Trailer.Get(credits.ReadyHeader), "no claim was issued")
 			require.Equal(t, tc.answer, response.Body.String(), "the answer must pass through byte for byte")
 			require.FileExists(t, ready, "the CLI did not run")
 		})
@@ -153,7 +154,8 @@ func TestCreditReceiptAnswersTrackedResponse(t *testing.T) {
 }
 
 // A tracked answer whose message issues a credit confirms exactly that claim's
-// token hash, which is how the core records the credit.
+// token hash, which is how the core records the credit. The receipt is a
+// trailer: the answer streamed before the claim was known.
 func TestCreditReceiptConfirmsIssuedCredit(t *testing.T) {
 	hash, err := credits.TokenHash("fixture-credit")
 	require.NoError(t, err)
@@ -165,7 +167,8 @@ func TestCreditReceiptConfirmsIssuedCredit(t *testing.T) {
 			g, identity, _ := creditTestGateway(t, tc.contentType, tc.answer)
 			response := creditTestPost(t, g, creditTestRequest, creditHeaders(identity), nil)
 			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
-			require.Equal(t, []string{hash}, response.Header().Values(credits.ReadyHeader))
+			require.Empty(t, response.Header().Values(credits.ReadyHeader))
+			require.Equal(t, []string{hash}, response.Result().Trailer.Values(credits.ReadyHeader))
 			require.Equal(t, tc.answer, response.Body.String())
 		})
 	}
@@ -212,47 +215,89 @@ func TestCreditAdmissionRefusesUntrustedRequests(t *testing.T) {
 	}
 }
 
-// The verified issuer and its authority are held for the whole request: a
-// resource reauthorization cannot switch it while the CLI is running, and the
-// identity step does not keep a slot of its own.
-func TestCreditTrackingHoldsTheIssuerAuthority(t *testing.T) {
+// trackedRequest serves one tracked request whose CLI runs as the given test
+// peer, and returns once the CLI started. The client reads the first bytes the
+// answer streams (empty when none came before the end); cancel ends the
+// request and waits until the Worker finished it.
+func trackedRequest(t *testing.T, peer string) (*Gateway, <-chan string, func()) {
+	t.Helper()
 	g, identity, ready := creditTestGateway(t, "text/event-stream", creditSSEAnswer)
-	g.Runner.Env = envWith(g.Runner.Env, map[string]string{"CCG_TEST_REQUEST_PEER": "stream"}, "CCG_TEST_REQUEST_FIXTURE")
+	g.Runner.Env = envWith(g.Runner.Env, map[string]string{"CCG_TEST_REQUEST_PEER": peer}, "CCG_TEST_REQUEST_FIXTURE")
 	done := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer close(done)
 		g.ServeHTTP(w, r)
 	}))
-	defer server.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, "POST", server.URL+"/v1/messages", strings.NewReader(creditTestRequest))
 	require.NoError(t, err)
 	request.Header.Set("x-api-key", "fixture")
 	for name, value := range creditHeaders(identity) {
 		request.Header.Set(name, value)
 	}
-	answered := make(chan error, 1)
+	first := make(chan string, 1)
 	go func() {
 		response, err := server.Client().Do(request)
-		if err == nil {
-			response.Body.Close()
+		if err != nil {
+			first <- ""
+			return
 		}
-		answered <- err
+		defer response.Body.Close()
+		buffer := make([]byte, len(cancellationFirstEvent))
+		n, _ := io.ReadFull(response.Body, buffer)
+		first <- string(buffer[:n])
 	}()
 	require.Eventually(t, func() bool { _, err := os.Stat(ready); return err == nil }, 5*time.Second, 10*time.Millisecond, "the CLI did not start")
-	require.False(t, g.resources.authority.mu.TryLock(), "the resource authority is not held during the CLI run")
+	return g, first, func() { cancel(); <-done; server.Close() }
+}
+
+// Until the provider answers, a tracked request shares the verified issuer's
+// authority: a reauthorization or resource operation cannot switch the issuer
+// before the CLI sent the request, while other tracked requests are not held
+// up. The identity step does not keep a slot of its own (2026-10-25 audit P2-2).
+func TestCreditTrackingSharesTheIssuerAuthorityUntilTheAnswer(t *testing.T) {
+	g, _, end := trackedRequest(t, "wait")
+	authority := &g.resources.authority.mu
+	require.False(t, authority.TryLock(), "a reauthorization could switch the issuer before the provider answered")
+	require.True(t, authority.TryRLock(), "another tracked request waits on this one")
+	authority.RUnlock()
 	require.Len(t, g.Slots, 1, "the identity slot is not released before the request's own")
+	end()
+	require.True(t, authority.TryLock(), "the resource authority is not released after the request")
+	authority.Unlock()
+}
+
+// A tracked answer streams like any other (2026-10-25 audit P2-1), and once the
+// provider answered the authority is free for resource operations.
+func TestCreditTrackedAnswerStreams(t *testing.T) {
+	g, first, end := trackedRequest(t, "stream")
+	defer end()
 	select {
-	case err := <-answered:
-		t.Fatalf("a tracked answer was committed before its CLI finished: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	case got := <-first:
+		require.Equal(t, cancellationFirstEvent, got, "the tracked answer was buffered")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the tracked answer did not stream before the CLI exited")
 	}
-	cancel()
-	<-done
-	require.True(t, g.resources.authority.mu.TryLock(), "the resource authority is not released after the request")
-	g.resources.authority.mu.Unlock()
-	<-answered
+	authority := &g.resources.authority.mu
+	require.True(t, authority.TryLock(), "the authority is still held after the provider answered")
+	authority.Unlock()
+}
+
+// A resource operation that cannot get the authority in time is answered, not
+// left as an empty 200 (2026-10-25 audit P2-2).
+func TestResourceAnswersWhenAuthorityIsBusy(t *testing.T) {
+	g, _, _ := creditTestGateway(t, "application/json", creditJSONAnswer)
+	authority := &g.resources.authority.mu
+	authority.Lock()
+	defer authority.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	request := httptest.NewRequest("GET", resources.IdentityPath, nil).WithContext(ctx)
+	request.Header.Set("x-api-key", "fixture")
+	response := httptest.NewRecorder()
+	g.resources.ServeHTTP(response, request)
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), "Resource authority unavailable")
 }
 
 // Untracked answers keep streaming: their first bytes reach the client while
@@ -293,4 +338,22 @@ func TestUntrackedRequestStillStreams(t *testing.T) {
 		t.Fatal("the untracked answer did not stream before the CLI exited")
 	}
 	cancel()
+}
+
+// The core's identity probe for a tracked request only reads the issuer: it is
+// answered while another tracked request shares the authority, and waits only
+// for an exclusive holder (2026-10-25 audit P2-2).
+func TestResourceIdentityProbeSharesTheAuthority(t *testing.T) {
+	g, identity, _ := creditTestGateway(t, "application/json", creditJSONAnswer)
+	authority := &g.resources.authority.mu
+	require.True(t, authority.TryRLock())
+	defer authority.RUnlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	request := httptest.NewRequest("GET", resources.IdentityPath, nil).WithContext(ctx)
+	request.Header.Set("x-api-key", "fixture")
+	response := httptest.NewRecorder()
+	g.resources.ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.Equal(t, identity.Generation, response.Header().Get(resources.GenerationHeader))
 }

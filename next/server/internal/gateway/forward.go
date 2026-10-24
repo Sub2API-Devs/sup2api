@@ -62,6 +62,8 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	sse := isSSE(resp.Header.Get("Content-Type"))
 	c.checkResponseShape(ctx, rt, resp, sse)
 	switch {
+	case c.creditStreams(rt, sse):
+		err = c.forwardCreditSSE(ctx, rt, resp, u, cap)
 	case c.resourceAccess != nil && c.resourceAccess.outputs || c.creditAccess != nil:
 		err = c.forwardResourceResponse(ctx, rt, resp, u, cap)
 	case sse:
@@ -337,19 +339,7 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 		if event == "" && len(data) == 0 {
 			return nil
 		}
-		if c.rec.FirstTokenMs == 0 && len(data) > 0 {
-			c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
-		}
-		if c.g.d.Observations != nil && c.observationFirstStreamAt.IsZero() && len(data) > 0 {
-			c.observeRequest(observation.FirstStreamEvent, c.rec)
-		}
-		u.ApplySSE(event, data)
-		// Only the events the endpoint named are kept, and only while the
-		// caps allow: the stream itself is relayed and dropped, never
-		// accumulated (usageplugin.go).
-		if cap != nil && gjson.ValidBytes(data) {
-			cap.addEvent(usagerules.EventName(event, data), data)
-		}
+		c.observeStreamEvent(u, cap, event, data)
 		var err error
 		switch {
 		case sc != nil:
@@ -412,6 +402,24 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 			}
 			return rerr
 		}
+	}
+}
+
+// observeStreamEvent records one relayed event: the first-token time, the
+// first stream observation, usage, and the plugin's usage capture.
+func (c *call) observeStreamEvent(u *usageAcc, cap *usageCapture, event string, data []byte) {
+	if c.rec.FirstTokenMs == 0 && len(data) > 0 {
+		c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
+	}
+	if c.g.d.Observations != nil && c.observationFirstStreamAt.IsZero() && len(data) > 0 {
+		c.observeRequest(observation.FirstStreamEvent, c.rec)
+	}
+	u.ApplySSE(event, data)
+	// Only the events the endpoint named are kept, and only while the caps
+	// allow: the stream itself is relayed and dropped, never accumulated
+	// (usageplugin.go).
+	if cap != nil && gjson.ValidBytes(data) {
+		cap.addEvent(usagerules.EventName(event, data), data)
 	}
 }
 

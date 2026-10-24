@@ -12,8 +12,10 @@ package engine
 //   - credits.ReadyHeader with the claim's token hash when the provider issued
 //     a credit, a claim the core recomputes from the same bytes.
 //
-// A claim is known only once the message is complete, so a tracked response is
-// buffered and committed only after the CLI succeeded.
+// A claim is known only once the message is complete, so the receipt is a
+// trailer: the response streams as it arrives (2026-10-25 audit P2-1), a copy
+// is kept for the claim, and the receipt follows the last byte. The core holds
+// back what carries a token until it has confirmed the receipt.
 
 import (
 	"bytes"
@@ -29,24 +31,26 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
-// creditAdmissionTimeout bounds issuer verification; the authority itself stays
-// held for the whole request.
+// creditAdmissionTimeout bounds waiting for the authority and verifying the
+// issuer.
 const creditAdmissionTimeout = 30 * time.Second
 
-var errCreditResponseTooLarge = errors.New("fallback credit response exceeds the receipt limit")
-
-// requestCredit is one tracked request. The resource authority stays held while
-// it answers, so a reauthorization cannot switch the issuer the core bound this
-// request to, and the client's own body and betas are what its answer's claim
-// is computed from.
+// requestCredit is one tracked request. It shares the resource authority from
+// issuer verification until the provider answered (2026-10-25 audit P2-2): a
+// reauthorization cannot switch the issuer the core bound this request to
+// before the CLI sent it, while tracked requests do not wait on each other and
+// resource operations wait only for that answer, not the whole response. The
+// client's own body and betas are what its answer's claim is computed from.
 type requestCredit struct {
-	authority  *sync.Mutex
+	authority  *sync.RWMutex
+	released   sync.Once
 	clientBody []byte
 	betas      []string
 }
 
-// release hands the resource authority back when the request finishes.
-func (c *requestCredit) release() { c.authority.Unlock() }
+// release hands the shared authority back, once: when the provider's answer
+// begins, or when the request ends without one.
+func (c *requestCredit) release() { c.released.Do(c.authority.RUnlock) }
 
 // admitCredit is the header admission of a tracked request: the core's tracking
 // mark with its registered beta, then the issuer its answer must name. A
@@ -65,7 +69,7 @@ func (g *Gateway) admitCredit(w http.ResponseWriter, r *http.Request) (*requestC
 	defer cancel()
 	// The resource path's order (lock → slot): a request waiting for authority
 	// never consumes a slot a resource request needs.
-	if err := lockResourceAuthority(ctx, &g.resources.authority.mu); err != nil {
+	if err := lockResourceAuthority(ctx, g.resources.authority.mu.TryRLock); err != nil {
 		return nil, refuse(503, "api_error", "Fallback credit issuer verification unavailable")
 	}
 	credit := &requestCredit{authority: &g.resources.authority.mu}
@@ -162,33 +166,33 @@ func creditTokenValue(raw []byte) any {
 	return value
 }
 
-// bufferCredit holds a tracked response until its claim is known: the core
-// refuses a committed answer whose credit it cannot confirm.
-func (o *requestCommandOutput) bufferCredit(p []byte) (int, error) {
-	if o.body.Len()+len(p) > credits.MaxBodyBytes {
-		o.overflow = true
-		return 0, errCreditResponseTooLarge
+// keepCredit keeps the copy a tracked answer's claim is computed from. Past the
+// core's own limit no claim can be confirmed, so the copy stops and the answer
+// carries no receipt; the core reaches the same conclusion.
+func (o *requestCommandOutput) keepCredit(p []byte) {
+	if o.creditOverflow || o.creditCopy.Len()+len(p) > credits.MaxBodyBytes {
+		o.creditOverflow = true
+		o.creditCopy = bytes.Buffer{}
+		return
 	}
-	return o.body.Write(p)
+	o.creditCopy.Write(p)
 }
 
-// finish commits a successful tracked answer with its credit receipt; the
-// answer is only committed here, after the claim is known.
+// finish ends a successful tracked answer with its credit receipt, sent as a
+// trailer after the answer's last byte.
 func (o *requestCommandOutput) finish() error {
-	status, headers, err := o.response()
-	if err != nil {
+	if err := o.start(); err != nil {
 		return err
 	}
-	ready := o.credit.receipt(headers, o.body.Bytes())
+	ready := ""
+	if !o.creditOverflow {
+		ready = o.credit.receipt(o.contentType, o.creditCopy.Bytes())
+	}
 	if ready != "" {
-		o.writer.Header().Set(credits.ReadyHeader, ready)
+		o.writer.Header().Set(http.TrailerPrefix+credits.ReadyHeader, ready)
 	}
-	o.commit(status, headers)
 	if o.diagnostic != nil {
-		o.diagnostic.trace("fallback_credit_receipt", Object{"ready": ready != "", "stream": eventStream(headers.Get("Content-Type"))})
-	}
-	if _, err := o.writer.Write(o.body.Bytes()); err != nil {
-		panic(http.ErrAbortHandler)
+		o.diagnostic.trace("fallback_credit_receipt", Object{"ready": ready != "", "stream": eventStream(o.contentType), "over_limit": o.creditOverflow})
 	}
 	_ = http.NewResponseController(o.writer).Flush()
 	return nil
@@ -197,9 +201,9 @@ func (o *requestCommandOutput) finish() error {
 // receipt is the token hash the core confirms for this answer, empty when the
 // answer issues no credit or its stream is not a complete message (the core
 // reaches the same conclusion from the same bytes).
-func (c *requestCredit) receipt(headers http.Header, body []byte) string {
+func (c *requestCredit) receipt(contentType string, body []byte) string {
 	message := body
-	if eventStream(headers.Get("Content-Type")) {
+	if eventStream(contentType) {
 		var err error
 		if message, err = credits.MessageFromEvents(creditPayloads(body)); err != nil {
 			return ""

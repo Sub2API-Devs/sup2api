@@ -45,6 +45,7 @@
 - `anthropic-version` 只接受 `2023-06-01`；body 上限 32 MiB（413）；Worker 密钥不对 401。
 - 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（2026-10-24 工作树，审核 C3；HEAD 是读完 body、装好信封之后才占）。
 - direct 也解析 body：必须是 JSON 对象且 `model` 非空；有请求上下文能力时还解析 `metadata.user_id` 与 agent 请求头，解析失败 400（审核 C9）。
+- 核心跟踪 fallback credit 的请求（带 `fallback-credit-2026-06-01`/`-07-01` 或 `server-side-fallback-2026-07-01`，核心加 `X-CCGateway-Fallback-Credit-Track`）：Worker 先核验发放方（资源身份），把 `Principal`/`Generation` 写在答复头上；答复照常流式转发，Worker 留一份副本，结束后用 trailer `X-CCGateway-Fallback-Credit-Ready` 回报 claim 的 token 哈希（插件 0.1.91 起；0.1.88–0.1.90 是整段缓冲后写在头上）。核心照常转发事件，只扣住从第一个含 `fallback_credit_token` 的事件起的尾部，核对回执并记下 credit 后放出；核对或记录失败时以一个 `error` 事件结束流，客户端拿不到网关不认识的 token。JSON 答复仍由核心整段读完（核心 0.1.187 起两种位置的回执都认）。账号授权锁：重新授权与资源操作独占；被跟踪的请求从核验发放方到上游开始答复期间共享，核心为它做的资源身份探测也共享，彼此不排队（审核 2026-10-25 P2-1/P2-2）。资源操作等不到锁或槽位时答 503，不再是空的 200。
 - 客户端请求头没有一个原样转发，去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
 
 ### 1.6 错误与来源
@@ -63,6 +64,8 @@
 ### 1.7 发布顺序
 
 先发插件（Controller、Worker 镜像与随镜像打包的 CLI；账号容器经原地更新换上新 Worker 与 CLI，CONTRACTS §53.7），再发核心：Worker 接受旧核心的多余键，而新核心的能力预检会拒绝旧 Worker。
+
+例外：核心 0.1.187 / 插件 0.1.91（fallback credit 回执改为 trailer）要**先发核心**。旧核心只读头上的回执，新 Worker 的回执在 trailer 里，真的发放 credit 的那次答复会被旧核心判为未确认（502）；新核心两种位置都认，可以先和旧 Worker 配合。
 
 ## 2. 历史
 

@@ -35,6 +35,7 @@ type resourceResponseRegistry struct {
 func (c *call) forwardResourceResponse(ctx context.Context, rt *typeRoute, resp *http.Response, u *usageAcc, capture *usageCapture) error {
 	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxUsageJSONBuf+1))
 	closeErr := resp.Body.Close()
+	creditTrailerEvidence(resp)
 	sse := isSSE(resp.Header.Get("Content-Type"))
 	events, parseErr := resourceResponseEvents(raw, sse)
 	for _, ev := range events {
