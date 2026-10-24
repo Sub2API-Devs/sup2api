@@ -27,13 +27,13 @@ const (
 	requestIdentitySecretFile = "request-identity.key"
 )
 
-// configureRequestIdentity enables the mapping only for a request-mode runtime
-// whose CLI declares it: the native session factory is what carries the mapped
+// configureRequestIdentity enables the mapping only for a runtime whose CLI
+// declares it: the native session factory is what carries the mapped
 // session into the metadata and the transport headers. The account's mapping
 // secret lives in the persistent data directory, so restarts and in-place
 // updates keep every mapping.
 func (g *Gateway) configureRequestIdentity(root string) error {
-	g.requestIdentityEnabled = !g.MaintenanceOnly && g.RequestMode != "" && g.CLIInfo.supports(features.RequestIdentityCapability)
+	g.requestIdentityEnabled = !g.MaintenanceOnly && g.CLIInfo.supports(features.RequestIdentityCapability)
 	if !g.requestIdentityEnabled {
 		return nil
 	}
@@ -112,18 +112,20 @@ func requestIdentityKey(secret []byte, env []string) (key []byte, oauth bool) {
 	return mac.Sum(nil), true
 }
 
-// resolveRequestIdentity is the identity context of one request. Replace needs
-// a key: an API-key account keeps the client's value, and a login whose email
-// is unknown falls back to the Worker's own identity rather than forwarding the
-// client's.
-func (g *Gateway) resolveRequestIdentity(env []string, raw []byte, mode string) (requestIdentity, error) {
+// resolveRequestIdentity is the identity build gives one request: the
+// client's value mapped with the account key (replace, the one source since
+// 2026-10-21). Replace needs a key: an API-key account keeps the client's
+// value, and a login whose email is unknown falls back to the Worker's own
+// identity rather than forwarding the client's.
+func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity) (requestIdentity, error) {
 	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
-	if mode == "replace" && !oauth {
+	mode := features.RequestIdentityDefault
+	if !oauth {
 		mode = "client"
-	} else if mode == "replace" && key == nil {
+	} else if key == nil {
 		mode = "worker"
 	}
-	return mapRequestIdentity(key, raw, mode)
+	return mapRequestIdentity(key, client, mode)
 }
 
 // legacyUserID is the flat form older clients put in metadata.user_id:
@@ -273,16 +275,30 @@ func clientIdentityFields(raw []byte) (map[string]string, string, error) {
 	}
 }
 
+// clientIdentity is the client's metadata.user_id split into its fields
+// (clientIdentityFields): read once per request, for the identity and the
+// agent context alike. err says the Worker could not read it.
+type clientIdentity struct {
+	fields  map[string]string
+	carrier string
+	err     error
+}
+
+func readClientIdentity(raw []byte) clientIdentity {
+	fields, carrier, err := clientIdentityFields(raw)
+	return clientIdentity{fields: fields, carrier: carrier, err: err}
+}
+
 // mapRequestIdentity resolves what the upstream request must carry. The client
 // value is only ever replaced when it exists: a request without an identity is
 // forwarded without metadata instead of being given one.
-func mapRequestIdentity(key, raw []byte, mode string) (requestIdentity, error) {
+func mapRequestIdentity(key []byte, client clientIdentity, mode string) (requestIdentity, error) {
 	result := requestIdentity{Version: 2, Mode: mode}
-	fields, carrier, err := clientIdentityFields(raw)
-	if err != nil || fields == nil {
-		return result, err
+	fields := client.fields
+	if client.err != nil || fields == nil {
+		return result, client.err
 	}
-	result.Carrier = carrier
+	result.Carrier = client.carrier
 	user, session, parent := fields["device_id"], fields["session_id"], fields["parent_session_id"]
 	if user == "" {
 		user = fields["account_uuid"]

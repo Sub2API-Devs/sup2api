@@ -16,7 +16,7 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 
 - `engine/`：Worker 的 HTTP 引擎（Go 包 `ccgateway/engine`）。`request_command.go` 是 `/v1/messages`；`request_identity.go`、`request_agent.go` 是身份与 agent 上下文；`request_log*.go` 是请求日志；`resource_*.go` 是资源身份（核心的 OAuth 资源路由）；`auth.go`、`usage.go` 是登录与用量；`cli_*.go` 是固定 CLI 的校验与 `/admin/cli`。
 - `worker/`：账号 Worker 程序（Go 模块 `ccgateway/worker`）：配置、生命周期、`/health`、`/admin/features`；只使用 `engine.NewRuntime`。
-- `contracts/`：跨组件合同（Go 模块）：WorkerPolicy、能力名、错误来源、契约夹具 `testdata/`。
+- `contracts/`：跨组件合同（Go 模块）：WorkerPolicy、能力名、CC 上下文头表（插件转发与 Worker 读取共用）、错误来源、契约夹具 `testdata/`。
 - `cli-mods/`：定制 CLI 的补丁与打包（`request` 命令及其支持模块）；`release/` 不进 Git，构建 Worker 前准备。
 - `controller/`：Python 容器控制器（账号容器、网络、出口、隧道、升级）。
 - `egress/`、`xray-egress/`：出口代理镜像。

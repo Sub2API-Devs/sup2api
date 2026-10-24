@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -106,15 +107,34 @@ func TestContentDiagnosticIsBoundedAndDoesNotBecomeError(t *testing.T) {
 func TestRequestCapabilitiesRequireCompatibleObservedCLI(t *testing.T) {
 	g := &Gateway{RequestMode: "build"}
 	require.Empty(t, g.requestCapabilities(), "configured mode must not manufacture CLI evidence")
-	g.CLIInfo.Capabilities = []string{"request_build"}
-	require.Equal(t, []string{features.BuildAttachmentCapability}, g.requestCapabilities())
-	g.CLIInfo.Capabilities = []string{"request_build", features.BuildContentPreservationCapability}
-	require.NotContains(t, g.requestCapabilities(), features.BuildAttachmentCapability,
-		"v2 preserving path cannot promise an unimplemented environment adapter")
+	// v1 is only v2's alias (W2): a CLI the build gate refuses (no
+	// preservation) or one without the content adapter is not offered to an
+	// older core's v1 preflight.
+	for _, capabilities := range [][]string{{"request_build"}, {"request_build", features.BuildContentPreservationCapability}} {
+		g.CLIInfo.Capabilities = capabilities
+		require.NotContains(t, g.requestCapabilities(), features.BuildAttachmentCapability, capabilities)
+	}
 	g.CLIInfo.Capabilities = append(g.CLIInfo.Capabilities, "request_direct", features.BuildAttachmentCapabilityV2, features.BuildBillingCapability)
 	require.Contains(t, g.requestCapabilities(), features.RequestPolicyModeCapability)
 	require.Contains(t, g.requestCapabilities(), features.BuildAttachmentCapabilityV2)
+	require.Contains(t, g.requestCapabilities(), features.BuildAttachmentCapability, "an older core preflights the platform sources as v1")
 	require.Contains(t, g.requestCapabilities(), features.BuildBillingCapability)
+}
+
+// What the Worker offers an older core's v1 preflight (a platform or OS
+// source from the Worker) it also serves: the build gate takes the request.
+func TestAttachmentV1PreflightMatchesTheBuildGate(t *testing.T) {
+	policy := features.WorkerPolicy{RelayMode: "build", BuildAttachmentSources: features.BuildAttachmentSources{"platform_name": "worker"}}
+	require.False(t, policy.BuildAttachmentSources.RequiresV2())
+	for _, capabilities := range [][]string{
+		{"request_build", features.BuildContentPreservationCapability, features.RequestLevelsCapability},
+		{"request_build", features.BuildContentPreservationCapability, features.RequestLevelsCapability, features.BuildAttachmentCapabilityV2},
+	} {
+		g := &Gateway{RequestMode: "build", CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities}}
+		offered := slices.Contains(g.requestCapabilities(), features.BuildAttachmentCapability)
+		plan := &requestPlan{mode: "build", fromCore: true, cli: policy.CLI()}
+		require.Equal(t, offered, g.checkCapabilities(plan) == nil, capabilities)
+	}
 }
 
 // The entrypoint reaches the CLI envelope only on a CLI that declares the

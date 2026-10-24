@@ -11,6 +11,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // Full payloads stay only in removable files; metadata describes protocol structure.
@@ -79,8 +81,9 @@ func (d *requestDiagnostic) requestLimit() int64 {
 // own d.mu, so one slow write never holds every other request. Whoever needs
 // both takes store.mu first (turning logs off, clearing content, listing the
 // active requests); nothing holding d.mu takes store.mu. Turning logs off
-// clears each active request's directory under its d.mu, so no write lands
-// after the logs are removed.
+// ends each active request's log under its d.mu, so no write lands after; the
+// logs themselves are removed once store.mu is released (store.applyLevel),
+// as is cleared content (store.clearFull).
 func (d *requestDiagnostic) lock() func() {
 	d.mu.Lock()
 	return d.mu.Unlock
@@ -224,16 +227,23 @@ func newRequestLogStore(root string) (*requestLogStore, error) {
 			return nil, err
 		}
 	}
+	// Logs moved aside to be removed (store.discard) and left by a stopped
+	// Worker are removed now.
+	aside, _ := filepath.Glob(s.root + discardedSuffix + "*")
+	for _, path := range aside {
+		if err := os.RemoveAll(path); err != nil {
+			return nil, err
+		}
+	}
 	s.startIndex()
 	return s, nil
 }
 
-// persist writes the level (caller holds s.mu). A store without a state
-// directory keeps its level in memory.
+// discardedSuffix names the logs turned off, moved aside to be removed.
+const discardedSuffix = ".deleted-"
+
+// persist writes the level (caller holds s.mu).
 func (s *requestLogStore) persist() error {
-	if s.state == "" {
-		return nil
-	}
 	state := requestLogState{Level: s.level}
 	if s.level == logLevelFull {
 		until := s.fullUntil.UTC()
@@ -259,11 +269,7 @@ func (s *requestLogStore) persist() error {
 
 // captureContent says whether a request starting now keeps content (caller
 // holds s.mu). The full level ends at its time and the summary applies again.
-// A store built without a level (tests, embedded gateways) keeps everything.
 func (s *requestLogStore) captureContent() bool {
-	if s.level == "" {
-		return true
-	}
 	if s.level == logLevelFull && !s.clock().Before(s.fullUntil) {
 		s.level, s.fullUntil = logLevelSummary, time.Time{}
 		if err := s.persist(); err != nil {
@@ -379,69 +385,67 @@ func requestLogUsage(root string) Object {
 	return Object{"summary_bytes": summary, "full_bytes": content, "requests": requests}
 }
 
-// clearContent removes every request's content files, keeping the summaries.
-func clearContent(root string) error {
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	for _, entry := range entries {
+// clearContent removes the content files of the requests listed in root,
+// keeping their summaries.
+func clearContent(root string, requests []os.DirEntry) error {
+	for _, entry := range requests {
 		if !entry.IsDir() || !uuidPattern.MatchString(entry.Name()) {
 			continue
 		}
 		files, _ := os.ReadDir(filepath.Join(root, entry.Name()))
 		for _, f := range files {
-			if !f.IsDir() && !summaryFiles[f.Name()] {
-				if err := os.Remove(filepath.Join(root, entry.Name(), f.Name())); err != nil && !os.IsNotExist(err) {
-					return err
-				}
+			if f.IsDir() || summaryFiles[f.Name()] {
+				continue
+			}
+			if err := removeLogPath(filepath.Join(root, entry.Name(), f.Name())); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-// capture starts the request's log; the gateway calls it once the caller is
-// authenticated (audit C7), so an unauthenticated request leaves nothing.
-func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root string) http.ResponseWriter {
-	prune := d.store == nil
-	if s := d.store; s != nil {
-		s.mu.Lock()
-		if !s.enabled {
-			s.mu.Unlock()
-			return w
-		}
-		// The level is the store's when the request starts; clearing content
-		// later changes it for the active requests (store.serve).
-		d.mu.Lock()
-		d.summaryOnly = !s.captureContent()
-		d.mu.Unlock()
-		s.active[d] = true
-		root = s.root
-		// A week of summaries is many directories: a request prunes at most
-		// once a minute (the maintenance loop prunes every minute too).
-		now := s.clock()
-		if prune = now.Sub(s.pruned) >= time.Minute; prune {
-			s.pruned = now
-		}
-		s.mu.Unlock()
-	}
-	if root == "" {
+// removeLogPath removes a log file or directory and what it holds; nothing
+// there is no error.
+var removeLogPath = os.RemoveAll
+
+// capture starts the request's log in its store; the gateway calls it once
+// the caller is authenticated (audit C7), so an unauthenticated request
+// leaves nothing. A request without a store (a Gateway built on its own) is
+// not logged.
+func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request) http.ResponseWriter {
+	s := d.store
+	if s == nil {
 		return w
 	}
-	if d.store == nil {
-		pruneRequestLogs(root)
-	} else if prune {
-		d.store.pruneFiles()
+	s.mu.Lock()
+	if !s.enabled {
+		s.mu.Unlock()
+		return w
+	}
+	// The level is the store's when the request starts; clearing content
+	// later changes it for the active requests (store.clearFull).
+	d.mu.Lock()
+	d.summaryOnly = !s.captureContent()
+	d.mu.Unlock()
+	s.active[d] = true
+	// A week of summaries is many directories: a request prunes at most
+	// once a minute (the maintenance loop prunes every minute too).
+	now := s.clock()
+	prune := now.Sub(s.pruned) >= time.Minute
+	if prune {
+		s.pruned = now
+	}
+	s.mu.Unlock()
+	if prune {
+		s.pruneFiles()
 	}
 	unlock := d.lock()
 	defer unlock()
 	if d.discarded {
 		return w // logs were turned off meanwhile
 	}
-	if err := os.MkdirAll(root, 0700); err != nil {
+	if err := os.MkdirAll(s.root, 0700); err != nil {
 		d.logFailure(err)
 		return w
 	}
@@ -450,7 +454,7 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root
 		d.fields["log_level"] = logLevelSummary
 	}
 	// A separate random filename prevents callers from selecting or overwriting files.
-	directory := filepath.Join(root, uuid())
+	directory := filepath.Join(s.root, uuid())
 	if err := os.Mkdir(directory, 0700); err != nil {
 		d.logFailure(err)
 		return w
@@ -484,7 +488,7 @@ func logValue(s string) string {
 
 func newRequestDiagnostic(w http.ResponseWriter, r *http.Request) *requestDiagnostic {
 	id := r.Header.Get("X-Request-ID")
-	if !sessionName.MatchString(id) {
+	if !features.RequestIDPattern.MatchString(id) {
 		id = uuid()
 	}
 	w.Header().Set("request-id", id)
@@ -641,11 +645,10 @@ type requestLogStore struct {
 	mu      sync.Mutex
 	root    string
 	enabled bool
-	// level is off, summary or full; "" (tests, embedded gateways) keeps
-	// everything and never expires. fullUntil ends the full level.
+	// level is off, summary or full; fullUntil ends the full level.
 	level     string
 	fullUntil time.Time
-	// state is the directory the level is saved in; "" keeps it in memory.
+	// state is the directory the level is saved in.
 	state  string
 	pruned time.Time
 	now    func() time.Time
@@ -680,61 +683,118 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 
 // change applies a PUT and describes the logs; false means it answered.
 func (s *requestLogStore) change(w http.ResponseWriter, r *http.Request) (Object, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if r.Method == "PUT" {
-		var input map[string]json.RawMessage
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil {
-			apiError(w, 400, "invalid_request_error", "Invalid request log setting")
+	switch r.Method {
+	case "GET":
+	case "PUT":
+		if !s.put(w, r) {
 			return nil, false
 		}
-		level, hours, clear, ok := requestLogChange(input)
-		if !ok {
-			apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":bool}`)
-			return nil, false
-		}
-		if clear {
-			for d := range s.active {
-				d.mu.Lock()
-				d.stopContent()
-				d.mu.Unlock()
-			}
-			if err := clearContent(s.root); err != nil {
-				apiError(w, 500, "api_error", "Cannot clear request log content")
-				return nil, false
-			}
-		} else {
-			previous, previousUntil := s.level, s.fullUntil
-			s.level, s.fullUntil = level, time.Time{}
-			if level == logLevelFull {
-				s.fullUntil = s.clock().Add(time.Duration(hours) * time.Hour)
-			}
-			if err := s.persist(); err != nil {
-				s.level, s.fullUntil = previous, previousUntil
-				apiError(w, 500, "api_error", "Cannot persist request log setting")
-				return nil, false
-			}
-			s.enabled = level != logLevelOff
-			if !s.enabled {
-				for d := range s.active {
-					d.mu.Lock()
-					d.stopContent()
-					d.directory = ""
-					d.discarded = true
-					d.mu.Unlock()
-				}
-				s.index = map[string]logEntry{}
-				if err := os.RemoveAll(s.root); err != nil {
-					apiError(w, 500, "api_error", "Cannot clear request logs")
-					return nil, false
-				}
-			}
-		}
-	} else if r.Method != "GET" {
+	default:
 		apiError(w, 405, "invalid_request_error", "Use GET or PUT")
 		return nil, false
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.describe(), true
+}
+
+// put applies one PUT: a level, or clearing the content.
+func (s *requestLogStore) put(w http.ResponseWriter, r *http.Request) bool {
+	var input map[string]json.RawMessage
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil {
+		apiError(w, 400, "invalid_request_error", "Invalid request log setting")
+		return false
+	}
+	level, hours, clear, ok := requestLogChange(input)
+	if !ok {
+		apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":bool}`)
+		return false
+	}
+	if clear {
+		return s.clearFull(w)
+	}
+	return s.applyLevel(w, level, hours)
+}
+
+// clearFull removes the content of every request logged so far; the
+// summaries stay. Under s.mu the running requests stop capturing content and
+// the logged requests are listed; their files are removed after s.mu is
+// released, so no request waits for the disk (audit C7).
+func (s *requestLogStore) clearFull(w http.ResponseWriter) bool {
+	s.mu.Lock()
+	for d := range s.active {
+		d.mu.Lock()
+		d.stopContent()
+		d.mu.Unlock()
+	}
+	requests, err := os.ReadDir(s.root)
+	s.mu.Unlock()
+	switch {
+	case os.IsNotExist(err):
+		err = nil
+	case err == nil:
+		err = clearContent(s.root, requests)
+	}
+	if err != nil {
+		apiError(w, 500, "api_error", "Cannot clear request log content")
+		return false
+	}
+	return true
+}
+
+// applyLevel sets and saves the level. Off ends the running requests' logs
+// and moves the logs aside under s.mu; they are removed after it is released.
+func (s *requestLogStore) applyLevel(w http.ResponseWriter, level string, hours int) bool {
+	s.mu.Lock()
+	previous, previousUntil := s.level, s.fullUntil
+	s.level, s.fullUntil = level, time.Time{}
+	if level == logLevelFull {
+		s.fullUntil = s.clock().Add(time.Duration(hours) * time.Hour)
+	}
+	if err := s.persist(); err != nil {
+		s.level, s.fullUntil = previous, previousUntil
+		s.mu.Unlock()
+		apiError(w, 500, "api_error", "Cannot persist request log setting")
+		return false
+	}
+	s.enabled = level != logLevelOff
+	var aside string
+	var err error
+	if !s.enabled {
+		aside, err = s.discard()
+	}
+	s.mu.Unlock()
+	if err == nil && aside != "" {
+		err = removeLogPath(aside)
+	}
+	if err != nil {
+		apiError(w, 500, "api_error", "Cannot clear request logs")
+		return false
+	}
+	return true
+}
+
+// discard ends every running request's log, empties the index and moves the
+// logs aside (caller holds s.mu). It returns the directory to remove, "" when
+// there were no logs; one left by a stopped Worker is removed at its next
+// start (newRequestLogStore).
+func (s *requestLogStore) discard() (string, error) {
+	for d := range s.active {
+		d.mu.Lock()
+		d.stopContent()
+		d.directory = ""
+		d.discarded = true
+		d.mu.Unlock()
+	}
+	s.index = map[string]logEntry{}
+	aside := s.root + discardedSuffix + uuid()
+	if err := os.Rename(s.root, aside); err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return aside, nil
 }
 
 // requestLogChange reads one PUT: a level (full with its hours), clearing the
@@ -791,9 +851,6 @@ func (d *requestDiagnostic) stopContent() {
 // adds the usage. The top-level limits are the full level's, as an older core reads them.
 func (s *requestLogStore) describe() Object {
 	level := s.level
-	if level == "" {
-		level = logLevelFull
-	}
 	if !s.enabled {
 		level = logLevelOff
 	}

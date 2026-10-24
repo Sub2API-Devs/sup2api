@@ -89,9 +89,9 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	// The gateway's own refusals (the core before any Worker, or the Worker
 	// before the CLI) carry their source and reason (contracts/requestfailure,
 	// audit C2/A6): they are never the upstream's verdict on the account.
-	source := requestfailure.SourceOf(headerValues(in.GetHeaders(), sourceHeader))
+	source := requestfailure.SourceOfValue(in.GetHeaders()[sourceHeader])
 	local := requestfailure.Local(source)
-	localReason := requestfailure.ReasonOf(in.GetHeaders()["x-ccgateway-error-reason"])
+	localReason := requestfailure.ReasonOf(in.GetHeaders()[reasonHeader])
 
 	switch {
 	case code == 0:
@@ -176,11 +176,11 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 	}
 }
 
-func scopedQuota(key string) bool { return key == "7d_fable" || key == "7d_sonnet" }
-
-// sourceHeader is requestfailure.SourceHeader as the host passes headers
-// (lowercase).
-const sourceHeader = "x-ccgateway-error-source"
+// The failure markers as the host passes headers (lowercase).
+var (
+	sourceHeader = strings.ToLower(requestfailure.SourceHeader)
+	reasonHeader = strings.ToLower(requestfailure.ReasonHeader)
+)
 
 // claimHeader is the limit a rejected request hit, as Claude Code reads it
 // (rateLimitType); claimResetHeader is when the unified limit resets.
@@ -215,24 +215,16 @@ func rejectedQuota(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.Q
 func quotaClaimKey(claim string) string {
 	switch claim {
 	case "five_hour":
-		return "5h"
+		return quota5h
 	case "seven_day":
-		return "7d"
+		return quota7d
 	case "seven_day_sonnet":
-		return "7d_sonnet"
+		return quota7dSonnet
 	case "seven_day_overage_included":
-		return "7d_fable"
+		return quota7dFable
 	default:
 		return ""
 	}
-}
-
-// headerValues is the single-valued header map as header values.
-func headerValues(h map[string]string, name string) []string {
-	if v, ok := h[name]; ok && v != "" {
-		return []string{v}
-	}
-	return nil
 }
 
 func truncate(s string, n int) string {

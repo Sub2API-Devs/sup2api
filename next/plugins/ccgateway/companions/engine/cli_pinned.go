@@ -53,14 +53,15 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.MaintenanceOnly || !g.CLIInfo.supports("request_build") {
 		return out
 	}
-	for _, capability := range []string{features.BuildAttachmentCapability, features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestLevelsCapability, features.BuildContentPreservationCapability} {
+	for _, capability := range []string{features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestLevelsCapability, features.BuildContentPreservationCapability} {
 		if g.CLIInfo.supports(capability) {
 			out = append(out, capability)
 		}
 	}
-	// v1 transformation is implemented by this Worker, with the CLI's
-	// verified build input contract. It does not imply v2 support.
-	if !slices.Contains(out, features.BuildAttachmentCapability) && (!g.CLIInfo.supports(features.BuildContentPreservationCapability) || g.CLIInfo.supports(features.BuildAttachmentCapabilityV2)) {
+	// v1 is the name an older core preflights the platform and OS sources
+	// with; the CLI's content adapter (v2) is what applies them, and the
+	// Worker's build gate asks for v2. So v1 is v2's alias, never more.
+	if g.CLIInfo.supports(features.BuildAttachmentCapabilityV2) {
 		out = append(out, features.BuildAttachmentCapability)
 	}
 	if g.CLIInfo.supports("request_direct") {
@@ -81,36 +82,33 @@ func (g *Gateway) requestCapabilities() []string {
 	return out
 }
 
-// Validate the actual file before authentication or requests. A version string
+// verifyPinnedCLI validates the actual file before authentication or
+// requests, and reads its request info once (audit C12). A version string
 // alone cannot distinguish the official binary from the required patched CLI.
-// It returns the request info it read (verified false when nothing is
-// pinned), so the CLI is asked once (audit C12). A checksum the caller
-// already verified on a root-owned file (Options.CLIChecksumVerified) is not
-// computed again.
-func verifyPinnedCLI(cli, version string, o Options) (info cliRequestInfo, verified bool, err error) {
-	if o.ExpectedCLIVersion == "" && o.ExpectedCLISHA256 == "" && o.ExpectedCLIPatch == "" {
-		return info, false, nil
+// A checksum the caller already verified on a root-owned file
+// (Options.CLIChecksumVerified) is not computed again. An unpinned CLI (a
+// development build) is only asked for its info.
+func verifyPinnedCLI(cli, version string, o Options) (cliRequestInfo, error) {
+	if !o.pinned() {
+		return readCLIRequestInfo(cli, version, o)
 	}
-	if version != o.ExpectedCLIVersion || !cliReleaseVersion.MatchString(version) {
-		return info, false, fmt.Errorf("configured CLI version %q differs from executable %q", o.ExpectedCLIVersion, version)
+	if version != o.ExpectedCLIVersion || !features.ValidCLIVersion(version) {
+		return cliRequestInfo{}, fmt.Errorf("configured CLI version %q differs from executable %q", o.ExpectedCLIVersion, version)
 	}
 	digest, err := hex.DecodeString(o.ExpectedCLISHA256)
 	if err != nil || len(digest) != sha256.Size || o.ExpectedCLIPatch == "" {
-		return info, false, fmt.Errorf("pinned CLI requires SHA256 and patch identity")
+		return cliRequestInfo{}, fmt.Errorf("pinned CLI requires SHA256 and patch identity")
 	}
 	if !o.CLIChecksumVerified {
 		if err = verifyCLIChecksum(cli, o.ExpectedCLISHA256); err != nil {
-			return info, false, err
+			return cliRequestInfo{}, err
 		}
 	}
-	info, err = readCLIRequestInfo(cli, version, o)
+	info, err := readCLIRequestInfo(cli, version, o)
 	if err != nil || info.Patch != o.ExpectedCLIPatch {
-		return info, false, fmt.Errorf("pinned CLI patch identity mismatch")
+		return cliRequestInfo{}, fmt.Errorf("pinned CLI patch identity mismatch")
 	}
-	if o.RequestMode != "" && !info.supports("request_"+o.RequestMode) {
-		return info, false, fmt.Errorf("pinned CLI does not support requested mode")
-	}
-	return info, true, nil
+	return info, nil
 }
 
 func verifyCLIChecksum(cli, expected string) error {

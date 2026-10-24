@@ -15,6 +15,10 @@ const MaxPolicyHeaderBytes = 16384
 
 var cliVersionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
 
+// ValidCLIVersion says whether v is a Claude Code release version
+// (major.minor.patch), the only form a policy, a Worker or its runtime pins.
+func ValidCLIVersion(v string) bool { return cliVersionPattern.MatchString(v) }
+
 // WorkerPolicy is the request policy on the wire (PolicyHeader): exactly what
 // the Worker reads, nothing the core only stores (2026-10-23 audit A1/C4).
 // The core builds it from the resolved policy (its workerPolicy), the Worker
@@ -51,7 +55,7 @@ func (p WorkerPolicy) Validate() error {
 	if p.RelayMode != "" && p.RelayMode != "build" && p.RelayMode != "direct" {
 		return errors.New("invalid relay_mode: must be build or direct")
 	}
-	if p.CLIVersion != "" && !cliVersionPattern.MatchString(p.CLIVersion) {
+	if p.CLIVersion != "" && !ValidCLIVersion(p.CLIVersion) {
 		return errors.New("invalid cli_version")
 	}
 	if err := p.BuildBillingSources.Validate(); err != nil {

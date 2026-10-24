@@ -16,7 +16,12 @@ import (
 
 // mapReplace is the default source: the client's value, mapped one way.
 func mapReplace(key, raw []byte) (requestIdentity, error) {
-	return mapRequestIdentity(key, raw, "replace")
+	return mapRequestIdentity(key, readClientIdentity(raw), "replace")
+}
+
+// mapWith maps the client's value of raw with one source.
+func mapWith(key, raw []byte, mode string) (requestIdentity, error) {
+	return mapRequestIdentity(key, readClientIdentity(raw), mode)
 }
 
 // accountEnv is one account's Claude configuration: the email the mapping is
@@ -88,18 +93,15 @@ func TestResolveRequestIdentityFallbacks(t *testing.T) {
 	raw := []byte(`{"metadata":{"user_id":"{\"device_id\":\"client-device\",\"session_id\":\"3f2a1b0c-4d5e-4f70-8192-a3b4c5d6e7f8\"}"}}`)
 	for name, tc := range map[string]struct {
 		env      []string
-		mode     string
 		want     string
 		rewrite  bool
 		mapsUser bool
 	}{
-		"oauth replace":    {accountEnv(t, "ops@example.invalid", true), "replace", "replace", true, true},
-		"api key replace":  {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "replace", "client", false, false},
-		"no email replace": {accountEnv(t, "", true), "replace", "worker", true, false},
-		"api key worker":   {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "worker", "worker", true, false},
-		"oauth client":     {accountEnv(t, "ops@example.invalid", true), "client", "client", false, false},
+		"oauth replace":    {accountEnv(t, "ops@example.invalid", true), "replace", true, true},
+		"api key replace":  {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "client", false, false},
+		"no email replace": {accountEnv(t, "", true), "worker", true, false},
 	} {
-		value, err := g.resolveRequestIdentity(tc.env, raw, tc.mode)
+		value, err := g.resolveRequestIdentity(tc.env, readClientIdentity(raw))
 		require.NoError(t, err, name)
 		require.Equal(t, tc.want, value.Mode, name)
 		require.Equal(t, tc.rewrite, value.Rewrite, name)
@@ -285,7 +287,7 @@ func TestAccountRequestIdentitySkipsAbsentFields(t *testing.T) {
 func TestAccountRequestIdentitySources(t *testing.T) {
 	key := bytes.Repeat([]byte{0x42}, 32)
 	raw := []byte(`{"metadata":{"user_id":"{\"device_id\":\"client-device\",\"session_id\":\"3f2a1b0c-4d5e-4f70-8192-a3b4c5d6e7f8\"}"}}`)
-	client, err := mapRequestIdentity(key, raw, "client")
+	client, err := mapWith(key, raw, "client")
 	require.NoError(t, err)
 	require.False(t, client.Rewrite, "the client value is forwarded, not replaced")
 	require.Empty(t, client.Device)
@@ -294,7 +296,7 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 	// The CLI adopts only a lowercase version 4 session (cli-mods
 	// request-identity.js): any other UUID is not handed over (audit C6).
 	for _, session := range []string{"3F2A1B0C-4D5E-4F70-8192-A3B4C5D6E7F8", "3f2a1b0c-4d5e-1f70-8192-a3b4c5d6e7f8", "3f2a1b0c-4d5e-4f70-c192-a3b4c5d6e7f8", "not-a-session"} {
-		other, err := mapRequestIdentity(key, []byte(`{"metadata":{"user_id":{"device_id":"client-device","session_id":"`+session+`"}}}`), "client")
+		other, err := mapWith(key, []byte(`{"metadata":{"user_id":{"device_id":"client-device","session_id":"`+session+`"}}}`), "client")
 		require.NoError(t, err)
 		require.Empty(t, other.Session, session)
 		require.False(t, other.Rewrite)
@@ -304,28 +306,25 @@ func TestAccountRequestIdentitySources(t *testing.T) {
 		require.True(t, cliSessionPattern.MatchString(mapped), mapped)
 	}
 
-	worker, err := mapRequestIdentity(key, raw, "worker")
+	worker, err := mapWith(key, raw, "worker")
 	require.NoError(t, err)
 	require.True(t, worker.Rewrite)
 	require.Empty(t, worker.Device, "the Worker's own device is used, not a mapped one")
 	require.Empty(t, worker.Session)
 
-	replace, err := mapRequestIdentity(key, raw, "replace")
+	replace, err := mapWith(key, raw, "replace")
 	require.NoError(t, err)
 	require.True(t, replace.Rewrite)
 	require.NotEmpty(t, replace.Device)
 	require.NotEqual(t, client.Session, replace.Session)
 	// A request without an identity is never given one, whatever the source.
 	for _, mode := range []string{"client", "worker", "replace"} {
-		absent, err := mapRequestIdentity(key, []byte(`{"model":"fixture"}`), mode)
+		absent, err := mapWith(key, []byte(`{"model":"fixture"}`), mode)
 		require.NoError(t, err)
 		require.False(t, absent.Rewrite, mode)
 		require.Empty(t, absent.Session, mode)
 	}
-	// Sources are a closed vocabulary; the empty set is the default replace.
-	require.Equal(t, "replace", features.RequestIdentitySources{}.Mode())
-	require.Equal(t, "client", features.RequestIdentitySources{"user_id": "client"}.Mode())
-	require.Equal(t, "worker", features.RequestIdentitySources{"user_id": "worker"}.Mode())
+	// Sources are a closed vocabulary (the core still validates stored ones).
 	require.NoError(t, features.RequestIdentitySources{"user_id": "replace"}.Validate())
 	for _, invalid := range []features.RequestIdentitySources{{"user_id": "erase"}, {"user_id": ""}, {"session_id": "client"}} {
 		require.Error(t, invalid.Validate())
@@ -347,9 +346,5 @@ func TestRequestIdentityCapabilityIsNotInferred(t *testing.T) {
 	require.NoError(t, g.configureRequestIdentity(root))
 	require.False(t, g.requestIdentityEnabled)
 	require.NotContains(t, g.requestCapabilities(), features.RequestIdentityCapability)
-	// The legacy native agent loop keeps its own session handling.
-	g.MaintenanceOnly, g.RequestMode = false, ""
-	require.NoError(t, g.configureRequestIdentity(root))
-	require.False(t, g.requestIdentityEnabled)
 	require.True(t, regexp.MustCompile(`^[a-f0-9-]{36}$`).MatchString(uuid()))
 }

@@ -35,6 +35,13 @@ func TestLocalSourcesAndReasons(t *testing.T) {
 	if SourceOf([]string{"core"}) != "core" || SourceOf([]string{"Core"}) != "" || SourceOf(nil) != "" {
 		t.Fatal("SourceOf")
 	}
+	// The CLI reports the upstream's answer and its own failures, never a
+	// gateway refusal; a single map value reads like a single header value.
+	for source, cli := range map[string]bool{SourceHTTP: true, SourceInput: true, SourceTransport: true, SourceTimeout: true, SourceInterrupted: true, SourceInternal: true, SourceGateway: false, SourceCore: false, "": false, "HTTP": false} {
+		if CLISource(source) != cli || SourceOfValue(source) != SourceOf([]string{source}) {
+			t.Fatal(source)
+		}
+	}
 	h := http.Header{}
 	h.Set(ReasonHeader, "configuration_error")
 	if Reason(h) != "configuration_error" {

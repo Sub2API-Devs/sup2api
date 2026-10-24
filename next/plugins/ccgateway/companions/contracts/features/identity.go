@@ -30,11 +30,3 @@ func (p RequestIdentitySources) Validate() error {
 // also the wire default: the host omits it, so a Worker whose CLI cannot map
 // identities keeps forwarding the client's value instead of refusing requests.
 const RequestIdentityDefault = "replace"
-
-// Mode is the effective source: the configured one, or the default.
-func (p RequestIdentitySources) Mode() string {
-	if source := p["user_id"]; source == "client" || source == "worker" {
-		return source
-	}
-	return RequestIdentityDefault
-}

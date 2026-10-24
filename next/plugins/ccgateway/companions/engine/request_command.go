@@ -1,7 +1,8 @@
 package engine
 
-// The opt-in request transport does not enter the SDK agent loop. Model tool
-// calls are returned to the caller; only the CLI owns upstream authentication.
+// The CLI's request command answers each request with one upstream call:
+// model tool calls are returned to the caller, and only the CLI owns upstream
+// authentication.
 //
 // One request goes through these steps, each refusing with its own answer:
 // admitRequest (from the headers: parseRequestPolicy, checkCapabilities — one
@@ -30,7 +31,7 @@ import (
 )
 
 func validateRequestMode(mode string) error {
-	if mode != "" && mode != "direct" && mode != "build" {
+	if mode != "direct" && mode != "build" {
 		return fmt.Errorf("request mode must be direct or build")
 	}
 	return nil
@@ -233,37 +234,60 @@ func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, *requestRe
 	return raw, nil
 }
 
-// resolveRequestContext is the identity and agent context the CLI gets.
+// resolveRequestContext is the identity and agent context the CLI gets, from
+// the client's metadata.user_id read once.
 func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Header, d *requestDiagnostic) *requestRefusal {
-	// The identity is not configurable (2026-10-21 decision): build maps a
-	// client metadata.user_id with the account key (replace). The mapping is
-	// on only for a CLI that carries it (configureRequestIdentity); without
-	// it the CLI keeps the native metadata and gets no context.
-	// Direct is a pure passthrough (2026-10-21 decision): the identity, like
-	// the rest of the body, goes upstream exactly as the client sent it.
-	if g.requestIdentityEnabled && building(p) {
-		mapped, err := g.resolveRequestIdentity(p.env, raw, features.RequestIdentityDefault)
+	// A CLI that rebuilds the client's kind of request (main thread, subagent,
+	// compaction) gets the client's agent context. Console tests are the
+	// gateway's own requests and keep the CLI's native context.
+	agent := !p.probe && g.CLIInfo.supports(features.RequestAgentContextCapability)
+	if !g.requestIdentityEnabled && !agent {
+		return nil
+	}
+	client := readClientIdentity(raw)
+	if refusal := g.resolveIdentity(p, client, agent); refusal != nil || !agent {
+		return refusal
+	}
+	return g.resolveAgent(p, client, h, d)
+}
+
+// resolveIdentity is the identity context. It is not configurable (2026-10-21
+// decision): build maps a client metadata.user_id with the account key; the
+// mapping is on only for a CLI that carries it (configureRequestIdentity),
+// and without it the CLI keeps the native metadata and gets no context.
+// Direct is a pure passthrough: the identity, like the rest of the body, goes
+// upstream as the client sent it. A CLI that rebuilds the client's kind of
+// request (agent) writes Claude Code's session header in direct too, so it
+// adopts the client's session and the header agrees with the body's metadata.
+func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, agent bool) *requestRefusal {
+	switch {
+	case !g.requestIdentityEnabled:
+	case building(p):
+		mapped, err := g.resolveRequestIdentity(p.env, client)
 		if err != nil {
 			return refuse(400, "invalid_request_error", err.Error())
 		}
 		p.identity = &mapped
+	case agent:
+		if mapped, _ := mapRequestIdentity(nil, client, "client"); mapped.Session != "" {
+			p.identity = &mapped
+		}
 	}
-	// A CLI that rebuilds the client's kind of request (main thread, subagent,
-	// compaction) gets the client's agent context. Console tests are the
-	// gateway's own requests and keep the CLI's native context.
-	if p.probe || !g.CLIInfo.supports(features.RequestAgentContextCapability) {
-		return nil
+	return nil
+}
+
+// resolveAgent is the agent context. Build refuses a metadata.user_id it
+// cannot read; direct sends the body as the client wrote it, so such an
+// identity is the upstream's to judge, not a Worker refusal (audit C9), and
+// the CLI gets the session-less context.
+func (g *Gateway) resolveAgent(p *requestPlan, client clientIdentity, h http.Header, d *requestDiagnostic) *requestRefusal {
+	if client.err != nil {
+		if building(p) {
+			return refuse(400, "invalid_request_error", client.err.Error())
+		}
+		d.trace("request_identity_unreadable", Object{"error": client.err.Error()})
 	}
-	agent, err := g.resolveRequestAgent(p.env, raw, h, p.mode)
-	if err != nil && building(p) {
-		return refuse(400, "invalid_request_error", err.Error())
-	}
-	if err != nil {
-		// Direct sends the body as the client wrote it: an identity the Worker
-		// cannot read is the upstream's to judge, not a Worker refusal (audit
-		// C9). The CLI gets the session-less context.
-		d.trace("request_identity_unreadable", Object{"error": err.Error()})
-	}
+	agent := g.resolveRequestAgent(p.env, client, h, p.mode)
 	p.agent = &agent
 	headers := make([]string, 0, len(agent.Client))
 	for name := range agent.Client {
@@ -271,13 +295,6 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Heade
 	}
 	slices.Sort(headers)
 	d.trace("request_agent", Object{"client_headers": headers, "map": agent.Map, "keyed": agent.Key != ""})
-	// Direct then also adopts the client's session, so the session header
-	// agrees with the metadata the body carries unchanged.
-	if directing(p) && g.requestIdentityEnabled {
-		if mapped, _ := mapRequestIdentity(nil, raw, "client"); mapped.Session != "" {
-			p.identity = &mapped
-		}
-	}
 	return nil
 }
 
@@ -438,7 +455,7 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 	switch {
 	case frame == nil && errors.Is(c.ctx.Err(), context.DeadlineExceeded):
 		frame = localRequestError(504, "timeout_error", "cli_timeout", "CLI request timed out")
-		frame.Source = "timeout"
+		frame.Source = requestfailure.SourceTimeout
 		c.fail(w, d, frame)
 	case c.output.started:
 		if c.err == nil && frame == nil {

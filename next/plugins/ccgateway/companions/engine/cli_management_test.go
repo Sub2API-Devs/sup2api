@@ -55,11 +55,12 @@ func TestCLIManagementPolicyAndAuthentication(t *testing.T) {
 }
 
 // The packaged CLI is never replaced by an official release, which has no
-// request command; the view keeps the field names the core reads.
+// request command: an install action is an unknown one. The view keeps the
+// field names the core reads.
 func TestCLIInstallIsRefusedAndTheViewKeepsItsShape(t *testing.T) {
 	r := cliTestRuntime(t, func(context.Context) (string, error) { return "2.1.304", nil })
 	for _, action := range []string{"begin-install", "validate-install", "finish-install"} {
-		if out := cliCall(r, "POST", `{"action":"`+action+`"}`, "admin-fixture"); out.Code != 409 {
+		if out := cliCall(r, "POST", `{"action":"`+action+`"}`, "admin-fixture"); out.Code != 400 {
 			t.Fatalf("%s: %d %s", action, out.Code, out.Body.String())
 		}
 	}
@@ -83,7 +84,7 @@ func TestCLISyncRechecksTheVersion(t *testing.T) {
 	}
 	current = "2.1.305"
 	cliCall(r, "POST", `{"action":"sync"}`, "admin-fixture")
-	if err := r.cli.ready(); err == nil || !strings.Contains(err.Error(), "2.1.305") || r.CLIReady() {
+	if err := r.cli.ready(); err == nil || !strings.Contains(err.Error(), "2.1.305") || r.cli.status().Version != "2.1.305" {
 		t.Fatalf("a changed CLI stayed ready: %v", err)
 	}
 	if r.cliManagement.result != "failed" {

@@ -344,23 +344,28 @@ exit 2
 	}
 }
 
-func TestRuntimeDefaultsToBuildAndRefusesRetiredHostMode(t *testing.T) {
+func TestRuntimeNeedsAModeAndRefusesRetiredHostMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Linux shell fixture")
 	}
 	root := t.TempDir()
 	cli := filepath.Join(root, "claude")
-	if err := os.WriteFile(cli, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.302 (Claude Code)'; exit 0; fi\nexit 1\n"), 0700); err != nil {
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo '2.1.302 (Claude Code)'; exit 0; fi\n" +
+		"if [ \"$1\" = \"--ccgateway-info\" ]; then echo '{\"version\":\"2.1.302\",\"patch\":\"fixture\",\"capabilities\":[\"request_build\"]}'; exit 0; fi\n" +
+		"exit 1\n"
+	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	rt, err := NewRuntime(Options{CLI: cli, DataDir: root, Key: "fixture", AdminKey: "fixture-admin"})
+	// The Worker's config defaults the mode; the engine is always told one.
+	if _, err := NewRuntime(Options{CLI: cli, DataDir: root, Key: "fixture", AdminKey: "fixture-admin"}); err == nil {
+		t.Fatal("a runtime without a mode started")
+	}
+	rt, err := NewRuntime(Options{RequestMode: "build", CLI: cli, DataDir: root, Key: "fixture", AdminKey: "fixture-admin"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rt.Close()
-	if rt.gateway.RequestMode != "build" {
-		t.Fatalf("default mode: %s", rt.gateway.RequestMode)
-	}
 	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
 	r.Header.Set("x-api-key", "fixture")
 	r.Header.Set(features.PolicyHeader, `{"relay_mode":"native"}`)

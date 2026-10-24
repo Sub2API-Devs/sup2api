@@ -75,7 +75,9 @@ func TestRequestCommandSeparatesCancellationAndDeadline(t *testing.T) {
 				}
 				t.Run(mode+"/"+cause+"/"+phase, func(t *testing.T) {
 					root := t.TempDir()
-					ready, logs := filepath.Join(root, "ready"), filepath.Join(root, "logs")
+					ready := filepath.Join(root, "ready")
+					store := fullLogStore(t, t.TempDir())
+					logs := store.root
 					exe, err := lifecycleTestExecutable()
 					if err != nil {
 						t.Fatal(err)
@@ -88,7 +90,7 @@ func TestRequestCommandSeparatesCancellationAndDeadline(t *testing.T) {
 					if cause == "client_with_frame" {
 						env = envWith(env, map[string]string{"CCG_TEST_REQUEST_FRAME": "1"})
 					}
-					g := &Gateway{RequestMode: mode, Key: "fixture", Runner: &Runner{CLI: exe, Work: root, Env: env}, Slots: make(chan struct{}, 1), Timeout: time.Minute, RequestLogDir: logs, CLIInfo: buildCLI}
+					g := &Gateway{RequestMode: mode, Key: "fixture", Runner: &Runner{CLI: exe, Work: root, Env: env}, Slots: make(chan struct{}, 1), Timeout: time.Minute, RequestLogs: store, CLIInfo: buildCLI}
 					if cause == "worker_deadline" {
 						g.Timeout = 2 * time.Second
 					}

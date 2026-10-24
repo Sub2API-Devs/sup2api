@@ -21,16 +21,14 @@ func messagesBuildComponents(raw []byte, policy *features.CLIPolicy, workingDire
 	if err := validateBuildNumbers(raw); err != nil {
 		return nil, err
 	}
-	if err := validateBuildContent(raw); err != nil {
-		return nil, err
-	}
+	// The body is read once; each part is validated where it is taken.
 	body, model, err := messagesObject(raw)
 	if err != nil {
 		return nil, err
 	}
-	var messages []json.RawMessage
-	if json.Unmarshal(body["messages"], &messages) != nil || len(messages) == 0 {
-		return nil, fmt.Errorf("messages must be a non-empty array")
+	messages, err := validateBuildContent(body)
+	if err != nil {
+		return nil, err
 	}
 	system, hasSystem, err := buildSystemComponent(body)
 	if err != nil {
@@ -96,17 +94,22 @@ func buildSystemComponent(body map[string]json.RawMessage) (system json.RawMessa
 	if json.Unmarshal(rawSystem, &blocks) != nil {
 		return nil, true, fmt.Errorf("build mode requires text system blocks")
 	}
-	for _, block := range blocks {
-		if err := checkSystemBlock(block); err != nil {
+	for i, block := range blocks {
+		if err := checkSystemBlock(block, i); err != nil {
 			return nil, true, err
 		}
 	}
 	return rawSystem, true, nil
 }
 
-func checkSystemBlock(block map[string]json.RawMessage) error {
+// checkSystemBlock: a system block is a text block (with its cache marker),
+// never one of the CLI's internal types.
+func checkSystemBlock(block map[string]json.RawMessage, i int) error {
 	var kind, text string
-	if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || !isJSONString(block["text"]) || json.Unmarshal(block["text"], &text) != nil {
+	if json.Unmarshal(block["type"], &kind) == nil && strings.HasPrefix(kind, "ccgateway_") {
+		return fmt.Errorf("reserved internal block type at system[%d]", i)
+	}
+	if kind != "text" || !isJSONString(block["text"]) || json.Unmarshal(block["text"], &text) != nil {
 		return fmt.Errorf("build mode requires text system blocks")
 	}
 	for key := range block {
@@ -206,36 +209,33 @@ func isJSONString(raw json.RawMessage) bool {
 	return len(raw) >= 2 && raw[0] == '"'
 }
 
-// Validate protocol locations only. Arbitrary tool input/schema properties
-// named text or requestPolicy are ordinary user data, not envelope controls.
-func validateBuildContent(raw []byte) error {
-	var body map[string]json.RawMessage
-	if json.Unmarshal(raw, &body) != nil || body == nil {
-		return fmt.Errorf("expected a Messages JSON object")
-	}
+// validateBuildContent checks the body's protocol locations and returns its
+// messages as sent (the system is checked where it is taken,
+// buildSystemComponent). Arbitrary tool input/schema properties named text
+// or requestPolicy are ordinary user data, not envelope controls.
+func validateBuildContent(body map[string]json.RawMessage) ([]json.RawMessage, error) {
 	for _, key := range []string{"requestPolicy", "runtimeContext", "attachments", "systemPrompt", "ccgatewaySystemBlocks", "ccgatewayBuildOnly"} {
 		if _, ok := body[key]; ok {
-			return fmt.Errorf("reserved internal request field %s", key)
+			return nil, fmt.Errorf("reserved internal request field %s", key)
 		}
 	}
 	if err := validateBuildGenerationParameters(body); err != nil {
-		return err
+		return nil, err
 	}
-	if system, ok := body["system"]; ok {
-		if err := validateBuildBlocks(system, "system"); err != nil {
-			return err
-		}
-	}
-	var messages []map[string]json.RawMessage
+	var messages []json.RawMessage
 	if json.Unmarshal(body["messages"], &messages) != nil || len(messages) == 0 {
-		return fmt.Errorf("messages must be a non-empty array")
+		return nil, fmt.Errorf("messages must be a non-empty array")
 	}
-	for i, message := range messages {
+	for i, raw := range messages {
+		var message map[string]json.RawMessage
+		if json.Unmarshal(raw, &message) != nil {
+			return nil, fmt.Errorf("messages must be a non-empty array")
+		}
 		if err := validateBuildMessage(message, i); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return messages, nil
 }
 
 func validateBuildMessage(message map[string]json.RawMessage, i int) error {
@@ -332,16 +332,16 @@ func validateBuildThinking(value json.RawMessage) error {
 	return nil
 }
 
+// maxSafeInteger is the largest integer a float64 (the CLI's JavaScript
+// number) holds exactly.
+const maxSafeInteger = 1<<53 - 1
+
 func positiveSafeInteger(raw json.RawMessage, field string) error {
-	text := string(bytes.TrimSpace(raw))
-	n, err := strconv.ParseFloat(text, 64)
-	if err != nil || n <= 0 || n > 9007199254740991 || math.Trunc(n) != n {
-		return fmt.Errorf("%s must be a positive safe integer", field)
-	}
-	// Check the exact JSON number before a float64/JS conversion can round
-	// a fractional boundary value into an apparently valid integer.
-	value, ok := new(big.Rat).SetString(text)
-	if !ok || !value.IsInt() || value.Sign() <= 0 || value.Num().Cmp(big.NewInt(9007199254740991)) > 0 {
+	// The exact JSON number: a float64 conversion could round a fractional
+	// boundary value into an apparently valid integer. (math/big refuses an
+	// exponent beyond about a million digits, so this stays cheap.)
+	value, ok := new(big.Rat).SetString(string(bytes.TrimSpace(raw)))
+	if !ok || !value.IsInt() || value.Sign() <= 0 || value.Num().Cmp(big.NewInt(maxSafeInteger)) > 0 {
 		return fmt.Errorf("%s must be a positive safe integer", field)
 	}
 	return nil
@@ -361,7 +361,7 @@ func visitBuildNumbers(value any) error {
 	switch v := value.(type) {
 	case json.Number:
 		n, err := strconv.ParseFloat(string(v), 64)
-		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || math.Trunc(n) == n && math.Abs(n) > 9007199254740991 {
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || math.Trunc(n) == n && math.Abs(n) > maxSafeInteger {
 			return fmt.Errorf("build cannot represent an unsafe JSON number; use direct mode")
 		}
 	case map[string]any:

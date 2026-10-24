@@ -137,8 +137,8 @@ func telemetryDefaults() map[string]string {
 	}
 }
 
-// baseEnv applies account settings and the managed request privacy defaults.
-// This is also the direct/build entrypoint; it does not use cliEnv.
+// baseEnv applies account settings and the managed request privacy defaults:
+// the environment every CLI process of the account starts from.
 func (r *Runner) baseEnv() []string {
 	env := r.Env
 	if env == nil {

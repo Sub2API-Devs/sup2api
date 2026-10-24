@@ -13,8 +13,31 @@ import (
 	"time"
 )
 
+// fullLogStore is a store in root at the full level for an hour: a test's
+// request logs keep their content.
+func fullLogStore(t *testing.T, root string) *requestLogStore {
+	t.Helper()
+	s, err := newRequestLogStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.level, s.fullUntil = logLevelFull, time.Now().Add(time.Hour)
+	s.mu.Unlock()
+	return s
+}
+
+// loggedRequest is a request diagnostic logging into a full-level store.
+func loggedRequest(t *testing.T, w http.ResponseWriter, r *http.Request) (*requestDiagnostic, http.ResponseWriter) {
+	t.Helper()
+	d := newRequestDiagnostic(w, r)
+	d.store = fullLogStore(t, t.TempDir())
+	return d, d.capture(w, r)
+}
+
 func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
-	root := t.TempDir()
+	store := fullLogStore(t, t.TempDir())
+	root := store.root
 	v := basic()
 	v["messages"].([]any)[1].(Object)["role"] = "developer"
 	body, _ := json.Marshal(v)
@@ -22,7 +45,7 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	r.Header.Set("Authorization", "Bearer secret-test-key")
 	r.Header.Set("Cookie", "session=secret-cookie")
 	w := httptest.NewRecorder()
-	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogDir: root, Slots: make(chan struct{}, 1)}
+	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogs: store, Slots: make(chan struct{}, 1)}
 	g.ServeHTTP(w, r)
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 || w.Code != 400 || w.Header().Get("request-id") == "" {
@@ -48,8 +71,7 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 func TestRequestLogCapturePreservesStreamingFlush(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
-	d := newRequestDiagnostic(w, r)
-	out := d.capture(w, r, t.TempDir())
+	d, out := loggedRequest(t, w, r)
 	out.Header().Set("Content-Type", "text/event-stream")
 	_, _ = out.Write([]byte("event: message_start\ndata: {}\n\n"))
 	if err := http.NewResponseController(out).Flush(); err != nil || !w.Flushed {
@@ -114,13 +136,12 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 	}
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	w := httptest.NewRecorder()
-	d := newRequestDiagnostic(w, r)
-	out := d.capture(w, r, dir)
+	d, out := loggedRequest(t, w, r)
 	d.save("request.body", []byte("private"))
 	d.bytes = 64 << 20
 	_, _ = out.Write([]byte("response"))
 	d.finish()
-	entries, _ := os.ReadDir(dir)
+	entries, _ := os.ReadDir(d.store.root)
 	if len(entries) != 1 || w.Body.String() != "response" {
 		t.Fatal("overflow lost record or broke response")
 	}
@@ -140,12 +161,12 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 
 func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 	root := t.TempDir()
-	store := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, enabled: true, active: map[*requestDiagnostic]bool{}}
+	store := fullLogStore(t, root)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, store.root)
+	out := d.capture(w, r)
 	d.save("request.body", []byte("private"))
 	_, _ = out.Write([]byte("before"))
 	d.save("upstream-request-test.body", []byte("upstream private"))
@@ -172,12 +193,12 @@ func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 }
 
 func TestRequestLogOverflowStreamAndLimits(t *testing.T) {
-	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	store := fullLogStore(t, t.TempDir())
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, "")
+	out := d.capture(w, r)
 	_, _ = out.Write([]byte("before\n"))
 	d.mu.Lock()
 	d.bytes = 64 << 20
@@ -203,12 +224,12 @@ func TestRequestLogOverflowStreamAndLimits(t *testing.T) {
 }
 
 func TestRequestLogDisableThenEnableDoesNotResurrectActiveLog(t *testing.T) {
-	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	store := fullLogStore(t, t.TempDir())
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	d.capture(w, r, "")
+	d.capture(w, r)
 	for _, body := range []string{`{"enabled":false}`, `{"enabled":true}`} {
 		out := httptest.NewRecorder()
 		store.serve(out, httptest.NewRequest("PUT", "/admin/request-logs", strings.NewReader(body)))
@@ -235,12 +256,12 @@ func (w *blockedLogResponseWriter) Write(b []byte) (int, error) {
 }
 
 func TestRequestLogSlowClientDoesNotBlockDisable(t *testing.T) {
-	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	store := fullLogStore(t, t.TempDir())
 	w := &blockedLogResponseWriter{httptest.NewRecorder(), make(chan struct{}), make(chan struct{})}
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, "")
+	out := d.capture(w, r)
 	written := make(chan struct{})
 	go func() { _, _ = out.Write([]byte("client response")); close(written) }()
 	<-w.started
@@ -266,15 +287,10 @@ func TestRequestLogSlowClientDoesNotBlockDisable(t *testing.T) {
 }
 
 func TestRequestDiagnosticConcurrentTraceAndMetadata(t *testing.T) {
-	for _, withStore := range []bool{false, true} {
+	for range 2 {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", "/v1/messages", nil)
-		d := newRequestDiagnostic(w, r)
-		root := t.TempDir()
-		if withStore {
-			d.store = &requestLogStore{root: root, enabled: true, active: map[*requestDiagnostic]bool{}}
-		}
-		d.capture(w, r, root)
+		d, _ := loggedRequest(t, w, r)
 		d.mu.Lock()
 		d.bytes = (64 << 20) - 2048
 		d.mu.Unlock()
@@ -304,8 +320,7 @@ func TestRequestDiagnosticConcurrentTraceAndMetadata(t *testing.T) {
 func TestRequestLogCompletionMetadataIsBounded(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
-	d := newRequestDiagnostic(w, r)
-	d.capture(w, r, t.TempDir())
+	d, _ := loggedRequest(t, w, r)
 	d.setField("messages", strings.Repeat("x", 300<<10))
 	d.finish()
 	b, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))

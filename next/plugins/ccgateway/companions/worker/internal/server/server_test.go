@@ -1,6 +1,7 @@
 package server
 
 import (
+	"ccgateway/engine"
 	"ccgateway/worker/pkg/types"
 	"context"
 	"errors"
@@ -9,7 +10,10 @@ import (
 	"testing"
 )
 
-type mockWorker struct{ healthError error }
+type mockWorker struct {
+	healthError error
+	facts       engine.RuntimeFacts
+}
 
 func (m *mockWorker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Forwarded", r.Header.Get("X-Test-Forwarded"))
@@ -18,11 +22,12 @@ func (m *mockWorker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (m *mockWorker) Health(context.Context) (*types.HealthStatus, error) {
 	return &types.HealthStatus{Status: "healthy"}, m.healthError
 }
-func (m *mockWorker) Close() error { return nil }
+func (m *mockWorker) Facts() engine.RuntimeFacts { return m.facts }
+func (m *mockWorker) Close() error               { return nil }
 
 func TestBindHostKeepsPortAndIPv6Brackets(t *testing.T) {
 	for _, tc := range []struct{ host, want string }{{"", ":8788"}, {"127.0.0.1", "127.0.0.1:8788"}, {"::1", "[::1]:8788"}} {
-		s := New(&mockWorker{}, 8788)
+		s := New(&mockWorker{}, 8788, "")
 		s.BindHost(tc.host)
 		if s.srv.Addr != tc.want {
 			t.Fatalf("got %s want %s", s.srv.Addr, tc.want)
@@ -31,12 +36,12 @@ func TestBindHostKeepsPortAndIPv6Brackets(t *testing.T) {
 }
 
 func TestRoutesForwardWithoutReencoding(t *testing.T) {
-	s := New(&mockWorker{}, 8788)
+	s := New(&mockWorker{}, 8788, "")
 	for _, path := range []string{"/v1/messages", "/admin/status", "/admin/auth/start"} {
 		req := httptest.NewRequest("POST", path, nil)
 		req.Header.Set("X-Test-Forwarded", "present")
 		out := httptest.NewRecorder()
-		s.handler.ServeHTTP(out, req)
+		s.srv.Handler.ServeHTTP(out, req)
 		if out.Code != 202 || out.Header().Get("X-Test-Forwarded") != "present" {
 			t.Fatalf("lost request at %s", path)
 		}
@@ -48,9 +53,9 @@ func TestHealth(t *testing.T) {
 		if fail {
 			w.healthError = errors.New("private error")
 		}
-		s := New(w, 8788)
+		s := New(w, 8788, "")
 		out := httptest.NewRecorder()
-		s.handler.ServeHTTP(out, httptest.NewRequest("GET", "/health", nil))
+		s.srv.Handler.ServeHTTP(out, httptest.NewRequest("GET", "/health", nil))
 		want := 200
 		if fail {
 			want = 503

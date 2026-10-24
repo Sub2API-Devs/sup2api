@@ -2,6 +2,7 @@ package ccgateway
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -86,15 +87,13 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 		if window.GetStatus() != "rejected" {
 			continue
 		}
-		switch key {
-		case "5h", "7d":
+		switch {
+		case !scopedQuota(key):
 			if shared == nil || window.GetResetsAtUnix() > shared.GetResetsAtUnix() {
 				shared = window
 			}
-		case "7d_fable", "7d_sonnet":
-			if quotaApplies(key, out.Model) {
-				scoped = window
-			}
+		case quotaApplies(key, out.Model):
+			scoped = window
 		}
 	}
 	blocked := shared
@@ -129,10 +128,10 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 		}
 		return
 	}
-	if windows["5h"] == nil {
+	if windows[quota5h] == nil {
 		return
 	}
-	for _, key := range []string{"5h", "7d", "7d_fable", "7d_sonnet"} {
+	for _, key := range quotaKeys {
 		window := windows[key]
 		if window == nil || !quotaApplies(key, out.Model) {
 			continue
@@ -147,19 +146,6 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 	out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_available"
 }
 
-func quotaApplies(key, model string) bool {
-	switch key {
-	case "5h", "7d":
-		return true
-	case "7d_fable":
-		return strings.HasPrefix(model, "claude-fable-")
-	case "7d_sonnet":
-		return strings.HasPrefix(model, "claude-sonnet-")
-	default:
-		return false
-	}
-}
-
 func validCachedQuotaWindow(window *pluginv1.QuotaWindow) bool {
 	if window == nil || !validUsage(window.GetUtilization()) || window.GetResetsAtUnix() < 0 || window.GetResetsAtUnix() > 253402300799 || window.GetUsed() < 0 || window.GetLimit() < 0 {
 		return false
@@ -167,9 +153,7 @@ func validCachedQuotaWindow(window *pluginv1.QuotaWindow) bool {
 	if window.GetUtilizationUnknown() && (window.GetUtilization() != 0 || window.GetUsed() != 0 || window.GetLimit() != 0) {
 		return false
 	}
-	switch window.GetKey() {
-	case "5h", "7d", "7d_sonnet", "7d_fable":
-	default:
+	if !slices.Contains(quotaKeys, window.GetKey()) {
 		return false
 	}
 	switch window.GetStatus() {

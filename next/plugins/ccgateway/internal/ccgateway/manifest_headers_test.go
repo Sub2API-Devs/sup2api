@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -23,8 +24,8 @@ func TestManifestPassesTheForwardedHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"anthropic-version", "anthropic-beta"}
-	for name := range agentContextHeaders {
-		want = append(want, name)
+	for _, header := range agentContextHeaders {
+		want = append(want, strings.ToLower(header.Header))
 	}
 	for _, accountType := range m.AccountTypes {
 		for _, platform := range accountType.Platforms {

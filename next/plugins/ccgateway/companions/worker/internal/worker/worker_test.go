@@ -156,7 +156,7 @@ func fixtureAt(t *testing.T, wantRequests int64, root string) Worker {
 	t.Setenv("WORKER_TEST_PROVIDER_URL", upstream.URL)
 	cli, err := os.Executable()
 	require.NoError(t, err)
-	w, err := New(&config.Config{WorkerID: "test", CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "worker-test-key", AdminKey: "worker-admin-key", RequestTimeout: 5 * time.Second})
+	w, err := New(&config.Config{WorkerID: "test", CLIPath: cli, RequestMode: "build", ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "worker-test-key", AdminKey: "worker-admin-key", RequestTimeout: 5 * time.Second})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, w.Close()) })
 	require.Eventually(t, func() bool {
@@ -223,7 +223,7 @@ func TestWorkerAdmission(t *testing.T) {
 }
 
 func TestWorkerRequiresKey(t *testing.T) {
-	_, err := New(&config.Config{})
+	_, err := New(&config.Config{RequestMode: "build"})
 	require.ErrorContains(t, err, "CCG_API_KEY")
 }
 

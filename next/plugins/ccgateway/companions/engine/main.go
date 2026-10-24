@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -21,7 +20,6 @@ type Gateway struct {
 	Key                    string
 	Timeout                time.Duration
 	Slots                  chan struct{}
-	RequestLogDir          string
 	RequestLogs            *requestLogStore
 	requestIdentityEnabled bool
 	requestIdentitySecret  []byte
@@ -34,11 +32,8 @@ type Gateway struct {
 // pass through here (requestErrorFrame writes them with their own source).
 func apiError(w http.ResponseWriter, status int, kind, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	// A writer that named the source already (the native path's "cli") keeps it.
-	if w.Header().Get(requestfailure.SourceHeader) == "" {
-		w.Header().Set(requestfailure.SourceHeader, requestfailure.SourceGateway)
-		w.Header().Set(requestfailure.ReasonHeader, gatewayReason(status, kind))
-	}
+	w.Header().Set(requestfailure.SourceHeader, requestfailure.SourceGateway)
+	w.Header().Set(requestfailure.ReasonHeader, gatewayReason(status, kind))
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(Object{"type": "error", "error": Object{"type": kind, "message": msg}})
 }
@@ -108,13 +103,12 @@ func withAuthorization(ctx context.Context, authorized bool) context.Context {
 	return context.WithValue(ctx, authorizationKey{}, authorized)
 }
 
-var sessionName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
-
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/healthz" && r.Method == "GET" {
+		f := g.facts()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version, "cli_patch": g.CLIInfo.Patch, "cli_sha256": g.CLIInfo.SHA256, "capabilities": g.requestCapabilities(), "slots": cap(g.Slots)})
+		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": f.CLIVersion, "cli_patch": f.CLIPatch, "cli_sha256": f.CLISHA256, "capabilities": f.Capabilities, "slots": f.Slots})
 		return
 	}
 	diagnostic := newRequestDiagnostic(w, r)
@@ -126,13 +120,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(401, "authentication_error", "Invalid gateway API key").write(w, diagnostic)
 		return
 	}
-	w = diagnostic.capture(w, r, g.RequestLogDir)
-	if g.RequestMode != "" {
-		g.serveRequestCommand(w, r, diagnostic)
-		return
-	}
 	// Every Worker runs the CLI's request command (audit C5): there is no
-	// other way to answer, and none is improvised.
-	diagnostic.fail(500, "api_error", "Worker has no request mode")
-	apiError(w, 500, "api_error", "Worker has no request mode")
+	// other way to answer.
+	g.serveRequestCommand(diagnostic.capture(w, r), r, diagnostic)
 }

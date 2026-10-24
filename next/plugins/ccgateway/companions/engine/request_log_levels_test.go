@@ -20,7 +20,7 @@ func logRequest(t *testing.T, store *requestLogStore) string {
 	r.Header.Set("X-Api-Key", "secret")
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, "")
+	out := d.capture(w, r)
 	d.request([]byte(`{"model":"m","messages":[{"role":"user","content":"`+privateMarker+`"}]}`), r.Header)
 	d.save("build-components.json", []byte(privateMarker))
 	d.appendTrace("cli-stdout.jsonl", []byte(privateMarker))

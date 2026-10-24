@@ -30,7 +30,7 @@ func TestAttachmentHierarchyConflicts(t *testing.T) {
 			t.Fatal(parent)
 		}
 	}
-	if !AttachmentContains("environment", "shell") {
+	if !attachmentContains("environment", "shell") {
 		t.Fatal("nested environment field missing")
 	}
 }

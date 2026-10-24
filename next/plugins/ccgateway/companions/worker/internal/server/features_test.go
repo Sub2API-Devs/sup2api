@@ -1,6 +1,7 @@
 package server
 
 import (
+	"ccgateway/engine"
 	"ccgateway/worker/pkg/types"
 	"context"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -21,7 +22,8 @@ func TestCapabilitiesUseObservedCLIVersionNotConfiguredImage(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/admin/features", nil)
 	r.Header.Set("Authorization", "Bearer admin")
-	New(&versionedWorker{}, 8788, "admin").handler.ServeHTTP(w, r)
+	worker := &versionedWorker{mockWorker{facts: engine.RuntimeFacts{ExecutionModes: []string{"request_direct", "request_build"}, Capabilities: []string{features.BuildAttachmentCapabilityV2, features.RequestLevelsCapability}}}}
+	New(worker, 8788, "admin").srv.Handler.ServeHTTP(w, r)
 	doc, err := features.DecodeRuntimeCapabilities(w.Body.Bytes())
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +31,9 @@ func TestCapabilitiesUseObservedCLIVersionNotConfiguredImage(t *testing.T) {
 	if doc.Probes[0].Value != "2.1.292" || doc.Probes[0].Status != "observed" || doc.Catalog.RuntimeVerified || doc.ModelProviderVerification != "not_run" {
 		t.Fatal("version observation turned into a readiness claim")
 	}
-	assert.Equal(t, []string{"native"}, doc.ExecutionModes)
+	// The modes and the catalog are the loaded CLI's.
+	assert.Equal(t, []string{"request_direct", "request_build"}, doc.ExecutionModes)
+	assert.Equal(t, features.RequestRuntimeCatalog(worker.facts.Capabilities), doc.Catalog)
 	assert.Empty(t, doc.HelperHistorySchemaVersions)
 	assert.Empty(t, doc.HelperHistoryPayloadVersions)
 }
@@ -43,7 +47,7 @@ func TestCapabilitiesRequireAdminAndReportOnlyObservedEvidence(t *testing.T) {
 		r := httptest.NewRequest(tc.method, "/admin/features", nil)
 		r.Header.Set("Authorization", tc.auth)
 		w := httptest.NewRecorder()
-		s.handler.ServeHTTP(w, r)
+		s.srv.Handler.ServeHTTP(w, r)
 		if w.Code != tc.status {
 			t.Fatal(tc.method, w.Code)
 		}
@@ -59,7 +63,7 @@ func TestCapabilitiesRequireAdminAndReportOnlyObservedEvidence(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/admin/features", nil)
-	New(&mockWorker{}, 8788).handler.ServeHTTP(w, r)
+	New(&mockWorker{}, 8788, "").srv.Handler.ServeHTTP(w, r)
 	if w.Code != 401 {
 		t.Fatal("empty admin key opened capability endpoint")
 	}

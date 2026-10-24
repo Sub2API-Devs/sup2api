@@ -14,6 +14,8 @@ import (
 type Worker interface {
 	http.Handler
 	Health(context.Context) (*types.HealthStatus, error)
+	// Facts is what the Worker and its loaded CLI offer (/admin/features).
+	Facts() engine.RuntimeFacts
 	Close() error
 }
 
@@ -59,10 +61,10 @@ func (w *impl) Health(ctx context.Context) (*types.HealthStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	f := w.Facts()
 	status := "healthy"
-	if !w.CLIReady() {
+	if !f.Ready {
 		status = "starting"
 	}
-	patch, checksum := w.CLIIdentity()
-	return &types.HealthStatus{Status: status, WorkerID: w.id, CLIVersion: w.CLIVersion(), Uptime: int64(time.Since(w.startTime).Seconds()), CLIPatch: patch, CLISHA256: checksum, Capabilities: w.RequestCapabilities(), MaintenanceOnly: w.MaintenanceOnly()}, nil
+	return &types.HealthStatus{Status: status, WorkerID: w.id, CLIVersion: f.InstalledCLI, Uptime: int64(time.Since(w.startTime).Seconds()), CLIPatch: f.CLIPatch, CLISHA256: f.CLISHA256, Capabilities: f.Capabilities, MaintenanceOnly: f.MaintenanceOnly}, nil
 }

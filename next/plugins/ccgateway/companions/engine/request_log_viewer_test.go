@@ -21,7 +21,7 @@ func viewerRequest(t *testing.T, store *requestLogStore, requestID string, statu
 	r.Header.Set("X-Request-ID", requestID)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, "")
+	out := d.capture(w, r)
 	d.request([]byte(`{"model":"claude-test","messages":[{"role":"user","content":"`+privateMarker+`"}]}`), r.Header)
 	d.save("build-components.json", []byte(`{"system":"`+privateMarker+`"}`))
 	d.trace("cli_error", Object{"message": strings.Repeat("e", 300)})
@@ -120,7 +120,7 @@ func TestRequestLogQueryShowsActiveRequests(t *testing.T) {
 	r.Header.Set("X-Request-ID", "rid-running")
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	d.capture(w, r, "")
+	d.capture(w, r)
 	got := listLogs(t, store, `{}`)
 	if len(got.Items) != 0 || len(got.Active) != 1 || got.Active[0]["request_id"] != "rid-running" {
 		t.Fatal("running request", got)

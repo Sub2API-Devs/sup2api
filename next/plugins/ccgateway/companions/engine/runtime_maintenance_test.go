@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,10 +54,12 @@ func TestRuntimeMaintenanceDoesNotInterruptActiveRequests(t *testing.T) {
 }
 
 func TestNativeBootstrapNeverServesModelRequests(t *testing.T) {
-	r := &Runtime{maintenanceOnly: true, life: context.Background(), Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { t.Fatal("business handler must not run") })}
+	g := &Gateway{MaintenanceOnly: true, Runner: &Runner{}, CLIInfo: cliRequestInfo{Capabilities: []string{"request_build", "request_direct", features.BuildContentPreservationCapability}}}
+	r := &Runtime{maintenanceOnly: true, gateway: g, cli: newCLICheck("2.1.304", nil), life: context.Background(), Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { t.Fatal("business handler must not run") })}
 	out := httptest.NewRecorder()
 	r.ServeHTTP(out, httptest.NewRequest("POST", "/v1/messages", bytes.NewBufferString(`{}`)))
 	require.Equal(t, 409, out.Code)
-	require.Empty(t, r.RequestCapabilities())
-	require.Empty(t, r.ExecutionModes())
+	// Neither health answer offers what the CLI could do.
+	require.Empty(t, r.Facts().Capabilities)
+	require.Empty(t, r.Facts().ExecutionModes)
 }

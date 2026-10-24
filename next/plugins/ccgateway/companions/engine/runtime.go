@@ -20,7 +20,7 @@ type Options struct {
 	// root-owned file a non-root Worker cannot change (the active runtime),
 	// so the CLI is not hashed again.
 	CLIChecksumVerified       bool
-	RequestMode               string // the CLI request transport: direct or build (default)
+	RequestMode               string // the CLI request transport: direct or build (the Worker's config defaults it)
 	CLI, DataDir              string
 	WorkingDirectory          string
 	RuntimeMaintenanceLease   string
@@ -67,9 +67,6 @@ type Runtime struct {
 }
 
 func NewRuntime(o Options) (*Runtime, error) {
-	if o.RequestMode == "" {
-		o.RequestMode = "build"
-	}
 	if err := validateOptions(o); err != nil {
 		return nil, err
 	}
@@ -88,48 +85,23 @@ func NewRuntime(o Options) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	success := false
-	defer func() {
-		if !success {
-			_ = os.RemoveAll(work)
-		}
-	}()
-	timeout := o.Timeout
-	if timeout <= 0 {
-		timeout = features.RequestTimeout
+	r, err := newRuntime(o, &Runner{CLI: cli, Version: version, Work: work, Env: o.Env, WorkingDirectory: o.WorkingDirectory}, cliInfo, root)
+	if err != nil {
+		_ = os.RemoveAll(work)
+		return nil, err
 	}
-	proxy, err := NewProxyConfigStore(root, o.AdminKey)
+	go r.maintain(r.life, r.gateway.RequestLogs)
+	return r, nil
+}
+
+// newRuntime assembles the account's Worker over the loaded CLI (runner)
+// and its data directory root.
+func newRuntime(o Options, runner *Runner, cliInfo cliRequestInfo, root string) (*Runtime, error) {
+	g, err := newGateway(o, runner, cliInfo, root)
 	if err != nil {
 		return nil, err
 	}
-	logs, err := newRequestLogStore(root)
-	if err != nil {
-		return nil, err
-	}
-	overrides := NewEnvironmentOverrides(root)
-	slots := o.Slots
-	if slots == 0 {
-		slots = DefaultRequestSlots
-	}
-	g := &Gateway{
-		Runner:          &Runner{CLI: cli, Version: version, Work: work, Proxy: proxy, Overrides: overrides, Env: o.Env, WorkingDirectory: o.WorkingDirectory},
-		RequestMode:     o.RequestMode,
-		CLIInfo:         cliInfo,
-		MaintenanceOnly: o.MaintenanceOnly,
-		Key:             o.Key,
-		Timeout:         timeout,
-		Slots:           make(chan struct{}, slots),
-		RequestLogDir:   logs.root,
-		RequestLogs:     logs,
-	}
-	if g.Runner.WorkingDirectory == "" {
-		g.Runner.WorkingDirectory = root
-	}
-	g.configureResourceReporting()
-	if err := g.configureRequestIdentity(root); err != nil {
-		return nil, err
-	}
-	admin := &authManager{cli: cli, key: o.AdminKey, work: work, proxy: proxy, overrides: overrides, version: version, requestLogs: logs, env: o.Env}
+	admin := &authManager{cli: runner.CLI, key: o.AdminKey, work: runner.Work, proxy: runner.Proxy, overrides: runner.Overrides, version: runner.Version, requestLogs: g.RequestLogs, env: o.Env}
 	resources, err := newResourceBroker(g, admin, root)
 	if err != nil {
 		return nil, err
@@ -140,21 +112,56 @@ func NewRuntime(o Options) (*Runtime, error) {
 		_ = resources.lease.Close()
 		return nil, err
 	}
-	mux := http.NewServeMux()
-	mux.Handle(resourcePrefix+"/", resources)
-	mux.Handle("/", g)
-	mux.Handle("/admin/", admin)
 	ctx, stop := context.WithCancel(context.Background())
-	r := &Runtime{Handler: mux, Version: version, gateway: g, admin: admin, resources: resources, work: work, stop: stop, life: ctx, done: make(chan struct{})}
+	r := &Runtime{Version: runner.Version, gateway: g, admin: admin, resources: resources, work: runner.Work, stop: stop, life: ctx, done: make(chan struct{})}
 	r.runtimeLease, r.runtimeLeaseExpires = o.RuntimeMaintenanceLease, o.RuntimeMaintenanceExpires
 	r.maintenanceOnly = o.MaintenanceOnly
 	r.cliManagement = cliManagement
-	r.cli = newCLICheck(version, func(ctx context.Context) (string, error) { return checkCLIVersion(ctx, cli) })
+	r.cli = newCLICheck(runner.Version, func(ctx context.Context) (string, error) { return checkCLIVersion(ctx, runner.CLI) })
+	r.Handler = r.routes()
+	return r, nil
+}
+
+// newGateway is the account's gateway: the CLI's runner with the account's
+// proxy and environment, its request logs, slots and identity mapping.
+func newGateway(o Options, runner *Runner, cliInfo cliRequestInfo, root string) (*Gateway, error) {
+	var err error
+	if runner.Proxy, err = NewProxyConfigStore(root, o.AdminKey); err != nil {
+		return nil, err
+	}
+	logs, err := newRequestLogStore(root)
+	if err != nil {
+		return nil, err
+	}
+	runner.Overrides = NewEnvironmentOverrides(root)
+	if runner.WorkingDirectory == "" {
+		runner.WorkingDirectory = root
+	}
+	timeout, slots := o.Timeout, o.Slots
+	if timeout <= 0 {
+		timeout = features.RequestTimeout
+	}
+	if slots == 0 {
+		slots = DefaultRequestSlots
+	}
+	g := &Gateway{Runner: runner, RequestMode: o.RequestMode, CLIInfo: cliInfo, MaintenanceOnly: o.MaintenanceOnly, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, slots), RequestLogs: logs}
+	g.configureResourceReporting()
+	if err := g.configureRequestIdentity(root); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+// routes is the Worker's HTTP surface: the gateway, the resource broker and
+// the management APIs.
+func (r *Runtime) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle(resourcePrefix+"/", r.resources)
+	mux.Handle("/", r.gateway)
+	mux.Handle("/admin/", r.admin)
 	mux.HandleFunc("/admin/cli", r.serveCLI)
 	mux.HandleFunc("/admin/runtime", r.serveRuntimeMaintenance)
-	go r.maintain(ctx, logs)
-	success = true
-	return r, nil
+	return mux
 }
 
 func validateOptions(o Options) error {
@@ -186,7 +193,10 @@ func validateOptions(o Options) error {
 }
 
 // loadPinnedCLI resolves the CLI, checks it is the pinned one and reads its
-// request capabilities.
+// request capabilities. A Worker that serves requests needs them: a CLI that
+// cannot say it runs the configured mode would refuse every request (409)
+// while reporting healthy, so it does not start. A maintenance-only Worker
+// serves no request and starts with no capabilities.
 func loadPinnedCLI(o Options) (cli, version string, info cliRequestInfo, err error) {
 	if cli, err = resolveCLI(o.CLI); err != nil {
 		return
@@ -194,41 +204,35 @@ func loadPinnedCLI(o Options) (cli, version string, info cliRequestInfo, err err
 	if version, err = checkVersion(cli); err != nil {
 		return
 	}
-	verifyOptions := o
-	if o.MaintenanceOnly {
-		verifyOptions.RequestMode = ""
+	info, err = verifyPinnedCLI(cli, version, o)
+	switch {
+	case err != nil && o.MaintenanceOnly && !o.pinned():
+		info, err = cliRequestInfo{}, nil
+	case err == nil && !o.MaintenanceOnly && !info.supports("request_"+o.RequestMode):
+		err = fmt.Errorf("loaded CLI does not support the configured request mode")
 	}
-	info, verified, err := verifyPinnedCLI(cli, version, verifyOptions)
 	if err != nil {
 		return
-	}
-	if !verified {
-		var infoErr error
-		if info, infoErr = readCLIRequestInfo(cli, version, o); infoErr != nil {
-			// An unpinned CLI without request info serves its configured
-			// mode only (the capabilities stay empty).
-			info = cliRequestInfo{}
-		} else if !o.MaintenanceOnly && !info.supports("request_"+o.RequestMode) {
-			err = fmt.Errorf("loaded CLI does not support configured request mode")
-			return
-		}
 	}
 	info.SHA256 = o.ExpectedCLISHA256
 	return
 }
 
+// pinned says whether the Worker is configured with the CLI it must run.
+func (o Options) pinned() bool {
+	return o.ExpectedCLIVersion != "" || o.ExpectedCLISHA256 != "" || o.ExpectedCLIPatch != ""
+}
+
 // newPinnedCLIManagement turns automatic release checks off for a pinned CLI.
+// Only in memory: the saved settings are the console's, and a pinned Worker
+// refuses turning them on (putCLIPolicy).
 func newPinnedCLIManagement(root, pinned string) (*cliManagement, error) {
 	m, err := newCLIManagement(root)
 	if err != nil || pinned == "" {
 		return m, err
 	}
 	m.pinnedVersion = pinned
-	policy := m.policy
-	policy.AutoUpdate = false
-	if err := m.save(policy); err != nil {
-		return nil, err
-	}
+	m.policy.AutoUpdate = false
 	return m, nil
 }
 
@@ -310,40 +314,45 @@ func (r *Runtime) release(business bool) {
 	r.active.Done()
 }
 
-func (r *Runtime) CLIVersion() string { return r.cli.status().Version }
+// RuntimeFacts is what a Worker says about itself. Its two health answers
+// are built from it, each keeping its own field names: the gateway's
+// /healthz for the core (Gateway.ServeHTTP) and the Worker's /health for the
+// controller.
+type RuntimeFacts struct {
+	// CLIVersion is the CLI requests run on, read at startup; InstalledCLI is
+	// what the last recheck found (they differ once the file changed).
+	CLIVersion, InstalledCLI string
+	CLIPatch, CLISHA256      string
+	// ExecutionModes and Capabilities are what the loaded CLI offers; a
+	// maintenance-only Worker offers none.
+	ExecutionModes, Capabilities []string
+	Slots                        int
+	MaintenanceOnly              bool
+	// Ready: the last recheck found the CLI read at startup.
+	Ready bool
+}
 
-// ExecutionModes lists the request transports the loaded CLI offers; a
-// maintenance-only Worker offers none.
-func (r *Runtime) ExecutionModes() []string {
-	if r.maintenanceOnly {
-		return []string{}
+// facts are the gateway's part of RuntimeFacts.
+func (g *Gateway) facts() RuntimeFacts {
+	f := RuntimeFacts{CLIVersion: g.Runner.Version, CLIPatch: g.CLIInfo.Patch, CLISHA256: g.CLIInfo.SHA256, ExecutionModes: []string{}, Capabilities: g.requestCapabilities(), Slots: cap(g.Slots), MaintenanceOnly: g.MaintenanceOnly}
+	if g.MaintenanceOnly {
+		return f
 	}
-	var modes []string
 	for _, mode := range []string{"request_direct", "request_build"} {
-		if r.gateway.CLIInfo.supports(mode) {
-			modes = append(modes, mode)
+		if g.CLIInfo.supports(mode) {
+			f.ExecutionModes = append(f.ExecutionModes, mode)
 		}
 	}
-	if len(modes) > 0 {
-		return modes
-	}
-	return []string{"request_" + r.gateway.RequestMode}
+	return f
 }
 
-func (r *Runtime) RequestCapabilities() []string {
-	if r.maintenanceOnly {
-		return []string{}
-	}
-	return r.gateway.requestCapabilities()
+// Facts is the Worker's RuntimeFacts now.
+func (r *Runtime) Facts() RuntimeFacts {
+	f := r.gateway.facts()
+	f.InstalledCLI = r.cli.status().Version
+	f.Ready = r.cli.ready() == nil
+	return f
 }
-
-func (r *Runtime) MaintenanceOnly() bool { return r.maintenanceOnly }
-
-func (r *Runtime) CLIIdentity() (string, string) {
-	return r.gateway.CLIInfo.Patch, r.gateway.CLIInfo.SHA256
-}
-
-func (r *Runtime) CLIReady() bool { return r.cli.ready() == nil }
 
 func (r *Runtime) Close() error {
 	r.once.Do(func() {

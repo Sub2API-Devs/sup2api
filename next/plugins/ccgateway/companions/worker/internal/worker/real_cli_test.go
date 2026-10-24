@@ -18,7 +18,8 @@ import (
 )
 
 // Real CLI with a synthetic key and an isolated local upstream: verifies the
-// worker entrypoint, account config, full history and protocol conversion.
+// worker entrypoint, account config and that each turn carries the client's
+// whole conversation (the request command keeps no history of its own).
 func TestWorkerRealCLI(t *testing.T) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
@@ -64,7 +65,7 @@ func TestWorkerRealCLI(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
 	service := httptest.NewUnstartedServer(nil)
 	defer service.Close()
-	w, err := New(&config.Config{WorkerID: "real-test", Port: service.Listener.Addr().(*net.TCPAddr).Port, CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "test-gateway-key", AdminKey: "test-admin-key", RequestTimeout: 20 * time.Second})
+	w, err := New(&config.Config{WorkerID: "real-test", Port: service.Listener.Addr().(*net.TCPAddr).Port, CLIPath: cli, RequestMode: "build", ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "test-gateway-key", AdminKey: "test-admin-key", RequestTimeout: 20 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,9 +92,6 @@ func TestWorkerRealCLI(t *testing.T) {
 		}
 		if res.StatusCode != 200 {
 			t.Fatalf("turn %d: %d %s", turn, res.StatusCode, data)
-		}
-		if turn > 0 && res.Header.Get("X-CCGateway-History") != "prefix-hit" {
-			t.Fatalf("history not reused: %s", res.Header.Get("X-CCGateway-History"))
 		}
 		if stream {
 			if strings.Count(string(data), "event: message_stop\n") != 1 || !bytes.Contains(data, []byte("Hello worker")) {

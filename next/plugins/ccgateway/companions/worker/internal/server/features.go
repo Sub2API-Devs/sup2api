@@ -47,17 +47,12 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		probe.Status = "observed"
 		probe.Value = status.CLIVersion
 	}
-	out := features.RuntimeCapabilities{ProtocolVersion: features.CapabilityProtocolVersion, Build: binaryBuildInfo(), Catalog: features.Catalog(), PolicySchemaVersions: []int{features.PolicySchemaVersion}, Probes: []features.RuntimeProbe{probe}, ModelProviderVerification: "not_run"}
-	out.ExecutionModes = []string{"native"}
-	if worker, ok := s.worker.(interface{ ExecutionModes() []string }); ok {
-		out.ExecutionModes = worker.ExecutionModes()
-		if len(out.ExecutionModes) == 1 && out.ExecutionModes[0] != "native" {
-			// Native policy declarations do not apply to single-request mode.
-			out.Catalog = features.RequestCatalog(out.ExecutionModes[0])
-		}
-	}
-	if worker, ok := s.worker.(interface{ RequestCapabilities() []string }); ok {
-		out.Catalog = features.RequestRuntimeCatalog(worker.RequestCapabilities())
+	facts := s.worker.Facts()
+	out := features.RuntimeCapabilities{
+		ProtocolVersion: features.CapabilityProtocolVersion, Build: binaryBuildInfo(),
+		ExecutionModes:       facts.ExecutionModes,
+		Catalog:              features.RequestRuntimeCatalog(facts.Capabilities),
+		PolicySchemaVersions: []int{features.PolicySchemaVersion}, Probes: []features.RuntimeProbe{probe}, ModelProviderVerification: "not_run",
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

@@ -7,13 +7,14 @@ import (
 	"fmt"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"net/url"
-	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -120,37 +121,22 @@ func headers(in map[string]string) map[string]string {
 			out[key] = value
 		}
 	}
-	for key, valid := range agentContextHeaders {
-		if value := strings.TrimSpace(in[key]); value != "" && len(value) <= 4096 && valid.MatchString(value) {
+	for _, header := range agentContextHeaders {
+		key := strings.ToLower(header.Header)
+		if value := strings.TrimSpace(in[key]); value != "" && header.Valid(value) {
 			out[key] = value
 		}
 	}
 	return out
 }
 
-// agentContextHeaders are the forwarded CC context headers and the shape each
-// must have; a value of any other shape is dropped, not forwarded.
-var agentContextHeaders = map[string]*regexp.Regexp{
-	"x-claude-code-request-class":   regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
-	"x-claude-code-agent-id":        regexp.MustCompile(`^[!-~]{1,256}$`),
-	"x-claude-code-parent-agent-id": regexp.MustCompile(`^[!-~]{1,256}$`),
-	"x-claude-code-agent-type":      regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`),
-	"x-claude-code-prompt-id":       regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
-	// CC 2.1.304 g4t: up to 32 "tool=ms" entries joined by ";", at most 4096 characters.
-	"x-claude-code-prev-tool-durations": regexp.MustCompile(`^[!-:<>-~]+=[0-9]+(;[!-:<>-~]+=[0-9]+){0,31}$`),
-	// CC 2.1.304 Zmn2: the compaction kind, on the compaction request and on the first request after one.
-	"x-cc-compaction-request":         regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
-	"x-claude-code-compaction":        regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
-	"x-cc-context-compacted":          regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
-	"x-claude-code-context-compacted": regexp.MustCompile(`^[a-z][a-z_]{0,31}$`),
-	// The client's own User-Agent, only when it is Claude Code's (2.1.304 dN):
-	// the Worker's CLI keeps it on a request that keeps the client's billing
-	// header, so the two agree as they do in Claude Code (audit D1).
-	"user-agent": regexp.MustCompile(`^claude-cli/[0-9]+\.[0-9]+\.[0-9]+ \(external, [a-z][a-z0-9-]{0,31}(, [a-z-]{1,32}/[!-~]{1,64}){0,3}\)$`),
-}
-
-// workerRequestID is the shape the Worker takes as its log's request ID.
-var workerRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+// agentContextHeaders are the forwarded CC context headers, with the shape
+// each must have (the Worker reads the same table); a value of any other
+// shape is dropped, not forwarded. The client's own User-Agent goes along
+// only when it is Claude Code's: the Worker's CLI keeps it on a request that
+// keeps the client's billing header, so the two agree as they do in Claude
+// Code (audit D1).
+var agentContextHeaders = append(slices.Clone(features.AgentContextHeaders), features.ClientUserAgent)
 
 // The host resolves this exact virtual target for this plugin and account type,
 // then injects authentication. No caller-supplied URL or credential is forwarded.
@@ -176,7 +162,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	outHeaders["x-ccgateway-session-scope"] = fmt.Sprintf("user:%d:key:%d", in.GetMeta().GetUserId(), in.GetMeta().GetApiKeyId())
 	// The core's request ID names the Worker's log, so a usage record leads
 	// to it (REQUEST-LOG-VIEWER-DESIGN.md §3); a caller's own is not copied.
-	if id := in.GetMeta().GetRequestId(); workerRequestID.MatchString(id) {
+	if id := in.GetMeta().GetRequestId(); features.RequestIDPattern.MatchString(id) {
 		outHeaders["x-request-id"] = id
 	}
 	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: target, Headers: outHeaders, UpstreamModel: model}, nil

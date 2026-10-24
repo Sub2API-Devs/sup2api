@@ -8,15 +8,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 const cliReleaseURL = "https://downloads.claude.ai/claude-code-releases/"
-
-var cliReleaseVersion = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
 
 type cliUpdatePolicy struct {
 	AutoUpdate bool   `json:"auto_update"`
@@ -156,16 +155,14 @@ func (r *Runtime) postCLIAction(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	action := str(body, "action")
-	if action == "begin-install" || action == "validate-install" || action == "finish-install" {
-		apiError(w, 409, "configuration_error", "CLI is pinned by ccgateway; use a packaged version")
-		return
-	}
 	if keys(body, "action") != nil {
 		apiError(w, 400, "invalid_request_error", "Unknown CLI action field")
 		return
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), 30*time.Second)
 	defer cancel()
+	// Nothing installs a CLI in place (a newer packaged CLI is a new
+	// container): an install action is an unknown one.
 	switch action {
 	case "check":
 		if err := r.checkCLIRelease(ctx); err != nil {
@@ -211,7 +208,7 @@ func (r *Runtime) checkCLIRelease(ctx context.Context) error {
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 129))
 	version := strings.TrimSpace(string(raw))
-	if err != nil || response.StatusCode != 200 || !cliReleaseVersion.MatchString(version) {
+	if err != nil || response.StatusCode != 200 || !features.ValidCLIVersion(version) {
 		return fmt.Errorf("invalid Claude Code release metadata")
 	}
 	m.mu.Lock()

@@ -12,7 +12,7 @@ import (
 // SourceHeader names who produced an error answer.
 const SourceHeader = "X-CCGateway-Error-Source"
 
-// The sources. The CLI's request command reports the first five in its
+// The sources. The CLI's request command reports the first six in its
 // stderr frame (the Worker writes them on); the last two are the gateway's
 // own refusals (2026-10-23, audit C2/A6).
 const (
@@ -47,17 +47,31 @@ func Source(h http.Header) string {
 	return SourceOf(h.Values(SourceHeader))
 }
 
-// SourceOf is Source for header values already read (the plugin host hands
-// headers to a plugin as a lowercase map).
+// SourceOf is Source for header values already read.
 func SourceOf(values []string) string {
 	if len(values) != 1 {
 		return ""
 	}
-	switch values[0] {
-	case SourceHTTP, SourceInput, SourceTransport, SourceTimeout, SourceInterrupted, SourceInternal, SourceGateway, SourceCore:
-		return values[0]
+	return SourceOfValue(values[0])
+}
+
+// SourceOfValue is Source for the one value of a single-valued header map
+// (the plugin host hands headers to a plugin as a lowercase map).
+func SourceOfValue(value string) string {
+	if CLISource(value) || Local(value) {
+		return value
 	}
 	return ""
+}
+
+// CLISource says whether source is one the CLI's request command reports in
+// its error frame: the upstream's HTTP answer or the CLI's own failure.
+func CLISource(source string) bool {
+	switch source {
+	case SourceHTTP, SourceInput, SourceTransport, SourceTimeout, SourceInterrupted, SourceInternal:
+		return true
+	}
+	return false
 }
 
 // Local reports whether a source names the gateway's own refusal (core or

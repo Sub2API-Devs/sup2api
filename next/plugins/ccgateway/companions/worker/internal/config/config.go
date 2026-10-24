@@ -18,7 +18,6 @@ type Config struct {
 	WorkerID string
 	Port     int
 	BindHost string
-	LogLevel string
 	APIKey   string
 	AdminKey string
 
@@ -43,7 +42,6 @@ type Config struct {
 	// 超时配置
 	RequestTimeout time.Duration
 	CLITimeout     time.Duration
-	HealthTimeout  time.Duration
 
 	// RequestSlots is how many requests the account runs at once
 	// (CCG_REQUEST_SLOTS, default engine.DefaultRequestSlots).
@@ -99,7 +97,6 @@ func Load() (*Config, error) {
 		WorkerID:         getEnv("WORKER_ID", workerID),
 		Port:             port,
 		BindHost:         bindHost,
-		LogLevel:         getEnv("LOG_LEVEL", "info"),
 		APIKey:           os.Getenv("CCG_API_KEY"),
 		AdminKey:         os.Getenv("CCG_ADMIN_KEY"),
 		CLIPath:          getEnv("WORKER_CLI_PATH", "/usr/local/bin/claude"),
@@ -112,7 +109,6 @@ func Load() (*Config, error) {
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
 		RequestTimeout:   requestTimeout,
 		CLITimeout:       getEnvDuration("CLI_TIMEOUT", requestTimeout),
-		HealthTimeout:    getEnvDuration("HEALTH_TIMEOUT", 5*time.Second),
 		RequestSlots:     slots,
 	}
 
@@ -134,9 +130,7 @@ func Load() (*Config, error) {
 
 // Validate 验证配置
 func (c *Config) Validate() error {
-	if c.RequestMode == "" {
-		c.RequestMode = "build"
-	}
+	// Load defaults the mode to build (CCG_REQUEST_MODE).
 	if c.RequestMode != "direct" && c.RequestMode != "build" {
 		return fmt.Errorf("CCG_REQUEST_MODE must be direct or build")
 	}

@@ -13,6 +13,9 @@ const RequestPolicyModeCapability = "request_policy_mode_v1"
 
 var BuildAttachmentFields = []string{"platform_name", "os_version", "shell", "primary_directory", "additional_directories", "git_repository", "worktree", "scratchpad_directory", "github_cli", "agent_proxy"}
 
+// BuildBillingFields are the billing header fields BuildBillingSources sets.
+var BuildBillingFields = []string{"cc_version", "cc_entrypoint"}
+
 // BuildAttachmentSources is deliberately separate from the retired agent
 // policy: upgrading a Worker must not activate old saved erase/replace rules.
 // Missing fields keep the client's text. Extended fields and erasure require
@@ -38,13 +41,11 @@ func (p BuildAttachmentSources) RequiresV2() bool {
 	return false
 }
 
-func (p BuildAttachmentSources) RequiresWorker() bool { return p.UsesWorker() }
-
 type BuildBillingSources map[string]string
 
 func (p BuildBillingSources) Validate() error {
 	for field, source := range p {
-		if (field != "cc_version" && field != "cc_entrypoint") || (source != "client" && source != "worker") {
+		if !slices.Contains(BuildBillingFields, field) || (source != "client" && source != "worker") {
 			return fmt.Errorf("invalid build_billing_sources: %s=%s", field, source)
 		}
 	}
@@ -59,8 +60,6 @@ func (p BuildBillingSources) UsesWorker() bool {
 	}
 	return false
 }
-
-func (p BuildBillingSources) RequiresWorker() bool { return p.UsesWorker() }
 
 func (p BuildAttachmentSources) UsesWorker() bool {
 	for _, source := range p {
@@ -90,13 +89,13 @@ var AttachmentChildren = map[string][]string{
 	"session_context":   {"claude_md", "git_status", "user_email", "session_other"},
 }
 
-// AttachmentContains includes equality and all descendant fields.
-func AttachmentContains(parent, child string) bool {
+// attachmentContains includes equality and all descendant fields.
+func attachmentContains(parent, child string) bool {
 	if parent == child {
 		return true
 	}
 	return slices.ContainsFunc(AttachmentChildren[parent], func(name string) bool {
-		return AttachmentContains(name, child)
+		return attachmentContains(name, child)
 	})
 }
 
@@ -126,7 +125,7 @@ func ValidateEraseClientAttachments(types []string) error {
 var ReplaceableClientAttachments = ErasableClientAttachments
 
 func attachmentsOverlap(a, b string) bool {
-	return AttachmentContains(a, b) || AttachmentContains(b, a)
+	return attachmentContains(a, b) || attachmentContains(b, a)
 }
 
 // ValidateReplaceClientAttachments accepts each listed type once and none

@@ -108,15 +108,16 @@ func (f *requestErrorFrame) valid() bool {
 	if f.Protocol != requestErrorProtocol || f.Status < 400 || f.Status > 599 || len(f.Body) > 64<<10 || len(f.Headers) > 32 {
 		return false
 	}
-	if f.BodyBytes < 0 || f.Source == "http" && f.Truncated || f.BodyFile && (f.Source != "http" || f.Body != "" || f.BodyBase64 != nil) {
+	// Only an upstream HTTP answer carries its body in a file or in base64,
+	// and its body is never truncated.
+	upstream := f.Source == requestfailure.SourceHTTP
+	if f.BodyBytes < 0 || upstream && f.Truncated || f.BodyFile && (!upstream || f.Body != "" || f.BodyBase64 != nil) {
 		return false
 	}
-	if f.BodyBase64 != nil && (f.Source != "http" || f.Body != "" || f.BodyFile) {
+	if f.BodyBase64 != nil && (!upstream || f.Body != "" || f.BodyFile) {
 		return false
 	}
-	switch f.Source {
-	case "http", "input", "transport", "timeout", "interrupted", "internal":
-	default:
+	if !requestfailure.CLISource(f.Source) {
 		return false
 	}
 	// The reader already bounds the entire protocol frame. Do not replace a
@@ -127,7 +128,7 @@ func (f *requestErrorFrame) valid() bool {
 // The CLI only chooses a marker, never a filesystem path. The Worker opens
 // its own request-local sidecar after the CLI exits and verifies completion.
 func (f *requestErrorFrame) openBody(meta string) (io.Closer, error) {
-	if f.Source != "http" {
+	if f.Source != requestfailure.SourceHTTP {
 		return nil, nil
 	}
 	if f.BodyFile {
@@ -176,7 +177,7 @@ func (f *requestErrorFrame) write(w http.ResponseWriter) {
 		}
 	}
 	httpfacts.Apply(w.Header(), h)
-	if f.Source == "http" {
+	if f.Source == requestfailure.SourceHTTP {
 		if ct := h.Get("Content-Type"); ct != "" {
 			w.Header().Set("Content-Type", ct)
 		} else {
@@ -201,5 +202,5 @@ func (f *requestErrorFrame) write(w http.ResponseWriter) {
 }
 
 func localRequestError(status int, kind, code, message string) *requestErrorFrame {
-	return &requestErrorFrame{Protocol: requestErrorProtocol, Source: "internal", Status: status, Error: requestErrorDetail{Type: kind, Code: code, Message: message}}
+	return &requestErrorFrame{Protocol: requestErrorProtocol, Source: requestfailure.SourceInternal, Status: status, Error: requestErrorDetail{Type: kind, Code: code, Message: message}}
 }

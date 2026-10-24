@@ -30,6 +30,36 @@ const (
 
 var _ pluginsdk.QuotaReader = (*Plugin)(nil)
 
+// The quota windows' keys: the account-wide five-hour and weekly limits, and
+// the weekly limits of one model family.
+const (
+	quota5h       = "5h"
+	quota7d       = "7d"
+	quota7dSonnet = "7d_sonnet"
+	quota7dFable  = "7d_fable"
+)
+
+// quotaKeys are every window, in the order the plugin reports them.
+var quotaKeys = []string{quota5h, quota7d, quota7dSonnet, quota7dFable}
+
+// scopedQuota says whether a window limits one model family only: exhausting
+// it moves that family's requests to another account, nothing else.
+func scopedQuota(key string) bool { return key == quota7dFable || key == quota7dSonnet }
+
+// quotaApplies says whether a window limits requests for model.
+func quotaApplies(key, model string) bool {
+	switch key {
+	case quota5h, quota7d:
+		return true
+	case quota7dFable:
+		return strings.HasPrefix(model, "claude-fable-")
+	case quota7dSonnet:
+		return strings.HasPrefix(model, "claude-sonnet-")
+	default:
+		return false
+	}
+}
+
 type usageWindow struct {
 	Utilization *float64 `json:"utilization"`
 	ResetsAt    *string  `json:"resets_at"`
@@ -149,7 +179,7 @@ func parseUsage(raw []byte) ([]*pluginv1.QuotaWindow, error) {
 	if json.Unmarshal(raw, &body) != nil || !uniqueUsageFields(gjson.ParseBytes(raw), 0) {
 		return nil, errors.New("usage response is invalid or ambiguous JSON")
 	}
-	windows := map[string]*usageWindow{"5h": body.Five, "7d": body.Week, "7d_sonnet": body.Sonnet, "7d_fable": body.Fable}
+	windows := map[string]*usageWindow{quota5h: body.Five, quota7d: body.Week, quota7dSonnet: body.Sonnet, quota7dFable: body.Fable}
 	seen := map[string]bool{}
 	for _, limit := range body.Limits {
 		key := usageLimitKey(limit)
@@ -178,7 +208,7 @@ func parseUsage(raw []byte) ([]*pluginv1.QuotaWindow, error) {
 		}
 	}
 	out := make([]*pluginv1.QuotaWindow, 0, len(windows))
-	for _, key := range []string{"5h", "7d", "7d_sonnet", "7d_fable"} {
+	for _, key := range quotaKeys {
 		if windows[key] == nil {
 			continue
 		}
@@ -223,9 +253,9 @@ func usageLimitKey(limit usageLimit) string {
 	}
 	switch {
 	case strings.EqualFold(limit.Scope.Model.DisplayName, "Fable"):
-		return "7d_fable"
+		return quota7dFable
 	case strings.EqualFold(limit.Scope.Model.DisplayName, "Sonnet"):
-		return "7d_sonnet"
+		return quota7dSonnet
 	default:
 		return ""
 	}

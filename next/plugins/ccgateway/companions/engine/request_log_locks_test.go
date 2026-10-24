@@ -16,7 +16,7 @@ import (
 func TestUnauthenticatedRequestLeavesNoLog(t *testing.T) {
 	store, err := newRequestLogStore(t.TempDir())
 	require.NoError(t, err)
-	g := &Gateway{RequestMode: "build", Key: "gateway-key", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogs: store, RequestLogDir: store.root, Slots: make(chan struct{}, 1)}
+	g := &Gateway{RequestMode: "build", Key: "gateway-key", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogs: store, Slots: make(chan struct{}, 1)}
 	for _, key := range []string{"", "wrong-key"} {
 		r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
 		if key != "" {
@@ -53,7 +53,7 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(w, r)
 	d.store = store
-	out := d.capture(w, r, "")
+	out := d.capture(w, r)
 	require.NotEmpty(t, d.directory)
 	store.mu.Lock()
 	done := make(chan struct{})
@@ -79,7 +79,7 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	// its writes.
 	d = newRequestDiagnostic(w, r)
 	d.store = store
-	out = d.capture(w, r, "")
+	out = d.capture(w, r)
 	directory := d.directory
 	putLogs(t, store, `{"level":"off"}`)
 	_, _ = out.Write([]byte("after off"))
@@ -87,6 +87,64 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	d.finish()
 	_, err = os.Stat(directory)
 	require.True(t, os.IsNotExist(err), "a log written after the logs were turned off")
+}
+
+// Turning logs off and clearing content remove files without the account's
+// lock (W6): a week of logs takes a while, and no request waits for it.
+func TestRequestLogRemovalDoesNotHoldTheAccountLock(t *testing.T) {
+	entered, release := make(chan string, 64), make(chan struct{})
+	removeLogPath = func(path string) error {
+		entered <- path
+		<-release
+		return os.RemoveAll(path)
+	}
+	t.Cleanup(func() { removeLogPath = os.RemoveAll })
+	root := t.TempDir()
+	store := fullLogStore(t, root)
+	old := logRequest(t, store)
+	_, err := os.Stat(filepath.Join(old, "request.body"))
+	require.NoError(t, err)
+	// A request that starts meanwhile is not held, and its content is not the
+	// cleared one.
+	unblocked := func(change string) (string, chan int) {
+		t.Helper()
+		done := make(chan int, 1)
+		go func() {
+			code, _ := putLogs(t, store, change)
+			done <- code
+		}()
+		<-entered
+		started := make(chan string)
+		go func() { started <- logRequest(t, store) }()
+		select {
+		case directory := <-started:
+			return directory, done
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatal("a request waited for", change)
+		}
+		return "", done
+	}
+
+	fresh, done := unblocked(`{"clear_full":true}`)
+	close(release)
+	require.Equal(t, 200, <-done)
+	_, err = os.Stat(filepath.Join(old, "request.body"))
+	require.True(t, os.IsNotExist(err), "the content logged before was cleared")
+	_, err = os.Stat(filepath.Join(old, "metadata.json"))
+	require.NoError(t, err, "the summary stays")
+	_, err = os.Stat(filepath.Join(fresh, "request.body"))
+	require.NoError(t, err, "a request logged after the clear keeps its content")
+
+	release = make(chan struct{})
+	off, done := unblocked(`{"level":"off"}`)
+	require.Empty(t, off, "logs off: the new request is not logged")
+	close(release)
+	require.Equal(t, 200, <-done)
+	_, err = os.Stat(store.root)
+	require.True(t, os.IsNotExist(err))
+	aside, _ := filepath.Glob(store.root + discardedSuffix + "*")
+	require.Empty(t, aside, "the logs moved aside are removed")
 }
 
 // The index is built in the background (audit C7): a request finished while

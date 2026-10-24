@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 const (
@@ -121,14 +123,6 @@ func (s *requestLogStore) waitIndex() {
 	}
 }
 
-// ensureIndex builds the index of a store that has none (caller holds s.mu):
-// one made without newRequestLogStore.
-func (s *requestLogStore) ensureIndex() {
-	if s.index == nil {
-		s.index = scanLogIndex(s.root)
-	}
-}
-
 // scanLogIndex reads every finished request's metadata.
 func scanLogIndex(root string) map[string]logEntry {
 	index := map[string]logEntry{}
@@ -149,7 +143,7 @@ func scanLogIndex(root string) map[string]logEntry {
 }
 
 // indexed adds a finished request (caller holds s.mu). While the index is
-// built it waits in indexPending; a store without one finds it on disk.
+// built it waits in indexPending.
 func (s *requestLogStore) indexed(id string, metadata []byte) {
 	e, ok := parseLogEntry(id, metadata)
 	switch {
@@ -164,9 +158,6 @@ func (s *requestLogStore) indexed(id string, metadata []byte) {
 // prune keeps each level within its limits and drops the removed requests
 // from the index.
 func (s *requestLogStore) prune() {
-	if s == nil {
-		return
-	}
 	s.mu.Lock()
 	s.pruned = s.clock()
 	s.mu.Unlock()
@@ -270,7 +261,7 @@ func (q *logQuery) valid() bool {
 		q.Limit = viewerPageDefault
 	}
 	if q.Limit < 1 || q.Limit > viewerPageMax || len(q.Model) > 256 ||
-		q.RequestID != "" && !sessionName.MatchString(q.RequestID) ||
+		q.RequestID != "" && !features.RequestIDPattern.MatchString(q.RequestID) ||
 		q.Status != "" && q.Status != "ok" && q.Status != "error" ||
 		q.Level != "" && q.Level != logLevelSummary && q.Level != logLevelFull {
 		return false
@@ -345,7 +336,6 @@ func (s *requestLogStore) query(w http.ResponseWriter, q logQuery) {
 		s.mu.Unlock()
 		return
 	}
-	s.ensureIndex()
 	all := make([]logEntry, 0, len(s.index))
 	for _, e := range s.index {
 		all = append(all, e)
@@ -415,7 +405,6 @@ func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
 	if s.off(w) {
 		return ""
 	}
-	s.ensureIndex()
 	if _, ok := s.index[id]; !ok {
 		apiError(w, 404, "request_log_not_found", "Request log not found")
 		return ""

@@ -8,7 +8,7 @@
 
 - `CCG_API_KEY`调用鉴权，`CCG_ADMIN_KEY`独立管理鉴权；不要记录值。
 - 容器`CCG_BIND`默认8787；`WORKER_PORT`可覆盖；裸程序未设两者时使用8788。
-- `WORKER_CLI_PATH`指打包的定制CLI（`/opt/ccgateway/cli/<版本>`），`CCG_REQUEST_MODE`为 `build`（默认）或 `direct`。
+- `WORKER_CLI_PATH`指打包的定制CLI（`/opt/ccgateway/cli/<版本>`），`CCG_REQUEST_MODE`为 `build`（默认）或 `direct`。CLI 必须能用 `--ccgateway-info` 说明自己支持所配模式，否则 Worker 不启动（只有 maintenance-only 的引导 Worker 例外）。
 - `CLAUDE_CONFIG_DIR`账号CLI配置/授权，`HISTORY_DIR`为Worker数据目录（请求日志、资源身份等）；兼容原容器`CCG_DATA_DIR`。
 - `REQUEST_TIMEOUT`/`CLI_TIMEOUT`取较短正值；`WORKER_CLI_VERSION`不替代实际版本探测。
 

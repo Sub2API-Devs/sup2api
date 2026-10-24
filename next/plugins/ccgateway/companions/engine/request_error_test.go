@@ -66,7 +66,8 @@ func TestRequestErrorHTTPResponseAndLogStatus(t *testing.T) {
 			out.Header().Set(requestfailure.SourceHeader, "internal")
 			r := httptest.NewRequest("POST", "/v1/messages", nil)
 			d := newRequestDiagnostic(out, r)
-			w := d.capture(out, r, t.TempDir())
+			d.store = fullLogStore(t, t.TempDir())
+			w := d.capture(out, r)
 			f.record(d, false)
 			f.write(w)
 			d.finish()
@@ -134,7 +135,8 @@ func TestRequestDiagnosticTracksStatusWithoutExplicitFail(t *testing.T) {
 	out := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d := newRequestDiagnostic(out, r)
-	w := d.capture(out, r, t.TempDir())
+	d.store = fullLogStore(t, t.TempDir())
+	w := d.capture(out, r)
 	w.WriteHeader(429)
 	_, _ = w.Write([]byte(`{"error":"upstream"}`))
 	d.finish()
@@ -160,7 +162,7 @@ func TestRequestCommandStructuredStderrThroughProcess(t *testing.T) {
 			if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 				t.Fatal(err)
 			}
-			g := &Gateway{RequestMode: mode, Key: "gateway", Runner: &Runner{CLI: cli, Work: root}, Slots: make(chan struct{}, 1), Timeout: time.Second, RequestLogDir: filepath.Join(root, "logs")}
+			g := &Gateway{RequestMode: mode, Key: "gateway", CLIInfo: buildCLI, Runner: &Runner{CLI: cli, Work: root}, Slots: make(chan struct{}, 1), Timeout: time.Second, RequestLogs: fullLogStore(t, root)}
 			r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
 			r.Header.Set("X-Api-Key", "gateway")
 			w := httptest.NewRecorder()

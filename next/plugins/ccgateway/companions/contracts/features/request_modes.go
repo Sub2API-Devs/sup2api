@@ -16,7 +16,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 			Mechanisms: []string{BuildAttachmentCapabilityV2}, Reason: "已加载 CLI 声明支持十项环境字段来源及擦除；仅修改匹配字段，未知内容保持。最终上游模型能力未验证。",
 		})
 	} else if slices.Contains(capabilities, BuildAttachmentCapability) {
-		doc.Features = append(doc.Features, RequestCatalog("request_build").Features[1])
+		doc.Features = append(doc.Features, buildAttachmentsFeature())
 	}
 	for _, feature := range []struct{ id, title, capability string }{
 		{"F-BUILD-BILLING", "build 计费归属来源", BuildBillingCapability},
@@ -44,12 +44,17 @@ func RequestCatalog(mode string) Document {
 		Reason:     "direct 保留 Messages 原文，只补缺失的计费头；build 由 CLI 用原生函数按客户端原块组装，Worker 不改写内容。均不执行工具循环，工具由调用方执行。count_tokens 未实现。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。",
 	}}}
 	if mode == "request_build" {
-		doc.Features = append(doc.Features, Feature{
-			ID: "F-BUILD-ATTACHMENTS", Title: "build 环境附件来源", Category: "CC 执行上下文", Scope: "cc", Status: "supported",
-			BodyPaths: []string{"system", "messages[].content"}, BetaHeaders: []string{},
-			Mechanisms: []string{BuildAttachmentCapabilityV2, "build_attachment_sources", "CLI 原生环境段"},
-			Reason:     "环境段各字段按来源由 CLI 的内容适配器生成：默认保留客户端，也可用 Worker 本机事实或擦除。仅识别完整 CC 环境段落，其余内容原样保留；不调用额外模型。direct 不执行转换。",
-		})
+		doc.Features = append(doc.Features, buildAttachmentsFeature())
 	}
 	return doc
+}
+
+// buildAttachmentsFeature is the build environment's attachment sources.
+func buildAttachmentsFeature() Feature {
+	return Feature{
+		ID: "F-BUILD-ATTACHMENTS", Title: "build 环境附件来源", Category: "CC 执行上下文", Scope: "cc", Status: "supported",
+		BodyPaths: []string{"system", "messages[].content"}, BetaHeaders: []string{},
+		Mechanisms: []string{BuildAttachmentCapabilityV2, "build_attachment_sources", "CLI 原生环境段"},
+		Reason:     "环境段各字段按来源由 CLI 的内容适配器生成：默认保留客户端，也可用 Worker 本机事实或擦除。仅识别完整 CC 环境段落，其余内容原样保留；不调用额外模型。direct 不执行转换。",
+	}
 }

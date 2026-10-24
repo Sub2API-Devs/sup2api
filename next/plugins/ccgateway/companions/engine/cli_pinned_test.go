@@ -68,3 +68,24 @@ func TestPinnedCLIIsVerifiedOnce(t *testing.T) {
 	require.True(t, info.supports("request_direct"))
 	require.Equal(t, []string{"--version", "--ccgateway-info"}, runs())
 }
+
+// A CLI that cannot say what it supports does not start a Worker that serves
+// requests: it would report healthy and refuse every request with 409 (W3).
+// A maintenance-only Worker serves none and starts without capabilities.
+func TestCLIWithoutRequestInfoDoesNotServe(t *testing.T) {
+	exe, err := lifecycleTestExecutable()
+	require.NoError(t, err)
+	t.Setenv("CCG_TEST_INFO_PEER", filepath.Join(t.TempDir(), "runs.log"))
+	t.Setenv("CCG_TEST_INFO_PEER_NO_INFO", "1")
+	for _, mode := range []string{"build", "direct"} {
+		_, _, _, err = loadPinnedCLI(Options{RequestMode: mode, CLI: exe})
+		require.ErrorContains(t, err, "cannot verify CLI request capabilities", mode)
+	}
+	_, version, info, err := loadPinnedCLI(Options{RequestMode: "build", CLI: exe, MaintenanceOnly: true})
+	require.NoError(t, err)
+	require.Equal(t, "2.1.304", version)
+	require.Empty(t, info.Capabilities)
+	// A pinned CLI must prove its identity even for maintenance.
+	_, _, _, err = loadPinnedCLI(Options{RequestMode: "build", CLI: exe, MaintenanceOnly: true, ExpectedCLIVersion: "2.1.304", ExpectedCLISHA256: strings.Repeat("0", 64), ExpectedCLIPatch: "ccgateway-test", CLIChecksumVerified: true})
+	require.ErrorContains(t, err, "patch identity mismatch")
+}

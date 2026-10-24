@@ -12,10 +12,12 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
-var activeVersion = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
 var activePatch = regexp.MustCompile(`^ccgateway-[a-z0-9-]+$`)
+var activeLease = regexp.MustCompile(`^[a-f0-9]{48}$`)
 
 // active-runtime.json is root-owned deployment metadata, never a request
 // field. Absence preserves the established pinned environment contract.
@@ -56,7 +58,7 @@ func (c *Config) loadActiveRuntime(root string) error {
 	if err := read(active, &selection); err != nil {
 		return err
 	}
-	if selection.SchemaVersion != 1 || !activeVersion.MatchString(selection.Version) || (selection.RequestMode != "build" && selection.RequestMode != "direct") {
+	if selection.SchemaVersion != 1 || !features.ValidCLIVersion(selection.Version) || (selection.RequestMode != "build" && selection.RequestMode != "direct") {
 		return fmt.Errorf("invalid active runtime selection")
 	}
 	if selection.Manifest == "" || filepath.IsAbs(selection.Manifest) {
@@ -99,7 +101,7 @@ func (c *Config) loadActiveRuntime(root string) error {
 	c.RequestMode = selection.RequestMode
 	c.MaintenanceOnly = selection.MaintenanceOnly
 	if selection.MaintenanceLease != "" {
-		if !regexp.MustCompile(`^[a-f0-9]{48}$`).MatchString(selection.MaintenanceLease) || selection.MaintenanceExpires > time.Now().Add(10*time.Minute).Unix() {
+		if !activeLease.MatchString(selection.MaintenanceLease) || selection.MaintenanceExpires > time.Now().Add(10*time.Minute).Unix() {
 			return fmt.Errorf("invalid active runtime maintenance lease")
 		}
 		c.RuntimeMaintenanceLease = selection.MaintenanceLease
