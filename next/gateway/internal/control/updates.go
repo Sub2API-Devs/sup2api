@@ -14,6 +14,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/Sub2API-Devs/sup2api/next/gateway/internal/release"
+	"github.com/jackc/pgx/v5"
 )
 
 const updateManifestAsset = "next-core-manifest.json"
@@ -342,33 +343,29 @@ func (s *Store) importGitHub(ctx context.Context, repository, tag string) (Relea
 	if err != nil {
 		return out, err
 	}
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback(ctx)
-	var actual string
-	var revision int64
-	if err = tx.QueryRow(ctx, `SELECT update_repository,update_source_revision FROM updater.clusters WHERE cluster_id=$1 FOR SHARE`, s.Cluster).Scan(&actual, &revision); err != nil {
-		return out, err
-	}
-	if actual != repository || revision != source.Revision {
-		return out, ErrConflict
-	}
-	manifest, _ := json.Marshal(out.Manifest)
-	signed, _ := json.Marshal(out.Signed)
-	_, err = tx.Exec(ctx, `INSERT INTO updater.releases(digest,release_id,manifest,signed_manifest,bundle_base) VALUES($1,$2,$3,$4,$5) ON CONFLICT(digest) DO NOTHING`, out.Digest, out.Manifest.ReleaseID, manifest, signed, out.BundleBase)
-	if err != nil {
-		return out, err
-	}
-	var storedBase string
-	if err = tx.QueryRow(ctx, `SELECT bundle_base FROM updater.releases WHERE digest=$1`, out.Digest).Scan(&storedBase); err != nil {
-		return out, err
-	}
-	if storedBase != out.BundleBase {
-		return out, errors.New("this signed release already exists from a different source; its existing source was retained")
-	}
-	if err = tx.Commit(ctx); err != nil {
+	if err = s.withTx(ctx, func(tx pgx.Tx) error {
+		var actual string
+		var revision int64
+		if err := tx.QueryRow(ctx, `SELECT update_repository,update_source_revision FROM updater.clusters WHERE cluster_id=$1 FOR SHARE`, s.Cluster).Scan(&actual, &revision); err != nil {
+			return err
+		}
+		if actual != repository || revision != source.Revision {
+			return ErrConflict
+		}
+		manifest, _ := json.Marshal(out.Manifest)
+		signed, _ := json.Marshal(out.Signed)
+		if _, err := tx.Exec(ctx, `INSERT INTO updater.releases(digest,release_id,manifest,signed_manifest,bundle_base) VALUES($1,$2,$3,$4,$5) ON CONFLICT(digest) DO NOTHING`, out.Digest, out.Manifest.ReleaseID, manifest, signed, out.BundleBase); err != nil {
+			return err
+		}
+		var storedBase string
+		if err := tx.QueryRow(ctx, `SELECT bundle_base FROM updater.releases WHERE digest=$1`, out.Digest).Scan(&storedBase); err != nil {
+			return err
+		}
+		if storedBase != out.BundleBase {
+			return errors.New("this signed release already exists from a different source; its existing source was retained")
+		}
+		return nil
+	}); err != nil {
 		return out, err
 	}
 	return s.Release(ctx, out.Digest)

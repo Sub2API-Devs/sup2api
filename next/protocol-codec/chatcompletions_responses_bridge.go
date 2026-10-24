@@ -434,7 +434,6 @@ func buildChatMessagesFromItems(messages []ChatMessage, rawItems []json.RawMessa
 		// tool_calls message and its tool reply, which DeepSeek rejects
 		// ("insufficient tool messages following tool_calls message"). Skip them.
 		if itemType != "" && itemType != "message" {
-			b.endThinkingSpan()
 			continue
 		}
 		if err := b.appendMessageItem(item); err != nil {
@@ -450,42 +449,26 @@ func buildChatMessagesFromItems(messages []ChatMessage, rawItems []json.RawMessa
 type chatItemBuilder struct {
 	messages []ChatMessage
 	opts     *ResponsesToChatOptions
-	// pendingReasoning holds the reasoning text from a reasoning item until the
-	// assistant message it belongs to is emitted. DeepSeek's thinking mode
-	// requires the reasoning_content that produced a tool call to be passed back
-	// on that assistant message; dropping it yields a 400. It only survives
-	// across an assistant message (so a following tool call in the same turn
-	// still receives it); any other role ends the thinking span.
-	pendingReasoning string
 	// lastTurnReasoning is the most recent reasoning text of the current turn,
-	// surviving tool outputs. DeepSeek emits reasoning only once per turn, so
-	// chained tool calls (reasoning → call A → output A → call B) leave call B's
-	// assistant message without reasoning_content and DeepSeek 400s the history;
-	// replaying the turn's reasoning on B's message satisfies the contract. Only
-	// a user-side item ends the turn and clears it.
+	// surviving tool outputs. DeepSeek's thinking mode requires the
+	// reasoning_content that produced a tool call to be passed back on that
+	// assistant message; dropping it yields a 400. DeepSeek also emits reasoning
+	// only once per turn, so chained tool calls (reasoning → call A → output A →
+	// call B) leave call B's assistant message without reasoning_content and
+	// DeepSeek 400s the history; replaying the turn's reasoning on B's message
+	// satisfies the contract. Only a user-side item ends the turn and clears it,
+	// because assistant and tool items are still part of the turn whose tool
+	// calls must keep their reasoning.
 	lastTurnReasoning               string
 	mediaByCallID                   toolOutputMediaByCallID
 	invalidFunctionCallIDs          map[string]struct{}
 	invalidEmptyFunctionCallOutputs int
 }
 
-func (b *chatItemBuilder) reasoningForAssistant() string {
-	if b.pendingReasoning != "" {
-		return b.pendingReasoning
-	}
-	return b.lastTurnReasoning
-}
-
-// endThinkingSpan clears only the reasoning awaiting an assistant message; the
-// turn's reasoning survives so a later tool call in the same turn still gets it.
-func (b *chatItemBuilder) endThinkingSpan() { b.pendingReasoning = "" }
-
-// endTurn clears the whole turn. Only user-side items may call it: the assistant
-// and tool paths must keep lastTurnReasoning alive across a turn's tool calls.
-func (b *chatItemBuilder) endTurn() {
-	b.pendingReasoning = ""
-	b.lastTurnReasoning = ""
-}
+// endTurn clears the turn's reasoning. Only user-side items may call it: the
+// assistant and tool paths must keep lastTurnReasoning alive across a turn's
+// tool calls.
+func (b *chatItemBuilder) endTurn() { b.lastTurnReasoning = "" }
 
 func (b *chatItemBuilder) appendUserText(text string) {
 	content, _ := json.Marshal(text)
@@ -535,20 +518,17 @@ func (b *chatItemBuilder) dispatch(itemType string, item map[string]json.RawMess
 }
 
 func (b *chatItemBuilder) appendReasoningItem(item map[string]json.RawMessage) {
-	if txt := extractResponsesReasoningText(item); txt != "" {
-		b.pendingReasoning = txt
-	} else if b.opts != nil && b.opts.ReasoningContentByID != nil {
+	text := extractResponsesReasoningText(item)
+	if text == "" && b.opts != nil && b.opts.ReasoningContentByID != nil {
 		// No plaintext summary (encrypted-only reasoning, e.g. after codex
 		// remote compaction): fall back to the gateway-side cache keyed
 		// by the reasoning item id, which always round-trips in history.
 		if id := rawString(item["id"]); id != "" {
-			if cached := b.opts.ReasoningContentByID(id); cached != "" {
-				b.pendingReasoning = cached
-			}
+			text = b.opts.ReasoningContentByID(id)
 		}
 	}
-	if b.pendingReasoning != "" {
-		b.lastTurnReasoning = b.pendingReasoning
+	if text != "" {
+		b.lastTurnReasoning = text
 	}
 }
 
@@ -570,7 +550,6 @@ func (b *chatItemBuilder) appendFunctionCallItem(item map[string]json.RawMessage
 		} else {
 			b.invalidEmptyFunctionCallOutputs++
 		}
-		b.endThinkingSpan()
 		return
 	}
 	name := rawString(item["name"])
@@ -586,8 +565,7 @@ func (b *chatItemBuilder) appendFunctionCallItem(item map[string]json.RawMessage
 			Name:      name,
 			Arguments: arguments,
 		},
-	}, b.reasoningForAssistant())
-	b.endThinkingSpan()
+	}, b.lastTurnReasoning)
 }
 
 func (b *chatItemBuilder) appendToolSearchCallItem(item map[string]json.RawMessage) {
@@ -607,8 +585,7 @@ func (b *chatItemBuilder) appendToolSearchCallItem(item map[string]json.RawMessa
 			Name:      toolSearchProxyName,
 			Arguments: arguments,
 		},
-	}, b.reasoningForAssistant())
-	b.endThinkingSpan()
+	}, b.lastTurnReasoning)
 }
 
 func (b *chatItemBuilder) appendCustomToolCallItem(item map[string]json.RawMessage) {
@@ -623,8 +600,7 @@ func (b *chatItemBuilder) appendCustomToolCallItem(item map[string]json.RawMessa
 			Name:      rawString(item["name"]),
 			Arguments: string(arguments),
 		},
-	}, b.reasoningForAssistant())
-	b.endThinkingSpan()
+	}, b.lastTurnReasoning)
 }
 
 func (b *chatItemBuilder) appendToolOutputItem(itemType string, item map[string]json.RawMessage) {
@@ -637,11 +613,9 @@ func (b *chatItemBuilder) appendToolOutputItem(itemType string, item map[string]
 	callID := rawString(item["call_id"])
 	if callID == "" && b.invalidEmptyFunctionCallOutputs > 0 {
 		b.invalidEmptyFunctionCallOutputs--
-		b.endThinkingSpan()
 		return
 	}
 	if _, skipped := b.invalidFunctionCallIDs[callID]; skipped {
-		b.endThinkingSpan()
 		return
 	}
 	delete(b.mediaByCallID, callID)
@@ -664,7 +638,6 @@ func (b *chatItemBuilder) appendToolOutputItem(itemType string, item map[string]
 		ToolCallID: callID,
 		Content:    content,
 	})
-	b.endThinkingSpan()
 }
 
 func (b *chatItemBuilder) appendAgentMessageItem(item map[string]json.RawMessage) {
@@ -674,7 +647,6 @@ func (b *chatItemBuilder) appendAgentMessageItem(item map[string]json.RawMessage
 	// 否则子智能体收不到任务却仍返回 200。
 	text := agentMessageText(item["content"])
 	if text == "" {
-		b.endThinkingSpan()
 		return
 	}
 	content, _ := json.Marshal(text)
@@ -703,8 +675,7 @@ func (b *chatItemBuilder) appendMessageItem(item map[string]json.RawMessage) err
 	// appendAssistantToolCall merges into this message and only fills
 	// ReasoningContent when it is still empty.
 	if role == "assistant" {
-		msg.ReasoningContent = b.reasoningForAssistant()
-		b.endThinkingSpan()
+		msg.ReasoningContent = b.lastTurnReasoning
 	} else {
 		b.endTurn()
 	}
@@ -876,18 +847,18 @@ func toolOutputImagePart(imageURL string) ChatContentPart {
 // Parallel tool calls arrive as consecutive *_call items and must share one
 // assistant message; the matching tool replies then follow it. Merge into the
 // immediately preceding assistant message.
-func appendAssistantToolCall(messages []ChatMessage, toolCall ChatToolCall, pendingReasoning string) []ChatMessage {
+func appendAssistantToolCall(messages []ChatMessage, toolCall ChatToolCall, reasoning string) []ChatMessage {
 	if n := len(messages); n > 0 && messages[n-1].Role == "assistant" {
 		messages[n-1].ToolCalls = append(messages[n-1].ToolCalls, toolCall)
 		if messages[n-1].ReasoningContent == "" {
-			messages[n-1].ReasoningContent = pendingReasoning
+			messages[n-1].ReasoningContent = reasoning
 		}
 		return messages
 	}
 	return append(messages, ChatMessage{
 		Role:             "assistant",
 		ToolCalls:        []ChatToolCall{toolCall},
-		ReasoningContent: pendingReasoning,
+		ReasoningContent: reasoning,
 	})
 }
 

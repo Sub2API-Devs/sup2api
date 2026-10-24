@@ -532,60 +532,50 @@ func (s *Store) Action(ctx context.Context, id, action, actor string) (Plan, err
 	if action == "rollback" {
 		return s.Rollback(ctx, id, actor)
 	}
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return Plan{}, err
-	}
-	defer tx.Rollback(ctx)
-	var status, strategy string
-	var cursor int
-	err = tx.QueryRow(ctx, `SELECT status,cursor,strategy FROM updater.upgrades WHERE id=$1 AND cluster_id=$2 FOR UPDATE`, id, s.Cluster).Scan(&status, &cursor, &strategy)
-	if err != nil {
-		return Plan{}, err
-	}
-	switch action {
-	case "pause":
-		if status != "running" && status != "paused" {
-			return Plan{}, ErrConflict
+	if err := s.withTx(ctx, func(tx pgx.Tx) error {
+		var status, strategy string
+		var cursor int
+		if err := tx.QueryRow(ctx, `SELECT status,cursor,strategy FROM updater.upgrades WHERE id=$1 AND cluster_id=$2 FOR UPDATE`, id, s.Cluster).Scan(&status, &cursor, &strategy); err != nil {
+			return err
 		}
-		status = "paused"
-	case "resume":
-		if strategy != PrimaryFirst {
-			return Plan{}, errors.New("legacy upgrade strategy cannot resume with this controller")
+		switch action {
+		case "pause":
+			if status != "running" && status != "paused" {
+				return ErrConflict
+			}
+			status = "paused"
+		case "resume":
+			if strategy != PrimaryFirst {
+				return errors.New("legacy upgrade strategy cannot resume with this controller")
+			}
+			if status != "paused" {
+				return ErrConflict
+			}
+			status = "running"
+			if _, err := tx.Exec(ctx, `UPDATE updater.steps SET status='pending',error='' WHERE upgrade_id=$1 AND status='failed'`, id); err != nil {
+				return err
+			}
+		case "cancel":
+			var disruptive bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.steps WHERE upgrade_id=$1 AND action<>'prepare')`, id).Scan(&disruptive); err != nil {
+				return err
+			}
+			if disruptive {
+				return errors.New("cannot cancel after routing or process changes; pause and resume the same plan")
+			}
+			if status != "running" && status != "paused" {
+				return ErrConflict
+			}
+			status = "cancelled"
+		default:
+			return errors.New("unsupported action; rollback requires an independently approved compatible release")
 		}
-		if status != "paused" {
-			return Plan{}, ErrConflict
+		if _, err := tx.Exec(ctx, `UPDATE updater.upgrades SET status=$2,error='',updated_at=now() WHERE id=$1`, id, status); err != nil {
+			return err
 		}
-		status = "running"
-		_, err = tx.Exec(ctx, `UPDATE updater.steps SET status='pending',error='' WHERE upgrade_id=$1 AND status='failed'`, id)
-	case "cancel":
-		var disruptive bool
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.steps WHERE upgrade_id=$1 AND action<>'prepare')`, id).Scan(&disruptive)
-		if err != nil {
-			return Plan{}, err
-		}
-		if disruptive {
-			return Plan{}, errors.New("cannot cancel after routing or process changes; pause and resume the same plan")
-		}
-		if status != "running" && status != "paused" {
-			return Plan{}, ErrConflict
-		}
-		status = "cancelled"
-	default:
-		return Plan{}, errors.New("unsupported action; rollback requires an independently approved compatible release")
-	}
-	if err != nil {
-		return Plan{}, err
-	}
-	_, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status=$2,error='',updated_at=now() WHERE id=$1`, id, status)
-	if err != nil {
-		return Plan{}, err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,$2,$3)`, id, action, "operator "+actor)
-	if err != nil {
-		return Plan{}, err
-	}
-	if err = tx.Commit(ctx); err != nil {
+		_, err := tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,$2,$3)`, id, action, "operator "+actor)
+		return err
+	}); err != nil {
 		return Plan{}, err
 	}
 	s.NotifyUpgrade(ctx)
@@ -1085,34 +1075,31 @@ func (s *Store) ConfirmStoppedCore(ctx context.Context, node, shellBoot, coreBoo
 	if coreBoot == "" {
 		return nil
 	}
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var current bool
-	if err = tx.QueryRow(ctx, `SELECT shell_boot_id=$3 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2 FOR UPDATE`, s.Cluster, node, shellBoot).Scan(&current); err != nil {
-		return err
-	}
-	if !current {
-		return ErrConflict
-	}
-	for _, item := range []struct{ table, sql string }{
-		{"plugin_runtime_nodes", `UPDATE plugin_runtime_nodes SET stopped=true,updated_at=now() WHERE boot_id=$1`},
-		{"plugin_rollout_cleanup", `UPDATE plugin_rollout_cleanup SET state='cleaned',updated_at=now() WHERE boot_id=$1 AND state='cleanup_pending'`},
-		{"plugin_rollout_nodes", `UPDATE plugin_rollout_nodes SET state='cleaned',updated_at=now() WHERE boot_id=$1 AND state='cleanup_pending'`},
-	} {
-		var present bool
-		if err = tx.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+item.table).Scan(&present); err != nil {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		var current bool
+		if err := tx.QueryRow(ctx, `SELECT shell_boot_id=$3 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2 FOR UPDATE`, s.Cluster, node, shellBoot).Scan(&current); err != nil {
 			return err
 		}
-		if present {
-			if _, err = tx.Exec(ctx, item.sql, coreBoot); err != nil {
+		if !current {
+			return ErrConflict
+		}
+		for _, item := range []struct{ table, sql string }{
+			{"plugin_runtime_nodes", `UPDATE plugin_runtime_nodes SET stopped=true,updated_at=now() WHERE boot_id=$1`},
+			{"plugin_rollout_cleanup", `UPDATE plugin_rollout_cleanup SET state='cleaned',updated_at=now() WHERE boot_id=$1 AND state='cleanup_pending'`},
+			{"plugin_rollout_nodes", `UPDATE plugin_rollout_nodes SET state='cleaned',updated_at=now() WHERE boot_id=$1 AND state='cleanup_pending'`},
+		} {
+			var present bool
+			if err := tx.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+item.table).Scan(&present); err != nil {
 				return err
 			}
+			if present {
+				if _, err := tx.Exec(ctx, item.sql, coreBoot); err != nil {
+					return err
+				}
+			}
 		}
-	}
-	return tx.Commit(ctx)
+		return nil
+	})
 }
 
 func (s *Store) packageReferenced(ctx context.Context, sum string) (bool, error) {

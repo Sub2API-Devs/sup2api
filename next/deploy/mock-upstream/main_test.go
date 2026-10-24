@@ -236,3 +236,34 @@ func TestAnthropicUnchanged(t *testing.T) {
 		t.Fatalf("recorded = %+v", r)
 	}
 }
+
+// countTokens shares begin with /v1/messages, so it must keep the same
+// recording (model, metadata user id, stream=false) and the same injected-error
+// path, plus the byte-based estimate in the success case.
+func TestCountTokensReusesBegin(t *testing.T) {
+	s, srv := newTestServer(t)
+	body := `{"model":"claude-x","metadata":{"user_id":"u-1"},"messages":[{"role":"user","content":"hi"}]}`
+	resp := post(t, srv, "/v1/messages/count_tokens", map[string]string{"x-api-key": "sk-ant-1"}, body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("count_tokens = %d", resp.StatusCode)
+	}
+	m := decode(t, resp)
+	if got, want := num(get(m, "input_tokens")), int64(len(body)/4)+1; got != want {
+		t.Fatalf("input_tokens = %d, want %d", got, want)
+	}
+	s.mu.Lock()
+	rec := s.log[0]
+	s.mu.Unlock()
+	if rec.Path != "/v1/messages/count_tokens" || rec.Model != "claude-x" || rec.MetadataUserID != "u-1" || rec.Stream || rec.Status != 200 {
+		t.Fatalf("recorded = %+v", rec)
+	}
+
+	// An injected status keeps the Anthropic error shape, as begin writes it.
+	resp = post(t, srv, "/v1/messages/count_tokens", map[string]string{"x-api-key": "sk-ant-1", "x-mock-status": "429"}, body)
+	if resp.StatusCode != 429 {
+		t.Fatalf("injected status = %d", resp.StatusCode)
+	}
+	if e := decode(t, resp); get(e, "type") != "error" {
+		t.Fatalf("injected error = %v", e)
+	}
+}

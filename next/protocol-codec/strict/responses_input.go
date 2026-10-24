@@ -100,6 +100,7 @@ func (p *Plan) responsesInput(in, out object) error {
 	if e != nil {
 		return e
 	}
+	run := c.newRoleRun()
 	for i, x := range a {
 		path := pos("input", i)
 		item, e := asObject(x, path)
@@ -113,34 +114,34 @@ func (p *Plan) responsesInput(in, out object) error {
 			}
 			typ = "message"
 		}
-		if e = p.inputItem(c, typ, item, path, i); e != nil {
+		if e = p.inputItem(run, typ, item, path, i); e != nil {
 			return e
 		}
 	}
-	if e = c.flushRole("input"); e != nil {
+	if e = run.flush("input"); e != nil {
 		return e
 	}
 	return c.finish(out)
 }
 
 // inputItem validates one Responses input item and appends its blocks to the
-// conversation being accumulated.
-func (p *Plan) inputItem(c *conversation, typ string, item object, path string, index int) error {
+// role run being accumulated.
+func (p *Plan) inputItem(run *roleRun, typ string, item object, path string, index int) error {
 	switch typ {
 	case "message":
-		return p.inputMessageItem(c, item, path, index)
+		return p.inputMessageItem(run, item, path, index)
 	case "function_call":
-		return p.inputFunctionCallItem(c, item, path)
+		return p.inputFunctionCallItem(run, item, path)
 	case "function_call_output":
-		return p.inputFunctionCallOutputItem(c, item, path)
+		return p.inputFunctionCallOutputItem(run, item, path)
 	case "reasoning":
-		return p.inputReasoningItem(c, item, path)
+		return p.inputReasoningItem(run, item, path)
 	default:
 		return fail(path+".type", "input item has no verified equivalent")
 	}
 }
 
-func (p *Plan) inputMessageItem(c *conversation, item object, path string, index int) error {
+func (p *Plan) inputMessageItem(run *roleRun, item object, path string, index int) error {
 	if e := keys(item, path, "type", "role", "content", "id", "status"); e != nil {
 		return e
 	}
@@ -152,14 +153,14 @@ func (p *Plan) inputMessageItem(c *conversation, item object, path string, index
 		return e
 	}
 	if r == "system" {
-		if index != 0 || c.system != nil {
+		if index != 0 || run.c.system != nil {
 			return fail(path, "system position/conflict cannot be preserved")
 		}
 		b, e := textParts(item["content"], path+".content", false)
 		if e != nil {
 			return e
 		}
-		c.system = b
+		run.c.system = b
 		return nil
 	}
 	if r != "user" && r != "assistant" {
@@ -176,10 +177,10 @@ func (p *Plan) inputMessageItem(c *conversation, item object, path string, index
 	if e != nil {
 		return e
 	}
-	return c.addRole(r, b, path)
+	return run.add(r, b, path)
 }
 
-func (p *Plan) inputFunctionCallItem(c *conversation, item object, path string) error {
+func (p *Plan) inputFunctionCallItem(run *roleRun, item object, path string) error {
 	if e := keys(item, path, "type", "id", "status", "call_id", "name", "arguments"); e != nil {
 		return e
 	}
@@ -194,10 +195,10 @@ func (p *Plan) inputFunctionCallItem(c *conversation, item object, path string) 
 	if e != nil {
 		return e
 	}
-	return c.addRole("assistant", []any{b}, path)
+	return run.add("assistant", []any{b}, path)
 }
 
-func (p *Plan) inputFunctionCallOutputItem(c *conversation, item object, path string) error {
+func (p *Plan) inputFunctionCallOutputItem(run *roleRun, item object, path string) error {
 	if e := keys(item, path, "type", "id", "status", "call_id", "output"); e != nil {
 		return e
 	}
@@ -212,10 +213,10 @@ func (p *Plan) inputFunctionCallOutputItem(c *conversation, item object, path st
 	if e != nil {
 		return e
 	}
-	return c.addRole("user", []any{object{"type": "tool_result", "tool_use_id": id, "content": b}}, path)
+	return run.add("user", []any{object{"type": "tool_result", "tool_use_id": id, "content": b}}, path)
 }
 
-func (p *Plan) inputReasoningItem(c *conversation, item object, path string) error {
+func (p *Plan) inputReasoningItem(run *roleRun, item object, path string) error {
 	if e := keys(item, path, "type", "id", "status", "summary", "encrypted_content"); e != nil {
 		return e
 	}
@@ -235,7 +236,7 @@ func (p *Plan) inputReasoningItem(c *conversation, item object, path string) err
 			return e
 		}
 	}
-	return c.addRole("assistant", []any{b}, path)
+	return run.add("assistant", []any{b}, path)
 }
 
 // inputSummaryMatchesSummary checks that a summary, when present, is the single

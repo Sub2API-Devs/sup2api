@@ -424,11 +424,7 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 	}
 	respID := fmt.Sprintf("mock-%d-%06d", id, rand.IntN(1000000))
 	if !stream {
-		writeJSON(w, 200, map[string]any{
-			"candidates":    geminiCandidate(b.text, "STOP"),
-			"usageMetadata": geminiUsage(b.usage, b.usage.OutputTokens, b.usage.ThoughtsTokens),
-			"modelVersion":  model, "responseId": respID,
-		})
+		writeJSON(w, 200, geminiJSON(model, b, respID))
 		return
 	}
 	// Chunks carry cumulative usageMetadata; the last one is complete.
@@ -454,6 +450,15 @@ func (s *server) gemini(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	geminiStreamJSON(w, r, events, b.chunkDelay)
+}
+
+// geminiJSON builds the single (non-streaming) generateContent response.
+func geminiJSON(model string, b behaviour, respID string) map[string]any {
+	return map[string]any{
+		"candidates":    geminiCandidate(b.text, "STOP"),
+		"usageMetadata": geminiUsage(b.usage, b.usage.OutputTokens, b.usage.ThoughtsTokens),
+		"modelVersion":  model, "responseId": respID,
+	}
 }
 
 // geminiCandidate builds the single candidate array of a Gemini response.

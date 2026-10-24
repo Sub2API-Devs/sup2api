@@ -493,16 +493,8 @@ func (s *server) countTokens(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	var req messagesRequest
 	_ = json.Unmarshal(body, &req)
-	uid, _ := req.Metadata["user_id"].(string)
-	id := s.record(r, body, req.Model, false, uid)
-	b := s.resolve(r, req.Metadata)
-	if !sleep(r, b.delay) {
-		s.setStatus(id, 499)
-		return
-	}
-	if b.status >= 400 {
-		s.setStatus(id, b.status)
-		writeMockError(w, b.status)
+	id, _, ok := s.begin(w, r, body, req.Model, false, req.Metadata, formatAnthropic)
+	if !ok {
 		return
 	}
 	s.setStatus(id, 200)

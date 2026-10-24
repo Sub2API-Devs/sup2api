@@ -145,3 +145,49 @@ func TestKeepLockRetriesTransientExtendErrors(t *testing.T) {
 	cancelParent()
 	stop()
 }
+
+// A holder whose Extend is still in flight when its validity runs out must lose
+// the lock: Redis stopped answering, and until is the last moment the lock can
+// still be ours. Continuing with an uncancelled context would let the guarded
+// work run past the lock's expiry.
+func TestKeepLockLosesLockWhenValidityExpiresDuringExtendErrors(t *testing.T) {
+	lk := &fakeLock{until: time.Now().Add(120 * time.Millisecond)}
+	lk.extend = func(ctx context.Context) (bool, error) {
+		// The retry is bounded by until; returning after that deadline is the
+		// "Redis hung past the validity" case.
+		<-ctx.Done()
+		return false, errors.New("redis timeout")
+	}
+	ctx, stop := KeepLock(context.Background(), lk)
+	defer stop()
+	if cause := waitCause(t, ctx); !errors.Is(cause, ErrLockLost) {
+		t.Fatalf("cause = %v, want ErrLockLost", cause)
+	}
+}
+
+// Ending the caller's context during a retry backoff is a quiet stop, not lock
+// loss: the holder asked to stop, and reporting ErrLockLost would make the
+// caller treat a normal shutdown as an unsafe overlap.
+func TestKeepLockContextEndsDuringBackoffIsQuiet(t *testing.T) {
+	lk := &fakeLock{until: time.Now().Add(800 * time.Millisecond)}
+	lk.extend = func(context.Context) (bool, error) { return false, errors.New("redis timeout") }
+	parent, cancelParent := context.WithCancel(context.Background())
+	ctx, stop := KeepLock(parent, lk)
+	// First wait is left/2 ~ 400ms, then Extend fails at once and the backoff is
+	// left/4 ~ 100ms: cancel inside that backoff.
+	time.Sleep(420 * time.Millisecond)
+	cancelParent()
+	if cause := waitCause(t, ctx); !errors.Is(cause, context.Canceled) {
+		t.Fatalf("cause = %v, want context.Canceled", cause)
+	}
+	if errors.Is(context.Cause(ctx), ErrLockLost) {
+		t.Fatal("parent cancellation must not be reported as lock loss")
+	}
+	stopped := make(chan struct{})
+	go func() { stop(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("stop did not return promptly after the context ended")
+	}
+}

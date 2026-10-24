@@ -302,8 +302,8 @@ func anthropicAssistantToChatMessages(raw json.RawMessage) ([]ChatMessage, error
 // next request; dropping it here made the bridge lose exactly what it had just
 // produced. DeepSeek's thinking mode requires the reasoning_content that
 // produced a tool call to be replayed on that assistant message and answers
-// 400 otherwise, which is why buildChatMessagesFromItems already carries
-// pendingReasoning onto assistant tool-call messages in the Responses→Chat
+// 400 otherwise, which is why buildChatMessagesFromItems already carries the
+// turn's reasoning onto assistant tool-call messages in the Responses→Chat
 // bridge. hasToolCalls keeps the scope identical to that sibling: reasoning
 // rides along with tool calls only, never on a plain assistant text turn.
 //

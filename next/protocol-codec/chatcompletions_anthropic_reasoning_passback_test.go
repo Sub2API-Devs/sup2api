@@ -91,7 +91,7 @@ func TestAnthropicChatBridge_ReasoningSurvivesOutboundInboundRoundTrip(t *testin
 	require.Len(t, back[0].ToolCalls, 1)
 }
 
-// 兄弟不变式：Responses→Chat 桥(buildChatMessagesFromItems 的 pendingReasoning)
+// 兄弟不变式：Responses→Chat 桥(buildChatMessagesFromItems 的 lastTurnReasoning)
 // 早就把 reasoning 挂到带 tool_calls 的 assistant 消息上了。等价历史下两条桥必须一致。
 func TestAnthropicChatBridge_MatchesResponsesChatBridgeReasoningPlacement(t *testing.T) {
 	responsesReq := &ResponsesRequest{

@@ -179,18 +179,16 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			}
 
 		case item.Role == "user":
-			content, err := convertRoleItemToAnthropic(item, "user")
-			if err != nil {
+			var err error
+			if messages, err = convertRoleItemToAnthropic(messages, item, userItemRole); err != nil {
 				return nil, nil, err
 			}
-			messages = appendIfNotEmptyAnthropic(messages, "user", content, false)
 
 		case item.Role == "assistant":
-			content, err := convertRoleItemToAnthropic(item, "assistant")
-			if err != nil {
+			var err error
+			if messages, err = convertRoleItemToAnthropic(messages, item, assistantItemRole); err != nil {
 				return nil, nil, err
 			}
-			messages = appendIfNotEmptyAnthropic(messages, "assistant", content, true)
 
 		default:
 			// 未知 role/type —— 尽量当作 user 消息保留其中的文本/图片。
@@ -200,11 +198,10 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 			if item.Content == nil {
 				continue
 			}
-			content, err := convertRoleItemToAnthropic(item, "user")
-			if err != nil {
+			var err error
+			if messages, err = convertRoleItemToAnthropic(messages, item, userItemRole); err != nil {
 				return nil, nil, err
 			}
-			messages = appendIfNotEmptyAnthropic(messages, "user", content, false)
 		}
 	}
 
@@ -282,30 +279,47 @@ func convertReasoningItemToAnthropic(item ResponsesInputItem, preserveThinking b
 	return AnthropicMessage{Role: "assistant", Content: content}, true, nil
 }
 
-// convertRoleItemToAnthropic converts the content of a user or assistant item
-// with that role's whitelist.
-func convertRoleItemToAnthropic(item ResponsesInputItem, role string) (json.RawMessage, error) {
-	if role == "assistant" {
-		return convertResponsesAssistantToAnthropicContent(item.Content)
-	}
-	return convertResponsesUserToAnthropicContent(item.Content)
+// anthropicItemRole is a converted history item's role. The value selects both
+// the content whitelist and whether a lone blank text block is rejected, so
+// "which role gets checked how" is defined once instead of at each call site.
+type anthropicItemRole struct {
+	name            string
+	rejectBlankText bool
 }
 
-// appendIfNotEmptyAnthropic drops content Anthropic would reject: an entirely
-// empty message, or — when rejectBlankText is set — one reduced to a lone blank
-// text block. User items only check emptiness; assistant items check both.
-func appendIfNotEmptyAnthropic(messages []AnthropicMessage, role string, content json.RawMessage, rejectBlankText bool) []AnthropicMessage {
+var (
+	userItemRole      = anthropicItemRole{name: "user"}
+	assistantItemRole = anthropicItemRole{name: "assistant", rejectBlankText: true}
+)
+
+// convertRoleItemToAnthropic converts the content of a user or assistant item
+// with that role's whitelist and appends the resulting message, dropping content
+// Anthropic would reject: an entirely empty message, or — for an assistant item
+// only — one reduced to a lone blank text block. Both decisions live here so a
+// call site cannot pair the user whitelist with the assistant blank-text rule
+// (which restores a guaranteed 400) or the reverse.
+func convertRoleItemToAnthropic(messages []AnthropicMessage, item ResponsesInputItem, r anthropicItemRole) ([]AnthropicMessage, error) {
+	var content json.RawMessage
+	var err error
+	if r == assistantItemRole {
+		content, err = convertResponsesAssistantToAnthropicContent(item.Content)
+	} else {
+		content, err = convertResponsesUserToAnthropicContent(item.Content)
+	}
+	if err != nil {
+		return messages, err
+	}
 	// 内容里只有网关不认识的分片时，sanitize 会得到空串。Anthropic 拒收
 	// 空内容消息（"all messages must have non-empty content"），整条丢掉
 	// 比发一条必然 400 的消息更可用。assistant 还可能退化成全空白文本块，同样拒收
 	// （"text content blocks must contain non-whitespace text"）。
 	if anthropicContentIsEmpty(content) {
-		return messages
+		return messages, nil
 	}
-	if rejectBlankText && anthropicContentIsOnlyBlankText(content) {
-		return messages
+	if r.rejectBlankText && anthropicContentIsOnlyBlankText(content) {
+		return messages, nil
 	}
-	return append(messages, AnthropicMessage{Role: role, Content: content})
+	return append(messages, AnthropicMessage{Role: r.name, Content: content}), nil
 }
 
 func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.RawMessage {
@@ -378,17 +392,18 @@ func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.Raw
 func normalizeAnthropicToolPairing(messages []AnthropicMessage) []AnthropicMessage {
 	// Index every tool_result block by its tool_use id (last wins on dup).
 	// Only the indexing is shared with the Chat normalizer; the rebuild below is
-	// specific to Anthropic's block array shape.
-	var userBlocks []AnthropicContentBlock
+	// specific to Anthropic's block array shape. Blocks are fed in message order
+	// without being flattened first, so a long history costs one small map and no
+	// full copy of every user block.
+	results := map[string]AnthropicContentBlock{}
 	for _, m := range messages {
 		if m.Role != "user" {
 			continue
 		}
-		userBlocks = append(userBlocks, parseContentBlocks(m.Content)...)
+		indexLastInto(results, parseContentBlocks(m.Content), func(b AnthropicContentBlock) (string, bool) {
+			return b.ToolUseID, b.Type == "tool_result" && b.ToolUseID != ""
+		})
 	}
-	results := indexLastBy(userBlocks, func(b AnthropicContentBlock) (string, bool) {
-		return b.ToolUseID, b.Type == "tool_result" && b.ToolUseID != ""
-	})
 
 	out := make([]AnthropicMessage, 0, len(messages))
 	for _, m := range messages {

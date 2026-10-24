@@ -177,38 +177,46 @@ type conversation struct {
 	system   any
 	pending  map[string]bool
 	used     map[string]bool
-	// role/blocks accumulate consecutive same-role Responses input items into one
-	// Anthropic message; see addRole and flushRole.
-	role   string
-	blocks []any
 }
 
 func newConversation() *conversation {
 	return &conversation{messages: []any{}, pending: map[string]bool{}, used: map[string]bool{}}
 }
 
-// addRole appends blocks to the message being accumulated for role, flushing the
+// roleRun accumulates consecutive same-role Responses input items into one
+// Anthropic message. Only the Responses path groups by role; chatMessages adds
+// whole messages and never uses it, which is why the accumulator lives beside
+// the conversation instead of in it.
+type roleRun struct {
+	c      *conversation
+	role   string
+	blocks []any
+}
+
+func (c *conversation) newRoleRun() *roleRun { return &roleRun{c: c} }
+
+// add appends blocks to the message being accumulated for role, flushing the
 // pending message first when the role changes. path is reported by that flush,
 // so an error points at the item that ended the previous run.
-func (c *conversation) addRole(role string, blocks []any, path string) error {
-	if c.role != "" && c.role != role {
-		if err := c.flushRole(path); err != nil {
+func (r *roleRun) add(role string, blocks []any, path string) error {
+	if r.role != "" && r.role != role {
+		if err := r.flush(path); err != nil {
 			return err
 		}
 	}
-	c.role = role
-	c.blocks = append(c.blocks, blocks...)
+	r.role = role
+	r.blocks = append(r.blocks, blocks...)
 	return nil
 }
 
-// flushRole emits the accumulated message, if any, and resets the accumulator.
-func (c *conversation) flushRole(path string) error {
-	if c.role == "" {
+// flush emits the accumulated message, if any, and resets the accumulator.
+func (r *roleRun) flush(path string) error {
+	if r.role == "" {
 		return nil
 	}
-	role, blocks := c.role, c.blocks
-	c.role, c.blocks = "", nil
-	return c.add(role, blocks, path)
+	role, blocks := r.role, r.blocks
+	r.role, r.blocks = "", nil
+	return r.c.add(role, blocks, path)
 }
 func (c *conversation) add(role string, blocks []any, path string) error {
 	if role != "user" && role != "assistant" {

@@ -130,7 +130,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if done, err := dispatchConfigCommand(opts); done {
+	done, err := dispatchConfigCommand(opts)
+	if err != nil || done {
 		return err
 	}
 	return runCommand(opts)
@@ -344,9 +345,7 @@ type serveSet struct {
 	cert            tls.Certificate
 	ca              *x509.CertPool
 	clientTLS       *tls.Config
-	redisClient     *redis.Client
 	ownNode         control.Node
-	peerManager     *peer.Manager
 	peerCache       atomic.Value
 	router          *proxy.Router
 	rt              *control.LocalRuntime
@@ -431,7 +430,6 @@ func (s *serveSet) build(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.redisClient = redisClient
 	s.cleanup(func() { _ = redisClient.Close() })
 	if opt := redisClient.Options(); opt.Password == "" && opt.Network != "unix" {
 		// Plugins reach the cluster network; a cache without a password
@@ -454,11 +452,10 @@ func (s *serveSet) build(ctx context.Context) error {
 	locks := control.NewRedisLocks(redisClient)
 	s.store.Locks = locks
 	s.store.Redis = redisClient
-	peerManager, err := s.newPeerManager(peerManagerDeps{redisClient: redisClient})
+	peerManager, err := s.newPeerManager(redisClient)
 	if err != nil {
 		return err
 	}
-	s.peerManager = peerManager
 	// A disabled, conflicting or Redis-less boot stays up in maintenance with its
 	// management socket; Run and the engine heartbeat keep retrying registration,
 	// and every engine pass refuses work until it succeeds.
@@ -474,19 +471,14 @@ func (s *serveSet) build(ctx context.Context) error {
 	if err = s.buildRuntime(ctx, peerManager, locks); err != nil {
 		return err
 	}
-	return s.listen(ctx)
-}
-
-// peerManagerDeps is what newPeerManager needs from the already-built shell.
-type peerManagerDeps struct {
-	redisClient *redis.Client
+	return s.listen()
 }
 
 // newPeerManager builds the Redis-backed peer identity manager.
-func (s *serveSet) newPeerManager(d peerManagerDeps) (*peer.Manager, error) {
+func (s *serveSet) newPeerManager(redisClient *redis.Client) (*peer.Manager, error) {
 	c := s.c
 	ownNode := s.ownNode
-	manager, err := peer.New(peer.Config{Redis: d.redisClient, Cluster: c.ClusterID, NodeID: c.NodeID, BootID: ownNode.ShellBootID, ConfiguredKey: c.PeerAuthKey, Validate: func(ctx context.Context, id peer.Identity) error {
+	manager, err := peer.New(peer.Config{Redis: redisClient, Cluster: c.ClusterID, NodeID: c.NodeID, BootID: ownNode.ShellBootID, ConfiguredKey: c.PeerAuthKey, Validate: func(ctx context.Context, id peer.Identity) error {
 		return s.store.ValidateNode(ctx, id.NodeID, id.BootID)
 	}, Register: func(ctx context.Context) error { return s.store.RegisterLocked(ctx, ownNode) }, WithRegistration: func(ctx context.Context, fn func(context.Context) error) error {
 		return s.store.WithRegistration(ctx, c.NodeID, fn)
@@ -573,7 +565,7 @@ func (s *serveSet) pollPeers(ctx context.Context) {
 }
 
 // listen binds the management socket and constructs the three servers.
-func (s *serveSet) listen(ctx context.Context) error {
+func (s *serveSet) listen() error {
 	c := s.c
 	if err := os.MkdirAll(filepath.Dir(c.ManagementSocket), 0700); err != nil {
 		return err

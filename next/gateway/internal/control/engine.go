@@ -364,59 +364,53 @@ func (e *Engine) Work(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	} // loss of lock never records completion
-	tx, txerr := e.Store.DB.Begin(ctx)
-	if txerr != nil {
-		return txerr
-	}
-	defer tx.Rollback(ctx)
-	// Serialize the outcome with pause/supersede itself, not only a snapshot
-	// of its status in UPDATE ... FROM. This keeps inherited step history
-	// immutable even when a late outcome races the rollback transaction.
-	var currentStatus string
-	if txerr = tx.QueryRow(ctx, `SELECT status FROM updater.upgrades WHERE id=$1 FOR UPDATE`, st.UpgradeID).Scan(&currentStatus); txerr != nil {
-		return txerr
-	}
+	execErr := err
 	status := "done"
 	message := ""
-	if err != nil {
+	if execErr != nil {
 		status = "failed"
-		message = err.Error()
+		message = execErr.Error()
 		if len(message) > 1024 {
 			message = message[:1024]
 		}
 	}
-	finished, txerr := tx.Exec(ctx, `UPDATE updater.steps s SET status=$3,error=$4,updated_at=now() FROM updater.upgrades u WHERE s.upgrade_id=$1 AND s.step_id=$2 AND u.id=s.upgrade_id AND u.status IN ('running','paused') AND u.cursor=s.step_id`, st.UpgradeID, st.ID, status, message)
-	if txerr != nil {
-		return txerr
-	}
-	if finished.RowsAffected() == 0 {
-		if _, txerr = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'late_result','ignored result from an inactive plan')`, st.UpgradeID); txerr != nil {
-			return txerr
+	late := false
+	if txerr := e.Store.withTx(ctx, func(tx pgx.Tx) error {
+		// Serialize the outcome with pause/supersede itself, not only a snapshot
+		// of its status in UPDATE ... FROM. This keeps inherited step history
+		// immutable even when a late outcome races the rollback transaction.
+		var currentStatus string
+		if err := tx.QueryRow(ctx, `SELECT status FROM updater.upgrades WHERE id=$1 FOR UPDATE`, st.UpgradeID).Scan(&currentStatus); err != nil {
+			return err
 		}
-		if txerr = tx.Commit(ctx); txerr != nil {
-			return txerr
+		finished, err := tx.Exec(ctx, `UPDATE updater.steps s SET status=$3,error=$4,updated_at=now() FROM updater.upgrades u WHERE s.upgrade_id=$1 AND s.step_id=$2 AND u.id=s.upgrade_id AND u.status IN ('running','paused') AND u.cursor=s.step_id`, st.UpgradeID, st.ID, status, message)
+		if err != nil {
+			return err
 		}
+		if finished.RowsAffected() == 0 {
+			late = true
+			_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'late_result','ignored result from an inactive plan')`, st.UpgradeID)
+			return err
+		}
+		if execErr != nil {
+			if _, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status='paused',error=$2,updated_at=now() WHERE id=$1 AND status IN ('running','paused')`, st.UpgradeID, message); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,$2,$3)`, st.UpgradeID, status, st.NodeID+": "+st.Action+" "+message)
 		return err
-	}
-	if err != nil {
-		_, txerr = tx.Exec(ctx, `UPDATE updater.upgrades SET status='paused',error=$2,updated_at=now() WHERE id=$1 AND status IN ('running','paused')`, st.UpgradeID, message)
-		if txerr != nil {
-			return txerr
-		}
-	}
-	_, txerr = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,$2,$3)`, st.UpgradeID, status, st.NodeID+": "+st.Action+" "+message)
-	if txerr != nil {
+	}); txerr != nil {
 		return txerr
 	}
-	if txerr = tx.Commit(ctx); txerr != nil {
-		return txerr
+	if late {
+		return execErr
 	}
 	e.progress.Add(1)
 	_ = e.Heartbeat(ctx)
 	// Publish after the post-action report so a peer can observe the new route
 	// on its first wake. Report/publication failures are repaired by polling.
 	e.Store.NotifyUpgrade(ctx)
-	return err
+	return execErr
 }
 func (e *Engine) Execute(ctx context.Context, st Step) error {
 	if err := ctx.Err(); err != nil {
@@ -781,7 +775,7 @@ func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) 
 	if !member || (stopped && !startIssued) || (startIssued && !localDone) {
 		forwarded := false
 		if e.Node.ID != primary {
-			if _, ok := e.redirectToPrimary(ctx, primary); ok {
+			if n, ok := e.freshPrimary(ctx, primary); ok && e.redirectToPrimary(ctx, n) {
 				forwarded = true
 			}
 		}
@@ -808,7 +802,9 @@ func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) 
 		return nil
 	}
 	if e.Node.ID != primary {
-		if attempted, _ := e.redirectToPrimary(ctx, primary); attempted {
+		if n, ok := e.freshPrimary(ctx, primary); ok {
+			// The redirect is best effort: the node is about to stop either way.
+			_ = e.redirectToPrimary(ctx, n)
 			return e.stop(ctx, "active-plan-recovery")
 		}
 	}
@@ -838,20 +834,24 @@ func scanNodeSteps(p Plan, nodeID string) (stopped, startIssued, localDone, disr
 	return stopped, startIssued, localDone, disrupted
 }
 
-// redirectToPrimary routes this node's serving through the primary when the
-// primary is fresh. attempted reports that a fresh primary was found, so a
-// redirect was tried whether or not it succeeded; ok reports that it worked.
-func (e *Engine) redirectToPrimary(ctx context.Context, primary string) (attempted, ok bool) {
+// freshPrimary returns the primary node when it is fresh and serving locally,
+// which is the precondition for routing this node's traffic through it. Callers
+// that only need "is there somewhere to redirect to" stop there; callers that
+// need the redirect itself pass the node on.
+func (e *Engine) freshPrimary(ctx context.Context, primary string) (Node, bool) {
 	nodes, _ := e.Store.Nodes(ctx)
 	for _, n := range nodes {
 		if n.ID == primary && n.ServingLocal(time.Now()) {
-			attempted = true
-			if e.Runtime.Redirect(ctx, n) == nil {
-				ok = true
-			}
+			return n, true
 		}
 	}
-	return attempted, ok
+	return Node{}, false
+}
+
+// redirectToPrimary routes this node's serving through primary and reports
+// whether that worked.
+func (e *Engine) redirectToPrimary(ctx context.Context, primary Node) bool {
+	return e.Runtime.Redirect(ctx, primary) == nil
 }
 
 // enterMaintenanceAndStop stops the core in maintenance for reason, which is
