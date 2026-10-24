@@ -1,6 +1,6 @@
 # CCGateway 请求工作流静态核对（拆分 → 组装 → 出口）
 
-2026-10-24。审核对象：`feat/next-platform` HEAD `c949810e2`（线上核心 0.1.186 / 插件 0.1.87 / CLI v23，CLI profile `ccgateway-v23-bound-imports`，固定 2.1.304）。只读核对，不改代码。CodeGraph/Serena/WarpGrep 不可用，全部用 Read/Grep/git 与 `artifacts/` 里的历史抓包。
+2026-10-24。审核对象：`feat/next-platform` HEAD `c949810e2`（线上核心 0.1.186 / 插件 0.1.87 / CLI v23，CLI profile `ccgateway-v23-bound-imports`，固定 2.1.304）。只读核对，不改代码。CodeGraph/Serena/WarpGrep 不可用，全部用 Read/Grep/git 与 `artifacts/` 里的历史抓包；§7 已并入 `01-offline.md`（17:23）与 `02-prod31.md`（17:37）的实测结果。
 
 本文回答一个问题：一次客户端请求经过「核心 → 插件 → Worker → CLI 补丁 → 上游」之后，**出口（发给 Anthropic 的请求）里每个请求头与 body 字段的值是从哪来的**，以及**哪里会与官方 Claude Code 客户端不一致**。
 
@@ -8,8 +8,8 @@
 
 ## 0. 结论（先看这几条）
 
-1. **请求头不是「透传」，而是「重新生成」**：核心只把 manifest `passHeaders` 列出的 13 个客户端头交给插件；插件按同一份 11 头的上下文表 + `anthropic-version`/`anthropic-beta` 再筛一次；Worker 只把它们变成 CLI 参数与环境变量；**上游请求的每一个头都由 Worker 容器里的原生 SDK / 原生 `nl()` / 补丁重新写出**。客户端头里真正「值原样」到上游的只有：`anthropic-version`、`anthropic-beta`（值集合，顺序保留）、5 个请求上下文头、prev-tool-durations + 4 个压缩头、以及满足条件的 `user-agent`。
-2. **body 对 CC 客户端基本逐字节保真**：build 用 `ccgatewayWireMessage` / `ccgatewaySystemBlocks` / `ccgatewayWireTools` 三处 wire 保真注入原生构造器，direct 只在原始 JSON 文本上拼接 system。历史抓包（2026-10-22，v18）显示主线程/子代理/多轮的 body 与官方直连逐字段一致，差别只有被映射的 ID、`metadata` 与 `cch`。
+1. **请求头不是「透传」，而是「重新生成」**：核心只把 manifest `passHeaders` 列出的 13 个客户端头交给插件；插件按同一份 11 头的上下文表 + `anthropic-version`/`anthropic-beta` 再筛一次；Worker 只把它们变成 CLI 参数与环境变量；**上游请求的每一个头都由 Worker 容器里的原生 SDK / 原生 `nl()` / 补丁重新写出**。客户端头里真正「值原样」到上游的只有：`anthropic-version`、`anthropic-beta`（集合原样，**顺序会因原生追加项而变**，见 A5）、5 个请求上下文头、prev-tool-durations + 4 个压缩头、以及满足条件的 `user-agent`。两轮动态实测：出口 24 个头名称与顺序与官方相同、无网关头泄漏。
+2. **body 对 CC 客户端基本逐字节保真**：build 用 `ccgatewayWireMessage` / `ccgatewaySystemBlocks` / `ccgatewayWireTools` 三处 wire 保真注入原生构造器，direct 在原始 JSON 文本上只改 system。两轮实测确认（`01-offline` 30 场景、`02-prod31` 13 次真实请求）：主线程/子代理/多轮/压缩的 body 键集合、键序、值与官方一致，差别只有被映射的 ID、`metadata` 与 `cch`；direct 与入站请求逐字节相同。
 3. **两个静态可确认的出口差异**（都不在现有事实文档里），**均已被两个动态报告实测确认**（`01-offline.md`、`02-prod31.md`）：
    - **请求行缺 `?beta=true`**：官方 `beta.messages.create` 打的是 `/v1/messages?beta=true`，我们的 `model-request.js` 直接 `client.post('/v1/messages')`；history 抓包 26/26 vs 74/74，`01-offline` 49/49 A 对 54/54 B，`02-prod31` 同。见 §4-D1。
    - **非 CC 请求自己补的计费头 `cch=00000`**（官方运行时才算 5 位十六进制）；CC 请求保留客户端自己的 cch（两种模式都实测逐请求相等），不受影响。见 §4-D2。
@@ -162,6 +162,18 @@
 
 依据：`content-policy.js:369-399,460-473,486-506`；`request-agent.js:79-113`；`request-build.js:151-184,227-250`；`request-entry.inc.js:32-57`；`direct-billing.js`；`patch-cli-2.1.304.cjs:101-120`。
 
+### 3.5 响应回头（反向，简记；不在主表范围）
+
+| 出口项（Worker→核心→客户端） | 来源 | 依据 |
+|---|---|---|
+| 状态、`Content-Type`、`request-id`/`anthropic-request-id`/`retry-after`/`x-should-retry`/`anthropic-ratelimit-*`/`anthropic-fast-*` | 上游原值（经 `httpfacts.Select` 白名单） | `contracts/httpfacts/httpfacts.go`；Worker `engine/request_command.go:520-528`、`request_error.go:172-190` |
+| 其余上游头（`set-cookie`、`x-internal-route`、`server` 等） | **丢弃** | 同上 |
+| `X-CCGateway-Error-Source`/`-Reason`、`Cache-Control: no-store` | Worker 自己加，**到不了客户端**（核心错误路径与正常路径都再白名单一次） | `engine/main.go:107`；`server/internal/gateway/upstream_error.go:55-65`；`forward.go:51` |
+| `X-Request-Id` | **核心补充**（自己的 rid；官方没有这个头） | `server/internal/gateway/pipeline.go:129-130` |
+| 流式 | 核心统一改写为 `text/event-stream` + `X-Accel-Buffering: no` | `forward.go:267-277` |
+
+`01-offline` #21/#22 实测与本表一致。
+
 ---
 
 ## 4. 代码与文档不一致 / 可能导致出口与官方不同的缺陷
@@ -173,8 +185,8 @@
 动态确认：`01-offline` A 侧 49/49 带、B 侧 54/54 不带（客户端对自定义 base URL 也发 `?beta=true`，本地探针实抓）；`02-prod31` 真实链路同（13 次真实上游全 200）。
 影响：请求行（path+query）与官方不同；上游目前接受（线上 200），但这是除传输层指纹外唯一**系统性**的请求行差异。修法：改用 `beta.messages.create` 或显式带 query。
 
-**D2（P3）非 CC 请求的 `cch` 恒为 `00000`。**
-官方 ELF 在运行时把 `cch=00000` 换成每次不同的 5 位十六进制（`CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md` §7）；我们重编的 CLI 没有这段，非 CC 请求由 `mergeBillingAttribution` / `applyDirectBilling` 插入的原生行里 `cch` 一直是 `00000`。CC 请求不受影响（客户端的 cch 原样保留）。已在 SYSTEM-PROMPT-ASSEMBLY §7 记录，但 REQUEST-HEADERS 的「已知边界」只写了 `cch` 一句，容易被读成只影响账号测试。
+**D2（P3）非 CC 请求的 `cch` 恒为 `00000`。〔实测确认〕**
+官方 ELF 在运行时把 `cch=00000` 换成每次不同的 5 位十六进制（`CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md` §7）；我们重编的 CLI 没有这段，非 CC 请求由 `mergeBillingAttribution` / `applyDirectBilling` 插入的原生行里 `cch` 一直是 `00000`（`01-offline` #15/#16、`02-prod31` §4.5 均实测）。CC 请求不受影响：两种模式都把客户端的 `cch` 原样保留（`01-offline` 逐请求相等，如 `29f01`→`29f01`）。已在 SYSTEM-PROMPT-ASSEMBLY §7 记录，但 REQUEST-HEADERS 的「已知边界」只写了 `cch` 一句，容易被读成只影响账号测试。注意 build 会改写映射后的 `cc_prompt_id`，所以 `cch` 与 body 的对应关系在 build 下已不成立（设计内）。
 
 **D3（P2，跨路径）核心仍在发/仍在等已无消费者的头。**
 - `X-CCGateway-Resource-Outputs/-Refs/-Contexts`、`X-CCGateway-Fallback-Credit`、`-Track`、`Principal`、`Generation` 由核心设在发往 `/v1/messages` 的请求上（`server/internal/gateway/resource_references.go:222-225,266`；`fallback_credit.go:137-140`），但 engine 的请求命令路径**没有任何读取**（engine 非测试代码 grep 全空）。
@@ -236,16 +248,17 @@ direct 只在客户端 session 是**小写 v4 UUID** 时采用它（`identity.go
 
 ## 5. 与「官方一模一样」的距离（一句话版）
 
-- **CC 客户端的主线程/子代理/多轮请求：body 与请求头集合、顺序、值在历史抓包里与官方直连一致**，差别只有：被有意映射的 ID（session/prompt/agent-id? agent-id 不映射）、`metadata.user_id`、`account_uuid`，以及 D1 的 URL query。
-- **辅助请求**：沿用同一路径，CC 请求不注入、不补身份行，形状与客户端一致。
-- **非 CC 请求**：设计上就不与任何官方客户端一致（按注入等级补成主线程形状），只能保证「像 CC」。
-- **传输层**（TLS、HTTP 版本、`cch`、`x-stainless-*` 的平台含义）不可能一致，属已知边界。
+- **CC 客户端的主线程/子代理/多轮/压缩请求：body 与请求头集合、顺序、值都与官方直连一致**（`01-offline` 30 场景 + `02-prod31` 13 次真实请求双证），差别只有：被有意映射的 ID（session/prompt；agent-id 不映射）、`metadata.user_id`、`account_uuid`、beta 的顺序（A5），以及 D1 的 URL query。
+- **辅助请求**：代码路径与主线程相同（不注入、不补身份行），但**两轮动态测试都没采到样本**（客户端在本配置下不发），仍属代码推断。
+- **非 CC 请求**：设计上就不与任何官方客户端一致（按注入等级补成主线程形状），只能保证「像 CC」；实测差异集中在 `cch=00000`、原生默认的 `thinking`/`temperature`/键序。
+- **传输层**（TLS、HTTP 版本、`cch`、`x-stainless-*` 的平台含义）不可能一致，属已知边界；出口报文的可观测性也是空白（A14）。
+- **另有一个与「像不像」无关、但会让请求失败的口径缺口**：fallback-credit beta → 上游 200 后客户端 502（A2/D3）。
 
 ---
 
 ## 6. 给动态验证队友的检查清单（建议逐条勾）
 
-> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考，必须用 0.1.87 / v23 重抓。
+> 期望值基于 HEAD 代码；历史抓包 `artifacts/claude-2.1.304/e2e/cap*` 是 v18–v22 时代的产物，只作形状参考。本清单已在 2026-10-24 由 `wf-offline`（v23，30 场景）与 `wf-prod31` 逐条执行，结果与归因见 §7。
 
 ### 6.1 wf-offline（docker 离线对拍：官方客户端直连 vs 经 Worker）
 

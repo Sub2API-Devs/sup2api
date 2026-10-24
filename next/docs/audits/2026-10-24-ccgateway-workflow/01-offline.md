@@ -128,7 +128,9 @@
 
 ## 4. 基线 A 文件（给 wf-prod31）
 
-路径：ovh `/tmp/ccg-audit-wf-baseline/`（共 8 个文件，728 KiB，**令牌已打码**为 `Bearer REDACTED`/`REDACTED`）。
+路径：ovh `/tmp/ccg-audit-wf-baseline/`（共 8 个文件，728 KiB，**令牌已打码**为 `Bearer REDACTED`/`REDACTED`）。本地另有一份同字节副本在 `artifacts/claude-2.1.304/e2e/wf-2026-10-24/baseline/`（artifacts 不进 git），wf-prod31 侧也有一份（`.../wf-2026-10-24/prod31/baseline/`）。
+
+`/tmp` 是共享目录：测完时该目录曾被一次清理删除（归属未定，不是任何单一 agent 明确执行的操作），随后用本地副本恢复到原位，并逐字节核对（8/8 文件、24 个保序头、`/v1/messages?beta=true`、令牌仍打码）。`/tmp` 会被重启清空，长期引用请以本地副本为准。
 
 格式：每个文件一个场景，`{"scenario","source","note","captured_at","requests":[{index,method,url,headers:[[name,value],…保序],body}]}`。
 
