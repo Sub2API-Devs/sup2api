@@ -211,7 +211,7 @@
 > **2026-10-11 04:30（北京时间）：** 核心 **v0.1.111**（源码 `dcde8a7ae`，manifest `a9a7ad179c25…`），只改了控制台界面，ccgateway 仍是 **0.1.36**。
 > - "CC 特性"页去掉了特性目录（工具安全审查、出站中继完全透传、thinking disabled 兼容的说明卡片），各特性的支持情况只写在 worker 的 `catalog.go` 里。
 > - thinking disabled 兼容只保留开关，在"工具与错误处理"里，说明补充了"两种中继模式下都生效"。
-> - 没有其他页面使用的特性目录视图和"查看账号 Worker 能力"探测组件一并删除；核心的 `/system/ccgateway/features` 接口保留。
+> - 没有其他页面使用的特性目录视图和"查看账号 Worker 能力"探测组件一并删除；核心的 `/system/ccgateway/features` 接口保留。2026-10-24 起该接口返回请求模式的能力目录（`features.RequestCatalog("request_build")`），旧目录 `features.Catalog()` 已删除。
 >
 
 > **2026-10-11 04:15（北京时间）：** 核心 **v0.1.110**（源码 `9e341029e`，manifest `1b7403c6b535…`），只改了控制台界面，ccgateway 仍是 **0.1.36**，worker 没有变化。
