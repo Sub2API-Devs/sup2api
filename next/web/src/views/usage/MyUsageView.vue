@@ -26,13 +26,19 @@ watch(tab, (v) => {
   if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
 })
 
-// The page owns the header; the open tab follows `revision` and reports its
-// loading state, so no ref reaches into a child's methods.
-const revision = ref(0)
-const loading = ref(false)
+// The page owns the header; the open tab follows its own `revision` and
+// reports its loading state, so no ref reaches into a child's methods. Each tab
+// has its own revision and loading: the hidden request list is never reloaded
+// by a refresh on the balance tab, and its loading never drives the button.
+const recordsRevision = ref(0)
+const ledgerRevision = ref(0)
+const recordsLoading = ref(false)
+const ledgerLoading = ref(false)
+const loading = computed(() => (tab.value === 'ledger' ? ledgerLoading.value : recordsLoading.value))
 
 function refresh() {
-  revision.value++
+  if (tab.value === 'ledger') ledgerRevision.value++
+  else recordsRevision.value++
 }
 </script>
 
@@ -46,8 +52,8 @@ function refresh() {
 
     <STabs v-model="tab" :tabs="tabs">
       <!-- v-show: the search survives a visit to the ledger tab -->
-      <UsageRecords v-show="tab === 'requests'" v-model:loading="loading" :revision="revision" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
-      <MyLedgerTab v-if="tab === 'ledger'" v-model:loading="loading" :revision="revision" />
+      <UsageRecords v-show="tab === 'requests'" v-model:loading="recordsLoading" :revision="recordsRevision" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
+      <MyLedgerTab v-if="tab === 'ledger'" v-model:loading="ledgerLoading" :revision="ledgerRevision" />
     </STabs>
   </div>
 </template>

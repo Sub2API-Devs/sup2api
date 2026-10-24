@@ -93,5 +93,3 @@ export function useModelList() {
     setModels, rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels
   }
 }
-
-export type ModelList = ReturnType<typeof useModelList>

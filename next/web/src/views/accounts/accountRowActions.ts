@@ -2,11 +2,12 @@
 // (built from the caller's rights and the account's plugin actions) and their
 // dispatch. The handlers come from the view, so the table here stays pure.
 import type { Account, AccountAction } from '@/api/types'
-import { lt } from '@/i18n'
+import { i18n, lt } from '@/i18n'
+
+const t = (key: string) => i18n.global.t(key)
 
 /** What a row menu entry needs from the view. */
 export interface RowActionDeps {
-  t: (key: string, params?: Record<string, unknown>) => string
   canReveal: (a: Account) => boolean
   canResetStatus: (a: Account) => boolean
   canRefreshCreds: (a: Account) => boolean
@@ -24,7 +25,6 @@ export interface RowActionDeps {
 
 /** Menu entries of one row; `hidden` keeps them out of the menu. */
 export function rowActions(a: Account, deps: RowActionDeps) {
-  const { t } = deps
   return [
     { key: 'detail', label: t('common.detail') },
     { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !deps.canReveal(a) || a.orphaned },
@@ -35,16 +35,18 @@ export function rowActions(a: Account, deps: RowActionDeps) {
   ]
 }
 
+/** View handler of each non-plugin entry (built once; handlers still come from the view). */
+const HANDLERS: Record<string, (a: Account, deps: RowActionDeps) => unknown> = {
+  detail: (a, deps) => deps.openDetail(a),
+  reveal: (a, deps) => deps.reveal(a),
+  'reset-status': (a, deps) => deps.resetStatus(a),
+  'refresh-credentials': (a, deps) => deps.refreshCreds(a),
+  delete: (a, deps) => deps.remove(a)
+}
+
 /** Runs a menu entry of one row: a plugin action by key, otherwise a view handler. */
 export function runRowAction(a: Account, key: string, deps: RowActionDeps) {
   const action = a.actions?.find((x) => `plugin:${x.plugin_key}:${x.id}` === key)
   if (action) return deps.runPluginAction(a, action)
-  const handlers: Record<string, (a: Account) => unknown> = {
-    detail: deps.openDetail,
-    reveal: deps.reveal,
-    'reset-status': deps.resetStatus,
-    'refresh-credentials': deps.refreshCreds,
-    delete: deps.remove
-  }
-  return handlers[key]?.(a)
+  return HANDLERS[key]?.(a, deps)
 }

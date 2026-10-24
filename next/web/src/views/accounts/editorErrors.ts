@@ -9,6 +9,17 @@ export const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_
 const CREDENTIAL_RE = /^credentials[.[]?(.*?)]?$/
 const isModelsField = (k: string) => k === 'models' || k.startsWith('models.') || k.startsWith('models[') || k.startsWith('model_mapping')
 
+/** The server's error of the model list / mapping, as `field: text` ('' when there is none). */
+export function modelsErrorText(errors: Record<string, string>): string {
+  for (const [k, v] of Object.entries(errors)) if (/^models(\[|$)/.test(k)) return `${k}: ${v}`
+  return ''
+}
+
+export function mappingErrorText(errors: Record<string, string>): string {
+  for (const [k, v] of Object.entries(errors)) if (/^model_mapping([.[]|$)/.test(k)) return k === 'model_mapping' ? v : `${k}: ${v}`
+  return ''
+}
+
 /** Splits field errors into the plugin form's (`credentials.x` → `x`) and the editor's own. */
 export function splitFieldErrors(all: Record<string, string>): { cred: Record<string, string>; base: Record<string, string> } {
   const cred: Record<string, string> = {}

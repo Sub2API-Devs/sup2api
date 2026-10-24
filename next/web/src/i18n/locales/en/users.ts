@@ -23,11 +23,5 @@ export default {
   assignGroupsTitle: 'Groups of {name}',
   groupsHint: 'The user can create API keys in these groups (restricted groups require assignment).',
   ledger: 'Balance ledger',
-  adjustBalance: 'Adjust balance',
-  currentBalance: 'Current balance',
-  direction: 'Direction',
-  credit: 'Credit (add)',
-  debit: 'Debit (deduct)',
-  amount: 'Amount (USD)',
-  amountInvalid: 'Enter a positive amount with at most 8 decimals'
+  adjustBalance: 'Adjust balance'
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { SEmpty, SHint, SIcon } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import type { PluginReview } from '@/api/types'
 import ConsentView from './ConsentView.vue'
@@ -41,7 +42,24 @@ const review = (over: Partial<PluginReview> = {}): PluginReview => ({
 
 function render(r: PluginReview) {
   mocks.get.mockResolvedValue(r)
-  return mount(ConsentView, { global: { plugins: [i18n, createPinia()], stubs: { teleport: true } } })
+  return mountView()
+}
+
+// A missing import of a @sub2api/ui component is only a runtime warning: Vue
+// renders an unknown element and everything that component drew disappears.
+// Turning that warning into a failure is what guards the page structure.
+function mountView() {
+  return mount(ConsentView, {
+    global: {
+      plugins: [i18n, createPinia()],
+      stubs: { teleport: true },
+      config: {
+        warnHandler: (msg) => {
+          if (msg.includes('Failed to resolve component')) throw new Error(msg)
+        }
+      }
+    }
+  })
 }
 
 describe('plugin consent page', () => {
@@ -93,5 +111,23 @@ describe('plugin consent page', () => {
     await w.get('[data-testid="consent-approve"]').trigger('click')
     await flushPromises()
     expect(mocks.post).not.toHaveBeenCalled()
+  })
+
+  it('keeps the page structure: icons and hints render after a split into child components', async () => {
+    const w = render(review())
+    await flushPromises()
+    // Resolved components (not unknown elements): the back arrow and the publisher hint.
+    expect(w.findComponent(SIcon).exists()).toBe(true)
+    expect(w.findComponent(SHint).exists()).toBe(true)
+    expect(w.find('svg').exists()).toBe(true)
+    expect(w.text()).toContain(i18n.global.t('plugins.publisher'))
+  })
+
+  it('shows the empty state when the review cannot be loaded', async () => {
+    mocks.get.mockRejectedValue(new Error('not found'))
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(SEmpty).exists()).toBe(true)
+    expect(w.text()).toContain(i18n.global.t('plugins.consent.notFound'))
   })
 })

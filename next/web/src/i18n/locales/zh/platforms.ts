@@ -2,7 +2,6 @@ export default {
   title: '平台',
   description: '平台声明网关端点。核心内置 anthropic、openai、gemini 三个平台，插件可以声明新平台。账号类型声明自己支持哪些平台，该类型的账号为这些平台的端点提供服务。',
   builtin: '内置',
-  plugin: '插件',
   pluginBy: '插件：{name}',
   endpoints: '端点',
   method: '方法',

@@ -31,7 +31,15 @@ export default [
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'vue/multi-word-component-names': 'off',
       'vue/no-v-html': 'warn',
-      '@intlify/vue-i18n/no-raw-text': 'off'
+      '@intlify/vue-i18n/no-raw-text': 'off',
+      // Every component is an explicit import; a missing one only warns at
+      // runtime and renders an unknown element (ConsentView lost SIcon/SEmpty
+      // that way). RouterLink/RouterView are registered by vue-router.
+      'vue/no-undef-components': ['error', { ignorePatterns: ['RouterLink', 'RouterView'] }],
+      // Not a layout rule: catches ASI hazards (`a = b\n(c)`). eslint-config-prettier
+      // above only switches it off because its CJS entry bundles it with the
+      // formatting rules, so it is turned back on here.
+      'no-unexpected-multiline': 'error'
     }
   },
   {

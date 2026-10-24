@@ -12,10 +12,10 @@ import { usePolicyLayers } from '../usePolicyLayerContext'
 const { t } = useI18n()
 const layers = usePolicyLayers()
 const entrypointOptions = billingEntrypoints.map(value => ({ value, label: value }))
-const entrypoint = computed(() => layers.view.value.build_billing_entrypoint ?? defaultBillingEntrypoint)
+const entrypoint = computed(() => layers.view.build_billing_entrypoint ?? defaultBillingEntrypoint)
 const setEntrypoint = (value: unknown) => layers.edit(draft => { draft.build_billing_entrypoint = value as BillingEntrypoint })
 const sourceOptions = computed<SelectOption[]>(() => (['client', 'worker'] as const).map(value => ({ value, label: t('ccgateway.layers.billingSources.' + value) })))
-const billingSource = (field: BillingField) => layers.view.value.build_billing_sources?.[field] ?? 'client'
+const billingSource = (field: BillingField) => layers.view.build_billing_sources?.[field] ?? 'client'
 const setBillingSource = (field: BillingField, value: unknown) => layers.edit(draft => { draft.build_billing_sources = { ...draft.build_billing_sources, [field]: value as 'client' | 'worker' } })
 </script>
 
@@ -31,11 +31,11 @@ const setBillingSource = (field: BillingField, value: unknown) => layers.edit(dr
         {{ t('ccgateway.levels.from.billing') }}
       </SChip>
       <SSegmented
-        v-if="layers.toggles.value"
+        v-if="layers.toggles"
         :model-value="layers.modeOf('billing')"
-        :options="layers.modeOptions.value"
+        :options="layers.modeOptions"
         size="sm"
-        :disabled="layers.disabled.value"
+        :disabled="layers.disabled"
         :aria-label="layers.modeLabel('billing')"
         data-testid="layer-mode-billing"
         @update:model-value="layers.setMode('billing', $event)"

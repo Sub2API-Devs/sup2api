@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip, SDisclosure, SOptionMatrix, SSegmented, SSettingRow, SSettingsGroup } from '@sub2api/ui'
 import type { OptionMatrixGroup, OptionMatrixRow } from '@sub2api/ui'
-import { buildAttachmentFields, injectionAttachments, injectionDefault, type BuildAttachmentField } from '../requestPolicy'
+import { buildAttachmentFields, injectionAttachments, type BuildAttachmentField } from '../requestPolicy'
 import { usePolicyLayers } from '../usePolicyLayerContext'
 
 const { t } = useI18n()
@@ -17,7 +17,7 @@ const envGroups: Array<{ key: string; fields: BuildAttachmentField[] }> = [
   { key: 'directories', fields: ['primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory'] },
   { key: 'tools', fields: ['github_cli', 'agent_proxy'] }
 ]
-const envSource = (field: BuildAttachmentField) => layers.view.value.build_attachment_sources?.[field] ?? 'client'
+const envSource = (field: BuildAttachmentField) => layers.view.build_attachment_sources?.[field] ?? 'client'
 const envColumns = computed(() => ['client', 'worker', 'erase'].map(value => ({ value, label: t('ccgateway.buildAttachments.' + value) })))
 const envMatrix = computed(() => Object.fromEntries(buildAttachmentFields.map(field => ['build_attachment_sources.' + field, envSource(field)])))
 const envSections = computed<OptionMatrixGroup[]>(() => envGroups.map(group => ({
@@ -43,47 +43,41 @@ const convertSummary = computed(() => {
   if (worker.length + erased < buildAttachmentFields.length) parts.push(s('rest'))
   return parts.join(s('sep'))
 })
-// An omitted choice is its level's default (LevelInjection).
-const injected = (part: 'attachments' | 'tools', name: string) =>
-  (layers.view.value.build_injection?.[part] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(part, name)
-const setInjection = (part: 'attachments' | 'tools', name: string, on: boolean) => layers.edit(draft => {
-  const injection = { ...draft.build_injection }
-  injection[part] = { ...injection[part], [name]: on }
-  draft.build_injection = injection
-})
+// An omitted choice is its level's default (LevelInjection): the context's
+// injected/setInjection are shared with the prompt card.
 </script>
 
 <template>
   <SSettingsGroup
-    :key="'environment-' + layers.has.value.environment"
+    :key="'environment-' + layers.has.environment"
     :title="t('ccgateway.layers.environment')"
-    :description="layers.has.value.environment ? layers.layerOrigin('environment') : layers.lockedText('environment')"
-    :collapsible="!layers.has.value.environment"
-    :default-open="layers.has.value.environment"
+    :description="layers.has.environment ? layers.layerOrigin('environment') : layers.lockedText('environment')"
+    :collapsible="!layers.has.environment"
+    :default-open="layers.has.environment"
     dense
     data-testid="build-attachments"
-    :data-locked="!layers.has.value.environment || undefined"
+    :data-locked="!layers.has.environment || undefined"
   >
     <template #actions>
       <SChip
-        v-if="layers.has.value.environment"
+        v-if="layers.has.environment"
         size="xs"
       >
         {{ t('ccgateway.levels.from.environment') }}
       </SChip>
       <SSegmented
-        v-if="layers.toggles.value"
+        v-if="layers.toggles"
         :model-value="layers.modeOf('environment')"
-        :options="layers.modeOptions.value"
+        :options="layers.modeOptions"
         size="sm"
-        :disabled="layers.disabled.value || layers.locked('environment')"
+        :disabled="layers.disabled || layers.locked('environment')"
         :aria-label="layers.modeLabel('environment')"
         data-testid="layer-mode-environment"
         @update:model-value="layers.setMode('environment', $event)"
       />
     </template>
     <template
-      v-if="layers.has.value.environment"
+      v-if="layers.has.environment"
       #details
     >
       <p>{{ t('ccgateway.levels.injectHint') }}</p>
@@ -104,11 +98,11 @@ const setInjection = (part: 'attachments' | 'tools', name: string, on: boolean) 
         <SChip
           v-for="name in injectionAttachments"
           :key="name"
-          :pressed="injected('attachments', name)"
-          :icon="injected('attachments', name) ? 'check' : undefined"
+          :pressed="layers.injected('attachments', name)"
+          :icon="layers.injected('attachments', name) ? 'check' : undefined"
           :disabled="!layers.editable('environment')"
           :data-testid="'injection-attachments-' + name"
-          @update:pressed="setInjection('attachments', name, $event)"
+          @update:pressed="layers.setInjection('attachments', name, $event)"
         >
           {{ t('ccgateway.levels.attachment.' + name) }}
         </SChip>

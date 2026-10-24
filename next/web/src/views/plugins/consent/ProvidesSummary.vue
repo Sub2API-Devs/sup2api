@@ -12,6 +12,7 @@ import { formatBytes } from '@/utils/format'
 import { useOptionalT } from '@/composables/optionalText'
 import { accountTypesOf, asArray, display, endpointText, formatDuration, hpKey, pick, platformsOf } from '../pluginUtil'
 import PluginGatewayDecl from '../parts/PluginGatewayDecl.vue'
+import { useConsentLabels } from './hostPermission'
 
 const props = defineProps<{
   review: PluginReview
@@ -22,7 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'toggle-role', key: string, on: boolean): void }>()
 const { t } = useI18n()
 const tr = useOptionalT()
-const colon = computed(() => t('plugins.colon'))
+const { colon } = useConsentLabels()
 const listSep = computed(() => t('plugins.listSep'))
 
 const reviewPlatforms = computed(() => platformsOf(props.review))

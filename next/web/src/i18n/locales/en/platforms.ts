@@ -3,7 +3,6 @@ export default {
   description:
     'Platforms declare gateway endpoints. The core ships anthropic, openai and gemini; plugins can add new platforms. Account types declare the platforms they support; accounts of those types serve the endpoints.',
   builtin: 'Built-in',
-  plugin: 'Plugin',
   pluginBy: 'Plugin: {name}',
   endpoints: 'Endpoints',
   method: 'Method',

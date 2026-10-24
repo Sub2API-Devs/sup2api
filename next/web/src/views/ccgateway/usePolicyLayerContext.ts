@@ -5,25 +5,37 @@
 // builds it once and provides it; the billing, environment and prompt cards
 // inject it, so `edit()` (and with it the "write only the fields this
 // interaction set" rule) stays in one place.
-import { computed, inject, provide, type ComputedRef, type InjectionKey } from 'vue'
+import { computed, inject, provide, reactive, type InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SelectOption } from '@sub2api/ui'
 import {
-  customizeLayer, followLayer, layerCustomized, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelOf,
+  customizeLayer, followLayer, injectionDefault, layerCustomized, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelOf,
   type FeatureLayer, type FeatureOverrides, type RequestLevel, type RequestPolicy
 } from './requestPolicy'
 
 type LockableLayer = 'identity' | 'environment' | 'prompt'
+/**
+ * The layers whose level can lock them. `editable` is only asked about these
+ * and `level`/`billing` (never `identity`, which RequestPolicySettings uses
+ * directly), so nothing has to be cast into LockableLayer.
+ */
+const mayBeLocked = (layer: FeatureLayer): layer is 'environment' | 'prompt' => layer === 'environment' || layer === 'prompt'
+/** The two parts of build_injection whose switches the cards edit. */
+type InjectionPart = 'attachments' | 'tools'
 
+/**
+ * The layer context. Returned as a reactive object of values (not refs), so a
+ * template reads `layers.has.environment` / `layers.view` like any other object.
+ */
 export interface PolicyLayers {
   /** The policy every card shows. */
-  view: ComputedRef<RequestPolicy>
+  view: RequestPolicy
   /** Follow / customize switches: at a group or an account only, never in a preview. */
-  toggles: ComputedRef<boolean>
+  toggles: boolean
   /** The form is disabled by its parent (read-only). */
-  disabled: ComputedRef<boolean>
-  modeOptions: ComputedRef<SelectOption[]>
-  has: ComputedRef<{ identity: boolean; environment: boolean; prompt: boolean }>
+  disabled: boolean
+  modeOptions: SelectOption[]
+  has: { identity: boolean; environment: boolean; prompt: boolean }
   locked: (layer: LockableLayer) => boolean
   lockedText: (layer: LockableLayer) => string
   modeOf: (layer: FeatureLayer) => 'follow' | 'custom'
@@ -36,6 +48,9 @@ export interface PolicyLayers {
   fieldOrigin: (key: string) => string | undefined
   /** Writes only the fields `change` sets: into the overrides (group, account) or the policy (global). */
   edit: (change: (draft: FeatureOverrides) => void) => void
+  /** One build_injection switch (an omitted choice is its level's default). */
+  injected: (part: InjectionPart, name: string) => boolean
+  setInjection: (part: InjectionPart, name: string, on: boolean) => void
 }
 
 const KEY: InjectionKey<PolicyLayers> = Symbol('policyLayers')
@@ -83,7 +98,9 @@ export function providePolicyLayers(input: PolicyLayersInput): PolicyLayers {
     input.setOverrides(mode === 'custom' ? customizeLayer(input.overrides(), inherited, layer) : followLayer(input.overrides(), layer))
   }
   // Customizing copies every inherited value of the layer; following deletes them.
-  const editable = (layer: FeatureLayer) => !input.disabled?.() && !showEffective.value && !locked(layer as LockableLayer) && (!layered.value || layerCustomized(input.overrides(), layer))
+  // `level` and `billing` are never lockable (their level has no such switch).
+  const editable = (layer: FeatureLayer) =>
+    !input.disabled?.() && !showEffective.value && !(mayBeLocked(layer) && locked(layer)) && (!layered.value || layerCustomized(input.overrides(), layer))
   // Every edit goes to the policy (global) or the overrides (group, account),
   // writing only the field it sets.
   function edit(change: (draft: FeatureOverrides) => void) {
@@ -101,10 +118,18 @@ export function providePolicyLayers(input: PolicyLayersInput): PolicyLayers {
     const list = ['global', 'group', 'account'].filter(source => found.has(source))
     return list.length ? t('ccgateway.layers.source', { source: list.map(source => t('ccgateway.layers.' + source)).join(t('ccgateway.levels.convertSummary.list')) }) : undefined
   }
-  const ctx: PolicyLayers = {
+  // Shared by the environment (attachments) and prompt (tools) cards.
+  const injected = (part: InjectionPart, name: string) =>
+    ((view.value.build_injection?.[part] as Record<string, boolean> | undefined)?.[name]) ?? injectionDefault(part, name)
+  const setInjection = (part: InjectionPart, name: string, on: boolean) => edit(draft => {
+    const injection = { ...draft.build_injection }
+    injection[part] = { ...injection[part], [name]: on }
+    draft.build_injection = injection
+  })
+  const ctx: PolicyLayers = reactive({
     view, toggles: computed(() => layered.value && !showEffective.value), disabled: computed(() => !!input.disabled?.()), modeOptions, has, locked, lockedText,
-    modeOf, modeLabel, setMode, editable, layerOrigin, fieldOrigin, edit
-  }
+    modeOf, modeLabel, setMode, editable, layerOrigin, fieldOrigin, edit, injected, setInjection
+  })
   provide(KEY, ctx)
   return ctx
 }

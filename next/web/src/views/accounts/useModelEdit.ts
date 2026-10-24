@@ -1,7 +1,7 @@
 // Model mapping, plugin defaults (CONTRACTS §41) and prefill of the account
 // editor, edited like new-api's channel form: mapping rows or a JSON object.
 // It builds on useModelList for the list itself and keeps the priced models
-// offered as suggestions. useModelsEditor composes both for AccountEditor.
+// offered as suggestions. AccountEditor uses it for both cards.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -20,7 +20,10 @@ const mappingJSON = (m: Mapping) => (Object.keys(m).length ? JSON.stringify(m, n
 export function useModelEdit(accountType: () => AccountType | null | undefined, subscription: () => string | null | undefined = () => undefined) {
   const { t } = useI18n()
   const list = useModelList()
-  const { models, modelsTextMode, modelsError, setModels, syncModelsText, mergeModels, clearModels, problemText } = list
+  const {
+    models, modelsText, modelsTextMode, modelsError, modelsSynced,
+    setModels, rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels, problemText
+  } = list
 
   const mapping = ref<Mapping>({})
   /**
@@ -111,7 +114,7 @@ export function useModelEdit(accountType: () => AccountType | null | undefined, 
 
   /** Merges the default models into the list; existing entries are kept. */
   function fillDefaultModels() {
-    if (!list.modelsSynced()) return
+    if (!modelsSynced()) return
     const added = mergeModels(defaultModels.value)
     toast(added ? t('accounts.editorUi.defaultsAdded', { n: added }) : t('accounts.editorUi.defaultsNothingNew'), added ? 'success' : 'info')
   }
@@ -162,13 +165,13 @@ export function useModelEdit(accountType: () => AccountType | null | undefined, 
   })
 
   return {
-    list,
+    models, modelsText, modelsTextMode, modelsError,
+    setModels, rejectModel, syncModelsText, setModelsTextMode, formatModelsText, mergeModels, clearModels, copyModels,
+    problemText,
+    modelsSynced,
     mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
     mappingText, mappingJsonMode, mappingError,
     fillDefaultModels, syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping,
-    clearPrefill, sameDefaults, applyDefaults, setSaved, resetEditing, commitPending, payload,
-    setModels
+    clearPrefill, sameDefaults, applyDefaults, setSaved, resetEditing, commitPending, payload
   }
 }
-
-export type ModelEdit = ReturnType<typeof useModelEdit>

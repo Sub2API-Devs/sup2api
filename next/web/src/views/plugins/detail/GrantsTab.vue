@@ -10,13 +10,13 @@ import { hpKey, riskOf, type PluginDetail, type PluginGrant } from '../pluginUti
 import RiskDot from '../parts/RiskDot.vue'
 import ScopeChips from '../parts/ScopeChips.vue'
 import StatusBadge from '../parts/StatusBadge.vue'
-import { useOptionalT } from '@/composables/optionalText'
+import { useConsentLabels } from '../consent/hostPermission'
 
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t, te } = useI18n()
-const tr = useOptionalT()
 const auth = useAuthStore()
+const { hpLabel } = useConsentLabels()
 
 const grants = ref<PluginGrant[]>(props.detail.grants || [])
 const loading = ref(false)
@@ -31,10 +31,6 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'granted_at', label: t('plugins.grants.grantedAt') },
   { key: 'actions', label: '', align: 'right' }
 ])
-
-function hpLabel(id: string): string {
-  return tr(`plugins.hp.${hpKey(id)}`, undefined, id)
-}
 
 async function load() {
   loading.value = true

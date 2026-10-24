@@ -42,6 +42,7 @@ export default {
     stream: 'Response mode'
   },
   filters: {
+    // Read by LedgerView (admin balance ledger) across namespaces: keep it.
     userId: 'User ID'
   },
   success: {

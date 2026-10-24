@@ -25,7 +25,5 @@ export default {
   createdTitle: 'API key created',
   onceWarning: 'Save this key. You can also copy it from the list later.',
   savedIt: 'I have saved it',
-  confirmDelete: 'Delete API key "{name}"? Clients using it will stop working immediately.',
-  searchPlaceholder: 'Search name or key prefix…',
-  userId: 'User ID'
+  confirmDelete: 'Delete API key "{name}"? Clients using it will stop working immediately.'
 }

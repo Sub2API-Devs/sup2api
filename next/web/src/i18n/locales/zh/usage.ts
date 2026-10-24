@@ -42,6 +42,7 @@ export default {
     stream: '响应方式'
   },
   filters: {
+    // 被 LedgerView（管理员余额流水）跨命名空间使用，不要删。
     userId: '用户 ID'
   },
   success: {

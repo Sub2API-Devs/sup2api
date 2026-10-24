@@ -6,17 +6,18 @@ import type { Group, Proxy } from '@/api/types'
 // mutations that change them.
 
 /** One page (200 by default) of a list endpoint: the whole set for a select. `query` adds filters. */
-export async function fetchFirstPage<T>(path: string, pageSize = 200, query: Query = {}): Promise<T[]> {
+export async function fetchFirstPage<T>(path: string, query: Query = {}, pageSize = 200): Promise<T[]> {
   return (await api.list<T>(path, { ...query, page_size: pageSize })).items
 }
 
 /** Every page of a list endpoint (the caller needs the complete set, not a dropdown). */
-export async function fetchAllPages<T>(path: string, pageSize = 200, query: Query = {}): Promise<T[]> {
+export async function fetchAllPages<T>(path: string, query: Query = {}, pageSize = 200): Promise<T[]> {
   const out: T[] = []
   for (let page = 1; ; page++) {
     const result = await api.list<T>(path, { ...query, page, page_size: pageSize })
     out.push(...result.items)
-    if (!result.paged || !result.items.length || out.length >= result.page.total) break
+    // `total` is optional on the wire: without it the seen count is the end.
+    if (!result.paged || !result.items.length || out.length >= (result.page.total ?? out.length)) break
   }
   return out
 }

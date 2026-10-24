@@ -152,7 +152,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', 200, { plugin_key: 'ccgateway' })
+    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway' })
     rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')

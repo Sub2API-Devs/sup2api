@@ -9,12 +9,12 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
   let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]}}
   on('GET',`${base}/remote-config`,()=>config)
-  // Code adaptation catalog (the core serves the Worker's catalog); the CC features tab lists the scope "cc" entries.
-  on('GET',`${base}/features`,()=>({catalog_version:'2026-10-09.18',policy_schema_version:1,runtime_verified:false,features:[
-    {id:'F-SAFEGUARDS',title:'工具安全审查',category:'CC 执行上下文',scope:'cc',status:'partial',body_paths:['safeguards'],beta_headers:['dangerous-tool-use-2026-09-03'],mechanisms:['CC 原生安全审查'],reason:'safeguards 由 Worker 内 Claude Code 处理。'},
-    {id:'F-ADD-DIR',title:'额外目录访问',category:'CC 执行上下文',scope:'cc',status:'supported',body_paths:['additional_directories'],beta_headers:[],mechanisms:['CLI --add-dir 参数传递','请求级目录授权','Mod 配置透传'],reason:'支持客户端通过 additional_directories 数组传递额外目录，网关保留并通过 --add-dir 参数传递给 CC CLI。'},
-    {id:'F-THINKING-DISABLED-COMPAT',title:'thinking disabled 兼容',category:'CC 执行上下文',scope:'cc',status:'partial',body_paths:['thinking.type'],beta_headers:[],mechanisms:['策略 thinking_disabled_compat','已验证模型清单'],reason:'默认 pass 与官方 API 一致返回 400；omit 时对 claude-opus-5-5、claude-fable-5-1 不传 thinking。'},
-    {id:'F-STREAM',title:'流式响应',category:'generation',scope:'api',status:'supported',body_paths:['stream'],beta_headers:[],mechanisms:['SSE'],reason:'官方 API 行为。'},
+  // Request catalog of the core (features.RequestCatalog("request_build")): the
+  // two entries the request path declares. Keep it in step with
+  // next/plugins/ccgateway/companions/contracts/features/request_modes.go.
+  on('GET',`${base}/features`,()=>({catalog_version:'2026-10-20.request-attachments-v1',policy_schema_version:1,runtime_verified:false,features:[
+    {id:'F-REQUEST-MODES',title:'单次请求 direct/build',category:'CC 执行上下文',scope:'cc',status:'partial',body_paths:['system','messages','tools'],beta_headers:[],mechanisms:['request_build','CLI 原生单次发送','API Key 认证','调用方执行工具'],reason:'direct 保留 Messages 原文，只补缺失的计费头；build 由 CLI 用原生函数按客户端原块组装，Worker 不改写内容。均不执行工具循环，工具由调用方执行。count_tokens 未实现。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。'},
+    {id:'F-BUILD-ATTACHMENTS',title:'build 环境附件来源',category:'CC 执行上下文',scope:'cc',status:'supported',body_paths:['system','messages[].content'],beta_headers:[],mechanisms:['build_attachment_sources_v2','build_attachment_sources','CLI 原生环境段'],reason:'环境段各字段按来源由 CLI 的内容适配器生成：默认保留客户端，也可用 Worker 本机事实或擦除。仅识别完整 CC 环境段落，其余内容原样保留；不调用额外模型。direct 不执行转换。'},
   ]}))
   on('PUT',`${base}/remote-config`,({body})=>{
     const { password,private_key,passphrase,admin_key,api_key,controller_ca,...publicFields }=body

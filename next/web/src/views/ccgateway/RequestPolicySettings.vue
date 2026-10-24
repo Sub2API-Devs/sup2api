@@ -36,7 +36,7 @@ const layers = providePolicyLayers({
 
 // ---------------------------------------------------------------- level
 const levelName = (value: RequestLevel) => t('ccgateway.levels.names.' + value)
-const level = computed(() => levelOf(layers.view.value))
+const level = computed(() => levelOf(layers.view))
 const levelOptions = computed<SelectOption[]>(() => requestLevels.map(value => ({ value, label: levelName(value) + (value === defaultRequestLevel ? t('ccgateway.levels.defaultMark') : '') })))
 const includedLayers = computed(() => [
   { key: 'billing', on: true },
@@ -70,11 +70,11 @@ const identityRules = computed(() => {
     >
       <template #actions>
         <SSegmented
-          v-if="layers.toggles.value"
+          v-if="layers.toggles"
           :model-value="layers.modeOf('level')"
-          :options="layers.modeOptions.value"
+          :options="layers.modeOptions"
           size="sm"
-          :disabled="layers.disabled.value"
+          :disabled="layers.disabled"
           :aria-label="layers.modeLabel('level')"
           data-testid="layer-mode-level"
           @update:model-value="layers.setMode('level', $event)"
@@ -111,7 +111,7 @@ const identityRules = computed(() => {
         </div>
         <p class="text-xs text-fg-muted">
           <span data-testid="level-desc">{{ t('ccgateway.levels.desc.' + level) }}</span>
-          · <span data-testid="cli-version">CLI <span class="font-mono">{{ layers.view.value.cli_version }}</span></span>
+          · <span data-testid="cli-version">CLI <span class="font-mono">{{ layers.view.cli_version }}</span></span>
         </p>
       </div>
     </SSettingsGroup>
@@ -121,17 +121,17 @@ const identityRules = computed(() => {
     <!-- The identity line has no settings: a request without one gets the line
     its billing header's entrypoint calls for. -->
     <SSettingsGroup
-      :key="'identity-' + layers.has.value.identity"
+      :key="'identity-' + layers.has.identity"
       :title="t('ccgateway.layers.identity')"
-      :description="layers.has.value.identity ? undefined : layers.lockedText('identity')"
-      :collapsible="!layers.has.value.identity"
-      :default-open="layers.has.value.identity"
+      :description="layers.has.identity ? undefined : layers.lockedText('identity')"
+      :collapsible="!layers.has.identity"
+      :default-open="layers.has.identity"
       dense
       data-testid="identity-lines"
-      :data-locked="!layers.has.value.identity || undefined"
+      :data-locked="!layers.has.identity || undefined"
     >
       <template
-        v-if="layers.has.value.identity"
+        v-if="layers.has.identity"
         #actions
       >
         <SChip size="xs">

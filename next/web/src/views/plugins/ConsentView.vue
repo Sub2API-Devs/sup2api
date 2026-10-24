@@ -3,18 +3,19 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, asArray, capabilityIdsOf, hpKey, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, asArray, capabilityIdsOf, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import TrustBadge from './parts/TrustBadge.vue'
 import ProvidesSummary from './consent/ProvidesSummary.vue'
 import HostPermissionTable from './consent/HostPermissionTable.vue'
 import type { HPRow } from './consent/hostPermission'
+import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
 import { fetchFirstPage } from '@/composables/lookups'
 
@@ -87,11 +88,7 @@ const blockedByPermission = computed(() => rows.value.filter((r) => !r.optional 
 const signatureOk = computed(() => review.value?.signature_status === 'valid')
 const canSubmit = computed(() => !!review.value && review.value.host_compat_ok !== false && blockedByPermission.value.length === 0)
 const isUpgrade = computed(() => !!review.value?.diff)
-const colon = computed(() => t('plugins.colon'))
-
-function hpLabel(id: string): string {
-  return tr(`plugins.hp.${hpKey(id)}`, undefined, id)
-}
+const { colon, hpLabel } = useConsentLabels()
 
 function sigLabel(s: string | undefined): string {
   const v = s || 'unknown'

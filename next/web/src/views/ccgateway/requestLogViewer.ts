@@ -210,5 +210,10 @@ export function durationText(ms: number): string {
   return `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`
 }
 
-/** Groups content files by kind, in reading order. */
+/**
+ * Groups content files by kind, in reading order. The engine keeps `cli` for
+ * logs written up to plugin 0.1.86 (its traceReader wrote `cli-stdout.jsonl`);
+ * both `cli` and `upstream` stay until those logs age out. `other` collects
+ * every kind this list does not know.
+ */
 export const FILE_KINDS = ['request', 'build', 'history', 'cli', 'upstream', 'response', 'other'] as const

@@ -3,7 +3,7 @@
 // POST / PATCH (submit) and the error routing (showSaveError) in one place.
 // AccountEditor keeps the template and only wires the state below.
 import type { ComputedRef, Ref } from 'vue'
-import { nextTick } from 'vue'
+import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
@@ -12,8 +12,10 @@ import { useProxiesLookup } from '@/composables/lookups'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
+import { accountControl } from './accountTypeChoices'
 import { sectionOfErrors, splitFieldErrors, type EditorSection } from './editorErrors'
 import { subscriptionLabel } from './subscription'
+import type { useModelEdit } from './useModelEdit'
 
 /** Editable basics of an account (AccountEditor's `basic`). */
 export interface AccountBasics {
@@ -29,12 +31,29 @@ export interface AccountBasics {
   tpm_limit: number
 }
 
-/** The model list / mapping editor, as far as saving needs it. */
-export interface SaveModels {
-  setModels(next: string[]): void
-  payload(): { models: string[]; model_mapping: Record<string, string> }
-  commitPending(): boolean
-  defaultModels(): string[]
+/** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
+export type ModelEditor = ReturnType<typeof useModelEdit>
+
+/** What saving needs of a CCGateway account beyond its type. */
+export interface AccountSaveCcg {
+  /** "automatic models" (the subscription's default list). */
+  autoModels: Ref<boolean>
+  autoDisableEnabled: Ref<boolean | null>
+  /** The proxy_url to send instead of proxy_id. */
+  proxyUrlToSend: ComputedRef<string>
+  featureDirty: ComputedRef<boolean>
+  featureBlocked: Ref<boolean>
+  featurePolicy: Ref<AccountFeaturePolicy | undefined>
+  /** New account: the draft flow is not authorized yet, so saving waits for it. */
+  draft: ComputedRef<boolean>
+  saveBlocked: ComputedRef<boolean>
+  /** Key (or account id) of the prepared draft container. */
+  draftKey: ComputedRef<string | null>
+  preparationUrl: ComputedRef<string | undefined>
+  /** The authorization panel of a new account. */
+  adopt(): void
+  rejected(reason: string): void
+  showAuth(): void
 }
 
 export interface AccountSaveDeps {
@@ -48,29 +67,12 @@ export interface AccountSaveDeps {
   saving: Ref<boolean>
   activeSection: Ref<EditorSection>
   locationLoading: Ref<boolean>
-  models: SaveModels
+  /** The model list / mapping editor (useModelEdit). */
+  models: ModelEditor
   /** Container locale and timezone (CCGateway accounts). */
-  environment(): { locale: string; timezone: string }
-  /** CCGateway accounts: settings, proxy, auto models and the CC feature draft. */
-  gateway: {
-    needed: ComputedRef<boolean>
-    automaticModels: ComputedRef<boolean>
-    schedulingConfigurable: ComputedRef<boolean>
-    autoDisableEnabled: Ref<boolean | null>
-    autoDisableConfigurable: ComputedRef<boolean>
-    proxyUrlToSend: ComputedRef<string>
-    featureDirty: ComputedRef<boolean>
-    featureBlocked: Ref<boolean>
-    featurePolicy: Ref<AccountFeaturePolicy | undefined>
-    draft: ComputedRef<boolean>
-    /** The draft flow is not authorized yet: saving waits for it. */
-    saveBlocked: ComputedRef<boolean>
-    draftKey: ComputedRef<string | null>
-    preparationUrl: ComputedRef<string | undefined>
-    adopt(): void
-    rejected(reason: string): void
-    showAuth(): void
-  }
+  settings: { locale: string; timezone: string }
+  /** CCGateway accounts only. */
+  ccg: AccountSaveCcg
   collectCredentials(): Promise<Record<string, unknown> | null>
   showCredentialErrors(cred: Record<string, string>): void
   loadAutoDisablePolicy(): Promise<void>
@@ -79,11 +81,14 @@ export interface AccountSaveDeps {
 
 export function useAccountSave(deps: AccountSaveDeps) {
   const { t } = useI18n()
-  const { account, accountType, editing, basic, errors, credErrors, saving, activeSection, models, gateway } = deps
+  const { account, accountType, editing, basic, errors, credErrors, saving, activeSection, models, ccg } = deps
+  // Both decisions are the account type's (accountControl), not the editor's state.
+  const schedulingConfigurable = computed(() => accountControl(accountType.value, 'schedulable').configurable)
+  const autoDisableConfigurable = computed(() => accountControl(accountType.value, 'auto_disable').configurable)
 
   /** Checks done before the request; the section to show when one fails. */
   async function invalidSection(form: HTMLFormElement): Promise<EditorSection | 'native' | 'ccg' | null> {
-    if (gateway.featureDirty.value && (gateway.featureBlocked.value || !validFeatureOverrides(gateway.featurePolicy.value!.overrides))) {
+    if (ccg.featureDirty.value && (ccg.featureBlocked.value || !validFeatureOverrides(ccg.featurePolicy.value!.overrides))) {
       errors.value = { cc_feature_policy: t('ccgateway.layers.invalid') }
       return 'cc_features'
     }
@@ -101,13 +106,13 @@ export function useAccountSave(deps: AccountSaveDeps) {
       errors.value = { name: t('ui.schema.v.required') }
       return 'connection'
     }
-    if (gateway.saveBlocked.value) return 'ccg'
+    if (ccg.saveBlocked.value) return 'ccg'
     // Pending text-mode / draft edits are committed (and validated) before saving.
     return models.commitPending() ? null : 'models'
   }
 
   function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
-    if (gateway.automaticModels.value) models.setModels([...models.defaultModels()])
+    if (ccg.autoModels.value && accountType.value?.plugin_key === 'ccgateway') models.setModels([...models.defaultModels.value])
     const body: Record<string, unknown> = {
       name: basic.name.trim(),
       group_ids: basic.group_ids,
@@ -118,23 +123,26 @@ export function useAccountSave(deps: AccountSaveDeps) {
       rpm_limit: Number(basic.rpm_limit) || 0,
       tpm_limit: Number(basic.tpm_limit) || 0
     }
-    if (gateway.schedulingConfigurable.value) body.schedulable = basic.schedulable
-    if (gateway.autoDisableEnabled.value === true && gateway.autoDisableConfigurable.value) body.auto_disable = basic.auto_disable
-    if (gateway.needed.value) {
-      const environment = deps.environment()
-      body.settings = { locale: environment.locale, timezone: environment.timezone }
-      body.auto_models = gateway.automaticModels.value
+    if (schedulingConfigurable.value) body.schedulable = basic.schedulable
+    if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable
+    if (ccgNeeded()) {
+      body.settings = { locale: deps.settings.locale, timezone: deps.settings.timezone }
+      body.auto_models = automaticModels()
       // Retired keys an older save may hold are dropped (the core ignores them).
-      if (editing.value && gateway.featureDirty.value) {
-        body.cc_feature_policy = { ...gateway.featurePolicy.value!, overrides: savedOverrides(gateway.featurePolicy.value!.overrides) }
+      if (editing.value && ccg.featureDirty.value) {
+        body.cc_feature_policy = { ...ccg.featurePolicy.value!, overrides: savedOverrides(ccg.featurePolicy.value!.overrides) }
       }
     }
     // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
-    if (gateway.proxyUrlToSend.value) body.proxy_url = gateway.proxyUrlToSend.value
+    if (ccg.proxyUrlToSend.value) body.proxy_url = ccg.proxyUrlToSend.value
     else body.proxy_id = basic.proxy_id
     if (accountType.value && !account.value?.orphaned) body.credentials = creds
     return body
   }
+
+  /** CCGateway accounts (managed and apikey) carry settings and need a proxy. */
+  const ccgNeeded = () => accountType.value?.plugin_key === 'ccgateway'
+  const automaticModels = () => ccgNeeded() && ccg.autoModels.value
 
   async function submit(body: Record<string, unknown>): Promise<Account> {
     if (editing.value) return api.patch<Account>(`/accounts/${account.value!.id}`, body)
@@ -142,10 +150,10 @@ export function useAccountSave(deps: AccountSaveDeps) {
     body.plugin_key = accountType.value!.plugin_key
     body.type = accountType.value!.type
     // A new Claude Code account adopts its authorized draft container.
-    const draft = gateway.draft.value ? gateway.draftKey.value : null
-    if (draft) body[gateway.preparationUrl.value ? 'preparation_key' : 'ccgateway_runtime'] = draft
+    const draft = ccg.draft.value ? ccg.draftKey.value : null
+    if (draft) body[ccg.preparationUrl.value ? 'preparation_key' : 'ccgateway_runtime'] = draft
     const created = await api.post<Account>('/accounts', body)
-    if (draft) gateway.adopt()
+    if (draft) ccg.adopt()
     return created
   }
 
@@ -156,11 +164,11 @@ export function useAccountSave(deps: AccountSaveDeps) {
       return
     }
     // The draft was refused (gone, or no longer signed in): back to the authorization steps.
-    const ccgReason = gateway.draft.value ? reasonOf(e) : ''
+    const ccgReason = ccg.draft.value ? reasonOf(e) : ''
     if (ccgReason === 'draft_not_found' || ccgReason === 'draft_not_authorized') {
-      gateway.rejected(ccgReason)
+      ccg.rejected(ccgReason)
       toast(t(`ccgateway.reason.${ccgReason}`), 'error')
-      gateway.showAuth()
+      ccg.showAuth()
       return
     }
     const all = fieldErrors(e)
@@ -177,7 +185,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
     errors.value = {}
     credErrors.value = {}
     const problem = await invalidSection(event.currentTarget as HTMLFormElement)
-    if (problem === 'ccg') return void gateway.showAuth()
+    if (problem === 'ccg') return void ccg.showAuth()
     if (problem && problem !== 'native') activeSection.value = problem
     if (problem) return
     const creds = await deps.collectCredentials()
@@ -208,5 +216,5 @@ export function useAccountSave(deps: AccountSaveDeps) {
     }
   }
 
-  return { invalidSection, requestBody, submit, showSaveError, save }
+  return { save }
 }

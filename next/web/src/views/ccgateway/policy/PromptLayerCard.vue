@@ -10,21 +10,14 @@ import { usePolicyLayers } from '../usePolicyLayerContext'
 
 const { t } = useI18n()
 const layers = usePolicyLayers()
-const injected = (name: string) =>
-  (layers.view.value.build_injection?.tools as Record<string, boolean> | undefined)?.[name] ?? injectionDefault('tools', name)
-const systemPrompt = computed(() => layers.view.value.build_injection?.system_prompt ?? injectionDefault('system_prompt'))
+const systemPrompt = computed(() => layers.view.build_injection?.system_prompt ?? injectionDefault('system_prompt'))
 function setSystemPrompt(on: boolean) {
   layers.edit(draft => {
     draft.build_injection = { ...draft.build_injection, system_prompt: on }
   })
 }
-function setTool(name: string, on: boolean) {
-  layers.edit(draft => {
-    const injection = { ...draft.build_injection }
-    injection.tools = { ...injection.tools, [name]: on }
-    draft.build_injection = injection
-  })
-}
+/** Tools use the context's shared build_injection switch (same as the environment card). */
+const setTool = (name: string, on: boolean) => layers.setInjection('tools', name, on)
 const toolHints = computed(() => [
   { tools: 'Agent', text: t('ccgateway.levels.toolHints.Agent') },
   { tools: ['WebSearch', 'NotebookEdit'].join(t('ccgateway.levels.convertSummary.list')), text: t('ccgateway.levels.toolHints.deferred') }
@@ -33,35 +26,35 @@ const toolHints = computed(() => [
 
 <template>
   <SSettingsGroup
-    :key="'prompt-' + layers.has.value.prompt"
+    :key="'prompt-' + layers.has.prompt"
     :title="t('ccgateway.levels.promptTools')"
-    :description="layers.has.value.prompt ? layers.layerOrigin('prompt') : layers.lockedText('prompt')"
-    :collapsible="!layers.has.value.prompt"
-    :default-open="layers.has.value.prompt"
+    :description="layers.has.prompt ? layers.layerOrigin('prompt') : layers.lockedText('prompt')"
+    :collapsible="!layers.has.prompt"
+    :default-open="layers.has.prompt"
     dense
     data-testid="prompt-tools"
-    :data-locked="!layers.has.value.prompt || undefined"
+    :data-locked="!layers.has.prompt || undefined"
   >
     <template #actions>
       <SChip
-        v-if="layers.has.value.prompt"
+        v-if="layers.has.prompt"
         size="xs"
       >
         {{ t('ccgateway.levels.from.prompt') }}
       </SChip>
       <SSegmented
-        v-if="layers.toggles.value"
+        v-if="layers.toggles"
         :model-value="layers.modeOf('prompt')"
-        :options="layers.modeOptions.value"
+        :options="layers.modeOptions"
         size="sm"
-        :disabled="layers.disabled.value || layers.locked('prompt')"
+        :disabled="layers.disabled || layers.locked('prompt')"
         :aria-label="layers.modeLabel('prompt')"
         data-testid="layer-mode-prompt"
         @update:model-value="layers.setMode('prompt', $event)"
       />
     </template>
     <template
-      v-if="layers.has.value.prompt"
+      v-if="layers.has.prompt"
       #details
     >
       <p>{{ t('ccgateway.levels.promptToolsShort') }}</p>
@@ -96,8 +89,8 @@ const toolHints = computed(() => [
           <SChip
             v-for="name in injectionTools"
             :key="name"
-            :pressed="injected(name)"
-            :icon="injected(name) ? 'check' : undefined"
+            :pressed="layers.injected('tools', name)"
+            :icon="layers.injected('tools', name) ? 'check' : undefined"
             :disabled="!layers.editable('prompt')"
             :data-testid="'injection-tools-' + name"
             @update:pressed="setTool(name, $event)"

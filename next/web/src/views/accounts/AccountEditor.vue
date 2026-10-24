@@ -37,9 +37,9 @@ import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
 import { useContainerEnvironment } from './useContainerEnvironment'
-import { useModelsEditor } from './useModelsEditor'
+import { useModelEdit } from './useModelEdit'
 import { useAccountSave } from './useAccountSave'
-import { CONNECTION_FIELDS, SCHEDULING_FIELDS, splitFieldErrors, type EditorSection } from './editorErrors'
+import { CONNECTION_FIELDS, SCHEDULING_FIELDS, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -137,23 +137,14 @@ watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { f
 const autoModels = ref(true)
 const ccgState = ref<{ key: string | null; authorized: boolean; subscription_type?: string }>({ key: null, authorized: false })
 const automaticModels = computed(() => props.accountType?.plugin_key === 'ccgateway' && autoModels.value)
-const editorModels = useModelsEditor(
+const editorModels = useModelEdit(
   () => props.accountType,
   () => props.account?.subscription_type ?? ccgState.value.subscription_type
 )
 const {
-  models, mapping, prefilled, prefillWhat, defaultModels, defaultMapping, modelOptions,
-  modelsText, modelsTextMode, modelsError, mappingText, mappingJsonMode, mappingError,
-  rejectModel, syncModelsText, setModelsTextMode, formatModelsText, clearModels, copyModels, fillDefaultModels,
-  syncMappingText, setMappingJsonMode, formatMappingText, fillMappingTemplate, fillDefaultMapping, clearPrefill
+  models, mapping, prefilled, defaultModels, modelsTextMode,
+  modelsError, mappingError, syncModelsText, clearPrefill
 } = editorModels
-function setAutoModels(value: boolean) {
-  autoModels.value = value
-  // Both transitions start from the preset; only loading a saved manual
-  // account keeps its custom list. Mapping remains an independent setting.
-  editorModels.setModels([...defaultModels.value])
-  prefilled.value = false
-}
 function mergeModels(ids: string[]) {
   if (automaticModels.value) {
     toast(t('accounts.editorUi.autoModelsHint'), 'info')
@@ -167,9 +158,8 @@ watch(defaultModels, (next, previous) => {
     editorModels.setModels([...next])
   }
 })
-/** JSON example of the mapping box and the 可视化 / JSON switch: AccountModelsCard. */
+/** Models and mappings of the section summary (the cards render their own counts). */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
-const defaultMappingCount = computed(() => Object.keys(defaultMapping.value).length)
 
 const editorSections = computed(() => [
   { key: 'connection' as const, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
@@ -190,14 +180,8 @@ const limitFields = computed(() => [
   { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), unit: t('accounts.editorUi.unitTpm') }
 ])
 /** Server field errors of the model list / mapping, shown under the editor. */
-const serverModelsError = computed(() => {
-  for (const [k, v] of Object.entries(errors.value)) if (/^models(\[|$)/.test(k)) return `${k}: ${v}`
-  return ''
-})
-const serverMappingError = computed(() => {
-  for (const [k, v] of Object.entries(errors.value)) if (/^model_mapping([.[]|$)/.test(k)) return k === 'model_mapping' ? v : `${k}: ${v}`
-  return ''
-})
+const serverModelsError = computed(() => modelsErrorText(errors.value))
+const serverMappingError = computed(() => mappingErrorText(errors.value))
 /** Sections holding an error, marked in the navigation. */
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
@@ -509,19 +493,11 @@ const { save } = useAccountSave({
   saving,
   activeSection,
   locationLoading,
-  models: {
-    setModels: editorModels.setModels,
-    payload: editorModels.payload,
-    commitPending: editorModels.commitPending,
-    defaultModels: () => defaultModels.value
-  },
-  environment: () => ({ locale: ccgSettings.locale, timezone: ccgSettings.timezone }),
-  gateway: {
-    needed: needsProxy,
-    automaticModels,
-    schedulingConfigurable: computed(() => schedulingControl.value.configurable),
+  models: editorModels,
+  settings: ccgSettings,
+  ccg: {
+    autoModels,
     autoDisableEnabled,
-    autoDisableConfigurable: computed(() => autoDisableControl.value.configurable),
     proxyUrlToSend,
     featureDirty: ccFeatureDirty,
     featureBlocked: ccFeatureBlocked,
@@ -666,46 +642,17 @@ const { save } = useAccountSave({
         <!-- ============================================================ models -->
         <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-4">
           <AccountModelsCard
-            v-model:models="models"
-            v-model:mapping="mapping"
-            v-model:models-text="modelsText"
-            v-model:mapping-text="mappingText"
-            v-model:models-text-mode="modelsTextMode"
-            v-model:mapping-json-mode="mappingJsonMode"
             v-model:auto-models="autoModels"
+            :editor="editorModels"
             :gateway="needsProxy"
             :automatic="automaticModels"
-            :prefilled="prefilled"
             :editing="editing"
-            :prefill-what="prefillWhat"
             :draft="ccgDraft"
             :can-fetch="canFetch"
             :fetching="fetching"
-            :default-models="defaultModels"
-            :model-options="modelOptions"
-            :models-error="modelsError"
-            :server-models-error="serverModelsError"
-            :mapping-error="mappingError"
-            :server-mapping-error="serverMappingError"
-            :mapping-count="mappingCount"
-            :default-mapping-count="defaultMappingCount"
-            @update:models="modelsError = ''"
-            @update:auto-models="setAutoModels"
+            :errors="errors"
+            :merge-models="mergeModels"
             @fetch="fetchModels"
-            @clear-prefill="clearPrefill"
-            @models-text-mode="setModelsTextMode"
-            @sync-models-text="syncModelsText()"
-            @format-models-text="formatModelsText"
-            @copy-models="copyModels"
-            @clear-models="clearModels"
-            @fill-default-models="fillDefaultModels"
-            @reject-model="rejectModel"
-            @mapping-json-mode="setMappingJsonMode"
-            @sync-mapping-text="syncMappingText()"
-            @format-mapping-text="formatMappingText"
-            @fill-mapping-template="fillMappingTemplate"
-            @fill-default-mapping="fillDefaultMapping"
-            @merge-models="mergeModels"
           />
         </div>
 

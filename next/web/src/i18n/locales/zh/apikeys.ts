@@ -25,7 +25,5 @@ export default {
   onceWarning: '请复制保存此密钥，之后也可以在列表中点击复制按钮获取。',
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
-  confirmDelete: '确定删除 API Key "{name}"？使用它的客户端将立即失效。',
-  searchPlaceholder: '搜索名称或密钥前缀…',
-  userId: '用户 ID'
+  confirmDelete: '确定删除 API Key "{name}"？使用它的客户端将立即失效。'
 }

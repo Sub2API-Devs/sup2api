@@ -2,7 +2,6 @@
 // Host permissions of the consent page: one row per host permission with its
 // risk, diff tag, description and the grant checkbox (low risk is always
 // granted; a permission the caller may not grant stays disabled).
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SCheckbox, SEmpty, SHint, SIcon } from '@sub2api/ui'
 import { lt } from '@/i18n'
@@ -10,7 +9,7 @@ import { useOptionalT } from '@/composables/optionalText'
 import { hpKey, type Risk } from '../pluginUtil'
 import RiskDot from '../parts/RiskDot.vue'
 import ScopeChips from '../parts/ScopeChips.vue'
-import type { HPRow } from './hostPermission'
+import { useConsentLabels, type HPRow } from './hostPermission'
 
 const props = defineProps<{
   rows: HPRow[]
@@ -21,22 +20,19 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'toggle', row: HPRow, on: boolean): void }>()
 const { t } = useI18n()
 const tr = useOptionalT()
+const { hpLabel } = useConsentLabels()
 
-function hpLabel(id: string): string {
-  return tr(`plugins.hp.${hpKey(id)}`, undefined, id)
-}
 const riskTone = (risk: Risk) => (risk === 'critical' ? 'danger' : risk === 'high' || risk === 'medium' ? 'warning' : 'success')
 const warnOf = (id: string) => (tr(`plugins.hpWarn.${hpKey(id)}`, undefined, t('plugins.consent.criticalWarn')))
 const descOf = (id: string) => tr(`plugins.hpDesc.${hpKey(id)}`, undefined, '')
-const rows = computed(() => props.rows)
 </script>
 
 <template>
   <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4">
-    <SEmpty v-if="rows.length === 0" :text="t('plugins.consent.noHostPermissions')" />
+    <SEmpty v-if="props.rows.length === 0" :text="t('plugins.consent.noHostPermissions')" />
     <ul v-else class="divide-y divide-gray-100 dark:divide-dark-700">
       <li
-        v-for="row in rows"
+        v-for="row in props.rows"
         :key="row.id"
         class="flex items-start gap-3 py-3"
         :class="[

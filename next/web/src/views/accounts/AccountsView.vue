@@ -253,7 +253,7 @@ function onTestUpdated(saved: Account) {
 const testable = (a: Account) => canTest(a) && !a.orphaned
 const {
   picked, batchTesting, batchRunning, batchDone, batchTotal,
-  pageTestable, allPicked, somePicked, pickRow, pickPage, batchTest, stopBatch
+  pageTestable, allPicked, somePicked, pickRow, pickPage, clear, batchTest, stopBatch
 } = useBatchTest({ items: computed(() => list.items.value), testable, tested: onTested })
 
 // ---------------------------------------------------------------- reveal credentials
@@ -424,7 +424,6 @@ async function runPluginAction(a: Account, action: AccountAction) {
 }
 
 const rowActionDeps: RowActionDeps = {
-  t,
   canReveal,
   canResetStatus,
   canRefreshCreds,
@@ -505,7 +504,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
             {{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.size }) }}
           </SButton>
           <SButton v-if="batchRunning" size="sm" variant="danger" icon="stop" @click="stopBatch">{{ t('accounts.modelTest.stop') }}</SButton>
-          <SLink v-else as="button" class="text-xs" @click="picked = new Set()">{{ t('accounts.batchTest.clear') }}</SLink>
+          <SLink v-else as="button" class="text-xs" @click="clear">{{ t('accounts.batchTest.clear') }}</SLink>
           <SHint inline size="xs">{{ t('accounts.batchTest.hint') }}</SHint>
         </template>
       </span>
