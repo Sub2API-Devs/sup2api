@@ -370,15 +370,7 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   const replaced = new Set(billingFields.filter(field => policy.build_billing_sources?.[field] === 'worker'));
   const blocks = structuredClone(toBlocks(system));
   if (!Array.isArray(blocks)) throw error('system must be text or blocks');
-  const found = []; let conflict = '';
-  blocks.forEach((block, index) => {
-    if (block?.type !== 'text') return;
-    if (typeof block.text !== 'string') throw error('system text must be a string');
-    const result = billingCandidate(c, block.text);
-    conflict ||= result.conflict ?? '';
-    for (const candidate of result.candidates ?? []) found.push({ ...candidate, index });
-  });
-  if (!conflict && found.length > 1) conflict = 'the system prompt carries more than one billing header';
+  const { found, conflict } = findBillingHeader(c, blocks);
   // A header that cannot be edited safely is refused when a value must be the
   // Worker's; otherwise it stays the client's, unchanged.
   if (conflict) {
@@ -392,23 +384,54 @@ function mergeBillingAttribution(c, system = [], policy = {}, nativeBilling, emi
   const target = found[0]?.index === 0 && found[0].line.start === 0 ? found[0] : undefined;
   const needed = target ? billingFields.filter(field => replaced.has(field) || !target.keys.has(field)) : billingFields;
   if (!needed.length) return structuredClone(system);
-  let generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
-  const nativeEntrypoint = generated.candidates?.length === 1 ? generated.candidates[0].keys.get('cc_entrypoint') : undefined;
-  if (policy.build_billing_entrypoint !== undefined && nativeEntrypoint) {
-    nativeBilling = splice(nativeBilling, [{ start: nativeEntrypoint.start, end: nativeEntrypoint.end, value: policy.build_billing_entrypoint }]);
-    generated = billingCandidate(c, nativeBilling);
-  }
+  const generated = nativeHeader(c, nativeBilling, policy);
   if (generated.conflict || generated.candidates?.length !== 1 || needed.some(field => !generated.candidates[0].keys.has(field))) {
     needed.forEach(field => diagnostic(emitDiagnostic, field, 'source_unavailable', 'system'));
     if (replaced.size) throw error('Required native billing attribution is unavailable', 503);
     return structuredClone(system);
   }
   if (!target) {
-    blocks.unshift({ type: 'text', text: nativeBilling });
+    blocks.unshift({ type: 'text', text: generated.text });
     billingFields.forEach(field => diagnostic(emitDiagnostic, field, 'inserted', 'system'));
     return blocks;
   }
-  const values = generated.candidates[0].keys, edits = [], missing = [];
+  return applyBillingFields(blocks, target, generated.candidates[0].keys, needed, emitDiagnostic);
+}
+
+// findBillingHeader finds every billing header line of the system's text
+// blocks, by block index; more than one is a conflict, as is one that cannot
+// be edited safely.
+function findBillingHeader(c, blocks) {
+  const found = []; let conflict = '';
+  blocks.forEach((block, index) => {
+    if (block?.type !== 'text') return;
+    if (typeof block.text !== 'string') throw error('system text must be a string');
+    const result = billingCandidate(c, block.text);
+    conflict ||= result.conflict ?? '';
+    for (const candidate of result.candidates ?? []) found.push({ ...candidate, index });
+  });
+  if (!conflict && found.length > 1) conflict = 'the system prompt carries more than one billing header';
+  return { found, conflict };
+}
+
+// nativeHeader is the CLI's own header line (kLo), with the policy's
+// configured entrypoint in place of the process's; text is what a request
+// without a header carries.
+function nativeHeader(c, nativeBilling, policy) {
+  let generated = typeof nativeBilling === 'string' ? billingCandidate(c, nativeBilling) : {};
+  const nativeEntrypoint = generated.candidates?.length === 1 ? generated.candidates[0].keys.get('cc_entrypoint') : undefined;
+  if (policy.build_billing_entrypoint !== undefined && nativeEntrypoint) {
+    nativeBilling = splice(nativeBilling, [{ start: nativeEntrypoint.start, end: nativeEntrypoint.end, value: policy.build_billing_entrypoint }]);
+    generated = billingCandidate(c, nativeBilling);
+  }
+  return { ...generated, text: nativeBilling };
+}
+
+// applyBillingFields writes the native values of the needed fields into the
+// target header: replacing the client's value, or appending the missing ones at
+// the end of its line.
+function applyBillingFields(blocks, target, values, needed, emitDiagnostic) {
+  const edits = [], missing = [];
   for (const field of needed) {
     const value = values.get(field).value, existing = target.keys.get(field);
     if (existing) { edits.push({ start: existing.start, end: existing.end, value }); diagnostic(emitDiagnostic, field, existing.value === value ? 'unchanged' : 'replaced', 'system'); }

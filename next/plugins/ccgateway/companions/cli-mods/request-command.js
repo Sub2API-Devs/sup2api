@@ -42,13 +42,9 @@ export async function runRequestCommand(args, natives = {}) {
   const controller = new AbortController(), signal = controller.signal;
   // phase names the step that failed, for the error frame (request-error.js).
   const state = { phase: 'input', responseStarted: false };
-  let response, interrupted = false, timedOut = false, outputError, deadline;
+  const run = { interrupted: false, timedOut: false, outputError: undefined, deadline: undefined, response: undefined };
   const customHeaders = process.env.ANTHROPIC_CUSTOM_HEADERS;
-  const interrupt = () => { interrupted = true; controller.abort(new Error('request interrupted')); process.stdin.destroy(); };
-  const failedOutput = error => { outputError = error; controller.abort(error); };
-  process.on('SIGINT', interrupt);
-  process.on('SIGTERM', interrupt);
-  process.stdout.on('error', failedOutput);
+  const listeners = installListeners(controller, run);
   try {
     const options = parseRequestOptions(args);
     if (options.help) { await write(process.stdout, help); return 0; }
@@ -63,38 +59,61 @@ export async function runRequestCommand(args, natives = {}) {
     // Both sF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
-    const rawBody = await readInput(options.input, signal);
-    const body = parseRequestJSON(rawBody, options.mode);
-    // checkModelRequest also bounds --timeout-ms.
-    const invalid = checkModelRequest({ body, headers: options.headers, timeoutMs: options.timeoutMs });
-    if (invalid) throw Error(invalid);
-    const timeout = options.timeoutMs ?? defaultTimeout;
-    deadline = setTimeout(() => { timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
-    deadline.unref?.();
-    const { outgoing, agent } = await prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives);
+    const request = await readRequest(state, options, signal, controller, run, { apiKey, natives });
     state.phase = 'transport';
-    response = await openModelRequest(outgoing, signal, init => openClient(init, apiKey, agent), mle);
-    if (!response.ok) {
-      await writeHttpError(state, response, options.meta, signal);
+    run.response = await openModelRequest(request.outgoing, signal, init => openClient(init, apiKey, request.agent), mle);
+    if (!run.response.ok) {
+      await writeHttpError(state, run.response, options.meta, signal);
       return 2;
     }
     state.phase = 'output';
-    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: response.status, statusText: response.statusText, headers: response.headers, request: { mode: options.mode, ...response.request } }, null, 2) + '\n');
-    await streamResponse(state, response, signal);
+    if (options.meta) await fs.writeFile(options.meta, JSON.stringify({ status: run.response.status, statusText: run.response.statusText, headers: run.response.headers, request: { mode: options.mode, ...run.response.request } }, null, 2) + '\n');
+    await streamResponse(state, run.response, signal);
     return 0;
   } catch (error) {
-    if (outputError?.code === 'EPIPE') return 0;
-    await write(process.stderr, encodeErrorFrame(localErrorFrame(error, { phase: state.phase, timedOut, interrupted, responseStarted: state.responseStarted })));
-    return interrupted ? 130 : 1;
+    if (run.outputError?.code === 'EPIPE') return 0;
+    await write(process.stderr, encodeErrorFrame(localErrorFrame(error, { phase: state.phase, timedOut: run.timedOut, interrupted: run.interrupted, responseStarted: state.responseStarted })));
+    return run.interrupted ? 130 : 1;
   } finally {
-    clearTimeout(deadline);
-    if (response) await cancelModelResponse(response);
-    process.off('SIGINT', interrupt);
-    process.off('SIGTERM', interrupt);
-    process.stdout.off('error', failedOutput);
+    clearTimeout(run.deadline);
+    if (run.response) await cancelModelResponse(run.response);
+    removeListeners(listeners);
     if (customHeaders === undefined) delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     else process.env.ANTHROPIC_CUSTOM_HEADERS = customHeaders;
   }
+}
+
+// installListeners is the command's interruption, its output-error and its
+// deadline: an interrupt or a failed stdout aborts the exchange, a deadline
+// also marks the request as timed out. removeListeners takes them all off.
+function installListeners(controller, run) {
+  const interrupt = () => { run.interrupted = true; controller.abort(new Error('request interrupted')); process.stdin.destroy(); };
+  const failedOutput = error => { run.outputError = error; controller.abort(error); };
+  process.on('SIGINT', interrupt);
+  process.on('SIGTERM', interrupt);
+  process.stdout.on('error', failedOutput);
+  return { interrupt, failedOutput };
+}
+
+function removeListeners({ interrupt, failedOutput }) {
+  process.off('SIGINT', interrupt);
+  process.off('SIGTERM', interrupt);
+  process.stdout.off('error', failedOutput);
+}
+
+// readRequest is the body as it arrived and the request to send, and starts
+// the overall deadline. apiKey was captured before the custom headers were
+// removed (readInput may block on stdin).
+async function readRequest(state, options, signal, controller, run, { apiKey, natives }) {
+  const rawBody = await readInput(options.input, signal);
+  const body = parseRequestJSON(rawBody, options.mode);
+  // checkModelRequest also bounds --timeout-ms.
+  const invalid = checkModelRequest({ body, headers: options.headers, timeoutMs: options.timeoutMs });
+  if (invalid) throw Error(invalid);
+  const timeout = options.timeoutMs ?? defaultTimeout;
+  run.deadline = setTimeout(() => { run.timedOut = true; controller.abort(new Error('request timed out')); }, timeout);
+  run.deadline.unref?.();
+  return prepareOutgoing(state, options, { body, rawBody, timeout, apiKey, signal }, natives);
 }
 
 const messagesOf = body => Array.isArray(body.messages) ? body.messages : [];

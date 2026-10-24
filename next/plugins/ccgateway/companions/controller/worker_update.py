@@ -17,8 +17,8 @@ from types import SimpleNamespace
 import docker
 import requests
 
-from common import (ACCOUNT_PORT, BadRequest, ContainerChanged, InvalidImage, RuntimeNotFound, UnsupportedContainer,
-                    check, valid_image, write_private_bytes)
+from common import (ACCOUNT_PORT, ContainerChanged, InvalidImage, RuntimeNotFound, UnsupportedContainer,
+                    check, failure_text, single_image, write_private_bytes)
 import dockerfs
 from dockerfs import WORKER_SOURCE, container_identity, image_container, read_file, worker_idle, worker_target
 
@@ -138,7 +138,7 @@ class WorkerUpdates:
         try:
             self.business_firewall(aid, container, gateway)
         except Exception as e:
-            log.warning('refence key=%s failed: %s: %s', aid, type(e).__name__, str(e)[:300])
+            log.warning('refence key=%s failed: %s', aid, failure_text(e))
 
     def restore_worker(self, aid, identity, target, data, sha256):
         """Put the backup back: temporary file + mv while running; written
@@ -165,16 +165,14 @@ class WorkerUpdates:
         except Exception as e:
             # The core's next reconciliation applies the configuration again;
             # nothing is recreated here.
-            log.warning('reactivate key=%s failed: %s: %s', aid, type(e).__name__, str(e)[:300])
+            log.warning('reactivate key=%s failed: %s', aid, failure_text(e))
             self.go_offline(aid)
             return False
 
     def update_worker(self, aid, desired):
         """POST /accounts/<key>/worker {"image": ref} (CONTRACTS §53.7)."""
         check(aid)
-        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
-        if not valid_image(ref):
-            raise BadRequest('invalid image reference')
+        ref = single_image(desired)
         data, sha256 = self.worker_program(ref)
         with self.guard(aid):
             return self._update_worker_locked(aid, data, sha256)

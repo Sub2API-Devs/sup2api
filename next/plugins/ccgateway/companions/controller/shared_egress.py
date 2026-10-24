@@ -5,7 +5,6 @@ All routing changes use a complete current snapshot, never per-account replaceme
 """
 import contextlib
 import hashlib
-import ipaddress
 import json
 import logging
 import os
@@ -15,7 +14,8 @@ import time
 from types import SimpleNamespace
 
 import docker
-from common import ACCOUNT_PORT, KEY, LABEL, BadRequest, boot_id, container_env, read_json, resolv_conf, write_private
+from common import (ACCOUNT_PORT, KEY, LABEL, BadRequest, boot_id, container_env, failure_text, ipv4, read_json,
+                    resolv_conf, write_private)
 from dockerfs import container_identity, worker_idle, worker_target
 from network import PRIVATE_DESTINATIONS, first_subnet, proxy_outbound
 
@@ -81,7 +81,7 @@ def firewall(bindings, nodes):
         interface = b['interface']
         if not interface.replace('_', '').replace('-', '').isalnum():
             raise ValueError('invalid interface')
-        ip, gw = str(ipaddress.IPv4Address(b['ip'])), str(ipaddress.IPv4Address(b['gateway']))
+        ip, gw = ipv4(b['ip']), ipv4(b['gateway'])
         identity = f'iifname "{interface}" ip saddr {ip}'
         if b.get('active'):
             for transport in ('tcp', 'udp'):
@@ -446,11 +446,16 @@ class SharedEgress:
         without running anything; the next apply revalidates it."""
         self.m.go_offline(aid)
         self.remove(aid, disconnect=True)
-        state.update(egress_backend=LEGACY, gateway_ip=state['legacy_gateway_ip'], revision='')
         state.pop('egress_migration', None)
+        self._switch_to_legacy(aid, state)
+        return self.status(aid)
+
+    def _switch_to_legacy(self, aid, state):
+        """Point the runtime back at its retained own egress, resolver
+        included, and write it down; the account's configuration follows."""
+        state.update(egress_backend=LEGACY, gateway_ip=state['legacy_gateway_ip'], revision='')
         self.resolv(aid, state['gateway_ip'])
         self.m.save(aid, state)
-        return self.status(aid)
 
     def _start_move(self, aid, target, current, app, state):
         """Checks, then the target gateway prepared while the old one still
@@ -542,9 +547,7 @@ class SharedEgress:
         try:
             move.app.stop(timeout=30)
             self.remove(aid, disconnect=True)
-            state.update(egress_backend=LEGACY, gateway_ip=state['legacy_gateway_ip'], revision='')
-            self.resolv(aid, state['gateway_ip'])
-            self.m.save(aid, state)
+            self._switch_to_legacy(aid, state)
             self.m.apply(aid, self.with_auth(move.app, move.desired))
             self._finish_journal(aid)
         except Exception:
@@ -572,7 +575,7 @@ class SharedEgress:
                 try:
                     self._recover_one(key, state)
                 except Exception as e:
-                    log.warning('shared egress recover key=%s: %s: %s', key, type(e).__name__, str(e)[:300])
+                    log.warning('shared egress recover key=%s: %s', key, failure_text(e))
                     self.m.go_offline(key)
 
     def _recover_one(self, key, state):
@@ -593,4 +596,4 @@ class SharedEgress:
                 self.recover()
                 self.collect()
             except Exception as e:
-                log.warning('shared egress pass failed: %s: %s', type(e).__name__, str(e)[:300])
+                log.warning('shared egress pass failed: %s', failure_text(e))

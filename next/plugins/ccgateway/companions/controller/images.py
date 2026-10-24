@@ -17,12 +17,14 @@ import time
 import docker
 import requests
 
+from common import IMAGE_ID, SHA256_HEX
+
 MAX_SIZE = 4 << 30
 MAX_CHUNK = 64 << 20
 MAX_PENDING = 4
 STALE_SECONDS = 3600
-UPLOAD_ID = re.compile(r'[A-Za-z0-9_-]{22}')
-SHA256 = re.compile(r'[0-9a-f]{64}')
+UPLOAD_ID_PATTERN = r'[A-Za-z0-9_-]{22}'
+UPLOAD_ID = re.compile(UPLOAD_ID_PATTERN)
 
 
 class UploadError(Exception):
@@ -48,6 +50,44 @@ def _qualified(tag):
     return 'docker.io/' + ('' if '/' in tag else 'library/') + tag
 
 
+def _copy(part, length, reader, offset):
+    """Copy exactly length bytes of reader into part at offset; an early end
+    of the body rewinds the file to offset (the chunk is written completely or
+    not at all)."""
+    remaining = length
+    try:
+        while remaining:
+            chunk = reader.read(min(remaining, 1 << 20))
+            if not chunk:
+                raise UploadError(400, 'invalid_request')  # body ended early
+            part.write(chunk)
+            remaining -= len(chunk)
+    except BaseException:
+        part.truncate(offset)
+        raise
+
+
+def _digest(path):
+    """SHA-256 of a file on disk."""
+    digest = hashlib.sha256()
+    with open(path, 'rb') as f:
+        while chunk := f.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _archive_member(archive, name):
+    """One small JSON document of a tar archive, None when it has no such
+    regular file."""
+    try:
+        member = archive.getmember(name)
+    except KeyError:
+        return None
+    if not member.isfile() or member.size > (1 << 20):
+        return None
+    return json.load(archive.extractfile(member))
+
+
 def archive_tags(path):
     """Image id (hex) -> RepoTags named by the archive (`docker save`).
 
@@ -60,21 +100,14 @@ def archive_tags(path):
     """
     try:
         with tarfile.open(path, 'r:*') as archive:
-            def document(name):
-                try:
-                    member = archive.getmember(name)
-                except KeyError:
-                    return None
-                if not member.isfile() or member.size > (1 << 20):
-                    return None
-                return json.load(archive.extractfile(member))
-            entries, index = document('manifest.json'), document('index.json')
+            entries = _archive_member(archive, 'manifest.json')
+            index = _archive_member(archive, 'index.json')
     except (OSError, ValueError, tarfile.TarError, EOFError):
         return {}
     out, repo_tags = {}, []
     for entry in entries if isinstance(entries, list) else []:
         config = entry.get('Config') if isinstance(entry, dict) else None
-        found = re.search(r'[0-9a-f]{64}', config) if isinstance(config, str) else None
+        found = SHA256_HEX.search(config) if isinstance(config, str) else None
         tags = [t for t in (entry.get('RepoTags') or []) if isinstance(t, str)] if isinstance(entry, dict) else []
         repo_tags.extend(tags)
         if found:
@@ -83,7 +116,7 @@ def archive_tags(path):
     for entry in manifests if isinstance(manifests, list) else []:
         digest = entry.get('digest') if isinstance(entry, dict) else None
         name = ((entry.get('annotations') or {}).get('io.containerd.image.name') if isinstance(entry, dict) else None)
-        if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest) or not isinstance(name, str):
+        if not isinstance(digest, str) or not IMAGE_ID.fullmatch(digest) or not isinstance(name, str):
             continue
         short = [t for t in repo_tags if _qualified(t) == name]
         out.setdefault(digest.removeprefix('sha256:'), []).extend(short or [name])
@@ -153,7 +186,7 @@ class Uploads:
     def create(self, size, sha256=None):
         if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= MAX_SIZE:
             raise UploadError(400, 'invalid_request')
-        if sha256 is not None and (not isinstance(sha256, str) or not SHA256.fullmatch(sha256)):
+        if sha256 is not None and (not isinstance(sha256, str) or not SHA256_HEX.fullmatch(sha256)):
             raise UploadError(400, 'invalid_request')
         with self.lock:
             self._cleanup(time.time())
@@ -190,17 +223,7 @@ class Uploads:
                 raise UploadError(400, 'invalid_request')
             with open(part, 'r+b') as f:
                 f.seek(current)
-                remaining = length
-                try:
-                    while remaining:
-                        chunk = reader.read(min(remaining, 1 << 20))
-                        if not chunk:
-                            raise UploadError(400, 'invalid_request')  # body ended early
-                        f.write(chunk)
-                        remaining -= len(chunk)
-                except BaseException:
-                    f.truncate(current)
-                    raise
+                _copy(f, length, reader, current)
             return {'offset': current + length, 'size': data['size']}
 
     def load(self, upload_id):
@@ -209,27 +232,29 @@ class Uploads:
             if current != data['size']:
                 raise UploadError(409, 'incomplete')
             try:
-                digest = hashlib.sha256()
-                with open(part, 'rb') as f:
-                    while chunk := f.read(1 << 20):
-                        digest.update(chunk)
-                digest = digest.hexdigest()
+                digest = _digest(part)
                 if data.get('sha256') and data['sha256'] != digest:
                     raise UploadError(400, 'checksum_mismatch')
-                try:
-                    with open(part, 'rb') as f:
-                        # The daemon accepts plain and gzip-compressed tars.
-                        images = self.docker.images.load(f)
-                except (docker.errors.DockerException, requests.exceptions.RequestException) as e:
-                    raise UploadError(400, 'load_failed') from e
+                images = self._load(part)
                 if not images:
                     raise UploadError(400, 'load_failed')
                 tags = archive_tags(part)
-
-                def names(image):
-                    if tags:
-                        return tags.get(image.id.removeprefix('sha256:'), [])
-                    return list(image.tags or [])
-                return {'sha256': digest, 'images': [{'id': image.id, 'tags': names(image)} for image in images]}
+                return {'sha256': digest,
+                        'images': [{'id': image.id, 'tags': _names(tags, image)} for image in images]}
             finally:
                 self._remove(upload_id)
+
+    def _load(self, part):
+        """Hand the archive to the daemon (plain and gzip-compressed tars)."""
+        try:
+            with open(part, 'rb') as f:
+                return self.docker.images.load(f)
+        except (docker.errors.DockerException, requests.exceptions.RequestException) as e:
+            raise UploadError(400, 'load_failed') from e
+
+
+def _names(tags, image):
+    """The tags the archive named for image; the daemon's own when it named none."""
+    if tags:
+        return tags.get(image.id.removeprefix('sha256:'), [])
+    return list(image.tags or [])

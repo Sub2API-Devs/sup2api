@@ -47,8 +47,8 @@ from cli_profiles import validate_profile, resolve_profile
 from common import (ACCOUNT_PORT, AUTH_LABEL, CONTROLLER_NAME, DISK_QUOTA_LABEL, DRAFT, IMAGE_LABEL, KEY, LABEL,
                     NETWORK_LABEL, REVISION, ActivationFailed, BadRequest, DiskQuotaUnavailable, ImagePullFailed,
                     InvalidCLIProfile, NotDraft, OwnershipMismatch, ResourceInUse, RuntimeBusy, absent_ok, boot_id, check,
-                    check_business_image, read_json, resolv_conf, rfc3339, valid_image, worker_request,
-                    worker_session, write_private)
+                    check_business_image, container, failure_text, read_json, resolv_conf, rfc3339, valid_image,
+                    worker_request, worker_session, write_private)
 from dockerfs import container_identity, image_of
 from http_api import Handler
 from images import Uploads
@@ -737,10 +737,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         except (ValueError, KeyError, TypeError) as e:
             raise BadRequest('invalid proxy') from e
         d = self.dir(aid)
-        reuse = False
-        if had_egress:
-            with contextlib.suppress(OSError, ValueError):
-                reuse = json.loads((d / 'sing-box.json').read_text()) == config
+        reuse = had_egress and self._singbox(aid) == config
         write_private(d / 'sing-box.json', json.dumps(config))
         write_private(d / 'firewall.nft', rules)
         self.oneshot(egress_image, entrypoint=['sing-box', 'check', '-c', '/config/sing-box.json'],
@@ -854,10 +851,10 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         for manual recovery unless purged; a draft's volume always goes). A
         resource that is gone already is skipped."""
         removed = {'containers': [], 'networks': [], 'volume': False}
-        for container in plan.containers:
-            if absent_ok(container.remove, force=True):
-                log.info('delete key=%s removed container %s', aid, container.name)
-                removed['containers'].append(container.name)
+        for item in plan.containers:
+            if absent_ok(item.remove, force=True):
+                log.info('delete key=%s removed container %s', aid, item.name)
+                removed['containers'].append(item.name)
         for network in plan.networks:
             if not absent_ok(network.reload):
                 continue
@@ -936,11 +933,10 @@ class Manager(RuntimeAdmin, WorkerUpdates):
     def _shared_gateway_id(self):
         """Id of this controller's shared egress gateway, attached to every
         shared account's network (detached by _detach_shared), or None."""
-        try:
-            gateway = self.docker.containers.get(f'{self.prefix}-shared-egress')
-        except docker.errors.NotFound:
+        gateway = container(self.docker, f'{self.prefix}-shared-egress')
+        if gateway is None or gateway.labels.get(SHARED_OWNER) != self.prefix:
             return None
-        return gateway.id if gateway.labels.get(SHARED_OWNER) == self.prefix else None
+        return gateway.id
 
     # Readiness and the request path.
 
@@ -1066,7 +1062,16 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         if state.get('egress_backend') == 'shared_xray':
             endpoint = self.shared.endpoint(aid)
             return endpoint[0] if endpoint else None
-        return json.loads((self.dir(aid) / 'sing-box.json').read_text())['outbounds'][0]['server']
+        config = self._singbox(aid)
+        return config['outbounds'][0]['server'] if config else None
+
+    def _singbox(self, aid):
+        """The persisted sing-box configuration of the runtime's own egress,
+        None when it cannot be read (absent, damaged or unreadable)."""
+        try:
+            return read_json(self.dir(aid) / 'sing-box.json')
+        except (OSError, ValueError):
+            return None
 
     def proxy_moved(self, aid):
         """Whether the proxy host name no longer resolves to the address the
@@ -1095,7 +1100,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                     log.warning('proxy of key=%s resolves to another address; runtime marked pending', aid)
                     self.drop_readiness(aid)
             except Exception as e:
-                log.warning('proxy recheck key=%s: %s: %s', aid, type(e).__name__, str(e)[:300])
+                log.warning('proxy recheck key=%s: %s', aid, failure_text(e))
             finally:
                 guard.release()
 

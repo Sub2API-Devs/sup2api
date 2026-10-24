@@ -7,7 +7,7 @@ import posixpath
 import docker
 
 import cleanup
-from common import (DOCKER_SOCKET, BadRequest, UpgradeInProgress, check_business_image, valid_image,
+from common import (DOCKER_SOCKET, BadRequest, UpgradeInProgress, check_business_image, single_image, valid_image,
                     write_private)
 from shared_egress import SCHEMA as SHARED_EGRESS_SCHEMA
 
@@ -45,9 +45,7 @@ class RuntimeAdmin:
         return self.health()
 
     def upgrade_controller(self, desired):
-        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
-        if not valid_image(ref):
-            raise BadRequest('invalid image reference')
+        ref = single_image(desired)
         env_dir = posixpath.dirname(self.env_file)
         if not posixpath.isabs(self.env_file) or env_dir == '/':
             raise RuntimeError('invalid runtime environment file path')

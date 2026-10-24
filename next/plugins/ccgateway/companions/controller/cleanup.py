@@ -6,7 +6,7 @@ import logging
 
 import docker
 
-from common import KEY, LABEL, SHA256_HEX, BadRequest, OwnershipMismatch, ResourceInUse, check
+from common import KEY, LABEL, SHA256_HEX, BadRequest, OwnershipMismatch, ResourceInUse, check, failure_text
 
 MAX_KEYS = 20000
 
@@ -82,7 +82,7 @@ def inventory_row(manager, key):
         with manager.guard(key):
             identity = snapshot(manager, key)
     except Exception as e:
-        log.warning('cleanup inventory key=%s: %s: %s', key, type(e).__name__, str(e)[:300])
+        log.warning('cleanup inventory key=%s: %s', key, failure_text(e))
         identity = unreadable_identity(key)
     return {'key': key, 'identity': identity} if identity else None
 
@@ -145,7 +145,7 @@ def clean_one(manager, row):
             manager.delete(key, account=True, purge=True)
             return {'key': key, 'status': 'deleted'}
     except Exception as e:
-        log.warning('cleanup key=%s failed: %s: %s', key, type(e).__name__, str(e)[:300])
+        log.warning('cleanup key=%s failed: %s', key, failure_text(e))
         # A foreign user of a resource, or a foreign resource with one of
         # its names: nothing of the runtime was deleted.
         reason = 'resource_in_use' if isinstance(e, (ResourceInUse, OwnershipMismatch)) else 'resource_cleanup_failed'

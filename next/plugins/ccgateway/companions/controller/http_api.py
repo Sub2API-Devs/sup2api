@@ -15,13 +15,13 @@ from common import (KEY_PATTERN, ActivationFailed, BadRequest, ContainerChanged,
                     InvalidCLIProfile, InvalidImage, NotDraft, OwnershipMismatch, ResourceInUse, RuntimeBusy,
                     RuntimeNotFound, UnsupportedContainer, UpgradeInProgress, error_answer, worker_request,
                     worker_session)
-from images import UploadError, MAX_CHUNK
+from images import UploadError, MAX_CHUNK, UPLOAD_ID_PATTERN
 
 log = logging.getLogger('ccgateway.controller')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|'
                    r'connection|tunnel|worker|egress|admin/(?:status|usage|features|request-logs(?:/(?:query|detail|read))?|cli|auth/(?:session|start|complete|cancel|logout|refresh))))?)?')
-UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
+UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/(' + UPLOAD_ID_PATTERN + r')(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller|cleanup)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
 TUNNEL_IDLE_SECONDS = 3700

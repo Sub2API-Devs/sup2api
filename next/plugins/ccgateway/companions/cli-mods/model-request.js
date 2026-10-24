@@ -32,62 +32,84 @@ async function close(entry, reason) {
   try { await entry.reader?.cancel(reason); } catch { /* Closing is idempotent. */ }
 }
 
+// openEntry is a response handle's stream state and the two deadlines that
+// close it: the caller's signal and the request's own timeout.
+function openEntry(options, signal) {
+  const entry = { controller: new AbortController(), signal, closed: false, busy: false, decoder: new TextDecoder(), pending: new Uint8Array() };
+  entry.onAbort = () => { void close(entry, signal.reason ?? new Error('model request aborted')); };
+  signal?.addEventListener('abort', entry.onAbort, { once: true });
+  entry.timer = setTimeout(() => { void close(entry, new Error('model request timed out')); }, options.timeoutMs ?? defaultTimeout);
+  entry.timer.unref?.();
+  return entry;
+}
+
+// captureErrorResponse wraps the transport so the header policy is applied and
+// the last HTTP error answer is kept: the client throws its own error for a
+// non-2xx answer, and that response is what the caller reads. request is the
+// authentication and betas actually sent, once the transport supplied headers.
+function captureErrorResponse(options, transportFetch) {
+  const captured = { response: undefined, request: undefined };
+  captured.fetchOverride = async (...args) => {
+    if (options.headerPolicy) {
+      const [url, init] = args;
+      if (!init || init.headers === undefined) throw Error('CC transport did not supply request headers');
+      const headers = authenticatedRequestHeaders(init.headers, options.headerPolicy);
+      captured.request = { authProfile: headers.has('authorization') ? 'oauth' : 'api-key', betas: normalizeBetas(headers.get('anthropic-beta')) };
+      args = [url, { ...init, headers }];
+    }
+    const response = await transportFetch(...args);
+    if (!response.ok) {
+      await captured.response?.body?.cancel().catch(() => {});
+      captured.response = response.clone();
+    }
+    return response;
+  };
+  return captured;
+}
+
+// sendOnce is the client's one POST of the request; the deadline of openEntry
+// bounds the whole exchange, and the client's own timeout (sent as
+// x-stainless-timeout) stays Claude Code's default, as a native request
+// carries it, unless the deadline is shorter.
+function sendOnce(client, options, entry) {
+  const headers = new Headers(options.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  const body = options.rawBody ?? options.body;
+  return client.post('/v1/messages', {
+    body, stream: options.body.stream === true,
+    headers, signal: entry.controller.signal,
+    maxRetries: 0, timeout: Math.min(options.timeoutMs ?? defaultTimeout, defaultTimeout),
+  }).asResponse();
+}
+
 // openModelRequest sends the request; the response it returns is read with
 // readModelResponse and closed with cancelModelResponse.
 export async function openModelRequest(options, signal, createClient, transportFetch) {
   const error = checkModelRequest(options);
   if (error) throw new Error(error);
   if (signal?.aborted) throw new Error('model request aborted');
-  const entry = { controller: new AbortController(), signal, closed: false, busy: false, decoder: new TextDecoder(), pending: new Uint8Array() };
-  entry.onAbort = () => { void close(entry, signal.reason ?? new Error('model request aborted')); };
-  signal?.addEventListener('abort', entry.onAbort, { once: true });
-  entry.timer = setTimeout(() => { void close(entry, new Error('model request timed out')); }, options.timeoutMs ?? defaultTimeout);
-  entry.timer.unref?.();
-  let errorResponse, request;
+  const entry = openEntry(options, signal);
+  const captured = captureErrorResponse(options, transportFetch);
   try {
     const client = await createClient({
-      model: options.body.model, signal: entry.controller.signal,
-      fetchOverride: async (...args) => {
-        if (options.headerPolicy) {
-          const [url, init] = args;
-          if (!init || init.headers === undefined) throw Error('CC transport did not supply request headers');
-          const headers = authenticatedRequestHeaders(init.headers, options.headerPolicy);
-          request = { authProfile: headers.has('authorization') ? 'oauth' : 'api-key', betas: normalizeBetas(headers.get('anthropic-beta')) };
-          args = [url, { ...init, headers }];
-        }
-        const response = await transportFetch(...args);
-        if (!response.ok) {
-          await errorResponse?.body?.cancel().catch(() => {});
-          errorResponse = response.clone();
-        }
-        return response;
-      },
+      model: options.body.model, signal: entry.controller.signal, fetchOverride: captured.fetchOverride,
     });
     let response;
     try {
-      const headers = new Headers(options.headers);
-      if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-      const body = options.rawBody ?? options.body;
-      // The deadline above bounds the whole exchange. The client's own timeout
-      // (sent as x-stainless-timeout) stays Claude Code's default, as a native
-      // request carries it, unless the deadline is shorter.
-      response = await client.post('/v1/messages', {
-        body, stream: options.body.stream === true,
-        headers, signal: entry.controller.signal,
-        maxRetries: 0, timeout: Math.min(options.timeoutMs ?? defaultTimeout, defaultTimeout),
-      }).asResponse();
+      response = await sendOnce(client, options, entry);
     } catch (error) {
-      if (!errorResponse || entry.controller.signal.aborted) throw error;
-      response = errorResponse;
-      errorResponse = undefined;
+      if (!captured.response || entry.controller.signal.aborted) throw error;
+      response = captured.response;
+      captured.response = undefined;
     }
     if (entry.closed) { await response.body?.cancel(); throw new Error('model request aborted'); }
-    await errorResponse?.body?.cancel().catch(() => {});
+    await captured.response?.body?.cancel().catch(() => {});
     entry.reader = response.body?.getReader();
+    const { request } = captured;
     return { [stream]: entry, status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), ok: response.ok, ...(request && { request }) };
   } catch (error) {
     await close(entry, error);
-    await errorResponse?.body?.cancel().catch(() => {});
+    await captured.response?.body?.cancel().catch(() => {});
     throw error;
   }
 }

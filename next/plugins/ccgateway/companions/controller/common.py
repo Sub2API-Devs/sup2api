@@ -6,6 +6,7 @@ shared_egress.py and runtime_updates.py all import from here instead of from
 each other (no import cycle, no import inside functions).
 """
 from datetime import datetime, timezone
+import ipaddress
 import json
 import os
 import re
@@ -196,6 +197,34 @@ def absent_ok(action, *args, **kwargs):
     except docker.errors.NotFound:
         return False
     return True
+
+
+def container(client, name):
+    """The container called name, None when there is none."""
+    try:
+        return client.containers.get(name)
+    except docker.errors.NotFound:
+        return None
+
+
+def ipv4(value):
+    """value as one IPv4 address string; ValueError for anything else (also
+    refuses text that would reach a firewall or route rule unchecked)."""
+    return str(ipaddress.IPv4Address(value))
+
+
+def failure_text(exc):
+    """An exception as one log line's tail: its type and a bounded message."""
+    return type(exc).__name__ + ': ' + str(exc)[:300]
+
+
+def single_image(desired):
+    """The image reference of a {"image": ref} request; BadRequest for
+    anything else (an endpoint that takes exactly one target image)."""
+    ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
+    if not valid_image(ref):
+        raise BadRequest('invalid image reference')
+    return ref
 
 
 def container_env(container):

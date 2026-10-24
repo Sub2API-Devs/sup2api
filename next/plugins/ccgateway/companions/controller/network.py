@@ -4,6 +4,8 @@ import socket
 import secrets
 from pathlib import Path
 
+from common import ipv4
+
 PRIVATE_POOLS = tuple(ipaddress.ip_network(c) for c in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
 
 
@@ -91,11 +93,41 @@ PRIVATE_DESTINATIONS = ('0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.
                         '172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4')
 
 
+def singbox_dns(with_detour):
+    """Remote DNS over DoT through the account's outbound. A direct outbound
+    has no detour: sing-box refuses to start with a DNS detour to an empty
+    direct outbound (sing-box check accepts it); without one it dials
+    directly."""
+    server = {'type': 'https', 'tag': 'remote-dns', 'server': '1.1.1.1',
+              'path': '/dns-query', 'tls': {'enabled': True, 'server_name': 'cloudflare-dns.com'}}
+    if with_detour:
+        server['detour'] = 'account-proxy'
+    return {'servers': [server], 'final': 'remote-dns', 'strategy': 'ipv4_only'}
+
+
+def singbox_inbounds(gateway_ip):
+    return [{'type': 'tproxy', 'tag': 'traffic', 'listen': '0.0.0.0', 'listen_port': 15001, 'network': 'tcp'},
+            {'type': 'direct', 'tag': 'dns', 'listen': gateway_ip, 'listen_port': 53}]
+
+
+def singbox_route():
+    return {'rules': [{'inbound': 'dns', 'action': 'hijack-dns'}], 'final': 'account-proxy'}
+
+
+def singbox_config(out, gateway_ip):
+    """The whole sing-box configuration for one outbound."""
+    return {'log': {'level': 'warn'},
+            'dns': singbox_dns(out['type'] != 'direct'),
+            'inbounds': singbox_inbounds(gateway_ip),
+            'outbounds': [out],
+            'route': singbox_route()}
+
+
 def configuration(proxy, app_ip, gateway_ip):
     """proxy None is direct egress: the runtime reaches public IPv4 TCP from
     the host's address, private and local destinations stay closed."""
-    app_ip = str(ipaddress.IPv4Address(app_ip))
-    gateway_ip = str(ipaddress.IPv4Address(gateway_ip))
+    app_ip = ipv4(app_ip)
+    gateway_ip = ipv4(gateway_ip)
     if proxy is None:
         out = {'type': 'direct', 'tag': 'account-proxy'}
         egress = (f'ip daddr {{ {PRIVATE_DESTINATIONS} }} drop\n'
@@ -103,22 +135,7 @@ def configuration(proxy, app_ip, gateway_ip):
     else:
         out = proxy_outbound(proxy)
         egress = f"ip daddr {out['server']} tcp dport {out['server_port']} accept"
-    config = {
-        'log': {'level': 'warn'},
-        'dns': {'servers': [{'type': 'https', 'tag': 'remote-dns', 'server': '1.1.1.1',
-                             'path': '/dns-query', 'detour': 'account-proxy',
-                             'tls': {'enabled': True, 'server_name': 'cloudflare-dns.com'}}],
-                'final': 'remote-dns', 'strategy': 'ipv4_only'},
-        'inbounds': [
-            {'type': 'tproxy', 'tag': 'traffic', 'listen': '0.0.0.0', 'listen_port': 15001, 'network': 'tcp'},
-            {'type': 'direct', 'tag': 'dns', 'listen': gateway_ip, 'listen_port': 53}],
-        'outbounds': [out],
-        'route': {'rules': [{'inbound': 'dns', 'action': 'hijack-dns'}], 'final': 'account-proxy'}
-    }
-    if proxy is None:
-        # sing-box refuses to start with a DNS detour to an empty direct
-        # outbound (sing-box check accepts it); without one it dials directly.
-        del config['dns']['servers'][0]['detour']
+    config = singbox_config(out, gateway_ip)
     firewall = f'''table inet ccg {{
  chain intercept {{ type filter hook prerouting priority mangle; policy accept;
   ip saddr {app_ip} ip daddr {gateway_ip} udp dport 53 accept
@@ -144,7 +161,7 @@ def configuration(proxy, app_ip, gateway_ip):
 
 
 def business_rules(gateway_ip):
-    gateway_ip = str(ipaddress.IPv4Address(gateway_ip))
+    gateway_ip = ipv4(gateway_ip)
     return f'''table inet ccg_app {{
  chain output {{ type filter hook output priority filter; policy drop;
   ct state established,related accept

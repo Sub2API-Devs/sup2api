@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**Claude Code 2.1.304 / `ccgateway-v23-bound-imports`**（2026-10-24 工作树，已编译未发布，ELF SHA-256 `df6e562bd0b330df8530d6346d530d1948511b1572fafe4b0295d1e34c5994ea`；上一版 `ccgateway-v22-client-entrypoint` 随插件 0.1.83 起；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
+**Claude Code 2.1.304 / `ccgateway-v23-bound-imports`**（2026-10-24 工作树，已编译未发布，ELF SHA-256 `558d7b314d44ec6a695c7c463d4cf1e79ed315fca23c5c70e44bea368d675b5c`；上一版 `ccgateway-v22-client-entrypoint` 随插件 0.1.83 起；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
 
 CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——`profiles/linux-x64-2.1.304.json` 的 `capabilities`（2026-10-24 工作树；之前是 `patch-cli-2.1.304.cjs` 里的常量）：
 
@@ -33,6 +33,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 | `request-command.js` | `claude request` 入口：读输入、direct 计费头、调 build、身份与身份行、发送、错误帧 |
 | `request-build.js` | build：内容策略、注入层探针、原生构造器、参数并回、计费合并（2026-10-24 前名为 `request-build-2.1.304.js`） |
 | `shared.js` | 支持模块共用的小函数与表（`object`、`toBlocks`、`systemTexts`、环境字段与计费字段、UUID 正则、`splice`），装成 `ccgateway-shared.js` |
+| `raw-json.js` | 在原始 JSON 文本上定位对象成员与数组元素的范围（`skipWs`/`skipString`/`skipValue`/`members`/`elements`/`member`），让调用方只重写被改动的那一段、其余字节原样透传；装成 `ccgateway-raw-json.js`（2026-10-24 审核 X32，从 `direct-billing.js` 抽出） |
 | `native-tools.js` | 把客户端自定义工具做成 CC 工具对象（`requestTool`），只供 CC 的策略与补丁后的 `FH` 读定义；CLI 不执行工具 |
 | `request-input.js`、`request-parameters.js`、`request-policy.js`、`content-policy.js`、`direct-billing.js`、`request-identity.js`、`request-agent.js`、`request-options.js`、`request-output.js`、`request-error.js`、`model-request.js`、`container-resources.js` | 支持模块 |
 | `native-environment-2.1.304.inc.js` | 拼进原生模块作用域的代码（原生环境读取与词表） |
@@ -76,7 +77,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
 | 版本 | 插件 | 内容 | 现状 |
 |---|---|---|---|
-| v23 `bound-imports` | 未发布 | 补丁导入的 5 个原生模块（`chunk-7y2kvacy/jkcb7qdd/m5q1b1c4/eanw7pgv/t2p0d04m`）加入 profile 哈希绑定，补丁期校验新增导入名确由目标模块导出（D3）；能力列表只在 profile、入口代码移到 `request-entry.inc.js`（D7）；删 296/302 补丁器与死代码（D6）；支持模块重构（`shared.js`）。2026-10-24 代码质量审核 04（J1–J21）：删 mods 工具执行链（`Pb`/`GYr`/`Ua`/`computeToolPool`/`Ten`/`N_e`/`mIt`/`ton`/`addTool`/`bz` 十处改写、`tool-dispatch.inc.js`、能力 `native_tools`/`mods_dispatch`，profile 少绑 5 个不再改写的模块），只留 `FH`；`buildRequest`/`applyContentPolicy`/`runRequestCommand` 拆分，策略只校验一次。出口：direct 给无 system 的请求补的 system 改放在 `messages` 之后（与官方键序一致，J2）；注入提示词的缓存断点按位置让出，客户端同文字的块保留自己的断点（J19）；其余与 v22 逐字节相同（17 种请求在新旧源码上的上游字节与请求头对拍全同）。ELF `df6e562b…94ea` | 待发布 |
+| v23 `bound-imports` | 未发布 | 补丁导入的 5 个原生模块（`chunk-7y2kvacy/jkcb7qdd/m5q1b1c4/eanw7pgv/t2p0d04m`）加入 profile 哈希绑定，补丁期校验新增导入名确由目标模块导出（D3）；能力列表只在 profile、入口代码移到 `request-entry.inc.js`（D7）；删 296/302 补丁器与死代码（D6）；支持模块重构（`shared.js`）。2026-10-24 代码质量审核 04（J1–J21）：删 mods 工具执行链（`Pb`/`GYr`/`Ua`/`computeToolPool`/`Ten`/`N_e`/`mIt`/`ton`/`addTool`/`bz` 十处改写、`tool-dispatch.inc.js`、能力 `native_tools`/`mods_dispatch`，profile 少绑 5 个不再改写的模块），只留 `FH`；`buildRequest`/`applyContentPolicy`/`runRequestCommand` 拆分，策略只校验一次。出口：direct 给无 system 的请求补的 system 改放在 `messages` 之后（与官方键序一致，J2）；注入提示词的缓存断点按位置让出，客户端同文字的块保留自己的断点（J19）；其余与 v22 逐字节相同（17 种请求在新旧源码上的上游字节与请求头对拍全同）。2026-10-24 第二轮优化（`../../../docs/audits/2026-10-24-optimization-round2/05-ccgateway.md`，X31–X33）：`direct-billing.js` 的手写 JSON 扫描器外置到新的支持模块 `raw-json.js`（已在 profile 的 `supportModules` 登记），`applyDirectBilling`/`mergeBillingAttribution`/`openModelRequest`/`runRequestCommand` 拆成小函数；出口未变（`npm test` 171/171、0 跳过）。ELF `558d7b31…5b5c` | 待发布 |
 | v22 `client-entrypoint` | 0.1.83 | 请求入口由 CLI 按请求设置（`requestEntrypoint` → 原生 `setEntrypointOnRequests`），计费头与 UA 读同一个值；CC 形状的客户端 UA 在计费头的 `cc_version`/`cc_entrypoint` 仍是客户端的时原样保留（`keepClientUserAgent`）；能力 `client_user_agent_v1` | 现行 |
 | v21 `native-layers` | 0.1.80 | 注入层的写死项改成原生提取：权限上下文 `gd()`、按非交互主线程 `xh` 组装提示词、追加提示词用原生 `pr`、剩余 token 用 `JDr` | 现行 |
 | v20 `request-levels` | 0.1.79 | 注入等级：direct 只处理计费头、不补身份行；非 CC 请求按主线程；已有的层不重复补；身份行自适应（不再按入口配置）；system 统一为块数组；能力 `request_levels_v1` | 现行 |
