@@ -54,8 +54,9 @@ var spec = apikey.Spec{
 	StripSuffixes:  []string{"/v1"},
 	KeyValidator:   &apikey.OpenAI,
 	Texts: apikey.Texts{
-		UnsupportedAccountType: "unsupported account type %q / 不支持的账号类型",
+		UnsupportedAccountType: "unsupported account type {type} / 不支持的账号类型",
 		KeyNotString:           "API key must be a string / api_key 必须是字符串",
+		KeyNotStringCode:       "pattern",
 	},
 }
 
@@ -178,7 +179,7 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		Headers:       upstreamHeaders(cfg.APIKey, nil),
 		BodyJson:      body,
 		Model:         model,
-		UsageProtocol: "openai.chat",
+		UsageProtocol: ProtocolChat,
 	}, nil
 }
 
@@ -188,7 +189,7 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 	if err != nil {
 		return nil, err
 	}
-	return apikey.ModelListRequest(cfg, "/v1/models", "data.#.id", "", upstreamHeaders(cfg.APIKey, nil)), nil
+	return apikey.ModelListRequest(cfg, apikey.ModelList{Path: "/v1/models", IdsPath: "data.#.id"}, upstreamHeaders(cfg.APIKey, nil)), nil
 }
 
 // webSocketBeta opts the upstream connection into the Responses WebSocket

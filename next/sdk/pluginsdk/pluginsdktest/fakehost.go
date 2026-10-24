@@ -281,9 +281,17 @@ func (f *FakeHost) LedgerDebit(_ context.Context, in *pluginv1.LedgerChangeReque
 	return f.ledgerChange(in, false)
 }
 
+// errDialReported marks a dial failure that dialAndOpen already sent to the
+// plugin as a DialResult. The stream ends normally in that case (a failed dial
+// is not a stream error); Dial must not treat the missing conn as usable.
+var errDialReported = errors.New("fake host: dial failure already reported")
+
 // Dial implements a direct (unfiltered) egress tunnel.
 func (f *FakeHost) Dial(stream pluginv1.EgressService_DialServer) error {
 	conn, err := f.dialAndOpen(stream)
+	if errors.Is(err, errDialReported) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -320,7 +328,10 @@ func (f *FakeHost) dialAndOpen(stream pluginv1.EgressService_DialServer) (net.Co
 	}
 	conn, err := dial(stream.Context(), open.GetNetwork(), open.GetAddress())
 	if err != nil {
-		return nil, stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: false, Error: err.Error()}}})
+		if serr := stream.Send(&pluginv1.EgressFrame{Kind: &pluginv1.EgressFrame_Result{Result: &pluginv1.DialResult{Ok: false, Error: err.Error()}}}); serr != nil {
+			return nil, serr
+		}
+		return nil, errDialReported
 	}
 	return conn, nil
 }

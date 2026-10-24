@@ -38,7 +38,9 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/egress"
+	sdkanthropic "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/anthropic"
 	openaiprovider "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/openai"
+	sdkvolcengine "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/providers/volcengine"
 )
 
 // PlatformID is the built-in platform the apikey account type serves.
@@ -65,15 +67,17 @@ const (
 )
 
 // Protocol ids of the built-in anthropic platform's endpoints
-// (sdk/platforms/anthropic.json).
+// (sdk/platforms/anthropic.json). They are aliases of the SDK provider
+// constants, so the plugin cannot drift from what classify.go and the core
+// compare against.
 const (
-	ProtocolMessages = "anthropic.messages"
+	ProtocolMessages = sdkvolcengine.ProtocolMessages
 	// ProtocolCountTokens is declared by the platform and therefore routed to
 	// this account type whether we want it or not: AccountPlatform has no
 	// per-endpoint filter, so declaring the platform accepts both endpoints.
 	// Ark documents no token-counting endpoint, so BuildUpstreamRequest
 	// refuses it by name rather than inventing a path that 404s.
-	ProtocolCountTokens = "anthropic.count_tokens"
+	ProtocolCountTokens = sdkvolcengine.ProtocolCountTokens
 )
 
 // Protocol ids of the volcengine platform declared in manifest.json.
@@ -164,8 +168,8 @@ const (
 	// DefaultAnthropicVersion is sent on Anthropic-protocol requests whose
 	// client sent none. Anthropic's API requires the header; the value is the
 	// one its own docs and every current SDK use, and the same default the
-	// anthropic plugin applies.
-	DefaultAnthropicVersion = "2023-06-01"
+	// anthropic plugin applies (the SDK provider constant).
+	DefaultAnthropicVersion = sdkanthropic.DefaultAPIVersion
 )
 
 // spec describes the apikey (official Ark) account type. A trailing /api/v3 of

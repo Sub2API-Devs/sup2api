@@ -69,67 +69,82 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 		return allowEmpty, nil
 	}
 	meta := in.GetMeta()
-	model, text, early := p.gate(c, meta, in.GetFields())
-	if early != nil {
-		return early, nil
+	gate := p.gate(c, meta, in.GetFields())
+	if gate.early != nil {
+		return gate.early, nil
 	}
 	protocol := meta.GetClientProtocol()
 	if protocol == "" {
 		protocol = meta.GetProtocol()
 	}
-	hash := textHash(text)
 	rec := eventRec{
 		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: meta.GetUserId(), APIKeyID: meta.GetApiKeyId(),
-		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
-		TextChars: utf8.RuneCountInString(text), TextHash: hex.EncodeToString(hash[:]), LLMModel: c.Model,
+		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(gate.model, 200), Protocol: protocol, Mode: c.Mode,
+		TextChars: utf8.RuneCountInString(gate.text), TextHash: hex.EncodeToString(gate.hash[:]), LLMModel: c.Model,
 	}
 	if c.StoreText {
-		t := textutil.TruncateRunes(text, eventTextMaxChar)
+		t := textutil.TruncateRunes(gate.text, eventTextMaxChar)
 		rec.Text = &t
 	}
-	key := cacheKey(c.policy, text)
+	key := cacheKey(c.policy, gate.text)
 	if c.Mode == ModeObserve {
-		return p.observeDecision(ctx, c, rec, text, key), nil
+		return p.observeDecision(ctx, c, rec, gate.text, key), nil
 	}
-	return p.enforceInline(ctx, c, rec, text, key), nil
+	return p.enforceInline(ctx, c, rec, gate.text, key), nil
+}
+
+// gateResult is what gate decided: the model and truncated text to judge (empty
+// when out of scope), their hash, or a non-nil early response that
+// OnGatewayRequest returns as is.
+type gateResult struct {
+	model string
+	text  string
+	hash  [32]byte
+	early *pluginv1.GatewayRequestHookResponse
+}
+
+func outOfScope(early *pluginv1.GatewayRequestHookResponse) gateResult {
+	return gateResult{early: early}
 }
 
 // gate applies the preconditions that decide, without judging anything, that
-// the request is out of scope. It returns the model and the (truncated) text
-// to judge, or a non-nil early response that OnGatewayRequest returns as is.
-func (p *Plugin) gate(c *config, meta *pluginv1.RequestMeta, fields map[string]string) (model, text string, early *pluginv1.GatewayRequestHookResponse) {
+// the request is out of scope.
+func (p *Plugin) gate(c *config, meta *pluginv1.RequestMeta, fields map[string]string) gateResult {
 	uid := meta.GetUserId()
 	if c.exempt[uid] {
-		return "", "", allowEmpty
+		return outOfScope(allowEmpty)
 	}
 	if p.isBlocked(uid) {
-		return "", "", deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked")
+		return outOfScope(deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked"))
 	}
 	if len(c.groups) > 0 && !c.groups[meta.GetGroupId()] {
-		return "", "", allowEmpty
+		return outOfScope(allowEmpty)
 	}
-	model = fieldString(fields[FieldModel])
+	model := fieldString(fields[FieldModel])
 	if model == "" {
 		model = meta.GetModel()
 	}
 	if !c.modelMatches(model) {
-		return "", "", allowEmpty
+		return outOfScope(allowEmpty)
 	}
-	text = extractText(fields)
+	text := extractText(fields)
 	if text == "" {
-		return "", "", allowEmpty
+		return outOfScope(allowEmpty)
 	}
 	if isSelfRequest(c.markerKey, text) {
-		return "", "", allowSelf
+		return outOfScope(allowSelf)
 	}
 	if visibleChars(text) < c.MinChars {
-		return "", "", allowEmpty
+		return outOfScope(allowEmpty)
 	}
 	text = truncateText(text, c.InputMaxChars)
-	if !sampled(textHash(text), c.SampleRate) {
-		return "", "", allowEmpty
+	// Hash once: the sample rate and the event record both need it, and the
+	// text may be up to eventTextMaxChar characters.
+	hash := textHash(text)
+	if !sampled(hash, c.SampleRate) {
+		return outOfScope(allowEmpty)
 	}
-	return model, text, nil
+	return gateResult{model: model, text: text, hash: hash}
 }
 
 // observeDecision answers observe mode: a cached verdict, or a queued job,

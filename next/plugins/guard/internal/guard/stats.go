@@ -139,15 +139,15 @@ func (p *Plugin) getStats(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		st.Bucket = "day"
 	}
 	// Minutely rows are kept 8 days; older windows read the hourly rollup.
-	table, col := "stats_minutely", "minute"
+	q := statsQuery{db: db, table: "stats_minutely", col: "minute", from: from, to: to, loc: loc}
 	if from.Before(now.Add(-7 * 24 * time.Hour)) {
-		table, col = "stats_hourly", "hour"
+		q.table, q.col = "stats_hourly", "hour"
 	}
-	bucketExpr := "date_trunc('hour', " + col + ", 'UTC')"
+	q.bucketExpr = "date_trunc('hour', " + q.col + ", 'UTC')"
 	if st.Bucket == "day" {
-		bucketExpr = "date_trunc('day', " + col + ", $3)"
+		q.bucketExpr = "date_trunc('day', " + q.col + ", $3)"
 	}
-	if err := statsTrend(ctx, db, &st, table, col, bucketExpr, from, to, loc); err != nil {
+	if err := q.trend(ctx, &st); err != nil {
 		return nil, err
 	}
 	if err := statsTopRules(ctx, db, &st, from, to); err != nil {
@@ -159,11 +159,23 @@ func (p *Plugin) getStats(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	return pluginsdk.DataResponse(st), nil
 }
 
-// statsTrend fills the trend (with empty buckets) and the two totals.
-func statsTrend(ctx context.Context, db *pgxpool.Pool, st *Stats, table, col, bucketExpr string, from, to time.Time, loc *time.Location) error {
-	rows, err := db.Query(ctx, `SELECT `+bucketExpr+` AS ts, sum(blocked)::bigint, sum(requests)::bigint
-		FROM `+table+` WHERE `+col+` >= $1 AND `+col+` < $2 AND $3::text IS NOT NULL
-		GROUP BY 1 ORDER BY 1`, from, to, loc.String())
+// statsQuery is the trend statement's inputs. table, col and bucketExpr are
+// SQL fragments chosen from the constants in getStats (never from a request),
+// and $3 binds loc.
+type statsQuery struct {
+	db         *pgxpool.Pool
+	table      string
+	col        string
+	bucketExpr string
+	from, to   time.Time
+	loc        *time.Location
+}
+
+// trend fills the trend (with empty buckets) and the two totals.
+func (q statsQuery) trend(ctx context.Context, st *Stats) error {
+	rows, err := q.db.Query(ctx, `SELECT `+q.bucketExpr+` AS ts, sum(blocked)::bigint, sum(requests)::bigint
+		FROM `+q.table+` WHERE `+q.col+` >= $1 AND `+q.col+` < $2 AND $3::text IS NOT NULL
+		GROUP BY 1 ORDER BY 1`, q.from, q.to, q.loc.String())
 	if err != nil {
 		return err
 	}
@@ -181,7 +193,7 @@ func statsTrend(ctx context.Context, db *pgxpool.Pool, st *Stats, table, col, bu
 		st.BlockedTotal += tp.Blocked
 		st.RequestsTotal += tp.Total
 	}
-	for b := bucketStart(from, st.Bucket, loc); b.Before(to); b = nextBucket(b, st.Bucket, loc) {
+	for b := bucketStart(q.from, st.Bucket, q.loc); b.Before(q.to); b = nextBucket(b, st.Bucket, q.loc) {
 		tp, ok := byTS[b.Unix()]
 		if !ok {
 			tp = TrendPoint{TS: b}

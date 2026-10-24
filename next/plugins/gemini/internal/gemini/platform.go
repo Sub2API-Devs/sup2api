@@ -165,5 +165,7 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 	if err != nil {
 		return nil, err
 	}
-	return apikey.ModelListRequest(cfg, "/v1beta/models?pageSize=1000", "models.#.name", "models/", upstreamHeaders(cfg.APIKey, nil)), nil
+	return apikey.ModelListRequest(cfg, apikey.ModelList{
+		Path: "/v1beta/models?pageSize=1000", IdsPath: "models.#.name", StripPrefix: "models/",
+	}, upstreamHeaders(cfg.APIKey, nil)), nil
 }

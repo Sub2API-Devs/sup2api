@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -80,19 +81,33 @@ type Config struct {
 // field keeps the SDK text. The console renders these strings verbatim and the
 // built-in plugins shipped their own wording before this helper existed; the
 // validation rules are the same either way.
+//
+// A message is plain text with named placeholders, never a printf template: a
+// message containing a bare percent sign ("100%") comes out unchanged, and an
+// unknown placeholder is left as it is.
 type Texts struct {
-	// UnsupportedAccountType is the account_type message; "%q" becomes the
-	// received account type.
+	// UnsupportedAccountType is the account_type message; "{type}" is replaced
+	// by the received account type, Go-quoted as %q used to quote it.
 	UnsupportedAccountType string
-	// KeyNotString, when set, reports a non-string api_key with code
-	// "pattern" and this message (plugins that lump it with a malformed
-	// string). Empty reports code "type" and the SDK message.
+	// KeyNotString, when set, reports a non-string api_key with this message
+	// instead of the SDK's own type message.
 	KeyNotString string
+	// KeyNotStringCode is the code reported with KeyNotString. Default
+	// "pattern" (the code this helper has always used for that message);
+	// plugins that keep the SDK's "type" code set it explicitly.
+	KeyNotStringCode string
 	// BaseURLRequired is the message of a missing base_url when
 	// RequireBaseURL is set.
 	BaseURLRequired string
-	// BaseURLFormat is the base_url format message; "%s" is the reason.
+	// BaseURLFormat is the base_url format message; "{reason}" is replaced by
+	// the reason.
 	BaseURLFormat string
+}
+
+// placeholder replaces one named placeholder in a Texts message. It never
+// interprets the surrounding text as a format string.
+func placeholder(msg, name, value string) string {
+	return strings.ReplaceAll(msg, "{"+name+"}", value)
 }
 
 // Spec describes an account type that uses api_key and optional base_url.
@@ -122,7 +137,7 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 		if msg == "" {
 			msg = "unsupported account type / 不支持的账号类型"
 		} else {
-			msg = fmt.Sprintf(msg, in.GetAccountType())
+			msg = placeholder(msg, "type", strconv.Quote(in.GetAccountType()))
 		}
 		errs = errs.Add("account_type", "unsupported", msg)
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
@@ -167,7 +182,11 @@ func (s Spec) validateKey(errs pluginsdk.FieldErrors, creds, settings map[string
 		return "", errs.Add("api_key", "required", "API key is required / 请填写 API Key")
 	case !isString:
 		if s.Texts.KeyNotString != "" {
-			return "", errs.Add("api_key", "pattern", s.Texts.KeyNotString)
+			code := s.Texts.KeyNotStringCode
+			if code == "" {
+				code = "pattern"
+			}
+			return "", errs.Add("api_key", code, s.Texts.KeyNotString)
 		}
 		return "", errs.Add("api_key", "type", "api_key must be a string / api_key 必须是字符串")
 	}
@@ -204,9 +223,9 @@ func (s Spec) validateBaseURL(errs pluginsdk.FieldErrors, creds, settings map[st
 	if err != nil {
 		msg := s.Texts.BaseURLFormat
 		if msg == "" {
-			msg = "base_url %s / base_url 格式错误"
+			msg = "base_url {reason} / base_url 格式错误"
 		}
-		return "", errs.Add("base_url", "format", fmt.Sprintf(msg, err.Error()))
+		return "", errs.Add("base_url", "format", placeholder(msg, "reason", err.Error()))
 	}
 	return normalized, errs
 }
@@ -310,20 +329,37 @@ func NormalizeBaseURL(baseStr string, stripSuffixes []string) (string, error) {
 	return u.String(), nil
 }
 
+// ModelList describes a model listing request: the path on base_url (with
+// whatever page size the upstream expects, e.g. "/v1/models?limit=1000"), where
+// the ids sit in the answer, and the prefix to strip from each id.
+type ModelList struct {
+	// Path is appended to the account's base_url.
+	Path string
+	// IdsPath is the gjson path of the model ids in the response.
+	IdsPath string
+	// StripPrefix is removed from the front of every id ("models/" for
+	// Gemini's resource names).
+	StripPrefix string
+}
+
 // ModelListRequest builds the GET a plugin's BuildModelsRequest returns: a
-// model listing on base_url + path, with the request's headers minus
-// content-type (nothing is sent in the body). path carries whatever page size
-// the upstream expects ("/v1/models?limit=1000"); idsPath and stripPrefix tell
-// the core where the ids are in the answer. headers is the map
-// upstreamHeaders just built; it is modified in place.
-func ModelListRequest(cfg *Config, path, idsPath, stripPrefix string, headers map[string]string) *pluginv1.BuildModelsRequestResponse {
-	delete(headers, "content-type")
+// model listing on base_url + list.Path, with the request's headers minus
+// content-type (nothing is sent in the body). headers is the map
+// upstreamHeaders just built; it is copied, never modified, so a caller may
+// reuse its header map.
+func ModelListRequest(cfg *Config, list ModelList, headers map[string]string) *pluginv1.BuildModelsRequestResponse {
+	h := make(map[string]string, len(headers))
+	for k, v := range headers {
+		if !strings.EqualFold(k, "content-type") {
+			h[k] = v
+		}
+	}
 	return &pluginv1.BuildModelsRequestResponse{
 		Method:      "GET",
-		Url:         cfg.BaseURL + path,
-		Headers:     headers,
-		IdsPath:     idsPath,
-		StripPrefix: stripPrefix,
+		Url:         cfg.BaseURL + list.Path,
+		Headers:     h,
+		IdsPath:     list.IdsPath,
+		StripPrefix: list.StripPrefix,
 	}
 }
 

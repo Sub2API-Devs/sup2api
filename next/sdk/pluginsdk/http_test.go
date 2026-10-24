@@ -150,3 +150,47 @@ func TestRouterReregisterReplaces(t *testing.T) {
 		t.Fatalf("registered %d routes, want 1", n)
 	}
 }
+
+// TestRouterRoutePathIsThePattern: the core sends the registered pattern as
+// route_path and the real parameters in path_params. That must be an exact
+// match that keeps the supplied parameters, not a segment match of the
+// pattern's own ":name" segments (which would overwrite them with ":name").
+func TestRouterRoutePathIsThePattern(t *testing.T) {
+	r := NewRouter()
+	var seen string
+	r.Handle("DELETE", "/blocks/:user_id", func(_ context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		seen = Param(req, "user_id")
+		return DataResponse(nil), nil
+	})
+	req := &pluginv1.HTTPRequest{
+		Method: "DELETE", Path: "/blocks/3", RoutePath: "/blocks/:user_id",
+		PathParams: map[string]string{"user_id": "3"},
+	}
+	resp, err := r.HandleHTTP(context.Background(), req)
+	if err != nil || resp.GetStatus() != 200 {
+		t.Fatalf("resp = %v %v", resp, err)
+	}
+	if seen != "3" {
+		t.Fatalf("user_id = %q, want 3", seen)
+	}
+}
+
+// TestRouterZeroValue: a Router{} works without NewRouter (the SDK used to keep
+// two route tables, so only the second one was nil-checked and the first
+// assignment panicked).
+func TestRouterZeroValue(t *testing.T) {
+	var r Router
+	if resp, err := r.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: "GET", Path: "/x"}); err != nil || resp.GetStatus() != 404 {
+		t.Fatalf("empty zero-value router: %v %v", resp, err)
+	}
+	r.Handle("GET", "/x", func(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		return DataResponse("x"), nil
+	})
+	resp, err := r.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: "GET", Path: "/x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.GetBody()); got != `{"data":"x"}` {
+		t.Fatalf("body = %s", got)
+	}
+}

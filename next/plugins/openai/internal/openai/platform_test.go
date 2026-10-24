@@ -40,13 +40,51 @@ func TestValidateCredentials(t *testing.T) {
 	if r.GetNormalizedCredentialsJson() != `{"api_key":"sk-proj-abcdef"}` || r.GetNormalizedSettingsJson() != `{"base_url":"https://relay.example.com"}` {
 		t.Fatalf("normalized = %s %s", r.GetNormalizedCredentialsJson(), r.GetNormalizedSettingsJson())
 	}
-	r, _ = h.Platform.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{}`})
-	if len(r.GetErrors()) != 1 || r.GetErrors()[0].GetField() != "api_key" {
-		t.Fatalf("missing key: %v", r.GetErrors())
+	// An explicit empty base_url means "use the default": CONTRACTS §21.3 has
+	// the plugin normalize an empty value, as anthropic and gemini already do.
+	// (This round's refactor aligned openai with them; it used to answer such
+	// a submission with a base_url format error.)
+	r, err = h.Platform.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{
+		AccountType: "apikey", CredentialsJson: `{"api_key":"sk-12345678","base_url":""}`,
+	})
+	if err != nil || len(r.GetErrors()) != 0 {
+		t.Fatalf("explicit empty base_url: %v %v", r.GetErrors(), err)
 	}
-	r, _ = h.Platform.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{AccountType: "oauth", CredentialsJson: `{"api_key":"sk-12345678"}`})
-	if len(r.GetErrors()) != 1 || r.GetErrors()[0].GetField() != "account_type" {
-		t.Fatalf("wrong type: %v", r.GetErrors())
+	if got := r.GetNormalizedCredentialsJson(); got != `{"api_key":"sk-12345678","base_url":"https://api.openai.com"}` {
+		t.Fatalf("normalized = %s", got)
+	}
+	// The wording below is what the console shipped before the shared
+	// apikey.Spec existed; it is pinned here as a (field, code, message)
+	// triple because the SDK test builds its own Spec and cannot see drift in
+	// this plugin's apikey.Texts.
+	for _, tc := range []struct {
+		name      string
+		typ       string
+		creds     string
+		wantField string
+		wantCode  string
+		wantMsg   string
+	}{
+		{"missing key", "apikey", `{}`, "api_key", "required", "API key is required / 请填写 API Key"},
+		{"non-string key", "apikey", `{"api_key":42}`, "api_key", "pattern", "API key must be a string / api_key 必须是字符串"},
+		{"key without sk- prefix", "apikey", `{"api_key":"apikey-12345678"}`, "api_key", "invalid_prefix", "api_key must start with a valid prefix / api_key 前缀不正确"},
+		{"wrong type", "oauth", `{"api_key":"sk-12345678"}`, "account_type", "unsupported", `unsupported account type "oauth" / 不支持的账号类型`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := h.Platform.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{
+				AccountType: tc.typ, CredentialsJson: tc.creds,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(r.GetErrors()) != 1 {
+				t.Fatalf("errors = %v, want exactly 1", r.GetErrors())
+			}
+			if e := r.GetErrors()[0]; e.GetField() != tc.wantField || e.GetCode() != tc.wantCode || e.GetMessage() != tc.wantMsg {
+				t.Fatalf("error = {%q %q %q}, want {%q %q %q}",
+					e.GetField(), e.GetCode(), e.GetMessage(), tc.wantField, tc.wantCode, tc.wantMsg)
+			}
+		})
 	}
 }
 

@@ -111,11 +111,11 @@ func assetKeyOK(k string) bool {
 // to first, then in the other one, because ValidateCredentials sees a single
 // merged object before the core splits it (server account/creds.go split()).
 func assetFields(credentialsJSON, settingsJSON string) (ak, sk, base, region string, err error) {
-	creds, err := decodeJSONObject(credentialsJSON)
+	creds, err := apikey.DecodeObject(credentialsJSON)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("credentials: %w", err)
 	}
-	settings, err := decodeJSONObject(settingsJSON)
+	settings, err := apikey.DecodeObject(settingsJSON)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("settings: %w", err)
 	}
@@ -141,13 +141,6 @@ func assetFields(credentialsJSON, settingsJSON string) (ak, sk, base, region str
 	}
 	region, err = str(FieldAssetRegion, settings, creds)
 	return ak, sk, base, region, err
-}
-
-// decodeJSONObject parses a credentials/settings JSON object. It is the SDK's
-// apikey.DecodeObject (empty or "null" yields an empty map), so the account
-// forms of every plugin read objects the same way.
-func decodeJSONObject(raw string) (map[string]any, error) {
-	return apikey.DecodeObject(raw)
 }
 
 // AssetConfigOf returns the asset library configuration of an account read
@@ -199,7 +192,7 @@ func AssetEnabled(settingsJSON string) bool {
 
 func assetSetting(credentialsJSON, settingsJSON, field string) (string, error) {
 	for _, raw := range []string{settingsJSON, credentialsJSON} {
-		obj, err := decodeJSONObject(raw)
+		obj, err := apikey.DecodeObject(raw)
 		if err != nil {
 			return "", err
 		}
@@ -293,7 +286,7 @@ func validateAssetFields(errs pluginsdk.FieldErrors, credentialsJSON, settingsJS
 // object, so inventing keys here would write fields the operator never
 // filled in.
 func normalizeAssetFields(objJSON string) string {
-	obj, err := decodeJSONObject(objJSON)
+	obj, err := apikey.DecodeObject(objJSON)
 	if err != nil || len(obj) == 0 {
 		return objJSON
 	}

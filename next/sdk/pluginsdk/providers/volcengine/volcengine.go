@@ -95,6 +95,11 @@ func errorTypeOpenAI(in *classify.Input) string {
 	}
 }
 
+// errorTypeAnthropic is Ark's Anthropic-surface vocabulary. It is not exactly
+// providers/anthropic.errorTypeForStatus: 413 and 529 still map to
+// invalid_request_error / api_error here. Aligning them would change the
+// client error type of those two statuses; that is a deliberate follow-up
+// (release note), not an oversight.
 func errorTypeAnthropic(in *classify.Input) string {
 	switch in.Status {
 	case http.StatusNotFound:

@@ -78,9 +78,10 @@ var spec = apikey.Spec{
 	DefaultBaseURL: DefaultBaseURL,
 	StripSuffixes:  []string{"/v1"},
 	Texts: apikey.Texts{
-		UnsupportedAccountType: "unsupported account type %q / 不支持的账号类型",
+		UnsupportedAccountType: "unsupported account type {type} / 不支持的账号类型",
 		KeyNotString:           "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符",
-		BaseURLFormat:          "base_url %s / base_url 必须是不含账号、查询参数的 http(s) 地址",
+		KeyNotStringCode:       "pattern",
+		BaseURLFormat:          "base_url {reason} / base_url 必须是不含账号、查询参数的 http(s) 地址",
 	},
 }
 
@@ -183,7 +184,7 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		Headers:       upstreamHeaders(cfg.APIKey, nil),
 		BodyJson:      body,
 		Model:         model,
-		UsageProtocol: "anthropic.messages",
+		UsageProtocol: ProtocolMessages,
 	}, nil
 }
 
@@ -197,5 +198,5 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
 	}
-	return apikey.ModelListRequest(cfg, "/v1/models?limit=1000", "data.#.id", "", upstreamHeaders(cfg.APIKey, nil)), nil
+	return apikey.ModelListRequest(cfg, apikey.ModelList{Path: "/v1/models?limit=1000", IdsPath: "data.#.id"}, upstreamHeaders(cfg.APIKey, nil)), nil
 }

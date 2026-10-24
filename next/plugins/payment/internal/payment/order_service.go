@@ -323,43 +323,34 @@ func (s *OrderService) ListOrders(ctx context.Context, userID int64, limit, offs
 	if err != nil {
 		return nil, 0, err
 	}
-	// Count total
-	var total int
-	err = db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM payment_orders WHERE user_id = $1
-	`, userID).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count orders: %w", err)
-	}
-
-	// Query orders (payment_trade_no is NULL until the order is paid)
-	rows, err := db.Query(ctx, `
-		SELECT id, user_id, out_trade_no, payment_type, COALESCE(payment_trade_no, ''),
-			amount, pay_amount, currency, order_type, status,
-			expires_at, paid_at, created_at
-		FROM payment_orders
-		WHERE user_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`, userID, limit, offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query orders: %w", err)
-	}
-	defer rows.Close()
-
-	var orders []Order
-	for rows.Next() {
+	// payment_trade_no is NULL until the order is paid.
+	orders, total, err := listPaged(ctx, db, pagedQuery{
+		countSQL:   `SELECT COUNT(*) FROM payment_orders`,
+		listSQL:    selectOrders,
+		where:      "user_id = $1",
+		args:       []any{userID},
+		orderBy:    "created_at DESC",
+		countLabel: "count orders",
+		queryLabel: "query orders",
+		scanLabel:  "scan order",
+	}, limit, offset, func(row pgx.CollectableRow) (Order, error) {
 		var o Order
-		err := rows.Scan(
+		err := row.Scan(
 			&o.ID, &o.UserID, &o.OutTradeNo, &o.PaymentType, &o.PaymentTradeNo,
 			&o.Amount, &o.PayAmount, &o.Currency, &o.OrderType, &o.Status,
 			&o.ExpiresAt, &o.PaidAt, &o.CreatedAt,
 		)
-		if err != nil {
-			return nil, 0, fmt.Errorf("scan order: %w", err)
-		}
-		orders = append(orders, o)
+		return o, err
+	})
+	if err != nil {
+		return nil, 0, err
 	}
-
 	return orders, total, nil
 }
+
+// selectOrders is the column list of the order list statements.
+const selectOrders = `
+	SELECT id, user_id, out_trade_no, payment_type, COALESCE(payment_trade_no, ''),
+		amount, pay_amount, currency, order_type, status,
+		expires_at, paid_at, created_at
+	FROM payment_orders`

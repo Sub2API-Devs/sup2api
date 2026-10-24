@@ -19,11 +19,10 @@ type HandlerFunc func(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1
 // (HTTPRequest.route_path, falling back to path). It implements HTTP.
 //
 // Routes are compiled when registered: each method keeps its patterns sorted
-// so that the most literal pattern wins and a tie is broken by the pattern
-// text, never by map iteration order. Two patterns can therefore never
-// resolve differently between two runs.
+// so that the pattern with more literal segments wins and a tie is broken by
+// the pattern text, never by map iteration order. Two patterns can therefore
+// never resolve differently between two runs.
 type Router struct {
-	routes   map[string]HandlerFunc
 	byMethod map[string][]route
 }
 
@@ -37,15 +36,15 @@ type route struct {
 
 // NewRouter returns an empty router.
 func NewRouter() *Router {
-	return &Router{routes: map[string]HandlerFunc{}, byMethod: map[string][]route{}}
+	return &Router{byMethod: map[string][]route{}}
 }
 
 // Handle registers h for method and the manifest route path, e.g.
 // Handle("GET", "/models", h). Registering the same method and path again
-// replaces the handler, as the previous map-backed router did.
+// replaces the handler, as the previous map-backed router did. A zero-value
+// Router is usable: the first Handle initialises its table.
 func (r *Router) Handle(method, path string, h HandlerFunc) {
 	method = strings.ToUpper(method)
-	r.routes[method+" "+path] = h
 	if r.byMethod == nil {
 		r.byMethod = map[string][]route{}
 	}
@@ -81,14 +80,21 @@ func (r *Router) HandleHTTP(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		if p == "" {
 			continue
 		}
-		// Try exact match first
-		if h, ok := r.routes[method+" "+p]; ok {
-			return h(ctx, req)
+		// A request may carry the registered pattern itself as route_path (the
+		// core sends the pattern and fills path_params). That is an exact
+		// match: answer it as is, without matching the pattern's own ":name"
+		// segments against themselves and overwriting the parameters.
+		patterns := r.byMethod[method]
+		for i := range patterns {
+			if patterns[i].pattern == p {
+				return patterns[i].handler(ctx, req)
+			}
 		}
-		// Try the compiled patterns of this method, longest literal prefix
-		// first (e.g., /models/list before /models/:id).
+		// Otherwise match the request path against the compiled patterns, most
+		// literal segments first, so an exact path (/models/list) comes before
+		// a parameter one (/models/:id) that would also match.
 		parts := splitPath(p)
-		for _, rt := range r.byMethod[method] {
+		for _, rt := range patterns {
 			params, ok := matchSegments(rt.segments, parts)
 			if !ok {
 				continue

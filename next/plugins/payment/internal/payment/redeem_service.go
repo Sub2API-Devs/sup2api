@@ -206,23 +206,19 @@ func (s *RedeemService) ListCodes(ctx context.Context, status string, limit, off
 	if err != nil {
 		return nil, 0, err
 	}
-	// The status filter changes the placeholders of both statements, so the
-	// pair is built together; listPaged only runs them and reads the rows.
+	// The status filter and the LIMIT/OFFSET numbering live in listPaged.
 	q := pagedQuery{
 		countSQL:   `SELECT COUNT(*) FROM redeem_codes`,
-		listSQL:    selectRedeemCodes + ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		listArgs:   []any{limit, offset},
+		listSQL:    selectRedeemCodes,
+		orderBy:    "created_at DESC",
 		countLabel: "count codes",
 		queryLabel: "query codes",
 		scanLabel:  "scan code",
 	}
 	if status != "" {
-		q.countSQL = `SELECT COUNT(*) FROM redeem_codes WHERE status = $1`
-		q.countArgs = []any{status}
-		q.listSQL = selectRedeemCodes + ` WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
-		q.listArgs = []any{status, limit, offset}
+		q.where, q.args = "status = $1", []any{status}
 	}
-	codes, total, err := listPaged(ctx, db, q, func(row pgx.CollectableRow) (RedeemCode, error) {
+	codes, total, err := listPaged(ctx, db, q, limit, offset, func(row pgx.CollectableRow) (RedeemCode, error) {
 		var rc RedeemCode
 		err := row.Scan(
 			&rc.ID, &rc.CodeHash, &rc.Type, &rc.Value, &rc.GroupID, &rc.ValidityDays,
@@ -248,44 +244,35 @@ func (s *RedeemService) GetUserRedeemHistory(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, 0, err
 	}
-	// Count total
-	var total int
-	err = db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM redeem_codes WHERE used_by = $1
-	`, userID).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count user codes: %w", err)
-	}
-
-	// Query codes
-	rows, err := db.Query(ctx, `
-		SELECT id, code_hash, type, value, status, used_at, notes, created_at
-		FROM redeem_codes
-		WHERE used_by = $1
-		ORDER BY used_at DESC
-		LIMIT $2 OFFSET $3
-	`, userID, limit, offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query user codes: %w", err)
-	}
-	defer rows.Close()
-
-	var codes []RedeemCode
-	for rows.Next() {
+	codes, total, err := listPaged(ctx, db, pagedQuery{
+		countSQL:   `SELECT COUNT(*) FROM redeem_codes`,
+		listSQL:    selectUserRedeemHistory,
+		where:      "used_by = $1",
+		args:       []any{userID},
+		orderBy:    "used_at DESC",
+		countLabel: "count user codes",
+		queryLabel: "query user codes",
+		scanLabel:  "scan code",
+	}, limit, offset, func(row pgx.CollectableRow) (RedeemCode, error) {
 		var rc RedeemCode
-		err := rows.Scan(
+		err := row.Scan(
 			&rc.ID, &rc.CodeHash, &rc.Type, &rc.Value, &rc.Status,
 			&rc.UsedAt, &rc.Notes, &rc.CreatedAt,
 		)
-		if err != nil {
-			return nil, 0, fmt.Errorf("scan code: %w", err)
-		}
 		rc.UsedBy = &userID
-		codes = append(codes, rc)
+		return rc, err
+	})
+	if err != nil {
+		return nil, 0, err
 	}
-
 	return codes, total, nil
 }
+
+// selectUserRedeemHistory is the column list of the user's own history: fewer
+// columns than the admin list, and no group/validity/expiry detail.
+const selectUserRedeemHistory = `
+	SELECT id, code_hash, type, value, status, used_at, notes, created_at
+	FROM redeem_codes`
 
 // DeleteCode deletes (invalidates) a redeem code
 func (s *RedeemService) DeleteCode(ctx context.Context, codeID int64) error {

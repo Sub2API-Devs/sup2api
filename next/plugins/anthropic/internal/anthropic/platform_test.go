@@ -110,6 +110,49 @@ func assertJSON(t *testing.T, got, want string) {
 	}
 }
 
+// TestValidateCredentialsWording pins the field, code and message of the
+// errors this plugin's own spec produces. The SDK test only checks the Spec
+// shape it builds itself, so a change to this plugin's apikey.Texts would
+// otherwise reach the console unnoticed.
+func TestValidateCredentialsWording(t *testing.T) {
+	_, h := start(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name  string
+		typ   string
+		creds string
+		sets  string
+		field string
+		code  string
+		msg   string
+	}{
+		{"wrong type", "oauth", `{"api_key":"sk-ant-12345678"}`, "",
+			"account_type", "unsupported", `unsupported account type "oauth" / 不支持的账号类型`},
+		{"missing key", "apikey", `{}`, "",
+			"api_key", "required", "API key is required / 请填写 API Key"},
+		{"non-string key", "apikey", `{"api_key":42}`, "",
+			"api_key", "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符"},
+		{"bad url", "apikey", `{"api_key":"sk-ant-12345678"}`, `{"base_url":"ftp://x"}`,
+			"base_url", "format", "base_url must be an absolute http(s) URL / base_url 必须是不含账号、查询参数的 http(s) 地址"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := h.Platform.ValidateCredentials(ctx, &pluginv1.ValidateCredentialsRequest{
+				AccountType: tc.typ, CredentialsJson: tc.creds, SettingsJson: tc.sets,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(r.GetErrors()) != 1 {
+				t.Fatalf("errors = %v, want exactly 1", r.GetErrors())
+			}
+			if e := r.GetErrors()[0]; e.GetField() != tc.field || e.GetCode() != tc.code || e.GetMessage() != tc.msg {
+				t.Fatalf("error = {%q %q %q}, want {%q %q %q}",
+					e.GetField(), e.GetCode(), e.GetMessage(), tc.field, tc.code, tc.msg)
+			}
+		})
+	}
+}
+
 func account(creds, settings string) *pluginv1.Account {
 	return &pluginv1.Account{Id: 42, Platform: "anthropic", Type: "apikey", CredentialsJson: creds, SettingsJson: settings}
 }

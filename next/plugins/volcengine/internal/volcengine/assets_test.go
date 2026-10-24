@@ -11,6 +11,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 )
 
 // validate runs ValidateCredentials in process and returns the field errors
@@ -80,14 +81,14 @@ func TestAssetFieldsNormalized(t *testing.T) {
 	if len(errs) != 0 {
 		t.Fatalf("errors = %v", errs)
 	}
-	creds, err := decodeJSONObject(resp.GetNormalizedCredentialsJson())
+	creds, err := apikey.DecodeObject(resp.GetNormalizedCredentialsJson())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if creds[FieldAccessKey] != testAK || creds[FieldSecretKey] != testSK {
 		t.Fatalf("normalized credentials = %s", resp.GetNormalizedCredentialsJson())
 	}
-	settings, err := decodeJSONObject(resp.GetNormalizedSettingsJson())
+	settings, err := apikey.DecodeObject(resp.GetNormalizedSettingsJson())
 	if err != nil {
 		t.Fatal(err)
 	}

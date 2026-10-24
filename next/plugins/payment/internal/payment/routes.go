@@ -265,8 +265,7 @@ func (h *HTTPHandler) handleListRedeemCodes(ctx context.Context, req *pluginv1.H
 	page, pageSize := pagination(req)
 	offset := (page - 1) * pageSize
 
-	status := ""
-	status = pluginsdk.Query(req, "status")
+	status := pluginsdk.Query(req, "status")
 
 	codes, total, err := h.redeem.ListCodes(ctx, status, pageSize, offset)
 	if err != nil {
@@ -336,8 +335,7 @@ func (h *HTTPHandler) handleListPromoCodes(ctx context.Context, req *pluginv1.HT
 	page, pageSize := pagination(req)
 	offset := (page - 1) * pageSize
 
-	status := ""
-	status = pluginsdk.Query(req, "status")
+	status := pluginsdk.Query(req, "status")
 
 	codes, total, err := h.promo.ListPromoCodes(ctx, status, pageSize, offset)
 	if err != nil {

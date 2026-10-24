@@ -183,23 +183,19 @@ func (s *PromoService) ListPromoCodes(ctx context.Context, status string, limit,
 	if err != nil {
 		return nil, 0, err
 	}
-	// The status filter changes the placeholders of both statements, so the
-	// pair is built together (see listPaged).
+	// The status filter and the LIMIT/OFFSET numbering live in listPaged.
 	q := pagedQuery{
 		countSQL:   `SELECT COUNT(*) FROM promo_codes`,
-		listSQL:    selectPromoCodes + ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		listArgs:   []any{limit, offset},
+		listSQL:    selectPromoCodes,
+		orderBy:    "created_at DESC",
 		countLabel: "count promo codes",
 		queryLabel: "query promo codes",
 		scanLabel:  "scan promo code",
 	}
 	if status != "" {
-		q.countSQL = `SELECT COUNT(*) FROM promo_codes WHERE status = $1`
-		q.countArgs = []any{status}
-		q.listSQL = selectPromoCodes + ` WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
-		q.listArgs = []any{status, limit, offset}
+		q.where, q.args = "status = $1", []any{status}
 	}
-	codes, total, err := listPaged(ctx, db, q, func(row pgx.CollectableRow) (PromoCode, error) {
+	codes, total, err := listPaged(ctx, db, q, limit, offset, func(row pgx.CollectableRow) (PromoCode, error) {
 		var pc PromoCode
 		err := row.Scan(
 			&pc.ID, &pc.Code, &pc.BonusAmount, &pc.MaxUses, &pc.UsedCount,

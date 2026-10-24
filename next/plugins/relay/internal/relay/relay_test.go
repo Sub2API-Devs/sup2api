@@ -87,6 +87,50 @@ func TestValidateCredentials(t *testing.T) {
 	}
 }
 
+// TestValidateCredentialsWording pins the field, code and message of this
+// plugin's own errors. The SDK test only checks the Spec it builds itself, so
+// a drift in this plugin's apikey.Texts would otherwise reach the console
+// unnoticed.
+func TestValidateCredentialsWording(t *testing.T) {
+	h := start(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name      string
+		typ       string
+		creds     string
+		wantField string
+		wantCode  string
+		wantMsg   string
+	}{
+		{"wrong type", "apikey", `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com"}`,
+			"account_type", "unsupported", `unsupported account type "apikey" / 不支持的账号类型`},
+		{"missing key", "relay_key", `{"base_url":"https://r.example.com"}`,
+			"api_key", "required", "API key is required / 请填写 API Key"},
+		{"non-string key", "relay_key", `{"api_key":42,"base_url":"https://r.example.com"}`,
+			"api_key", "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符"},
+		{"missing base url", "relay_key", `{"api_key":"sk-relay-abcdef"}`,
+			"base_url", "required", "Base URL of the relay is required / 请填写中转站的 Base URL"},
+		{"bad base url", "relay_key", `{"api_key":"sk-relay-abcdef","base_url":"ftp://x"}`,
+			"base_url", "format", "base_url must be an absolute http(s) URL / base_url 必须是不含账号、查询参数的 http(s) 地址"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := h.Platform.ValidateCredentials(ctx, &pluginv1.ValidateCredentialsRequest{
+				AccountType: tc.typ, CredentialsJson: tc.creds,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(r.GetErrors()) != 1 {
+				t.Fatalf("errors = %v, want exactly 1", r.GetErrors())
+			}
+			if e := r.GetErrors()[0]; e.GetField() != tc.wantField || e.GetCode() != tc.wantCode || e.GetMessage() != tc.wantMsg {
+				t.Fatalf("error = {%q %q %q}, want {%q %q %q}",
+					e.GetField(), e.GetCode(), e.GetMessage(), tc.wantField, tc.wantCode, tc.wantMsg)
+			}
+		})
+	}
+}
+
 func assertJSON(t *testing.T, got, want string) {
 	t.Helper()
 	if want == "" {

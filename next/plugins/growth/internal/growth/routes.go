@@ -219,7 +219,9 @@ func (p *Plugin) getCheckinStatus(ctx context.Context, req *pluginv1.HTTPRequest
 	if err != nil {
 		return unavailable(err), nil
 	}
-	// Recent.
+	// Recent. checkin_date is a date column read into a string: the ::text is
+	// explicit so the scan stays correct if the connection ever asks for
+	// binary result formats (pgx sends text today, so it costs nothing).
 	rows, err := db.Query(ctx, `SELECT checkin_date::text, quota_awarded, created_at FROM checkins WHERE user_id = $1 ORDER BY checkin_date DESC LIMIT 7`, uid)
 	if err != nil {
 		return unavailable(err), nil
@@ -367,7 +369,10 @@ func (p *Plugin) getReferralDetail(ctx context.Context, req *pluginv1.HTTPReques
 	}
 	if d.Invitees, err = pgxCollectRows(rows, func(row pgx.CollectableRow) (int64, error) {
 		var id int64
-		return id, row.Scan(&id)
+		if err := row.Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
 	}); err != nil {
 		return unavailable(err), nil
 	}
@@ -434,6 +439,8 @@ func (p *Plugin) listCheckins(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err := db.QueryRow(ctx, `SELECT COUNT(*) FROM checkins`).Scan(&total); err != nil {
 		return unavailable(err), nil
 	}
+	// checkin_date is a date column read into a string; ::text pins the
+	// result format (see getCheckinStatus).
 	rows, err := db.Query(ctx, `SELECT id, user_id, checkin_date::text, quota_awarded, created_at
 		FROM checkins ORDER BY created_at DESC LIMIT $1 OFFSET $2`, size, offset)
 	if err != nil {

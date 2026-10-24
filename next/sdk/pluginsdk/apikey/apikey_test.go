@@ -105,23 +105,33 @@ func TestNormalizeBaseURL(t *testing.T) {
 
 // TestModelListRequest: the four model-list callers (anthropic, openai,
 // gemini, relay) build the same request; the path and the id location are the
-// only differences, and content-type (a body header) is always dropped.
+// only differences, and content-type (a body header) is always dropped. The
+// caller's header map is copied, so reusing it after the call is safe.
 func TestModelListRequest(t *testing.T) {
 	cfg := &Config{APIKey: "k", BaseURL: "https://api.example.com"}
 	h := map[string]string{"x-api-key": "k", "content-type": "application/json", "anthropic-version": "2023-06-01"}
-	r := ModelListRequest(cfg, "/v1/models?limit=1000", "data.#.id", "", h)
+	r := ModelListRequest(cfg, ModelList{Path: "/v1/models?limit=1000", IdsPath: "data.#.id"}, h)
 	if r.GetMethod() != "GET" || r.GetUrl() != "https://api.example.com/v1/models?limit=1000" ||
 		r.GetIdsPath() != "data.#.id" || r.GetStripPrefix() != "" {
 		t.Fatalf("request = %v", r)
 	}
-	if _, ok := h["content-type"]; ok {
+	if _, ok := r.GetHeaders()["content-type"]; ok {
 		t.Fatal("content-type must be dropped from a GET")
 	}
-	if h["x-api-key"] != "k" || h["anthropic-version"] != "2023-06-01" {
-		t.Fatalf("headers = %v", h)
+	if r.GetHeaders()["x-api-key"] != "k" || r.GetHeaders()["anthropic-version"] != "2023-06-01" {
+		t.Fatalf("headers = %v", r.GetHeaders())
 	}
-	if got := ModelListRequest(cfg, "/v1beta/models", "models.#.name", "models/", map[string]string{}); got.GetStripPrefix() != "models/" {
-		t.Fatalf("strip prefix = %q", got.GetStripPrefix())
+	if len(h) != 3 || h["content-type"] != "application/json" {
+		t.Fatalf("the caller's header map was modified: %v", h)
+	}
+	// A differently-cased content type is dropped too.
+	r = ModelListRequest(cfg, ModelList{Path: "/v1beta/models", IdsPath: "models.#.name", StripPrefix: "models/"},
+		map[string]string{"Content-Type": "application/json", "authorization": "Bearer k"})
+	if got := r.GetStripPrefix(); got != "models/" {
+		t.Fatalf("strip prefix = %q", got)
+	}
+	if len(r.GetHeaders()) != 1 || r.GetHeaders()["authorization"] != "Bearer k" {
+		t.Fatalf("headers = %v", r.GetHeaders())
 	}
 }
 
@@ -135,8 +145,9 @@ func TestTextsKeepShippedWording(t *testing.T) {
 	}
 
 	s := Spec{AccountType: "relay_key", RequireBaseURL: true, Texts: Texts{
-		UnsupportedAccountType: "unsupported account type %q / 不支持的账号类型",
+		UnsupportedAccountType: "unsupported account type {type} / 不支持的账号类型",
 		KeyNotString:           "API key must be a string / api_key 必须是字符串",
+		KeyNotStringCode:       "pattern",
 		BaseURLRequired:        "Base URL of the relay is required / 请填写中转站的 Base URL",
 	}}
 	r := s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey"})
@@ -160,5 +171,42 @@ func TestTextsKeepShippedWording(t *testing.T) {
 	}
 	if got := r.GetErrors()[1].GetMessage(); got != "Base URL of the relay is required / 请填写中转站的 Base URL" {
 		t.Fatalf("required message = %q", got)
+	}
+}
+
+// TestTextsAreNotFormatStrings: a Texts message is plain text, so a bare
+// percent sign ("100%") reaches the console unchanged and an unknown
+// placeholder stays as written. Before, the message went through Sprintf and
+// "100%" came out as "%!d(MISSING)" or swallowed the argument.
+func TestTextsAreNotFormatStrings(t *testing.T) {
+	s := Spec{AccountType: "apikey", DefaultBaseURL: "https://api.example.com", Texts: Texts{
+		UnsupportedAccountType: "unsupported account type {type} (100% sure) / 不支持的账号类型",
+		KeyNotString:           "key must be text, 100% / key 必须是字符串",
+		KeyNotStringCode:       "type",
+		BaseURLFormat:          "base_url {reason}: must be 100% absolute / base_url 格式错误",
+	}}
+	r := s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "other"})
+	if got := r.GetErrors()[0].GetMessage(); got != `unsupported account type "other" (100% sure) / 不支持的账号类型` {
+		t.Fatalf("account type message = %q", got)
+	}
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{"api_key":42}`})
+	if got := r.GetErrors()[0].GetMessage(); got != "key must be text, 100% / key 必须是字符串" {
+		t.Fatalf("key message = %q", got)
+	}
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{"api_key":42}`})
+	if e := r.GetErrors()[0]; e.GetCode() != "type" || e.GetMessage() != "key must be text, 100% / key 必须是字符串" {
+		t.Fatalf("non-string key = %v", e)
+	}
+	// The code is configured separately from the message: leaving it empty
+	// keeps the historical "pattern".
+	s.Texts.KeyNotStringCode = ""
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{"api_key":42}`})
+	if e := r.GetErrors()[0]; e.GetCode() != "pattern" || e.GetMessage() != "key must be text, 100% / key 必须是字符串" {
+		t.Fatalf("non-string key = %v", e)
+	}
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{"api_key":"sk-12345678"}`, SettingsJson: `{"base_url":"ftp://x"}`})
+	if e := r.GetErrors()[0]; e.GetField() != "base_url" || e.GetCode() != "format" ||
+		e.GetMessage() != "base_url must be an absolute http(s) URL: must be 100% absolute / base_url 格式错误" {
+		t.Fatalf("format error = %v", e)
 	}
 }

@@ -9,15 +9,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// pagedQuery is one admin list endpoint: a count statement and the page
-// statement, each with the arguments it needs, plus the message prefix of
-// each failure. Callers build both statements (they differ only by the
-// optional status filter and its placeholders); this type only carries them.
+// pagedQuery is one paged list endpoint. The WHERE clause and its arguments
+// are written once: listPaged appends them to both statements and numbers the
+// page's LIMIT/OFFSET after them, so a caller never shifts "$2"/"$3" by hand.
 type pagedQuery struct {
-	countSQL  string
-	countArgs []any
-	listSQL   string
-	listArgs  []any
+	// countSQL and listSQL end at the table (no WHERE, ORDER BY or LIMIT).
+	countSQL string
+	listSQL  string
+	// where is the optional filter shared by both statements, with its
+	// placeholders numbered from $1; args are its arguments.
+	where string
+	args  []any
+	// orderBy is the page statement's ORDER BY ("created_at DESC").
+	orderBy string
 	// Labels are the failure prefixes, kept per stage because the endpoints
 	// report the raw error to administrators ("count codes: ...").
 	countLabel string
@@ -25,15 +29,30 @@ type pagedQuery struct {
 	scanLabel  string
 }
 
+// statements renders the count and page SQL with the filter applied and the
+// page window numbered after the filter's arguments.
+func (q pagedQuery) statements(limit, offset int) (countSQL, listSQL string, args []any) {
+	where := ""
+	if q.where != "" {
+		where = " WHERE " + q.where
+	}
+	countSQL = q.countSQL + where
+	listSQL = fmt.Sprintf("%s%s ORDER BY %s LIMIT $%d OFFSET $%d",
+		q.listSQL, where, q.orderBy, len(q.args)+1, len(q.args)+2)
+	args = append(append(make([]any, 0, len(q.args)+2), q.args...), limit, offset)
+	return countSQL, listSQL, args
+}
+
 // listPaged runs the count and the page statement and reads the rows into T.
 // It returns the total for the pagination block, which callers still need even
 // when the page is empty.
-func listPaged[T any](ctx context.Context, db *pgxpool.Pool, q pagedQuery, scan pgx.RowToFunc[T]) ([]T, int, error) {
+func listPaged[T any](ctx context.Context, db *pgxpool.Pool, q pagedQuery, limit, offset int, scan pgx.RowToFunc[T]) ([]T, int, error) {
+	countSQL, listSQL, args := q.statements(limit, offset)
 	var total int
-	if err := db.QueryRow(ctx, q.countSQL, q.countArgs...).Scan(&total); err != nil {
+	if err := db.QueryRow(ctx, countSQL, args[:len(q.args)]...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("%s: %w", q.countLabel, err)
 	}
-	rows, err := db.Query(ctx, q.listSQL, q.listArgs...)
+	rows, err := db.Query(ctx, listSQL, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: %w", q.queryLabel, err)
 	}

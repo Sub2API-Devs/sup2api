@@ -34,9 +34,10 @@ const (
 	// 上游端点
 	MessagesURL = "https://api.anthropic.com/v1/messages"
 
-	// AnthropicAPIVersion 是所有 Anthropic 面请求带的版本头；
+	// AnthropicAPIVersion 是所有 Anthropic 面请求带的版本头（与 SDK
+	// providers/anthropic 的默认版本是同一个值）；
 	// OAuthBeta 是 OAuth 令牌/用量端点要求的 beta 名。
-	AnthropicAPIVersion = "2023-06-01"
+	AnthropicAPIVersion = anthropic.DefaultAPIVersion
 	OAuthBeta           = "oauth-2025-04-20"
 
 	// 控制台"测试账号"未指定模型时使用（manifest defaultModels 之一）

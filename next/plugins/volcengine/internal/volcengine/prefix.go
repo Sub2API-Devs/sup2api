@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 )
 
 // prefixes are the path prefixes of one account, already normalized.
@@ -49,7 +50,7 @@ func prefixesOf(accountType, settingsJSON string) (prefixes, error) {
 	if accountType != AccountTypeRelay {
 		return prefixes{api: APIPrefix, video: APIPrefix, anthropic: "/api/compatible/v1"}, nil
 	}
-	settings, err := decodeJSONObject(settingsJSON)
+	settings, err := apikey.DecodeObject(settingsJSON)
 	if err != nil {
 		return prefixes{}, fmt.Errorf("settings: %w", err)
 	}
@@ -123,7 +124,7 @@ func prefixesOf(accountType, settingsJSON string) (prefixes, error) {
 func validateRelayBaseURL(errs pluginsdk.FieldErrors, credentialsJSON, settingsJSON string) pluginsdk.FieldErrors {
 	raw := ""
 	for _, src := range []string{settingsJSON, credentialsJSON} {
-		obj, err := decodeJSONObject(src)
+		obj, err := apikey.DecodeObject(src)
 		if err != nil {
 			continue
 		}
@@ -194,7 +195,7 @@ func normalizePrefix(raw string) (string, error) {
 // meant. It is the friendly half of the guarantee - the binding half is
 // upstreamURL, which runs on every request.
 func validatePrefixFields(errs pluginsdk.FieldErrors, settingsJSON string) pluginsdk.FieldErrors {
-	obj, err := decodeJSONObject(settingsJSON)
+	obj, err := apikey.DecodeObject(settingsJSON)
 	if err != nil {
 		return errs.Add("", "type", err.Error()+" / 字段类型不正确")
 	}
@@ -230,7 +231,7 @@ func validatePrefixFields(errs pluginsdk.FieldErrors, settingsJSON string) plugi
 // turned it into a field error, and silently storing a "fixed" version of
 // something we refused would be worse than storing what was sent.
 func normalizePrefixFields(objJSON string) string {
-	obj, err := decodeJSONObject(objJSON)
+	obj, err := apikey.DecodeObject(objJSON)
 	if err != nil || len(obj) == 0 {
 		return objJSON
 	}
