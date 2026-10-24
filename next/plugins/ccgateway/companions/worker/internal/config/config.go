@@ -51,31 +51,12 @@ type Config struct {
 // Load 从环境变量加载配置
 func Load() (*Config, error) {
 	workerID, _ := os.Hostname()
-	port := 8788
-	bindHost := ""
-	if bind := os.Getenv("CCG_BIND"); bind != "" {
-		host, rawPort, err := net.SplitHostPort(bind)
-		if err != nil {
-			return nil, fmt.Errorf("invalid CCG_BIND")
-		}
-		port, err = strconv.Atoi(rawPort)
-		if err != nil {
-			return nil, fmt.Errorf("invalid CCG_BIND port")
-		}
-		if port < 1 || port > 65535 {
-			return nil, fmt.Errorf("invalid CCG_BIND port")
-		}
-		if !validBindHost(host) {
-			return nil, fmt.Errorf("CCG_BIND host must be loopback or unspecified; the internal relay requires loopback")
-		}
-		if host == "localhost" {
-			host = "127.0.0.1"
-		}
-		bindHost = host
+	bindHost, port, err := parseBind()
+	if err != nil {
+		return nil, err
 	}
 	// WORKER_PORT overrides only the port; an explicit CCG_BIND host survives.
 	if raw := os.Getenv("WORKER_PORT"); raw != "" {
-		var err error
 		port, err = strconv.Atoi(raw)
 		if err != nil {
 			return nil, fmt.Errorf("invalid WORKER_PORT")
@@ -174,6 +155,33 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		return defaultValue
 	}
 	return d
+}
+
+// defaultWorkerPort is the Worker's listen port when CCG_BIND does not set one.
+const defaultWorkerPort = 8788
+
+// parseBind reads CCG_BIND (host:port). An empty variable keeps the default
+// port and an unspecified host.
+func parseBind() (host string, port int, err error) {
+	port = defaultWorkerPort
+	bind := os.Getenv("CCG_BIND")
+	if bind == "" {
+		return "", port, nil
+	}
+	host, rawPort, err := net.SplitHostPort(bind)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid CCG_BIND")
+	}
+	if port, err = strconv.Atoi(rawPort); err != nil || port < 1 || port > 65535 {
+		return "", 0, fmt.Errorf("invalid CCG_BIND port")
+	}
+	if !validBindHost(host) {
+		return "", 0, fmt.Errorf("CCG_BIND host must be loopback or unspecified; the internal relay requires loopback")
+	}
+	if host == "localhost" {
+		host = "127.0.0.1"
+	}
+	return host, port, nil
 }
 
 func validBindHost(host string) bool {

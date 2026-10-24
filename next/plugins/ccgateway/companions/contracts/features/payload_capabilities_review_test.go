@@ -6,7 +6,7 @@ import (
 )
 
 func TestReviewPayloadCapabilitiesExplicitEmptyIsNotLegacyOmission(t *testing.T) {
-	base := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "test", Revision: "fixture"}, Catalog: Catalog(), PolicySchemaVersions: []int{1}, Probes: []RuntimeProbe{}, ModelProviderVerification: "not_run"}
+	base := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "test", Revision: "fixture"}, Catalog: RequestRuntimeCatalog(nil), PolicySchemaVersions: []int{1}, Probes: []RuntimeProbe{}, ModelProviderVerification: "not_run"}
 	raw, _ := json.Marshal(base)
 	for _, v := range []string{"null", "[]"} {
 		body := append([]byte(`{"helper_history_payload_versions":`+v+`,`), raw[1:]...)

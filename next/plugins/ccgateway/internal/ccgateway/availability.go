@@ -71,9 +71,33 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 	if snapshot.GetUpdatedAtUnix() <= 0 || snapshot.GetUpdatedAtUnix() > now {
 		return
 	}
-	windows := map[string]*pluginv1.QuotaWindow{}
-	invalid := len(snapshot.GetWindows()) > 64 || snapshot.GetRevision() < 0
-	var shared, scoped *pluginv1.QuotaWindow
+	windows, invalid, shared, scoped := scanQuotaWindows(snapshot, out.Model)
+	if blocked := blockedWindow(shared, scoped); blocked != nil {
+		out.State, out.Reason = pluginv1.ModelAvailability_UNAVAILABLE, "quota_rejected:"+blocked.GetKey()
+		if blocked.GetResetsAtUnix() > now {
+			out.RetryAtUnix = blocked.GetResetsAtUnix()
+		}
+		return
+	}
+	if invalid {
+		out.Reason = "invalid_quota_snapshot"
+		return
+	}
+	if refreshOnRequest {
+		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
+		return
+	}
+	if authRefused {
+		return // Reason already says authorization_required
+	}
+	finalQuotaState(snapshot, now, windows, out)
+}
+
+// scanQuotaWindows indexes the cached windows and picks the blocking ones: the
+// shared window with the latest reset, and the scoped window for this model.
+func scanQuotaWindows(snapshot *pluginv1.AccountQuotaSnapshot, model string) (windows map[string]*pluginv1.QuotaWindow, invalid bool, shared, scoped *pluginv1.QuotaWindow) {
+	windows = map[string]*pluginv1.QuotaWindow{}
+	invalid = len(snapshot.GetWindows()) > 64 || snapshot.GetRevision() < 0
 	for _, window := range snapshot.GetWindows() {
 		if !validCachedQuotaWindow(window) {
 			invalid = true
@@ -92,35 +116,24 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 			if shared == nil || window.GetResetsAtUnix() > shared.GetResetsAtUnix() {
 				shared = window
 			}
-		case quotaApplies(key, out.Model):
+		case quotaApplies(key, model):
 			scoped = window
 		}
 	}
-	blocked := shared
-	if blocked == nil {
-		blocked = scoped
+	return windows, invalid, shared, scoped
+}
+
+// blockedWindow prefers the shared exhausted window over the scoped one.
+func blockedWindow(shared, scoped *pluginv1.QuotaWindow) *pluginv1.QuotaWindow {
+	if shared != nil {
+		return shared
 	}
-	if blocked != nil {
-		out.State, out.Reason = pluginv1.ModelAvailability_UNAVAILABLE, "quota_rejected:"+blocked.GetKey()
-		if blocked.GetResetsAtUnix() > now {
-			out.RetryAtUnix = blocked.GetResetsAtUnix()
-		}
-		return
-	}
-	if invalid {
-		out.Reason = "invalid_quota_snapshot"
-		return
-	}
-	if refreshOnRequest {
-		out.State, out.Reason = pluginv1.ModelAvailability_AVAILABLE, "quota_auth_refresh_on_request"
-		return
-	}
-	if authRefused {
-		out.Reason = "authorization_required"
-		return
-	}
-	// A failed query keeps the windows of the last successful one; they
-	// decide until they are too old.
+	return scoped
+}
+
+// finalQuotaState decides from a fresh, unblocked snapshot. A failed query
+// keeps the windows of the last successful one; they decide until too old.
+func finalQuotaState(snapshot *pluginv1.AccountQuotaSnapshot, now int64, windows map[string]*pluginv1.QuotaWindow, out *pluginv1.ModelAvailability) {
 	if now-snapshot.GetUpdatedAtUnix() >= int64(quotaValid.Seconds()) {
 		out.Reason = "quota_stale"
 		if snapshot.GetError() != "" {

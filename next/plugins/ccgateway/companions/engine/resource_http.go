@@ -41,7 +41,7 @@ func newResourceBroker(g *Gateway, authority *authManager, root string) (*resour
 		{"CCG_RESOURCE_BODY_LIMIT_BYTES", &limit, resourceHardLimit},
 		{"CCG_RESOURCE_SPOOL_LIMIT_BYTES", &budget, 8 * resourceHardLimit},
 	} {
-		if value := resourceEnv(g.Runner.baseEnv(), setting.name); value != "" {
+		if value := environmentValue(g.Runner.baseEnv(), setting.name); value != "" {
 			n, err := strconv.ParseInt(value, 10, 64)
 			if err != nil || n <= 0 || n > setting.maximum {
 				return nil, fmt.Errorf("invalid %s", setting.name)
@@ -63,22 +63,8 @@ func newResourceBroker(g *Gateway, authority *authManager, root string) (*resour
 func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w, r, finish := b.resourceDiagnostic(w, r)
 	defer finish()
-	if !b.g.authorized(r) {
-		apiError(w, 401, "authentication_error", "Invalid Worker API key")
-		return
-	}
-	identityOnly := r.Method == "GET" && r.URL.Path == resources.IdentityPath && r.URL.RawQuery == "" && r.ContentLength == 0
-	var route resourceRoute
-	var err error
-	if !identityOnly {
-		route, err = parseResourceRoute(r)
-		if err != nil {
-			apiError(w, 400, "invalid_request_error", err.Error())
-			return
-		}
-	}
-	if r.ContentLength > b.limit {
-		apiError(w, 413, "invalid_request_error", "Resource payload exceeds configured size limit")
+	route, identityOnly, ok := b.admitResource(w, r)
+	if !ok {
 		return
 	}
 	deadline := time.Now().Add(resourceTimeout)
@@ -88,16 +74,12 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
 	ctx = withResourceAuthorization(ctx)
-	var input *resourceSpool
-	if route.upload {
-		input, err = spoolResource(ctx, b.dir, r.Body, r.ContentLength, b.limit, b.budget)
-		if err != nil {
-			resourceDiagnostic(ctx).trace("resource_upload_failed", Object{"error": err.Error(), "body_hash_unavailable": true})
-			apiError(w, 413, "invalid_request_error", err.Error())
-			return
-		}
+	input, ok := b.spoolInput(w, r, ctx, route)
+	if !ok {
+		return
+	}
+	if input != nil {
 		defer input.Close()
-		recordResourceInput(ctx, input, route.contentType)
 	}
 	// The managed authorization writer and resource operation share a lock;
 	// a controlled reauthorization cannot switch issuer between profile and IO.
@@ -109,6 +91,63 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { <-b.g.Slots }()
+	id, ok := b.verifiedIdentity(w, ctx)
+	if !ok {
+		return
+	}
+	if identityOnly {
+		serveResourceIdentity(w, id)
+		return
+	}
+	if err := verifyExpectedResourceIdentity(r.Header, id); err != nil {
+		resourceDiagnostic(ctx).trace("resource_issuer_mismatch", nil)
+		apiError(w, 409, "invalid_request_error", err.Error())
+		return
+	}
+	b.dispatchResource(w, ctx, id, route, input)
+}
+
+// admitResource authenticates the call and resolves its route and size. An
+// identity-only probe is a bare GET of the identity path.
+func (b *resourceBroker) admitResource(w http.ResponseWriter, r *http.Request) (route resourceRoute, identityOnly, ok bool) {
+	if !b.g.authorized(r) {
+		apiError(w, 401, "authentication_error", "Invalid Worker API key")
+		return route, false, false
+	}
+	identityOnly = r.Method == "GET" && r.URL.Path == resources.IdentityPath && r.URL.RawQuery == "" && r.ContentLength == 0
+	if !identityOnly {
+		parsed, err := parseResourceRoute(r)
+		if err != nil {
+			apiError(w, 400, "invalid_request_error", err.Error())
+			return resourceRoute{}, false, false
+		}
+		route = parsed
+	}
+	if r.ContentLength > b.limit {
+		apiError(w, 413, "invalid_request_error", "Resource payload exceeds configured size limit")
+		return resourceRoute{}, false, false
+	}
+	return route, identityOnly, true
+}
+
+// spoolInput spools an upload body to disk before any CLI process or slot is
+// reserved. Non-upload operations have no body.
+func (b *resourceBroker) spoolInput(w http.ResponseWriter, r *http.Request, ctx context.Context, route resourceRoute) (*resourceSpool, bool) {
+	if !route.upload {
+		return nil, true
+	}
+	input, err := spoolResource(ctx, b.dir, r.Body, r.ContentLength, b.limit, b.budget)
+	if err != nil {
+		resourceDiagnostic(ctx).trace("resource_upload_failed", Object{"error": err.Error(), "body_hash_unavailable": true})
+		apiError(w, 413, "invalid_request_error", err.Error())
+		return nil, false
+	}
+	recordResourceInput(ctx, input, route.contentType)
+	return input, true
+}
+
+// verifiedIdentity runs the identity step; failures are already answered.
+func (b *resourceBroker) verifiedIdentity(w http.ResponseWriter, ctx context.Context) (resources.Identity, bool) {
 	d := resourceDiagnostic(ctx)
 	d.trace("resource_identity_verifying", nil)
 	id, err := b.identity(ctx)
@@ -119,21 +158,24 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			typ = resources.IdentityUnsupportedErrorType
 		}
 		apiError(w, 503, typ, err.Error())
-		return
+		return resources.Identity{}, false
 	}
 	d.trace("resource_identity_verified", id)
-	if identityOnly {
-		w.Header().Set(resources.PrincipalHeader, id.PrincipalID)
-		w.Header().Set(resources.GenerationHeader, id.Generation)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(id)
-		return
-	}
-	if err = verifyExpectedResourceIdentity(r.Header, id); err != nil {
-		d.trace("resource_issuer_mismatch", nil)
-		apiError(w, 409, "invalid_request_error", err.Error())
-		return
-	}
+	return id, true
+}
+
+// serveResourceIdentity answers the identity-only probe.
+func serveResourceIdentity(w http.ResponseWriter, id resources.Identity) {
+	w.Header().Set(resources.PrincipalHeader, id.PrincipalID)
+	w.Header().Set(resources.GenerationHeader, id.Generation)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(id)
+}
+
+// dispatchResource performs the management operation and streams the spooled
+// response back.
+func (b *resourceBroker) dispatchResource(w http.ResponseWriter, ctx context.Context, id resources.Identity, route resourceRoute, input *resourceSpool) {
+	d := resourceDiagnostic(ctx)
 	op := &resourceExchange{route: route, input: input, dir: b.dir, limit: b.limit, budget: b.budget}
 	d.trace("resource_dispatch", Object{"method": route.method, "path": route.path, "query": route.query})
 	resp, err := b.g.Runner.runResource(ctx, op)

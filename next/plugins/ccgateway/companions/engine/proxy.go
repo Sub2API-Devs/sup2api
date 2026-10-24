@@ -94,20 +94,8 @@ func validateProxy(mode, raw string) error {
 		return errors.New("invalid HTTP(S) proxy URL")
 	}
 	host := u.Hostname()
-	if host == "" {
-		return errors.New("invalid HTTP(S) proxy host")
-	}
-	if net.ParseIP(host) == nil {
-		for _, label := range strings.Split(host, ".") {
-			if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-				return errors.New("invalid HTTP(S) proxy host")
-			}
-			for _, c := range label {
-				if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
-					return errors.New("invalid HTTP(S) proxy host")
-				}
-			}
-		}
+	if message := validProxyHost(host); message != "" {
+		return errors.New(message)
 	}
 	if strings.HasSuffix(u.Host, ":") {
 		return errors.New("invalid HTTP(S) proxy port")
@@ -125,6 +113,27 @@ func validateProxy(mode, raw string) error {
 		}
 	}
 	return nil
+}
+
+// validProxyHost returns the error text for an invalid proxy host, or "" when
+// the host is a well-formed IP literal or DNS name.
+func validProxyHost(host string) string {
+	if host == "" {
+		return "invalid HTTP(S) proxy host"
+	}
+	if net.ParseIP(host) == nil {
+		for _, label := range strings.Split(host, ".") {
+			if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+				return "invalid HTTP(S) proxy host"
+			}
+			for _, c := range label {
+				if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+					return "invalid HTTP(S) proxy host"
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (s *ProxyConfigStore) viewLocked() Object {

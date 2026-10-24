@@ -116,6 +116,57 @@ func storedOAuthIn(env []string) storedOAuth {
 	return storedOAuth{access: strings.TrimSpace(o.AccessToken), expiresAt: o.ExpiresAt, refreshable: strings.TrimSpace(o.RefreshToken) != ""}
 }
 
+// parseProxyURL parses one proxy URL of the shapes the management transport
+// accepts. It never reports the URL itself: it may contain a password.
+func parseProxyURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return nil, false
+	}
+	switch u.Scheme {
+	case "http", "https", "socks5", "socks5h":
+	default:
+		return nil, false
+	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return nil, false
+		}
+	} else if strings.HasSuffix(u.Host, ":") {
+		return nil, false
+	}
+	return u, true
+}
+
+// scanProxyEnv returns the single HTTPS proxy configured in the environment.
+// invalid reports a configuration the management transport must refuse rather
+// than silently use direct egress: a malformed proxy, conflicting HTTPS_PROXY
+// values, or any ALL_PROXY.
+func scanProxyEnv(env []string) (raw string, invalid bool) {
+	for _, item := range env {
+		k, v, _ := strings.Cut(item, "=")
+		if strings.EqualFold(k, "HTTP_PROXY") && v != "" {
+			// HTTP_PROXY is not used for these HTTPS calls, but a malformed
+			// configured proxy must never silently result in direct egress.
+			if _, ok := parseProxyURL(v); !ok {
+				return "", true
+			}
+		}
+		if strings.EqualFold(k, "ALL_PROXY") && v != "" {
+			// This management transport has no verified ALL_PROXY semantics.
+			return "", true
+		}
+		if strings.EqualFold(k, "HTTPS_PROXY") && v != "" {
+			if raw != "" && raw != v {
+				return "", true
+			}
+			raw = v
+		}
+	}
+	return raw, false
+}
+
 // envProxy returns the HTTPS proxy of a process environment (what the CLI
 // would use), nil for a direct connection. With CCG_EXTERNAL_EGRESS the
 // environment has no proxy: the account egress controller forces the route.
@@ -124,51 +175,14 @@ func envProxy(env []string) func(*http.Request) (*url.URL, error) {
 		// Never include a proxy URL: it may contain a password.
 		return nil, fmt.Errorf("invalid management HTTPS proxy configuration")
 	}
-	parseProxy := func(raw string) (*url.URL, bool) {
-		u, err := url.Parse(raw)
-		if err != nil || u.Hostname() == "" || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-			return nil, false
-		}
-		switch u.Scheme {
-		case "http", "https", "socks5", "socks5h":
-		default:
-			return nil, false
-		}
-		if port := u.Port(); port != "" {
-			n, err := strconv.Atoi(port)
-			if err != nil || n < 1 || n > 65535 {
-				return nil, false
-			}
-		} else if strings.HasSuffix(u.Host, ":") {
-			return nil, false
-		}
-		return u, true
-	}
-	var raw string
-	for _, item := range env {
-		k, v, _ := strings.Cut(item, "=")
-		if strings.EqualFold(k, "HTTP_PROXY") && v != "" {
-			// HTTP_PROXY is not used for these HTTPS calls, but a malformed
-			// configured proxy must never silently result in direct egress.
-			if _, ok := parseProxy(v); !ok {
-				return invalid
-			}
-		}
-		if strings.EqualFold(k, "ALL_PROXY") && v != "" {
-			// This management transport has no verified ALL_PROXY semantics.
-			return invalid
-		}
-		if strings.EqualFold(k, "HTTPS_PROXY") && v != "" {
-			if raw != "" && raw != v {
-				return invalid
-			}
-			raw = v
-		}
+	raw, bad := scanProxyEnv(env)
+	if bad {
+		return invalid
 	}
 	if raw == "" {
 		return nil
 	}
-	u, ok := parseProxy(raw)
+	u, ok := parseProxyURL(raw)
 	if !ok {
 		return invalid
 	}
@@ -215,10 +229,7 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 502, codeUpstreamError, "The usage request could not be built.")
 		return
 	}
-	ua := "claude-code/2.1.7"
-	if a.version != "" {
-		ua = "claude-code/" + a.version
-	}
+	ua := cliUserAgent(a.version)
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)

@@ -46,13 +46,12 @@ func programmaticParent(block map[string]any) string {
 	return ""
 }
 
+// requestResourceCapabilities reports whether the request depends on
+// server-side execution outputs and which programmatic parents stay pending.
 func requestResourceCapabilities(root map[string]any) (bool, []string, error) {
 	outputs := root["container"] != nil
 	tools, _ := root["tools"].([]any)
-	for _, value := range tools {
-		tool, _ := value.(map[string]any)
-		outputs = outputs || executionTool(tool)
-	}
+	scanTools(tools, &outputs)
 	parents := map[string]bool{}
 	messages, _ := root["messages"].([]any)
 	for _, value := range messages {
@@ -60,57 +59,83 @@ func requestResourceCapabilities(root map[string]any) (bool, []string, error) {
 		blocks, _ := message["content"].([]any)
 		for _, value := range blocks {
 			block, _ := value.(map[string]any)
-			outputs = outputs || resourceToolChange(block)
-			if block["type"] == "compaction" {
-				changes, _ := block["tool_changes"].([]any)
-				for _, value := range changes {
-					change, _ := value.(map[string]any)
-					outputs = outputs || resourceToolChange(change)
-				}
-			}
-			if message["role"] != "assistant" {
-				continue
-			}
-			switch block["type"] {
-			case "server_tool_use":
-				switch block["name"] {
-				case "code_execution", "bash_code_execution", "text_editor_code_execution":
-					outputs = true
-				}
-				if block["name"] == "code_execution" {
-					id, _ := block["id"].(string)
-					if !segment.MatchString(id) {
-						return false, nil, fmt.Errorf("invalid execution parent ID")
-					}
-					if _, exists := parents[id]; exists {
-						return false, nil, fmt.Errorf("duplicate active execution parent")
-					}
-					parents[id] = false
-				}
-				if parent := programmaticParent(block); parent != "" {
-					if _, exists := parents[parent]; !exists || !segment.MatchString(parent) {
-						return false, nil, fmt.Errorf("programmatic server caller has no active execution parent")
-					}
-					parents[parent] = true
-					outputs = true
-				}
-			case "code_execution_tool_result", "bash_code_execution_tool_result", "text_editor_code_execution_tool_result":
-				outputs = true
-				if block["type"] == "code_execution_tool_result" {
-					id, _ := block["tool_use_id"].(string)
-					delete(parents, id)
-				}
-			case "tool_use":
-				if parent := programmaticParent(block); parent != "" {
-					if _, exists := parents[parent]; !exists || !segment.MatchString(parent) {
-						return false, nil, fmt.Errorf("programmatic caller has no active execution parent")
-					}
-					parents[parent] = true
-					outputs = true
-				}
+			if err := scanBlock(block, message["role"], parents, &outputs); err != nil {
+				return false, nil, err
 			}
 		}
 	}
+	pending, err := pendingParents(parents)
+	if err != nil {
+		return false, nil, err
+	}
+	return outputs, pending, nil
+}
+
+func scanTools(tools []any, outputs *bool) {
+	for _, value := range tools {
+		tool, _ := value.(map[string]any)
+		*outputs = *outputs || executionTool(tool)
+	}
+}
+
+// scanBlock inspects one public content block: inline tool changes anywhere,
+// and execution parents/callers in assistant messages only.
+func scanBlock(block map[string]any, role any, parents map[string]bool, outputs *bool) error {
+	*outputs = *outputs || resourceToolChange(block)
+	if block["type"] == "compaction" {
+		changes, _ := block["tool_changes"].([]any)
+		for _, value := range changes {
+			change, _ := value.(map[string]any)
+			*outputs = *outputs || resourceToolChange(change)
+		}
+	}
+	if role != "assistant" {
+		return nil
+	}
+	switch block["type"] {
+	case "server_tool_use":
+		switch block["name"] {
+		case "code_execution", "bash_code_execution", "text_editor_code_execution":
+			*outputs = true
+		}
+		if block["name"] == "code_execution" {
+			id, _ := block["id"].(string)
+			if !segment.MatchString(id) {
+				return fmt.Errorf("invalid execution parent ID")
+			}
+			if _, exists := parents[id]; exists {
+				return fmt.Errorf("duplicate active execution parent")
+			}
+			parents[id] = false
+		}
+		if parent := programmaticParent(block); parent != "" {
+			if _, exists := parents[parent]; !exists || !segment.MatchString(parent) {
+				return fmt.Errorf("programmatic server caller has no active execution parent")
+			}
+			parents[parent] = true
+			*outputs = true
+		}
+	case "code_execution_tool_result", "bash_code_execution_tool_result", "text_editor_code_execution_tool_result":
+		*outputs = true
+		if block["type"] == "code_execution_tool_result" {
+			id, _ := block["tool_use_id"].(string)
+			delete(parents, id)
+		}
+	case "tool_use":
+		if parent := programmaticParent(block); parent != "" {
+			if _, exists := parents[parent]; !exists || !segment.MatchString(parent) {
+				return fmt.Errorf("programmatic caller has no active execution parent")
+			}
+			parents[parent] = true
+			*outputs = true
+		}
+	}
+	return nil
+}
+
+// pendingParents returns the sorted parents that still have programmatic
+// callers.
+func pendingParents(parents map[string]bool) ([]string, error) {
 	var pending []string
 	for parent, hasCalls := range parents {
 		if hasCalls {
@@ -118,10 +143,10 @@ func requestResourceCapabilities(root map[string]any) (bool, []string, error) {
 		}
 	}
 	if len(pending) > 100 {
-		return false, nil, fmt.Errorf("too many pending programmatic parents")
+		return nil, fmt.Errorf("too many pending programmatic parents")
 	}
 	sort.Strings(pending)
-	return outputs, pending, nil
+	return pending, nil
 }
 
 // ResponsePTCParents returns only provider caller references, not client tool

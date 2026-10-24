@@ -101,30 +101,8 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		if resp.ClientMessage == "" {
 			resp.ClientMessage = "upstream connection failed"
 		}
-	case local && code == http.StatusTooManyRequests:
-		// The Worker's concurrency limit: free again in a moment.
-		resp.LocalFailure = true
-		until, src := rateLimitReset(in.GetHeaders(), now)
-		cooldown(until.Sub(now), "gateway concurrency limit until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
-	case local && (code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusConflict || code >= 500):
-		// The runtime refused for a reason of its own (a stale Worker key the
-		// core re-reads, a policy its CLI cannot carry, an account state, a
-		// Worker not ready): try another account, cool this one down briefly,
-		// and say why. The account's credentials are not in question.
-		resp.LocalFailure = true
-		why := localReason
-		if why == "" {
-			why = fmt.Sprintf("status %d", code)
-		}
-		if msg != "" {
-			why += ": " + truncate(msg, 200)
-		}
-		cooldown(serverErrorCooldown, "gateway refused the request ("+why+")")
 	case local:
-		// The Worker found the request itself unusable (400, 404, 405, 413):
-		// another account would answer the same.
-		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
-		resp.LocalFailure = true
+		classifyLocal(resp, in.GetHeaders(), code, localReason, msg, now, cooldown)
 	case code == http.StatusBadRequest && isAccountBillingError(msg):
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
 		resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
@@ -147,6 +125,36 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
 	}
 	return resp, nil
+}
+
+// classifyLocal handles an error the gateway itself produced (its source header
+// names it): a Worker concurrency limit, a runtime refusal, or a request the
+// Worker found unusable. It is never the upstream's verdict on the account.
+func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]string, code int, localReason, msg string, now time.Time, cooldown func(time.Duration, string)) {
+	resp.LocalFailure = true
+	switch {
+	case code == http.StatusTooManyRequests:
+		// The Worker's concurrency limit: free again in a moment.
+		until, src := rateLimitReset(headers, now)
+		cooldown(until.Sub(now), "gateway concurrency limit until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
+	case code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusConflict || code >= 500:
+		// The runtime refused for a reason of its own (a stale Worker key the
+		// core re-reads, a policy its CLI cannot carry, an account state, a
+		// Worker not ready): try another account, cool this one down briefly,
+		// and say why. The account's credentials are not in question.
+		why := localReason
+		if why == "" {
+			why = fmt.Sprintf("status %d", code)
+		}
+		if msg != "" {
+			why += ": " + truncate(msg, 200)
+		}
+		cooldown(serverErrorCooldown, "gateway refused the request ("+why+")")
+	default:
+		// The Worker found the request itself unusable (400, 404, 405, 413):
+		// another account would answer the same.
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+	}
 }
 
 // classifyRateLimit handles an upstream 429. A managed account's answer names

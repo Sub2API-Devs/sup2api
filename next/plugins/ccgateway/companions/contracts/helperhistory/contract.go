@@ -69,57 +69,79 @@ func Validate(raw []byte) error {
 	}
 	previous := -1
 	for _, s := range p.Segments {
-		if p.Version == PayloadVersion1 && s.Kind != "" || p.Version == PayloadVersion2 && s.Kind != SegmentSystemOnly && s.Kind != SegmentWholeRound {
-			return fmt.Errorf("invalid helper segment kind for payload version")
+		next, err := validateSegment(p.Version, s, previous)
+		if err != nil {
+			return err
 		}
-		if s.AfterMessage < 0 || s.AfterMessage < previous || !ValidDigest(s.PublicAnchorDigest) || !ValidDigest(s.ToolCatalogDigest) || len(s.Messages) == 0 {
-			return fmt.Errorf("invalid helper history segment")
-		}
-		previous = s.AfterMessage
-		pairIndex := 0
-		for _, m := range s.Messages {
-			var v struct {
-				Role    string          `json:"role"`
-				Content json.RawMessage `json:"content"`
-			}
-			if json.Unmarshal(m, &v) != nil || len(v.Content) == 0 || (v.Content[0] != '[' && !(v.Role == "system" && v.Content[0] == '"')) {
-				return fmt.Errorf("invalid helper message")
-			}
-			if s.Kind == SegmentSystemOnly {
-				if v.Role != "system" {
-					return fmt.Errorf("system-only helper segment contains non-system message")
-				}
-				var content any
-				_ = json.Unmarshal(v.Content, &content)
-				switch c := content.(type) {
-				case string:
-					if c == "" {
-						return fmt.Errorf("empty helper system content")
-					}
-				case []any:
-					if len(c) == 0 {
-						return fmt.Errorf("empty helper system content")
-					}
-				default:
-					return fmt.Errorf("invalid helper system content")
-				}
-				continue
-			}
-			if v.Role == "system" && pairIndex == 0 {
-				continue
-			}
-			role := "assistant"
-			if pairIndex%2 == 1 {
-				role = "user"
-			}
-			if v.Role != role {
-				return fmt.Errorf("invalid helper message order")
-			}
-			pairIndex++
-		}
-		if s.Kind != SegmentSystemOnly && (pairIndex == 0 || pairIndex%2 != 0) {
-			return fmt.Errorf("incomplete helper message pair")
-		}
+		previous = next
 	}
 	return nil
+}
+
+// validateSegment checks one segment and returns its anchor for the
+// non-decreasing ordering check.
+func validateSegment(version int, s Segment, previous int) (int, error) {
+	if version == PayloadVersion1 && s.Kind != "" || version == PayloadVersion2 && s.Kind != SegmentSystemOnly && s.Kind != SegmentWholeRound {
+		return 0, fmt.Errorf("invalid helper segment kind for payload version")
+	}
+	if s.AfterMessage < 0 || s.AfterMessage < previous || !ValidDigest(s.PublicAnchorDigest) || !ValidDigest(s.ToolCatalogDigest) || len(s.Messages) == 0 {
+		return 0, fmt.Errorf("invalid helper history segment")
+	}
+	pairIndex := 0
+	for _, m := range s.Messages {
+		next, err := validateMessage(m, s.Kind, pairIndex)
+		if err != nil {
+			return 0, err
+		}
+		pairIndex = next
+	}
+	if s.Kind != SegmentSystemOnly && (pairIndex == 0 || pairIndex%2 != 0) {
+		return 0, fmt.Errorf("incomplete helper message pair")
+	}
+	return s.AfterMessage, nil
+}
+
+// validateMessage checks one hidden message and returns the next pair index. A
+// system-only segment carries only system messages and does not advance it; a
+// whole-round segment alternates assistant/user after an optional leading
+// system message.
+func validateMessage(raw json.RawMessage, kind string, pairIndex int) (int, error) {
+	var v struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal(raw, &v) != nil || len(v.Content) == 0 || (v.Content[0] != '[' && !(v.Role == "system" && v.Content[0] == '"')) {
+		return 0, fmt.Errorf("invalid helper message")
+	}
+	if kind == SegmentSystemOnly {
+		if v.Role != "system" {
+			return 0, fmt.Errorf("system-only helper segment contains non-system message")
+		}
+		var content any
+		_ = json.Unmarshal(v.Content, &content)
+		switch c := content.(type) {
+		case string:
+			if c == "" {
+				return 0, fmt.Errorf("empty helper system content")
+			}
+		case []any:
+			if len(c) == 0 {
+				return 0, fmt.Errorf("empty helper system content")
+			}
+		default:
+			return 0, fmt.Errorf("invalid helper system content")
+		}
+		return pairIndex, nil
+	}
+	if v.Role == "system" && pairIndex == 0 {
+		return pairIndex, nil
+	}
+	role := "assistant"
+	if pairIndex%2 == 1 {
+		role = "user"
+	}
+	if v.Role != role {
+		return 0, fmt.Errorf("invalid helper message order")
+	}
+	return pairIndex + 1, nil
 }

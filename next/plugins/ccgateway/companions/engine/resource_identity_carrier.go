@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,17 +68,35 @@ func resourceAuthorizationCandidate(env []string) (*resourceAuthorization, error
 	return auth, nil
 }
 
+// errUnverifiedResourceSource is the single failure reply for a credential
+// source this Worker cannot prove: missing, ambiguous, or unsupported.
+var errUnverifiedResourceSource = errors.New("resource credential source is missing, ambiguous, or unsupported; CLI selection is unverified")
+
 func resourceAuthorizationSource(env []string) (*resourceAuthorization, error) {
-	unverified := func() (*resourceAuthorization, error) {
-		return nil, fmt.Errorf("resource credential source is missing, ambiguous, or unsupported; CLI selection is unverified")
+	sources, err := credentialSources(env)
+	if err != nil {
+		return nil, err
 	}
+	auth, token, refresh, err := readCredential(env, sources[0])
+	if err != nil {
+		return nil, err
+	}
+	auth.sourceIdentity, auth.fingerprint = resourceSourceIdentity(env, auth, token, refresh)
+	return auth, nil
+}
+
+// credentialSources validates the environment and returns its single supported
+// credential source. Any override the snapshot cannot reason about, a
+// duplicate environment spelling, or settings-level injection is rejected:
+// Go and the CLI must never pick different identities.
+func credentialSources(env []string) ([]string, error) {
 	if !resourceBackendSupported(env) {
-		return unverified()
+		return nil, errUnverifiedResourceSource
 	}
 	// These may override auth/transport outside the snapshot's supported set.
 	for _, key := range []string{"ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_API_KEY_HELPER", "CLAUDE_CODE_API_KEY_HELPER_TTL_MS", "CLAUDE_CODE_MANAGED_SETTINGS", "CLAUDE_CODE_MANAGED_SETTINGS_FILE"} {
-		if resourceEnv(env, key) != "" {
-			return unverified()
+		if environmentValue(env, key) != "" {
+			return nil, errUnverifiedResourceSource
 		}
 	}
 	// Duplicate environment spellings must not cause Go and the CLI to select
@@ -90,13 +109,13 @@ func resourceAuthorizationSource(env []string) (*resourceAuthorization, error) {
 		}
 		name = strings.ToUpper(name)
 		if old, exists := seen[name]; exists && old != value {
-			return unverified()
+			return nil, errUnverifiedResourceSource
 		}
 		seen[name] = value
 	}
 	snapshot, err := localAuthSnapshot(env)
 	if err != nil {
-		return unverified()
+		return nil, errUnverifiedResourceSource
 	}
 	// The snapshot reports presence, not every way CLI settings can override
 	// process env. Reject settings-level env injection and opaque helpers too.
@@ -104,72 +123,84 @@ func resourceAuthorizationSource(env []string) (*resourceAuthorization, error) {
 	for _, path := range []string{filepath.Join(config, "settings.json"), filepath.Join(config, "settings.local.json"), snapshotGlobalConfigPath(env)} {
 		settings, err := readSnapshotObject(path)
 		if err != nil {
-			return unverified()
+			return nil, errUnverifiedResourceSource
 		}
 		for _, key := range []string{"apiKeyHelper", "env"} {
 			if value, exists := settings[key]; exists && value != nil {
-				return unverified()
+				return nil, errUnverifiedResourceSource
 			}
 		}
 	}
 	sources, _ := snapshot["credential_sources"].([]string)
 	if len(sources) != 1 || snapshot["credential_source_unresolved"] != false {
-		return unverified()
+		return nil, errUnverifiedResourceSource
 	}
-	auth := &resourceAuthorization{header: http.Header{}, config: snapshotConfigDirectory(env), source: sources[0]}
+	return sources, nil
+}
+
+// readCredential builds the authorization for the single supported source. The
+// raw token material is returned only so the caller can fingerprint it.
+func readCredential(env []string, source string) (*resourceAuthorization, string, string, error) {
+	auth := &resourceAuthorization{header: http.Header{}, config: snapshotConfigDirectory(env), source: source}
 	var token, refresh string
-	switch sources[0] {
+	switch source {
 	case "api_key_env":
 		auth.method = "api_key"
-		token = resourceEnv(env, "ANTHROPIC_API_KEY")
+		token = environmentValue(env, "ANTHROPIC_API_KEY")
 		auth.header.Set("X-Api-Key", token)
 	case "oauth_token_env":
 		auth.method = "oauth_token"
-		token = resourceEnv(env, "CLAUDE_CODE_OAUTH_TOKEN")
+		token = environmentValue(env, "CLAUDE_CODE_OAUTH_TOKEN")
 	case "stored_oauth":
 		// Only explicit file-backed managed storage is supported here. A CLI
 		// keychain or helper cannot be inferred from a nearby JSON file.
-		config := resourceEnv(env, "CLAUDE_CONFIG_DIR")
-		storage := resourceEnv(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR")
+		config := environmentValue(env, "CLAUDE_CONFIG_DIR")
+		storage := environmentValue(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR")
 		if runtime.GOOS == "darwin" || config == "" || storage == "" || filepath.Clean(config) != filepath.Clean(storage) {
-			return unverified()
+			return nil, "", "", errUnverifiedResourceSource
 		}
-		credentials, e := readSnapshotObject(credentialsPathIn(env))
-		if e != nil {
-			return unverified()
+		credentials, err := readSnapshotObject(credentialsPathIn(env))
+		if err != nil {
+			return nil, "", "", errUnverifiedResourceSource
 		}
 		oauth, _ := credentials["claudeAiOauth"].(map[string]any)
 		expiry, ok := oauth["expiresAt"].(float64)
 		if !ok {
-			return unverified()
+			return nil, "", "", errUnverifiedResourceSource
 		}
 		auth.expiresAt = expiry
 		token, refresh = str(oauth, "accessToken"), str(oauth, "refreshToken")
 		auth.refreshable = refresh != ""
 		auth.method = "claude.ai"
 	default:
-		return unverified()
+		return nil, "", "", errUnverifiedResourceSource
 	}
 	if token == "" || strings.TrimSpace(token) != token || strings.ContainsAny(token, " \t\r\n") || !validResourceHeader(token) {
-		return unverified()
+		return nil, "", "", errUnverifiedResourceSource
 	}
 	if auth.method != "api_key" {
-		if base := resourceEnv(env, "ANTHROPIC_BASE_URL"); base != "" {
+		// OAuth credentials are only sent to the first-party API origin.
+		if base := environmentValue(env, "ANTHROPIC_BASE_URL"); base != "" {
 			target, err := url.Parse(base)
-			if err != nil || target.Scheme != "https" || target.Hostname() != "api.anthropic.com" || (target.Port() != "" && target.Port() != "443") || target.User != nil || strings.TrimRight(target.Path, "/") != "" || target.RawPath != "" || target.RawQuery != "" || target.Fragment != "" || target.Opaque != "" {
-				return unverified()
+			if err != nil || !firstPartyOrigin(target, strings.TrimRight(target.Path, "/")) {
+				return nil, "", "", errUnverifiedResourceSource
 			}
 		}
 		auth.header.Set("Authorization", "Bearer "+token)
 		auth.header.Set("Anthropic-Beta", "oauth-2025-04-20")
 	}
+	return auth, token, refresh, nil
+}
+
+// resourceSourceIdentity fingerprints the environment the credential came from
+// and the credential itself (source identity and full fingerprint).
+func resourceSourceIdentity(env []string, auth *resourceAuthorization, token, refresh string) (string, string) {
 	source := []string{auth.source, auth.method, filepath.Clean(auth.config), filepath.Clean(credentialsPathIn(env)), filepath.Clean(snapshotGlobalConfigPath(env))}
 	for _, key := range []string{"CCG_RESOURCE_ISSUER_ID", "CCG_RESOURCE_ISSUER_GENERATION", "ANTHROPIC_BASE_URL", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"} {
-		source = append(source, key, resourceEnv(env, key))
+		source = append(source, key, environmentValue(env, key))
 	}
-	auth.sourceIdentity = digest(source)
-	auth.fingerprint = digest([]any{auth.sourceIdentity, token, refresh, auth.expiresAt})
-	return auth, nil
+	sourceIdentity := digest(source)
+	return sourceIdentity, digest([]any{sourceIdentity, token, refresh, auth.expiresAt})
 }
 
 // auth status is a documented non-model CLI command. It verifies the method
@@ -207,38 +238,40 @@ func (runner *Runner) selectResourceAuthorization(ctx context.Context, env []str
 	return after, nil
 }
 
-func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env []string, before *resourceAuthorization) (*resourceAuthorization, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	// No version gate: the initialization below accepts only a successful
-	// handshake from a claude.ai source and a stable or properly rotated
-	// credential, whatever the Claude Code version (2026-10-22 user decision).
-	stage := "process"
-	failure := func() (*resourceAuthorization, error) {
-		return nil, fmt.Errorf("resource CLI initialization did not establish a ready, persistent credential (%s)", stage)
-	}
-	refreshing, err := resourceOAuthRefreshPending(before)
-	if err != nil {
-		return failure()
-	}
-	refreshing = refreshing || (before.refreshable && before.expiresAt <= float64(time.Now().Add(5*time.Minute).UnixMilli()))
-	cmd := exec.CommandContext(ctx, runner.CLI, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":true}`, "--no-session-persistence", "--no-chrome", "--disable-slash-commands")
-	cmd.Env, cmd.Dir, cmd.WaitDelay = env, runner.Work, time.Second
+// verificationCLI is one short-lived CLI process whose only purpose is to
+// verify (or refresh) a stored credential. frames carries the decoded stdout
+// frames; done closes after the process exited and the scanner stopped.
+type verificationCLI struct {
+	input      io.WriteCloser
+	output     *io.PipeReader
+	writer     *io.PipeWriter
+	cancel     context.CancelFunc
+	frames     chan Object
+	done       chan struct{}
+	processErr error
+	readErr    error
+}
+
+// startVerificationCLI starts the native initialization process. cancel is the
+// caller's context canceller: a read failure cancels the whole verification,
+// so the state machine observes ctx.Done with the stage it had reached.
+func startVerificationCLI(ctx context.Context, cancel context.CancelFunc, cli string, env []string, dir string) (*verificationCLI, error) {
+	cmd := exec.CommandContext(ctx, cli, interactiveCLIArgs()...)
+	cmd.Env, cmd.Dir, cmd.WaitDelay = env, dir, time.Second
 	input, err := cmd.StdinPipe()
 	if err != nil {
-		return failure()
+		return nil, err
 	}
-	defer input.Close()
 	output, writer := io.Pipe()
-	defer output.Close()
-	defer writer.Close()
 	cmd.Stdout = writer
-	if cmd.Start() != nil {
-		return failure()
+	if err = cmd.Start(); err != nil {
+		input.Close()
+		output.Close()
+		writer.Close()
+		return nil, err
 	}
-	frames := make(chan Object)
-	done, drained := make(chan struct{}), make(chan struct{})
-	var processErr, readErr error
+	c := &verificationCLI{input: input, output: output, writer: writer, cancel: cancel, frames: make(chan Object), done: make(chan struct{})}
+	drained := make(chan struct{})
 	go func() {
 		defer close(drained)
 		scan := bufio.NewScanner(output)
@@ -248,37 +281,80 @@ func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env [
 			total += len(scan.Bytes())
 			frame, err := decodeObject(scan.Bytes())
 			if err != nil || total > 1<<20 {
-				readErr = fmt.Errorf("invalid CLI initialization output")
+				c.readErr = fmt.Errorf("invalid CLI initialization output")
 				cancel()
-				output.CloseWithError(readErr)
+				output.CloseWithError(c.readErr)
 				break
 			}
 			select {
-			case frames <- frame:
+			case c.frames <- frame:
 			case <-ctx.Done():
 			}
 		}
 		if scan.Err() != nil {
-			readErr = fmt.Errorf("CLI initialization output unavailable")
+			c.readErr = fmt.Errorf("CLI initialization output unavailable")
 			cancel()
-			output.CloseWithError(readErr)
+			output.CloseWithError(c.readErr)
 		}
 	}()
 	go func() {
-		processErr = cmd.Wait()
+		c.processErr = cmd.Wait()
 		writer.Close()
 		<-drained
-		close(done)
+		close(c.done)
 	}()
-	defer func() {
-		input.Close()
-		cancel()
-		output.Close()
-		<-done
-	}()
-	id := uuid()
-	if json.NewEncoder(input).Encode(Object{"type": "control_request", "request_id": id, "request": Object{"subtype": "initialize", "hooks": Object{}, "sdkMcpServers": []any{}, "supportedDialogKinds": []any{}, "promptSuggestions": false}}) != nil {
+	return c, nil
+}
+
+// stop tears the process down in the original defer order (last registered
+// first): stdin, cancel, output, wait for the process, then the writer. The
+// extra closes of the original nested defers are no-ops here.
+func (c *verificationCLI) stop() {
+	c.input.Close()
+	c.cancel()
+	c.output.Close()
+	<-c.done
+	c.writer.Close()
+}
+
+func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env []string, before *resourceAuthorization) (*resourceAuthorization, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// No version gate: the initialization below accepts only a successful
+	// handshake from a claude.ai source and a stable or properly rotated
+	// credential, whatever the Claude Code version (2026-10-22 user decision).
+	failure := func() (*resourceAuthorization, error) {
+		return nil, resourceInitializationFailure("process")
+	}
+	refreshing, err := resourceOAuthRefreshPending(before)
+	if err != nil {
 		return failure()
+	}
+	refreshing = refreshing || (before.refreshable && before.expiresAt <= float64(time.Now().Add(5*time.Minute).UnixMilli()))
+	cli, err := startVerificationCLI(ctx, cancel, runner.CLI, env, runner.Work)
+	if err != nil {
+		return failure()
+	}
+	defer cli.stop()
+	id := uuid()
+	if json.NewEncoder(cli.input).Encode(Object{"type": "control_request", "request_id": id, "request": Object{"subtype": "initialize", "hooks": Object{}, "sdkMcpServers": []any{}, "supportedDialogKinds": []any{}, "promptSuggestions": false}}) != nil {
+		return failure()
+	}
+	return awaitResourceInitialization(ctx, cli, before, env, id, refreshing)
+}
+
+// resourceInitializationFailure names the stage the initialization reached.
+func resourceInitializationFailure(stage string) error {
+	return fmt.Errorf("resource CLI initialization did not establish a ready, persistent credential (%s)", stage)
+}
+
+// awaitResourceInitialization drives the initialization state machine until the
+// credential is ready and the process has exited. The stage name in the failure
+// message is the last stage the machine reached.
+func awaitResourceInitialization(ctx context.Context, cli *verificationCLI, before *resourceAuthorization, env []string, id string, refreshing bool) (*resourceAuthorization, error) {
+	stage := "process"
+	failure := func() (*resourceAuthorization, error) {
+		return nil, resourceInitializationFailure(stage)
 	}
 	initialized, closing := false, false
 	var ready *resourceAuthorization
@@ -288,7 +364,7 @@ func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env [
 		select {
 		case <-ctx.Done():
 			return failure()
-		case frame := <-frames:
+		case frame := <-cli.frames:
 			stage = "protocol"
 			switch str(frame, "type") {
 			case "control_response":
@@ -334,15 +410,15 @@ func (runner *Runner) initializeResourceAuthorization(ctx context.Context, env [
 					if refreshing && after.fingerprint == before.fingerprint {
 						continue
 					}
-					if input.Close() != nil {
+					if cli.input.Close() != nil {
 						return failure()
 					}
 					ready, closing = after, true
 				}
 			}
-		case <-done:
+		case <-cli.done:
 			stage = "exit"
-			if !initialized || !closing || processErr != nil || readErr != nil || ctx.Err() != nil {
+			if !initialized || !closing || cli.processErr != nil || cli.readErr != nil || ctx.Err() != nil {
 				return failure()
 			}
 			after, err := resourceAuthorizationCandidate(env)
@@ -444,7 +520,7 @@ func (p *resourceIdentityProbe) classify(h http.Header) (bool, error) {
 
 func resourceBackendSupported(env []string) bool {
 	for _, key := range []string{"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY"} {
-		value := strings.ToLower(resourceEnv(env, key))
+		value := strings.ToLower(environmentValue(env, key))
 		if value != "" && value != "0" && value != "false" {
 			return false
 		}

@@ -20,7 +20,7 @@ func TestPolicySchemaCompatibility(t *testing.T) {
 }
 
 func TestRuntimeCapabilitiesProjection(t *testing.T) {
-	want := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "dev", Revision: "unknown"}, Catalog: Catalog(), PolicySchemaVersions: []int{1}, Probes: []RuntimeProbe{{Name: "cli_version", Status: "unavailable"}}, ModelProviderVerification: "not_run"}
+	want := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "dev", Revision: "unknown"}, Catalog: RequestRuntimeCatalog(nil), PolicySchemaVersions: []int{1}, Probes: []RuntimeProbe{{Name: "cli_version", Status: "unavailable"}}, ModelProviderVerification: "not_run"}
 	raw, _ := json.Marshal(want)
 	var object map[string]any
 	_ = json.Unmarshal(raw, &object)

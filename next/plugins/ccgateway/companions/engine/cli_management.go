@@ -218,18 +218,3 @@ func (r *Runtime) checkCLIRelease(ctx context.Context) error {
 	}
 	return nil
 }
-
-// autoUpdateCLI keeps latest_version current for a Worker that follows its
-// channel; nothing is installed.
-func (r *Runtime) autoUpdateCLI(ctx context.Context) {
-	m := r.cliManagement
-	m.mu.Lock()
-	check := m.policy.AutoUpdate && time.Since(m.checked) >= 6*time.Hour
-	m.mu.Unlock()
-	if !check {
-		return
-	}
-	bounded, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	_ = r.checkCLIRelease(bounded)
-}

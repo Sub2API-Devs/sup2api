@@ -62,6 +62,17 @@ func validResourceHeader(value string) bool {
 	return true
 }
 
+// firstPartyOrigin reports whether target is Anthropic's first-party API
+// origin: HTTPS on api.anthropic.com with the default port only, and no base
+// path, query, fragment, opaque or escaped path part. basePath is the URL path
+// already trimmed of trailing slashes.
+func firstPartyOrigin(target *url.URL, basePath string) bool {
+	return target.Scheme == "https" && target.Hostname() == "api.anthropic.com" &&
+		(target.Port() == "" || target.Port() == "443") && target.User == nil &&
+		basePath == "" && target.RawPath == "" && target.RawQuery == "" &&
+		target.Fragment == "" && target.Opaque == ""
+}
+
 func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*resourceResponse, error) {
 	op.mu.Lock()
 	if op.dispatched {
@@ -74,8 +85,8 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 	var auth *resourceAuthorization
 	var err error
 	if op.identity != nil {
-		op.identity.issuer = resourceEnv(env, "CCG_RESOURCE_ISSUER_ID")
-		op.identity.epoch = resourceEnv(env, "CCG_RESOURCE_ISSUER_GENERATION")
+		op.identity.issuer = environmentValue(env, "CCG_RESOURCE_ISSUER_ID")
+		op.identity.epoch = environmentValue(env, "CCG_RESOURCE_ISSUER_GENERATION")
 		auth, err = runner.selectResourceAuthorization(ctx, env)
 		if err == nil {
 			op.identity.auth = auth
@@ -98,11 +109,7 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 	if err != nil {
 		return nil, err
 	}
-	ua := "claude-code/2.1.7" // same fallback as the existing usage management call
-	if runner.Version != "" {
-		ua = "claude-code/" + runner.Version
-	}
-	auth.header.Set("User-Agent", ua)
+	auth.header.Set("User-Agent", cliUserAgent(runner.Version))
 	client, transport := managementHTTPClient(env)
 	defer transport.CloseIdleConnections()
 	resp, err := resourceManagementHTTP(ctx, env, op, auth, client)
@@ -119,51 +126,16 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 // resourceManagementHTTP has no model endpoint escape hatch: even internal
 // callers must pass the Files/Skills operation allowlist or the identity probe.
 func resourceManagementHTTP(ctx context.Context, env []string, op *resourceExchange, auth *resourceAuthorization, client *http.Client) (*resourceResponse, error) {
-	if op.identity != nil {
-		if op.route.method != http.MethodGet || op.route.path != "/api/oauth/profile" || op.route.query != "" || op.input != nil {
-			return nil, fmt.Errorf("invalid resource identity operation")
-		}
-	} else {
-		upload, err := resources.ValidateOperation(resources.Operation{Method: op.route.method, Path: op.route.path, RawQuery: op.route.query})
-		if err != nil {
-			return nil, fmt.Errorf("unsupported resource management operation")
-		}
-		if upload != (op.input != nil) {
-			return nil, fmt.Errorf("invalid resource management payload")
-		}
-		if upload {
-			kind, params, err := mime.ParseMediaType(op.route.contentType)
-			if err != nil || kind != "multipart/form-data" || params["boundary"] == "" {
-				return nil, fmt.Errorf("resource upload requires multipart/form-data with a boundary")
-			}
-		}
+	if err := validateResourceExchange(op); err != nil {
+		return nil, err
 	}
-	base := resourceEnv(env, "ANTHROPIC_BASE_URL")
-	if base == "" {
-		base = "https://api.anthropic.com"
+	target, err := resourceTarget(env, op.route, auth)
+	if err != nil {
+		return nil, err
 	}
-	target, err := url.Parse(base)
-	if err != nil || target.Scheme != "https" || target.Hostname() == "" || target.User != nil || target.RawQuery != "" || target.Fragment != "" || target.Opaque != "" || target.RawPath != "" {
-		return nil, fmt.Errorf("resource management requires a verified HTTPS API origin")
-	}
-	basePath := strings.TrimRight(target.Path, "/")
-	for _, segment := range strings.Split(basePath, "/") {
-		if segment == "." || segment == ".." || strings.Contains(segment, "\\") {
-			return nil, fmt.Errorf("invalid resource management API base path")
-		}
-	}
-	// OAuth tokens are only sent to their first-party resource server. An
-	// arbitrary custom base URL is not evidence of an equivalent issuer.
-	if auth.method != "api_key" && (target.Hostname() != "api.anthropic.com" || (target.Port() != "" && target.Port() != "443") || basePath != "") {
-		return nil, fmt.Errorf("resource OAuth management requires the first-party API origin")
-	}
-	target.Path, target.RawQuery = basePath+op.route.path, op.route.query
-	var body io.Reader
-	if op.input != nil {
-		if op.input.size > op.limit || op.input.size > resourceHardLimit {
-			return nil, fmt.Errorf("resource payload exceeds configured size limit")
-		}
-		body = io.NewSectionReader(op.input.File, 0, op.input.size)
+	body, err := resourceRequestBody(op)
+	if err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, op.route.method, target.String(), body)
 	if err != nil {
@@ -203,4 +175,67 @@ func resourceManagementHTTP(ctx context.Context, env []string, op *resourceExcha
 	op.response = response
 	op.mu.Unlock()
 	return response, nil
+}
+
+// validateResourceExchange admits the operation: the identity probe has one
+// fixed shape, and every other operation must be on the Files/Skills
+// allowlist with a payload that matches it.
+func validateResourceExchange(op *resourceExchange) error {
+	if op.identity != nil {
+		if op.route.method != http.MethodGet || op.route.path != "/api/oauth/profile" || op.route.query != "" || op.input != nil {
+			return fmt.Errorf("invalid resource identity operation")
+		}
+		return nil
+	}
+	upload, err := resources.ValidateOperation(resources.Operation{Method: op.route.method, Path: op.route.path, RawQuery: op.route.query})
+	if err != nil {
+		return fmt.Errorf("unsupported resource management operation")
+	}
+	if upload != (op.input != nil) {
+		return fmt.Errorf("invalid resource management payload")
+	}
+	if upload {
+		kind, params, err := mime.ParseMediaType(op.route.contentType)
+		if err != nil || kind != "multipart/form-data" || params["boundary"] == "" {
+			return fmt.Errorf("resource upload requires multipart/form-data with a boundary")
+		}
+	}
+	return nil
+}
+
+// resourceTarget resolves the base API origin of the management call and
+// applies the operation path. OAuth tokens are only sent to their first-party
+// resource server: an arbitrary custom base URL is not evidence of an
+// equivalent issuer.
+func resourceTarget(env []string, route resourceRoute, auth *resourceAuthorization) (*url.URL, error) {
+	base := environmentValue(env, "ANTHROPIC_BASE_URL")
+	if base == "" {
+		base = "https://api.anthropic.com"
+	}
+	target, err := url.Parse(base)
+	if err != nil || target.Scheme != "https" || target.Hostname() == "" || target.User != nil || target.RawQuery != "" || target.Fragment != "" || target.Opaque != "" || target.RawPath != "" {
+		return nil, fmt.Errorf("resource management requires a verified HTTPS API origin")
+	}
+	basePath := strings.TrimRight(target.Path, "/")
+	for _, segment := range strings.Split(basePath, "/") {
+		if segment == "." || segment == ".." || strings.Contains(segment, "\\") {
+			return nil, fmt.Errorf("invalid resource management API base path")
+		}
+	}
+	if auth.method != "api_key" && !firstPartyOrigin(target, basePath) {
+		return nil, fmt.Errorf("resource OAuth management requires the first-party API origin")
+	}
+	target.Path, target.RawQuery = basePath+route.path, route.query
+	return target, nil
+}
+
+// resourceRequestBody spools the upload payload and enforces its size limit.
+func resourceRequestBody(op *resourceExchange) (io.Reader, error) {
+	if op.input == nil {
+		return nil, nil
+	}
+	if op.input.size > op.limit || op.input.size > resourceHardLimit {
+		return nil, fmt.Errorf("resource payload exceeds configured size limit")
+	}
+	return io.NewSectionReader(op.input.File, 0, op.input.size), nil
 }

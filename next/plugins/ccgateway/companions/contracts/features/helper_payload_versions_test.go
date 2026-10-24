@@ -6,7 +6,7 @@ import (
 )
 
 func TestHelperPayloadCapabilityIsIndependent(t *testing.T) {
-	base := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "fixture", Revision: "fixture"}, Catalog: Catalog(), PolicySchemaVersions: []int{1}, HelperHistorySchemaVersions: []int{1}, Probes: []RuntimeProbe{}, ModelProviderVerification: "not_run"}
+	base := RuntimeCapabilities{ProtocolVersion: 1, Build: BuildInfo{Version: "fixture", Revision: "fixture"}, Catalog: RequestRuntimeCatalog(nil), PolicySchemaVersions: []int{1}, HelperHistorySchemaVersions: []int{1}, Probes: []RuntimeProbe{}, ModelProviderVerification: "not_run"}
 	for _, tc := range []struct {
 		versions []int
 		fail     bool

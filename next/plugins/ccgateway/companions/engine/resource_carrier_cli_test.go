@@ -146,7 +146,7 @@ func resourceManagedTestRunner(t *testing.T, handler http.HandlerFunc) *Runner {
 		proxy.Close()
 		tunnels.Range(func(_, value any) bool { _ = value.(net.Conn).Close(); return true })
 	})
-	runner.Env = envWith(runner.Env, map[string]string{"ANTHROPIC_BASE_URL": "https://api.anthropic.com", "HTTPS_PROXY": proxy.URL, "HTTP_PROXY": proxy.URL, "CLAUDE_SECURESTORAGE_CONFIG_DIR": resourceEnv(runner.Env, "CLAUDE_CONFIG_DIR"), "CCG_RESOURCE_ISSUER_ID": "managed-resource-fixture", "CCG_RESOURCE_ISSUER_GENERATION": "1"})
+	runner.Env = envWith(runner.Env, map[string]string{"ANTHROPIC_BASE_URL": "https://api.anthropic.com", "HTTPS_PROXY": proxy.URL, "HTTP_PROXY": proxy.URL, "CLAUDE_SECURESTORAGE_CONFIG_DIR": environmentValue(runner.Env, "CLAUDE_CONFIG_DIR"), "CCG_RESOURCE_ISSUER_ID": "managed-resource-fixture", "CCG_RESOURCE_ISSUER_GENERATION": "1"})
 	return runner
 }
 

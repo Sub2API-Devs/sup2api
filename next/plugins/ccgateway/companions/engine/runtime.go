@@ -236,22 +236,19 @@ func newPinnedCLIManagement(root, pinned string) (*cliManagement, error) {
 	return m, nil
 }
 
-// maintain prunes the request logs every minute and checks the release
-// channel every ten, until ctx ends.
+// maintain prunes the request logs every minute until ctx ends. Release
+// channels are not polled: a Worker runs a fixed, packaged CLI, so only the
+// explicit "check" action refreshes latest_version.
 func (r *Runtime) maintain(ctx context.Context, logs *requestLogStore) {
 	defer close(r.done)
 	prune := time.NewTicker(time.Minute)
 	defer prune.Stop()
-	releases := time.NewTicker(10 * time.Minute)
-	defer releases.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-prune.C:
 			logs.prune()
-		case <-releases.C:
-			r.autoUpdateCLI(ctx)
 		}
 	}
 }

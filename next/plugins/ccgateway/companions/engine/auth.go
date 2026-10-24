@@ -150,7 +150,7 @@ func (a *authManager) start(ctx context.Context) (Object, error) {
 		return s.public(), nil // idempotent: the pending login keeps its link
 	}
 	life, cancel := context.WithTimeout(context.Background(), authSessionLifetime)
-	cmd := exec.CommandContext(life, a.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":true}`, "--no-session-persistence", "--no-chrome", "--disable-slash-commands")
+	cmd := exec.CommandContext(life, a.cli, interactiveCLIArgs()...)
 	cmd.Env = envWith(a.environment(), nil, "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL")
 	processFailed := authFail(codeAuthProcessFailed, "The login process could not be started.")
 	input, err := cmd.StdinPipe()
@@ -273,30 +273,44 @@ func (a *authManager) cancelSession(w http.ResponseWriter, r *http.Request) (Obj
 	return Object{"success": true}, nil
 }
 
+// serveSubRoute dispatches the management sub-APIs that own their own handler.
+// The table is ordered: /admin/request-logs is exact, while
+// /admin/request-logs/<action> is a prefix.
+func (a *authManager) serveSubRoute(w http.ResponseWriter, r *http.Request) bool {
+	routes := []struct {
+		path   string
+		prefix bool
+		handle func(string)
+	}{
+		{path: "/admin/proxy", handle: func(string) { a.proxy.serve(w, r) }},
+		{path: "/admin/environment", handle: func(string) { a.overrides.serve(w, r, a.inherited()) }},
+		{path: "/admin/request-logs", handle: func(string) { a.requestLogs.serve(w, r) }},
+		{path: "/admin/request-logs/", prefix: true, handle: func(action string) { a.requestLogs.serveViewer(w, r, action) }},
+		{path: "/admin/usage", handle: func(string) { a.usage(w, r) }},
+	}
+	for _, route := range routes {
+		if route.prefix {
+			if action, ok := strings.CutPrefix(r.URL.Path, route.path); ok {
+				route.handle(action)
+				return true
+			}
+			continue
+		}
+		if r.URL.Path == route.path {
+			route.handle("")
+			return true
+		}
+	}
+	return false
+}
+
 func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if !AdminAuthorized(r, a.key) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}
-	if r.URL.Path == "/admin/proxy" {
-		a.proxy.serve(w, r)
-		return
-	}
-	if r.URL.Path == "/admin/environment" {
-		a.overrides.serve(w, r, a.inherited())
-		return
-	}
-	if r.URL.Path == "/admin/request-logs" {
-		a.requestLogs.serve(w, r)
-		return
-	}
-	if action, ok := strings.CutPrefix(r.URL.Path, "/admin/request-logs/"); ok {
-		a.requestLogs.serveViewer(w, r, action)
-		return
-	}
-	if r.URL.Path == "/admin/usage" {
-		a.usage(w, r)
+	if a.serveSubRoute(w, r) {
 		return
 	}
 	a.mu.Lock()

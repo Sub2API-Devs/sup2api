@@ -118,39 +118,20 @@ func ClaimForResponse(body, response []byte, betas []string) (*Claim, error) {
 		return nil, err
 	}
 	details, _ := object["stop_details"].(map[string]any)
-	value, present := details["fallback_credit_token"]
-	if !present || value == nil {
+	if value, present := details["fallback_credit_token"]; !present || value == nil {
 		return nil, nil
 	}
-	token, ok := value.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid fallback credit response token")
-	}
-	hash, err := TokenHash(token)
+	hash, model, prefill, err := claimFromDetails(details, object)
 	if err != nil {
 		return nil, err
 	}
-	if object["stop_reason"] != "refusal" {
-		return nil, fmt.Errorf("fallback credit was not issued by a refusal")
-	}
-	model, ok := object["model"].(string)
-	if !ok || model == "" {
-		return nil, fmt.Errorf("fallback credit source model missing")
-	}
-	claim := &Claim{TokenHash: hash, SourceModel: model}
-	if value := details["fallback_has_prefill_claim"]; value != nil {
-		v, ok := value.(bool)
-		if !ok {
-			return nil, fmt.Errorf("invalid fallback credit prefill claim")
-		}
-		claim.Prefill = &v
-	}
+	claim := &Claim{TokenHash: hash, SourceModel: model, Prefill: prefill}
 	base, err := Digest(body, betas)
 	if err != nil {
 		return nil, err
 	}
 	claim.Digests = []string{base}
-	if claim.Prefill != nil && !*claim.Prefill {
+	if prefill != nil && !*prefill {
 		return claim, nil
 	}
 	content, ok := object["content"].([]any)
@@ -165,13 +146,11 @@ func ClaimForResponse(body, response []byte, betas []string) (*Claim, error) {
 	if !ok {
 		return nil, fmt.Errorf("fallback credit request messages missing")
 	}
-	for _, echo := range [][]any{content, ContinuationContent(content)} {
-		source["messages"] = append(append([]any{}, messages...), map[string]any{"role": "assistant", "content": echo})
-		raw, _ := json.Marshal(source)
-		digest, err := Digest(raw, betas)
-		if err != nil {
-			return nil, err
-		}
+	digests, err := continuationDigests(source, messages, content, betas)
+	if err != nil {
+		return nil, err
+	}
+	for _, digest := range digests {
 		found := false
 		for _, old := range claim.Digests {
 			found = found || old == digest
@@ -181,6 +160,53 @@ func ClaimForResponse(body, response []byte, betas []string) (*Claim, error) {
 		}
 	}
 	return claim, nil
+}
+
+// claimFromDetails reads the token, refusal authority, model and prefill
+// declaration from the response. The caller has already established that a
+// token is present.
+func claimFromDetails(details, object map[string]any) (string, string, *bool, error) {
+	token, ok := details["fallback_credit_token"].(string)
+	if !ok {
+		return "", "", nil, fmt.Errorf("invalid fallback credit response token")
+	}
+	hash, err := TokenHash(token)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if object["stop_reason"] != "refusal" {
+		return "", "", nil, fmt.Errorf("fallback credit was not issued by a refusal")
+	}
+	model, ok := object["model"].(string)
+	if !ok || model == "" {
+		return "", "", nil, fmt.Errorf("fallback credit source model missing")
+	}
+	var prefill *bool
+	if value := details["fallback_has_prefill_claim"]; value != nil {
+		v, ok := value.(bool)
+		if !ok {
+			return "", "", nil, fmt.Errorf("invalid fallback credit prefill claim")
+		}
+		prefill = &v
+	}
+	return hash, model, prefill, nil
+}
+
+// continuationDigests hashes the two permitted echo shapes: the response
+// content verbatim, then the continuation-adjusted form without unanswered
+// tool_use blocks.
+func continuationDigests(source map[string]any, messages, content []any, betas []string) ([]string, error) {
+	digests := make([]string, 0, 2)
+	for _, echo := range [][]any{content, ContinuationContent(content)} {
+		source["messages"] = append(append([]any{}, messages...), map[string]any{"role": "assistant", "content": echo})
+		raw, _ := json.Marshal(source)
+		digest, err := Digest(raw, betas)
+		if err != nil {
+			return nil, err
+		}
+		digests = append(digests, digest)
+	}
+	return digests, nil
 }
 
 // ContinuationContent performs only the adjustments documented for a credit

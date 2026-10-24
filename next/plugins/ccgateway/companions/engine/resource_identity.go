@@ -29,10 +29,6 @@ type verifiedResourceIdentity struct {
 	at       time.Time
 }
 
-func resourceEnv(env []string, key string) string {
-	return environmentValue(env, key)
-}
-
 // apiKeyOnly reports whether the account's only credential is an API key
 // from the environment.
 func apiKeyOnly(env []string) bool {
@@ -64,7 +60,7 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 	if !resourceBackendSupported(env) {
 		return resources.Identity{}, fmt.Errorf("resource authentication backend unsupported")
 	}
-	probe := &resourceIdentityProbe{issuer: resourceEnv(env, "CCG_RESOURCE_ISSUER_ID"), epoch: resourceEnv(env, "CCG_RESOURCE_ISSUER_GENERATION")}
+	probe := &resourceIdentityProbe{issuer: environmentValue(env, "CCG_RESOURCE_ISSUER_ID"), epoch: environmentValue(env, "CCG_RESOURCE_ISSUER_GENERATION")}
 	// An API key without a managed issuer can never prove an identity; say so
 	// at once instead of after the CLI verification.
 	if (probe.issuer == "" || probe.epoch == "") && apiKeyOnly(env) {
