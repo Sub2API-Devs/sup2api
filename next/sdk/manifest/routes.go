@@ -50,8 +50,9 @@ func CoreRouteOf(p string) (string, bool) {
 
 // CoreGatewayPrefixes are gateway paths the core serves itself, ahead of
 // plugin endpoints: the provider resource APIs (server/internal/gateway,
-// resource_http.go). A plugin endpoint under them would never be reached.
-var CoreGatewayPrefixes = [][]string{{"v1", "files"}, {"v1", "skills"}}
+// resource_http.go) and an API key's own usage (key_usage.go). A plugin
+// endpoint under them would never be reached.
+var CoreGatewayPrefixes = [][]string{{"v1", "files"}, {"v1", "skills"}, {"v1", "usage"}}
 
 // CoreGatewayRouteOf returns the core gateway route ("/v1/files",
 // "/v1/skills") the endpoint path p could match, by the rules of

@@ -109,6 +109,13 @@ type KeyLimits struct {
 	Concurrency int   `json:"max_concurrency"`
 }
 
+// KeyUsageReporter answers GET /v1/usage for an authenticated API key: what
+// it can still spend, its caps and what it used (CONTRACTS §62). The answer
+// is written as JSON.
+type KeyUsageReporter interface {
+	KeyUsage(ctx context.Context, p *APIKeyPrincipal) (any, error)
+}
+
 // KeySlots is the Slots kind of the API keys' requests in flight.
 const KeySlots = "apikey"
 

@@ -55,6 +55,7 @@ export default {
     shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
     run: '在终端执行（只对当前终端有效）',
     file: '写入 {path}',
+    usage: '查询这个 Key 的剩余额度、限速与用量（GET /v1/usage，CC Switch 导入后自动查询）',
     noClient: '这个 Key 所在分组的平台没有内置的客户端配置，可直接调用下方接口。',
     endpoints: '可调用的接口（地址前加 {base}）：'
   },

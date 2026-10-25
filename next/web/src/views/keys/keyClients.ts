@@ -81,7 +81,24 @@ requires_openai_auth = true`
 /** The clients of the platforms a key reaches, in CLIENTS order. */
 export const clientsFor = (platforms: readonly string[] | null | undefined) => CLIENTS.filter((c) => platforms?.includes(c.platform))
 
-/** The CC Switch deep link importing the key as a provider of the client. */
+/** GET /v1/usage of the gateway at base: what a key can spend and used (CONTRACTS §62). */
+export const usageURL = (base: string) => `${base}/v1/usage`
+
+/** CC Switch's usage script: it fills in {{apiKey}} and reads the balance left. */
+export function ccSwitchUsageScript(base: string): string {
+  return `({
+  request: {
+    url: "${usageURL(base)}",
+    method: "GET",
+    headers: { "Authorization": "Bearer {{apiKey}}" }
+  },
+  extractor: function (response) {
+    return { isValid: response.isValid !== false, remaining: response.remaining, unit: response.unit || "USD" };
+  }
+})`
+}
+
+/** The CC Switch deep link importing the key as a provider of the client, with its usage query. */
 export function ccSwitchLink(client: KeyClient, base: string, name: string, key: string): string {
   const q = new URLSearchParams({
     resource: 'provider',
@@ -90,7 +107,10 @@ export function ccSwitchLink(client: KeyClient, base: string, name: string, key:
     homepage: base,
     endpoint: client.ccSwitch.endpoint(base),
     apiKey: key,
-    configFormat: 'json'
+    configFormat: 'json',
+    usageEnabled: 'true',
+    usageScript: btoa(ccSwitchUsageScript(base)),
+    usageAutoInterval: '30'
   })
   return `ccswitch://v1/import?${q}`
 }

@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { CLIENTS, ccSwitchLink, clientsFor } from './keyClients'
+import { CLIENTS, ccSwitchLink, ccSwitchUsageScript, clientsFor } from './keyClients'
 
 const client = (id: string) => CLIENTS.find((c) => c.id === id)!
 const base = 'https://gw.example.com'
 const key = 'sk-s2a-test'
 
 describe('API key clients', () => {
+  it('reads the balance left from the /v1/usage of the gateway in CC Switch', () => {
+    const script = ccSwitchUsageScript(base)
+    expect(script).toContain(`url: "${base}/v1/usage"`)
+    expect(script).not.toContain(key)
+    // The script is an expression CC Switch evaluates and calls.
+    const { extractor } = new Function(`return ${script}`)()
+    expect(extractor({ isValid: true, remaining: 6.5, unit: 'USD' })).toEqual({ isValid: true, remaining: 6.5, unit: 'USD' })
+    expect(extractor({ isValid: false, remaining: 0 })).toEqual({ isValid: false, remaining: 0, unit: 'USD' })
+  })
   it('offers the clients of the platforms a key reaches', () => {
     expect(clientsFor(['openai', 'volcengine', 'anthropic']).map((c) => c.id)).toEqual(['claude', 'codex'])
     expect(clientsFor(['volcengine'])).toEqual([])
@@ -31,7 +40,8 @@ describe('API key clients', () => {
     const link = new URL(ccSwitchLink(client('codex'), base, 'gw.example.com', key))
     expect(link.protocol).toBe('ccswitch:')
     expect(Object.fromEntries(link.searchParams)).toEqual({
-      resource: 'provider', app: 'codex', name: 'gw.example.com', homepage: base, endpoint: `${base}/v1`, apiKey: key, configFormat: 'json'
+      resource: 'provider', app: 'codex', name: 'gw.example.com', homepage: base, endpoint: `${base}/v1`, apiKey: key, configFormat: 'json',
+      usageEnabled: 'true', usageScript: btoa(ccSwitchUsageScript(base)), usageAutoInterval: '30'
     })
     expect(new URL(ccSwitchLink(client('claude'), base, 'n', key)).searchParams.get('endpoint')).toBe(base)
   })

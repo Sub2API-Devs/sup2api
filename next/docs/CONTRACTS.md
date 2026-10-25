@@ -4292,3 +4292,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 网关：认证结果带 `core.KeyQuota`；计费端点在 `prepareBilling` 查余额之前检查，`quota_used >= quota_limit` 时返回 402 `key_quota_exhausted`（Anthropic 格式 `billing_error`，OpenAI 格式 `insufficient_quota`，客户端不会重试），用量记录 `error_type` 为 `key_quota_exhausted`，不选账号、不请求上游。免费端点不受限。
 - 额度在请求结算后才增加：同时进行的请求都放行，额度可能被超出这些请求的费用；WebSocket 会话里的每一轮用的是建立会话时读到的已用额度。
 - 控制台「额度」列显示「已用 / 额度」与进度条（用完标红），不限时显示已用金额；在「设置限速与额度」里修改额度和清零已用，新建表单也可设置。
+
+## 62. `GET /v1/usage`：API Key 查询自己的余额与用量（2026-10-26，用户要求）
+
+- 网关保留路径 `/v1/usage`（`manifest.CoreGatewayPrefixes`，插件端点不能声明它或它下面的路径），在插件端点与资源接口之前处理。密钥可放在 `x-api-key`、`Authorization: Bearer` 或 `x-goog-api-key`；认证与普通请求相同（停用、过期、IP 白名单、`gateway:use`），失败按 Anthropic 错误格式返回；非 GET 405，子路径 404。不占并发槽、不计入限速，响应 `Cache-Control: no-store`。
+- 响应沿用 sub2api 的形状（CC Switch 的用量脚本可直接读）：`mode`（有额度或任一限速时 `quota_limited`，否则 `unrestricted`）、`isValid`（启用且未过期；额度用完仍为 true）、`status`、`planName`（分组名）、`remaining`（可再花的美元：所有者余额，设了额度时不超过额度剩余，不小于 0）、`unit: "USD"`、`balance`、`quota {limit, used, remaining, unit}`、`rate_limits [{type: rpm|tpm|concurrency, window: 1m|now, limit, used, remaining}]`（只列设了上限的项）、`expires_at`、`usage.today/total {requests, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens, cost}`。金额为 JSON 数字；今天按 UTC 日；`cost` 与额度同口径（`apikey_quota_charge`）。
+- 控制台「使用密钥」给出查询命令；「导入 CC Switch」带上用量脚本（`usageEnabled`、`usageScript`、`usageAutoInterval=30`），脚本请求 `<网关>/v1/usage`，由 CC Switch 填入 `{{apiKey}}`，读取 `remaining`、`unit`、`isValid`。

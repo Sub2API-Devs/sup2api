@@ -43,10 +43,12 @@ type Service struct {
 	// list reports them when set.
 	Windows core.RateWindows
 	Slots   core.Slots
-	db      *store.DB
-	rdb     redis.UniversalClient // optional cache
-	authz   core.Authorizer
-	reg     core.PluginRegistry // optional: platforms are [] without it
+	// Balances gives GET /v1/usage the owner's balance.
+	Balances Balances
+	db       *store.DB
+	rdb      redis.UniversalClient // optional cache
+	authz    core.Authorizer
+	reg      core.PluginRegistry // optional: platforms are [] without it
 
 	mu      sync.Mutex
 	touched map[int64]time.Time

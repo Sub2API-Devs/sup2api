@@ -36,6 +36,7 @@ export default {
     shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
     run: 'Run in a terminal (that terminal only)',
     file: 'Write to {path}',
+    usage: 'Query what this key can still spend, its limits and usage (GET /v1/usage; CC Switch queries it after import)',
     noClient: 'No built-in client configuration for the platforms of this key; call the endpoints below directly.',
     endpoints: 'Endpoints it can call (prefix them with {base}):'
   },

@@ -58,6 +58,8 @@ type Deps struct {
 	// KeyWindows counts and caps the API keys' requests and tokens per
 	// minute (CONTRACTS §60); nil = not counted.
 	KeyWindows core.RateWindows
+	// KeyUsage answers GET /v1/usage (CONTRACTS §62); nil = 404.
+	KeyUsage core.KeyUsageReporter
 	// Quota receives the subscription quota headers of upstream responses
 	// for account types declaring manifest quota.headers (CONTRACTS §44);
 	// nil = not recorded.
@@ -212,7 +214,7 @@ func (g *Gateway) Close() {
 func (g *Gateway) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method, path := c.Request.Method, c.Request.URL.Path
-		if g.serveResourceHTTP(c) {
+		if g.serveKeyUsage(c) || g.serveResourceHTTP(c) {
 			c.Abort()
 			return
 		}

@@ -6,7 +6,7 @@ import type { ApiKey } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 import { useCcSwitch } from './ccSwitch'
-import { SHELLS, clientsFor, gatewayBase, type Shell } from './keyClients'
+import { SHELLS, clientsFor, gatewayBase, usageURL, type Shell } from './keyClients'
 import { revealKey } from './reveal'
 
 // How to use an API key: the configuration of each client of its platforms
@@ -27,6 +27,7 @@ const shell = ref<Shell>(navigator.userAgent.includes('Windows') ? 'powershell' 
 const client = computed(() => clients.value.find((c) => c.id === tab.value) ?? clients.value[0])
 const snippets = computed(() => client.value?.snippets(base, key.value, shell.value) ?? [])
 const tabs = computed(() => clients.value.map((c) => ({ key: c.id, label: c.label })))
+const usageQuery = computed(() => `curl -H "Authorization: Bearer ${key.value}" ${usageURL(base)}`)
 const shellOptions = computed(() => SHELLS.map((s) => ({ value: s, label: t(`apikeys.use.shells.${s}`) })))
 
 watch(() => props.apiKey, async (k) => {
@@ -70,6 +71,13 @@ watch(() => props.apiKey, async (k) => {
         </div>
       </STabs>
       <SEmpty v-else size="sm" icon="code" :text="t('apikeys.use.noClient')" />
+      <div class="space-y-1 border-t border-line pt-3">
+        <div class="flex items-center justify-between gap-2 text-xs text-fg-muted">
+          <span>{{ t('apikeys.use.usage') }}</span>
+          <SCopyButton :text="usageQuery" size="xs" :disabled="!revealed" />
+        </div>
+        <SCode :text="usageQuery" :wrap="false" class="text-xs" data-testid="key-usage-query" />
+      </div>
       <div v-if="platforms?.length" class="space-y-2 border-t border-line pt-3">
         <SHint size="xs">{{ t('apikeys.use.endpoints', { base }) }}</SHint>
         <PlatformEndpointsPreview :ids="platforms" />

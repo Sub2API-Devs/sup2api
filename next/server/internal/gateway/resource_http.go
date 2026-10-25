@@ -56,13 +56,7 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 		x.fail(core.ErrUnavailable)
 		return true
 	}
-	key := strings.TrimSpace(c.GetHeader("x-api-key"))
-	if key == "" {
-		value := strings.TrimSpace(c.GetHeader("Authorization"))
-		if len(value) > 7 && strings.EqualFold(value[:7], "Bearer ") {
-			key = strings.TrimSpace(value[7:])
-		}
-	}
+	key := requestKey(c)
 	if key == "" {
 		x.fail(core.ErrUnauthenticated)
 		return true
