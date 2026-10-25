@@ -89,7 +89,7 @@ async function pick(w: VueWrapper, testId: string, index: number) {
   if (testId.startsWith('build-attachment-') && !w.find(`[data-testid="${testId}"]`).exists()) await w.get('[data-testid="environment-convert-edit"] button').trigger('click')
   await w.get(`[data-testid="${testId}"]`).findAll('input')[index]!.trigger('change')
 }
-const level = (w: VueWrapper, value: string) => w.get(`[data-testid="request-level"] input[value="${value}"]`).trigger('change')
+const level = (w: VueWrapper, value: string) => w.get('[data-testid="request-level"]').setValue(String(['none', 'micro', 'low', 'high'].indexOf(value)))
 // Attachments and tools are toggle chips; the system prompt a switch.
 const toggle = (w: VueWrapper, testId: string) => w.get(`[data-testid="${testId}"] button`).trigger('click')
 // A group or an account follows or customizes each layer as a whole.
@@ -231,7 +231,7 @@ describe('editor payloads for the core contract', () => {
     // and resolves as the core migrates it; it counts as a customized level.
     saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: { relay_mode: 'direct' } } })
     w = await remote('group')
-    expect(w.get<HTMLInputElement>('[data-testid="request-level"] input[value="none"]').element.checked).toBe(true)
+    expect(w.get<HTMLSelectElement>('[data-testid="request-level"]').element.value).toBe('0')
     expect(w.get<HTMLInputElement>('[data-testid="layer-mode-level"] input[value="custom"]').element.checked).toBe(true)
     cases.push({ name: 'group-legacy-direct', layer: 'group', group_id: 3, saved: jsonCopy(saved), body: await submit(w),
       expect: { level: 'none', relay_mode: 'direct' } })

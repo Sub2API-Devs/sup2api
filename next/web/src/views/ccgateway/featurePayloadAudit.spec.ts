@@ -99,8 +99,8 @@ async function pick(w: VueWrapper, testId: string, index: number) {
 const picked = (w: VueWrapper, testId: string) => cells(w, testId).findIndex(i => (i.element as HTMLInputElement).checked)
 const shown = (w: VueWrapper, testId: string) => w.find(`[data-testid="${testId}"]`).exists()
 const loose = (w: VueWrapper, testId: string) => cells(w, testId).some(i => i.attributes('disabled') === undefined)
-// The level segments: `change` like the matrix cells (an already checked one still counts).
-const level = (w: VueWrapper, value: string) => w.get(`[data-testid="request-level"] input[value="${value}"]`).trigger('change')
+// The level select: setting the chosen one again still emits.
+const level = (w: VueWrapper, value: string) => w.get('[data-testid="request-level"]').setValue(String(['none', 'micro', 'low', 'high'].indexOf(value)))
 // A group or an account follows or customizes each layer as a whole.
 const layerMode = (w: VueWrapper, layer: string, mode: 'follow' | 'custom') => w.get(`[data-testid="layer-mode-${layer}"] input[value="${mode}"]`).trigger('change')
 const locked = (w: VueWrapper, testId: string) => cells(w, testId).every(i => i.attributes('disabled') !== undefined)

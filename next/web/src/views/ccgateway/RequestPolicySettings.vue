@@ -4,7 +4,7 @@
 // and prompt are the layer cards, which read the shared context below.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SChip, SDisclosure, SSegmented, SSettingsGroup } from '@sub2api/ui'
+import { SChip, SDisclosure, SSegmented, SSelect, SSettingRow, SSettingsGroup } from '@sub2api/ui'
 import type { SelectOption } from '@sub2api/ui'
 import {
   defaultRequestLevel, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelOf, mergeFeaturePolicy, requestLevels,
@@ -83,37 +83,44 @@ const identityRules = computed(() => {
       <template #details>
         <p>{{ t('ccgateway.levels.hint') }}</p>
       </template>
-      <div class="space-y-2 py-3">
-        <SSegmented
+      <!-- The level is one choice; what it fixes (the layers it enables, the
+      mode it sends with) is read beside it. -->
+      <SSettingRow
+        size="sm"
+        data-testid="request-level-row"
+      >
+        <template #label>
+          <span data-testid="level-desc">{{ t('ccgateway.levels.desc.' + level) }}</span>
+        </template>
+        <template #description>
+          <span
+            class="flex flex-wrap items-center gap-1.5"
+            data-testid="level-layers"
+          >
+            <SChip
+              v-for="layer in includedLayers"
+              :key="layer.key"
+              size="xs"
+              :tone="layer.on ? 'primary' : 'neutral'"
+              :icon="layer.on ? 'check' : undefined"
+              :class="layer.on ? '' : 'opacity-60'"
+              :data-on="layer.on || undefined"
+            >
+              {{ t('ccgateway.levels.layerNames.' + layer.key) }}
+            </SChip>
+            <span data-testid="cli-version">CLI <span class="font-mono">{{ layers.view.cli_version }}</span></span>
+          </span>
+        </template>
+        <SSelect
           :model-value="level"
           :options="levelOptions"
-          block
           :disabled="!layers.editable('level')"
           :aria-label="t('ccgateway.levels.title')"
+          class="w-40"
           data-testid="request-level"
           @update:model-value="setLevel"
         />
-        <div
-          class="flex flex-wrap items-center gap-1.5"
-          data-testid="level-layers"
-        >
-          <SChip
-            v-for="layer in includedLayers"
-            :key="layer.key"
-            size="xs"
-            :tone="layer.on ? 'primary' : 'neutral'"
-            :icon="layer.on ? 'check' : undefined"
-            :class="layer.on ? '' : 'opacity-60'"
-            :data-on="layer.on || undefined"
-          >
-            {{ t('ccgateway.levels.layerNames.' + layer.key) }}
-          </SChip>
-        </div>
-        <p class="text-xs text-fg-muted">
-          <span data-testid="level-desc">{{ t('ccgateway.levels.desc.' + level) }}</span>
-          · <span data-testid="cli-version">CLI <span class="font-mono">{{ layers.view.cli_version }}</span></span>
-        </p>
-      </div>
+      </SSettingRow>
     </SSettingsGroup>
 
     <BillingLayerCard />

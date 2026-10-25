@@ -94,8 +94,8 @@ describe('CC feature layer contract', () => {
     const mode = (layer: string) => w.get(`[data-testid="layer-mode-${layer}"]`).findAll('input').find(i => (i.element as HTMLInputElement).checked)?.attributes('value')
     for (const layer of ['level', 'billing', 'environment', 'prompt']) expect(mode(layer)).toBe('follow')
     // Following shows the inherited values, greyed.
-    expect(w.get<HTMLInputElement>('[data-testid="request-level"] input[value="low"]').element.checked).toBe(true)
-    expect(w.get('[data-testid="request-level"]').findAll('input').every(i => i.attributes('disabled') !== undefined)).toBe(true)
+    expect(w.get<HTMLSelectElement>('[data-testid="request-level"]').element.value).toBe('2')
+    expect(w.get('[data-testid="request-level"]').attributes('disabled')).toBeDefined()
     expect(w.get<HTMLInputElement>('[data-testid="billing-cc_version"] input[value="worker"]').element.checked).toBe(true)
     expect(w.get('[data-testid="billing-cc_version"]').findAll('input').every(i => i.attributes('disabled') !== undefined)).toBe(true)
     expect(w.get('[data-testid="injection-attachments-date"] button').attributes('disabled')).toBeDefined()
@@ -132,7 +132,7 @@ describe('CC feature layer contract', () => {
       expect(w.get('[data-testid="build-attachments"]').text()).toContain('提升到低注入后生效')
       expect(w.get('[data-testid="identity-lines"]').text()).toContain('提升到微注入后生效')
       expect(w.find('[data-testid="billing-cc_version"]').exists()).toBe(true)
-      expect(w.get<HTMLInputElement>('[data-testid="request-level"] input[value="none"]').element.checked).toBe(true)
+      expect(w.get<HTMLSelectElement>('[data-testid="request-level"]').element.value).toBe('0')
       // A legacy relay mode alone already customizes the level.
       expect(w.get<HTMLInputElement>('[data-testid="layer-mode-level"] input[value="custom"]').element.checked).toBe(true)
     }
@@ -140,8 +140,8 @@ describe('CC feature layer contract', () => {
   })
   it('writes only the level of a customized level layer and follows by deleting it', async () => {
     const w = mount(RequestPolicySettings, { props: { modelValue: defaultRequestPolicy(), inherited: { ...defaultRequestPolicy(), level: 'micro' }, overrides: { relay_mode: 'direct' } }, global: { plugins: [i18n] } })
-    expect(w.get('[data-testid="request-level"]').findAll('input').map(i => i.attributes('value'))).toEqual(['none', 'micro', 'low', 'high'])
-    await w.get('[data-testid="request-level"] input[value="high"]').setValue(true)
+    expect(w.get('[data-testid="request-level"]').findAll('option').map(o => o.text())).toEqual(['0 注入', '微注入', '低注入（默认）', '高注入'])
+    await w.get('[data-testid="request-level"]').setValue('3')
     expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ level: 'high' })
     await w.setProps({ overrides: { level: 'high' } })
     expect(w.get('[data-testid="prompt-tools"]').attributes('data-locked')).toBeUndefined()
@@ -149,7 +149,7 @@ describe('CC feature layer contract', () => {
     await w.get('[data-testid="layer-mode-level"] input[value="follow"]').setValue(true)
     expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({})
     await w.setProps({ overrides: {} })
-    expect(w.get<HTMLInputElement>('[data-testid="request-level"] input[value="micro"]').element.checked).toBe(true)
+    expect(w.get<HTMLSelectElement>('[data-testid="request-level"]').element.value).toBe('1')
     await w.get('[data-testid="layer-mode-level"] input[value="custom"]').setValue(true)
     expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ level: 'micro' })
     w.unmount()

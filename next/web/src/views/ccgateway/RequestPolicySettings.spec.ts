@@ -25,8 +25,9 @@ const tab = (w: VueWrapper, key: (typeof TABS)[number]) => w.findAll('[data-test
 const radios = (w: VueWrapper, sel: string) => w.get(sel).findAll('input')
 const picked = (w: VueWrapper, sel: string) => radios(w, sel).findIndex(i => (i.element as HTMLInputElement).checked)
 const pick = (w: VueWrapper, sel: string, index: number) => radios(w, sel)[index]!.setValue(true)
-const level = (w: VueWrapper, value: string) => w.get(`[data-testid="request-level"] input[value="${value}"]`).setValue(true)
-const levelPicked = (w: VueWrapper) => w.get('[data-testid="request-level"]').findAll('input').find(i => (i.element as HTMLInputElement).checked)?.attributes('value')
+const levels = ['none', 'micro', 'low', 'high']
+const level = (w: VueWrapper, value: string) => w.get('[data-testid="request-level"]').setValue(String(levels.indexOf(value)))
+const levelPicked = (w: VueWrapper) => levels[Number(w.get<HTMLSelectElement>('[data-testid="request-level"]').element.value)]
 // Attachments and tools are toggle chips; the field matrix is folded under its summary.
 const chip = (w: VueWrapper, sel: string) => w.get(`${sel} button`)
 const pressed = (w: VueWrapper, sel: string) => chip(w, sel).attributes('aria-pressed') === 'true'
@@ -69,8 +70,7 @@ describe('CCGateway request levels', () => {
     mocks.get.mockResolvedValue(config(undefined))
     const w = await render()
     const cards = w.get('[data-testid="request-level"]')
-    expect(cards.findAll('input').map(i => i.attributes('value'))).toEqual(['none', 'micro', 'low', 'high'])
-    expect(cards.findAll('label').map(l => l.text())).toEqual(['0 注入', '微注入', '低注入（默认）', '高注入'])
+    expect(cards.findAll('option').map(o => o.text())).toEqual(['0 注入', '微注入', '低注入（默认）', '高注入'])
     expect(levelPicked(w)).toBe('low')
     expect(w.get('[data-testid="level-desc"]').text()).toContain('缺的首轮附件补上')
     // The layers the level includes, the last one not.
