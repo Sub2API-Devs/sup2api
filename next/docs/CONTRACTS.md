@@ -3948,7 +3948,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
 
-> 2026-10-25：本节的会话分支、规范文件与会话索引属于已删除的 native 路径（§53.21），整节只作历史。现在的会话规则：build 按账号把 `metadata.user_id` 的 session 映射成同会话稳定的值，direct 原样用客户端的，出口 `x-claude-code-session-id` 与出口 metadata 一致（BUILD-REQUEST-COMPONENTS-DESIGN §7）。插件仍给 Worker 加 `x-ccgateway-session-scope` 头，Worker 已没有读取方。
+> 2026-10-25：本节的会话分支、规范文件与会话索引属于已删除的 native 路径（§53.21），整节只作历史。现在的会话规则：build 按账号把 `metadata.user_id` 的 session 映射成同会话稳定的值，direct 原样用客户端的，出口 `x-claude-code-session-id` 与出口 metadata 一致（BUILD-REQUEST-COMPONENTS-DESIGN §7）。插件原先给 Worker 加的 `x-ccgateway-session-scope` 头已无读取方，2026-10-25 起插件不再发送（随下一个插件版本生效）。
 
 **历史演进记录**：本节逐次记录旧方案。出站中继改写 session/metadata、restoreCacheSystem、Sonnet 续接引导及旧客户端 session 头兼容只说明当时实现，不是当前 native-only 功能。当前会话仍按最后的 v2 规则选分支，但由原生私有记录以 U 运行、CLI 自身设置 U/A′；无 HTTP relay 还原。现行执行与限制以 §53.13–§53.14 为准，旧实现见 `archive/ccgateway-relay-0.1.41@4b0e0967c`。
 

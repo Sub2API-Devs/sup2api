@@ -25,7 +25,7 @@ func TestManagedRPCRequests(t *testing.T) {
 		if r.GetUrl() != VirtualURL || r.GetMethod() != "POST" || r.GetUpstreamModel() != "mapped" {
 			t.Fatalf("wrong request %v", r)
 		}
-		if len(r.GetHeaders()) != 4 || r.GetHeaders()["anthropic-beta"] != "test-beta" {
+		if len(r.GetHeaders()) != 3 || r.GetHeaders()["anthropic-beta"] != "test-beta" {
 			t.Fatal("header allowlist changed")
 		}
 	}
@@ -71,7 +71,10 @@ func TestAccountExtensionsSurviveValidationAndRequests(t *testing.T) {
 	}
 }
 
-func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
+// The Worker's headers are the host's and the client's CC context only: no
+// session scope (the native path that read it is gone, CONTRACTS §53.21), and
+// a caller's own gateway headers are not copied.
+func TestUpstreamHeadersCarryNoSessionScope(t *testing.T) {
 	p := New()
 	in := &pluginv1.BuildUpstreamRequestRequest{
 		Account:        &pluginv1.Account{Platform: PlatformID, Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: "{}"},
@@ -82,8 +85,8 @@ func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Headers["x-ccgateway-session-scope"] != "user:12:key:34" {
-		t.Fatal("native session scope not owned by host")
+	if _, sent := r.Headers["x-ccgateway-session-scope"]; sent {
+		t.Fatal("a session scope header was sent", r.Headers)
 	}
 	if r.Headers["x-request-id"] != "0123456789abcdef01234567" {
 		t.Fatal("the Worker's log is not named by the core's request ID", r.Headers)
@@ -96,8 +99,8 @@ func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 	in.Meta.ApiKeyId = 35
 	in.Meta.RequestId = "not/a request id"
 	r2, err := p.BuildUpstreamRequest(context.Background(), in)
-	if err != nil || r2.Headers["x-ccgateway-session-scope"] == r.Headers["x-ccgateway-session-scope"] {
-		t.Fatal("API keys share session scope")
+	if err != nil {
+		t.Fatal(err)
 	}
 	if _, forwarded := r2.Headers["x-request-id"]; forwarded {
 		t.Fatal("a malformed request ID or the caller's was forwarded")

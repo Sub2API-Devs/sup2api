@@ -4,7 +4,6 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -158,8 +157,6 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		}
 	}
 	outHeaders := headers(in.GetInboundHeaders())
-	// Scope is supplied by the authenticated host, never copied from caller headers.
-	outHeaders["x-ccgateway-session-scope"] = fmt.Sprintf("user:%d:key:%d", in.GetMeta().GetUserId(), in.GetMeta().GetApiKeyId())
 	// The core's request ID names the Worker's log, so a usage record leads
 	// to it (REQUEST-LOG-VIEWER-DESIGN.md §3); a caller's own is not copied.
 	if id := in.GetMeta().GetRequestId(); features.RequestIDPattern.MatchString(id) {

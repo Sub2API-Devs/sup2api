@@ -331,7 +331,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
         { time: at(l.duration_ms), event: 'request_finished', detail: { stage: l.stage, status: l.status } },
       ],
       events_truncated: false,
-      request_headers: { 'Content-Type': ['application/json'], 'Anthropic-Version': ['2023-06-01'], 'X-Api-Key': ['[REDACTED]'], 'X-Request-Id': [l.request_id], 'X-Ccgateway-Session-Scope': ['user:118:key:402'] },
+      request_headers: { 'Content-Type': ['application/json'], 'Anthropic-Version': ['2023-06-01'], 'X-Api-Key': ['[REDACTED]'], 'X-Request-Id': [l.request_id] },
       response_headers: { 'Content-Type': [l.stream ? 'text/event-stream' : 'application/json'], 'Request-Id': [l.request_id] },
       files: Object.entries(l.files).map(([name, b]) => ({ name, bytes: b.length, kind: fileKind(name) })),
       content,
