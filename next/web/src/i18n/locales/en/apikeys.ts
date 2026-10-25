@@ -27,6 +27,23 @@ export default {
     resetConfirm: 'Reset the used quota of "{name}"? Later requests count from 0 again.',
     resetDone: 'Used quota reset'
   },
+  use: {
+    open: 'Use key',
+    title: 'Use "{name}"',
+    noKey: 'This legacy key is hash-only, so its prefix stands in below; create a new key for a complete configuration.',
+    base: 'Gateway address',
+    shell: 'Shell',
+    shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
+    run: 'Run in a terminal (that terminal only)',
+    file: 'Write to {path}',
+    noClient: 'No built-in client configuration for the platforms of this key; call the endpoints below directly.',
+    endpoints: 'Endpoints it can call (prefix them with {base}):'
+  },
+  ccSwitch: {
+    import: 'Import to CC Switch',
+    pick: 'Import to',
+    notOpened: 'CC Switch did not open? Install CC Switch and try again.'
+  },
   changeGroup: 'Change group',
   groupChanged: 'Group changed',
   enabledToast: 'API key enabled',

@@ -26,6 +26,8 @@ import KeyQuotaCell from './KeyQuotaCell.vue'
 import { capsBody, capsForm, quotaOf } from './keyLimits'
 import ApiKeyCell from './ApiKeyCell.vue'
 import { useKeyUsage } from './keyUsage'
+import KeyUseGuide from './KeyUseGuide.vue'
+import KeyCcSwitchButton from './KeyCcSwitchButton.vue'
 
 const { t } = useI18n()
 const list = useList<ApiKey>('/me/api-keys')
@@ -98,6 +100,9 @@ async function update(k: ApiKey, body: { status?: string; group_id?: number }, d
 }
 const setEnabled = (k: ApiKey, on: boolean) => update(k, { status: on ? 'active' : 'disabled' }, t(on ? 'apikeys.enabledToast' : 'apikeys.disabledToast'))
 const moveToGroup = (k: ApiKey, groupId: number) => update(k, { group_id: groupId }, t('apikeys.groupChanged'))
+
+/** The key whose usage guide is open. */
+const useKey = ref<ApiKey | null>(null)
 
 // ------------------------------------------------------------------ limits
 
@@ -286,8 +291,10 @@ function remove(k: ApiKey) {
             data-testid="key-enabled-switch"
             @update:model-value="setEnabled(row, $event)"
           />
-          <SButton variant="ghost" size="sm" icon="shield" data-testid="edit-key-ips" @click="editIPs(row)">{{ t('apikeys.ipAllowlist') }}</SButton>
-          <SButton variant="ghost" size="sm" tone="danger" icon="trash" data-testid="delete-key" @click="remove(row)">{{ t('common.delete') }}</SButton>
+          <SButton variant="ghost" size="sm" icon="code" data-testid="use-key" @click="useKey = row">{{ t('apikeys.use.open') }}</SButton>
+          <KeyCcSwitchButton :api-key="row" :platforms="groupCell(row).platforms" />
+          <SButton variant="ghost" size="sm" icon="shield" icon-only :aria-label="t('apikeys.ipAllowlist')" :title="t('apikeys.ipAllowlist')" data-testid="edit-key-ips" @click="editIPs(row)" />
+          <SButton variant="ghost" size="sm" tone="danger" icon="trash" icon-only :aria-label="t('common.delete')" :title="t('common.delete')" data-testid="delete-key" @click="remove(row)" />
         </div>
       </template>
       <template #empty>
@@ -340,6 +347,8 @@ function remove(k: ApiKey) {
         <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
       </template>
     </SModal>
+
+    <KeyUseGuide :api-key="useKey" :platforms="useKey ? groupCell(useKey).platforms : null" @close="useKey = null" />
 
     <SModal :open="!!limitsKey" :title="t('apikeys.limits.edit')" :persistent="limitsSaving" :closable="!limitsSaving" @update:open="!$event && (limitsKey = null)">
       <form @submit.prevent="saveLimits">

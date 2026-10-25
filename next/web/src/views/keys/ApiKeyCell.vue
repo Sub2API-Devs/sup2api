@@ -6,6 +6,7 @@ import { SButton, SCode, confirm, toast } from '@sub2api/ui'
 import type { ApiKey } from '@/api/types'
 import { copyText } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
+import { revealKey } from './reveal'
 
 const props = withDefaults(defineProps<{ apiKey: ApiKey; allowed?: boolean }>(), { allowed: true })
 const { t } = useI18n()
@@ -27,8 +28,7 @@ async function copy() {
   if (copying.value || !props.allowed || !props.apiKey.copyable) return
   copying.value = true
   try {
-    const result = await api.post<{ key: string }>(`/me/api-keys/${props.apiKey.id}/reveal`, {})
-    const ok = await copyText(result.key)
+    const ok = await copyText(await revealKey(props.apiKey.id))
     toast(t(ok ? 'common.copied' : 'common.copyFailed'), ok ? 'success' : 'error')
   } catch (e) {
     notifyError(e)

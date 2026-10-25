@@ -46,6 +46,23 @@ export default {
     resetConfirm: '确定把 "{name}" 的已用额度清零？之后的请求重新从 0 开始累计。',
     resetDone: '已用额度已清零'
   },
+  use: {
+    open: '使用密钥',
+    title: '使用 "{name}"',
+    noKey: '这是旧密钥，只保存了哈希，下面用前缀代替；新建密钥后即可得到完整配置。',
+    base: '网关地址',
+    shell: '终端',
+    shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
+    run: '在终端执行（只对当前终端有效）',
+    file: '写入 {path}',
+    noClient: '这个 Key 所在分组的平台没有内置的客户端配置，可直接调用下方接口。',
+    endpoints: '可调用的接口（地址前加 {base}）：'
+  },
+  ccSwitch: {
+    import: '导入 CC Switch',
+    pick: '导入到',
+    notOpened: '没有打开 CC Switch？请先安装 CC Switch 后再试。'
+  },
   changeGroup: '更换分组',
   groupChanged: '已更换分组',
   enabledToast: 'API Key 已启用',

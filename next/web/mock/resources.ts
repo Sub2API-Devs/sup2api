@@ -396,7 +396,8 @@ function liveOf(k: MockKey) {
 }
 
 function keyOut(k: MockKey) {
-  return { rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, quota_limit: '0', quota_used: k.id === 1 ? '3.2' : '0', ...k, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
+  // old-script stands for a legacy hash-only key.
+  return { copyable: k.id !== 3, rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, quota_limit: '0', quota_used: k.id === 1 ? '3.2' : '0', ...k, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
 }
 
 function randomToken(n: number) {
@@ -440,6 +441,11 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   }
   if (b.reset_quota) k.quota_used = '0'
   return keyOut(k)
+})
+on('POST', '/me/api-keys/:id/reveal', (req) => {
+  const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
+  if (!k) return fail(404, 'not_found', 'api key not found')
+  return { key: k.key_prefix + 'X'.repeat(47 - k.key_prefix.length) }
 })
 on('DELETE', '/me/api-keys/:id', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
