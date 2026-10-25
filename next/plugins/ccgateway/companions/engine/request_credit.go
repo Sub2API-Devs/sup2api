@@ -205,7 +205,7 @@ func (c *requestCredit) receipt(contentType string, body []byte) string {
 	message := body
 	if eventStream(contentType) {
 		var err error
-		if message, err = credits.MessageFromEvents(creditPayloads(body)); err != nil {
+		if message, err = credits.MessageFromEvents(credits.EventPayloads(body)); err != nil {
 			return ""
 		}
 	}
@@ -218,29 +218,4 @@ func (c *requestCredit) receipt(contentType string, body []byte) string {
 
 func eventStream(contentType string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/event-stream")
-}
-
-// creditPayloads is the core's own reading of an event stream: blocks separated
-// by a blank line, their data lines joined (one leading space dropped), empty
-// payloads left out.
-func creditPayloads(body []byte) [][]byte {
-	var payloads [][]byte
-	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
-	for _, block := range bytes.Split(normalized, []byte("\n\n")) {
-		var data []byte
-		for _, line := range bytes.Split(block, []byte("\n")) {
-			value, ok := bytes.CutPrefix(line, []byte("data:"))
-			if !ok {
-				continue
-			}
-			if len(data) > 0 {
-				data = append(data, '\n')
-			}
-			data = append(data, bytes.TrimPrefix(value, []byte(" "))...)
-		}
-		if len(bytes.TrimSpace(data)) > 0 {
-			payloads = append(payloads, data)
-		}
-	}
-	return payloads
 }

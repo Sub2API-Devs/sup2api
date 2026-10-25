@@ -7,6 +7,34 @@ import (
 	"strings"
 )
 
+// EventPayloads reads an event stream as the Worker and the core both do for a
+// credit claim (2026-10-25 audit r3 P2-3: one reading, so both reach the same
+// claim from the same bytes): blocks separated by a blank line (CRLF or LF),
+// their data lines joined with a newline (one leading space dropped); comment,
+// event and other lines are ignored, empty payloads left out, and a last block
+// without a closing blank line still counts.
+func EventPayloads(raw []byte) [][]byte {
+	var payloads [][]byte
+	normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
+	for _, block := range bytes.Split(normalized, []byte("\n\n")) {
+		var data []byte
+		for _, line := range bytes.Split(block, []byte("\n")) {
+			value, ok := bytes.CutPrefix(line, []byte("data:"))
+			if !ok {
+				continue
+			}
+			if len(data) > 0 {
+				data = append(data, '\n')
+			}
+			data = append(data, bytes.TrimPrefix(value, []byte(" "))...)
+		}
+		if len(bytes.TrimSpace(data)) > 0 {
+			payloads = append(payloads, data)
+		}
+	}
+	return payloads
+}
+
 // errCreditStream is the single failure reply for every malformed or
 // unsupported stream. Callers never see which check failed.
 var errCreditStream = errors.New("invalid or unsupported credit response stream")
@@ -371,4 +399,24 @@ func mergeCreditFacts(message, delta map[string]any) error {
 		message[key] = value
 	}
 	return nil
+}
+
+// EventCarriesToken reports whether one event payload names a fallback credit
+// token, read as MessageFromEvents reads it: message_start's message or
+// message_delta's delta with a stop_details.fallback_credit_token that is not
+// null. A payload that is not a JSON object carries none (it cannot make a
+// claim either).
+func EventCarriesToken(payload []byte) bool {
+	event, err := Object(payload)
+	if err != nil {
+		return false
+	}
+	for _, key := range []string{"message", "delta"} {
+		part, _ := event[key].(map[string]any)
+		details, _ := part["stop_details"].(map[string]any)
+		if value, present := details["fallback_credit_token"]; present && value != nil {
+			return true
+		}
+	}
+	return false
 }

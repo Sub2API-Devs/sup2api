@@ -16,8 +16,14 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
-// creditTokenField is the response field that carries a fallback credit.
-var creditTokenField = []byte("fallback_credit_token")
+// streamEndedError is a failure a committed stream already told its client
+// with an error event: the stream then ends as a stream does, rather than
+// being cut off, which a client would read as a dropped connection and retry
+// (2026-10-25 audit r3 P2-1). The failure is still recorded.
+type streamEndedError struct{ err error }
+
+func (e *streamEndedError) Error() string { return e.err.Error() }
+func (e *streamEndedError) Unwrap() error { return e.err }
 
 // creditStreams reports whether a tracked response streams to the client
 // (2026-10-25 audit P2-1): an Anthropic event stream relayed as it is. A
@@ -41,12 +47,14 @@ func creditTrailerEvidence(resp *http.Response) {
 }
 
 // forwardCreditSSE relays a tracked event stream as it arrives. Only what can
-// carry a credit token is held back: every event from the first one that names
-// fallback_credit_token. The Worker's receipt arrives after the last byte, and
-// the held events are released once the credit is confirmed and recorded. A
-// credit that cannot be confirmed or recorded ends the stream with an error
-// event in their place, so a client never holds a token the gateway does not
-// know.
+// carry a credit token is held back: every event from the first one whose
+// payload carries a token as the claim reads it (credits.EventCarriesToken).
+// The Worker's receipt arrives after the last byte, and the held events are
+// released once the credit is confirmed and recorded. A credit that cannot be
+// confirmed or recorded ends the stream with an error event in their place, so
+// a client never holds a token the gateway does not know. The claim is read
+// from the stream with the Worker's own reading (credits.EventPayloads), so
+// the two agree on every stream form (audit r3 P2-3).
 func (c *call) forwardCreditSSE(ctx context.Context, rt *typeRoute, resp *http.Response, u *usageAcc, cap *usageCapture) error {
 	binding := c.creditAccess.binding
 	if resources.ValidateIdentityHeaders(resp.Header, resources.Identity{PrincipalID: binding.PrincipalID, Generation: binding.Generation}) != nil {
@@ -63,7 +71,9 @@ func (c *call) forwardCreditSSE(ctx context.Context, rt *typeRoute, resp *http.R
 	w.Flush()
 
 	// all is the whole stream the claim is computed from, up to the limit the
-	// buffered path has; held is what waits for the receipt.
+	// buffered path has; held is what waits for the receipt. Past that limit
+	// no receipt can be confirmed, so held events are dropped rather than kept
+	// for an error event that replaces them anyway (audit r3 P2-4).
 	var all, held, block []byte
 	overflow, holding := false, false
 	relay := func() error {
@@ -73,14 +83,16 @@ func (c *call) forwardCreditSSE(ctx context.Context, rt *typeRoute, resp *http.R
 		event, data := sseBlockEvent(block)
 		c.observeStreamEvent(u, cap, event, data)
 		if !overflow && len(all)+len(block) > maxUsageJSONBuf {
-			overflow, all = true, nil
+			overflow, all, held = true, nil, nil
 		} else if !overflow {
 			all = append(all, block...)
 		}
-		holding = holding || bytes.Contains(block, creditTokenField)
+		holding = holding || credits.EventCarriesToken(data)
 		defer func() { block = block[:0] }()
 		if holding {
-			held = append(held, block...)
+			if !overflow {
+				held = append(held, block...)
+			}
 			return nil
 		}
 		if _, err := w.Write(block); err != nil {
@@ -135,10 +147,10 @@ func (c *call) forwardCreditSSE(ctx context.Context, rt *typeRoute, resp *http.R
 	w.Flush()
 	var storage *creditStorageError
 	if errors.As(err, &storage) {
-		return err
+		return &streamEndedError{err: err}
 	}
 	slog.WarnContext(ctx, "gateway: stateful response withheld", "request_id", c.rid, "reason", err.Error())
-	return &convertError{err: fmt.Errorf("resource output registration: %w", err)}
+	return &streamEndedError{err: &convertError{err: fmt.Errorf("resource output registration: %w", err)}}
 }
 
 // confirmStreamedCredit checks the Worker's evidence against the complete
@@ -147,9 +159,10 @@ func (c *call) confirmStreamedCredit(ctx context.Context, resp *http.Response, a
 	if overflow {
 		return fmt.Errorf("incomplete or oversized stateful response")
 	}
-	events, err := resourceResponseEvents(all, true)
-	if err != nil {
-		return err
+	payloads := credits.EventPayloads(all)
+	events := make([]resourceResponseEvent, len(payloads))
+	for i, payload := range payloads {
+		events[i] = resourceResponseEvent{data: payload}
 	}
 	return c.observeFallbackCredit(ctx, resp, events, true)
 }

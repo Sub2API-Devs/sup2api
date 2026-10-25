@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,11 @@ type resourceBroker struct {
 	lease        *resourceLease
 	// verified is the last verified identity (cachedIdentity).
 	verified atomic.Pointer[verifiedResourceIdentity]
+	// verifying lets one verification run at a time: requests that share the
+	// authority (tracked requests, identity probes) would otherwise start the
+	// verification CLI together on a cold cache, refreshing the login and
+	// writing the identity file concurrently (2026-10-25 audit r3 P2-2).
+	verifying sync.Mutex
 }
 
 func newResourceBroker(g *Gateway, authority *authManager, root string) (*resourceBroker, error) {

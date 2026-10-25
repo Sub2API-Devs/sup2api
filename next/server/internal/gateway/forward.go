@@ -128,7 +128,8 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 		c.recordStreamFailure(ctx, acct.GetId(), u.StreamError)
 	}
 	c.armUsageExtraction(rt, acct, resp, cap, upBody)
-	if err != nil && ctx.Err() == nil && !errors.Is(err, errClientGone) && responseCommitted && rt.binding.Plugin.Key == "ccgateway" {
+	var ended *streamEndedError
+	if err != nil && ctx.Err() == nil && !errors.Is(err, errClientGone) && !errors.As(err, &ended) && responseCommitted && rt.binding.Plugin.Key == "ccgateway" {
 		// Preserve the Worker's interrupted framing all the way to the client.
 		// dispatch completes partial usage/account bookkeeping before aborting.
 		c.abortResponse = true

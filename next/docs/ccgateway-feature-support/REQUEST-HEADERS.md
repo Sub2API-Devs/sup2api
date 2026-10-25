@@ -1,4 +1,6 @@
-# CCGateway 请求头的去向（2026-10-25，CLI `ccgateway-v26-native-assembly`）
+# CCGateway 请求头的去向
+
+以代码为准；CLI 版本见 [`cli-mods/README.md`](../../plugins/ccgateway/companions/cli-mods/README.md) 的版本表。
 
 审核（`next/docs/audits/2026-10-23-ccgateway/04-cli-mods.md` §2.3）指出「请求头拆分」此前没有一处成文。这里是事实源：上游收到的请求头**全部由 Worker 进程里的原生 CLI（`sF` 创建的 SDK 客户端）生成**，没有一个是把客户端的头直接透传过去的。客户端的头到 Worker 之后被拆成四路，只作为生成的输入；其中一部分的值会被原样写回（③ 的头、agent-id 等上下文头的原值、符合条件的 UA），所以「值与客户端相同」和「头被透传」是两回事。
 

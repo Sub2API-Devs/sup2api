@@ -11,13 +11,19 @@ import (
 // waiters release their upload spool without waiting for a long model turn.
 // tryLock is the authority's TryLock, or its TryRLock for a shared hold.
 func lockResourceAuthority(ctx context.Context, tryLock func() bool) error {
+	return waitLock(ctx, "authority", tryLock)
+}
+
+// waitLock takes a lock through tryLock until ctx ends; phase names the wait
+// in the resource diagnostics.
+func waitLock(ctx context.Context, phase string, tryLock func() bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if tryLock() {
 		return nil
 	}
-	resourceWaiting(ctx, "authority")
+	resourceWaiting(ctx, phase)
 	timer := time.NewTicker(10 * time.Millisecond)
 	defer timer.Stop()
 	for {

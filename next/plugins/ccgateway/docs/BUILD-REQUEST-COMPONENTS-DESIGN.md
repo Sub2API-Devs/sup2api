@@ -1,6 +1,6 @@
 # build 模式的请求组件化与内容改写设计
 
-本文描述 `claude request --build` 在 Claude Code 2.1.304 / contract v2（CLI `ccgateway-v26-native-assembly`，插件 0.1.91）下的实现契约：Worker 如何把客户端 Messages body 装进组件信封，CLI 如何把组件还原成 CC 内部记录、按策略替换或擦除、再用 CC 原生构造器产出最终 body。direct 的计费头处理在第 6.3 节。
+本文描述 `claude request --build` 在 Claude Code 2.1.304 / contract v2 下的实现契约（以代码为准，版本见 [`cli-mods/README.md`](../companions/cli-mods/README.md) 的版本表）：Worker 如何把客户端 Messages body 装进组件信封，CLI 如何把组件还原成 CC 内部记录、按策略替换或擦除、再用 CC 原生构造器产出最终 body。direct 的计费头处理在第 6.3 节。
 
 这是**代码契约说明**，不是发布或部署验收记录。各层注入（身份行、环境、提示词、工具）以 [注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) 第 6、7、8、12 节为准，本文只写组件与内容改写；请求头的去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。附件类型的完整清点见 [BUILD-ATTACHMENT-TRANSFORM-DESIGN.md](BUILD-ATTACHMENT-TRANSFORM-DESIGN.md)——那是 2.1.302 时期 Worker 侧 v1 改写的研究记录，v1 路径已于 2026-10-24 删除（CONTRACTS §53.21）。
 

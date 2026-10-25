@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -199,9 +198,9 @@ func (s *memoryCredits) LookupOwned(_ context.Context, owner core.ResourceOwner,
 	return r, nil
 }
 
-// creditStreamRequest is fileRequest for a tracked model request whose stream
-// may end with its error event and an aborted connection, which marks the
-// stream as incomplete.
+// creditStreamRequest is fileRequest for a tracked model request. A stream that
+// reports a failure in its error event still ends as a stream does
+// (2026-10-25 audit r3 P2-1): reading it to the end succeeds.
 func creditStreamRequest(t *testing.T, e *env, raw []byte) (int, []byte) {
 	t.Helper()
 	req, _ := http.NewRequest("POST", e.srv.URL+"/v1/messages", bytes.NewReader(raw))
@@ -214,8 +213,8 @@ func creditStreamRequest(t *testing.T, e *env, raw []byte) (int, []byte) {
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Fatal(err)
+	if err != nil {
+		t.Fatal("the stream was cut off:", err)
 	}
 	return resp.StatusCode, body
 }

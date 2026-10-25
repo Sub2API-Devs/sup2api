@@ -276,3 +276,14 @@
 - 插件出口：`next/plugins/ccgateway/internal/ccgateway/ccgateway.go:150-175`；`manifest.json:81-95,140-154`；`contracts/httpfacts/headers.go:10-37`。
 - 隧道（证明 trailer 透传）：`next/server/internal/ccgateway/controller_tunnel.go:27-110`；`next/plugins/ccgateway/companions/controller/http_api.py:326-377`。
 - 契约夹具：`next/plugins/ccgateway/companions/contracts/testdata/worker-cli-requests.json`；`engine/contract_fixture_test.go`；`cli-mods/test/contract-fixtures.test.mjs`。
+
+---
+
+## 处理结果（2026-10-25，工作树，未发布）
+
+- **P2-1 已修**：确认或记录失败时，核心写出 `error` 事件后正常结束流（`credit_stream.go` `streamEndedError`，`forward.go` 对它不再 `abortResponse`），失败仍记入用量记录。测试 `TestFallbackCreditUnconfirmedStreamEndsCleanly`；`creditStreamRequest` 不再容忍截断。
+- **P2-2 已修**：Worker 的资源身份核验在缓存未命中时单飞（`resource_identity.go` `verifying` 锁 + 拿锁后再查一次缓存），等候者直接用刚核验出的身份，不再并发起核验 CLI、并发刷新凭证或抢身份文件锁。测试 `TestColdIdentityIsVerifiedOnce`。
+- **P2-3 已修**：读流算 claim 的函数移到契约 `credits.EventPayloads`，Worker 与核心的流式路径共用（核心不再对 tracked 流用严格的 `resourceResponseEvents`）；CRLF、注释行、末事件无结尾空行都一致。测试 `TestEventPayloadsReadsEveryStreamForm`、`TestFallbackCreditStreamFormsMatchTheWorker`。整段读的 JSON/资源输出路径不变。
+- **P2-4 已修**：是否扣住改为 `credits.EventCarriesToken`（按 claim 的读法：`message_delta.delta` 或 `message_start.message` 里非 null 的 `stop_details.fallback_credit_token`，重复键同样按解码结果），回答里提到这个词不再扣住；超过 32 MiB 后扣住的部分丢弃，`held` 有界。测试 `TestEventCarriesToken`、`TestFallbackCreditStreamHoldsOnlyAToken`。
+- **P2-5 已修**：REQUEST-MODES、BUILD-REQUEST-COMPONENTS-DESIGN、SUBAGENT-REQUEST-CONTEXT-DESIGN、REQUEST-HEADERS 的版本横幅改为「以代码为准，版本见 cli-mods README 版本表」，不再写死版本；REQUEST-MODES §1.5 写明上述新语义。
+- 新测试都在旧代码上确认会失败。companions、contracts、cli-mods（178）、插件模块、核心全量（49 个包）测试通过。

@@ -70,6 +70,16 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 		bindResourceAuthorization(ctx, cached.auth)
 		return cached.identity, nil
 	}
+	// One verification at a time; a request that waited takes the identity
+	// the one before it verified.
+	if err := waitLock(ctx, "identity", b.verifying.TryLock); err != nil {
+		return resources.Identity{}, err
+	}
+	defer b.verifying.Unlock()
+	if cached := b.cachedIdentity(env); cached != nil {
+		bindResourceAuthorization(ctx, cached.auth)
+		return cached.identity, nil
+	}
 	remember := func(id resources.Identity, err error) (resources.Identity, error) {
 		if err == nil {
 			bindResourceAuthorization(ctx, probe.auth)

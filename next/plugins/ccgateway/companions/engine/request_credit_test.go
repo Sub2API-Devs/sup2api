@@ -357,3 +357,37 @@ func TestResourceIdentityProbeSharesTheAuthority(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	require.Equal(t, identity.Generation, response.Header().Get(resources.GenerationHeader))
 }
+
+// Requests that share the authority on a cold cache verify the identity one at
+// a time, and one that waited takes the identity just verified instead of
+// verifying again (2026-10-25 audit r3 P2-2).
+func TestColdIdentityIsVerifiedOnce(t *testing.T) {
+	g, identity, _ := creditTestGateway(t, "application/json", creditJSONAnswer)
+	broker := g.resources
+	broker.verifying.Lock()
+	broker.verified.Store(nil)
+	got := make(chan resources.Identity, 1)
+	waiting := make(chan struct{})
+	ctx := context.WithValue(context.Background(), resourceWaitObserverKey{}, func(phase string) {
+		if phase == "identity" {
+			close(waiting)
+		}
+	})
+	go func() {
+		id, err := broker.identity(ctx)
+		require.NoError(t, err)
+		got <- id
+	}()
+	<-waiting
+	// The verification the waiter queued behind finishes and is cached.
+	auth, err := resourceAuthorizationCandidate(g.Runner.baseEnv())
+	require.NoError(t, err)
+	broker.verified.Store(&verifiedResourceIdentity{identity: identity, auth: auth, at: time.Now()})
+	broker.verifying.Unlock()
+	select {
+	case id := <-got:
+		require.Equal(t, identity, id, "the waiter verified again instead of taking the cached identity")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting verification never finished")
+	}
+}
