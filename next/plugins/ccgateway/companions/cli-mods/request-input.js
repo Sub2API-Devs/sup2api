@@ -51,7 +51,7 @@ function parseComponents(components, preserveContent) {
   const allowed = new Set(['model', 'systemPrompt', 'messages', 'attachments', 'tools', 'parameters', 'stream']);
   for (const key of Object.keys(components)) if (!allowed.has(key)) fail(`unknown component ${key}; use parameters for generation options, or --direct for a complete HTTP body`);
   if (!Array.isArray(components.messages) || !components.messages.length) fail('messages must be a non-empty array');
-  if (components.stream !== undefined && typeof components.stream !== 'boolean') fail('stream must be boolean');
+  // stream goes as the client sent it; the upstream judges its value.
   const parameters = structuredClone(components.parameters ?? {});
   // Its keys are checked once, by validateBuildParameters (request-parameters.js).
   if (!object(parameters)) fail('parameters must be an object');

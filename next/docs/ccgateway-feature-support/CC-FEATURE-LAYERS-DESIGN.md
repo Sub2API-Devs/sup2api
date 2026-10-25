@@ -327,7 +327,7 @@ Git 状态与 worktree 的原生文案依赖工作目录上下文；临时目录
 
 生成参数分为两类：model、max_tokens、thinking、temperature、tool_choice、metadata、betas 和 output_config 的 effort／format 保留已经明确的原生处理规则；其余客户端参数及 output_config 扩展字段按原值传递。内部组件键不得经 parameters 覆盖，合并必须保留安全的 own-property 语义。禁止静默丢弃参数，也禁止用完整原始 body 撤销原生字段处理。
 
-外部 build 不读取 `CLAUDE_CODE_EXTRA_BODY` 作为后置覆盖来源。显式 max_tokens 必须为正安全整数；thinking 必须使用 enabled／disabled／adaptive，enabled 必须有正安全整数预算，其他两种不得带预算；stream 显式传入时必须为布尔值。Worker 和独立 CLI 在发送前拒绝非法值。缺省控制项继续使用原生默认值，direct 保持原始正文。
+外部 build 不读取 `CLAUDE_CODE_EXTRA_BODY` 作为后置覆盖来源。生成参数不由网关预检（CLI v29 / 插件 0.1.95 起，此前 Worker 与 CLI 对非法值回 400）：构建器能如实表达的（正整数 max_tokens、数字 temperature、已知类型与字段的 thinking、对象 output_config）交给原生规则；其余（未知 thinking 类型或字段、非正整数预算、非布尔 stream 等）构建时当作未传，最终 body 放回客户端原值，由上游判断并返回官方错误。缺省控制项继续使用原生默认值，direct 保持原始正文。
 
 未经显式合同支持的消息字段或 native 无法表达的结构，应在发送前拒绝，而不是静默丢弃。不能通过把完整原始 body 覆盖回 build 结果来恢复内容，因为那会撤销原生生成参数的处理。
 

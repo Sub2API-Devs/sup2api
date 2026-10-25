@@ -15,7 +15,7 @@
 
 模式不单独配置：核心按全局→分组→账号解析出的注入等级决定（none → direct，其余 → build），随每个请求的策略头下发。新安装的默认等级是「低」（build，平台与系统版本用服务端的值）；固定 CLI 版本是 2.1.304。Worker 容器的 `CCG_REQUEST_MODE`（缺省 build）只在请求没有策略头（手动调用）时生效。
 
-**build 的生成参数**：`max_tokens`、`thinking`、`tool_choice`、`temperature`、`output_config.effort`/`format` 交给 CC 原生构建接口，最终值由原生模型规则决定；`metadata` 由身份逻辑决定（build 设计第 7 节）。其余参数——如 `top_p`、`top_k`、`stop_sequences`、`service_tier`，以及 `output_config` 的其他子键——由 `mergeAdditionalParameters`（`cli-mods/request-parameters.js`）原样并回最终 body；`diagnostics` 只在客户端自己发了时才发。客户端没发 `stream` 时出口 body 也没有 `stream` 键（build 与 direct 相同，审核 C10 已修；2026-10-25 离线与 31 号生产出口均证实）。
+**build 的生成参数**：`max_tokens`、`thinking`、`tool_choice`、`temperature`、`output_config.effort`/`format` 交给 CC 原生构建接口，最终值由原生模型规则决定；`metadata` 由身份逻辑决定（build 设计第 7 节）。其余参数——如 `top_p`、`top_k`、`stop_sequences`、`service_tier`，以及 `output_config` 的其他子键——由 `mergeAdditionalParameters`（`cli-mods/request-parameters.js`）原样并回最终 body；`diagnostics` 只在客户端自己发了时才发。构建器不能如实表达的生成值（未知 thinking 类型或字段、预算或 max_tokens 不是正整数、非布尔 stream、非对象 output_config）不预检、不拒绝，原样发给上游判断；数字保持客户端原文（`1.0`、超过 2^53 的整数等，CLI v29 起；此前 build 对这些都回 400）。build 下读不出的 `metadata.user_id` 当作没带，补账号身份。客户端没发 `stream` 时出口 body 也没有 `stream` 键（build 与 direct 相同，审核 C10 已修；2026-10-25 离线与 31 号生产出口均证实）。
 
 ### 1.2 策略头
 

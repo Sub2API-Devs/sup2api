@@ -264,6 +264,12 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Heade
 		return nil
 	}
 	client := readClientIdentity(raw)
+	// Build owns metadata: a metadata.user_id it cannot read is given the
+	// account's identity like a missing one (2026-10-25), never refused.
+	if client.err != nil && building(p) {
+		d.trace("request_identity_unreadable", Object{"error": client.err.Error(), "replaced": true})
+		client = clientIdentity{}
+	}
 	if refusal := g.resolveIdentity(p, client, raw, agent); refusal != nil || !agent {
 		return refusal
 	}
@@ -295,15 +301,12 @@ func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, raw []b
 	return nil
 }
 
-// resolveAgent is the agent context. Build refuses a metadata.user_id it
-// cannot read; direct sends the body as the client wrote it, so such an
-// identity is the upstream's to judge, not a Worker refusal (audit C9), and
-// the CLI gets the session-less context.
+// resolveAgent is the agent context. Direct sends the body as the client
+// wrote it, so a metadata.user_id the Worker cannot read is the upstream's to
+// judge, not a Worker refusal (audit C9), and the CLI gets the session-less
+// context (build replaced such a value, resolveRequestContext).
 func (g *Gateway) resolveAgent(p *requestPlan, client clientIdentity, h http.Header, d *requestDiagnostic) *requestRefusal {
 	if client.err != nil {
-		if building(p) {
-			return refuse(400, "invalid_request_error", client.err.Error())
-		}
 		d.trace("request_identity_unreadable", Object{"error": client.err.Error()})
 	}
 	agent := g.resolveRequestAgent(p.env, client, h, p.mode)

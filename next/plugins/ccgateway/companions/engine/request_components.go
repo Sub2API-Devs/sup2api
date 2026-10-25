@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
@@ -18,9 +15,6 @@ import (
 // renamed in place), the CLI's part of the wire policy (features.CLIPolicy)
 // and the Worker's runtime context.
 func messagesBuildComponents(raw []byte, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
-	if err := validateBuildNumbers(raw); err != nil {
-		return nil, err
-	}
 	// The body is read once; each part is validated where it is taken.
 	body, model, err := messagesObject(raw)
 	if err != nil {
@@ -219,9 +213,9 @@ func validateBuildContent(body map[string]json.RawMessage) ([]json.RawMessage, e
 			return nil, fmt.Errorf("reserved internal request field %s", key)
 		}
 	}
-	if err := validateBuildGenerationParameters(body); err != nil {
-		return nil, err
-	}
+	// Generation values and numbers are the client's as sent (2026-10-25):
+	// the CLI keeps every number as written and carries what its builder
+	// cannot as the client wrote it; the upstream judges them.
 	var messages []json.RawMessage
 	if json.Unmarshal(body["messages"], &messages) != nil || len(messages) == 0 {
 		return nil, fmt.Errorf("messages must be a non-empty array")
@@ -286,96 +280,6 @@ func validateBuildBlock(block map[string]json.RawMessage, at string) error {
 	}
 	if nested, ok := block["content"]; ok && kind == "tool_result" {
 		return validateBuildBlocks(nested, at+".content")
-	}
-	return nil
-}
-
-// Validate explicit generation controls before starting the CLI. Omitted
-// controls still use native defaults; model-specific budget adjustment remains
-// the CLI's responsibility. This validator is never used by direct mode.
-func validateBuildGenerationParameters(body map[string]json.RawMessage) error {
-	if value, exists := body["max_tokens"]; exists {
-		if err := positiveSafeInteger(value, "max_tokens"); err != nil {
-			return err
-		}
-	}
-	if value, exists := body["stream"]; exists {
-		value = bytes.TrimSpace(value)
-		if !bytes.Equal(value, []byte("true")) && !bytes.Equal(value, []byte("false")) {
-			return fmt.Errorf("stream must be a boolean")
-		}
-	}
-	if value, exists := body["thinking"]; exists {
-		return validateBuildThinking(value)
-	}
-	return nil
-}
-
-func validateBuildThinking(value json.RawMessage) error {
-	var thinking map[string]json.RawMessage
-	if json.Unmarshal(value, &thinking) != nil || thinking == nil {
-		return fmt.Errorf("thinking must be an object")
-	}
-	var kind string
-	if json.Unmarshal(thinking["type"], &kind) != nil || (kind != "enabled" && kind != "disabled" && kind != "adaptive") {
-		return fmt.Errorf("thinking.type must be enabled, disabled or adaptive")
-	}
-	budget, hasBudget := thinking["budget_tokens"]
-	switch {
-	case kind == "enabled" && !hasBudget:
-		return fmt.Errorf("thinking.budget_tokens is required when thinking.type is enabled")
-	case kind == "enabled":
-		return positiveSafeInteger(budget, "thinking.budget_tokens")
-	case hasBudget:
-		return fmt.Errorf("thinking.budget_tokens requires thinking.type enabled")
-	}
-	return nil
-}
-
-// maxSafeInteger is the largest integer a float64 (the CLI's JavaScript
-// number) holds exactly.
-const maxSafeInteger = 1<<53 - 1
-
-func positiveSafeInteger(raw json.RawMessage, field string) error {
-	// The exact JSON number: a float64 conversion could round a fractional
-	// boundary value into an apparently valid integer. (math/big refuses an
-	// exponent beyond about a million digits, so this stays cheap.)
-	value, ok := new(big.Rat).SetString(string(bytes.TrimSpace(raw)))
-	if !ok || !value.IsInt() || value.Sign() <= 0 || value.Num().Cmp(big.NewInt(maxSafeInteger)) > 0 {
-		return fmt.Errorf("%s must be a positive safe integer", field)
-	}
-	return nil
-}
-
-func validateBuildNumbers(raw []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var root any
-	if err := decoder.Decode(&root); err != nil {
-		return err
-	}
-	return visitBuildNumbers(root)
-}
-
-func visitBuildNumbers(value any) error {
-	switch v := value.(type) {
-	case json.Number:
-		n, err := strconv.ParseFloat(string(v), 64)
-		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || math.Trunc(n) == n && math.Abs(n) > maxSafeInteger {
-			return fmt.Errorf("build cannot represent an unsafe JSON number; use direct mode")
-		}
-	case map[string]any:
-		for _, item := range v {
-			if err := visitBuildNumbers(item); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for _, item := range v {
-			if err := visitBuildNumbers(item); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }

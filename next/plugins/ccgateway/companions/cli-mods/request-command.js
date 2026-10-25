@@ -6,7 +6,7 @@ import { mBr } from './chunk-4qs43hr1.js';
 import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
-import { parseRequestOptions, parseRequestJSON } from './ccgateway-request-options.js';
+import { parseRequestOptions, parseRequestJSON, parseBuildJSON } from './ccgateway-request-options.js';
 import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
 import { betaOrder } from './ccgateway-request-betas.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
@@ -117,13 +117,17 @@ function removeListeners({ interrupt, failedOutput }) {
 // headers were removed (readInput may block on stdin).
 async function readRequest(ctx) {
   const rawBody = await readInput(ctx.options.input, ctx.signal);
-  const body = parseRequestJSON(rawBody, ctx.options.mode);
+  // Build keeps the client's numbers as written (request-options.js); the sent
+  // body gets them back at the fetch boundary (model-request.js).
+  const { body, restoreNumbers } = ctx.options.mode === 'build' ? parseBuildJSON(rawBody) : { body: parseRequestJSON(rawBody, 'direct') };
   const invalid = checkModelRequest({ body, headers: ctx.options.headers, timeoutMs: ctx.options.timeoutMs });
   if (invalid) throw Error(invalid);
   const timeout = ctx.options.timeoutMs ?? defaultTimeout;
   ctx.run.deadline = setTimeout(() => { ctx.run.timedOut = true; ctx.controller.abort(new Error('request timed out')); }, timeout);
   ctx.run.deadline.unref?.();
-  return prepareOutgoing(ctx, { body, rawBody, timeout });
+  const prepared = await prepareOutgoing(ctx, { body, rawBody, timeout });
+  if (restoreNumbers) prepared.outgoing.restoreNumbers = restoreNumbers;
+  return prepared;
 }
 
 const messagesOf = body => Array.isArray(body.messages) ? body.messages : [];

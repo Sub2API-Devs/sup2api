@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeBetas, finalBetas, apiKeyRequestHeaders, authenticatedRequestHeaders } from '../request-headers.js';
-import { parseRequestOptions, parseRequestJSON } from '../request-options.js';
+import { parseRequestOptions, parseRequestJSON, parseBuildJSON, numberValue } from '../request-options.js';
 
 test('betas have one canonical representation across flags and differently cased headers', () => {
   const parsed = parseRequestOptions(['--build', '--betas', 'a, b,,a', '--header', 'Anthropic-Beta: c,b', '--header', 'anthropic-beta: D', 'body.json']);
@@ -41,11 +41,24 @@ test('API-key header policy keeps the CC headers and checks authentication', () 
   assert.throws(() => apiKeyRequestHeaders(native, { apiKey: 'fake' }), /authentication/);
 });
 
-test('build rejects unsafe numbers before parsing, direct keeps raw-source eligibility', () => {
-  const raw = '{"large":9007199254740993,"text":"9007199254740993"}';
-  assert.throws(() => parseRequestJSON(raw, 'build'), /unsafe JSON number/);
-  assert.doesNotThrow(() => parseRequestJSON(raw, 'direct'));
-  assert.equal(parseRequestJSON('{"text":"9007199254740993","n":12.5}', 'build').n, 12.5);
+// 2026-10-25: build sends the client's numbers as the client wrote them; a
+// number in a string is text and is never touched.
+test('build keeps every number as written, direct parses as JSON does', () => {
+  const raw = '{"large":9007199254740993,"id":12345678901234567891,"one":1.0,"neg":-0,"exp":1e2,"half":0.5,"n":7,"text":"9007199254740993 1.0 \\" 1e2","nested":[{"x":[1.50,{"y":-12345678901234567891}]}]}';
+  const { body, restoreNumbers } = parseBuildJSON(raw);
+  assert.equal(body.half, 0.5);
+  assert.equal(body.n, 7);
+  assert.equal(body.text, '9007199254740993 1.0 " 1e2');
+  assert.equal(numberValue(body.one), 1);
+  // A double that would change the value is not given to the builder.
+  assert.equal(numberValue(body.large), body.large);
+  assert.equal(numberValue(body.exp), 100);
+  assert.equal(numberValue('ccgnum_0123456789abcdef0123456789abcdef_0'), 'ccgnum_0123456789abcdef0123456789abcdef_0', 'another request\'s placeholder is text');
+  assert.equal(restoreNumbers(JSON.stringify(body)), raw);
+  // A placeholder copied into other text cannot be put back: never sent.
+  assert.throws(() => restoreNumbers(JSON.stringify({ text: 'x' + body.large })), /could not keep a number/);
+  assert.equal(parseBuildJSON('{"n":1,"x":0.5}').restoreNumbers, undefined, 'nothing kept, nothing to restore');
+  assert.deepEqual(parseRequestJSON(raw, 'direct'), JSON.parse(raw));
 });
 
 test('OAuth retains native authentication and transport while selecting explicit and auth betas', () => {

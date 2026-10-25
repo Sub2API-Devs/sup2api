@@ -10,7 +10,7 @@ import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.
 import { getRootSession, setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
-import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters } from './ccgateway-request-parameters.js';
+import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters, generationControls } from './ccgateway-request-parameters.js';
 import { toBlocks } from './ccgateway-shared.js';
 
 // The content policy recognizes CC's own wording: the environment renderers'
@@ -137,12 +137,9 @@ const clientTools = customTools => customTools.map(tool => ({
   ccgatewayRequestDefinition: tool,
 }));
 
-// The client's thinking as CC's thinking configuration, which CC's model rules
-// turn back into the request's.
-const thinkingConfigFor = thinking => thinking?.type === 'enabled'
-  ? { type: 'enabled', budgetTokens: thinking.budget_tokens, display: thinking.display }
-  : thinking?.type === 'adaptive' ? { type: 'enabled', display: thinking.display }
-    : { type: 'disabled', mechanical: true };
+// The client's thinking as CC's thinking configuration (generationControls);
+// without one CC knows, CC builds the request without thinking.
+const thinkingConfigFor = controls => controls.thinking ?? { type: 'disabled', mechanical: true };
 
 // identityLineInputs are the selector's own inputs for the contract's line
 // names (request-policy.js identityLineChoices): n1n renders the text, so no
@@ -231,8 +228,8 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   if (!agent || agent.requestClass === 'main') markPrompt(records, agent?.promptId, entrypoint);
   const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   const tools = clientTools(initial.customTools);
-  const native = {};
-  const options = buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; }, capturePrefix: value => { native.prefix = value; } });
+  const native = {}, controls = generationControls(external.parameters);
+  const options = buildOptions(body, initial, content, { controls, agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; }, capturePrefix: value => { native.prefix = value; } });
   // A request with a billing header is Claude Code's own and only has its
   // fields and attachments converted; one without gets the chosen layers.
   const layers = billing.hasBilling(initial.systemBlocks) ? null
@@ -243,8 +240,8 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   // patched body puts in front of the prompt, as PAs does.
   const identity = identityRequest(policy, entrypoint, { clientBilling, appended: layers?.appended === true, system: content.system, apiKey });
   options.recordedCliPrefix = identity.recorded;
-  const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(body.thinking), tools, signal, options }, signal, 'CC request builder did not produce a request');
-  return finishBuilt(built, { body, headers, external, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity });
+  const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(controls), tools, signal, options }, signal, 'CC request builder did not produce a request');
+  return finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity });
 }
 
 // convertContent applies the content policy to the system and messages as the
@@ -257,15 +254,15 @@ function convertContent(initial, policy, context) {
 }
 
 // buildOptions are CC's query options for the client's request.
-function buildOptions(body, initial, content, { agent, clientBetas, fingerprint, tools, captureBilling, capturePrefix }) {
+function buildOptions(body, initial, content, { controls, agent, clientBetas, fingerprint, tools, captureBilling, capturePrefix }) {
   return {
     model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? Al(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
     getToolPermissionContext: async () => ccgatewayPermissionContext(),
     agents: [], allowedAgentTypes: [], mcpClients: [],
     extraToolSchemas: initial.extraToolSchemas, toolChoice: body.tool_choice,
-    maxOutputTokensOverride: body.max_tokens, effortValue: body.output_config?.effort,
-    temperatureOverride: body.temperature, outputFormat: body.output_config?.format,
+    maxOutputTokensOverride: controls.maxTokens, effortValue: controls.outputConfig?.effort,
+    temperatureOverride: controls.temperature, outputFormat: controls.outputConfig?.format,
     enablePromptCaching: false, skipMessageCacheMarkers: true,
     // Native model rules own generation parameters; never overlay the input
     // body onto their result (in particular thinking and tool_choice).
@@ -289,12 +286,14 @@ function applyLayers(options, layers, messages) {
 // finishBuilt completes CC's request: the parameters CC does not own, the
 // cache breakpoint limit, the billing header, the identity line, the betas and
 // stream.
-function finishBuilt(native, { body, headers, external, policy, nativeBilling, agent, clientBilling, clientBetas, layers, identity }) {
+function finishBuilt(native, { body, headers, external, controls, policy, nativeBilling, agent, clientBilling, clientBetas, layers, identity }) {
   const { mergeBillingAttribution, setLeadingBillingField } = nativeContentPolicy();
   // Preserve only parameters which the native builder does not own. Its
   // normalized model/thinking/tool choice/metadata and output effort/format
   // remain authoritative, including intentional omission of those fields.
   const built = mergeAdditionalParameters(native, external.parameters);
+  // A control the builder could not carry goes as the client wrote it.
+  for (const [key, value] of Object.entries(controls.raw)) built[key] = structuredClone(value);
   if (layers?.system) limitBreakpoints(built, layers.ownLines);
   built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
   // The client's header names its prompt; it must match the mapped prompt header.

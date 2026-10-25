@@ -57,6 +57,12 @@ function captureErrorResponse(options, transportFetch) {
       captured.request = { authProfile: headers.has('authorization') ? 'oauth' : 'api-key', betas: normalizeBetas(headers.get('anthropic-beta')) };
       args = [url, { ...init, headers }];
     }
+    // A build's numbers go as the client wrote them (request-options.js).
+    if (options.restoreNumbers) {
+      const [url, init] = args;
+      if (typeof init?.body !== 'string') throw Error('CC transport did not supply a JSON request body');
+      args = [url, { ...init, body: options.restoreNumbers(init.body) }];
+    }
     const response = await transportFetch(...args);
     if (!response.ok) {
       await captured.response?.body?.cancel().catch(() => {});

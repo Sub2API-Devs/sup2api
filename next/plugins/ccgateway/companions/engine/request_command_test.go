@@ -225,11 +225,8 @@ func TestCLIProcessesNeverGetTheWorkerKeys(t *testing.T) {
 
 func TestMessagesBuildComponentsPreservesHistoryAndSchemas(t *testing.T) {
 	raw := []byte(`{"model":"m","system":[{"type":"text","text":"policy","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"custom":9007199254740993}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"},{"type":"text","text":"<system-reminder>keep position</system-reminder>"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}}]}],"tools":[{"name":"Bash","description":"custom","input_schema":{"type":"object","properties":{"custom":{"type":"integer"}}},"strict":true},{"type":"web_search_20250305","name":"web_search"}],"max_tokens":128,"stream":true,"unknown_generation_field":{"value":9007199254740993}}`)
-	// Build rejects numbers the native JS runtime cannot exactly represent.
-	if _, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, ""); err == nil {
-		t.Fatal("unsafe integer accepted")
-	}
-	raw = []byte(strings.ReplaceAll(string(raw), "9007199254740993", "9007199254740991"))
+	// A number a JavaScript double would change reaches the CLI as written;
+	// the CLI keeps it (2026-10-25), so build does not refuse it.
 	got, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +246,7 @@ func TestMessagesBuildComponentsPreservesHistoryAndSchemas(t *testing.T) {
 	if !reflect.DeepEqual(sent, kept) {
 		t.Fatal("messages were changed", string(after["messages"]))
 	}
-	if !strings.Contains(string(got), `9007199254740991`) || strings.Contains(string(got), `9007199254740992`) {
+	if !strings.Contains(string(got), `9007199254740993`) || strings.Contains(string(got), `9007199254740992`) {
 		t.Fatal("number precision lost")
 	}
 	var tools []map[string]json.RawMessage

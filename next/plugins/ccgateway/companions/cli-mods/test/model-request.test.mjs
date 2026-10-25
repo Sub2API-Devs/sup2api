@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, messagesPath } from '../model-request.js';
+import { parseBuildJSON } from '../request-options.js';
 
 const options = { body: { model: 'fixture', messages: [], unknown: { keep: true } }, nativeCreate: true };
 // The SDK client as the transport uses it: the beta Messages create (build) and
@@ -120,4 +121,18 @@ test('the client timeout stays Claude Code default unless the deadline is shorte
     await cancelModelResponse(response);
     assert.equal(seen, expected, String(timeoutMs));
   }
+});
+
+// A build's numbers leave as the client wrote them: the native create
+// serializes the placeholders, and the transport puts the client's text back
+// at the fetch boundary (request-options.js parseBuildJSON).
+test('build sends the client numbers as written at the fetch boundary', async () => {
+  const raw = '{"model":"fixture","messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"f","input":{"id":12345678901234567891,"ratio":1.0}}]}]}';
+  const { body, restoreNumbers } = parseBuildJSON(raw);
+  let sent;
+  const response = await openModelRequest({ ...options, body, restoreNumbers, headerPolicy: { betas: [], oauthBeta: 'oauth-fixture' } }, undefined,
+    async init => ({ beta: { messages: { create: (built, request) => ({ asResponse: () => init.fetchOverride('http://fixture.invalid/v1/messages', { method: 'POST', body: JSON.stringify(built), headers: { authorization: 'Bearer native-fixture' } }) }) } } }),
+    async (url, init) => { sent = init.body; return new Response('ok'); });
+  assert.equal(sent, raw);
+  await cancelModelResponse(response);
 });

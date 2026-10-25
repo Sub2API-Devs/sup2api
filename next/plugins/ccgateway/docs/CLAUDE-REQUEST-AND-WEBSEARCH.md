@@ -65,7 +65,7 @@ claude request --build --betas "mid-conversation-system-2026-04-07" components.j
 - 自定义工具用 `inputSchema`，构建时变成 `input_schema`，名称不添加 MCP 前缀。服务端工具使用原生 `type/name` 定义。
 - `parameters` 放 max_tokens、thinking、tool_choice、output_config、metadata 等参数；不能覆盖 model/system/messages/tools/stream。beta 首选独立 `--betas`，兼容旧 `parameters.betas` 和 `--header anthropic-beta:...`。
 - 独立 system 消息保留完整文本块、output_config 和 clear_at（never/next_user_message）。输入顺序不被自动改成合法位置：上游对 system 的位置、模型和 beta 限制仍然有效。
-- 构建模式使用原生消息归一化，不承诺 JSON 字节、所有块边界及浮点数保真。Worker 和 CLI 均在丢失精度前拒绝超出 JS 安全整数范围或非有限值的数字；需要原始数字文本时用 direct。
+- 构建模式使用原生消息归一化，不承诺 JSON 字节与所有块边界。数字保真（CLI v29 / 插件 0.1.95 起）：JS 双精度无法原样写回的数字（超出安全整数的整数、`1.0`、`1e2`、`-0`、超长小数）以占位交给构建器，发送时在最终 body 里换回客户端原文，不再拒绝（此前 Worker 和 CLI 都回 400）。
 
 ## Worker 提取后的组件
 

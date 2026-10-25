@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -180,7 +181,8 @@ func TestRequestAgentContextNeedsTheCapability(t *testing.T) {
 
 // Direct sends the body as the client wrote it: an identity the Worker cannot
 // read is the upstream's to judge (audit C9), and the CLI gets the session-
-// less agent context. Build, which rebuilds the metadata, refuses it.
+// less agent context. Build, which owns the metadata, gives such a request the
+// account's identity, as it does one without (2026-10-25), never a refusal.
 func TestDirectForwardsAnUnreadableIdentity(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
@@ -194,18 +196,26 @@ func TestDirectForwardsAnUnreadableIdentity(t *testing.T) {
 			capture, target := filepath.Join(root, "input.jsonl"), filepath.Join(root, "agent-env.json")
 			g := &Gateway{RequestMode: mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.RequestAgentContextCapability, features.BuildContentPreservationCapability}},
-				Runner: &Runner{CLI: exe, Work: root, Env: envWith(os.Environ(), map[string]string{
+				Runner: &Runner{CLI: exe, Work: root, Env: envWith(append(os.Environ(), accountEnv(t, "ops@example.invalid", true)...), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture, "CCG_TEST_REQUEST_ENV_CAPTURE": target,
-				})}}
+				})},
+				requestIdentityEnabled: true, requestIdentitySecret: bytes.Repeat([]byte{0x24}, 32)}
 			request := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
 			request.Header.Set("x-api-key", "fixture")
 			response := httptest.NewRecorder()
 			g.ServeHTTP(response, request)
+			require.Equal(t, 200, response.Code, response.Body.String())
 			if mode == "build" {
-				require.Equal(t, 400, response.Code, body)
+				raw, err := os.ReadFile(target)
+				require.NoError(t, err)
+				var env map[string]string
+				require.NoError(t, json.Unmarshal(raw, &env))
+				var identity requestIdentity
+				require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity), body)
+				require.Equal(t, requestIdentity{Version: 2, Mode: "replace", Rewrite: true, Carrier: "json", Session: identity.Session}, identity, body)
+				require.Regexp(t, cliSessionPattern, identity.Session)
 				continue
 			}
-			require.Equal(t, 200, response.Code, response.Body.String())
 			sent, err := os.ReadFile(capture)
 			require.NoError(t, err)
 			require.Equal(t, body+"\n", string(sent), "direct changed the body")

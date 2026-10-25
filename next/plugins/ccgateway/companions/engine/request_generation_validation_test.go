@@ -13,7 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var invalidBuildGeneration = []struct {
+// clientGeneration are generation values the CLI's builder cannot carry, or
+// numbers a JavaScript double would change. Since 2026-10-25 build refuses
+// none of them: the CLI gets them as the client sent them, and sends what its
+// builder cannot carry as the client wrote it, for the upstream to judge.
+var clientGeneration = []struct {
 	name, fields string
 }{
 	{"zero_tokens", `"max_tokens":0`},
@@ -51,14 +55,37 @@ func generationRequest(fields string) []byte {
 	return []byte(`{"model":"fixture","messages":[{"role":"user","content":"validation"}]` + fields + `}`)
 }
 
-func TestBuildGenerationRejectsMalformedExplicitControls(t *testing.T) {
-	for _, tc := range invalidBuildGeneration {
+func TestBuildGenerationKeepsClientValuesAsSent(t *testing.T) {
+	for _, tc := range clientGeneration {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := generationRequest(tc.fields)
-			_, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
-			require.Error(t, err)
+			out, err := messagesBuildComponents(raw, &features.CLIPolicy{ContractVersion: 2}, "/work")
+			require.NoError(t, err)
+			require.Equal(t, generationBytes(t, raw), generationBytes(t, out), "the CLI gets the client's bytes")
 		})
 	}
+}
+
+// generationBytes are the generation values of a Messages body or of its
+// build envelope (parameters, stream), as bytes.
+func generationBytes(t *testing.T, raw []byte) map[string]string {
+	t.Helper()
+	var body map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &body))
+	if parameters, ok := body["parameters"]; ok {
+		stream, hasStream := body["stream"]
+		require.NoError(t, json.Unmarshal(parameters, &body))
+		if hasStream {
+			body["stream"] = stream
+		}
+	}
+	out := map[string]string{}
+	for _, key := range []string{"max_tokens", "thinking", "stream"} {
+		if value, ok := body[key]; ok {
+			out[key] = string(value)
+		}
+	}
+	return out
 }
 
 func TestBuildGenerationKeepsNativeDefaultsAndBudgetAdjustment(t *testing.T) {
@@ -92,7 +119,7 @@ func TestBuildGenerationKeepsNativeDefaultsAndBudgetAdjustment(t *testing.T) {
 	}
 }
 
-func TestInvalidBuildGenerationNeverStartsCLIAndDirectKeepsBytes(t *testing.T) {
+func TestClientGenerationReachesTheCLIInBothModes(t *testing.T) {
 	exe, err := lifecycleTestExecutable()
 	require.NoError(t, err)
 	root := t.TempDir()
@@ -106,16 +133,18 @@ func TestInvalidBuildGenerationNeverStartsCLIAndDirectKeepsBytes(t *testing.T) {
 			Env: envWith(os.Environ(), map[string]string{"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": capture})},
 		Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 	}
-	for _, tc := range invalidBuildGeneration {
+	for _, tc := range clientGeneration {
 		t.Run("build/"+tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(generationRequest(tc.fields)))
+			raw := generationRequest(tc.fields)
+			req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 			req.Header.Set("x-api-key", "fixture")
 			out := httptest.NewRecorder()
 			g.ServeHTTP(out, req)
-			require.Equal(t, 400, out.Code, out.Body.String())
-			require.Contains(t, out.Body.String(), "invalid_request_error")
-			_, err := os.Stat(capture)
-			require.True(t, os.IsNotExist(err), "invalid build must not start the request CLI")
+			require.Equal(t, 200, out.Code, out.Body.String())
+			sent, err := os.ReadFile(capture)
+			require.NoError(t, err)
+			require.NoError(t, os.Remove(capture))
+			require.Equal(t, generationBytes(t, raw), generationBytes(t, bytes.TrimSpace(sent)), "the CLI starts with the client's values")
 		})
 	}
 	// The same semantically invalid upstream fields are opaque in direct mode.

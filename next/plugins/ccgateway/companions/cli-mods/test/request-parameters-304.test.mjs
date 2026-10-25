@@ -5,8 +5,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { validateBuildParameters, mergeAdditionalParameters, wireToolDefinitions, nativeParameterFields } from '../request-parameters.js';
-import { parseRequestJSON } from '../request-options.js';
+import { validateBuildParameters, mergeAdditionalParameters, wireToolDefinitions, nativeParameterFields, generationControls } from '../request-parameters.js';
+import { parseRequestJSON, parseBuildJSON } from '../request-options.js';
 import { installSupport } from './support.mjs';
 import { restored, nativeSkip } from './artifacts.mjs';
 
@@ -66,27 +66,44 @@ test('304 internal controls and component slots cannot be supplied as generation
   }
 });
 
-test('304 positive-integer and thinking discriminant contracts reject invalid shapes', () => {
-  for (const max_tokens of [0,-1,1.5,null,'12',true,Number.MAX_SAFE_INTEGER+1,Infinity,NaN]) {
-    assert.throws(() => validateBuildParameters({ max_tokens }), e => e.field === 'parameters.max_tokens');
+// 2026-10-25: build never refuses a generation value of its own. What CC's
+// builder can carry goes to it; anything else is sent as the client wrote it.
+test('304 generation controls the builder cannot carry go as the client wrote them', () => {
+  for (const max_tokens of [0, -1, 1.5, null, '12', true, Number.MAX_SAFE_INTEGER + 1]) {
+    const controls = generationControls({ max_tokens });
+    assert.equal(controls.maxTokens, undefined, String(max_tokens));
+    assert.deepEqual(controls.raw, { max_tokens }, String(max_tokens));
   }
-  for (const thinking of [null,[],false,'enabled',{}, {type:'other'}, {type:'enabled'}, {type:'enabled',budget_tokens:0}, {type:'enabled',budget_tokens:1.5}, {type:'enabled',budget_tokens:'1024'}, {type:'adaptive',budget_tokens:1024}, {type:'disabled',budget_tokens:null}]) {
-    assert.throws(() => validateBuildParameters({ thinking }), e => e.status === 400 && e.field.startsWith('parameters.thinking'));
+  for (const thinking of [null, [], false, 'enabled', {}, { type: 'other' }, { type: 'enabled' }, { type: 'enabled', budget_tokens: 0 }, { type: 'enabled', budget_tokens: 1.5 }, { type: 'enabled', budget_tokens: '1024' }, { type: 'adaptive', budget_tokens: 1024 }, { type: 'disabled', budget_tokens: null }, { type: 'enabled', budget_tokens: 1024, future: true }]) {
+    const controls = generationControls({ thinking });
+    assert.equal(controls.thinking, undefined, JSON.stringify(thinking));
+    assert.deepEqual(controls.raw, { thinking }, JSON.stringify(thinking));
   }
-  for (const output_config of [null,[],true,'invalid']) assert.throws(() => validateBuildParameters({ output_config }), /parameters\.output_config/);
-  assert.doesNotThrow(() => validateBuildParameters(undefined));
-  assert.doesNotThrow(() => validateBuildParameters({ max_tokens: 1, thinking: { type: 'enabled', budget_tokens: 1 } }));
-  assert.doesNotThrow(() => validateBuildParameters({ thinking: { type: 'adaptive' } }));
-  assert.doesNotThrow(() => validateBuildParameters({ thinking: { type: 'disabled' } }));
+  for (const output_config of [null, [], true, 'invalid']) assert.deepEqual(generationControls({ output_config }).raw, { output_config });
+  for (const temperature of [null, '0.5', true]) assert.deepEqual(generationControls({ temperature }).raw, { temperature });
+  assert.doesNotThrow(() => validateBuildParameters({ max_tokens: 0, thinking: { type: 'other' }, output_config: 'invalid' }));
+  const known = generationControls({ max_tokens: 1, temperature: 0.5, thinking: { type: 'enabled', budget_tokens: 1, display: 'summarized' }, output_config: { effort: 'high' } });
+  assert.deepEqual(known, { raw: {}, maxTokens: 1, temperature: 0.5, thinking: { type: 'enabled', budgetTokens: 1, display: 'summarized' }, outputConfig: { effort: 'high' } });
+  assert.deepEqual(generationControls({ thinking: { type: 'adaptive' } }).thinking, { type: 'enabled', display: undefined });
+  assert.deepEqual(generationControls({ thinking: { type: 'disabled' } }).thinking, { type: 'disabled', mechanical: true });
+  assert.deepEqual(generationControls(), { raw: {} });
 });
 
-test('build lexical numbers cannot hide nonintegral values behind JSON rounding; direct is unchanged', () => {
-  for (const token of ['1.00000000000000001','9007199254740991.1','1e-324','1.00000000000000001e0']) {
+// A number JSON.parse would round is kept as the client wrote it; the
+// builder reads the double it denotes, and one it cannot carry goes raw.
+test('build keeps nonintegral and unsafe numbers as written; direct is unchanged', () => {
+  for (const token of ['1.00000000000000001', '9007199254740991.1', '1e-324', '1.00000000000000001e0', '9007199254740993']) {
     const raw = `{"model":"fixture","max_tokens":${token}}`;
-    assert.throws(() => parseRequestJSON(raw, 'build'), /unsafe JSON number/);
+    const { body, restoreNumbers } = parseBuildJSON(raw);
+    assert.equal(restoreNumbers(JSON.stringify(body)), raw, token);
+    const controls = generationControls({ max_tokens: body.max_tokens });
+    assert.equal(controls.maxTokens, undefined, token);
+    assert.equal(restoreNumbers(JSON.stringify(controls.raw)), `{"max_tokens":${token}}`, token);
     assert.deepEqual(parseRequestJSON(raw, 'direct'), JSON.parse(raw));
   }
-  for (const token of ['1.0','1e3','1.1e1','9007199254740991.0','0e-999999999','0.5','1.25']) {
+  // 10.0 is the integer ten: the builder carries it, the client's text is not needed.
+  assert.equal(generationControls({ max_tokens: parseBuildJSON('{"max_tokens":10.0}').body.max_tokens }).maxTokens, 10);
+  for (const token of ['0.5', '1.25', '7']) {
     const raw = `{"model":"fixture","value":${token}}`;
     assert.deepEqual(parseRequestJSON(raw, 'build'), JSON.parse(raw));
   }
@@ -154,13 +171,24 @@ test('304 adapter sends stream only when the client did', async () => {
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });
 
-test('304 adapter rejects invalid generation input before any native build invocation', async () => {
+// 2026-10-25: a generation value CC's builder cannot carry is not a refusal:
+// the builder runs without it and the request carries the client's value; only
+// the internal envelope names stay refused.
+test('304 adapter sends generation values the builder cannot carry as the client wrote them', async () => {
   const fixture=await adapterFixture();
   try {
-    for(const parameters of [{max_tokens:0},{max_tokens:-1},{thinking:{type:'other'}},{thinking:{type:'enabled'}},{thinking:{type:'adaptive',budget_tokens:1024}},{requestPolicy:{contract_version:2}}]) {
-      await assert.rejects(fixture.adapter.buildRequest({model:'fixture',messages:[{role:'user',content:'no send'}],parameters},{},new AbortController().signal), e=>e.status===400 && e.field.startsWith('parameters.'));
+    for(const parameters of [{max_tokens:0},{max_tokens:-1},{thinking:{type:'other'}},{thinking:{type:'enabled'}},{thinking:{type:'adaptive',budget_tokens:1024}},{output_config:'invalid'},{temperature:'warm'}]) {
+      const result=await fixture.adapter.buildRequest({model:'fixture',messages:[{role:'user',content:'send'}],parameters},{},new AbortController().signal);
+      const [key,value]=Object.entries(parameters)[0];
+      assert.deepEqual(result.body[key],value,key);
+      const {options,thinkingConfig}=fixture.native.captured;
+      assert.equal(options.maxOutputTokensOverride,undefined,key);
+      assert.equal(options.temperatureOverride,undefined,key);
+      assert.deepEqual(thinkingConfig,{type:'disabled',mechanical:true},key);
     }
-    assert.equal(fixture.native.calls,0,'invalid input cannot invoke the native builder or transport');
+    const calls=fixture.native.calls;
+    await assert.rejects(fixture.adapter.buildRequest({model:'fixture',messages:[{role:'user',content:'no send'}],parameters:{requestPolicy:{contract_version:2}}},{},new AbortController().signal), e=>e.status===400 && e.field==='parameters.requestPolicy');
+    assert.equal(fixture.native.calls,calls,'an internal name cannot invoke the native builder');
   } finally { await fs.rm(fixture.dir,{recursive:true,force:true}); }
 });
 

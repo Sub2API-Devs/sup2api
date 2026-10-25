@@ -40,32 +40,71 @@ function addHeader(options, value) {
   options.headers[name] = content;
 }
 
-// JSON.parse may round a nonintegral token such as 1.00000000000000001 to 1.
-// Check only that integer-looking Number result against the original decimal
-// token; ordinary fractional values retain the established JSON Number rules.
-function exactIntegerToken(token) {
-  const match = /^-?(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(token);
-  if (!match) return false;
-  const fraction = match[2] ?? '', digits = match[1] + fraction;
-  if (/^0+$/.test(digits)) return true;
-  const removed = fraction.length - Number(match[3] ?? 0);
-  if (removed <= 0) return true;
-  if (removed > digits.length) return false;
-  return /^0+$/.test(digits.slice(-removed));
-}
+// A build is a JavaScript object, and JSON.parse keeps a number only as the
+// double nearest to it: 12345678901234567891 would go upstream as
+// 12345678901234567000, 1.0 as 1 (2026-10-25: the client's numbers are sent as
+// the client wrote them, never refused or rounded). So build parses a body in
+// which every number that JSON.stringify would not give back unchanged stands
+// in as a placeholder string; the request is assembled around it, and the
+// sent body gets the client's text back (model-request.js, at the fetch
+// boundary). A number the builder reads (numberValue) is the double it
+// denotes. Direct sends the raw bytes and parses only to read them.
+const tokens = /"(?:[^"\\]|\\.)*"|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
 export function parseRequestJSON(raw, mode) {
-  if (mode === 'build') {
-    // A native JS builder cannot round-trip an unsafe integer. Reject it
-    // before JSON.parse loses the original digits; direct keeps raw JSON.
-    const tokens = /"(?:[^"\\]|\\.)*"|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
-    for (const match of raw.matchAll(tokens)) {
-      if (match[1] === undefined) continue;
-      const value = Number(match[1]);
-      if (!Number.isFinite(value) || Number.isInteger(value) && (!Number.isSafeInteger(value) || !exactIntegerToken(match[1]))) {
-        throw Error('request --build cannot represent an unsafe JSON number; use --direct');
-      }
-    }
-  }
-  return JSON.parse(raw);
+  if (mode !== 'build') return JSON.parse(raw);
+  return parseBuildJSON(raw).body;
+}
+
+// parseBuildJSON is the build input with its numbers kept: body, and
+// restoreNumbers(text), which puts the client's numbers back into the JSON
+// text of the request that is sent.
+export function parseBuildJSON(raw) {
+  let nonce;
+  do nonce = crypto.randomUUID().replaceAll('-', ''); while (raw.includes(nonce));
+  const kept = [];
+  const text = raw.replace(tokens, (match, number) => {
+    if (number === undefined || JSON.stringify(Number(number)) === number) return match;
+    kept.push(number);
+    return `"ccgnum_${nonce}_${kept.length - 1}"`;
+  });
+  const body = JSON.parse(text);
+  const placeholder = new RegExp(`"ccgnum_${nonce}_(\\d+)"`, 'g');
+  keptNumbers = kept.length ? { nonce, kept } : undefined;
+  return {
+    body,
+    // Without a kept number the sent body is left alone.
+    restoreNumbers: kept.length ? sent => {
+      const restored = sent.replace(placeholder, (_, index) => kept[Number(index)]);
+      // A placeholder that was copied into other text cannot be restored.
+      if (restored.includes(`ccgnum_${nonce}_`)) throw Error('request --build could not keep a number as the client sent it');
+      return restored;
+    } : undefined,
+  };
+}
+
+// numberValue is what a value the builder reads denotes: a kept number whose
+// double is exactly the client's value (10.0 is ten) is that double; one the
+// double would change (1.00000000000000001, 9007199254740993) stays the
+// placeholder, so the builder does not get it and the client's text is sent
+// (request-parameters.js generationControls). Any other value is itself.
+let keptNumbers;
+export function numberValue(value) {
+  if (typeof value !== 'string' || !keptNumbers) return value;
+  const match = /^ccgnum_([0-9a-f]{32})_(\d+)$/.exec(value);
+  if (!match || match[1] !== keptNumbers.nonce) return value;
+  const text = keptNumbers.kept[Number(match[2])], number = Number(text);
+  return Number.isFinite(number) && decimal(text) === decimal(JSON.stringify(number)) ? number : value;
+}
+
+// decimal is a JSON number's exact value as digits and an exponent, so two
+// spellings of one value (10.0, 1e1, 10) compare equal.
+function decimal(text) {
+  const [, sign, whole, fraction = '', exponent = '0'] = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text);
+  let digits = (whole + fraction).replace(/^0+/, ''), power = Number(exponent) - fraction.length;
+  if (!digits) return '0';
+  const zeros = digits.length - digits.replace(/0+$/, '').length;
+  digits = digits.slice(0, digits.length - zeros);
+  power += zeros;
+  return `${sign}${digits}e${power}`;
 }
