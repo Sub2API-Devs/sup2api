@@ -15,8 +15,17 @@ export default {
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: 'Concurrent' },
     hint: 'Empty or 0 means unlimited. Over a cap, requests get 429 with Retry-After. Tokens count when a response finishes, so large requests running at the same time can pass TPM slightly within a minute.',
     none: 'Unlimited',
-    edit: 'Set limits',
-    saved: 'Limits saved'
+    edit: 'Set limits and quota',
+    saved: 'Saved'
+  },
+  quota: {
+    title: 'Quota',
+    limit: 'Quota (USD)',
+    hint: 'The quota adds up what requests were charged; once used up, requests get 402. Requests running at the same time count when they finish, so the quota can be passed slightly.',
+    used: 'Used {n}',
+    reset: 'Reset used',
+    resetConfirm: 'Reset the used quota of "{name}"? Later requests count from 0 again.',
+    resetDone: 'Used quota reset'
   },
   changeGroup: 'Change group',
   groupChanged: 'Group changed',

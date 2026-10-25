@@ -4284,3 +4284,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 60.4 控制台
 
 「我的 API Key」列表新增「限速」列：只列设了上限的项，显示「已用 / 上限」与进度条（≥80% 黄、满额红），都不限时显示「不限」；铅笔按钮打开编辑框。新建 Key 的表单也有这三项，留空即不限。
+
+## 61. API Key 的额度（2026-10-26，用户要求，同样由创建者设置）
+
+- 迁移 0059：`api_keys.quota_limit numeric(20,8)`（美元，0 = 不限）与 `quota_used numeric(20,8)`。已用额度 = 该 Key 用量记录里 `billing_status` 为 `billed` 或 `reserved` 的 `total_cost` 之和：结算、预估入账、对账补扣与退款、手工退款都通过改写这一行的 `total_cost` 或状态完成，所以由 `usage_logs` 上的触发器 `apikey_quota_track`（INSERT 与 UPDATE OF billing_status, total_cost）把差额加到 `quota_used`，所有路径（包括旧核心节点）自动一致。删除旧用量记录不退还额度。迁移时按已有记录回填（锁住 `usage_logs` 到提交，回填与触发器之间不漏账），重跑迁移不再回填。
+- `POST /me/api-keys`、`PATCH /me/api-keys/:id` 接受 `quota_limit`（0–1,000,000,000，最多 8 位小数）；PATCH 的 `reset_quota: true` 把 `quota_used` 清零。Key 视图返回 `quota_limit`、`quota_used`（十进制字符串）。
+- 网关：认证结果带 `core.KeyQuota`；计费端点在 `prepareBilling` 查余额之前检查，`quota_used >= quota_limit` 时返回 402 `key_quota_exhausted`（Anthropic 格式 `billing_error`，OpenAI 格式 `insufficient_quota`，客户端不会重试），用量记录 `error_type` 为 `key_quota_exhausted`，不选账号、不请求上游。免费端点不受限。
+- 额度在请求结算后才增加：同时进行的请求都放行，额度可能被超出这些请求的费用；WebSocket 会话里的每一轮用的是建立会话时读到的已用额度。
+- 控制台「额度」列显示「已用 / 额度」与进度条（用完标红），不限时显示已用金额；在「设置限速与额度」里修改额度和清零已用，新建表单也可设置。

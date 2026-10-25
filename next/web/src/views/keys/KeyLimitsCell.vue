@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SButton, SProgress } from '@sub2api/ui'
 import type { ApiKey } from '@/api/types'
 import { formatCompact } from '@/utils/format'
-import { cappedLimits } from './keyLimits'
+import { cappedLimits, usageTone as tone } from './keyLimits'
 
 // The capped limits of a key, each as used / cap with a bar (unknown use
 // shows only the cap); a pencil opens the editor (emits edit).
@@ -12,7 +12,6 @@ const props = defineProps<{ apiKey: ApiKey; editable?: boolean }>()
 defineEmits<{ (e: 'edit'): void }>()
 const { t } = useI18n()
 const rows = computed(() => cappedLimits(props.apiKey))
-const tone = (used: number, max: number) => (used >= max ? 'danger' : used >= max * 0.8 ? 'warning' : 'primary')
 </script>
 
 <template>

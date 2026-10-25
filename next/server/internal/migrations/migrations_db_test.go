@@ -2,6 +2,7 @@ package migrations_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -262,4 +263,60 @@ func TestSecurityHardeningDoesNotReopenPrivateProxies(t *testing.T) {
 	if allow {
 		t.Fatal("re-running 0027 opened private addresses to a proxy saved after it")
 	}
+}
+
+// quota_used starts from what each key was charged, then follows every charge
+// through the usage_logs trigger (CONTRACTS §61); rerunning the migration
+// keeps a reset, and deleting usage rows gives nothing back.
+func TestAPIKeyQuotaMigrationAndTrigger(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql, args...)
+		require.NoError(t, err)
+	}
+	used := func() string {
+		t.Helper()
+		var v string
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT quota_used::text FROM api_keys WHERE name='quota'`).Scan(&v))
+		return v
+	}
+	migrate := func() {
+		t.Helper()
+		_, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+	}
+	usage := func(rid, status, cost string) {
+		t.Helper()
+		exec(`INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, protocol, endpoint, status_code, success, total_cost, billing_status)
+			SELECT $1, k.user_id, k.id, k.group_id, 'anthropic.messages', '/v1/messages', 200, true, $3::numeric, $2 FROM api_keys k WHERE k.name='quota'`, rid, status, cost)
+	}
+	exec(`DROP TRIGGER apikey_quota_track ON usage_logs; DROP FUNCTION apikey_quota_track(); DROP FUNCTION apikey_quota_charge(text, numeric);
+		ALTER TABLE api_keys DROP COLUMN quota_limit, DROP COLUMN quota_used;
+		DELETE FROM schema_migrations WHERE id='0059_apikey_quota.sql';
+		INSERT INTO users(email,password_hash) VALUES ('quota@example.com','test');
+		INSERT INTO groups(name) VALUES ('quota');
+		INSERT INTO api_keys(user_id,group_id,name,key_prefix,key_hash)
+		SELECT u.id,g.id,'quota','masked','quota-hash' FROM users u,groups g WHERE u.email='quota@example.com' AND g.name='quota'`)
+	for i, r := range [][2]string{{"billed", "1.5"}, {"reserved", "0.5"}, {"free", "2"}, {"failed", "3"}, {"pending", "4"}} {
+		usage(fmt.Sprint("old-", i), r[0], r[1])
+	}
+	migrate()
+	require.Equal(t, "2.00000000", used(), "billed and reserved rows so far")
+
+	usage("new", "pending", "0")
+	exec(`UPDATE usage_logs SET total_cost = 0.25, billing_status = 'billed' WHERE request_id = 'new'`)
+	require.Equal(t, "2.25000000", used(), "settled")
+	exec(`UPDATE usage_logs SET total_cost = 0.75 WHERE request_id = 'old-1'`)
+	require.Equal(t, "2.50000000", used(), "reconciled")
+	exec(`UPDATE usage_logs SET total_cost = 0, billing_status = 'free' WHERE request_id = 'old-0'`)
+	require.Equal(t, "1.00000000", used(), "refunded")
+	exec(`DELETE FROM usage_logs WHERE request_id = 'new'`)
+	require.Equal(t, "1.00000000", used(), "deleting history gives nothing back")
+
+	exec(`UPDATE api_keys SET quota_used = 0 WHERE name='quota'`)
+	exec(`DELETE FROM schema_migrations WHERE id='0059_apikey_quota.sql'`)
+	migrate()
+	require.Equal(t, "0.00000000", used(), "a rerun keeps the reset")
 }

@@ -105,3 +105,38 @@ func (s liveSlots) InUseMany(_ context.Context, _ string, ids []int64) (map[int6
 	}
 	return out, nil
 }
+
+// The owner sets a quota in USD, sees what was used and may reset it;
+// authentication hands both to the gateway (CONTRACTS §61).
+func TestAPIKeyQuotaSetByOwner(t *testing.T) {
+	e := setup(t)
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('quota') RETURNING id`)
+	status, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "budget", "group_id": group, "quota_limit": "10.5"})
+	require.Equal(t, 201, status, out)
+	key := out["data"].(map[string]any)
+	require.Equal(t, []any{"10.5", "0"}, []any{key["quota_limit"], key["quota_used"]})
+	raw, id := key["key"].(string), int64(key["id"].(float64))
+	e.exec(`UPDATE api_keys SET quota_used = 10.5 WHERE id = $1`, id)
+	p, err := e.svc.Authenticate(t.Context(), raw)
+	require.NoError(t, err)
+	require.True(t, p.KeyQuota.Exhausted())
+
+	path := fmt.Sprintf("/me/api-keys/%d", id)
+	status, out = e.do(e.user, "PATCH", path, map[string]any{"quota_limit": 20})
+	require.Equal(t, 200, status)
+	require.Equal(t, "20", out["data"].(map[string]any)["quota_limit"])
+	p, _ = e.svc.Authenticate(t.Context(), raw)
+	require.False(t, p.KeyQuota.Exhausted())
+
+	status, out = e.do(e.user, "PATCH", path, map[string]any{"reset_quota": true})
+	require.Equal(t, 200, status)
+	require.Equal(t, []any{"20", "0"}, []any{out["data"].(map[string]any)["quota_limit"], out["data"].(map[string]any)["quota_used"]})
+
+	for _, body := range []map[string]any{{"quota_limit": -1}, {"quota_limit": "0.000000001"}, {"quota_limit": 2e9}} {
+		status, _ = e.do(e.user, "PATCH", path, body)
+		require.Equal(t, 400, status, body)
+	}
+	status, out = e.do(e.user, "PATCH", path, map[string]any{"quota_limit": 0})
+	require.Equal(t, 200, status)
+	require.Equal(t, "0", out["data"].(map[string]any)["quota_limit"], "0 removes the quota")
+}

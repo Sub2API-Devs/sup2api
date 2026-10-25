@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -80,4 +82,26 @@ func TestAPIKeyCaps(t *testing.T) {
 			t.Fatalf("usage %+v %v", u, err)
 		}
 	})
+}
+
+// A key that spent its owner's quota is refused with 402 before any account
+// is chosen (CONTRACTS §61).
+func TestAPIKeyQuotaExhausted(t *testing.T) {
+	e := newEnv(t)
+	e.auth.keys[testKey].KeyQuota = core.KeyQuota{Limit: decimal.NewFromInt(5), Used: decimal.RequireFromString("5.00000001")}
+	r := e.messages(body(testModel, false))
+	if r.status != 402 || r.json().Get("error.type").String() != "billing_error" || !strings.Contains(r.json().Get("error.message").String(), "quota") {
+		t.Fatalf("exhausted quota: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); rec.ErrorType != errTypeKeyQuotaExhausted {
+		t.Fatalf("record error type %q", rec.ErrorType)
+	}
+	if len(e.up.keys()) != 0 {
+		t.Fatal("a refused request reached an upstream")
+	}
+	e.auth.keys[testKey].KeyQuota.Used = decimal.RequireFromString("4.99")
+	if r := e.messages(body(testModel, false)); r.status != 200 {
+		t.Fatalf("under the quota: %d %s", r.status, r.body)
+	}
+	e.record()
 }

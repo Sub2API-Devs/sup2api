@@ -85,10 +85,21 @@ type APIKeyPrincipal struct {
 	KeyID              int64
 	UserID             int64
 	UserMaxConcurrency int
-	// KeyLimits are the caps the key's owner set on it.
+	// KeyLimits and KeyQuota are the caps the key's owner set on it.
 	KeyLimits KeyLimits
+	KeyQuota  KeyQuota
 	Group     GroupInfo
 }
+
+// KeyQuota is an API key's spend cap in USD (Limit 0 = unlimited) and what
+// its requests were charged so far (CONTRACTS §61).
+type KeyQuota struct {
+	Limit decimal.Decimal `json:"quota_limit"`
+	Used  decimal.Decimal `json:"quota_used"`
+}
+
+// Exhausted reports whether a capped key has spent its quota.
+func (q KeyQuota) Exhausted() bool { return q.Limit.IsPositive() && q.Used.GreaterThanOrEqual(q.Limit) }
 
 // KeyLimits caps one API key (0 = unlimited): requests and tokens per minute
 // and requests in flight, all counted across the nodes.

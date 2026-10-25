@@ -28,6 +28,7 @@ const (
 const (
 	errTypeBlockedByHook       = "blocked_by_hook"
 	errTypeInsufficientBalance = "insufficient_balance"
+	errTypeKeyQuotaExhausted   = "key_quota_exhausted"
 	errTypeNoAccount           = "no_account"
 	errTypeUpstream            = "upstream_error"
 	errTypeClientCanceled      = "client_canceled"

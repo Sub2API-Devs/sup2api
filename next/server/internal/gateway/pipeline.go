@@ -470,6 +470,9 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 	if c.g.d.Balance == nil {
 		return fromCore(core.AsError(errors.New("billing precharger unavailable")), errTypeInternal)
 	}
+	if c.principal.KeyQuota.Exhausted() {
+		return fromCore(core.ErrKeyQuotaExhausted, errTypeKeyQuotaExhausted)
+	}
 	if err := c.g.d.Balance.CheckBalance(ctx, c.principal.UserID); err != nil {
 		e := core.AsError(err)
 		rt := errTypeInsufficientBalance

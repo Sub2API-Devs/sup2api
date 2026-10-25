@@ -363,6 +363,8 @@ on('POST', '/users/:id/balance/adjust', (req) => {
 // ------------------------------------------------------------------ API keys
 
 interface MockKey {
+  quota_limit?: string
+  quota_used?: string
   rpm_limit?: number
   tpm_limit?: number
   max_concurrency?: number
@@ -380,7 +382,7 @@ interface MockKey {
 const ME_ID = 1
 const keys: MockKey[] = [
   { id: 1, user_id: 1, group_id: 1, name: 'laptop', key_prefix: 'sk-s2a-a1b2', status: 'active', expires_at: null, last_used_at: now(-42), created_at: now(-86400 * 30) },
-  { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, name: 'ci-runner', key_prefix: 'sk-s2a-c3d4', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
+  { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, quota_limit: '20', quota_used: '17.3', name: 'ci-runner', key_prefix: 'sk-s2a-c3d4', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
   { id: 3, user_id: 1, group_id: 1, name: 'old-script', key_prefix: 'sk-s2a-e5f6', status: 'active', expires_at: now(-86400), last_used_at: now(-86400 * 3), created_at: now(-86400 * 50) },
   { id: 4, user_id: 2, group_id: 1, name: 'ops-tools', key_prefix: 'sk-s2a-g7h8', status: 'active', expires_at: null, last_used_at: now(-300), created_at: now(-86400 * 8) },
   { id: 5, user_id: 4, group_id: 2, name: 'acme-prod', key_prefix: 'sk-s2a-i9j0', status: 'disabled', expires_at: null, last_used_at: now(-86400 * 4), created_at: now(-86400 * 9) }
@@ -394,7 +396,7 @@ function liveOf(k: MockKey) {
 }
 
 function keyOut(k: MockKey) {
-  return { rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, ...k, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
+  return { rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, quota_limit: '0', quota_used: k.id === 1 ? '3.2' : '0', ...k, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
 }
 
 function randomToken(n: number) {
@@ -417,7 +419,7 @@ on('POST', '/me/api-keys', (req) => {
   if (!myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
   const token = 'sk-s2a-' + randomToken(40)
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined && !(Number(b[f]) >= 0)) return invalid(f, 'must be between 0 (unlimited) and the maximum')
-  const k: MockKey = { id: nextId(), user_id: ME_ID, group_id: Number(b.group_id), rpm_limit: Number(b.rpm_limit) || 0, tpm_limit: Number(b.tpm_limit) || 0, max_concurrency: Number(b.max_concurrency) || 0, name: b.name, key_prefix: token.slice(0, 11), status: 'active', expires_at: b.expires_at || null, last_used_at: null, created_at: now() }
+  const k: MockKey = { id: nextId(), user_id: ME_ID, group_id: Number(b.group_id), rpm_limit: Number(b.rpm_limit) || 0, tpm_limit: Number(b.tpm_limit) || 0, max_concurrency: Number(b.max_concurrency) || 0, quota_limit: String(Number(b.quota_limit) || 0), quota_used: '0', name: b.name, key_prefix: token.slice(0, 11), status: 'active', expires_at: b.expires_at || null, last_used_at: null, created_at: now() }
   keys.unshift(k)
   return { ...keyOut(k), key: token }
 })
@@ -425,13 +427,18 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
   const b = req.body || {}
-  if (b.status === undefined && b.group_id === undefined && LIMIT_FIELDS.every((f) => b[f] === undefined)) return fail(400, 'invalid_argument', 'nothing to update')
+  if (b.status === undefined && b.group_id === undefined && LIMIT_FIELDS.every((f) => b[f] === undefined) && b.quota_limit === undefined && !b.reset_quota) return fail(400, 'invalid_argument', 'nothing to update')
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined && !(Number(b[f]) >= 0)) return invalid(f, 'must be between 0 (unlimited) and the maximum')
   if (b.status !== undefined && b.status !== 'active' && b.status !== 'disabled') return invalid('status', 'status must be active or disabled')
   if (b.group_id !== undefined && !myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
   if (b.status !== undefined) k.status = b.status
   if (b.group_id !== undefined) k.group_id = Number(b.group_id)
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined) k[f] = Number(b[f])
+  if (b.quota_limit !== undefined) {
+    if (!(Number(b.quota_limit) >= 0)) return invalid('quota_limit', 'must be between 0 (unlimited) and 1000000000 USD')
+    k.quota_limit = String(Number(b.quota_limit))
+  }
+  if (b.reset_quota) k.quota_used = '0'
   return keyOut(k)
 })
 on('DELETE', '/me/api-keys/:id', (req) => {

@@ -43,10 +43,10 @@ type Service struct {
 	// list reports them when set.
 	Windows core.RateWindows
 	Slots   core.Slots
-	db     *store.DB
-	rdb    redis.UniversalClient // optional cache
-	authz  core.Authorizer
-	reg    core.PluginRegistry // optional: platforms are [] without it
+	db      *store.DB
+	rdb     redis.UniversalClient // optional cache
+	authz   core.Authorizer
+	reg     core.PluginRegistry // optional: platforms are [] without it
 
 	mu      sync.Mutex
 	touched map[int64]time.Time
@@ -177,6 +177,7 @@ type cached struct {
 	GroupAvailable     bool       `json:"group_available,omitempty"`
 	AllowedIPs         []string   `json:"allowed_ips"`
 	KeyLimits          core.KeyLimits
+	KeyQuota           core.KeyQuota
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -226,6 +227,7 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 		UserID:             e.UserID,
 		UserMaxConcurrency: e.UserMaxConcurrency,
 		KeyLimits:          e.KeyLimits,
+		KeyQuota:           e.KeyQuota,
 		Group: core.GroupInfo{
 			ID:              e.GroupID,
 			Name:            e.GroupName,
@@ -244,14 +246,14 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 			(u.status = 'active' AND u.deleted_at IS NULL), u.max_concurrency,
 			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
 			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips,
-			k.rpm_limit, k.tpm_limit, k.max_concurrency
+			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
 		JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive, &e.UserMaxConcurrency,
 		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs,
-		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency)
+		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used)
 	switch {
 	case store.IsNoRows(err):
 		e = &cached{Found: false}
@@ -290,6 +292,7 @@ type APIKey struct {
 	Platforms []string `json:"platforms"`
 	// The owner's caps and, when the service counts them, the current use.
 	core.KeyLimits
+	core.KeyQuota
 	Live       *KeyLive   `json:"live,omitempty"`
 	Status     string     `json:"status"`
 	ExpiresAt  *time.Time `json:"expires_at"`
@@ -301,14 +304,14 @@ type APIKey struct {
 
 const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, k.group_id, g.name, k.status,
 		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips,
-		k.rpm_limit, k.tpm_limit, k.max_concurrency
+		k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
 	FROM api_keys k JOIN users u ON u.id = k.user_id JOIN groups g ON g.id = k.group_id`
 
 func scanKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
 	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName,
 		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable, &k.AllowedIPs,
-		&k.RPM, &k.TPM, &k.Concurrency)
+		&k.RPM, &k.TPM, &k.Concurrency, &k.Limit, &k.Used)
 	return &k, err
 }
 
@@ -427,11 +430,12 @@ func (s *Service) createMine(c *gin.Context) {
 		ExpiresAt  *time.Time `json:"expires_at"`
 		AllowedIPs []string   `json:"allowed_ips"`
 		core.KeyLimits
+		QuotaLimit decimal.Decimal `json:"quota_limit"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := validLimits(ctx, in.KeyLimits); err != nil {
+	if err := validCaps(ctx, in.KeyLimits, in.QuotaLimit); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -461,9 +465,9 @@ func (s *Service) createMine(c *gin.Context) {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at, allowed_ips,
-				rpm_limit, tpm_limit, max_concurrency)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt, allowedIPs, in.RPM, in.TPM, in.Concurrency).Scan(&id); err != nil {
+				rpm_limit, tpm_limit, max_concurrency, quota_limit)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt, allowedIPs, in.RPM, in.TPM, in.Concurrency, in.QuotaLimit).Scan(&id); err != nil {
 			return err
 		}
 		if s.Cipher == nil {
@@ -494,7 +498,8 @@ func (s *Service) createMine(c *gin.Context) {
 }
 
 // updateMine switches a key on or off (status active | disabled), moves it
-// to another group the owner may use and changes its caps. Authentication
+// to another group the owner may use, changes its caps and resets the quota
+// it used. Authentication
 // reads them on every request, so the next call already sees the change.
 func (s *Service) updateMine(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -519,9 +524,10 @@ func (s *Service) updateMine(c *gin.Context) {
 			}
 		}
 		err := tx.QueryRow(ctx, `UPDATE api_keys SET status = COALESCE($3, status), group_id = COALESCE($4, group_id),
-				rpm_limit = COALESCE($5, rpm_limit), tpm_limit = COALESCE($6, tpm_limit), max_concurrency = COALESCE($7, max_concurrency)
+				rpm_limit = COALESCE($5, rpm_limit), tpm_limit = COALESCE($6, tpm_limit), max_concurrency = COALESCE($7, max_concurrency),
+				quota_limit = COALESCE($8, quota_limit), quota_used = CASE WHEN $9 THEN 0 ELSE quota_used END
 			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING key_hash`,
-			id, uid, in.Status, in.GroupID, in.RPM, in.TPM, in.Concurrency).Scan(&hash)
+			id, uid, in.Status, in.GroupID, in.RPM, in.TPM, in.Concurrency, in.QuotaLimit, in.ResetQuota).Scan(&hash)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -548,11 +554,14 @@ func (s *Service) updateMine(c *gin.Context) {
 // keyUpdate is the body of PATCH /me/api-keys/:id (absent fields stay) and
 // its audit detail.
 type keyUpdate struct {
-	Status      *string `json:"status,omitempty"`
-	GroupID     *int64  `json:"group_id,omitempty"`
-	RPM         *int    `json:"rpm_limit,omitempty"`
-	TPM         *int64  `json:"tpm_limit,omitempty"`
-	Concurrency *int    `json:"max_concurrency,omitempty"`
+	Status      *string          `json:"status,omitempty"`
+	GroupID     *int64           `json:"group_id,omitempty"`
+	RPM         *int             `json:"rpm_limit,omitempty"`
+	TPM         *int64           `json:"tpm_limit,omitempty"`
+	Concurrency *int             `json:"max_concurrency,omitempty"`
+	QuotaLimit  *decimal.Decimal `json:"quota_limit,omitempty"`
+	// ResetQuota sets quota_used back to 0.
+	ResetQuota bool `json:"reset_quota,omitempty"`
 }
 
 func (u *keyUpdate) validate(ctx context.Context) error {
@@ -563,7 +572,7 @@ func (u *keyUpdate) validate(ctx context.Context) error {
 		return core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
 			Message: t(ctx, "status must be active or disabled", "状态只能是 active 或 disabled")})
 	}
-	return validLimits(ctx, core.KeyLimits{RPM: deref(u.RPM), TPM: deref(u.TPM), Concurrency: deref(u.Concurrency)})
+	return validCaps(ctx, core.KeyLimits{RPM: deref(u.RPM), TPM: deref(u.TPM), Concurrency: deref(u.Concurrency)}, deref(u.QuotaLimit))
 }
 
 func deref[T any](p *T) (v T) {
@@ -581,8 +590,16 @@ const (
 	maxConcurrency = 100_000
 )
 
-func validLimits(ctx context.Context, l core.KeyLimits) error {
+// maxQuota bounds a key's quota in USD (numeric(20,8) holds 12 integer digits).
+var maxQuota = decimal.NewFromInt(1_000_000_000)
+
+// validCaps checks the caps and the quota (USD, at most 8 decimals).
+func validCaps(ctx context.Context, l core.KeyLimits, quota decimal.Decimal) error {
 	var bad []core.FieldError
+	if quota.IsNegative() || quota.GreaterThan(maxQuota) || !quota.Equal(quota.Round(8)) {
+		bad = append(bad, core.FieldError{Field: "quota_limit", Code: "invalid",
+			Message: t(ctx, "must be between 0 (unlimited) and 1000000000 USD with at most 8 decimals", "须在 0（不限）到 1000000000 美元之间，最多 8 位小数")})
+	}
 	for _, c := range []struct {
 		field  string
 		v, max int64

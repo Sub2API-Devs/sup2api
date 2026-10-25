@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SCopyButton, SEmpty, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, SSwitch, STable, STextarea, STooltip, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SCopyButton, SEmpty, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, SSwitch, STable, STextarea, STooltip, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
@@ -12,6 +12,7 @@ import { usePlatforms } from '@/composables/platforms'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
+import { formatMoney } from '@/utils/format'
 import StatusBadge from '@/components/StatusBadge.vue'
 import TimeText from '@/components/TimeText.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
@@ -21,7 +22,8 @@ import KeyGroupSwitch from './KeyGroupSwitch.vue'
 import KeyUsageCell from './KeyUsageCell.vue'
 import KeyLimitsCell from './KeyLimitsCell.vue'
 import KeyLimitsFields from './KeyLimitsFields.vue'
-import { limitsBody, limitsForm } from './keyLimits'
+import KeyQuotaCell from './KeyQuotaCell.vue'
+import { capsBody, capsForm, quotaOf } from './keyLimits'
 import ApiKeyCell from './ApiKeyCell.vue'
 import { useKeyUsage } from './keyUsage'
 
@@ -58,6 +60,7 @@ const columns = computed(() =>
     { key: 'group', label: t('common.group') },
     ...(canReadUsage ? [{ key: 'usage', label: t('apikeys.usage.title') }] : []),
     { key: 'limits', label: t('apikeys.limits.title') },
+    { key: 'quota', label: t('apikeys.quota.title') },
     { key: 'status', label: t('common.status') },
     { key: 'expires_at', label: t('apikeys.expiresAt') },
     { key: 'last_used_at', label: t('apikeys.lastUsed') },
@@ -99,13 +102,14 @@ const moveToGroup = (k: ApiKey, groupId: number) => update(k, { group_id: groupI
 // ------------------------------------------------------------------ limits
 
 const limitsKey = ref<ApiKey | null>(null)
-const limitsEdit = ref(limitsForm())
+const limitsEdit = ref(capsForm())
 const limitsErrors = ref<Record<string, string>>({})
 const limitsSaving = ref(false)
+const editedQuota = computed(() => (limitsKey.value ? quotaOf(limitsKey.value) : null))
 
 function editLimits(k: ApiKey) {
   limitsKey.value = k
-  limitsEdit.value = limitsForm(k)
+  limitsEdit.value = capsForm(k)
   limitsErrors.value = {}
 }
 async function saveLimits() {
@@ -115,11 +119,24 @@ async function saveLimits() {
   limitsErrors.value = {}
   try {
     // The live counters are kept: the answer reports them as of now too.
-    Object.assign(k, await api.patch<ApiKey>(`/me/api-keys/${k.id}`, limitsBody(limitsEdit.value)))
+    Object.assign(k, await api.patch<ApiKey>(`/me/api-keys/${k.id}`, capsBody(limitsEdit.value)))
     limitsKey.value = null
     toast(t('apikeys.limits.saved'), 'success')
   } catch (e) {
     applyFormError(e, limitsErrors)
+  } finally {
+    limitsSaving.value = false
+  }
+}
+async function resetQuota() {
+  const k = limitsKey.value
+  if (!k || limitsSaving.value || !(await confirm({ title: t('apikeys.quota.reset'), message: t('apikeys.quota.resetConfirm', { name: k.name }) }))) return
+  limitsSaving.value = true
+  try {
+    Object.assign(k, await api.patch<ApiKey>(`/me/api-keys/${k.id}`, { reset_quota: true }))
+    toast(t('apikeys.quota.resetDone'), 'success')
+  } catch (e) {
+    notifyError(e)
   } finally {
     limitsSaving.value = false
   }
@@ -130,7 +147,7 @@ async function saveLimits() {
 const createOpen = ref(false)
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})
-const form = reactive({ name: '', group_id: null as number | null, expires_at: '', allowed_ips: '', limits: limitsForm() })
+const form = reactive({ name: '', group_id: null as number | null, expires_at: '', allowed_ips: '', limits: capsForm() })
 const ipKey = ref<ApiKey | null>(null)
 const ipText = ref('')
 const ipSaving = ref(false)
@@ -171,7 +188,7 @@ const selectedGroup = computed(() => groups.value.find((g) => g.id === form.grou
 
 function openCreate() {
   loadGroups()
-  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '', allowed_ips: '', limits: limitsForm() })
+  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '', allowed_ips: '', limits: capsForm() })
   errors.value = {}
   createOpen.value = true
 }
@@ -188,7 +205,7 @@ async function submitCreate() {
   if (Object.keys(errors.value).length) return
   creating.value = true
   try {
-    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id, allowed_ips: ipEntries(form.allowed_ips), ...limitsBody(form.limits) }
+    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id, allowed_ips: ipEntries(form.allowed_ips), ...capsBody(form.limits) }
     if (exp) body.expires_at = exp
     const created = await api.post<ApiKey>('/me/api-keys', body)
     createOpen.value = false
@@ -245,6 +262,7 @@ function remove(k: ApiKey) {
       </template>
       <template #cell-usage="{ row }"><KeyUsageCell :usage="usage.of(row.id)" /></template>
       <template #cell-limits="{ row }"><KeyLimitsCell :api-key="row" editable @edit="editLimits(row)" /></template>
+      <template #cell-quota="{ row }"><KeyQuotaCell :api-key="row" /></template>
       <template #cell-status="{ row }">
         <StatusBadge :status="statusOf(row)" :tone="statusOf(row) === 'expired' ? 'warning' : undefined" :labels="{ expired: 'apikeys.expired' }" />
       </template>
@@ -326,6 +344,10 @@ function remove(k: ApiKey) {
     <SModal :open="!!limitsKey" :title="t('apikeys.limits.edit')" :persistent="limitsSaving" :closable="!limitsSaving" @update:open="!$event && (limitsKey = null)">
       <form @submit.prevent="saveLimits">
         <KeyLimitsFields v-model="limitsEdit" :errors="limitsErrors" :disabled="limitsSaving" />
+        <div class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2 text-xs">
+          <span class="text-fg-muted">{{ t('apikeys.quota.used', { n: formatMoney(editedQuota?.used ?? 0, 4) }) }}</span>
+          <SButton size="xs" variant="ghost" icon="refresh" :disabled="limitsSaving || !editedQuota?.used" data-testid="reset-key-quota" @click="resetQuota">{{ t('apikeys.quota.reset') }}</SButton>
+        </div>
       </form>
       <template #footer>
         <SButton :disabled="limitsSaving" @click="limitsKey = null">{{ t('common.cancel') }}</SButton>

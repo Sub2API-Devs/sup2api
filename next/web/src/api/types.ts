@@ -93,6 +93,9 @@ export interface KeyLimits {
 }
 
 export interface ApiKey extends Partial<KeyLimits> {
+  /** Spend cap in USD (decimal string, "0" = unlimited) and what was charged (CONTRACTS §61). */
+  quota_limit?: string
+  quota_used?: string
   id: number
   user_id?: number
   user_email?: string // assumed

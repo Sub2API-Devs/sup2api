@@ -34,8 +34,17 @@ export default {
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: '并发' },
     hint: '留空或 0 表示不限。超出时请求返回 429 并带 Retry-After。Token 在响应结束后才计入，同一分钟内同时进行的大请求可能略超 TPM。',
     none: '不限',
-    edit: '设置限速',
-    saved: '限速已保存'
+    edit: '设置限速与额度',
+    saved: '已保存'
+  },
+  quota: {
+    title: '额度',
+    limit: '额度（美元）',
+    hint: '额度按实际扣费累计，用完后请求返回 402；同时进行的请求在结束后才计入，可能略超额度。',
+    used: '已用 {n}',
+    reset: '清零已用',
+    resetConfirm: '确定把 "{name}" 的已用额度清零？之后的请求重新从 0 开始累计。',
+    resetDone: '已用额度已清零'
   },
   changeGroup: '更换分组',
   groupChanged: '已更换分组',

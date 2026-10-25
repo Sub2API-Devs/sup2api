@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import type { ApiKey } from '@/api/types'
 import KeyLimitsCell from './KeyLimitsCell.vue'
-import { limitsBody, limitsForm } from './keyLimits'
+import { capsBody, capsForm } from './keyLimits'
 
 const key = (k: Partial<ApiKey>) => ({ id: 1, name: 'k', group_id: 1, key_prefix: 'sk', status: 'active', created_at: '', ...k }) as ApiKey
 const render = (k: Partial<ApiKey>, editable = false) => {
@@ -35,7 +35,8 @@ describe('API key limits cell', () => {
 
 describe('API key limits form', () => {
   it('shows unlimited caps empty and sends empty fields as 0', () => {
-    expect(limitsForm({ rpm_limit: 0, tpm_limit: 5, max_concurrency: 0 })).toEqual({ rpm_limit: null, tpm_limit: 5, max_concurrency: null })
-    expect(limitsBody({ rpm_limit: null, tpm_limit: 5, max_concurrency: 3 })).toEqual({ rpm_limit: 0, tpm_limit: 5, max_concurrency: 3 })
+    expect(capsForm({ rpm_limit: 0, tpm_limit: 5, max_concurrency: 0, quota_limit: '12.5' })).toEqual({ rpm_limit: null, tpm_limit: 5, max_concurrency: null, quota_limit: 12.5 })
+    expect(capsForm({ quota_limit: '0' }).quota_limit).toBeNull()
+    expect(capsBody({ rpm_limit: null, tpm_limit: 5, max_concurrency: 3, quota_limit: null })).toEqual({ rpm_limit: 0, tpm_limit: 5, max_concurrency: 3, quota_limit: 0 })
   })
 })
