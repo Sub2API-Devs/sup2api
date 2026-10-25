@@ -19,7 +19,7 @@ describe('style.css component classes', () => {
     const css = readFileSync('src/style.css', 'utf8')
     const names = new Set([...css.matchAll(/^\s*\.([a-z][a-z0-9-]*)[\s,{:]/gm)].map((m) => m[1]))
     const code = [...sources('src'), ...sources('packages/ui/src'), readFileSync('index.html', 'utf8')].join('\n')
-    const unused = [...names].filter((n) => !new RegExp(`(^|[^\w-])${n}($|[^\w-])`).test(code))
+    const unused = [...names].filter((n) => !new RegExp(String.raw`(^|[^\w-])${n}($|[^\w-])`).test(code))
     expect(unused).toEqual([])
   })
 })
