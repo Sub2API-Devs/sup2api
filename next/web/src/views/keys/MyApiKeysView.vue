@@ -19,6 +19,9 @@ import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview
 import KeyGroupCell from './KeyGroupCell.vue'
 import KeyGroupSwitch from './KeyGroupSwitch.vue'
 import KeyUsageCell from './KeyUsageCell.vue'
+import KeyLimitsCell from './KeyLimitsCell.vue'
+import KeyLimitsFields from './KeyLimitsFields.vue'
+import { limitsBody, limitsForm } from './keyLimits'
 import ApiKeyCell from './ApiKeyCell.vue'
 import { useKeyUsage } from './keyUsage'
 
@@ -54,6 +57,7 @@ const columns = computed(() =>
     { key: 'key_prefix', label: t('apikeys.key') },
     { key: 'group', label: t('common.group') },
     ...(canReadUsage ? [{ key: 'usage', label: t('apikeys.usage.title') }] : []),
+    { key: 'limits', label: t('apikeys.limits.title') },
     { key: 'status', label: t('common.status') },
     { key: 'expires_at', label: t('apikeys.expiresAt') },
     { key: 'last_used_at', label: t('apikeys.lastUsed') },
@@ -92,12 +96,41 @@ async function update(k: ApiKey, body: { status?: string; group_id?: number }, d
 const setEnabled = (k: ApiKey, on: boolean) => update(k, { status: on ? 'active' : 'disabled' }, t(on ? 'apikeys.enabledToast' : 'apikeys.disabledToast'))
 const moveToGroup = (k: ApiKey, groupId: number) => update(k, { group_id: groupId }, t('apikeys.groupChanged'))
 
+// ------------------------------------------------------------------ limits
+
+const limitsKey = ref<ApiKey | null>(null)
+const limitsEdit = ref(limitsForm())
+const limitsErrors = ref<Record<string, string>>({})
+const limitsSaving = ref(false)
+
+function editLimits(k: ApiKey) {
+  limitsKey.value = k
+  limitsEdit.value = limitsForm(k)
+  limitsErrors.value = {}
+}
+async function saveLimits() {
+  const k = limitsKey.value
+  if (!k || limitsSaving.value) return
+  limitsSaving.value = true
+  limitsErrors.value = {}
+  try {
+    // The live counters are kept: the answer reports them as of now too.
+    Object.assign(k, await api.patch<ApiKey>(`/me/api-keys/${k.id}`, limitsBody(limitsEdit.value)))
+    limitsKey.value = null
+    toast(t('apikeys.limits.saved'), 'success')
+  } catch (e) {
+    applyFormError(e, limitsErrors)
+  } finally {
+    limitsSaving.value = false
+  }
+}
+
 // ------------------------------------------------------------------ create
 
 const createOpen = ref(false)
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})
-const form = reactive({ name: '', group_id: null as number | null, expires_at: '', allowed_ips: '' })
+const form = reactive({ name: '', group_id: null as number | null, expires_at: '', allowed_ips: '', limits: limitsForm() })
 const ipKey = ref<ApiKey | null>(null)
 const ipText = ref('')
 const ipSaving = ref(false)
@@ -138,7 +171,7 @@ const selectedGroup = computed(() => groups.value.find((g) => g.id === form.grou
 
 function openCreate() {
   loadGroups()
-  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '', allowed_ips: '' })
+  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '', allowed_ips: '', limits: limitsForm() })
   errors.value = {}
   createOpen.value = true
 }
@@ -155,7 +188,7 @@ async function submitCreate() {
   if (Object.keys(errors.value).length) return
   creating.value = true
   try {
-    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id, allowed_ips: ipEntries(form.allowed_ips) }
+    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id, allowed_ips: ipEntries(form.allowed_ips), ...limitsBody(form.limits) }
     if (exp) body.expires_at = exp
     const created = await api.post<ApiKey>('/me/api-keys', body)
     createOpen.value = false
@@ -211,6 +244,7 @@ function remove(k: ApiKey) {
         </KeyGroupSwitch>
       </template>
       <template #cell-usage="{ row }"><KeyUsageCell :usage="usage.of(row.id)" /></template>
+      <template #cell-limits="{ row }"><KeyLimitsCell :api-key="row" editable @edit="editLimits(row)" /></template>
       <template #cell-status="{ row }">
         <StatusBadge :status="statusOf(row)" :tone="statusOf(row) === 'expired' ? 'warning' : undefined" :labels="{ expired: 'apikeys.expired' }" />
       </template>
@@ -278,6 +312,7 @@ function remove(k: ApiKey) {
         <SField :label="t('apikeys.ipAllowlist')" :hint="t('apikeys.ipAllowlistHint')" :error="errors.allowed_ips">
           <STextarea v-model="form.allowed_ips" :aria-label="t('apikeys.ipAllowlist')" mono :rows="3" :maxlength="16384" data-testid="create-key-ips" />
         </SField>
+        <KeyLimitsFields v-model="form.limits" :errors="errors" />
         <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
           <SInput v-model="form.expires_at" type="datetime-local" />
         </SField>
@@ -285,6 +320,16 @@ function remove(k: ApiKey) {
       <template #footer>
         <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
         <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
+      </template>
+    </SModal>
+
+    <SModal :open="!!limitsKey" :title="t('apikeys.limits.edit')" :persistent="limitsSaving" :closable="!limitsSaving" @update:open="!$event && (limitsKey = null)">
+      <form @submit.prevent="saveLimits">
+        <KeyLimitsFields v-model="limitsEdit" :errors="limitsErrors" :disabled="limitsSaving" />
+      </form>
+      <template #footer>
+        <SButton :disabled="limitsSaving" @click="limitsKey = null">{{ t('common.cancel') }}</SButton>
+        <SButton variant="primary" :loading="limitsSaving" data-testid="save-key-limits" @click="saveLimits">{{ t('common.save') }}</SButton>
       </template>
     </SModal>
 

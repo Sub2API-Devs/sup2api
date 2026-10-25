@@ -7,6 +7,17 @@ export default {
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   create: 'New API key',
   usage: { title: 'Usage', today: 'Today', total: 'Total', requests: '{n} req' },
+  limits: {
+    title: 'Limits',
+    rpm: 'Requests / min (RPM)',
+    tpm: 'Tokens / min (TPM)',
+    concurrency: 'Max concurrency',
+    short: { rpm: 'RPM', tpm: 'TPM', concurrency: 'Concurrent' },
+    hint: 'Empty or 0 means unlimited. Over a cap, requests get 429 with Retry-After. Tokens count when a response finishes, so large requests running at the same time can pass TPM slightly within a minute.',
+    none: 'Unlimited',
+    edit: 'Set limits',
+    saved: 'Limits saved'
+  },
   changeGroup: 'Change group',
   groupChanged: 'Group changed',
   enabledToast: 'API key enabled',

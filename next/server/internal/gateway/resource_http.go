@@ -87,6 +87,12 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 		return true
 	}
 	defer release()
+	ctx, releaseKey, e := g.admitKey(ctx, p, x.rid)
+	if e != nil {
+		writeError(c, "anthropic", e)
+		return true
+	}
+	defer releaseKey()
 	c.Request = c.Request.WithContext(ctx)
 	var keys []core.AccountTypeKey
 	table := g.table.Load()

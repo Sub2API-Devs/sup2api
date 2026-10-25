@@ -2,10 +2,12 @@ package account
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -25,13 +27,13 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if ok, err := b.TryHit(ctx, ref, "second"); err != nil || ok {
 		t.Fatal("second node bypassed shared limit", ok, err)
 	}
-	minute := minuteWindow(stamp)
-	if n, err := rdb.Get(ctx, rateKey(7, "rpm", minute)).Int(); err != nil || n != 1 {
+	// The keys are those of the releases before the shared ratelimit package.
+	if n, err := rdb.Get(ctx, "rl:account:7:rpm:"+strconv.FormatInt(stamp.Unix()/60, 10)).Int(); err != nil || n != 1 {
 		t.Fatal("RPM key used local time", n, err)
 	}
 	a.Hit(ctx, 8, "session")
 	a.AddTokens(ctx, 8, 17)
-	if n, err := rdb.Get(ctx, rateKey(8, "tpm", minute)).Int(); err != nil || n != 17 {
+	if n, err := rdb.Get(ctx, ratelimit.Key("account", 8, "tpm", stamp)).Int(); err != nil || n != 17 {
 		t.Fatal("TPM key used local time", n, err)
 	}
 	u, err := b.Usage(ctx, []int64{8})

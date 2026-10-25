@@ -39,6 +39,10 @@ const (
 // Service serves API key endpoints and authenticates gateway requests.
 type Service struct {
 	Cipher *secret.Cipher
+	// Windows and Slots hold the live counts of the owners' caps; the key
+	// list reports them when set.
+	Windows core.RateWindows
+	Slots   core.Slots
 	db     *store.DB
 	rdb    redis.UniversalClient // optional cache
 	authz  core.Authorizer
@@ -172,6 +176,7 @@ type cached struct {
 	ModelFilterMode    string     `json:"model_filter_mode,omitempty"`
 	GroupAvailable     bool       `json:"group_available,omitempty"`
 	AllowedIPs         []string   `json:"allowed_ips"`
+	KeyLimits          core.KeyLimits
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -220,6 +225,7 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 		KeyID:              e.KeyID,
 		UserID:             e.UserID,
 		UserMaxConcurrency: e.UserMaxConcurrency,
+		KeyLimits:          e.KeyLimits,
 		Group: core.GroupInfo{
 			ID:              e.GroupID,
 			Name:            e.GroupName,
@@ -237,13 +243,15 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
 			(u.status = 'active' AND u.deleted_at IS NULL), u.max_concurrency,
 			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
-			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips
+			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips,
+			k.rpm_limit, k.tpm_limit, k.max_concurrency
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
 		JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive, &e.UserMaxConcurrency,
-		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs)
+		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs,
+		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency)
 	switch {
 	case store.IsNoRows(err):
 		e = &cached{Found: false}
@@ -279,7 +287,10 @@ type APIKey struct {
 	GroupName  string   `json:"group_name"`
 	AllowedIPs []string `json:"allowed_ips"`
 	// Platforms the key can reach: those of its group (CONTRACTS §13).
-	Platforms  []string   `json:"platforms"`
+	Platforms []string `json:"platforms"`
+	// The owner's caps and, when the service counts them, the current use.
+	core.KeyLimits
+	Live       *KeyLive   `json:"live,omitempty"`
 	Status     string     `json:"status"`
 	ExpiresAt  *time.Time `json:"expires_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
@@ -289,13 +300,15 @@ type APIKey struct {
 }
 
 const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, k.group_id, g.name, k.status,
-		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips
+		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips,
+		k.rpm_limit, k.tpm_limit, k.max_concurrency
 	FROM api_keys k JOIN users u ON u.id = k.user_id JOIN groups g ON g.id = k.group_id`
 
 func scanKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
 	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName,
-		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable, &k.AllowedIPs)
+		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable, &k.AllowedIPs,
+		&k.RPM, &k.TPM, &k.Concurrency)
 	return &k, err
 }
 
@@ -339,7 +352,7 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 		return
 	}
 	rows.Close()
-	if err := s.fillPlatforms(ctx, items); err != nil {
+	if err := s.fill(ctx, items); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -359,7 +372,7 @@ func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := s.fillPlatforms(ctx, []*APIKey{k}); err != nil {
+	if err := s.fill(ctx, []*APIKey{k}); err != nil {
 		return nil, err
 	}
 	return k, nil
@@ -413,8 +426,13 @@ func (s *Service) createMine(c *gin.Context) {
 		GroupID    int64      `json:"group_id"`
 		ExpiresAt  *time.Time `json:"expires_at"`
 		AllowedIPs []string   `json:"allowed_ips"`
+		core.KeyLimits
 	}
 	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	if err := validLimits(ctx, in.KeyLimits); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	name, err := validName(ctx, in.Name)
@@ -442,9 +460,10 @@ func (s *Service) createMine(c *gin.Context) {
 		if err := requireGroup(ctx, tx, uid, in.GroupID); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at, allowed_ips)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt, allowedIPs).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at, allowed_ips,
+				rpm_limit, tpm_limit, max_concurrency)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt, allowedIPs, in.RPM, in.TPM, in.Concurrency).Scan(&id); err != nil {
 			return err
 		}
 		if s.Cipher == nil {
@@ -474,9 +493,9 @@ func (s *Service) createMine(c *gin.Context) {
 	httpapi.Created(c, k)
 }
 
-// updateMine switches a key on or off (status active | disabled) and moves it
-// to another group the owner may use. Authentication reads both on every
-// request, so the next call already sees the change.
+// updateMine switches a key on or off (status active | disabled), moves it
+// to another group the owner may use and changes its caps. Authentication
+// reads them on every request, so the next call already sees the change.
 func (s *Service) updateMine(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
@@ -484,23 +503,13 @@ func (s *Service) updateMine(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var in struct {
-		Status  *string `json:"status"`
-		GroupID *int64  `json:"group_id"`
-	}
+	var in keyUpdate
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := validUpdate(ctx, in.Status, in.GroupID); err != nil {
+	if err := in.validate(ctx); err != nil {
 		httpapi.Fail(c, err)
 		return
-	}
-	detail := map[string]any{}
-	if in.Status != nil {
-		detail["status"] = *in.Status
-	}
-	if in.GroupID != nil {
-		detail["group_id"] = *in.GroupID
 	}
 	var hash string
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -509,15 +518,17 @@ func (s *Service) updateMine(c *gin.Context) {
 				return err
 			}
 		}
-		err := tx.QueryRow(ctx, `UPDATE api_keys SET status = COALESCE($3, status), group_id = COALESCE($4, group_id)
-			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING key_hash`, id, uid, in.Status, in.GroupID).Scan(&hash)
+		err := tx.QueryRow(ctx, `UPDATE api_keys SET status = COALESCE($3, status), group_id = COALESCE($4, group_id),
+				rpm_limit = COALESCE($5, rpm_limit), tpm_limit = COALESCE($6, tpm_limit), max_concurrency = COALESCE($7, max_concurrency)
+			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING key_hash`,
+			id, uid, in.Status, in.GroupID, in.RPM, in.TPM, in.Concurrency).Scan(&hash)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO audit_logs (user_id,action,target_type,target_id,detail,ip) VALUES ($1,'apikey.update','apikey',$2,$3,$4)`, uid, strconv.FormatInt(id, 10), detail, c.ClientIP())
+		_, err = tx.Exec(ctx, `INSERT INTO audit_logs (user_id,action,target_type,target_id,detail,ip) VALUES ($1,'apikey.update','apikey',$2,$3,$4)`, uid, strconv.FormatInt(id, 10), in, c.ClientIP())
 		return err
 	})
 	if err != nil {
@@ -534,13 +545,56 @@ func (s *Service) updateMine(c *gin.Context) {
 	httpapi.OK(c, k)
 }
 
-func validUpdate(ctx context.Context, status *string, groupID *int64) error {
-	if status == nil && groupID == nil {
-		return core.ErrInvalidArgument.WithMessage(t(ctx, "nothing to update: give status or group_id", "没有要修改的内容：请提供 status 或 group_id"))
+// keyUpdate is the body of PATCH /me/api-keys/:id (absent fields stay) and
+// its audit detail.
+type keyUpdate struct {
+	Status      *string `json:"status,omitempty"`
+	GroupID     *int64  `json:"group_id,omitempty"`
+	RPM         *int    `json:"rpm_limit,omitempty"`
+	TPM         *int64  `json:"tpm_limit,omitempty"`
+	Concurrency *int    `json:"max_concurrency,omitempty"`
+}
+
+func (u *keyUpdate) validate(ctx context.Context) error {
+	if *u == (keyUpdate{}) {
+		return core.ErrInvalidArgument.WithMessage(t(ctx, "nothing to update", "没有要修改的内容"))
 	}
-	if status != nil && *status != "active" && *status != "disabled" {
+	if u.Status != nil && *u.Status != "active" && *u.Status != "disabled" {
 		return core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
 			Message: t(ctx, "status must be active or disabled", "状态只能是 active 或 disabled")})
+	}
+	return validLimits(ctx, core.KeyLimits{RPM: deref(u.RPM), TPM: deref(u.TPM), Concurrency: deref(u.Concurrency)})
+}
+
+func deref[T any](p *T) (v T) {
+	if p != nil {
+		v = *p
+	}
+	return v
+}
+
+// Upper bounds of the caps (0 = unlimited): far above any real use, they only
+// keep the numbers sane.
+const (
+	maxRPM         = 1_000_000
+	maxTPM         = 1_000_000_000_000
+	maxConcurrency = 100_000
+)
+
+func validLimits(ctx context.Context, l core.KeyLimits) error {
+	var bad []core.FieldError
+	for _, c := range []struct {
+		field  string
+		v, max int64
+	}{{"rpm_limit", int64(l.RPM), maxRPM}, {"tpm_limit", l.TPM, maxTPM}, {"max_concurrency", int64(l.Concurrency), maxConcurrency}} {
+		if c.v < 0 || c.v > c.max {
+			n := strconv.FormatInt(c.max, 10)
+			bad = append(bad, core.FieldError{Field: c.field, Code: "invalid",
+				Message: t(ctx, "must be between 0 (unlimited) and "+n, "须在 0（不限）到 "+n+" 之间")})
+		}
+	}
+	if len(bad) > 0 {
+		return core.InvalidFields(bad...)
 	}
 	return nil
 }

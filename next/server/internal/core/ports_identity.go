@@ -85,7 +85,30 @@ type APIKeyPrincipal struct {
 	KeyID              int64
 	UserID             int64
 	UserMaxConcurrency int
-	Group              GroupInfo
+	// KeyLimits are the caps the key's owner set on it.
+	KeyLimits KeyLimits
+	Group     GroupInfo
+}
+
+// KeyLimits caps one API key (0 = unlimited): requests and tokens per minute
+// and requests in flight, all counted across the nodes.
+type KeyLimits struct {
+	RPM         int   `json:"rpm_limit"`
+	TPM         int64 `json:"tpm_limit"`
+	Concurrency int   `json:"max_concurrency"`
+}
+
+// KeySlots is the Slots kind of the API keys' requests in flight.
+const KeySlots = "apikey"
+
+// RateWindows counts requests and tokens of one kind of subject (API keys)
+// in shared minute windows. Admit counts one request when the subject is
+// under rpm and tpm (0 = unlimited), else returns the time until the next
+// window; AddTokens counts a finished response.
+type RateWindows interface {
+	Admit(ctx context.Context, id int64, rpm int, tpm int64) (ok bool, retry time.Duration, err error)
+	AddTokens(ctx context.Context, id, n int64)
+	Usage(ctx context.Context, ids []int64) (map[int64]RateUsage, error)
 }
 
 // APIKeyAuthenticator resolves a raw client key. Errors: ErrUnauthenticated

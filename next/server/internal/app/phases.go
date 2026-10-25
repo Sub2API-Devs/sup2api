@@ -52,6 +52,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/providerresources"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/updater"
@@ -174,6 +175,8 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.grp = group.New(b.db, b.rdb, b.cl.Bus, b.reg)
 	b.keys = apikey.New(b.db, b.rdb, az, b.reg)
 	b.keys.Cipher = b.cipher
+	// Per-key caps the owners set (CONTRACTS §60): minute windows and slots.
+	b.keys.Windows, b.keys.Slots = ratelimit.NewMinute(b.rdb, "apikey"), b.cl.Slots
 	b.prx = proxy.New(b.db, b.cipher, b.cl.Bus, proxy.Options{AllowPrivate: cfg.AllowPrivateUpstream, Registry: b.reg, Events: b.events})
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
@@ -291,7 +294,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 		Resources: resources, Skills: resources, Credits: fallbackcredits.New(b.db, 4096), ResourceTransport: b.ccg.ResourceTransport(),
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Node: b.cl.Registry, Registry: b.reg,
 		Auth: b.keys, Pricer: b.bill, Balance: b.bill, Slots: b.cl.Slots,
-		Accounts: b.acc, Proxies: b.prx, Settler: b.settler, Observations: observations, Tasks: b.settler, Limiter: b.limiter, Quota: b.acc, Config: cfg, Converters: b.converters,
+		Accounts: b.acc, Proxies: b.prx, Settler: b.settler, Observations: observations, Tasks: b.settler, Limiter: b.limiter, KeyWindows: b.keys.Windows, Quota: b.acc, Config: cfg, Converters: b.converters,
 		Draining: b.gate.isDraining,
 	})
 

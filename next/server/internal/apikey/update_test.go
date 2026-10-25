@@ -1,10 +1,15 @@
 package apikey
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 )
 
 // PATCH /me/api-keys/:id switches the owner's key off and on and moves it to
@@ -46,4 +51,57 @@ func TestAPIKeyStatusAndGroupUpdate(t *testing.T) {
 	var audits int
 	require.NoError(t, e.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_logs WHERE action='apikey.update' AND user_id=$1`, e.user).Scan(&audits))
 	require.Equal(t, 2, audits)
+}
+
+// The owner sets the caps on create and PATCH; authentication hands them to
+// the gateway, and the list reports their live use (CONTRACTS §60).
+func TestAPIKeyCapsSetByOwner(t *testing.T) {
+	e := setup(t)
+	e.svc.Windows, e.svc.Slots = ratelimit.NewMinute(redis.NewClient(&redis.Options{Addr: e.mr.Addr()}), "apikey"), liveSlots{}
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('caps') RETURNING id`)
+	status, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "ci", "group_id": group, "rpm_limit": 60, "tpm_limit": 100000, "max_concurrency": 2})
+	require.Equal(t, 201, status, out)
+	key := out["data"].(map[string]any)
+	require.Equal(t, []any{float64(60), float64(100000), float64(2)}, []any{key["rpm_limit"], key["tpm_limit"], key["max_concurrency"]})
+	raw, id := key["key"].(string), int64(key["id"].(float64))
+	p, err := e.svc.Authenticate(t.Context(), raw)
+	require.NoError(t, err)
+	require.Equal(t, core.KeyLimits{RPM: 60, TPM: 100000, Concurrency: 2}, p.KeyLimits)
+
+	path := fmt.Sprintf("/me/api-keys/%d", id)
+	status, _ = e.do(e.user, "PATCH", path, map[string]any{"rpm_limit": 0, "max_concurrency": 5})
+	require.Equal(t, 200, status)
+	p, err = e.svc.Authenticate(t.Context(), raw)
+	require.NoError(t, err)
+	require.Equal(t, core.KeyLimits{RPM: 0, TPM: 100000, Concurrency: 5}, p.KeyLimits, "absent fields stay, 0 clears")
+
+	for _, body := range []map[string]any{{"rpm_limit": -1}, {"tpm_limit": maxTPM + 1}, {"max_concurrency": maxConcurrency + 1}} {
+		status, _ = e.do(e.user, "PATCH", path, body)
+		require.Equal(t, 400, status, body)
+	}
+	status, _ = e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "bad", "group_id": group, "rpm_limit": -5})
+	require.Equal(t, 400, status)
+
+	_, _, err = e.svc.Windows.Admit(t.Context(), id, 0, 0)
+	require.NoError(t, err)
+	e.svc.Slots = liveSlots{id: 2}
+	status, out = e.do(e.user, "GET", "/me/api-keys", nil)
+	require.Equal(t, 200, status)
+	live := out["data"].([]any)[0].(map[string]any)["live"].(map[string]any)
+	require.Equal(t, map[string]any{"rpm": float64(1), "tpm": float64(0), "concurrency": float64(2)}, live)
+}
+
+// liveSlots reports fixed slots in use per key id.
+type liveSlots map[int64]int
+
+func (liveSlots) Acquire(context.Context, string, int64, int, string) (func(), bool, error) {
+	return func() {}, true, nil
+}
+func (s liveSlots) InUse(_ context.Context, _ string, id int64) (int, error) { return s[id], nil }
+func (s liveSlots) InUseMany(_ context.Context, _ string, ids []int64) (map[int64]int, error) {
+	out := map[int64]int{}
+	for _, id := range ids {
+		out[id] = s[id]
+	}
+	return out, nil
 }

@@ -26,6 +26,17 @@ export default {
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
   usage: { title: '用量', today: '今日', total: '累计', requests: '{n} 次' },
+  limits: {
+    title: '限速',
+    rpm: '每分钟请求（RPM）',
+    tpm: '每分钟 Token（TPM）',
+    concurrency: '最大并发',
+    short: { rpm: 'RPM', tpm: 'TPM', concurrency: '并发' },
+    hint: '留空或 0 表示不限。超出时请求返回 429 并带 Retry-After。Token 在响应结束后才计入，同一分钟内同时进行的大请求可能略超 TPM。',
+    none: '不限',
+    edit: '设置限速',
+    saved: '限速已保存'
+  },
   changeGroup: '更换分组',
   groupChanged: '已更换分组',
   enabledToast: 'API Key 已启用',

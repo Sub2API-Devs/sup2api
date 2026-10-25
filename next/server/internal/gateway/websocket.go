@@ -351,13 +351,20 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	p := cl.principal
-	_, releaseUser, ok, err := core.AcquireSlot(ctx, s.g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, cl.rid)
+	_, releaseUserSlot, ok, err := core.AcquireSlot(ctx, s.g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, cl.rid)
 	if err != nil {
 		return reject(cl, fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
 	}
 	if !ok {
 		return reject(cl, fromCore(core.ErrRateLimited.WithMessage("too many concurrent requests for this user"), errTypeRateLimited))
 	}
+	// Each turn is one request of the API key (CONTRACTS §60).
+	_, releaseKey, ke := s.g.admitKey(ctx, p, cl.rid)
+	if ke != nil {
+		releaseUserSlot()
+		return reject(cl, ke)
+	}
+	releaseUser := func() { releaseKey(); releaseUserSlot() }
 	var releaseAccount func()
 	handedOff := false
 	defer func() {

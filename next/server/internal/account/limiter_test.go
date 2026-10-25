@@ -15,7 +15,7 @@ func TestLimiterWindows(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 	now := time.Date(2026, 9, 25, 12, 0, 30, 0, time.UTC)
 	l := NewLimiter(rdb)
-	l.now = func() time.Time { return now }
+	l.w.Now = func() time.Time { return now }
 	ctx := context.Background()
 	refs := []core.AccountRef{{ID: 1, RPMLimit: 2}, {ID: 2, TPMLimit: 100}, {ID: 3}}
 	if ex, err := l.Exhausted(ctx, refs, "s1"); err != nil || len(ex) != 0 {

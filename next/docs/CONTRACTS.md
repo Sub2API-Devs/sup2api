@@ -4261,3 +4261,26 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 账号列表在类型后显示订阅徽标（Max / Pro …），详情增加"订阅"一行。
 - 新建 Claude Code 订阅账号的模型区提示保存时会按订阅类型调整；保存结果与提交的列表不同时提示"已按 Pro 订阅调整模型列表（N 个模型）"。保存后照常编辑。
 - Claude Code 账号的模型区顶部有"自动配置模型"开关，默认打开（账号 `auto_models` 为 null 或 true）：模型列表只读，显示按订阅取的预设（41.2；新建时用授权面板报告的订阅），填入预设、获取、清空等按钮隐藏，保存时提交该预设与 `auto_models: true`。关闭时先填入当前预设，之后可随意增删，保存 `auto_models: false`，插件不再改动。模型映射不受开关影响。
+
+## 60. API Key 的限速（2026-10-26，用户要求：由创建 Key 的人自己设置）
+
+### 60.1 数据与接口
+
+- 迁移 0058：`api_keys.rpm_limit int`、`tpm_limit bigint`、`max_concurrency int`，都是 `NOT NULL DEFAULT 0`，0 = 不限。旧核心忽略这三列、不限速，所有节点升级后才生效。
+- `POST /me/api-keys` 与 `PATCH /me/api-keys/:id` 接受这三个字段（PATCH 未给的字段不变，给 0 清除），范围 0–1,000,000 / 0–10¹² / 0–100,000，越界为 `invalid_fields`。PATCH 的审计 `apikey.update` 的 `detail` 就是请求里给出的字段。
+- Key 视图返回这三个字段，以及 `live: {rpm, tpm, concurrency}`：本分钟已计的请求数与 token 数、正在进行的请求数（跨节点）。计数读不到时省略 `live`，列表照常返回。
+
+### 60.2 网关
+
+- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在占用户并发槽之后、选账号之前调用 `admitKey`：先占 `apikey` 类并发槽（`core.KeySlots`，与用户、账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
+- 不设上限的 Key 也计数（槽与分钟窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与用户并发、账号限速一致。
+- 超限返回 429（`rate_limited`，消息含 "API key"），并发超限 `Retry-After: 5`，RPM/TPM 超限 `Retry-After` 为到下一分钟的秒数；不会选账号、不会请求上游，用量记录的 `error_type` 为 `rate_limited`。
+- TPM 与账号 TPM（§18）相同：响应结束、知道 token 数后由 `countTokens` 同时计入账号与 Key 的窗口，同一分钟内同时进行的大请求可能超出，超出后本分钟剩余的请求被拒。
+
+### 60.3 共享实现
+
+`internal/ratelimit.Minute` 是按作用域（`account`、`apikey`）的分钟窗口；`account.Limiter` 改为它的 `account` 作用域，Redis 键仍为 `rl:account:{id}:{rpm|tpm}:{分钟}`，滚动升级期间新旧节点共用同一计数。
+
+### 60.4 控制台
+
+「我的 API Key」列表新增「限速」列：只列设了上限的项，显示「已用 / 上限」与进度条（≥80% 黄、满额红），都不限时显示「不限」；铅笔按钮打开编辑框。新建 Key 的表单也有这三项，留空即不限。

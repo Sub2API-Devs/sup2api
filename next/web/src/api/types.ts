@@ -85,7 +85,14 @@ export interface PermissionModule {
 
 // ------------------------------------------------------------------ keys, groups, proxies
 
-export interface ApiKey {
+/** Caps the owner sets on an API key; 0 = unlimited (CONTRACTS §60). */
+export interface KeyLimits {
+  rpm_limit: number
+  tpm_limit: number
+  max_concurrency: number
+}
+
+export interface ApiKey extends Partial<KeyLimits> {
   id: number
   user_id?: number
   user_email?: string // assumed
@@ -102,6 +109,8 @@ export interface ApiKey {
   key?: string // plaintext, only in create or authorized reveal responses
   /** Platforms reachable with this key (same as its group's). */
   platforms?: string[]
+  /** Current use across the nodes: this minute's requests and tokens, requests in flight. */
+  live?: { rpm: number; tpm: number; concurrency: number }
 }
 
 export interface Group {

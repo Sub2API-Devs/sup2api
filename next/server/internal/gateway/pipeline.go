@@ -232,6 +232,13 @@ func (c *call) run(ctx context.Context) {
 		return
 	}
 	defer release()
+	// 5b. The caps of the API key.
+	ctx, releaseKey, e := c.g.admitKey(ctx, p, c.rid)
+	if e != nil {
+		c.fail(e)
+		return
+	}
+	defer releaseKey()
 
 	// 6. Schedule, forward, fail over.
 	c.dispatch(ctx)
@@ -788,12 +795,9 @@ func (c *call) dropReservation(ctx context.Context, rec *core.UsageRecord, billi
 		"protocol", c.ep.Protocol, "ref_id", rv.RefID, "billing", billing, "reason", why)
 }
 
-// countTokens adds this request's tokens to the account's rate-limit window.
+// countTokens adds this request's tokens to the rate-limit windows of the
+// account and of the API key.
 func (c *call) countTokens(ctx context.Context, accountID int64) {
-	lim := c.g.d.Limiter
-	if lim == nil || accountID == 0 {
-		return
-	}
 	n := c.rec.Tokens.Total()
 	if len(c.rec.Replacement) > 0 {
 		n = 0
@@ -804,7 +808,14 @@ func (c *call) countTokens(ctx context.Context, accountID int64) {
 	for _, item := range c.rec.Additional {
 		n += item.Tokens.Total()
 	}
-	if n > 0 {
-		lim.AddTokens(context.WithoutCancel(ctx), accountID, n)
+	if n <= 0 {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	if lim := c.g.d.Limiter; lim != nil && accountID != 0 {
+		lim.AddTokens(ctx, accountID, n)
+	}
+	if w := c.g.d.KeyWindows; w != nil && c.principal != nil {
+		w.AddTokens(ctx, c.principal.KeyID, n)
 	}
 }

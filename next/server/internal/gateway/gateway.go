@@ -55,6 +55,9 @@ type Deps struct {
 	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter
+	// KeyWindows counts and caps the API keys' requests and tokens per
+	// minute (CONTRACTS §60); nil = not counted.
+	KeyWindows core.RateWindows
 	// Quota receives the subscription quota headers of upstream responses
 	// for account types declaring manifest quota.headers (CONTRACTS §44);
 	// nil = not recorded.

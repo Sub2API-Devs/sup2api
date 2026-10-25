@@ -28,6 +28,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
@@ -883,6 +884,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	e.gw = New(Deps{
 		Redis: e.rdb, Registry: e.reg, Node: fakeNode{}, Auth: e.auth, Pricer: e.pricer, Balance: e.balance,
 		Slots: e.slots, Accounts: e.accounts, Proxies: fakeProxies{}, Settler: e.settler,
+		KeyWindows: ratelimit.NewMinute(e.rdb, "apikey"),
 		Config: &config.Config{AllowPrivateUpstream: true}, Converters: e.conv,
 	})
 	t.Cleanup(e.gw.Close)
