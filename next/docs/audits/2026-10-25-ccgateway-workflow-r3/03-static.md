@@ -287,3 +287,4 @@
 - **P2-4 已修**：是否扣住改为 `credits.EventCarriesToken`（按 claim 的读法：`message_delta.delta` 或 `message_start.message` 里非 null 的 `stop_details.fallback_credit_token`，重复键同样按解码结果），回答里提到这个词不再扣住；超过 32 MiB 后扣住的部分丢弃，`held` 有界。测试 `TestEventCarriesToken`、`TestFallbackCreditStreamHoldsOnlyAToken`。
 - **P2-5 已修**：REQUEST-MODES、BUILD-REQUEST-COMPONENTS-DESIGN、SUBAGENT-REQUEST-CONTEXT-DESIGN、REQUEST-HEADERS 的版本横幅改为「以代码为准，版本见 cli-mods README 版本表」，不再写死版本；REQUEST-MODES §1.5 写明上述新语义。
 - 新测试都在旧代码上确认会失败。companions、contracts、cli-mods（178）、插件模块、核心全量（49 个包）测试通过。
+- **已发布**（2026-10-25）：核心 0.1.188 + 插件 0.1.94（CLI 仍 v28）。离线全量 69 场景两版 0 差异；真实链路因 31 号令牌被吊销未验证，待重新授权后补测 §7 的 A1–A3、A5–A11。
