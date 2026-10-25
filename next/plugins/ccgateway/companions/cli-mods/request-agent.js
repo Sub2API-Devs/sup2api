@@ -7,12 +7,13 @@
 // zbe). This module only chooses those inputs; the headers stay CC's.
 //
 // The Worker supplies the client's CC headers and a key scoped to the client
-// session (SUBAGENT-REQUEST-CONTEXT-DESIGN.md). Which kind of request it is
-// comes from the client's request-class header, otherwise from the body:
-// a first block that opens with CC's billing header is Claude Code's, a
-// subagent when the header says cc_is_subagent=true; any other request is
-// built as CC's main thread (2026-10-23: a request without the header is
-// completed as the main agent's).
+// session (SUBAGENT-REQUEST-CONTEXT-DESIGN.md). A request whose system carries
+// CC's billing header is Claude Code's: its kind comes from its request-class
+// header, otherwise from that header (a subagent when it says
+// cc_is_subagent=true). Any other request is built as CC's main thread
+// (2026-10-23), and its CC context headers are not used (2026-10-25): a client
+// that is not Claude Code cannot name itself a subagent, a compaction or any
+// other kind, nor set the agent, prompt or loop headers.
 import { createHash, createHmac } from 'node:crypto';
 import { uuidPattern as uuid } from './shared.js';
 
@@ -78,9 +79,10 @@ function uuidV4(bytes) {
 // sent are derived in either mode.
 export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders }) {
   if (loopFields.some(field => typeof loopHeaders?.[field] !== 'string')) throw Error('Missing native loop header names');
-  const { client, map, key } = context;
+  const { map, key } = context;
   const own = (label, value) => map ? derive(key, label, value) : undefined;
   const claudeCode = billing !== null && billing !== undefined;
+  const client = claudeCode ? context.client : {};
   const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : 'main');
   const clientPrompt = client.prompt_id ?? (claudeCode && uuid.test(billing.cc_prompt_id ?? '') ? billing.cc_prompt_id : undefined);
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)

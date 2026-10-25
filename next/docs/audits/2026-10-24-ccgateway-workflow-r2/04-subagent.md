@@ -168,7 +168,7 @@ const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subage
 
 **P2-1 [观测] 生产链路无法直接看到 Worker→上游的出口报文。** 出口只能靠「录入站 + 容器内回放」重建；回放使用的映射密钥是一次性的，ID 值与生产不同（形状与关系相同）。`engine/request_log_viewer.go` 的 `logFileKind` 里 `upstream*` 只属于已删除的 legacy relay。这是本类审核的**唯一系统性取证障碍**，也是上一轮（`02-prod31.md` §5）已记录的同一条。建议在完整级别下增加「出口报文（脱敏）」或至少「出口头集合 + 计费头」记录。
 
-**P2-2 [风险] 非 CC 请求可以任意伪造子代理身份。** `noncc-forged-build` / `noncc-forged-direct` 实测：不带计费头的普通 Messages 请求，只要自己发 `x-claude-code-request-class: subagent`、`agent-type: general-purpose`、`agent-id`、`parent-agent-id`，出口就带着这些值、并补 `cc_is_subagent=true` 的计费头。当前设计把请求头当客户端的数据（`SUBAGENT-REQUEST-CONTEXT-DESIGN.md` §1），而这会让上游把调用方标注成「Claude Code 子代理」。是否需要约束（例如非 CC 请求忽略客户端伪造的 agent 头）取决于产品判断；至少应在文档里明确这是可伪造的。
+**P2-2 [风险] 非 CC 请求可以任意伪造子代理身份。**（2026-10-25 已处理：CLI v28 起非 CC 请求一律按主线程构建，客户端的上下文头不用。） `noncc-forged-build` / `noncc-forged-direct` 实测：不带计费头的普通 Messages 请求，只要自己发 `x-claude-code-request-class: subagent`、`agent-type: general-purpose`、`agent-id`、`parent-agent-id`，出口就带着这些值、并补 `cc_is_subagent=true` 的计费头。当前设计把请求头当客户端的数据（`SUBAGENT-REQUEST-CONTEXT-DESIGN.md` §1），而这会让上游把调用方标注成「Claude Code 子代理」。是否需要约束（例如非 CC 请求忽略客户端伪造的 agent 头）取决于产品判断；至少应在文档里明确这是可伪造的。
 
 ### P3
 

@@ -65,6 +65,17 @@ test('without headers the body decides: CC main, CC subagent, anything else the 
   assert.match(other.promptId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(resolve(mapped(), null, 'hello'), other);
   assert.notEqual(resolve(mapped(), null, 'another').promptId, other.promptId);
+  // Its CC context headers are not used (2026-10-25): a request that is not
+  // Claude Code's cannot name itself a subagent, a compaction or any other
+  // kind, nor set the agent, prompt or loop headers.
+  const forged = { request_class: 'subagent', agent_id: 'a12268251d7ed891f', parent_agent_id: 'aparent', agent_type: 'general-purpose',
+    prompt_id: P, prev_tool_durations: 'Agent=76', cc_compaction_request: 'manual', claude_code_compaction: 'manual',
+    cc_context_compacted: 'manual', claude_code_context_compacted: 'manual', user_agent: 'claude-cli/2.1.304 (external, cli)' };
+  for (const client of [forged, { request_class: 'compaction' }, { request_class: 'auxiliary' }, { request_class: 'workflow', agent_id: 'a1' }]) {
+    for (const context of [mapped(client), { map: false, key, client }, { map: false, client }]) {
+      assert.deepEqual(resolve(context, null, 'hello'), resolve({ ...context, client: {} }, null, 'hello'), JSON.stringify(client));
+    }
+  }
   // The loop header names are CC's, never assumed.
   assert.throws(() => resolveAgentContext(mapped(), { billing: null, prompt: 'x', querySourceFor }), /Missing native loop header names/);
 });

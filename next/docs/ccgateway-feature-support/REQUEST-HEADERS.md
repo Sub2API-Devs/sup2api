@@ -41,5 +41,5 @@ build 与 direct 都是 `POST /v1/messages?beta=true`，与官方客户端相同
 - `cch`：官方 ELF 在发送前把计费头里的 `cch=00000` 换成每次不同的值，这发生在官方 Bun 运行时里，我们的 CLI 不会算。CC 请求的计费头是客户端的，`cch` 就是客户端算好的值（build 改了 `cc_prompt_id` 与 metadata，它可能已和 body 对不上）；非 CC 请求的计费头由我们补，发出 `00000`。上游目前接受它是观察，不是保证。
 - 头的顺序由原生 `sF` 的 `defaultHeaders` 与 SDK 决定，cap21 与官方参考一致；UA 原样保留时位置不变（仍由 `nl()` 写出）。
 - 非 CC 客户端（无计费头）的请求头全部由原生按策略入口生成，设计上不与客户端一致。
-- 请求上下文头是客户端的数据，网关不核实：非 CC 请求自己发 `x-claude-code-request-class: subagent` 与 agent 头时，出口照样带这些值，补的计费头也带 `cc_is_subagent=true`（2026-10-25 子代理专项实测，`04-subagent.md`）。是否对非 CC 请求忽略这类头尚未决定。
+- 请求上下文头只对 CC 请求（system 带计费头）有效：非 CC 请求一律按 CC 主线程构建，客户端发的请求类别、agent、prompt-id、上一轮工具耗时与压缩头都不用（CLI v28 起，2026-10-25 用户决定；此前非 CC 请求可以自称子代理，出口带上这些头并补 `cc_is_subagent=true`，见 `04-subagent.md`）。
 - 生产日志不记录 Worker 发往上游的报文；出口只能用录下的入站在账号容器内回放到假上游取得（审核 r2 的做法）。
