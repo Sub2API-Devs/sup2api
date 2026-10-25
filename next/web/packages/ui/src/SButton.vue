@@ -37,14 +37,24 @@ if (isDev && props.iconOnly && !props.ariaLabel) {
   console.warn('[@sub2api/ui] <SButton icon-only> needs an aria-label')
 }
 
+// Literal class names so Tailwind keeps them (it drops unused .btn-* rules).
+const VARIANT = {
+  primary: 'btn-primary',
+  secondary: 'btn-secondary',
+  ghost: 'btn-ghost',
+  danger: 'btn-danger',
+  success: 'btn-success',
+  warning: 'btn-warning'
+}
+const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
 const SQUARE: Record<string, string> = { xs: 'w-6 px-0', sm: 'w-8 px-0', md: 'w-10 px-0', lg: 'w-12 px-0' }
 const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
 const inactive = computed(() => props.disabled || props.loading)
 const isLink = computed(() => !!(props.to || props.href))
 const cls = computed(() => [
   'btn',
-  `btn-${props.variant}`,
-  `btn-${props.size}`,
+  VARIANT[props.variant],
+  SIZE[props.size],
   props.block ? 'w-full' : '',
   props.iconOnly || props.square ? SQUARE[props.size] : '',
   props.tone === 'danger' ? '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20' : '',

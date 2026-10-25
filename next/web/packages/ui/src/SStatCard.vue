@@ -25,6 +25,8 @@ const props = withDefaults(
   }>(),
   { tone: 'primary', selected: undefined }
 )
+// Literal class names so Tailwind keeps them.
+const TONE = { primary: 'stat-icon-primary', success: 'stat-icon-success', warning: 'stat-icon-warning', danger: 'stat-icon-danger' }
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 const inst = getCurrentInstance()
 const button = computed(() => props.selectable || props.selected !== undefined || !!inst?.vnode.props?.onClick)
@@ -50,7 +52,7 @@ const target = computed(() => {
     :aria-pressed="button && selected !== undefined ? selected : undefined"
     @click="emit('click', $event)"
   >
-    <div v-if="icon" class="stat-icon" :class="[`stat-icon-${tone}`, compact ? '!h-9 !w-9' : '']">
+    <div v-if="icon" class="stat-icon" :class="[TONE[tone], compact ? '!h-9 !w-9' : '']">
       <SIcon :name="icon" :class="compact ? 'h-5 w-5' : 'h-6 w-6'" />
     </div>
     <div class="min-w-0 flex-1">
