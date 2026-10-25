@@ -3948,6 +3948,8 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
 
+> 2026-10-25：本节的会话分支、规范文件与会话索引属于已删除的 native 路径（§53.21），整节只作历史。现在的会话规则：build 按账号把 `metadata.user_id` 的 session 映射成同会话稳定的值，direct 原样用客户端的，出口 `x-claude-code-session-id` 与出口 metadata 一致（BUILD-REQUEST-COMPONENTS-DESIGN §7）。插件仍给 Worker 加 `x-ccgateway-session-scope` 头，Worker 已没有读取方。
+
 **历史演进记录**：本节逐次记录旧方案。出站中继改写 session/metadata、restoreCacheSystem、Sonnet 续接引导及旧客户端 session 头兼容只说明当时实现，不是当前 native-only 功能。当前会话仍按最后的 v2 规则选分支，但由原生私有记录以 U 运行、CLI 自身设置 U/A′；无 HTTP relay 还原。现行执行与限制以 §53.13–§53.14 为准，旧实现见 `archive/ccgateway-relay-0.1.41@4b0e0967c`。
 
 背景（实测，CLI 2.1.292）：原生 CC 同一 sessionId 下主线、子代理、分类器、标题请求都带同一个 `X-Claude-Code-Session-Id` 与 `metadata.user_id.session_id`，子代理另带 `x-claude-code-agent-id`；主线写 `<S>.jsonl`、每个子代理写独立文件，均只追加，回退表现为同文件内分支。`--session-id S` 对已存在会话报错 `already in use`；`--resume S` 追加同一文件；两个 `--resume S` 并发都成功、同文件出现分支点、不损坏；不指定节点时下次续接沿最后写入的分支。旧实现每次 fork / rebuild 都换随机内部会话 ID，且所有请求共用 logical `auto`。
@@ -3985,7 +3987,9 @@ images/gateway.tar.gz      # Caddy 网关
 - 上游 `metadata.user_id` 用 CLI 自己的值，只把 `session_id` 换成 U（其余字节不变）；旧格式 `…_session_<uuid>` 只换会话段；都认不出时按 CLI 字段顺序生成 `{"device_id":"","account_uuid":"","session_id":U}`。A' 的格式为 `a` + 16 位小写十六进制（与 CLI 自己的子代理 ID 同形）。主线请求删除 agent-id 头。
 - 已知：客户端计费头是占位值（如 `cch=00000`）时 CLI 会重算，开头 system 块仍无法还原（改动前即如此）。
 
-### 53.13 固定 native 请求策略与原生表达（当前工作树）
+### 53.13 固定 native 请求策略与原生表达（历史，已由 §53.21 取代）
+
+> 2026-10-25：本节描述的 native 执行路径已于 2026-10-24 删除（§53.21），Worker 只运行 CLI 的 `request --build|--direct`，下文的准入拒绝清单、EXTRA_BODY、私有原生历史都不再执行；fallback credit 现在由请求命令回执（REQUEST-MODES §1.5）。仍然有效的只有 count_tokens 一条：插件不声明，核心不调度到 CCGateway。现行契约见 `plugins/ccgateway/docs/REQUEST-MODES.md` 与 BUILD-REQUEST-COMPONENTS-DESIGN。
 
 旧 relay 仅保留在 `archive/ccgateway-relay-0.1.41@4b0e0967c`；当前工作树已物理删除旧主体与 `mod/search`。本文描述 native-only 代码合同，**测试及资源授权仍在验收中，不代表已发布、已部署或全部验证通过**。逐项设计见 `ccgateway-feature-support/PASSTHROUGH-DESIGN.md`，策略细节见 `CCGATEWAY-REQUEST-POLICY.md`。
 

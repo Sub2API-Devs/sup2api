@@ -61,7 +61,7 @@ qmn2                         发请求：
 要点：
 
 - `XY3 = { getAllBaseTools: cb7, getTools: e$4, assembleToolPool: m4t2 }` 是工具目录。`e$4` 按权限上下文过滤、按开关启用，得到的就是 CC 实际发的那一组（实抓主线程：Agent、Bash、Edit、ListAgents、Read、ReportFindings、ScheduleWakeup、Skill、ToolSearch、Workflow、Write，加 `DeferredToolPlaceholder`，其余经 ToolSearch 延迟加载）。
-- `FH5` 对原生工具和对客户端工具走的是两条路。build 现在把客户端工具注册成“native”（`registerNative`），走的是 `nativeDefinition`，原样输出客户端的定义。CC 自己的工具走 `CYt`（schema）和 `CVo2`（描述），描述会随模型（lean）、其他工具是否存在等条件变化。所以工具定义只能在 CLI 里按当次的模型和工具组合生成，Worker 预先抓一份传进去会对不上。
+- `FH5` 对原生工具和对客户端工具走的是两条路。build 当时把客户端工具注册成“native”（`registerNative`），走的是 `nativeDefinition`，原样输出客户端的定义（v26 起改为：客户端工具做成 CC 工具并带上客户端原定义，补丁让 `FH` 对它们直接返回该定义，`registerNative`/`nativeDefinition` 已删除，见 BUILD-REQUEST-COMPONENTS-DESIGN §6 第 5 步）。CC 自己的工具走 `CYt`（schema）和 `CVo2`（描述），描述会随模型（lean）、其他工具是否存在等条件变化。所以工具定义只能在 CLI 里按当次的模型和工具组合生成，Worker 预先抓一份传进去会对不上。
 - 默认提示词依赖工具：`nin2` 的 `session_guidance` 等段按 `tools` 写，`r1e` 里 `RCr(tools)`、`QFs(tools)`、`I0s(tools)` 也按工具插段。所以第 4 层必须用最终的工具列表（客户端工具加上第 5 层注入的）来渲染，否则提示词里说的工具和实际发的不一致。
 - 附件也有依赖：`deferred_tools_delta`（“The following deferred tools are now available via ToolSearch…”）、`agent_listing_delta`（可用代理类型）、`skill_listing` 都在描述工具。没有对应工具时补它们，内容就是错的。不依赖工具的是 environment（`Dvn` → `zkt`）、model（“You are powered by…”）、日期、total_tokens。
 - 身份行 `n1n`：非交互且有追加提示词时是 `official_cli_sdk`（ke）。第 4 层把客户端 system 当作 `--append-system-prompt` 放在默认提示词之后，这正是 CC 自己选 ke 的情形。

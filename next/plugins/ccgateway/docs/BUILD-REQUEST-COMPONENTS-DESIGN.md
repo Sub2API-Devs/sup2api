@@ -1,6 +1,6 @@
 # build 模式的请求组件化与内容改写设计
 
-本文描述 `claude request --build` 在 Claude Code 2.1.304 / contract v2（CLI `ccgateway-v22-client-entrypoint`）下的实现契约：Worker 如何把客户端 Messages body 装进组件信封，CLI 如何把组件还原成 CC 内部记录、按策略替换或擦除、再用 CC 原生构造器产出最终 body。direct 的计费头处理在第 6.3 节。
+本文描述 `claude request --build` 在 Claude Code 2.1.304 / contract v2（CLI `ccgateway-v26-native-assembly`，插件 0.1.91）下的实现契约：Worker 如何把客户端 Messages body 装进组件信封，CLI 如何把组件还原成 CC 内部记录、按策略替换或擦除、再用 CC 原生构造器产出最终 body。direct 的计费头处理在第 6.3 节。
 
 这是**代码契约说明**，不是发布或部署验收记录。各层注入（身份行、环境、提示词、工具）以 [注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) 第 6、7、8、12 节为准，本文只写组件与内容改写；请求头的去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。附件类型的完整清点见 [BUILD-ATTACHMENT-TRANSFORM-DESIGN.md](BUILD-ATTACHMENT-TRANSFORM-DESIGN.md)——那是 2.1.302 时期 Worker 侧 v1 改写的研究记录，v1 路径已于 2026-10-24 删除（CONTRACTS §53.21）。
 
@@ -26,27 +26,27 @@ components JSON ──stdin──▶ claude request --build
       │ ② CLI：组件 → CC 内部记录（prepareBuildInput）
       │ ③ CLI：内容策略替换/擦除（applyContentPolicy）
       │ ④ CLI：非 CC 请求按等级注入各层（injectLayers，探针构建）
-      │ ⑤ CLI：原生构造器产出 body（jOt），计费合并（mergeBillingAttribution）
-      │ ⑥ CLI：身份 metadata（applyBuildMetadata）与身份行（applyBuildCliPrefix，OAuth）
+      │ ⑤ CLI：原生构造器产出 body（jOt），身份行由原生 PAs 放置（recordedCliPrefix，OAuth），计费合并（mergeBillingAttribution）
+      │ ⑥ CLI：身份 metadata（applyBuildMetadata）
       ▼
-最终 body ──▶ CC 自己的 HTTP 客户端 ──▶ 上游
+最终 body ──▶ CC 自己的 SDK（client.beta.messages.create）──▶ POST /v1/messages?beta=true ──▶ 上游
 ```
 
 一次客户端请求仍然只触发一次模型生成：CLI 以 `maxRetries: 0` 发送，工具调用交回客户端。注入层需要的探针构建只在 CLI 进程内产出 body，不发送。
 
 ## 2. Worker 侧：body → 组件信封
 
-入口 `messagesBuildComponents`（engine），Worker 的请求命令在 build 下调用它（工作树 `prepareInput`）。
+入口 `messagesBuildComponents`（engine），Worker 的请求命令在 build 下调用它（`request_command.go` `prepareInput`）。
 
 先做两道校验：`validateBuildNumbers`（数值字段范围）与 `validateBuildContent`（内容结构）。然后按固定映射装填：
 
 | 原 body 字段 | 去向 | 缺省时 |
 |---|---|---|
 | `model` | `model` | 必须是非空字符串，否则 400 |
-| `system` | `systemPrompt`（字节原样） | `[]`；显式 `null` 400 |
+| `system` | `systemPrompt`（字节原样） | 不写这个键（CLI 视为没有 system）；显式 `null` 400 |
 | `messages` | `messages`（字节原样） | 必须是非空数组，否则 400 |
 | `tools` | `tools`（每个工具的键序原样，custom 工具只把 `input_schema` 原位改名） | 不写这个键（与空数组不同） |
-| `stream` | `stream` | `false` |
+| `stream` | `stream` | 不写这个键（CLI 也不发） |
 | 其余全部 | `parameters` | — |
 
 另外总写 `attachments: []`、`requestPolicy`（`features.CLIPolicy`，见 2.2）和 `runtimeContext`（`workingDirectory` 为 Worker 的工作目录，`additionalWorkingDirectories` 为空）。
@@ -56,7 +56,7 @@ components JSON ──stdin──▶ claude request --build
 - **system 只接受** string 或 `text` 块，块内只允许 `type` / `text` / `cache_control`；其他字段直接 400。build 表达不了非文本 system 块。
 - **`tools` 缺失与空数组不同**：缺失时信封里没有 `tools` 键，CLI 也就不发。
 - custom 工具必须有对象形 `input_schema`，同时带 `inputSchema` 拒绝；非 custom 工具原样传入。
-- **两处缺省填充不是原生行为**（审核 C10）：`stream` 缺省给 `false`，CLI 最终发出 `stream: body.stream === true`，所以客户端没发 `stream` 时上游 body 里多出 `"stream":false`；`system` 缺省给 `[]`，因为 build 总带计费头，最终 system 一定是数组，影响只在形状。
+- **缺省不填充**（审核 C10 已修）：客户端没发 `stream` 时信封里没有 `stream`，出口 body 也没有（`request_components.go`、`request-input.js` `prepareBuildInput`）。`system` 缺省为空：build 总带计费头，最终 system 一定是块数组，影响只在形状。
 - `parameters` 内若再次出现 `model`/`system`/`messages`/`tools`/`stream`，或 `requestPolicy`/`runtimeContext`/`ccgateway*` 前缀，CLI 拒绝（`validateBuildParameters`），防止绕过组件。
 
 ### 2.1 Worker 的能力门
@@ -74,7 +74,7 @@ Worker 在读 body 之前按 CLI 的 `--ccgateway-info` 能力检查（`requestC
 | build：下发了 `build_injection` | `build_injection_v1` |
 | direct：下发了服务端入口或计费来源 | `direct_billing_v1` |
 
-（2026-10-24 工作树：`request_levels_v1` 一行补上了审核 C11 指出的 build 缺口；此前 Worker 只在 direct 带计费来源时检查它。）
+（`request_levels_v1` 一行是审核 C11 补上的 build 缺口；此前 Worker 只在 direct 带计费来源时检查它。）
 
 ### 2.2 两个版本号不要混用
 
@@ -236,11 +236,12 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 2. 算出请求入口（`requestEntrypoint`）并调原生 `setEntrypointOnRequests`，原生计费头与 UA 读同一个值。
 3. `applyContentPolicy` 改写 system 与 messages；用改写结果**再跑一次** `prepareBuildInput`，得到最终 `input`。
 4. 计算指纹用的消息（`fingerprintMessages`，6.2）；按客户端的计费头与首条提示解析请求类别（`resolveAgent`，见 SUBAGENT-REQUEST-CONTEXT-DESIGN）；主线程由 `markPrompt`（原生 `iws`/`h0n`，经 `ccgatewayMarkTurns`）给提示记录写 turn 与 prompt ID，原生 `PAs` 据此写出完整的主线程计费头。
-5. 客户端工具通过 `registerNative` 注册进 CC 的工具表，使构造器认得它们。
+5. 每个客户端工具做成一个 CC 工具（`native-tools.js` `requestTool`，带 `ccgatewayRequestDefinition` = 客户端原定义），CC 自己的权限、延迟加载、工具搜索策略照常看到它；补丁让原生 `FH` 对这些工具直接返回客户端定义（v26 起，原生 `FH` 会给客户端工具加 `strict` 等字段、改键序），body 的 `tools` 写客户端原定义（`ccgatewayWireTools`），CC 自己的工具仍走原生 `FH`。
 6. **没有计费头的请求**按下发的 `build_injection` 注入各层（`injectLayers`：一次原生探针构建取提示词块、工具定义、附件位置与所需 beta；客户端已有的层不重复补）。规则见 [注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) 第 7、12、13 节。有计费头的请求只做第 5 节的转换。
 7. `jOt({…})` 是 CC 原生请求构造器，负责模型名归一化、thinking、`tool_choice`、`metadata`、缓存标记。补丁注入的 `ccgateway_request` 事件携带它产出的 body。
 8. `mergeAdditionalParameters`（`request-parameters.js`）把构造器**不拥有**的参数并回：除 `max_tokens`、`thinking`、`tool_choice`、`metadata`、`temperature`、`betas`、`output_config` 与组件键以外，客户端 `parameters` 里的字段（如 `top_p`、`top_k`、`stop_sequences`、`service_tier`）原样写入最终 body；`output_config` 只并回 `effort`/`format` 以外的子键；`diagnostics` 只在客户端自己发了时才发。
-9. 注入了提示词时按上游 4 个缓存断点的上限去掉注入块上的原生标记（`limitBreakpoints`）；`mergeBillingAttribution` 处理计费行（5.5）；beta 取客户端 ∪ 构造器 ∪ 注入层所需，写入请求头并从 body 删除 `betas`。
+9. 注入了提示词时按上游 4 个缓存断点的上限去掉注入块上的原生标记（`limitBreakpoints`）；`mergeBillingAttribution` 处理计费行（5.5）；beta 取客户端 ∪ 构造器 ∪ 注入层所需，写入请求头并从 body 删除 `betas`：客户端的保持客户端顺序，新增的按原生顺序插入（`request-betas.js` `betaOrder` 与 `request-headers.js` `finalBetas`，v25；见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)）。
+10. `request-command.js` 经 `model-request.js` 发送：build 用原生 `client.beta.messages.create`（请求行 `POST /v1/messages?beta=true`，超时取 Claude Code 默认 600 秒与 Worker 期限的较小者、`maxRetries: 0`，v26）。
 
 设计意图写在注释里：
 
@@ -251,7 +252,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 生成参数由 CC 自己的模型规则决定，组件只补充它不管的部分。
 
-最后 `request-command.js` 在 build 之后处理身份（`applyBuildMetadata`，第 7 节）与 OAuth 身份行（`applyBuildCliPrefix`，6.1）——因为 build 会自行生成 `metadata` 和 system 开头，必须按客户端原有的决定覆盖。
+身份行（6.1）在构造时由原生放置；`request-command.js` 在 build 之后只处理身份 metadata（`applyBuildMetadata`，第 7 节）——build 会自行生成 `metadata`，必须按客户端原有的决定覆盖。
 
 ### 6.1 Claude Code 身份行（OAuth，build）
 
@@ -270,7 +271,7 @@ if (regions.length !== 1 || regions[0].update || regions[0].blocked.size || …)
 
 核心不再下发 `build_identity_lines`（CONTRACTS §53.18）；旧 Worker 带来的这个键 CLI 接受但不使用。
 
-OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）在发送前处理一次（`request-identity.js` `applyBuildCliPrefix`）。判断和插入的内容都来自 CLI 本身：判断用 CLI 的 `t1n`（它认的就是 `n1n` 的三句），首块是不是计费头用 CLI 的 `B1s`；三句由补丁用 `n1n` 的三组参数生成，按名字取。
+OAuth 的 build 请求（没有 `ANTHROPIC_API_KEY`）走原生路径（v26 起，`request-build.js` `identityRequest`/`applyIdentityLine`）：选好的句子通过查询选项 `recordedCliPrefix` 交给原生，`n1n` 返回它、`PAs` 把它放在原生放身份行的位置（`[计费头, 身份行, ...提示]`），补丁在 `PAs` 里经 `ccgatewayCapturePrefix` 取回原生渲染出的那一行，再写进最终 body。句子文本只由 `n1n` 按三组输入渲染（`isNonInteractive`、`hasAppendSystemPrompt`），不保存副本；判断用 CLI 的 `t1n`（认的就是 `n1n` 的三句）与 `B1s`（首块是不是计费头）。下表第 2 行「首块既不是计费头也不是身份行」是原生没有的情形，由我们在最前补该入口的句子（v26 只保留这一处自写逻辑）。
 
 | 请求 | system | 处理 |
 |---|---|---|
@@ -302,7 +303,7 @@ Worker 的 direct 能力门见 2.1 节。direct 下 Worker 仍解析 body（必�
 
 ## 7. 身份边界
 
-`metadata.user_id` 不可配置（2026-10-21 用户决定）：核心不下发 `request_identity_sources`（早先保存的值也不下发）；Worker 以 `features.RequestIdentityDefault`（`replace`）处理。映射只在 CLI 声明 `request_identity_v1` 时启用（`configureRequestIdentity`）；不声明时 Worker 不设 `CCG_REQUEST_IDENTITY`，CLI 的 `applyBuildMetadata` 没有上下文就保留原生构造器生成的 metadata（Worker 里"不支持时按 `client`"的分支因此到不了；工作树在 `resolveRequestContext`）。界面没有身份卡片，只在请求模式下写一行说明。
+`metadata.user_id` 不可配置（2026-10-21 用户决定）：核心不下发 `request_identity_sources`（早先保存的值也不下发）；Worker 以 `features.RequestIdentityDefault`（`replace`）处理。映射只在 CLI 声明 `request_identity_v1` 时启用（`configureRequestIdentity`）；不声明时 Worker 不设 `CCG_REQUEST_IDENTITY`，CLI 的 `applyBuildMetadata` 没有上下文就保留原生构造器生成的 metadata（Worker 里"不支持时按 `client`"的分支因此到不了；在 `request_command.go` `resolveRequestContext`）。界面没有身份卡片，只在请求模式下写一行说明。
 
 - **只经环境变量传递**：Worker 把解析结果写入 `CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?}`），不进 build 信封。
   - **build**：Worker 启用了身份映射（CLI 声明 `request_identity_v1`）时总设置，CLI 据此决定最终 metadata。
@@ -345,7 +346,7 @@ CCG_CONTENT_DIAGNOSTIC {"protocol":"ccgateway.content.diagnostic.v1","field":…
 
 ## 10. 能力协商与灰度
 
-能力常量在 `contracts/features/`（`attachments.go`、`identity.go`、`identity_line.go`、`injection.go`、`levels.go`、`request_modes.go`、`agent_context.go`）；CLI 的能力列表只有一处（工作树里是 `profiles/linux-x64-2.1.304.json` 的 `capabilities`，HEAD 是 `patch-cli-2.1.304.cjs` 的常量），经 `--ccgateway-info` 报告：
+能力常量在 `contracts/features/`（`attachments.go`、`identity.go`、`identity_line.go`、`injection.go`、`levels.go`、`request_modes.go`、`agent_context.go`）；CLI 的能力列表只有一处（`profiles/linux-x64-2.1.304.json` 的 `capabilities`），经 `--ccgateway-info` 报告：
 
 | 能力 | 含义 |
 |---|---|
@@ -368,15 +369,14 @@ Worker 在 `/healthz` 声明它能用的能力（`requestCapabilities`）；核�
 - direct：下发了服务端入口或计费来源有 `worker` 时 `direct_billing_v1`。
 - build：总是 `build_content_preservation_v1`；附件来源需要 v2 时 `build_attachment_sources_v2`，只用 `worker` 的旧两键时 `build_attachment_sources_v1`；计费 `worker` 时 `build_billing_sources_v1`；下发了服务端入口时 `build_identity_line_v1`；有注入时 `build_injection_v1`。
 
-缺能力、版本不符或探测失败都阻止模型发送，核心以自己的 503（`X-CCGateway-Error-Source: core`，原因 `configuration_error`，消息写明缺哪个能力或版本不符）回答。该探测是本地 Worker 查询，不是上游模型请求。2026-10-24 工作树（审核 A7）：`/healthz` 的答复按路由缓存 30 秒（`requestCacheTTL`），Worker 原地更新后该路由被丢弃；缓存期间的旧答复最多推迟核心自己的拒绝，Worker 仍按 2.1 节自行拒绝。HEAD 时每个请求都读一次、不缓存，且 `request_policy_mode_v1` 与 `build_content_preservation_v1` 只在 `cli_version` 为 2.1.304（或 direct）时要求。
+缺能力、版本不符或探测失败都阻止模型发送，核心以自己的 503（`X-CCGateway-Error-Source: core`，原因 `configuration_error`，消息写明缺哪个能力或版本不符）回答。该探测是本地 Worker 查询，不是上游模型请求。`/healthz` 的答复按路由缓存 30 秒（`requestCacheTTL`，审核 A7），Worker 原地更新后该路由被丢弃；缓存期间的旧答复最多推迟核心自己的拒绝，Worker 仍按 2.1 节自行拒绝。
 
 注入等级 none 即 direct，环境来源与注入项保留在配置里但不下发，切回低、高注入后生效。
 
 ## 11. 已知缺口
 
-- `ccgatewayEnvironment` 依赖的原生读取器（`gH`、`Cl`、`uoo`、`poo`、`moo`、`Nkt`、`foo`、`zkt`）在补丁里以符号绑定，**换 CLI 版本必须重新核对符号**。审核 D3 指出支持模块另从 5 个未做哈希绑定的模块导入（`chunk-7y2kvacy`、`chunk-jkcb7qdd`、`chunk-m5q1b1c4`、`chunk-eanw7pgv`、`chunk-t2p0d04m`），且动态导入名在补丁期不校验；2026-10-24 工作树已把这 5 个模块加进 profile 的 `modules` 哈希，并由补丁器 `checkImports` 校验补丁新增的每个导入名确实由对应模块导出（未提交，以提交后的代码为准）。
-- `stream`/`system` 缺省填充（第 2 节，C10）。
-- Worker 给 CLI 进程设默认入口：`CLAUDE_CODE_ENTRYPOINT` 未设、为空或为 `cli` 时设成 `sdk-cli`（Worker 组装 CLI 命令时，工作树 `requestCommand`；审核 C14）。v22 起 CLI 按请求调 `setEntrypointOnRequests`，计费头与 UA 都读请求入口，进程默认值不再决定发出的入口；但它与策略默认入口 `sdk-cli` 是两条独立的默认，改其中一个时要一起改。
+- `ccgatewayEnvironment` 依赖的原生读取器（`gH`、`Cl`、`uoo`、`poo`、`moo`、`Nkt`、`foo`、`zkt`）在补丁里以符号绑定，**换 CLI 版本必须重新核对符号**。审核 D3 指出支持模块另从 5 个未做哈希绑定的模块导入（`chunk-7y2kvacy`、`chunk-jkcb7qdd`、`chunk-m5q1b1c4`、`chunk-eanw7pgv`、`chunk-t2p0d04m`），且动态导入名在补丁期不校验；这 5 个模块已加进 profile 的 `modules` 哈希，补丁器 `checkImports` 校验补丁新增的每个导入名确实由对应模块导出。
+- Worker 给 CLI 进程设默认入口：`CLAUDE_CODE_ENTRYPOINT` 未设、为空或为 `cli` 时设成 `sdk-cli`（Worker 组装 CLI 命令时，`request_command.go` `requestCommand`；审核 C14）。v22 起 CLI 按请求调 `setEntrypointOnRequests`，计费头与 UA 都读请求入口，进程默认值不再决定发出的入口；但它与策略默认入口 `sdk-cli` 是两条独立的默认，改其中一个时要一起改。
 
 ## 12. 验证范围
 
@@ -391,4 +391,4 @@ Worker 在 `/healthz` 声明它能用的能力（`requestCapabilities`）；核�
 
 - 十项字段在同一请求内混合来源的端到端抓包（现有覆盖为组合矩阵，不是真实客户端全量）。
 - 契约夹具在 CLI 侧不运行原生构造器（`jOt`、`aBe` 需编译后的 CLI），这部分仍靠 Linux 编译产物的回环验证。
-- 现行 CLI（v21/v22）对非 CC 请求的出口形状只有离线容器与 31 号的记录，没有留存抓包（审核 10 §5.1）。
+- 生产不记录 Worker 发往上游的报文；出口形状靠离线容器与 31 号容器内回放取得。v26 的抓包与比较结果留在 `artifacts/claude-2.1.304/e2e/wf-r2-2026-10-24/`、`prod31-r2-2026-10-25/`、`subagent-2026-10-25/`（不进 git），结论见 `next/docs/audits/2026-10-24-ccgateway-workflow-r2/`。

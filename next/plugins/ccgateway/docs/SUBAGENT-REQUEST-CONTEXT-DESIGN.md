@@ -2,6 +2,8 @@
 
 > 2026-10-24：本文"非 CC 请求按子代理构建"（第 1 节、第 2 节表、第 9 节表中的非 CC 行）已被 [注入等级设计](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md) 第 3 节第 1 条取代（CLI v20 起）：没有计费头的请求按**主线程**构建（客户端请求头 `x-claude-code-request-class` 自己写明类别时除外；`querySource: sdk`，不发 agent-id，prompt ID 由首条提示派生，计费头不带 `cc_is_subagent`），见 `request-agent.js` `resolveAgentContext`。CC 请求的主线程/子代理/压缩判断与 ID 映射仍按本文。
 
+**现状（2026-10-25，CLI v26 / 插件 0.1.91）见第 15 节。**
+
 2026-10-22。已实现为 CLI v18（`ccgateway-v18-agent-context`，能力 `request_agent_context_v1`），未发布，实施结果见第 9 节。依据见 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md](CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) 第 9–11 节：build 原样保留子代理的提示词、消息和计费头，但请求头按主线程生成（`request-class: main`，没有 agent-id、agent-type、prompt-id），还多带了 1 小时缓存的 beta。原因是请求命令和原生构建都写死了 `querySource: 'sdk'` 和主线程上下文。
 
 ## 1. 已定的规则（2026-10-22 用户决定）
@@ -24,7 +26,7 @@
 | CC 子代理，agent-type 为 `custom` 或缺失 | `agent:custom` | 同上 | P′ |
 | CC 请求，客户端 request-class 为 compaction | `compact` | 主线程 | P′ |
 | CC 请求，客户端 request-class 为其他值（auxiliary 等） | `sdk`，并显式传 `requestClass` | 主线程 | P′ |
-| 非 CC 请求 | `agent:custom` | `{agentType:"subagent", agentId:A′}` | P′（见第 3 节） |
+| 非 CC 请求（v18–v19；v20 起改按主线程，见文首） | `agent:custom` | `{agentType:"subagent", agentId:A′}` | P′（见第 3 节） |
 
 - 内置类型以 CLI 自己的内置代理名单为准；不在名单里按 `custom`。agent-type 缺失时第一版不做提示词匹配。
 - 非 CC 请求发出的形状：`request-class: subagent`、`agent-type: custom`、有 agent-id、没有 parent；缺计费头时 v17 补的原生整行会带 `cc_is_subagent=true` 和 `cc_prompt_id`；5 分钟缓存，不带 1 小时 beta。已知代价：会话里只有子代理请求、system 末尾没有 CLI 的 T7t 三段，与真实 CC 不同（用户已知并决定）。
@@ -189,3 +191,12 @@ ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：�
 - **#21 重测（插件 0.1.77）**：14 个请求全部 200；request-class、agent-type、agent-id、prompt-id、prev-tool-durations 和压缩头（`x-cc-compaction-request`、`x-claude-code-compaction`）都到达 Worker。
 - **#31（OAuth，插件 0.1.77）**：14 个请求全部 200，请求头到达情况与 #21 相同，`diagnostics` 原样转发；OAuth 资源身份在 2.1.304 上可用。
 - 用量记录：#21 28 条、#31 14 条，全部 200。
+
+## 15. 现状（2026-10-25，CLI v26 / 插件 0.1.91）
+
+依据：`next/docs/audits/2026-10-24-ccgateway-workflow-r2/04-subagent.md`（静态 + docker 离线 + 31 号真实链路）。
+
+- **识别**：网关不判断层级。插件按 `contracts/features.AgentContextHeaders` 转发 `request-class`、`agent-id`、`parent-agent-id`、`agent-type`、`prompt-id` 等头（`manifest.json` `passHeaders`，`x-claude-code-session-id` 不在内，会话取自 body `metadata.user_id`），Worker 经 `CCG_REQUEST_AGENT` 交给 CLI，`request-agent.js` `resolveAgentContext` 选出 `querySource`/`requestClass`/`agentContext`/`promptId`；没有 request-class 头时，带计费头且 `cc_is_subagent=true` 的是子代理，否则主线程。嵌套关系完全来自客户端：孙代理的 `parent-agent-id` 等于上一层的 `agent-id`，第三层同理。
+- **组装**：请求头由原生 `sF` 生成、计费头由原生 `kLo` 补字段、缓存时长与 `extended-cache-ttl` 由原生 `zbe2(querySource)` 决定（第 2 节）；build 经原生 `client.beta.messages.create` 发出，请求行 `POST /v1/messages?beta=true`（v24 之前为 `/v1/messages`，插件 0.1.88 修复）。
+- **实测**：主 → 子、两层、三层嵌套、后台代理结束后的通知续轮（`cc_turn_origin=task_notification`）、fork 子代理，build 与 direct 都与官方客户端直连一致（离线 46 对请求、726 条断言；31 号真实链路 6 个请求全部 200、出口回放 0 处不符）。差异只有设计内的 ID 映射与客户端对自定义地址不发的 `mid-conversation-system-clear-at-2026-08-21`。
+- **边界**：请求上下文头是客户端的数据，网关不核实：非 CC 请求自己发 `request-class: subagent` 与 agent 头时，出口照样带这些值并补 `cc_is_subagent=true` 的计费头（是否限制尚未决定）。`workflow`、`teammate` 类请求只有单测，没有实测样本。

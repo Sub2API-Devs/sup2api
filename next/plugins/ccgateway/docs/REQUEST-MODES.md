@@ -1,12 +1,12 @@
 # CCGateway 请求模式
 
-第 1 节是当前契约（2026-10-24，插件 0.1.87 / CLI 2.1.304 `ccgateway-v22-client-entrypoint`，以代码为准）；第 2 节是按发布顺序保留的历史记录，其中的版本、默认值和规则只代表当时。
+第 1 节是当前契约（2026-10-25，核心 0.1.187 / 插件 0.1.91 / CLI 2.1.304 `ccgateway-v26-native-assembly`，以代码为准）；第 2 节是按发布顺序保留的历史记录，其中的版本、默认值和规则只代表当时。
 
 ## 1. 当前契约
 
 ### 1.1 两种模式
 
-每个 `/v1/messages` 请求在账号 Worker 里运行一次打包 CLI 的 `claude request --build` 或 `--direct`（engine `serveRequestCommand`），没有第三种执行方式；Worker 没有请求模式时回 500 `Worker has no request mode`（CONTRACTS §53.21）。两种模式都把工具调用交回调用方执行，网关不运行 Agent 工具循环；CLI 以 `maxRetries: 0` 发送，一次客户端请求只触发一次模型生成。
+每个 `/v1/messages` 请求在账号 Worker 里运行一次打包 CLI 的 `claude request --build` 或 `--direct`（engine `serveRequestCommand`），没有第三种执行方式；Worker 没有请求模式时回 500 `Worker has no request mode`（CONTRACTS §53.21）。两种模式都把工具调用交回调用方执行，网关不运行 Agent 工具循环；CLI 以 `maxRetries: 0` 发送，一次客户端请求只触发一次模型生成。两种模式的请求行都是 `POST /v1/messages?beta=true`，与官方客户端相同（插件 0.1.88 起）：build 经原生 SDK 的 `client.beta.messages.create` 发送（路径、`?beta=true`、betas 转头都由 SDK 决定，插件 0.1.90 起）；direct 要发原始字节，用 `client.post`，路径在打补丁时从原生 SDK 的 create 里按 AST 取出（`cli-mods/model-request.js` `messagesPath`），不写字面量。
 
 | 模式 | 注入等级 | 做什么 |
 |---|---|---|
@@ -15,7 +15,7 @@
 
 模式不单独配置：核心按全局→分组→账号解析出的注入等级决定（none → direct，其余 → build），随每个请求的策略头下发。新安装的默认等级是「低」（build，平台与系统版本用服务端的值）；固定 CLI 版本是 2.1.304。Worker 容器的 `CCG_REQUEST_MODE`（缺省 build）只在请求没有策略头（手动调用）时生效。
 
-**build 的生成参数**：`max_tokens`、`thinking`、`tool_choice`、`temperature`、`output_config.effort`/`format` 交给 CC 原生构建接口，最终值由原生模型规则决定；`metadata` 由身份逻辑决定（build 设计第 7 节）。其余参数——如 `top_p`、`top_k`、`stop_sequences`、`service_tier`，以及 `output_config` 的其他子键——由 `mergeAdditionalParameters`（`cli-mods/request-parameters.js`）原样并回最终 body；`diagnostics` 只在客户端自己发了时才发。客户端没发 `stream` 时 build 发出 `"stream":false`（审核 C10）。
+**build 的生成参数**：`max_tokens`、`thinking`、`tool_choice`、`temperature`、`output_config.effort`/`format` 交给 CC 原生构建接口，最终值由原生模型规则决定；`metadata` 由身份逻辑决定（build 设计第 7 节）。其余参数——如 `top_p`、`top_k`、`stop_sequences`、`service_tier`，以及 `output_config` 的其他子键——由 `mergeAdditionalParameters`（`cli-mods/request-parameters.js`）原样并回最终 body；`diagnostics` 只在客户端自己发了时才发。客户端没发 `stream` 时出口 body 也没有 `stream` 键（build 与 direct 相同，审核 C10 已修；2026-10-25 离线与 31 号生产出口均证实）。
 
 ### 1.2 策略头
 
@@ -33,7 +33,7 @@
 - **核心预检**：发送 `/v1/messages` 或 `/v1/ccgateway/probe` 前，经同一账号路由读 Worker `/healthz`，核对 CLI 版本与线形要求的能力（`requestPolicyCapabilities`：总是 `request_policy_mode_v1`、`request_levels_v1`，其余按线形内容）。不满足时核心自己回 503，`X-CCGateway-Error-Source: core`、原因 `configuration_error`，消息写明缺的能力或版本不符。
 - **Worker**：读 body 之前按同一张表检查（`requestCapabilityGates`）：带核心策略头的请求要求 `request_levels_v1`；build 必须有 `build_content_preservation_v1`，并按下发的来源、入口、注入要求对应能力；direct 下发了入口或计费来源要求 `direct_billing_v1`。不满足 409 `configuration_error`。
 
-能力表见 [build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) §2.1、§10（其中注明了 2026-10-24 工作树与 HEAD 的差别：Worker 的 `request_levels_v1` 门、核心的 `/healthz` 缓存）。Worker 就绪只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验（CONTRACTS §53.21）。
+能力表见 [build 设计](BUILD-REQUEST-COMPONENTS-DESIGN.md) §2.1、§10。核心读到的 `/healthz` 按路由缓存 30 秒，Worker 原地更新后该路由被丢弃。Worker 就绪只取决于启动时的 `--version`、`--ccgateway-info` 与固定版本/补丁/哈希校验（CONTRACTS §53.21）。
 
 ### 1.4 账号测试（probe）
 
@@ -43,10 +43,10 @@
 
 - 只接受 `POST /v1/messages` 与 `/v1/ccgateway/probe`；其他路径 404 `not_found_error`（`count_tokens` 插件不声明，核心不调度到 CCGateway）。
 - `anthropic-version` 只接受 `2023-06-01`；body 上限 32 MiB（413）；Worker 密钥不对 401。
-- 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（2026-10-24 工作树，审核 C3；HEAD 是读完 body、装好信封之后才占）。
+- 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（审核 C3）。被跟踪 fallback credit 的请求在占槽之前另用一个槽核验发放方（见下条）。
 - direct 也解析 body：必须是 JSON 对象且 `model` 非空；有请求上下文能力时还解析 `metadata.user_id` 与 agent 请求头，解析失败 400（审核 C9）。
 - 核心跟踪 fallback credit 的请求（带 `fallback-credit-2026-06-01`/`-07-01` 或 `server-side-fallback-2026-07-01`，核心加 `X-CCGateway-Fallback-Credit-Track`）：Worker 先核验发放方（资源身份），把 `Principal`/`Generation` 写在答复头上；答复照常流式转发，Worker 留一份副本，结束后用 trailer `X-CCGateway-Fallback-Credit-Ready` 回报 claim 的 token 哈希（插件 0.1.91 起；0.1.88–0.1.90 是整段缓冲后写在头上）。核心照常转发事件，只扣住从第一个含 `fallback_credit_token` 的事件起的尾部，核对回执并记下 credit 后放出；核对或记录失败时以一个 `error` 事件结束流，客户端拿不到网关不认识的 token。JSON 答复仍由核心整段读完（核心 0.1.187 起两种位置的回执都认）。账号授权锁：重新授权与资源操作独占；被跟踪的请求从核验发放方到上游开始答复期间共享，核心为它做的资源身份探测也共享，彼此不排队（审核 2026-10-25 P2-1/P2-2）。资源操作等不到锁或槽位时答 503，不再是空的 200。
-- 客户端请求头没有一个原样转发，去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
+- 上游收到的请求头都由 Worker 里的原生 CLI 生成；客户端的头只作为输入（有的值原样写回，如 agent-id、压缩头、符合条件的 UA），去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
 
 ### 1.6 错误与来源
 
