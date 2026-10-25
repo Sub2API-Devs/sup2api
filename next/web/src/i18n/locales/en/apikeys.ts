@@ -6,6 +6,8 @@ export default {
   myTitle: 'API keys',
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   create: 'New API key',
+  edit: 'Edit API key',
+  actions: { use: 'Use' },
   usage: { title: 'Usage', today: 'Today', total: 'Total', requests: '{n} req' },
   limits: {
     title: 'Limits',
@@ -15,8 +17,6 @@ export default {
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: 'Concurrent' },
     hint: 'Empty or 0 means unlimited. Over a cap, requests get 429 with Retry-After. Tokens count when a response finishes, so large requests running at the same time can pass TPM slightly within a minute.',
     none: 'Unlimited',
-    edit: 'Set limits and quota',
-    saved: 'Saved'
   },
   quota: {
     title: 'Quota',
@@ -41,6 +41,7 @@ export default {
     endpoints: 'Endpoints it can call (prefix them with {base}):'
   },
   ccSwitch: {
+    noClient: 'No client of the platforms of this key can be imported into CC Switch',
     import: 'Import to CC Switch',
     pick: 'Import to',
     notOpened: 'CC Switch did not open? Install CC Switch and try again.'
@@ -54,9 +55,7 @@ export default {
   key: 'Key',
   ipAllowlist: 'IP allowlist',
   ipAllowlistHint: 'One IPv4, IPv6 or CIDR entry per line (up to 256). Empty means unrestricted. Only matching client IPs can use this key.',
-  ipAllowlistEdit: 'Edit IP allowlist',
   ipAllowlistCount: '{n} allowed IPs / networks',
-  ipAllowlistSaved: 'IP allowlist saved',
   namePlaceholder: 'e.g. my-laptop',
   expiresAt: 'Expires',
   expiresHint: 'Optional. Leave empty for a key that never expires.',

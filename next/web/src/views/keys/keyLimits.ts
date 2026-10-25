@@ -26,9 +26,9 @@ export function capsBody(form: KeyCapsForm): KeyCaps {
   return { rpm_limit: form.rpm_limit || 0, tpm_limit: form.tpm_limit || 0, max_concurrency: form.max_concurrency || 0, quota_limit: form.quota_limit || 0 }
 }
 
-/** The capped limits of a key with their current use. */
-export function cappedLimits(k: ApiKey) {
-  return LIMITS.filter((l) => (k[l.field] ?? 0) > 0).map((l) => ({ ...l, max: k[l.field] as number, used: k.live?.[l.live] }))
+/** Each limit of a key with its cap (0 = unlimited) and current use (undefined when not counted). */
+export function limitRows(k: ApiKey) {
+  return LIMITS.map((l) => ({ ...l, max: k[l.field] ?? 0, used: k.live?.[l.live] }))
 }
 
 /** A key's quota: limit 0 = unlimited; used is what its requests were charged. */

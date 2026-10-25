@@ -48,8 +48,8 @@ describe('CC Switch import button', () => {
     await flushPromises()
     expect(open).toHaveBeenCalledWith(expect.objectContaining({ id: 'codex' }), 'sk-s2a-full-secret')
   })
-  it('is absent without a client and disabled for a legacy key', () => {
-    expect(mount(KeyCcSwitchButton, { props: { apiKey: key(), platforms: ['volcengine'] }, global }).find('[data-testid="key-ccswitch"]').exists()).toBe(false)
+  it('is disabled without a client and for a legacy key', () => {
+    expect(mount(KeyCcSwitchButton, { props: { apiKey: key(), platforms: ['volcengine'] }, global }).get('[data-testid="key-ccswitch"]').attributes('disabled')).toBeDefined()
     expect(mount(KeyCcSwitchButton, { props: { apiKey: key({ copyable: false }), platforms: ['anthropic'] }, global }).get('[data-testid="key-ccswitch"]').attributes('disabled')).toBeDefined()
   })
 })

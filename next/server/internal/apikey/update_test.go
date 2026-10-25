@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -139,4 +140,35 @@ func TestAPIKeyQuotaSetByOwner(t *testing.T) {
 	status, out = e.do(e.user, "PATCH", path, map[string]any{"quota_limit": 0})
 	require.Equal(t, 200, status)
 	require.Equal(t, "0", out["data"].(map[string]any)["quota_limit"], "0 removes the quota")
+}
+
+// The edit form saves the name, expiry and IP allowlist with the same PATCH;
+// expires_at null removes the expiry and absent fields stay.
+func TestAPIKeyEditFields(t *testing.T) {
+	e := setup(t)
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('edit') RETURNING id`)
+	expiry := time.Now().Add(48 * time.Hour).UTC().Truncate(time.Second)
+	status, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "old", "group_id": group, "expires_at": expiry, "allowed_ips": []string{"192.0.2.7"}})
+	require.Equal(t, 201, status, out)
+	raw, path := out["data"].(map[string]any)["key"].(string), fmt.Sprintf("/me/api-keys/%d", int64(out["data"].(map[string]any)["id"].(float64)))
+
+	status, out = e.do(e.user, "PATCH", path, map[string]any{"name": "  renamed  ", "allowed_ips": []string{"198.51.100.9/24"}})
+	require.Equal(t, 200, status, out)
+	k := out["data"].(map[string]any)
+	require.Equal(t, "renamed", k["name"])
+	require.Equal(t, []any{"198.51.100.0/24"}, k["allowed_ips"])
+	require.NotNil(t, k["expires_at"], "an absent expiry stays")
+	_, err := e.svc.Authenticate(core.WithClientIP(t.Context(), "192.0.2.7"), raw)
+	require.Equal(t, "ip_not_allowed", codeOf(err))
+
+	status, out = e.do(e.user, "PATCH", path, map[string]any{"expires_at": nil, "allowed_ips": []string{}})
+	require.Equal(t, 200, status, out)
+	require.Nil(t, out["data"].(map[string]any)["expires_at"])
+	_, err = e.svc.Authenticate(core.WithClientIP(t.Context(), "192.0.2.7"), raw)
+	require.NoError(t, err)
+
+	for _, body := range []map[string]any{{"name": " "}, {"expires_at": "yesterday"}, {"expires_at": time.Now().Add(-time.Hour)}, {"allowed_ips": []string{"bad"}}} {
+		status, _ = e.do(e.user, "PATCH", path, body)
+		require.Equal(t, 400, status, body)
+	}
 }

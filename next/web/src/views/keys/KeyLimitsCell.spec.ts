@@ -5,31 +5,24 @@ import type { ApiKey } from '@/api/types'
 import KeyLimitsCell from './KeyLimitsCell.vue'
 import { capsBody, capsForm } from './keyLimits'
 
-const key = (k: Partial<ApiKey>) => ({ id: 1, name: 'k', group_id: 1, key_prefix: 'sk', status: 'active', created_at: '', ...k }) as ApiKey
-const render = (k: Partial<ApiKey>, editable = false) => {
+const render = (k: Partial<ApiKey>) => {
   i18n.global.locale.value = 'zh'
-  return mount(KeyLimitsCell, { props: { apiKey: key(k), editable }, global: { plugins: [i18n] } })
+  return mount(KeyLimitsCell, { props: { apiKey: { id: 1, name: 'k', group_id: 1, key_prefix: 'sk', status: 'active', created_at: '', ...k } as ApiKey }, global: { plugins: [i18n] } })
 }
+const line = (w: ReturnType<typeof render>, field: string) => w.get(`[data-limit="${field}"]`).text().replace(/\s+/g, '')
 
 describe('API key limits cell', () => {
-  it('shows only the capped limits with their current use', () => {
+  it('shows RPM, TPM and concurrency as use / cap, ∞ when unlimited, bars under the capped', () => {
     const w = render({ rpm_limit: 60, tpm_limit: 0, max_concurrency: 2, live: { rpm: 51, tpm: 900, concurrency: 1 } })
-    expect(w.text()).toContain('RPM51 / 60')
-    expect(w.text()).toContain('并发1 / 2')
-    expect(w.text()).not.toContain('TPM')
+    expect(line(w, 'rpm_limit')).toBe('RPM51/60')
+    expect(line(w, 'tpm_limit')).toBe('TPM900/∞')
+    expect(line(w, 'max_concurrency')).toBe('并发1/2')
     expect(w.findAll('[role="progressbar"]')).toHaveLength(2)
   })
-  it('reads unlimited without caps and only the cap without live counters', () => {
-    expect(render({ rpm_limit: 0, tpm_limit: 0, max_concurrency: 0 }).text()).toBe('不限')
+  it('shows — for uses that are not counted', () => {
     const w = render({ tpm_limit: 200000 })
-    expect(w.text()).toBe('TPM200K')
+    expect(line(w, 'tpm_limit')).toBe('TPM—/200K')
     expect(w.find('[role="progressbar"]').exists()).toBe(false)
-  })
-  it('offers the editor only when editable', async () => {
-    expect(render({}).find('[data-testid="edit-key-limits"]').exists()).toBe(false)
-    const w = render({}, true)
-    await w.get('[data-testid="edit-key-limits"]').trigger('click')
-    expect(w.emitted('edit')).toHaveLength(1)
   })
 })
 

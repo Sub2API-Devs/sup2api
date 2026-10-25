@@ -2,12 +2,12 @@ export default {
   myTitle: 'API Key',
   myDescription: '仅显示和管理你自己的密钥，管理员也无法查看其他用户的 Key。每个 Key 绑定一个分组，决定可访问的平台、模型和费率。',
   create: '新建 API Key',
+  edit: '编辑 API Key',
+  actions: { use: '使用' },
   key: '密钥',
   ipAllowlist: 'IP 白名单',
   ipAllowlistHint: '每行一个 IPv4、IPv6 地址或 CIDR 网段，最多 256 条。留空表示不限；设置后仅匹配的调用 IP 可使用此密钥。',
-  ipAllowlistEdit: '编辑 IP 白名单',
   ipAllowlistCount: '允许 {n} 个 IP / 网段',
-  ipAllowlistSaved: 'IP 白名单已保存',
   rotate: '重新生成密钥',
   rotateConfirm: '确定重新生成 "{name}" 的密钥？旧密钥会立即失效，使用它的客户端需要更新。',
   rotated: '密钥已重新生成，请复制新密钥并更新客户端。',
@@ -34,8 +34,6 @@ export default {
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: '并发' },
     hint: '留空或 0 表示不限。超出时请求返回 429 并带 Retry-After。Token 在响应结束后才计入，同一分钟内同时进行的大请求可能略超 TPM。',
     none: '不限',
-    edit: '设置限速与额度',
-    saved: '已保存'
   },
   quota: {
     title: '额度',
@@ -60,6 +58,7 @@ export default {
     endpoints: '可调用的接口（地址前加 {base}）：'
   },
   ccSwitch: {
+    noClient: '这个 Key 的平台没有可导入 CC Switch 的客户端',
     import: '导入 CC Switch',
     pick: '导入到',
     notOpened: '没有打开 CC Switch？请先安装 CC Switch 后再试。'

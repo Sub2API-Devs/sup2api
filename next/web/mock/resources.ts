@@ -428,7 +428,7 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
   const b = req.body || {}
-  if (b.status === undefined && b.group_id === undefined && LIMIT_FIELDS.every((f) => b[f] === undefined) && b.quota_limit === undefined && !b.reset_quota) return fail(400, 'invalid_argument', 'nothing to update')
+  if (b.status === undefined && b.group_id === undefined && LIMIT_FIELDS.every((f) => b[f] === undefined) && b.quota_limit === undefined && !b.reset_quota && b.name === undefined && b.expires_at === undefined && b.allowed_ips === undefined) return fail(400, 'invalid_argument', 'nothing to update')
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined && !(Number(b[f]) >= 0)) return invalid(f, 'must be between 0 (unlimited) and the maximum')
   if (b.status !== undefined && b.status !== 'active' && b.status !== 'disabled') return invalid('status', 'status must be active or disabled')
   if (b.group_id !== undefined && !myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
@@ -440,6 +440,12 @@ on('PATCH', '/me/api-keys/:id', (req) => {
     k.quota_limit = String(Number(b.quota_limit))
   }
   if (b.reset_quota) k.quota_used = '0'
+  if (b.name !== undefined) {
+    if (!String(b.name).trim()) return invalid('name', 'name must be 1-100 characters')
+    k.name = String(b.name).trim()
+  }
+  if (b.expires_at !== undefined) k.expires_at = b.expires_at
+  if (b.allowed_ips !== undefined) (k as MockKey & { allowed_ips?: string[] }).allowed_ips = b.allowed_ips
   return keyOut(k)
 })
 on('POST', '/me/api-keys/:id/reveal', (req) => {

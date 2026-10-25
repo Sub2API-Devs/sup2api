@@ -7,8 +7,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"math/big"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -499,9 +501,9 @@ func (s *Service) createMine(c *gin.Context) {
 	httpapi.Created(c, k)
 }
 
-// updateMine switches a key on or off (status active | disabled), moves it
-// to another group the owner may use, changes its caps and resets the quota
-// it used. Authentication
+// updateMine edits the owner's key: its name, expiry and IP allowlist, its
+// status (active | disabled), its group (one the owner may use), its caps,
+// and resets the quota it used. Authentication
 // reads them on every request, so the next call already sees the change.
 func (s *Service) updateMine(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -514,7 +516,7 @@ func (s *Service) updateMine(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := in.validate(ctx); err != nil {
+	if err := in.normalize(ctx); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -527,9 +529,12 @@ func (s *Service) updateMine(c *gin.Context) {
 		}
 		err := tx.QueryRow(ctx, `UPDATE api_keys SET status = COALESCE($3, status), group_id = COALESCE($4, group_id),
 				rpm_limit = COALESCE($5, rpm_limit), tpm_limit = COALESCE($6, tpm_limit), max_concurrency = COALESCE($7, max_concurrency),
-				quota_limit = COALESCE($8, quota_limit), quota_used = CASE WHEN $9 THEN 0 ELSE quota_used END
+				quota_limit = COALESCE($8, quota_limit), quota_used = CASE WHEN $9 THEN 0 ELSE quota_used END,
+				name = COALESCE($10, name), allowed_ips = COALESCE($11, allowed_ips),
+				expires_at = CASE WHEN $12 THEN $13 ELSE expires_at END
 			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING key_hash`,
-			id, uid, in.Status, in.GroupID, in.RPM, in.TPM, in.Concurrency, in.QuotaLimit, in.ResetQuota).Scan(&hash)
+			id, uid, in.Status, in.GroupID, in.RPM, in.TPM, in.Concurrency, in.QuotaLimit, in.ResetQuota,
+			in.Name, in.AllowedIPs, in.ExpiresAt != nil, in.expiry).Scan(&hash)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -554,8 +559,11 @@ func (s *Service) updateMine(c *gin.Context) {
 }
 
 // keyUpdate is the body of PATCH /me/api-keys/:id (absent fields stay) and
-// its audit detail.
+// its audit detail. expires_at null removes the expiry.
 type keyUpdate struct {
+	Name        *string          `json:"name,omitempty"`
+	ExpiresAt   json.RawMessage  `json:"expires_at,omitempty"`
+	AllowedIPs  *[]string        `json:"allowed_ips,omitempty"`
 	Status      *string          `json:"status,omitempty"`
 	GroupID     *int64           `json:"group_id,omitempty"`
 	RPM         *int             `json:"rpm_limit,omitempty"`
@@ -564,11 +572,37 @@ type keyUpdate struct {
 	QuotaLimit  *decimal.Decimal `json:"quota_limit,omitempty"`
 	// ResetQuota sets quota_used back to 0.
 	ResetQuota bool `json:"reset_quota,omitempty"`
+
+	expiry *time.Time // ExpiresAt decoded
 }
 
-func (u *keyUpdate) validate(ctx context.Context) error {
-	if *u == (keyUpdate{}) {
+// normalize checks the fields given and puts the name and allowlist in their
+// stored form.
+func (u *keyUpdate) normalize(ctx context.Context) error {
+	if reflect.ValueOf(*u).IsZero() {
 		return core.ErrInvalidArgument.WithMessage(t(ctx, "nothing to update", "没有要修改的内容"))
+	}
+	if u.Name != nil {
+		name, err := validName(ctx, *u.Name)
+		if err != nil {
+			return err
+		}
+		u.Name = &name
+	}
+	if u.ExpiresAt != nil {
+		if err := json.Unmarshal(u.ExpiresAt, &u.expiry); err != nil {
+			return core.InvalidFields(core.FieldError{Field: "expires_at", Code: "invalid", Message: t(ctx, "expiry must be an RFC 3339 time or null", "过期时间须为 RFC 3339 时间或 null")})
+		}
+		if err := futureExpiry(ctx, u.expiry); err != nil {
+			return err
+		}
+	}
+	if u.AllowedIPs != nil {
+		entries, err := normalizeAllowedIPs(ctx, *u.AllowedIPs)
+		if err != nil {
+			return err
+		}
+		u.AllowedIPs = &entries
 	}
 	if u.Status != nil && *u.Status != "active" && *u.Status != "disabled" {
 		return core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
