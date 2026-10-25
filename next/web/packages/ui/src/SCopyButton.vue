@@ -16,7 +16,7 @@ const props = withDefaults(
     text: string | number | null | undefined
     label?: string
     iconOnly?: boolean
-    size?: 'sm' | 'md'
+    size?: 'xs' | 'sm' | 'md'
     variant?: 'ghost' | 'secondary'
     toast?: boolean
     disabled?: boolean

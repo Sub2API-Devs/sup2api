@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SCopyButton, SDropdown, SField, SHint, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SCopyButton, SEmpty, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, STooltip, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
@@ -33,25 +33,26 @@ async function loadGroups() {
 }
 loadGroups()
 
-function groupName(k: ApiKey) {
-  return k.group_name || groups.value.find((g) => g.id === k.group_id)?.name || `#${k.group_id}`
+const groupOf = (k: ApiKey) => groups.value.find((g) => g.id === k.group_id)
+
+/** The key's group cell: name and platforms as reported on the key, else those of its group. */
+function groupCell(k: ApiKey) {
+  const g = groupOf(k)
+  return { name: k.group_name || g?.name || `#${k.group_id}`, multiplier: g?.rate_multiplier, platforms: k.platforms ?? g?.platforms }
 }
 
-/** Platforms of the key: reported on the key, else those of its group. */
-function keyPlatforms(k: ApiKey): string[] | undefined {
-  return k.platforms ?? groups.value.find((g) => g.id === k.group_id)?.platforms
-}
-
-const columns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('common.name') },
-  { key: 'key_prefix', label: t('apikeys.key') },
-  { key: 'group', label: t('common.group') },
-  { key: 'status', label: t('common.status') },
-  { key: 'expires_at', label: t('apikeys.expiresAt') },
-  { key: 'last_used_at', label: t('apikeys.lastUsed') },
-  { key: 'created_at', label: t('common.createdAt') },
-  { key: 'actions', label: t('common.actions'), align: 'right' }
-])
+const columns = computed(() =>
+  ([
+    { key: 'name', label: t('common.name') },
+    { key: 'key_prefix', label: t('apikeys.key') },
+    { key: 'group', label: t('common.group') },
+    { key: 'status', label: t('common.status') },
+    { key: 'expires_at', label: t('apikeys.expiresAt') },
+    { key: 'last_used_at', label: t('apikeys.lastUsed') },
+    { key: 'created_at', label: t('common.createdAt') },
+    { key: 'actions', label: t('common.actions'), align: 'right' }
+  ] satisfies TableColumn[]).map((c): TableColumn => ({ ...c, nowrap: true }))
+)
 
 function isExpired(k: ApiKey) {
   return !!k.expires_at && new Date(k.expires_at).getTime() < Date.now()
@@ -162,20 +163,24 @@ function remove(k: ApiKey) {
       </template>
     </SPageHeader>
 
-    <STable card dense class="api-key-table" :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card dense :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
-        <span class="font-medium text-fg">{{ row.name }}</span>
-        <SHint v-if="row.allowed_ips?.length" size="xs">{{ t('apikeys.ipAllowlistCount', { n: row.allowed_ips.length }) }}</SHint>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="font-medium text-fg">{{ row.name }}</span>
+          <STooltip v-if="row.allowed_ips?.length" :content="t('apikeys.ipAllowlistCount', { n: row.allowed_ips.length })">
+            <SIcon name="shield" class="h-3.5 w-3.5 text-sky-500" data-testid="key-ip-restricted" />
+          </STooltip>
+        </span>
       </template>
       <template #cell-key_prefix="{ row }">
         <ApiKeyCell :api-key="row" @rotated="list.reload()" />
       </template>
-      <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
+      <template #cell-group="{ row }"><KeyGroupCell v-bind="groupCell(row)" /></template>
       <template #cell-status="{ row }">
         <StatusBadge :status="statusOf(row)" :tone="statusOf(row) === 'expired' ? 'warning' : undefined" :labels="{ expired: 'apikeys.expired' }" />
       </template>
       <template #cell-expires_at="{ row }">
-        <TimeText :value="row.expires_at" :empty="t('apikeys.noExpiry')" />
+        <TimeText :value="row.expires_at" :empty="t('apikeys.noExpiry')" :muted="!isExpired(row)" :class="{ 'text-red-600 dark:text-red-400': isExpired(row) }" />
       </template>
       <template #cell-last_used_at="{ row }">
         <TimeText :value="row.last_used_at" mode="relative" :empty="t('common.never')" />
@@ -185,9 +190,14 @@ function remove(k: ApiKey) {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <SButton variant="ghost" size="sm" data-testid="edit-key-ips" @click="editIPs(row)">{{ t('apikeys.ipAllowlist') }}</SButton>
-          <SDropdown :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" @select="$event === 'delete' && remove(row)" />
+          <SButton variant="ghost" size="sm" icon="shield" data-testid="edit-key-ips" @click="editIPs(row)">{{ t('apikeys.ipAllowlist') }}</SButton>
+          <SButton variant="ghost" size="sm" tone="danger" icon="trash" data-testid="delete-key" @click="remove(row)">{{ t('common.delete') }}</SButton>
         </div>
+      </template>
+      <template #empty>
+        <SEmpty icon="key" :title="t('apikeys.empty')" :text="t('apikeys.emptyHint')">
+          <template #actions><SButton variant="primary" icon="plus" @click="openCreate">{{ t('apikeys.create') }}</SButton></template>
+        </SEmpty>
       </template>
       <template #footer>
         <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />

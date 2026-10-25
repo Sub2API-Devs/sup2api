@@ -25,5 +25,7 @@ export default {
   onceWarning: '请复制保存此密钥，之后也可以在列表中点击复制按钮获取。',
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
+  empty: '还没有 API Key',
+  emptyHint: '新建一个 Key，即可通过网关调用所选分组的平台和模型。',
   confirmDelete: '确定删除 API Key "{name}"？使用它的客户端将立即失效。'
 }

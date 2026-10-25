@@ -6,8 +6,9 @@ import type { AccountTypePlatform } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
 
 // Platform badges: either plain ids (groups, API keys) or account type
-// platforms, whose unavailable entries are greyed with a hint.
-const props = defineProps<{ ids?: string[] | null; items?: AccountTypePlatform[] | null; empty?: string }>()
+// platforms, whose unavailable entries are greyed with a hint. `size` xs and
+// `nowrap` (one line) suit table cells.
+const props = defineProps<{ ids?: string[] | null; items?: AccountTypePlatform[] | null; empty?: string; size?: 'xs' | 'sm'; nowrap?: boolean }>()
 const { t } = useI18n()
 const platforms = usePlatforms()
 platforms.load()
@@ -21,7 +22,7 @@ const list = computed(() => {
 </script>
 
 <template>
-  <span v-if="list.length" class="inline-flex flex-wrap items-center gap-1" data-testid="platform-badges">
+  <span v-if="list.length" class="inline-flex items-center gap-1" :class="nowrap ? 'flex-nowrap' : 'flex-wrap'" data-testid="platform-badges">
     <span
       v-for="p in list"
       :key="p.id"
@@ -30,7 +31,7 @@ const list = computed(() => {
       :data-platform="p.id"
       :data-available="p.available ? '1' : '0'"
     >
-      <SBadge :tone="!p.available ? 'gray' : p.builtin ? 'primary' : 'accent'">
+      <SBadge :size="size" :tone="!p.available ? 'gray' : p.builtin ? 'primary' : 'accent'">
         <span :class="p.available ? '' : 'line-through'">{{ p.label }}</span>
         <span v-if="!p.available" class="ml-1 text-[10px] no-underline">({{ t('platforms.unavailable') }})</span>
       </SBadge>

@@ -6,6 +6,8 @@ export default {
   myTitle: 'API keys',
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   create: 'New API key',
+  empty: 'No API keys yet',
+  emptyHint: 'Create a key to call the platforms and models of its group through the gateway.',
   key: 'Key',
   ipAllowlist: 'IP allowlist',
   ipAllowlistHint: 'One IPv4, IPv6 or CIDR entry per line (up to 256). Empty means unrestricted. Only matching client IPs can use this key.',

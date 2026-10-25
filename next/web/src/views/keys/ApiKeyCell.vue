@@ -39,9 +39,9 @@ async function copy() {
 </script>
 
 <template>
-  <div class="inline-flex items-center gap-1.5 whitespace-nowrap">
-    <SCode inline :text="`${apiKey.key_prefix}…`" />
-    <SButton v-if="allowed" variant="ghost" size="sm" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" icon-only icon="copy" data-testid="copy-api-key" @click.stop="copy" />
-    <SButton v-if="allowed" variant="ghost" size="sm" :disabled="rotating || copying" :title="t('apikeys.rotate')" :aria-label="t('apikeys.rotate')" icon-only icon="refresh" data-testid="rotate-api-key" @click.stop="rotate" />
+  <div class="inline-flex items-center gap-0.5 whitespace-nowrap">
+    <SCode inline class="mr-1" :text="`${apiKey.key_prefix}…`" />
+    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" icon-only icon="copy" data-testid="copy-api-key" @click.stop="copy" />
+    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="rotating || copying" :title="t('apikeys.rotate')" :aria-label="t('apikeys.rotate')" icon-only icon="refresh" data-testid="rotate-api-key" @click.stop="rotate" />
   </div>
 </template>

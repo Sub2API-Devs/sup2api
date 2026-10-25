@@ -1,7 +1,8 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
 // Data table. Cells render `cell-<key>` slots (or the value at a dotted key,
 // '—' when empty); headers render `head-<key>` slots (or the label). A
-// column with key 'actions' sticks to the right edge. Options:
+// column with key 'actions' sticks to the right edge, set off by a shadow
+// while columns scroll underneath it. Options:
 // - expandable: chevron column + the `expand` slot under an open row;
 // - selectable + v-model:selected (array of row keys, see rowKey): checkbox
 //   column with a select-all header (indeterminate when partly selected);
@@ -24,6 +25,7 @@ import { displayValue, getPath } from './value'
 import { useTableReorder } from './tableReorder'
 import { useTableColumns, type TableColumnStorage } from './tableColumns'
 import STableColumnSettings from './STableColumnSettings.vue'
+import { useScrollClip } from './scrollClip'
 import SIPAddress from './SIPAddress.vue'
 
 const props = withDefaults(
@@ -67,6 +69,9 @@ const columnState = useTableColumns(() => props.columns, () => props.columnSetti
 const visibleColumns = computed(() => props.columnSettingsKey ? columnState.visibleColumns.value : props.columns)
 const expanded = ref(new Set<unknown>())
 const table = ref<HTMLTableElement>()
+const root = ref<HTMLElement>()
+const inner = ref<HTMLElement>()
+const clipped = useScrollClip(computed(() => (props.card ? inner.value : root.value)), table)
 const reorderHelp = useId()
 const reorderMessage = ref('')
 const reorder = useTableReorder(table, props, event => {
@@ -135,6 +140,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
 <template>
   <component
     :is="card ? 'section' : 'div'"
+    ref="root"
     :class="card ? 'card overflow-hidden' : ['table-container', { 's-table-fit-expanded': fitExpandedToContainer }]"
   >
     <template v-if="reorderable">
@@ -155,11 +161,14 @@ function onRowKey(e: KeyboardEvent, row: T) {
       <slot name="toolbar" />
       <STableColumnSettings v-if="columnSettingsKey" :state="columnState" class="ms-auto" />
     </div>
-    <div :class="card ? ['table-container s-table-in-card', { 's-table-fit-expanded': fitExpandedToContainer }] : 'contents'">
+    <div
+      ref="inner"
+      :class="card ? ['table-container s-table-in-card', { 's-table-fit-expanded': fitExpandedToContainer }] : 'contents'"
+    >
       <table
         ref="table"
         class="table"
-        :class="dense ? 'table-dense' : ''"
+        :class="{ 'table-dense': dense, 's-table-clipped': clipped }"
         :aria-busy="loading || undefined"
       >
         <thead>
@@ -411,6 +420,8 @@ function onRowKey(e: KeyboardEvent, row: T) {
   z-index: 1;
   white-space: nowrap;
   background: rgb(var(--surface, 255 255 255));
+}
+.s-table-clipped > * > tr > .s-table-actions {
   box-shadow:
     -1px 0 0 rgb(var(--line, 229 231 235)),
     -6px 0 8px -8px #64748b;

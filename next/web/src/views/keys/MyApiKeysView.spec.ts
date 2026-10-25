@@ -4,11 +4,12 @@ import { ref } from 'vue'
 import { i18n } from '@/i18n'
 import MyApiKeysView from './MyApiKeysView.vue'
 
-const { post, put, reload, notifyError } = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn(), reload: vi.fn(), notifyError: vi.fn() }))
+const { post, put, reload, notifyError, deleteWithConfirm } = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn(), reload: vi.fn(), notifyError: vi.fn(), deleteWithConfirm: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: { post, put } }))
 vi.mock('@/composables/useList', () => ({ useList: () => ({ items: ref([{ id: 7, name: 'laptop', group_id: 1, status: 'active', created_at: '', allowed_ips: ['192.0.2.0/24'] }]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(1), reload }) }))
 vi.mock('@/composables/lookups', () => ({ fetchMyGroups: async () => [{ id: 1, name: 'default' }] }))
 vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (value: string) => value }) }))
+vi.mock('@/composables/crud', () => ({ deleteWithConfirm }))
 vi.mock('@/utils/errors', () => ({ fieldErrors: () => ({ allowed_ips: 'invalid IP' }), notifyError }))
 enableAutoUnmount(afterEach)
 function render() {
@@ -54,5 +55,11 @@ describe('API key IP configuration', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(post).toHaveBeenCalledWith('/me/api-keys', expect.objectContaining({ name: 'new-key', allowed_ips: ['192.0.2.7', '2001:db8::/32'] }))
+  })
+  it('marks an IP-restricted key and deletes from the row', async () => {
+    const w = render()
+    expect(w.find('[data-testid="key-ip-restricted"]').exists()).toBe(true)
+    await w.get('[data-testid="delete-key"]').trigger('click')
+    expect(deleteWithConfirm).toHaveBeenCalledWith('/me/api-keys/7', expect.stringContaining('laptop'), reload)
   })
 })

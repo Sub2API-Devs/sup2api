@@ -5,6 +5,7 @@
 // disabled / loading link renders an <a aria-disabled="true"> without href.
 // `icon` / `iconRight` are SIcon names; `iconOnly` drops the text padding
 // (square button) and needs `ariaLabel`; `square` makes any button square.
+// `size` xs is the compact variant for table cells.
 // `tone="danger"` colours a ghost / secondary button red.
 import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
@@ -15,7 +16,7 @@ import { isDev } from './dev'
 const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'
-    size?: 'sm' | 'md' | 'lg'
+    size?: 'xs' | 'sm' | 'md' | 'lg'
     loading?: boolean
     disabled?: boolean
     type?: 'button' | 'submit' | 'reset'
@@ -36,8 +37,8 @@ if (isDev && props.iconOnly && !props.ariaLabel) {
   console.warn('[@sub2api/ui] <SButton icon-only> needs an aria-label')
 }
 
-const SQUARE: Record<string, string> = { sm: 'w-8 px-0', md: 'w-10 px-0', lg: 'w-12 px-0' }
-const ICON: Record<string, string> = { sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
+const SQUARE: Record<string, string> = { xs: 'w-6 px-0', sm: 'w-8 px-0', md: 'w-10 px-0', lg: 'w-12 px-0' }
+const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
 const inactive = computed(() => props.disabled || props.loading)
 const isLink = computed(() => !!(props.to || props.href))
 const cls = computed(() => [
