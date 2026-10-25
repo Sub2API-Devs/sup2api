@@ -158,13 +158,16 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	var spec core.ProxySpec
 	var password, accountCredentials []byte
 	var settings []byte
+	// The version covers what configures the runtime. The plugin's read-only
+	// extension account_email (CONTRACTS §59.6) is a fact about its login, not
+	// configuration: recording it never makes the controller re-apply.
 	err := q.QueryRow(ctx, `SELECT
   a.deleted_at IS NOT NULL,
   r.retired_at IS NOT NULL,
   `+sqlInRetention+`,
   r.purged_at IS NOT NULL,
   a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')),
-  concat_ws('|',a.id,a.type,a.proxy_id,a.deleted_at,p.updated_at,encode(a.credentials_enc,'hex'),a.settings::text,r.retired_at),
+  concat_ws('|',a.id,a.type,a.proxy_id,a.deleted_at,p.updated_at,encode(a.credentials_enc,'hex'),(a.settings - 'account_email')::text,r.retired_at),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
   COALESCE(r.key, a.id::text), a.settings
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id

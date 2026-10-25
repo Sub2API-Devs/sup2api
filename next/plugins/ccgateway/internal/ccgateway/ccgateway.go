@@ -49,7 +49,9 @@ func emptyObject(raw string) bool {
 }
 func normalize(kind, raw, settings string) (string, pluginsdk.FieldErrors) {
 	var fields pluginsdk.FieldErrors
-	if _, err := environment.Normalize([]byte(settings)); err != nil {
+	// The plugin's read-only extensions (account_email) are its own facts,
+	// not runtime environment settings.
+	if _, err := environment.Normalize(adminSettings(settings)); err != nil {
 		fields = fields.Add("settings", "invalid", "Invalid runtime environment / 运行环境配置无效")
 	}
 	switch kind {
@@ -97,7 +99,7 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 	if len(fields) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: fields}, nil
 	}
-	settings, _ := environment.Normalize([]byte(in.GetSettingsJson()))
+	settings, _ := environment.Normalize(adminSettings(in.GetSettingsJson()))
 	encoded, _ := json.Marshal(settings)
 	return &pluginv1.ValidateCredentialsResponse{NormalizedCredentialsJson: raw, NormalizedSettingsJson: string(encoded)}, nil
 }

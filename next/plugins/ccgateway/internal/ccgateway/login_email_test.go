@@ -80,3 +80,22 @@ func TestManifestDeclaresLoginEmailReadOnly(t *testing.T) {
 		}
 	}
 }
+
+// The 0.1.96 incident: a managed account whose settings hold the plugin's
+// account_email was refused on every model and test request ("Invalid
+// CCGateway account credentials"), because the runtime environment check saw
+// the extension as an unknown environment setting. The extension is never an
+// environment setting; an unknown key of the admin's still is.
+func TestLoginEmailNeverBlocksRequests(t *testing.T) {
+	settings := `{"locale":"en-US","timezone":"America/Los_Angeles","account_email":"ops@example.invalid"}`
+	if err := validateAccount(&pluginv1.Account{Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: settings}); err != nil {
+		t.Fatalf("a recorded login email refused the account: %v", err)
+	}
+	out, err := New().ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{AccountType: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: settings})
+	if err != nil || len(out.GetErrors()) > 0 || out.GetNormalizedSettingsJson() != `{"locale":"en-US","timezone":"America/Los_Angeles"}` {
+		t.Fatalf("validate credentials: %v %v %s", err, out.GetErrors(), out.GetNormalizedSettingsJson())
+	}
+	if err := validateAccount(&pluginv1.Account{Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: `{"region":"jp"}`}); err == nil {
+		t.Fatal("an unknown environment setting was accepted")
+	}
+}
