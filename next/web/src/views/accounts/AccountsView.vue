@@ -521,6 +521,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <div class="min-w-64 max-w-sm space-y-0.5">
           <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-xxs text-fg-subtle">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
           <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><SBadge v-if="row.subscription_type" size="xs" tone="purple" class="shrink-0" :title="t('accounts.subscriptionHint')" data-testid="account-subscription">{{ subscriptionLabel(row.subscription_type) }}</SBadge><span v-if="row.last_used_at" class="shrink-0 text-xxs text-fg-subtle">· {{ formatRelative(row.last_used_at, t) }}</span></div>
+          <div v-for="fact in accountTypes.pluginFacts(row.plugin_key, row.type, row.settings)" :key="fact.key" class="truncate text-xs text-fg-muted" :title="`${fact.label}: ${fact.value}`" :data-testid="'account-fact-' + fact.key">{{ fact.label }} <span class="text-fg">{{ fact.value }}</span></div>
         </div>
       </template>
       <template #cell-groups="{ row }"><div class="flex max-w-48 flex-wrap gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
@@ -624,6 +625,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
               <SDescItem v-if="detail.subscription_type" :label="t('accounts.subscription')">
                 <SBadge tone="purple" :title="t('accounts.subscriptionHint')">{{ subscriptionLabel(detail.subscription_type) }}</SBadge>
               </SDescItem>
+              <SDescItem v-for="fact in accountTypes.pluginFacts(detail.plugin_key, detail.type, detail.settings)" :key="fact.key" :label="fact.label" :data-testid="'account-detail-fact-' + fact.key">{{ fact.value }}</SDescItem>
               <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
               <SDescItem :label="t('accounts.servesEndpoints')">
                 <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />

@@ -75,5 +75,20 @@ export function useAccountTypes() {
     return out
   })
 
-  return { types, loaded, load, find, label, typeLabel, pluginName, grouped }
+  /**
+   * The plugin's read-only extensions of an account (extensionsSchema
+   * properties with readOnly: true, CONTRACTS §59) that it has a value for, in
+   * schema order: facts the plugin keeps, such as a Claude Code login email.
+   */
+  function pluginFacts(pluginKey: string, type: string, settings?: Record<string, unknown> | null): { key: string; label: string; value: string }[] {
+    const properties = find(pluginKey, type)?.extensions_schema?.properties ?? {}
+    return Object.entries(properties).flatMap(([key, property]) => {
+      const p = property as { readOnly?: boolean; 'x-label'?: LText }
+      const value = settings?.[key]
+      if (!p?.readOnly || (typeof value !== 'string' && typeof value !== 'number') || value === '') return []
+      return [{ key, label: (p['x-label'] && lt(p['x-label'])) || key, value: String(value) }]
+    })
+  }
+
+  return { types, loaded, load, find, label, typeLabel, pluginName, grouped, pluginFacts }
 }

@@ -24,11 +24,17 @@ type AccountSynchronization struct {
 
 // AccountPreparationFacts is what the preparation resource observed of the
 // prepared account (CONTRACTS §59). The core records SubscriptionType on the
-// account and hands the facts to the plugin's before_create.
+// account and hands the facts to the plugin's before_create, and to its
+// before_update whenever the account's runtime is observed again (create,
+// re-authorization, health); the plugin keeps what it wants of them in its
+// read-only extensions (AccountPatch.extensions_json).
 type AccountPreparationFacts struct {
 	// SubscriptionType is the plan the upstream reported ("max", "pro" ...);
 	// "" when unknown.
 	SubscriptionType string `json:"subscription_type,omitempty"`
+	// AccountEmail is the email of the upstream login the runtime is signed
+	// in with; "" when unknown.
+	AccountEmail string `json:"account_email,omitempty"`
 }
 
 type AccountSynchronizationReader interface {

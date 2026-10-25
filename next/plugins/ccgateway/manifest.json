@@ -60,7 +60,8 @@
         "additionalProperties": false,
         "properties": {
           "locale": {"type": "string", "maxLength": 32},
-          "timezone": {"type": "string", "maxLength": 128}
+          "timezone": {"type": "string", "maxLength": 128},
+          "account_email": {"type": "string", "maxLength": 320, "readOnly": true, "x-label": {"en": "Login email", "zh": "登录邮箱"}}
         }
       },
       "commonControls": {

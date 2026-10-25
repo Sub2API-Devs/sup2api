@@ -117,6 +117,11 @@ func localAuthSnapshot(env []string) (Object, error) {
 		if subscription := storedSubscription(oauth); subscription != "" {
 			result["subscription_type"] = subscription
 		}
+		// The login's email, as Claude Code stores it at login (the core
+		// keeps it on the account, CONTRACTS §59).
+		if email := storedAccountEmail(env); email != "" {
+			result["account_email"] = email
+		}
 	}
 	present := len(sources) > 0
 	unresolved := false

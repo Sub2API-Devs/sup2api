@@ -59,6 +59,7 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		return "", draftNotFound(core.ErrInvalidArgument)
 	}
 	subscriptionChanged := false
+	var observed core.AccountPreparationFacts
 	err := s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, reauthLockSQL, accountID); err != nil {
 			return err
@@ -88,10 +89,12 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		var health struct {
 			LoggedIn         bool   `json:"logged_in"`
 			SubscriptionType string `json:"subscription_type"`
+			AccountEmail     string `json:"account_email"`
 		}
 		if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&health) != nil || !health.LoggedIn {
 			return reasonError(core.ErrInvalidArgument, "draft_not_authorized")
 		}
+		observed = observedFacts(health.SubscriptionType, health.AccountEmail)
 		changed, err := recordSubscription(ctx, tx, accountID, health.SubscriptionType)
 		if err != nil {
 			return err
@@ -104,10 +107,9 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 	})
 	if err == nil {
 		s.Kick(key)
-		// Only once the new subscription type is committed (CONTRACTS §59).
-		if subscriptionChanged {
-			s.subscriptionChanged(ctx, accountID)
-		}
+		// Only once the new subscription type is committed (CONTRACTS §59);
+		// a re-authorization may also be another login (its email).
+		s.factsObserved(ctx, accountID, observed, subscriptionChanged)
 	}
 	return "", err
 }

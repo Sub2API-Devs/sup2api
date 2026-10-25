@@ -6,10 +6,24 @@ import (
 	"errors"
 	"regexp"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 var subscriptionPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
+// emailPattern bounds the login email a Worker reports: one address, no
+// spaces or control characters.
+var emailPattern = regexp.MustCompile(`^[^\s@]{1,64}@[^\s@]{1,255}$`)
+
+// normalizeEmail keeps the email of the Claude login a Worker reported; ""
+// for anything that is not one address.
+func normalizeEmail(value string) string {
+	if len(value) <= 320 && emailPattern.MatchString(value) {
+		return value
+	}
+	return ""
+}
 
 // normalizeSubscription keeps a subscription type the Worker reported from
 // Claude Code ("max", "pro", "team", "enterprise" ...); "" for anything else.
@@ -36,6 +50,9 @@ func safeAuthStatus(raw []byte) (any, error) {
 		// SubscriptionType is what Claude Code reported for the signed-in
 		// account (CONTRACTS §59); absent when unknown.
 		SubscriptionType string `json:"subscription_type,omitempty"`
+		// AccountEmail is the email of the signed-in Claude login; absent
+		// when unknown.
+		AccountEmail string `json:"account_email,omitempty"`
 	}
 	if json.Unmarshal(raw, &v) != nil {
 		return nil, errors.New("invalid status")
@@ -72,6 +89,7 @@ func safeAuthStatus(raw []byte) (any, error) {
 	}
 	v.LoggedIn = *v.CredentialPresent
 	v.SubscriptionType = normalizeSubscription(v.SubscriptionType)
+	v.AccountEmail = normalizeEmail(v.AccountEmail)
 	return v, nil
 }
 
@@ -90,10 +108,15 @@ func recordSubscription(ctx context.Context, q store.Querier, accountID int64, v
 	return tag.RowsAffected() > 0, nil
 }
 
-// subscriptionChanged runs the SubscriptionChanged hook, when any, after a
-// changed subscription type was committed.
-func (s *Service) subscriptionChanged(ctx context.Context, accountID int64) {
-	if s.SubscriptionChanged != nil {
-		s.SubscriptionChanged(ctx, accountID)
+// factsObserved runs the FactsObserved hook, when any, once what the
+// runtime reported was committed.
+func (s *Service) factsObserved(ctx context.Context, accountID int64, observed core.AccountPreparationFacts, subscriptionChanged bool) {
+	if s.FactsObserved != nil && accountID > 0 {
+		s.FactsObserved(ctx, accountID, observed, subscriptionChanged)
 	}
+}
+
+// observedFacts are the facts of a Worker status answer.
+func observedFacts(subscription, email string) core.AccountPreparationFacts {
+	return core.AccountPreparationFacts{SubscriptionType: normalizeSubscription(subscription), AccountEmail: normalizeEmail(email)}
 }

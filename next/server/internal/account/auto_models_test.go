@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 var (
@@ -118,7 +119,7 @@ func TestSubscriptionChangedRecomputesAutomaticModels(t *testing.T) {
 	}
 
 	e.exec1(`UPDATE accounts SET subscription_type='max' WHERE id=$1 RETURNING id`, id)
-	e.svc.SubscriptionChanged(ctx, id)
+	e.svc.FactsObserved(ctx, id, core.AccountPreparationFacts{}, true)
 	if models, _ := savedModels(t, e, id); !slices.Equal(models, autoMaxModels) {
 		t.Fatalf("automatic models after the change to max %v", models)
 	}
@@ -141,14 +142,14 @@ func TestSubscriptionChangedRecomputesAutomaticModels(t *testing.T) {
 	}
 
 	// Nothing to change: nothing written.
-	e.svc.SubscriptionChanged(ctx, id)
+	e.svc.FactsObserved(ctx, id, core.AccountPreparationFacts{}, true)
 	if n := audits(); n != 1 {
 		t.Fatalf("unchanged models audited again: %d", n)
 	}
 
 	// Manual mode: the subscription type no longer touches the list.
 	e.exec1(`UPDATE accounts SET auto_models=false, subscription_type='pro' WHERE id=$1 RETURNING id`, id)
-	e.svc.SubscriptionChanged(ctx, id)
+	e.svc.FactsObserved(ctx, id, core.AccountPreparationFacts{}, true)
 	if models, _ := savedModels(t, e, id); !slices.Equal(models, autoMaxModels) {
 		t.Fatalf("manual models changed %v", models)
 	}

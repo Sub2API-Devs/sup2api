@@ -174,6 +174,8 @@ type fakeController struct {
 	cliVersion string // cli_version probe of admin/features ("" reports none)
 	// subscription is the subscription_type admin/status reports ("" none).
 	subscription string
+	// email is the account_email admin/status reports ("" none).
+	email string
 }
 
 func newFakeController(t *testing.T) *fakeController {
@@ -290,6 +292,9 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status := map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"}
 		if c.subscription != "" {
 			status["subscription_type"] = c.subscription
+		}
+		if c.email != "" {
+			status["account_email"] = c.email
 		}
 		_ = json.NewEncoder(w).Encode(status)
 	case "admin/features":
@@ -475,11 +480,20 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 	if code, out = f.call("GET", id, "health", ""); code != 200 || data(out)["logged_in"] != true {
 		t.Fatalf("health: %d %v", code, out)
 	}
-	// Health keeps the subscription type Claude Code reported on the account (§59).
-	var changed []int64
-	f.s.SubscriptionChanged = func(_ context.Context, account int64) { changed = append(changed, account) }
+	// Health keeps the subscription type Claude Code reported on the account
+	// and hands the observed facts (the login email) to the account service
+	// every time (§59).
+	type observation struct {
+		account int64
+		facts   core.AccountPreparationFacts
+		changed bool
+	}
+	var observed []observation
+	f.s.FactsObserved = func(_ context.Context, account int64, facts core.AccountPreparationFacts, changed bool) {
+		observed = append(observed, observation{account, facts, changed})
+	}
 	ctl.mu.Lock()
-	ctl.subscription = "max"
+	ctl.subscription, ctl.email = "max", "ops@example.invalid"
 	ctl.mu.Unlock()
 	if code, out = f.call("GET", id, "health", ""); code != 200 {
 		t.Fatalf("health: %d %v", code, out)
@@ -488,12 +502,13 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 	if err := f.s.DB.Pool.QueryRow(t.Context(), `SELECT subscription_type FROM accounts WHERE id=$1`, id).Scan(&subscription); err != nil || subscription == nil || *subscription != "max" {
 		t.Fatalf("recorded subscription %v %v", subscription, err)
 	}
-	// Only an actual change runs the hook.
+	// Every observation runs the hook; only the first changed the subscription.
 	if code, out = f.call("GET", id, "health", ""); code != 200 {
 		t.Fatalf("health: %d %v", code, out)
 	}
-	if len(changed) != 1 || changed[0] != id {
-		t.Fatalf("subscription change hook calls %v", changed)
+	facts := core.AccountPreparationFacts{SubscriptionType: "max", AccountEmail: "ops@example.invalid"}
+	if len(observed) != 2 || observed[0] != (observation{id, facts, true}) || observed[1] != (observation{id, facts, false}) {
+		t.Fatalf("facts hook calls %+v", observed)
 	}
 	if code, out = f.call("POST", id, "complete", `{"code":"abc#st"}`); code != 400 || reason(out) != "session_not_found" {
 		t.Fatalf("complete without a login: %d %v", code, out)

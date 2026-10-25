@@ -139,6 +139,7 @@ interface MockAccountType {
   converts?: Array<{ platform: string; path: string }>
   default_models?: string[]
   default_model_mapping?: Record<string, string>
+  extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
 }
 
 // Built-in model list of the Claude Code account types (plugins/ccgateway/manifest.json).
@@ -215,6 +216,8 @@ const accountTypeDecls: MockAccountType[] = [
     sensitive_fields: [],
     default_models: CC_MODELS,
     default_model_mapping: {},
+    // manifest.json: the login email is the plugin's read-only extension.
+    extensions_schema: { type: 'object', properties: { locale: { type: 'string', maxLength: 32 }, timezone: { type: 'string', maxLength: 128 }, account_email: { type: 'string', maxLength: 320, readOnly: true, 'x-label': { en: 'Login email', zh: '登录邮箱' } } } },
     supports: ['anthropic']
   },
   {
@@ -338,7 +341,7 @@ export const accounts: any[] = [
   { id: 23, name: 'claude-pro-3', plugin_key: 'claude_oauth', type: 'claude_setup_token', created_by: 6, group_ids: [2], proxy_id: null, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-95), created_at: now(-86400 * 6), credentials: { access_token: '******' } },
   { id: 24, name: 'claude-max-new', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-600), credentials: { access_token: '******', refresh_token: '******' } },
   // Claude Code (CCGateway) managed accounts, one container each (mock/ccgateway.ts with SUB2API_MOCK_CCGATEWAY): authorized / not yet.
-  { id: 25, name: 'cc-main', plugin_key: 'ccgateway', type: 'managed', created_by: 1, subscription_type: 'max', group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-420), created_at: now(-86400 * 4), credentials: {} },
+  { id: 25, name: 'cc-main', plugin_key: 'ccgateway', type: 'managed', created_by: 1, subscription_type: 'max', settings: { locale: 'en-US', timezone: 'America/New_York', account_email: 'cc-main@example.com' }, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-420), created_at: now(-86400 * 4), credentials: {} },
   { id: 26, name: 'cc-pending', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 5, weight: 1, max_concurrency: 4, schedulable: true, models: ['claude-sonnet-4-5'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-3600), credentials: {} },
   // Row without a proxy: its container egresses directly.
   { id: 27, name: 'cc-noproxy', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: null, priority: 6, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-7200), credentials: {} },

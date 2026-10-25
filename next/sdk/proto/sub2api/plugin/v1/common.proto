@@ -64,7 +64,8 @@ message AccountLifecycleRequest {
   repeated string changed_fields = 6;
   // Facts the core learned from the account's preparation, as a JSON object;
   // on before_create or before_update (saved account facts), "" when unknown. Known keys:
-  // "subscription_type" (e.g. "max", "pro"), absent when unknown.
+  // "subscription_type" (e.g. "max", "pro") and "account_email" (the
+  // upstream login's email), each absent when unknown.
   string resource_facts_json = 7;
 }
 
@@ -82,6 +83,11 @@ message AccountLifecycleResponse {
 message AccountPatch {
   ModelList models = 1;
   ModelMappingValue model_mapping = 2;
+  // Values of the account type's read-only extensions (extensionsSchema
+  // properties with "readOnly": true), as a JSON object: the plugin's own
+  // facts about the account, which the admin cannot edit. Only the keys given
+  // change; a null value removes one. "" leaves them unchanged.
+  string extensions_json = 3;
 }
 
 // ModelList is a model id list; empty means every model.

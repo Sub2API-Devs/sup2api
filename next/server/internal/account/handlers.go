@@ -977,11 +977,19 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	// The plugin may adjust the account before it is saved (CONTRACTS §59).
+	// The plugin may adjust the account before it is saved (CONTRACTS §59),
+	// and set its read-only extensions from the observed facts.
 	patched, err := applyAccountPatch(ctx, before, &models, &mapping)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
+	}
+	if settings, changed, err := s.applyExtensionsPatch(bt, p.settings, before); err != nil {
+		httpapi.Fail(c, err)
+		return
+	} else if changed {
+		p.settings = settings
+		patched = append(patched, "settings")
 	}
 	var id int64
 	proxyCreated := false
@@ -1169,6 +1177,19 @@ func (s *Service) update(c *gin.Context) {
 		case "model_mapping":
 			in.ModelMapping = &modelMapping
 		}
+	}
+	saving := cur.Settings
+	if extensionSettings != nil {
+		saving = []byte(*extensionSettings)
+	} else if p != nil {
+		saving = p.settings
+	}
+	if settings, changed, err := s.applyExtensionsPatch(bt, saving, before); err != nil {
+		httpapi.Fail(c, err)
+		return
+	} else if changed {
+		value := string(settings)
+		extensionSettings = &value
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)

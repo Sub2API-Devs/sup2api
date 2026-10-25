@@ -4239,6 +4239,22 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **0.1.69 修订（自动配置模型，`hostCompat >=0.1.172`）：** `before_create` 与 `before_update` 中，`auto_models` 不为 `false`（含未设置）时总是返回内置列表：`pro` 去掉两个 Fable 模型（9 个，`DefaultModelsForSubscription`），其他与未知订阅为全部 11 个，`apikey` 账号没有订阅类型、按全部处理；用户提交的列表被覆盖。`auto_models == false` 时不返回补丁，用户的列表（包括空 = 所有模型）原样保存。manifest 的 `defaultModelsBySubscription.pro` 与该规则一致（测试保证）。
 
+### 59.6 插件只读扩展字段与上游登录邮箱（2026-10-25，用户要求）
+
+插件专属的账号事实存放在通用的扩展字段（`accounts.settings`，按账号类型 `extensionsSchema` 校验）里，不给核心加专用列。第一个用例是 ccgateway 记录 Claude Code 实际登录的邮箱。
+
+- **只读扩展**：`extensionsSchema` 里 `"readOnly": true` 的属性归插件所有。管理员通过 `settings` 写这些键返回 400，字段错误码为 `read_only`。管理员编辑自己的扩展时，插件的值保持不变。插件 `validate` 阶段只收到管理员可编辑的扩展。可选的 `"x-label": {en, zh}` 是控制台显示的标签。
+- **写入**：`AccountPatch.extensions_json`（字段 3）是 JSON 对象，只能包含该类型声明的只读键，值为 `null` 表示删除，空串表示不改。核心按 `extensionsSchema` 校验后合并进 `settings`；不合规按插件不可用处理，账号不保存。`before_create`、`before_update` 都生效。
+- **观测事实**：`resource_facts_json` 增加 `account_email`（上游登录邮箱，未知时不带），核心字段为 `core.AccountPreparationFacts.AccountEmail`。ccgateway 的事实来自 Worker `GET /admin/status` 的 `account_email`：Worker 从本地 `.claude.json` 的 `oauthAccount.emailAddress` 读取，只在存有 Claude 登录时报告，不联网、不读令牌；Worker 与核心各校验一次是否为单个地址（不超过 320 字符、不含空白、恰好一个 `@`）。
+- **更新时机**：
+  - 授权后创建账号：事实随 `before_create` 交给插件。
+  - 重新授权提交、控制台查看凭证状态（`GET …/health`）：ccgateway 服务调用 `FactsObserved` 回调（取代原 `SubscriptionChanged`），每次观测都调用。账号服务用 `before_update` 把事实交给插件：订阅变化时 `changed_fields = ["subscription_type"]`，其余为 `["resource_facts"]`。
+  - 只写真正改变的内容：模型只在自动模式下改，只读扩展不受自动模式影响。只读扩展的修改审计为 `account.extensions.plugin`，`detail` 只记改动的键、不记值。邮箱未知时不清除已有值。
+  - 请求、账号测试、令牌刷新都不更新。
+- **ccgateway 0.1.96**：`managed` 类型声明 `account_email`（字符串、最多 320 字符、只读，标签「登录邮箱」）；`before_create` / `before_update` 收到 `account_email` 时返回 `extensions_json: {"account_email": …}`。`apikey` 类型不声明、不写。插件读取设置时先去掉这个键，再规范化容器语言与时区。
+- **控制台**：账号列表在类型行下方、详情页在「订阅」之后，显示所有有值的只读扩展（标签取 `x-label`，没有就显示键名）。编辑器不提交这些键。
+- **发布顺序**：先插件后核心、先核心后插件都行。旧核心忽略 `extensions_json`；新核心面对旧插件时，旧插件不返回该字段，旧 Worker 也不报告邮箱。已有账号在下一次查看凭证状态或重新授权时补上。
+
 ### 59.5 控制台
 
 - 账号列表在类型后显示订阅徽标（Max / Pro …），详情增加"订阅"一行。

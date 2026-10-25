@@ -39,6 +39,7 @@ type preparationResource struct {
 	prepared     map[string]bool
 	ready        bool
 	subscription string
+	email        string
 	cancelled    int
 	adopted      int64
 }
@@ -57,7 +58,7 @@ func (r *preparationResource) CheckAccountPreparation(context.Context, core.Acco
 	if !r.ready {
 		return core.AccountPreparationFacts{}, core.ErrInvalidArgument.WithMessage("not ready")
 	}
-	return core.AccountPreparationFacts{SubscriptionType: r.subscription}, nil
+	return core.AccountPreparationFacts{SubscriptionType: r.subscription, AccountEmail: r.email}, nil
 }
 func (r *preparationResource) AdoptAccountPreparation(_ context.Context, _ pgx.Tx, _ core.AccountPreparation, id int64) error {
 	r.adopted = id

@@ -222,10 +222,13 @@ type Service struct {
 	// Bus carries configuration and account changes between nodes (the
 	// request cache and immediate reconciles); nil: this node only.
 	Bus core.Bus
-	// SubscriptionChanged is called after a changed subscription type of an
-	// account was committed (CONTRACTS §59), so the account service can
-	// recompute automatic model lists; nil: nothing happens.
-	SubscriptionChanged func(ctx context.Context, accountID int64)
+	// FactsObserved is called after an account's runtime was observed again
+	// (re-authorization, health) and what it reported committed (CONTRACTS
+	// §59): observed is what the runtime reported, subscriptionChanged that
+	// the recorded subscription type changed. The account service gives the
+	// plugin the facts (automatic models, read-only extensions such as the
+	// login email); nil: nothing happens.
+	FactsObserved func(ctx context.Context, accountID int64, observed core.AccountPreparationFacts, subscriptionChanged bool)
 	// cache keeps what forwarding a model request needs (request_cache.go).
 	cache requestCache
 	// sweepNow asks Run for a reconcile pass of every runtime now.

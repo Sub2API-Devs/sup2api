@@ -796,7 +796,7 @@ func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft boo
 	case "health":
 		out, e = safeResult("/status", raw)
 		if e == nil && !draft {
-			s.noteSubscription(ctx, d.AccountID, raw)
+			s.noteFacts(ctx, d.AccountID, raw)
 		}
 		if e == nil && cliVersion != nil {
 			out = withCLIVersion(out, <-cliVersion)
@@ -814,20 +814,23 @@ func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft boo
 	return out, nil
 }
 
-// noteSubscription keeps the account's subscription type current from its
-// health answer (CONTRACTS §59).
-func (s *Service) noteSubscription(ctx context.Context, accountID int64, raw []byte) {
-	var facts struct {
+// noteFacts keeps the account current from its health answer (CONTRACTS
+// §59): the subscription type on the account, and what the plugin keeps of
+// the observed facts (the login email).
+func (s *Service) noteFacts(ctx context.Context, accountID int64, raw []byte) {
+	var status struct {
 		SubscriptionType string `json:"subscription_type"`
+		AccountEmail     string `json:"account_email"`
 	}
-	if json.Unmarshal(raw, &facts) != nil {
+	if json.Unmarshal(raw, &status) != nil {
 		return
 	}
-	if changed, err := recordSubscription(ctx, s.DB.Pool, accountID, facts.SubscriptionType); err != nil {
+	changed, err := recordSubscription(ctx, s.DB.Pool, accountID, status.SubscriptionType)
+	if err != nil {
 		slog.WarnContext(ctx, "ccgateway: record subscription type", "account", accountID, "err", err)
-	} else if changed {
-		s.subscriptionChanged(ctx, accountID)
+		return
 	}
+	s.factsObserved(ctx, accountID, observedFacts(status.SubscriptionType, status.AccountEmail), changed)
 }
 
 func (s *Service) runtimeActionRequest(ctx context.Context, key, method, path string, body []byte, revision string) (*http.Response, func() error, error) {

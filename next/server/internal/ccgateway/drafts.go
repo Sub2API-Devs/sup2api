@@ -377,12 +377,12 @@ func (s *Service) checkDraftLogin(ctx context.Context, key string, scope *int64,
 	var v struct {
 		LoggedIn         bool   `json:"logged_in"`
 		SubscriptionType string `json:"subscription_type"`
+		AccountEmail     string `json:"account_email"`
 	}
 	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&v) != nil || !v.LoggedIn {
 		return facts, notAuthorized
 	}
-	facts.SubscriptionType = normalizeSubscription(v.SubscriptionType)
-	return facts, nil
+	return observedFacts(v.SubscriptionType, v.AccountEmail), nil
 }
 
 // AdoptDraft makes the draft key the runtime of account accountID, inside
