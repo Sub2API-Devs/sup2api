@@ -3,11 +3,13 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 import { i18n } from '@/i18n'
 import MyApiKeysView from './MyApiKeysView.vue'
+import KeyGroupSwitch from './KeyGroupSwitch.vue'
 
-const { post, put, reload, notifyError, deleteWithConfirm } = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn(), reload: vi.fn(), notifyError: vi.fn(), deleteWithConfirm: vi.fn() }))
-vi.mock('@sub2api/host', () => ({ api: { post, put } }))
+const { get, post, put, patch, reload, notifyError, deleteWithConfirm } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), reload: vi.fn(), notifyError: vi.fn(), deleteWithConfirm: vi.fn() }))
+vi.mock('@sub2api/host', () => ({ api: { get, post, put, patch } }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/composables/useList', () => ({ useList: () => ({ items: ref([{ id: 7, name: 'laptop', group_id: 1, status: 'active', created_at: '', allowed_ips: ['192.0.2.0/24'] }]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(1), reload }) }))
-vi.mock('@/composables/lookups', () => ({ fetchMyGroups: async () => [{ id: 1, name: 'default' }] }))
+vi.mock('@/composables/lookups', () => ({ fetchMyGroups: async () => [{ id: 1, name: 'default' }, { id: 2, name: 'vip' }] }))
 vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (value: string) => value }) }))
 vi.mock('@/composables/crud', () => ({ deleteWithConfirm }))
 vi.mock('@/utils/errors', () => ({ fieldErrors: () => ({ allowed_ips: 'invalid IP' }), notifyError }))
@@ -18,7 +20,12 @@ function render() {
 }
 
 describe('API key IP configuration', () => {
-  beforeEach(() => { vi.clearAllMocks(); put.mockResolvedValue({}) })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    put.mockResolvedValue({})
+    // Today's and all-time usage per key (group_by=api_key).
+    get.mockImplementation(async (_path: string, q: { from: string }) => [{ key: '7', requests: q.from.startsWith('1970') ? 12 : 3, total_cost: q.from.startsWith('1970') ? '1.5' : '0.25' }])
+  })
   it('loads and saves an owner key allowlist, including explicit clearing', async () => {
     const w = render()
     await w.get('[data-testid="edit-key-ips"]').trigger('click')
@@ -61,5 +68,30 @@ describe('API key IP configuration', () => {
     expect(w.find('[data-testid="key-ip-restricted"]').exists()).toBe(true)
     await w.get('[data-testid="delete-key"]').trigger('click')
     expect(deleteWithConfirm).toHaveBeenCalledWith('/me/api-keys/7', expect.stringContaining('laptop'), reload)
+  })
+  it('shows the usage of each key today and in total', async () => {
+    const w = render()
+    await flushPromises()
+    expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ group_by: 'api_key', from: new Date(0).toISOString() }))
+    const usage = w.get('[data-testid="key-usage"]').text()
+    expect(usage).toContain('$0.25')
+    expect(usage).toContain('3 次')
+    expect(usage).toContain('$1.50')
+    expect(usage).toContain('12 次')
+  })
+  it('switches a key off and moves it to another group in place', async () => {
+    patch.mockResolvedValueOnce({ id: 7, name: 'laptop', group_id: 1, status: 'disabled', created_at: '' })
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="key-enabled-switch"]').trigger('click')
+    await flushPromises()
+    expect(patch).toHaveBeenCalledWith('/me/api-keys/7', { status: 'disabled' })
+    expect((w.get('[data-testid="key-enabled-switch"]').element as HTMLInputElement).checked).toBe(false)
+    patch.mockResolvedValueOnce({ id: 7, name: 'laptop', group_id: 2, status: 'disabled', created_at: '' })
+    // The menu itself is SDropdown's (it closes at once without layout here).
+    w.findComponent(KeyGroupSwitch).vm.$emit('change', 2)
+    await flushPromises()
+    expect(patch).toHaveBeenLastCalledWith('/me/api-keys/7', { group_id: 2 })
+    expect(reload).not.toHaveBeenCalled()
   })
 })

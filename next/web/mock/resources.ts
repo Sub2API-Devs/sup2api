@@ -410,6 +410,17 @@ on('POST', '/me/api-keys', (req) => {
   keys.unshift(k)
   return { ...keyOut(k), key: token }
 })
+on('PATCH', '/me/api-keys/:id', (req) => {
+  const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
+  if (!k) return fail(404, 'not_found', 'api key not found')
+  const b = req.body || {}
+  if (b.status === undefined && b.group_id === undefined) return fail(400, 'invalid_argument', 'nothing to update: give status or group_id')
+  if (b.status !== undefined && b.status !== 'active' && b.status !== 'disabled') return invalid('status', 'status must be active or disabled')
+  if (b.group_id !== undefined && !myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
+  if (b.status !== undefined) k.status = b.status
+  if (b.group_id !== undefined) k.group_id = Number(b.group_id)
+  return keyOut(k)
+})
 on('DELETE', '/me/api-keys/:id', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')

@@ -951,7 +951,8 @@ for (let i = 0; i < 90; i++) {
     client_request_id: clientRequestId,
     user_id: user.id,
     user_email: user.email,
-    api_key_id: user.id * 10,
+    // The console user spreads over its first two keys (the API key list's usage column).
+    api_key_id: user.id === 1 ? 1 + (i % 2) : user.id * 10,
     api_key_name: `${user.name}-key`,
     client_ip: CLIENT_IPS[user.id][r(21) < 0.75 ? 0 : 1],
     group_id: group.id,
@@ -1101,7 +1102,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
   const by = q.group_by || 'day'
   const map = new Map<string, any>()
   for (const u of usageFilter(rows, q)) {
-    const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : by === 'ip' ? u.client_ip : u.created_at.slice(0, 10)
+    const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : by === 'ip' ? u.client_ip : by === 'api_key' ? String(u.api_key_id) : u.created_at.slice(0, 10)
     const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0 }
     if (by === 'user') s.user_email = u.user_email
     if (by === 'ip' && (!s.last_at || u.created_at > s.last_at)) s.last_at = u.created_at

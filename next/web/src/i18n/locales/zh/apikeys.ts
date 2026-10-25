@@ -25,6 +25,11 @@ export default {
   onceWarning: '请复制保存此密钥，之后也可以在列表中点击复制按钮获取。',
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
+  usage: { title: '用量', today: '今日', total: '累计', requests: '{n} 次' },
+  changeGroup: '更换分组',
+  groupChanged: '已更换分组',
+  enabledToast: 'API Key 已启用',
+  disabledToast: 'API Key 已停用，使用它的请求会被拒绝',
   empty: '还没有 API Key',
   emptyHint: '新建一个 Key，即可通过网关调用所选分组的平台和模型。',
   confirmDelete: '确定删除 API Key "{name}"？使用它的客户端将立即失效。'

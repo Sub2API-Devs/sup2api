@@ -125,6 +125,28 @@ func TestUsageSummaryByClientIP(t *testing.T) {
 	require.NotContains(t, days[0].(map[string]any), "last_at")
 }
 
+// group_by=api_key gives the API key list its per-key requests and cost; the
+// caller's own summary never counts another user's keys.
+func TestUsageSummaryByAPIKey(t *testing.T) {
+	f := newFixture(t)
+	var recs []*core.UsageRecord
+	for i, key := range []int64{1, 2, 2} {
+		r := f.record("key-"+strconv.Itoa(i), false)
+		r.APIKeyID = key
+		recs = append(recs, r)
+	}
+	other := f.record("key-other", false)
+	other.UserID, other.APIKeyID = f.other, 3
+	f.svc.process(t.Context(), append(recs, other))
+
+	requests := map[string]float64{}
+	for _, r := range f.get(f.user, "/me/usage/summary?group_by=api_key&from=2026-09-01T00:00:00Z", 200)["data"].([]any) {
+		m := r.(map[string]any)
+		requests[m["key"].(string)] = m["requests"].(float64)
+	}
+	require.Equal(t, map[string]float64{"1": 1, "2": 2}, requests)
+}
+
 func TestUsageSummaryPromptTokens(t *testing.T) {
 	f := newFixture(t)
 	for _, tc := range []struct {

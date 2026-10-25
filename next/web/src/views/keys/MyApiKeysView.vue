@@ -2,13 +2,14 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SCopyButton, SEmpty, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, STooltip, toast, type TableColumn } from '@sub2api/ui'
+import { SAlert, SButton, SCode, SCopyButton, SEmpty, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, SSwitch, STable, STextarea, STooltip, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { fetchMyGroups } from '@/composables/lookups'
 import { usePlatforms } from '@/composables/platforms'
+import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -16,12 +17,18 @@ import TimeText from '@/components/TimeText.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 import KeyGroupCell from './KeyGroupCell.vue'
+import KeyGroupSwitch from './KeyGroupSwitch.vue'
+import KeyUsageCell from './KeyUsageCell.vue'
 import ApiKeyCell from './ApiKeyCell.vue'
+import { useKeyUsage } from './keyUsage'
 
 const { t } = useI18n()
 const list = useList<ApiKey>('/me/api-keys')
 const platforms = usePlatforms()
 platforms.load()
+const canReadUsage = useAuthStore().has('usage:self:read')
+const usage = useKeyUsage()
+if (canReadUsage) usage.load()
 
 const groups = ref<Group[]>([])
 async function loadGroups() {
@@ -46,6 +53,7 @@ const columns = computed(() =>
     { key: 'name', label: t('common.name') },
     { key: 'key_prefix', label: t('apikeys.key') },
     { key: 'group', label: t('common.group') },
+    ...(canReadUsage ? [{ key: 'usage', label: t('apikeys.usage.title') }] : []),
     { key: 'status', label: t('common.status') },
     { key: 'expires_at', label: t('apikeys.expiresAt') },
     { key: 'last_used_at', label: t('apikeys.lastUsed') },
@@ -61,6 +69,28 @@ function isExpired(k: ApiKey) {
 function statusOf(k: ApiKey) {
   return isExpired(k) && k.status === 'active' ? 'expired' : k.status
 }
+
+// ------------------------------------------------------------------ status and group
+
+const updating = ref(new Set<number>())
+
+/** Applies a PATCH to the key's row in place (the answer is the updated key). */
+async function update(k: ApiKey, body: { status?: string; group_id?: number }, done: string) {
+  if (updating.value.has(k.id)) return
+  updating.value = new Set(updating.value).add(k.id)
+  try {
+    Object.assign(k, await api.patch<ApiKey>(`/me/api-keys/${k.id}`, body))
+    toast(done, 'success')
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    const rest = new Set(updating.value)
+    rest.delete(k.id)
+    updating.value = rest
+  }
+}
+const setEnabled = (k: ApiKey, on: boolean) => update(k, { status: on ? 'active' : 'disabled' }, t(on ? 'apikeys.enabledToast' : 'apikeys.disabledToast'))
+const moveToGroup = (k: ApiKey, groupId: number) => update(k, { group_id: groupId }, t('apikeys.groupChanged'))
 
 // ------------------------------------------------------------------ create
 
@@ -175,7 +205,12 @@ function remove(k: ApiKey) {
       <template #cell-key_prefix="{ row }">
         <ApiKeyCell :api-key="row" @rotated="list.reload()" />
       </template>
-      <template #cell-group="{ row }"><KeyGroupCell v-bind="groupCell(row)" /></template>
+      <template #cell-group="{ row }">
+        <KeyGroupSwitch :group-id="row.group_id" :options="groupOptions" :disabled="updating.has(row.id)" @change="moveToGroup(row, $event)">
+          <KeyGroupCell v-bind="groupCell(row)" />
+        </KeyGroupSwitch>
+      </template>
+      <template #cell-usage="{ row }"><KeyUsageCell :usage="usage.of(row.id)" /></template>
       <template #cell-status="{ row }">
         <StatusBadge :status="statusOf(row)" :tone="statusOf(row) === 'expired' ? 'warning' : undefined" :labels="{ expired: 'apikeys.expired' }" />
       </template>
@@ -190,6 +225,15 @@ function remove(k: ApiKey) {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
+          <SSwitch
+            :model-value="row.status === 'active'"
+            :disabled="updating.has(row.id)"
+            :aria-label="t(row.status === 'active' ? 'common.disable' : 'common.enable')"
+            :title="t(row.status === 'active' ? 'common.disable' : 'common.enable')"
+            class="mr-1"
+            data-testid="key-enabled-switch"
+            @update:model-value="setEnabled(row, $event)"
+          />
           <SButton variant="ghost" size="sm" icon="shield" data-testid="edit-key-ips" @click="editIPs(row)">{{ t('apikeys.ipAllowlist') }}</SButton>
           <SButton variant="ghost" size="sm" tone="danger" icon="trash" data-testid="delete-key" @click="remove(row)">{{ t('common.delete') }}</SButton>
         </div>

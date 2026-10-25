@@ -459,9 +459,9 @@ type SummaryRow struct {
 // thousands of addresses, and the console only lists the busiest ones.
 const maxIPGroups = 100
 
-// GET /usage/summary?from=&to=&group_by=day|model|user|ip (default: day, last
-// 30 days). Days are UTC dates "YYYY-MM-DD"; users are keyed by id; client IPs
-// come busiest first, at most maxIPGroups of them.
+// GET /usage/summary?from=&to=&group_by=day|model|user|ip|api_key (default:
+// day, last 30 days). Days are UTC dates "YYYY-MM-DD"; users and API keys are
+// keyed by id; client IPs come busiest first, at most maxIPGroups of them.
 func (s *Service) summary(c *gin.Context) { s.summarize(c, nil) }
 
 // GET /me/usage/summary: the same for the caller (group_by=user refused).
@@ -487,20 +487,22 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		key = `to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
 	case "model":
 		key = `u.model`
+	case "api_key":
+		key = `u.api_key_id::text`
 	case "ip":
 		key = `u.client_ip`
 		lastAt = `max(u.created_at)`
 		order = ` ORDER BY count(*) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
 	case "user":
 		if self != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model or ip"))
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, ip or api_key"))
 			return
 		}
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
 		extra = `, COALESCE(max(us.email), '')`
 	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, user or ip"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, user, ip or api_key"))
 		return
 	}
 	if extra == "" {

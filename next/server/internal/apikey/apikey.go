@@ -60,6 +60,7 @@ func New(db *store.DB, rdb redis.UniversalClient, authz core.Authorizer, reg cor
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/api-keys", "apikey:self:manage", s.listMine)
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
+	r.Perm("PATCH", "/me/api-keys/:id", "apikey:self:manage", s.updateMine)
 	r.Perm("PUT", "/me/api-keys/:id/ip-allowlist", "apikey:self:manage", s.updateIPAllowlist)
 	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
 	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
@@ -376,7 +377,12 @@ func groupAvailable(ctx context.Context, q store.Querier, userID, groupID int64)
 	return ok, err
 }
 
-func groupUnavailable(ctx context.Context) error {
+// requireGroup fails with a group_id field error unless the group is usable by user.
+func requireGroup(ctx context.Context, q store.Querier, userID, groupID int64) error {
+	ok, err := groupAvailable(ctx, q, userID, groupID)
+	if err != nil || ok {
+		return err
+	}
 	return core.InvalidFields(core.FieldError{Field: "group_id", Code: "not_available",
 		Message: t(ctx, "the group does not exist or is not available to the user", "分组不存在或用户无权使用")})
 }
@@ -433,12 +439,8 @@ func (s *Service) createMine(c *gin.Context) {
 	hash := HashKey(raw)
 	var id int64
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		ok, err := groupAvailable(ctx, tx, uid, in.GroupID)
-		if err != nil {
+		if err := requireGroup(ctx, tx, uid, in.GroupID); err != nil {
 			return err
-		}
-		if !ok {
-			return groupUnavailable(ctx)
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at, allowed_ips)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
@@ -470,6 +472,77 @@ func (s *Service) createMine(c *gin.Context) {
 	k.UserEmail = ""
 	k.Key = raw
 	httpapi.Created(c, k)
+}
+
+// updateMine switches a key on or off (status active | disabled) and moves it
+// to another group the owner may use. Authentication reads both on every
+// request, so the next call already sees the change.
+func (s *Service) updateMine(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid, _ := core.UserID(ctx)
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var in struct {
+		Status  *string `json:"status"`
+		GroupID *int64  `json:"group_id"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	if err := validUpdate(ctx, in.Status, in.GroupID); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	detail := map[string]any{}
+	if in.Status != nil {
+		detail["status"] = *in.Status
+	}
+	if in.GroupID != nil {
+		detail["group_id"] = *in.GroupID
+	}
+	var hash string
+	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if in.GroupID != nil {
+			if err := requireGroup(ctx, tx, uid, *in.GroupID); err != nil {
+				return err
+			}
+		}
+		err := tx.QueryRow(ctx, `UPDATE api_keys SET status = COALESCE($3, status), group_id = COALESCE($4, group_id)
+			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING key_hash`, id, uid, in.Status, in.GroupID).Scan(&hash)
+		if store.IsNoRows(err) {
+			return notFound(ctx)
+		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO audit_logs (user_id,action,target_type,target_id,detail,ip) VALUES ($1,'apikey.update','apikey',$2,$3,$4)`, uid, strconv.FormatInt(id, 10), detail, c.ClientIP())
+		return err
+	})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.dropCache(ctx, hash)
+	k, err := s.loadKey(ctx, id, uid)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	k.UserEmail = ""
+	httpapi.OK(c, k)
+}
+
+func validUpdate(ctx context.Context, status *string, groupID *int64) error {
+	if status == nil && groupID == nil {
+		return core.ErrInvalidArgument.WithMessage(t(ctx, "nothing to update: give status or group_id", "没有要修改的内容：请提供 status 或 group_id"))
+	}
+	if status != nil && *status != "active" && *status != "disabled" {
+		return core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
+			Message: t(ctx, "status must be active or disabled", "状态只能是 active 或 disabled")})
+	}
+	return nil
 }
 
 func (s *Service) revealMine(c *gin.Context) {
