@@ -116,7 +116,8 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				require.NotContains(t, env[requestIdentityEnv], "source-session")
 				require.Len(t, identity.Device, 64)
 				require.True(t, identity.Rewrite)
-				// A request that carries no identity starts the CLI natively.
+				// A request that carries no identity gets the account's own
+				// (2026-10-25), with the conversation's session.
 				request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","messages":[{"role":"user","content":"hello"}]}`))
 				request.Header.Set("x-api-key", "fixture")
 				response = httptest.NewRecorder()
@@ -126,11 +127,10 @@ func TestRequestCommandAppliesAccountIdentityOnlyForOAuth(t *testing.T) {
 				require.NoError(t, err)
 				env = nil
 				require.NoError(t, json.Unmarshal(data, &env))
-				// Build carries no rewrite: the CLI drops the metadata its native
-				// builder would invent instead of giving the request an identity.
 				identity = requestIdentity{}
 				require.NoError(t, json.Unmarshal([]byte(env[requestIdentityEnv]), &identity))
-				require.Equal(t, requestIdentity{Version: 2, Mode: "replace"}, identity)
+				require.Regexp(t, cliSessionPattern, identity.Session)
+				require.Equal(t, requestIdentity{Version: 2, Mode: "replace", Rewrite: true, Carrier: "json", Session: identity.Session}, identity)
 			})
 		}
 	}

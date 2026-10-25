@@ -13,7 +13,7 @@
 - build 的请求总带计费头：客户端没有就补 CLI 原生的整行，缺字段就补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。选 `worker` 时**要么用原生值，要么拒绝**：计费头无法安全改写（多个头、重复字段、格式不对）时 400；原生计费值拿不到时 503。
 - 原生环境拿不到时同样**拒绝请求（503）**，不使用猜测值。
 - 身份行（OAuth）由 CLI 按计费头的入口**自适应**补，不可配置：带计费头的 CC 请求不补，没有计费头的请求缺身份行时补一句（第 6.1 节）。API Key 账号不补。
-- 身份（`metadata.user_id`）不属于内容策略，也不可配置：build 有就按账号密钥映射（`replace`），没有不加；direct 原样转发 body，但 Worker 仍把客户端会话交给 CLI，让会话头与 body 一致（第 7 节）。
+- 身份（`metadata.user_id`）不属于内容策略，也不可配置：build 有就按账号密钥映射（`replace`），没有就给账号自己的身份（2026-10-25 起，第 7 节）；direct 原样转发 body，但 Worker 仍把客户端会话交给 CLI，让会话头与 body 一致（第 7 节）。
 - direct 只处理开头的计费头（等级 0）：缺头或缺字段时补原生值，按计费来源换字段，**不补身份行**，字符串 system 改成块数组，其余字节原样转发（第 6.3 节）。
 
 ## 1. 总体链路
@@ -309,7 +309,7 @@ Worker 的 direct 能力门见 2.1 节。direct 下 Worker 仍解析 body（必�
   - **build**：Worker 启用了身份映射（CLI 声明 `request_identity_v1`）时总设置，CLI 据此决定最终 metadata。
   - **direct**：CLI 声明 `request_agent_context_v1` 且映射已启用时，Worker 以 `client` 模式解析客户端 metadata，**取到会话 ID 才设置**，只为让 CLI 采用客户端的会话（会话头与 body 里原样转发的 metadata 一致）；body 不改。
 - **是否改写只由 Worker 的 `rewrite` 决定**（`applyBuildMetadata`）。客户端没发身份、或身份里没有可映射字段（只有未知字段、已知字段全为空或 null）时 `rewrite=false`，保留客户端原值及其载体（对象 / JSON 字符串 / 扁平字符串）。
-- **build 不凭空生成身份**：客户端没发 metadata 时删掉原生构造器生成的 metadata；客户端 metadata 没有 `user_id` 时按客户端原样发送。
+- **没有身份的请求给账号自己的身份**（2026-10-25 用户决定，CLI v27；此前不加，而官方 CC 的每个请求都带 `metadata.user_id`）：客户端没发 `metadata.user_id`（没有 metadata、没有这个键、或值为 null/空串）且映射可用（OAuth 账号、有映射密钥）时，Worker 给出 `rewrite: true`、`carrier: json` 与会话（`generatedRequestIdentity`），CLI 写入 `{device_id, account_uuid, session_id}`：device 与 account 是该账号 CLI 自己的值，会话由对话的第一条消息按账号密钥映射，同一对话的后续轮次不变、会话头与之一致；客户端 metadata 里的其他键保留。两个以同一条消息开头的对话会共用会话。API Key 账号、拿不到映射密钥的登录仍不加；direct 原样转发，不加。
 - **账号类型**（`resolveRequestIdentity`）：API Key 账号 `replace` 按 `client` 处理；OAuth 账号读不到邮箱时 `replace` 退为 `worker`。
 - **会话头一致**：Worker 给出 `session_id` 时 CLI 以它作为根会话（`requestSessionID`），传输头与 metadata 一致。
 - 账号测试（`/v1/ccgateway/probe`）是网关自己的请求：固定走 build、不带请求上下文，身份按同样规则处理。

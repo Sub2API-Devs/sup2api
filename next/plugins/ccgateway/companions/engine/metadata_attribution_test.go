@@ -101,7 +101,7 @@ func TestResolveRequestIdentityFallbacks(t *testing.T) {
 		"api key replace":  {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "client", false, false},
 		"no email replace": {accountEnv(t, "", true), "worker", true, false},
 	} {
-		value, err := g.resolveRequestIdentity(tc.env, readClientIdentity(raw))
+		value, err := g.resolveRequestIdentity(tc.env, readClientIdentity(raw), raw)
 		require.NoError(t, err, name)
 		require.Equal(t, tc.want, value.Mode, name)
 		require.Equal(t, tc.rewrite, value.Rewrite, name)
@@ -347,4 +347,38 @@ func TestRequestIdentityCapabilityIsNotInferred(t *testing.T) {
 	require.False(t, g.requestIdentityEnabled)
 	require.NotContains(t, g.requestCapabilities(), features.RequestIdentityCapability)
 	require.True(t, regexp.MustCompile(`^[a-f0-9-]{36}$`).MatchString(uuid()))
+}
+
+// A request that names no identity gets the account's own (2026-10-25): every
+// Claude Code request carries one. Its session stays across the turns of one
+// conversation (the first message, however encoded) and differs between
+// conversations and accounts; an API-key account and a login without a key
+// still get none.
+func TestRequestWithoutIdentityGetsTheAccounts(t *testing.T) {
+	g := &Gateway{requestIdentitySecret: bytes.Repeat([]byte{0x24}, 32)}
+	oauth := accountEnv(t, "ops@example.invalid", true)
+	resolve := func(env []string, body string) requestIdentity {
+		t.Helper()
+		value, err := g.resolveRequestIdentity(env, readClientIdentity([]byte(body)), []byte(body))
+		require.NoError(t, err)
+		return value
+	}
+	turn1 := resolve(oauth, `{"model":"m","messages":[{"role":"user","content":"Plan the trip."}]}`)
+	require.Equal(t, requestIdentity{Version: 2, Mode: "replace", Rewrite: true, Carrier: "json", Session: turn1.Session}, turn1)
+	require.Regexp(t, cliSessionPattern, turn1.Session)
+	turn2 := resolve(oauth, `{"model":"m","metadata":{"other":1},"messages":[{"content": "Plan the trip.", "role":"user"},{"role":"assistant","content":"Sure."},{"role":"user","content":"Go on."}]}`)
+	require.Equal(t, turn1.Session, turn2.Session, "a later turn of the same conversation")
+	require.NotEqual(t, turn1.Session, resolve(oauth, `{"model":"m","metadata":{"user_id":null},"messages":[{"role":"user","content":"Another conversation."}]}`).Session)
+	require.NotEqual(t, turn1.Session, resolve(accountEnv(t, "other@example.invalid", true), `{"model":"m","messages":[{"role":"user","content":"Plan the trip."}]}`).Session, "another account")
+	for name, env := range map[string][]string{
+		"api key account": append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"),
+		"no mapping key":  accountEnv(t, "", true),
+	} {
+		value := resolve(env, `{"model":"m","messages":[{"role":"user","content":"Plan the trip."}]}`)
+		require.False(t, value.Rewrite, name)
+		require.Empty(t, value.Session, name)
+	}
+	// A client value with nothing to map (known fields, all empty) stays the
+	// client's.
+	require.False(t, resolve(oauth, `{"model":"m","metadata":{"user_id":"{\"device_id\":\"\",\"session_id\":\"\"}"},"messages":[{"role":"user","content":"x"}]}`).Rewrite)
 }

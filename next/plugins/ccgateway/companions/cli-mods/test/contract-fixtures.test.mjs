@@ -92,8 +92,13 @@ for (const c of fixture.cases) {
       const client = external.parameters?.metadata;
       const built = applyBuildMetadata({ metadata: { user_id: nativeIdentity().user_id } }, client, nativeIdentity);
       const identity = JSON.parse(c.identity);
-      if (!client) assert.ok(!Object.hasOwn(built, 'metadata'));
-      else if (identity.rewrite) {
+      if (!client?.user_id) {
+        // No client identity: the account's own when the Worker generated one
+        // (2026-10-25), in Claude Code's JSON string with the Worker's session;
+        // otherwise none.
+        if (identity.rewrite) assert.equal(JSON.parse(built.metadata.user_id).session_id, identity.session_id);
+        else assert.ok(!Object.hasOwn(built, 'metadata'));
+      } else if (identity.rewrite) {
         assert.notDeepEqual(built.metadata.user_id, client.user_id);
         assert.equal(typeof built.metadata.user_id, typeof client.user_id);
       } else assert.deepEqual(built.metadata, client);

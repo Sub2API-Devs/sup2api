@@ -39,11 +39,22 @@ test('build metadata follows the configured identity source', async () => {
   await context(payload({ mode: 'client', rewrite: true }), () => {
     assert.throws(() => applyBuildMetadata(built(), client, native), /Invalid Worker request identity/);
   });
-  // A client that sent no identity gets none: the native value is discarded.
-  await context(payload(), () => {
+  // A client that sent no identity gets the account's own when the Worker
+  // generated one (2026-10-25): the CLI's device and account, the Worker's
+  // conversation session, in Claude Code's JSON string, next to the client's
+  // other metadata.
+  const generated = { version: 2, mode: 'replace', rewrite: true, session_id: parent, carrier: 'json' };
+  const own = { device_id: 'b'.repeat(64), account_uuid: 'worker-account', session_id: parent, native_extra: 'kept' };
+  await context(generated, () => {
+    for (const client of [undefined, {}, { user_id: null }, { user_id: '' }])
+      assert.deepEqual(JSON.parse(applyBuildMetadata(built(), client, native).metadata.user_id), own, JSON.stringify(client));
+    const kept = applyBuildMetadata(built(), { other: 1 }, native).metadata;
+    assert.equal(kept.other, 1);
+    assert.deepEqual(JSON.parse(kept.user_id), own);
+  });
+  // Without the Worker's decision (no mapping key) it still gets none.
+  await context({ version: 2, mode: 'worker', rewrite: false }, () => {
     assert.ok(!Object.hasOwn(applyBuildMetadata(built(), undefined, native), 'metadata'));
-    assert.ok(!Object.hasOwn(applyBuildMetadata(built(), {}, native), 'metadata'));
-    assert.deepEqual(applyBuildMetadata(built(), { user_id: null }, native).metadata, { user_id: null });
     assert.deepEqual(applyBuildMetadata(built(), { other: 1 }, native).metadata, { other: 1 });
   });
   // The carrier the client used is preserved.

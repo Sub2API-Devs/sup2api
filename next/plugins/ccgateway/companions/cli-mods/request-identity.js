@@ -63,21 +63,24 @@ function hasUserID(metadata) {
   return typeof value === 'string' ? value !== '' : value !== null && typeof value === 'object' && Object.keys(value).length > 0;
 }
 
-// applyBuildMetadata owns metadata for build mode: the native builder always
-// invents one, but a client that sent no identity must not get one, and a
-// client value must follow the configured source. Whether the client value is
-// replaced is the Worker's rewrite decision: a value with
-// nothing to map (only unknown or empty fields) stays the client's, in its own
-// carrier (2026-10-21; build used to replace it with this CLI's identity).
+// applyBuildMetadata owns metadata for build mode, by the Worker's decision
+// (rewrite): a client value is mapped, and one with nothing to map (only
+// unknown or empty fields) stays the client's, in its own carrier
+// (2026-10-21). A request that sent no metadata.user_id gets the account's
+// own identity when the Worker says so (2026-10-25: every Claude Code request
+// carries one; such requests used to go without), next to any other metadata
+// the client sent; otherwise it gets none.
 export function applyBuildMetadata(built, clientMetadata, nativeIdentity) {
   const mapped = identity();
   // Without a Worker context (API-key accounts, older Workers) the native
   // builder keeps ownership of metadata.
   if (!mapped) return built;
-  const metadata = clientMetadata && typeof clientMetadata === 'object' && !Array.isArray(clientMetadata)
+  let metadata = clientMetadata && typeof clientMetadata === 'object' && !Array.isArray(clientMetadata)
     ? structuredClone(clientMetadata) : undefined;
-  if (metadata && mapped.rewrite && hasUserID(metadata))
+  if (mapped.rewrite && hasUserID(metadata))
     metadata.user_id = encode(target(nativeIdentity()), mapped.carrier ?? (typeof metadata.user_id === 'string' ? 'json' : 'object'));
+  else if (mapped.rewrite && mapped.mode === 'replace')
+    metadata = { ...metadata, user_id: encode(target(nativeIdentity()), mapped.carrier ?? 'json') };
   if (!metadata || Object.keys(metadata).length === 0) delete built.metadata;
   else built.metadata = metadata;
   return built;

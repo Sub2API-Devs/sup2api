@@ -264,25 +264,25 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Heade
 		return nil
 	}
 	client := readClientIdentity(raw)
-	if refusal := g.resolveIdentity(p, client, agent); refusal != nil || !agent {
+	if refusal := g.resolveIdentity(p, client, raw, agent); refusal != nil || !agent {
 		return refusal
 	}
 	return g.resolveAgent(p, client, h, d)
 }
 
 // resolveIdentity is the identity context. It is not configurable (2026-10-21
-// decision): build maps a client metadata.user_id with the account key; the
-// mapping is on only for a CLI that carries it (configureRequestIdentity),
+// decision): build maps a client metadata.user_id with the account key and
+// gives a request without one the account's own (2026-10-25); the mapping is on only for a CLI that carries it (configureRequestIdentity),
 // and without it the CLI keeps the native metadata and gets no context.
 // Direct is a pure passthrough: the identity, like the rest of the body, goes
 // upstream as the client sent it. A CLI that rebuilds the client's kind of
 // request (agent) writes Claude Code's session header in direct too, so it
 // adopts the client's session and the header agrees with the body's metadata.
-func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, agent bool) *requestRefusal {
+func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, raw []byte, agent bool) *requestRefusal {
 	switch {
 	case !g.requestIdentityEnabled:
 	case building(p):
-		mapped, err := g.resolveRequestIdentity(p.env, client)
+		mapped, err := g.resolveRequestIdentity(p.env, client, raw)
 		if err != nil {
 			return refuse(400, "invalid_request_error", err.Error())
 		}

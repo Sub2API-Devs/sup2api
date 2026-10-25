@@ -22,19 +22,19 @@
       "name": "build-entrypoint",
       "mode": "build",
       "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_billing_entrypoint\":\"claude-vscode\"},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"systemPrompt\":[{\"type\":\"text\",\"text\":\"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;\"},{\"type\":\"text\",\"text\":\"plain system\"}]}",
-      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
+      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"a0ab309b-08a7-4534-84f8-a36b4eea9f4a\",\"carrier\":\"json\"}"
     },
     {
       "name": "build-injection",
       "mode": "build",
       "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2,\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"NotebookEdit\":true,\"Read\":true,\"Write\":true}}},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"},\"systemPrompt\":\"plain system\"}",
-      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
+      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"a0ab309b-08a7-4534-84f8-a36b4eea9f4a\",\"carrier\":\"json\"}"
     },
     {
       "name": "build-no-identity",
       "mode": "build",
       "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"hi\"},{\"role\":\"user\",\"content\":\"again\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",
-      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":false}"
+      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"a0ab309b-08a7-4534-84f8-a36b4eea9f4a\",\"carrier\":\"json\"}"
     },
     {
       "name": "build-unusable-identity",

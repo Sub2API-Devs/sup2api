@@ -112,12 +112,14 @@ func requestIdentityKey(secret []byte, env []string) (key []byte, oauth bool) {
 	return mac.Sum(nil), true
 }
 
-// resolveRequestIdentity is the identity build gives one request: the
-// client's value mapped with the account key (replace, the one source since
-// 2026-10-21). Replace needs a key: an API-key account keeps the client's
-// value, and a login whose email is unknown falls back to the Worker's own
-// identity rather than forwarding the client's.
-func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity) (requestIdentity, error) {
+// resolveRequestIdentity is the identity build gives one request (body is
+// the client's): the client's value mapped with the account key (replace, the
+// one source since 2026-10-21). Replace needs a key: an API-key account keeps
+// the client's value, and a login whose email is unknown falls back to the
+// Worker's own identity rather than forwarding the client's. A request that
+// names no identity gets the account's own, as every Claude Code request
+// carries one (generatedRequestIdentity).
+func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity, body []byte) (requestIdentity, error) {
 	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
 	mode := features.RequestIdentityDefault
 	if !oauth {
@@ -125,7 +127,36 @@ func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity) (r
 	} else if key == nil {
 		mode = "worker"
 	}
+	if mode == "replace" && client.err == nil && client.fields == nil {
+		return generatedRequestIdentity(key, body), nil
+	}
 	return mapRequestIdentity(key, client, mode)
+}
+
+// generatedRequestIdentity is the identity of a request that sent no
+// metadata.user_id (2026-10-25 decision; such a request used to go without
+// one, which no Claude Code request does): the account's own device and
+// account, as its CLI writes them, in Claude Code's JSON-string carrier. The
+// session stays the same across the turns of one conversation: it is mapped
+// from the conversation's first message, which every later turn repeats.
+// Two conversations that open with the same message share it.
+func generatedRequestIdentity(key, body []byte) requestIdentity {
+	result := requestIdentity{Version: 2, Mode: "replace", Rewrite: true, Carrier: "json", Session: uuid()}
+	var request struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	if json.Unmarshal(body, &request) != nil || len(request.Messages) == 0 {
+		return result
+	}
+	var first any
+	if json.Unmarshal(request.Messages[0], &first) != nil {
+		return result
+	}
+	// The canonical form (sorted keys, no spacing) keeps the session when a
+	// client re-encodes the same message.
+	canonical, _ := json.Marshal(first)
+	result.Session = digestUUID(identityDigest(key, "conversation", string(canonical)))
+	return result
 }
 
 // legacyUserID is the flat form older clients put in metadata.user_id:
@@ -289,9 +320,9 @@ func readClientIdentity(raw []byte) clientIdentity {
 	return clientIdentity{fields: fields, carrier: carrier, err: err}
 }
 
-// mapRequestIdentity resolves what the upstream request must carry. The client
-// value is only ever replaced when it exists: a request without an identity is
-// forwarded without metadata instead of being given one.
+// mapRequestIdentity resolves what the upstream request must carry from the
+// client's own value; a request without one is given the account's
+// (generatedRequestIdentity) or, without a mapping key, none.
 func mapRequestIdentity(key []byte, client clientIdentity, mode string) (requestIdentity, error) {
 	result := requestIdentity{Version: 2, Mode: mode}
 	fields := client.fields
