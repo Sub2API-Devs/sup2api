@@ -408,7 +408,7 @@ func TestRouteFollowsTheControllerWithoutTheBus(t *testing.T) {
 // the account's CC feature policy from the database and ask the Worker's
 // /healthz (audit A7). Both are kept with the route now: an account change
 // (account:changed, AccountChanged) or an in-place Worker update drops them,
-// and the health answer expires after requestCacheTTL.
+// and the health answer expires after healthCacheTTL.
 func TestRequestPathKeepsPolicyAndWorkerHealth(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
@@ -501,7 +501,7 @@ func TestRequestPathKeepsPolicyAndWorkerHealth(t *testing.T) {
 	// The health answer expires on its own.
 	s.cache.mu.Lock()
 	for _, r := range s.cache.routes {
-		r.healthAt = time.Now().Add(-requestCacheTTL - time.Second)
+		r.healthAt = time.Now().Add(-healthCacheTTL - time.Second)
 	}
 	s.cache.mu.Unlock()
 	call()

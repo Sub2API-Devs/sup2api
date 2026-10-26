@@ -19,19 +19,34 @@ import (
 // They only change with the configuration, an account, a proxy or a runtime,
 // so they are kept between requests (2026-10-11) instead of being read from
 // the database and the controller every time. A change drops them on this
-// node and, through the bus, on the others. The bus is best-effort, so the
-// configuration and the desired revisions also expire after requestCacheTTL,
-// and a route is only used for the controller of the configuration read and
-// for routeMaxAge (audit A4).
+// node and, through the bus, on the others. Every such change publishes:
+// config saves, controller install/upgrade and runtime updates use
+// config:changed (configChanged), account saves account:changed (and the
+// saving node calls AccountChanged directly), a saved proxy config:changed
+// "proxy", and a saved feature policy ccgateway_features. The bus is
+// best-effort, so the entries still expire after requestCacheTTL as a
+// fallback: a change whose message was lost is picked up within five minutes
+// instead of thirty seconds, and a route is only used for the controller of
+// the configuration read and for routeMaxAge (audit A4).
 // A connection is only asked from the controller for the revision the core
 // wants, and every new tunnel carries it (the controller answers 409 unless
 // it is the applied one); dropping a route closes its idle tunnels.
-var requestCacheTTL = 30 * time.Second
+var requestCacheTTL = 5 * time.Minute
 
-// routeIdleTimeout keeps an idle connection to a Worker shorter than the
-// Worker's own idle timeout (60 s), so a kept connection is not one the
-// Worker is closing.
-const routeIdleTimeout = 30 * time.Second
+// healthCacheTTL keeps the Worker's last /healthz answer as short-lived as
+// before: raising the configuration fallback must not extend how long a
+// capability answer is trusted.
+const healthCacheTTL = 30 * time.Second
+
+// routeIdleTimeout keeps an idle connection to a Worker. The Worker closes an
+// idle keep-alive connection itself (next/plugins/ccgateway/companions/
+// worker/internal/server/server.go, http.Server.IdleTimeout; being raised to
+// at least 180 s), so this must stay below it: a POST sent on a connection the
+// Worker is closing is not retried. Keeping it long makes a request after a
+// longer pause reuse the tunnel instead of paying a new TLS connection, the
+// controller's lock and a Worker round trip before the first token. The
+// controller's relay idle timeout (3700 s) is not the constraint.
+const routeIdleTimeout = 110 * time.Second
 
 // ccgatewayChange is published on config:changed when the CCGateway
 // configuration is saved.
@@ -121,7 +136,7 @@ type accountRoute struct {
 	at time.Time
 	// health is the Worker's last /healthz answer through this route and when
 	// it was read (guarded by requestCache.mu): the capability check of a
-	// model request reuses it for requestCacheTTL (audit A7). The Worker still
+	// model request reuses it for healthCacheTTL (audit A7). The Worker still
 	// refuses a policy its CLI cannot apply itself, so a stale answer only
 	// delays the core's own, clearer refusal.
 	health   *workerHealth
@@ -249,11 +264,11 @@ func (s *Service) requestAccountFeatures(ctx context.Context, id int64) (Account
 }
 
 // routeHealth is the Worker health r last read, nil when there is none or it
-// is older than requestCacheTTL.
+// is older than healthCacheTTL.
 func (s *Service) routeHealth(r *accountRoute) *workerHealth {
 	s.cache.mu.Lock()
 	defer s.cache.mu.Unlock()
-	if r.health == nil || time.Since(r.healthAt) >= requestCacheTTL {
+	if r.health == nil || time.Since(r.healthAt) >= healthCacheTTL {
 		return nil
 	}
 	return r.health
