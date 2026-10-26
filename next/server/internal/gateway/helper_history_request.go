@@ -17,6 +17,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/tidwall/gjson"
 )
 
 type helperHistoryRequest struct {
@@ -61,11 +62,12 @@ func stripHelperHistoryHeaders(h http.Header) {
 	}
 }
 
+// helperBudgetRequested reports whether output_config.task_budget is present
+// and not null. It reads only that value instead of unmarshalling the whole
+// body: this runs for every Anthropic request and the body can be megabytes.
 func helperBudgetRequested(raw []byte) bool {
-	var body struct {
-		Output map[string]json.RawMessage `json:"output_config"`
-	}
-	return json.Unmarshal(raw, &body) == nil && len(body.Output["task_budget"]) > 0 && string(body.Output["task_budget"]) != "null"
+	v := gjson.GetBytes(raw, "output_config.task_budget")
+	return v.Exists() && v.Type != gjson.Null
 }
 func (c *call) discoverHelperHistory(ctx context.Context) *gwError {
 	if c.ep.Protocol != "anthropic.messages" || c.g.d.HelperHistory == nil {

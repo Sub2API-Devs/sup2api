@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -79,5 +80,76 @@ func TestPreConsumeSettings(t *testing.T) {
 		if code < 400 {
 			t.Fatalf("accepted %v", v)
 		}
+	}
+}
+
+// One precharge used to be a dozen serial statements, half of them repeated
+// by ApplyTx. The merged path must keep every value and every refusal the
+// same: reservation, ledger row, balance, event, idempotent replay and the
+// rolled-back balance row of an insufficient first charge.
+func TestPrechargeReservationLedgerAndReplay(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	uid := e.user("precharge-path@test.invalid")
+	record := func(id string) *core.UsageRecord {
+		return &core.UsageRecord{RequestID: id, UserID: uid, Price: &core.PriceRule{Expression: "flat(0.75)"}, RateMultiplier: decimal.NewFromInt(1)}
+	}
+	var n int
+	if err := e.svc.Precharge(ctx, record("r1")); core.AsError(err).Code != core.ErrInsufficientBalance.Code {
+		t.Fatalf("no balance row: %v", err)
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM user_balances WHERE user_id=$1`, uid).Scan(&n)
+	if n != 0 {
+		t.Fatal("refused first charge left the balance row it had created")
+	}
+	if _, err := e.svc.Apply(ctx, core.LedgerChange{UserID: uid, Amount: decimal.NewFromInt(1), Credit: true, Kind: KindAdminAdjust, IdempotencyKey: "seed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Precharge(ctx, record("r1")); err != nil {
+		t.Fatal(err)
+	}
+	var balance, delta, after, amount decimal.Decimal
+	var kind, refType, refID, key, note string
+	if err := e.db.Pool.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id=$1`, uid).Scan(&balance); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.Pool.QueryRow(ctx, `SELECT delta,balance_after,kind,ref_type,ref_id,idempotency_key,note FROM balance_ledger WHERE idempotency_key='precharge:r1'`).
+		Scan(&delta, &after, &kind, &refType, &refID, &key, &note); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.Pool.QueryRow(ctx, `SELECT amount FROM request_precharges WHERE request_id='r1' AND user_id=$1`, uid).Scan(&amount); err != nil {
+		t.Fatal(err)
+	}
+	if !balance.Equal(decimal.RequireFromString("0.25")) || !delta.Equal(decimal.RequireFromString("-0.75")) ||
+		!after.Equal(decimal.RequireFromString("0.25")) || !amount.Equal(decimal.RequireFromString("0.75")) ||
+		kind != KindUsage || refType != "precharge" || refID != "r1" || key != "precharge:r1" || note != "request precharge" {
+		t.Fatalf("charged %s/%s/%s/%s %s %s %s %s %q", balance, delta, after, amount, kind, refType, refID, key, note)
+	}
+	// Replay: success, nothing charged, nothing emitted.
+	if err := e.svc.Precharge(ctx, record("r1")); err != nil {
+		t.Fatal(err)
+	}
+	var events, ledger int
+	_ = e.db.Pool.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id=$1`, uid).Scan(&balance)
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM events WHERE type='balance.changed' AND payload->>'user_id'=$1`, strconv.FormatInt(uid, 10)).Scan(&events)
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger WHERE user_id=$1`, uid).Scan(&ledger)
+	if !balance.Equal(decimal.RequireFromString("0.25")) || events != 2 || ledger != 2 {
+		t.Fatalf("replay charged again: balance %s events %d ledger %d", balance, events, ledger)
+	}
+	// Insufficient: no reservation, no ledger row, balance untouched.
+	if err := e.svc.Precharge(ctx, record("r2")); core.AsError(err).Code != core.ErrInsufficientBalance.Code {
+		t.Fatalf("insufficient: %v", err)
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM request_precharges WHERE request_id='r2'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("insufficient precharge left a reservation")
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger WHERE idempotency_key='precharge:r2'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("insufficient precharge wrote a ledger row")
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id=$1`, uid).Scan(&balance)
+	if !balance.Equal(decimal.RequireFromString("0.25")) {
+		t.Fatalf("insufficient precharge changed the balance to %s", balance)
 	}
 }

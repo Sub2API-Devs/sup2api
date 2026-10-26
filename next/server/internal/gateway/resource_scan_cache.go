@@ -24,7 +24,13 @@ func (s *resourceScanCache) scan(body []byte) ([]resources.Reference, error) {
 }
 
 func (s *resourceScanCache) inspect(body []byte) (resources.RequestInfo, error) {
-	digest := sha256.Sum256(body)
+	return s.inspectDigest(sha256.Sum256(body), body)
+}
+
+// inspectDigest is inspect for a body whose digest the caller already has:
+// the request body is hashed once per body version (body_state.go) even though
+// the scan itself runs before and after hooks and per upstream attempt.
+func (s *resourceScanCache) inspectDigest(digest [32]byte, body []byte) (resources.RequestInfo, error) {
 	for _, entry := range s.entries {
 		if entry.valid && entry.digest == digest {
 			return entry.info, nil

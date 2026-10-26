@@ -45,11 +45,11 @@ func (c *call) precharge(ctx context.Context) error {
 		return err
 	}
 	fields, omitted := usageRequestFields(c.ep.UsageRequestFields, c.body)
-	// The body limit bounds the prompt, so the local tokenizer counts all of it.
-	prompt := c.promptText(tokenizer.MaxTextBytes)
-	in := &pluginv1.EstimateUsageRequest{Meta: c.meta(), Fields: fields, FieldsOmitted: omitted, PreConsumeTokens: floor, Prompt: truncateUTF8(prompt, pluginPromptBytes)}
 	var report *pluginv1.UsageReport
 	if pb, exists := c.gen.Platform(c.platform); exists && pb.Client != nil {
+		// The body limit bounds the prompt, so the local tokenizer counts all of it.
+		prompt := c.promptText(tokenizer.MaxTextBytes)
+		in := &pluginv1.EstimateUsageRequest{Meta: c.meta(), Fields: fields, FieldsOmitted: omitted, PreConsumeTokens: floor, Prompt: truncateUTF8(prompt, pluginPromptBytes)}
 		estimator, ok := pb.Client.(interface {
 			EstimateUsage(context.Context, *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error)
 		})
@@ -78,7 +78,9 @@ func (c *call) precharge(ctx context.Context) error {
 		if c.ep.TaskSubmit() {
 			return fmt.Errorf("task estimator unavailable")
 		}
-		report, err = localTokenizerEstimate(ctx, prompt, floor)
+		// Built-in platforms count locally; run() may already have done it
+		// off the request path (prompt_count.go).
+		report, err = c.localPromptEstimate(ctx, floor)
 		if err != nil {
 			return err
 		}

@@ -454,14 +454,24 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 // unaddressable resource reference is the client's mistake and is returned
 // (attemptReturn), everything else fails over.
 func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind, *gwError) {
-	if err := c.validateResourceReferencePatches(rt.upstream, upBody, body); err != nil {
-		return attemptReturn, invalidModelReference(err.Error())
-	}
-	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
-		return attemptFailover, invalidModelReference(err.Error())
-	}
-	if err := validateModelReferencePatches(upBody, body, rt.modelReferences); err != nil {
-		return attemptFailover, invalidModelReference(err.Error())
+	// applyPatches returns upBody itself when the plugin asked for no patch,
+	// and then the three comparisons below compare the request with itself:
+	// they cannot fail, yet each walks the whole body (four scans and two
+	// hashes). Compare the bytes instead — never with a substring pre-check,
+	// which a \u escape would defeat — and run the guards only when they differ.
+	if !bytes.Equal(upBody, body) {
+		if err := c.validateResourceReferencePatches(rt.upstream, upBody, body); err != nil {
+			return attemptReturn, invalidModelReference(err.Error())
+		}
+		// The body is the one this call already parsed; the patched copy is
+		// parsed once and both rule sets read it.
+		before, after := c.rootFor(upBody), c.rootFor(body)
+		if err := modelReferencePatches(before, after, c.ep.Request.ModelReferences); err != nil {
+			return attemptFailover, invalidModelReference(err.Error())
+		}
+		if err := modelReferencePatches(before, after, rt.modelReferences); err != nil {
+			return attemptFailover, invalidModelReference(err.Error())
+		}
 	}
 	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
 		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested operation")

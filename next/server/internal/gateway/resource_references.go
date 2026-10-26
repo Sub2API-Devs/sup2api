@@ -45,7 +45,7 @@ func (c *call) checkResourceReferences(ctx context.Context) *gwError {
 	if !fileReferenceProtocol(c.ep.Protocol) {
 		return nil
 	}
-	info, err := c.resourceScans.inspect(c.body)
+	info, err := c.resourceScans.inspectDigest(c.bodyDigest(), c.body)
 	if err != nil {
 		return invalidModelReference(err.Error())
 	}
@@ -118,7 +118,7 @@ func (c *call) mapResourceReferences(ctx context.Context, body []byte, account *
 		}
 		return body, nil
 	}
-	targetInfo, err := c.resourceScans.inspect(body)
+	targetInfo, err := c.resourceScans.inspectDigest(c.digestFor(body), body)
 	refs := targetInfo.References
 	if err != nil {
 		return nil, err
@@ -155,11 +155,11 @@ func (c *call) validateResourceReferencePatches(protocol string, before, after [
 	if !fileReferenceProtocol(protocol) {
 		return nil
 	}
-	a, err := c.resourceScans.inspect(before)
+	a, err := c.resourceScans.inspectDigest(c.digestFor(before), before)
 	if err != nil {
 		return err
 	}
-	b, err := c.resourceScans.inspect(after)
+	b, err := c.resourceScans.inspectDigest(c.digestFor(after), after)
 	if err != nil {
 		return err
 	}
