@@ -12,7 +12,7 @@ describe('CC feature layer contract', () => {
     // A saved CLI version is kept (the core checks it against the runtimes);
     // no saved one is the packaged default.
     expect(normalizeRequestPolicy({ cli_version: '2.1.302' }).cli_version).toBe('2.1.302')
-    expect(normalizeRequestPolicy({}).cli_version).toBe('2.1.304')
+    expect(normalizeRequestPolicy({}).cli_version).toBe('2.1.310')
     expect(newRequestPolicy().build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'worker' })
   })
   it('merges sparse nested values and counts only actual differences', () => {
@@ -71,7 +71,7 @@ describe('CC feature layer contract', () => {
     await w.get('[data-testid="environment-convert-edit"] button').trigger('click')
     expect(w.findAll('[data-testid^="build-attachment-"]')).toHaveLength(10)
     expect(w.findAll('[data-testid^="billing-cc_"]').filter(x => x.attributes('role') === 'radiogroup')).toHaveLength(2)
-    expect(w.get('[data-testid="cli-version"]').text()).toBe('CLI 2.1.304')
+    expect(w.get('[data-testid="cli-version"]').text()).toBe('CLI 2.1.310')
     expect(w.find('[data-testid="cli-version"] input').exists()).toBe(false)
     expect(enabled('billing-cc_version')).toEqual(['client', 'worker'])
     expect(enabled('build-attachment-shell')).toEqual(['client', 'worker', 'erase'])

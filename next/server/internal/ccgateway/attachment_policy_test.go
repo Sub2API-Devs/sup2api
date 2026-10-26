@@ -44,11 +44,11 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 		capable       bool
 		blocked       bool
 	}{
-		{"build", "2.1.304", false, true},
+		{"build", PinnedCLIVersion, false, true},
 		{"build", "2.1.296", true, true},
-		{"build", "2.1.304", true, false},
-		{"direct", "2.1.304", true, false},
-		{"direct", "2.1.304", false, true},
+		{"build", PinnedCLIVersion, true, false},
+		{"direct", PinnedCLIVersion, true, false},
+		{"direct", PinnedCLIVersion, false, true},
 	} {
 		t.Run(tc.mode+"/"+tc.version+"/"+strconv.FormatBool(tc.capable), func(t *testing.T) {
 			probes, modelRequests := 0, 0

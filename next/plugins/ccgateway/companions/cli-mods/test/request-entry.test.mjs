@@ -7,24 +7,24 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { installSupport } from './support.mjs';
+import { installSupport, linkNatives } from './support.mjs';
 
 // The modules the entry, the command and the native bindings import: native
 // stubs that record what they were given, and a command stand-in that reports
 // how the entry called it.
 const chunks = {
-  'chunk-3nrrbnwj.js': `import fs from 'node:fs';
+  'stub-policy.js': `import fs from 'node:fs';
     export const loadFastPathPolicy = async settings => { fs.writeFileSync(process.env.CCG_FIXTURE_DIR + '/policy.json', JSON.stringify(settings ?? null)); return process.env.CCG_FIXTURE_REFUSED === '1'; };`,
-  'chunk-4qs43hr1.js': 'export const gTe = Object.freeze({ name: "oauth_auth", header: "oauth-fixture" }); export const mBr = betas => betas; export const _ke = class {}; export const sF = async () => new _ke(); export const mle = () => {};',
-  'chunk-t61vswm2.js': 'export const yBe = () => ({ user_id: "native" }); export const PAs = () => ["native-header"];',
-  'chunk-7y2kvacy.js': 'export const oJe = "x-anthropic-billing-header:";',
-  'chunk-jkcb7qdd.js': 'export const KF = "<system-reminder>"; export const lKe = "</system-reminder>";',
-  'chunk-2gh4h0fv.js': 'export const RIs = messages => "fingerprint";',
-  'chunk-7p6jp6kj.js': 'export const Al = () => ({}); export const S8n = () => [];',
-  'chunk-m5q1b1c4.js': 'export const Zoe = (type, builtIn) => builtIn ? "agent:builtin:" + type : "agent:custom";',
-  'chunk-rncrmfyt.js': 'export const ccgatewayLayerVocabulary = () => ({ loopHeaders: {} }); export const ccgatewayPromptTurn = () => ({});',
-  'chunk-38xgev2z.js': 'export class _ke {} export const sF = async () => new _ke(); export const mle = () => {};',
-  'chunk-72vwyp9d.js': 'export const getRootSession = () => ({}); export const setEntrypointOnRequests = () => {};',
+  'stub-betas.js': 'export const oauthBeta = Object.freeze({ name: "oauth_auth", header: "oauth-fixture" }); export const betasAllowed = betas => betas; export const _ke = class {}; export const sF = async () => new _ke(); export const mle = () => {};',
+  'stub-identity.js': 'export const requestIdentity = () => ({ user_id: "native" }); export const attributionHeader = () => ["native-header"];',
+  'stub-billing.js': 'export const billingHeaderPrefix = "x-anthropic-billing-header:";',
+  'stub-reminder.js': 'export const reminderOpen = "<system-reminder>"; export const reminderClose = "</system-reminder>";',
+  'stub-fingerprint.js': 'export const attributionFingerprint = messages => "fingerprint";',
+  'stub-context.js': 'export const mainAgentContext = () => ({}); export const modelBetas = () => [];',
+  'stub-query-source.js': 'export const querySourceFor = (type, builtIn) => builtIn ? "agent:builtin:" + type : "agent:custom";',
+  'stub-core.js': 'export const ccgatewayLayerVocabulary = () => ({ loopHeaders: {} }); export const ccgatewayPromptTurn = () => ({});',
+  'stub-transport.js': 'export class AnthropicClient {} export const createClient = async () => new AnthropicClient(); export const modelFetch = () => {};',
+  'stub-session.js': 'export const getRootSession = () => ({}); export const setEntrypointOnRequests = () => {};',
   'ccgateway-request-command.js': `import fs from 'node:fs';
     export const runRequestCommand = async (args, natives) => {
       fs.writeFileSync(process.env.CCG_FIXTURE_DIR + '/command.json', JSON.stringify({ args, natives: Object.keys(natives).sort(), oauthBeta: natives.oauthBeta,
@@ -39,6 +39,7 @@ async function fixture() {
   await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
   await installSupport(dir);
   for (const [name, code] of Object.entries(chunks)) await fs.writeFile(path.join(dir, name), code);
+  await linkNatives(dir);
   process.env.CCG_FIXTURE_DIR = dir;
   const entry = await import(pathToFileURL(path.join(dir, 'ccgateway-request-entry.js')));
   const read = async name => JSON.parse(await fs.readFile(path.join(dir, name), 'utf8').catch(() => 'null'));

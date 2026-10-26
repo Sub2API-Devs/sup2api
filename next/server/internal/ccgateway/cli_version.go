@@ -13,7 +13,7 @@ import (
 // stored policy names none: the version the bundled runtime image packages.
 // It is the only place the core spells a CLI version; everything else follows
 // the stored cli_version and the Worker's declared capabilities.
-const PinnedCLIVersion = "2.1.304"
+const PinnedCLIVersion = "2.1.310"
 
 // cliVersionChecks bounds the Worker reads of one cli_version check.
 const cliVersionChecks = 8

@@ -8,5 +8,5 @@ LABEL io.sup2api.ccgateway.shared-egress="1"
 # still override it with CCG_CONTROLLER_VERSION in the environment file.
 ARG VERSION=dev
 ENV CCG_CONTROLLER_VERSION=$VERSION
-ENV CCG_DEFAULT_CLI_VERSION=2.1.304
+ENV CCG_DEFAULT_CLI_VERSION=2.1.310
 CMD ["python", "manager.py"]

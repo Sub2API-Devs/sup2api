@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { installSupport } from './support.mjs';
+import { installSupport, linkNatives } from './support.mjs';
 
 test('CLI stores complete opaque HTTP error bodies and reserves envelopes for local failures', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-http-errors-'));
@@ -12,10 +12,10 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
     await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-38xgev2z.js': 'export class _ke {} export const sF=async()=>new _ke(); export const mle=()=>{};',
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({});export const S8n=()=>[];',
-      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
-      'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
+      'stub-transport.js': 'export class AnthropicClient {} export const createClient=async()=>new AnthropicClient(); export const modelFetch=()=>{};',
+      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];',
+      'stub-betas.js': 'export const betasAllowed=()=>true;',
+      'stub-session.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       'ccgateway-request-build.js': 'export const buildRequest=async body=>({body,headers:{},clientBetas:[],addedBetas:[]});',
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
         let body,offset=0;
@@ -31,6 +31,7 @@ test('CLI stores complete opaque HTTP error bodies and reserves envelopes for lo
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
         process.exitCode=await runRequestCommand(process.argv.slice(2));`
     })) await fs.writeFile(path.join(dir, name), code);
+    await linkNatives(dir);
     const run = args => new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['run.mjs', ...args], { cwd: dir, env: { ...process.env, CCG_FIXTURE_FAIL: args.includes('fail.json') ? '1' : '' } });
       const out=[],err=[];

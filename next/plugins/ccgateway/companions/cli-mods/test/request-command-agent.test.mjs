@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { installSupport } from './support.mjs';
+import { installSupport, linkNatives } from './support.mjs';
 
 // The request command hands CC's client factory the client's kind of request:
 // its query source, agent context and prompt ID decide the headers CC writes.
@@ -16,14 +16,14 @@ test('the client factory and direct billing get the client kind of request', asy
     await fs.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
     await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-38xgev2z.js': `import fs from 'node:fs';
-        export class _ke {}
-        export const sF=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new _ke()};
-        export const mle=()=>{};`,
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({agentType:"main",agentId:"native-session"});export const S8n=()=>[];',
-      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
+      'stub-transport.js': `import fs from 'node:fs';
+        export class AnthropicClient {}
+        export const createClient=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new AnthropicClient()};
+        export const modelFetch=()=>{};`,
+      'stub-context.js': 'export const mainAgentContext=()=>({agentType:"main",agentId:"native-session"});export const modelBetas=()=>[];',
+      'stub-betas.js': 'export const betasAllowed=()=>true;',
       // CC's request-scoped entrypoint (TY/H2r), recorded.
-      'chunk-72vwyp9d.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
+      'stub-session.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
       // A build stand-in: the system goes out as it came (the client's header
       // stays), the agent context is resolved as the real build does.
       'ccgateway-request-build.js': "const leading=s=>Array.isArray(s)&&s[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...s[0].text.matchAll(/(\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;export const buildRequest=async(c,headers,signal,resolveAgent)=>({body:{model:c.model,system:c.systemPrompt,messages:c.messages},headers:{},identityLine:{line:'none'},agent:resolveAgent?.({billing:leading(c.systemPrompt),prompt:''}),clientBetas:[],addedBetas:[]});",
@@ -46,6 +46,7 @@ test('the client factory and direct billing get the client kind of request', asy
         process.exitCode=await runRequestCommand(process.argv.slice(2),{directBuild,agentNative});
         fs.writeFileSync('user-agent.json',JSON.stringify(clientUserAgent()??null));`,
     })) await fs.writeFile(path.join(dir, name), code);
+    await linkNatives(dir);
     const run = (body, env, mode = '--direct') => new Promise((resolve, reject) => {
       for (const name of ['entrypoint.json', 'user-agent.json']) fs.rm(path.join(dir, name), { force: true });
       const child = spawn(process.execPath, ['run.mjs', mode], { cwd: dir, env: { ...process.env, CCG_DIRECT_POLICY: '{}', ...env } });

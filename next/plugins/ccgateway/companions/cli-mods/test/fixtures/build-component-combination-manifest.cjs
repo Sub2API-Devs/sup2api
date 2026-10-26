@@ -1,12 +1,16 @@
 // Independent expected spans from the native client golden fixture.
 // Run inside the disposable Linux test container, so os.type/release describe
-// its controlled environment, not the Windows authoring host.
+// its controlled environment, not the Windows authoring host. CC_VERSION
+// (default 2.1.304) selects the version's assembly manifest, official capture
+// and native environment template; a missing template is not substituted.
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), assert = require('node:assert/strict');
-const { sha } = require('../replay-helpers.cjs');
-const baseline = require('./assembly-cases.json');
-const official = require('./official-request-2.1.304.json');
-const golden = require('./native-environment-2.1.304.json');
-const template = baseline.cases.find(c => c.id === 'messages.official_304_build');
+const { sha, ccVersion, readFixture, nativeCCVersion } = require('../replay-helpers.cjs');
+const version = ccVersion();
+const baseline = readFixture('assembly-cases', version, 'CC_VERSION=' + version + ' node fixtures/build-assembly-manifest.cjs');
+const official = readFixture('official-request', version, 'test/e2e/capture-official.sh');
+const golden = readFixture('native-environment', version, 'the native environment renderer of ' + version + ' with the inputs of native-environment-2.1.304.json');
+assert.equal(golden.cli_version, version);
+const template = baseline.cases.find(c => c.id === 'messages.official_capture_build');
 const ordinary = baseline.cases.find(c => c.id === 'messages.error_tool_result_media').body;
 if (process.platform !== 'linux' || !fs.existsSync('/.dockerenv') || process.env.CCG_ASSEMBLY_DISPOSABLE !== '1')
   throw Error('Generate expected runtime facts only inside the disposable Linux container');
@@ -43,15 +47,29 @@ function bodyFor(origin) {
   ];
   return body;
 }
+// The native cc_version fingerprints the first prompt, not the environment
+// reminder in front of it (request-input.js firstPromptText, 2026-10-21; the
+// 2026-10-20 oracle hashed messages[0].content[0], the reminder). A
+// worker-sourced cc_entrypoint is the request's configured one, default
+// sdk-cli (content-policy.js requestEntrypoint).
+function billingFor(body, policy) {
+  const bill = policy.build_billing_sources ?? {};
+  return initialBilling
+    .replace('2.1.302.b50', bill.cc_version === 'worker' ? nativeCCVersion(body.messages, version) : '2.1.302.b50')
+    .replace('client-fixture', bill.cc_entrypoint === 'worker' ? 'sdk-cli' : 'client-fixture');
+}
 function expectedFor(body, policy) {
   const expected = clone(body);
   expected.messages[0].content[0].text = environment(policy.build_attachment_sources ?? {});
-  const text = expected.messages[0].content[0].text;
-  const fingerprint = sha('59cf53e54c78' + [4, 7, 20].map(i => text[i] ?? '0').join('') + '2.1.304').slice(0, 3);
-  const bill = policy.build_billing_sources ?? {};
-  expected.system[0].text = initialBilling
-    .replace('2.1.302.b50', bill.cc_version === 'worker' ? `2.1.304.${fingerprint}` : '2.1.302.b50')
-    .replace('client-fixture', bill.cc_entrypoint === 'worker' ? 'sdk-cli' : 'client-fixture');
+  expected.system[0].text = billingFor(expected, policy);
+  return expected;
+}
+// Direct leaves the environment alone but applies the billing sources to the
+// leading header (CLI v17, direct-billing.js; build design §6.3); the
+// 2026-10-20 contract expected the body unchanged.
+function expectedDirect(body, policy) {
+  const expected = clone(body);
+  expected.system[0].text = billingFor(expected, policy);
   return expected;
 }
 function selection(keys, source = 'worker') {
@@ -101,7 +119,7 @@ for (const origin of ['cc', 'noncc']) {
   const allWorker = selection(allFields), changed = expectedFor(bodyFor(origin), allWorker);
   add(origin, 'REPEAT', 'repeat_all_worker', allWorker, { body: changed, expected: changed });
   const raw = bodyFor(origin);
-  add(origin, 'DIRECT', 'direct_with_all_worker', allWorker, { body: raw, expected: raw, mode: 'direct' });
+  add(origin, 'DIRECT', 'direct_with_all_worker', allWorker, { body: raw, expected: expectedDirect(raw, allWorker), mode: 'direct' });
 }
 assert.equal(cases.length, 216);
 assert.equal(new Set(cases.map(c => c.id)).size, cases.length);
@@ -109,8 +127,8 @@ const output = process.argv[2];
 if (!output) throw Error('An output manifest path is required');
 fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
 fs.writeFileSync(output, JSON.stringify({
-  schema_version: 1, suite: 'client-components-single-multiple-combinations-2.1.304',
-  expected_cli_sha256: baseline.expected_cli_sha256, expected_worker_sha256: baseline.expected_worker_sha256,
+  schema_version: 2, suite: 'client-components-single-multiple-combinations-' + version, cc_version: version,
+  artifact_pins: baseline.artifact_pins,
   scope: { provider: 'firstParty', client_types: ['official capture with full native golden fields', 'ordinary Messages with tool history'],
     dimensions: { environment: fields, billing: billingFields }, runtime_server_facts: server,
     exclusions: 'Not a complete runtime Cartesian matrix, not live cloud model calls, and not all carriers/models/providers.',

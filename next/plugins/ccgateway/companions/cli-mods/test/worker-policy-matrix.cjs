@@ -2,6 +2,9 @@
 // Run ONLY in a disposable --network none container; see the adjacent README.
 // Expected content is assembled from native golden field spans, without
 // importing the production recognizer, transformer, or policy merger.
+// CC_VERSION (default 2.1.304) selects fixtures/native-environment-<version>.json
+// and the CLI version the policies must name; artifact SHAs are pinned by the
+// caller (PROBE_EXPECT_CLI_SHA, PROBE_EXPECT_WORKER_SHA) or reported unpinned.
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -9,17 +12,20 @@ const http = require('node:http');
 const cp = require('node:child_process');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
+const { ccVersion, readFixture, pin, anyUnpinned, nativeCCVersion, nativeHeaderBlock } = require('./replay-helpers.cjs');
 
 if (process.env.CCG_MATRIX_DISPOSABLE !== '1' || !fs.existsSync('/.dockerenv') ||
     process.getuid?.() !== 0 || fs.existsSync('/var/run/docker.sock')) {
   throw Error('Use a disposable Linux container, --network none, root harness, without Docker socket');
 }
-const cliInput = process.env.PROBE_CLI || '/input/claude-linux-matrix';
-const workerInput = process.env.PROBE_WORKER || '/input/ccg-worker-304-policy-final-linux';
+const version = ccVersion();
+const cliInput = process.env.PROBE_CLI || '/input/claude-linux';
+const workerInput = process.env.PROBE_WORKER || '/input/ccg-worker-linux';
 const policiesFile = process.env.PROBE_POLICIES || '/input/config-matrix-policies.json';
-const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/native-environment-2.1.304.json'), 'utf8'));
+const fixture = readFixture('native-environment', version, `the native environment renderer of ${version} with the inputs of native-environment-2.1.304.json`);
+assert.equal(fixture.cli_version, version);
 const matrix = JSON.parse(fs.readFileSync(policiesFile, 'utf8'));
-assert.equal(matrix.cli_version, '2.1.304');
+assert.equal(matrix.cli_version, version);
 assert(Array.isArray(matrix.cases) && matrix.cases.length >= 30);
 const hash = value => crypto.createHash('sha256').update(typeof value === 'string' || Buffer.isBuffer(value) ? value : JSON.stringify(value)).digest('hex');
 const environmentFields = ['platform_name', 'os_version', 'shell', 'primary_directory', 'additional_directories',
@@ -93,32 +99,40 @@ const baseBody = {
   } }],
 };
 
-const root = '/opt/ccgateway/cli/ccg304-matrix';
+const root = '/opt/ccgateway/cli/ccg-matrix';
 fs.mkdirSync(root, { recursive: true, mode: 0o755 });
 fs.copyFileSync(cliInput, root + '/claude');
 fs.chownSync(root + '/claude', 0, 0);
 fs.chmodSync(root + '/claude', 0o755);
-const cliSHA = hash(fs.readFileSync(root + '/claude'));
-if (process.env.PROBE_EXPECT_CLI_SHA) assert.equal(cliSHA, process.env.PROBE_EXPECT_CLI_SHA, 'stale CLI snapshot');
+const pins = {
+  cli: { ...pin('Patched CLI', root + '/claude', ['PROBE_EXPECT_CLI_SHA']), path: cliInput },
+  worker: pin('Worker', workerInput, ['PROBE_EXPECT_WORKER_SHA']),
+};
+const cliSHA = pins.cli.sha256;
 const cli = JSON.parse(cp.execFileSync(root + '/claude', ['--ccgateway-info'], { encoding: 'utf8' }));
-assert.equal(cli.version, '2.1.304');
-assert.equal(cli.patch, 'ccgateway-v12-feature-policy');
-fs.writeFileSync(root + '/manifest.json', JSON.stringify({ versions: { '2.1.304': {
+assert.equal(cli.version, version);
+// The patch tag is the caller's to pin (the 2026-10-20 run fixed
+// ccgateway-v12-feature-policy; profiles/linux-x64-<version>.json extension).
+if (process.env.PROBE_EXPECT_CLI_PATCH) assert.equal(cli.patch, process.env.PROBE_EXPECT_CLI_PATCH);
+fs.writeFileSync(root + '/manifest.json', JSON.stringify({ versions: { [version]: {
   path: 'claude', sha256: cliSHA, patch: cli.patch, modes: ['build', 'direct'],
 } } }), { mode: 0o644 });
 fs.writeFileSync('/opt/ccgateway/cli/active-runtime.json', JSON.stringify({
-  schema_version: 1, manifest: 'ccg304-matrix/manifest.json', version: '2.1.304', request_mode: 'build',
+  schema_version: 1, manifest: 'ccg-matrix/manifest.json', version, request_mode: 'build',
 }), { mode: 0o644 });
 for (const directory of [stableDirectory, '/work/matrix-config', '/work/matrix-data', '/work/matrix-data/cache']) {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   fs.chownSync(directory, 1000, 1000);
 }
-const captured = [];
+const captured = [], requestLines = [];
+// Both modes' request line since CLI v24 (REQUEST-MODES §1.1).
+const messagesPath = '/v1/messages?beta=true';
 const server = http.createServer(async (req, res) => {
   let text = '';
   for await (const bytes of req) text += bytes;
   if (!req.url.startsWith('/v1/messages')) { res.writeHead(404).end(); return; }
   captured.push(JSON.parse(text));
+  requestLines.push(req.url);
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ id: 'msg_matrix', type: 'message', role: 'assistant', model: 'claude-sonnet-4-6',
     content: [{ type: 'text', text: 'local matrix fixture only' }], stop_reason: 'end_turn', stop_sequence: null,
@@ -128,11 +142,11 @@ const baseURL = 'http://127.0.0.1:18087';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let worker, workerLog = '';
 const record = {
-  cli, cli_sha256: cliSHA, worker_sha256: hash(fs.readFileSync(workerInput)),
+  cc_version: version, cli, cli_sha256: cliSHA, worker_sha256: pins.worker.sha256, artifact_identity: pins, sha_unpinned: anyUnpinned(pins),
   policies_sha256: hash(fs.readFileSync(policiesFile)), fixture_sha256: hash(fixture),
-  runtime: { working_directory: stableDirectory, shell: 'bash', session_kind: 'bg',
+  runtime: { working_directory: stableDirectory, shell: 'bash', session_kind: 'bg', account: 'API key',
     optional_fields_absent: ['additional_directories', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy'] },
-  generated_parameters: ['metadata', 'thinking', 'native model parameter normalization'],
+  generated_parameters: ['thinking, temperature, output_config: native model parameter normalization (not compared here)'],
   cases: [],
 };
 async function waitHealthy() {
@@ -157,31 +171,47 @@ function billingValue(system, field) {
   const text = (typeof system === 'string' ? [system] : system.map(block => block.text)).join('\n');
   return new RegExp('\\b' + field + '=([^;\\s]+);').exec(text)?.[1];
 }
+const billingPrefix = 'x-anthropic-billing-header:';
+// The native values of the billing fields for a request, computed here:
+// cc_version is the independent fingerprint of the first prompt
+// (replay-helpers nativeCCVersion; request-input.js firstPromptText),
+// cc_entrypoint the configured entrypoint, default sdk-cli (content-policy.js
+// requestEntrypoint). The 2026-10-20 oracle read the actual values back and
+// only checked their shape.
+const nativeValues = (body, policy) => ({ cc_version: nativeCCVersion(body.messages, version), cc_entrypoint: policy.build_billing_entrypoint ?? 'sdk-cli' });
+// expectedSystem applies the current billing rules (content-policy.js
+// mergeBillingAttribution; build design §5.5), in both modes (direct since
+// CLI v17, direct-billing.js):
+// - no header opening the first block (billingMode missing / not_leading):
+//   the native whole line goes in front, a client header elsewhere stays as
+//   it is (2026-10-22); the 2026-10-20 oracle inserted only worker fields;
+// - a leading header: worker-sourced fields take the native value, a missing
+//   field is appended with the native value whatever its source.
+// A header that cannot be edited is a refusal (runCase, billingMode ambiguous).
 function expectedSystem(body, policy, outgoing, billingMode) {
   const blocks = typeof body.system === 'string' ? [{ type: 'text', text: body.system }] : structuredClone(body.system ?? []);
-  if (billingMode === 'ambiguous') return blocks;
+  const native = nativeValues(body, policy);
+  if (billingMode === 'missing' || billingMode === 'not_leading') {
+    const header = nativeHeaderBlock(outgoing.system?.[0], native);
+    assert(header.ok, 'native billing header: ' + header.problems.join('; '));
+    return [header.expected, ...blocks];
+  }
   const sources = policy.build_billing_sources ?? {};
-  const values = {};
-  for (const field of ['cc_version', 'cc_entrypoint']) {
-    if (sources[field] !== 'worker') continue;
-    const actual = billingValue(outgoing.system, field);
-    if (field === 'cc_version') assert.match(actual ?? '', /^2\.1\.304\.[a-f0-9]{3}$/);
-    else assert.equal(actual, 'sdk-cli');
-    values[field] = actual;
-  }
-  if (billingMode === 'missing') {
-    const entries = Object.entries(values);
-    if (entries.length) blocks.unshift({ type: 'text', text: 'x-anthropic-billing-header: ' +
-      entries.map(([key, value]) => `${key}=${value};`).join(' ') });
-    return blocks;
-  }
-  for (const block of blocks) {
-    if (!block.text.includes('x-anthropic-billing-header:')) continue;
-    for (const [field, value] of Object.entries(values)) {
+  const first = blocks[0];
+  if (first?.type === 'text' && first.text.startsWith(billingPrefix)) {
+    const end = first.text.indexOf('\n') < 0 ? first.text.length : first.text.indexOf('\n');
+    let line = first.text.slice(0, end);
+    const missing = [];
+    for (const field of ['cc_version', 'cc_entrypoint']) {
       const pattern = new RegExp('(\\b' + field + '=)[^;\\s]+;');
-      if (pattern.test(block.text)) block.text = block.text.replace(pattern, `$1${value};`);
-      else block.text += ` ${field}=${value};`;
+      if (!pattern.test(line)) missing.push(field);
+      else if (sources[field] === 'worker') line = line.replace(pattern, `$1${native[field]};`);
     }
+    if (missing.length) {
+      const trimmed = line.trimEnd();
+      line = trimmed + (trimmed.endsWith(';') || trimmed.endsWith(':') ? ' ' : '; ') + missing.map(field => `${field}=${native[field]};`).join(' ') + line.slice(trimmed.length);
+    }
+    first.text = line + first.text.slice(end);
   }
   return blocks;
 }
@@ -193,7 +223,12 @@ function carrierText(text, sources, variant) {
   return next;
 }
 function assertContent(body, policy, outgoing, variant, billingMode) {
-  if (policy.relay_mode === 'direct') { assert.deepEqual(outgoing, body); return; }
+  if (policy.relay_mode === 'direct') {
+    // Direct: the client's body with only the billing sources applied to its
+    // header (CLI v17); the 2026-10-20 check required the body unchanged.
+    assert.deepEqual(outgoing, { ...structuredClone(body), system: expectedSystem(body, policy, outgoing, billingMode) });
+    return;
+  }
   const sources = policy.build_attachment_sources ?? {};
   const expected = structuredClone(body);
   expected.system = expectedSystem(body, policy, outgoing, billingMode).map(block => ({ ...block,
@@ -223,19 +258,29 @@ async function runCase(name, body, policy, details = {}, variant = 'full', billi
       headers: { 'x-api-key': 'matrix-local-only', 'content-type': 'application/json', 'x-ccgateway-request-policy': JSON.stringify(policy) },
       body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
     const text = await response.text();
-    assert.equal(response.status, 200, text.slice(0, 2000));
-    assert.equal(captured.length, before + 1, 'a successful request must issue exactly one model POST');
-    const outgoing = captured.at(-1);
-    assertContent(body, policy, outgoing, variant, billingMode);
-    result.status = 'passed';
-    result.non_target_content_equal = true;
-    result.system_sha256 = hash(outgoing.system);
-    result.messages_sha256 = hash(outgoing.messages);
-    result.billing = { cc_version: billingValue(outgoing.system, 'cc_version'), cc_entrypoint: billingValue(outgoing.system, 'cc_entrypoint') };
-    result.environment_actions = Object.fromEntries(environmentFields.map(field => {
-      const source = policy.relay_mode === 'direct' ? 'client' : policy.build_attachment_sources?.[field] ?? 'client';
-      return [field, source === 'worker' && serverFields[field] === '' ? 'removed_server_absent' : source];
-    }));
+    if (billingMode === 'ambiguous') {
+      // Two header lines with a Worker-sourced field: refused with 400 before
+      // any model call (build design §5.5 table, §8; content-policy.js
+      // mergeBillingAttribution). The 2026-10-20 oracle sent it unchanged.
+      assert.equal(response.status, 400, text.slice(0, 2000));
+      assert.equal(captured.length, before, 'a refused request must not reach the model');
+      result.status = 'passed'; result.refused = text.slice(0, 500);
+    } else {
+      assert.equal(response.status, 200, text.slice(0, 2000));
+      assert.equal(captured.length, before + 1, 'a successful request must issue exactly one model POST');
+      assert.equal(requestLines.at(-1), messagesPath, 'request line');
+      const outgoing = captured.at(-1);
+      assertContent(body, policy, outgoing, variant, billingMode);
+      result.status = 'passed';
+      result.non_target_content_equal = true;
+      result.system_sha256 = hash(outgoing.system);
+      result.messages_sha256 = hash(outgoing.messages);
+      result.billing = { cc_version: billingValue(outgoing.system, 'cc_version'), cc_entrypoint: billingValue(outgoing.system, 'cc_entrypoint') };
+      result.environment_actions = Object.fromEntries(environmentFields.map(field => {
+        const source = policy.relay_mode === 'direct' ? 'client' : policy.build_attachment_sources?.[field] ?? 'client';
+        return [field, source === 'worker' && serverFields[field] === '' ? 'removed_server_absent' : source];
+      }));
+    }
   } catch (error) {
     result.error = String(error.stack ?? error).slice(0, 7000);
     result.worker_log = workerLog.slice(-2000);
@@ -268,7 +313,9 @@ async function runSupplemental() {
         { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'lookup-1',
           content: [{ type: 'text', text: wrap(fullClient), cache_control: { type: 'ephemeral' } }] }] });
     }
-    await runCase('carrier-' + variant, body, platform, { source: 'core-resolved-policy-reused' }, variant);
+    // A string system whose header is not at its start: the native line goes
+    // in front (billingMode not_leading).
+    await runCase('carrier-' + variant, body, platform, { source: 'core-resolved-policy-reused' }, variant, variant === 'system_string' ? 'not_leading' : undefined);
   }
   for (const field of ['primary_directory', 'additional_directories', 'git_repository', 'worktree', 'scratchpad_directory', 'github_cli', 'agent_proxy']) {
     for (const source of ['worker', 'erase']) {
@@ -290,8 +337,8 @@ async function runSupplemental() {
   }
   const ambiguous = structuredClone(baseBody);
   ambiguous.system[0].text += '\nx-anthropic-billing-header: cc_version=duplicate;';
-  // Ambiguity leaves the original text alone even for server-selected fields.
-  await runCase('billing-duplicate-no-second-injection', ambiguous, policyFor('build_billing_sources.cc_entrypoint', 'worker'), {}, 'full', 'ambiguous');
+  // Two headers with a Worker-sourced field are refused (runCase, ambiguous).
+  await runCase('billing-duplicate-worker-refused', ambiguous, policyFor('build_billing_sources.cc_entrypoint', 'worker'), {}, 'full', 'ambiguous');
   for (const source of ['worker', 'erase', 'client', 'worker', 'client']) {
     await runCase('adjacent-switch-shell-' + source + '-' + record.cases.length, structuredClone(baseBody),
       policyFor('build_attachment_sources.shell', source), { source: 'core-resolved-policy-reused' });
@@ -316,7 +363,9 @@ async function runSupplemental() {
   for (const item of matrix.cases) {
     assert.equal(item.worker_policy.relay_mode, item.expected_mode);
     if (item.expected_mode === 'direct') {
-      assert(!item.worker_policy.build_attachment_sources && !item.worker_policy.build_billing_sources, 'direct wire policy must not carry sources');
+      // Level none sends the billing entrypoint and sources, never attachment
+      // sources (core feature_policy.go workerPolicy); direct applies them.
+      assert(!item.worker_policy.build_attachment_sources, 'direct wire policy must not carry attachment sources');
     } else if (item.field?.includes('.')) {
       const [group, field] = item.field.split('.');
       assert.equal(item.worker_policy[group]?.[field] ?? 'client', item.expected_source, 'wire policy differs from core matrix expectation');

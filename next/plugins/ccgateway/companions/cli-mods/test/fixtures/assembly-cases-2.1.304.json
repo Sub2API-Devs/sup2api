@@ -1,11 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "suite": "native-assembly-first-party-2.1.304",
+  "cc_version": "2.1.304",
   "source_symbol_aliases": {
-    "Kvt": "Adapter import alias bound to native jOt in the pinned 2.1.304 profile"
+    "Kvt": "Adapter import alias bound to the native request builder (2.1.304 jOt)"
   },
+  "source_symbols_version": "2.1.304 (names in the recovered 2.1.304 source; other versions map them through artifacts/claude-<version>/equiv-*.json)",
   "scope": {
     "provider": "first-party Anthropic Messages",
+    "runtime_account": "API key (assembly-runtime.cjs)",
     "transports": [
       "request --build",
       "request --direct"
@@ -13,11 +16,11 @@
     "excludes": [
       "Bedrock",
       "Vertex",
-      "interactive agent/tool execution loop"
+      "interactive agent/tool execution loop",
+      "OAuth identity line and account identity"
     ]
   },
-  "expected_worker_sha256": "98f2746fed500a3b6fb4a6574431d2ebe74bd1ea8e269f6b07895149eced79db",
-  "expected_cli_sha256": "138da88ed5895fbc099115e7662df7ff9a6bd848d5a4cd142e29f2c9baaa56bd",
+  "artifact_pins": "Supplied by the caller at run time: PROBE_EXPECT_CLI_SHA, PROBE_EXPECT_WORKER_SHA; unpinned runs report sha_unpinned",
   "cases": [
     {
       "id": "input.null_text",
@@ -62,7 +65,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -70,11 +72,12 @@
       }
     },
     {
-      "id": "input.unsafe_number",
-      "group": "INPUT",
+      "id": "messages.unsafe_number_as_written",
+      "group": "MSG",
       "mode": "build",
       "source_symbols": [
-        "validateBuildNumbers"
+        "validateBuildContent",
+        "prepareBuildInput"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -137,17 +140,23 @@
         "kind": "synthetic"
       },
       "contract": {
-        "response_status": 400,
-        "upstream_requests": 0,
-        "content": "rejected",
-        "tools": "not_sent",
-        "parameters": {},
+        "response_status": 200,
+        "upstream_requests": 1,
+        "content": "billing_insert",
+        "tools": "exact",
+        "parameters": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 128,
+          "stream": false
+        },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
-        }
+        },
+        "raw_texts": [
+          "\"unsafe\":9007199254740992"
+        ]
       }
     },
     {
@@ -199,7 +208,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -246,7 +254,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -291,7 +298,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -324,7 +330,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -332,7 +338,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -366,7 +371,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -374,7 +379,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -408,7 +412,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -416,7 +420,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -466,7 +469,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -474,7 +477,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -524,7 +526,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -532,7 +534,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -590,7 +591,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -598,7 +599,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -665,7 +665,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -673,7 +673,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -769,7 +768,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -777,7 +776,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -887,7 +885,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -895,7 +893,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -959,7 +956,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -967,7 +964,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1025,7 +1021,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1033,7 +1029,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1078,7 +1073,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1086,7 +1081,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1132,7 +1126,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1178,7 +1171,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1235,7 +1227,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1243,7 +1235,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1322,13 +1313,14 @@
       },
       "fixture_source": {
         "kind": "derived_official_tool_definition",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1336,7 +1328,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1411,13 +1402,14 @@
       },
       "fixture_source": {
         "kind": "derived_official_tool_definition",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1425,7 +1417,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1503,13 +1494,14 @@
       },
       "fixture_source": {
         "kind": "derived_official_tool_definition",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1517,7 +1509,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1589,7 +1580,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1597,7 +1588,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1664,7 +1654,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1672,7 +1662,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1745,7 +1734,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1753,7 +1742,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1828,7 +1816,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1836,7 +1824,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -1919,13 +1906,14 @@
       },
       "fixture_source": {
         "kind": "derived_official_tool_definition",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -1937,7 +1925,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2045,13 +2032,14 @@
       },
       "fixture_source": {
         "kind": "derived_official_tool_definition",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2059,7 +2047,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2100,7 +2087,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2108,7 +2095,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2149,7 +2135,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2157,7 +2143,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2202,7 +2187,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2214,7 +2199,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2273,7 +2257,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2299,7 +2283,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2343,7 +2326,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2354,7 +2337,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2398,7 +2380,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2410,7 +2392,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2461,7 +2442,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2473,7 +2454,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2544,7 +2524,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2559,7 +2539,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default",
@@ -2568,12 +2547,13 @@
       }
     },
     {
-      "id": "params.metadata_regenerated",
+      "id": "params.metadata_client_value_kept",
       "group": "PARAM",
       "mode": "build",
       "source_symbols": [
-        "buildRequest",
-        "Kvt"
+        "applyBuildMetadata",
+        "resolveRequestIdentity",
+        "mapRequestIdentity"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -2604,22 +2584,21 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
           "max_tokens": 128,
-          "stream": false
+          "stream": false,
+          "metadata": {
+            "user_id": "client-metadata-must-not-be-provider-identity"
+          }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
-        },
-        "assertions": [
-          "metadata_regenerated"
-        ]
+        }
       }
     },
     {
@@ -2657,7 +2636,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2666,7 +2645,6 @@
           "top_p": 0.7
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2710,7 +2688,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2721,7 +2699,6 @@
           ]
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2777,7 +2754,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2800,7 +2777,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2858,7 +2834,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2869,7 +2845,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2918,7 +2893,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2931,7 +2906,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2976,7 +2950,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -2984,7 +2958,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -2992,11 +2965,12 @@
       }
     },
     {
-      "id": "send.direct_exact",
+      "id": "send.direct_byte_preserving",
       "group": "SEND",
       "mode": "direct",
       "source_symbols": [
-        "openModelRequest"
+        "openModelRequest",
+        "applyDirectBilling"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -3035,7 +3009,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3043,7 +3017,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3088,7 +3061,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3096,7 +3069,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3145,7 +3117,7 @@
       "contract": {
         "response_status": 429,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3153,7 +3125,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3198,7 +3169,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3206,7 +3177,6 @@
           "stream": true
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3254,7 +3224,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3262,7 +3232,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3311,7 +3280,7 @@
       "contract": {
         "response_status": 429,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3319,7 +3288,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3364,7 +3332,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3372,7 +3340,6 @@
           "stream": true
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3423,7 +3390,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3431,7 +3398,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3476,7 +3442,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3484,7 +3450,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3530,7 +3495,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "expected_patches",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3538,7 +3503,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3593,7 +3557,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "expected_patches",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -3601,7 +3565,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3666,7 +3629,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3723,7 +3685,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3731,7 +3692,7 @@
       }
     },
     {
-      "id": "billing_env.billing_duplicate_keep",
+      "id": "billing_env.billing_duplicate_worker_refused",
       "group": "BILL_ENV",
       "mode": "build",
       "source_symbols": [
@@ -3767,6 +3728,55 @@
         }
       },
       "contract": {
+        "response_status": 400,
+        "upstream_requests": 0,
+        "content": "rejected",
+        "tools": "not_sent",
+        "parameters": {},
+        "native_authorized": {
+          "thinking": "when absent: native mechanical disabled representation",
+          "temperature": "when absent and accepted: native default",
+          "output_config": "when absent: native model effort default"
+        }
+      }
+    },
+    {
+      "id": "billing_env.billing_duplicate_client_kept",
+      "group": "BILL_ENV",
+      "mode": "build",
+      "source_symbols": [
+        "mergeBillingAttribution"
+      ],
+      "body": {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 128,
+        "stream": false,
+        "system": [
+          {
+            "type": "text",
+            "text": "x-anthropic-billing-header: cc_version=2.1.302.abc; cc_entrypoint=client-entry; other=keep;\nx-anthropic-billing-header: cc_version=2.1.302.abc; cc_entrypoint=client-entry; other=keep;",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "messages": [
+          {
+            "role": "user",
+            "content": "Assembly fixture user."
+          }
+        ]
+      },
+      "fixture_source": {
+        "kind": "synthetic"
+      },
+      "policy": {
+        "build_billing_sources": {
+          "cc_version": "client",
+          "cc_entrypoint": "client"
+        }
+      },
+      "contract": {
         "response_status": 200,
         "upstream_requests": 1,
         "content": "preserve",
@@ -3777,7 +3787,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3831,7 +3840,6 @@
           "stream": false
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3849,12 +3857,12 @@
       }
     },
     {
-      "id": "input.max_tokens_zero",
-      "group": "INPUT",
+      "id": "params.max_tokens_zero_as_sent",
+      "group": "PARAM",
       "mode": "build",
       "source_symbols": [
-        "buildRequest",
-        "qmn.uXn"
+        "generationControls",
+        "finishBuilt"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -3880,13 +3888,16 @@
         "kind": "synthetic"
       },
       "contract": {
-        "response_status": 400,
-        "upstream_requests": 0,
-        "content": "rejected",
-        "tools": "not_sent",
-        "parameters": {},
+        "response_status": 200,
+        "upstream_requests": 1,
+        "content": "billing_insert",
+        "tools": "exact",
+        "parameters": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 0,
+          "stream": false
+        },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3894,12 +3905,12 @@
       }
     },
     {
-      "id": "input.max_tokens_negative",
-      "group": "INPUT",
+      "id": "params.max_tokens_negative_as_sent",
+      "group": "PARAM",
       "mode": "build",
       "source_symbols": [
-        "buildRequest",
-        "qmn.uXn"
+        "generationControls",
+        "finishBuilt"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -3925,13 +3936,16 @@
         "kind": "synthetic"
       },
       "contract": {
-        "response_status": 400,
-        "upstream_requests": 0,
-        "content": "rejected",
-        "tools": "not_sent",
-        "parameters": {},
+        "response_status": 200,
+        "upstream_requests": 1,
+        "content": "billing_insert",
+        "tools": "exact",
+        "parameters": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": -1,
+          "stream": false
+        },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3939,12 +3953,12 @@
       }
     },
     {
-      "id": "input.stream_not_boolean",
-      "group": "INPUT",
+      "id": "params.stream_string_as_sent",
+      "group": "PARAM",
       "mode": "build",
       "source_symbols": [
-        "validateBuildContent",
-        "prepareBuildInput"
+        "generationControls",
+        "finishBuilt"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -3970,13 +3984,16 @@
         "kind": "synthetic"
       },
       "contract": {
-        "response_status": 400,
-        "upstream_requests": 0,
-        "content": "rejected",
-        "tools": "not_sent",
-        "parameters": {},
+        "response_status": 200,
+        "upstream_requests": 1,
+        "content": "billing_insert",
+        "tools": "exact",
+        "parameters": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 128,
+          "stream": "true"
+        },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -3984,11 +4001,13 @@
       }
     },
     {
-      "id": "input.thinking_invalid_type",
-      "group": "INPUT",
+      "id": "params.thinking_unknown_type_as_sent",
+      "group": "PARAM",
       "mode": "build",
       "source_symbols": [
-        "buildRequest"
+        "generationControls",
+        "thinkingConfigFor",
+        "finishBuilt"
       ],
       "body": {
         "model": "claude-sonnet-4-6",
@@ -4017,13 +4036,20 @@
         "kind": "synthetic"
       },
       "contract": {
-        "response_status": 400,
-        "upstream_requests": 0,
-        "content": "rejected",
-        "tools": "not_sent",
-        "parameters": {},
+        "response_status": 200,
+        "upstream_requests": 1,
+        "content": "billing_insert",
+        "tools": "exact",
+        "parameters": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 128,
+          "stream": false,
+          "thinking": {
+            "type": "invalid-fixture"
+          },
+          "temperature": 1
+        },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4071,7 +4097,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4119,7 +4144,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4177,7 +4201,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -4188,7 +4212,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4230,7 +4253,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -4239,7 +4262,6 @@
           "top_k": 17
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4281,7 +4303,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -4290,7 +4312,6 @@
           "service_tier": "standard_only"
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4337,7 +4358,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -4351,7 +4372,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4395,7 +4415,7 @@
       "contract": {
         "response_status": 200,
         "upstream_requests": 1,
-        "content": "preserve",
+        "content": "billing_insert",
         "tools": "exact",
         "parameters": {
           "model": "claude-sonnet-4-6",
@@ -4406,7 +4426,6 @@
           }
         },
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4444,7 +4463,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4483,7 +4501,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4524,7 +4541,6 @@
         "tools": "not_sent",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -4533,7 +4549,7 @@
       }
     },
     {
-      "id": "messages.official_304_build",
+      "id": "messages.official_capture_build",
       "group": "MSG",
       "mode": "build",
       "source_symbols": [
@@ -5055,8 +5071,10 @@
       },
       "fixture_source": {
         "kind": "official_fresh_capture",
+        "fixture": "fixtures/official-request-2.1.304.json",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
@@ -5065,7 +5083,6 @@
         "tools": "exact",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"
@@ -5073,7 +5090,7 @@
       }
     },
     {
-      "id": "messages.official_304_direct",
+      "id": "messages.official_capture_direct",
       "group": "MSG",
       "mode": "direct",
       "source_symbols": [
@@ -5595,8 +5612,10 @@
       },
       "fixture_source": {
         "kind": "official_fresh_capture",
+        "fixture": "fixtures/official-request-2.1.304.json",
+        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f",
         "source_cli_sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-        "body_sha256": "d426c952c70b46b91a39e147d91d0a737fc10dabcc32d4eb32b5bce6b47e7c0f"
+        "tools_source": "fixtures/official-tools-2.1.304.json"
       },
       "contract": {
         "response_status": 200,
@@ -5605,7 +5624,6 @@
         "tools": "exact",
         "parameters": {},
         "native_authorized": {
-          "metadata": "CLI regenerates device/session metadata; not request-body passthrough",
           "thinking": "when absent: native mechanical disabled representation",
           "temperature": "when absent and accepted: native default",
           "output_config": "when absent: native model effort default"

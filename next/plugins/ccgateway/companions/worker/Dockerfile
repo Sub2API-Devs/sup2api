@@ -25,7 +25,7 @@ FROM node:22-bookworm-slim
 
 # The release directory is produced by cli-mods/package-release.cjs. Never
 # download an unpatched latest CLI while building the account runtime.
-ARG CLAUDE_VERSION=2.1.304
+ARG CLAUDE_VERSION=2.1.310
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl locales tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY cli-mods/release/ /opt/ccgateway/cli/

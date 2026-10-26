@@ -1,30 +1,26 @@
-import { jOt, aBe, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewaySystemRecord } from './chunk-rncrmfyt.js';
-import { oJe, B1s as isBillingHeader } from './chunk-7y2kvacy.js';
-import { KF, lKe } from './chunk-jkcb7qdd.js';
-import { Al } from './chunk-7p6jp6kj.js';
-import { m4t as nativeToolPool } from './chunk-eanw7pgv.js';
-import { n1n as identityLine, t1n as isIdentityLine } from './chunk-t61vswm2.js';
+import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewaySystemRecord,
+  billingHeaderPrefix, isBillingHeader, reminderOpen, reminderClose, mainAgentContext, toolPool as nativeToolPool, identityLine, isIdentityLine,
+  getRootSession, setEntrypointOnRequests } from './native-build.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
 import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
-import { getRootSession, setEntrypointOnRequests } from './chunk-72vwyp9d.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
 import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters, generationControls } from './ccgateway-request-parameters.js';
 import { toBlocks } from './ccgateway-shared.js';
 
 // The content policy recognizes CC's own wording: the environment renderers'
-// vocabulary, the billing header (oJe) and the reminder tags (KF, lKe), all native.
+// vocabulary, the billing header (billingHeaderPrefix) and the reminder tags (reminderOpen, reminderClose), all native.
 let contentPolicy, layerVocabulary;
-const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: oJe, reminder: [KF, lKe] });
+const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccgatewayEnvironmentVocabulary(), billingHeader: billingHeaderPrefix, reminder: [reminderOpen, reminderClose] });
 const nativeLayers = () => layerVocabulary ??= ccgatewayLayerVocabulary();
 
 const firstPrompt = 'CCGATEWAY_FIRST_PROMPT_7d3c1a';
 
-// collectBuilt runs CC's request builder (jOt, patched to yield the request
+// collectBuilt runs CC's request builder (queryModel, patched to yield the request
 // instead of sending it) and returns the request body.
 async function collectBuilt(input, signal, missing) {
-  for await (const event of jOt(input)) {
+  for await (const event of queryModel(input)) {
     if (signal.aborted) throw signal.reason;
     if (event.type === 'ccgateway_request') { if (!event.body) break; return event.body; }
     if (event.type === 'assistant' && event.isApiErrorMessage) throw new Error(`CC request builder: ${JSON.stringify(event.message?.content)}`);
@@ -37,7 +33,7 @@ async function collectBuilt(input, signal, missing) {
 function attachmentCarriers(messages) {
   return messages.flatMap(message => {
     const texts = toBlocks(message.content ?? []).filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text);
-    return message.role === 'system' ? texts : message.role === 'user' ? texts.filter(text => text.trimStart().startsWith(KF)) : [];
+    return message.role === 'system' ? texts : message.role === 'user' ? texts.filter(text => text.trimStart().startsWith(reminderOpen)) : [];
   });
 }
 const opensWith = (texts, openings) => texts.some(text => openings.some(opening => text.startsWith(opening) || text.includes('\n' + opening)));
@@ -71,7 +67,7 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const lines = prompt ? clientSystem.filter(block => isIdentityLine(block.text)) : [];
   const own = prompt ? clientSystem.filter(block => !isIdentityLine(block.text)).map(block => block.text) : [];
   const systemPrompt = prompt ? await ccgatewayDefaultPrompt([...tools, ...clientTools], model, own) : [];
-  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, aBe, { systemRecord: ccgatewaySystemRecord });
+  const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, renderAttachment, { systemRecord: ccgatewaySystemRecord });
   const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: clientRecords, session });
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
   const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
@@ -80,7 +76,7 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   signal, 'CC request builder did not produce the injected layers');
   // The billing header and the identity line are the other layers' (merged
   // after build), so only the prompt blocks are taken.
-  const system = prompt ? (Array.isArray(built.system) ? built.system : []).filter(block => !block.text.startsWith(oJe) && !isIdentityLine(block.text)) : [];
+  const system = prompt ? (Array.isArray(built.system) ? built.system : []).filter(block => !block.text.startsWith(billingHeaderPrefix) && !isIdentityLine(block.text)) : [];
   const at = built.messages.findIndex(message => toBlocks(message.content).some(block => block.type === 'text' && block.text.includes(firstPrompt)));
   if (at < 0) throw new Error('CC request builder lost the first prompt');
   const blocks = toBlocks(built.messages[at].content), mark = blocks.findIndex(block => block.type === 'text' && block.text.includes(firstPrompt));
@@ -211,7 +207,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   validateBuildParameters(external.parameters);
   const policy = validateRequestPolicy(requestPolicy);
   const context = runtimeContext(suppliedContext);
-  const initial = prepareBuildInput(external, aBe, { preserveContent: true, systemRecord: ccgatewaySystemRecord });
+  const initial = prepareBuildInput(external, renderAttachment, { preserveContent: true, systemRecord: ccgatewaySystemRecord });
   // The request's entrypoint, the one its header will carry (the client's own
   // or the configured one), is set the way CC sets it for a request
   // (setEntrypointOnRequests): the native header (PAs) and the User-Agent
@@ -220,7 +216,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   setEntrypointOnRequests(entrypoint);
   const content = await convertContent(initial, policy, context);
   const records = wireRecords(content.messages, external.model, ccgatewaySystemRecord), session = getRootSession();
-  const fingerprint = fingerprintMessages(content.messages, KF);
+  const fingerprint = fingerprintMessages(content.messages, reminderOpen);
   // The client's own header, wherever it is, makes the request Claude Code's
   // (hasBilling decides the same): its kind and IDs come from that header.
   const clientBilling = billing.requestBilling(initial.systemBlocks);
@@ -248,7 +244,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
 // wire carries them, before the native builder computes the fingerprint. It
 // never receives or overlays generation parameters.
 function convertContent(initial, policy, context) {
-  return nativeContentPolicy().applyContentPolicy({ system: initial.systemBlocks, messages: wireMessages(initial.messages, aBe) }, policy, {
+  return nativeContentPolicy().applyContentPolicy({ system: initial.systemBlocks, messages: wireMessages(initial.messages, renderAttachment) }, policy, {
     readEnvironment: fields => ccgatewayEnvironment(context, fields),
   }, contentDiagnostic);
 }
@@ -256,7 +252,7 @@ function convertContent(initial, policy, context) {
 // buildOptions are CC's query options for the client's request.
 function buildOptions(body, initial, content, { controls, agent, clientBetas, fingerprint, tools, captureBilling, capturePrefix }) {
   return {
-    model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? Al(),
+    model: body.model, querySource: agent?.querySource ?? 'sdk', agentContext: agent?.agentContext ?? mainAgentContext(),
     isNonInteractiveSession: true, withoutToolDescribeHooks: true,
     getToolPermissionContext: async () => ccgatewayPermissionContext(),
     agents: [], allowedAgentTypes: [], mcpClients: [],

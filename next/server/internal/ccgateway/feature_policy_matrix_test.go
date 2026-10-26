@@ -260,7 +260,7 @@ func TestFeatureScalarSettingsAcrossAllLayers(t *testing.T) {
 					resolved := cfg.ResolveFeaturePolicy(7, AccountFeaturePolicy{Mode: "custom", Overrides: account})
 					require.Equal(t, value, field.get(resolved.Effective))
 					require.Equal(t, origin, resolved.Sources[field.key])
-					require.Equal(t, "2.1.304", resolved.Effective.CLIVersion)
+					require.Equal(t, PinnedCLIVersion, resolved.Effective.CLIVersion)
 					wire, err := (&Service{}).resolvedWorkerPolicy(context.Background(), Config{RequestPolicy: &resolved.Effective}, 0, 0)
 					require.NoError(t, err)
 					raw, _ := json.Marshal(wire)

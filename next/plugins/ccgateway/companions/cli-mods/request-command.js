@@ -1,9 +1,6 @@
 // Copied beside the version-pinned restored modules by patch-cli-2.1.304.cjs.
 import fs from 'node:fs/promises';
-import { sF, _ke, mle } from './chunk-38xgev2z.js';
-import { Al } from './chunk-7p6jp6kj.js';
-import { mBr } from './chunk-4qs43hr1.js';
-import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
+import { createClient, AnthropicClient, modelFetch, mainAgentContext, betasAllowed, setEntrypointOnRequests } from './native-command.js';
 import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout, requestCapture } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, parseBuildJSON } from './ccgateway-request-options.js';
@@ -62,13 +59,13 @@ export async function runRequestCommand(args, natives = {}) {
     await clearMeta(ctx);
     ctx.capture = await openCapture(ctx.options);
     ctx.apiKey = process.env.ANTHROPIC_API_KEY;
-    // Both sF and the SDK constructor read this variable. Never let arbitrary
+    // Both createClient and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     const { outgoing, agent } = await readRequest(ctx);
     ctx.state.phase = 'transport';
     if (ctx.capture) outgoing.capture = ctx.capture;
-    ctx.run.response = await openModelRequest(outgoing, ctx.signal, init => openClient(init, ctx.apiKey, agent), mle);
+    ctx.run.response = await openModelRequest(outgoing, ctx.signal, init => openClient(init, ctx.apiKey, agent), modelFetch);
     if (!ctx.run.response.ok) {
       await writeHttpError(ctx, ctx.run.response);
       return 2;
@@ -172,7 +169,7 @@ async function prepareOutgoing(ctx, incoming) {
   // (build reads the client's system from its components).
   setClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? incoming.body.systemPrompt : incoming.body.system), agentNative?.leadingBilling(outgoing.body.system));
   const betas = requestBetas(outgoing.body?.model, clientBetas, [...addedBetas, ...(ctx.apiKey ? [] : [oauthBeta])]);
-  if (betas.length && !mBr(betas)) throw Error('Experimental betas are disabled by the active CC policy');
+  if (betas.length && !betasAllowed(betas)) throw Error('Experimental betas are disabled by the active CC policy');
   outgoing.headerPolicy = { apiKey: ctx.apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
   return { outgoing, agent };
 }
@@ -244,14 +241,14 @@ async function prepareBuild(ctx, body, resolveAgent) {
   return { outgoing, agent, clientBetas, addedBetas };
 }
 
-// openClient is CC's own authenticated client (sF) for the client's kind of
+// openClient is CC's own authenticated client (createClient) for the client's kind of
 // request.
 async function openClient(init, apiKey, agent) {
   const querySource = agent?.querySource ?? 'sdk';
-  const client = await sF({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: querySource, querySource,
-    ...agent?.explicitClass !== undefined && { requestClass: agent.explicitClass }, agentContext: agent?.agentContext ?? Al(),
+  const client = await createClient({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: querySource, querySource,
+    ...agent?.explicitClass !== undefined && { requestClass: agent.explicitClass }, agentContext: agent?.agentContext ?? mainAgentContext(),
     ...agent?.promptId !== undefined && { promptId: agent.promptId } });
-  if (!(client instanceof _ke)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
+  if (!(client instanceof AnthropicClient)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');
   return client;
 }
 

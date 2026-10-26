@@ -10,7 +10,7 @@ import { encodeErrorFrame, policyDeniedFrame } from './ccgateway-request-error.j
 // returns. The native bindings (request-natives.js) load only once the request
 // is accepted.
 export async function runRequest(args, settings) {
-  const { loadFastPathPolicy } = await import('./chunk-3nrrbnwj.js');
+  const { loadFastPathPolicy } = await import('./native-entry.js');
   if (await loadFastPathPolicy(settings)) {
     process.stderr.write(encodeErrorFrame(policyDeniedFrame()));
     return 1;

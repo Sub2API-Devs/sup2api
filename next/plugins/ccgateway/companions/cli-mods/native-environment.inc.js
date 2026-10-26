@@ -13,13 +13,13 @@ export const ccgatewayEnvironmentSnapshotKeys = ['workingDirectory', 'isWorktree
 // The on-demand readers, in the native snapshot's order: the requested field
 // that needs it, the snapshot key it fills, and its reader.
 const ccgatewayEnvironmentReaders = context => [
-  ['git_repository', 'isGitRepo', () => gH()],
-  ['worktree', 'isWorktree', () => Cl() !== null || hK(context.workingDirectory)],
+  ['git_repository', 'isGitRepo', () => native_isGitRepo()],
+  ['worktree', 'isWorktree', () => native_worktreeSession() !== null || native_isWorktreePath(context.workingDirectory)],
   ['additional_directories', 'additionalWorkingDirectories', () => [...context.additionalWorkingDirectories]],
-  ['shell', 'shell', () => uoo()],
-  ['os_version', 'osVersion', () => poo()],
-  ['scratchpad_directory', 'scratchpadDirectory', () => moo()],
-  ['github_cli', 'githubCli', () => Nkt()],
+  ['shell', 'shell', () => native_shellName()],
+  ['os_version', 'osVersion', () => native_osVersion()],
+  ['scratchpad_directory', 'scratchpadDirectory', () => native_scratchpadDirectory()],
+  ['github_cli', 'githubCli', () => native_githubCli()],
 ];
 export async function ccgatewayEnvironment(context, selected) {
   const wanted = new Set(selected);
@@ -27,21 +27,21 @@ export async function ccgatewayEnvironment(context, selected) {
   // The proxy note is rendered only when it is requested: the patched renderer
   // reads ccgatewayProxyText (null suppresses the line), so content-policy can
   // parse the snapshot without an unrequested proxy paragraph.
-  const override = cle();
+  const override = native_environmentOverride();
   if (override !== undefined) {
     let proxy = null;
     if (wanted.has('agent_proxy')) {
-      try { proxy = l1(override) ? ule(override) : foo(); }
+      try { proxy = native_overrideHasProxy(override) ? native_overrideProxyText(override) : native_proxyText(); }
       catch { unavailableFields.push('agent_proxy'); }
     }
-    return { text: zkt({ ...override, ccgatewayProxyText: proxy }), fieldText: { agent_proxy: proxy }, unavailableFields };
+    return { text: native_renderEnvironment({ ...override, ccgatewayProxyText: proxy }), fieldText: { agent_proxy: proxy }, unavailableFields };
   }
   let proxy = null;
   if (wanted.has('agent_proxy')) {
-    try { proxy = foo(); }
+    try { proxy = native_proxyText(); }
     catch { unavailableFields.push('agent_proxy'); }
   }
-  const snapshot = { platform: a.platform, additionalWorkingDirectories: [], ccgatewayProxyText: proxy };
+  const snapshot = { platform: native_runtime.platform, additionalWorkingDirectories: [], ccgatewayProxyText: proxy };
   // primary_directory, git_repository and worktree are facts about the working
   // directory: left absent unless one of them is wanted.
   if (['primary_directory', 'git_repository', 'worktree'].some(field => wanted.has(field))) {
@@ -55,7 +55,7 @@ export async function ccgatewayEnvironment(context, selected) {
     catch { unavailableFields.push(field); }
   }
   return {
-    text: zkt(snapshot),
+    text: native_renderEnvironment(snapshot),
     fieldText: { agent_proxy: proxy },
     unavailableFields,
   };
@@ -72,18 +72,18 @@ export function ccgatewayEnvironmentVocabulary() {
   const only = list => list.length === 1 ? list[0] : unexpected();
   const bullets = text => text.split('\n').filter(line => line.startsWith(' - ')).map(line => line.slice(3));
   const label = (text, marker) => around(only(bullets(text).filter(line => line.includes(marker))), marker)[0];
-  const withdrawn = (snapshot, field) => only(bullets(Kkt(snapshot, [{ field }])));
+  const withdrawn = (snapshot, field) => only(bullets(native_renderEnvironmentChanges(snapshot, [{ field }])));
   const base = { workingDirectory: value + 'P', isWorktree: false, isGitRepo: true, additionalWorkingDirectories: [value + 'A'],
     platform: value + 'L', shell: value + 'S', osVersion: value + 'O' };
-  const full = _oo(base), lines = full.split('\n'), listed = lines.indexOf('  - ' + value + 'A');
+  const full = native_renderEnvironmentFields(base), lines = full.split('\n'), listed = lines.indexOf('  - ' + value + 'A');
   if (listed < 1 || !lines[listed - 1].startsWith(' - ')) unexpected();
-  const notGit = bullets(_oo({ ...base, isGitRepo: false }));
+  const notGit = bullets(native_renderEnvironmentFields({ ...base, isGitRepo: false }));
   const git = only(bullets(full).filter(line => !notGit.includes(line)));
   if (!git.endsWith('true')) unexpected();
   const primary = label(full, value + 'P');
   // The proxy line has a variable CA path, an optional README clause between
   // its middle and end, and an optional list of preconfigured CLIs.
-  const proxy = (hasReadme, installedClis) => xNe({ caBundlePath: path, hasReadme, installedClis });
+  const proxy = (hasReadme, installedClis) => native_renderProxyNote({ caBundlePath: path, hasReadme, installedClis });
   const plain = proxy(false, []), readme = proxy(true, []);
   const [start] = around(plain, path);
   let common = 0;
@@ -91,16 +91,16 @@ export function ccgatewayEnvironmentVocabulary() {
   const end = plain.slice(common);
   if (!readme.endsWith(end) || common <= start.length + path.length) unexpected();
   return {
-    heading: PNe, intro: ooo, updateHeading: roo,
+    heading: native_environmentHeading, intro: native_environmentIntro, updateHeading: native_environmentUpdateHeading,
     labels: {
       primary_directory: primary,
       git_repository: git.slice(0, -'true'.length),
       additional_directories: lines[listed - 1].slice(3),
       platform_name: label(full, value + 'L'), shell: label(full, value + 'S'), os_version: label(full, value + 'O'),
     },
-    was: around(around(only(bullets(Kkt(base, [{ field: 'workingDirectory', from: was }]))), primary + value + 'P')[1], was),
-    additionalChanged: bullets(Kkt(base, [{ field: 'additionalWorkingDirectories', added: [value + '1'], removed: [value + '2'] }])),
-    worktree: jkt, stash: Ukt,
+    was: around(around(only(bullets(native_renderEnvironmentChanges(base, [{ field: 'workingDirectory', from: was }]))), primary + value + 'P')[1], was),
+    additionalChanged: bullets(native_renderEnvironmentChanges(base, [{ field: 'additionalWorkingDirectories', added: [value + '1'], removed: [value + '2'] }])),
+    worktree: native_worktreeNote, stash: native_stashNote,
     withdrawal: {
       primary_directory: withdrawn({ ...base, workingDirectory: undefined }, 'workingDirectory'),
       worktree: withdrawn(base, 'isWorktree'),
@@ -108,13 +108,13 @@ export function ccgatewayEnvironmentVocabulary() {
       github_cli: withdrawn(base, 'githubCli'),
       agent_proxy: withdrawn(base, 'agentProxy'),
     },
-    scratchpad: around(Gkt(value), value),
+    scratchpad: around(native_renderScratchpad(value), value),
     github: [...new Set(Array.from({ length: 16 }, (_, bits) =>
-      ANe(iys({ enterprise: (bits & 1) > 0, anyHost: (bits & 2) > 0, noJq: (bits & 4) > 0, runner: (bits & 8) > 0 }))))],
-    githubReplaces: aoo,
+      native_renderGithub(native_githubOptions({ enterprise: (bits & 1) > 0, anyHost: (bits & 2) > 0, noJq: (bits & 4) > 0, runner: (bits & 8) > 0 }))))],
+    githubReplaces: native_githubReplaces,
     proxy: {
       start, middle: plain.slice(start.length + path.length, common), end,
-      readme: around(readme.slice(common, readme.length - end.length), guo(path)),
+      readme: around(readme.slice(common, readme.length - end.length), native_renderProxyReadme(path)),
       clis: around(proxy(false, [value]).slice(plain.length), value),
     },
   };
@@ -134,17 +134,17 @@ export function ccgatewayEnvironmentVocabulary() {
 // and placed by the native message pipeline, never here.
 export const ccgatewayDefaultPrompt = async (tools, model, appended) => {
   const append = appended.reduce((joined, text) => ccgatewayJoinAppend(joined, text), undefined);
-  return ki([...r1e(await wx(tools, model), { tools, memoryMechanicsPrompt: null, appendSystemPrompt: void 0 }), ...append ? [append] : []]);
+  return native_systemPromptBlocks([...native_withToolSections(await native_defaultSystemPrompt(tools, model), { tools, memoryMechanicsPrompt: null, appendSystemPrompt: void 0 }), ...append ? [append] : []]);
 };
 // The permission context a fresh non-interactive session starts with.
-export const ccgatewayPermissionContext = () => gd();
+export const ccgatewayPermissionContext = () => native_permissionContext();
 export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records, session }) {
   const wanted = new Set(kinds), out = [];
-  if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await Wkt({ cwd: workingDirectory, additionalWorkingDirectories }) });
-  if (wanted.has('model')) out.push(await eSt(Jkt(ah({ permissionMode: 'default', mainLoopModel: model, exceeds200kTokens: false }))));
+  if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await native_collectEnvironment({ cwd: workingDirectory, additionalWorkingDirectories }) });
+  if (wanted.has('model')) out.push(await native_modelIdentityAttachment(native_modelIdentityInput(native_mainLoopModel({ permissionMode: 'default', mainLoopModel: model, exceeds200kTokens: false }))));
   // A session's first turn: the main thread, without a task budget.
-  if (wanted.has('total_tokens')) out.push(...JDr(session, records, model, void 0, false, void 0, false));
-  if (wanted.has('date')) out.push({ type: 'date', date: ccgDate() });
+  if (wanted.has('total_tokens')) out.push(...native_tokenBudgetAttachments(session, records, model, void 0, false, void 0, false));
+  if (wanted.has('date')) out.push({ type: 'date', date: native_currentDate() });
   return out;
 }
 
@@ -155,14 +155,14 @@ export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory
 // typing); otherwise the prompt comes from the SDK. Returns the last prompt's
 // record (a3e), or undefined.
 export function ccgatewayMarkTurns(records, interactive) {
-  const origin = iws(interactive ? { origin: { kind: 'human' } } : { promptSource: 'sdk' });
+  const origin = native_turnOrigin(interactive ? { origin: { kind: 'human' } } : { promptSource: 'sdk' });
   records.forEach((row, at) => {
-    if (row?.type !== 'user' || !pde(row)) return;
+    if (row?.type !== 'user' || !native_isPromptRecord(row)) return;
     row.turnOrigin = origin;
-    const position = h0n(records.slice(0, at), origin);
+    const position = native_turnPosition(records.slice(0, at), origin);
     if (position !== undefined) row.turnPosition = position;
   });
-  const last = a3e(records);
+  const last = native_lastPromptIndex(records);
   return last === -1 ? undefined : records[last];
 }
 // ccgatewayPromptTurn is the same for a Messages body (direct): its messages
@@ -186,16 +186,16 @@ export function ccgatewayLayerVocabulary() {
   // What two renderings share before their values differ.
   const common = (a, b) => { let at = 0; while (at < a.length && a[at] === b[at]) at++; if (!at) throw Error('Unexpected native attachment wording'); return a.slice(0, at); };
   // The environment's opening is what zkt renders ahead of the field lines.
-  const snapshot = { platform: mark, additionalWorkingDirectories: [] }, environment = zkt(snapshot), fields = _oo(snapshot);
+  const snapshot = { platform: mark, additionalWorkingDirectories: [] }, environment = native_renderEnvironment(snapshot), fields = native_renderEnvironmentFields(snapshot);
   if (!environment.endsWith(fields) || environment.length === fields.length) throw Error('Unexpected native attachment wording');
   return {
     attachments: {
       environment: [environment.slice(0, -fields.length).trimEnd()],
-      model: [before(Eoo({ modelId: mark })), before(RBs({ modelId: mark }))],
-      total_tokens: [common(u7t('countdown', 1), u7t('countdown', 2))],
-      date: [before(fSt({ date: mark })), before(fSt({ date: mark, changed: true }))],
+      model: [before(native_renderModelIdentity({ modelId: mark })), before(native_renderModelIdentityShort({ modelId: mark }))],
+      total_tokens: [common(native_renderTokenBudget('countdown', 1), native_renderTokenBudget('countdown', 2))],
+      date: [before(native_renderDate({ date: mark })), before(native_renderDate({ date: mark, changed: true }))],
     },
-    systemPrompt: p4n,
-    loopHeaders: { prev_tool_durations: m4t, cc_compaction_request: c4t, claude_code_compaction: f4t, cc_context_compacted: u4t, claude_code_context_compacted: p4t },
+    systemPrompt: native_securityParagraph,
+    loopHeaders: { prev_tool_durations: native_headerPrevToolDurations, cc_compaction_request: native_headerCompactionRequest, claude_code_compaction: native_headerClaudeCodeCompaction, cc_context_compacted: native_headerContextCompacted, claude_code_context_compacted: native_headerClaudeCodeContextCompacted },
   };
 }

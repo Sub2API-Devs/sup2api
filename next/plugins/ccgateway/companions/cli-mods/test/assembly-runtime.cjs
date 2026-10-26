@@ -1,9 +1,13 @@
 // Shared runtime harness for native assembly acceptance (not business code).
 // Reuses the verified matrix setup: sealed active CLI, UID 1000 Worker, local
 // model stub, no real credentials, and one capture per HTTP model request.
+// The Claude Code version is CC_VERSION (default 2.1.304); the artifacts'
+// expected SHA-256 come from the caller (PROBE_EXPECT_CLI_SHA,
+// PROBE_EXPECT_WORKER_SHA, else options.expect from a legacy manifest) and
+// are otherwise only reported (sha_unpinned).
 const fs = require('node:fs'), cp = require('node:child_process'), http = require('node:http');
 const assert = require('node:assert/strict');
-const { sha } = require('./replay-helpers.cjs');
+const { ccVersion, pin } = require('./replay-helpers.cjs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function startRuntime(options = {}) {
@@ -12,21 +16,26 @@ async function startRuntime(options = {}) {
   }
   if (process.env.CCG_ASSEMBLY_DISPOSABLE !== '1' || !fs.existsSync('/.dockerenv') ||
       process.getuid?.() !== 0 || fs.existsSync('/var/run/docker.sock')) throw Error('Disposable --network none container required');
-  const cliInput = process.env.PROBE_CLI || '/input/claude-linux-assembly-fix';
-  const workerInput = process.env.PROBE_WORKER || '/input/ccg-worker-304-assembly-fix-linux';
-  const root = '/opt/ccgateway/cli/ccg304-assembly', workingDirectory = '/work/assembly-context';
+  const version = ccVersion();
+  const cliInput = process.env.PROBE_CLI || '/input/claude-linux';
+  const workerInput = process.env.PROBE_WORKER || '/input/ccg-worker-linux';
+  const root = '/opt/ccgateway/cli/ccg-assembly', workingDirectory = '/work/assembly-context';
   fs.mkdirSync(root, { recursive: true, mode: 0o755 });
   fs.copyFileSync(cliInput, root + '/claude'); fs.chownSync(root + '/claude', 0, 0); fs.chmodSync(root + '/claude', 0o755);
-  const cliSHA = sha(fs.readFileSync(root + '/claude'));
-  const expectedSHA = process.env.PROBE_EXPECT_CLI_SHA || '138da88ed5895fbc099115e7662df7ff9a6bd848d5a4cd142e29f2c9baaa56bd';
-  assert.equal(cliSHA, expectedSHA);
+  const pins = {
+    cli: pin('Patched CLI', root + '/claude', ['PROBE_EXPECT_CLI_SHA'], options.expect?.cli),
+    worker: pin('Worker', workerInput, ['PROBE_EXPECT_WORKER_SHA', 'PROBE_EXPECTED_WORKER_SHA256'], options.expect?.worker),
+  };
+  pins.cli.path = cliInput;
+  const cliSHA = pins.cli.sha256;
   const info = JSON.parse(cp.execFileSync(root + '/claude', ['--ccgateway-info'], { encoding: 'utf8' }));
-  assert.equal(info.version, '2.1.304');
-  fs.writeFileSync(root + '/manifest.json', JSON.stringify({ versions: { '2.1.304': {
+  assert.equal(info.version, version, `CLI reports Claude Code ${info.version}, CC_VERSION is ${version}`);
+  if (process.env.PROBE_EXPECT_CLI_PATCH) assert.equal(info.patch, process.env.PROBE_EXPECT_CLI_PATCH, 'CLI patch tag');
+  fs.writeFileSync(root + '/manifest.json', JSON.stringify({ versions: { [version]: {
     path: 'claude', sha256: cliSHA, patch: info.patch, modes: ['direct', 'build'],
   } } }), { mode: 0o644 });
   fs.writeFileSync('/opt/ccgateway/cli/active-runtime.json', JSON.stringify({
-    schema_version: 1, manifest: 'ccg304-assembly/manifest.json', version: '2.1.304', request_mode: 'build',
+    schema_version: 1, manifest: 'ccg-assembly/manifest.json', version, request_mode: 'build',
   }), { mode: 0o644 });
   for (const directory of [workingDirectory, '/work/assembly-home', '/work/assembly-home/config', '/work/assembly-data', '/work/assembly-data/cache']) {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 }); fs.chownSync(directory, 1000, 1000);
@@ -98,12 +107,12 @@ async function startRuntime(options = {}) {
     assert.equal(captures.length, 0, 'readiness probes cannot issue model calls');
   } catch (error) { await close(); throw error; }
   return {
-    identity: { cli: info, cli_sha256: cliSHA, worker_sha256: sha(fs.readFileSync(workerInput)), worker_capabilities: workerCapabilities },
+    identity: { cc_version: version, cli: info, cli_sha256: cliSHA, worker_sha256: pins.worker.sha256, worker_capabilities: workerCapabilities, pins },
     captures, workingDirectory, close,
     async send(test) {
       responseFixture = test.response_fixture ?? {};
       const before = captures.length;
-      const policy = { schema_version: 1, relay_mode: test.mode ?? 'build', cli_version: '2.1.304', ...(test.policy ?? {}) };
+      const policy = { schema_version: 1, relay_mode: test.mode ?? 'build', cli_version: version, ...(test.policy ?? {}) };
       const started = Date.now();
       const sentRaw = test.raw_body ?? JSON.stringify(test.body);
       if (test.transport === 'standalone-cli') {

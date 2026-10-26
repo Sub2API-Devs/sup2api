@@ -1,14 +1,27 @@
 // Grouped native assembly suite. HTTP 200 is not a pass oracle.
 // Known tool/parameter drops fail; unproved native-model rules remain unknown.
+// CC_VERSION (default 2.1.304) selects fixtures/assembly-cases-<version>.json
+// unless PROBE_MANIFEST names another; artifact SHAs are pinned by the caller
+// (assembly-runtime.cjs), never here.
 const fs = require('node:fs'), path = require('node:path');
 const { startRuntime } = require('./assembly-runtime.cjs');
-const { sha, normalizeSystem, same, differences, definitionHash, onlyUserIDChanged } = require('./replay-helpers.cjs');
-const manifestPath = process.env.PROBE_MANIFEST || path.join(__dirname, 'fixtures/assembly-cases.json');
+const { sha, normalizeSystem, same, differences, definitionHash, ccVersion, fixturePath, anyUnpinned,
+  nativeCCVersion, nativeHeaderBlock, billingLines, nativeDefaultPermitted, withoutTopLevelMember } = require('./replay-helpers.cjs');
+const version = ccVersion();
+const manifestPath = process.env.PROBE_MANIFEST || fixturePath('assembly-cases', version);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-const record = { suite: manifest.suite, scope: manifest.scope, manifest_sha256: sha(fs.readFileSync(manifestPath)),
+// A manifest carries the version its fixtures and fingerprints were built for.
+if (manifest.cc_version !== undefined && manifest.cc_version !== version)
+  throw Error(`${manifestPath} is for Claude Code ${manifest.cc_version}, CC_VERSION is ${version}`);
+const record = { suite: manifest.suite, scope: manifest.scope, cc_version: version, manifest_sha256: sha(fs.readFileSync(manifestPath)),
   cases: [], branch_coverage_claim: 'Cases exercise named assembly contracts; this is not complete AST branch coverage.' };
 let runtime, currentEnvironment = '';
 const stripContent = body => Object.fromEntries(Object.entries(body).filter(([key]) => !['system', 'messages', 'tools'].includes(key)));
+// The request line both modes send since CLI v24 (plugin 0.1.88): the native
+// SDK's create path with ?beta=true (REQUEST-MODES §1.1; cli-mods
+// model-request.js messagesPath is taken from the SDK's create at patch time).
+const messagesPath = '/v1/messages?beta=true';
+const defaultEntrypoint = 'sdk-cli';
 function validNativeMetadata(value) {
   try {
     if (!same(Object.keys(value).sort(), ['user_id'])) return false;
@@ -24,25 +37,30 @@ function applyPatch(target, patch) {
   for (const key of patch.path.slice(0, -1)) parent = parent[key];
   parent[patch.path.at(-1)] = structuredClone(patch.value);
 }
+// expectedContent is the client's body with the contract's edits. billing_insert:
+// the client's system has no usable leading header, so build (always, since
+// CLI v16) and direct (since v17) put the CLI's own whole header line in
+// front (content-policy.js mergeBillingAttribution; direct-billing.js;
+// BUILD-REQUEST-COMPONENTS-DESIGN §5.5, §6.3). Its cc_version is computed here
+// independently from the first prompt (replay-helpers nativeCCVersion), its
+// cc_entrypoint is the request's (no client header, no configured one:
+// sdk-cli, request-policy.js defaultEntrypoint).
 function expectedContent(test, wire, checks) {
   const expected = structuredClone(test.body);
   expected.system = normalizeSystem(expected.system);
   for (const patch of test.contract.patches ?? []) applyPatch(expected, patch);
   if (test.contract.content === 'billing_insert') {
-    const lines = (wire.system ?? []).flatMap(block => (block.text ?? '').split('\n')).filter(line => line.startsWith('x-anthropic-billing-header:'));
-    const version = /\bcc_version=([^;\s]+);/.exec(lines[0] ?? '')?.[1];
-    const entrypoint = /\bcc_entrypoint=([^;\s]+);/.exec(lines[0] ?? '')?.[1];
-    checks('billing.native-version', /^2\.1\.304\.[a-f0-9]{3}$/.test(version ?? ''), { actual: version });
-    // Wire message.isMeta is not lifted onto the native CC record.
-    const firstUser = expected.messages.find(message => message.role === 'user');
-    const text = typeof firstUser?.content === 'string' ? firstUser.content :
-      firstUser?.content?.find(block => block.type === 'text')?.text ?? '';
-    const fingerprint = sha('59cf53e54c78' + [4, 7, 20].map(index => text[index] ?? '0').join('') + '2.1.304').slice(0, 3);
-    const expectedVersion = '2.1.304.' + fingerprint;
-    checks('billing.independent-fingerprint', version === expectedVersion, { expected: expectedVersion, actual: version });
-    checks('billing.native-entrypoint', entrypoint === 'sdk-cli', { actual: entrypoint });
-    checks('billing.unique-block', lines.length === 1, { actual: lines.length });
-    expected.system.unshift({ type: 'text', text: `x-anthropic-billing-header: cc_version=${expectedVersion}; cc_entrypoint=sdk-cli;` });
+    const expectedVersion = nativeCCVersion(expected.messages, version);
+    const entrypoint = test.policy?.build_billing_entrypoint ?? defaultEntrypoint;
+    const header = nativeHeaderBlock(normalizeSystem(wire.system)[0], { cc_version: expectedVersion, cc_entrypoint: entrypoint });
+    checks('billing.native-version', new RegExp(`^${version.replaceAll('.', '\\.')}\\.[a-f0-9]{3}$`).test(header.fields?.cc_version ?? ''), { actual: header.fields?.cc_version });
+    checks('billing.independent-fingerprint', header.fields?.cc_version === expectedVersion, { expected: expectedVersion, actual: header.fields?.cc_version });
+    checks('billing.native-entrypoint', header.fields?.cc_entrypoint === entrypoint, { expected: entrypoint, actual: header.fields?.cc_entrypoint });
+    checks('billing.native-fields', header.ok, { problems: header.problems, fields: header.fields });
+    // The inserted line is the only new one; a client header elsewhere stays.
+    const clientLines = billingLines(expected.system).length;
+    checks('billing.unique-block', billingLines(wire.system).length === clientLines + 1, { expected: clientLines + 1, actual: billingLines(wire.system).length });
+    expected.system.unshift(header.expected);
   }
   return expected;
 }
@@ -62,7 +80,7 @@ function evaluate(test, response) {
     result.rejection = response.text.slice(0, 1500);
   } else if (response.captures.length) {
     const capture = response.captures.at(-1), wire = capture.body;
-    check('send.method-and-endpoint', capture.method === 'POST' && capture.url === '/v1/messages', { method: capture.method, url: capture.url });
+    check('send.method-and-endpoint', capture.method === 'POST' && capture.url === messagesPath, { method: capture.method, url: capture.url, expected: messagesPath });
     check('send.worker-auth-only', capture.auth_uses_worker_credential && !capture.authorization_present && !capture.leaked_policy_header);
     result.request_sha256 = sha(test.body);
     result.outgoing_sha256 = sha(wire);
@@ -81,15 +99,20 @@ function evaluate(test, response) {
     check('content.messages', result.diffs.messages.length === 0);
     if (contract.tools === 'exact') check('content.tools-exact', result.diffs.tools.length === 0);
     if (test.mode === 'direct' || contract.whole_body === 'exact') {
-      // Direct is a pure passthrough (2026-10-21): its bytes never change.
-      const privacy = test.mode !== 'direct' && test.transport !== 'standalone-cli' && runtime.identity.worker_capabilities.includes('request_identity_v1') &&
-        typeof test.body.metadata?.user_id === 'string' && test.body.metadata.user_id !== '';
-      if (privacy) {
-        check('send.direct-only-user-id-change', onlyUserIDChanged(response.sent_raw, capture.raw));
-        check('metadata.private-identity', validNativeMetadata({ user_id: wire.metadata?.user_id }));
-      } else {
-        check('send.direct-whole-body', same(wire, test.body), { diff: differences(test.body, wire) });
-        check('send.direct-raw-bytes', capture.raw === response.sent_raw, { expected_sha256: sha(response.sent_raw), actual_sha256: sha(capture.raw) });
+      // Direct sends the client's body except the billing header (CLI v17;
+      // direct-billing.js, BUILD-REQUEST-COMPONENTS-DESIGN §6.3): the expected
+      // body is the client's with the contracted system edits, and every byte
+      // outside the system member must be the client's. With no system edit
+      // the whole raw body must be identical. Direct never touches metadata
+      // (build design §7: "direct 原样转发").
+      const body = structuredClone(test.body);
+      const systemEdited = !same(expected.system, normalizeSystem(test.body.system)) || typeof test.body.system === 'string';
+      if (test.body.system !== undefined || expected.system.length) body.system = expected.system;
+      check('send.direct-whole-body', same(wire, body), { diff: differences(body, wire) });
+      if (!systemEdited) check('send.direct-raw-bytes', capture.raw === response.sent_raw, { expected_sha256: sha(response.sent_raw), actual_sha256: sha(capture.raw) });
+      else {
+        const before = withoutTopLevelMember(response.sent_raw, 'system'), after = withoutTopLevelMember(capture.raw, 'system');
+        check('send.direct-raw-bytes', before !== null && before === after, { scope: 'every byte outside the system member', expected_sha256: before && sha(before), actual_sha256: after && sha(after) });
       }
     }
     for (const [key, value] of Object.entries(contract.parameters ?? {})) {
@@ -101,13 +124,10 @@ function evaluate(test, response) {
         let permitted = false;
         if (Object.hasOwn(contract.native_authorized ?? {}, key)) {
           if (key === 'metadata') permitted = validNativeMetadata(wire.metadata);
-          else if (key === 'thinking' && test.body.thinking === undefined) permitted = same(wire.thinking, { type: 'disabled' });
-          else if (key === 'temperature' && test.body.temperature === undefined) permitted = wire.temperature === 1 && wire.thinking?.type === 'disabled';
-          else if (key === 'output_config' && test.body.output_config === undefined) permitted = same(wire.output_config, { effort: 'high' });
           else if (key === 'thinking' && test.unknown_reason) {
             result.checks.push({ id: 'parameter.closed-world.thinking', status: 'unknown', evidence: { reason: test.unknown_reason, actual: wire.thinking } });
             continue;
-          }
+          } else permitted = nativeDefaultPermitted(key, test.body, wire);
         }
         check('parameter.closed-world.' + key, permitted, { before: test.body[key] ?? '<absent>', after: wire[key] ?? '<absent>' });
       }
@@ -116,6 +136,9 @@ function evaluate(test, response) {
       rule, changed: !same(test.body[field], wire[field]),
       note: 'Authorized native normalization is recorded separately; it does not satisfy a stricter supplied parameter contract.',
     }]));
+    // Literal texts the outgoing bytes must carry as the client wrote them
+    // (numbers beyond 2^53 since CLI v29: REQUEST-MODES §1.1).
+    for (const text of contract.raw_texts ?? []) check('send.raw-text', capture.raw.includes(text) && response.sent_raw.includes(text), { text });
     for (const assertion of contract.assertions ?? []) {
       if (assertion === 'metadata_regenerated') check(assertion, validNativeMetadata(wire.metadata) && wire.metadata.user_id !== test.body.metadata?.user_id);
       else if (assertion === 'beta_forwarded') {
@@ -140,14 +163,18 @@ function evaluate(test, response) {
   if (!cases.length) throw Error('No matching assembly cases');
   // Execute default-runtime cases together, then isolated controlled env cases.
   cases.sort((a, b) => Number(Boolean(a.runtime_environment)) - Number(Boolean(b.runtime_environment)));
+  // Pins: the caller's environment, else a legacy manifest's fixed SHAs.
+  const expect = { cli: manifest.expected_cli_sha256, worker: manifest.expected_worker_sha256 };
   for (const test of cases) {
     const environment = JSON.stringify(test.runtime_environment ?? {});
     if (!runtime || environment !== currentEnvironment) {
       if (runtime) await runtime.close();
-      runtime = await startRuntime({ environment: test.runtime_environment });
+      runtime = await startRuntime({ environment: test.runtime_environment, expect });
       currentEnvironment = environment;
-      if (runtime.identity.cli_sha256 !== manifest.expected_cli_sha256) throw Error('Manifest and actual CLI SHA differ');
-      if (runtime.identity.worker_sha256 !== manifest.expected_worker_sha256) throw Error('Manifest and actual Worker SHA differ');
+      if (record.artifact_identity && (record.artifact_identity.cli.sha256 !== runtime.identity.cli_sha256 || record.artifact_identity.worker.sha256 !== runtime.identity.worker_sha256))
+        throw Error('Artifacts changed between runtimes of one run');
+      record.artifact_identity = runtime.identity.pins;
+      record.sha_unpinned = anyUnpinned(runtime.identity.pins);
     }
     let result;
     try { result = evaluate(test, await runtime.send(test)); }

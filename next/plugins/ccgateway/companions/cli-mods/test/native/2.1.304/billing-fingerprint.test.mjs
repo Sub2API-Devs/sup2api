@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { fingerprintMessages } from '../request-input.js';
-import { vocabulary } from './vocabulary.mjs';
-import { restored, nativeSkip } from './artifacts.mjs';
+import { fingerprintMessages } from '../../../request-input.js';
+import { vocabulary } from '../../vocabulary.mjs';
+import { pinned } from '../../artifacts.mjs';
+const { restored, nativeSkip, profile, environmentSource } = pinned('2.1.304');
 const require = createRequire(import.meta.url);
 const options = { skip: nativeSkip('native fingerprint oracle was') };
 let oracle;
 function native() {
   // Loading the oracle validates the full native source hash. Changed baselines
   // fail explicitly; missing optional artifacts are the only skip condition.
-  return oracle ??= require('./analysis/billing-fingerprint-oracle.cjs').createOracle(fileURLToPath(restored));
+  return oracle ??= require('./billing-fingerprint-oracle.cjs').createOracle(fileURLToPath(restored));
 }
 const sample = '012345678901234567890123';
 const user = content => ({ role: 'user', content });
@@ -50,7 +51,7 @@ test('native fingerprint: only sampled positions affect the digest', options, ()
 // patch hands RIs (fingerprintMessages), so a real `claude -p` request must
 // give back the cc_version in its own header (2026-10-21 fix).
 test('build fingerprints the text CC fingerprinted, not the leading reminder', options, () => {
-  const official = JSON.parse(fs.readFileSync(new URL('fixtures/official-request-2.1.304.json', import.meta.url), 'utf8'));
+  const official = JSON.parse(fs.readFileSync(new URL('../../fixtures/official-request-2.1.304.json', import.meta.url), 'utf8'));
   const sent = official.system[0].text.match(/cc_version=([^;]+);/)[1];
   assert.equal(native().fromNativeRecords(fingerprintMessages(official.messages, vocabulary.reminder[0])), sent);
   assert.notEqual(native().fromExpectedWire(official.messages), sent);

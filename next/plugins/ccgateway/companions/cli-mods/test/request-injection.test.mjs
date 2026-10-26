@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { vocabulary, layers } from './vocabulary.mjs';
 import { validateRequestPolicy, injectionChoices } from '../request-policy.js';
 import { createContentPolicy } from '../content-policy.js';
-import { installSupport } from './support.mjs';
+import { installSupport, linkNatives } from './support.mjs';
 
 // The layers a request without a billing header is given (2026-10-23).
 test('the injection policy takes only known layers, as keys set to true or false', () => {
@@ -39,21 +39,22 @@ async function fixture(probeBody, { captureHeader = false } = {}) {
   const header = JSON.stringify(vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;');
   for (const [name, source] of Object.entries({
     'package.json': '{"type":"module"}',
-    'chunk-rncrmfyt.js': `export const calls=[]; export const ccgatewaySystemRecord=content=>({type:'api_system',message:{role:'system',content},uuid:'fixture',timestamp:'fixture'}); export const aBe=()=>({isKnownType:true,messages:[]}); export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)});
+    'stub-core.js': `export const calls=[]; export const ccgatewaySystemRecord=content=>({type:'api_system',message:{role:'system',content},uuid:'fixture',timestamp:'fixture'}); export const renderAttachment=()=>({isKnownType:true,messages:[]}); export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)});
       export const ccgatewayDefaultPrompt=async(tools,model,appended)=>['PROMPT for '+tools.map(t=>t.name).join(','),...appended.length?['APPEND '+appended.join('\\n\\n')]:[]]; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type})); export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)});
-      export async function* jOt(input){calls.push(input); const probe=input.options.ccgatewayNativeProbe===true;
+      export async function* queryModel(input){calls.push(input); const probe=input.options.ccgatewayNativeProbe===true;
         if(!probe&&${captureHeader})input.options.ccgatewayCaptureBilling?.(${header});
         input.options.ccgatewayCapturePrefix?.(input.options.recordedCliPrefix===undefined?null:input.options.recordedCliPrefix);
         const body=probe?${JSON.stringify(probeBody)}:{model:'m',system:input.options.ccgatewaySystemBlocks,messages:input.options.ccgatewayWireMessages,...input.options.ccgatewayWireTools===undefined?{}:{tools:input.options.ccgatewayWireTools}};
         if(probe) body.system=[{type:'text',text:${header}},{type:'text',text:'LINE'},...body.system];
         yield {type:'ccgateway_request',body}}`,
-    'chunk-7y2kvacy.js': `export const oJe=${JSON.stringify(vocabulary.billingHeader)}; export const B1s=block=>typeof block?.text==='string'&&block.text.startsWith(oJe);`,
-    'chunk-jkcb7qdd.js': `export const KF=${JSON.stringify(vocabulary.reminder[0])},lKe=${JSON.stringify(vocabulary.reminder[1])};`,
-    'chunk-eanw7pgv.js': `export const m4t=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
-    'chunk-t61vswm2.js': `export const t1n=text=>text==='LINE'; export const n1n=options=>options?.recorded!==void 0?options.recorded:'LINE';`,
-    'chunk-7p6jp6kj.js': 'export const Al=()=>({});', 'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
+    'stub-billing.js': `export const billingHeaderPrefix=${JSON.stringify(vocabulary.billingHeader)}; export const isBillingHeader=block=>typeof block?.text==='string'&&block.text.startsWith(billingHeaderPrefix);`,
+    'stub-reminder.js': `export const reminderOpen=${JSON.stringify(vocabulary.reminder[0])},reminderClose=${JSON.stringify(vocabulary.reminder[1])};`,
+    'stub-tools.js': `export const toolPool=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
+    'stub-identity.js': `export const isIdentityLine=text=>text==='LINE'; export const identityLine=options=>options?.recorded!==void 0?options.recorded:'LINE';`,
+    'stub-context.js': 'export const mainAgentContext=()=>({});', 'stub-session.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'stub-betas.js': 'export const betasAllowed=()=>true;',
   })) await fs.writeFile(path.join(dir, name), source);
-  return { dir, header: JSON.parse(header), adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'chunk-rncrmfyt.js'))), session: await import(pathToFileURL(path.join(dir, 'chunk-72vwyp9d.js'))) };
+  await linkNatives(dir);
+  return { dir, header: JSON.parse(header), adapter: await import(pathToFileURL(path.join(dir, 'ccgateway-request-build.js'))), native: await import(pathToFileURL(path.join(dir, 'stub-core.js'))), session: await import(pathToFileURL(path.join(dir, 'stub-session.js'))) };
 }
 const injectAll = { contract_version: 2, build_injection: { system_prompt: true, attachments: { environment: true, date: true }, tools: { Read: true, Bash: true } } };
 const client = (system, policy = injectAll) => ({ model: 'm', systemPrompt: system, messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'again' }],

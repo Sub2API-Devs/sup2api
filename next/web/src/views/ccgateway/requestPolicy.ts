@@ -222,7 +222,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     // policy keeps its own, which the core checks against the runtimes. The
     // core's GET always answers one; this only fills a policy read without it
     // (recorded in companions/contracts/testdata/web-policy-payloads.json).
-    cli_version: '2.1.304',
+    cli_version: '2.1.310',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
       { name: 'fine-grained-tool-streaming-2025-05-14', mapping: 'fine_grained_tools' },

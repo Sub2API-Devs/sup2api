@@ -11,13 +11,14 @@ import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { requestSessionID } from '../request-identity.js';
+import { requestSessionID } from '../../../request-identity.js';
+import { pinned } from '../../artifacts.mjs';
+const { restored, profile } = pinned('2.1.310');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '../../../../../..');
-const mods = path.dirname(here);
-const baseline = path.join(root, 'artifacts/claude-2.1.304/linux-restored');
-const packageFile = process.env.CCG_BABEL_PACKAGE || path.join(root, 'next/web/package.json');
+const mods = path.resolve(here, '../../..');
+const baseline = fileURLToPath(restored);
+const packageFile = process.env.CCG_BABEL_PACKAGE || path.join(mods, 'package.json');
 const parser = createRequire(packageFile)('@babel/parser');
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -55,20 +56,23 @@ function compact(source) {
 }
 
 before(() => {
-  assert(fs.existsSync(baseline), 'Recovered 2.1.304 baseline is required; this test must not silently pass without it');
-  ownedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg304-wire-test-'));
+  assert(fs.existsSync(baseline), 'Recovered 2.1.310 baseline is required; this test must not silently pass without it');
+  ownedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg310-wire-test-'));
   output = path.join(ownedDirectory, 'patched');
-  execFileSync(process.execPath, [path.join(mods, 'patch-cli-2.1.304.cjs'), baseline, output], {
+  execFileSync(process.execPath, [path.join(mods, 'patch-cli.cjs'), baseline, output], {
     env: { ...process.env, CCG_BABEL_PACKAGE: packageFile },
     encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 120000,
   });
   patchManifest = JSON.parse(fs.readFileSync(path.join(output, 'ccgateway-patch.json'), 'utf8'));
-  const source = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  // 2.1.310 names (2.1.304 in parentheses): core chunk-j0tbz6ra.js
+  // (chunk-rncrmfyt.js), query rSn (qmn), builder Ceo (uXn), final body Vc
+  // ($c), extra body sl (Xa).
+  const source = fs.readFileSync(path.join(output, 'chunk-j0tbz6ra.js'), 'utf8');
   const tree = parser.parse(source, { sourceType: 'module' });
-  const qmn = one(find(tree, n => n.type === 'FunctionDeclaration' && n.id?.name === 'qmn'), 'qmn');
-  const uXn = one(find(qmn, n => n.type === 'VariableDeclarator' && n.id?.name === 'uXn'), 'qmn.uXn');
-  const body = one(find(uXn.init, n => n.type === 'VariableDeclarator' && n.id?.name === '$c'), 'qmn.uXn.$c');
-  const extra = one(find(uXn.init, n => n.type === 'VariableDeclarator' && n.id?.name === 'Xa'), 'qmn.uXn.Xa');
+  const rSn = one(find(tree, n => n.type === 'FunctionDeclaration' && n.id?.name === 'rSn'), 'rSn');
+  const Ceo = one(find(rSn, n => n.type === 'VariableDeclarator' && n.id?.name === 'Ceo'), 'rSn.Ceo');
+  const body = one(find(Ceo.init, n => n.type === 'VariableDeclarator' && n.id?.name === 'Vc'), 'rSn.Ceo.Vc');
+  const extra = one(find(Ceo.init, n => n.type === 'VariableDeclarator' && n.id?.name === 'sl'), 'rSn.Ceo.sl');
   finalObject = source.slice(body.init.start, body.init.end);
   extraBodyExpression = source.slice(extra.init.start, extra.init.end);
 });
@@ -78,7 +82,7 @@ after(() => {
   // Delete only the fresh test-owned directory immediately inside OS temp.
   const target = path.resolve(ownedDirectory), parent = path.resolve(os.tmpdir());
   assert.equal(path.dirname(target), parent);
-  assert(path.basename(target).startsWith('ccg304-wire-test-'));
+  assert(path.basename(target).startsWith('ccg310-wire-test-'));
   fs.rmSync(target, { recursive: true, force: true });
 });
 
@@ -87,30 +91,34 @@ function assemble({ external, tools, extra = {}, choice = { type: 'auto' }, thin
   const messages = [{ role: 'user', content: [{ type: 'text', text: 'original user' }] }];
   const system = [{ type: 'text', text: 'original system' }];
   const nativeTools = [{ name: 'native_reordered', description: 'native' }];
-  const J = {
+  // The builder's locals in 2.1.310 (2.1.304 in parentheses): Q (J), Rl (yl),
+  // K2 (z2), tA (fC), kS (Rk), ep (Gf), Jh (jh), ub (CT), A$ (OF), zWe (yBe),
+  // MT (db), Zf (kf), Jie (hse), wE (MA), DF (oF), Uie (o5), mS (iy), cb (Zk),
+  // OT (Kw), Tg (qm), yd (Il), eD (VO), RW (vR), sl (Xa); each is the name the
+  // final literal Vc reads in the same place $c read the old one.
+  const Q = {
     ccgatewayBuildOnly: external, ccgatewayWireTools: tools,
     ccgatewayWireMessages: messages, ccgatewaySystemBlocks: system, model: 'claude-sonnet-4-6',
   };
   const context = {
-    structuredClone, J, yl: [],
-    z2() { extraBodyCalls++; return structuredClone(extra); },
-    fC: value => value, Rk: null, Gf: messages, jh: { system, tools: nativeTools },
-    CT: choice, OF: false, yBe: () => ({ user_id: 'native-stub-identity' }),
-    db: 128, kf: thinking, hse: 1, MA: null, oF: false, o5: false,
-    iy: false, Zk: null, Kw: null, qm: {}, Il: { effort: 'high' },
-    VO: undefined, vR: () => false,
+    structuredClone, Q, Rl: [],
+    K2() { extraBodyCalls++; return structuredClone(extra); },
+    tA: value => value, kS: null, ep: messages, Jh: { system, tools: nativeTools },
+    ub: choice, A$: false, zWe: () => ({ user_id: 'native-stub-identity' }),
+    MT: 128, Zf: thinking, Jie: 1, wE: null, DF: false, Uie: false,
+    mS: false, cb: null, OT: null, Tg: {}, yd: { effort: 'high' },
+    eD: undefined, RW: () => false,
   };
   vm.createContext(context);
-  context.Xa = vm.runInContext(`(${extraBodyExpression})`, context);
+  context.sl = vm.runInContext(`(${extraBodyExpression})`, context);
   const result = vm.runInContext(`(${finalObject})`, context);
   return { result, extraBodyCalls, messages, system, nativeTools };
 }
 
-test('304 patch binds baseline hashes and emits a matching native module hash', () => {
-  const profile = JSON.parse(fs.readFileSync(path.join(mods, 'profiles/linux-x64-2.1.304.json'), 'utf8'));
+test('310 patch binds baseline hashes and emits a matching native module hash', () => {
   // The capabilities are the profile's, and --ccgateway-info prints the same.
   assert.deepEqual(patchManifest.capabilities, profile.capabilities);
-  assert(compact(fs.readFileSync(path.join(output, 'cli.js'), 'utf8')).includes('console.log(JSON.stringify({version:"2.1.304",patch:' + JSON.stringify(profile.extension) + ',capabilities:' + JSON.stringify(profile.capabilities) + '}));return}'));
+  assert(compact(fs.readFileSync(path.join(output, 'cli.js'), 'utf8')).includes('console.log(JSON.stringify({version:"2.1.310",patch:' + JSON.stringify(profile.extension) + ',capabilities:' + JSON.stringify(profile.capabilities) + '}));return}'));
   for (const [name, hashes] of Object.entries(patchManifest.files)) {
     assert.equal(hashes.before, profile.modules[name]);
     assert.equal(hashes.before, sha(fs.readFileSync(path.join(baseline, name))));
@@ -191,41 +199,46 @@ function nativeFunction(directory, file, name) {
 test('container resource reporting does not read host CPU, RAM, load or disk', async () => {
   const resources = { cpus: 2, memory_gb: 2, free_mem_mb: 1536 };
   const forbidden = () => { throw Error('host hardware was read'); };
+  // 2.1.310 (2.1.304): nki (Ali) in chunk-c6dz8eqs.js (chunk-yqea5hk4.js);
+  // ahr (qir), Aoo (w8r), yWr ($Hr), bWr (UHr), _Wr (FHr), Pe (Ne), N (U).
   const context = {
-    ccgContainerResources: () => resources, qir: () => true, AbortSignal,
-    w8r: async () => ({ complete: true, profile: { tools: ['fixture'] } }),
-    s: 2000, c: [], $Hr: 100, UHr: 10000, FHr: 1e6, a: 2n ** 30n,
-    d: forbidden, p: forbidden, u: forbidden, Ne: value => value,
-    _: JSON.stringify, m: forbidden, l: forbidden, U: value => value, f() {}, g() {},
+    ccgContainerResources: () => resources, ahr: () => true, AbortSignal,
+    Aoo: async () => ({ complete: true, profile: { tools: ['fixture'] } }),
+    s: 2000, c: [], yWr: 100, bWr: 10000, _Wr: 1e6, a: 2n ** 30n,
+    d: forbidden, p: forbidden, u: forbidden, Pe: value => value,
+    _: JSON.stringify, m: forbidden, l: forbidden, N: value => value, f() {}, g() {},
   };
   vm.createContext(context);
-  vm.runInContext(nativeFunction(output, 'chunk-yqea5hk4.js', 'Ali'), context);
-  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2 });
+  vm.runInContext(nativeFunction(output, 'chunk-c6dz8eqs.js', 'nki'), context);
+  assert.deepEqual(plain(await context.nki('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2 });
   context.ccgContainerResources = () => ({ ...resources, disk_free_gb: 7 });
-  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2, disk_free_gb: 7 });
+  assert.deepEqual(plain(await context.nki('/work')), { tools: ['fixture'], cpus: 2, memory_gb: 2, disk_free_gb: 7 });
   context.ccgContainerResources = () => ({});
-  assert.deepEqual(plain(await context.Ali('/work')), { tools: ['fixture'] }, 'unknown limits must not fall back to the host');
-  context.qir = () => false;
+  assert.deepEqual(plain(await context.nki('/work')), { tools: ['fixture'] }, 'unknown limits must not fall back to the host');
+  context.ahr = () => false;
   context.ccgContainerResources = forbidden;
-  assert.equal(await context.Ali('/work'), undefined, 'native feature gate stays ahead of collection');
+  assert.equal(await context.nki('/work'), undefined, 'native feature gate stays ahead of collection');
 
+  // 2.1.310 (2.1.304): X (V) in chunk-c57c64b0.js (chunk-sx3g9k86.js); Vfe
+  // (sce), H the os module (F), i the environment (a), B (H), V4t (yGt).
   const performance = {
     ccgContainerResources: () => resources,
-    sce: () => ({ getEntriesByType: () => [{ name: 'main_after_run', startTime: 1 }] }),
-    _t: {}, ft: new Set(), F: { freemem: forbidden, loadavg: forbidden },
-    a: {}, v: undefined, H: undefined, yGt: () => undefined,
+    Vfe: () => ({ getEntriesByType: () => [{ name: 'main_after_run', startTime: 1 }] }),
+    _t: {}, ft: new Set(), H: { freemem: forbidden, loadavg: forbidden },
+    i: {}, v: undefined, B: undefined, V4t: () => undefined,
   };
   vm.createContext(performance);
-  vm.runInContext(nativeFunction(output, 'chunk-sx3g9k86.js', 'V'), performance);
-  const result = performance.V({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
+  vm.runInContext(nativeFunction(output, 'chunk-c57c64b0.js', 'X'), performance);
+  const result = performance.X({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
   assert.equal(result.free_mem_mb, 1536);
   assert(!Object.hasOwn(result, 'load_avg_1m'));
   performance.ccgContainerResources = () => ({});
-  const unknown = performance.V({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
+  const unknown = performance.X({ firstEmitPhases: new Set(), startupContext: {} }, { late: false });
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v31-request-capture');
+  // The 2.1.310 profile names its patch ccgateway-v32-cc-2-1-310 (2.1.304: ccgateway-v31-request-capture).
+  assert.equal(patchManifest.extension, 'ccgateway-v32-cc-2-1-310');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
@@ -236,7 +249,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // The Claude Code lines are the CLI's own: the build request gets the native
   // selector's three lines (interactive; non-interactive with and without an
   // appended prompt) and recognizer. Direct gets only the native header line
-  // (kLo over RIs of the first user prompt, with a main-thread prompt's ID and
+  // (Y2o over fWs of the first user prompt, with a main-thread prompt's ID and
   // turn), no identity line (2026-10-23).
   // The entry is inserted as written (request-entry.inc.js): a stub with the
   // info line and one import of the command's support module, so the patched
@@ -250,71 +263,68 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // The command's wiring is its support module: CC's fast-path policy, the
   // native bindings it composes, and the command itself.
   const entry = fs.readFileSync(path.join(output, 'ccgateway-request-entry.js'), 'utf8');
-  assert(entry.includes("await import('./chunk-3nrrbnwj.js')"));
+  assert(entry.includes("await import('./ccgateway-native-entry.js')"));
   assert(entry.includes("await import('./ccgateway-request-command.js')"));
   assert(entry.includes("await import('./ccgateway-request-natives.js')"));
   assert(entry.includes('runRequestCommand(args, { agentNative, directBuild, identityBuild, oauthBeta })'));
-  // The native bindings are read once, from hash-bound modules: the identity
-  // (yBe) and attribution header (PAs), the billing header (oJe), the login's
-  // beta, the attribution fingerprint, the query source naming and the layer
-  // vocabulary.
+  // The native bindings are read once, from hash-bound modules, through the
+  // generated native groups: each logical name is the profile's binding.
+  const reexports = name => Object.fromEntries([...fs.readFileSync(path.join(output, name), 'utf8').matchAll(/export \{ ([^}]*) \} from '\.\/([^']+)';/g)]
+    .flatMap(([, list, file]) => list.split(', ').map(item => { const [native, logical = native] = item.split(' as '); return [logical, file + ':' + native]; })));
+  for (const [group, bindings] of Object.entries(profile.natives)) assert.deepEqual(reexports('ccgateway-native-' + group + '.js'), bindings, group);
+  assert.deepEqual(profile.natives.entry, { loadFastPathPolicy: 'chunk-r2a214y7.js:loadFastPathPolicy' });
+  assert.deepEqual(profile.natives.natives, { oauthBeta: 'chunk-at88wjsn.js:mRe', requestIdentity: 'chunk-f7aya6cs.js:zWe', attributionHeader: 'chunk-f7aya6cs.js:EFs',
+    billingHeaderPrefix: 'chunk-q1myka9a.js:jet', reminderOpen: 'chunk-ewvf3tep.js:TB', attributionFingerprint: 'chunk-6h7ejyet.js:fWs', mainAgentContext: 'chunk-ajtyjx88.js:zl',
+    querySourceFor: 'chunk-a5n97xgg.js:vae', ccgatewayLayerVocabulary: 'chunk-j0tbz6ra.js:ccgatewayLayerVocabulary', ccgatewayPromptTurn: 'chunk-j0tbz6ra.js:ccgatewayPromptTurn' });
   const natives = fs.readFileSync(path.join(output, 'ccgateway-request-natives.js'), 'utf8');
-  for (const line of [
-    "import { gTe as oauthAuth } from './chunk-4qs43hr1.js';",
-    "import { yBe as nativeIdentity, PAs as attributionHeader } from './chunk-t61vswm2.js';",
-    "import { oJe as billingHeader } from './chunk-7y2kvacy.js';",
-    "import { KF as reminderOpen } from './chunk-jkcb7qdd.js';",
-    "import { RIs as attributionFingerprint } from './chunk-2gh4h0fv.js';",
-    "import { Al as mainAgentContext } from './chunk-7p6jp6kj.js';",
-    "import { Zoe as querySourceFor } from './chunk-m5q1b1c4.js';",
-    "import { ccgatewayLayerVocabulary, ccgatewayPromptTurn } from './chunk-rncrmfyt.js';",
-  ]) assert(natives.includes(line), line);
+  assert(natives.includes("from './ccgateway-native-natives.js';"));
+  assert(!/from '\.\/chunk-/.test(natives));
   assert(!natives.includes('prefixBuild'));
-  assert(!natives.includes('identityLine'), 'the line is rendered by n1n inside the builder');
-  assert(!natives.includes('kLo:header'));
+  assert(!natives.includes('identityLine'), 'the line is rendered by $Vn inside the builder');
+  assert(!natives.includes('Y2o:header'));
   assert.match(natives, /fingerprint: attributionFingerprint\(fingerprintMessages\(Array\.isArray\(body\.messages\) \? body\.messages : \[\], reminderOpen\)\)/);
   assert(natives.includes('export const oauthBeta = oauthAuth.header;'));
-  assert(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8').startsWith('import {ZUo as ccgBeta} from "./chunk-4qs43hr1.js";\nimport {POo as ccgDate} from "./chunk-t2p0d04m.js";\n'));
+  assert(fs.readFileSync(path.join(output, 'chunk-j0tbz6ra.js'), 'utf8').startsWith('import {H5o as ccgateway_native_betaFromHeader} from "./chunk-at88wjsn.js";\nimport {qjo as ccgateway_native_currentDate} from "./chunk-183gveyz.js";\n'));
   // The beta order is the builder's own list, read by AST from the hash-bound
   // core and installed in its support module; the core exports nothing of it.
   const betas = fs.readFileSync(path.join(output, 'ccgateway-request-betas.js'), 'utf8');
-  assert.match(betas, /^import \{ S8n \} from '\.\/chunk-7p6jp6kj\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-4qs43hr1\.js";\n/m);
+  assert.match(betas, /^import \{ modelBetas \} from '\.\/ccgateway-native-command\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-at88wjsn\.js";\n/m);
   const builderBetas = /const builderBetas = \[([^\]]*)\];/.exec(betas)[1].split(',');
   assert.equal(builderBetas.length, 12, 'the builder pushes twelve betas');
   assert.equal(new Set(builderBetas).size, builderBetas.length);
-  // eS.beta (a plugin's per-request beta) is not a module constant and is not
+  // fb.beta (2.1.304 eS.beta; a plugin's per-request beta) is not a module constant and is not
   // taken; the core keeps the order out of its scope and its builder as it was.
-  const coreBytes = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  const coreBytes = fs.readFileSync(path.join(output, 'chunk-j0tbz6ra.js'), 'utf8');
   assert(!coreBytes.includes('ccgatewayBetaOrder'));
-  assert(coreBytes.includes('if(eS)zr.push(eS.beta),Zk=eS.body;'), 'the native builder is otherwise unchanged');
-  assert(coreBytes.includes('export {ile as ccgatewaySystemRecord};'), 'the native system record factory is exported');
+  assert(coreBytes.includes('if(fb)Jr.push(fb.beta),cb=fb.body;'), 'the native builder is otherwise unchanged');
+  assert(coreBytes.includes('export {Qle as ccgatewaySystemRecord};'), 'the native system record factory is exported');
   // The client's system blocks join as the CLI joins two appended prompts:
   // its own function, copied from the main module (which stays unchanged).
   const joinContext = vm.createContext({});
-  vm.runInContext(nativeFunction(output, 'chunk-rncrmfyt.js', 'ccgatewayJoinAppend'), joinContext);
+  vm.runInContext(nativeFunction(output, 'chunk-j0tbz6ra.js', 'ccgatewayJoinAppend'), joinContext);
   assert.equal(joinContext.ccgatewayJoinAppend('a\n', 'b'), 'a\n\nb');
   assert.equal(joinContext.ccgatewayJoinAppend(undefined, 'b'), 'b');
-  assert(!patchManifest.files['chunk-wt08cjq1.js']);
+  assert(!patchManifest.files['chunk-6d8swme1.js']);
   assert(patchManifest.capabilities.includes('request_agent_context_v1'));
   assert(patchManifest.supportFiles['ccgateway-request-agent.js']);
   // The default headers' User-Agent is the client's own when the request keeps
-  // the client's billing header, else CC's (dN); the request command names the
-  // entrypoint natively (setEntrypointOnRequests) for the header and dN alike.
-  const transport = fs.readFileSync(path.join(output, 'chunk-38xgev2z.js'), 'utf8');
+  // the client's billing header, else CC's (M$; 2.1.304 dN); the request command names the
+  // entrypoint natively (setEntrypointOnRequests) for the header and M$ alike.
+  const transport = fs.readFileSync(path.join(output, 'chunk-bbw420pv.js'), 'utf8');
   assert(transport.startsWith('import {clientUserAgent as ccgatewayClientUserAgent} from "./ccgateway-request-agent.js";\n'));
-  assert.equal(transport.split('"User-Agent":ccgatewayClientUserAgent()??dN()').length, 2);
-  assert(!transport.includes('"User-Agent":dN()'));
-  // The Mod tool-execution chain is gone: only FH reads the client tools, and
+  assert.equal(transport.split('"User-Agent":ccgatewayClientUserAgent()??M$()').length, 2);
+  assert(!transport.includes('"User-Agent":M$()'));
+  // The Mod tool-execution chain is gone: only rH (2.1.304 FH) reads the client tools, and
   // it hands back the client's own definition as it is.
-  const coreText = fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8');
+  const coreText = fs.readFileSync(path.join(output, 'chunk-j0tbz6ra.js'), 'utf8');
   assert.equal(coreText.split('./ccgateway-native-tools.js').length, 2);
   assert(coreText.includes('import {isNative as ccgIsNative} from "./ccgateway-native-tools.js";'));
   assert(coreText.includes('if(ccgIsNative(e))return structuredClone(e.ccgatewayRequestDefinition);'));
   assert(!coreText.includes('ccgDefinition'));
   // The identity line comes from the builder's recordedCliPrefix, and the
-  // patched PAs hands build the line it put in front of the prompt.
-  assert(coreText.includes('recorded:J.recordedCliPrefix'));
-  assert(fs.readFileSync(path.join(output, 'chunk-t61vswm2.js'), 'utf8').includes('r.ccgatewayCapturePrefix?.(n);'));
+  // patched EFs hands build the line it put in front of the prompt.
+  assert(coreText.includes('recorded:Q.recordedCliPrefix'));
+  assert(fs.readFileSync(path.join(output, 'chunk-f7aya6cs.js'), 'utf8').includes('r.ccgatewayCapturePrefix?.(n);'));
   for (const name of ['ccgRegister', 'ccgRevision', 'ccgMerge', 'ccgFind', 'ccgDispatch']) assert(!coreText.includes(name), name);
   // Direct's endpoint is the native beta Messages post's own, read by AST and
   // filled into the transport; the repository source holds no copy of it.
@@ -322,17 +332,21 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.match(transportSupport, /export const messagesPath = \/\*CCGATEWAY_MESSAGES_PATH\*\/ ["']\/v1\/messages\?beta=true["'];/);
   assert(transportSupport.includes('client.beta.messages.create(options.body, request).asResponse()'));
   assert(!fs.readFileSync(path.join(mods, 'model-request.js'), 'utf8').includes("'/v1/messages?beta=true'"));
-  const nativeTransport = fs.readFileSync(path.join(baseline, 'chunk-38xgev2z.js'), 'utf8');
+  const nativeTransport = fs.readFileSync(path.join(baseline, 'chunk-bbw420pv.js'), 'utf8');
   const nativePath = one(find(parser.parse(nativeTransport, { sourceType: 'module' }),
     n => n.type === 'StringLiteral' && n.value === '/v1/messages?beta=true'), 'native beta Messages path');
   assert.equal(nativePath.value, '/v1/messages?beta=true');
-  for (const file of ['chunk-0q47gehe.js', 'chunk-8w3jrzn0.js', 'chunk-g8r6rccx.js', 'chunk-qygf2xvn.js', 'chunk-gzc5bc6y.js']) {
+  // 2.1.310 (2.1.304): chunk-gq77tz5k (0q47gehe), chunk-7rnqxvcm (8w3jrzn0),
+  // chunk-mdxeekqd (g8r6rccx), chunk-csvfdyfe (qygf2xvn), chunk-tqjdehqd (gzc5bc6y).
+  for (const file of ['chunk-gq77tz5k.js', 'chunk-7rnqxvcm.js', 'chunk-mdxeekqd.js', 'chunk-csvfdyfe.js', 'chunk-tqjdehqd.js']) {
     assert(!patchManifest.files[file], file);
     assert.equal(sha(fs.readFileSync(path.join(output, file))), sha(fs.readFileSync(path.join(baseline, file))), file);
   }
-  for (const name of ['Ten', 'N_e', 'mIt', 'bz', 'GYr']) assert.equal(nativeFunction(output, 'chunk-rncrmfyt.js', name), nativeFunction(baseline, 'chunk-rncrmfyt.js', name), name);
-  for (const name of ['ccgateway-request-command.js', 'ccgateway-request-build.js']) {
-    assert(fs.readFileSync(path.join(output, name), 'utf8').includes("setEntrypointOnRequests } from './chunk-72vwyp9d.js'"), name);
+  // Din (Ten), ZSe (N_e), r0t (mIt), kK (bz), W7r (GYr).
+  for (const name of ['Din', 'ZSe', 'r0t', 'kK', 'W7r']) assert.equal(nativeFunction(output, 'chunk-j0tbz6ra.js', name), nativeFunction(baseline, 'chunk-j0tbz6ra.js', name), name);
+  for (const name of ['command', 'build']) {
+    assert(fs.readFileSync(path.join(output, 'ccgateway-request-' + name + '.js'), 'utf8').includes("setEntrypointOnRequests } from './ccgateway-native-" + name + ".js'"), name);
+    assert.equal(profile.natives[name].setEntrypointOnRequests, 'chunk-k19pbtc6.js:setEntrypointOnRequests');
   }
   // Installed support modules import each other by their installed names.
   assert.match(fs.readFileSync(path.join(output, 'ccgateway-direct-billing.js'), 'utf8'), /from '\.\/ccgateway-content-policy\.js'/);
@@ -341,13 +355,15 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.doesNotMatch(cli, /identityBody|prefixBody|rewriteDirectIdentity|directCliPrefix/);
   // The attribution fingerprint hashes the first user prompt of the external
   // messages, not their reminder blocks.
-  assert.match(fs.readFileSync(path.join(output, 'chunk-rncrmfyt.js'), 'utf8'), /let tF=RIs\(J\.ccgatewayBuildOnly===true\?J\.ccgatewayFingerprintMessages:Aa\),/);
+  // cyt/fWs/Q/ou are 2.1.304 tF/RIs/J/Aa.
+  assert.match(fs.readFileSync(path.join(output, 'chunk-j0tbz6ra.js'), 'utf8'), /let cyt=fWs\(Q\.ccgatewayBuildOnly===true\?Q\.ccgatewayFingerprintMessages:ou\),/);
 });
 
 test('container reporting patches preserve resource admission, Git concurrency and native identity generators', () => {
   for (const [file, names] of [
-    ['chunk-rncrmfyt.js', ['Jwn', 'rOr', 'Xnt', 'poo']],
-    ['chunk-7p6jp6kj.js', ['ZM', 'I_t', 'd1']],
+    // kxn/_Fr/yit/fao (Jwn/rOr/Xnt/poo); _H/GEt/Zj (ZM/I_t/d1) in chunk-ajtyjx88.js (chunk-7p6jp6kj.js).
+    ['chunk-j0tbz6ra.js', ['kxn', '_Fr', 'yit', 'fao']],
+    ['chunk-ajtyjx88.js', ['_H', 'GEt', 'Zj']],
   ]) for (const name of names) assert.equal(nativeFunction(output, file, name), nativeFunction(baseline, file, name));
 });
 
@@ -358,12 +374,13 @@ test('the patched root session is the Worker identity, never a re-derived UUID',
   const old = process.env.CCG_REQUEST_IDENTITY;
   process.env.CCG_REQUEST_IDENTITY = JSON.stringify(mapped);
   try {
-    const rootContext = { ccgRequestSessionID: requestSessionID, Xzr: x => x, vn: () => ({}),
-      ier: () => assert.fail('must not hash the mapped session through remote UUIDv5'),
-      Ure: () => assert.fail('mapped session must not be replaced by a random session') };
+    // 2.1.310 (2.1.304): Fr (Yi) in chunk-wrtp8qz8.js (chunk-dxktn51d.js); W9r (Xzr), Xt (vn), _Yt (ier), uie (Ure).
+    const rootContext = { ccgRequestSessionID: requestSessionID, W9r: x => x, Xt: () => ({}),
+      _Yt: () => assert.fail('must not hash the mapped session through remote UUIDv5'),
+      uie: () => assert.fail('mapped session must not be replaced by a random session') };
     vm.createContext(rootContext);
-    vm.runInContext(nativeFunction(output, 'chunk-dxktn51d.js', 'Yi'), rootContext);
-    assert.equal(rootContext.Yi('/work').id, mapped.session_id);
+    vm.runInContext(nativeFunction(output, 'chunk-wrtp8qz8.js', 'Fr'), rootContext);
+    assert.equal(rootContext.Fr('/work').id, mapped.session_id);
   } finally {
     if (old === undefined) delete process.env.CCG_REQUEST_IDENTITY;
     else process.env.CCG_REQUEST_IDENTITY = old;

@@ -39,6 +39,13 @@ function evaluate(manifest, report) {
   }
   if (!planned.size) issues.push('Empty test plan');
   const cliSHA = report?.identity?.cli_sha256 || report?.cli_sha256;
+  // The pinned artifacts: a legacy manifest's fixed SHAs, else the caller's
+  // pins the run recorded (assembly-replay artifact_identity, merged
+  // artifact_identity). An unpinned run cannot be accepted as evidence for a
+  // specific CLI.
+  const pinnedCLI = manifest.expected_cli_sha256 ?? report?.artifact_identity?.cli?.expected_sha256 ?? report?.artifact_identity?.expected_cli_sha256 ?? undefined;
+  const pinnedWorker = manifest.expected_worker_sha256 ?? report?.artifact_identity?.worker?.expected_sha256 ?? undefined;
+  if (report && !pinnedCLI) issues.push('CLI SHA unpinned: set PROBE_EXPECT_CLI_SHA for the run');
   if (!report) issues.push('Runtime report missing');
   const groups = {};
   const cases = [...planned.values()].map(c => {
@@ -53,9 +60,9 @@ function evaluate(manifest, report) {
       for (const checkID of requiredAssertions(c, observed))
         if (!observed.checks?.some(check => check.id === checkID)) issues.push(`Missing required assertion ${checkID}: ${c.id}`);
     }
-    if (observed && (observed.actual_identity?.cli_sha256 || cliSHA) !== manifest.expected_cli_sha256)
+    if (observed && pinnedCLI && (observed.actual_identity?.cli_sha256 || cliSHA) !== pinnedCLI)
       issues.push(`CLI identity missing or differs from planned SHA: ${c.id}`);
-    if (observed && manifest.expected_worker_sha256 && observed.actual_identity?.worker_sha256 !== manifest.expected_worker_sha256)
+    if (observed && pinnedWorker && observed.actual_identity?.worker_sha256 !== pinnedWorker)
       issues.push(`Worker identity missing or differs from planned SHA: ${c.id}`);
     let status = observed?.status || 'not-run';
     if (!['pass', 'fail', 'unknown', 'not-run'].includes(status)) {
@@ -76,9 +83,10 @@ function evaluate(manifest, report) {
 module.exports = { evaluate };
 if (require.main === module) {
   const root = path.resolve(__dirname, '../../../../../../..');
-  const manifestFile = path.resolve(process.argv[2] || path.join(__dirname, '../fixtures/assembly-cases.json'));
-  const reportFile = path.resolve(process.argv[3] || path.join(root, 'artifacts/claude-2.1.304/assembly-repair-report.json'));
-  const output = path.resolve(process.argv[4] || path.join(root, 'artifacts/claude-2.1.304/assembly-audit/repair-coverage.json'));
+  const version = process.env.CC_VERSION || '2.1.304';
+  const manifestFile = path.resolve(process.argv[2] || path.join(__dirname, `../fixtures/assembly-cases-${version}.json`));
+  const reportFile = path.resolve(process.argv[3] || path.join(root, `artifacts/claude-${version}/assembly-repair-report.json`));
+  const output = path.resolve(process.argv[4] || path.join(root, `artifacts/claude-${version}/assembly-audit/repair-coverage.json`));
   const manifestBytes = fs.readFileSync(manifestFile);
   const reportBytes = fs.existsSync(reportFile) ? fs.readFileSync(reportFile) : null;
   const sha = b => crypto.createHash('sha256').update(b).digest('hex');

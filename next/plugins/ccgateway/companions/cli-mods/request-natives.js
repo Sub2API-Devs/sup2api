@@ -4,14 +4,7 @@
 // naming (Zoe) and the layer vocabulary, composed here with the support modules
 // that use them. The request command imports this module; the patched entry
 // only loads the command.
-import { gTe as oauthAuth } from './chunk-4qs43hr1.js';
-import { yBe as nativeIdentity, PAs as attributionHeader } from './chunk-t61vswm2.js';
-import { oJe as billingHeader } from './chunk-7y2kvacy.js';
-import { KF as reminderOpen } from './chunk-jkcb7qdd.js';
-import { RIs as attributionFingerprint } from './chunk-2gh4h0fv.js';
-import { Al as mainAgentContext } from './chunk-7p6jp6kj.js';
-import { Zoe as querySourceFor } from './chunk-m5q1b1c4.js';
-import { ccgatewayLayerVocabulary, ccgatewayPromptTurn } from './chunk-rncrmfyt.js';
+import { oauthBeta as oauthAuth, requestIdentity as nativeIdentity, attributionHeader, billingHeaderPrefix as billingHeader, reminderOpen, attributionFingerprint, mainAgentContext, querySourceFor, ccgatewayLayerVocabulary, ccgatewayPromptTurn } from './native-natives.js';
 import { applyBuildMetadata } from './ccgateway-request-identity.js';
 import { applyDirectBilling } from './ccgateway-direct-billing.js';
 import { createBillingPolicy } from './ccgateway-content-policy.js';

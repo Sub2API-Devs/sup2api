@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { installSupport } from './support.mjs';
+import { installSupport, linkNatives } from './support.mjs';
 
 // request_capture_v1 through the command: the request command with the real
 // transport (model-request.js), a CC client stand-in that hands the fetch
@@ -24,8 +24,8 @@ test('the command records what the transport sent, for direct and build', async 
     for (const [name, code] of Object.entries({
       // CC's client: the SDK's two routes, each handing the fetch boundary the
       // headers CC writes (authentication included) and the serialized body.
-      'chunk-38xgev2z.js': `import fs from 'node:fs';
-        export class _ke {
+      'stub-transport.js': `import fs from 'node:fs';
+        export class AnthropicClient {
           constructor(init) { this.init = init; }
           post(route, request) { return { asResponse: () => this.send(route, request, request.body) }; }
           get beta() { return { messages: { create: (body, request) => ({ asResponse: () => this.send('/v1/messages?beta=true', request, JSON.stringify(body)) }) } }; }
@@ -38,22 +38,23 @@ test('the command records what the transport sent, for direct and build', async 
             return this.init.fetchOverride('https://api.anthropic.com' + route, { method: 'POST', headers, body, signal: request.signal });
           }
         }
-        export const sF = async init => new _ke(init);
+        export const createClient = async init => new AnthropicClient(init);
         // The transport keeps exactly what it was handed.
-        export const mle = async (url, init) => {
+        export const modelFetch = async (url, init) => {
           fs.writeFileSync('wire.body', Buffer.from(init.body));
           fs.writeFileSync('wire.json', JSON.stringify({ url: String(url), method: init.method, headers: [...new Headers(init.headers)] }));
           return new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } });
         };`,
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({});export const S8n=()=>[];',
-      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
-      'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
+      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];',
+      'stub-betas.js': 'export const betasAllowed=()=>true;',
+      'stub-session.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // Build assembles a body around the client's components; the kept number
       // goes back at the fetch boundary.
       'ccgateway-request-build.js': "export const buildRequest=async c=>({body:{model:c.model,max_tokens:c.parameters.max_tokens,messages:c.messages,stream:c.stream},headers:{},identityLine:{line:'none'},clientBetas:[],addedBetas:['fixture-added-2026-01-01']});",
       'run.mjs': `import {runRequestCommand} from './ccgateway-request-command.js';
         process.exitCode=await runRequestCommand(process.argv.slice(2));`,
     })) await fs.writeFile(path.join(dir, name), code);
+    await linkNatives(dir);
 
     const run = (args, input, env = {}) => new Promise((resolve, reject) => {
       const childEnv = { ...process.env, ...env };

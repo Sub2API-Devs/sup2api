@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import vm from 'node:vm';
 import { identityLineFor } from '../request-policy.js';
-import { restored, nativeSkip } from './artifacts.mjs';
 
 // The entrypoint decides the line, as Claude Code picks it (2026-10-23,
 // adaptive): an SDK entrypoint takes the appended line only when build gave
@@ -30,33 +28,6 @@ test('the line is chosen by the request entrypoint', () => {
   assert.deepEqual(pick(policy, 'cli'), ['official_cli', 'official_cli']);
 });
 
-// The line's text and its recognition are the CLI's own: request-build.js
-// renders each contract name by passing n1n its three inputs, and the patched
-// body's placement checks it with t1n. The recovered source is not in Git, so
-// this is skipped, visibly, where it is absent.
-const restoredChunk = new URL('chunk-t61vswm2.js', restored);
-test('the CLI renders one line per selector input and recognizes each as its own', { skip: nativeSkip('native t1n/n1n were') }, () => {
-  const chunk = fs.readFileSync(restoredChunk, 'utf8');
-  const piece = pattern => { const m = chunk.match(pattern); assert(m, String(pattern)); return m[0]; };
-  const native = vm.runInNewContext(piece(/var le="You are Claude Code[^;]*;/) + piece(/function t1n\(e\)\{[^}]*\}/) +
-    piece(/function n1n\(e\)\{.*?return le\}/) + ';({t1n,n1n,lines:vt})', { Pe: () => 'firstParty' });
-  // The inputs request-build.js passes for each contract name.
-  const rendered = {
-    official_cli: native.n1n({ isNonInteractive: false, hasAppendSystemPrompt: false }),
-    official_cli_sdk: native.n1n({ isNonInteractive: true, hasAppendSystemPrompt: true }),
-    agent_sdk: native.n1n({ isNonInteractive: true, hasAppendSystemPrompt: false }),
-  };
-  // vt is [le, ke, De]: interactive, SDK with an appended prompt, SDK. The
-  // three inputs select the three, and t1n recognizes exactly them.
-  assert.deepEqual(Object.values(rendered), [...native.lines]);
-  assert.deepEqual(Object.values(rendered).map(line => line.length), [57, 94, 62]);
-  assert(native.lines.every(native.t1n) && !native.t1n(rendered.agent_sdk + ' '));
-  // recordedCliPrefix is n1n's replay: a recorded value is returned as it is,
-  // and null means the system carries no line (PAs drops a falsy line).
-  assert.equal(native.n1n({ recorded: rendered.official_cli_sdk }), rendered.official_cli_sdk);
-  assert.equal(native.n1n({ recorded: null }), null);
-});
-
 // The request command sends the body build returned as it is (build put the
 // line in it) and tells build whether this is an API-key request, whose build
 // records no line. Direct forwards its body unchanged.
@@ -65,16 +36,16 @@ test('the command sends build as it returned it, and direct unchanged', async ()
   const { default: os } = await import('node:os');
   const { default: path } = await import('node:path');
   const { spawn } = await import('node:child_process');
-  const { installSupport } = await import('./support.mjs');
+  const { installSupport, linkNatives } = await import('./support.mjs');
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ccg-cli-prefix-'));
   try {
     await fsp.writeFile(path.join(dir, 'package.json'), '{"type":"module"}');
     await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
-      'chunk-38xgev2z.js': 'export class _ke {} export const sF=async()=>new _ke(); export const mle=()=>{};',
-      'chunk-7p6jp6kj.js': 'export const Al=()=>({});export const S8n=()=>[];',
-      'chunk-4qs43hr1.js': 'export const mBr=()=>true;',
-      'chunk-72vwyp9d.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
+      'stub-transport.js': 'export class AnthropicClient {} export const createClient=async()=>new AnthropicClient(); export const modelFetch=()=>{};',
+      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];',
+      'stub-betas.js': 'export const betasAllowed=()=>true;',
+      'stub-session.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // Build reports what it assembled, and the apiKey flag it was given.
       'ccgateway-request-build.js': 'export const buildRequest=async(body,headers,signal,resolveAgent,options)=>({body:{model:body.model,system:[{type:"text",text:"LINE"},{type:"text",text:"built"}],apiKey:options?.apiKey===true},headers:{},identityLine:{line:"agent_sdk",fallback:"agent_sdk"},clientBetas:[],addedBetas:[]});',
       // Records exactly what would be sent, then answers with an HTTP error.
@@ -89,6 +60,7 @@ test('the command sends build as it returned it, and direct unchanged', async ()
         const agentNative={entrypoint:(system,policy)=>policy.build_billing_entrypoint??'sdk-cli',turn:()=>({}),leadingBilling:()=>null};
         process.exitCode=await runRequestCommand(process.argv.slice(2),{directBuild:async(raw)=>raw,agentNative});`,
     })) await fsp.writeFile(path.join(dir, name), code);
+    await linkNatives(dir);
     const input = '{"model":"fixture","system":"Be brief.","messages":[{"role":"user","content":"hi"}]}';
     const run = (mode, apiKey) => new Promise((resolve, reject) => {
       const env = { ...process.env };

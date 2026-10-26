@@ -1,15 +1,22 @@
 // Unmodified official CLI -> byte-preserving recording ingress -> real Worker
 // -> patched CLI -> loopback SSE model stub -> official CLI result.
 // No captured-body replay and no production recognizer in the expected oracle.
+// CC_VERSION (default 2.1.304) is the version of the official client and of
+// the patched CLI; the official SHA is pinned by PROBE_OFFICIAL_SHA, the CLI
+// and Worker by assembly-runtime.cjs (PROBE_EXPECT_CLI_SHA,
+// PROBE_EXPECT_WORKER_SHA), else reported as sha_unpinned.
 const fs = require('node:fs'), http = require('node:http'), cp = require('node:child_process');
 const crypto = require('node:crypto'), assert = require('node:assert/strict'), os = require('node:os');
 const { startRuntime } = require('./assembly-runtime.cjs');
-const { sha, normalizeSystem, differences, same } = require('./replay-helpers.cjs');
-const official = process.env.PROBE_OFFICIAL || '/input/claude-official-304';
-const officialSHA = 'ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912';
-assert.equal(sha(fs.readFileSync(official)), officialSHA);
+const { sha, normalizeSystem, differences, same, ccVersion, pin, anyUnpinned, nativeCCVersion, nativeDefaultPermitted, withoutTopLevelMember } = require('./replay-helpers.cjs');
+const version = ccVersion();
+const official = process.env.PROBE_OFFICIAL || `/input/claude-official-${version}`;
+const officialPin = pin('Official CLI', official, ['PROBE_OFFICIAL_SHA']);
+const officialSHA = officialPin.sha256;
 const officialVersion = cp.execFileSync(official, ['--version'], { encoding: 'utf8', timeout: 15000 }).trim();
-assert.match(officialVersion, /^2\.1\.304\b/);
+assert(officialVersion === version || officialVersion.startsWith(version + ' '), `official client reports ${officialVersion}, CC_VERSION is ${version}`);
+// Both modes' request line since CLI v24 (REQUEST-MODES §1.1).
+const messagesPath = '/v1/messages?beta=true';
 const clientKey = 'assembly-gateway-key';
 const clientBase = '/work/live-official';
 const sessionID = crypto.randomUUID();
@@ -34,10 +41,10 @@ const scenarios = [
     must_change: ['primary_directory', 'shell', 'cc_entrypoint'], resumed: true },
 ];
 const report = {
-  suite: 'live-unmodified-official-2.1.304-through-worker',
+  suite: `live-unmodified-official-${version}-through-worker`, cc_version: version,
   source_cli_sha256: officialSHA, source_cli_version: officialVersion, harness_sha256: sha(fs.readFileSync(__filename)),
   provenance: 'Every model request is freshly emitted by the official executable during this run; the ingress forwards its original bytes and only supplies the trusted test policy header.',
-  byte_evidence: 'Ingress passes the original Buffer to fetch without reserialization (source-level evidence). Direct compares all bytes, with only the metadata.user_id exception when Worker identity mapping is active. Build compares structured content and selected transformations; no raw-byte tap inside Worker is claimed.',
+  byte_evidence: 'Ingress passes the original Buffer to fetch without reserialization (source-level evidence). Direct compares every byte outside the system member (all bytes when the billing policy changes nothing); the system member is compared structurally. Build compares structured content and selected transformations; no raw-byte tap inside Worker is claimed.',
   scope: 'One isolated network-none Docker container, separate official and patched CLI processes, synthetic API keys, loopback model responses. No real Anthropic model calls and no production gateway deployment.',
   cases: [], auxiliary_requests: [], ingress_errors: [],
 };
@@ -58,10 +65,12 @@ function billingLines(body) {
   return normalizeSystem(body.system).flatMap(block => (block.text ?? '').split('\n'))
     .filter(line => line.startsWith('x-anthropic-billing-header:'));
 }
+// Direct applies only the billing sources to the client's leading header
+// (CLI v17, direct-billing.js; build design §6.3): the environment stays as
+// sent. Build applies both.
 function expectedFor(input, scenario) {
   const expected = structuredClone(input), changes = [], locations = [];
-  if (scenario.mode === 'direct') return { expected, changes, locations };
-  const selected = scenario.policy.build_attachment_sources ?? {};
+  const selected = scenario.mode === 'direct' ? {} : scenario.policy.build_attachment_sources ?? {};
   const names = { 'Primary working directory': 'primary_directory', Platform: 'platform_name', Shell: 'shell', 'OS Version': 'os_version' };
   const worker = { primary_directory: runtime.workingDirectory, platform_name: 'linux', shell: 'bash', os_version: `${os.type()} ${os.release()}` };
   textCarriers(expected, (text, location) => {
@@ -83,9 +92,9 @@ function expectedFor(input, scenario) {
       });
     return text.slice(0, start) + replacement + text.slice(end);
   });
-  const firstUser = expected.messages.find(m => m.role === 'user');
-  const firstText = typeof firstUser?.content === 'string' ? firstUser.content : firstUser?.content?.find(b => b.type === 'text')?.text ?? '';
-  const nativeVersion = '2.1.304.' + sha('59cf53e54c78' + [4, 7, 20].map(i => firstText[i] ?? '0').join('') + '2.1.304').slice(0, 3);
+  // The native cc_version fingerprints the first prompt, not the reminder in
+  // front of it (request-input.js firstPromptText, 2026-10-21).
+  const nativeVersion = nativeCCVersion(expected.messages, version);
   const billing = scenario.policy.build_billing_sources ?? {};
   const server = { cc_version: nativeVersion, cc_entrypoint: 'sdk-cli' };
   for (const [i, block] of normalizeSystem(expected.system).entries()) {
@@ -147,7 +156,8 @@ function nativeMetadata(value) {
 (async () => {
   runtime = await startRuntime();
   report.identity = runtime.identity;
-  assert.equal(runtime.identity.worker_sha256, process.env.PROBE_EXPECTED_WORKER_SHA256 ?? '98f2746fed500a3b6fb4a6574431d2ebe74bd1ea8e269f6b07895149eced79db');
+  report.artifact_identity = { official: officialPin, ...runtime.identity.pins };
+  report.sha_unpinned = anyUnpinned(report.artifact_identity);
   proxy = http.createServer(async (req, res) => {
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -161,7 +171,7 @@ function nativeMetadata(value) {
       const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers))
         if (!['host', 'content-length', 'connection', 'transfer-encoding'].includes(key) && value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);
-      const policy = { schema_version: 1, relay_mode: active.mode ?? 'build', cli_version: '2.1.304', ...active.policy };
+      const policy = { schema_version: 1, relay_mode: active.mode ?? 'build', cli_version: version, ...active.policy };
       headers.set('x-ccgateway-request-policy', JSON.stringify(policy));
       const entry = { case_id: active.id, raw: raw.toString('utf8'), body: JSON.parse(raw.toString('utf8')), raw_sha256: sha(raw),
         client_key_matched: req.headers['x-api-key'] === clientKey,
@@ -202,10 +212,10 @@ function nativeMetadata(value) {
         row.input = input; row.output = wire; row.client_headers = inbound.client_headers;
         row.ingress_sha256 = inbound.raw_sha256; row.outgoing_sha256 = sha(outgoing.raw);
         check('ingress.client-auth', inbound.client_key_matched && !inbound.client_supplied_policy);
-        check('ingress.official-user-agent', String(inbound.client_headers['user-agent']).startsWith('claude-cli/2.1.304 '));
+        check('ingress.official-user-agent', String(inbound.client_headers['user-agent']).startsWith(`claude-cli/${version} `));
         check('worker.http-200', inbound.http_status === 200);
         row.outgoing_transport = { method: outgoing.method, path: outgoing.url };
-        check('worker.method-and-endpoint', outgoing.method === 'POST' && outgoing.url === '/v1/messages');
+        check('worker.method-and-endpoint', outgoing.method === 'POST' && outgoing.url === messagesPath, { url: outgoing.url, expected: messagesPath });
         check('worker.auth-isolated', outgoing.auth_uses_worker_credential && !outgoing.authorization_present && !outgoing.leaked_policy_header);
         check('worker.sse-complete', inbound.worker_response.includes('event: message_stop\n'));
         const { expected, changes, locations } = expectedFor(input, scenario);
@@ -219,13 +229,24 @@ function nativeMetadata(value) {
         check('content.tools', row.diffs.tools.length === 0);
         check('billing.one-block', billingLines(wire).length === 1);
         if (scenario.mode === 'direct') {
-          // Direct is a pure passthrough (2026-10-21): its bytes never change.
-          check('direct.raw-bytes', outgoing.raw === inbound.raw);
+          // Direct keeps every byte outside the system member; with nothing to
+          // change in the header, every byte (direct-billing.js). The
+          // 2026-10-20 check required all bytes whatever the policy.
+          const outside = raw => withoutTopLevelMember(raw, 'system');
+          if (changes.length) check('direct.raw-bytes-outside-system', outside(outgoing.raw) !== null && outside(outgoing.raw) === outside(inbound.raw));
+          else check('direct.raw-bytes', outgoing.raw === inbound.raw);
+          check('direct.whole-body', same(wire, { ...input, system: expected.system }), { diff: differences({ ...input, system: expected.system }, wire) });
         }
         else {
-          check('metadata.native-identity', nativeMetadata(wire.metadata));
+          // The Worker resolves an API-key account's identity as client: the
+          // official client's own metadata goes out unchanged (engine
+          // request_identity.go resolveRequestIdentity; request-identity.js
+          // applyBuildMetadata; build design §7). The 2026-10-20 check only
+          // asked for native-shaped metadata.
+          check('metadata.client-value', nativeMetadata(input.metadata) && same(wire.metadata, input.metadata), { input: input.metadata, output: wire.metadata });
           const parameters = object => Object.fromEntries(Object.entries(object).filter(([k]) => !['system', 'messages', 'tools', 'metadata'].includes(k)));
-          row.diffs.parameters = differences(parameters(input), parameters(wire));
+          row.diffs.parameters = differences(parameters(input), parameters(wire))
+            .filter(diff => !nativeDefaultPermitted(diff.path.split(/[.[]/)[0], input, wire));
           check('parameters.preserved', row.diffs.parameters.length === 0);
         }
         for (const field of scenario.must_change ?? []) check('actual-change.' + field, changes.some(c => c.field === field));

@@ -1,9 +1,12 @@
-/* Historical, hash-bound AST audit of the pre-fix 2.1.304 tool assembly path.
+/* Historical, hash-bound AST audit of the pre-fix tool assembly path.
  * This reproduces the config-audit snapshot's defects, not current behavior.
- * Current native final-wire behavior is tested by patch-wire-preservation-304.test.mjs.
+ * Current native final-wire behavior is tested by
+ * test/native/<version>/patch-wire-preservation.test.mjs.
  *
- * node test/analysis/tool-assembly-analysis.cjs [--repo ROOT] [--out FILE]
+ * [CC_VERSION=<version>] node test/analysis/tool-assembly-analysis.cjs [--repo ROOT] [--out FILE]
  * Add --assert-contract to exit nonzero when a preservation contract fails.
+ * Only versions with a recorded pre-fix snapshot (historicalSnapshots) run;
+ * any other version is refused, not approximated.
  *
  * VM cases execute extracted native functions/expressions with the explicitly
  * reported collaborators stubbed. They are NOT whole-CLI or network tests.
@@ -146,13 +149,33 @@ function evaluateSupport(module, names) {
   }, { timeout: 2000 });
 }
 
+// The pre-fix snapshots this audit is bound to, by Claude Code version: the
+// recovered core chunk, the patched config-audit tree and its manifest SHA,
+// and the name of qmn's ToolSearch-refusal retry option. 2.1.310 renamed that
+// option withoutToolSearch -> toolSearchRefusal (artifacts/claude-2.1.310/
+// linux-restored chunk-j0tbz6ra.js) and has no pre-fix config-audit snapshot,
+// so there is nothing for this audit to reproduce there.
+const historicalSnapshots = {
+  '2.1.304': {
+    core: 'chunk-rncrmfyt.js', patched: 'linux-patched-v12-config-audit',
+    manifestSHA: '86f15b6dbd20c9eee867c3e19546685f6dfb2eb40a2fb8f61be410622af05a81',
+    searchRefusalOption: 'withoutToolSearch',
+  },
+};
+const searchRefusalOptions = { '2.1.304': 'withoutToolSearch', '2.1.310': 'toolSearchRefusal' };
+
 async function runToolAssemblyAnalysis(options = {}) {
+  const version = options.version ?? process.env.CC_VERSION ?? '2.1.304';
+  const snapshot = historicalSnapshots[version];
+  if (!snapshot) throw Error(`No pre-fix tool-assembly snapshot for Claude Code ${version}` +
+    (searchRefusalOptions[version] ? ` (its qmn retry option is ${searchRefusalOptions[version]})` : '') +
+    `; current behavior: test/native/${version}/patch-wire-preservation.test.mjs`);
   const repo = repoFrom(options.repo ?? __dirname);
   const parser = createRequire(path.resolve(options.babelPackage ?? process.env.CCG_BABEL_PACKAGE ?? path.join(repo, 'next/web/package.json')))('@babel/parser');
-  const sourceRoot = path.resolve(options.sourceRoot ?? path.join(repo, 'artifacts/claude-2.1.304/linux-restored'));
-  const patchedRoot = path.resolve(options.patchedRoot ?? path.join(repo, 'artifacts/claude-2.1.304/linux-patched-v12-config-audit'));
-  const output = path.resolve(options.output ?? path.join(repo, 'artifacts/claude-2.1.304/assembly-audit/tools-pre-fix-replay.json'));
-  const originalEvidence = path.resolve(repo, 'artifacts/claude-2.1.304/assembly-audit/tools.json');
+  const sourceRoot = path.resolve(options.sourceRoot ?? path.join(repo, `artifacts/claude-${version}/linux-restored`));
+  const patchedRoot = path.resolve(options.patchedRoot ?? path.join(repo, `artifacts/claude-${version}/${snapshot.patched}`));
+  const output = path.resolve(options.output ?? path.join(repo, `artifacts/claude-${version}/assembly-audit/tools-pre-fix-replay.json`));
+  const originalEvidence = path.resolve(repo, `artifacts/claude-${version}/assembly-audit/tools.json`);
   assert.ok(output !== originalEvidence || !fs.existsSync(originalEvidence), 'Preserve the original pre-fix tools.json evidence; choose a different --out path');
   const cache = new Map();
   const load = (root, file) => {
@@ -160,8 +183,8 @@ async function runToolAssemblyAnalysis(options = {}) {
     if (!cache.has(key)) cache.set(key, new SourceModule(key, parser, repo));
     return cache.get(key);
   };
-  const core = load(sourceRoot, 'chunk-rncrmfyt.js');
-  const patchedCore = load(patchedRoot, 'chunk-rncrmfyt.js');
+  const core = load(sourceRoot, snapshot.core);
+  const patchedCore = load(patchedRoot, snapshot.core);
   const placement = load(sourceRoot, 'chunk-5vqpbzgd.js');
   const modes = load(sourceRoot, 'chunk-gtqjkgba.js');
   const identity = load(sourceRoot, 'chunk-h3dn4j2q.js');
@@ -172,9 +195,9 @@ async function runToolAssemblyAnalysis(options = {}) {
   const adapter = load(patchedRoot, 'ccgateway-request-build.js');
   const input = load(patchedRoot, 'ccgateway-request-input.js');
   const registry = load(patchedRoot, 'ccgateway-native-tools.js');
-  const profile = JSON.parse(fs.readFileSync(path.join(repo, 'next/plugins/ccgateway/companions/cli-mods/profiles/linux-x64-2.1.304.json'), 'utf8'));
+  const profile = JSON.parse(fs.readFileSync(path.join(repo, `next/plugins/ccgateway/companions/cli-mods/profiles/linux-x64-${version}.json`), 'utf8'));
   const manifestBytes = fs.readFileSync(path.join(patchedRoot, 'ccgateway-patch.json'));
-  const historicalManifestSHA = '86f15b6dbd20c9eee867c3e19546685f6dfb2eb40a2fb8f61be410622af05a81';
+  const historicalManifestSHA = snapshot.manifestSHA;
   assert.equal(sha256(manifestBytes), historicalManifestSHA,
     'This historical audit only supports the exact pre-fix config-audit snapshot. Use the current wire-preservation tests for a repaired patch.');
   const patchManifest = JSON.parse(manifestBytes);
@@ -227,7 +250,7 @@ async function runToolAssemblyAnalysis(options = {}) {
     'jOt destructures tools:s and passes it through sGe to ugn then qmn. sGe uses the unmodified pool on the first attempt.',
     ['initial_tools_forwarded', 'native_org_policy_refusal_retry']);
   branch('tools.search_recovery_retry', core, core.declaration('ugn'),
-    'Native mZ recovery retries qmn with withoutToolSearch=true and a new reminder. External build exits at its request event before native network/recovery.',
+    `Native mZ recovery retries qmn with ${snapshot.searchRefusalOption}=true and a new reminder. External build exits at its request event before native network/recovery.`,
     ['native_search_refusal_retry', 'external_build_no_native_retry']);
   branch('tools.native_availability', core, core.declaration('H8e'),
     'Model/provider support and a ToolSearch name/alias in the native tool pool gate ToolSearch.',
@@ -444,15 +467,15 @@ async function runToolAssemblyAnalysis(options = {}) {
       ['provider, refusal registry and placeholder constants supplied by fixtures; exact tzs executed']);
   }
 
-  const optionsOfInterest = ['withoutToolSearch', 'hasPendingMcpServers', 'recordedToolDescriptions', 'recordedToolEntries',
+  const optionsOfInterest = [snapshot.searchRefusalOption, 'hasPendingMcpServers', 'recordedToolDescriptions', 'recordedToolEntries',
     'recordedToolServers', 'recordedDeferredTools', 'toolPoolRefreshes', 'redescribedTools', 'mcpClients', 'withoutToolDescribeHooks',
     'toolChoice', 'extraToolSchemas', 'enablePromptCaching', 'advisorModel', 'advisorDeferred'];
   const nativeOptionReads = [...new Set(descendants(qmn, n => ['MemberExpression', 'OptionalMemberExpression'].includes(n.type) &&
     n.object?.name === 'J').map(property))];
   const report = {
-    schema_version: 1, category: 'tools', cli_version: '2.1.304', analysis: 'Babel AST with lexical binding resolution; selected native helper VM execution',
+    schema_version: 1, category: 'tools', cli_version: version, analysis: 'Babel AST with lexical binding resolution; selected native helper VM execution',
     historical_scope: { snapshot: 'pre-fix linux-patched-v12-config-audit', manifest_sha256: historicalManifestSHA,
-      current_behavior_claimed: false, current_regression: 'test/patch-wire-preservation-304.test.mjs' },
+      current_behavior_claimed: false, current_regression: `test/native/${version}/patch-wire-preservation.test.mjs` },
     source_positions: 'Babel positions: 1-based lines, 0-based columns, UTF-16 offsets; node hashes use UTF-8 source text.',
     source_root: sourceRoot, patched_root: patchedRoot, files: moduleFiles,
     hash_verification: { source_profile_binary_sha256: profile.binarySHA256, source_helpers: helperHashes,

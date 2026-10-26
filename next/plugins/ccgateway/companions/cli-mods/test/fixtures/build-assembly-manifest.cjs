@@ -1,8 +1,37 @@
-// Regenerate the static, reviewable assembly-cases.json fixture. This file
-// constructs test data only; it imports no production implementation.
+// Regenerate the static, reviewable assembly manifest of one Claude Code
+// version: CC_VERSION=<version> (default 2.1.304) node fixtures/build-assembly-manifest.cjs
+// writes fixtures/assembly-cases-<version>.json. This file constructs test
+// data only; it imports no production implementation. Contracts follow the
+// current request rules (cli-mods sources, BUILD-REQUEST-COMPONENTS-DESIGN,
+// REQUEST-MODES); each rule that changed since the 2026-10-20 manifest names
+// its source where it is applied. The manifest carries no artifact SHA: the
+// caller pins them at run time (assembly-runtime.cjs).
 const fs = require('node:fs'), path = require('node:path');
-const definitions = require('./official-tools-2.1.304.json').tools;
-const officialProvenance = require('./official-tools-2.1.304.json');
+const { sha, ccVersion, readFixture, fixturePath, normalizeSystem } = require('../replay-helpers.cjs');
+const version = ccVersion();
+const official = readFixture('official-request', version, 'capture it with test/e2e/capture-official.sh');
+const officialSHA = sha(official);
+// ToolSearch and DeferredToolPlaceholder are the official client's own
+// definitions: the entries of the same fresh capture's tools array
+// (official-tools-2.1.304.json holds exactly those two entries of
+// official-request-2.1.304.json, body_sha256 = that capture). A version
+// without an official-tools file takes them from its official-request
+// capture; when the file exists it must agree with the capture.
+const toolsFile = fixturePath('official-tools', version);
+const officialTools = fs.existsSync(toolsFile) ? JSON.parse(fs.readFileSync(toolsFile, 'utf8')) : null;
+const fromCapture = Object.fromEntries(['ToolSearch', 'DeferredToolPlaceholder'].map(name => {
+  const found = (official.tools ?? []).filter(tool => tool.name === name);
+  if (found.length !== 1) throw Error(`official-request-${version}.json must carry exactly one ${name} tool`);
+  return [name, found[0]];
+}));
+if (officialTools) {
+  if (officialTools.body_sha256 !== officialSHA) throw Error(`official-tools-${version}.json is not from official-request-${version}.json`);
+  for (const name of Object.keys(fromCapture)) if (JSON.stringify(officialTools.tools[name]) !== JSON.stringify(fromCapture[name]))
+    throw Error(`official-tools-${version}.json ${name} differs from the capture`);
+}
+const definitions = fromCapture;
+const officialProvenance = { body_sha256: officialSHA, source_cli_sha256: officialTools?.source_cli_sha256 ?? null,
+  tools_source: officialTools ? `fixtures/official-tools-${version}.json` : `fixtures/official-request-${version}.json tools[]` };
 const clone = value => structuredClone(value);
 const tool = (name = 'lookup', extra = {}) => ({ name, description: 'Assembly fixture tool.', input_schema: { type: 'object', properties: { key: { type: 'string' } } }, ...extra });
 const base = () => ({ model: 'claude-sonnet-4-6', max_tokens: 128, stream: false,
@@ -14,7 +43,15 @@ const environment = '# Environment\nYou have been invoked in the following envir
 const reminder = text => '<system-reminder>\n' + text + '</system-reminder>';
 const billing = 'x-anthropic-billing-header: cc_version=2.1.302.abc; cc_entrypoint=client-entry; other=keep;';
 const cases = [];
-const nativeAuthorized = { metadata: 'CLI regenerates device/session metadata; not request-body passthrough',
+// Native rules the closed-world parameter check accepts when the client left
+// the control out (replay-helpers nativeDefaultPermitted). metadata is not
+// among them any more: the runtime is an API-key account, for which the
+// Worker resolves the identity as `client` (engine request_identity.go
+// resolveRequestIdentity: "an API-key account keeps the client's value"), and
+// the CLI then keeps the client's metadata or sends none (request-identity.js
+// applyBuildMetadata; build design §7: "API Key 账号...仍不加"). The CLI's own
+// regenerated metadata of the 2026-10-20 runs no longer reaches the wire.
+const nativeAuthorized = {
   thinking: 'when absent: native mechanical disabled representation', temperature: 'when absent and accepted: native default',
   output_config: 'when absent: native model effort default' };
 function add(id, group, body, extra = {}) {
@@ -26,13 +63,18 @@ function add(id, group, body, extra = {}) {
     ...extra, contract };
   cases.push(item); return item;
 }
-function reject(id, body, symbols = ['validateBuildContent', 'prepareBuildInput']) {
-  add(id, 'INPUT', body, { source_symbols: symbols, contract: { response_status: 400, upstream_requests: 0, content: 'rejected', tools: 'not_sent', parameters: {} } });
+function reject(id, body, symbols = ['validateBuildContent', 'prepareBuildInput'], extra = {}) {
+  add(id, 'INPUT', body, { source_symbols: symbols, ...extra, contract: { response_status: 400, upstream_requests: 0, content: 'rejected', tools: 'not_sent', parameters: {} } });
 }
 let body = base(); body.messages[0].content = [{ type: 'text', text: null }]; reject('input.null_text', body);
+// Numbers are the client's as written since CLI v29 (2026-10-25): build no
+// longer refuses an integer beyond 2^53 and sends its original text
+// (engine request_components.go validateBuildContent; REQUEST-MODES §1.1).
 body = base(); body.tools = [tool()]; body.messages.push(
   { role: 'assistant', content: [{ type: 'tool_use', id: 'x', name: 'lookup', input: { unsafe: 9007199254740992 } }] },
-  { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'x', content: 'fixture' }] }); reject('input.unsafe_number', body, ['validateBuildNumbers']);
+  { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'x', content: 'fixture' }] });
+add('messages.unsafe_number_as_written', 'MSG', body, { source_symbols: ['validateBuildContent', 'prepareBuildInput'],
+  contract: { raw_texts: ['"unsafe":9007199254740992'] } });
 body = base(); body.messages.push({ role: 'assistant', content: [{ type: 'tool_use', id: 'missing', name: 'lookup', input: {} }] }); reject('input.missing_tool_result', body);
 body = base(); body.runtimeContext = { workingDirectory: '/untrusted' }; reject('input.reserved_envelope', body, ['validateBuildContent']);
 body = base(); body.messages[0].role = 'developer'; reject('input.invalid_role', body);
@@ -57,6 +99,10 @@ body = base(); body.messages = [{ role: 'user', content: 'Previous prompt' }, { 
   { type: 'thinking', thinking: 'Opaque retained thought.', signature: 'opaque-test-signature' }, { type: 'redacted_thinking', data: 'opaque-test-data' }, { type: 'text', text: 'previous answer' },
 ] }, { role: 'user', content: 'Continue.' }]; add('messages.opaque_thinking', 'MSG', body);
 
+// Tool catalogs go out as the client's own definitions (patched FH returns
+// the client definition, ccgatewayWireTools; v26): ToolSearch stays, a missing
+// description stays missing (request-build.js clientTools,
+// request-parameters.js wireToolDefinitions; CLI-TEST-PLAN §9).
 const toolSymbols = ['prepareBuildInput', 'buildRequest', 'B1e', 'T', 'FH'];
 function toolsCase(id, tools, extra = {}) { const value = base(); value.tools = tools; return add(id, 'TOOLS', value, { source_symbols: toolSymbols, ...extra }); }
 toolsCase('tools.custom_description', [tool()]);
@@ -99,7 +145,10 @@ paramsCase('params.thinking_enabled_budget', { max_tokens: 2048, thinking: { typ
 body = { ...base(), tools: [tool()], thinking: { type: 'adaptive' }, tool_choice: { type: 'tool', name: 'lookup' } };
 add('params.forced_tool_with_adaptive', 'PARAM', body, { contract: { parameters: { model: body.model, max_tokens: 128, stream: false, tool_choice: { type: 'auto' }, thinking: { type: 'adaptive', display: 'updates' } },
   native_authorized: { ...clone(nativeAuthorized), tool_choice: 'native extended-thinking branch demotes forced tool to auto' } } });
-paramsCase('params.metadata_regenerated', { metadata: { user_id: 'client-metadata-must-not-be-provider-identity' } }, {}, { contract: { parameters: { model: 'claude-sonnet-4-6', max_tokens: 128, stream: false }, assertions: ['metadata_regenerated'] } });
+// The client's metadata goes out as sent on an API-key account (see
+// nativeAuthorized above); the 2026-10-20 contract expected the CLI's own.
+paramsCase('params.metadata_client_value_kept', { metadata: { user_id: 'client-metadata-must-not-be-provider-identity' } }, { metadata: { user_id: 'client-metadata-must-not-be-provider-identity' } }, {
+  source_symbols: ['applyBuildMetadata', 'resolveRequestIdentity', 'mapRequestIdentity'] });
 paramsCase('params.top_p_preservation', { top_p: 0.7 });
 paramsCase('params.stop_sequences_preservation', { stop_sequences: ['STOP_ASSEMBLY'] });
 paramsCase('params.context_management_preservation', { context_management: { edits: [{ type: 'clear_tool_uses_20250919', trigger: { type: 'input_tokens', value: 10000 }, keep: { type: 'tool_uses', value: 2 } }] } });
@@ -113,8 +162,13 @@ paramsCase('params.extra_body_cannot_override_preserved_input', {}, {}, {
   source_symbols: ['z2', 'qmn.uXn', 'buildRequest'],
 });
 
+// Direct keeps the client's bytes except the billing header (CLI v17,
+// direct-billing.js): this body has no header, so the native line is put in
+// front of its system and nothing else changes (whole body and every byte
+// outside system, assembly-replay.cjs). Pretty-printed raw input proves the
+// splice keeps the client's formatting.
 body = { ...base(), top_p: 0.4, stop_sequences: ['STOP_DIRECT'], metadata: { user_id: 'direct-fixture' }, unknown_direct_field: { retained: true } };
-add('send.direct_exact', 'SEND', body, { mode: 'direct', raw_body: JSON.stringify(body, null, 3) + '\n', source_symbols: ['openModelRequest'], contract: { whole_body: 'exact' } });
+add('send.direct_byte_preserving', 'SEND', body, { mode: 'direct', raw_body: JSON.stringify(body, null, 3) + '\n', source_symbols: ['openModelRequest', 'applyDirectBilling'], contract: { whole_body: 'exact' } });
 for (const mode of ['direct', 'build']) {
   add(`send.${mode}_beta`, 'SEND', base(), { mode, headers: { 'anthropic-beta': 'context-management-2025-06-27' },
     source_symbols: ['normalizeBetas', 'openModelRequest'], contract: { assertions: ['beta_forwarded', 'worker_auth_only'] } });
@@ -133,18 +187,30 @@ add('billing_env.environment_shell_erase', 'BILL_ENV', body, { policy: { build_a
 body = base(); add('billing_env.billing_missing_native_fill', 'BILL_ENV', body, { policy: { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' } }, contract: { content: 'billing_insert' }, source_symbols: ['mergeBillingAttribution', 'ccgatewayCaptureBilling'] });
 body = base(); body.messages[0].content = '0123456789abcdefghijklmnopqrstuv';
 add('billing_env.billing_different_fingerprint', 'BILL_ENV', body, { policy: { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' } }, contract: { content: 'billing_insert' }, source_symbols: ['aW', 'Eg', 'mergeBillingAttribution', 'ccgatewayCaptureBilling'] });
+// Two header lines cannot be edited safely: with a Worker-sourced field the
+// request is refused with 400, with client sources only it goes unchanged
+// (content-policy.js mergeBillingAttribution conflict; build design §5.5
+// table, §8). The 2026-10-20 contract kept it in both cases.
 body = base(); body.system[0].text = billing + '\n' + billing;
-add('billing_env.billing_duplicate_keep', 'BILL_ENV', body, { policy: { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' } }, source_symbols: ['mergeBillingAttribution'] });
+reject('billing_env.billing_duplicate_worker_refused', body, ['mergeBillingAttribution'],
+  { group: 'BILL_ENV', policy: { build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' } } });
+body = base(); body.system[0].text = billing + '\n' + billing;
+add('billing_env.billing_duplicate_client_kept', 'BILL_ENV', body, { policy: { build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' } }, source_symbols: ['mergeBillingAttribution'] });
 body = base(); body.system[0].text = billing;
 add('billing_env.billing_mixed_source', 'BILL_ENV', body, { policy: { build_billing_sources: { cc_version: 'client', cc_entrypoint: 'worker' } },
   contract: { content: 'expected_patches', patches: [{ path: ['system', 0, 'text'], value: billing.replace('cc_entrypoint=client-entry', 'cc_entrypoint=sdk-cli') }] }, source_symbols: ['mergeBillingAttribution'] });
 
+// Generation values the builder cannot carry are sent as the client wrote
+// them since CLI v29 (2026-10-25): no 400 any more (request-parameters.js
+// generationControls raw; engine request_generation_validation_test.go
+// clientGeneration; REQUEST-MODES §1.1). The builder then gets the control as
+// if absent: thinking is its mechanical disabled one (request-build.js
+// thinkingConfigFor), with the native temperature 1 of a disabled thinking.
 for (const value of [0, -1]) {
-  body = { ...base(), max_tokens: value };
-  reject(`input.max_tokens_${value === 0 ? 'zero' : 'negative'}`, body, ['buildRequest', 'qmn.uXn']);
+  paramsCase(`params.max_tokens_${value === 0 ? 'zero' : 'negative'}_as_sent`, { max_tokens: value }, {}, { source_symbols: ['generationControls', 'finishBuilt'] });
 }
-body = { ...base(), stream: 'true' }; reject('input.stream_not_boolean', body);
-body = { ...base(), thinking: { type: 'invalid-fixture' } }; reject('input.thinking_invalid_type', body, ['buildRequest']);
+paramsCase('params.stream_string_as_sent', { stream: 'true' }, {}, { source_symbols: ['generationControls', 'finishBuilt'] });
+paramsCase('params.thinking_unknown_type_as_sent', { thinking: { type: 'invalid-fixture' } }, { thinking: { type: 'invalid-fixture' }, temperature: 1 }, { source_symbols: ['generationControls', 'thinkingConfigFor', 'finishBuilt'] });
 body = { ...base(), betas: [7] }; reject('input.beta_non_string', body, ['normalizeBetas', 'prepareBuildInput']);
 body = { ...base(), requestPolicy: { contract_version: 2 } }; reject('input.reserved_request_policy', body);
 paramsCase('params.tool_choice_any', { tools: [tool()], tool_choice: { type: 'any' } }, { tool_choice: { type: 'any' } });
@@ -162,20 +228,43 @@ for (const [id, mutate] of [
   add(id, 'INPUT', body, { transport: 'standalone-cli', source_symbols: ['prepareBuildInput'],
     contract: { response_status: null, cli_exit_code: 1, upstream_requests: 0, content: 'rejected', tools: 'not_sent', parameters: {} } });
 }
-const official = require('./official-request-2.1.304.json');
+// The unmodified official client's own request (fresh HOME, synthetic key,
+// loopback mock). It opens with a complete header, so neither mode adds one:
+// build keeps every component (and, on this API-key runtime, its metadata),
+// direct keeps every byte.
 for (const mode of ['build', 'direct']) {
-  add(`messages.official_304_${mode}`, 'MSG', clone(official), { mode,
-    fixture_source: { kind: 'official_fresh_capture', source_cli_sha256: officialProvenance.source_cli_sha256, body_sha256: officialProvenance.body_sha256 },
+  add(`messages.official_capture_${mode}`, 'MSG', clone(official), { mode,
+    fixture_source: { kind: 'official_fresh_capture', fixture: `fixtures/official-request-${version}.json`, ...officialProvenance },
     contract: { parameters: {}, ...(mode === 'direct' ? { whole_body: 'exact' } : {}) } });
 }
 for (const item of cases) if (item.fixture_source.kind === 'synthetic' && Array.isArray(item.body.tools) && item.body.tools.some(tool => ['ToolSearch', 'DeferredToolPlaceholder'].includes(tool.name))) {
-  item.fixture_source = { kind: 'derived_official_tool_definition', source_cli_sha256: officialProvenance.source_cli_sha256, body_sha256: officialProvenance.body_sha256 };
+  item.fixture_source = { kind: 'derived_official_tool_definition', ...officialProvenance };
 }
-const manifest = { schema_version: 1, suite: 'native-assembly-first-party-2.1.304',
-  source_symbol_aliases: { Kvt: 'Adapter import alias bound to native jOt in the pinned 2.1.304 profile' },
-  scope: { provider: 'first-party Anthropic Messages', transports: ['request --build', 'request --direct'], excludes: ['Bedrock', 'Vertex', 'interactive agent/tool execution loop'] },
-  expected_worker_sha256: '98f2746fed500a3b6fb4a6574431d2ebe74bd1ea8e269f6b07895149eced79db',
-  expected_cli_sha256: '138da88ed5895fbc099115e7662df7ff9a6bd848d5a4cd142e29f2c9baaa56bd', cases };
+// Build always carries Claude Code's header (CLI v16; build design §5.5:
+// "没有计费头...在 system 首部插入原生整行") and direct since v17 (§6.3): a
+// request whose system does not open with a complete header gets the native
+// line in front. Only a header that cannot be edited (two lines) suppresses it.
+const leadingComplete = system => {
+  const first = normalizeSystem(system)[0];
+  if (first?.type !== 'text' || typeof first.text !== 'string' || !first.text.startsWith('x-anthropic-billing-header:')) return false;
+  const keys = [...first.text.split('\n')[0].matchAll(/\b(cc_version|cc_entrypoint)=[^;\s]+;/g)].map(match => match[1]);
+  return keys.includes('cc_version') && keys.includes('cc_entrypoint');
+};
+const headerLines = system => normalizeSystem(system).flatMap(block => typeof block?.text === 'string' ? block.text.split('\n') : []).filter(line => line.startsWith('x-anthropic-billing-header:')).length;
+for (const item of cases) {
+  if (item.contract.content === 'rejected' || item.transport === 'standalone-cli' || item.contract.content === 'billing_insert') continue;
+  if (headerLines(item.body.system) > 1 || leadingComplete(item.body.system)) continue;
+  item.contract.content = 'billing_insert';
+}
+const manifest = { schema_version: 2, suite: 'native-assembly-first-party-' + version, cc_version: version,
+  source_symbol_aliases: { Kvt: 'Adapter import alias bound to the native request builder (2.1.304 jOt)' },
+  source_symbols_version: '2.1.304 (names in the recovered 2.1.304 source; other versions map them through artifacts/claude-<version>/equiv-*.json)',
+  scope: { provider: 'first-party Anthropic Messages', runtime_account: 'API key (assembly-runtime.cjs)', transports: ['request --build', 'request --direct'], excludes: ['Bedrock', 'Vertex', 'interactive agent/tool execution loop', 'OAuth identity line and account identity'] },
+  artifact_pins: 'Supplied by the caller at run time: PROBE_EXPECT_CLI_SHA, PROBE_EXPECT_WORKER_SHA; unpinned runs report sha_unpinned',
+  cases };
 if (new Set(cases.map(item => item.id)).size !== cases.length) throw Error('duplicate stable case id');
-fs.writeFileSync(path.join(__dirname, 'assembly-cases.json'), JSON.stringify(manifest, null, 2) + '\n');
-console.log(JSON.stringify({ cases: cases.length, groups: Object.fromEntries([...new Set(cases.map(item => item.group))].map(group => [group, cases.filter(item => item.group === group).length])) }));
+const output = fixturePath('assembly-cases', version);
+fs.writeFileSync(output, JSON.stringify(manifest, null, 2) + '\n');
+console.log(JSON.stringify({ output: path.relative(process.cwd(), output), cases: cases.length,
+  billing_insert: cases.filter(item => item.contract.content === 'billing_insert').length,
+  groups: Object.fromEntries([...new Set(cases.map(item => item.group))].map(group => [group, cases.filter(item => item.group === group).length])) }));

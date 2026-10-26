@@ -2,6 +2,13 @@
   "name": "ccgateway-cli-mods",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test test/*.test.mjs" },
-  "devDependencies": { "@babel/parser": "8.0.4" }
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
+  "devDependencies": {
+    "@babel/parser": "8.0.4",
+    "esbuild": "0.28.2",
+    "eslint-scope": "8.4.0",
+    "espree": "10.4.0"
+  }
 }

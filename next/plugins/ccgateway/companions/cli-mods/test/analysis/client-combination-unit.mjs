@@ -1,5 +1,7 @@
-// Explicit slow suite: node next/plugins/ccgateway/companions/cli-mods/test/analysis/client-combination-unit.mjs
+// Explicit slow suite: [CC_VERSION=<version>] node next/plugins/ccgateway/companions/cli-mods/test/analysis/client-combination-unit.mjs
 // Oracle uses ordered, captured native golden spans; it never imports the recognizer.
+// CC_VERSION (default 2.1.304) selects the native environment template and
+// the native vocabulary of that version; a missing fixture is not substituted.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -7,18 +9,33 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { createContentPolicy } from '../../content-policy.js';
-import { vocabulary } from '../vocabulary.mjs';
-const { applyContentPolicy } = createContentPolicy(vocabulary);
+import { pinned } from '../artifacts.mjs';
+const ccVersion = process.env.CC_VERSION || '2.1.304';
+const fixtures = pinned(ccVersion);
+const vocabularyPath = fileURLToPath(fixtures.fixture('native-vocabulary'));
+const { applyContentPolicy, mergeBillingAttribution } = createContentPolicy(JSON.parse(fs.readFileSync(vocabularyPath, 'utf8')));
+// Build converts the environment with applyContentPolicy and, after the native
+// builder, merges the billing header with mergeBillingAttribution and the
+// native line (request-build.js convertContent, finishBuilt). The billing
+// merge left applyContentPolicy (which no longer reads native.billing), so
+// the 2026-10-20 suite, which expected it there, failed every worker-billing
+// combination; both steps are applied here, as build applies them.
+async function convert(body, policy, native) {
+  const output = await applyContentPolicy(body, policy, native);
+  output.system = mergeBillingAttribution(output.system, policy, native.billing);
+  return output;
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../../../../..');
-const fixturePath = path.resolve(here, '../fixtures/native-environment-2.1.304.json');
+const fixturePath = fileURLToPath(fixtures.fixture('native-environment'));
+if (!fs.existsSync(fixturePath)) throw Error(`fixtures/${path.basename(fixturePath)} is missing for Claude Code ${ccVersion}: render it with the native environment renderer of ${ccVersion} (inputs of native-environment-2.1.304.json); it is not substituted`);
 const productionPath = path.resolve(here, '../../content-policy.js');
 const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const sourceFiles = [fileURLToPath(import.meta.url), fixturePath, productionPath];
+const sourceFiles = [fileURLToPath(import.meta.url), fixturePath, vocabularyPath, productionPath];
 const hashes = sourceFiles.map(file => ({ path: path.relative(root, file).replaceAll('\\', '/'), sha256: sha(file) }));
 const golden = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
-assert.equal(golden.cli_version, '2.1.304');
+assert.equal(golden.cli_version, ccVersion);
 const order = ['primary_directory', 'worktree', 'git_repository', 'additional_directories', 'platform_name', 'shell', 'os_version', 'scratchpad_directory', 'agent_proxy', 'github_cli'];
 const envSources = ['client', 'worker', 'erase'];
 const billingSources = ['client', 'worker'];
@@ -37,7 +54,7 @@ function environment(selection) {
   return client.header + order.map(field => selection[field] === 'erase' ? ''
     : selection[field] === 'worker' ? worker.fields[field] : client.fields[field]).join('') + retained;
 }
-const billing = 'x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=sdk-cli; cc_workload=server-only;';
+const billing = `x-anthropic-billing-header: cc_version=${ccVersion}.abc; cc_entrypoint=sdk-cli; cc_workload=server-only;`;
 function body(env, version = '0.0.0.client', entry = 'client-entry') {
   return {
     model: 'claude-sonnet-4-6', stream: true, max_tokens: 2048,
@@ -76,7 +93,7 @@ for (let envIndex = 0; envIndex < 3 ** 10; envIndex++) {
     const version = billingSources[billIndex % 2], entry = billingSources[Math.floor(billIndex / 2)];
     const policy = freeze({ schema_version: 2, relay_mode: 'build', build_attachment_sources: selected, build_billing_sources: { cc_version: version, cc_entrypoint: entry } });
     const id = envIndex * 4 + billIndex;
-    const expected = body(environment(selected), version === 'worker' ? '2.1.304.abc' : '0.0.0.client', entry === 'worker' ? 'sdk-cli' : 'client-entry');
+    const expected = body(environment(selected), version === 'worker' ? `${ccVersion}.abc` : '0.0.0.client', entry === 'worker' ? 'sdk-cli' : 'client-entry');
     let reads = 0;
     const native = { billing, readEnvironment(requested) {
       reads++;
@@ -85,12 +102,12 @@ for (let envIndex = 0; envIndex < 3 ** 10; envIndex++) {
       return golden.nativeFullWorker;
     } };
     try {
-      const output = await applyContentPolicy(input, policy, native);
+      const output = await convert(input, policy, native);
       assert.deepEqual(output, expected, 'whole body exact independent golden expectation');
       assert.equal(reads, needed.length ? 1 : 0, 'one snapshot or zero facts');
       needed.length ? counts.oneReadCases++ : counts.zeroReadCases++;
       reads = 0;
-      const repeated = await applyContentPolicy(output, policy, native);
+      const repeated = await convert(output, policy, native);
       assert.deepEqual(repeated, expected, 'idempotency against independent golden expectation');
       assert.deepEqual(output, expected, 'second application did not mutate its input');
       assert.equal(reads, needed.length ? 1 : 0, 'idempotent collector one snapshot or zero facts');
@@ -114,9 +131,9 @@ for (let envIndex = 0; envIndex < 3 ** 10; envIndex++) {
 assert.equal(counts.executed, total);
 const unchangedSources = sourceFiles.every((file, i) => sha(file) === hashes[i].sha256);
 const report = {
-  schema: 'ccgateway.client-combination-unit.v1', cli_version: '2.1.304',
+  schema: 'ccgateway.client-combination-unit.v1', cli_version: ccVersion,
   generated_at: new Date().toISOString(), elapsed_ms: Math.round(performance.now() - started),
-  command: 'node next/plugins/ccgateway/companions/cli-mods/test/analysis/client-combination-unit.mjs',
+  command: `CC_VERSION=${ccVersion} node next/plugins/ccgateway/companions/cli-mods/test/analysis/client-combination-unit.mjs`,
   status: counts.failed === 0 && unchangedSources ? 'passed' : 'failed',
   total, counts, by_non_client_field_count: byNonClientFields, per_field_source_counts: fieldSources,
   enumeration: 'envIndex base-3 digits in field_order, billingIndex base-2: cc_version then cc_entrypoint; id = envIndex * 4 + billingIndex',
@@ -125,14 +142,14 @@ const report = {
   assertions: ['exact complete body compared with independent ordered golden spans', 'only selected worker fields collected, no duplicates, exactly one call', 'no worker source means zero native environment calls', 'input remains unchanged', 'second application produces exact same independent expected body and leaves first output unchanged'],
   scope: {
     carrier: 'messages[0].role=user, content[0].text system-reminder; system[0] billing',
-    facts: 'collector stub returns captured native 2.1.304 golden, billing fixed native fixture; does not execute native collector or Worker',
+    facts: `collector stub returns captured native ${ccVersion} golden, billing fixed native fixture; does not execute native collector or Worker`,
     retained: 'unknown environment instruction, nested opaque Platform, full request params/tools, cache attributes, assistant thinking/tool use, tool result, images, non-target system/message blocks',
     identical_client_worker_golden_fields: order.filter(field => client.fields[field] === worker.fields[field]),
     limitations: ['single fixed carrier and complete recognized baseline', 'no actual CLI binary/Worker/network/collector verification', 'same-valued client/worker golden fields checked through collector requests and erase, replacement text alone cannot distinguish their sources', 'missing/ambiguous/fenced/history/optional-absent cases remain in separate existing tests', 'existing 150 carrier and 1620 pair suites unchanged'],
   },
   failures, failures_truncated: counts.failed > failures.length,
 };
-const destination = path.join(root, 'artifacts/claude-2.1.304/client-combination-unit-report.json');
+const destination = process.env.PROBE_REPORT ? path.resolve(process.env.PROBE_REPORT) : path.join(root, `artifacts/claude-${ccVersion}/client-combination-unit-report.json`);
 fs.mkdirSync(path.dirname(destination), { recursive: true });
 fs.writeFileSync(destination, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify({ report: destination, status: report.status, ...counts, elapsed_ms: report.elapsed_ms }));
