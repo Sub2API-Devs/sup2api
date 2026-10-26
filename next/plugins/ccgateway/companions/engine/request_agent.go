@@ -62,9 +62,9 @@ func readClientAgentHeaders(h http.Header, userAgent bool) map[string]string {
 // session-less context, which direct uses (audit C9: the body goes upstream
 // as sent, and the upstream judges it); build gives it the account identity
 // instead (resolveRequestContext).
-func (g *Gateway) resolveRequestAgent(env []string, client clientIdentity, h http.Header, mode string) requestAgent {
+func (g *Gateway) resolveRequestAgent(p *requestPlan, client clientIdentity, h http.Header) requestAgent {
 	result := requestAgent{Version: 1, Client: readClientAgentHeaders(h, g.CLIInfo.supports(features.ClientUserAgentCapability))}
-	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
+	key, oauth := p.mapping.load(g.requestIdentitySecret, p.env)
 	if oauth && key == nil && len(g.requestIdentitySecret) > 0 {
 		// The login's email is unknown: the Worker's own secret still keeps
 		// the IDs private and stable.
@@ -75,7 +75,7 @@ func (g *Gateway) resolveRequestAgent(env []string, client clientIdentity, h htt
 	if key != nil {
 		sum := identityDigest(key, "agent-context", client.fields["session_id"])
 		result.Key = hex.EncodeToString(sum[:])
-		result.Map = mode == "build"
+		result.Map = p.mode == "build"
 	}
 	return result
 }

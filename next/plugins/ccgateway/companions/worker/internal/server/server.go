@@ -17,6 +17,13 @@ type Server struct {
 	adminKey string
 }
 
+// idleTimeout is how long an idle keep-alive connection stays open. The core
+// reuses a connection it kept for up to 110 s (its own idle limit), so this
+// must stay well above it: a connection both sides would close at the same
+// time is one the core can write into after this end closed it
+// (CONTRACTS §63.8).
+const idleTimeout = 180 * time.Second
+
 // New serves w on port; adminKey opens /admin/features (empty opens nothing).
 func New(w worker.Worker, port int, adminKey string) *Server {
 	s := &Server{worker: w, port: port, adminKey: adminKey}
@@ -25,7 +32,7 @@ func New(w worker.Worker, port int, adminKey string) *Server {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/admin/features", s.handleFeatures)
 	// Initialize before Run so Shutdown does not race the server goroutine.
-	s.srv = &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: time.Minute}
+	s.srv = &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: idleTimeout}
 	return s
 }
 

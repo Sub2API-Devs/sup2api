@@ -22,7 +22,8 @@ type requestLogState struct {
 
 // newRequestLogStore reads the account's level. Off removes any log left.
 func newRequestLogStore(root string) (*requestLogStore, error) {
-	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelSummary, active: map[*requestDiagnostic]bool{}}
+	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelSummary, active: map[*requestDiagnostic]bool{},
+		pruneDue: make(chan struct{}, 1)}
 	raw, err := os.ReadFile(filepath.Join(root, requestLogStateFile))
 	var saved requestLogState
 	switch {
@@ -130,6 +131,9 @@ type requestLogStore struct {
 	indexReady    chan struct{}
 	// pruning lets one prune run at a time.
 	pruning sync.Mutex
+	// pruneDue asks for a prune off the request goroutine (capture); the
+	// maintenance loop serves it and stops with the Worker.
+	pruneDue chan struct{}
 }
 
 func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {

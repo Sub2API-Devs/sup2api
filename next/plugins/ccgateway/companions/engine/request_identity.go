@@ -112,6 +112,24 @@ func requestIdentityKey(secret []byte, env []string) (key []byte, oauth bool) {
 	return mac.Sum(nil), true
 }
 
+// requestKey is the account's mapping key for one request. Both the identity
+// and the agent context need it, and it reads the account's credentials and
+// .claude.json; the request reads them once. It is never shared between
+// requests.
+type requestKey struct {
+	read  bool
+	key   []byte
+	oauth bool
+}
+
+func (k *requestKey) load(secret []byte, env []string) (key []byte, oauth bool) {
+	if !k.read {
+		k.key, k.oauth = requestIdentityKey(secret, env)
+		k.read = true
+	}
+	return k.key, k.oauth
+}
+
 // resolveRequestIdentity is the identity build gives one request (body is
 // the client's): the client's value mapped with the account key (replace, the
 // one source since 2026-10-21). Replace needs a key: an API-key account keeps
@@ -119,8 +137,8 @@ func requestIdentityKey(secret []byte, env []string) (key []byte, oauth bool) {
 // Worker's own identity rather than forwarding the client's. A request that
 // names no identity gets the account's own, as every Claude Code request
 // carries one (generatedRequestIdentity).
-func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity, body []byte) (requestIdentity, error) {
-	key, oauth := requestIdentityKey(g.requestIdentitySecret, env)
+func (g *Gateway) resolveRequestIdentity(p *requestPlan, client clientIdentity, body *requestBody) (requestIdentity, error) {
+	key, oauth := p.mapping.load(g.requestIdentitySecret, p.env)
 	mode := features.RequestIdentityDefault
 	if !oauth {
 		mode = "client"
@@ -140,16 +158,14 @@ func (g *Gateway) resolveRequestIdentity(env []string, client clientIdentity, bo
 // session stays the same across the turns of one conversation: it is mapped
 // from the conversation's first message, which every later turn repeats.
 // Two conversations that open with the same message share it.
-func generatedRequestIdentity(key, body []byte) requestIdentity {
+func generatedRequestIdentity(key []byte, body *requestBody) requestIdentity {
 	result := requestIdentity{Version: 2, Mode: "replace", Rewrite: true, Carrier: "json", Session: uuid()}
-	var request struct {
-		Messages []json.RawMessage `json:"messages"`
-	}
-	if json.Unmarshal(body, &request) != nil || len(request.Messages) == 0 {
+	var messages []json.RawMessage
+	if json.Unmarshal(body.top["messages"], &messages) != nil || len(messages) == 0 {
 		return result
 	}
 	var first any
-	if json.Unmarshal(request.Messages[0], &first) != nil {
+	if json.Unmarshal(messages[0], &first) != nil {
 		return result
 	}
 	// The canonical form (sorted keys, no spacing) keeps the session when a
@@ -250,16 +266,32 @@ func identityDigest(key []byte, values ...string) [32]byte {
 }
 
 // clientIdentityFields splits the client's metadata.user_id into its fields
-// and names its carrier; nil fields mean the request carries none.
+// and names its carrier; nil fields mean the request carries none. It reads
+// the whole body; clientIdentity (requestBody) reads the already-parsed
+// metadata instead.
+func clientIdentityFields(raw []byte) (map[string]string, string, error) {
+	metadata, err := identityProperty(raw, "metadata")
+	if err != nil {
+		return nil, "", err
+	}
+	return clientIdentityFieldsFromMetadata(metadata)
+}
+
+// clientIdentityFieldsFromMetadata reads the identity of a metadata object
+// that was already extracted (or is absent: nil, no identity).
+func clientIdentityFieldsFromMetadata(metadata json.RawMessage) (map[string]string, string, error) {
+	if len(metadata) == 0 || bytes.Equal(bytes.TrimSpace(metadata), []byte("null")) {
+		return nil, "", nil
+	}
+	return userIDIdentityFields(metadata)
+}
+
+// userIDIdentityFields reads metadata.user_id out of a metadata object.
 // metadata.user_id reaches us in three carriers: the identity object, a string
 // holding that object, and the legacy flat
 // user_<hex>_account_<uuid>_session_<uuid> string. Each is split into its own
 // fields, and the reply keeps the carrier's shape.
-func clientIdentityFields(raw []byte) (map[string]string, string, error) {
-	metadata, err := identityProperty(raw, "metadata")
-	if err != nil || len(metadata) == 0 || bytes.Equal(bytes.TrimSpace(metadata), []byte("null")) {
-		return nil, "", err
-	}
+func userIDIdentityFields(metadata json.RawMessage) (map[string]string, string, error) {
 	value, err := identityProperty(metadata, "user_id")
 	if err != nil || len(value) == 0 || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 		return nil, "", err
@@ -317,6 +349,19 @@ type clientIdentity struct {
 
 func readClientIdentity(raw []byte) clientIdentity {
 	fields, carrier, err := clientIdentityFields(raw)
+	return clientIdentity{fields: fields, carrier: carrier, err: err}
+}
+
+// clientIdentity reads the body's metadata.user_id from the request's one
+// parse. A body the parse could not read, one whose bytes spell an escape (a
+// metadata key may then be written another way than it reads), or one naming
+// metadata twice goes through the byte-level reader, so the answer -- including
+// the duplicate-key refusal the CLI records in its trace -- stays the same.
+func (body *requestBody) clientIdentity() clientIdentity {
+	if body.err != nil || body.escaped || body.metadataTwice {
+		return readClientIdentity(body.raw)
+	}
+	fields, carrier, err := clientIdentityFieldsFromMetadata(body.top["metadata"])
 	return clientIdentity{fields: fields, carrier: carrier, err: err}
 }
 

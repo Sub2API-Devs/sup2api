@@ -49,8 +49,10 @@ type requestPlan struct {
 	input    []byte   // the CLI's stdin: the body (direct) or the build envelope
 	identity *requestIdentity
 	agent    *requestAgent
-	direct   []byte         // CCG_DIRECT_POLICY; nil leaves direct a passthrough
-	credit   *requestCredit // the core tracks this request's fallback credit
+	// mapping: the account's identity key, read once for identity and agent.
+	mapping requestKey
+	direct  []byte         // CCG_DIRECT_POLICY; nil leaves direct a passthrough
+	credit  *requestCredit // the core tracks this request's fallback credit
 }
 
 // requestRefusal is the Worker's own answer before the CLI runs.
@@ -130,24 +132,27 @@ func (g *Gateway) admitRequest(w http.ResponseWriter, r *http.Request, d *reques
 }
 
 // prepareRequest reads the body and decides everything the CLI is started
-// with.
+// with. The body is parsed once (requestBody); the credential scan, the
+// identity carrier, the log's summary and the build envelope all read that
+// parse.
 func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requestDiagnostic, plan *requestPlan) *requestRefusal {
 	raw, refusal := readRequestBody(w, r)
 	if refusal != nil {
 		return refusal
 	}
-	d.prepareSecrets(raw, r.Header.Values("anthropic-beta")...)
+	body := parseRequestBody(raw)
+	d.prepareSecrets(body, r.Header.Values("anthropic-beta")...)
 	// The redemption the client sent is bound to the headers the core admitted
 	// (request_credit.go); the client's own body is kept for its claim.
-	if refusal = plan.admitCreditBody(raw, r.Header); refusal != nil {
+	if refusal = plan.admitCreditBody(body, r.Header); refusal != nil {
 		return refusal
 	}
 	plan.env = g.Runner.baseEnv()
-	if refusal = g.resolveRequestContext(plan, raw, r.Header, d); refusal != nil {
+	if refusal = g.resolveRequestContext(plan, body, r.Header, d); refusal != nil {
 		return refusal
 	}
-	d.request(raw, r.Header)
-	return g.prepareInput(plan, raw)
+	d.request(body, r.Header)
+	return g.prepareInput(plan, body)
 }
 
 // parseRequestPolicy reads the mode and the core's policy. The wire policy is
@@ -255,7 +260,7 @@ func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, *requestRe
 
 // resolveRequestContext is the identity and agent context the CLI gets, from
 // the client's metadata.user_id read once.
-func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Header, d *requestDiagnostic) *requestRefusal {
+func (g *Gateway) resolveRequestContext(p *requestPlan, body *requestBody, h http.Header, d *requestDiagnostic) *requestRefusal {
 	// A CLI that rebuilds the client's kind of request (main thread, subagent,
 	// compaction) gets the client's agent context. Console tests are the
 	// gateway's own requests and keep the CLI's native context.
@@ -263,14 +268,14 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Heade
 	if !g.requestIdentityEnabled && !agent {
 		return nil
 	}
-	client := readClientIdentity(raw)
+	client := body.clientIdentity()
 	// Build owns metadata: a metadata.user_id it cannot read is given the
 	// account's identity like a missing one (2026-10-25), never refused.
 	if client.err != nil && building(p) {
 		d.trace("request_identity_unreadable", Object{"error": client.err.Error(), "replaced": true})
 		client = clientIdentity{}
 	}
-	if refusal := g.resolveIdentity(p, client, raw, agent); refusal != nil || !agent {
+	if refusal := g.resolveIdentity(p, client, body, agent); refusal != nil || !agent {
 		return refusal
 	}
 	return g.resolveAgent(p, client, h, d)
@@ -284,11 +289,11 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, raw []byte, h http.Heade
 // upstream as the client sent it. A CLI that rebuilds the client's kind of
 // request (agent) writes Claude Code's session header in direct too, so it
 // adopts the client's session and the header agrees with the body's metadata.
-func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, raw []byte, agent bool) *requestRefusal {
+func (g *Gateway) resolveIdentity(p *requestPlan, client clientIdentity, body *requestBody, agent bool) *requestRefusal {
 	switch {
 	case !g.requestIdentityEnabled:
 	case building(p):
-		mapped, err := g.resolveRequestIdentity(p.env, client, raw)
+		mapped, err := g.resolveRequestIdentity(p, client, body)
 		if err != nil {
 			return refuse(400, "invalid_request_error", err.Error())
 		}
@@ -309,7 +314,7 @@ func (g *Gateway) resolveAgent(p *requestPlan, client clientIdentity, h http.Hea
 	if client.err != nil {
 		d.trace("request_identity_unreadable", Object{"error": client.err.Error()})
 	}
-	agent := g.resolveRequestAgent(p.env, client, h, p.mode)
+	agent := g.resolveRequestAgent(p, client, h)
 	p.agent = &agent
 	headers := make([]string, 0, len(agent.Client))
 	for name := range agent.Client {
@@ -321,11 +326,11 @@ func (g *Gateway) resolveAgent(p *requestPlan, client clientIdentity, h http.Hea
 }
 
 // prepareInput writes the CLI's stdin and its direct context.
-func (g *Gateway) prepareInput(p *requestPlan, raw []byte) *requestRefusal {
+func (g *Gateway) prepareInput(p *requestPlan, body *requestBody) *requestRefusal {
 	if building(p) {
 		// The CLI envelope carries the content and billing choices only: the
 		// identity context travels in its own environment variable.
-		input, err := messagesBuildComponents(raw, &p.cli, g.Runner.WorkingDirectory)
+		input, err := messagesBuildComponentsFrom(body, &p.cli, g.Runner.WorkingDirectory)
 		if err != nil {
 			return refuse(400, "invalid_request_error", err.Error())
 		}
@@ -345,10 +350,10 @@ func (g *Gateway) prepareInput(p *requestPlan, raw []byte) *requestRefusal {
 	}
 	// The CLI needs a Messages object with a model (checkModelRequest); the
 	// rest is the upstream's to judge.
-	if _, _, err := messagesObject(raw); err != nil {
+	if _, err := body.model(); err != nil {
 		return refuse(400, "invalid_request_error", err.Error())
 	}
-	p.input = raw
+	p.input = body.raw
 	return nil
 }
 

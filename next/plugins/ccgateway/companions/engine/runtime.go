@@ -236,9 +236,11 @@ func newPinnedCLIManagement(root, pinned string) (*cliManagement, error) {
 	return m, nil
 }
 
-// maintain prunes the request logs every minute until ctx ends. Release
-// channels are not polled: a Worker runs a fixed, packaged CLI, so only the
-// explicit "check" action refreshes latest_version.
+// maintain prunes the request logs every minute until ctx ends, and serves the
+// prunes a request asked for (request log capture), so a request never walks
+// the log directory itself. Release channels are not polled: a Worker runs a
+// fixed, packaged CLI, so only the explicit "check" action refreshes
+// latest_version.
 func (r *Runtime) maintain(ctx context.Context, logs *requestLogStore) {
 	defer close(r.done)
 	prune := time.NewTicker(time.Minute)
@@ -250,6 +252,8 @@ func (r *Runtime) maintain(ctx context.Context, logs *requestLogStore) {
 		case <-prune.C:
 			logs.prune()
 			r.resources.keepIdentityWarm(ctx)
+		case <-logs.pruneDue:
+			logs.prune()
 		}
 	}
 }

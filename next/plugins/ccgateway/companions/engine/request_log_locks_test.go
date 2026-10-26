@@ -59,7 +59,7 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		d.request([]byte(`{"model":"m","messages":[]}`), r.Header)
+		d.request(parseRequestBody([]byte(`{"model":"m","messages":[]}`)), r.Header)
 		d.save("build-components.json", []byte(`{}`))
 		d.trace("event", Object{"n": 1})
 		_, _ = out.Write([]byte("response"))

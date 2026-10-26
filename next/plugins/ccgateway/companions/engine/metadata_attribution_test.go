@@ -101,7 +101,7 @@ func TestResolveRequestIdentityFallbacks(t *testing.T) {
 		"api key replace":  {append(accountEnv(t, "ops@example.invalid", true), "ANTHROPIC_API_KEY=fixture"), "client", false, false},
 		"no email replace": {accountEnv(t, "", true), "worker", true, false},
 	} {
-		value, err := g.resolveRequestIdentity(tc.env, readClientIdentity(raw), raw)
+		value, err := g.resolveRequestIdentity(&requestPlan{env: tc.env}, readClientIdentity(raw), parseRequestBody(raw))
 		require.NoError(t, err, name)
 		require.Equal(t, tc.want, value.Mode, name)
 		require.Equal(t, tc.rewrite, value.Rewrite, name)
@@ -359,7 +359,7 @@ func TestRequestWithoutIdentityGetsTheAccounts(t *testing.T) {
 	oauth := accountEnv(t, "ops@example.invalid", true)
 	resolve := func(env []string, body string) requestIdentity {
 		t.Helper()
-		value, err := g.resolveRequestIdentity(env, readClientIdentity([]byte(body)), []byte(body))
+		value, err := g.resolveRequestIdentity(&requestPlan{env: env}, readClientIdentity([]byte(body)), parseRequestBody([]byte(body)))
 		require.NoError(t, err)
 		return value
 	}

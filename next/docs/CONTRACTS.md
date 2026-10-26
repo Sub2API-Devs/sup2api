@@ -4332,3 +4332,30 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 63.6 Worker 的 GOMAXPROCS
 
 账号容器限 2 核（控制器 `nano_cpus`），宿主机有 384 核；Worker 模块的 go.mod 是 1.24，Go 1.25 起按容器配额设 GOMAXPROCS 的默认行为没有生效，GOMAXPROCS 为 384，进程有上百个线程，GC 的并行标记一下用完配额，容器被限流（生产 34 号容器启动以来 17 次、累计 6.3 秒）。`worker/cmd/worker/main.go` 用 `//go:debug containermaxprocs=1`、`updatemaxprocs=1` 只打开这一项（不改 go 版本，其余 GODEBUG 默认不变）：同一镜像、`--cpus 2` 下 GOMAXPROCS 由 384 变为 2。CLI（Bun）在 2 核容器里只开 8 个线程，不需要调整。
+
+### 63.8 Worker 的单次解析与空闲连接
+
+容器里 `request_command` 事件比请求体到达晚约 0.23 秒（1 MB 请求体、2 核容器）。原因是 `prepareRequest` 对同一个请求体做了约 4 次完整 JSON 解析：`prepareSecrets` 无条件解成树找 `authorization_token`/`fallback_credit_token`；`readClientIdentity` 用 `json.Decoder` 逐成员扫全文只为取 `metadata.user_id`；`d.request` 再解一次做摘要（摘要级别也做）；`messagesBuildComponents` 又解消息、解析两次 tools、最后整包 `json.Marshal`。此外每分钟的日志清理同步跑在请求 goroutine 上，`.claude.json` 与凭证文件每请求读两遍。
+
+改动：
+
+- `engine/request_body.go` 新增 `requestBody`：`json.Unmarshal` 到 `map[string]json.RawMessage` 一次得到全部顶层成员（各成员保持客户端原始字节），并顺带得出三个事实：`valid`（凭证扫描能否读这份体）、`escaped`（字节里有 `\u` 转义）、`metadataTwice`（`metadata` 出现多次）。`prepareRequest` 里解析一次，凭证检测、身份读取、请求摘要、build 信封全部读这一份。
+- 凭证检测只在可能命中时走树：`\u` 存在（键可能被转义写成别的拼法）或字节里出现不区分大小写的两个键名之一时，才做与原来完全相同的 `json.Unmarshal(&any)` + 递归；否则跳过。`valid` 不是 `json.Valid` 而是凭证扫描自己的判断：扫描解的是 float64 树，`1e999` 这类 float64 放不下的数字会让它失败，所以这种体本来就被当成 malformed（永不保留原始体）。`hasUnrepresentableNumber` 只在数字接近该量级时才真正转换。
+- 身份读取从已解析的 `metadata` 成员取值；`escaped` 或 `metadataTwice` 或体不可解析时退回原来的字节级读取器（它的 `metadata`/`user_id` 重复键拒绝、转义拼写规则与错误文本都不变，`request_identity_unreadable` 事件的 detail 也一样）。
+- 请求摘要的字段计算移到后台 goroutine（`describeRequest` / `summarizeRequest`），`request_received` 事件仍由 `request` 同步写在原位置；`finish` 在写 `metadata.json` 前等待它结束，所以事件文件与 metadata 的字段和值不变。没有日志（或日志关闭）的请求不启动这个 goroutine。
+- 每分钟的清理改为请求只向 store 的非阻塞缓冲通道发一次请求（`pruneDue`，容量 1，天然单飞），由 `Runtime.maintain` 这个随 Worker 关闭而退出的循环执行。
+- `requestPlan.mapping`（`requestKey`）在请求作用域内缓存账号映射键：身份与 agent 上下文共用一次读取（凭证文件 + `.claude.json`）；不跨请求缓存凭证。
+- `messagesBuildComponents` 用已解析的成员，参数表在旁边单独构造（不再原地删除顶层键），tools 只解析一次目录并逐项读取定义；`renameJSONKey` 的逐字节保真不变。
+
+不变式：
+
+- 发往 CLI 的 stdin 字节、发往上游的请求、对核心的响应与请求日志的对外内容（summary/full 两级里每个字段与值）与改动前相同；`body_sha256`、`body_bytes`、`request.body` 仍取自客户端原始字节。
+- 日志语义的时序不变：`request_received` 仍在读体后立即写；`metadata.json` 仍包含全部摘要字段，只是在 `finish` 时才落盘。
+- 日志清理仍在请求要求后才发生（最多每分钟一次），只是不在请求 goroutine 上。
+
+空闲连接（同一轮改动）：
+
+- 核心侧每条到 Worker 的隧道空闲 30 s 关闭，本轮由核心侧改为 110 s；因此 Worker 一侧所有会先于它断开连接的超时必须 **≥ 180 s**。`worker/internal/server/server.go` 的 `http.Server.IdleTimeout` 由 `time.Minute`（60 s）改为 `idleTimeout = 180 * time.Second`（`ReadHeaderTimeout` 10 s、`ReadTimeout` 30 s 不变，它们只约束请求本身）。
+- 控制器侧隧道已经是 `http_api.Handler.splice` 的 `TUNNEL_IDLE_SECONDS = 3700`（两端 socket 都设），远大于 180 s，不需要改；`Handler.setup` 的 240 s 只作用于普通 HTTP 请求（升级前），隧道建立后即被 3700 s 覆盖。
+- 约束：**核心隧道空闲 110 s < 对端 180 s**。对端若先关闭，核心会把一个已被关闭的连接拿去用，请求直接失败而不是重连。`worker/internal/server/timeouts_test.go` 用这个数字守护该关系，改变任一侧时必须同时确认另一侧。
+
