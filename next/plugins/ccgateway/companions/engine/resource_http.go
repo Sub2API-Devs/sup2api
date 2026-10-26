@@ -35,6 +35,8 @@ type resourceBroker struct {
 	// verification CLI together on a cold cache, refreshing the login and
 	// writing the identity file concurrently (2026-10-25 audit r3 P2-2).
 	verifying sync.Mutex
+	// used is when the account last served a request (UnixNano, touch).
+	used atomic.Int64
 }
 
 func newResourceBroker(g *Gateway, authority *authManager, root string) (*resourceBroker, error) {

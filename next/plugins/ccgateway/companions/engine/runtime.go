@@ -249,6 +249,7 @@ func (r *Runtime) maintain(ctx context.Context, logs *requestLogStore) {
 			return
 		case <-prune.C:
 			logs.prune()
+			r.resources.keepIdentityWarm(ctx)
 		}
 	}
 }
@@ -259,6 +260,9 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	defer r.release(business)
+	if business {
+		r.resources.touch()
+	}
 	ctx, cancel := context.WithCancel(request.Context())
 	stop := context.AfterFunc(r.life, cancel)
 	defer stop()

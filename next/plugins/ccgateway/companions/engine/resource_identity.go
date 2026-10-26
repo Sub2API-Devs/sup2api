@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +15,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
-var errManagedResourceIssuerMissing = errors.New("API key resources require managed issuer ID and generation")
+var (
+	errManagedResourceIssuerMissing = errors.New("API key resources require managed issuer ID and generation")
+	errIdentityVerifying            = errors.New("resource identity verification already running")
+)
 
 // resourceIdentityTTL bounds how long a verified identity is reused while the
 // credential stays the same. A changed credential (a refresh, a
@@ -22,6 +26,15 @@ var errManagedResourceIssuerMissing = errors.New("API key resources require mana
 // that needs the identity (diagnostics) does not start a CLI and call the
 // profile endpoint every time.
 const resourceIdentityTTL = 10 * time.Minute
+
+// A verified identity this old is verified again in the background while the
+// account was used within identityKeepWarm (keepIdentityWarm), so a request
+// that needs it seldom waits for the CLI and the profile call (CONTRACTS
+// §63.4). An idle account lets it expire.
+const (
+	identityRefreshAge = resourceIdentityTTL - 2*time.Minute
+	identityKeepWarm   = 30 * time.Minute
+)
 
 type verifiedResourceIdentity struct {
 	identity resources.Identity
@@ -55,6 +68,39 @@ func (b *resourceBroker) cachedIdentity(env []string) *verifiedResourceIdentity 
 }
 
 func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, error) {
+	return b.verifyIdentity(ctx, false)
+}
+
+// touch records that the account served a request (keepIdentityWarm).
+func (b *resourceBroker) touch() { b.used.Store(time.Now().UnixNano()) }
+
+// keepIdentityWarm verifies an identity about to expire again while the
+// account is in use. It never waits: an authorization change in progress, a
+// Worker without a free slot or a verification already running skips the
+// round, and a failure leaves the cached identity to expire as before.
+func (b *resourceBroker) keepIdentityWarm(ctx context.Context) {
+	cached := b.verified.Load()
+	if cached == nil || time.Since(cached.at) < identityRefreshAge || time.Since(time.Unix(0, b.used.Load())) > identityKeepWarm {
+		return
+	}
+	if !b.authority.mu.TryRLock() {
+		return
+	}
+	defer b.authority.mu.RUnlock()
+	select {
+	case b.g.Slots <- struct{}{}:
+		defer func() { <-b.g.Slots }()
+	default:
+		return
+	}
+	if _, err := b.verifyIdentity(ctx, true); err != nil && !errors.Is(err, errIdentityVerifying) {
+		log.Printf("resource identity refresh failed: %v", err)
+	}
+}
+
+// verifyIdentity is the verified identity: the cached one unless refresh, then
+// one the CLI verifies. A refresh never waits for a running verification.
+func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (resources.Identity, error) {
 	bindResourceAuthorization(ctx, nil)
 	env := b.g.Runner.baseEnv()
 	if !resourceBackendSupported(env) {
@@ -66,17 +112,21 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 	if (probe.issuer == "" || probe.epoch == "") && apiKeyOnly(env) {
 		return resources.Identity{}, errManagedResourceIssuerMissing
 	}
-	if cached := b.cachedIdentity(env); cached != nil {
+	if cached := b.cachedIdentity(env); cached != nil && !refresh {
 		bindResourceAuthorization(ctx, cached.auth)
 		return cached.identity, nil
 	}
 	// One verification at a time; a request that waited takes the identity
 	// the one before it verified.
-	if err := waitLock(ctx, "identity", b.verifying.TryLock); err != nil {
+	if refresh {
+		if !b.verifying.TryLock() {
+			return resources.Identity{}, errIdentityVerifying
+		}
+	} else if err := waitLock(ctx, "identity", b.verifying.TryLock); err != nil {
 		return resources.Identity{}, err
 	}
 	defer b.verifying.Unlock()
-	if cached := b.cachedIdentity(env); cached != nil {
+	if cached := b.cachedIdentity(env); cached != nil && !refresh {
 		bindResourceAuthorization(ctx, cached.auth)
 		return cached.identity, nil
 	}

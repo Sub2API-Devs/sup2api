@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**Claude Code 2.1.304 / `ccgateway-v29-client-values`**（2026-10-25，随插件 0.1.95 发布，ELF SHA-256 `de9c971c3411ec2f151082157c499f88ab379cbb2927f7f5e0dea2d3c577d90a`；上一版 `ccgateway-v28-cc-only-context` 随插件 0.1.93、0.1.94；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
+**Claude Code 2.1.304 / `ccgateway-v30-bytecode`**（2026-10-26，随插件 0.1.98 发布，ELF SHA-256 `81d5d3702b322ea561cdf5d6e831e22af90cd1ba41e10d1cb9fca0c9bf3f554b`；上一版 `ccgateway-v29-client-values` 随插件 0.1.95–0.1.97；profile `profiles/linux-x64-2.1.304.json` 的 `extension`）。用 Bun 1.4.3 编译（官方 2.1.304 内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
 
 CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——`profiles/linux-x64-2.1.304.json` 的 `capabilities`（2026-10-24 工作树；之前是 `patch-cli-2.1.304.cjs` 里的常量）：
 
@@ -61,7 +61,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
    ```sh
    cd /absolute/path/patched
-   bun build cli.js src/plugins/functionHooks/hooks-worker/hooks-worker.js --compile --target=bun-linux-x64 --outfile /absolute/path/claude-linux-native
+   bun build cli.js src/plugins/functionHooks/hooks-worker/hooks-worker.js --compile --bytecode --format=esm --target=bun-linux-x64 --outfile /absolute/path/claude-linux-native
    ```
 
    两个入口都必须给：只编 `cli.js` 会漏掉 hooks worker。
@@ -91,6 +91,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
 | 版本 | 插件 | 内容 | 现状 |
 |---|---|---|---|
+| v30 `bytecode` | 插件 0.1.98 | 只改编译：`build.sh` 加 `--bytecode --format=esm`，每个模块编成 Bun 字节码（官方构建也是），补丁与支持模块与 v29 逐字节相同。启动不再解析整个包：`--version` 0.80 → 0.04 秒，请求命令到读输入 0.91 → 0.10 秒（Worker 每个请求启动一次 CLI，CONTRACTS §63.5）；常驻内存 135 → 139 MiB，ELF 157 → 293 MB。ELF `81d5d370…554b` | 现行 |
 | v29 `client-values` | 插件 0.1.95 | 客户端的值原样发（2026-10-25 用户决定）：① **数字保真**：build 解析前把 JS 双精度不能原样写回的数字（超出安全整数的整数、`1.0`、`1e2`、`-0`、超长小数）换成本次随机标记的占位串，组装全程带着走，发送时在 fetch 边界把最终 body 里的占位换回客户端原文（`request-options.js parseBuildJSON`、`model-request.js`）；占位被拷进别的文本则报错不发。不再拒绝（此前 CLI 与 Worker 都回 400）。② **生成参数不预检**：构建器读的数字按「值完全相等才交给构建器」（`numberValue`：`10.0` 是 10，`1.00000000000000001` 不是）；构建器不能如实表达的 max_tokens、temperature、thinking（未知类型/字段、预算非正整数）、output_config 非对象、stream 非布尔，构建时当作未传、最终 body 放回客户端原值（`generationControls`），由上游判断。③ Worker 侧：删 `validateBuildNumbers` 与生成参数预检；build 下读不出的 `metadata.user_id` 当作没带、补账号身份（direct 仍原样）。离线（0.1.94 镜像挂载新 Worker + v29，假上游记录原始 body）：12 个客户端值用例 12/12（旧组合 3/12，其余 9 个被 Worker 400）。ELF `de9c971c…d90a` | 现行 |
 | v28 `cc-only-context` | 插件 0.1.93 | 非 CC 请求一律按 CC 主线程构建（2026-10-25 用户决定）：没有计费头的请求不用客户端的请求类别、agent-id/parent/agent-type、prompt-id、上一轮工具耗时与压缩头（`resolveAgentContext` 只对 CC 请求读客户端头），build 与 direct 相同；此前非 CC 请求可自称子代理，出口补 `cc_is_subagent=true`。离线（0.1.92 镜像 + v28）：伪造子代理/压缩头的请求与不带头的完全相同（v27 四项都不同）；官方客户端 32 个场景 54 个请求与 v27 出口 0 差异 | 现行 |
 | v27 `account-identity` | 插件 0.1.92 | 没有身份的 build 请求给账号自己的身份（2026-10-25 用户决定）：客户端没发 `metadata.user_id` 而 Worker 给出 `rewrite: true`（OAuth、有映射密钥）时，`applyBuildMetadata` 写入该账号 CLI 自己的 device/account 与 Worker 的对话会话（JSON 字符串，客户端其他 metadata 键保留）；Worker 侧 `generatedRequestIdentity` 由对话第一条消息映射会话。旧 CLI 收到这种上下文只是不加 metadata（与以前相同）。离线验证（新 Worker + v27，假上游）：首轮与后续轮会话相同且等于会话头、不同对话不同、`user_id: null` 也补、客户端自带的值仍按映射、direct 不加。beta 不变（按客户端，只加请求体字段必需的） | 现行 |

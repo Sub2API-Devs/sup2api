@@ -176,6 +176,16 @@ func TestRealCLIResourceHTTPIdentityAndProviderErrors(t *testing.T) {
 			require.NotEmpty(t, id.Generation)
 			assert.NotContains(t, first.Body.String(), "account-fixture")
 			assert.NotContains(t, first.Body.String(), "dummy-resource")
+			// In use and about to expire: the background round verifies again
+			// and keeps the issuer (CONTRACTS §63.4).
+			stale := *broker.verified.Load()
+			stale.at = time.Now().Add(-identityRefreshAge - time.Second)
+			broker.verified.Store(&stale)
+			broker.touch()
+			broker.keepIdentityWarm(context.Background())
+			refreshed := broker.verified.Load()
+			require.Less(t, time.Since(refreshed.at), time.Minute, "not verified again")
+			require.Equal(t, id, refreshed.identity)
 			bad := id
 			bad.Generation = "old"
 			response := call("DELETE", resourcePrefix+"/v1/files/file_fixture", bad)
