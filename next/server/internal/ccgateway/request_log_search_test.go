@@ -221,6 +221,22 @@ func TestRequestLogStateViewerSearch(t *testing.T) {
 	}
 }
 
+// A Worker that clears all logs says so; the core passes the flag on, so the
+// console offers the action (REQUEST-LOG-POLICY-DESIGN.md §7).
+func TestRequestLogStateClearAll(t *testing.T) {
+	base := `{"enabled":true,"level":"summary","levels":["off","summary","full"],"viewer":true`
+	for raw, want := range map[string]bool{base + `}`: false, base + `,"clear_all":true}`: true} {
+		out, err := decodeRequestLogState([]byte(raw))
+		st, ok := out.(requestLogLevelState)
+		if err != nil || !ok || st.ClearAll != want {
+			t.Fatalf("%s: %v %+v", raw, err, out)
+		}
+		if encoded, _ := json.Marshal(st); !strings.Contains(string(encoded), `"clear_all":`+map[bool]string{true: "true", false: "false"}[want]) {
+			t.Fatal("not projected", string(encoded))
+		}
+	}
+}
+
 func TestRequestLogsStatePassesViewerSearch(t *testing.T) {
 	s, _ := requestLogsService(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(strings.Replace(leveledWorkerState, `"viewer":true`, `"viewer":true,"viewer_search":true`, 1)))

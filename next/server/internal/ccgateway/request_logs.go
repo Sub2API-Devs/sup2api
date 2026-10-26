@@ -412,6 +412,9 @@ type requestLogLevelState struct {
 	// ViewerSearch: the Worker's query takes mode/session_id/sha256/changed
 	// (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3).
 	ViewerSearch bool `json:"viewer_search"`
+	// ClearAll: the Worker deletes all of an account's logs on
+	// {"clear_all":true} (REQUEST-LOG-POLICY-DESIGN.md §3).
+	ClearAll bool `json:"clear_all"`
 }
 
 func validLimit(limit *int64) bool {
@@ -478,11 +481,12 @@ func decodeLevelState(raw []byte, legacy requestLogState) (requestLogLevelState,
 		Usage        *requestLogUsage  `json:"usage"`
 		Viewer       bool              `json:"viewer"`
 		ViewerSearch bool              `json:"viewer_search"`
+		ClearAll     bool              `json:"clear_all"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return requestLogLevelState{}, false, err
 	}
-	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer, ViewerSearch: in.ViewerSearch}
+	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer, ViewerSearch: in.ViewerSearch, ClearAll: in.ClearAll}
 	if len(in.Levels) == 0 || len(in.Levels) > len(requestLogLevels) {
 		return requestLogLevelState{}, false, errors.New("invalid request log levels")
 	}
