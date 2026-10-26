@@ -121,10 +121,9 @@ func (g *Gateway) admitRequest(w http.ResponseWriter, r *http.Request, d *reques
 		return nil, refusal
 	}
 	// Every request the Worker can name a mode for is logged with it.
-	d.setField("mode", plan.mode)
+	d.admitted(plan.mode, plan.probe)
 	if plan.probe {
 		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
-		d.setField("test_mode", "native_build")
 	}
 	if refusal = g.checkCapabilities(plan); refusal != nil {
 		return nil, refusal
@@ -148,7 +147,7 @@ func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requ
 		return refusal
 	}
 	body := parseRequestBody(raw)
-	d.prepareSecrets(body, r.Header.Values("anthropic-beta")...)
+	d.screenSecrets(body, r.Header)
 	// The redemption the client sent is bound to the headers the core admitted
 	// (request_credit.go); the client's own body is kept for its claim.
 	if refusal = plan.admitCreditBody(body, r.Header); refusal != nil {
@@ -273,19 +272,11 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, body *requestBody, h htt
 	// gateway's own requests and keep the CLI's native context.
 	agent := !p.probe && g.CLIInfo.supports(features.RequestAgentContextCapability)
 	needed := g.requestIdentityEnabled || agent
-	// The log keeps the client's session (request_log_upstream.go) from the
-	// same read of metadata.user_id.
-	logged := d.enabled()
-	if !needed && !logged {
-		return nil
-	}
-	client := body.clientIdentity()
-	if logged {
-		d.clientSession(client, h)
-	}
+	d.clientSession(body, h)
 	if !needed {
 		return nil
 	}
+	client := body.clientIdentity()
 	// Build owns metadata: a metadata.user_id it cannot read is given the
 	// account's identity like a missing one (2026-10-25), never refused.
 	if client.err != nil && building(p) {
@@ -409,10 +400,7 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	run.stderr = &requestErrorReader{diagnostic: d}
 	cmd.Stdout, cmd.Stderr = run.output, run.stderr
 	d.trace("request_command", Object{"mode": p.mode, "configured_mode": g.RequestMode, "probe": p.probe, "cli_version": runner.Version})
-	if building(p) {
-		d.save("build-components.json", p.input)
-	}
-	d.setStage("request_command")
+	d.commandStarted(p.mode, p.input)
 	// A deadline must also end a write blocked on a slow caller.
 	deadlineSet := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
@@ -426,7 +414,7 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	// The request the CLI sent goes into the log after the answer, and before
 	// the temporary directory is removed, even when the answer aborts.
-	defer d.keepUpstreamRequest(p.capture, p.captureBody, run.reachedUpstream())
+	defer d.keepUpstreamRequest(p.capture, p.captureBody, run.reachedUpstream)
 	run.writeOutcome(w, d, p.env)
 }
 
@@ -618,9 +606,6 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 	}
 	o.writer.WriteHeader(status)
 	o.status = status
-	if o.diagnostic != nil {
-		o.diagnostic.setHTTPStatus(status)
-	}
 	o.started = true
 }
 

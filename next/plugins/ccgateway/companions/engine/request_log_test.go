@@ -17,12 +17,12 @@ import (
 // request logs keep their content.
 func fullLogStore(t *testing.T, root string) *requestLogStore {
 	t.Helper()
-	s, err := newRequestLogStore(root)
+	s, err := openTestLogStore(t, root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.level, s.fullUntil = logLevelFull, time.Now().Add(time.Hour)
+	s.level, s.fullUntil, s.enabled = logLevelFull, time.Now().Add(time.Hour), true
 	s.mu.Unlock()
 	return s
 }
@@ -47,13 +47,15 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	w := httptest.NewRecorder()
 	g := &Gateway{RequestMode: "build", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogs: store, Slots: make(chan struct{}, 1)}
 	g.ServeHTTP(w, r)
+	store.flush()
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 || w.Code != 400 || w.Header().Get("request-id") == "" {
 		t.Fatalf("missing rejected request log: %d %v", w.Code, entries)
 	}
 	dir := filepath.Join(root, entries[0].Name())
 	request, _ := os.ReadFile(filepath.Join(dir, "request.body"))
-	response, _ := os.ReadFile(filepath.Join(dir, "response.body"))
+	// A JSON answer is kept as it is (REQUEST-LOG-ASYNC-DESIGN.md §4).
+	response, _ := os.ReadFile(filepath.Join(dir, responseJSONFile))
 	if !bytes.Equal(request, body) || !bytes.Equal(response, w.Body.Bytes()) {
 		t.Fatal("request or response differs from wire data")
 	}
@@ -68,20 +70,44 @@ func TestFullRequestLogsIncludeRejectedRequestAndResponse(t *testing.T) {
 	}
 }
 
+// The stream reaches the client as it was written and flushed; the log keeps
+// the one Messages response it carried (REQUEST-LOG-ASYNC-DESIGN.md §4), not
+// the raw stream.
 func TestRequestLogCapturePreservesStreamingFlush(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	d, out := loggedRequest(t, w, r)
 	out.Header().Set("Content-Type", "text/event-stream")
-	_, _ = out.Write([]byte("event: message_start\ndata: {}\n\n"))
+	first := "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":3}}}\n\n"
+	_, _ = out.Write([]byte(first))
 	if err := http.NewResponseController(out).Flush(); err != nil || !w.Flushed {
 		t.Fatal("stream flush broken", err)
 	}
-	_, _ = out.Write([]byte("event: message_stop\ndata: {}\n\n"))
-	d.finish()
-	b, _ := os.ReadFile(filepath.Join(d.directory, "response.body"))
-	if !bytes.Equal(b, w.Body.Bytes()) {
-		t.Fatal("stream response not captured exactly")
+	rest := "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n" +
+		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n" +
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+	_, _ = out.Write([]byte(rest))
+	finishLog(d)
+	if w.Body.String() != first+rest {
+		t.Fatal("stream changed on its way to the client")
+	}
+	b, err := os.ReadFile(filepath.Join(d.directory, responseJSONFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"content":[{"text":"hi","type":"text"}],"id":"msg_1","role":"assistant","stop_reason":"end_turn","type":"message","usage":{"input_tokens":3,"output_tokens":1}}`
+	if string(b) != want {
+		t.Fatalf("stream not assembled: %s", b)
+	}
+	if _, err := os.Stat(filepath.Join(d.directory, responseBodyFile)); !os.IsNotExist(err) {
+		t.Fatal("the raw stream was kept")
+	}
+	metadata, _ := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
+	var record Object
+	if json.Unmarshal(metadata, &record) != nil || record["response_assembled"] != true || record["response_events"] != float64(6) || record["response_capture"] != "complete" {
+		t.Fatalf("response metadata: %s", metadata)
 	}
 }
 
@@ -127,7 +153,7 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "request-logs.disabled"), []byte("disabled"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	store, err := newRequestLogStore(root)
+	store, err := openTestLogStore(t, root)
 	if err != nil || store.enabled || store.level != logLevelOff {
 		t.Fatal(store, err)
 	}
@@ -141,6 +167,7 @@ func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 	d.bytes = 64 << 20
 	_, _ = out.Write([]byte("response"))
 	d.finish()
+	d.flushLogs()
 	entries, _ := os.ReadDir(d.store.root)
 	if len(entries) != 1 || w.Body.String() != "response" {
 		t.Fatal("overflow lost record or broke response")
@@ -178,10 +205,11 @@ func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 	_, _ = out.Write([]byte("after"))
 	d.save("upstream-request-after.body", []byte("must not persist"))
 	d.finish()
+	d.flushLogs()
 	if _, err := os.Stat(store.root); !os.IsNotExist(err) {
 		t.Fatal("active log recreated after disable")
 	}
-	if saved, err := newRequestLogStore(root); err != nil || saved.enabled {
+	if saved, err := openTestLogStore(t, root); err != nil || saved.enabled {
 		t.Fatal("disable not persisted", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "request-logs.disabled")); err != nil {
@@ -208,6 +236,7 @@ func TestRequestLogOverflowStreamAndLimits(t *testing.T) {
 		t.Fatal("overflow interrupted flush", err)
 	}
 	d.finish()
+	d.flushLogs()
 	if w.Body.String() != "before\nafter limit\n" || d.bytes != 64<<20 {
 		t.Fatal("capture limit changed transport or grew budget")
 	}
@@ -238,6 +267,7 @@ func TestRequestLogDisableThenEnableDoesNotResurrectActiveLog(t *testing.T) {
 		}
 	}
 	d.finish()
+	d.flushLogs()
 	if _, err := os.Stat(store.root); !os.IsNotExist(err) {
 		t.Fatal("old completion recreated purged request")
 	}
@@ -281,6 +311,7 @@ func TestRequestLogSlowClientDoesNotBlockDisable(t *testing.T) {
 	close(w.release)
 	<-written
 	d.finish()
+	d.flushLogs()
 	if w.Body.String() != "client response" {
 		t.Fatal("disable interrupted response")
 	}
@@ -309,6 +340,7 @@ func TestRequestDiagnosticConcurrentTraceAndMetadata(t *testing.T) {
 		}
 		wg.Wait()
 		d.finish()
+		d.flushLogs()
 		b, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
 		var record Object
 		if err != nil || json.Unmarshal(b, &record) != nil || record["log_status"] != "truncated" || d.bytes > 64<<20 {
@@ -323,6 +355,7 @@ func TestRequestLogCompletionMetadataIsBounded(t *testing.T) {
 	d, _ := loggedRequest(t, w, r)
 	d.setField("messages", strings.Repeat("x", 300<<10))
 	d.finish()
+	d.flushLogs()
 	b, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
 	if err != nil || len(b) > 256<<10 {
 		t.Fatal("completion metadata exceeded its separate budget", err, len(b))
@@ -335,6 +368,7 @@ func TestRequestLogCompletionMetadataIsBounded(t *testing.T) {
 	d.trace("late_mod_event", Object{})
 	d.save("late-payload.body", []byte("after completion"))
 	d.finish()
+	d.flushLogs()
 	after, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
 	if err != nil || !bytes.Equal(b, after) || d.bytes != before {
 		t.Fatal("late producer changed finalized capture", err)

@@ -205,12 +205,13 @@ const jsonEscapedLetter = "\\" + "u0074"
 // The redaction a captured body gets still hides a credential value whose key
 // was spelled with an escape: the escape is not a way around detection.
 func TestEscapedCredentialKeyIsStillDetectedAndRedacted(t *testing.T) {
-	d := &requestDiagnostic{directory: t.TempDir(), fields: Object{}}
+	d := detachedDiagnostic(t)
 	raw := []byte(`{"model":"m","` + escapedCredentialKey + `":"ESCAPED_SENTINEL"}`)
 	d.prepareSecrets(parseRequestBody(raw))
 	require.True(t, d.secretCapture)
 	require.Equal(t, []string{"ESCAPED_SENTINEL"}, d.secretTokens)
 	d.save("request.body", raw)
+	d.flushLogs()
 	data, err := os.ReadFile(filepath.Join(d.directory, "request.body"))
 	require.NoError(t, err)
 	require.NotContains(t, string(data), "ESCAPED_SENTINEL")

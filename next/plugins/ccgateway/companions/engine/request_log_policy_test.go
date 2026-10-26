@@ -20,7 +20,7 @@ import (
 func policyStore(t *testing.T, local string) (*requestLogStore, string) {
 	t.Helper()
 	root := t.TempDir()
-	store, err := newRequestLogStore(root)
+	store, err := openTestLogStore(t, root)
 	require.NoError(t, err)
 	body := `{"level":"` + local + `"}`
 	if local == logLevelFull {
@@ -47,6 +47,7 @@ func policyRequest(t *testing.T, store *requestLogStore, policy string) *request
 	d.save("build-components.json", []byte(`{"system":"`+privateMarker+`"}`))
 	_, _ = out.Write([]byte(privateMarker))
 	d.finish()
+	d.flushLogs()
 	return d
 }
 
@@ -160,6 +161,7 @@ func TestRequestLogPolicyThroughGateway(t *testing.T) {
 		r.Header.Set(features.PolicyHeader, policy)
 		out := httptest.NewRecorder()
 		g.ServeHTTP(out, r)
+		store.flush()
 		return out.Code
 	}
 	only := func(t *testing.T, store *requestLogStore) Object {
@@ -213,7 +215,7 @@ func TestRequestLogPolicyLogsSurviveRestartAndPrune(t *testing.T) {
 	id := filepath.Base(d.directory)
 	store.prune()
 	require.Len(t, listLogs(t, store, `{}`).Items, 1, "a fresh log was pruned")
-	reloaded, err := newRequestLogStore(root)
+	reloaded, err := openTestLogStore(t, root)
 	require.NoError(t, err)
 	require.Equal(t, logLevelOff, reloaded.level)
 	got := listLogs(t, reloaded, `{}`)
@@ -234,14 +236,14 @@ func TestRequestLogLegacyMarkerPurgesOnce(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "request-logs", uuid()), 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(root, requestLogDisabledMarker), []byte("disabled"), 0600))
-	store, err := newRequestLogStore(root)
+	store, err := openTestLogStore(t, root)
 	require.NoError(t, err)
 	require.Empty(t, logDirectories(t, store))
 	raw, err := os.ReadFile(filepath.Join(root, requestLogStateFile))
 	require.NoError(t, err)
 	require.Contains(t, string(raw), `"off"`)
 	policyRequest(t, store, `{"request_log":"summary"}`)
-	reloaded, err := newRequestLogStore(root)
+	reloaded, err := openTestLogStore(t, root)
 	require.NoError(t, err)
 	require.Len(t, logDirectories(t, reloaded), 1)
 	require.Equal(t, logLevelOff, reloaded.level)
@@ -292,6 +294,7 @@ func TestRequestLogClearAll(t *testing.T) {
 	running.save("request.body", []byte(privateMarker))
 	_, _ = out.Write([]byte("after"))
 	running.finish()
+	running.flushLogs()
 	require.Equal(t, "after", w.Body.String(), "clearing interrupted the response")
 	require.Empty(t, logDirectories(t, store), "a running request's log came back")
 	require.Empty(t, listLogs(t, store, `{}`).Items)

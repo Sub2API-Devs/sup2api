@@ -92,7 +92,7 @@ type Config struct {
 	CCFeatureGroups map[string]GroupFeaturePolicy `json:"cc_feature_groups,omitempty"`
 	FeatureRevision int64                         `json:"feature_revision"`
 	// RequestLogs is the default request log rule of every account without
-	// its own setting (CONTRACTS §65); nil is summary.
+	// its own setting (CONTRACTS §65); nil is off.
 	RequestLogs *RequestLogDefault `json:"request_logs,omitempty"`
 
 	// bundled holds the image references of the active plugin package

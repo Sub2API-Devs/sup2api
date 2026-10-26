@@ -1,12 +1,11 @@
 package engine
 
 // Worker-owned diagnostic artifacts. Call sites use these nil-safe methods so
-// tracing can be disabled without changing the request execution path.
+// tracing can be disabled without changing the request execution path. They
+// only hand the work to the log's background writer (request_log_sink.go).
 import (
 	"bytes"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -16,7 +15,7 @@ func (d *requestDiagnostic) enabled() bool {
 	}
 	unlock := d.lock()
 	defer unlock()
-	// Logs turned off clear the directory (store.serve).
+	// Logs turned off clear the directory (store.discard).
 	return d.directory != "" && !d.discarded && !d.finished
 }
 
@@ -39,19 +38,13 @@ func (d *requestDiagnostic) appendTrace(name string, b []byte) {
 	if d.secretCapture && name != "events.jsonl" || !d.keeps(name) {
 		return // Raw transport chunks can split a credential at any byte; a summary keeps no content.
 	}
-	b = d.redactCaptureLocked(b)
 	if d.directory == "" || !d.reserve(len(b)) {
 		return
 	}
-	f, err := os.OpenFile(filepath.Join(d.directory, name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		d.logFailure(err)
-		return
-	}
-	defer f.Close()
-	if _, err := f.Write(b); err != nil {
-		d.logFailure(err)
-	}
+	d.submitLocked(int64(len(b)), func() int64 {
+		d.appendFile(name, b)
+		return 0
+	})
 }
 
 func (d *requestDiagnostic) trace(event string, detail any) {

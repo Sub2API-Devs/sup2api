@@ -558,8 +558,10 @@ describe('default request log level', () => {
     await flushPromises()
     const group = w.get('[data-testid="settings-request-logs"]')
     expect(group.text()).toContain('默认请求日志级别')
-    expect(group.text()).toContain('默认不能设为完整')
-    expect(w.get('[data-testid="request-log-default"]').text().replace(/\s+/g, '')).toBe('关闭摘要')
+    expect(group.text()).toContain('没有单独设置的账号使用此级别')
+    expect(group.text()).not.toContain('默认不能设为完整')
+    expect(w.get('[data-testid="request-log-default"]').text().replace(/\s+/g, '')).toBe('关闭摘要完整')
+    expect(w.find('[data-testid="request-log-default-full-warning"]').exists()).toBe(false)
     expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="summary"]').element.checked).toBe(true)
     expect(w.get('[data-testid="request-log-overrides"]').text()).toBe('2 个账号单独设置')
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
@@ -577,11 +579,35 @@ describe('default request log level', () => {
     w.unmount()
   })
 
-  it('reads an unset or unknown rule as summary', async () => {
+  it('saves full, warning that every account following the default keeps bodies', async () => {
+    const w = await render(controller({ request_logs: { level: 'summary' } }))
+    await w.get('[data-testid="request-log-default"] input[value="full"]').setValue(true)
+    expect(w.get('[data-testid="request-log-default-full-warning"]').text()).toBe('所有跟随默认的账号都会保存请求与响应正文（保留 24 小时、总预算 512 MiB）。')
+    mocks.put.mockResolvedValue(controller({ request_logs: { level: 'full' } }))
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1]).toMatchObject({ request_logs: { level: 'full' } })
+    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="full"]').element.checked).toBe(true)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="request-log-default-full-warning"]').exists()).toBe(true)
+    await w.get('[data-testid="request-log-default"] input[value="summary"]').setValue(true)
+    expect(w.find('[data-testid="request-log-default-full-warning"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('reads a saved full rule as full', async () => {
     const w = await render(controller({ request_logs: { level: 'full' } }))
-    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="summary"]').element.checked).toBe(true)
+    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="full"]').element.checked).toBe(true)
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     w.unmount()
+  })
+
+  it('reads an unset or unknown rule as off', async () => {
+    for (const rule of [{}, { level: 'debug' }]) {
+      const w = await render(controller({ request_logs: rule }))
+      expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="off"]').element.checked).toBe(true)
+      expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+      w.unmount()
+    }
   })
 
   it('is neither shown nor sent to an older core without the rule', async () => {

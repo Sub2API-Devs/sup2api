@@ -67,6 +67,7 @@ func runLoggedBody(t *testing.T, mode, body string) (stdin []byte, log requestLo
 	response := httptest.NewRecorder()
 	g.ServeHTTP(response, request)
 	require.Equal(t, 200, response.Code, response.Body.String())
+	store.flush()
 	stdin, err = os.ReadFile(filepath.Join(root, "input.jsonl"))
 	require.NoError(t, err)
 	// The peer writes one line per request, so it appends the separator.
@@ -159,6 +160,7 @@ func TestWholeCredentialRequestStillRedacts(t *testing.T) {
 	response := httptest.NewRecorder()
 	g.ServeHTTP(response, request)
 	require.Equal(t, 200, response.Code, response.Body.String())
+	store.flush()
 	entries, err := os.ReadDir(store.root)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)

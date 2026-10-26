@@ -333,3 +333,51 @@ export function durationText(ms: number): string {
  * every kind this list does not know.
  */
 export const FILE_KINDS = ['request', 'build', 'history', 'cli', 'upstream', 'response', 'other'] as const
+
+/**
+ * The bodies of a detail (REQUEST-LOG-ASYNC-DESIGN.md §5), each read from one
+ * file. The response is the assembled `response.json`; older logs, and
+ * responses that could not be assembled, have `response.body` (raw bytes).
+ */
+export type BodyPart = 'request' | 'upstream' | 'response'
+export const BODY_FILES: Record<BodyPart, readonly string[]> = {
+  request: ['request.body'],
+  upstream: ['upstream-request.body'],
+  response: ['response.json', 'response.body'],
+}
+
+/**
+ * Why a body is not shown: a summary log keeps none; the caller cannot read
+ * files (settings:manage); every file of the log is gone (expired or
+ * deleted); this part was not kept.
+ */
+export type BodyReason = 'summary' | 'needs_manage' | 'gone' | 'missing'
+export type BodySource = { file: RequestLogFile; raw: boolean } | { reason: BodyReason }
+
+/** The file of one body, or why there is none. `raw`: response bytes that were not assembled. */
+export function bodySource(part: BodyPart, d: Pick<RequestLogDetail, 'content' | 'files'>, level: LogLevel): BodySource {
+  if (level === 'summary') return { reason: 'summary' }
+  if (!d.content) return { reason: 'needs_manage' }
+  if (!d.files.length) return { reason: 'gone' }
+  for (const name of BODY_FILES[part]) {
+    const file = d.files.find(f => f.name === name)
+    if (file) return { file, raw: name === 'response.body' }
+  }
+  return { reason: 'missing' }
+}
+
+export interface ResponseFacts {
+  /** The Worker assembled the full response (null: not recorded, an older log). */
+  assembled: boolean | null
+  /** e.g. `dropped`: the capture stopped, the queue was full. */
+  capture: string
+  droppedBytes: number | null
+  events: number | null
+}
+
+/** Response capture fields of the metadata, each only when recorded and well-formed. */
+export function responseFacts(m: Record<string, unknown> | null | undefined): ResponseFacts {
+  const v = m ?? {}
+  const n = (x: unknown) => (typeof x === 'number' && Number.isSafeInteger(x) && x >= 0 ? x : null)
+  return { assembled: bool(v.response_assembled), capture: str(v.response_capture), droppedBytes: n(v.log_dropped_bytes), events: n(v.response_events) }
+}

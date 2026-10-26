@@ -4408,9 +4408,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 65.1 规则
 
-- 默认规则：CCGateway 配置 `request_logs.level`（`Config.RequestLogs`），只能是 `off` 或 `summary`；缺省（旧配置、未保存过）= `summary`。`full` 不能作为默认。
+- 默认规则：CCGateway 配置 `request_logs.level`（`Config.RequestLogs`），可为 `off`、`summary` 或 `full`；缺省（旧配置、未保存过）= `off`（2026-10-27 用户要求，此前为 `summary`）。默认为 `full` 时长期有效、没有时长或到期时间（2026-10-27，REQUEST-LOG-ASYNC-DESIGN §6），只受 Worker 完整级别的保留期（24 小时）与预算（512 MiB）约束，超出按最旧清理；所有跟随默认的账号都会保存请求与响应正文。存储里出现未知值时按 `off`。
 - 账号设置：表 `ccgateway_account_request_logs`（迁移 0061）。无行 = 跟随默认；`off`、`summary`；`full` 必带 `full_until`（保存时 = 当前时间截到秒 + 1/4/24 小时）。
-- 生效级别 = 账号设置（`full` 且当前时间不早于 `full_until` 视为无设置）否则默认规则。`off` 只停止记录，不删除已有日志。不做分组层。
+- 生效级别 = 账号设置（`full` 且当前时间不早于 `full_until` 视为无设置）否则默认规则（可能是 `full`）。账号自己的 `off`/`summary` 优先于默认的 `full`。`off` 只停止记录，不删除已有日志。不做分组层。
 
 ### 65.2 存储（迁移 0061，可重跑）
 
@@ -4426,7 +4426,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 65.4 接口
 
-默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"}`，省略保持原值；`full`、空串、其他值或未知键 400。
+默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值，可为 `full`）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"|"full"}`，省略保持原值；空串、其他值或未知键（含 `full_for_hours`/`full_until`：默认的 `full` 不带时长）400。
 
 账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（权限不变：GET `settings:read`/`account:read`/本人 `account:own:read`；PUT `settings:manage`/`account:update`/本人 `account:own:update`；本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
 
@@ -4436,12 +4436,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
  "worker":{"enabled":true,"level":"summary","full_until":null,"levels":["off","summary","full"],"limits":{…},"usage":{…},"viewer":true,"viewer_search":true}}
 ```
 
-- `setting.level`：`follow|off|summary|full`；过期的 `full` 显示为 `follow`（`full_until` 为 null）。`effective` 是此刻随请求下发的级别。
+- `setting.level`：`follow|off|summary|full`；过期的 `full` 显示为 `follow`（`full_until` 为 null）。`default` 为 `off|summary|full`。`effective` 是此刻随请求下发的级别；跟随默认 `full` 时 `effective` = `full` 且 `setting.full_until` 为 null（默认没有到期时间）。
 - `worker`：Worker 状态，按 REQUEST-LOG-LEVELS-DESIGN 与 §64.3 的规则逐字段挑选（旧 Worker 为只有 `enabled` 等字段的旧形状）。**其中 `level`/`enabled`/`full_until` 只是 Worker 无策略头时的本地级别，不是生效级别**，界面只用 `setting`/`effective`。Worker 不可达、回错、形状不对，或账号的运行环境不可用（已删除、代理不可用）时为 `null`，其余照常返回（问 Worker 最多 10 秒）。
 - PUT 只接受下列之一（多键、未知键、旧开关 `{"enabled":…}` 一律 400）：
   - `{"level":"follow"}`（删行）、`{"level":"off"}`、`{"level":"summary"}`、`{"level":"full","full_for_hours":1|4|24}`：只写核心表（同一事务写审计），**不转发 Worker**；写后丢缓存并广播（65.3）。
   - `{"clear_full":true}`、`{"clear_all":true}`：按规范形式转发 Worker `PUT admin/request-logs`，`worker` = Worker 回答；Worker 失败按原规则报错（运行环境不可用 400，其他 503/400）。不改任何级别。旧 Worker 不认识 `clear_all`，会 400。
 - 审计：动作 `ccgateway.account.<id>.request-logs`，详情只含枚举与时间：级别变更 `{"change":"level","level":…,"previous":…,"full_for_hours":…,"full_until":…}`；清除 `{"change":"clear_full"|"clear_all"}`。
 
-兼容：旧核心的 PUT `{"enabled":bool}` 与 `{"level":…}` 转发给 Worker、改其本地级别；新核心不再转发级别，因此**升级核心前 Worker 必须已是带 `request_log_policy_v1` 的版本**（发布顺序先插件后核心），否则旧 Worker 继续按升级前的本地级别记录，界面设置对它不生效。
+兼容：旧核心的 PUT `{"enabled":bool}` 与 `{"level":…}` 转发给 Worker、改其本地级别；新核心不再转发级别，因此**升级核心前 Worker 必须已是带 `request_log_policy_v1` 的版本**（发布顺序先插件后核心），否则旧 Worker 继续按升级前的本地级别记录，界面设置对它不生效。默认 `full`（2026-10-27）不需要新表或迁移；回退到旧核心时，旧核心把存储里的默认 `full` 当 `summary`（旧 `DefaultRequestLog` 只认 `off`），但旧核心保存配置时若原样带回 `full` 会 400，需先改回 `off`/`summary`。
 

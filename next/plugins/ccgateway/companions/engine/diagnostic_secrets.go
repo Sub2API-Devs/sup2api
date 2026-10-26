@@ -3,8 +3,17 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"strings"
 )
+
+// screenSecrets is the request telling its log the body arrived, before
+// anything else of it is read: a request that is not logged pays nothing.
+func (d *requestDiagnostic) screenSecrets(body *requestBody, h http.Header) {
+	if d.enabled() {
+		d.prepareSecrets(body, h.Values("anthropic-beta")...)
+	}
+}
 
 // prepareSecrets runs before the first client body is captured, even when
 // admission later fails. Invalid JSON is never safe to retain as a raw body.
@@ -72,12 +81,19 @@ func (d *requestDiagnostic) detectSecrets(body []byte) {
 	visit(value)
 }
 
-// redactCaptureLocked changes diagnostic copies only. Whole scalar values are
-// redacted; request/response execution never receives this representation.
+// redactCaptureLocked is redactCapture for this request (caller holds d.mu).
 func (d *requestDiagnostic) redactCaptureLocked(raw []byte) []byte {
 	if !d.secretCapture {
 		return raw
 	}
+	return redactCapture(raw, d.secretTokens)
+}
+
+// redactCapture changes diagnostic copies only, for a request whose content
+// may hold a credential. Whole scalar values are redacted; request/response
+// execution never receives this representation. The log's background writer
+// runs it, so a large body is not decoded on the request's goroutine.
+func redactCapture(raw []byte, secretTokens []string) []byte {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -100,7 +116,7 @@ func (d *requestDiagnostic) redactCaptureLocked(raw []byte) []byte {
 				v[i] = redact(child)
 			}
 		case string:
-			for _, secret := range d.secretTokens {
+			for _, secret := range secretTokens {
 				if strings.Contains(v, secret) {
 					return "[REDACTED]"
 				}

@@ -71,6 +71,7 @@ func TestRequestErrorHTTPResponseAndLogStatus(t *testing.T) {
 			f.record(d, false)
 			f.write(w)
 			d.finish()
+			d.flushLogs()
 			if out.Code != status || out.Body.String() != body || out.Header().Get("Retry-After") != "7" || out.Header().Get("X-Should-Retry") != "true" {
 				t.Fatal(out.Code, out.Header(), out.Body.String())
 			}
@@ -140,6 +141,7 @@ func TestRequestDiagnosticTracksStatusWithoutExplicitFail(t *testing.T) {
 	w.WriteHeader(429)
 	_, _ = w.Write([]byte(`{"error":"upstream"}`))
 	d.finish()
+	d.flushLogs()
 	if d.status != 429 || d.fields["status"] != 429 {
 		t.Fatal(d.fields)
 	}

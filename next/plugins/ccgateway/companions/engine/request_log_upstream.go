@@ -9,12 +9,12 @@ package engine
 // the facts people search by as flat metadata fields.
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
@@ -98,57 +98,122 @@ type sentRequest struct {
 
 // keepUpstreamRequest keeps what the CLI wrote under prefix ("" when it was
 // not asked) once it has ended; reached says the request certainly went
-// upstream (cliRun.reachedUpstream).
-func (d *requestDiagnostic) keepUpstreamRequest(prefix string, body, reached bool) {
-	if d == nil || prefix == "" {
-		if d.enabled() {
+// upstream (cliRun.reachedUpstream), asked only when the answer matters.
+//
+// The request's temporary directory is removed when the request returns, so
+// the files are moved out of it first, into the log's staging directory (a
+// rename: no byte is read or copied here); the background writer reads,
+// keeps and removes them (keepSent). A file that cannot be moved is left to
+// the temporary directory and the log says so.
+func (d *requestDiagnostic) keepUpstreamRequest(prefix string, body bool, reached func() bool) {
+	if !d.enabled() {
+		return
+	}
+	if prefix == "" {
+		d.setField("upstream_captured", false)
+		return
+	}
+	facts, err := d.store.stage(prefix + ".json")
+	if err != nil {
+		reason := "unreadable"
+		if os.IsNotExist(err) {
+			reason = "absent"
+		}
+		// A request that failed before sending has nothing to capture: the
+		// field is left out, so the viewer does not report it as missed.
+		if reached() {
 			d.setField("upstream_captured", false)
+			d.trace("upstream_capture_missing", Object{"reason": reason})
 		}
 		return
 	}
-	raw, err := readBounded(prefix+".json", upstreamFactsMax)
+	sent, bodyLost := "", false
+	if body {
+		if sent, err = d.store.stage(prefix + ".body"); err != nil {
+			sent, bodyLost = "", !os.IsNotExist(err)
+		}
+	}
+	wasReached := reached()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if bodyLost {
+		d.fields["upstream_body_dropped"] = true
+	}
+	if !d.submitLocked(0, func() int64 {
+		d.keepSent(facts, sent, wasReached)
+		return 0
+	}) {
+		d.fields["upstream_captured"] = false
+	}
+}
+
+// keepSent keeps the sent request's facts and body (sink) and removes them
+// from staging.
+func (d *requestDiagnostic) keepSent(facts, body string, reached bool) {
+	defer os.Remove(facts)
+	if body != "" {
+		defer os.Remove(body)
+	}
+	raw, err := readBounded(facts, upstreamFactsMax)
 	var sent sentRequest
 	reason := ""
 	switch {
-	case os.IsNotExist(err):
-		reason = "absent"
 	case err != nil:
 		reason = "unreadable"
 	case json.Unmarshal(raw, &sent) != nil:
 		reason = "invalid"
 	}
 	if reason != "" {
-		// A request that failed before sending has nothing to capture: the
-		// field is left out, so the viewer does not report it as missed.
 		if reached {
 			d.setField("upstream_captured", false)
-			d.trace("upstream_capture_missing", Object{"reason": reason})
+			d.traceNow("upstream_capture_missing", Object{"reason": reason})
 		}
 		return
 	}
-	// The body is opened before the request's lock is taken; the copy runs
-	// under it, as every other file of the log is written.
-	var source *os.File
-	if body {
-		if f, err := os.Open(prefix + ".body"); err == nil {
-			source = f
-			defer f.Close()
-		}
-	}
-	unlock := d.lock()
-	defer unlock()
 	// A request whose content may hold a credential keeps only its redacted
 	// facts (diagnostic_secrets.go); the metadata reads the same.
-	redacted := d.redactCaptureLocked(raw)
-	if d.secretCapture {
+	policy := d.policyFor(upstreamRequestFile)
+	redacted := raw
+	if policy.secret {
+		redacted = redactCapture(raw, policy.tokens)
 		sent = sentRequest{}
 		_ = json.Unmarshal(redacted, &sent)
 	}
-	d.fields["upstream_captured"] = d.saveLocked(upstreamRequestFile, raw)
-	if source != nil {
-		d.copyLocked(upstreamBodyFile, source)
-	}
+	d.mu.Lock()
+	charged := d.directory != "" && d.keeps(upstreamRequestFile) && d.charge(int64(len(redacted)))
+	d.mu.Unlock()
+	saved := charged && d.writeFile(upstreamRequestFile, raw)
+	d.mu.Lock()
+	d.fields["upstream_captured"] = saved
 	d.upstreamFieldsLocked(sent)
+	d.mu.Unlock()
+	if body != "" {
+		d.moveIn(upstreamBodyFile, body)
+	}
+}
+
+// traceNow writes an event from the background writer itself (sink).
+func (d *requestDiagnostic) traceNow(event string, detail any) {
+	d.mu.Lock()
+	ok := d.directory != "" && !d.discarded
+	content := !d.summaryOnly
+	d.mu.Unlock()
+	if !ok {
+		return
+	}
+	if !content {
+		detail = boundStrings(detail)
+	}
+	b, err := json.Marshal(Object{"time": time.Now().UTC().Format(time.RFC3339Nano), "event": event, "detail": detail})
+	if err != nil {
+		return
+	}
+	d.mu.Lock()
+	charged := d.charge(int64(len(b) + 1))
+	d.mu.Unlock()
+	if charged {
+		d.appendFile("events.jsonl", append(b, '\n'))
+	}
 }
 
 // upstreamFieldsLocked writes the sent request's facts as flat metadata
@@ -211,48 +276,53 @@ func splitBetas(value string) []string {
 	return betas
 }
 
-// copyLocked keeps a content file the CLI wrote, within the request's budget
-// (caller holds d.mu). Only raw content goes this way: a request whose content
-// must be redacted, or one at the summary level, keeps none.
-func (d *requestDiagnostic) copyLocked(name string, source *os.File) bool {
-	if d.directory == "" || !d.keeps(name) || d.secretCapture {
-		return false
-	}
-	info, err := source.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return false
-	}
-	size := min(info.Size(), d.requestLimit()+1)
-	if !d.reserve(int(size)) {
-		return false
-	}
-	target, err := os.OpenFile(filepath.Join(d.directory, name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		d.logFailure(err)
-		return false
-	}
-	copied, err := io.Copy(target, io.LimitReader(source, size))
-	if closeErr := target.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil && copied != size {
-		err = io.ErrUnexpectedEOF
-	}
-	if err != nil {
-		d.logFailure(err)
-		return false
-	}
-	return true
+// moveIn keeps a content file the CLI wrote, within the request's budget, by
+// moving it from staging into the log (sink). Only raw content goes this way:
+// a request whose content must be redacted, or one at the summary level,
+// keeps none.
+func (d *requestDiagnostic) moveIn(name, staged string) {
+	d.inLog(func(dir string) {
+		info, err := os.Lstat(staged)
+		if err != nil || !info.Mode().IsRegular() {
+			return
+		}
+		d.mu.Lock()
+		keep := d.keeps(name) && !d.secretCapture && d.charge(min(info.Size(), d.requestLimit()+1))
+		d.mu.Unlock()
+		if !keep {
+			return
+		}
+		if err := os.Rename(staged, filepath.Join(dir, name)); err != nil {
+			d.failed(err)
+			return
+		}
+		logFileWritten(dir, name)
+	})
 }
 
 // clientSession records the client's session: the one in its metadata.user_id
-// or, without a usable one, its Claude Code session header.
-func (d *requestDiagnostic) clientSession(client clientIdentity, h http.Header) {
-	session := client.fields["session_id"]
-	if !logSessionID.MatchString(session) {
-		session = h.Get("X-Claude-Code-Session-Id")
+// or, without a usable one, its Claude Code session header. The body is read
+// by the background writer, so the request pays nothing for it.
+func (d *requestDiagnostic) clientSession(body *requestBody, h http.Header) {
+	if !d.enabled() {
+		return
 	}
-	if logSessionID.MatchString(session) {
-		d.setField("client_session_id", session)
+	header := h.Get("X-Claude-Code-Session-Id")
+	// The task holds the body until it runs: the bytes it reads are counted.
+	size := len(body.top["metadata"])
+	if body.err != nil || body.escaped || body.metadataTwice {
+		size = len(body.raw)
 	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.submitLocked(int64(size), func() int64 {
+		session := body.clientIdentity().fields["session_id"]
+		if !logSessionID.MatchString(session) {
+			session = header
+		}
+		if logSessionID.MatchString(session) {
+			d.setField("client_session_id", session)
+		}
+		return 0
+	})
 }

@@ -26,6 +26,7 @@ func TestBackgroundRequestSummaryLandsBeforeMetadata(t *testing.T) {
 	d.request(parseRequestBody([]byte(`{"model":"claude-test","stream":true,"system":"s","messages":[{"role":"user","content":"hi"},{"role":"assistant","content":[{"type":"text","text":"x"}]}]}`)), r.Header)
 	_, _ = out.Write([]byte("ok"))
 	d.finish()
+	d.flushLogs()
 	var metadata Object
 	raw, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
 	require.NoError(t, err)
@@ -49,6 +50,7 @@ func TestRequestReceivedEventIsUnchanged(t *testing.T) {
 	_ = d.capture(w, r)
 	d.request(parseRequestBody([]byte(`{"model":"m","messages":[]}`)), r.Header)
 	d.finish()
+	d.flushLogs()
 	events, err := os.ReadFile(filepath.Join(d.directory, "events.jsonl"))
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(events)), "\n")
@@ -79,6 +81,7 @@ func TestRequestLogPruneRunsOffTheRequestGoroutine(t *testing.T) {
 	d.store = store
 	_ = d.capture(w, r)
 	d.finish()
+	d.flushLogs()
 	_, err := os.Stat(old)
 	require.NoError(t, err, "the request walked the log directory itself")
 	require.Len(t, store.pruneDue, 1)
@@ -105,6 +108,7 @@ func TestRequestLogPruneIsSingleFlight(t *testing.T) {
 			defer wg.Done()
 			_ = d.capture(w, r)
 			d.finish()
+			d.flushLogs()
 		}()
 	}
 	wg.Wait()
@@ -119,9 +123,11 @@ func TestNoLogMeansNoBackgroundSummary(t *testing.T) {
 	d := newRequestDiagnostic(w, r)
 	d.request(parseRequestBody([]byte(`{"model":"m","messages":[]}`)), r.Header)
 	d.mu.Lock()
-	require.Nil(t, d.summaryDone)
 	_, summarized := d.fields["message_count"]
+	_, digested := d.fields["body_bytes"]
 	d.mu.Unlock()
 	require.False(t, summarized)
+	require.False(t, digested)
 	d.finish()
+	d.flushLogs()
 }

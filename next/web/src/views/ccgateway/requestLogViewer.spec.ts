@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hexPreview, joinBytes, jsonlBlocks, looksBinary, prettyJSON, rewritten, searchQuery, shortId, sseBlocks, textOf, upstreamFacts, upstreamMissing, viewOf } from './requestLogViewer'
+import { bodySource, hexPreview, joinBytes, jsonlBlocks, looksBinary, prettyJSON, responseFacts, rewritten, searchQuery, shortId, sseBlocks, textOf, upstreamFacts, upstreamMissing, viewOf } from './requestLogViewer'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 
@@ -117,5 +117,38 @@ describe('upstream request facts', () => {
       { k: 'accept', v: 'a, b', redacted: false },
       { k: 'x-api-key', v: '[REDACTED]', redacted: true }
     ])
+  })
+})
+
+describe('request log bodies (REQUEST-LOG-ASYNC-DESIGN.md §5)', () => {
+  const file = (name: string, kind = 'other') => ({ name, bytes: 10, kind })
+  const all = [file('request.body', 'request'), file('upstream-request.body', 'upstream'), file('response.json', 'response'), file('response.body', 'response')]
+
+  it('reads each part from its file, the assembled response first', () => {
+    const d = { content: true, files: all }
+    expect(bodySource('request', d, 'full')).toEqual({ file: all[0], raw: false })
+    expect(bodySource('upstream', d, 'full')).toEqual({ file: all[1], raw: false })
+    expect(bodySource('response', d, 'full')).toEqual({ file: all[2], raw: false })
+  })
+
+  it('falls back to the raw response.body when there is no response.json', () => {
+    expect(bodySource('response', { content: true, files: [all[0], all[3]] }, 'full')).toEqual({ file: all[3], raw: true })
+  })
+
+  it('says why a body is not shown: summary, permission, gone, not kept', () => {
+    expect(bodySource('request', { content: true, files: all }, 'summary')).toEqual({ reason: 'summary' })
+    expect(bodySource('request', { content: false, files: all }, 'summary')).toEqual({ reason: 'summary' })
+    expect(bodySource('response', { content: false, files: all }, 'full')).toEqual({ reason: 'needs_manage' })
+    expect(bodySource('request', { content: true, files: [] }, 'full')).toEqual({ reason: 'gone' })
+    expect(bodySource('upstream', { content: true, files: [all[0]] }, 'full')).toEqual({ reason: 'missing' })
+    // Older upstream file names are only in the file list.
+    expect(bodySource('upstream', { content: true, files: [file('upstream-1-request.body')] }, 'full')).toEqual({ reason: 'missing' })
+  })
+
+  it('reads the response capture fields only when recorded and well-formed', () => {
+    expect(responseFacts(undefined)).toEqual({ assembled: null, capture: '', droppedBytes: null, events: null })
+    expect(responseFacts({ response_assembled: true, response_events: 9 })).toEqual({ assembled: true, capture: '', droppedBytes: null, events: 9 })
+    expect(responseFacts({ response_assembled: false, response_capture: 'dropped', log_dropped_bytes: 81920 })).toEqual({ assembled: false, capture: 'dropped', droppedBytes: 81920, events: null })
+    expect(responseFacts({ response_assembled: 'yes', response_capture: 3, log_dropped_bytes: -1, response_events: 1.5 })).toEqual({ assembled: null, capture: '', droppedBytes: null, events: null })
   })
 })

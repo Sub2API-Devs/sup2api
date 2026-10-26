@@ -8,7 +8,7 @@ import (
 )
 
 func TestTraceOverflowRetainsPartialArtifactsAndCompletion(t *testing.T) {
-	d := &requestDiagnostic{fields: Object{}, directory: t.TempDir()}
+	d := detachedDiagnostic(t)
 	d.save("retained.body", []byte("before overflow"))
 	directory := d.directory
 	d.bytes = 64 << 20
@@ -18,7 +18,7 @@ func TestTraceOverflowRetainsPartialArtifactsAndCompletion(t *testing.T) {
 	}
 	d.artifact("late.json", Object{"must": "not be written"})
 	d.trace("later", Object{})
-	d.finish()
+	finishLog(d)
 	retained, err := os.ReadFile(filepath.Join(directory, "retained.body"))
 	if err != nil || string(retained) != "before overflow" {
 		t.Fatal("overflow destroyed earlier capture", err)

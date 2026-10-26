@@ -95,7 +95,7 @@ func TestRequestLogsRuntimePassThrough(t *testing.T) {
 	w := serveRequestLogsOnce(s, "GET", "")
 	got := decodeRequestLogAnswer(t, w)
 	if strings.Contains(w.Body.String(), "private_data") || got.Data.Worker["enabled"] != false || got.Data.Worker["levels"] != nil ||
-		got.Data.Setting.Level != "follow" || got.Data.Default != "summary" || got.Data.Effective != "summary" {
+		got.Data.Setting.Level != "follow" || got.Data.Default != "off" || got.Data.Effective != "off" {
 		t.Fatalf("GET: %s", w.Body.String())
 	}
 	if w := serveRequestLogsOnce(s, "PUT", `{"enabled":false}`); w.Code != 400 {
@@ -123,7 +123,7 @@ func TestRequestLogsLevelsSavedInTheCoreAndAudited(t *testing.T) {
 	w := serveRequestLogsOnce(s, "GET", "")
 	got := decodeRequestLogAnswer(t, w)
 	if strings.Contains(w.Body.String(), "private_data") || got.Data.Setting.Level != "follow" || got.Data.Setting.FullUntil != nil ||
-		got.Data.Default != "summary" || got.Data.Effective != "summary" ||
+		got.Data.Default != "off" || got.Data.Effective != "off" ||
 		got.Data.Worker["level"] != "full" || got.Data.Worker["full_until"] != "2026-10-23T07:04:05Z" ||
 		got.Data.Worker["usage"] == nil || got.Data.Worker["limits"] == nil || got.Data.Worker["viewer"] != true {
 		t.Fatalf("GET projection: %s", w.Body.String())
@@ -156,7 +156,7 @@ func TestRequestLogsLevelsSavedInTheCoreAndAudited(t *testing.T) {
 		t.Fatalf("stored %s %v %v", level, stored, err)
 	}
 	got = put(`{"level":"follow"}`)
-	if got.Data.Setting.Level != "follow" || got.Data.Effective != "summary" {
+	if got.Data.Setting.Level != "follow" || got.Data.Effective != "off" {
 		t.Fatalf("PUT follow: %+v", got.Data)
 	}
 	var rows int
@@ -218,7 +218,7 @@ func TestRequestLogsWithoutWorker(t *testing.T) {
 		w.WriteHeader(502)
 	})
 	got := decodeRequestLogAnswer(t, serveRequestLogsOnce(s, "GET", ""))
-	if got.Data.Worker != nil || got.Data.Effective != "summary" {
+	if got.Data.Worker != nil || got.Data.Effective != "off" {
 		t.Fatalf("GET: %+v", got.Data)
 	}
 	got = decodeRequestLogAnswer(t, serveRequestLogsOnce(s, "PUT", `{"level":"off"}`))

@@ -181,6 +181,7 @@ func TestRequestCommandSeparatesCancellationAndDeadline(t *testing.T) {
 					if paths, _ := filepath.Glob(filepath.Join(root, "request-*")); len(paths) != 0 {
 						t.Fatal("temporary request directories leaked", paths)
 					}
+					store.flush()
 					entries, err := os.ReadDir(logs)
 					if err != nil || len(entries) != 1 {
 						t.Fatal(entries, err)

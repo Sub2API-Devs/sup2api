@@ -14,8 +14,7 @@ import (
 // An unauthenticated request leaves no log: no directory, no headers (audit
 // C7). The caller's key is still never written for an authenticated one.
 func TestUnauthenticatedRequestLeavesNoLog(t *testing.T) {
-	store, err := newRequestLogStore(t.TempDir())
-	require.NoError(t, err)
+	store := summaryLogStore(t, t.TempDir())
 	g := &Gateway{RequestMode: "build", Key: "gateway-key", CLIInfo: buildCLI, Runner: &Runner{}, RequestLogs: store, Slots: make(chan struct{}, 1)}
 	for _, key := range []string{"", "wrong-key"} {
 		r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[{"role":"user","content":"x"}]}`))
@@ -27,6 +26,7 @@ func TestUnauthenticatedRequestLeavesNoLog(t *testing.T) {
 		require.Equal(t, 401, out.Code)
 		require.NotEmpty(t, out.Header().Get("request-id"))
 	}
+	store.flush()
 	entries, _ := os.ReadDir(store.root)
 	require.Empty(t, entries, "an unauthenticated request created a log")
 	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m","messages":[]}`))
@@ -34,6 +34,7 @@ func TestUnauthenticatedRequestLeavesNoLog(t *testing.T) {
 	out := httptest.NewRecorder()
 	g.ServeHTTP(out, r)
 	require.Equal(t, 400, out.Code)
+	store.flush()
 	entries, _ = os.ReadDir(store.root)
 	require.Len(t, entries, 1)
 	headers, err := os.ReadFile(filepath.Join(store.root, entries[0].Name(), "request-headers.json"))
@@ -44,10 +45,10 @@ func TestUnauthenticatedRequestLeavesNoLog(t *testing.T) {
 // A request's log files are written under its own lock, never the account's
 // (audit C7): a request keeps logging while the account's lock is held.
 func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
-	store, err := newRequestLogStore(t.TempDir())
+	store, err := openTestLogStore(t, t.TempDir())
 	require.NoError(t, err)
 	store.mu.Lock()
-	store.level, store.fullUntil = logLevelFull, time.Now().Add(time.Hour)
+	store.level, store.fullUntil, store.enabled = logLevelFull, time.Now().Add(time.Hour), true
 	store.mu.Unlock()
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
@@ -71,6 +72,7 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	}
 	store.mu.Unlock()
 	d.finish()
+	d.flushLogs()
 	for _, name := range []string{"request.body", "build-components.json", "events.jsonl", "response.body", "metadata.json"} {
 		_, err := os.Stat(filepath.Join(d.directory, name))
 		require.NoError(t, err, name)
@@ -85,6 +87,7 @@ func TestRequestLogWritesDoNotTakeTheAccountLock(t *testing.T) {
 	_, _ = out.Write([]byte("after off"))
 	d.save("build-components.json", []byte(`{}`))
 	d.finish()
+	d.flushLogs()
 	_, err = os.Stat(directory)
 	require.True(t, os.IsNotExist(err), "a log written after the logs were turned off")
 }
@@ -136,6 +139,11 @@ func TestRequestLogRemovalDoesNotHoldTheAccountLock(t *testing.T) {
 	_, err = os.Stat(filepath.Join(fresh, "request.body"))
 	require.NoError(t, err, "a request logged after the clear keeps its content")
 
+	// Clearing removed one file at a time: the next change must wait for its
+	// own removal, not one of these.
+	for len(entered) > 0 {
+		<-entered
+	}
 	release = make(chan struct{})
 	off, done := unblocked(`{"level":"off"}`)
 	require.Empty(t, off, "logs off: the new request is not logged")
@@ -150,8 +158,7 @@ func TestRequestLogRemovalDoesNotHoldTheAccountLock(t *testing.T) {
 // The index is built in the background (audit C7): a request finished while
 // the disk is read is listed, and logs turned off meanwhile drop the scan.
 func TestRequestLogIndexBuildKeepsRequestsFinishedMeanwhile(t *testing.T) {
-	store, err := newRequestLogStore(t.TempDir())
-	require.NoError(t, err)
+	store := summaryLogStore(t, t.TempDir())
 	old := viewerRequest(t, store, "rid-old", 200)
 	store.waitIndex()
 	meta, err := os.ReadFile(filepath.Join(store.root, old, "metadata.json"))

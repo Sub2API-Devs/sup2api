@@ -27,6 +27,7 @@ func logRequest(t *testing.T, store *requestLogStore) string {
 	d.trace("cli_error", Object{"message": strings.Repeat("e", 300)})
 	_, _ = out.Write([]byte(privateMarker))
 	d.finish()
+	d.flushLogs()
 	return d.directory
 }
 
@@ -41,19 +42,21 @@ func putLogs(t *testing.T, store *requestLogStore, body string) (int, Object) {
 
 func TestRequestLogLevelDefaultsAndLegacyMarker(t *testing.T) {
 	root := t.TempDir()
-	store, err := newRequestLogStore(root)
-	if err != nil || store.level != logLevelSummary || !store.enabled {
-		t.Fatal("a new account must log the summary", store, err)
+	store, err := openTestLogStore(t, root)
+	// A new account logs nothing of its own (2026-10-27): the level only
+	// decides for a request whose policy names none.
+	if err != nil || store.level != logLevelOff || store.enabled {
+		t.Fatal("a new account must not log by default", store, err)
 	}
 	legacy := t.TempDir()
 	_ = os.WriteFile(filepath.Join(legacy, requestLogDisabledMarker), []byte("disabled"), 0600)
-	if store, err := newRequestLogStore(legacy); err != nil || store.level != logLevelOff || store.enabled {
+	if store, err := openTestLogStore(t, legacy); err != nil || store.level != logLevelOff || store.enabled {
 		t.Fatal("an older Worker's disable must stay off", err)
 	}
 	until := time.Now().Add(time.Hour).UTC()
 	saved, _ := json.Marshal(requestLogState{Level: logLevelFull, FullUntil: &until})
 	_ = os.WriteFile(filepath.Join(root, requestLogStateFile), saved, 0600)
-	if store, err := newRequestLogStore(root); err != nil || store.level != logLevelFull || !store.fullUntil.Equal(until) {
+	if store, err := openTestLogStore(t, root); err != nil || store.level != logLevelFull || !store.fullUntil.Equal(until) {
 		t.Fatal("the full level and its end must survive a restart", err)
 	}
 }
@@ -61,7 +64,7 @@ func TestRequestLogLevelDefaultsAndLegacyMarker(t *testing.T) {
 // The summary keeps what a request looked like and none of its content.
 func TestSummaryLevelKeepsNoContent(t *testing.T) {
 	root := t.TempDir()
-	store, _ := newRequestLogStore(root)
+	store := summaryLogStore(t, root)
 	dir := logRequest(t, store)
 	entries, _ := os.ReadDir(dir)
 	names := []string{}
@@ -99,7 +102,7 @@ func TestSummaryLevelKeepsNoContent(t *testing.T) {
 // Full keeps content for the chosen hours, then the summary applies again.
 func TestFullLevelExpiresToSummary(t *testing.T) {
 	root := t.TempDir()
-	store, _ := newRequestLogStore(root)
+	store, _ := openTestLogStore(t, root)
 	now := time.Now()
 	store.now = func() time.Time { return now }
 	code, state := putLogs(t, store, `{"level":"full","full_for_hours":4}`)
@@ -122,13 +125,13 @@ func TestFullLevelExpiresToSummary(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "request.body")); !os.IsNotExist(err) {
 		t.Fatal("full level outlived its time")
 	}
-	if reloaded, _ := newRequestLogStore(root); reloaded.level != logLevelSummary {
+	if reloaded, _ := openTestLogStore(t, root); reloaded.level != logLevelSummary {
 		t.Fatal("the end of the full level was not saved", reloaded.level)
 	}
 }
 
 func TestRequestLogChangesAreValidated(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store, _ := openTestLogStore(t, t.TempDir())
 	for _, body := range []string{`{}`, `{"level":"full"}`, `{"level":"full","full_for_hours":2}`, `{"level":"summary","full_for_hours":1}`,
 		`{"level":"verbose"}`, `{"level":"off","enabled":false}`, `{"clear_full":false}`, `{"enabled":null}`, `{"enabled":"yes"}`, `[]`} {
 		if code, _ := putLogs(t, store, body); code != 400 {
@@ -147,7 +150,7 @@ func TestRequestLogChangesAreValidated(t *testing.T) {
 // each level's limits and what the logs hold.
 func TestClearFullKeepsSummariesAndDescribeReportsUsage(t *testing.T) {
 	root := t.TempDir()
-	store, _ := newRequestLogStore(root)
+	store, _ := openTestLogStore(t, root)
 	putLogs(t, store, `{"level":"full","full_for_hours":1}`)
 	dir := logRequest(t, store)
 	code, state := putLogs(t, store, `{"clear_full":true}`)

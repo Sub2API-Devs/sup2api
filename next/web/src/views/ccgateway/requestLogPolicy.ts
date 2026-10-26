@@ -6,12 +6,15 @@
 export type RequestLogLevel = 'off' | 'summary' | 'full'
 /** The account's own setting; follow: the default rule. */
 export type RequestLogSetting = 'follow' | RequestLogLevel
-/** The default rule never turns the full level on (§1). */
-export type RequestLogDefault = 'off' | 'summary'
+/**
+ * The default rule may be full too, without an end (REQUEST-LOG-ASYNC-DESIGN.md §6):
+ * the Worker's retention and budget of the full tier still apply.
+ */
+export type RequestLogDefault = RequestLogLevel
 
 export const LOG_LEVELS: readonly RequestLogLevel[] = ['off', 'summary', 'full']
 export const LOG_SETTINGS: readonly RequestLogSetting[] = ['follow', 'off', 'summary', 'full']
-export const LOG_DEFAULTS: readonly RequestLogDefault[] = ['off', 'summary']
+export const LOG_DEFAULTS: readonly RequestLogDefault[] = ['off', 'summary', 'full']
 export const FULL_HOURS = [1, 4, 24] as const
 
 export interface RequestLogTier {

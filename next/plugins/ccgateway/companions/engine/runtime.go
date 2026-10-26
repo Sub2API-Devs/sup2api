@@ -367,6 +367,11 @@ func (r *Runtime) Close() error {
 		r.stop()
 		r.active.Wait()
 		<-r.done
+		// Every request has handed its log over: the background writer gets a
+		// bounded time to write it (REQUEST-LOG-ASYNC-DESIGN.md §3).
+		if r.gateway != nil {
+			r.gateway.RequestLogs.close()
+		}
 		r.admin.mu.Lock()
 		r.admin.end()
 		r.admin.mu.Unlock()

@@ -6,7 +6,7 @@
 
 | 层 | 存在哪 | 可选值 |
 |---|---|---|
-| 默认规则 | CCGateway 配置（`Config.RequestLogs`，与镜像、请求策略同一份配置，“部署与运行”编辑） | `off`、`summary`（缺省 `summary`）。**不能选 full**：全量对话落盘只允许单个账号临时开 |
+| 默认规则 | CCGateway 配置（`Config.RequestLogs`，与镜像、请求策略同一份配置，“部署与运行”编辑） | `off`、`summary`、`full`（缺省 `off`，2026-10-27 起；full 于 2026-10-27 放开，见 REQUEST-LOG-ASYNC-DESIGN §6） |
 | 账号设置 | 新表 `ccgateway_account_request_logs`（迁移 0061） | 不设置 = 跟随默认；`off`、`summary`；`full` 必须带时长 1/4/24 小时（存 `full_until`） |
 
 生效级别 = 账号设置（`full` 且已过 `full_until` 视为没设置）否则默认规则。**`off` 只停止记录，不删除已有日志**；删除是单独的动作（第 4 节）。不做分组层。

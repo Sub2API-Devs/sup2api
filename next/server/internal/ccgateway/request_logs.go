@@ -41,8 +41,10 @@ const maxSafeInteger = 1<<53 - 1
 const requestLogFollow = "follow"
 
 // RequestLogDefault is the default request log rule of the CCGateway
-// configuration (CONTRACTS §65): off or summary. Full is only ever enabled
-// for one account at a time, temporarily.
+// configuration (CONTRACTS §65): off, summary or full. A full default has no
+// end (REQUEST-LOG-ASYNC-DESIGN.md §6): it lasts until the rule is changed,
+// bounded only by the Worker's retention and budget for full logs; an
+// account's own full stays temporary (1/4/24 hours).
 type RequestLogDefault struct {
 	Level string `json:"level"`
 }
@@ -60,24 +62,24 @@ func (r *RequestLogDefault) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// DefaultRequestLog is the level of an account without its own setting:
-// summary unless the configuration says off.
+// DefaultRequestLog is the level of an account without its own setting: the
+// configuration's rule (off, summary or full), off when there is none.
 func (c Config) DefaultRequestLog() string {
-	if c.RequestLogs != nil && c.RequestLogs.Level == requestLogOff {
-		return requestLogOff
+	if c.RequestLogs != nil && requestLogLevels[c.RequestLogs.Level] {
+		return c.RequestLogs.Level
 	}
-	return requestLogSummary
+	return requestLogOff
 }
 
-// mergeRequestLogs: omitted keeps the stored rule; a named one must be off or
-// summary (full is refused: it is per account and temporary).
+// mergeRequestLogs: omitted keeps the stored rule; a named one must be off,
+// summary or full (full without an end: the default has no duration).
 func mergeRequestLogs(c *Config, old Config) error {
 	if c.RequestLogs == nil {
 		c.RequestLogs = old.RequestLogs
 		return nil
 	}
-	if l := c.RequestLogs.Level; l != requestLogOff && l != requestLogSummary {
-		return errors.New(`invalid request_logs.level: must be "off" or "summary"`)
+	if !requestLogLevels[c.RequestLogs.Level] {
+		return errors.New(`invalid request_logs.level: must be "off", "summary" or "full"`)
 	}
 	return nil
 }

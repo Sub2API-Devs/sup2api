@@ -31,6 +31,7 @@ func viewerRequest(t *testing.T, store *requestLogStore, requestID string, statu
 	}
 	_, _ = out.Write([]byte(privateMarker))
 	d.finish()
+	d.flushLogs()
 	return filepath.Base(d.directory)
 }
 
@@ -70,7 +71,7 @@ func listLogs(t *testing.T, store *requestLogStore, body string) viewerList {
 // its own group so a current console still labels those directories right.
 func TestRequestLogFileKinds(t *testing.T) {
 	for name, want := range map[string]string{
-		"request.body": "request", "response.body": "response", "resource-config.json": "upstream",
+		"request.body": "request", "response.body": "response", "response.json": "response", "resource-config.json": "upstream",
 		"upstream-request.body": "upstream", "upstream-request.json": "upstream",
 		"cli-stdout.jsonl": "cli", "cli-stderr.jsonl": "cli", "history.jsonl": "history",
 		"build-components.json": "build", "notes.txt": "other",
@@ -82,7 +83,7 @@ func TestRequestLogFileKinds(t *testing.T) {
 }
 
 func TestRequestLogQueryOrdersFiltersAndPages(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store := summaryLogStore(t, t.TempDir())
 	first := viewerRequest(t, store, "rid-retried", 529)
 	putLogs(t, store, `{"level":"full","full_for_hours":1}`)
 	second := viewerRequest(t, store, "rid-retried", 200)
@@ -122,14 +123,14 @@ func TestRequestLogQueryOrdersFiltersAndPages(t *testing.T) {
 		}
 	}
 	// A new store reads the same index from disk.
-	reloaded, _ := newRequestLogStore(filepath.Dir(store.root))
+	reloaded, _ := openTestLogStore(t, filepath.Dir(store.root))
 	if got := listLogs(t, reloaded, `{}`); len(got.Items) != 3 || got.Items[0].ID != third {
 		t.Fatal("index not rebuilt from disk", got)
 	}
 }
 
 func TestRequestLogQueryShowsActiveRequests(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store := summaryLogStore(t, t.TempDir())
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/v1/messages", nil)
 	r.Header.Set("X-Request-ID", "rid-running")
@@ -141,13 +142,14 @@ func TestRequestLogQueryShowsActiveRequests(t *testing.T) {
 		t.Fatal("running request", got)
 	}
 	d.finish()
+	d.flushLogs()
 	if got := listLogs(t, store, `{}`); len(got.Items) != 1 || len(got.Active) != 0 {
 		t.Fatal("finished request not indexed", got)
 	}
 }
 
 func TestRequestLogDetailBoundsEventsWithoutContent(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store, _ := openTestLogStore(t, t.TempDir())
 	putLogs(t, store, `{"level":"full","full_for_hours":1}`)
 	id := viewerRequest(t, store, "rid-detail", 200)
 	type detail struct {
@@ -199,7 +201,7 @@ func TestRequestLogDetailBoundsEventsWithoutContent(t *testing.T) {
 }
 
 func TestRequestLogReadChunksAndDownloads(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store, _ := openTestLogStore(t, t.TempDir())
 	putLogs(t, store, `{"level":"full","full_for_hours":1}`)
 	id := viewerRequest(t, store, "rid-read", 200)
 	body, _ := os.ReadFile(filepath.Join(store.root, id, "request.body"))
@@ -241,7 +243,7 @@ func TestRequestLogReadChunksAndDownloads(t *testing.T) {
 }
 
 func TestRequestLogViewerFollowsLevelAndPruning(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store, _ := openTestLogStore(t, t.TempDir())
 	putLogs(t, store, `{"level":"full","full_for_hours":1}`)
 	id := viewerRequest(t, store, "rid-prune", 200)
 	if _, state := putLogs(t, store, `{"clear_full":true}`); state["viewer"] != true {
@@ -283,7 +285,7 @@ func TestRequestLogViewerFollowsLevelAndPruning(t *testing.T) {
 }
 
 func TestRequestLogPruneDropsIndexEntries(t *testing.T) {
-	store, _ := newRequestLogStore(t.TempDir())
+	store := summaryLogStore(t, t.TempDir())
 	id := viewerRequest(t, store, "rid-old", 200)
 	listLogs(t, store, `{}`)
 	meta := filepath.Join(store.root, id, "metadata.json")

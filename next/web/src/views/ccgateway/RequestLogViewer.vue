@@ -8,10 +8,11 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDateTime, SDescItem, SDescriptions, SDisclosure, SDrawer, SEmpty, SHint, SInput, SSegmented, SSelect, SSpinner, STable, STabs, type SelectOption, type TabItem, type TableColumn } from '@sub2api/ui'
 import { errorMessage } from '@/utils/errors'
+import RequestLogBody from './RequestLogBody.vue'
 import RequestLogContent from './RequestLogContent.vue'
 import {
-  durationText, listRequestLogs, requestLogDetail, rewritten, searchQuery, SESSION_ID_RE, SHA256_RE, shortId, sizeText, upstreamFacts, upstreamMissing,
-  type LogMode, type RequestLogActive, type RequestLogDetail, type RequestLogItem, type RequestLogQuery
+  bodySource, durationText, listRequestLogs, requestLogDetail, responseFacts, rewritten, searchQuery, SESSION_ID_RE, SHA256_RE, shortId, sizeText, upstreamFacts, upstreamMissing,
+  type BodyPart, type LogMode, type RequestLogActive, type RequestLogDetail, type RequestLogItem, type RequestLogQuery
 } from './requestLogViewer'
 
 /**
@@ -200,20 +201,28 @@ const columns = computed<TableColumn[]>(() => [
 const statusTone = (s: number) => (s >= 500 ? 'danger' : s >= 400 ? 'warning' : 'success')
 const isMode = (v: unknown): v is LogMode => v === 'direct' || v === 'build'
 
-// ---- detail
+// ---- detail: overview, the four parts (REQUEST-LOG-ASYNC-DESIGN.md §5), events and every file
 const upstream = computed(() => (detail.value ? upstreamFacts(detail.value) : null))
 const tabs = computed<TabItem[]>(() => {
   const d = detail.value
   const list: TabItem[] = [
     { key: 'overview', label: t('ccgateway.logViewer.tabs.overview') },
-    { key: 'events', label: t('ccgateway.logViewer.tabs.events'), badge: d?.events.length },
     { key: 'request_headers', label: t('ccgateway.logViewer.tabs.requestHeaders') },
-    { key: 'response_headers', label: t('ccgateway.logViewer.tabs.responseHeaders') }
+    { key: 'request_body', label: t('ccgateway.logViewer.tabs.requestBody') },
+    { key: 'upstream', label: t('ccgateway.logViewer.tabs.upstream') },
+    { key: 'response_headers', label: t('ccgateway.logViewer.tabs.responseHeaders') },
+    { key: 'response_body', label: t('ccgateway.logViewer.tabs.responseBody') },
+    { key: 'events', label: t('ccgateway.logViewer.tabs.events'), badge: d?.events.length }
   ]
-  if (upstream.value) list.push({ key: 'upstream', label: t('ccgateway.logViewer.tabs.upstream') })
-  if (d?.content && d.files.length) list.push({ key: 'content', label: t('ccgateway.logViewer.tabs.content'), badge: d.files.length })
+  if (d?.content && d.files.length) list.push({ key: 'files', label: t('ccgateway.logViewer.tabs.files'), badge: d.files.length })
   return list
 })
+const body = (part: BodyPart) => (detail.value && current.value ? bodySource(part, detail.value, current.value.log_level) : { reason: 'missing' as const })
+/** The body shown by the request / response body tab. */
+const bodyPart = computed<BodyPart | null>(() => (tab.value === 'request_body' ? 'request' : tab.value === 'response_body' ? 'response' : null))
+const readable = (part: BodyPart) => 'file' in body(part)
+const response = computed(() => responseFacts(detail.value?.metadata))
+const captureText = (v: string) => (v === 'dropped' ? t('ccgateway.logViewer.response.captureDropped') : v)
 
 const meta = computed(() => detail.value?.metadata ?? {})
 const metaText = (k: string) => {
@@ -299,6 +308,7 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
         <template #cell-bytes="{ row }">
           <span class="whitespace-nowrap text-xs">{{ sizeText(row.bytes) }}</span>
           <SBadge v-if="row.log_status === 'truncated'" tone="warning" size="sm" class="ml-1">{{ t('ccgateway.logViewer.truncated') }}</SBadge>
+          <SBadge v-else-if="row.log_status === 'partial'" tone="warning" size="sm" class="ml-1" :title="t('ccgateway.logViewer.partialTitle')">{{ t('ccgateway.logViewer.partial') }}</SBadge>
         </template>
       </STable>
       <div v-if="next" class="flex justify-center">
@@ -341,7 +351,15 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
             <SDescItem :label="t('ccgateway.logViewer.fields.log')" full>
               {{ t(`ccgateway.requestLogs.level.${current.log_level}`) }} · {{ sizeText(current.bytes) }}
               <SBadge v-if="current.log_status === 'truncated'" tone="warning" size="sm" class="ml-1">{{ t('ccgateway.logViewer.truncated') }}</SBadge>
+              <SBadge v-else-if="current.log_status === 'partial'" tone="warning" size="sm" class="ml-1" :title="t('ccgateway.logViewer.partialTitle')">{{ t('ccgateway.logViewer.partial') }}</SBadge>
             </SDescItem>
+            <SDescItem v-if="response.assembled !== null" :label="t('ccgateway.logViewer.response.assembled')" data-testid="request-log-response-assembled">
+              {{ response.assembled ? t('ccgateway.logViewer.response.assembledYes') : t('ccgateway.logViewer.response.assembledNo') }}<template v-if="response.events !== null"> · {{ t('ccgateway.logViewer.response.events', { n: response.events }) }}</template>
+            </SDescItem>
+            <SDescItem v-if="response.capture" :label="t('ccgateway.logViewer.response.capture')" data-testid="request-log-response-capture">
+              <SBadge tone="warning" size="sm"><span class="font-mono">{{ captureText(response.capture) }}</span></SBadge>
+            </SDescItem>
+            <SDescItem v-if="response.droppedBytes !== null" :label="t('ccgateway.logViewer.response.droppedBytes')" :value="sizeText(response.droppedBytes)" data-testid="request-log-dropped-bytes" />
           </SDescriptions>
           <SDisclosure :label="t('ccgateway.logViewer.allFields')">
             <SCode class="max-h-96 overflow-auto text-xs" :text="metaJSON" />
@@ -377,64 +395,75 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
             </template>
           </dl>
         </template>
-        <template v-else-if="tab === 'upstream' && upstream">
-          <SHint size="xs">{{ t('ccgateway.logViewer.upstream.hint') }}</SHint>
-          <SDescriptions dense :columns="2" label-width="9rem" data-testid="request-log-upstream">
-            <SDescItem :label="t('ccgateway.logViewer.upstream.method')" mono :value="upstream.method" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.attempts')" :value="upstream.attempts" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.url')" mono full copyable :value="upstream.url" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.sentAt')">
-              <SDateTime v-if="upstream.sentAt" :value="upstream.sentAt" mode="absolute" />
-              <template v-else>—</template>
-            </SDescItem>
-            <SDescItem :label="t('ccgateway.logViewer.upstream.encoding')" mono :value="upstream.encoding" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.bodyBytes')" :value="bodySize(upstream.bodyBytes)" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.changed')">
-              <SBadge v-if="upstream.changed === true" tone="warning" size="sm">{{ t('ccgateway.logViewer.upstream.changedYes') }}</SBadge>
-              <SBadge v-else-if="upstream.changed === false" tone="gray" size="sm">{{ t('ccgateway.logViewer.upstream.changedNo') }}</SBadge>
-              <template v-else>—</template>
-            </SDescItem>
-            <SDescItem :label="t('ccgateway.logViewer.upstream.sha256')" mono full data-testid="request-log-upstream-sha256">
-              <template v-if="upstream.bodySha256">
-                <span class="break-all">{{ upstream.bodySha256 }}</span>
-                <SCopyButton :text="upstream.bodySha256" icon-only size="xs" class="ml-1 align-middle" />
-                <SButton v-if="canFilterSha(upstream.bodySha256)" size="xs" variant="ghost" icon="filter" class="ml-1" data-testid="request-log-filter-by-sha256" @click="filterBy('sha256', upstream.bodySha256)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
+        <template v-else-if="tab === 'upstream'">
+          <SEmpty v-if="!upstream" size="sm" :text="t('ccgateway.logViewer.upstream.none')" data-testid="request-log-upstream-none" />
+          <template v-else>
+            <SHint size="xs">{{ t('ccgateway.logViewer.upstream.hint') }}</SHint>
+            <SDescriptions dense :columns="2" label-width="9rem" data-testid="request-log-upstream">
+              <SDescItem :label="t('ccgateway.logViewer.upstream.method')" mono :value="upstream.method" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.attempts')" :value="upstream.attempts" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.url')" mono full copyable :value="upstream.url" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.sentAt')">
+                <SDateTime v-if="upstream.sentAt" :value="upstream.sentAt" mode="absolute" />
+                <template v-else>—</template>
+              </SDescItem>
+              <SDescItem :label="t('ccgateway.logViewer.upstream.encoding')" mono :value="upstream.encoding" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.bodyBytes')" :value="bodySize(upstream.bodyBytes)" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.changed')">
+                <SBadge v-if="upstream.changed === true" tone="warning" size="sm">{{ t('ccgateway.logViewer.upstream.changedYes') }}</SBadge>
+                <SBadge v-else-if="upstream.changed === false" tone="gray" size="sm">{{ t('ccgateway.logViewer.upstream.changedNo') }}</SBadge>
+                <template v-else>—</template>
+              </SDescItem>
+              <SDescItem :label="t('ccgateway.logViewer.upstream.sha256')" mono full data-testid="request-log-upstream-sha256">
+                <template v-if="upstream.bodySha256">
+                  <span class="break-all">{{ upstream.bodySha256 }}</span>
+                  <SCopyButton :text="upstream.bodySha256" icon-only size="xs" class="ml-1 align-middle" />
+                  <SButton v-if="canFilterSha(upstream.bodySha256)" size="xs" variant="ghost" icon="filter" class="ml-1" data-testid="request-log-filter-by-sha256" @click="filterBy('sha256', upstream.bodySha256)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
+                </template>
+                <template v-else>—</template>
+              </SDescItem>
+              <SDescItem v-if="upstream.inputSha256" :label="t('ccgateway.logViewer.upstream.inputSha256')" mono full>
+                <span class="break-all">{{ upstream.inputSha256 }}</span>
+                <SCopyButton :text="upstream.inputSha256" icon-only size="xs" class="ml-1 align-middle" />
+                <SButton v-if="canFilterSha(upstream.inputSha256)" size="xs" variant="ghost" icon="filter" class="ml-1" @click="filterBy('sha256', upstream.inputSha256)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
+              </SDescItem>
+              <SDescItem :label="t('ccgateway.logViewer.upstream.model')" mono :value="upstream.model" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.stream')" :value="yesNo(upstream.stream)" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.session')" mono full data-testid="request-log-upstream-session">
+                <template v-if="upstream.session">
+                  <span class="break-all">{{ upstream.session }}</span>
+                  <SCopyButton :text="upstream.session" icon-only size="xs" class="ml-1 align-middle" />
+                  <SButton v-if="canFilterSession(upstream.session)" size="xs" variant="ghost" icon="filter" class="ml-1" data-testid="request-log-filter-by-session" @click="filterBy('session', upstream.session)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
+                </template>
+                <template v-else>—</template>
+              </SDescItem>
+              <SDescItem :label="t('ccgateway.logViewer.upstream.requestClass')" mono :value="upstream.requestClass" />
+              <SDescItem :label="t('ccgateway.logViewer.upstream.betas')" full>
+                <span v-if="upstream.betas.length" class="flex flex-wrap gap-1">
+                  <SBadge v-for="b in upstream.betas" :key="b" size="sm"><span class="font-mono">{{ b }}</span></SBadge>
+                </span>
+                <template v-else>—</template>
+              </SDescItem>
+            </SDescriptions>
+            <div class="text-xs font-medium text-fg-muted">{{ t('ccgateway.logViewer.upstream.headers') }}</div>
+            <SEmpty v-if="!upstream.headers.length" size="sm" />
+            <dl v-else class="grid grid-cols-[minmax(10rem,16rem)_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs" data-testid="request-log-upstream-headers">
+              <template v-for="h in upstream.headers" :key="h.k">
+                <dt class="break-all font-mono text-fg-muted">{{ h.k }}</dt>
+                <dd class="break-all font-mono" :class="h.redacted ? 'italic text-fg-subtle' : ''">{{ h.v }}</dd>
               </template>
-              <template v-else>—</template>
-            </SDescItem>
-            <SDescItem v-if="upstream.inputSha256" :label="t('ccgateway.logViewer.upstream.inputSha256')" mono full>
-              <span class="break-all">{{ upstream.inputSha256 }}</span>
-              <SCopyButton :text="upstream.inputSha256" icon-only size="xs" class="ml-1 align-middle" />
-              <SButton v-if="canFilterSha(upstream.inputSha256)" size="xs" variant="ghost" icon="filter" class="ml-1" @click="filterBy('sha256', upstream.inputSha256)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
-            </SDescItem>
-            <SDescItem :label="t('ccgateway.logViewer.upstream.model')" mono :value="upstream.model" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.stream')" :value="yesNo(upstream.stream)" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.session')" mono full data-testid="request-log-upstream-session">
-              <template v-if="upstream.session">
-                <span class="break-all">{{ upstream.session }}</span>
-                <SCopyButton :text="upstream.session" icon-only size="xs" class="ml-1 align-middle" />
-                <SButton v-if="canFilterSession(upstream.session)" size="xs" variant="ghost" icon="filter" class="ml-1" data-testid="request-log-filter-by-session" @click="filterBy('session', upstream.session)">{{ t('ccgateway.logViewer.search.filterBy') }}</SButton>
-              </template>
-              <template v-else>—</template>
-            </SDescItem>
-            <SDescItem :label="t('ccgateway.logViewer.upstream.requestClass')" mono :value="upstream.requestClass" />
-            <SDescItem :label="t('ccgateway.logViewer.upstream.betas')" full>
-              <span v-if="upstream.betas.length" class="flex flex-wrap gap-1">
-                <SBadge v-for="b in upstream.betas" :key="b" size="sm"><span class="font-mono">{{ b }}</span></SBadge>
-              </span>
-              <template v-else>—</template>
-            </SDescItem>
-          </SDescriptions>
-          <div class="text-xs font-medium text-fg-muted">{{ t('ccgateway.logViewer.upstream.headers') }}</div>
-          <SEmpty v-if="!upstream.headers.length" size="sm" />
-          <dl v-else class="grid grid-cols-[minmax(10rem,16rem)_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs" data-testid="request-log-upstream-headers">
-            <template v-for="h in upstream.headers" :key="h.k">
-              <dt class="break-all font-mono text-fg-muted">{{ h.k }}</dt>
-              <dd class="break-all font-mono" :class="h.redacted ? 'italic text-fg-subtle' : ''">{{ h.v }}</dd>
-            </template>
-          </dl>
+            </dl>
+          </template>
+          <div class="text-xs font-medium text-fg-muted">{{ t('ccgateway.logViewer.upstream.body') }}</div>
+          <SAlert v-if="readable('upstream') && !contentNoticeSeen" tone="warning" dense dismissible data-testid="request-log-content-notice" @dismiss="contentNoticeSeen = true">{{ t('ccgateway.logViewer.contentNotice') }}</SAlert>
+          <RequestLogBody :key="`${current.id}-upstream`" :account-id="accountId" :log="current.id" :request-id="current.request_id" part="upstream" :source="body('upstream')" />
         </template>
-        <template v-else-if="tab === 'content'">
+        <template v-else-if="bodyPart">
+          <SHint v-if="bodyPart === 'response' && response.capture === 'dropped'" tone="warning" size="xs" data-testid="request-log-response-dropped">{{ t('ccgateway.logViewer.response.dropped') }}</SHint>
+          <SAlert v-if="readable(bodyPart) && !contentNoticeSeen" tone="warning" dense dismissible data-testid="request-log-content-notice" @dismiss="contentNoticeSeen = true">{{ t('ccgateway.logViewer.contentNotice') }}</SAlert>
+          <RequestLogBody :key="`${current.id}-${bodyPart}`" :account-id="accountId" :log="current.id" :request-id="current.request_id" :part="bodyPart" :source="body(bodyPart)" />
+        </template>
+        <template v-else-if="tab === 'files'">
           <SAlert v-if="!contentNoticeSeen" tone="warning" dense dismissible data-testid="request-log-content-notice" @dismiss="contentNoticeSeen = true">{{ t('ccgateway.logViewer.contentNotice') }}</SAlert>
           <RequestLogContent :key="current.id" :account-id="accountId" :log="current.id" :request-id="current.request_id" :files="detail.files" />
         </template>

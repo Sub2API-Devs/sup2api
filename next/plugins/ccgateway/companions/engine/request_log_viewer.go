@@ -204,6 +204,21 @@ func (s *requestLogStore) prune() {
 	s.pruned = s.clock()
 	s.mu.Unlock()
 	s.pruneFiles()
+	pruneStaging(s.staging, s.clock())
+}
+
+// stagingRetention is how long a staged sent request may wait: one whose
+// background write was refused is left there and removed after it.
+const stagingRetention = 10 * time.Minute
+
+// pruneStaging removes the staged files older than stagingRetention.
+func pruneStaging(dir string, now time.Time) {
+	entries, _ := os.ReadDir(dir)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && now.Sub(info.ModTime()) > stagingRetention {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+		}
+	}
 }
 
 // pruneFiles removes what the levels' limits no longer keep without holding
@@ -467,12 +482,14 @@ func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
 // `upstream-*` is the request the CLI sent (upstream-request.body; its facts,
 // upstream-request.json, are a summary file the detail returns itself), and
 // `resource-*` the resource requests the Worker made upstream. response-meta.json
-// lives in the request's temporary directory, not here.
+// lives in the request's temporary directory, not here. The response is
+// response.json once assembled (REQUEST-LOG-ASYNC-DESIGN.md §4), response.body
+// when it could not be and in older logs.
 func logFileKind(name string) string {
 	switch {
 	case name == "request.body":
 		return "request"
-	case name == "response.body":
+	case name == responseBodyFile, name == responseJSONFile:
 		return "response"
 	case strings.HasPrefix(name, "upstream-"), strings.HasPrefix(name, "resource-"):
 		return "upstream"

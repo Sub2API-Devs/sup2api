@@ -405,6 +405,16 @@ describe('account request log settings of the core', () => {
     w.unmount()
   })
 
+  it('names a full default, with no countdown on a following account', async () => {
+    core({ 25: policy({ default: 'full', effective: 'full' }) })
+    const w = await render()
+    expect(w.get('[data-testid="request-log-level-25"]').text().replace(/\s+/g, '')).toBe('跟随默认（完整）关闭摘要完整')
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(w.get('[data-testid="request-log-limits-25"]').text()).toContain('当前生效：完整。')
+    expect(w.find('[data-testid="request-log-full-25"]').exists()).toBe(false)
+    w.unmount()
+  })
+
   it('sets off, summary and follow without a confirmation, since off deletes nothing', async () => {
     core({ 25: policy() })
     mocks.put.mockResolvedValueOnce(policy({ setting: { level: 'off', full_until: null }, effective: 'off' }))
@@ -559,7 +569,8 @@ describe('account request log settings of the core', () => {
       policy({ setting: { level: 'debug', full_until: null } }),
       policy({ setting: { level: 'full', full_until: null } }),
       policy({ setting: null }),
-      policy({ default: 'full' }),
+      // A full default is valid since REQUEST-LOG-ASYNC-DESIGN.md §6; follow is never a default.
+      policy({ default: 'follow' }),
       policy({ effective: 'verbose' }),
       policy({ worker: 'down' }),
     ]) {

@@ -77,9 +77,9 @@ const imagesChanged = computed(() => IMAGE_KEYS.some(k => imagesPayload.value[k]
 const savedLogDefault = computed<RequestLogDefault | null>(() => {
   const rule = saved.value?.request_logs
   if (!rule || typeof rule !== 'object') return null
-  return isDefault(rule.level) ? rule.level : 'summary'
+  return isDefault(rule.level) ? rule.level : 'off'
 })
-const requestLogDefault = ref<RequestLogDefault>('summary')
+const requestLogDefault = ref<RequestLogDefault>('off')
 const logDefaultChanged = computed(() => savedLogDefault.value !== null && requestLogDefault.value !== savedLogDefault.value)
 const logDefaultOptions = computed(() => LOG_DEFAULTS.map(value => ({ value, label: t(`ccgateway.requestLogs.level.${value}`) })))
 const overridesText = computed(() => {
@@ -173,7 +173,7 @@ function assign(config: RemoteConfig) {
   network.pool = config.network?.pool || DEFAULT_POOL
   network.allocation = config.network?.allocation || 'random'
   const rule = config.request_logs
-  requestLogDefault.value = rule && typeof rule === 'object' && isDefault(rule.level) ? rule.level : 'summary'
+  requestLogDefault.value = rule && typeof rule === 'object' && isDefault(rule.level) ? rule.level : 'off'
   const controller = config.mode === 'controller'
   endpoint.value = controller && config.host ? endpointOf(config) : ''
   adminKey.value = ''
@@ -369,7 +369,11 @@ onBeforeUnmount(() => {
             </RuntimeInstall>
             <!-- The default request log level, saved with the form; the account containers below may each set their own. -->
             <SSettingsGroup v-if="savedLogDefault !== null" v-show="activeTab === 'deployment'" :title="t('ccgateway.requestLogs.title')" data-testid="settings-request-logs">
-              <SSettingRow :label="t('ccgateway.requestLogs.defaultLabel')" :description="t('ccgateway.requestLogs.defaultHint')">
+              <SSettingRow :label="t('ccgateway.requestLogs.defaultLabel')">
+                <template #description>
+                  {{ t('ccgateway.requestLogs.defaultHint') }}
+                  <SHint v-if="requestLogDefault === 'full'" inline tone="warning" size="xs" class="mt-1 block" data-testid="request-log-default-full-warning">{{ t('ccgateway.requestLogs.defaultFullWarning') }}</SHint>
+                </template>
                 <div class="flex items-center gap-2 whitespace-nowrap">
                   <SSegmented :model-value="requestLogDefault" :options="logDefaultOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.requestLogs.defaultLabel')" data-testid="request-log-default" @update:model-value="requestLogDefault = isDefault($event) ? $event : requestLogDefault" />
                   <SHint v-if="overridesText" inline size="xs" data-testid="request-log-overrides">{{ overridesText }}</SHint>

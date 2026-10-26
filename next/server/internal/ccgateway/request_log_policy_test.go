@@ -19,17 +19,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CONTRACTS §65: the default rule is part of the configuration, off or
-// summary only; omitted keeps the stored one.
+// CONTRACTS §65: the default rule is part of the configuration, off, summary
+// or full (full without an end, REQUEST-LOG-ASYNC-DESIGN.md §6); omitted
+// keeps the stored one.
 func TestRequestLogDefaultConfig(t *testing.T) {
-	require.Equal(t, "summary", Config{}.DefaultRequestLog(), "no rule is summary")
+	require.Equal(t, "off", Config{}.DefaultRequestLog(), "no rule is off")
 	require.Equal(t, "off", Config{RequestLogs: &RequestLogDefault{Level: "off"}}.DefaultRequestLog())
+	require.Equal(t, "full", Config{RequestLogs: &RequestLogDefault{Level: "full"}}.DefaultRequestLog())
+	require.Equal(t, "off", Config{RequestLogs: &RequestLogDefault{Level: "verbose"}}.DefaultRequestLog(), "an unknown stored rule is off")
 	old := Config{Mode: "disabled", RequestLogs: &RequestLogDefault{Level: "off"}}
 	for _, tc := range []struct{ body, want string }{
 		{`{"mode":"disabled"}`, "off"},
 		{`{"mode":"disabled","request_logs":null}`, "off"},
 		{`{"mode":"disabled","request_logs":{"level":"summary"}}`, "summary"},
 		{`{"mode":"disabled","request_logs":{"level":"off"}}`, "off"},
+		{`{"mode":"disabled","request_logs":{"level":"full"}}`, "full"},
 	} {
 		var in Config
 		require.NoError(t, json.Unmarshal([]byte(tc.body), &in), tc.body)
@@ -39,7 +43,7 @@ func TestRequestLogDefaultConfig(t *testing.T) {
 		require.Equal(t, RequestLogDefault{Level: tc.want}, saved.Public()["request_logs"], tc.body)
 	}
 	for _, body := range []string{
-		`{"mode":"disabled","request_logs":{"level":"full"}}`,
+		`{"mode":"disabled","request_logs":{"level":"Full"}}`,
 		`{"mode":"disabled","request_logs":{"level":""}}`,
 		`{"mode":"disabled","request_logs":{}}`,
 		`{"mode":"disabled","request_logs":{"level":"Summary"}}`,
@@ -52,13 +56,15 @@ func TestRequestLogDefaultConfig(t *testing.T) {
 	}
 	var in Config
 	require.Error(t, json.Unmarshal([]byte(`{"request_logs":{"level":"off","full_for_hours":4}}`), &in), "unknown keys are refused")
+	require.Error(t, json.Unmarshal([]byte(`{"request_logs":{"level":"full","full_for_hours":4}}`), &in), "a full default has no duration")
+	require.Error(t, json.Unmarshal([]byte(`{"request_logs":{"level":"full","full_until":"2026-10-27T00:00:00Z"}}`), &in), "nor an end")
 	require.Error(t, json.Unmarshal([]byte(`{"request_logs":"off"}`), &in))
 	// The default travels with each request: no runtime is reconciled for it.
 	require.True(t, sameRuntimeConfig(Config{Mode: "controller"}, Config{Mode: "controller", RequestLogs: &RequestLogDefault{Level: "off"}}))
 }
 
 // The default rule is saved with the configuration (PUT remote-config,
-// settings:manage), read back by GET, and refuses full; no runtime is asked.
+// settings:manage), read back by GET, full included; no runtime is asked.
 func TestRequestLogDefaultSavedThroughRemoteConfig(t *testing.T) {
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a request log default reached the controller: %s", r.URL.Path)
@@ -70,25 +76,28 @@ func TestRequestLogDefaultSavedThroughRemoteConfig(t *testing.T) {
 	f.auth.keys[reader] = []string{"settings:read"}
 	code, out := f.request(admin, "GET", "/system/ccgateway/remote-config", "")
 	require.Equal(t, 200, code, out)
-	require.Equal(t, map[string]any{"level": "summary"}, data(out)["request_logs"])
-	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"off"}}`)
-	require.Equal(t, 200, code, out)
 	require.Equal(t, map[string]any{"level": "off"}, data(out)["request_logs"])
+	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"summary"}}`)
+	require.Equal(t, 200, code, out)
+	require.Equal(t, map[string]any{"level": "summary"}, data(out)["request_logs"])
 	code, _ = f.request(reader, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"summary"}}`)
 	require.Equal(t, 403, code)
-	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"full"}}`)
-	require.Equal(t, 400, code, out)
 	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"verbose"}}`)
 	require.Equal(t, 400, code, out)
+	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"full","full_for_hours":24}}`)
+	require.Equal(t, 400, code, out)
+	code, out = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","request_logs":{"level":"full"}}`)
+	require.Equal(t, 200, code, out)
+	require.Equal(t, map[string]any{"level": "full"}, data(out)["request_logs"])
 	// Saving something else keeps it.
 	code, _ = f.request(admin, "PUT", "/system/ccgateway/remote-config", `{"mode":"local"}`)
 	require.Equal(t, 200, code)
 	code, out = f.request(reader, "GET", "/system/ccgateway/remote-config", "")
 	require.Equal(t, 200, code, out)
-	require.Equal(t, map[string]any{"level": "off"}, data(out)["request_logs"])
+	require.Equal(t, map[string]any{"level": "full"}, data(out)["request_logs"])
 	cfg, err := f.s.Load(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "off", cfg.DefaultRequestLog())
+	require.Equal(t, "full", cfg.DefaultRequestLog())
 }
 
 // REQUEST-LOG-POLICY-DESIGN.md §1: the account's setting, else the default;
@@ -97,21 +106,27 @@ func TestEffectiveRequestLog(t *testing.T) {
 	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 	later, earlier := now.Add(time.Hour), now.Add(-time.Second)
 	off := Config{RequestLogs: &RequestLogDefault{Level: "off"}}
+	full := Config{RequestLogs: &RequestLogDefault{Level: "full"}}
 	for _, tc := range []struct {
 		name    string
 		cfg     Config
 		account AccountRequestLog
 		want    string
 	}{
-		{"follow default", Config{}, AccountRequestLog{}, "summary"},
+		{"follow default", Config{}, AccountRequestLog{}, "off"},
 		{"follow off", off, AccountRequestLog{}, "off"},
+		{"follow full", full, AccountRequestLog{}, "full"},
 		{"override off", Config{}, AccountRequestLog{Level: "off"}, "off"},
+		{"override off under full", full, AccountRequestLog{Level: "off"}, "off"},
 		{"override summary", off, AccountRequestLog{Level: "summary"}, "summary"},
+		{"override summary under full", full, AccountRequestLog{Level: "summary"}, "summary"},
 		{"full until later", off, AccountRequestLog{Level: "full", FullUntil: &later}, "full"},
 		{"full expired", off, AccountRequestLog{Level: "full", FullUntil: &earlier}, "off"},
-		{"full at its end", Config{}, AccountRequestLog{Level: "full", FullUntil: &now}, "summary"},
-		{"full without expiry", Config{}, AccountRequestLog{Level: "full"}, "summary"},
-		{"unknown level", Config{}, AccountRequestLog{Level: "verbose"}, "summary"},
+		{"full expired under full", full, AccountRequestLog{Level: "full", FullUntil: &earlier}, "full"},
+		{"full at its end", Config{}, AccountRequestLog{Level: "full", FullUntil: &now}, "off"},
+		{"full without expiry", Config{}, AccountRequestLog{Level: "full"}, "off"},
+		{"unknown level", Config{}, AccountRequestLog{Level: "verbose"}, "off"},
+		{"unknown level under full", full, AccountRequestLog{Level: "verbose"}, "full"},
 	} {
 		require.Equal(t, tc.want, effectiveRequestLog(tc.cfg, tc.account, now), tc.name)
 	}
@@ -185,8 +200,8 @@ func TestRequestLogLevelOnTheRequestPath(t *testing.T) {
 		require.NotEmpty(t, p.RelayMode, "the feature policy is still sent")
 		return p.RequestLog
 	}
-	require.Equal(t, "summary", level(), "no rule, no setting")
-	require.Contains(t, send(VirtualTestURL, "/v1/ccgateway/probe"), `"request_log":"summary"`, "the account test carries it too")
+	require.Equal(t, "off", level(), "no rule, no setting")
+	require.Contains(t, send(VirtualTestURL, "/v1/ccgateway/probe"), `"request_log":"off"`, "the account test carries it too")
 
 	// Saved through the endpoint: dropped at once here, announced to the others.
 	put := func(body string) {
@@ -210,14 +225,31 @@ func TestRequestLogLevelOnTheRequestPath(t *testing.T) {
 	s.cache.mu.Lock()
 	s.cache.requestLogs[id] = cacheEntry[AccountRequestLog]{v: AccountRequestLog{Level: "full", FullUntil: &past}, at: time.Now()}
 	s.cache.mu.Unlock()
-	require.Equal(t, "summary", level(), "an expired full follows the default")
+	require.Equal(t, "off", level(), "an expired full follows the default")
 
 	// Following, the configuration's rule applies once it is read again.
 	put(`{"level":"follow"}`)
-	saveConfig(&RequestLogDefault{Level: "off"})
-	require.Equal(t, "summary", level(), "the configuration is cached")
+	saveConfig(&RequestLogDefault{Level: "summary"})
+	require.Equal(t, "off", level(), "the configuration is cached")
 	s.onConfigChanged([]byte(`{"type":"ccgateway_features"}`))
-	require.Equal(t, "off", level())
+	require.Equal(t, "summary", level())
+
+	// A full default reaches the Worker as full, with no end of its own.
+	saveConfig(&RequestLogDefault{Level: "full"})
+	s.onConfigChanged([]byte(`{"type":"ccgateway_features"}`))
+	require.Equal(t, "full", level(), "a following account under a full default")
+	require.Contains(t, send(VirtualTestURL, "/v1/ccgateway/probe"), `"request_log":"full"`)
+	put(`{"level":"summary"}`)
+	require.Equal(t, "summary", level(), "the account's own level wins over a full default")
+	view := decodeRequestLogAnswer(t, serveRequestLogsFor(s, d, "GET", ""))
+	require.Equal(t, "full", view.Data.Default)
+	require.Equal(t, "summary", view.Data.Effective)
+	put(`{"level":"follow"}`)
+	view = decodeRequestLogAnswer(t, serveRequestLogsFor(s, d, "GET", ""))
+	require.Equal(t, "full", view.Data.Default)
+	require.Equal(t, "full", view.Data.Effective)
+	require.Equal(t, "follow", view.Data.Setting.Level)
+	require.Nil(t, view.Data.Setting.FullUntil, "a full default has no end")
 
 	// A provider resource request names only its level.
 	put(`{"level":"full","full_for_hours":1}`)

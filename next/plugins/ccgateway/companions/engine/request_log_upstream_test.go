@@ -118,6 +118,7 @@ func upstreamPost(t *testing.T, g *Gateway, body string, headers map[string]stri
 	}
 	response := httptest.NewRecorder()
 	g.ServeHTTP(response, request)
+	g.RequestLogs.flush()
 	if paths, _ := filepath.Glob(filepath.Join(g.Runner.Work, "request-*")); len(paths) != 0 {
 		t.Fatal("temporary request directories leaked", paths)
 	}
@@ -145,15 +146,13 @@ func storeAt(t *testing.T, level string) *requestLogStore {
 	case logLevelFull:
 		return fullLogStore(t, t.TempDir())
 	case logLevelOff:
-		store, err := newRequestLogStore(t.TempDir())
+		store, err := openTestLogStore(t, t.TempDir())
 		require.NoError(t, err)
 		code, _ := putLogs(t, store, `{"level":"off"}`)
 		require.Equal(t, 200, code)
 		return store
 	}
-	store, err := newRequestLogStore(t.TempDir())
-	require.NoError(t, err)
-	return store
+	return summaryLogStore(t, t.TempDir())
 }
 
 const upstreamTestBody = `{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"d\",\"session_id\":\"` + upstreamTestClient + `\"}"}}`
@@ -385,7 +384,7 @@ func TestUpstreamCaptureQueryAndDetail(t *testing.T) {
 }
 
 func TestRequestLogStateOffersViewerSearch(t *testing.T) {
-	store, err := newRequestLogStore(t.TempDir())
+	store, err := openTestLogStore(t, t.TempDir())
 	require.NoError(t, err)
 	w := httptest.NewRecorder()
 	store.serve(w, httptest.NewRequest(http.MethodGet, "/admin/request-logs", nil))
@@ -411,8 +410,9 @@ func TestUpstreamCaptureBodyFollowsClearedContent(t *testing.T) {
 	require.NoError(t, os.WriteFile(prefix+".body", []byte("sent"), 0600))
 	code, _ := putLogs(t, store, `{"clear_full":true}`)
 	require.Equal(t, 200, code)
-	d.keepUpstreamRequest(prefix, true, true)
+	d.keepUpstreamRequest(prefix, true, func() bool { return true })
 	d.finish()
+	d.flushLogs()
 	_, err := os.Stat(filepath.Join(d.directory, upstreamBodyFile))
 	require.True(t, os.IsNotExist(err))
 	_, err = os.Stat(filepath.Join(d.directory, upstreamRequestFile))

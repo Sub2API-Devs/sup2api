@@ -8,6 +8,9 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const base = '/system/ccgateway'
   // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
   let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]},request_logs:{level:'summary'}}
+  // SUB2API_MOCK_CCG_LOG_DEFAULT=full|off starts with that default request log rule (REQUEST-LOG-ASYNC-DESIGN.md §6:
+  // a full default has no end; the Worker's full retention and budget still apply).
+  if (['off','summary','full'].includes(process.env.SUB2API_MOCK_CCG_LOG_DEFAULT||'')) config.request_logs={level:process.env.SUB2API_MOCK_CCG_LOG_DEFAULT}
   on('GET',`${base}/remote-config`,()=>config)
   // Request catalog of the core (features.RequestCatalog("request_build")): the
   // two entries the request path declares. Keep it in step with
@@ -18,8 +21,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   ]}))
   on('PUT',`${base}/remote-config`,({body})=>{
     const { password,private_key,passphrase,admin_key,api_key,controller_ca,...publicFields }=body
-    // The default request log rule (REQUEST-LOG-POLICY-DESIGN.md §1): off or summary only; omitted keeps it.
-    if (publicFields.request_logs!==undefined && !['off','summary'].includes(publicFields.request_logs?.level)) return fail(400,'invalid_argument','request_logs.level must be off or summary.')
+    // The default request log rule (REQUEST-LOG-ASYNC-DESIGN.md §6): off, summary or full; omitted keeps it.
+    if (publicFields.request_logs!==undefined && !['off','summary','full'].includes(publicFields.request_logs?.level)) return fail(400,'invalid_argument','request_logs.level must be off, summary or full.')
     config={...config,...publicFields,account_runtimes:true,has_admin_key:!!admin_key||config.has_admin_key,has_controller_ca:publicFields.scheme==='http'?false:(!!controller_ca||config.has_controller_ca)}
     return config
   })
@@ -209,7 +212,10 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     ['26', { level: 'full', fullUntil: Date.now() + 2 * 3600000 }],
     ['27', { level: 'off', fullUntil: null }],
   ])
-  const defaultLog = (): 'off' | 'summary' => ((config.request_logs as { level?: string } | undefined)?.level === 'off' ? 'off' : 'summary')
+  const defaultLog = (): LogLevel => {
+    const level = (config.request_logs as { level?: string } | undefined)?.level
+    return level === 'off' || level === 'full' ? level : 'summary'
+  }
   const policyState = (id: string, key: string) => {
     let s = logSettings.get(id)
     if (s?.level === 'full' && s.fullUntil !== null && s.fullUntil <= Date.now()) { logSettings.delete(id); s = undefined }
@@ -268,6 +274,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     // Upstream capture (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3); absent on older logs.
     mode?: 'direct' | 'build'; client_session_id?: string; upstream_session_id?: string; body_sha256?: string; upstream_body_sha256?: string
     body_changed?: boolean; upstream_captured?: boolean; upstream_bytes?: number
+    // Response capture metadata of a full log (REQUEST-LOG-ASYNC-DESIGN.md §4); only in its detail.
+    response?: Record<string, unknown>
   }
   const mockLogs = new Map<string, MockLog[]>()
   const uuidOf = (seed: string) => {
@@ -279,6 +287,23 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const requestBody = () => enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, system: [{ type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: '帮我看看这个报错 <script>alert(1)</script>' }] }))
   // What the CLI sent after the build rewrote it (or the same bytes in direct mode).
   const rewrittenBody = (session: string) => enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, metadata: { user_id: JSON.stringify({ session_id: session }) }, system: [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=2.1.304; cch=00000;' }, { type: 'text', text: 'You are Claude Code, Anthropic\'s official CLI for Claude.' }, { type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: [{ type: 'text', text: '<system-reminder>…</system-reminder>' }, { type: 'text', text: '帮我看看这个报错 <script>alert(1)</script>' }] }] }))
+  // The response as the Worker assembles it from the stream (REQUEST-LOG-ASYNC-DESIGN.md §4).
+  const assembledResponse = (n: number) => enc(JSON.stringify({
+    id: `msg_${n}`, type: 'message', role: 'assistant', model: 'claude-sonnet-4-6',
+    content: [
+      { type: 'thinking', thinking: '先读一下报错堆栈……', signature: 'EqQBCkYIBxgCKkB' + 'a'.repeat(40) },
+      { type: 'text', text: '好的，我先看一下这个报错 <b>不应渲染为 HTML</b>……' },
+      { type: 'tool_use', id: `toolu_${n}`, name: 'Read', input: { file_path: '/workspace/src/main.ts' } },
+    ],
+    stop_reason: 'tool_use', stop_sequence: null,
+    usage: { input_tokens: 18231, cache_read_input_tokens: 17984, output_tokens: 96 },
+  }))
+  // Logs 0–5 keep the assembled response.json; 6 could not be assembled (response.body, raw);
+  // 7 dropped its response capture (queue full).
+  const responseFile = (n: number, sse: string): Record<string, Uint8Array> => n === 6 ? { 'response.body': enc(sse) } : n === 7 ? {} : { 'response.json': assembledResponse(n) }
+  const responseMeta = (n: number): Record<string, unknown> => n === 6
+    ? { response_assembled: false }
+    : n === 7 ? { response_assembled: false, response_capture: 'dropped', log_dropped_bytes: 81920 } : { response_assembled: true, response_events: 9 }
   const logFiles = (rid: string, n: number, upstream: Uint8Array | null): Record<string, Uint8Array> => {
     const sse = ['event: message_start', `data: {"type":"message_start","message":{"id":"msg_${n}","model":"claude-sonnet-4-6","usage":{"input_tokens":18231,"cache_read_input_tokens":17984}}}`, '',
       'event: content_block_delta', 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"好的，我先看一下这个报错……"}}', '',
@@ -292,7 +317,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       'build-components.json': enc(JSON.stringify({ level: 'low', system_blocks: 3, tools: ['Bash', 'Read', 'Edit', 'Write'], attachments: ['date', 'environment'] })),
       'effective-config.json': enc(JSON.stringify({ args: ['--print', '--output-format', 'stream-json'], model: 'claude-sonnet-4-6' })),
       'cli-stdout.jsonl': enc(cli),
-      'response.body': enc(sse),
+      ...responseFile(n, sse),
       'upstream-1-request.body': new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x02, 0xff, ...enc('binary payload')]),
       ...(upstream ? { 'upstream-request.body': upstream } : {}),
     }
@@ -329,8 +354,9 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
         model: n % 4 === 1 ? 'claude-opus-4-1' : 'claude-sonnet-4-6', stream: n % 5 !== 0, log_level: full ? 'full' : 'summary',
         error_type: failed ? 'overloaded_error' : rejected ? 'invalid_request_error' : undefined,
         error: failed ? 'Overloaded' : rejected ? 'messages: roles must alternate between "user" and "assistant"' : undefined,
-        log_status: n === 0 ? 'truncated' : 'complete', test: n === 11, attempt: n === 2 ? 2 : n === 3 ? 1 : undefined,
+        log_status: n === 0 ? 'truncated' : n === 7 ? 'partial' : 'complete', test: n === 11, attempt: n === 2 ? 2 : n === 3 ? 1 : undefined,
         files: full ? logFiles(rid, n, sent) : {},
+        response: full ? responseMeta(n) : undefined,
         ...capture,
       })
     }
@@ -371,14 +397,14 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     const page = list.slice(0, limit)
     const last = page[page.length - 1]
     return {
-      items: page.map(({ files, upstream_bytes: _bytes, ...l }) => ({ ...l, has_content: Object.keys(files).length > 0, bytes: logBytes(files) })),
+      items: page.map(({ files, upstream_bytes: _bytes, response: _response, ...l }) => ({ ...l, has_content: Object.keys(files).length > 0, bytes: logBytes(files) })),
       next: list.length > limit ? `${Date.parse(last.time)}000000_${last.id}` : null,
       active: q.before ? [] : [{ request_id: 'e11c0de0e11c0de0e11c0de0', started: new Date(Date.now() - 18000).toISOString(), stage: 'upstream' }],
     }
   })
   const findLog = (req: MockRequest, key: string) => logsFor(key).find(l => l.id === req.params.log)
   const logMissing = () => fail(404, 'not_found', 'The request log was not found; it may have expired.', { reason: 'request_log_not_found' })
-  const fileKind = (name: string) => name === 'request.body' ? 'request' : name === 'response.body' ? 'response' : name.startsWith('upstream') ? 'upstream' : name.startsWith('cli-') ? 'cli' : 'build'
+  const fileKind = (name: string) => name === 'request.body' ? 'request' : name === 'response.body' || name === 'response.json' ? 'response' : name.startsWith('upstream') ? 'upstream' : name.startsWith('cli-') ? 'cli' : 'build'
   on('GET', `${base}/accounts/:id/request-logs/requests/:log`, (req) => {
     const who = caller(req)
     if (!hasPerm(who, ['settings:read', 'account:read', 'settings:manage'])) return fail(403, 'permission_denied', 'settings:read or account:read is required')
@@ -416,6 +442,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
         message_count: 12, history_mode: 'prefix-hit', execution_mode: 'build', anthropic_beta: 'claude-code-20250219,oauth-2025-04-20', duration_ms: l.duration_ms, log_status: l.log_status,
         error_type: l.error_type, error: l.error, messages: [{ index: 0, role: 'user', content_type: 'string', text_bytes: 42 }],
         ...upstreamMeta,
+        ...l.response,
       },
       events: [
         { time: at(0), event: 'request_received', detail: { request_id: l.request_id } },

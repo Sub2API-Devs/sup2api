@@ -2,6 +2,8 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,7 +14,9 @@ import (
 
 // The level is kept beside the logs (request-logs.json); an older Worker's
 // marker (request-logs.disabled) is read as off and written for off, so a
-// rollback keeps logging off. Without either the level is the summary.
+// rollback keeps logging off. Without either the level is off (2026-10-27):
+// it only decides for a request whose policy names no level (one sent by
+// hand, or by an older core), and reading it removes nothing.
 const requestLogStateFile, requestLogDisabledMarker = "request-logs.json", "request-logs.disabled"
 
 type requestLogState struct {
@@ -27,8 +31,8 @@ type requestLogState struct {
 // Worker's off (its marker alone) removes them, once: the level is then saved
 // as this Worker's own, which the next start reads.
 func newRequestLogStore(root string) (*requestLogStore, error) {
-	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelSummary, active: map[*requestDiagnostic]bool{},
-		pruneDue: make(chan struct{}, 1)}
+	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelOff, active: map[*requestDiagnostic]bool{},
+		pruneDue: make(chan struct{}, 1), staging: filepath.Join(root, requestLogStaging)}
 	raw, err := os.ReadFile(filepath.Join(root, requestLogStateFile))
 	var saved requestLogState
 	legacyOff := false
@@ -52,30 +56,66 @@ func newRequestLogStore(root string) (*requestLogStore, error) {
 		if err := os.RemoveAll(s.root); err != nil {
 			return nil, err
 		}
-		if err := s.persist(); err != nil {
+		if err := s.writeState(s.level, s.fullUntil); err != nil {
 			log.Printf("request log level not saved: %v", err)
 		}
 	}
 	// Logs moved aside to be removed (store.discard) and left by a stopped
-	// Worker are removed now.
+	// Worker are removed now, as are sent requests a stopped Worker staged.
 	aside, _ := filepath.Glob(s.root + discardedSuffix + "*")
 	for _, path := range aside {
 		if err := os.RemoveAll(path); err != nil {
 			return nil, err
 		}
 	}
+	if err := os.RemoveAll(s.staging); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(s.staging, 0700); err != nil {
+		return nil, err
+	}
+	s.sink = newLogSink(logSinkQueue, logSinkInflight)
 	s.startIndex()
 	return s, nil
+}
+
+// requestLogStaging holds the request the CLI sent, moved out of the
+// request's temporary directory until the background writer keeps it
+// (keepUpstreamRequest). It sits beside the logs, on the same disk as the
+// Worker's temporary directories, so moving a file there is a rename.
+const requestLogStaging = "request-logs-staging"
+
+// stage moves a file the CLI wrote into staging.
+func (s *requestLogStore) stage(path string) (string, error) {
+	staged := filepath.Join(s.staging, uuid())
+	if err := os.Rename(path, staged); err != nil {
+		// A missing staging directory is not a missing file.
+		if _, statErr := os.Lstat(path); statErr == nil {
+			return "", fmt.Errorf("stage %s: %w", filepath.Base(path), errors.Join(err, errStagingUnavailable))
+		}
+		return "", err
+	}
+	return staged, nil
+}
+
+var errStagingUnavailable = errors.New("request log staging unavailable")
+
+// close stops the background writer, letting it drain for a while (§3).
+func (s *requestLogStore) close() {
+	if s != nil {
+		s.sink.close(logSinkDrain)
+	}
 }
 
 // discardedSuffix names the logs turned off, moved aside to be removed.
 const discardedSuffix = ".deleted-"
 
-// persist writes the level (caller holds s.mu).
-func (s *requestLogStore) persist() error {
-	state := requestLogState{Level: s.level}
-	if s.level == logLevelFull {
-		until := s.fullUntil.UTC()
+// writeState saves a level (caller holds s.persist, never s.mu: a request
+// never waits for the disk).
+func (s *requestLogStore) writeState(level string, fullUntil time.Time) error {
+	state := requestLogState{Level: level}
+	if level == logLevelFull {
+		until := fullUntil.UTC()
 		state.FullUntil = &until
 	}
 	b, _ := json.Marshal(state)
@@ -87,7 +127,7 @@ func (s *requestLogStore) persist() error {
 		return err
 	}
 	marker := filepath.Join(s.state, requestLogDisabledMarker)
-	if s.level == logLevelOff {
+	if level == logLevelOff {
 		return os.WriteFile(marker, []byte("disabled"), 0600)
 	}
 	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
@@ -96,14 +136,29 @@ func (s *requestLogStore) persist() error {
 	return nil
 }
 
+// persistCurrent saves the level the store holds now (the background writer,
+// after the full level ended).
+func (s *requestLogStore) persistCurrent() {
+	s.persist.Lock()
+	defer s.persist.Unlock()
+	s.mu.Lock()
+	level, until := s.level, s.fullUntil
+	s.mu.Unlock()
+	if err := s.writeState(level, until); err != nil {
+		log.Printf("request log level not saved: %v", err)
+	}
+}
+
 // captureContent says whether a request starting now keeps content (caller
-// holds s.mu). The full level ends at its time and the summary applies again.
+// holds s.mu). The full level ends at its time and the summary applies again;
+// the background writer saves that.
 func (s *requestLogStore) captureContent() bool {
 	if s.level == logLevelFull && !s.clock().Before(s.fullUntil) {
 		s.level, s.fullUntil = logLevelSummary, time.Time{}
-		if err := s.persist(); err != nil {
-			log.Printf("request log level not saved: %v", err)
-		}
+		s.sink.submit(0, func() int64 {
+			s.persistCurrent()
+			return 0
+		})
 	}
 	return s.level == logLevelFull
 }
@@ -117,9 +172,17 @@ func (s *requestLogStore) clock() time.Time {
 
 type requestLogStore struct {
 	// mu guards the level, the active requests and the index; no file is
-	// written under it except the level's own (see requestDiagnostic.lock).
-	mu   sync.Mutex
-	root string
+	// touched under it (see requestDiagnostic.lock).
+	mu sync.Mutex
+	// io is held by the background writer while it writes a request's files
+	// and by turning logs off or clearing them; no request takes it.
+	io sync.Mutex
+	// persist orders the saves of the level.
+	persist sync.Mutex
+	// sink is the background writer every log file goes through.
+	sink    *logSink
+	staging string
+	root    string
 	// enabled: the store's own level is not off. It decides only for a request
 	// whose policy names no level (capture); logs kept at a policy's level are
 	// written, listed and read whatever it is.
@@ -208,13 +271,17 @@ const (
 )
 
 // clearAll removes every log, summaries and content, and leaves the level as
-// it is (REQUEST-LOG-POLICY-DESIGN.md §3). Like turning the level off, under
-// s.mu the running requests' logs end and the logs are moved aside; they are
-// removed after s.mu is released, so no request waits for the disk.
+// it is (REQUEST-LOG-POLICY-DESIGN.md §3). Like turning the level off, the
+// running requests' logs end and the logs are moved aside while no
+// background write runs; they are removed after, so no request and no
+// background write waits for the disk.
 func (s *requestLogStore) clearAll(w http.ResponseWriter) bool {
+	s.io.Lock()
 	s.mu.Lock()
-	aside, err := s.discard()
+	s.discardLocked()
 	s.mu.Unlock()
+	aside, err := s.moveAside()
+	s.io.Unlock()
 	if err == nil && aside != "" {
 		err = removeLogPath(aside)
 	}
@@ -226,18 +293,21 @@ func (s *requestLogStore) clearAll(w http.ResponseWriter) bool {
 }
 
 // clearFull removes the content of every request logged so far; the
-// summaries stay. Under s.mu the running requests stop capturing content and
-// the logged requests are listed; their files are removed after s.mu is
-// released, so no request waits for the disk (audit C7).
+// summaries stay. While no background write runs, the requests not yet
+// completed stop keeping content (their queued content is then skipped) and
+// the logged requests are listed; their files are removed after, so no
+// request waits for the disk (audit C7).
 func (s *requestLogStore) clearFull(w http.ResponseWriter) bool {
+	s.io.Lock()
 	s.mu.Lock()
 	for d := range s.active {
 		d.mu.Lock()
 		d.stopContent()
 		d.mu.Unlock()
 	}
-	requests, err := os.ReadDir(s.root)
 	s.mu.Unlock()
+	requests, err := os.ReadDir(s.root)
+	s.io.Unlock()
 	switch {
 	case os.IsNotExist(err):
 		err = nil
@@ -251,28 +321,34 @@ func (s *requestLogStore) clearFull(w http.ResponseWriter) bool {
 	return true
 }
 
-// applyLevel sets and saves the level. Off ends the running requests' logs
-// and moves the logs aside under s.mu; they are removed after it is released.
+// applyLevel saves and sets the level. The level is saved first, outside
+// s.mu, so a request never waits for it. Off ends the running requests' logs
+// and moves the logs aside; they are removed after.
 func (s *requestLogStore) applyLevel(w http.ResponseWriter, level string, hours int) bool {
-	s.mu.Lock()
-	previous, previousUntil := s.level, s.fullUntil
-	s.level, s.fullUntil = level, time.Time{}
+	s.persist.Lock()
+	defer s.persist.Unlock()
+	var until time.Time
 	if level == logLevelFull {
-		s.fullUntil = s.clock().Add(time.Duration(hours) * time.Hour)
+		until = s.clock().Add(time.Duration(hours) * time.Hour)
 	}
-	if err := s.persist(); err != nil {
-		s.level, s.fullUntil = previous, previousUntil
-		s.mu.Unlock()
+	if err := s.writeState(level, until); err != nil {
 		apiError(w, 500, "api_error", "Cannot persist request log setting")
 		return false
 	}
+	s.io.Lock()
+	s.mu.Lock()
+	s.level, s.fullUntil = level, until
 	s.enabled = level != logLevelOff
-	var aside string
-	var err error
 	if !s.enabled {
-		aside, err = s.discard()
+		s.discardLocked()
 	}
 	s.mu.Unlock()
+	var aside string
+	var err error
+	if level == logLevelOff {
+		aside, err = s.moveAside()
+	}
+	s.io.Unlock()
 	if err == nil && aside != "" {
 		err = removeLogPath(aside)
 	}
@@ -283,12 +359,10 @@ func (s *requestLogStore) applyLevel(w http.ResponseWriter, level string, hours 
 	return true
 }
 
-// discard ends every running request's log, empties the index and moves the
-// logs aside (caller holds s.mu), for the level turned off and for clearing
-// every log. It returns the directory to remove, "" when
-// there were no logs; one left by a stopped Worker is removed at its next
-// start (newRequestLogStore).
-func (s *requestLogStore) discard() (string, error) {
+// discardLocked ends every running request's log and empties the index
+// (caller holds s.io and s.mu), for the level turned off and for clearing
+// every log. A request's queued writes find its directory gone.
+func (s *requestLogStore) discardLocked() {
 	for d := range s.active {
 		d.mu.Lock()
 		d.stopContent()
@@ -297,6 +371,12 @@ func (s *requestLogStore) discard() (string, error) {
 		d.mu.Unlock()
 	}
 	s.index = map[string]logEntry{}
+}
+
+// moveAside moves the logs aside (caller holds s.io) and returns the
+// directory to remove, "" when there were no logs; one left by a stopped
+// Worker is removed at its next start (newRequestLogStore).
+func (s *requestLogStore) moveAside() (string, error) {
 	aside := s.root + discardedSuffix + uuid()
 	if err := os.Rename(s.root, aside); err != nil {
 		if os.IsNotExist(err) {

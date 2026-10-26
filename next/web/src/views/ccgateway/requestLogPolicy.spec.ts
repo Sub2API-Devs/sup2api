@@ -25,7 +25,8 @@ describe('request log policy of the core', () => {
       answer({ setting: { level: 'full' } }),
       answer({ setting: { level: 'debug' } }),
       answer({ setting: 'summary' }),
-      answer({ default: 'full' }),
+      answer({ default: 'follow' }),
+      answer({ default: 'debug' }),
       answer({ default: undefined }),
       answer({ effective: 'follow' }),
       answer({ worker: 3 }),
@@ -40,6 +41,17 @@ describe('request log policy of the core', () => {
     expect(activeSetting(expired, NOW)).toBe('follow')
     expect(effectiveAt(expired, NOW)).toBe('summary')
     expect(effectiveAt(policyOf(answer({ default: 'off', effective: 'off' }))!, NOW)).toBe('off')
+  })
+
+  it('reads a full default, which has no end (REQUEST-LOG-ASYNC-DESIGN.md §6)', () => {
+    const p = policyOf(answer({ default: 'full', effective: 'full' }))!
+    expect(p).toMatchObject({ setting: 'follow', fullUntil: null, default: 'full', effective: 'full' })
+    expect(activeSetting(p, NOW)).toBe('follow')
+    expect(effectiveAt(p, NOW)).toBe('full')
+    // An account's own full level still ends, then follows the full default.
+    const expired = policyOf(answer({ setting: { level: 'full', full_until: '2026-10-26T11:59:00Z' }, default: 'full', effective: 'full' }))!
+    expect(activeSetting(expired, NOW)).toBe('follow')
+    expect(effectiveAt(expired, NOW)).toBe('full')
   })
 
   it('counts the accounts with their own setting, unknown without a current core', () => {
