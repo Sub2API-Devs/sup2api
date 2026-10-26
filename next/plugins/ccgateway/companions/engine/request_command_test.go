@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/stretchr/testify/require"
 )
 
@@ -291,10 +293,16 @@ func TestMessagesBuildComponentsRejectsUnrepresentableSystem(t *testing.T) {
 	}
 }
 
+// The fake CLI answers an upstream HTTP error the way the request command
+// does (cli-mods request-command.js writeHttpError): no response metadata and
+// nothing on stdout, the body in <meta>.error-body, one structured frame on
+// stderr, exit 2. Its frame also names headers the Worker must not relay.
 func TestRequestCommandForwardsThroughExecutable(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture; executed on Linux release host")
 	}
+	body := `{"type":"error","error":{"type":"rate_limit_error","message":"test"}}`
+	frame := fmt.Sprintf(`{"protocol":%q,"source":"http","status":429,"error":{"type":"rate_limit_error","code":"rate_limit_error","message":"test"},"headers":{"content-type":"application/json","retry-after":"7","content-encoding":"gzip","content-length":"999","set-cookie":"private"},"bodyFile":true,"bodyBytes":%d}`, requestErrorProtocol, len(body))
 	for _, mode := range []string{"direct", "build"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
@@ -306,8 +314,8 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 cat > "$FIXTURE/input"
-printf '%s' '{"status":429,"headers":{"content-type":"application/json","retry-after":"7","content-encoding":"gzip","content-length":"999","set-cookie":"private"}}' > "$meta"
-printf '%s' '{"type":"error","error":{"type":"rate_limit_error","message":"test"}}'
+printf '%s' '` + body + `' > "$meta.error-body"
+printf '%s\n' '` + requestErrorPrefix + frame + `' >&2
 exit 2
 `
 			if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
@@ -320,16 +328,22 @@ exit 2
 			r.Header.Set("anthropic-beta", "test-beta")
 			out := httptest.NewRecorder()
 			g.ServeHTTP(out, r)
-			if out.Code != 429 || out.Header().Get("Retry-After") != "7" || out.Header().Get("Content-Encoding") != "" || out.Header().Get("Set-Cookie") != "" || !strings.Contains(out.Body.String(), `"rate_limit_error"`) {
-				t.Fatalf("%d %v %s", out.Code, out.Header(), out.Body.String())
+			h := out.Header()
+			if out.Code != 429 || h.Get("Retry-After") != "7" || h.Get("Content-Type") != "application/json" || h.Get("Content-Encoding") != "" || h.Get("Content-Length") != "" || h.Get("Set-Cookie") != "" || h.Get(requestfailure.SourceHeader) != requestfailure.SourceHTTP || out.Body.String() != body {
+				t.Fatalf("%d %v %s", out.Code, h, out.Body.String())
 			}
 			input, _ := os.ReadFile(filepath.Join(root, "input"))
 			args, _ := os.ReadFile(filepath.Join(root, "args"))
 			if mode == "direct" && string(input) != raw {
 				t.Fatal("direct altered raw JSON")
 			}
-			if mode == "build" && !strings.Contains(string(input), `"systemPrompt"`) {
-				t.Fatal("build received HTTP body")
+			if mode == "build" {
+				// The envelope: generation fields go in parameters, and a
+				// client without a system sends no systemPrompt (audit C10).
+				var components map[string]json.RawMessage
+				if json.Unmarshal(input, &components) != nil || components["max_tokens"] != nil || !strings.Contains(string(components["parameters"]), `"max_tokens":16`) {
+					t.Fatal("build received HTTP body", string(input))
+				}
 			}
 			if !strings.HasPrefix(string(args), "request\n--"+mode+"\n") || strings.Contains(string(args), "gateway") {
 				t.Fatal("wrong command or leaked inbound credential", string(args))

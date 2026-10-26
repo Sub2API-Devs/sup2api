@@ -52,10 +52,17 @@ func resourceTestRunner(t *testing.T, handler http.HandlerFunc) *Runner {
 // management integration in its own test subprocess so installing a fixture CA
 // cannot change any native/model fixture's trust store. This is the same test
 // binary and real CLI, not a substitute implementation or a skipped test.
+//
+// Without CCG_REAL_CLI the test itself is skipped, so it reports SKIP rather
+// than a PASS over skipped subtests. API-key and env-OAuth selection need the
+// official CLI: the rebuilt one's auth status never exits (CONTRACTS §53.14).
 func resourceManagedTestProcess(t *testing.T) bool {
 	t.Helper()
-	if os.Getenv("CCG_RESOURCE_MANAGEMENT_TEST_CHILD") == "1" || os.Getenv("CCG_REAL_CLI") == "" {
+	if os.Getenv("CCG_RESOURCE_MANAGEMENT_TEST_CHILD") == "1" {
 		return true
+	}
+	if os.Getenv("CCG_REAL_CLI") == "" {
+		t.Skip("set CCG_REAL_CLI to a Linux Claude Code binary (official for API-key/env-OAuth selection)")
 	}
 	executable, err := os.Executable()
 	require.NoError(t, err)

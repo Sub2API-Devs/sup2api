@@ -41,6 +41,14 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 
 本机是 Windows 时，部分进程级用例只在 Linux 上执行（CI 与发布主机）；`CCG_REAL_CLI` 指向真实 CLI 时才跑真实 CLI 用例。改 engine 后要同时 `GOOS=linux go vet ./...`。Worker → CLI 的请求字节由 `contracts/testdata/worker-cli-requests.json` 固定，改动后用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重新生成并检查差异。
 
+Windows 上跑 Linux 用例：在有 Docker 的 Linux 主机上（如 ovh，源码放在一次性目录里），对 `next/plugins/ccgateway` 执行
+
+    docker run --rm -v <ccgateway>:/src -w /src/companions golang:1.27-bookworm go test -count=1 -v ./engine/
+
+不设 `CCG_REAL_CLI` 时 `TestRealCLI*` 在顶层显示 SKIP，不加 `-v` 只看到 `ok`，不能当作已验证。资源管理的四个用例（`TestRealCLIResource{HTTPIdentityAndProviderErrors,CarrierNeverGenerates,CancellationReleasesSpool,ManagementCancellationReleasesAuthorityAndSpool}`）在子进程里跑真实 CLI，要用**官方** Linux CLI：重建的 CLI 的 `auth status` 不退出（CONTRACTS §53.14），API key / env OAuth 的选择会超时 503。ovh 上的官方 2.1.304 在 `~/sup2api/checks/ccg-304-v12/claude-official-304`（SHA-256 `ea0f1357…f27912`）：
+
+    docker run --rm -v <ccgateway>:/src -v ~/sup2api/checks/ccg-304-v12/claude-official-304:/opt/claude/claude:ro -e CCG_REAL_CLI=/opt/claude/claude -w /src/companions golang:1.27-bookworm go test -count=1 -v -run '^TestRealCLIResource' ./engine/
+
 ## 文档
 
 - 请求模式与策略：[REQUEST-MODES](../docs/REQUEST-MODES.md)、[BUILD-REQUEST-COMPONENTS-DESIGN](../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md)、[注入等级](../../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)
