@@ -55,6 +55,21 @@ type call struct {
 	stream    bool
 
 	promptCache map[int]string
+	// prompt is the local token count started once the hooks released the
+	// body (prompt_count.go); precharge joins it instead of counting on the
+	// request path. nil when not started or already joined.
+	prompt *promptCount
+	// bodyVersion counts hook body replacements. scanned/scannedBodyVersion
+	// remember the version whose model, resource and fallback-credit checks
+	// passed, so the second checkModel can reuse them; doc and digest cache
+	// the parsed document and the SHA-256 of that same version (body_state.go).
+	bodyVersion        uint64
+	scanned            bool
+	scannedBodyVersion uint64
+	doc                gjson.Result
+	docValid           bool
+	digest             [32]byte
+	digestValid        bool
 
 	// scheduling: account types able to serve the endpoint protocol
 	routes    map[core.AccountTypeKey]*typeRoute
@@ -206,6 +221,12 @@ func (c *call) run(ctx context.Context) {
 		c.serveTaskSnapshot()
 		return
 	}
+	// The body is final from here on: the local precharge estimate is the
+	// slowest part of preparing a large request, so it runs while the helper
+	// history lookup and the balance check wait on the database. The defer
+	// joins it on every path, so no goroutine outlives the handler.
+	c.startPromptCount(ctx)
+	defer c.joinPromptCount()
 	if e := c.discoverHelperHistory(ctx); e != nil {
 		c.fail(e)
 		return
@@ -382,13 +403,25 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if !c.principal.Group.AllowsModel(c.model) {
 		return fromCore(core.ErrModelNotFound.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
 	}
+	// The three checks below walk the whole body and may hit the database.
+	// Hooks do not change headers, and they replace the body only through
+	// setBody, which bumps bodyVersion; an unchanged version therefore left
+	// every input of the first pass identical, and repeating it would only
+	// repeat the scans (and, for a fallback-credit token, the registry read).
+	if c.scanned && c.scannedBodyVersion == c.bodyVersion {
+		return nil
+	}
 	if err := c.checkReferencedModels(); err != nil {
 		return err
 	}
 	if err := c.checkResourceReferences(ctx); err != nil {
 		return err
 	}
-	return c.checkFallbackCredit(ctx)
+	if err := c.checkFallbackCredit(ctx); err != nil {
+		return err
+	}
+	c.scanned, c.scannedBodyVersion = true, c.bodyVersion
+	return nil
 }
 
 // resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin
@@ -738,6 +771,8 @@ func (c *call) submit() {
 func (c *call) releaseBodies() {
 	c.body = nil
 	c.promptCache = nil
+	c.doc, c.docValid = gjson.Result{}, false
+	c.digestValid = false
 	for _, rt := range c.routes {
 		rt.body = nil
 	}

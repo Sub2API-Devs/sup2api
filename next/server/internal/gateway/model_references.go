@@ -29,8 +29,13 @@ type modelReference struct {
 // prompt text and historical model names never grant new model invocations.
 func (c *call) checkReferencedModels() *gwError {
 	c.modelRefs = nil
-	for _, rule := range c.ep.Request.ModelReferences {
-		locations, err := modelReferenceLocations(c.body, rule.ArrayPath)
+	rules := c.ep.Request.ModelReferences
+	if len(rules) == 0 {
+		return nil // most endpoints declare none: no body is parsed for them
+	}
+	root := c.bodyRoot()
+	for _, rule := range rules {
+		locations, err := modelReferenceLocationsIn(root, rule.ArrayPath)
 		if err != nil {
 			return invalidModelReference(err.Error())
 		}
@@ -283,17 +288,19 @@ func (c *call) hasReferencedPrice() bool {
 	return false
 }
 
-// Plugins may shape transport fields, but may not introduce a new billable
-// model invocation after authorization, account selection and price freezing.
-func (c *call) validatePatchedModelReferences(before, after []byte) error {
-	return validateModelReferencePatches(before, after, c.ep.Request.ModelReferences)
+func modelReferenceSnapshot(body []byte, rules []manifest.RequestModelReference) ([]string, error) {
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	return modelReferenceSnapshotIn(gjson.ParseBytes(body), rules)
 }
 
-func modelReferenceSnapshot(body []byte, rules []manifest.RequestModelReference) ([]string, error) {
+// modelReferenceSnapshotIn is modelReferenceSnapshot over a parsed root.
+func modelReferenceSnapshotIn(root gjson.Result, rules []manifest.RequestModelReference) ([]string, error) {
 	var refs []string
 	modelCount := 0
 	for _, rule := range rules {
-		locations, err := modelReferenceLocations(body, rule.ArrayPath)
+		locations, err := modelReferenceLocationsIn(root, rule.ArrayPath)
 		if err != nil {
 			return nil, err
 		}
@@ -318,11 +325,21 @@ func modelReferenceSnapshot(body []byte, rules []manifest.RequestModelReference)
 }
 
 func validateModelReferencePatches(before, after []byte, rules []manifest.RequestModelReference) error {
-	want, err := modelReferenceSnapshot(before, rules)
+	return modelReferencePatches(gjson.ParseBytes(before), gjson.ParseBytes(after), rules)
+}
+
+// modelReferencePatches is validateModelReferencePatches over parsed roots:
+// plugins may shape transport fields, but may not introduce a new billable
+// model invocation after authorization, account selection and price freezing.
+func modelReferencePatches(before, after gjson.Result, rules []manifest.RequestModelReference) error {
+	if len(rules) == 0 {
+		return nil // nothing is declared, so a patch cannot change a declared reference
+	}
+	want, err := modelReferenceSnapshotIn(before, rules)
 	if err != nil {
 		return err
 	}
-	got, err := modelReferenceSnapshot(after, rules)
+	got, err := modelReferenceSnapshotIn(after, rules)
 	if err != nil {
 		return err
 	}

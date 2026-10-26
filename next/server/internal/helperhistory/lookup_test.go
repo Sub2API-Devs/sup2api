@@ -7,9 +7,43 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	wire "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
+
+// A lookup whose prefixes no record carries must not queue behind a writer:
+// the unlocked probe answers Unknown before the locked transaction is opened.
+// The previous implementation blocked on the advisory lock until the context
+// expired.
+func TestHelperHistoryDBUnknownLookupDoesNotWaitForWriter(t *testing.T) {
+	s, r := fixture(t)
+	ctx := context.Background()
+	errCh := make(chan error, 1)
+	acquired, release := make(chan struct{}), make(chan struct{})
+	go func() {
+		errCh <- s.db.Tx(ctx, func(tx pgx.Tx) error {
+			if e := lock(ctx, tx, r.Owner); e != nil {
+				return e
+			}
+			close(acquired)
+			<-release
+			return nil
+		})
+	}()
+	<-acquired
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	got, err := s.Lookup(probeCtx, r.Owner, []string{strings.Repeat("e", 64)})
+	close(release)
+	if e := <-errCh; e != nil {
+		t.Fatal(e)
+	}
+	if err != nil || got.State != core.HelperHistoryUnknown {
+		t.Fatalf("unknown lookup waited for the writer or answered %s: %v", got.State, err)
+	}
+}
 
 func TestHelperHistoryDBLookupBeforeNamespace(t *testing.T) {
 	s, r := fixture(t)
