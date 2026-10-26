@@ -56,6 +56,9 @@
 | `capcheck.cjs` | 上游请求记录（CLI v31 `request_capture_v1`）：每个上游收到的请求都在 Worker 日志 `upstream-request.json` 里有同哈希的记录，保留的 `upstream-request.body` 与收到的字节相同，记录的头与收到的一致（密钥遮蔽） |
 | `respcheck.cjs` | 响应组装核对，按 request-id 配对；在本套件里配不上（见下），保留它是因为 `respmatch.cjs` 用它的 `assemble()` |
 | `respmatch.cjs` | 响应组装核对，按规范化 JSON **内容**配对：Worker 日志的 `response.json` 要能在代理记录的客户端答复（SSE 组装后）里找到相同的一份 |
+| `capture-official.sh` | 换 Claude Code 版本时用：一次性断网容器里让未改的官方 CLI（全新 HOME、全新非 Git 项目、合成 API key）向 `fake-upstream.cjs` 发一个请求，写出 `test/fixtures/official-request-<版本>.json`（`TOOLS_OUT=` 另写 official-tools 夹具） |
+| `official-diff.cjs` | 两份 Messages 请求体按组件比较（顶层键、system 各块、首轮各 reminder、其余消息、每个工具的描述/schema/其他字段、生成参数），版本号、cc_version 指纹、cch、日期先规范化；新旧官方抓包之间的差异就是官方自己的变化清单 |
+| `crossversion.cjs` | 两次运行（如基线 v31 + 旧官方客户端 vs 候选 + 新官方客户端）逐请求按组件比较 B 侧上游请求，并把每处差异归因：A 侧（官方客户端直连）也有的来自客户端，只在 B 侧出现的来自网关 |
 
 ## 环境变量
 
@@ -326,3 +329,12 @@
 - `regress-compare.cjs`：新增可选规则文件、右侧多出的场景（`ONLY-RIGHT`）、有差异时退出码 1；不带规则时，除新增的 `ONLY-RIGHT` 行与退出码外，输出与原脚本相同（已用 `release-0195/results/captures.tgz` 比对）。
 - `export-baseline.cjs`：`source` 文字里的客户端说明改为 `OFFICIAL_LABEL`、`RUN_LABEL`（缺省为原文字）。
 - 其余脚本与原文件相同。
+
+## 跨版本运行（2.1.304 → 2.1.310 时的做法）
+
+候选是另一个 Claude Code 版本的 CLI release 时：`NEW=1 CLI_NEW=<release 目录> CC_VERSION=<新版本>`（`run.sh` 以 `WORKER_CLI_PATH=/opt/ccgateway/cli/$CC_VERSION/claude` 启动 Worker，镜像自带的 `/usr/local/bin/claude` 指向旧版本）。两组对照：
+
+1. **同一个旧官方客户端**（`OFFICIAL_CLI` 指旧版，`TAG=<新>c<旧>`）：与基线（镜像自带 Worker + 旧 CLI）用 `regress-compare.cjs <基线>/cap <候选>/cap rules.json` 比较，`rules.json` 为 `{"replace":[["<新版本>","<旧版本>"]]}`；剩下的差异逐个用 `official-diff.cjs` 看组件，只能是官方自己的变化（2.1.310：高注入等级注入的 Bash 描述）。
+2. **新官方客户端**（`OFFICIAL_CLI` 指新版，`CLIENT_CC_VERSION=<新版本>`）：`verify.cjs` 全过；`crossversion.cjs <基线>/cap <候选>/cap` 的 `gatewayOnly` 只能有第 1 组已解释的项。
+
+同时跑 `values`、`classify` 两个模式（`all` 不含它们）。
