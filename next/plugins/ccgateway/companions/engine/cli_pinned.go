@@ -83,6 +83,9 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.CLIInfo.supports(features.RequestCaptureCapability) {
 		out = append(out, features.RequestCaptureCapability)
 	}
+	// The Worker logs each request at the level its policy names
+	// (request_log_diagnostic.go capture); the CLI takes no part.
+	out = append(out, features.RequestLogPolicyCapability)
 	return out
 }
 

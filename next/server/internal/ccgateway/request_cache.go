@@ -23,7 +23,8 @@ import (
 // config saves, controller install/upgrade and runtime updates use
 // config:changed (configChanged), account saves account:changed (and the
 // saving node calls AccountChanged directly), a saved proxy config:changed
-// "proxy", and a saved feature policy ccgateway_features. The bus is
+// "proxy", and a saved feature policy ccgateway_features (an account's
+// request log level ccgateway_request_log with its id). The bus is
 // best-effort, so the entries still expire after requestCacheTTL as a
 // fallback: a change whose message was lost is picked up within five minutes
 // instead of thirty seconds, and a route is only used for the controller of
@@ -53,6 +54,33 @@ const routeIdleTimeout = 110 * time.Second
 const ccgatewayChange = "ccgateway"
 const ccgatewayFeatureChange = "ccgateway_features"
 
+// ccgatewayRequestLogChange is published on config:changed with the account
+// id when an account's request log level is saved: the other nodes drop only
+// that account's cached level (an older core ignores the type and picks the
+// change up after requestCacheTTL).
+const ccgatewayRequestLogChange = "ccgateway_request_log"
+
+// forgetRequestLog drops account id's cached request log level on this node.
+func (s *Service) forgetRequestLog(id int64) {
+	s.cache.mu.Lock()
+	s.cache.gen++
+	delete(s.cache.requestLogs, id)
+	s.cache.mu.Unlock()
+}
+
+// requestLogChanged follows a saved request log level of account id: this
+// node drops it now, the others through the bus.
+func (s *Service) requestLogChanged(ctx context.Context, id int64) {
+	s.forgetRequestLog(id)
+	if s.Bus == nil {
+		return
+	}
+	b, _ := json.Marshal(map[string]any{"type": ccgatewayRequestLogChange, "account_id": id})
+	if err := s.Bus.Publish(context.WithoutCancel(ctx), core.ChannelConfigChanged, b); err != nil {
+		slog.WarnContext(ctx, "CCGateway: publish request log change", "err", err)
+	}
+}
+
 func (s *Service) invalidateFeatureConfig() {
 	s.cache.mu.Lock()
 	s.cache.gen++
@@ -81,6 +109,9 @@ type requestCache struct {
 	// features holds each account's CC feature policy (audit A7); it changes
 	// with the account, so account:changed drops it with the desired state.
 	features map[int64]cacheEntry[AccountFeaturePolicy]
+	// requestLogs holds each account's own request log level (CONTRACTS
+	// §65); a saved level drops it (requestLogChanged), like the account.
+	requestLogs map[int64]cacheEntry[AccountRequestLog]
 	// routes is keyed by runtime key and holds the route of one revision.
 	routes map[string]*accountRoute
 }
@@ -291,6 +322,7 @@ func (s *Service) forgetAccount(id int64, key string) {
 	}
 	delete(c.desired, id)
 	delete(c.features, id)
+	delete(c.requestLogs, id)
 	r := c.routes[key]
 	delete(c.routes, key)
 	c.mu.Unlock()
@@ -338,6 +370,7 @@ func (s *Service) invalidateRequests(keepConfig bool) {
 	}
 	c.desired = nil
 	c.features = nil
+	c.requestLogs = nil
 	routes := c.routes
 	c.routes = nil
 	c.mu.Unlock()
@@ -367,12 +400,17 @@ func (s *Service) configChanged(ctx context.Context) {
 // sweep. Other configuration messages are not ours.
 func (s *Service) onConfigChanged(payload []byte) {
 	var m struct {
-		Type string `json:"type"`
+		Type      string `json:"type"`
+		AccountID int64  `json:"account_id"`
 	}
 	if json.Unmarshal(payload, &m) != nil {
 		return
 	}
 	switch m.Type {
+	case ccgatewayRequestLogChange:
+		if m.AccountID > 0 {
+			s.forgetRequestLog(m.AccountID)
+		}
 	case ccgatewayFeatureChange:
 		s.invalidateFeatureConfig()
 	case ccgatewayChange:

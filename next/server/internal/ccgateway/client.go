@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
@@ -160,6 +161,8 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 		if o := a.attachPolicy(clone, path); o != nil {
 			return o.values()
 		}
+	} else if o := a.attachLogPolicy(clone); o != nil {
+		return o.values()
 	}
 	return a.send(clone).values()
 }
@@ -320,6 +323,12 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	if err != nil {
 		return a.fail(err)
 	}
+	// The level this request is logged at (CONTRACTS §65): the core decides,
+	// the Worker records. Not a required capability: an older Worker ignores
+	// it and keeps its local level.
+	if policy.RequestLog, err = a.t.s.requestLogLevel(a.ctx, a.cfg, a.t.accountID); err != nil {
+		return a.fail(err)
+	}
 	if err := policy.Validate(); err != nil {
 		return a.refuse("invalid_request_policy", "The CC feature policy is invalid: "+err.Error()+".")
 	}
@@ -339,6 +348,23 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	}
 	policyJSON, _ := json.Marshal(policy)
 	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
+	return nil
+}
+
+// attachLogPolicy puts on a provider resource request (which has no CC
+// feature policy) a policy naming only its request log level (CONTRACTS
+// §65): every other field is absent, which the Worker reads as its own. The
+// Worker's resource broker reads nothing else of the header; an older Worker
+// ignores it.
+func (a *attempt) attachLogPolicy(clone *http.Request) *outcome {
+	level, err := a.t.s.requestLogLevel(a.ctx, a.cfg, a.t.accountID)
+	if err != nil {
+		return a.fail(err)
+	}
+	// Not features.WorkerPolicy: it always writes schema_version and
+	// relay_mode, and a schema_version 0 is refused.
+	policyJSON, _ := json.Marshal(map[string]string{"request_log": level})
+	clone.Header.Set(features.PolicyHeader, string(policyJSON))
 	return nil
 }
 

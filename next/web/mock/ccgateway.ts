@@ -7,7 +7,7 @@ import { mockProxyStatus } from './resources'
 if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const base = '/system/ccgateway'
   // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
-  let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]}}
+  let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]},request_logs:{level:'summary'}}
   on('GET',`${base}/remote-config`,()=>config)
   // Request catalog of the core (features.RequestCatalog("request_build")): the
   // two entries the request path declares. Keep it in step with
@@ -18,6 +18,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   ]}))
   on('PUT',`${base}/remote-config`,({body})=>{
     const { password,private_key,passphrase,admin_key,api_key,controller_ca,...publicFields }=body
+    // The default request log rule (REQUEST-LOG-POLICY-DESIGN.md §1): off or summary only; omitted keeps it.
+    if (publicFields.request_logs!==undefined && !['off','summary'].includes(publicFields.request_logs?.level)) return fail(400,'invalid_argument','request_logs.level must be off or summary.')
     config={...config,...publicFields,account_runtimes:true,has_admin_key:!!admin_key||config.has_admin_key,has_controller_ca:publicFields.scheme==='http'?false:(!!controller_ca||config.has_controller_ca)}
     return config
   })
@@ -194,19 +196,57 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata',
       viewer: true,
       viewer_search: true,
+      // Takes {"clear_all":true} (REQUEST-LOG-POLICY-DESIGN.md §3).
+      clear_all: true,
+    }
+  }
+  // The core's account setting and default rule (REQUEST-LOG-POLICY-DESIGN.md §4): stored in the core,
+  // never forwarded to the Worker; the Worker state is attached (null until the container is ready).
+  // Fixtures: #26 is full for two hours, #27 is off on its own, the rest follow the default.
+  // SUB2API_MOCK_CCG_LEGACY_LOGS=1 answers like an older core (the Worker state itself, levels forwarded).
+  const legacyLogs = !!process.env.SUB2API_MOCK_CCG_LEGACY_LOGS
+  const logSettings = new Map<string, { level: LogLevel; fullUntil: number | null }>([
+    ['26', { level: 'full', fullUntil: Date.now() + 2 * 3600000 }],
+    ['27', { level: 'off', fullUntil: null }],
+  ])
+  const defaultLog = (): 'off' | 'summary' => ((config.request_logs as { level?: string } | undefined)?.level === 'off' ? 'off' : 'summary')
+  const policyState = (id: string, key: string) => {
+    let s = logSettings.get(id)
+    if (s?.level === 'full' && s.fullUntil !== null && s.fullUntil <= Date.now()) { logSettings.delete(id); s = undefined }
+    const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'))
+    return {
+      setting: { level: s ? s.level : 'follow', full_until: iso(s?.fullUntil ?? null) },
+      default: defaultLog(),
+      effective: s ? s.level : defaultLog(),
+      worker: ready(key) ? requestLogState(key) : null,
     }
   }
   on('GET', `${base}/accounts/:id/request-logs`, (req) => {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
+    if (!legacyLogs) return policyState(req.params.id, r.key)
     return !ready(r.key) ? notSynchronized() : requestLogState(r.key)
   })
   on('PUT', `${base}/accounts/:id/request-logs`, (req) => {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
-    if (!ready(r.key)) return notSynchronized()
     const body = (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {}) as Record<string, unknown>
     const keys = Object.keys(body).sort().join(',')
+    if (!legacyLogs) {
+      const id = req.params.id
+      if (keys === 'level' && body.level === 'follow') logSettings.delete(id)
+      else if (keys === 'level' && (body.level === 'off' || body.level === 'summary')) logSettings.set(id, { level: body.level, fullUntil: null })
+      else if (keys === 'full_for_hours,level' && body.level === 'full' && [1, 4, 24].includes(body.full_for_hours as number)) {
+        logSettings.set(id, { level: 'full', fullUntil: Date.now() + (body.full_for_hours as number) * 3600000 })
+      } else if ((keys === 'clear_full' && body.clear_full === true) || (keys === 'clear_all' && body.clear_all === true)) {
+        // Forwarded to the Worker: unavailable until it runs.
+        if (!ready(r.key)) return notSynchronized()
+        const s = logsOf(r.key)
+        if (body.clear_all) { Object.assign(s, { summaryBytes: 0, fullBytes: 0, requests: 0 }); mockLogs.set(r.key, []) } else s.fullBytes = 0
+      } else return fail(400, 'invalid_argument', 'Send exactly one of {"level":"follow"|"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"clear_all":true}.')
+      return policyState(id, r.key)
+    }
+    if (!ready(r.key)) return notSynchronized()
     const s = logsOf(r.key)
     const set = (level: LogLevel) => {
       if (level === 'off') Object.assign(s, { summaryBytes: 0, fullBytes: 0, requests: 0 })
@@ -302,7 +342,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     const r = accountRuntime(req)
     if (!isRuntime(r)) return r
     if (!ready(r.key)) return notSynchronized()
-    if (logsOf(r.key).level === 'off') return fail(409, 'conflict', 'Request logs are off for this account.', { reason: 'request_logs_off' })
+    // Only an older Worker refuses reads at its local off level (REQUEST-LOG-POLICY-DESIGN.md §3).
+    if (legacyLogs && logsOf(r.key).level === 'off') return fail(409, 'conflict', 'Request logs are off for this account.', { reason: 'request_logs_off' })
     return r
   }
   on('GET', `${base}/accounts/:id/request-logs/requests`, (req) => {

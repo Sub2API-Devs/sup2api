@@ -9,14 +9,20 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
-// Request log levels (REQUEST-LOG-LEVELS-DESIGN §2/§4). Only the level,
-// expiry, validated limits and usage are exposed here; the logs themselves are
-// read through request_log_viewer.go.
+// Request log levels (REQUEST-LOG-LEVELS-DESIGN §2/§4,
+// REQUEST-LOG-POLICY-DESIGN.md, CONTRACTS §65). The core decides each
+// request's level (an account's own setting, else the configuration's default
+// rule) and sends it with the request; it records no log itself. The Worker's
+// state (limits, usage) is passed through; the logs themselves are read
+// through request_log_viewer.go.
 const (
 	requestLogOff     = "off"
 	requestLogSummary = "summary"
@@ -30,17 +36,144 @@ var requestLogFullHours = map[int]bool{1: true, 4: true, 24: true}
 
 const maxSafeInteger = 1<<53 - 1
 
+// requestLogFollow is an account without its own level: it follows the
+// default rule of the CCGateway configuration.
+const requestLogFollow = "follow"
+
+// RequestLogDefault is the default request log rule of the CCGateway
+// configuration (CONTRACTS §65): off or summary. Full is only ever enabled
+// for one account at a time, temporarily.
+type RequestLogDefault struct {
+	Level string `json:"level"`
+}
+
+// UnmarshalJSON is strict: an unknown key is a mistake, not a later field.
+func (r *RequestLogDefault) UnmarshalJSON(raw []byte) error {
+	type plain RequestLogDefault
+	var out plain
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&out); err != nil {
+		return err
+	}
+	*r = RequestLogDefault(out)
+	return nil
+}
+
+// DefaultRequestLog is the level of an account without its own setting:
+// summary unless the configuration says off.
+func (c Config) DefaultRequestLog() string {
+	if c.RequestLogs != nil && c.RequestLogs.Level == requestLogOff {
+		return requestLogOff
+	}
+	return requestLogSummary
+}
+
+// mergeRequestLogs: omitted keeps the stored rule; a named one must be off or
+// summary (full is refused: it is per account and temporary).
+func mergeRequestLogs(c *Config, old Config) error {
+	if c.RequestLogs == nil {
+		c.RequestLogs = old.RequestLogs
+		return nil
+	}
+	if l := c.RequestLogs.Level; l != requestLogOff && l != requestLogSummary {
+		return errors.New(`invalid request_logs.level: must be "off" or "summary"`)
+	}
+	return nil
+}
+
+// AccountRequestLog is an account's own request log level
+// (ccgateway_account_request_logs). Level "" follows the default rule.
+type AccountRequestLog struct {
+	Level     string
+	FullUntil *time.Time
+}
+
+// set reports whether the setting applies at now: a full level past its
+// full_until counts as no setting.
+func (a AccountRequestLog) set(now time.Time) bool {
+	switch a.Level {
+	case requestLogOff, requestLogSummary:
+		return true
+	case requestLogFull:
+		return a.FullUntil != nil && now.Before(*a.FullUntil)
+	}
+	return false
+}
+
+// effectiveRequestLog is the level a request of the account is logged at
+// (REQUEST-LOG-POLICY-DESIGN.md §1).
+func effectiveRequestLog(c Config, a AccountRequestLog, now time.Time) string {
+	if a.set(now) {
+		return a.Level
+	}
+	return c.DefaultRequestLog()
+}
+
+// LoadAccountRequestLog reads account id's own level; no row follows.
+func LoadAccountRequestLog(ctx context.Context, q store.Querier, id int64) (AccountRequestLog, error) {
+	var a AccountRequestLog
+	err := q.QueryRow(ctx, `SELECT level, full_until FROM ccgateway_account_request_logs WHERE account_id=$1`, id).Scan(&a.Level, &a.FullUntil)
+	if store.IsNoRows(err) {
+		return AccountRequestLog{}, nil
+	}
+	return a, err
+}
+
+// requestLogLevel is the request_log a request of account id carries: read
+// through the request cache, the expiry of full checked now (not when the
+// setting was cached). An account-less request follows the default.
+func (s *Service) requestLogLevel(ctx context.Context, c Config, id int64) (string, error) {
+	if id <= 0 {
+		return c.DefaultRequestLog(), nil
+	}
+	a, _, err := readThrough(&s.cache, &s.cache.requestLogs, id, func() (AccountRequestLog, error) { return LoadAccountRequestLog(ctx, s.DB.Pool, id) })
+	if err != nil {
+		return "", err
+	}
+	return effectiveRequestLog(c, a, time.Now()), nil
+}
+
+// requestLogView is the answer of GET and PUT .../request-logs: the
+// account's setting, the default rule, what applies now, and the Worker's
+// own state (limits, usage, viewer) as it reported it; worker is null when
+// the Worker could not be asked. The level is decided here and sent with
+// every request (X-CCGateway-Request-Policy request_log); the Worker's local
+// level in its state is only what it falls back to without one.
+type requestLogView struct {
+	Setting   requestLogSetting `json:"setting"`
+	Default   string            `json:"default"`
+	Effective string            `json:"effective"`
+	Worker    any               `json:"worker"`
+}
+
+type requestLogSetting struct {
+	Level     string  `json:"level"`
+	FullUntil *string `json:"full_until"`
+}
+
+func viewSetting(a AccountRequestLog, now time.Time) requestLogSetting {
+	if !a.set(now) {
+		return requestLogSetting{Level: requestLogFollow}
+	}
+	out := requestLogSetting{Level: a.Level}
+	if a.FullUntil != nil {
+		v := a.FullUntil.UTC().Format(time.RFC3339)
+		out.FullUntil = &v
+	}
+	return out
+}
+
+// workerRequestLogTimeout bounds asking the Worker for its state: the core's
+// own part of the answer does not wait on an unreachable runtime.
+var workerRequestLogTimeout = 10 * time.Second
+
 func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accountDesired) {
 	method := c.Request.Method
 	if method != http.MethodGet && method != http.MethodPut {
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if reason := d.unavailable(); reason != "" {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
-		return
-	}
-	var body []byte
 	var change requestLogChange
 	if method == http.MethodPut {
 		var in map[string]json.RawMessage
@@ -53,52 +186,136 @@ func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accoun
 			httpapi.Fail(c, e)
 			return
 		}
-		body = change.body()
+		if d.Deleted {
+			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reasonAccountDeleted))
+			return
+		}
 	}
+	cfg, err := s.Load(ctx)
+	if err != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+	var worker any
+	switch {
+	case change.Clear != "":
+		// Deleting logs is the Worker's: forwarded in canonical form.
+		if reason := d.unavailable(); reason != "" {
+			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
+			return
+		}
+		out, e := s.workerRequestLogs(ctx, d, http.MethodPut, change.body())
+		if e != nil {
+			httpapi.Fail(c, e)
+			return
+		}
+		worker = out
+		s.recordDetail(c, "account."+strconv.FormatInt(d.AccountID, 10)+".request-logs", map[string]any{"change": change.Clear})
+	case method == http.MethodPut:
+		if e := s.saveAccountRequestLog(c, ctx, d.AccountID, change); e != nil {
+			httpapi.Fail(c, e)
+			return
+		}
+	}
+	a, err := LoadAccountRequestLog(ctx, s.DB.Pool, d.AccountID)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if worker == nil && d.unavailable() == "" {
+		// Best effort: the core's part is answered without it.
+		wctx, cancel := context.WithTimeout(ctx, workerRequestLogTimeout)
+		if out, e := s.workerRequestLogs(wctx, d, http.MethodGet, nil); e == nil {
+			worker = out
+		}
+		cancel()
+	}
+	now := time.Now()
+	httpapi.OK(c, requestLogView{Setting: viewSetting(a, now), Default: cfg.DefaultRequestLog(), Effective: effectiveRequestLog(cfg, a, now), Worker: worker})
+}
+
+// workerRequestLogs asks the account's Worker for its request log state
+// (GET) or to delete logs (PUT clear_full / clear_all) and decodes the answer.
+func (s *Service) workerRequestLogs(ctx context.Context, d accountDesired, method string, body []byte) (any, *core.Error) {
 	res, closeConn, e := s.runtimeRequest(ctx, d.Key, method, "admin/request-logs", body, d.Revision)
 	if e != nil {
-		httpapi.Fail(c, transportError(e))
-		return
+		return nil, transportError(e)
 	}
 	defer closeConn()
 	defer res.Body.Close()
 	raw, e := readBounded(res.Body, 4096)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
-		return
+		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
 	if res.StatusCode != http.StatusOK {
-		httpapi.Fail(c, runtimeError(res.StatusCode, raw))
-		return
+		return nil, runtimeError(res.StatusCode, raw)
 	}
 	out, err := decodeRequestLogState(raw)
 	if err != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
-		return
+		return nil, reasonError(core.ErrUnavailable, "runtime_unavailable")
 	}
-	if method == http.MethodPut {
-		s.recordDetail(c, "account."+strconv.FormatInt(d.AccountID, 10)+".request-logs", change.audit(out))
-	}
-	httpapi.OK(c, out)
+	return out, nil
 }
 
-// requestLogChange is one validated PUT form. Exactly one of the fields is
-// meaningful: Enabled (legacy switch), Level (+FullForHours for full) or
-// ClearFull.
+// saveAccountRequestLog writes the account's level (follow deletes the row)
+// and its audit row in one transaction, then drops the cached setting here
+// and, through the bus, on the other nodes.
+func (s *Service) saveAccountRequestLog(c *gin.Context, ctx context.Context, id int64, change requestLogChange) error {
+	ctx = audit.WithClientIP(ctx, c.ClientIP())
+	uid, _ := core.UserID(ctx)
+	var updatedBy *int64
+	if uid > 0 {
+		updatedBy = &uid
+	}
+	detail := map[string]any{"change": "level", "level": change.Level}
+	var fullUntil *time.Time
+	if change.Level == requestLogFull {
+		t := time.Now().UTC().Truncate(time.Second).Add(time.Duration(change.FullForHours) * time.Hour)
+		fullUntil = &t
+		detail["full_for_hours"] = change.FullForHours
+		detail["full_until"] = t.Format(time.RFC3339)
+	}
+	err := s.DB.Tx(ctx, func(tx pgx.Tx) error {
+		old, err := LoadAccountRequestLog(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		detail["previous"] = viewSetting(old, time.Now()).Level
+		if change.Level == requestLogFollow {
+			_, err = tx.Exec(ctx, `DELETE FROM ccgateway_account_request_logs WHERE account_id=$1`, id)
+		} else {
+			_, err = tx.Exec(ctx, `INSERT INTO ccgateway_account_request_logs(account_id,level,full_until,updated_by)
+				VALUES($1,$2,$3,$4) ON CONFLICT(account_id) DO UPDATE SET level=EXCLUDED.level,full_until=EXCLUDED.full_until,
+				updated_by=EXCLUDED.updated_by,updated_at=clock_timestamp()`, id, change.Level, fullUntil, updatedBy)
+		}
+		if err != nil {
+			return err
+		}
+		return audit.Audit(ctx, tx, uid, "ccgateway.account."+strconv.FormatInt(id, 10)+".request-logs", "system", "ccgateway", detail)
+	})
+	if err != nil {
+		return err
+	}
+	s.requestLogChanged(ctx, id)
+	return nil
+}
+
+// requestLogChange is one validated PUT form: Level (+FullForHours for
+// full) or Clear (clear_full / clear_all).
 type requestLogChange struct {
-	Enabled      *bool
 	Level        string
 	FullForHours int
-	ClearFull    bool
+	Clear        string
 }
 
-// parseRequestLogChange accepts exactly one of {"level":"off"},
-// {"level":"summary"}, {"level":"full","full_for_hours":1|4|24},
-// {"clear_full":true} or the legacy {"enabled":bool}. Unknown and mixed keys
-// are rejected.
+// parseRequestLogChange accepts exactly one of {"level":"follow"},
+// {"level":"off"}, {"level":"summary"},
+// {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or
+// {"clear_all":true}. Unknown and mixed keys are rejected, the old switch
+// {"enabled":bool} included: the level is the core's now.
 func parseRequestLogChange(in map[string]json.RawMessage) (requestLogChange, *core.Error) {
 	var out requestLogChange
-	invalid := core.ErrInvalidArgument.WithMessage(`Send exactly one of {"level":"off"}, {"level":"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":true|false}.`)
+	invalid := core.ErrInvalidArgument.WithMessage(`Send exactly one of {"level":"follow"}, {"level":"off"}, {"level":"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"clear_all":true}.`)
 	has := func(keys ...string) bool {
 		if len(in) != len(keys) {
 			return false
@@ -111,22 +328,20 @@ func parseRequestLogChange(in map[string]json.RawMessage) (requestLogChange, *co
 		return true
 	}
 	switch {
-	case has("enabled"):
-		var v *bool
-		if json.Unmarshal(in["enabled"], &v) != nil || v == nil {
-			return out, core.ErrInvalidArgument.WithMessage("enabled must be a boolean.")
+	case has("clear_full"), has("clear_all"):
+		key := "clear_full"
+		if has("clear_all") {
+			key = "clear_all"
 		}
-		out.Enabled = v
-	case has("clear_full"):
 		var v bool
-		if json.Unmarshal(in["clear_full"], &v) != nil || !v {
-			return out, core.ErrInvalidArgument.WithMessage("clear_full must be true.")
+		if json.Unmarshal(in[key], &v) != nil || !v {
+			return out, core.ErrInvalidArgument.WithMessage(key + " must be true.")
 		}
-		out.ClearFull = true
+		out.Clear = key
 	case has("level"):
 		var v string
-		if json.Unmarshal(in["level"], &v) != nil || !requestLogLevels[v] {
-			return out, core.ErrInvalidArgument.WithMessage(`level must be "off", "summary" or "full".`)
+		if json.Unmarshal(in["level"], &v) != nil || (v != requestLogFollow && !requestLogLevels[v]) {
+			return out, core.ErrInvalidArgument.WithMessage(`level must be "follow", "off", "summary" or "full".`)
 		}
 		if v == requestLogFull {
 			return out, core.ErrInvalidArgument.WithMessage("The full level needs full_for_hours (1, 4 or 24).")
@@ -148,46 +363,11 @@ func parseRequestLogChange(in map[string]json.RawMessage) (requestLogChange, *co
 	return out, nil
 }
 
-// body is the canonical form forwarded to the Worker; nothing from the client
-// body is copied verbatim.
+// body is the canonical form of a clear forwarded to the Worker; nothing
+// from the client body is copied verbatim.
 func (r requestLogChange) body() []byte {
-	var v any
-	switch {
-	case r.Enabled != nil:
-		v = map[string]bool{"enabled": *r.Enabled}
-	case r.ClearFull:
-		v = map[string]bool{"clear_full": true}
-	case r.Level == requestLogFull:
-		v = map[string]any{"level": r.Level, "full_for_hours": r.FullForHours}
-	default:
-		v = map[string]string{"level": r.Level}
-	}
-	b, _ := json.Marshal(v)
+	b, _ := json.Marshal(map[string]bool{r.Clear: true})
 	return b
-}
-
-// audit is the audit detail: the requested change and the resulting state.
-// Only enum values, hours and a timestamp; never log contents.
-func (r requestLogChange) audit(out any) map[string]any {
-	detail := map[string]any{}
-	switch {
-	case r.Enabled != nil:
-		detail["change"], detail["enabled"] = "enabled", *r.Enabled
-	case r.ClearFull:
-		detail["change"] = "clear_full"
-	default:
-		detail["change"] = "level"
-		if r.FullForHours > 0 {
-			detail["full_for_hours"] = r.FullForHours
-		}
-	}
-	if st, ok := out.(requestLogLevelState); ok {
-		detail["level"] = st.Level
-		detail["full_until"] = st.FullUntil
-	} else if st, ok := out.(requestLogState); ok && st.Enabled != nil {
-		detail["result_enabled"] = *st.Enabled
-	}
-	return detail
 }
 
 // requestLogState is the legacy shape: an old Worker without levels. The UI

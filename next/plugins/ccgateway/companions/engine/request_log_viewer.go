@@ -382,21 +382,13 @@ type logItem struct {
 	Bytes      int64 `json:"bytes"`
 }
 
-func (s *requestLogStore) off(w http.ResponseWriter) bool {
-	if !s.enabled {
-		apiError(w, 409, "request_logs_off", "Request logs are off")
-		return true
-	}
-	return false
-}
-
+// The viewer reads whatever logs there are, whatever the store's own level:
+// a request's policy may log it while that level is off
+// (REQUEST-LOG-POLICY-DESIGN.md §3). Turning the level off still removes the
+// logs, so after it the list is empty and a log is not found.
 func (s *requestLogStore) query(w http.ResponseWriter, q logQuery) {
 	s.waitIndex()
 	s.mu.Lock()
-	if s.off(w) {
-		s.mu.Unlock()
-		return
-	}
 	all := make([]logEntry, 0, len(s.index))
 	for _, e := range s.index {
 		all = append(all, e)
@@ -463,9 +455,6 @@ func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
 	s.waitIndex()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.off(w) {
-		return ""
-	}
 	if _, ok := s.index[id]; !ok {
 		apiError(w, 404, "request_log_not_found", "Request log not found")
 		return ""

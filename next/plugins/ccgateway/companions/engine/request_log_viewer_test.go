@@ -259,14 +259,17 @@ func TestRequestLogViewerFollowsLevelAndPruning(t *testing.T) {
 	}
 	viewerRequest(t, store, "rid-off", 200)
 	putLogs(t, store, `{"level":"off"}`)
-	if code, _, _ := viewer(t, store, "detail", `{"id":"`+id+`"}`); code != 409 {
+	// Turning the level off removes the logs; the viewer no longer answers 409
+	// for the local level (REQUEST-LOG-POLICY-DESIGN.md §3): what was removed
+	// is not found and the list is empty.
+	if code, _, _ := viewer(t, store, "detail", `{"id":"`+id+`"}`); code != 404 {
 		t.Fatal("detail while off", code)
 	}
-	if code, _, _ := viewer(t, store, "read", `{"id":"`+id+`","name":"request.body"}`); code != 409 {
+	if code, _, _ := viewer(t, store, "read", `{"id":"`+id+`","name":"request.body"}`); code != 404 {
 		t.Fatal("read while off", code)
 	}
-	if code, raw, _ := viewer(t, store, "query", `{}`); code != 409 || !strings.Contains(string(raw), "request_logs_off") {
-		t.Fatal("query while off", code)
+	if got := listLogs(t, store, `{}`); len(got.Items) != 0 {
+		t.Fatal("logs from before off listed while off", got)
 	}
 	putLogs(t, store, `{"level":"summary"}`)
 	if got := listLogs(t, store, `{}`); len(got.Items) != 0 {

@@ -13,13 +13,15 @@ const { t } = useI18n(), auth = useAuthStore()
 const manage = computed(() => auth.has('settings:manage'))
 /** Re-reads the account list after the connection changed. */
 const revision = ref(0)
+/** Accounts with their own request log setting, shown next to the default level. */
+const logOverrides = ref<number | null>(null)
 </script>
 <template>
   <div class="space-y-5">
     <SPageHeader v-if="!embedded" :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/plugins/ccgateway?tab=settings">{{ t('plugins.detail.tabs.settings') }}</SButton></template></SPageHeader>
     <SHint v-if="!manage">{{ t('ccgateway.readOnly') }}</SHint>
-    <RemoteSettings :disabled="!manage" @saved="revision++">
-      <template #accounts><AccountRuntimes :key="revision" /></template>
+    <RemoteSettings :disabled="!manage" :request-log-overrides="logOverrides" @saved="revision++">
+      <template #accounts><AccountRuntimes :key="revision" @overrides="logOverrides = $event" /></template>
     </RemoteSettings>
   </div>
 </template>

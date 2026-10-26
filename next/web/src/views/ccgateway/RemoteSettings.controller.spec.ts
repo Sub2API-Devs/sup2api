@@ -550,6 +550,51 @@ describe('installing the controller', () => {
   })
 })
 
+describe('default request log level', () => {
+  // The deployment tab is hidden with v-show: its fields are in the document either way.
+  it('saves off or summary with the configuration and notes the accounts set on their own', async () => {
+    mocks.config = controller({ request_logs: { level: 'summary' } })
+    const w = mount(RemoteSettings, { attachTo: document.body, props: { requestLogOverrides: 2 }, global: { plugins: [i18n, createPinia()] } })
+    await flushPromises()
+    const group = w.get('[data-testid="settings-request-logs"]')
+    expect(group.text()).toContain('默认请求日志级别')
+    expect(group.text()).toContain('默认不能设为完整')
+    expect(w.get('[data-testid="request-log-default"]').text().replace(/\s+/g, '')).toBe('关闭摘要')
+    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="summary"]').element.checked).toBe(true)
+    expect(w.get('[data-testid="request-log-overrides"]').text()).toBe('2 个账号单独设置')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    await w.get('[data-testid="request-log-default"] input[value="off"]').setValue(true)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
+    mocks.put.mockResolvedValue(controller({ request_logs: { level: 'off' } }))
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1]).toMatchObject({ mode: 'controller', request_logs: { level: 'off' } })
+    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="off"]').element.checked).toBe(true)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    await w.setProps({ requestLogOverrides: 0 })
+    expect(w.get('[data-testid="request-log-overrides"]').text()).toBe('没有账号单独设置')
+    await w.setProps({ requestLogOverrides: null })
+    expect(w.find('[data-testid="request-log-overrides"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('reads an unset or unknown rule as summary', async () => {
+    const w = await render(controller({ request_logs: { level: 'full' } }))
+    expect(w.get<HTMLInputElement>('[data-testid="request-log-default"] input[value="summary"]').element.checked).toBe(true)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+
+  it('is neither shown nor sent to an older core without the rule', async () => {
+    const w = await render(controller())
+    expect(w.find('[data-testid="settings-request-logs"]').exists()).toBe(false)
+    await w.get('[data-testid="network-allocation"] input[value="sequential"]').setValue(true)
+    mocks.put.mockResolvedValue(controller())
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1]).not.toHaveProperty('request_logs')
+    w.unmount()
+  })
+})
+
 describe('connection and install copy', () => {
   const keys = (o: unknown, prefix = ''): string[] => Object.entries(o as Record<string, unknown>).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`])).sort()
   it('has the same keys in zh and en', () => {

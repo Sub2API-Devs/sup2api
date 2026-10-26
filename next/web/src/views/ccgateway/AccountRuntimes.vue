@@ -3,7 +3,7 @@
 // account). Authorizing happens on the Accounts page: each row links to the
 // account editor (/accounts?edit=<id>), where the container is started and
 // the Claude login is completed.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
@@ -19,21 +19,16 @@ import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import CLISettings from './CLISettings.vue'
 import RetainedRuntimes from './RetainedRuntimes.vue'
 import RequestLogViewer from './RequestLogViewer.vue'
-
-type RequestLogLevel = 'off' | 'summary' | 'full'
-const LOG_LEVELS: readonly RequestLogLevel[] = ['off', 'summary', 'full']
-const FULL_HOURS = [1, 4, 24] as const
-
-interface RequestLogTier {
-  retention_hours?: number
-  storage_budget_bytes?: number
-  per_request_limit_bytes?: number
-}
+import {
+  FULL_HOURS, LOG_SETTINGS, activeSetting, countOverrides, effectiveAt, isLevel, isSetting, policyOf, workerInfoOf,
+  type RequestLogLevel, type RequestLogPolicy, type RequestLogTier, type WorkerLogInfo,
+} from './requestLogPolicy'
 
 /**
- * GET / PUT /request-logs. A Worker with levels (REQUEST-LOG-LEVELS-DESIGN §4)
- * reports `levels`; an older one only `enabled` and the flat limits, and
- * keeps the old switch.
+ * GET / PUT /request-logs of an older core: the Worker state itself. A Worker
+ * with levels (REQUEST-LOG-LEVELS-DESIGN §4) reports `levels`; an older one
+ * only `enabled` and the flat limits, and keeps the old switch. A current core
+ * answers with the account setting instead (requestLogPolicy.ts).
  */
 interface RequestLogState {
   enabled: boolean
@@ -52,18 +47,12 @@ interface RequestLogState {
   viewer_search?: boolean
 }
 
-/** Validated level state of a Worker that reports levels. */
-interface RequestLogLevels {
+/** Validated level state of a Worker that reports levels (older core). */
+interface RequestLogLevels extends WorkerLogInfo {
   level: RequestLogLevel
   levels: RequestLogLevel[]
   /** ms since epoch, only at the full level */
   fullUntil: number | null
-  summary: RequestLogTier | null
-  full: RequestLogTier | null
-  usage: { summary_bytes: number | null; full_bytes: number | null; requests: number | null }
-  overflow: boolean
-  viewer: boolean
-  viewerSearch: boolean
 }
 
 interface Row {
@@ -89,7 +78,12 @@ interface Row {
   logsLimits: RequestLogState | null
   /** null: an older Worker without levels (the switch is shown). */
   logsLevels: RequestLogLevels | null
+  /** The account setting of a current core; null: an older core (logsLevels / logsEnabled). */
+  logsPolicy: RequestLogPolicy | null
 }
+
+/** overrides: accounts with their own log setting among the loaded rows (null: none from a current core). */
+const emit = defineEmits<{ (event: 'overrides', count: number | null): void }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -103,7 +97,12 @@ const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KE
 const canViewLogs = computed(() => auth.has('settings:read') || auth.has('account:read'))
 const viewing = ref<Row | null>(null)
 const viewerOpen = computed({ get: () => viewing.value !== null, set: (v: boolean) => { if (!v) viewing.value = null } })
-const showViewer = (r: Row) => canViewLogs.value && !!r.logsLevels?.viewer && r.logsLevels.level !== 'off'
+const showViewer = (r: Row) => canViewLogs.value && (r.logsPolicy
+  // A current core: shown while the Worker is unreachable too (disabled), since logs may exist at any level (§3).
+  ? !r.logsPolicy.worker || r.logsPolicy.worker.viewer
+  : !!r.logsLevels?.viewer && r.logsLevels.level !== 'off')
+/** Limits, usage and viewer the row's Worker reported, whichever core answered. */
+const workerOf = (r: Row): WorkerLogInfo | null => (r.logsPolicy ? r.logsPolicy.worker : r.logsLevels)
 const rows = ref<Row[]>([])
 const loading = ref(false)
 const cleaning = ref(false)
@@ -139,11 +138,11 @@ async function inspect(r: Row) {
       // API key accounts need no login state: only the version, best effort.
       try { r.cliVersion = cliVersionOf(await api.get<CcgRuntimeHealth>(`/system/ccgateway/accounts/${r.id}/health`)) } catch { /* shown as unknown */ }
     }
-    if (r.phase === 'ready') {
-      try {
-        applyLogs(r, await api.get<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`))
-      } catch { r.logsError = true }
-    }
+    // A current core answers for every account (worker null while the container is not
+    // ready), so the level can be set before it runs; an older one only through a ready Worker.
+    try {
+      applyLogs(r, await api.get<unknown>(`/system/ccgateway/accounts/${r.id}/request-logs`))
+    } catch { if (r.phase === 'ready') r.logsError = true }
   } catch {
     r.error = true
   } finally {
@@ -156,7 +155,7 @@ async function load() {
   error.value = ''
   try {
     const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway' })
-    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null }))
+    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null, logsPolicy: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -199,18 +198,9 @@ async function putLogs(r: Row, body: Record<string, unknown>) {
   r.logsBusy = true
   r.logsError = false
   try {
-    applyLogs(r, await api.put<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`, body))
+    applyLogs(r, await api.put<unknown>(`/system/ccgateway/accounts/${r.id}/request-logs`, body))
   } catch { r.logsError = true }
   finally { r.logsBusy = false }
-}
-
-const safeCount = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min
-const isLevel = (v: unknown): v is RequestLogLevel => typeof v === 'string' && (LOG_LEVELS as readonly string[]).includes(v)
-
-function tierOf(v: RequestLogTier | undefined): RequestLogTier | null {
-  if (!v || typeof v !== 'object') return null
-  const values = [v.retention_hours, v.storage_budget_bytes, v.per_request_limit_bytes]
-  return values.every(x => safeCount(x, 1)) ? v : null
 }
 
 /** The level state of a Worker that reports levels; throws when it is malformed. */
@@ -222,20 +212,20 @@ function levelsOf(state: RequestLogState): RequestLogLevels {
     fullUntil = typeof state.full_until === 'string' ? Date.parse(state.full_until) : NaN
     if (!Number.isFinite(fullUntil)) throw new Error('invalid request log expiry')
   }
-  const usage = (k: 'summary_bytes' | 'full_bytes' | 'requests') => (safeCount(state.usage?.[k], 0) ? state.usage![k]! : null)
-  return {
-    level: state.level, levels, fullUntil,
-    summary: tierOf(state.limits?.summary), full: tierOf(state.limits?.full),
-    usage: { summary_bytes: usage('summary_bytes'), full_bytes: usage('full_bytes'), requests: usage('requests') },
-    overflow: state.overflow_behavior === 'retain_partial_with_metadata',
-    viewer: state.viewer === true,
-    viewerSearch: state.viewer_search === true,
-  }
+  return { level: state.level, levels, fullUntil, ...workerInfoOf(state as unknown as Record<string, unknown>) }
 }
 
-function applyLogs(r: Row, state: RequestLogState) {
-  if (typeof state?.enabled !== 'boolean') throw new Error('invalid request log state')
+/** Takes the answer of either core; throws (leaving the row as it was) when it is malformed. */
+function applyLogs(r: Row, answer: unknown) {
+  const policy = policyOf(answer)
+  if (policy) {
+    Object.assign(r, { logsPolicy: policy, logsEnabled: null, logsLevels: null, logsLimits: null })
+    return
+  }
+  const state = answer as RequestLogState
+  if (typeof state.enabled !== 'boolean') throw new Error('invalid request log state')
   const levels = Array.isArray(state.levels) ? levelsOf(state) : null
+  r.logsPolicy = null
   r.logsEnabled = state.enabled
   r.logsLevels = levels
   const values = [state.per_request_limit_bytes, state.retention_hours, state.storage_budget_bytes]
@@ -243,6 +233,11 @@ function applyLogs(r: Row, state: RequestLogState) {
 }
 
 const levelOptions = (r: Row): SelectOption[] => r.logsLevels!.levels.map(l => ({ value: l, label: t(`ccgateway.requestLogs.level.${l}`) }))
+/** Follow names the default it follows, e.g. "跟随默认（摘要）". */
+const settingOptions = (p: RequestLogPolicy): SelectOption[] => LOG_SETTINGS.map(s => ({
+  value: s,
+  label: s === 'follow' ? t('ccgateway.requestLogs.follow', { level: t(`ccgateway.requestLogs.level.${p.default}`) }) : t(`ccgateway.requestLogs.level.${s}`),
+}))
 
 /** The full level is only enabled for a chosen duration, after the warning. */
 const fullDialog = ref<{ row: Row; hours: number } | null>(null)
@@ -262,6 +257,20 @@ async function chooseLevel(r: Row, value: SelectOption['value']) {
   await putLogs(r, { level: value })
 }
 
+/**
+ * A current core only stores the setting (§4): off stops recording without
+ * deleting anything, so nothing but the full level asks first.
+ */
+async function chooseSetting(r: Row, value: SelectOption['value']) {
+  const p = r.logsPolicy
+  if (!p || r.logsBusy || !canLogs(r) || !isSetting(value) || value === activeSetting(p, now.value)) return
+  if (value === 'full') {
+    fullDialog.value = { row: r, hours: 1 }
+    return
+  }
+  await putLogs(r, { level: value })
+}
+
 async function confirmFull() {
   const pending = fullDialog.value
   if (!pending) return
@@ -275,18 +284,38 @@ async function clearFull(r: Row) {
   await putLogs(r, { clear_full: true })
 }
 
+/** Deletes every log of the account (summaries and bodies); the setting stays (§4). */
+async function clearAll(r: Row) {
+  if (r.logsBusy || !canLogs(r) || !r.logsPolicy?.worker?.clearAll) return
+  if (!await confirm({ title: t('ccgateway.requestLogs.clearAllTitle'), message: t('ccgateway.requestLogs.clearAllConfirm'), confirmText: t('ccgateway.requestLogs.clearAll'), danger: true })) return
+  await putLogs(r, { clear_all: true })
+}
+
 // The countdown of the full level, refreshed every 30 seconds.
 const now = ref(Date.now())
 let clock: ReturnType<typeof setInterval> | undefined
 onMounted(() => { clock = setInterval(() => { now.value = Date.now() }, 30000) })
 onBeforeUnmount(() => clearInterval(clock))
 
+/** The setting shown for the row of a current core (an expired full level follows the default). */
+const settingOf = (p: RequestLogPolicy) => activeSetting(p, now.value)
+const overrides = computed(() => countOverrides(rows.value.map(r => r.logsPolicy), now.value))
+watch(overrides, count => emit('overrides', count), { immediate: true })
+/** The older core's hint (off deletes the logs) while one of its rows is shown. */
+const legacyRows = computed(() => rows.value.some(r => r.logsEnabled !== null))
+
 function fullRemaining(r: Row): string {
-  const until = r.logsLevels?.fullUntil
+  const policy = r.logsPolicy !== null
+  const until = policy ? r.logsPolicy!.fullUntil : r.logsLevels?.fullUntil
   if (until == null) return ''
   const minutes = Math.ceil((until - now.value) / 60000)
   if (minutes <= 0) return t('ccgateway.requestLogs.fullExpired')
   const hours = Math.floor(minutes / 60)
+  if (policy) {
+    return hours > 0
+      ? t('ccgateway.requestLogs.followRemaining', { hours, minutes: minutes % 60 })
+      : t('ccgateway.requestLogs.followRemainingMinutes', { minutes })
+  }
   return hours > 0
     ? t('ccgateway.requestLogs.fullRemaining', { hours, minutes: minutes % 60 })
     : t('ccgateway.requestLogs.fullRemainingMinutes', { minutes })
@@ -316,19 +345,28 @@ function logLimits(r: Row): string {
     total: Number((limits.storage_budget_bytes! / 1048576).toFixed(3)),
   })
 }
+function workerDetails(w: WorkerLogInfo): string[] {
+  const parts = [tierText('summary', w.summary, w.usage.summary_bytes), tierText('full', w.full, w.usage.full_bytes)]
+  if (w.usage.requests !== null) parts.push(t('ccgateway.requestLogs.requests', { count: w.usage.requests }))
+  parts.push(t('ccgateway.requestLogs.errorText'))
+  if (w.overflow) parts.push(t('ccgateway.requestLogs.overflow'))
+  return parts
+}
 /** Limits and overflow behavior the Worker reported: shown on hover / focus of the control. */
 function logDetails(r: Row): string {
-  const lv = r.logsLevels
-  if (lv) {
-    const parts = [tierText('summary', lv.summary, lv.usage.summary_bytes), tierText('full', lv.full, lv.usage.full_bytes)]
-    if (lv.usage.requests !== null) parts.push(t('ccgateway.requestLogs.requests', { count: lv.usage.requests }))
-    parts.push(t('ccgateway.requestLogs.errorText'))
-    if (lv.overflow) parts.push(t('ccgateway.requestLogs.overflow'))
-    return parts.join(' ')
+  const p = r.logsPolicy
+  if (p) {
+    const effective = t('ccgateway.requestLogs.effective', { level: t(`ccgateway.requestLogs.level.${effectiveAt(p, now.value)}`) })
+    return [effective, ...(p.worker ? workerDetails(p.worker) : [t('ccgateway.requestLogs.workerUnavailable')])].join(' ')
   }
+  const lv = r.logsLevels
+  if (lv) return workerDetails(lv).join(' ')
   const overflow = r.logsLimits?.overflow_behavior === 'retain_partial_with_metadata' ? t('ccgateway.requestLogs.overflow') : t('ccgateway.requestLogs.unreportedOverflow')
   return `${logLimits(r)} ${overflow}`
 }
+const viewText = (w: WorkerLogInfo | null) => (!w
+  ? t('ccgateway.requestLogs.viewUnavailable')
+  : w.usage.requests === null ? t('ccgateway.requestLogs.view') : t('ccgateway.requestLogs.viewCount', { count: w.usage.requests }))
 
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
@@ -364,6 +402,7 @@ async function refreshAuth(r: Row) {
     <div class="space-y-3">
       <SHint tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
       <SHint>{{ t('ccgateway.requestLogs.hint') }}</SHint>
+      <SHint v-if="legacyRows" data-testid="request-log-legacy-hint">{{ t('ccgateway.requestLogs.legacyHint') }}</SHint>
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
       <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
@@ -387,7 +426,22 @@ async function refreshAuth(r: Row) {
         </template>
         <template #cell-request_logs="{ row }">
           <!-- The tooltip only mirrors the row's hidden description, which assistive technology reads instead. -->
-          <template v-if="row.logsLevels">
+          <template v-if="row.logsPolicy">
+            <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
+              <SSegmented :model-value="settingOf(row.logsPolicy)" :options="settingOptions(row.logsPolicy)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseSetting(row, $event)" />
+              <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
+              <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
+              <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
+            </STooltip>
+            <div class="mt-1 flex items-center gap-2 whitespace-nowrap">
+              <SButton v-if="showViewer(row)" size="sm" variant="ghost" icon="list" :disabled="!row.logsPolicy.worker" :data-testid="`request-log-view-${row.id}`" @click="viewing = row">{{ viewText(row.logsPolicy.worker) }}</SButton>
+              <SHint v-if="settingOf(row.logsPolicy) === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
+              <SButton v-if="(row.logsPolicy.worker?.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+              <SButton v-if="canLogs(row) && row.logsPolicy.worker?.clearAll" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-all-${row.id}`" @click="clearAll(row)">{{ t('ccgateway.requestLogs.clearAll') }}</SButton>
+            </div>
+            <SHint v-if="!row.logsPolicy.worker" size="xs" :data-testid="`request-log-worker-unavailable-${row.id}`">{{ t('ccgateway.requestLogs.workerUnavailable') }}</SHint>
+          </template>
+          <template v-else-if="row.logsLevels">
             <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
               <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
               <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
@@ -396,7 +450,7 @@ async function refreshAuth(r: Row) {
             </STooltip>
             <div v-if="row.logsLevels.level === 'full' || (row.logsLevels.usage.full_bytes ?? 0) > 0 || showViewer(row)" class="mt-1 flex items-center gap-2 whitespace-nowrap">
               <SButton v-if="showViewer(row)" size="sm" variant="ghost" icon="list" :data-testid="`request-log-view-${row.id}`" @click="viewing = row">
-                {{ row.logsLevels.usage.requests === null ? t('ccgateway.requestLogs.view') : t('ccgateway.requestLogs.viewCount', { count: row.logsLevels.usage.requests }) }}
+                {{ viewText(row.logsLevels) }}
               </SButton>
               <SHint v-if="row.logsLevels.level === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
               <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
@@ -425,7 +479,7 @@ async function refreshAuth(r: Row) {
     </div>
     <SModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning">
       <div class="space-y-3" data-testid="request-log-full-dialog">
-        <SHint id="request-log-full-warning" tone="warning">{{ t('ccgateway.requestLogs.fullWarning') }}</SHint>
+        <SHint id="request-log-full-warning" tone="warning">{{ t(fullDialog?.row.logsPolicy ? 'ccgateway.requestLogs.followFullWarning' : 'ccgateway.requestLogs.fullWarning') }}</SHint>
         <SSegmented v-if="fullDialog" :model-value="fullDialog.hours" :options="hourOptions" block :aria-label="t('ccgateway.requestLogs.fullDuration')" data-testid="request-log-full-hours" @update:model-value="setHours" />
       </div>
       <template #footer>
@@ -433,6 +487,6 @@ async function refreshAuth(r: Row) {
         <SButton variant="primary" data-testid="request-log-full-confirm" @click="confirmFull">{{ t('ccgateway.requestLogs.fullAction') }}</SButton>
       </template>
     </SModal>
-    <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="viewing.logsLevels ? logDetails(viewing) : undefined" :search="viewing.logsLevels?.viewerSearch === true" />
+    <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="workerOf(viewing) ? logDetails(viewing) : undefined" :search="workerOf(viewing)?.viewerSearch === true" />
   </SCard>
 </template>

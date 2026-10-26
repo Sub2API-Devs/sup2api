@@ -4400,3 +4400,48 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 状态是逐字段挑选（不是整段透传）；分级状态新增布尔 `viewer_search`，取自 Worker 同名字段（缺省 `false`，非布尔整段 503）。旧版无 `levels` 的状态形状不带此字段。
 
+> §65 起，这份状态只出现在 `GET/PUT …/request-logs` 回答的 `worker` 子对象里（见 §65.4）。
+
+## 65. 请求日志级别：默认规则 + 账号设置，由核心随请求下发（2026-10-26，用户要求）
+
+设计：[REQUEST-LOG-POLICY-DESIGN.md](ccgateway-feature-support/REQUEST-LOG-POLICY-DESIGN.md)。**核心不记录任何日志**：只保存级别设置、组装策略头、提供设置接口；请求内容不在核心落盘、不写数据库。日志仍由每个账号的 Worker 记录与保存。
+
+### 65.1 规则
+
+- 默认规则：CCGateway 配置 `request_logs.level`（`Config.RequestLogs`），只能是 `off` 或 `summary`；缺省（旧配置、未保存过）= `summary`。`full` 不能作为默认。
+- 账号设置：表 `ccgateway_account_request_logs`（迁移 0061）。无行 = 跟随默认；`off`、`summary`；`full` 必带 `full_until`（保存时 = 当前时间截到秒 + 1/4/24 小时）。
+- 生效级别 = 账号设置（`full` 且当前时间不早于 `full_until` 视为无设置）否则默认规则。`off` 只停止记录，不删除已有日志。不做分组层。
+
+### 65.2 存储（迁移 0061，可重跑）
+
+`ccgateway_account_request_logs(account_id bigint PK REFERENCES accounts(id) ON DELETE CASCADE, level text CHECK IN ('off','summary','full'), full_until timestamptz, updated_at, updated_by bigint)`，约束 `(level='full') = (full_until IS NOT NULL)`。只新增表：旧核心忽略它，所有 Worker 按本地级别。账号在本系统是软删除（`deleted_at`），行只在账号行被真正删除时级联删除；已软删除账号的行保留但不再生效（账号不再被调度），接口对已删除账号的 PUT 回 400 `account_deleted`。
+
+### 65.3 下发
+
+- 模型请求与账号测试（probe）：`attachPolicy` 在 `X-CCGateway-Request-Policy` 里加 `request_log` = 生效级别（`features.WorkerPolicy.RequestLog`）。无账号的请求用默认规则。
+- 供应商资源请求（`resourceTransport`，此前不带策略头）：策略头只有 `{"request_log":"<级别>"}`，不带 `schema_version`/`relay_mode` 等（缺省字段 Worker 视为用自己的；`schema_version` 写 0 会被 Worker 拒绝，所以不能直接序列化 `WorkerPolicy`）。Worker 的资源处理只在日志 capture 中读它。
+- `request_log_policy_v1` **不是**必需能力：旧 Worker 忽略未知键，按本地级别记录。
+- 账号设置走请求路径缓存（`requestCache.requestLogs`，与 `features` 同一 `readThrough`）；`full_until` 在组装策略头时与当前时间比较，不依赖缓存刷新。保存后本节点立即丢弃该账号的缓存，并在 `config:changed` 上发 `{"type":"ccgateway_request_log","account_id":N}`，其他节点只丢该账号的缓存（旧核心忽略此类型，最迟 `requestCacheTTL` 后读到）。`account:changed` 与全量失效同样丢弃它。
+- 默认规则随配置缓存：保存配置时它不算运行环境变化（`sameRuntimeConfig` 忽略），走 `featureConfigChanged`（丢配置缓存、发 `ccgateway_features`），不触发任何 runtime 同步。
+
+### 65.4 接口
+
+默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"}`，省略保持原值；`full`、空串、其他值或未知键 400。
+
+账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（权限不变：GET `settings:read`/`account:read`/本人 `account:own:read`；PUT `settings:manage`/`account:update`/本人 `account:own:update`；本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
+
+```json
+{"setting":{"level":"full","full_until":"2026-10-26T16:00:00Z"},
+ "default":"summary","effective":"full",
+ "worker":{"enabled":true,"level":"summary","full_until":null,"levels":["off","summary","full"],"limits":{…},"usage":{…},"viewer":true,"viewer_search":true}}
+```
+
+- `setting.level`：`follow|off|summary|full`；过期的 `full` 显示为 `follow`（`full_until` 为 null）。`effective` 是此刻随请求下发的级别。
+- `worker`：Worker 状态，按 REQUEST-LOG-LEVELS-DESIGN 与 §64.3 的规则逐字段挑选（旧 Worker 为只有 `enabled` 等字段的旧形状）。**其中 `level`/`enabled`/`full_until` 只是 Worker 无策略头时的本地级别，不是生效级别**，界面只用 `setting`/`effective`。Worker 不可达、回错、形状不对，或账号的运行环境不可用（已删除、代理不可用）时为 `null`，其余照常返回（问 Worker 最多 10 秒）。
+- PUT 只接受下列之一（多键、未知键、旧开关 `{"enabled":…}` 一律 400）：
+  - `{"level":"follow"}`（删行）、`{"level":"off"}`、`{"level":"summary"}`、`{"level":"full","full_for_hours":1|4|24}`：只写核心表（同一事务写审计），**不转发 Worker**；写后丢缓存并广播（65.3）。
+  - `{"clear_full":true}`、`{"clear_all":true}`：按规范形式转发 Worker `PUT admin/request-logs`，`worker` = Worker 回答；Worker 失败按原规则报错（运行环境不可用 400，其他 503/400）。不改任何级别。旧 Worker 不认识 `clear_all`，会 400。
+- 审计：动作 `ccgateway.account.<id>.request-logs`，详情只含枚举与时间：级别变更 `{"change":"level","level":…,"previous":…,"full_for_hours":…,"full_until":…}`；清除 `{"change":"clear_full"|"clear_all"}`。
+
+兼容：旧核心的 PUT `{"enabled":bool}` 与 `{"level":…}` 转发给 Worker、改其本地级别；新核心不再转发级别，因此**升级核心前 Worker 必须已是带 `request_log_policy_v1` 的版本**（发布顺序先插件后核心），否则旧 Worker 继续按升级前的本地级别记录，界面设置对它不生效。
+

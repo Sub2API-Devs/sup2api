@@ -43,7 +43,22 @@ type WorkerPolicy struct {
 	// BuildInjection is what the level adds to a request without a billing
 	// header, only the items added (BuildInjection.Effective); nil adds nothing.
 	BuildInjection *BuildInjection `json:"build_injection,omitempty"`
+	// RequestLog is the request log level for this request, resolved by the
+	// core from the account's setting or the CCGateway default
+	// (REQUEST-LOG-POLICY-DESIGN.md); "" leaves the Worker's own level.
+	RequestLog string `json:"request_log,omitempty"`
 }
+
+// Request log levels a policy may name (RequestLog).
+const (
+	RequestLogOff     = "off"
+	RequestLogSummary = "summary"
+	RequestLogFull    = "full"
+)
+
+// RequestLogPolicyCapability: the Worker logs each request at the level its
+// policy names (WorkerPolicy.RequestLog).
+const RequestLogPolicyCapability = "request_log_policy_v1"
 
 // Validate checks every field's vocabulary. The core always names the relay
 // mode and CLI version; a value the Worker reads without them (the CLI run by
@@ -66,6 +81,9 @@ func (p WorkerPolicy) Validate() error {
 	}
 	if err := p.BuildAttachmentSources.Validate(); err != nil {
 		return err
+	}
+	if p.RequestLog != "" && p.RequestLog != RequestLogOff && p.RequestLog != RequestLogSummary && p.RequestLog != RequestLogFull {
+		return errors.New("invalid request_log: must be off, summary or full")
 	}
 	return p.BuildInjection.Validate()
 }

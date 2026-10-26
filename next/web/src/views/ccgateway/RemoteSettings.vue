@@ -20,14 +20,17 @@ import { defaultRequestPolicy, newRequestPolicy, normalizeRequestPolicy, savedOv
 import { reasonDisplay, reasonOf } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
 import { basePathOf, connectionStateOf, controllerFormProblem, endpointScheme, formatControllerEndpoint, parseControllerEndpoint, schemeOf } from './controllerMode'
+import { LOG_DEFAULTS, isDefault, type RequestLogDefault } from './requestLogPolicy'
 
 interface RuntimeImages { app: string; egress: string; controller: string }
-interface RemoteConfig extends CcgRemoteConfig { request_policy?: Partial<RequestPolicy>; cc_feature_groups?: Record<string, FeatureGroup>; feature_revision?: number }
+/** request_logs: the default request log rule (REQUEST-LOG-POLICY-DESIGN.md §1); absent from an older core. */
+interface RemoteConfig extends CcgRemoteConfig { request_policy?: Partial<RequestPolicy>; cc_feature_groups?: Record<string, FeatureGroup>; feature_revision?: number; request_logs?: { level?: string } }
 /** Install warnings with a translation (ccgateway.controllerInstall.warnings.*); others are shown as their code. */
 const INSTALL_WARNINGS = ['dns_mismatch']
 /** A form input problem: its message is shown as is (other failures show a generic text). */
 class FormError extends Error {}
-const props = defineProps<{ disabled?: boolean }>()
+/** requestLogOverrides: accounts with their own log setting in the account list (null: unknown). */
+const props = defineProps<{ disabled?: boolean; requestLogOverrides?: number | null }>()
 const emit = defineEmits<{ (event: 'saved'): void }>()
 const { t } = useI18n()
 const { reasonLabel } = useCcgText()
@@ -70,8 +73,22 @@ const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSO
 const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || DEFAULT_POOL) || network.allocation !== (saved.value?.network?.allocation || 'random'))
 const imagesPayload = computed<RuntimeImages>(() => ({ app: images.app.trim(), egress: images.egress.trim(), controller: images.controller.trim() }))
 const imagesChanged = computed(() => IMAGE_KEYS.some(k => imagesPayload.value[k] !== (saved.value?.images?.[k] || '')))
+/** The saved default request log level: missing (an older core) hides the setting; unset is summary (§1). */
+const savedLogDefault = computed<RequestLogDefault | null>(() => {
+  const rule = saved.value?.request_logs
+  if (!rule || typeof rule !== 'object') return null
+  return isDefault(rule.level) ? rule.level : 'summary'
+})
+const requestLogDefault = ref<RequestLogDefault>('summary')
+const logDefaultChanged = computed(() => savedLogDefault.value !== null && requestLogDefault.value !== savedLogDefault.value)
+const logDefaultOptions = computed(() => LOG_DEFAULTS.map(value => ({ value, label: t(`ccgateway.requestLogs.level.${value}`) })))
+const overridesText = computed(() => {
+  const n = props.requestLogOverrides
+  if (n === null || n === undefined) return ''
+  return n > 0 ? t('ccgateway.requestLogs.overrides', { n }) : t('ccgateway.requestLogs.overridesNone')
+})
 /** Unsaved settings of the other tabs would be replaced by the configuration an install returns. */
-const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value || groupChanged.value)
+const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value || groupChanged.value || logDefaultChanged.value)
 const imageLabel = (key: typeof IMAGE_KEYS[number]) => t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`)
 
 // ---------------------------------------------------------------- controller connection
@@ -155,6 +172,8 @@ function assign(config: RemoteConfig) {
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || DEFAULT_POOL
   network.allocation = config.network?.allocation || 'random'
+  const rule = config.request_logs
+  requestLogDefault.value = rule && typeof rule === 'object' && isDefault(rule.level) ? rule.level : 'summary'
   const controller = config.mode === 'controller'
   endpoint.value = controller && config.host ? endpointOf(config) : ''
   adminKey.value = ''
@@ -236,7 +255,9 @@ async function save() {
     cc_feature_groups: Object.fromEntries(Object.entries(featureGroups.value).map(([id, group]) => [id, { ...group, overrides: savedOverrides(group.overrides) }])),
     feature_revision: s.feature_revision ?? 0,
     images: gateway ? { ...imagesPayload.value, gateway } : imagesPayload.value,
-    network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation }
+    network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation },
+    // Only to a core that reports the rule (an older one would not know it).
+    ...(savedLogDefault.value !== null ? { request_logs: { level: requestLogDefault.value } } : {})
   }, { signal: AbortSignal.timeout(55000) })
   assign(response)
   runtimeRevision.value++
@@ -346,6 +367,15 @@ onBeforeUnmount(() => {
                 </SSettingRow>
               </SSettingsGroup>
             </RuntimeInstall>
+            <!-- The default request log level, saved with the form; the account containers below may each set their own. -->
+            <SSettingsGroup v-if="savedLogDefault !== null" v-show="activeTab === 'deployment'" :title="t('ccgateway.requestLogs.title')" data-testid="settings-request-logs">
+              <SSettingRow :label="t('ccgateway.requestLogs.defaultLabel')" :description="t('ccgateway.requestLogs.defaultHint')">
+                <div class="flex items-center gap-2 whitespace-nowrap">
+                  <SSegmented :model-value="requestLogDefault" :options="logDefaultOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.requestLogs.defaultLabel')" data-testid="request-log-default" @update:model-value="requestLogDefault = isDefault($event) ? $event : requestLogDefault" />
+                  <SHint v-if="overridesText" inline size="xs" data-testid="request-log-overrides">{{ overridesText }}</SHint>
+                </div>
+              </SSettingRow>
+            </SSettingsGroup>
           </div>
           <div class="flex justify-end border-t border-line bg-surface py-3">
             <SButton type="submit" variant="primary" :disabled="!dirty" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</SButton>

@@ -20,12 +20,18 @@ type requestLogState struct {
 	FullUntil *time.Time `json:"full_until"`
 }
 
-// newRequestLogStore reads the account's level. Off removes any log left.
+// newRequestLogStore reads the account's level. The logs left are kept
+// whatever the level: turning it off removed them then (applyLevel), and a
+// log written since at the level a request's policy named
+// (REQUEST-LOG-POLICY-DESIGN.md §3) must survive a restart. Only an older
+// Worker's off (its marker alone) removes them, once: the level is then saved
+// as this Worker's own, which the next start reads.
 func newRequestLogStore(root string) (*requestLogStore, error) {
 	s := &requestLogStore{root: filepath.Join(root, "request-logs"), state: root, level: logLevelSummary, active: map[*requestDiagnostic]bool{},
 		pruneDue: make(chan struct{}, 1)}
 	raw, err := os.ReadFile(filepath.Join(root, requestLogStateFile))
 	var saved requestLogState
+	legacyOff := false
 	switch {
 	case err == nil && json.Unmarshal(raw, &saved) == nil && (saved.Level == logLevelOff || saved.Level == logLevelSummary || saved.Level == logLevelFull && saved.FullUntil != nil):
 		s.level = saved.Level
@@ -36,15 +42,18 @@ func newRequestLogStore(root string) (*requestLogStore, error) {
 		return nil, err
 	default:
 		if _, err := os.Stat(filepath.Join(root, requestLogDisabledMarker)); err == nil {
-			s.level = logLevelOff
+			s.level, legacyOff = logLevelOff, true
 		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
 	}
 	s.enabled = s.level != logLevelOff
-	if !s.enabled {
+	if legacyOff {
 		if err := os.RemoveAll(s.root); err != nil {
 			return nil, err
+		}
+		if err := s.persist(); err != nil {
+			log.Printf("request log level not saved: %v", err)
 		}
 	}
 	// Logs moved aside to be removed (store.discard) and left by a stopped
@@ -109,8 +118,11 @@ func (s *requestLogStore) clock() time.Time {
 type requestLogStore struct {
 	// mu guards the level, the active requests and the index; no file is
 	// written under it except the level's own (see requestDiagnostic.lock).
-	mu      sync.Mutex
-	root    string
+	mu   sync.Mutex
+	root string
+	// enabled: the store's own level is not off. It decides only for a request
+	// whose policy names no level (capture); logs kept at a policy's level are
+	// written, listed and read whatever it is.
 	enabled bool
 	// level is off, summary or full; fullUntil ends the full level.
 	level     string
@@ -177,13 +189,40 @@ func (s *requestLogStore) put(w http.ResponseWriter, r *http.Request) bool {
 	}
 	level, hours, clear, ok := requestLogChange(input)
 	if !ok {
-		apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true} or {"enabled":bool}`)
+		apiError(w, 400, "invalid_request_error", `Use {"level":"off"|"summary"}, {"level":"full","full_for_hours":1|4|24}, {"clear_full":true}, {"clear_all":true} or {"enabled":bool}`)
 		return false
 	}
-	if clear {
+	switch clear {
+	case clearFull:
 		return s.clearFull(w)
+	case clearAll:
+		return s.clearAll(w)
 	}
 	return s.applyLevel(w, level, hours)
+}
+
+// What a PUT clears (requestLogChange): the content alone, or every log.
+const (
+	clearFull = "full"
+	clearAll  = "all"
+)
+
+// clearAll removes every log, summaries and content, and leaves the level as
+// it is (REQUEST-LOG-POLICY-DESIGN.md §3). Like turning the level off, under
+// s.mu the running requests' logs end and the logs are moved aside; they are
+// removed after s.mu is released, so no request waits for the disk.
+func (s *requestLogStore) clearAll(w http.ResponseWriter) bool {
+	s.mu.Lock()
+	aside, err := s.discard()
+	s.mu.Unlock()
+	if err == nil && aside != "" {
+		err = removeLogPath(aside)
+	}
+	if err != nil {
+		apiError(w, 500, "api_error", "Cannot clear request logs")
+		return false
+	}
+	return true
 }
 
 // clearFull removes the content of every request logged so far; the
@@ -245,7 +284,8 @@ func (s *requestLogStore) applyLevel(w http.ResponseWriter, level string, hours 
 }
 
 // discard ends every running request's log, empties the index and moves the
-// logs aside (caller holds s.mu). It returns the directory to remove, "" when
+// logs aside (caller holds s.mu), for the level turned off and for clearing
+// every log. It returns the directory to remove, "" when
 // there were no logs; one left by a stopped Worker is removed at its next
 // start (newRequestLogStore).
 func (s *requestLogStore) discard() (string, error) {
@@ -268,8 +308,8 @@ func (s *requestLogStore) discard() (string, error) {
 }
 
 // requestLogChange reads one PUT: a level (full with its hours), clearing the
-// content, or an older core's switch (on is the summary).
-func requestLogChange(input map[string]json.RawMessage) (level string, hours int, clear, ok bool) {
+// content or every log, or an older core's switch (on is the summary).
+func requestLogChange(input map[string]json.RawMessage) (level string, hours int, clear string, ok bool) {
 	only := func(keys ...string) bool {
 		if len(input) != len(keys) {
 			return false
@@ -285,26 +325,29 @@ func requestLogChange(input map[string]json.RawMessage) (level string, hours int
 	case only("enabled"):
 		var on bool
 		if json.Unmarshal(input["enabled"], &on) != nil || string(input["enabled"]) == "null" {
-			return "", 0, false, false
+			return "", 0, "", false
 		}
 		if on {
-			return logLevelSummary, 0, false, true
+			return logLevelSummary, 0, "", true
 		}
-		return logLevelOff, 0, false, true
+		return logLevelOff, 0, "", true
 	case only("clear_full"):
 		var yes bool
-		return "", 0, true, json.Unmarshal(input["clear_full"], &yes) == nil && yes
+		return "", 0, clearFull, json.Unmarshal(input["clear_full"], &yes) == nil && yes
+	case only("clear_all"):
+		var yes bool
+		return "", 0, clearAll, json.Unmarshal(input["clear_all"], &yes) == nil && yes
 	case only("level"), only("level", "full_for_hours"):
 		if json.Unmarshal(input["level"], &level) != nil {
-			return "", 0, false, false
+			return "", 0, "", false
 		}
 		_, timed := input["full_for_hours"]
 		if level == logLevelFull {
-			return level, hours, false, timed && json.Unmarshal(input["full_for_hours"], &hours) == nil && fullDurations[hours]
+			return level, hours, "", timed && json.Unmarshal(input["full_for_hours"], &hours) == nil && fullDurations[hours]
 		}
-		return level, 0, false, !timed && (level == logLevelOff || level == logLevelSummary)
+		return level, 0, "", !timed && (level == logLevelOff || level == logLevelSummary)
 	}
-	return "", 0, false, false
+	return "", 0, "", false
 }
 
 // describe is the level and each level's limits (caller holds s.mu); serve
@@ -336,5 +379,8 @@ func (s *requestLogStore) describe() Object {
 		// changed (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3); an older Worker
 		// refuses those keys.
 		"viewer_search": true,
+		// clear_all: a PUT {"clear_all":true} removes every log and keeps the
+		// level (REQUEST-LOG-POLICY-DESIGN.md §3); an older Worker refuses it.
+		"clear_all": true,
 	}
 }

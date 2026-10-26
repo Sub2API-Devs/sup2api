@@ -221,24 +221,58 @@ func (d *requestDiagnostic) reserve(n int) bool {
 	return false
 }
 
+// Where a request's log level came from (metadata log_level_source): the
+// core's policy (features.WorkerPolicy.RequestLog) or the Worker's own level.
+const (
+	logLevelFromPolicy = "policy"
+	logLevelFromLocal  = "local"
+)
+
+// policyLogLevel is the log level the request's policy names, "" when it has
+// no policy or names none (REQUEST-LOG-POLICY-DESIGN.md §3). An invalid policy
+// names none: the request is logged at the Worker's own level and refused with
+// 400 when its policy is read (parseRequestPolicy).
+func policyLogLevel(h http.Header) string {
+	value := h.Get(features.PolicyHeader)
+	if value == "" {
+		return ""
+	}
+	policy, err := features.ParseWorkerPolicy([]byte(value))
+	if err != nil {
+		return ""
+	}
+	return policy.RequestLog
+}
+
 // capture starts the request's log in its store; the gateway calls it once
 // the caller is authenticated (audit C7), so an unauthenticated request
 // leaves nothing. A request without a store (a Gateway built on its own) is
-// not logged.
+// not logged. The level is the one the request's policy names; without one
+// it is the store's own, which the policy's level neither reads nor changes.
 func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request) http.ResponseWriter {
 	s := d.store
 	if s == nil {
 		return w
 	}
+	policyLevel := policyLogLevel(r.Header)
+	if policyLevel == logLevelOff {
+		return w
+	}
 	s.mu.Lock()
-	if !s.enabled {
+	if policyLevel == "" && !s.enabled {
 		s.mu.Unlock()
 		return w
 	}
-	// The level is the store's when the request starts; clearing content
-	// later changes it for the active requests (store.clearFull).
+	// The level is decided when the request starts; clearing content later
+	// changes it for the active requests (store.clearFull).
 	d.mu.Lock()
-	d.summaryOnly = !s.captureContent()
+	if policyLevel != "" {
+		d.summaryOnly = policyLevel != logLevelFull
+		d.fields["log_level_source"] = logLevelFromPolicy
+	} else {
+		d.summaryOnly = !s.captureContent()
+		d.fields["log_level_source"] = logLevelFromLocal
+	}
 	d.mu.Unlock()
 	s.active[d] = true
 	// A week of summaries is many directories: a request asks for a prune at
@@ -525,11 +559,13 @@ func (d *requestDiagnostic) finish() {
 	if s := d.store; s != nil {
 		s.mu.Lock()
 		delete(s.active, d)
-		// Logs turned off since clear the directory: nothing to list.
+		// Logs turned off or cleared since clear the directory (store.discard,
+		// under s.mu): nothing to list. A log kept at the policy's level is
+		// listed whatever the store's own level.
 		d.mu.Lock()
 		directory := d.directory
 		d.mu.Unlock()
-		if directory != "" && s.enabled {
+		if directory != "" {
 			s.indexed(filepath.Base(directory), b)
 		}
 		s.mu.Unlock()

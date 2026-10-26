@@ -341,3 +341,246 @@ describe('account runtime debug log levels', () => {
     }
   })
 })
+
+describe('account request log settings of the core', () => {
+  const MIB = 1048576
+  const workerState = (over: Record<string, unknown> = {}) => ({
+    enabled: true, level: 'summary', full_until: null, levels: ['off', 'summary', 'full'],
+    limits: {
+      summary: { retention_hours: 168, storage_budget_bytes: 128 * MIB, per_request_limit_bytes: 262144 },
+      full: { retention_hours: 24, storage_budget_bytes: 512 * MIB, per_request_limit_bytes: 64 * MIB },
+    },
+    usage: { summary_bytes: 2 * MIB, full_bytes: 0, requests: 3 },
+    viewer: true, viewer_search: true, clear_all: true,
+    ...over,
+  })
+  const policy = (over: Record<string, unknown> = {}) => ({
+    setting: { level: 'follow', full_until: null }, default: 'summary', effective: 'summary', worker: workerState(), ...over,
+  })
+  const fullFor = (ms: number, over: Record<string, unknown> = {}) => policy({ setting: { level: 'full', full_until: new Date(Date.now() + ms).toISOString() }, effective: 'full', ...over })
+  /** answers: request-logs answer per account id; status: container status per account id (ready by default). */
+  function core(answers: Record<number, unknown>, status: Record<number, string> = {}) {
+    mocks.get.mockImplementation(async (path: string) => {
+      const id = Number(path.split('/')[4])
+      if (path.endsWith('/status')) return { status: status[id] ?? 'ready', container: `cc-${id}` }
+      if (path.endsWith('/health')) return { logged_in: true }
+      return answers[id]
+    })
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.manage = true
+    mocks.confirm.mockResolvedValue(true)
+    mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'cc-main', type: 'managed', created_by: 1 }] })
+    i18n.global.locale.value = 'zh'
+  })
+  async function render() {
+    const wrapper = mount(AccountRuntimes, { attachTo: document.body, global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    return wrapper
+  }
+  const radio = (w: Awaited<ReturnType<typeof render>>, value: string, id = 25) => w.get<HTMLInputElement>(`[data-testid="request-log-level-${id}"] input[value="${value}"]`)
+  const lastOverrides = (w: Awaited<ReturnType<typeof render>>) => w.emitted('overrides')!.at(-1)![0]
+
+  it('follows the default and names the level it follows', async () => {
+    core({ 25: policy() })
+    const w = await render()
+    expect(w.get('[data-testid="request-log-level-25"]').text().replace(/\s+/g, '')).toBe('跟随默认（摘要）关闭摘要完整')
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(w.get('[data-testid="request-log-limits-25"]').text()).toContain('当前生效：摘要。')
+    expect(w.get('[data-testid="request-log-view-25"]').text()).toBe('查看日志（3）')
+    expect(w.find('[data-testid="request-log-full-25"]').exists()).toBe(false)
+    expect(w.text()).toContain('级别由核心随每个请求下发给 Worker')
+    expect(w.text()).toContain('关闭只停止记录，不删除已有日志')
+    expect(w.find('[data-testid="request-log-legacy-hint"]').exists()).toBe(false)
+    expect(lastOverrides(w)).toBe(0)
+    w.unmount()
+  })
+
+  it('names an off default too', async () => {
+    core({ 25: policy({ default: 'off', effective: 'off' }) })
+    const w = await render()
+    expect(radio(w, 'follow').element.parentElement!.textContent).toContain('跟随默认（关闭）')
+    expect(w.get('[data-testid="request-log-limits-25"]').text()).toContain('当前生效：关闭。')
+    w.unmount()
+  })
+
+  it('sets off, summary and follow without a confirmation, since off deletes nothing', async () => {
+    core({ 25: policy() })
+    mocks.put.mockResolvedValueOnce(policy({ setting: { level: 'off', full_until: null }, effective: 'off' }))
+    const w = await render()
+    await radio(w, 'off').setValue(true)
+    await flushPromises()
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    expect(mocks.put).toHaveBeenLastCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'off' })
+    expect(radio(w, 'off').element.checked).toBe(true)
+    expect(lastOverrides(w)).toBe(1)
+    mocks.put.mockResolvedValueOnce(policy())
+    await radio(w, 'follow').setValue(true)
+    await flushPromises()
+    expect(mocks.put).toHaveBeenLastCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'follow' })
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(lastOverrides(w)).toBe(0)
+    w.unmount()
+  })
+
+  it('keeps the setting and shows an error when saving fails', async () => {
+    core({ 25: policy() })
+    mocks.put.mockRejectedValue(new Error('unreachable'))
+    const w = await render()
+    await radio(w, 'summary').setValue(true)
+    await flushPromises()
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(w.text()).toContain('读取或更新日志开关失败')
+    w.unmount()
+  })
+
+  it('turns full on for a chosen duration and counts down to following the default', async () => {
+    core({ 25: policy() })
+    mocks.put.mockResolvedValue(fullFor(24 * 3600000))
+    const w = await render()
+    await radio(w, 'full').setValue(true)
+    await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
+    const dialog = document.body.querySelector('[data-testid="request-log-full-dialog"]')
+    expect(dialog?.textContent).toContain('到期回到跟随默认')
+    ;(document.body.querySelector('[data-testid="request-log-full-hours"] input[value="24"]') as HTMLInputElement).click()
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid="request-log-full-confirm"]') as HTMLElement).click()
+    await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'full', full_for_hours: 24 })
+    expect(radio(w, 'full').element.checked).toBe(true)
+    expect(w.get('[data-testid="request-log-full-25"]').text()).toMatch(/^完整：剩余 (23 小时 59|24 小时 0) 分（到期回到跟随默认）$/)
+    expect(lastOverrides(w)).toBe(1)
+    w.unmount()
+  })
+
+  it('shows the remaining time of a full setting, and an expired one as following the default', async () => {
+    for (const [ms, text] of [
+      [(3 * 60 + 12) * 60000 - 5000, '完整：剩余 3 小时 12 分（到期回到跟随默认）'],
+      [25 * 60000 - 5000, '完整：剩余 25 分（到期回到跟随默认）'],
+    ] as const) {
+      core({ 25: fullFor(ms) })
+      const w = await render()
+      expect(w.get('[data-testid="request-log-full-25"]').text()).toBe(text)
+      w.unmount()
+    }
+    core({ 25: fullFor(-60000) })
+    const w = await render()
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(w.find('[data-testid="request-log-full-25"]').exists()).toBe(false)
+    expect(w.get('[data-testid="request-log-limits-25"]').text()).toContain('当前生效：摘要。')
+    expect(lastOverrides(w)).toBe(0)
+    w.unmount()
+  })
+
+  it('clears all logs or the full content only after confirmation', async () => {
+    core({ 25: policy({ worker: workerState({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }) }) })
+    mocks.confirm.mockResolvedValueOnce(false)
+    mocks.put.mockResolvedValue(policy({ worker: workerState({ usage: { summary_bytes: 0, full_bytes: 0, requests: 0 } }) }))
+    const w = await render()
+    await w.get('[data-testid="request-log-clear-all-25"]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ danger: true, title: '清空请求调试日志' }))
+    expect(mocks.put).not.toHaveBeenCalled()
+    await w.get('[data-testid="request-log-clear-all-25"]').trigger('click')
+    await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { clear_all: true })
+    expect(w.get('[data-testid="request-log-view-25"]').text()).toBe('查看日志（0）')
+    expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+    // The setting is kept.
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    w.unmount()
+  })
+
+  it('still sets the level while the Worker cannot be reached, with usage and viewing unavailable', async () => {
+    mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'cc-main', type: 'managed', created_by: 1 }, { id: 26, name: 'cc-new', type: 'managed', created_by: 1 }] })
+    core({ 25: policy({ worker: null }), 26: policy({ setting: { level: 'off', full_until: null }, effective: 'off', worker: null }) }, { 26: 'creating' })
+    mocks.put.mockResolvedValue(policy({ setting: { level: 'summary', full_until: null }, worker: null }))
+    const w = await render()
+    for (const id of [25, 26]) {
+      expect(w.get(`[data-testid="request-log-view-${id}"]`).text()).toBe('查看日志（不可用）')
+      expect(w.get(`[data-testid="request-log-view-${id}"]`).attributes('disabled')).toBeDefined()
+      expect(w.find(`[data-testid="request-log-clear-all-${id}"]`).exists()).toBe(false)
+      expect(w.get(`[data-testid="request-log-worker-unavailable-${id}"]`).text()).toContain('级别仍可设置')
+      expect(w.get(`[data-testid="request-log-limits-${id}"]`).text()).toContain('Worker 暂时无法访问')
+    }
+    // A container that is not ready yet is asked too.
+    expect(mocks.get).toHaveBeenCalledWith('/system/ccgateway/accounts/26/request-logs')
+    expect(radio(w, 'off', 26).element.checked).toBe(true)
+    expect(lastOverrides(w)).toBe(1)
+    await radio(w, 'summary').setValue(true)
+    await flushPromises()
+    expect(mocks.put).toHaveBeenCalledWith('/system/ccgateway/accounts/25/request-logs', { level: 'summary' })
+    expect(radio(w, 'summary').element.checked).toBe(true)
+    expect(lastOverrides(w)).toBe(2)
+    expect(w.text()).not.toContain('读取或更新日志开关失败')
+    w.unmount()
+  })
+
+  it('does not flag an older core that cannot answer for a container that is not ready', async () => {
+    mocks.get.mockImplementation(async (path: string) => {
+      if (path.endsWith('/status')) return { status: 'creating' }
+      throw new Error('not_synchronized')
+    })
+    const w = await render()
+    expect(w.text()).not.toContain('读取或更新日志开关失败')
+    expect(w.find('[data-testid="request-log-level-25"]').exists()).toBe(false)
+    expect(lastOverrides(w)).toBeNull()
+    w.unmount()
+  })
+
+  it('shows the setting, not the Worker\'s own level, and hides clearing for a Worker without it', async () => {
+    // The Worker's local level is off; the core says the account follows the default (summary).
+    core({ 25: policy({ worker: workerState({ enabled: false, level: 'off', clear_all: undefined }) }) })
+    const w = await render()
+    expect(radio(w, 'follow').element.checked).toBe(true)
+    expect(radio(w, 'off').element.checked).toBe(false)
+    expect(w.get('[data-testid="request-log-limits-25"]').text()).toContain('当前生效：摘要。')
+    // A local off no longer blocks reading (§3).
+    expect(w.get('[data-testid="request-log-view-25"]').attributes('disabled')).toBeUndefined()
+    expect(w.find('[data-testid="request-log-clear-all-25"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('lets readers see the setting but not change it or delete logs', async () => {
+    mocks.manage = false
+    core({ 25: policy({ worker: workerState({ usage: { summary_bytes: 1, full_bytes: 5, requests: 1 } }) }) })
+    const w = await render()
+    expect(radio(w, 'full').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="request-log-clear-all-25"]').exists()).toBe(false)
+    expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+    expect(w.get('[data-testid="request-log-view-25"]').attributes('disabled')).toBeUndefined()
+    w.unmount()
+  })
+
+  it('rejects a malformed setting instead of guessing', async () => {
+    for (const bad of [
+      policy({ setting: { level: 'debug', full_until: null } }),
+      policy({ setting: { level: 'full', full_until: null } }),
+      policy({ setting: null }),
+      policy({ default: 'full' }),
+      policy({ effective: 'verbose' }),
+      policy({ worker: 'down' }),
+    ]) {
+      core({ 25: bad })
+      const w = await render()
+      expect(w.find('[data-testid="request-log-level-25"]').exists()).toBe(false)
+      expect(w.text()).toContain('读取或更新日志开关失败')
+      w.unmount()
+    }
+  })
+
+  it('keeps the older controls when the core answers with the Worker state', async () => {
+    mocks.list.mockResolvedValue({ items: [{ id: 25, name: 'cc-main', type: 'managed', created_by: 1 }, { id: 26, name: 'cc-new', type: 'managed', created_by: 1 }] })
+    core({ 25: workerState(), 26: policy() })
+    const w = await render()
+    // 25: the older core's three levels; 26: the current one's four settings.
+    expect(w.get('[data-testid="request-log-level-25"]').text().replace(/\s+/g, '')).toBe('关闭摘要完整')
+    expect(w.get('[data-testid="request-log-level-26"]').text().replace(/\s+/g, '')).toBe('跟随默认（摘要）关闭摘要完整')
+    expect(w.get('[data-testid="request-log-legacy-hint"]').text()).toContain('关闭会停止记录并删除该账号的全部请求调试日志')
+    expect(w.find('[data-testid="request-log-clear-all-25"]').exists()).toBe(false)
+    expect(lastOverrides(w)).toBe(0)
+    w.unmount()
+  })
+})

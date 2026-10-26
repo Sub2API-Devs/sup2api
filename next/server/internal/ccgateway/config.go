@@ -42,6 +42,9 @@ func sameRuntimeConfig(a, b Config) bool {
 	a.RequestPolicy, b.RequestPolicy = nil, nil
 	a.CCFeatureGroups, b.CCFeatureGroups = nil, nil
 	a.FeatureRevision, b.FeatureRevision = 0, 0
+	// The request log default travels with each request's policy: a change
+	// needs no runtime reconciled, only the cached configuration dropped.
+	a.RequestLogs, b.RequestLogs = nil, nil
 	a.bundled, b.bundled = nil, nil
 	return av == bv && reflect.DeepEqual(a, b)
 }
@@ -88,6 +91,9 @@ type Config struct {
 	RequestPolicy   *RequestPolicy                `json:"request_policy,omitempty"`
 	CCFeatureGroups map[string]GroupFeaturePolicy `json:"cc_feature_groups,omitempty"`
 	FeatureRevision int64                         `json:"feature_revision"`
+	// RequestLogs is the default request log rule of every account without
+	// its own setting (CONTRACTS §65); nil is summary.
+	RequestLogs *RequestLogDefault `json:"request_logs,omitempty"`
 
 	// bundled holds the image references of the active plugin package
 	// (§53.10), set when the configuration is loaded; never saved.
@@ -183,6 +189,7 @@ func (c Config) Public() map[string]any {
 		"request_policy":            c.EffectiveRequestPolicy(),
 		"cc_feature_groups":         c.featureGroups(),
 		"feature_revision":          c.FeatureRevision,
+		"request_logs":              RequestLogDefault{Level: c.DefaultRequestLog()},
 	}
 }
 
@@ -353,14 +360,14 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	// Network, request policy and images are independent of the target and
 	// kept when disconnected too (the install uses the saved images).
-	for _, merge := range []func(*Config, Config) error{mergeNetwork, mergeRequestPolicy, mergeImages} {
+	for _, merge := range []func(*Config, Config) error{mergeNetwork, mergeRequestPolicy, mergeImages, mergeRequestLogs} {
 		if err := merge(&c, old); err != nil {
 			return c, err
 		}
 	}
 	if c.Mode == "disabled" {
 		// Not configured: no target, no keys.
-		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images, CCFeatureGroups: c.CCFeatureGroups, FeatureRevision: c.FeatureRevision}, nil
+		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images, CCFeatureGroups: c.CCFeatureGroups, FeatureRevision: c.FeatureRevision, RequestLogs: c.RequestLogs}, nil
 	}
 	if legacy {
 		return mergeLegacy(c, old)
