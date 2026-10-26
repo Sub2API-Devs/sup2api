@@ -5,10 +5,9 @@
 // generated once and kept in a state directory, so data survives restarts.
 //
 // Prepare only fills in variables that are not already set: pointing
-// SUB2API_DATABASE_URL or SUB2API_REDIS_URL elsewhere uses those servers
-// instead. The core then starts through config.Load and app.Run like any
-// other node; dev mode changes where the configuration comes from, nothing
-// else.
+// DATABASE_URL or REDIS_URL elsewhere uses those servers instead. The core
+// then starts through config.Load and app.Run like any other node; dev mode
+// changes where the configuration comes from, nothing else.
 package devenv
 
 import (
@@ -102,7 +101,7 @@ func DefaultStateDir() (string, error) {
 	return filepath.Join(base, "sub2api-dev"), nil
 }
 
-// Prepare starts the dependencies and sets the SUB2API_* variables the core
+// Prepare starts the dependencies and sets the variables config.Load
 // reads. Variables that are already set are left alone.
 func Prepare(ctx context.Context, opt Options) (*Env, error) {
 	var err error
@@ -135,13 +134,13 @@ func Prepare(ctx context.Context, opt Options) (*Env, error) {
 	}
 	env := &Env{StateDir: opt.StateDir, URL: "http://" + opt.Addr, AdminEmail: AdminEmail, AdminPassword: sec.AdminPassword}
 
-	env.DatabaseURL = os.Getenv("SUB2API_DATABASE_URL")
+	env.DatabaseURL = os.Getenv("DATABASE_URL")
 	if env.DatabaseURL == "" {
 		if env.DatabaseURL, err = localDatabase(ctx, DatabaseFor(opt.StateDir), opt.Reset); err != nil {
 			return nil, err
 		}
 	} else if opt.Reset {
-		return nil, errors.New("--reset only resets the local dev database; SUB2API_DATABASE_URL is set")
+		return nil, errors.New("--reset only resets the local dev database; DATABASE_URL is set")
 	}
 	if opt.Reset {
 		if err := os.RemoveAll(pluginDir); err != nil {
@@ -149,7 +148,7 @@ func Prepare(ctx context.Context, opt Options) (*Env, error) {
 		}
 	}
 
-	env.RedisURL = os.Getenv("SUB2API_REDIS_URL")
+	env.RedisURL = os.Getenv("REDIS_URL")
 	if env.RedisURL == "" {
 		env.redis = miniredis.NewMiniRedis()
 		if err := env.redis.StartAddr("127.0.0.1:0"); err != nil {
@@ -162,8 +161,8 @@ func Prepare(ctx context.Context, opt Options) (*Env, error) {
 	vars := []struct{ k, v string }{
 		{"SUB2API_HTTP_ADDR", opt.Addr},
 		{"SUB2API_PUBLIC_URL", env.URL},
-		{"SUB2API_DATABASE_URL", env.DatabaseURL},
-		{"SUB2API_REDIS_URL", env.RedisURL},
+		{"DATABASE_URL", env.DatabaseURL},
+		{"REDIS_URL", env.RedisURL},
 		{"SUB2API_MASTER_KEY", sec.MasterKey},
 		{"SUB2API_JWT_SECRET", sec.JWTSecret},
 		{"SUB2API_BOOTSTRAP_ADMIN_EMAIL", AdminEmail},

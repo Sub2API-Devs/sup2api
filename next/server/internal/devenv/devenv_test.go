@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,11 +12,12 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/testpg"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 )
 
 // clearEnv unsets the variables Prepare fills in (restored after the test).
 func clearEnv(t *testing.T) {
-	for _, k := range []string{"SUB2API_HTTP_ADDR", "SUB2API_PUBLIC_URL", "SUB2API_DATABASE_URL", "SUB2API_REDIS_URL",
+	for _, k := range []string{"SUB2API_HTTP_ADDR", "SUB2API_PUBLIC_URL", "DATABASE_URL", "REDIS_URL",
 		"SUB2API_MASTER_KEY", "SUB2API_JWT_SECRET", "SUB2API_BOOTSTRAP_ADMIN_EMAIL", "SUB2API_BOOTSTRAP_ADMIN_PASSWORD",
 		"NODE_ID", "SUB2API_PLUGIN_DIR", "SUB2API_BUILTIN_PLUGIN_DIR", "SUB2API_PLUGIN_DEV_MODE",
 		"SUB2API_PLUGIN_STRICT_NETWORK", "SUB2API_PLUGIN_SECCOMP", "SUB2API_SHUTDOWN_DELAY"} {
@@ -52,8 +54,8 @@ func TestPrepare(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"SUB2API_HTTP_ADDR":          "127.0.0.1:18099",
-		"SUB2API_DATABASE_URL":       env.DatabaseURL,
-		"SUB2API_REDIS_URL":          env.RedisURL,
+		"DATABASE_URL":               env.DatabaseURL,
+		"REDIS_URL":                  env.RedisURL,
 		"SUB2API_PLUGIN_DEV_MODE":    "true",
 		"SUB2API_BUILTIN_PLUGIN_DIR": filepath.Join(state, "builtin"),
 		"SUB2API_SHUTDOWN_DELAY":     "0s",
@@ -62,6 +64,7 @@ func TestPrepare(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
+	checkLoads(t, env)
 	conn, err := pgx.Connect(ctx, env.DatabaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -112,6 +115,39 @@ func TestPrepare(t *testing.T) {
 	}
 }
 
+// checkLoads starts the core's configuration from what Prepare set, the way
+// `sub2api dev` does, and checks it uses the prepared servers.
+func checkLoads(t *testing.T, env *Env) {
+	t.Helper()
+	cfg, err := config.Load(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("config.Load after Prepare: %v", err)
+	}
+	if cfg.DatabaseURL != env.DatabaseURL || cfg.RedisURL != env.RedisURL || cfg.PublicURL != env.URL ||
+		cfg.BootstrapAdminEmail != env.AdminEmail || cfg.BootstrapAdminPassword != env.AdminPassword ||
+		cfg.NodeID != "dev" || !cfg.Plugins.DevMode || cfg.Plugins.StrictNetwork || cfg.Plugins.Seccomp ||
+		cfg.Plugins.DataDir != filepath.Join(env.StateDir, "plugins") || cfg.ShutdownDelay != 0 {
+		t.Fatalf("config %+v does not match env %+v", cfg, env)
+	}
+}
+
+// Servers named by the caller are used as they are, and the core loads them;
+// neither PostgreSQL nor miniredis is started.
+func TestPrepareCallerServers(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://caller@db.invalid/app")
+	t.Setenv("REDIS_URL", "redis://cache.invalid:6379/0")
+	env, err := Prepare(context.Background(), Options{StateDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer env.Close()
+	if env.DatabaseURL != "postgres://caller@db.invalid/app" || env.RedisURL != "redis://cache.invalid:6379/0" || env.MemoryRedis {
+		t.Fatalf("env %+v ignored the caller's servers", env)
+	}
+	checkLoads(t, env)
+}
+
 func hasMarker(t *testing.T, dsn string) bool {
 	t.Helper()
 	ctx := context.Background()
@@ -129,8 +165,8 @@ func hasMarker(t *testing.T, dsn string) bool {
 
 func TestResetRefusesForeignDatabase(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("SUB2API_DATABASE_URL", "postgres://somewhere/else")
+	t.Setenv("DATABASE_URL", "postgres://somewhere/else")
 	if _, err := Prepare(context.Background(), Options{StateDir: t.TempDir(), Reset: true}); err == nil {
-		t.Fatal("--reset with SUB2API_DATABASE_URL accepted")
+		t.Fatal("--reset with DATABASE_URL accepted")
 	}
 }

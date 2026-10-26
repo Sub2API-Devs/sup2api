@@ -2894,7 +2894,7 @@ sub2api dev [--addr 127.0.0.1:8080] [--state <dir>] [--builtin-dir <dir>] [--res
   - 开发模式（`SUB2API_PLUGIN_DEV_MODE=true`）：任何系统上都直接以子进程运行插件，不用沙箱、网络命名空间、seccomp；
   - `--builtin-dir` 里的包按内建插件安装：自动同意全部 host 权限、启用，见到新版本就升级（§37）。
 - **其余**：`NODE_ID=dev`，`SUB2API_SHUTDOWN_DELAY=0s`（新增变量，默认 3s：停止前先报告不健康的时长，单机开发不需要）。
-- **已有环境变量优先**：设了 `SUB2API_DATABASE_URL`、`SUB2API_REDIS_URL` 等，就改用那些服务，dev 只补没设的。`--reset` 只能重置本机的 dev 库，设了 `SUB2API_DATABASE_URL` 时拒绝执行。
+- **已有环境变量优先**：设了 `DATABASE_URL`、`REDIS_URL` 等（与 `config.Load` 读的名字相同），就改用那些服务，dev 只补没设的。`--reset` 只能重置本机的 dev 库，设了 `DATABASE_URL` 时拒绝执行。
 - `--reset`：删掉 dev 库和插件数据，保留密钥。
 - `--exit-on-stdin-close`：stdin 关闭时优雅退出。供 `sub2api-plugin dev` 使用：Windows 上没法给子进程发 `os.Interrupt`，父进程意外退出时也能带走核心和插件。
 - 不改变核心逻辑：dev 只决定配置从哪里来，之后照常走 `config.Load` 和 `app.Run`。

@@ -16,8 +16,9 @@ import (
 // Redis credentials, the master key, the JWT secret, the bootstrap password,
 // the supervisor token). main removes them from the process environment once
 // the configuration is loaded (procguard.ScrubEnv): everything after that
-// reads the loaded Config, never the environment. The SUB2API_DATABASE_URL /
-// SUB2API_REDIS_URL spellings are what `sub2api dev` sets.
+// reads the loaded Config, never the environment. Load does not read the
+// SUB2API_DATABASE_URL / SUB2API_REDIS_URL spellings, but deployment files
+// still set them next to DATABASE_URL / REDIS_URL, so they are removed too.
 var SensitiveEnv = []string{
 	"DATABASE_URL",
 	"REDIS_URL",
@@ -32,8 +33,8 @@ var SensitiveEnv = []string{
 type Config struct {
 	HTTPAddr    string // SUB2API_HTTP_ADDR, default ":8080"
 	PublicURL   string // SUB2API_PUBLIC_URL, e.g. "http://127.0.0.1:3120"
-	DatabaseURL string // SUB2API_DATABASE_URL (required)
-	RedisURL    string // SUB2API_REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
+	DatabaseURL string // DATABASE_URL (required)
+	RedisURL    string // REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
 	NodeID      string // NODE_ID, default hostname
 	LogLevel    string // SUB2API_LOG_LEVEL: debug | info | warn | error
 
