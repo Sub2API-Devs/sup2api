@@ -11,14 +11,14 @@ import (
 	bpe "github.com/tiktoken-go/tokenizer"
 )
 
-const MaxTextBytes = 1 << 20
+// MaxTextBytes is the gateway's request body limit: the prompt text of any
+// request it accepts can be counted. Counting is linear in the text (the
+// library's merge is no longer quadratic in a long run, v0.10.0).
+const MaxTextBytes = 32 << 20
 
+// codecs holds one codec per encoding; Count only reads it, so concurrent
+// requests count in parallel.
 var codecs sync.Map
-
-type counter struct {
-	mu    sync.Mutex
-	codec bpe.Codec
-}
 
 func Count(ctx context.Context, text, encoding string) (int64, string, error) {
 	if encoding == "" {
@@ -39,14 +39,8 @@ func Count(ctx context.Context, text, encoding string) (int64, string, error) {
 		if err != nil {
 			return 0, encoding, err
 		}
-		v, _ = codecs.LoadOrStore(encoding, &counter{codec: codec})
+		v, _ = codecs.LoadOrStore(encoding, codec)
 	}
-	c := v.(*counter)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return 0, encoding, err
-	}
-	n, err := c.codec.Count(text)
+	n, err := v.(bpe.Codec).Count(text)
 	return int64(n), encoding, err
 }

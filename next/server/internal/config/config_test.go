@@ -3,10 +3,14 @@ package config_test
 import (
 	"bytes"
 	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/procguard"
@@ -139,5 +143,45 @@ func TestPluginRunDirAndEgressDefaults(t *testing.T) {
 	t.Setenv("SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE", "true")
 	if cfg, err = config.Load("linux"); err != nil || cfg.Plugins.RunDir != "/run/s2p" || !cfg.Plugins.EgressAllowPrivate {
 		t.Fatalf("overrides: %+v %v", cfg.Plugins, err)
+	}
+}
+
+// A managed core is reached only through its shell on loopback, which sets
+// X-Forwarded-For to the client it saw: the core trusts loopback, so client
+// IPs (usage rows, API key allowlists, login limits) are the client's, not
+// 127.0.0.1. An unmanaged core trusts only SUB2API_TRUSTED_PROXIES.
+func TestManagedCoreTrustsItsShell(t *testing.T) {
+	setRequired(t)
+	t.Setenv("SUB2API_TRUSTED_PROXIES", "10.0.0.0/8")
+	cfg, err := config.Load("linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.TrustedProxies, ","); got != "10.0.0.0/8,127.0.0.1,::1" {
+		t.Fatalf("managed trusted proxies %s", got)
+	}
+	engine := gin.New()
+	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		t.Fatal(err)
+	}
+	var seen string
+	engine.GET("/", func(c *gin.Context) { seen = c.ClientIP() })
+	for remote, want := range map[string]string{"127.0.0.1:41000": "203.0.113.9", "[::1]:41000": "203.0.113.9", "198.51.100.4:41000": "198.51.100.4"} {
+		q := httptest.NewRequest(http.MethodGet, "/", nil)
+		q.RemoteAddr = remote
+		q.Header.Set("X-Forwarded-For", "203.0.113.9")
+		engine.ServeHTTP(httptest.NewRecorder(), q)
+		if seen != want {
+			t.Fatalf("from %s: client %s, want %s", remote, seen, want)
+		}
+	}
+
+	setRequired(t)
+	t.Setenv("SUB2API_MANAGED", "false")
+	if cfg, err = config.Load("linux"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.TrustedProxies, ","); got != "10.0.0.0/8" {
+		t.Fatalf("unmanaged trusted proxies %s", got)
 	}
 }

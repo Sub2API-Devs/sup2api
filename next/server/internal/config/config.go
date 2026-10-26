@@ -53,7 +53,8 @@ type Config struct {
 	AllowPrivateUpstream bool
 
 	// TrustedProxies lists proxy IPs/CIDRs whose X-Forwarded-For is trusted
-	// (SUB2API_TRUSTED_PROXIES, comma separated; empty = trust none).
+	// (SUB2API_TRUSTED_PROXIES, comma separated; empty = trust none). A
+	// managed core also trusts loopback: its shell.
 	TrustedProxies []string
 
 	// Managed is enabled only when a local supervisor owns process admission.
@@ -185,6 +186,12 @@ func Load(goos string) (*Config, error) {
 		if p = strings.TrimSpace(p); p != "" {
 			c.TrustedProxies = append(c.TrustedProxies, p)
 		}
+	}
+	// A managed core listens on loopback behind its shell, which drops the
+	// client's forwarding headers and sets X-Forwarded-For to the peer it saw:
+	// every request comes from the shell, so loopback is the trusted proxy.
+	if c.Managed.Enabled {
+		c.TrustedProxies = append(c.TrustedProxies, "127.0.0.1", "::1")
 	}
 	p := &c.Plugins
 	p.DataDir = env("SUB2API_PLUGIN_DIR", "/var/lib/sub2api/plugins")

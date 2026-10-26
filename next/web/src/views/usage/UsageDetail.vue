@@ -45,7 +45,8 @@ const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
 const summary = computed(() => [
   { label: t('usage.cols.cost'), value: u.value.billing_status === 'free' ? t('usage.free') : formatMoney(u.value.total_cost, 8) },
   { label: t('usage.request.latency'), value: `${formatNumber(u.value.latency_ms / 1000, 2)} s` },
-  { label: t('usage.request.firstToken'), value: u.value.stream && u.value.first_token_ms != null ? `${formatNumber(u.value.first_token_ms / 1000, 2)} s` : '—' }
+  { label: t('usage.request.firstToken'), value: u.value.stream && u.value.first_token_ms != null ? `${formatNumber(u.value.first_token_ms / 1000, 2)} s` : '—' },
+  { label: t('usage.request.upload'), value: u.value.upload_ms ? `${formatNumber(u.value.upload_ms / 1000, 2)} s` : '—' }
 ])
 const knownRounds = computed(() => knownUsageRounds(u.value))
 const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))

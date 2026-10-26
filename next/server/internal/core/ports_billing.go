@@ -187,6 +187,7 @@ type UsageRecord struct {
 	RateMultiplier     decimal.Decimal
 	LatencyMs          int
 	FirstTokenMs       int
+	UploadMs           int // request start until the body was read (CONTRACTS §63)
 	ClientIP           string
 	UserAgent          string
 	NodeID             string

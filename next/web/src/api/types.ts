@@ -847,6 +847,8 @@ export interface UsageLog {
   sticky_hit?: boolean
   latency_ms: number
   first_token_ms?: number
+  /** Request start until the body was read (CONTRACTS §63): a large body from a distant client is part of the first token. */
+  upload_ms?: number
   ledger_id?: number | null // assumed
   created_at: string
 }

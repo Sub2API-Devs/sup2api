@@ -145,6 +145,7 @@ export default {
     attempts: '上游尝试次数',
     latency: '耗时',
     firstToken: '首 token',
+    upload: '上传',
     error: '错误'
   },
   tokens: {

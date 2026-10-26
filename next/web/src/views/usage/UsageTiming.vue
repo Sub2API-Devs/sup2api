@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // Latency of a request: first token (streams) and total, coloured by speed
 // (usage.ts firstTokenTone / latencyTone), with a matching bar on the left,
-// then the response mode and the output speed.
+// then the response mode, the output speed and the upload time.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/utils/format'
-import { firstTokenTone, latencyTone, tokensPerSecond, type SpeedTone, type UsageRow } from './usage'
+import { firstTokenTone, latencyTone, shownUploadMs, tokensPerSecond, type SpeedTone, type UsageRow } from './usage'
 
 const props = defineProps<{ row: UsageRow }>()
 const { t } = useI18n()
@@ -21,6 +21,7 @@ const lines = computed(() => [
   { key: 'total', label: t('usage.request.latency'), ms: props.row.latency_ms, tone: latencyTone(props.row) }
 ])
 const seconds = (ms: number) => formatNumber(ms / 1000, 2) + ' s'
+const upload = computed(() => shownUploadMs(props.row))
 const speed = computed(() => {
   const v = tokensPerSecond(props.row)
   return v === null ? '' : `${Math.round(v)} t/s`
@@ -44,6 +45,7 @@ const speed = computed(() => {
     <p class="whitespace-nowrap pl-3 text-xxs leading-tight text-fg-subtle">
       <span :class="row.stream ? 'font-medium text-sky-600 dark:text-sky-400' : ''">{{ row.stream ? t('usage.stream') : t('usage.nonStream') }}</span>
       <span v-if="speed" class="tabular-nums"> · {{ speed }}</span>
+      <span v-if="upload" class="tabular-nums" data-testid="usage-upload"> · {{ t('usage.request.upload') }} {{ seconds(upload) }}</span>
     </p>
   </div>
 </template>

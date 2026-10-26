@@ -58,6 +58,7 @@ type Record struct {
 	MatchedTier           string          `json:"matched_tier"`
 	LatencyMs             int             `json:"latency_ms"`
 	FirstTokenMs          int             `json:"first_token_ms"`
+	UploadMs              int             `json:"upload_ms"`
 	StickyHit             bool            `json:"sticky_hit"`
 }
 
@@ -123,7 +124,7 @@ const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.
 	u.status_code, u.success,
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
-	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.sticky_hit, u.client_ip`
+	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.upload_ms, u.sticky_hit, u.client_ip`
 
 const recordJoins = ` FROM usage_logs u
 	LEFT JOIN users us ON us.id = u.user_id
@@ -138,7 +139,7 @@ func (r *Record) scanTargets() []any {
 		&r.Endpoint, &r.Model, &r.UpstreamModel, &r.Stream, &r.StatusCode, &r.Success, &r.ErrorType,
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
-		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.StickyHit, &r.ClientIP}
+		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP}
 }
 
 // hideUpstream removes upstream account details (account, account type and

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -118,4 +119,41 @@ func TestEstimateUsageUnimplementedTaskSubmitReturnsError(t *testing.T) {
 		t.Fatalf("expected no precharge call for task.submit error, got %d calls", spy.calls)
 	}
 	e.noRecord()
+}
+
+type promptEstimator struct {
+	*fakePlatform
+	prompt int
+}
+
+func (p *promptEstimator) EstimateUsage(_ context.Context, in *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error) {
+	p.prompt = len(in.GetPrompt())
+	return nil, status.Error(codes.Unimplemented, "EstimateUsage not implemented")
+}
+
+// A prompt above 1 MiB (a long 1M-context conversation) was refused before
+// any upstream request; now the local tokenizer counts all of it and the
+// plugin estimator is given the first pluginPromptBytes (CONTRACTS §63).
+func TestPrechargeCountsAPromptAboveOneMiB(t *testing.T) {
+	e := newEnv(t)
+	spy := &admissionSpy{fakeBalance: e.balance}
+	e.gw.d.Balance = spy
+	est := &promptEstimator{fakePlatform: e.plat}
+	pb := e.gen.platforms[0]
+	pb.Client = est
+	e.gen.platforms[0] = pb
+
+	b := body(testModel, false)
+	b["messages"] = []any{map[string]any{"role": "user", "content": strings.Repeat("token ", 450_000)}}
+	r := e.messages(b)
+	if r.status >= 400 {
+		t.Fatalf("status %d: %s", r.status, r.body)
+	}
+	if est.prompt != pluginPromptBytes {
+		t.Fatalf("plugin was given %d prompt bytes, want %d", est.prompt, pluginPromptBytes)
+	}
+	if spy.record.Tokens.Input < 450_000 {
+		t.Fatalf("local count %d does not cover the whole prompt", spy.record.Tokens.Input)
+	}
+	e.record()
 }

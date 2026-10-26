@@ -912,6 +912,8 @@ for (let i = 0; i < 90; i++) {
   const requestId = 'req_' + hashOf('u' + i).slice(0, 16)
   // Client X-Request-Id (CONTRACTS §14.4): most SDK calls send one.
   const clientRequestId = r(20) < 0.7 ? `cli-${hashOf('c' + i).slice(0, 8)}-${hashOf('d' + i).slice(0, 4)}` : ''
+  // The body's arrival (upload_ms) is part of the first token and the total.
+  const upload = 20 + Math.floor(r(22) * r(22) * 2500)
   const native = NATIVE_ENDPOINT[account.upstream]
   const hook_decisions = [
     { plugin_key: 'guard', hook_id: 'content-filter', decision: blocked ? 'deny' : 'allow', latency_ms: 3 + Math.floor(r(15) * 20), note: blocked ? 'matched rule "no-secrets"' : undefined }
@@ -985,8 +987,9 @@ for (let i = 0; i < 90; i++) {
     matched_tier: billing.tier || '',
     price_id: billing.status === 'billed' ? price?.id : null,
     expr_hash: billing.status === 'billed' ? price?.expr_hash : '',
-    latency_ms: success ? 800 + Math.floor(r(17) * 4000) : 120,
-    first_token_ms: success ? 300 + Math.floor(r(18) * 900) : undefined,
+    latency_ms: success ? upload + 800 + Math.floor(r(17) * 4000) : 120,
+    first_token_ms: success ? upload + 300 + Math.floor(r(18) * 900) : undefined,
+    upload_ms: upload,
     sticky_rule: 'claude-code-session',
     sticky_hit: r(19) < 0.7,
     hook_decisions,

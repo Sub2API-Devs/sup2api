@@ -14,6 +14,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
+// pluginPromptBytes caps the prompt text a plugin estimator is given (CONTRACTS
+// §63): a gRPC message stays far below its 4 MiB limit.
+const pluginPromptBytes = 1 << 20
+
 // localTokenizerEstimate is the fallback estimate when the plugin does not
 // implement EstimateUsage (or the endpoint has none): the local tokenizer
 // counts the prompt and the caller's pre-consume floor is kept.
@@ -41,11 +45,9 @@ func (c *call) precharge(ctx context.Context) error {
 		return err
 	}
 	fields, omitted := usageRequestFields(c.ep.UsageRequestFields, c.body)
-	prompt := c.promptText(tokenizer.MaxTextBytes + 1)
-	if len(prompt) > tokenizer.MaxTextBytes {
-		return fmt.Errorf("prompt exceeds local tokenizer limit")
-	}
-	in := &pluginv1.EstimateUsageRequest{Meta: c.meta(), Fields: fields, FieldsOmitted: omitted, PreConsumeTokens: floor, Prompt: prompt}
+	// The body limit bounds the prompt, so the local tokenizer counts all of it.
+	prompt := c.promptText(tokenizer.MaxTextBytes)
+	in := &pluginv1.EstimateUsageRequest{Meta: c.meta(), Fields: fields, FieldsOmitted: omitted, PreConsumeTokens: floor, Prompt: truncateUTF8(prompt, pluginPromptBytes)}
 	var report *pluginv1.UsageReport
 	if pb, exists := c.gen.Platform(c.platform); exists && pb.Client != nil {
 		estimator, ok := pb.Client.(interface {

@@ -435,9 +435,9 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 					cache_creation_1h_tokens, metrics, sticky_rule, sticky_hit, hook_decisions, rate_multiplier,
 					price_id, expr_hash, billing_mode, billing_detail, billing_status, latency_ms, first_token_ms,
 					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol, client_request_id,
-					sched_decisions, plugin_detail, anomalies)
+					sched_decisions, plugin_detail, anomalies, upload_ms)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)
+					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46)
 				ON CONFLICT (request_id) DO NOTHING
 				RETURNING id`,
 				trunc(rec.RequestID, 64), rec.UserID, rec.APIKeyID, rec.GroupID, rec.AccountID,
@@ -449,7 +449,7 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 				rate, priceID, exprHash, mode, detail, status, rec.LatencyMs, rec.FirstTokenMs,
 				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created,
 				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100), trunc(rec.ClientRequestID, 128),
-				jsonOr(rec.SchedDecisions, "[]"), pluginDetailJSON(rec.PluginDetail), anomalies)
+				jsonOr(rec.SchedDecisions, "[]"), pluginDetailJSON(rec.PluginDetail), anomalies, rec.UploadMs)
 		}
 		br := tx.SendBatch(ctx, b)
 		var free []core.Event

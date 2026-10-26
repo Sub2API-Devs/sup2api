@@ -185,6 +185,9 @@ func (c *call) run(ctx context.Context) {
 		c.fail(e)
 		return
 	}
+	// The body's arrival is part of every later time the row shows: a large
+	// body from a distant client can be most of the first-token time.
+	c.rec.UploadMs = int(c.g.now().Sub(c.start) / time.Millisecond)
 	if e := c.checkModel(ctx); e != nil {
 		c.fail(e)
 		return

@@ -344,6 +344,7 @@ func TestUsageAPI(t *testing.T) {
 	mine := f.record("req-mine", true)
 	mine.AccountID = &acc
 	mine.ClientRequestID = "cli-req-1"
+	mine.UploadMs = 2120
 	// Served through protocol conversion: client endpoint openai.chat, upstream
 	// anthropic.messages.
 	mine.Platform, mine.Protocol, mine.AccountType = "openai", "openai.chat", "relay_key"
@@ -356,7 +357,7 @@ func TestUsageAPI(t *testing.T) {
 	}
 	first := items[0].(map[string]any)
 	if first["account_id"] != nil || first["user_email"] != "u@example.com" || first["group_name"] != "default" || first["total_cost"] != "0.708" ||
-		first["account_type"] != "" || first["upstream_protocol"] != "" {
+		first["account_type"] != "" || first["upstream_protocol"] != "" || first["upload_ms"] != float64(0) {
 		t.Fatalf("row: %v", first)
 	}
 	all := f.get(f.user, "/usage?model=claude-haiku-4", 200)["data"].([]any)
@@ -374,7 +375,8 @@ func TestUsageAPI(t *testing.T) {
 	f.get(f.user, "/usage?account_type=relay_key", 400)
 	byCRID := f.get(f.user, "/usage?client_request_id=cli-req-1", 200)["data"].([]any)
 	if len(byCRID) != 1 || byCRID[0].(map[string]any)["request_id"] != "req-mine" ||
-		byCRID[0].(map[string]any)["client_request_id"] != "cli-req-1" {
+		byCRID[0].(map[string]any)["client_request_id"] != "cli-req-1" ||
+		byCRID[0].(map[string]any)["upload_ms"] != float64(2120) {
 		t.Fatalf("client_request_id filter: %v", byCRID)
 	}
 	if n := len(f.get(f.user, "/me/usage?client_request_id=cli-req-1", 200)["data"].([]any)); n != 1 {

@@ -145,6 +145,7 @@ export default {
     attempts: 'Upstream attempts',
     latency: 'Latency',
     firstToken: 'first token',
+    upload: 'upload',
     error: 'Error'
   },
   tokens: {

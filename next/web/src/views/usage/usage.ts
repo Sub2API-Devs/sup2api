@@ -44,6 +44,9 @@ export function firstTokenTone(ms: number): SpeedTone {
   return ms < 5000 ? 'success' : ms < 10000 ? 'warning' : 'danger'
 }
 
+/** The upload time worth showing (from 0.1 s): the body's arrival, part of the first token. */
+export const shownUploadMs = (u: Pick<UsageLog, 'upload_ms'>) => ((u.upload_ms || 0) >= 100 ? u.upload_ms! : 0)
+
 /** Output tokens per second, timed from the first token on a stream; null without output. */
 export function tokensPerSecond(u: Pick<UsageLog, 'output_tokens' | 'latency_ms' | 'first_token_ms' | 'stream'>): number | null {
   const out = u.output_tokens || 0

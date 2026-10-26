@@ -4301,3 +4301,22 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 网关保留路径 `/v1/usage`（`manifest.CoreGatewayPrefixes`，插件端点不能声明它或它下面的路径），在插件端点与资源接口之前处理。密钥可放在 `x-api-key`、`Authorization: Bearer` 或 `x-goog-api-key`；认证与普通请求相同（停用、过期、IP 白名单、`gateway:use`），失败按 Anthropic 错误格式返回；非 GET 405，子路径 404。不占并发槽、不计入限速，响应 `Cache-Control: no-store`。
 - 响应沿用 sub2api 的形状（CC Switch 的用量脚本可直接读）：`mode`（有额度或任一限速时 `quota_limited`，否则 `unrestricted`）、`isValid`（启用且未过期；额度用完仍为 true）、`status`、`planName`（分组名）、`remaining`（可再花的美元：所有者余额，设了额度时不超过额度剩余，不小于 0）、`unit: "USD"`、`balance`、`quota {limit, used, remaining, unit}`、`rate_limits [{type: rpm|tpm|concurrency, window: 1m|now, limit, used, remaining}]`（只列设了上限的项）、`expires_at`、`usage.today/total {requests, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens, cost}`。金额为 JSON 数字；今天按 UTC 日；`cost` 与额度同口径（`apikey_quota_charge`）。
 - 控制台「使用密钥」给出查询命令；「导入 CC Switch」带上用量脚本（`usageEnabled`、`usageScript`、`usageAutoInterval=30`），脚本请求 `<网关>/v1/usage`，由 CC Switch 填入 `{{apiKey}}`，读取 `remaining`、`unit`、`isValid`。
+
+## 63. 首 token 延迟里的服务端部分（2026-10-26，用户要求分析并修复）
+
+分析（生产 34 号账号、约 1 MB 请求体）：一次请求约 5 秒首 token 中，客户端上传请求体约 2 秒、核心与插件转发约 0.1 秒、Worker 启动 CLI 约 1 秒、上游约 2 秒；外壳是流式反向代理，核心在请求头到达时开始计时，所以上传时间算在首 token 里。
+
+### 63.1 上传耗时 `upload_ms`
+
+- 迁移 0060：`usage_logs.upload_ms int NOT NULL DEFAULT 0`，从请求开始到核心读完请求体的毫秒数（HTTP 请求；WebSocket 为 0）。旧核心写 0。
+- 用量接口（`/usage`、`/me/usage` 列表与详情）返回 `upload_ms`；控制台「计时」列在 ≥ 0.1 秒时于末行显示「上传 x s」，详情的摘要里列出。
+
+### 63.2 本地 token 估算
+
+- `github.com/tiktoken-go/tokenizer` 升级到 v0.10.0：v0.8.0 的合并步骤对单个长片段是平方时间（80 KB 不含分隔符的同类字符要 2–3 秒），v0.10.0 为线性，计数不变。
+- 去掉全局锁：编码器的 `Count` 只读，并发请求并行计数。
+- 预扣（§25.8）的本地 tokenizer 统计全部提示文本，上限为请求体上限 32 MiB（`tokenizer.MaxTextBytes`），此前超过 1 MiB 的提示直接拒绝请求。传给插件 `EstimateUsage` 的 `prompt` 只取前 1 MiB（`pluginPromptBytes`，按 UTF-8 边界截断），gRPC 消息远低于 4 MiB 上限。
+
+### 63.3 客户端 IP
+
+托管核心（`SUB2API_MANAGED`）只在回环地址上被它的外壳访问，外壳删去客户端带来的转发头、把它看到的对端写进 `X-Forwarded-For`。托管核心因此在 `SUB2API_TRUSTED_PROXIES` 之外信任 `127.0.0.1`、`::1`：用量与审计记录的 IP、API Key 的 IP 白名单、登录限流都按真实客户端 IP（此前一律为 127.0.0.1，白名单写真实 IP 时所有请求都被拒）。非托管部署不变。
