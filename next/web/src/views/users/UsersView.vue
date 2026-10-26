@@ -325,7 +325,7 @@ function remove(u: User) {
           <SInput v-model="createForm.display_name" />
         </SField>
         <SField :label="t('users.password')" required :hint="t('users.passwordHint')" :error="createErrors.password">
-          <SInput v-model="createForm.password" type="password" autocomplete="new-password" />
+          <SInput v-model="createForm.password" type="password" autocomplete="new-password" revealable />
         </SField>
         <SField :label="t('users.roles')" :error="createErrors.role_keys">
           <div v-if="roles.length" class="flex flex-wrap gap-x-4 gap-y-2">

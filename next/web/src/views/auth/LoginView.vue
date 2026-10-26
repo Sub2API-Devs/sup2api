@@ -82,7 +82,7 @@ async function submit() {
           <SInput v-model="email" type="email" autocomplete="username" autofocus />
         </SField>
         <SField :label="t('auth.login.password')">
-          <SInput v-model="password" type="password" autocomplete="current-password" />
+          <SInput v-model="password" type="password" autocomplete="current-password" revealable />
         </SField>
         <SAlert v-if="retryLeft" tone="danger" dense data-testid="login-rate-limited">{{ t('auth.login.rateLimited', { n: retryLeft }) }}</SAlert>
         <SAlert v-else-if="error" tone="danger" dense data-testid="login-error">{{ error }}</SAlert>
