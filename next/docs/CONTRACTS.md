@@ -4328,3 +4328,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 63.5 CLI 编译为字节码（v30 `bytecode`）
 
 官方 2.1.304 的每个模块都编成了 Bun 字节码，我们重编的 CLI 没有，每次启动都要解析整个包：`claude --version` 0.8 秒、请求命令到读输入 0.9 秒（Worker 每个请求启动一次 CLI）。`cli-mods/build.sh` 改为 `--compile --bytecode --format=esm`（恢复出的模块是 ESM，单用 `--bytecode` 默认 CJS 会失败）：同一份补丁源码，`--version` 0.04 秒、请求命令 0.1 秒，常驻内存 139 MiB（原 135 MiB），ELF 从 157 MB 增至 293 MB（官方 288 MB）。Bun 编译不可逐字节复现，发布照旧按产物哈希固定。
+
+### 63.6 Worker 的 GOMAXPROCS
+
+账号容器限 2 核（控制器 `nano_cpus`），宿主机有 384 核；Worker 模块的 go.mod 是 1.24，Go 1.25 起按容器配额设 GOMAXPROCS 的默认行为没有生效，GOMAXPROCS 为 384，进程有上百个线程，GC 的并行标记一下用完配额，容器被限流（生产 34 号容器启动以来 17 次、累计 6.3 秒）。`worker/cmd/worker/main.go` 用 `//go:debug containermaxprocs=1`、`updatemaxprocs=1` 只打开这一项（不改 go 版本，其余 GODEBUG 默认不变）：同一镜像、`--cpus 2` 下 GOMAXPROCS 由 384 变为 2。CLI（Bun）在 2 核容器里只开 8 个线程，不需要调整。

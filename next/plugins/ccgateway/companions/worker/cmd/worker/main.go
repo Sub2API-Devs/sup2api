@@ -1,3 +1,10 @@
+// The account container has a CPU quota (2 cores) on a host with hundreds: size
+// GOMAXPROCS to the quota as Go 1.25+ does by default (go.mod is 1.24), or
+// the GC starts a mark worker per host core and the quota throttles every
+// request in the container (CONTRACTS §63.6).
+//
+//go:debug containermaxprocs=1
+//go:debug updatemaxprocs=1
 package main
 
 import (
