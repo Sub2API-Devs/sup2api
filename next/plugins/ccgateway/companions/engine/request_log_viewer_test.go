@@ -22,7 +22,7 @@ func viewerRequest(t *testing.T, store *requestLogStore, requestID string, statu
 	d := newRequestDiagnostic(w, r)
 	d.store = store
 	out := d.capture(w, r)
-	d.request([]byte(`{"model":"claude-test","messages":[{"role":"user","content":"`+privateMarker+`"}]}`), r.Header)
+	d.request(parseRequestBody([]byte(`{"model":"claude-test","messages":[{"role":"user","content":"`+privateMarker+`"}]}`)), r.Header)
 	d.save("build-components.json", []byte(`{"system":"`+privateMarker+`"}`))
 	d.trace("cli_error", Object{"message": strings.Repeat("e", 300)})
 	if status >= 400 {

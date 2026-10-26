@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,10 @@ type requestDiagnostic struct {
 	// summary level), decided when its log starts; only the summary files
 	// are written. A diagnostic without a store keeps everything.
 	summaryOnly bool
+	// summaryDone closes when the background description of the request body
+	// has landed (request); finish waits for it before writing metadata. nil
+	// when there is none.
+	summaryDone chan struct{}
 }
 
 // Request log levels (REQUEST-LOG-LEVELS-DESIGN.md): off keeps nothing; the
@@ -210,8 +215,10 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request) http
 	d.summaryOnly = !s.captureContent()
 	d.mu.Unlock()
 	s.active[d] = true
-	// A week of summaries is many directories: a request prunes at most
-	// once a minute (the maintenance loop prunes every minute too).
+	// A week of summaries is many directories: a request asks for a prune at
+	// most once a minute (the maintenance loop prunes every minute too). The
+	// prune itself runs off this goroutine: the maintenance loop owns it and
+	// stops with the Worker.
 	now := s.clock()
 	prune := now.Sub(s.pruned) >= time.Minute
 	if prune {
@@ -219,7 +226,10 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request) http
 	}
 	s.mu.Unlock()
 	if prune {
-		s.pruneFiles()
+		select {
+		case s.pruneDue <- struct{}{}:
+		default: // one prune already asked for and not run yet
+		}
 	}
 	unlock := d.lock()
 	defer unlock()
@@ -289,34 +299,102 @@ func (d *requestDiagnostic) emit(event string) {
 	d.fields["timestamp"] = time.Now().UTC().Format(time.RFC3339Nano)
 }
 
-func (d *requestDiagnostic) request(body []byte, h http.Header) {
-	d.save("request.body", body)
+// request records that the body arrived: its size and digest, the headers,
+// and the request_received event. Its messages are described afterwards, off
+// the request goroutine (describeRequest): only metadata.json reads those
+// fields, and finish waits for them.
+func (d *requestDiagnostic) request(body *requestBody, h http.Header) {
+	d.save("request.body", body.raw)
 	d.mu.Lock()
-	sum := sha256.Sum256(body)
-	d.fields["body_bytes"] = len(body)
+	sum := sha256.Sum256(body.raw)
+	d.fields["body_bytes"] = len(body.raw)
 	d.fields["body_sha256"] = hex.EncodeToString(sum[:])
 	d.fields["anthropic_beta"] = logValue(h.Get("anthropic-beta"))
-	o, err := decodeObject(body)
-	if err == nil {
-		d.fields["model"] = logValue(str(o, "model"))
-		if stream, ok := o["stream"].(bool); ok {
-			d.fields["stream"] = stream
-		}
-		d.fields["has_system"] = o["system"] != nil
-		messages, _ := o["messages"].([]any)
-		d.fields["message_count"] = len(messages)
-		summaries, truncated := messageSummaries(messages)
-		d.fields["messages"] = summaries
-		if truncated {
-			d.fields["messages_truncated"] = true
-		}
-	} else {
-		d.fields["invalid_json"] = true
-	}
 	d.emit("request_received")
 	requestID := d.fields["request_id"]
 	d.mu.Unlock()
 	d.trace("request_received", Object{"request_id": requestID})
+	d.describeRequest(body.summaryInput())
+}
+
+// describeRequest computes the body's summary fields in the background. The
+// event file's request_received line stays where request wrote it, so the log
+// reads the same; only the fields' insertion moves, and finish waits for it.
+func (d *requestDiagnostic) describeRequest(input summaryInput) {
+	if !d.enabled() {
+		return // no log keeps the fields
+	}
+	done := make(chan struct{})
+	d.mu.Lock()
+	d.summaryDone = done
+	d.mu.Unlock()
+	go func() {
+		defer close(done)
+		fields := summarizeRequest(input)
+		d.mu.Lock()
+		for key, value := range fields {
+			d.fields[key] = value
+		}
+		d.mu.Unlock()
+	}()
+}
+
+// summarizeRequest is the log's description of a request body: the fields
+// decodeObject and messageSummaries produced when the summary ran inline
+// (values decoded with UseNumber, so no number is rounded or refused).
+func summarizeRequest(input summaryInput) Object {
+	fields := Object{}
+	if input.invalid {
+		fields["invalid_json"] = true
+		return fields
+	}
+	fields["model"] = logValue(jsonStringValue(input.model))
+	if stream, ok := jsonBoolValue(input.stream); ok {
+		fields["stream"] = stream
+	}
+	fields["has_system"] = input.system != nil && !jsonNull(input.system)
+	messages, _ := jsonValue(input.messages).([]any)
+	fields["message_count"] = len(messages)
+	summaries, truncated := messageSummaries(messages)
+	fields["messages"] = summaries
+	if truncated {
+		fields["messages_truncated"] = true
+	}
+	return fields
+}
+
+// jsonValue is one member as decodeObject decoded it: numbers stay as
+// written, so a number no float64 holds still counts its message.
+func jsonValue(raw json.RawMessage) any {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	return value
+}
+
+func jsonStringValue(raw json.RawMessage) string {
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		return ""
+	}
+	return value
+}
+
+func jsonBoolValue(raw json.RawMessage) (bool, bool) {
+	switch string(bytes.TrimSpace(raw)) {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	}
+	return false, false
+}
+
+func jsonNull(raw json.RawMessage) bool {
+	return string(bytes.TrimSpace(raw)) == "null"
 }
 
 // messageSummaries describes the request messages for the log: shape only, at
@@ -386,7 +464,19 @@ func (d *requestDiagnostic) clientCanceled(committed bool) {
 	d.trace("request_canceled", Object{"response_started": committed})
 }
 
+// waitForSummary lets the background description land before the metadata is
+// written. It holds no lock: the goroutine needs d.mu to record its fields.
+func (d *requestDiagnostic) waitForSummary() {
+	d.mu.Lock()
+	done := d.summaryDone
+	d.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+}
+
 func (d *requestDiagnostic) finish() {
+	d.waitForSummary()
 	d.mu.Lock()
 	detail := Object{"stage": d.stage, "status": d.status}
 	d.mu.Unlock()

@@ -11,7 +11,7 @@ import (
 func TestDiagnosticSecretsStructuredAndSplitCapture(t *testing.T) {
 	dir := t.TempDir()
 	d := &requestDiagnostic{directory: dir, fields: Object{}}
-	d.prepareSecrets([]byte(`{"mcp_servers":[{"authorization_token":"MCP_PRIVATE_SENTINEL"}]}`))
+	d.prepareSecrets(parseRequestBody([]byte(`{"mcp_servers":[{"authorization_token":"MCP_PRIVATE_SENTINEL"}]}`)))
 	d.save("request.body", []byte(`{"authorization_token":"MCP_PRIVATE_SENTINEL","model":"fixture"}`))
 	d.save("upstream.body", []byte(`{"error":{"message":"echo MCP_PRIVATE_SENTINEL here"},"number":9007199254740993}`))
 	d.appendTrace("upstream.raw", []byte("MCP_PRIVATE_"))
@@ -50,7 +50,7 @@ func TestDiagnosticSecretsStructuredAndSplitCapture(t *testing.T) {
 func TestDiagnosticSecretsMalformedRequestNotCaptured(t *testing.T) {
 	d := &requestDiagnostic{directory: t.TempDir(), fields: Object{}}
 	raw := []byte(`{"authorization_\u0074oken":"MALFORMED_SECRET"`)
-	d.prepareSecrets(raw)
+	d.prepareSecrets(parseRequestBody(raw))
 	d.save("request.body", raw)
 	data, _ := os.ReadFile(filepath.Join(d.directory, "request.body"))
 	if strings.Contains(string(data), "MALFORMED_SECRET") {

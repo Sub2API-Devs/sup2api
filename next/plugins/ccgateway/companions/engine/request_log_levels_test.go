@@ -21,7 +21,7 @@ func logRequest(t *testing.T, store *requestLogStore) string {
 	d := newRequestDiagnostic(w, r)
 	d.store = store
 	out := d.capture(w, r)
-	d.request([]byte(`{"model":"m","messages":[{"role":"user","content":"`+privateMarker+`"}]}`), r.Header)
+	d.request(parseRequestBody([]byte(`{"model":"m","messages":[{"role":"user","content":"`+privateMarker+`"}]}`)), r.Header)
 	d.save("build-components.json", []byte(privateMarker))
 	d.appendTrace("cli-stdout.jsonl", []byte(privateMarker))
 	d.trace("cli_error", Object{"message": strings.Repeat("e", 300)})

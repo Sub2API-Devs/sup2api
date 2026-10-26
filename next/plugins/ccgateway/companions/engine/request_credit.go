@@ -117,8 +117,8 @@ func (g *Gateway) creditIssuer(ctx context.Context, w http.ResponseWriter, r *ht
 // admitCreditBody binds the client's redemption to the admitted headers and,
 // for a tracked request, keeps what its answer's claim is computed from. A
 // token travels only with tracking, and an admission only with a token.
-func (p *requestPlan) admitCreditBody(raw []byte, h http.Header) *requestRefusal {
-	parameter, err := credits.ParseParameter(creditTokenValue(raw))
+func (p *requestPlan) admitCreditBody(body *requestBody, h http.Header) *requestRefusal {
+	parameter, err := credits.ParseParameter(body.creditToken())
 	if err != nil {
 		return refuse(400, "invalid_request_error", err.Error())
 	}
@@ -136,24 +136,22 @@ func (p *requestPlan) admitCreditBody(raw []byte, h http.Header) *requestRefusal
 		}
 	}
 	if p.credit != nil {
-		p.credit.clientBody = append([]byte(nil), raw...)
+		p.credit.clientBody = append([]byte(nil), body.raw...)
 		p.credit.betas = append([]string(nil), h.Values("Anthropic-Beta")...)
 	}
 	return nil
 }
 
-// creditTokenValue is the body's fallback_credit_token as JSON, null when the
-// body does not name it. Only a body that mentions the parameter is decoded; a
-// body that cannot be read is the mode's own refusal, answered there.
-func creditTokenValue(raw []byte) any {
-	if !bytes.Contains(raw, []byte("fallback_credit_token")) {
+// creditToken is the body's fallback_credit_token as JSON, null when the body
+// does not name it. Only a body that mentions the parameter is read; a body
+// that cannot be read is the mode's own refusal, answered there. The mention
+// is still checked in the client's bytes: a key spelled with escapes names
+// nothing here, as before.
+func (body *requestBody) creditToken() any {
+	if body.err != nil || !bytes.Contains(body.raw, []byte("fallback_credit_token")) {
 		return nil
 	}
-	var body map[string]json.RawMessage
-	if json.Unmarshal(raw, &body) != nil {
-		return nil
-	}
-	field, exists := body["fallback_credit_token"]
+	field, exists := body.top["fallback_credit_token"]
 	if !exists {
 		return nil
 	}

@@ -15,28 +15,40 @@ import (
 // renamed in place), the CLI's part of the wire policy (features.CLIPolicy)
 // and the Worker's runtime context.
 func messagesBuildComponents(raw []byte, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
-	// The body is read once; each part is validated where it is taken.
-	body, model, err := messagesObject(raw)
+	return messagesBuildComponentsFrom(parseRequestBody(raw), policy, workingDirectory)
+}
+
+// messagesBuildComponentsFrom is messagesBuildComponents over the request's
+// one parse. Each part is validated where it is taken; the top-level members
+// are left as parsed (the parameter table is built beside them) so the
+// request's background summary still reads them.
+func messagesBuildComponentsFrom(body *requestBody, policy *features.CLIPolicy, workingDirectory string) ([]byte, error) {
+	model, err := body.model()
 	if err != nil {
 		return nil, err
 	}
-	messages, err := validateBuildContent(body)
+	messages, err := validateBuildContent(body.top)
 	if err != nil {
 		return nil, err
 	}
-	system, hasSystem, err := buildSystemComponent(body)
+	system, hasSystem, err := buildSystemComponent(body.top)
 	if err != nil {
 		return nil, err
 	}
-	tools, hasTools, err := buildToolComponents(body)
+	tools, hasTools, err := buildToolComponents(body.top)
 	if err != nil {
 		return nil, err
 	}
-	stream, hasStream := body["stream"]
-	for _, key := range []string{"model", "system", "messages", "tools", "stream"} {
-		delete(body, key)
+	stream, hasStream := body.top["stream"]
+	parameters := make(map[string]json.RawMessage, len(body.top))
+	for key, value := range body.top {
+		switch key {
+		case "model", "system", "messages", "tools", "stream":
+			continue // the envelope carries these under their own names
+		}
+		parameters[key] = value
 	}
-	components := map[string]any{"model": model, "messages": messages, "attachments": []any{}, "parameters": body}
+	components := map[string]any{"model": model, "messages": messages, "attachments": []any{}, "parameters": parameters}
 	// What the client did not send the envelope leaves out (audit C10): the
 	// CLI reads an absent stream as false and an absent system as none
 	// (cli-mods request-input.js), as the upstream does. An absent tool
@@ -54,20 +66,6 @@ func messagesBuildComponents(raw []byte, policy *features.CLIPolicy, workingDire
 	components["requestPolicy"] = policy
 	components["runtimeContext"] = map[string]any{"workingDirectory": workingDirectory, "additionalWorkingDirectories": []string{}}
 	return json.Marshal(components)
-}
-
-// messagesObject reads a Messages body as an object with its model: what the
-// CLI's checkModelRequest requires of every request, in either mode.
-func messagesObject(raw []byte) (map[string]json.RawMessage, string, error) {
-	var body map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &body); err != nil || body == nil {
-		return nil, "", errors.New("expected a Messages JSON object")
-	}
-	var model string
-	if json.Unmarshal(body["model"], &model) != nil || strings.TrimSpace(model) == "" {
-		return nil, "", errors.New("model must be a non-empty string")
-	}
-	return body, model, nil
 }
 
 // buildSystemComponent is the client's system as the CLI takes it: a string,
@@ -122,10 +120,16 @@ func buildToolComponents(body map[string]json.RawMessage) (wire []json.RawMessag
 	if !has {
 		return nil, false, nil
 	}
-	var tools []map[string]json.RawMessage
-	wire = []json.RawMessage{}
-	if json.Unmarshal(rawTools, &tools) != nil || tools == nil || json.Unmarshal(rawTools, &wire) != nil {
+	if json.Unmarshal(rawTools, &wire) != nil || wire == nil {
 		return nil, true, fmt.Errorf("tools must be an array")
+	}
+	// Every entry is an object before any is read for its definition, as the
+	// catalog was validated when it was parsed whole.
+	tools := make([]map[string]json.RawMessage, len(wire))
+	for index, raw := range wire {
+		if json.Unmarshal(raw, &tools[index]) != nil {
+			return nil, true, fmt.Errorf("tools must be an array")
+		}
 	}
 	for index, tool := range tools {
 		if wire[index], err = buildToolComponent(tool, wire[index]); err != nil {

@@ -8,7 +8,9 @@ import (
 
 // prepareSecrets runs before the first client body is captured, even when
 // admission later fails. Invalid JSON is never safe to retain as a raw body.
-func (d *requestDiagnostic) prepareSecrets(body []byte, betaHeaders ...string) {
+// The body was already parsed for the request; a body that cannot even hold a
+// credential key skips the tree walk entirely.
+func (d *requestDiagnostic) prepareSecrets(body *requestBody, betaHeaders ...string) {
 	if d == nil {
 		return
 	}
@@ -22,40 +24,52 @@ func (d *requestDiagnostic) prepareSecrets(body []byte, betaHeaders ...string) {
 			}
 		}
 	}
-	var value any
-	if json.Unmarshal(body, &value) != nil {
+	switch {
+	case !body.valid:
 		d.secretCapture = true
-	} else {
-		var visit func(any)
-		visit = func(v any) {
-			switch v := v.(type) {
-			case map[string]any:
-				for key, child := range v {
-					if strings.EqualFold(key, "authorization_token") || strings.EqualFold(key, "fallback_credit_token") {
-						d.secretCapture = true
-						if object, ok := child.(map[string]any); ok {
-							if text, ok := object["token"].(string); ok && text != "" {
-								d.secretTokens = append(d.secretTokens, text)
-							}
-						}
-						if text, ok := child.(string); ok && text != "" {
-							d.secretTokens = append(d.secretTokens, text)
-						}
-					}
-					visit(child)
-				}
-			case []any:
-				for _, child := range v {
-					visit(child)
-				}
-			}
-		}
-		visit(value)
+	case body.mayHoldCredential():
+		d.detectSecrets(body.raw)
 	}
 	if d.secretCapture {
 		d.fields["capture_policy"] = "structured_redacted_only"
 		d.fields["raw_capture_omitted_reason"] = "credential-bearing or malformed request; unframed chunks cannot be safely sanitized"
 	}
+}
+
+// detectSecrets is the tree walk credential detection has always used. Only a
+// body that may spell one of the keys reaches it, so it keeps the exact
+// duplicate-key and escaping behaviour of decoding the body into a tree.
+func (d *requestDiagnostic) detectSecrets(body []byte) {
+	var value any
+	if json.Unmarshal(body, &value) != nil {
+		d.secretCapture = true
+		return
+	}
+	var visit func(any)
+	visit = func(v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			for key, child := range v {
+				if strings.EqualFold(key, "authorization_token") || strings.EqualFold(key, "fallback_credit_token") {
+					d.secretCapture = true
+					if object, ok := child.(map[string]any); ok {
+						if text, ok := object["token"].(string); ok && text != "" {
+							d.secretTokens = append(d.secretTokens, text)
+						}
+					}
+					if text, ok := child.(string); ok && text != "" {
+						d.secretTokens = append(d.secretTokens, text)
+					}
+				}
+				visit(child)
+			}
+		case []any:
+			for _, child := range v {
+				visit(child)
+			}
+		}
+	}
+	visit(value)
 }
 
 // redactCaptureLocked changes diagnostic copies only. Whole scalar values are

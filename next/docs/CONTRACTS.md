@@ -4345,3 +4345,30 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **预扣事务的往返从约 12 次降到 4 次**（`billing/precharge.go`）。一个事务现在只有：BEGIN、一个 `pgx.Batch`（建 `user_balances` 行 → `FOR UPDATE` 锁住该行 → 一条 CTE 语句写 `balance_ledger`、`request_precharges` 并更新余额）、`balance.changed` 事件、COMMIT。被合并掉的正是原 `ApplyTx` 重复的语句（又一次插入余额行、又一次 `FOR UPDATE`、又一次幂等查询），余额是否足够的判断（`balance - amount > min_balance`）与幂等键是否已存在都表达在同一条 SQL 里：任何一条不满足就一行都不写，客户端据返回的 `duplicate` / `sufficient` 得到与原来相同的“成功且不扣费”或 `insufficient_balance`。锁顺序未变（仍然先锁 `user_balances` 的那一行再动流水与预留，释放路径 `ReleasePrechargeTx` 同样先锁该行）；幂等键仍是 `precharge:{request_id}`，仍是 `balance_ledger` 的唯一键；写入的值不变（`delta = -round(amount,8)`、`balance_after = balance + delta`、kind/ref_type/ref_id/note 相同，`validateChange` 在事务前先做，因此 8 位小数之外的值仍在写库前被拒）。旧的 `user_balances` 行在余额不足导致回滚时也不会留下（整条语句随事务回滚）。若幂等键恰好在本语句快照之后被其它事务插入，语句不写任何行，此时回落到 `ApplyTx` 原来的做法：加锁事务内 `findLedger` 读回该行并比较 user/amount/kind，一致则视为重复成功，不一致为 `idempotency key reused...` 冲突。`Precharge` 仍在任何上游请求之前完成（`prepareBilling` 的顺序未变），`usage` 侧的 `ApplyTx` 未改。回归测试 `TestPrechargeRoundTrips` 用 pgx tracer 计数：同一请求重跑时为 4 次 flush（1 BEGIN、2 batch、1 COMMIT），旧实现为 12 次。
 - **额度快照没有合并**（此项未做）。`guardAvailability` 重新读取一次快照是为了在“已准入、即将发送”这一刻发现额度/配额代际变化（`generation`、窗口、`now` 都参与比较），复用它前面的 `filterAvailability` 快照会让这次发送前的检查退化为对旧值的重复确认，等于删掉了一处安全检查；无法在保持语义的前提下省掉这次读取，因此只保留原有的一次过滤查询与每次尝试前的一次确认查询。
 - **CCGateway 请求缓存与隧道**（`ccgateway/request_cache.go`）。配置、账号 desired、特性策略的 TTL 从 30 秒放宽到 5 分钟，仅作为事件总线的兜底：所有变更来源都已覆盖——配置保存、控制器安装/升级、运行时更新走 `config:changed`（`configChanged`），账号保存走 `account:changed`（保存节点直接调用 `AccountChanged`，其它节点收消息），代理保存走 `config:changed` 的类型 `"proxy"`，特性策略保存走 `ccgateway_features`。Worker `/healthz` 的答案仍按原来的 30 秒过期（新增 `healthCacheTTL`），放宽兜底不会延长能力结论的可信期。隧道空闲超时 `routeIdleTimeout` 从 30 秒提到 110 秒：Worker 侧的空闲超时是 `http.Server.IdleTimeout`（`next/plugins/ccgateway/companions/worker/internal/server/server.go`，当前 60 秒，另一处改动会提到 ≥180 秒），核心必须短于对端——在被对端关闭的连接上发出的 POST 不会被重试；控制器中继的空闲超时（`TUNNEL_IDLE_SECONDS = 3700`）不是约束。核心的 110 秒因此依赖 Worker 的 ≥180 秒：先升 Worker，再升核心。
+
+### 63.8 Worker 的单次解析与空闲连接
+
+容器里 `request_command` 事件比请求体到达晚约 0.23 秒（1 MB 请求体、2 核容器）。原因是 `prepareRequest` 对同一个请求体做了约 4 次完整 JSON 解析：`prepareSecrets` 无条件解成树找 `authorization_token`/`fallback_credit_token`；`readClientIdentity` 用 `json.Decoder` 逐成员扫全文只为取 `metadata.user_id`；`d.request` 再解一次做摘要（摘要级别也做）；`messagesBuildComponents` 又解消息、解析两次 tools、最后整包 `json.Marshal`。此外每分钟的日志清理同步跑在请求 goroutine 上，`.claude.json` 与凭证文件每请求读两遍。
+
+改动：
+
+- `engine/request_body.go` 新增 `requestBody`：`json.Unmarshal` 到 `map[string]json.RawMessage` 一次得到全部顶层成员（各成员保持客户端原始字节），并顺带得出三个事实：`valid`（凭证扫描能否读这份体）、`escaped`（字节里有 `\u` 转义）、`metadataTwice`（`metadata` 出现多次）。`prepareRequest` 里解析一次，凭证检测、身份读取、请求摘要、build 信封全部读这一份。
+- 凭证检测只在可能命中时走树：`\u` 存在（键可能被转义写成别的拼法）或字节里出现不区分大小写的两个键名之一时，才做与原来完全相同的 `json.Unmarshal(&any)` + 递归；否则跳过。`valid` 不是 `json.Valid` 而是凭证扫描自己的判断：扫描解的是 float64 树，`1e999` 这类 float64 放不下的数字会让它失败，所以这种体本来就被当成 malformed（永不保留原始体）。`hasUnrepresentableNumber` 只在数字接近该量级时才真正转换。
+- 身份读取从已解析的 `metadata` 成员取值；`escaped` 或 `metadataTwice` 或体不可解析时退回原来的字节级读取器（它的 `metadata`/`user_id` 重复键拒绝、转义拼写规则与错误文本都不变，`request_identity_unreadable` 事件的 detail 也一样）。
+- 请求摘要的字段计算移到后台 goroutine（`describeRequest` / `summarizeRequest`），`request_received` 事件仍由 `request` 同步写在原位置；`finish` 在写 `metadata.json` 前等待它结束，所以事件文件与 metadata 的字段和值不变。没有日志（或日志关闭）的请求不启动这个 goroutine。
+- 每分钟的清理改为请求只向 store 的非阻塞缓冲通道发一次请求（`pruneDue`，容量 1，天然单飞），由 `Runtime.maintain` 这个随 Worker 关闭而退出的循环执行。
+- `requestPlan.mapping`（`requestKey`）在请求作用域内缓存账号映射键：身份与 agent 上下文共用一次读取（凭证文件 + `.claude.json`）；不跨请求缓存凭证。
+- `messagesBuildComponents` 用已解析的成员，参数表在旁边单独构造（不再原地删除顶层键），tools 只解析一次目录并逐项读取定义；`renameJSONKey` 的逐字节保真不变。
+
+不变式：
+
+- 发往 CLI 的 stdin 字节、发往上游的请求、对核心的响应与请求日志的对外内容（summary/full 两级里每个字段与值）与改动前相同；`body_sha256`、`body_bytes`、`request.body` 仍取自客户端原始字节。
+- 日志语义的时序不变：`request_received` 仍在读体后立即写；`metadata.json` 仍包含全部摘要字段，只是在 `finish` 时才落盘。
+- 日志清理仍在请求要求后才发生（最多每分钟一次），只是不在请求 goroutine 上。
+
+空闲连接（同一轮改动）：
+
+- 核心侧每条到 Worker 的隧道空闲 30 s 关闭，本轮由核心侧改为 110 s；因此 Worker 一侧所有会先于它断开连接的超时必须 **≥ 180 s**。`worker/internal/server/server.go` 的 `http.Server.IdleTimeout` 由 `time.Minute`（60 s）改为 `idleTimeout = 180 * time.Second`（`ReadHeaderTimeout` 10 s、`ReadTimeout` 30 s 不变，它们只约束请求本身）。
+- 控制器侧隧道已经是 `http_api.Handler.splice` 的 `TUNNEL_IDLE_SECONDS = 3700`（两端 socket 都设），远大于 180 s，不需要改；`Handler.setup` 的 240 s 只作用于普通 HTTP 请求（升级前），隧道建立后即被 3700 s 覆盖。
+- 约束：**核心隧道空闲 110 s < 对端 180 s**。对端若先关闭，核心会把一个已被关闭的连接拿去用，请求直接失败而不是重连。`worker/internal/server/timeouts_test.go` 用这个数字守护该关系，改变任一侧时必须同时确认另一侧。
+

@@ -11,7 +11,7 @@ import (
 
 func TestCreditObjectSecretEchoIsRedacted(t *testing.T) {
 	d := &requestDiagnostic{directory: t.TempDir(), fields: Object{}}
-	d.prepareSecrets([]byte(`{"fallback_credit_token":{"token":"OBJECT_SECRET_SENTINEL","mode":"best_effort"}}`))
+	d.prepareSecrets(parseRequestBody([]byte(`{"fallback_credit_token":{"token":"OBJECT_SECRET_SENTINEL","mode":"best_effort"}}`)))
 	d.save("safe.json", []byte(`{"echo":"OBJECT_SECRET_SENTINEL","fallback_credit_token":{"token":"OBJECT_SECRET_SENTINEL"}}`))
 	raw, err := os.ReadFile(filepath.Join(d.directory, "safe.json"))
 	require.NoError(t, err)
