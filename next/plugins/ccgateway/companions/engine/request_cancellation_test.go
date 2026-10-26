@@ -42,6 +42,9 @@ func requestCancellationPeer() {
 			data, _ := json.Marshal(values)
 			_ = os.WriteFile(target, data, 0600)
 		}
+		// The request it sent, as a CLI with request_capture_v1 writes it
+		// (request_log_upstream_test.go).
+		upstreamCapturePeer(raw)
 		for i, arg := range os.Args {
 			if arg == "--response-meta" && i+1 < len(os.Args) {
 				_ = os.WriteFile(os.Args[i+1], []byte(`{"status":200,"headers":{"content-type":"text/event-stream"}}`), 0600)

@@ -193,6 +193,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       // Legacy top-level fields (full tier values) for older consoles.
       retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata',
       viewer: true,
+      viewer_search: true,
     }
   }
   on('GET', `${base}/accounts/:id/request-logs`, (req) => {
@@ -224,6 +225,9 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   interface MockLog {
     id: string; request_id: string; time: string; duration_ms: number; status: number; stage: string; model: string; stream: boolean
     log_level: 'summary' | 'full'; error_type?: string; error?: string; log_status: string; test: boolean; attempt?: number; files: Record<string, Uint8Array>
+    // Upstream capture (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3); absent on older logs.
+    mode?: 'direct' | 'build'; client_session_id?: string; upstream_session_id?: string; body_sha256?: string; upstream_body_sha256?: string
+    body_changed?: boolean; upstream_captured?: boolean; upstream_bytes?: number
   }
   const mockLogs = new Map<string, MockLog[]>()
   const uuidOf = (seed: string) => {
@@ -231,7 +235,11 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
   }
   const enc = (v: string) => new TextEncoder().encode(v)
-  const logFiles = (rid: string, n: number): Record<string, Uint8Array> => {
+  const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
+  const requestBody = () => enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, system: [{ type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: '帮我看看这个报错 <script>alert(1)</script>' }] }))
+  // What the CLI sent after the build rewrote it (or the same bytes in direct mode).
+  const rewrittenBody = (session: string) => enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, metadata: { user_id: JSON.stringify({ session_id: session }) }, system: [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=2.1.304; cch=00000;' }, { type: 'text', text: 'You are Claude Code, Anthropic\'s official CLI for Claude.' }, { type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: [{ type: 'text', text: '<system-reminder>…</system-reminder>' }, { type: 'text', text: '帮我看看这个报错 <script>alert(1)</script>' }] }] }))
+  const logFiles = (rid: string, n: number, upstream: Uint8Array | null): Record<string, Uint8Array> => {
     const sse = ['event: message_start', `data: {"type":"message_start","message":{"id":"msg_${n}","model":"claude-sonnet-4-6","usage":{"input_tokens":18231,"cache_read_input_tokens":17984}}}`, '',
       'event: content_block_delta', 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"好的，我先看一下这个报错……"}}', '',
       'event: message_stop', 'data: {"type":"message_stop"}', '', ''].join('\n')
@@ -240,12 +248,13 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       ? { type: 'system', subtype: 'init', model: 'claude-sonnet-4-6', session_id: rid }
       : { type: 'assistant', message: { content: [{ type: 'text', text: `第 ${i} 段输出 <b>不应渲染为 HTML</b>` }] } })).join('\n') + '\n'
     return {
-      'request.body': enc(JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 32000, stream: true, system: [{ type: 'text', text: 'You are Claude Code…' }], messages: [{ role: 'user', content: '帮我看看这个报错 <script>alert(1)</script>' }] })),
+      'request.body': requestBody(),
       'build-components.json': enc(JSON.stringify({ level: 'low', system_blocks: 3, tools: ['Bash', 'Read', 'Edit', 'Write'], attachments: ['date', 'environment'] })),
       'effective-config.json': enc(JSON.stringify({ args: ['--print', '--output-format', 'stream-json'], model: 'claude-sonnet-4-6' })),
       'cli-stdout.jsonl': enc(cli),
       'response.body': enc(sse),
       'upstream-1-request.body': new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x02, 0xff, ...enc('binary payload')]),
+      ...(upstream ? { 'upstream-request.body': upstream } : {}),
     }
   }
   const logsFor = (key: string): MockLog[] => {
@@ -258,6 +267,22 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       const failed = n % 9 === 3
       const rejected = n % 17 === 5
       const full = n < 8
+      // Logs 100+ predate the capture; n % 10 === 4 and rejected requests have no upstream record.
+      const legacy = n >= 100
+      const mode = n % 3 === 2 ? 'direct' as const : 'build' as const
+      const captured = !legacy && !rejected && n % 10 !== 4
+      // A build request is assembled again: its sent body always differs.
+      const changed = mode === 'build' || n % 7 === 0
+      const session = uuidOf(key + ':session:' + Math.floor(n / 6))
+      const input = full ? requestBody() : enc(`${key}:${n}:incoming`)
+      const sent = !captured ? null : changed ? (full ? rewrittenBody(session) : enc(`${key}:${n}:sent`)) : input
+      const capture = legacy ? {} : {
+        mode, client_session_id: session, body_sha256: sha256(input), upstream_captured: captured,
+        ...(sent ? {
+          upstream_session_id: mode === 'direct' ? session : uuidOf(key + ':cli:' + Math.floor(n / 6)),
+          upstream_body_sha256: sha256(sent), body_changed: changed, upstream_bytes: sent.length,
+        } : {}),
+      }
       list.push({
         id: uuidOf(key + ':' + n), request_id: rid, time: new Date(now - n * 7 * 60000 - 4000).toISOString(), duration_ms: failed ? 900 : rejected ? 12 : 1200 + (n * 317) % 9000,
         status: failed ? 529 : rejected ? 400 : 200, stage: failed ? 'upstream' : rejected ? 'parse_request' : 'finished',
@@ -265,7 +290,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
         error_type: failed ? 'overloaded_error' : rejected ? 'invalid_request_error' : undefined,
         error: failed ? 'Overloaded' : rejected ? 'messages: roles must alternate between "user" and "assistant"' : undefined,
         log_status: n === 0 ? 'truncated' : 'complete', test: n === 11, attempt: n === 2 ? 2 : n === 3 ? 1 : undefined,
-        files: full ? logFiles(rid, n) : {},
+        files: full ? logFiles(rid, n, sent) : {},
+        ...capture,
       })
     }
     mockLogs.set(key, list)
@@ -290,13 +316,21 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     if (q.request_id?.startsWith('req_') && !logs.some(l => l.request_id === q.request_id)) {
       logs.splice(1, 0, { ...logs[1], id: uuidOf(r.key + ':' + q.request_id), request_id: q.request_id })
     }
+    // The search filters, checked like the core (design §3/§4).
+    if (q.mode && q.mode !== 'direct' && q.mode !== 'build') return fail(400, 'invalid_argument', 'Invalid mode.')
+    if (q.session_id && !/^[A-Za-z0-9_-]{1,128}$/.test(q.session_id)) return fail(400, 'invalid_argument', 'Invalid session_id.')
+    if (q.sha256 && !/^[0-9a-fA-F]{64}$/.test(q.sha256)) return fail(400, 'invalid_argument', 'Invalid sha256.')
+    if (q.changed && q.changed !== 'true' && q.changed !== 'false') return fail(400, 'invalid_argument', 'Invalid changed.')
+    const sha = q.sha256?.toLowerCase()
     let list = logsFor(r.key).filter(l => (!q.request_id || l.request_id === q.request_id) && (!q.model || l.model === q.model) && (!q.level || l.log_level === q.level)
-      && (!q.status || (q.status === 'error') === (l.status >= 400)) && (!q.since || l.time >= q.since))
+      && (!q.status || (q.status === 'error') === (l.status >= 400)) && (!q.since || l.time >= q.since)
+      && (!q.mode || l.mode === q.mode) && (!q.session_id || l.client_session_id === q.session_id || l.upstream_session_id === q.session_id)
+      && (!sha || l.body_sha256 === sha || l.upstream_body_sha256 === sha) && (!q.changed || (l.body_changed !== undefined && String(l.body_changed) === q.changed)))
     if (q.before) list = list.slice(list.findIndex(l => l.id === q.before.split('_')[1]) + 1)
     const page = list.slice(0, limit)
     const last = page[page.length - 1]
     return {
-      items: page.map(({ files, ...l }) => ({ ...l, has_content: Object.keys(files).length > 0, bytes: logBytes(files) })),
+      items: page.map(({ files, upstream_bytes: _bytes, ...l }) => ({ ...l, has_content: Object.keys(files).length > 0, bytes: logBytes(files) })),
       next: list.length > limit ? `${Date.parse(last.time)}000000_${last.id}` : null,
       active: q.before ? [] : [{ request_id: 'e11c0de0e11c0de0e11c0de0', started: new Date(Date.now() - 18000).toISOString(), stage: 'upstream' }],
     }
@@ -315,11 +349,32 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     const t0 = Date.parse(l.time)
     const at = (ms: number) => new Date(t0 + ms).toISOString()
     const long = 'x'.repeat(300)
+    const betas = ['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14']
+    const requestClass = l.mode === 'build' && l.request_id.endsWith('0') ? 'subagent' : 'main'
+    const sent = l.upstream_body_sha256 !== undefined
+    const upstreamMeta = l.mode === undefined ? {} : {
+      mode: l.mode, client_session_id: l.client_session_id, body_sha256: l.body_sha256, upstream_captured: l.upstream_captured,
+      ...(sent ? {
+        upstream_attempts: l.attempt ?? 1, upstream_model: l.model, upstream_stream: l.stream, upstream_body_bytes: l.upstream_bytes, upstream_body_sha256: l.upstream_body_sha256,
+        upstream_session_id: l.upstream_session_id, upstream_request_class: requestClass, upstream_betas: betas, body_changed: l.body_changed,
+      } : {}),
+    }
+    // upstream-request.json as the CLI writes it; the core masks the secret headers again.
+    const upstreamRequest = sent ? {
+      schema: 1, mode: l.mode, attempts: l.attempt ?? 1, sent_at: at(812), method: 'POST', url: 'https://api.anthropic.com/v1/messages?beta=true',
+      headers: {
+        'accept': 'application/json', 'anthropic-beta': betas.join(','), 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-version': '2023-06-01',
+        'authorization': '[REDACTED]', 'content-type': 'application/json', 'user-agent': 'claude-cli/2.1.304 (external, cli)', 'x-app': 'cli',
+        'x-claude-code-request-class': requestClass, 'x-claude-code-session-id': l.upstream_session_id, 'x-stainless-retry-count': '0',
+      },
+      body_encoding: 'identity', body_bytes: l.upstream_bytes, body_sha256: l.upstream_body_sha256, model: l.model, stream: l.stream,
+    } : undefined
     return {
       metadata: {
         request_id: l.request_id, event: 'request_finished', stage: l.stage, status: l.status, http_status: l.status, model: l.model, stream: l.stream, log_level: l.log_level,
         message_count: 12, history_mode: 'prefix-hit', execution_mode: 'build', anthropic_beta: 'claude-code-20250219,oauth-2025-04-20', duration_ms: l.duration_ms, log_status: l.log_status,
         error_type: l.error_type, error: l.error, messages: [{ index: 0, role: 'user', content_type: 'string', text_bytes: 42 }],
+        ...upstreamMeta,
       },
       events: [
         { time: at(0), event: 'request_received', detail: { request_id: l.request_id } },
@@ -335,6 +390,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       response_headers: { 'Content-Type': [l.stream ? 'text/event-stream' : 'application/json'], 'Request-Id': [l.request_id] },
       files: Object.entries(l.files).map(([name, b]) => ({ name, bytes: b.length, kind: fileKind(name) })),
       content,
+      ...(upstreamRequest ? { upstream_request: upstreamRequest } : {}),
     }
   })
   on('GET', `${base}/accounts/:id/request-logs/requests/:log/files/:name`, (req) => {

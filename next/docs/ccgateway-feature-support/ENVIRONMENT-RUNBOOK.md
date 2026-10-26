@@ -397,7 +397,7 @@ docker exec sup2api-1 sub2api-gateway status -config /etc/sub2api/shell.json | p
 - 本地未来默认镜像 `ccgateway-worker:0.1.80`，镜像内程序是 `/usr/local/bin/worker`，构建参数不同，哈希不同。保存默认镜像配置不会自动替换已有账号；镜像推送仓库未闭环。
 - Worker 内部监听 `8787`，宿主 Controller 的同端口与它们处于不同网络空间。Core 按 Controller 的带 revision 连接信息动态发现私网 IP，再经 SSH 直连；不要固定每账号 IP 或逐账号维护 permitopen。
 - 现场还有 `ccgateway-worker-test`，宿主 `8788`，属于旧测试资源，不代表生产默认镜像。新隔离测试不要占用它或生产 `8787`。
-- `/work/data/cache` 和 `/work/data/request-logs` 现场存在；授权/config 在 `/work` 持久卷内，勿读取或复制 OAuth 内容。账号管理 API 只提供日志开关/限额状态，日志正文留在容器文件；关闭会删除已有日志。
+- `/work/data/cache` 和 `/work/data/request-logs` 现场存在；授权/config 在 `/work` 持久卷内，勿读取或复制 OAuth 内容。请求日志分关闭/摘要/完整三级（[级别](REQUEST-LOG-LEVELS-DESIGN.md)），界面可查看（[查看](REQUEST-LOG-VIEWER-DESIGN.md)）；关闭会删除已有日志。
 - 最新构建门禁/制品 `/opt/ccgateway-runtime/feature-validation-609691490`；原地更新备份 `/opt/ccgateway-runtime/manual-backups/20261009-609691490-21` 与 `...-22`，旧 `.79` 程序名 `ccgateway`。
 
 ```sh
@@ -412,7 +412,9 @@ docker inspect ccg-controller --format '{{.Name}}|{{.Config.Image}}|{{.State.Sta
 
 原 `.56` 容器没有 curl，上面的 Node fetch 本轮可用。两 Worker `/health` 均 `200`、CLI `2.1.292`；不代表 OAuth/余额在线有效。Docker app 日志轮转为 20m×3；`docker logs --since 10m --tail 100 ccg-controller` 等输出也须先脱敏。**不要运行 `claude auth status`、profile、手工 refresh/清锁作为健康检查**，曾发生探针遗留 OAuth 锁。
 
-查询具体请求先在平台用量找时间/账号/attempt，再到对应Worker列文件：`docker exec ccg-d1d2964e14bf728d9-app find /work/data/request-logs -maxdepth 2 -type f`（#21改容器名）。每请求目录内可有`events.jsonl`、`effective-config.json`、`mod-config.json`、`feature-decisions.json`、`history-native.jsonl`、`upstream-request-*.body`及响应；按实际文件和partial/truncated状态判断。正文用受控SSH私下读取，不把整个目录提交Git或回显到公开报告。Core管理`GET /api/v1/system/ccgateway/accounts/22/request-logs`只返回enabled/限额，不是日志下载接口。Worker目前无Core RID header直接联结，需时间/账号/上游ID/usage交叉核对。
+查询具体请求优先从用量记录详情的“请求日志”按钮进入：插件把核心的 `request_id` 作为 `x-request-id` 发给 Worker，Worker 日志的 `request_id` 与用量记录一致（账号测试除外）。也可调 `GET /api/v1/system/ccgateway/accounts/:id/request-logs/requests?request_id=…`（列表/详情 `settings:read`、`account:read` 或 `settings:manage`，`account:own:read` 不行；正文 `/files/:name` 只限 `settings:manage`，记审计，同人同文件 10 分钟内合并一条），或到 Worker 列文件：`docker exec <账号容器> find /work/data/request-logs -maxdepth 2 -type f`（目录名是随机 uuid，请求 ID 在 `metadata.json`）。
+
+每请求目录的文件（native 路径删除后，§53.21）：摘要级别只有 `metadata.json`、`events.jsonl`、`request-headers.json`、`response-headers.json`；完整级别另有 `request.body`（核心发给 Worker 的 body 原字节，可能已经过核心的模型映射、协议转换、钩子补丁、资源引用改写；核心不留存客户原始 body）、`build-components.json`（仅 build：交给 CLI 的组件信封）、`response.body`（回给核心的响应，含 SSE），OAuth 资源请求另有 `resource-*.json`。凭据安全模式（`capture_policy: structured_redacted_only`）下 `request.body` 是脱敏副本、`response.body` 为空。**最终发往上游的请求**：插件 0.1.101 / CLI v31 起记录为 `upstream-request.json`（摘要级别就有，请求头已遮蔽）和 `upstream-request.body`（仅完整级别），`metadata.json` 带 `mode`、`client_session_id`、`upstream_session_id`、`upstream_body_sha256`、`upstream_content_sha256`、`body_changed` 等字段，可直接 `grep -l '"client_session_id": "<会话>"' /work/data/request-logs/*/metadata.json`；设计见 [REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md](REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md)。旧日志里的 `effective-config.json`、`mod-config.json`、`feature-decisions.json`、`history-native.jsonl`、`upstream-request-*.body` 只属于已删除的 native 路径。按实际文件和 `log_status`（complete/partial/truncated）判断；正文不提交 Git、不回显到公开报告。
 
 ## 4. 凭据与管理访问
 

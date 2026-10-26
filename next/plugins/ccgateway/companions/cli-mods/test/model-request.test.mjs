@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, messagesPath } from '../model-request.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, messagesPath, requestCapture } from '../model-request.js';
 import { parseBuildJSON } from '../request-options.js';
 
 const options = { body: { model: 'fixture', messages: [], unknown: { keep: true } }, nativeCreate: true };
@@ -135,4 +139,125 @@ test('build sends the client numbers as written at the fetch boundary', async ()
     async (url, init) => { sent = init.body; return new Response('ok'); });
   assert.equal(sent, raw);
   await cancelModelResponse(response);
+});
+
+// request_capture_v1: the record of what left at the fetch boundary, read
+// after the header policy and the number restore, written once the send has
+// started; the last send overwrites the files and attempts counts them.
+const recordKeys = ['schema', 'mode', 'attempts', 'sent_at', 'method', 'url', 'headers', 'body_encoding', 'body_bytes', 'body_sha256', 'content_sha256', 'model', 'stream'];
+const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+const tempDir = () => fs.mkdtemp(path.join(os.tmpdir(), 'ccg-capture-'));
+const readRecord = async prefix => JSON.parse(await fs.readFile(prefix + '.json', 'utf8'));
+// sendThrough opens a request whose client hands the fetch boundary each init
+// in turn, as CC's client does for a resend.
+async function sendThrough(inits, capture, transport, extra = {}) {
+  const response = await openModelRequest({ ...options, nativeCreate: false, rawBody: '{}', capture, ...extra }, undefined,
+    async init => ({ post: () => ({ asResponse: async () => {
+      let last;
+      for (const sent of inits) last = await init.fetchOverride('https://api.anthropic.com/v1/messages?beta=true', sent);
+      return last;
+    } }) }), transport);
+  await cancelModelResponse(response);
+  await capture.settle();
+  return response;
+}
+
+test('the capture records the final headers and body of the last send, secrets redacted', async () => {
+  const dir = await tempDir();
+  try {
+    const prefix = path.join(dir, 'sent');
+    const capture = requestCapture({ prefix, body: true, mode: 'direct' });
+    const second = '{"model":"fixture","stream":true,"n":9007199254740993,"text":"中文🙂"}';
+    const native = () => new Headers({ authorization: 'Bearer native-secret', cookie: 'c=secret', 'proxy-authorization': 'Basic secret', 'X-Claude-Code-Session-Id': 'session-1', 'User-Agent': 'native-cc' });
+    const wire = [];
+    await sendThrough([{ method: 'POST', headers: native(), body: '{"model":"first"}' }, { method: 'post', headers: native(), body: second }], capture, async (url, init) => {
+      // The send is never behind the record: nothing is written before it.
+      if (!wire.length) await assert.rejects(fs.access(prefix + '.json'));
+      wire.push({ url, body: init.body, headers: new Headers(init.headers) });
+      return new Response('ok');
+    }, { headerPolicy: { betas: ['client-beta', 'oauth-fixture'], oauthBeta: 'oauth-fixture' } });
+    assert.equal(wire.length, 2);
+    const record = await readRecord(prefix);
+    assert.deepEqual(Object.keys(record), recordKeys);
+    assert.equal(record.schema, 1);
+    assert.equal(record.mode, 'direct');
+    assert.equal(record.attempts, 2);
+    assert.equal(new Date(record.sent_at).toISOString(), record.sent_at);
+    assert.equal(record.method, 'POST');
+    assert.equal(record.url, 'https://api.anthropic.com/v1/messages?beta=true');
+    // The headers the transport got, as fetch spells them; only secrets differ.
+    const expected = Object.fromEntries([...wire[1].headers].map(([name, value]) => [name, ['authorization', 'cookie', 'proxy-authorization'].includes(name) ? '[REDACTED]' : value]));
+    assert.deepEqual(record.headers, expected);
+    assert.deepEqual(Object.keys(record.headers), Object.keys(record.headers).toSorted());
+    assert.equal(record.headers['anthropic-beta'], 'client-beta,oauth-fixture');
+    assert.equal(record.headers['x-claude-code-session-id'], 'session-1');
+    assert.equal(wire[1].headers.get('authorization'), 'Bearer native-secret', 'the record never touches what is sent');
+    assert.equal((await fs.readFile(prefix + '.json', 'utf8')).includes('secret'), false);
+    const bytes = Buffer.from(second, 'utf8');
+    assert.deepEqual(await fs.readFile(prefix + '.body'), bytes);
+    assert.equal(record.body_encoding, 'identity');
+    assert.equal(record.body_bytes, bytes.length);
+    assert.equal(record.body_sha256, sha256(bytes));
+    assert.equal(record.model, 'fixture');
+    assert.equal(record.stream, true);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('the capture keeps binary bytes as sent and never reads a stream', async () => {
+  const dir = await tempDir();
+  try {
+    const prefix = path.join(dir, 'sent');
+    const ok = async () => new Response('ok');
+    // Encoded bytes: recorded as they are, with nothing read out of them.
+    const encoded = new Uint8Array([0x1f, 0x8b, 0, 0xff, 0x80]);
+    let capture = requestCapture({ prefix, body: true, mode: 'build' });
+    await sendThrough([{ method: 'POST', headers: { 'Content-Encoding': 'gzip', 'X-Api-Key': 'key-secret', 'Content-Type': 'application/json' }, body: encoded }], capture, ok);
+    let record = await readRecord(prefix);
+    assert.equal(record.mode, 'build');
+    assert.deepEqual(record.headers, { 'content-encoding': 'gzip', 'content-type': 'application/json', 'x-api-key': '[REDACTED]' });
+    assert.equal(record.body_encoding, 'gzip');
+    assert.equal(record.body_bytes, 5);
+    assert.equal(record.body_sha256, sha256(encoded));
+    assert.equal(record.content_sha256, '', 'encoded bytes have no content digest');
+    assert.equal(record.model, '');
+    assert.equal(record.stream, null);
+    assert.deepEqual(await fs.readFile(prefix + '.body'), Buffer.from(encoded));
+    // Unencoded bytes are JSON the record reads.
+    const json = new TextEncoder().encode('{"model":"bytes","stream":false}');
+    capture = requestCapture({ prefix, body: true, mode: 'direct' });
+    await sendThrough([{ method: 'POST', headers: {}, body: json.buffer }], capture, ok);
+    record = await readRecord(prefix);
+    assert.deepEqual([record.body_encoding, record.body_bytes, record.model, record.stream], ['identity', json.length, 'bytes', false]);
+    assert.deepEqual(await fs.readFile(prefix + '.body'), Buffer.from(json));
+    // A stream is not read: no size, no hash, no body file.
+    capture = requestCapture({ prefix, body: true, mode: 'direct' });
+    const stream = new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array([1])); } });
+    await sendThrough([{ method: 'POST', headers: {}, body: stream }], capture, ok);
+    record = await readRecord(prefix);
+    assert.deepEqual([record.body_encoding, record.body_bytes, record.body_sha256, record.content_sha256, record.model, record.stream], ['binary', -1, '', '', '', null]);
+    await assert.rejects(fs.access(prefix + '.body'));
+    assert.equal(stream.locked, false, 'the record takes no reader');
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('the body file is written only when asked for, and a failed write never fails the request', async () => {
+  const dir = await tempDir();
+  try {
+    const prefix = path.join(dir, 'sent');
+    let capture = requestCapture({ prefix, mode: 'direct' });
+    await sendThrough([{ method: 'POST', headers: {}, body: '{"model":"fixture"}' }], capture, async () => new Response('ok'));
+    assert.equal((await readRecord(prefix)).body_bytes, 19);
+    await assert.rejects(fs.access(prefix + '.body'));
+    // A prefix in a missing directory: the request goes and answers as usual.
+    capture = requestCapture({ prefix: path.join(dir, 'missing', 'sent'), body: true, mode: 'direct' });
+    const response = await openModelRequest({ ...options, nativeCreate: false, rawBody: '{}', capture }, undefined,
+      async init => ({ post: () => ({ asResponse: () => init.fetchOverride('https://api.anthropic.com/v1/messages', { method: 'POST', headers: {}, body: '{}' }) }) }),
+      async () => new Response('answer'));
+    assert.equal(response.ok, true);
+    assert.equal((await readModelResponse(response)).text, 'answer');
+    await cancelModelResponse(response);
+    await capture.settle();
+    assert.equal(capture.attempts, 1);
+    await assert.rejects(fs.access(path.join(dir, 'missing')));
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });

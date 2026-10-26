@@ -10,7 +10,7 @@
       → claude request --build|--direct（打包的定制 CLI，一请求一进程） → 上游
 ```
 
-Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI，由 CLI 用 Claude Code 自己的函数组装（计费头、身份行、注入层、环境段、工具定义）；direct 下请求体原样交给 CLI，只补缺的计费头。Worker 负责的只有：鉴权、请求策略（`X-CCGateway-Request-Policy`，`contracts/features.WorkerPolicy`）、身份与 agent 上下文映射、并发槽位、请求日志和错误来源标记。
+Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI，由 CLI 用 Claude Code 自己的函数组装（计费头、身份行、注入层、环境段、工具定义）；direct 下请求体原样交给 CLI，CLI 只动 system 开头的计费头（缺头或缺字段补原生值、按计费来源换字段，字符串 system 因此改成块数组），其余字节不变；两种模式的上游请求头都由 CLI 原生生成（见 [REQUEST-MODES](../docs/REQUEST-MODES.md)）。Worker 负责的只有：鉴权、请求策略（`X-CCGateway-Request-Policy`，`contracts/features.WorkerPolicy`）、身份与 agent 上下文映射、并发槽位、请求日志和错误来源标记。
 
 ## 目录
 

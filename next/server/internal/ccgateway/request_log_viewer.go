@@ -36,8 +36,12 @@ var (
 	requestLogFileName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 	requestLogReqID    = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 	requestLogCursor   = regexp.MustCompile(`^[0-9]{1,20}_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	// The shapes of the upstream-capture search fields
+	// (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3/§4).
+	requestLogSessionID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	requestLogSHA256    = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	// The summary files: the detail carries them, a file read never does.
-	requestLogSummaryFiles = map[string]bool{"metadata.json": true, "events.jsonl": true, "request-headers.json": true, "response-headers.json": true}
+	requestLogSummaryFiles = map[string]bool{"metadata.json": true, "events.jsonl": true, "request-headers.json": true, "response-headers.json": true, "upstream-request.json": true}
 	// Masked again here, whatever the Worker wrote.
 	requestLogSecretHeaders = map[string]bool{"authorization": true, "proxy-authorization": true, "x-api-key": true, "cookie": true, "set-cookie": true, "x-ccg-revision": true}
 )
@@ -102,7 +106,14 @@ func (s *Service) viewerJSON(c *gin.Context, ctx context.Context, d accountDesir
 		return nil, false
 	}
 	if res.StatusCode != http.StatusOK {
-		httpapi.Fail(c, viewerError(res.StatusCode, raw))
+		e := viewerError(res.StatusCode, raw)
+		// The core checked the query to the Worker's rules, so a refusal of
+		// one with the new filters is a Worker without viewer_search.
+		if q, isQuery := body.(map[string]any); isQuery && action == "query" && res.StatusCode == http.StatusBadRequest && usesRequestLogSearch(q) {
+			e = reasonError(core.ErrUnavailable, "request_log_search_unsupported").
+				WithMessage("This account's runtime cannot filter request logs by mode, session, SHA-256 or change; update the CCGateway plugin.")
+		}
+		httpapi.Fail(c, e)
 		return nil, false
 	}
 	return raw, true
@@ -116,7 +127,8 @@ func requestLogQuery(c *gin.Context) (map[string]any, *core.Error) {
 	}
 	for name := range c.Request.URL.Query() {
 		switch name {
-		case "limit", "before", "request_id", "status", "model", "level", "since", "until":
+		case "limit", "before", "request_id", "status", "model", "level", "since", "until",
+			"mode", "session_id", "sha256", "changed":
 		default:
 			return nil, invalid("parameter " + strconv.Quote(name))
 		}
@@ -141,6 +153,8 @@ func requestLogQuery(c *gin.Context) (map[string]any, *core.Error) {
 		}},
 		{"since", rfc3339},
 		{"until", rfc3339},
+		{"mode", validRequestMode},
+		{"session_id", requestLogSessionID.MatchString},
 	} {
 		if v := c.Query(p.name); v != "" {
 			if !p.ok(v) {
@@ -149,8 +163,39 @@ func requestLogQuery(c *gin.Context) (map[string]any, *core.Error) {
 			q[p.name] = v
 		}
 	}
+	if v := c.Query("sha256"); v != "" {
+		v = strings.ToLower(v)
+		if !requestLogSHA256.MatchString(v) {
+			return nil, invalid("sha256 (64 hexadecimal digits)")
+		}
+		q["sha256"] = v
+	}
+	switch c.Query("changed") {
+	case "":
+	case "true":
+		q["changed"] = true
+	case "false":
+		q["changed"] = false
+	default:
+		return nil, invalid("changed (true or false)")
+	}
 	return q, nil
 }
+
+// requestLogSearchKeys are the filters only a Worker reporting viewer_search
+// understands; an older Worker refuses the whole query (400).
+var requestLogSearchKeys = []string{"mode", "session_id", "sha256", "changed"}
+
+func usesRequestLogSearch(q map[string]any) bool {
+	for _, k := range requestLogSearchKeys {
+		if _, ok := q[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func validRequestMode(v string) bool { return v == "direct" || v == "build" }
 
 func rfc3339(v string) bool {
 	_, e := time.Parse(time.RFC3339, v)
@@ -174,6 +219,34 @@ type requestLogItem struct {
 	Attempt    int    `json:"attempt,omitempty"`
 	HasContent bool   `json:"has_content"`
 	Bytes      int64  `json:"bytes"`
+	// Upstream capture (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3): only
+	// identifiers and hashes, each dropped when not of its shape.
+	Mode               string `json:"mode,omitempty"`
+	ClientSessionID    string `json:"client_session_id,omitempty"`
+	UpstreamSessionID  string `json:"upstream_session_id,omitempty"`
+	BodySHA256         string `json:"body_sha256,omitempty"`
+	UpstreamBodySHA256 string `json:"upstream_body_sha256,omitempty"`
+	BodyChanged        *bool  `json:"body_changed,omitempty"`
+	// UpstreamCaptured is absent for a request that sent nothing upstream.
+	UpstreamCaptured *bool `json:"upstream_captured,omitempty"`
+}
+
+// clean drops the upstream-capture fields that are not of their shape. They
+// are search aids: one odd value must not hide the whole page.
+func (item *requestLogItem) clean() {
+	if !validRequestMode(item.Mode) {
+		item.Mode = ""
+	}
+	for _, id := range []*string{&item.ClientSessionID, &item.UpstreamSessionID} {
+		if !requestLogSessionID.MatchString(*id) {
+			*id = ""
+		}
+	}
+	for _, sum := range []*string{&item.BodySHA256, &item.UpstreamBodySHA256} {
+		if *sum = strings.ToLower(*sum); !requestLogSHA256.MatchString(*sum) {
+			*sum = ""
+		}
+	}
 }
 
 type requestLogActive struct {
@@ -197,11 +270,13 @@ func decodeRequestLogPage(raw []byte) (requestLogPage, error) {
 	if page.Next != nil && !requestLogCursor.MatchString(*page.Next) {
 		return page, errors.New("invalid request log cursor")
 	}
-	for _, item := range page.Items {
+	for i := range page.Items {
+		item := &page.Items[i]
 		if !requestLogID.MatchString(item.ID) || !rfc3339(item.Time) || item.Level != requestLogSummary && item.Level != requestLogFull ||
 			item.DurationMS < 0 || item.Bytes < 0 || item.Attempt < 0 {
 			return page, errors.New("invalid request log item")
 		}
+		item.clean()
 	}
 	if page.Active == nil {
 		page.Active = []requestLogActive{}
@@ -246,8 +321,42 @@ type requestLogDetail struct {
 	RequestHeaders  map[string][]string `json:"request_headers"`
 	ResponseHeaders map[string][]string `json:"response_headers"`
 	Files           []requestLogFile    `json:"files"`
+	// UpstreamRequest is upstream-request.json: what the CLI sent, without
+	// the body (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §2/§4).
+	UpstreamRequest map[string]any `json:"upstream_request,omitempty"`
 	// Content says whether the caller may read the files (settings:manage).
 	Content bool `json:"content"`
+}
+
+// maskUpstreamRequest masks the secret headers of upstream-request.json
+// again. Its headers are {"name": "value"}; anything else under a secret
+// name is masked too, and headers that are not an object are dropped.
+func maskUpstreamRequest(up map[string]any) map[string]any {
+	if up == nil {
+		return nil
+	}
+	raw, ok := up["headers"]
+	if !ok {
+		return up
+	}
+	h, ok := raw.(map[string]any)
+	if !ok {
+		delete(up, "headers")
+		return up
+	}
+	for k, v := range h {
+		if !requestLogSecretHeaders[strings.ToLower(k)] {
+			continue
+		}
+		if list, isList := v.([]any); isList {
+			for i := range list {
+				list[i] = "[REDACTED]"
+			}
+			continue
+		}
+		h[k] = "[REDACTED]"
+	}
+	return up
 }
 
 func maskHeaders(h map[string][]string) map[string][]string {
@@ -294,6 +403,7 @@ func (s *Service) requestLogDetail(c *gin.Context) {
 		out.Events = []any{}
 	}
 	out.RequestHeaders, out.ResponseHeaders = maskHeaders(out.RequestHeaders), maskHeaders(out.ResponseHeaders)
+	out.UpstreamRequest = maskUpstreamRequest(out.UpstreamRequest)
 	httpapi.OK(c, out)
 }
 

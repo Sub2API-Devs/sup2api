@@ -229,6 +229,9 @@ type requestLogLevelState struct {
 	Usage     *requestLogUsage `json:"usage,omitempty"`
 	// Viewer: the Worker serves the log reads (REQUEST-LOG-VIEWER-DESIGN.md).
 	Viewer bool `json:"viewer"`
+	// ViewerSearch: the Worker's query takes mode/session_id/sha256/changed
+	// (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3).
+	ViewerSearch bool `json:"viewer_search"`
 }
 
 func validLimit(limit *int64) bool {
@@ -288,17 +291,18 @@ func decodeLevelState(raw []byte, legacy requestLogState) (requestLogLevelState,
 		return requestLogLevelState{}, false, nil
 	}
 	var in struct {
-		Level     *string           `json:"level"`
-		FullUntil *string           `json:"full_until"`
-		Levels    []string          `json:"levels"`
-		Limits    *requestLogLimits `json:"limits"`
-		Usage     *requestLogUsage  `json:"usage"`
-		Viewer    bool              `json:"viewer"`
+		Level        *string           `json:"level"`
+		FullUntil    *string           `json:"full_until"`
+		Levels       []string          `json:"levels"`
+		Limits       *requestLogLimits `json:"limits"`
+		Usage        *requestLogUsage  `json:"usage"`
+		Viewer       bool              `json:"viewer"`
+		ViewerSearch bool              `json:"viewer_search"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return requestLogLevelState{}, false, err
 	}
-	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer}
+	out := requestLogLevelState{requestLogState: legacy, Viewer: in.Viewer, ViewerSearch: in.ViewerSearch}
 	if len(in.Levels) == 0 || len(in.Levels) > len(requestLogLevels) {
 		return requestLogLevelState{}, false, errors.New("invalid request log levels")
 	}

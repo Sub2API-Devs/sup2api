@@ -4,7 +4,7 @@ import { sF, _ke, mle } from './chunk-38xgev2z.js';
 import { Al } from './chunk-7p6jp6kj.js';
 import { mBr } from './chunk-4qs43hr1.js';
 import { setEntrypointOnRequests } from './chunk-72vwyp9d.js';
-import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout } from './ccgateway-model-request.js';
+import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResponse, defaultTimeout, requestCapture } from './ccgateway-model-request.js';
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, parseBuildJSON } from './ccgateway-request-options.js';
 import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
@@ -20,20 +20,25 @@ Successful responses (including SSE) use stdout. Errors use a structured stderr 
 HTTP error bytes are stored beside --response-meta as <file>.error-body, or in
 the stderr frame as bodyBase64 when no metadata path is supplied.
 
-  --direct                 Forward the original JSON body unchanged (default)
+  --direct                 Send the JSON body as written; only a missing or
+                           Worker-owned billing header is filled (default)
   --build                  Assemble components through CC, then send once
   --input <file|->          Read JSON from a file; default: stdin
   --betas <a,b,...>         API beta features (repeatable; comma separated)
   --header <name:value>     anthropic-version or anthropic-beta only
   --timeout-ms <number>     Deadline including response body (default: 600000)
   --response-meta <file>    Save HTTP status and response headers as JSON
+  --capture-request <prefix>
+                           Record the request as sent upstream in <prefix>.json:
+                           URL, headers (secrets redacted), body size and SHA-256
+  --capture-body           Also save the sent body bytes as <prefix>.body
+                           (requires --capture-request)
   --help                   Show this help
 
 Exit codes: 0 success, 1 transport/input error, 2 HTTP error, 130 interrupted.
 
 Build components: model, systemPrompt, messages, attachments, tools, parameters,
-and stream. Custom tools use inputSchema. Worker-extracted attachments use
-references to preserve message/block positions. Generation fields go in parameters.
+and stream. Custom tools use inputSchema. Generation fields go in parameters.
 Authentication uses an explicit ANTHROPIC_API_KEY or CC's native OAuth login.
 `;
 
@@ -55,12 +60,14 @@ export async function runRequestCommand(args, natives = {}) {
     ctx.options = parseRequestOptions(args);
     if (ctx.options.help) { await write(process.stdout, help); return 0; }
     await clearMeta(ctx);
+    ctx.capture = await openCapture(ctx.options);
     ctx.apiKey = process.env.ANTHROPIC_API_KEY;
     // Both sF and the SDK constructor read this variable. Never let arbitrary
     // server environment headers override authentication or request betas.
     delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     const { outgoing, agent } = await readRequest(ctx);
     ctx.state.phase = 'transport';
+    if (ctx.capture) outgoing.capture = ctx.capture;
     ctx.run.response = await openModelRequest(outgoing, ctx.signal, init => openClient(init, ctx.apiKey, agent), mle);
     if (!ctx.run.response.ok) {
       await writeHttpError(ctx, ctx.run.response);
@@ -77,6 +84,9 @@ export async function runRequestCommand(args, natives = {}) {
   } finally {
     clearTimeout(ctx.run.deadline);
     if (ctx.run.response) await cancelModelResponse(ctx.run.response);
+    // The record of what was sent is written beside the send; the command
+    // waits for it, and a failed write never changes the outcome.
+    await ctx.capture?.settle();
     removeListeners(listeners);
     if (customHeaders === undefined) delete process.env.ANTHROPIC_CUSTOM_HEADERS;
     else process.env.ANTHROPIC_CUSTOM_HEADERS = customHeaders;
@@ -91,6 +101,16 @@ async function clearMeta(ctx) {
   await fs.rm(ctx.options.meta, { force: true });
   await fs.rm(ctx.options.meta + '.error-body', { force: true });
   ctx.state.phase = 'input';
+}
+
+// openCapture is the request's record of what it sends (--capture-request),
+// or undefined. A reused prefix cannot describe an earlier request: its files
+// are removed first, and a failure to remove them is the record's, not the
+// request's (the record never fails a request).
+async function openCapture(options) {
+  if (options.capture === undefined) return undefined;
+  for (const suffix of ['.json', '.body']) await fs.rm(options.capture + suffix, { force: true }).catch(() => {});
+  return requestCapture({ prefix: options.capture, body: options.captureBody === true, mode: options.mode });
 }
 
 // installListeners is the command's interruption, its output-error and its

@@ -44,7 +44,7 @@
 - 只接受 `POST /v1/messages` 与 `/v1/ccgateway/probe`；其他路径 404 `not_found_error`（`count_tokens` 插件不声明，核心不调度到 CCGateway）。
 - `anthropic-version` 只接受 `2023-06-01`；body 上限 32 MiB（413）；Worker 密钥不对 401。
 - 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（审核 C3）。被跟踪 fallback credit 的请求在占槽之前另用一个槽核验发放方（见下条）。
-- direct 也解析 body：必须是 JSON 对象且 `model` 非空；有请求上下文能力时还解析 `metadata.user_id` 与 agent 请求头，解析失败 400（审核 C9）。
+- direct 也解析 body：必须是 JSON 对象且 `model` 非空。`metadata.user_id` 读不出时不拒绝，只记 `request_identity_unreadable` 事件，原样交给上游判断（审核 C9，`resolveAgent`）；agent 请求头同样只作为输入，不因格式拒绝。
 - 核心跟踪 fallback credit 的请求（带 `fallback-credit-2026-06-01`/`-07-01` 或 `server-side-fallback-2026-07-01`，核心加 `X-CCGateway-Fallback-Credit-Track`）：Worker 先核验发放方（资源身份），把 `Principal`/`Generation` 写在答复头上；答复照常流式转发，Worker 留一份副本，结束后用 trailer `X-CCGateway-Fallback-Credit-Ready` 回报 claim 的 token 哈希（插件 0.1.91 起；0.1.88–0.1.90 是整段缓冲后写在头上）。核心照常转发事件，只扣住从第一个真正带 token 的事件（`message_delta` 的 `delta` 或 `message_start` 的 `message` 里非 null 的 `stop_details.fallback_credit_token`，`credits.EventCarriesToken`）起的尾部，核对回执并记下 credit 后放出；回答里只是提到这个词不会扣住。核对或记录失败时以一个 `error` 事件结束流，客户端拿不到网关不认识的 token，流随后正常结束、不中断连接（中断会被客户端当成断线重试）；超过 32 MiB 时扣住的部分直接丢弃（反正无法确认）。核心与 Worker 用同一个函数（`credits.EventPayloads`）读流算 claim，CRLF、注释行、末事件没有结尾空行都一样处理。冷缓存下的资源身份核验同一时刻只跑一次，等候的请求直接用刚核验出的身份（以上为 2026-10-25 第三轮审核 P2-1–P2-4）。JSON 答复仍由核心整段读完（核心 0.1.187 起两种位置的回执都认）。账号授权锁：重新授权与资源操作独占；被跟踪的请求从核验发放方到上游开始答复期间共享，核心为它做的资源身份探测也共享，彼此不排队（审核 2026-10-25 P2-1/P2-2）。资源操作等不到锁或槽位时答 503，不再是空的 200。
 - 上游收到的请求头都由 Worker 里的原生 CLI 生成；客户端的头只作为输入（有的值原样写回，如 agent-id、压缩头、符合条件的 UA），去向见 [REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
 

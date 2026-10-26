@@ -79,6 +79,10 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.CLIInfo.supports(features.RequestAgentContextCapability) {
 		out = append(out, features.RequestAgentContextCapability)
 	}
+	// The request log keeps the request the CLI sent (request_command.go).
+	if g.CLIInfo.supports(features.RequestCaptureCapability) {
+		out = append(out, features.RequestCaptureCapability)
+	}
 	return out
 }
 

@@ -14,17 +14,24 @@ export function parseRequestOptions(args) {
       options.mode = arg.slice(2); continue;
     }
     if (arg === '--') { if (i + 2 !== args.length) throw Error('Expected one input file after --'); setInput(args[++i]); continue; }
+    if (arg === '--capture-body') { options.captureBody = true; continue; }
     if (arg === '-' || !arg.startsWith('-')) { setInput(arg); continue; }
-    if (!['--input', '--betas', '--header', '--timeout-ms', '--response-meta'].includes(arg)) throw Error(`Unknown request option: ${arg}`);
+    if (!['--input', '--betas', '--header', '--timeout-ms', '--response-meta', '--capture-request'].includes(arg)) throw Error(`Unknown request option: ${arg}`);
     const value = args[++i];
     if (value === undefined) throw Error(`Missing value for ${arg}`);
     if (arg === '--input') setInput(value);
     if (arg === '--betas') options.betas = normalizeBetas(options.betas, value);
     if (arg === '--timeout-ms') options.timeoutMs = Number(value);
     if (arg === '--response-meta') options.meta = value;
+    if (arg === '--capture-request') {
+      if (!value) throw Error('--capture-request needs a file prefix');
+      options.capture = value;
+    }
     if (arg === '--header') addHeader(options, value);
   }
   options.mode ??= 'direct';
+  // The body is part of a capture: without the record it has no file.
+  if (options.captureBody && options.capture === undefined) throw Error('--capture-body requires --capture-request');
   if (options.betas.length) options.headers['anthropic-beta'] = options.betas.join(',');
   return options;
 }

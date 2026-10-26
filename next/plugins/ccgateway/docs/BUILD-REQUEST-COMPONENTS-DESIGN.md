@@ -7,7 +7,7 @@
 ## 结论
 
 - build 模式**不重新实现协议**。最终 body 由 CC 自己的请求构造器（`jOt` → `qmn` → `PAs`）产出，Worker 与 CLI 只提供组件和精确的文本改写。（`jOt`、`aBe` 是 2.1.304 bundle 里的名字；较早的文档与审核报告按旧源码写作 `Kvt`、`MDe`，指同一函数。）
-- 只有一条路径：Worker 把客户端的块原样放进信封（只把 custom 工具的 `input_schema` 原位改名为 `inputSchema`），改写全部在 CLI 里、在保留原始 wire 记录的前提下进行。CLI 未声明 `build_content_preservation_v1` 时 Worker 直接 409。
+- 只有一条路径：Worker 把客户端的块原样放进信封：各字段的值字节不变，只按第 2 节的映射换位置（`system` → `systemPrompt`，其余顶层键收进 `parameters`，custom 工具的 `input_schema` 原位改名为 `inputSchema`，另加 `attachments`/`requestPolicy`/`runtimeContext`；信封外层重新序列化，顶层键序不保留）。改写全部在 CLI 里、在保留原始 wire 记录的前提下进行。CLI 未声明 `build_content_preservation_v1` 时 Worker 直接 409。
 - 内容改写**只作用于已识别的环境行与计费行**。环境段里未识别格式、代码围栏内、歧义和重复的内容一律不改，并留诊断；`erase` 也只删除识别出的、受支持的条目。
 - 环境字段的来源有三种：`client`（原样）、`worker`（用 CLI 自己的原生环境渲染）、`erase`（删除）；只在注入等级「低」及以上下发（CONTRACTS §53.18）。
 - build 的请求总带计费头：客户端没有就补 CLI 原生的整行，缺字段就补原生值；`client`（默认）保留客户端已有的值，`worker` 换成原生值。选 `worker` 时**要么用原生值，要么拒绝**：计费头无法安全改写（多个头、重复字段、格式不对）时 400；原生计费值拿不到时 503。

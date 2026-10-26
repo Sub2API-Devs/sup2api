@@ -4372,3 +4372,31 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 控制器侧隧道已经是 `http_api.Handler.splice` 的 `TUNNEL_IDLE_SECONDS = 3700`（两端 socket 都设），远大于 180 s，不需要改；`Handler.setup` 的 240 s 只作用于普通 HTTP 请求（升级前），隧道建立后即被 3700 s 覆盖。
 - 约束：**核心隧道空闲 110 s < 对端 180 s**。对端若先关闭，核心会把一个已被关闭的连接拿去用，请求直接失败而不是重连。`worker/internal/server/timeouts_test.go` 用这个数字守护该关系，改变任一侧时必须同时确认另一侧。
 
+## 64. 请求日志查看：上游请求与搜索字段的核心转发（2026-10-26，用户要求）
+
+设计：[REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md](ccgateway-feature-support/REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md) §4。**核心不记录任何东西**：不新增落盘、数据库写入或日志；只扩展查看接口的校验与转发（`server/internal/ccgateway/request_log_viewer.go`、`request_logs.go`）。
+
+### 64.1 列表 `GET /system/ccgateway/accounts/:id/request-logs/requests`
+
+新增查询参数（空值等于没给；只在给出时转发到 Worker `admin/request-logs/query` 的查询体；其他未知参数仍 400）：
+
+| 参数 | 校验 | 转发给 Worker |
+|---|---|---|
+| `mode` | `direct` 或 `build`（区分大小写） | 字符串 |
+| `session_id` | `^[A-Za-z0-9_-]{1,128}$` | 字符串（匹配客户端或上游会话任一，由 Worker 判断） |
+| `sha256` | 64 位十六进制，大小写都收，**转小写**后转发 | 字符串 |
+| `changed` | `true` 或 `false`（小写） | **JSON 布尔** |
+
+列表项新增字段（逐项校验；**形状不对的值置空/省略，不让整页失败**——它们只是搜索辅助；JSON 类型错误仍按原规则整页 503）：`mode`（只留 `direct`/`build`）、`client_session_id`、`upstream_session_id`（同上会话形状）、`body_sha256`、`upstream_body_sha256`（转小写后须为 64 位小写十六进制）、`body_changed`（`*bool`，没有就省略）、`upstream_captured`（布尔，总是输出）。
+
+兼容：旧 Worker 的查询解码 `DisallowUnknownFields`，收到新键回 400。核心已按 Worker 的规则校验过，所以**带了新筛选而 Worker 回 400** 时核心答 503、`details.reason = request_log_search_unsupported`（提示升级插件）；不带新筛选的 400 照旧。核心不为此先查一次状态（不加往返）；界面应只在状态有 `viewer_search` 时显示新筛选。
+
+### 64.2 详情 `GET …/requests/:log`
+
+- 新字段 `upstream_request`（对象，可省略）= Worker 返回的 `upstream-request.json` 内容，原样透传，只对其中 `headers` 再遮蔽一次：名字（不区分大小写）在 `requestLogSecretHeaders`（`authorization`、`proxy-authorization`、`x-api-key`、`cookie`、`set-cookie`、`x-ccg-revision`）里的值改成 `"[REDACTED]"`（字符串值直接替换，数组逐项替换，其他类型整体替换）；`headers` 不是对象时删掉该键。`upstream_request` 不是对象时整个详情 503（与其他字段一致）。
+- `upstream-request.json` 加入摘要文件集合：不出现在 `files`，`…/files/upstream-request.json` 读取一律 400。`upstream-request.body` 是正文文件，照常出现在 `files`、仅 `settings:manage` 可读并审计。
+
+### 64.3 状态 `GET …/request-logs`
+
+状态是逐字段挑选（不是整段透传）；分级状态新增布尔 `viewer_search`，取自 Worker 同名字段（缺省 `false`，非布尔整段 503）。旧版无 `levels` 的状态形状不带此字段。
+

@@ -332,5 +332,9 @@ func (s *requestLogStore) describe() Object {
 		"overflow_behavior": "retain_partial_with_metadata",
 		// viewer: the logs can be read through /admin/request-logs/{query,detail,read}.
 		"viewer": true,
+		// viewer_search: the query also takes mode, session_id, sha256 and
+		// changed (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3); an older Worker
+		// refuses those keys.
+		"viewer_search": true,
 	}
 }

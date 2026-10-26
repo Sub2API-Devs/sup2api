@@ -1,5 +1,7 @@
 // The request command's raw Messages transport. The caller supplies CC's
 // authenticated client factory; credentials and fetch policy stay inside it.
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import { authenticatedRequestHeaders, normalizeBetas } from './request-headers.js';
 const forbiddenHeaders = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'cookie', 'connection', 'content-length', 'transfer-encoding']);
 // The deadline of a request without --timeout-ms, and Claude Code's own
@@ -43,6 +45,94 @@ function openEntry(options, signal) {
   return entry;
 }
 
+// requestCapture is the record of what a request sent (--capture-request,
+// request_capture_v1): <prefix>.json, the facts and headers of the last send,
+// and with body also <prefix>.body, its bytes. The fetch boundary calls sent()
+// with the final url and init; the record never delays or fails the send: only
+// the headers (and a binary body, which the transport may reuse) are copied
+// before it, everything else is done once the send has started, one send after
+// another, and a failed write is dropped. settle() is the command's wait for
+// the writes before it exits. Each send overwrites the files; attempts counts.
+export function requestCapture({ prefix, body = false, mode }) {
+  const capture = { prefix, body, mode, attempts: 0, written: Promise.resolve() };
+  capture.sent = (url, init) => {
+    const attempts = ++capture.attempts, sentAt = new Date().toISOString();
+    let sent;
+    try { sent = sendSnapshot(url, init); } catch { return; }
+    capture.written = capture.written
+      .then(() => new Promise(resolve => setImmediate(resolve)))
+      .then(() => writeCapture(capture, sent, attempts, sentAt))
+      .catch(() => {});
+  };
+  capture.settle = async () => {
+    for (let last; last !== capture.written;) await (last = capture.written);
+  };
+  return capture;
+}
+
+// The values of these headers are secrets: the record names them only.
+const secretHeaders = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'cookie']);
+
+// sendSnapshot is what a send carries, read at its fetch boundary: the headers
+// as fetch combines them (lower-case names, sorted, secrets redacted), and the
+// body as a string, a copy of its bytes, or null when it is neither (a stream,
+// which the record does not read).
+function sendSnapshot(url, init = {}) {
+  const headers = {};
+  const entries = [...new Headers(init.headers ?? undefined)].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const [name, value] of entries) headers[name] = secretHeaders.has(name) ? '[REDACTED]' : value;
+  const href = typeof url === 'string' ? url : url instanceof URL ? url.href : String(url?.url ?? url);
+  const method = String(init.method ?? url?.method ?? 'GET').toUpperCase();
+  const { body } = init;
+  let sentBody = null, encoding = 'identity';
+  if (body === undefined || body === null) sentBody = '';
+  else if (typeof body === 'string') sentBody = body;
+  else if (body instanceof ArrayBuffer) sentBody = Buffer.from(new Uint8Array(body));
+  else if (ArrayBuffer.isView(body)) sentBody = Buffer.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+  if (sentBody instanceof Buffer && headers['content-encoding']) encoding = headers['content-encoding'];
+  return { method, url: href, headers, body: sentBody, encoding };
+}
+
+// sentFacts is the model and stream flag of a JSON body the record can read;
+// an encoded or unreadable body has neither.
+function sentFacts(bytes, encoding) {
+  if (encoding !== 'identity') return { model: '', stream: null };
+  try {
+    const body = JSON.parse(bytes.toString('utf8'));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return { model: '', stream: null };
+    return { model: typeof body.model === 'string' ? body.model : '', stream: body.stream === true };
+  } catch { return { model: '', stream: null }; }
+}
+
+// contentBytes is a JSON body without the whitespace after it: CC's own
+// transport pads a large first-party body with a newline and random blanks
+// before this boundary (chunk-38xgev2z.js cy), so the content digest compares
+// what was asked for, not that padding.
+function contentBytes(bytes) {
+  let end = bytes.length;
+  while (end > 0 && (bytes[end - 1] === 0x20 || bytes[end - 1] === 0x09 || bytes[end - 1] === 0x0a || bytes[end - 1] === 0x0d)) end--;
+  return bytes.subarray(0, end);
+}
+
+const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+
+async function writeCapture(capture, sent, attempts, sentAt) {
+  const bytes = typeof sent.body === 'string' ? Buffer.from(sent.body, 'utf8') : sent.body;
+  const { model, stream } = bytes ? sentFacts(bytes, sent.encoding) : { model: '', stream: null };
+  const readable = bytes && sent.encoding === 'identity';
+  const record = {
+    schema: 1, mode: capture.mode, attempts, sent_at: sentAt, method: sent.method, url: sent.url, headers: sent.headers,
+    body_encoding: bytes ? sent.encoding : 'binary', body_bytes: bytes ? bytes.length : -1,
+    body_sha256: bytes ? sha256(bytes) : '', content_sha256: readable ? sha256(contentBytes(bytes)) : '', model, stream,
+  };
+  // The body goes first, so a record on disk never names bytes not yet there.
+  if (capture.body) {
+    if (bytes) await fs.writeFile(capture.prefix + '.body', bytes, { mode: 0o600 });
+    else await fs.rm(capture.prefix + '.body', { force: true });
+  }
+  await fs.writeFile(capture.prefix + '.json', JSON.stringify(record, null, 2), { mode: 0o600 });
+}
+
 // captureErrorResponse wraps the transport so the header policy is applied and
 // the last HTTP error answer is kept: the client throws its own error for a
 // non-2xx answer, and that response is what the caller reads. request is the
@@ -63,6 +153,8 @@ function captureErrorResponse(options, transportFetch) {
       if (typeof init?.body !== 'string') throw Error('CC transport did not supply a JSON request body');
       args = [url, { ...init, body: options.restoreNumbers(init.body) }];
     }
+    // What leaves for the transport, once nothing here changes it any more.
+    options.capture?.sent(...args);
     const response = await transportFetch(...args);
     if (!response.ok) {
       await captured.response?.body?.cancel().catch(() => {});

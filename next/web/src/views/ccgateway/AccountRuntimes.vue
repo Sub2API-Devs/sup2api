@@ -48,6 +48,8 @@ interface RequestLogState {
   usage?: { summary_bytes?: number; full_bytes?: number; requests?: number }
   /** The Worker serves the log reads (REQUEST-LOG-VIEWER-DESIGN.md). */
   viewer?: boolean
+  /** The list takes mode / session / hash / rewritten filters (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3). */
+  viewer_search?: boolean
 }
 
 /** Validated level state of a Worker that reports levels. */
@@ -61,6 +63,7 @@ interface RequestLogLevels {
   usage: { summary_bytes: number | null; full_bytes: number | null; requests: number | null }
   overflow: boolean
   viewer: boolean
+  viewerSearch: boolean
 }
 
 interface Row {
@@ -226,6 +229,7 @@ function levelsOf(state: RequestLogState): RequestLogLevels {
     usage: { summary_bytes: usage('summary_bytes'), full_bytes: usage('full_bytes'), requests: usage('requests') },
     overflow: state.overflow_behavior === 'retain_partial_with_metadata',
     viewer: state.viewer === true,
+    viewerSearch: state.viewer_search === true,
   }
 }
 
@@ -429,6 +433,6 @@ async function refreshAuth(r: Row) {
         <SButton variant="primary" data-testid="request-log-full-confirm" @click="confirmFull">{{ t('ccgateway.requestLogs.fullAction') }}</SButton>
       </template>
     </SModal>
-    <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="viewing.logsLevels ? logDetails(viewing) : undefined" />
+    <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="viewing.logsLevels ? logDetails(viewing) : undefined" :search="viewing.logsLevels?.viewerSearch === true" />
   </SCard>
 </template>

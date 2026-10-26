@@ -24,6 +24,22 @@ test('positional file, stdin and input conflicts are explicit', () => {
   }
 });
 
+// request_capture_v1: the record takes a file prefix; its body file is part of
+// the record and cannot be asked for alone.
+test('--capture-request takes a prefix and --capture-body needs it', () => {
+  const parsed = parseRequestOptions(['--build', '--capture-body', '--capture-request', '/tmp/x/sent', 'body.json']);
+  assert.equal(parsed.capture, '/tmp/x/sent');
+  assert.equal(parsed.captureBody, true);
+  assert.equal(parsed.input, 'body.json');
+  assert.equal(parseRequestOptions(['--capture-request', 'sent']).captureBody, undefined);
+  const none = parseRequestOptions(['--direct']);
+  assert.equal(none.capture, undefined);
+  assert.equal(none.captureBody, undefined);
+  assert.throws(() => parseRequestOptions(['--capture-body']), /--capture-body requires --capture-request/);
+  assert.throws(() => parseRequestOptions(['--capture-request']), /Missing value/);
+  assert.throws(() => parseRequestOptions(['--capture-request', '']), /prefix/);
+});
+
 // An API-key request carries the headers Claude Code built, as Claude Code sends
 // them itself with an API key; the version and betas are the request's, and
 // authentication must be exactly the configured key.

@@ -4,6 +4,8 @@
 
 界面原型：[REQUEST-LOG-VIEWER-UI.html](REQUEST-LOG-VIEWER-UI.html)。
 
+> **2026-10-26 现状。** 第 1 节是实现前的状况（核心那时只能拿到开关和占用），实施见第 12 节。native 路径删除后（CONTRACTS §53.21），正文只剩 `request.body`（请求）、`build-components.json`（组装，仅 build）、`response.body`（响应），以及 OAuth 资源请求的 `resource-*.json`（归在“上游”类）。第 8.3 节列的 `effective-config.json`、`feature-decisions.json`、`cli-stdout.jsonl`、`upstream*` 只会出现在升级前的旧日志里。插件 0.1.101 起另有 `upstream-request.json`（摘要文件）与 `upstream-request.body`（“上游”类正文），以及模式、会话、SHA-256、是否改写四个筛选，见 [REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md](REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md)。现行文件清单与凭据安全模式的例外见 [REQUEST-LOG-LEVELS-DESIGN.md](REQUEST-LOG-LEVELS-DESIGN.md) 开头。
+
 ## 1. 现状
 
 - 日志只在 Worker 容器的 `/work/data/request-logs/<随机 uuid>/` 里，查看要 `docker exec`。

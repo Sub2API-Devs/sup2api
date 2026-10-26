@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v30-bytecode",
+  "extension": "ccgateway-v31-request-capture",
   "capabilities": [
     "request_direct",
     "request_build",
@@ -19,7 +19,8 @@
     "request_agent_context_v1",
     "build_injection_v1",
     "request_levels_v1",
-    "client_user_agent_v1"
+    "client_user_agent_v1",
+    "request_capture_v1"
   ],
   "supportModules": ["shared", "raw-json", "native-tools", "model-request", "request-betas", "request-entry", "request-natives", "request-command", "request-input", "request-build", "request-parameters", "request-output", "request-options", "request-headers", "request-error", "request-policy", "content-policy", "container-resources", "request-identity", "direct-billing", "request-agent"],
   "modules": {

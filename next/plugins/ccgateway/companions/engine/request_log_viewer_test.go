@@ -71,6 +71,7 @@ func listLogs(t *testing.T, store *requestLogStore, body string) viewerList {
 func TestRequestLogFileKinds(t *testing.T) {
 	for name, want := range map[string]string{
 		"request.body": "request", "response.body": "response", "resource-config.json": "upstream",
+		"upstream-request.body": "upstream", "upstream-request.json": "upstream",
 		"cli-stdout.jsonl": "cli", "cli-stderr.jsonl": "cli", "history.jsonl": "history",
 		"build-components.json": "build", "notes.txt": "other",
 	} {

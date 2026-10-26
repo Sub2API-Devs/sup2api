@@ -5,6 +5,14 @@ import "slices"
 const ContainerResourceReportingCapability = "container_resource_reporting_v1"
 const RequestIdentityCapability = "request_identity_v1"
 
+// RequestCaptureCapability: the CLI's request command takes
+// --capture-request <prefix> (and --capture-body) and writes the request it
+// finally sent upstream: <prefix>.json holds its facts and headers with
+// credentials masked, <prefix>.body its body bytes. The Worker keeps them in
+// the request's log (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md, 2026-10-26); an
+// older CLI refuses the unknown arguments, so the Worker asks only this one.
+const RequestCaptureCapability = "request_capture_v1"
+
 // RequestRuntimeCatalog distinguishes declared Worker code from capabilities
 // observed on the selected CLI. It never promotes model/provider verification.
 func RequestRuntimeCatalog(capabilities []string) Document {
@@ -27,6 +35,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 		{"F-REQUEST-AGENT-CONTEXT", "按客户端还原主代理/子代理请求", RequestAgentContextCapability},
 		{"F-BUILD-PRESERVATION", "build 内容保真", BuildContentPreservationCapability},
 		{"F-REQUEST-POLICY-MODE", "按请求选择 direct/build", RequestPolicyModeCapability},
+		{"F-REQUEST-CAPTURE", "请求日志记录最终上游请求", RequestCaptureCapability},
 	} {
 		if slices.Contains(capabilities, feature.capability) {
 			doc.Features = append(doc.Features, Feature{ID: feature.id, Title: feature.title, Category: "CC 执行上下文", Scope: "cc", Status: "supported", BodyPaths: []string{}, BetaHeaders: []string{}, Mechanisms: []string{feature.capability}, Reason: "Worker 与实际加载 CLI 的合同能力交集；不代表模型提供方验证已完成。"})

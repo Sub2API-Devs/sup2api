@@ -79,7 +79,7 @@ test('the command sends build as it returned it, and direct unchanged', async ()
       'ccgateway-request-build.js': 'export const buildRequest=async(body,headers,signal,resolveAgent,options)=>({body:{model:body.model,system:[{type:"text",text:"LINE"},{type:"text",text:"built"}],apiKey:options?.apiKey===true},headers:{},identityLine:{line:"agent_sdk",fallback:"agent_sdk"},clientBetas:[],addedBetas:[]});',
       // Records exactly what would be sent, then answers with an HTTP error.
       'ccgateway-model-request.js': `import fs from 'node:fs/promises';
-        export const checkModelRequest=()=>null;export const defaultTimeout=600000;
+        export const checkModelRequest=()=>null;export const defaultTimeout=600000;export const requestCapture=()=>{throw Error('no capture was asked for')};
         export const openModelRequest=async o=>{const b=o.rawBody??o.body;
           await fs.writeFile('sent.json',typeof b==='string'?b:JSON.stringify(b));
           await fs.writeFile('keys.json',JSON.stringify(Object.keys(o)));return {id:'x',ok:false,status:400,headers:{}}};

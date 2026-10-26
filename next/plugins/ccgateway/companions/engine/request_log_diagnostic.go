@@ -39,6 +39,27 @@ type requestDiagnostic struct {
 	// has landed (request); finish waits for it before writing metadata. nil
 	// when there is none.
 	summaryDone chan struct{}
+	// contentSHA256 is the request body's digest without the whitespace after
+	// it, compared with the sent request's (keepUpstreamRequest).
+	contentSHA256 string
+}
+
+// bodyDigests is a body's SHA-256 and, in the same pass, that of the body
+// without its trailing whitespace: CC's transport pads a large body it sends,
+// so content is compared without it (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §2).
+func bodyDigests(raw []byte) (sum, content string) {
+	end := len(raw)
+	for end > 0 && (raw[end-1] == ' ' || raw[end-1] == '\t' || raw[end-1] == '\n' || raw[end-1] == '\r') {
+		end--
+	}
+	h := sha256.New()
+	h.Write(raw[:end])
+	content = hex.EncodeToString(h.Sum(nil))
+	if end == len(raw) {
+		return content, content
+	}
+	h.Write(raw[end:])
+	return hex.EncodeToString(h.Sum(nil)), content
 }
 
 // Request log levels (REQUEST-LOG-LEVELS-DESIGN.md): off keeps nothing; the
@@ -66,8 +87,10 @@ const (
 var fullDurations = map[int]bool{1: true, 4: true, 24: true}
 
 // summaryFiles are the files the summary level writes: none holds request or
-// response content. Every other file is content and needs the full level.
-var summaryFiles = map[string]bool{"metadata.json": true, "events.jsonl": true, "request-headers.json": true, "response-headers.json": true}
+// response content (upstream-request.json is the sent request's facts and
+// headers, credentials masked by the CLI). Every other file is content and
+// needs the full level.
+var summaryFiles = map[string]bool{"metadata.json": true, "events.jsonl": true, "request-headers.json": true, "response-headers.json": true, upstreamRequestFile: true}
 
 // keeps says whether this request's log takes the named file.
 func (d *requestDiagnostic) keeps(name string) bool { return !d.summaryOnly || summaryFiles[name] }
@@ -157,19 +180,22 @@ func (d *requestDiagnostic) save(name string, b []byte) {
 	d.saveLocked(name, b)
 }
 
-func (d *requestDiagnostic) saveLocked(name string, b []byte) {
+// saveLocked writes one file of the request's log and says whether it did.
+func (d *requestDiagnostic) saveLocked(name string, b []byte) bool {
 	b = d.redactCaptureLocked(b)
 	// Logs turned off clear the directory (store.serve).
 	if d.directory == "" || !d.keeps(name) {
-		return
+		return false
 	}
 	// Completion metadata remains queryable even when payload capture overflowed.
 	if name != "metadata.json" && !d.reserve(len(b)) {
-		return
+		return false
 	}
 	if err := os.WriteFile(filepath.Join(d.directory, name), b, 0600); err != nil {
 		d.logFailure(err)
+		return false
 	}
+	return true
 }
 
 // Stop payload capture at the request budget, preserving an explicitly partial
@@ -306,9 +332,10 @@ func (d *requestDiagnostic) emit(event string) {
 func (d *requestDiagnostic) request(body *requestBody, h http.Header) {
 	d.save("request.body", body.raw)
 	d.mu.Lock()
-	sum := sha256.Sum256(body.raw)
+	sum, content := bodyDigests(body.raw)
 	d.fields["body_bytes"] = len(body.raw)
-	d.fields["body_sha256"] = hex.EncodeToString(sum[:])
+	d.fields["body_sha256"] = sum
+	d.contentSHA256 = content
 	d.fields["anthropic_beta"] = logValue(h.Get("anthropic-beta"))
 	d.emit("request_received")
 	requestID := d.fields["request_id"]

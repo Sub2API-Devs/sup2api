@@ -37,39 +37,60 @@ const (
 // logFileName is a content file's name as the Worker writes them.
 var logFileName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
-// logEntry is one finished request in the index, from its metadata.json.
+// logEntry is one finished request in the index, from its metadata.json. The
+// mode, sessions and digests (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3) are
+// what the list is searched by; a log from before them has none.
 type logEntry struct {
-	ID         string    `json:"id"`
-	RequestID  string    `json:"request_id"`
-	Time       time.Time `json:"time"`
-	DurationMS int64     `json:"duration_ms"`
-	Status     int       `json:"status"`
-	Stage      string    `json:"stage"`
-	Model      string    `json:"model,omitempty"`
-	Stream     *bool     `json:"stream,omitempty"`
-	Level      string    `json:"log_level"`
-	ErrorType  string    `json:"error_type,omitempty"`
-	Error      string    `json:"error,omitempty"`
-	LogStatus  string    `json:"log_status"`
-	Test       bool      `json:"test"`
+	ID                 string    `json:"id"`
+	RequestID          string    `json:"request_id"`
+	Time               time.Time `json:"time"`
+	DurationMS         int64     `json:"duration_ms"`
+	Status             int       `json:"status"`
+	Stage              string    `json:"stage"`
+	Model              string    `json:"model,omitempty"`
+	Stream             *bool     `json:"stream,omitempty"`
+	Level              string    `json:"log_level"`
+	ErrorType          string    `json:"error_type,omitempty"`
+	Error              string    `json:"error,omitempty"`
+	LogStatus          string    `json:"log_status"`
+	Test               bool      `json:"test"`
+	Mode               string    `json:"mode,omitempty"`
+	ClientSessionID    string    `json:"client_session_id,omitempty"`
+	UpstreamSessionID  string    `json:"upstream_session_id,omitempty"`
+	BodySHA256         string    `json:"body_sha256,omitempty"`
+	UpstreamBodySHA256 string    `json:"upstream_body_sha256,omitempty"`
+	BodyChanged        *bool     `json:"body_changed,omitempty"`
+	// UpstreamCaptured is absent for a request that sent nothing upstream.
+	UpstreamCaptured *bool `json:"upstream_captured,omitempty"`
+	// upstreamContentSHA256 is searched by sha256, not listed.
+	upstreamContentSHA256 string
 }
 
 // parseLogEntry reads the index fields of a request's metadata. A log from
-// before the levels kept everything, so it counts as full.
+// before the levels kept everything, so it counts as full. A search field of
+// another shape is left out.
 func parseLogEntry(id string, raw []byte) (logEntry, bool) {
 	var m struct {
-		RequestID  string `json:"request_id"`
-		Timestamp  string `json:"timestamp"`
-		DurationMS int64  `json:"duration_ms"`
-		Status     int    `json:"status"`
-		Stage      string `json:"stage"`
-		Model      string `json:"model"`
-		Stream     *bool  `json:"stream"`
-		Level      string `json:"log_level"`
-		ErrorType  string `json:"error_type"`
-		Error      string `json:"error"`
-		LogStatus  string `json:"log_status"`
-		TestMode   any    `json:"test_mode"`
+		RequestID          string `json:"request_id"`
+		Timestamp          string `json:"timestamp"`
+		DurationMS         int64  `json:"duration_ms"`
+		Status             int    `json:"status"`
+		Stage              string `json:"stage"`
+		Model              string `json:"model"`
+		Stream             *bool  `json:"stream"`
+		Level              string `json:"log_level"`
+		ErrorType          string `json:"error_type"`
+		Error              string `json:"error"`
+		LogStatus          string `json:"log_status"`
+		TestMode           any    `json:"test_mode"`
+		Mode               any    `json:"mode"`
+		ClientSessionID    any    `json:"client_session_id"`
+		UpstreamSessionID  any    `json:"upstream_session_id"`
+		BodySHA256         any    `json:"body_sha256"`
+		UpstreamBodySHA256 any    `json:"upstream_body_sha256"`
+		BodyChanged        any    `json:"body_changed"`
+		UpstreamCaptured   any    `json:"upstream_captured"`
+		UpstreamContent    any    `json:"upstream_content_sha256"`
 	}
 	if json.Unmarshal(raw, &m) != nil {
 		return logEntry{}, false
@@ -82,9 +103,30 @@ func parseLogEntry(id string, raw []byte) (logEntry, bool) {
 		m.Level = logLevelFull
 	}
 	test := m.TestMode != nil && m.TestMode != false && m.TestMode != ""
-	return logEntry{ID: id, RequestID: logValue(m.RequestID), Time: finished.Add(-time.Duration(m.DurationMS) * time.Millisecond).UTC(), DurationMS: m.DurationMS,
+	e := logEntry{ID: id, RequestID: logValue(m.RequestID), Time: finished.Add(-time.Duration(m.DurationMS) * time.Millisecond).UTC(), DurationMS: m.DurationMS,
 		Status: m.Status, Stage: logValue(m.Stage), Model: logValue(m.Model), Stream: m.Stream, Level: m.Level, ErrorType: logValue(m.ErrorType),
-		Error: logValue(m.Error), LogStatus: logValue(m.LogStatus), Test: test}, true
+		Error: logValue(m.Error), LogStatus: logValue(m.LogStatus), Test: test,
+		Mode: shaped(m.Mode, logMode), ClientSessionID: shaped(m.ClientSessionID, logSessionID), UpstreamSessionID: shaped(m.UpstreamSessionID, logSessionID),
+		BodySHA256: shaped(m.BodySHA256, sha256Hex), UpstreamBodySHA256: shaped(m.UpstreamBodySHA256, sha256Hex),
+		upstreamContentSHA256: shaped(m.UpstreamContent, sha256Hex)}
+	if changed, ok := m.BodyChanged.(bool); ok {
+		e.BodyChanged = &changed
+	}
+	if captured, ok := m.UpstreamCaptured.(bool); ok {
+		e.UpstreamCaptured = &captured
+	}
+	return e, true
+}
+
+// logMode is a request mode as the index keeps it.
+var logMode = regexp.MustCompile(`^(direct|build)$`)
+
+// shaped is value when it is a string of pattern's shape, else "".
+func shaped(value any, pattern *regexp.Regexp) string {
+	if s, ok := value.(string); ok && pattern.MatchString(s) {
+		return s
+	}
+	return ""
 }
 
 // startIndex builds the index in the background: a week of summaries is tens
@@ -251,10 +293,20 @@ type logQuery struct {
 	Level     string `json:"level"`
 	Since     string `json:"since"`
 	Until     string `json:"until"`
+	// The search by the sent request (viewer_search): the mode, a session
+	// (the client's or the upstream's), a body digest (the client's or the
+	// sent one) and whether the body changed.
+	Mode      string `json:"mode"`
+	SessionID string `json:"session_id"`
+	SHA256    string `json:"sha256"`
+	Changed   *bool  `json:"changed"`
 	since     time.Time
 	until     time.Time
 	cursor    *logEntry
 }
+
+// querySHA256 is a digest as a query may spell it.
+var querySHA256 = regexp.MustCompile(`^[0-9A-Fa-f]{64}$`)
 
 func (q *logQuery) valid() bool {
 	if q.Limit == 0 {
@@ -263,9 +315,13 @@ func (q *logQuery) valid() bool {
 	if q.Limit < 1 || q.Limit > viewerPageMax || len(q.Model) > 256 ||
 		q.RequestID != "" && !features.RequestIDPattern.MatchString(q.RequestID) ||
 		q.Status != "" && q.Status != "ok" && q.Status != "error" ||
-		q.Level != "" && q.Level != logLevelSummary && q.Level != logLevelFull {
+		q.Level != "" && q.Level != logLevelSummary && q.Level != logLevelFull ||
+		q.Mode != "" && !logMode.MatchString(q.Mode) ||
+		q.SessionID != "" && !logSessionID.MatchString(q.SessionID) ||
+		q.SHA256 != "" && !querySHA256.MatchString(q.SHA256) {
 		return false
 	}
+	q.SHA256 = strings.ToLower(q.SHA256)
 	for _, t := range []struct {
 		raw string
 		out *time.Time
@@ -298,7 +354,12 @@ func (q *logQuery) matches(e logEntry) bool {
 		q.Status == "ok" && e.Status >= 400,
 		q.Status == "error" && e.Status < 400,
 		!q.since.IsZero() && e.Time.Before(q.since),
-		!q.until.IsZero() && e.Time.After(q.until):
+		!q.until.IsZero() && e.Time.After(q.until),
+		q.Mode != "" && e.Mode != q.Mode,
+		q.SessionID != "" && e.ClientSessionID != q.SessionID && e.UpstreamSessionID != q.SessionID,
+		q.SHA256 != "" && e.BodySHA256 != q.SHA256 && e.UpstreamBodySHA256 != q.SHA256 && e.upstreamContentSHA256 != q.SHA256,
+		// A log that could not compare the bodies matches neither answer.
+		q.Changed != nil && (e.BodyChanged == nil || *e.BodyChanged != *q.Changed):
 		return false
 	}
 	return q.cursor == nil || newerLog(*q.cursor, e)
@@ -413,17 +474,18 @@ func (s *requestLogStore) directoryOf(w http.ResponseWriter, id string) string {
 }
 
 // logFileKind groups content files for the viewer. `cli-*` is kept for logs
-// written up to plugin 0.1.86, whose traceReader still wrote cli-stdout.jsonl;
-// `upstream*` was only written by the removed legacy relay. Both labels stay
-// until those logs age out, and response-meta.json lives in the request's
-// temporary directory, not here.
+// written up to plugin 0.1.86, whose traceReader still wrote cli-stdout.jsonl.
+// `upstream-*` is the request the CLI sent (upstream-request.body; its facts,
+// upstream-request.json, are a summary file the detail returns itself), and
+// `resource-*` the resource requests the Worker made upstream. response-meta.json
+// lives in the request's temporary directory, not here.
 func logFileKind(name string) string {
 	switch {
 	case name == "request.body":
 		return "request"
 	case name == "response.body":
 		return "response"
-	case strings.HasPrefix(name, "resource-"):
+	case strings.HasPrefix(name, "upstream-"), strings.HasPrefix(name, "resource-"):
 		return "upstream"
 	case strings.HasPrefix(name, "cli-"):
 		return "cli"
@@ -455,6 +517,15 @@ func (s *requestLogStore) detail(w http.ResponseWriter, id string, content bool)
 		return h
 	}
 	events, truncated := readEvents(filepath.Join(dir, "events.jsonl"), content)
+	// The request the CLI sent, as an object: a summary file, so it comes with
+	// or without content; null when the request has none.
+	var upstream any
+	if raw, err := readBounded(filepath.Join(dir, upstreamRequestFile), upstreamFactsMax); err == nil {
+		var object map[string]any
+		if json.Unmarshal(raw, &object) == nil {
+			upstream = object
+		}
+	}
 	files := []Object{}
 	entries, _ := os.ReadDir(dir)
 	for _, f := range entries {
@@ -466,7 +537,7 @@ func (s *requestLogStore) detail(w http.ResponseWriter, id string, content bool)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(Object{"metadata": metadata, "events": events, "events_truncated": truncated,
-		"request_headers": headers("request-headers.json"), "response_headers": headers("response-headers.json"), "files": files})
+		"request_headers": headers("request-headers.json"), "response_headers": headers("response-headers.json"), "upstream_request": upstream, "files": files})
 }
 
 // readEvents is the request's event list, bounded. Without content every

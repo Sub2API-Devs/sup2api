@@ -53,6 +53,11 @@ type requestPlan struct {
 	mapping requestKey
 	direct  []byte         // CCG_DIRECT_POLICY; nil leaves direct a passthrough
 	credit  *requestCredit // the core tracks this request's fallback credit
+	// capture: the prefix the CLI writes the request it sent under ("" for
+	// none), and captureBody whether it writes the body too
+	// (request_log_upstream.go).
+	capture     string
+	captureBody bool
 }
 
 // requestRefusal is the Worker's own answer before the CLI runs.
@@ -115,6 +120,8 @@ func (g *Gateway) admitRequest(w http.ResponseWriter, r *http.Request, d *reques
 	if refusal != nil {
 		return nil, refusal
 	}
+	// Every request the Worker can name a mode for is logged with it.
+	d.setField("mode", plan.mode)
 	if plan.probe {
 		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
 		d.setField("test_mode", "native_build")
@@ -265,10 +272,20 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, body *requestBody, h htt
 	// compaction) gets the client's agent context. Console tests are the
 	// gateway's own requests and keep the CLI's native context.
 	agent := !p.probe && g.CLIInfo.supports(features.RequestAgentContextCapability)
-	if !g.requestIdentityEnabled && !agent {
+	needed := g.requestIdentityEnabled || agent
+	// The log keeps the client's session (request_log_upstream.go) from the
+	// same read of metadata.user_id.
+	logged := d.enabled()
+	if !needed && !logged {
 		return nil
 	}
 	client := body.clientIdentity()
+	if logged {
+		d.clientSession(client, h)
+	}
+	if !needed {
+		return nil
+	}
 	// Build owns metadata: a metadata.user_id it cannot read is given the
 	// account's identity like a missing one (2026-10-25), never refused.
 	if client.err != nil && building(p) {
@@ -382,6 +399,7 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	}
 	defer os.RemoveAll(dir)
 	run := &cliRun{meta: filepath.Join(dir, "response-meta.json"), ctx: ctx, request: r.Context()}
+	p.capture, p.captureBody = g.upstreamCapture(d, dir)
 	cmd := g.requestCommand(ctx, p, run.meta, timeout, r.Header)
 	cmd.Dir = dir
 	if building(p) {
@@ -406,6 +424,9 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 		<-deadlineSet
 	}
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+	// The request the CLI sent goes into the log after the answer, and before
+	// the temporary directory is removed, even when the answer aborts.
+	defer d.keepUpstreamRequest(p.capture, p.captureBody, run.reachedUpstream())
 	run.writeOutcome(w, d, p.env)
 }
 
@@ -419,6 +440,14 @@ func (g *Gateway) requestCommand(ctx context.Context, p *requestPlan, meta strin
 	}
 	if values := h.Values("anthropic-beta"); len(values) > 0 {
 		args = append(args, "--betas", strings.Join(values, ","))
+	}
+	// Only a CLI with the capability is asked (an older one refuses unknown
+	// arguments), and only while the request is logged (upstreamCapture).
+	if p.capture != "" {
+		args = append(args, "--capture-request", p.capture)
+		if p.captureBody {
+			args = append(args, "--capture-body")
+		}
 	}
 	cmd := exec.CommandContext(ctx, g.Runner.CLI, args...)
 	cmd.Env, cmd.Stdin, cmd.WaitDelay = p.env, bytes.NewReader(p.input), 2*time.Second

@@ -2,6 +2,15 @@
 
 2026-10-23 用户提出，同日确认第 7 节全部按建议：默认摘要；摘要 7 天 / 128 MiB；完整只能选 1/4/24 小时、到期回到摘要；现有完整日志自然过期；摘要保留最多 256 字符错误文字。
 
+> **现行文件（2026-10-26 按代码核对）。** native 路径已于 10-24 删除（CONTRACTS §53.21），Worker 只运行 CLI 的请求命令（direct 或 build）。第 1、2 节里的 `cli-stdout.jsonl`、`history-*.jsonl`、`history.json`、`mod-config.json`、“CLI 输出、历史快照”以及 `web_search_output` 事件都已不存在；第 5 节“日志内容仍然不经过核心”已被[界面查看](REQUEST-LOG-VIEWER-DESIGN.md)取代。日志目录是 `/work/data/request-logs/<随机 uuid>/`，请求 ID 在 `metadata.json` 里。`/v1/messages` 现在写的文件：
+>
+> - 摘要与完整都有：`metadata.json`、`events.jsonl`、`request-headers.json`、`response-headers.json`。
+> - 仅完整：`request.body`（核心发给 Worker 的 body 原字节；核心之前可能已改过 `model` 映射、协议转换、钩子补丁、资源引用 ID，所以不一定等于客户原始请求，核心也不留存客户原始 body）、`build-components.json`（仅 build，账号测试也算：交给 CLI 的组件信封）、`response.body`（Worker 回给核心的全部字节，含 SSE）。
+> - 仅完整，OAuth 资源请求：`resource-config.json`、`resource-request-facts.json`、`resource-response*.json`。
+> - 例外：带 fallback-credit beta、body 含 `authorization_token`/`fallback_credit_token` 或 JSON 不合法的请求进入凭据安全模式（`metadata.json` 的 `capture_policy: structured_redacted_only`），`request.body` 是脱敏后重新序列化的副本（不合法的 JSON 只留占位文字），`response.body` 为空。
+>
+> **最终发往上游的请求**（插件 0.1.101 / CLI v31 起，[上游请求记录](REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md)）：CLI 在发送处记录，Worker 存成 `upstream-request.json`（方法、URL、遮蔽后的请求头、正文大小与哈希；摘要级别就有）和 `upstream-request.body`（发出的正文字节；仅完整级别、非凭据安全模式），并把会话、模式、哈希、是否改动写进 `metadata.json` 供搜索。核心不留存客户原始请求，所以能对比的是“核心转给 Worker 的请求”与“CLI 发给上游的请求”。此前的版本不记录上游请求。
+
 ## 1. 现状
 
 每个账号的 Worker 在自己的容器里保存请求日志，位置是 `/work/data/request-logs/<请求ID>/`。界面上有对应开关：插件 → Claude Code → 设置 → 部署与运行 → 账号容器 →「请求调试日志」，每个账号一个开关。

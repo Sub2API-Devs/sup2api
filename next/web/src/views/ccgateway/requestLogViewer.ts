@@ -4,6 +4,7 @@
 import { ApiError, api, apiBase, session } from '@sub2api/host'
 
 export type LogLevel = 'summary' | 'full'
+export type LogMode = 'direct' | 'build'
 
 export interface RequestLogItem {
   id: string
@@ -22,6 +23,16 @@ export interface RequestLogItem {
   attempt?: number
   has_content: boolean
   bytes: number
+  // Final upstream request (REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md §3); absent
+  // in logs written before it.
+  mode?: LogMode
+  client_session_id?: string
+  upstream_session_id?: string
+  body_sha256?: string
+  upstream_body_sha256?: string
+  /** Only when both hashes are known. */
+  body_changed?: boolean
+  upstream_captured?: boolean
 }
 
 export interface RequestLogActive { request_id: string; started: string; stage: string }
@@ -39,6 +50,8 @@ export interface RequestLogDetail {
   files: RequestLogFile[]
   /** The caller may read the files (settings:manage). */
   content: boolean
+  /** upstream-request.json as the CLI wrote it, secret headers masked; absent when not captured. */
+  upstream_request?: Record<string, unknown> | null
 }
 
 export interface RequestLogQuery {
@@ -49,6 +62,109 @@ export interface RequestLogQuery {
   model?: string
   level?: LogLevel
   since?: string
+  mode?: LogMode
+  session_id?: string
+  sha256?: string
+  changed?: 'true' | 'false'
+}
+
+// The shapes the core and the Worker accept (design §3/§4).
+export const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
+export const SHA256_RE = /^[0-9a-f]{64}$/
+
+export interface SearchFilters { mode: '' | LogMode; session: string; sha256: string; changed: '' | 'true' | 'false' }
+export type SearchField = 'session_id' | 'sha256'
+
+/**
+ * The search part of the list query. Only sent when the Worker offers it
+ * (`viewer_search`): an older one refuses unknown keys. A malformed value is
+ * reported and the list must not be requested.
+ */
+export function searchQuery(f: SearchFilters, enabled: boolean): { query: Partial<RequestLogQuery>; invalid: SearchField[] } {
+  const query: Partial<RequestLogQuery> = {}
+  const invalid: SearchField[] = []
+  if (!enabled) return { query, invalid }
+  if (f.mode === 'direct' || f.mode === 'build') query.mode = f.mode
+  if (f.changed === 'true' || f.changed === 'false') query.changed = f.changed
+  const session = f.session.trim()
+  if (session) {
+    if (SESSION_ID_RE.test(session)) query.session_id = session
+    else invalid.push('session_id')
+  }
+  const sha = f.sha256.trim().toLowerCase()
+  if (sha) {
+    if (SHA256_RE.test(sha)) query.sha256 = sha
+    else invalid.push('sha256')
+  }
+  return { query, invalid }
+}
+
+/** A log written with the capture whose upstream request was not recorded (older logs have no `mode`). */
+export const upstreamMissing = (item: Pick<RequestLogItem, 'mode' | 'upstream_captured'>) => item.upstream_captured === false && !!item.mode
+
+/**
+ * The "rewritten" badge: only direct requests. A build request is assembled
+ * again, so its body always differs and the badge would say nothing.
+ */
+export const rewritten = (item: Pick<RequestLogItem, 'mode' | 'body_changed'>) => item.mode === 'direct' && item.body_changed === true
+
+const str = (v: unknown) => (typeof v === 'string' ? v : '')
+const count = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : null)
+const bool = (v: unknown) => (typeof v === 'boolean' ? v : null)
+
+export interface UpstreamFacts {
+  method: string
+  url: string
+  attempts: number | null
+  sentAt: string
+  encoding: string
+  /** -1: a streamed body whose size is unknown. */
+  bodyBytes: number | null
+  bodySha256: string
+  /** The hash of the body that entered the gateway, for comparison. */
+  inputSha256: string
+  changed: boolean | null
+  model: string
+  stream: boolean | null
+  betas: string[]
+  session: string
+  requestClass: string
+  headers: { k: string; v: string; redacted: boolean }[]
+}
+
+/**
+ * The upstream request of a detail, every field type-checked. The headers
+ * come from `upstream_request`; betas, session and class fall back to them
+ * when metadata does not carry the flat fields. Null when not captured.
+ */
+export function upstreamFacts(d: Pick<RequestLogDetail, 'metadata' | 'upstream_request'>): UpstreamFacts | null {
+  const u = d.upstream_request
+  if (!u || typeof u !== 'object' || Array.isArray(u)) return null
+  const m = d.metadata ?? {}
+  const raw = u.headers && typeof u.headers === 'object' && !Array.isArray(u.headers) ? (u.headers as Record<string, unknown>) : {}
+  // The CLI writes name → string (repeated values already joined); name →
+  // string[] (the shape of request_headers) is read too.
+  const headerValue = (v: unknown) => (typeof v === 'string' ? v : Array.isArray(v) && v.length && v.every(x => typeof x === 'string') ? v.join(', ') : null)
+  const headers = Object.entries(raw).flatMap(([k, v]) => {
+    const value = headerValue(v)
+    const redacted = typeof v === 'string' ? v === '[REDACTED]' : Array.isArray(v) && v.every(x => x === '[REDACTED]')
+    return value === null ? [] : [{ k: k.toLowerCase(), v: value, redacted }]
+  }).sort((a, b) => a.k.localeCompare(b.k))
+  const header = (name: string) => headers.find(h => h.k === name)?.v ?? ''
+  const betas = Array.isArray(m.upstream_betas) && m.upstream_betas.every(b => typeof b === 'string')
+    ? (m.upstream_betas as string[])
+    : header('anthropic-beta').split(',').map(b => b.trim()).filter(Boolean)
+  const sha = str(u.body_sha256).toLowerCase()
+  return {
+    method: str(u.method), url: str(u.url), attempts: count(u.attempts), sentAt: str(u.sent_at),
+    encoding: str(u.body_encoding), bodyBytes: count(u.body_bytes), bodySha256: SHA256_RE.test(sha) ? sha : '',
+    inputSha256: SHA256_RE.test(str(m.body_sha256)) ? str(m.body_sha256) : '',
+    changed: bool(m.body_changed),
+    model: str(u.model), stream: bool(u.stream), betas,
+    session: str(m.upstream_session_id) || header('x-claude-code-session-id'),
+    requestClass: str(m.upstream_request_class) || header('x-claude-code-request-class'),
+    headers
+  }
 }
 
 export const CHUNK_BYTES = 1 << 20
