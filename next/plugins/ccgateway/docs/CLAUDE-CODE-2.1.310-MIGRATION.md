@@ -59,8 +59,11 @@
 | 官方客户端实时转发 | `live-official-client.cjs`（未改官方 CLI → Worker → 定制 CLI → 假上游，含会话恢复轮） | 10/10 | 10/10 |
 | 官方抓包回放 | `official-client-replay.cjs` | verified，14 项 0 失败 | verified，14 项 0 失败 |
 | 离线端到端回归（官方 2.1.304 客户端） | 0.1.103 镜像自带 Worker；基线 v31，候选 v32；`regress-compare` 把 `2.1.310` 规范成 `2.1.304` | — | 71 个场景 137 个上游请求：69 个逐字节相同，2 个（`plain-build-high`、`apikey-account-noncc-high`，即高注入等级）只差注入的 Bash 工具描述（`official-diff`：1 处差异）；`verify` 1595/1595；客户端值保真 12/12；分类 3 项通过；唯一失败的 `login-account` 两边相同（既有问题） |
-| 离线端到端回归（官方 2.1.310 客户端） | 同上，客户端换成官方 2.1.310 | — | 见下方补记 |
+| 离线端到端回归（官方 2.1.310 客户端） | 同上，客户端换成官方 2.1.310；`test/e2e/crossversion.cjs` 把每个请求与基线（v31 + 官方 2.1.304 客户端）的差异按组件归因：A 侧（官方客户端直连）也有的差异来自客户端，只在 B 侧（经网关）出现的来自网关 | — | `verify` 1595/1595；客户端值保真 12/12；分类 3 项通过；61 个客户端调用成功（`login-account` 同基线失败）；137 个请求里网关独有的差异只有高注入等级注入的 Bash 描述（2 个请求，即上一行的官方变化），其余差异（Agent/Bash 描述、延迟工具列表、子代理消息等）A 侧同样出现，来自客户端本身 |
+| 组件组合（自造 CC 与非 CC 请求，12 单字段 worker、10 单字段 erase、66 对字段、5 组多字段、6 组混合来源、6 次连续切换、all-client、重复应用、direct） | `component-combination-replay.cjs`，夹具 `native-environment-<版本>.json` 由原生渲染器执行生成（两版三段文本逐字相同） | 216/216 | 216/216 |
+| 来源组合单元套件 | `analysis/client-combination-unit.mjs`，3^10 × 2^2 种来源组合 | 236196/236196 | 236196/236196 |
 | Go / 前端 | 核心 `internal/ccgateway`、engine、contracts（本机）；控制台 ccgateway 页面 368 项 | — | 全过 |
+| 生产（发布后） | 账号测试；35 号开完整日志 1 小时测一次再恢复跟随默认 | — | 21、35、36 Haiku 200（34 号上游 429 速率限制，与发布无关）；35 号日志 `upstream-request.json`：`/v1/messages?beta=true`、UA `claude-cli/2.1.310 (external, sdk-cli)`、计费头 `cc_version=2.1.310.e58`、无 `cc_project`、授权头 `[REDACTED]`，`response.json` 已组装 |
 
 ## 5. 发布
 

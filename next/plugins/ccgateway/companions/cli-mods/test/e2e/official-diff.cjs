@@ -13,7 +13,7 @@ const norm = s => typeof s !== 'string' ? s : s
   .replace(/cch=[0-9a-f]{5}/g, 'cch=<cch>').replace(/cc_prompt_id=[0-9a-f-]{36}/g, 'cc_prompt_id=<id>')
   .replace(/Today's date is \d{4}-\d{2}-\d{2}/g, "Today's date is <date>");
 const out = [];
-const same = (label, x, y) => { const nx = JSON.stringify(x, (k, v) => norm(v)), ny = JSON.stringify(y, (k, v) => norm(v)); if (nx !== ny) out.push({ label, a: nx, b: ny }); return nx === ny; };
+const same = (label, x, y) => { const nx = JSON.stringify(x, (k, v) => norm(v)) ?? "(absent)", ny = JSON.stringify(y, (k, v) => norm(v)) ?? "(absent)"; if (nx !== ny) out.push({ label, a: nx, b: ny }); return nx === ny; };
 same('top-level keys', Object.keys(a), Object.keys(b));
 same('model', a.model, b.model);
 const sys = x => Array.isArray(x.system) ? x.system : x.system === undefined ? [] : [{ type: 'text', text: x.system }];

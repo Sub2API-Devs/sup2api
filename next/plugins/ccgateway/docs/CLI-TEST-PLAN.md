@@ -113,7 +113,7 @@ Go：`cd next/plugins/ccgateway/companions && go test ./engine/ ./contracts/...`
 
 运行（Linux 一次性容器）：`-e CCG_ASSEMBLY_DISPOSABLE=1`、只读挂载输入与 `test/`、`--entrypoint node <镜像> /tests/assembly-replay.cjs > report.json`。`CC_VERSION` 选清单（清单里的 `cc_version` 必须一致）；`PROBE_CLI`/`PROBE_WORKER` 指定制品，SHA 见下面的共同约定，另可 `PROBE_EXPECT_CLI_PATCH` 核对补丁标签；`PROBE_MANIFEST` 换清单，`PROBE_CASE_FILTER`/`PROBE_CASE_IDS` 跑子集。有任何 `fail`/`unknown` 退出码为 1。`assembly-merge.cjs` 校验批次 manifest 哈希、定义哈希、实际 CLI SHA 后合并；旧定义的结果不能满足新合同。
 
-**L4–L7 共同约定**（`replay-helpers.cjs`，2026-10-27 起；对应的三个 README 尚未跟上）：`CC_VERSION`（缺省 2.1.304）同时决定读哪一版的夹具（`fixtures/<名>-<版本>.json`，缺了就失败，不拿别的版本代替）、计费指纹与策略里的 `cli_version`，补丁 CLI 报告的版本必须一致；制品 SHA 一律由调用方给（官方 `PROBE_OFFICIAL_SHA`、补丁 CLI `PROBE_EXPECT_CLI_SHA`、Worker `PROBE_EXPECT_WORKER_SHA`），不给时只报告并标 `sha_unpinned`，这种结果不能作为验收；上游请求行按 `/v1/messages?beta=true` 断言。
+**L4–L7 共同约定**（`replay-helpers.cjs`，2026-10-27 起）：`CC_VERSION`（缺省 2.1.304）同时决定读哪一版的夹具（`fixtures/<名>-<版本>.json`，缺了就失败，不拿别的版本代替）、计费指纹与策略里的 `cli_version`，补丁 CLI 报告的版本必须一致；制品 SHA 一律由调用方给（官方 `PROBE_OFFICIAL_SHA`、补丁 CLI `PROBE_EXPECT_CLI_SHA`、Worker `PROBE_EXPECT_WORKER_SHA`），不给时只报告并标 `sha_unpinned`，这种结果不能作为验收；上游请求行按 `/v1/messages?beta=true` 断言。
 
 ### 2.5 L5 组件组合
 
@@ -517,9 +517,9 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 
 ## 10. 仍缺的测试
 
-1. **L4–L7 改后没有重跑**：脚本已参数化（2.4 节），需要在一次性容器里按两个版本各跑一遍、固定 SHA，并据结果更新三个 README；或明确由 e2e 与 `capture-official.sh` 取代的部分后删除。
-2. **2.1.310 的原生夹具不全**：没有 `native-environment-2.1.310.json`，所以 `CC_VERSION=2.1.310` 下 L5 单元组合与 L7 会因缺夹具失败（按设计不拿 2.1.304 的代替；`official-tools-<版本>.json` 不是必需的，没有时组装清单从官方抓包的 `tools[]` 取）；仓库里的 `official-request-2.1.304.json` 不是 `capture-official.sh` 抓的，同条件重抓的 2.1.304 只在 `artifacts/claude-2.1.310/captures/`。
-3. **`official-diff.cjs` 的输出缺陷**：两边组件数不同（例如 system 块数不同、某侧缺块）时，打印差异处读 `undefined.length` 抛 `TypeError`，用旧的 `official-request-2.1.304.json` 对 `official-request-2.1.310.json` 时可复现；条件相同的两次抓包不受影响。
+1. **L4–L7 已按两个版本重跑**（2026-10-27，ovh 一次性 `--network none` 容器，SHA 由调用方固定）：组装对账 76/76、客户端来源 14/14、官方客户端实时转发 10/10、官方抓包回放 verified（14 项）、组件组合 216/216，2.1.304（v31）与 2.1.310（v32）结果相同；命令见 `test/assembly-replay.README.md`。Worker 策略矩阵（L7 的 `worker-policy-matrix.cjs`）依赖核心生成的 `config-matrix-policies.json`，这次没有重新生成、没有跑。
+2. **夹具**：`native-environment-2.1.310.json` 已由原生渲染器执行生成（`test/native/<版本>/environment-template.test.mjs`，两版三段文本逐字相同）。仓库里的 `official-request-2.1.304.json` 是 2.1.304 第一版时期的抓包（比 `capture-official.sh` 少 `diagnostics` 等字段），版本无关测试与 2.1.304 组装清单仍读它；跨版本比较官方请求时用同条件重抓的那份（`artifacts/claude-2.1.310/captures/official-request-2.1.304-recapture.json`）。
+3. **`official-diff.cjs`**：两边组件数不同时的 `TypeError` 已修（缺的一侧记为 `(absent)`）。
 4. **e2e 场景缺口**：假上游支持 `bg`（后台子代理）、`fork`，`run.sh` 没有场景；没有 WebSearch/服务端工具、图片与文档、thinking 签名回传、`tool_choice`、`count_tokens`（应 404）、超时与中断、上游 5xx/429、超大正文（32 MiB）、并发槽满（429）的端到端场景；`all` 不含 `values`/`conc`/`classify`，容易漏跑。e2e 各变量的缺省值仍是 2.1.304 时期的，跑 2.1.310 要显式设 `CC_VERSION`/`CLIENT_CC_VERSION`/`OFFICIAL_CLI`。
 5. **A/B 白名单没有自动化**：`compare.cjs` 只列差异，允许表靠人工对照；应把允许表写成规则并让脚本给出通过/失败。
 6. **跨版本静态检查的剩余缺口**：“每个种子必须有归类记录”没有检查；`equiv` 对低 `similarity` 的对齐配对只报告不拦截；REA 交叉验证的脚本（`artifacts/claude-2.1.310/scratch-rea/`）是一次性草稿，不在仓库。
