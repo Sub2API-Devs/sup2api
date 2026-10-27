@@ -117,6 +117,13 @@ type Service struct {
 	reconcileCfg   *resolved
 	reconcileCfgAt time.Time
 	reconcileEpoch uint64
+
+	// Authz answers the console statistics' optional sections (users and
+	// accounts in GET /usage/overview); nil hides them.
+	Authz core.Authorizer
+	// overviews caches GET /usage/overview briefly: it scans every user's
+	// last 30 days.
+	overviews overviewCache
 }
 
 var _ core.Settler = (*Service)(nil)

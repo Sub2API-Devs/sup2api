@@ -4484,3 +4484,35 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 66.4 菜单（`authz/menus.go`）
 
 概览项改名「仪表盘 / Dashboard」；「我的」分组改名「我的账户 / My account」，其中「API Key」改为「API 密钥」；删除「使用统计」（`/me/stats`），控制台把它重定向到 `/me/usage`。没有网关、财务、系统任何一个分组的用户，控制台把侧边栏画成不带分组标题的平铺列表（纯前端规则，接口不变）。
+
+### 66.5 导出 `GET /me/usage/export`（`usage:self:read`）、`GET /usage/export`（`usage:all:read`）（P2，2026-10-28）
+
+实现：`usage/export.go`。
+
+- 参数：与对应列表（`/me/usage`、`/usage`）相同的筛选，另加 `tz=`（时间列的时区，校验同 66.1）和 `lang=zh|en`（表头语言；缺省看 `Accept-Language`，以 `zh` 开头为中文，否则英文；其他值 400）。筛选在写出第一个字节前校验，非法时照常回 JSON 错误。
+- 回应：`200 text/csv; charset=utf-8`，`Content-Disposition: attachment; filename="usage_YYYYMMDD_HHMMSS.csv"`（`tz` 的当地时间），`Cache-Control: no-store`。文件以 UTF-8 BOM（`EF BB BF`）开头，表格软件因此按 UTF-8 打开。
+- 行：新到旧，按 `(created_at, id)` 游标分页，每批 1000 行，不跑单条大查询。最多 100000 行，超出时最后一行是 `# truncated at 100000 rows; narrow the time range or filters`。表头已发出后查询出错，最后一行是 `# export failed: …`，不会被当成完整文件。
+- 列：时间、请求 ID、客户端请求 ID、用户*、API 密钥、分组、账号*、模型、上游模型*、端点、协议、流式、状态码、成功、错误类型、输入 / 输出 / 缓存读取 / 缓存写入 Token（缓存写入含 1 小时写）、费用、原价（费用 ÷ 倍率，倍率为 0 计 0）、倍率、计费状态、首 token (ms)、耗时 (ms)、调用 IP。带 * 的三列只在管理员导出里有；自助导出与自助列表一样隐藏上游信息。
+- 以 `= + - @`、制表符或回车开头的单元格前加 `'`，防表格公式注入。
+- 每次导出写一条审计 `usage.export`（`detail`：行数、是否截断、是否自助、原始查询串）。
+
+### 66.6 管理员概览与排行（P2，2026-10-28）
+
+**`GET /usage/overview?tz=`（`usage:all:read`）**：形状与 66.2 相同，统计全部用户；没有 `api_keys`，另有两块，各自要求对应权限，没有权限就不出现这个字段：
+
+```json
+{"users":{"total":120,"new_today":3,"active_today":41},
+ "accounts":{"total":38,"available":30,"error":2,"disabled":4}}
+```
+
+- `users`（`user:read`）：未删除的用户数；`new_today` 是 `tz` 今天注册的；`active_today` 是今天有使用记录的不同用户数。
+- `accounts`（`account:read`）：未删除的账号数；`available` 是 `status='active'` 且可调度；`error`、`disabled` 按状态计数。全部是 COUNT，不受列表分页影响。
+- 进程内按「时区 + 两个权限」缓存 30 秒（它扫描全部用户近 30 天的行）。
+
+**`group_by=upstream_model`**：管理员的 `/usage/summary` 可按上游实际模型分组；自助接口返回 400，与 `user` 相同。
+
+**排行 `order=cost|requests|tokens&limit=1..200`**（两个 summary 接口的分组结果都适用）：
+
+- 按指标降序，相同时按 `key` 升序；只给 `limit` 时按 `cost`，只给 `order` 时上限 200。非法值 400（`order must be cost, requests or tokens` / `limit must be 1-200`）。
+- 超出 `limit` 的行合并成一行 `key="__other__"`，排在最后：各计数与费用求和，`latency_ms_avg`、`first_token_ms_avg` 按成功请求数加权平均。不带这两个参数时结果与此前完全相同（按 `key` 排序、不合并）。
+- 控制台用法：管理员仪表盘的用户消费榜（`group_by=user&order=…&limit=10`）、使用记录页的「用户排行」页签（前 20 / 50 / 100 / 200）。

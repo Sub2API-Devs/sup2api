@@ -14,7 +14,9 @@ export function useUsageSummary(
   path: string,
   filters: Record<string, unknown>,
   groupBy: MaybeRefOrGetter<string>,
-  enabled: MaybeRefOrGetter<boolean> = true
+  enabled: MaybeRefOrGetter<boolean> = true,
+  /** More query parameters (order, limit), watched like the filters. */
+  extra: MaybeRefOrGetter<Record<string, unknown>> = {}
 ) {
   const rows = ref<UsageSummaryRow[]>([])
   const loading = ref(false)
@@ -27,7 +29,7 @@ export function useUsageSummary(
     loading.value = true
     error.value = null
     try {
-      const r = await api.get<UsageSummaryRow[] | { items?: UsageSummaryRow[] }>(path, { ...filters, group_by: toValue(groupBy), tz: browserTZ() })
+      const r = await api.get<UsageSummaryRow[] | { items?: UsageSummaryRow[] }>(path, { ...filters, ...toValue(extra), group_by: toValue(groupBy), tz: browserTZ() })
       if (my === seq) rows.value = Array.isArray(r) ? r : r?.items || []
     } catch (e) {
       if (my === seq) {
@@ -39,6 +41,6 @@ export function useUsageSummary(
     }
   }
 
-  watch([() => ({ ...filters }), () => toValue(groupBy), () => toValue(enabled)], reload, { deep: true, immediate: true })
+  watch([() => ({ ...filters }), () => toValue(groupBy), () => toValue(enabled), () => ({ ...toValue(extra) })], reload, { deep: true, immediate: true })
   return { rows, loading, error, reload }
 }

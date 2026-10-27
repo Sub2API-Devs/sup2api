@@ -5,9 +5,9 @@
 // breakdown is one GET <summaryPath>?group_by=…&tz=…; nothing is queried
 // while `enabled` is false (the panel is collapsed). A failed query shows as
 // an error with a retry, never as an empty chart.
-import { computed, toRef, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SButton, SCard } from '@sub2api/ui'
+import { SAlert, SButton, SCard, SSegmented } from '@sub2api/ui'
 import { useUsageSummary } from '@/views/usage/useUsageSummary'
 import { errorMessage } from '@/utils/errors'
 import DistributionCard from './DistributionCard.vue'
@@ -27,14 +27,22 @@ const props = withDefaults(
     /** Bumped by the page's refresh button. */
     revision?: number
     group: string
+    /** Offer the model breakdown by upstream model too (operators only). */
+    modelSources?: boolean
   }>(),
-  { secondary: null, layout: 'records', enabled: true, revision: 0 }
+  { secondary: null, layout: 'records', enabled: true, revision: 0, modelSources: false }
 )
 const emit = defineEmits<{ (e: 'select-model', key: string): void; (e: 'select-secondary', key: string): void }>()
 const { t } = useI18n()
 
 const enabled = toRef(props, 'enabled')
-const models = useUsageSummary(props.summaryPath, props.filters, 'model', enabled)
+// The filter narrows the requested model, so only that breakdown selects.
+const source = ref<'model' | 'upstream_model'>('model')
+const sourceOptions = computed(() => [
+  { value: 'model', label: t('stats.sourceRequested') },
+  { value: 'upstream_model', label: t('stats.sourceUpstream') }
+])
+const models = useUsageSummary(props.summaryPath, props.filters, () => (props.modelSources ? source.value : 'model'), enabled)
 const second = useUsageSummary(props.summaryPath, props.filters, () => props.secondary?.groupBy || 'none', () => props.enabled && !!props.secondary)
 const trend = useUsageSummary(props.summaryPath, props.filters, () => props.granularity, enabled)
 
@@ -58,7 +66,18 @@ watch(() => props.revision, reload)
     </SAlert>
     <template v-if="layout === 'records'">
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <DistributionCard :title="t('stats.modelDist')" :key-label="t('stats.model')" :rows="models.rows.value" :loading="models.loading.value" selectable @select="emit('select-model', $event)" />
+        <DistributionCard
+          :title="t('stats.modelDist')"
+          :key-label="t('stats.model')"
+          :rows="models.rows.value"
+          :loading="models.loading.value"
+          :selectable="!modelSources || source === 'model'"
+          @select="emit('select-model', $event)"
+        >
+          <template v-if="modelSources" #extra>
+            <SSegmented v-model="source" size="sm" :aria-label="t('stats.model')" :options="sourceOptions" data-testid="model-source" />
+          </template>
+        </DistributionCard>
         <DistributionCard
           v-if="secondary"
           :title="secondary.title"
@@ -78,7 +97,11 @@ watch(() => props.revision, reload)
       <SCard :title="t('stats.tokenTrend')" :subtitle="t('stats.tokenTrendHint')">
         <TokenTrendChart :rows="trend.rows.value" :buckets="buckets" :granularity="granularity" :loading="trend.loading.value" :group="group" height="248px" />
       </SCard>
-      <DistributionCard :title="t('stats.modelDist')" :key-label="t('stats.model')" :rows="models.rows.value" :loading="models.loading.value" />
+      <DistributionCard :title="t('stats.modelDist')" :key-label="t('stats.model')" :rows="models.rows.value" :loading="models.loading.value">
+        <template v-if="modelSources" #extra>
+          <SSegmented v-model="source" size="sm" :aria-label="t('stats.model')" :options="sourceOptions" data-testid="model-source" />
+        </template>
+      </DistributionCard>
     </div>
     <MetricStrip :rows="trend.rows.value" :buckets="buckets" :granularity="granularity" :loading="trend.loading.value" :group="group" />
   </div>

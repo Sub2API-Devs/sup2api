@@ -71,6 +71,7 @@ function pct(r: UsageSummaryRow) {
 <template>
   <SCard :title="title" :padded="false">
     <template #actions>
+      <slot name="extra" />
       <SSegmented
         v-model="metric"
         size="sm"

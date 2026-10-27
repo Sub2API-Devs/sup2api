@@ -18,11 +18,11 @@ const loading = ref(false)
 <template>
   <div>
     <SPageHeader :title="t('dashboard.title')" :description="t('dashboard.welcome', { name: auth.me?.display_name || auth.me?.email || '' })">
-      <template v-if="!admin" #actions>
+      <template #actions>
         <SButton :loading="loading" icon="refresh" @click="revision++">{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
-    <AdminDashboard v-if="admin" />
+    <AdminDashboard v-if="admin" :revision="revision" @update:loading="loading = $event" />
     <UserDashboard v-else :revision="revision" @update:loading="loading = $event" />
   </div>
 </template>

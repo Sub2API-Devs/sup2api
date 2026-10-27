@@ -1063,6 +1063,8 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.to && u.created_at > q.to) return false
     if (q.user_id && String(u.user_id) !== q.user_id) return false
     if (q.group_id && String(u.group_id) !== q.group_id) return false
+    if (q.group_name && u.group_name !== q.group_name) return false
+    if (q.api_key_id && String(u.api_key_id) !== q.api_key_id) return false
     if (q.account_id && String(u.account_id) !== q.account_id) return false
     if (q.client_request_id && u.client_request_id !== q.client_request_id) return false
     if (q.client_ip && u.client_ip !== q.client_ip) return false
@@ -1114,6 +1116,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
   const keyOf = (u: any): string => {
     switch (by) {
       case 'model': return u.model
+      case 'upstream_model': return u.upstream_model
       case 'user': return String(u.user_id)
       case 'ip': return u.client_ip
       case 'api_key': return String(u.api_key_id)
@@ -1161,33 +1164,96 @@ function usageSummary(rows: any[], query: Record<string, string>) {
       standard_cost: money(s.standard_cost)
     }
   })
-  return by === 'ip' ? out.sort((a, b) => b.requests - a.requests || a.key.localeCompare(b.key)).slice(0, 100) : out.sort((a, b) => a.key.localeCompare(b.key))
+  if (by === 'ip') return out.sort((a, b) => b.requests - a.requests || a.key.localeCompare(b.key)).slice(0, 100)
+  return q.order ? ranked(out, q.order, Number(q.limit) || 0) : out.sort((a, b) => a.key.localeCompare(b.key))
+}
+
+/** order=cost|requests|tokens&limit=n (CONTRACTS §66.6): the top n, the rest folded into key __other__. */
+function ranked(rows: any[], order: string, limit: number) {
+  const metric = (r: any) => (order === 'requests' ? r.requests : order === 'tokens' ? r.total_tokens : Number(r.total_cost))
+  const sorted = [...rows].sort((a, b) => metric(b) - metric(a) || a.key.localeCompare(b.key))
+  if (!limit || sorted.length <= limit) return sorted
+  const rest = sorted.slice(limit)
+  const other: any = { key: '__other__', requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_tokens: 0, total_cost: 0, standard_cost: 0 }
+  for (const r of rest) {
+    for (const k of ['requests', 'success', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_creation_tokens', 'prompt_tokens', 'total_tokens']) other[k] += r[k]
+    other.total_cost += Number(r.total_cost)
+    other.standard_cost += Number(r.standard_cost)
+  }
+  return [...sorted.slice(0, limit), { ...other, total_cost: money(other.total_cost), standard_cost: money(other.standard_cost) }]
+}
+
+function overviewOf(rows: any[], tz: string) {
+  const today = zoned(new Date().toISOString(), tz).day
+  const yesterday = zoned(new Date(Date.now() - 86400000).toISOString(), tz).day
+  const totals = (part: any[]) => {
+    const { key: _k, total_tokens: _t, ...s } = usageSummary(part, { group_by: 'none', from: '1970-01-01T00:00:00Z' })[0]
+    return s
+  }
+  const recent = rows.filter((u) => Date.now() - Date.parse(u.created_at) < 5 * 60000)
+  return {
+    tz,
+    today: totals(rows.filter((u) => zoned(u.created_at, tz).day === today)),
+    yesterday: totals(rows.filter((u) => zoned(u.created_at, tz).day === yesterday)),
+    last_30d: totals(rows),
+    last_5m: { requests: recent.length, tokens: recent.reduce((a, u) => a + u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_creation_tokens, 0) }
+  }
+}
+
+/** GET …/usage/export (CONTRACTS §66.5): a short CSV with the BOM, like the server. */
+function usageCSV(rows: any[], q: Record<string, string>, self: boolean) {
+  const zh = q.lang === 'zh'
+  const cols: Array<[string, string, (u: any) => unknown, boolean?]> = [
+    ['时间', 'Time', (u) => u.created_at],
+    ['请求 ID', 'Request ID', (u) => u.request_id],
+    ['用户', 'User', (u) => u.user_email, true],
+    ['API 密钥', 'API key', (u) => u.api_key_name],
+    ['账号', 'Account', (u) => u.account_name ?? '', true],
+    ['模型', 'Model', (u) => u.model],
+    ['上游模型', 'Upstream model', (u) => u.upstream_model, true],
+    ['状态', 'Status', (u) => u.status_code],
+    ['输入', 'Input', (u) => u.input_tokens],
+    ['输出', 'Output', (u) => u.output_tokens],
+    ['缓存读', 'Cache read', (u) => u.cache_read_tokens],
+    ['缓存写', 'Cache write', (u) => u.cache_creation_tokens],
+    ['费用', 'Cost', (u) => u.total_cost]
+  ]
+  const shown = cols.filter((c) => !(self && c[3]))
+  const cell = (v: unknown) => {
+    let s = String(v ?? '')
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const lines = [shown.map((c) => (zh ? c[0] : c[1])).join(',')]
+  for (const u of usageFilter(rows, q).slice(0, 1000)) lines.push(shown.map((c) => cell(c[2](u))).join(','))
+  const body = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(lines.join('\r\n') + '\r\n', 'utf8')])
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15)
+  return {
+    __status: 200,
+    __headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="usage_${stamp}.csv"` },
+    __bytes: body,
+    body: undefined
+  }
 }
 
 on('GET', '/usage/summary', (req) => usageSummary(usageRows, req.query))
 on('GET', '/me/usage/summary', (req) =>
-  req.query.group_by === 'user' ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip') : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
+  req.query.group_by === 'user' || req.query.group_by === 'upstream_model'
+    ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip')
+    : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
-on('GET', '/me/usage/overview', (req) => {
+on('GET', '/me/usage/overview', (req) => ({ ...overviewOf(usageRows.filter((u) => u.user_id === 1), req.query.tz || 'UTC'), api_keys: { total: 2, active: 2 } }))
+// GET /usage/overview (CONTRACTS §66.6): all users, plus users and accounts.
+on('GET', '/usage/overview', (req) => {
   const tz = req.query.tz || 'UTC'
-  const mine = usageRows.filter((u) => u.user_id === 1)
+  const o = overviewOf(usageRows, tz)
   const today = zoned(new Date().toISOString(), tz).day
-  const yesterday = zoned(new Date(Date.now() - 86400000).toISOString(), tz).day
-  const totals = (rows: any[]) => {
-    const { key: _k, total_tokens: _t, ...s } = usageSummary(rows, { group_by: 'none', from: '1970-01-01T00:00:00Z' })[0]
-    return s
-  }
-  const recent = mine.filter((u) => Date.now() - Date.parse(u.created_at) < 5 * 60000)
-  return {
-    tz,
-    today: totals(mine.filter((u) => zoned(u.created_at, tz).day === today)),
-    yesterday: totals(mine.filter((u) => zoned(u.created_at, tz).day === yesterday)),
-    last_30d: totals(mine),
-    last_5m: { requests: recent.length, tokens: recent.reduce((a, u) => a + u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_creation_tokens, 0) },
-    api_keys: { total: 2, active: 2 }
-  }
+  const active = new Set(usageRows.filter((u) => zoned(u.created_at, tz).day === today).map((u) => u.user_id)).size
+  return { ...o, users: { total: 4, new_today: 1, active_today: active }, accounts: { total: 6, available: 4, error: 1, disabled: 1 } }
 })
+on('GET', '/usage/export', (req) => usageCSV(usageRows, req.query, false))
+on('GET', '/me/usage/export', (req) => usageCSV(usageRows.filter((u) => u.user_id === 1), req.query, true))
 on('GET', '/usage', (req) => paginate(usageFilter(usageRows, req.query).map((u) => publicUsage(u)), req.query))
 on('GET', '/usage/:id', (req) => {
   const u = usageRows.find((x) => x.id === Number(req.params.id))

@@ -18,10 +18,11 @@ vi.mock('@/composables/lookups', () => ({ fetchMyGroups: async () => [{ id: 1, n
 vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (value: string) => value, endpointsOf: () => [] }) }))
 vi.mock('@/composables/crud', () => ({ deleteWithConfirm }))
 vi.mock('@/utils/errors', () => ({ fieldErrors: () => ({}), notifyError }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ theme: 'light' }) }))
 enableAutoUnmount(afterEach)
 function render() {
   i18n.global.locale.value = 'zh'
-  return mount(MyApiKeysView, { global: { plugins: [i18n], stubs: { Teleport: true, ApiKeyCell: true } } })
+  return mount(MyApiKeysView, { global: { plugins: [i18n], stubs: { Teleport: true, ApiKeyCell: true, SChart: true } } })
 }
 
 describe('API key list', () => {
@@ -30,6 +31,23 @@ describe('API key list', () => {
     items.value = [row()]
     // Today's and all-time usage per key (group_by=api_key).
     get.mockImplementation(async (_path: string, q: { from: string }) => [{ key: '7', requests: q.from === startOfToday().toISOString() ? 3 : 12, total_cost: q.from === startOfToday().toISOString() ? '0.25' : '1.5' }])
+  })
+  it('opens the usage of a key in a drawer, 7 days first, then 30', async () => {
+    const w = render()
+    await flushPromises()
+    expect(w.find('[data-testid="key-usage-drawer"]').exists()).toBe(false)
+    await w.get('[data-testid="open-key-usage"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="key-usage-drawer"]').exists()).toBe(true)
+    const seven = new Date()
+    seven.setHours(0, 0, 0, 0)
+    seven.setDate(seven.getDate() - 6)
+    for (const g of ['none', 'day', 'model']) expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ api_key_id: '7', group_by: g, from: seven.toISOString() }))
+    get.mockClear()
+    await w.get('[data-testid="key-usage-days"]').findAll('input')[1].setValue(true)
+    await flushPromises()
+    expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ api_key_id: '7', group_by: 'day' }))
+    expect(new Date(get.mock.calls[0][1].from).getTime()).toBeLessThan(seven.getTime())
   })
   it('marks an IP-restricted key and deletes from the row', async () => {
     const w = render()

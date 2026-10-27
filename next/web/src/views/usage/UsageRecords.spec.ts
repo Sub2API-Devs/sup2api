@@ -29,11 +29,15 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { name: 'UsageCharts', template: '<div data-testid="charts" />' } }))
+vi.mock('./UserRanking.vue', () => ({ default: { name: 'UserRanking', emits: ['select'], template: '<div data-testid="ranking" />' } }))
+const { exportUsage, notifyError } = vi.hoisted(() => ({ exportUsage: vi.fn(), notifyError: vi.fn() }))
+vi.mock('./exportUsage', () => ({ exportUsage }))
+vi.mock('@/utils/errors', async (orig) => ({ ...(await orig<object>()), notifyError }))
 enableAutoUnmount(afterEach)
 
 function render(admin = false, extraTabs: Array<{ key: string; label: string }> = []) {
   return mount(UsageRecords, {
-    props: { listPath: '/me/usage', summaryPath: '/me/usage/summary', defaultRange: '7d', admin, extraTabs },
+    props: { listPath: admin ? '/usage' : '/me/usage', summaryPath: admin ? '/usage/summary' : '/me/usage/summary', defaultRange: '7d', admin, extraTabs },
     slots: { 'tab-ledger': '<div data-testid="ledger" />' },
     global: { plugins: [i18n], stubs: { SChart: true } }
   })
@@ -96,5 +100,47 @@ describe('usage records page', () => {
     main2.filters.model_contains = 'opus'
     await flushPromises()
     expect(errors2.filters).toMatchObject({ model_contains: 'opus', success: 'false' })
+  })
+
+  it('gives an operator the user ranking; a ranked user filters the requests', async () => {
+    expect(render().text()).not.toContain('用户排行')
+    lists.length = 0
+    query = { tab: 'ranking' }
+    const w = render(true)
+    await flushPromises()
+    expect(w.text()).toContain('用户排行')
+    const ranking = w.findComponent({ name: 'UserRanking' })
+    expect(ranking.exists()).toBe(true)
+    ranking.vm.$emit('select', '3')
+    await flushPromises()
+    expect(lists[0].filters.user_id).toBe('3')
+    expect(w.find('[data-testid="ranking"]').exists()).toBe(false)
+    expect(replace).toHaveBeenLastCalledWith({ query: { tab: undefined } })
+  })
+
+  it('starts from the filters of a link; a user cannot preset another user', async () => {
+    query = { user_id: '3', group_name: 'vip', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
+    render(true)
+    expect(lists[0].filters).toMatchObject(query)
+    lists.length = 0
+    render()
+    expect(lists[0].filters.user_id).toBeUndefined()
+    expect(lists[0].filters.group_name).toBeUndefined()
+    expect(lists[0].filters.from).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  it('exports the searched requests, and reports a failed export', async () => {
+    const w = render()
+    await flushPromises()
+    lists[0].filters.model_contains = 'opus'
+    exportUsage.mockResolvedValueOnce(undefined)
+    await w.get('[data-testid="export-usage"]').trigger('click')
+    await flushPromises()
+    expect(exportUsage).toHaveBeenCalledWith('/me/usage/export', expect.objectContaining({ model_contains: 'opus' }))
+    const boom = new Error('boom')
+    exportUsage.mockRejectedValueOnce(boom)
+    await w.get('[data-testid="export-usage"]').trigger('click')
+    await flushPromises()
+    expect(notifyError).toHaveBeenCalledWith(boom)
   })
 })

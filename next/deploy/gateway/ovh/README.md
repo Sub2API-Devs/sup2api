@@ -2,7 +2,16 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
-2026-10-27 最新：网关 **0.1.126**（`aceb9e80a`，两个节点都已更新）——每个请求的就绪检查改为 1 秒缓存，clicodeplus 节点每个请求不再多出约 0.26 秒（api.prophey.ai 从 0.38 s 降到 0.02–0.03 s）；`remove-node`/`set-primary` 不再引用从未建立的表，sup2api-2/3/4 的登记已删除。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
+2026-10-28 最新：账号模型手动补 `claude-haiku-5-5`。自动模型模式的账号在 0.1.107 发布时已经有了，这次补的是停用的 31（手动模型）、20、21（测试账号）。只改了 `models`，状态和模式都没变。20 号保存时插件按默认列表补全，所以多了它原来没有的 `claude-opus-4-8`；明确提交原列表也会被补回，就没再改。脚本在 `stage/haiku-5-5-manual/{survey.py,add.py,set20.py}`。原列表从 `backups/ccgateway-0.1.107` 核对（dump 要用 `postgres:18-alpine` 的 pg_restore）。
+
+2026-10-27 历史发布：CCGateway/Controller/Worker **0.1.107**（`fc0414f0a`，包 SHA `3839bcfc…8006d`，rollout 192），CLI 不变（v33）；核心仍 0.1.208。内容：Pro 和 Max 的默认模型列表加入 `claude-haiku-5-5`（`models.go`、`manifest.json` 三处）。
+- 顺序：备份 `backups/ccgateway-0.1.107` → 上传、升级 → bundled controller、egress → `runtime/workers` 配对原地更新 → bundled app。23 号显示 failed，因为它已被删除。
+- 自动模型模式的 32、34–41 号用 `stage/ccgateway-0.1.107/refresh_models.py` 重新应用默认列表。
+- 核对：用 `claude-haiku-5-5` 测试，35 号经 api.prophey.ai、34 号经 ovh 都返回 200。线上已有这个模型的价格（`model_prices` id 323）。
+
+2026-10-27 历史：网关 **0.1.127**（`1a8b0ce10`，镜像 ID `584ba013…`，两个节点都已更新）。本机就绪检查改为懒检查：默认可用，请求到达核心就保持可用，连接失败后才每 30 秒问一次 `/v1/status`。这替代了 0.1.126 的 1 秒缓存。两个节点更新时都是先从 Caddy 摘下再重建容器。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
+
+2026-10-27 历史：网关 **0.1.126**（`aceb9e80a`，两个节点都已更新）——每个请求的就绪检查改为 1 秒缓存，clicodeplus 节点每个请求不再多出约 0.26 秒（api.prophey.ai 从 0.38 s 降到 0.02–0.03 s）；`remove-node`/`set-primary` 不再引用从未建立的表，sup2api-2/3/4 的登记已删除。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
 2026-10-27 历史（部署架构）：**两节点**——clicodeplus 的 `sup2api-ccp`（从节点，api.prophey.ai 首选）+ ovh 的 `sup2api-1`（主节点，容灾，经 ovh Caddy `sup2api.15.204.107.38.sslip.io` → 127.0.0.1:3130）。sup2api-2/3/4 已停用并删除容器与状态卷；ovh 本机 `sup2api-valkey` 已删除，两节点共用 `rediss://…@valkey.prophey.ai:6380/0`（Caddy layer4 只允许两台服务器 IP）；数据库仍是 Supabase。核心仍 0.1.208、CCGateway 仍 0.1.106。切换时全站中断约 12 秒。拓扑、切换步骤、核对与已知问题（clicodeplus 节点每请求多约 0.26 秒、`remove-node` 报表不存在）见 [clicodeplus/README.md](../clicodeplus/README.md)。下面各条记录里的「四节点」「3130–3133」是当时的部署。
 

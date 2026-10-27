@@ -20,6 +20,7 @@ import KeyGroupSwitch from './KeyGroupSwitch.vue'
 import KeyLimitsCell from './KeyLimitsCell.vue'
 import KeyQuotaCell from './KeyQuotaCell.vue'
 import KeyUsageCell from './KeyUsageCell.vue'
+import KeyUsageDrawer from './KeyUsageDrawer.vue'
 import KeyUseGuide from './KeyUseGuide.vue'
 import { useKeyUsage } from './keyUsage'
 
@@ -102,6 +103,8 @@ const moveToGroup = (k: ApiKey, groupId: number) => update(k, { group_id: groupI
 
 /** The key whose usage guide is open. */
 const useKey = ref<ApiKey | null>(null)
+/** The key whose usage drawer is open. */
+const usageKey = ref<ApiKey | null>(null)
 const editorOpen = ref(false)
 /** The key being edited; null while creating. */
 const editKey = ref<ApiKey | null>(null)
@@ -154,7 +157,11 @@ function remove(k: ApiKey) {
           <KeyGroupCell v-bind="groupCell(row)" />
         </KeyGroupSwitch>
       </template>
-      <template #cell-usage="{ row }"><KeyUsageCell :usage="usage.of(row.id)" /></template>
+      <template #cell-usage="{ row }">
+        <button type="button" class="-m-1 rounded-md p-1 text-left hover:bg-surface-2" :title="t('stats.key.open')" data-testid="open-key-usage" @click="usageKey = row">
+          <KeyUsageCell :usage="usage.of(row.id)" />
+        </button>
+      </template>
       <template #cell-limits="{ row }"><KeyLimitsCell :api-key="row" /></template>
       <template #cell-quota="{ row }"><KeyQuotaCell :api-key="row" /></template>
       <template #cell-status="{ row }">
@@ -199,6 +206,8 @@ function remove(k: ApiKey) {
     <KeyEditor v-model:open="editorOpen" :api-key="editKey" :groups="groups" @saved="saved" />
 
     <KeyUseGuide :api-key="useKey" :platforms="useKey ? groupCell(useKey).platforms : null" @close="useKey = null" />
+
+    <KeyUsageDrawer v-if="canReadUsage && usageKey" :api-key="usageKey" @close="usageKey = null" />
 
     <SModal :open="!!plaintext" :title="t('apikeys.createdTitle')" persistent :closable="false" @update:open="!$event && (plaintext = '')">
       <div class="space-y-4">

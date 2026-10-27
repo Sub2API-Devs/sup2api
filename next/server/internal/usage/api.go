@@ -111,6 +111,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/usage/:id", "usage:self:read", s.myUsageDetail)
 	r.Perm("GET", "/usage", "usage:all:read", s.allUsage)
 	r.Perm("GET", "/usage/summary", "usage:all:read", s.summary)
+	r.Perm("GET", "/usage/overview", "usage:all:read", s.allOverview)
+	r.Perm("GET", "/usage/export", "usage:all:read", s.allExport)
+	r.Perm("GET", "/me/usage/export", "usage:self:read", s.myExport)
 	r.Perm("GET", "/usage/:id", "usage:all:read", s.usageDetail)
 	// The manual way out of the abandon policy (§25.4). Both move money, so
 	// they get their own permission rather than riding on usage:all:read.
@@ -541,8 +544,16 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
 		extra = `, COALESCE(max(us.email), '')`
+	case "upstream_model":
+		// The model the upstream was asked for is upstream-side detail
+		// (hideUpstream): operators only.
+		if self != nil {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip"))
+			return
+		}
+		key = `u.upstream_model`
 	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, user, api_key, group, endpoint, platform or ip"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, upstream_model, user, api_key, group, endpoint, platform or ip"))
 		return
 	}
 	if extra == "" {
@@ -596,6 +607,10 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		return rows.Err()
 	})
 	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if out, err = rankRows(c, out); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

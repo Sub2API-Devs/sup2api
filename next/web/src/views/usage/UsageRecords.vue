@@ -2,10 +2,12 @@
 // Usage records with their statistics, for an operator (`admin`: all users)
 // or for the caller: the search bar (time range, granularity, filters), the
 // four totals, the charts (collapsible, remembered per page) and the tabs -
-// the request list, the failed requests, the client IPs, plus any tab the
-// page adds (`extraTabs`, rendered from the #tab-<key> slot). Every part
-// follows the same filters. The open tab is ?tab= in the URL. The page header
-// (title, refresh) stays with the view and bumps `revision`.
+// the request list, the failed requests, the client IPs, the user ranking
+// (operator only), plus any tab the page adds (`extraTabs`, rendered from the
+// #tab-<key> slot). Every part follows the same filters, which a link may
+// preset (?user_id=, ?from=, …); Export downloads them as CSV. The open tab
+// is ?tab= in the URL. The page header (title, refresh) stays with the view
+// and bumps `revision`.
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -16,9 +18,12 @@ import { useAuthStore } from '@/stores/auth'
 import UsageSummaryCards from '@/components/UsageSummaryCards.vue'
 import UsageCharts from '@/components/stats/UsageCharts.vue'
 import { autoGranularity, hourAllowed, type Granularity } from '@/components/stats/stats'
+import { notifyError } from '@/utils/errors'
+import { exportUsage } from './exportUsage'
 import UsageFilters from './UsageFilters.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
 import UsageTable from './UsageTable.vue'
+import UserRanking from './UserRanking.vue'
 import { useUsageSummary } from './useUsageSummary'
 import type { UsageRow } from './usage'
 
@@ -50,7 +55,15 @@ const baseFilters = {
   // exact match on the client's X-Request-Id (CONTRACTS §14.4)
   client_request_id: ''
 }
-const { items, loading, page, pageSize, total, filters, reload: reloadList } = useList<UsageRow>(props.listPath, baseFilters)
+// A link from the dashboard opens the page already filtered (?user_id=…&from=…&to=…).
+const QUERY_FILTERS = ['user_id', 'group_name', 'model_contains', 'api_key_id', 'from', 'to'] as const
+const fromQuery: Record<string, string> = {}
+for (const k of QUERY_FILTERS) {
+  const v = route.query[k]
+  if (typeof v === 'string' && v !== '' && (props.admin || (k !== 'user_id' && k !== 'group_name'))) fromQuery[k] = v
+}
+if (fromQuery.from || fromQuery.to) range.value = 'custom'
+const { items, loading, page, pageSize, total, filters, reload: reloadList } = useList<UsageRow>(props.listPath, { ...baseFilters, ...fromQuery })
 
 // Granularity: automatic (hours up to a day) until the user picks one; a new
 // range goes back to automatic. Hours over 31 days are refused by the server.
@@ -92,6 +105,7 @@ const tabs = computed<TabItem[]>(() => [
   { key: 'records', label: t('stats.tabs.records'), badge: total.value || undefined },
   { key: 'errors', label: t('stats.tabs.errors') },
   { key: 'ips', label: t('stats.tabs.ips') },
+  ...(props.admin ? [{ key: 'ranking', label: t('stats.tabs.ranking') }] : []),
   ...props.extraTabs
 ])
 const tabKeys = () => tabs.value.map((x) => x.key)
@@ -141,6 +155,23 @@ watch(busy, (v) => emit('update:loading', v), { immediate: true })
 function filterBy(patch: Record<string, string>) {
   Object.assign(filters, patch)
 }
+function selectUser(id: string) {
+  filters.user_id = id
+  tab.value = 'records'
+}
+
+// CSV of the searched requests (the list's filters, not its page).
+const exporting = ref(false)
+async function exportCsv() {
+  exporting.value = true
+  try {
+    await exportUsage(`${props.listPath}/export`, filters)
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -159,6 +190,9 @@ function filterBy(patch: Record<string, string>) {
             @update:model-value="picked = $event as Granularity"
           />
         </div>
+      </template>
+      <template #actions>
+        <SButton type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
       </template>
     </UsageFilters>
 
@@ -187,6 +221,7 @@ function filterBy(patch: Record<string, string>) {
         :secondary="secondary"
         :revision="revisionCharts"
         :group="admin ? 'usage-admin' : 'usage-mine'"
+        :model-sources="admin"
         @select-model="filterBy({ model_contains: $event })"
         @select-secondary="(k: string) => filterBy(admin ? { group_name: k } : { api_key_id: k })"
       />
@@ -229,6 +264,7 @@ function filterBy(patch: Record<string, string>) {
         :active="filters.client_ip"
         @filter="(ip: string) => (filters.client_ip = ip)"
       />
+      <UserRanking v-if="admin && tab === 'ranking'" :summary-path="summaryPath" :filters="filters" :revision="revisionCharts" @select="selectUser" />
       <template v-for="x in extraTabs" :key="x.key">
         <slot v-if="tab === x.key" :name="`tab-${x.key}`" />
       </template>

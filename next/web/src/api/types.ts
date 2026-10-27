@@ -896,14 +896,19 @@ export interface UsageTotals {
   first_token_ms_avg: number
 }
 
-/** GET /me/usage/overview: the dashboard's figures in one answer. */
+/** GET /me/usage/overview and GET /usage/overview: the dashboard's figures in one answer. */
 export interface UsageOverview {
   tz: string
   today: UsageTotals
   yesterday: UsageTotals
   last_30d: UsageTotals
   last_5m: { requests: number; tokens: number }
-  api_keys: { total: number; active: number }
+  /** The caller's keys (self view only). */
+  api_keys?: { total: number; active: number }
+  /** Operator view with user:read. */
+  users?: { total: number; new_today: number; active_today: number }
+  /** Operator view with account:read. */
+  accounts?: { total: number; available: number; error: number; disabled: number }
 }
 
 export interface BillingSettings {
