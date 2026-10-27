@@ -1,0 +1,53 @@
+# sup2api 节点 sup2api-ccp（clicodeplus）。主节点是 ovh 的 sup2api-1。
+# 公网入口只经本机 Caddy（api.prophey.ai → 127.0.0.1:3140）；7443 是节点间
+# HTTPS，防火墙只放行 ovh（见 /usr/local/sbin/sup2api-peer-firewall.sh）。
+# 数据库为 Supabase，Redis 为 valkey.prophey.ai:6380（TLS），都在 .env。
+name: sup2api-node
+
+services:
+  sup2api-ccp:
+    image: ${GATEWAY_IMAGE:-sup2api-gateway:0.1.125}
+    container_name: sup2api-ccp
+    pull_policy: never
+    restart: unless-stopped
+    # The gateway drains its core (HTTP, then plugins and pending usage) on stop.
+    stop_grace_period: 180s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: {max-size: 50m, max-file: "5"}
+    networks: [sup2api-node]
+    ports:
+      - "127.0.0.1:3140:8080"
+      - "0.0.0.0:7443:7443"
+    extra_hosts:
+      - "sup2api-1:15.204.107.38"
+    volumes:
+      - ./certs/sup2api-ccp:/etc/sub2api/tls:ro
+      - ./config/sup2api-ccp.json:/etc/sub2api/shell.json:ro
+      - sup2api-ccp-data:/var/lib/sub2api
+    environment:
+      SUB2API_PLUGIN_OFFICIAL_KEYS: ${PLUGIN_TRUST_KEY:?}
+      SUB2API_BUILTIN_TRUST_KEY: ${PLUGIN_TRUST_KEY:?}
+      SUB2API_MARKET_SOURCES: ${MARKET_SOURCES:?}
+      SUB2API_PLUGIN_VERIFY_SIGNATURES: "false"
+      DATABASE_URL: ${DATABASE_URL:?}
+      SUB2API_PG_MAX_CONNS: "10"
+      SUB2API_GATEWAY_POOL_MAX_CONNS: "4"
+      REDIS_URL: ${REDIS_URL:?}
+      SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?}
+      SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?}
+    entrypoint: [sub2api-shell]
+    command: [serve, -config, /etc/sub2api/shell.json]
+
+networks:
+  sup2api-node:
+    name: sup2api-node
+    ipam:
+      config:
+        - subnet: 10.234.10.0/24
+          gateway: 10.234.10.1
+
+volumes:
+  sup2api-ccp-data:

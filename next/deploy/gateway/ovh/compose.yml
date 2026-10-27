@@ -1,13 +1,15 @@
-# sup2api on ovh as a gateway-managed cluster: four gateways on the existing
-# sup2api PostgreSQL/Redis/market (project network sup2api_default), each
-# supervising its own core. Core releases are signed and served by "releases".
+# Gateway-managed cluster, ovh part (2026-10-27): primary node sup2api-1 + releases server.
+# The other node is sup2api-ccp on clicodeplus (/root/sup2api-node). api.prophey.ai goes to
+# clicodeplus Caddy, which prefers its local node and falls back to this node through the
+# ovh Caddy site sup2api.15.204.107.38.sslip.io -> 127.0.0.1:3130. 7443 is the node-to-node
+# HTTPS port. Database: Supabase; Redis: valkey.prophey.ai:6380 (TLS); both in .env.
 name: sup2api-managed
 
 x-logging: &logging
   driver: json-file
   options:
-    max-size: "50m"
-    max-file: "5"
+    max-size: 50m
+    max-file: 5
 
 x-node: &node
   logging: *logging
@@ -16,83 +18,58 @@ x-node: &node
   restart: unless-stopped
   # The gateway drains its core (HTTP, then plugins and pending usage) on stop.
   stop_grace_period: 180s
-  # CPU protection measures each node against its own quota; without one a
-  # node sees all 384 host CPUs and never reaches the threshold.
-  cpus: 2
-  mem_limit: 2g
-  # The gateway and its core run as UID 1000 and need no capabilities or
-  # privilege gains; plugins set no_new_privs themselves as well.
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
-  networks: [sup2api]
-  depends_on: [releases]
-  environment: &env
-    DATABASE_URL: postgres://sup2api:${PG_PASSWORD:?}@pg:5432/sup2api?sslmode=disable
-    # The cache requires a password (requirepass in deploy/single/compose.yml);
-    # REDIS_PASSWORD is hex, so it needs no URL escaping.
-    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD (hex) in .env}@redis:6379/0
-    # Migration only: serve management requests of cores that do not send the
-    # management token yet. Leave empty once the baseline core sends it.
-    SUB2API_ALLOW_TOKENLESS_MANAGEMENT: ${SUB2API_ALLOW_TOKENLESS_MANAGEMENT:-}
-    SUB2API_LOG_LEVEL: info
-    SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?}
-    SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?}
-    SUB2API_BOOTSTRAP_ADMIN_EMAIL: ${SUB2API_BOOTSTRAP_ADMIN_EMAIL:?}
-    SUB2API_BOOTSTRAP_ADMIN_PASSWORD: ${SUB2API_BOOTSTRAP_ADMIN_PASSWORD:?}
-    SUB2API_PLUGIN_DIR: /var/lib/sub2api/plugins
-    SUB2API_PLUGIN_DEV_MODE: "false"
-    SUB2API_PLUGIN_ALLOW_UNSIGNED: "false"
-    SUB2API_PLUGIN_VERIFY_SIGNATURES: "false"
-    SUB2API_PLUGIN_STRICT_NETWORK: "true"
-    SUB2API_PLUGIN_SECCOMP: "true"
-    SUB2API_PLUGIN_DB_ROLE_ISOLATION: "true"
-    SUB2API_PLUGIN_MAX_MEMORY_MB: "1024"
-    # The image entrypoint used to derive these from the bundled dev key;
-    # managed cores start without it, so they are explicit here.
+  networks:
+    - sup2api_default
+  volumes:
+    - ./certs/ca.crt:/etc/sub2api/tls/ca.crt:ro
+  environment:
     SUB2API_PLUGIN_OFFICIAL_KEYS: ${PLUGIN_TRUST_KEY:?}
     SUB2API_BUILTIN_TRUST_KEY: ${PLUGIN_TRUST_KEY:?}
     SUB2API_MARKET_SOURCES: ${MARKET_SOURCES:?}
+    SUB2API_PLUGIN_VERIFY_SIGNATURES: "false"
+    DATABASE_URL: ${DATABASE_URL:?}
+    SUB2API_PG_MAX_CONNS: "10"
+    SUB2API_GATEWAY_POOL_MAX_CONNS: "4"
+    REDIS_URL: ${REDIS_URL:?}
+    SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY}
+    SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET}
+    SUB2API_BOOTSTRAP_ADMIN_EMAIL: ${SUB2API_BOOTSTRAP_ADMIN_EMAIL}
+    SUB2API_BOOTSTRAP_ADMIN_PASSWORD: ${SUB2API_BOOTSTRAP_ADMIN_PASSWORD}
+  entrypoint: [sub2api-shell]
+  command: [serve, -config, /etc/sub2api/shell.json]
 
 services:
-  releases:
-    logging: *logging
-    image: caddy:2
-    restart: unless-stopped
-    mem_limit: 64m
-    networks: [sup2api]
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./publish:/srv/sup2api:ro
-      - ./certs/releases:/certs:ro
-
   sup2api-1:
     <<: *node
-    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3130" }
-    ports: ["0.0.0.0:3130:8080"]
-    volumes: [state-1:/var/lib/sub2api, ./config/sup2api-1.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-1:/etc/sub2api/tls:ro]
-  sup2api-2:
-    <<: *node
-    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3131" }
-    ports: ["0.0.0.0:3131:8080"]
-    volumes: [state-2:/var/lib/sub2api, ./config/sup2api-2.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-2:/etc/sub2api/tls:ro]
-  sup2api-3:
-    <<: *node
-    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3132" }
-    ports: ["0.0.0.0:3132:8080"]
-    volumes: [state-3:/var/lib/sub2api, ./config/sup2api-3.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-3:/etc/sub2api/tls:ro]
-  sup2api-4:
-    <<: *node
-    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3133" }
-    ports: ["0.0.0.0:3133:8080"]
-    volumes: [state-4:/var/lib/sub2api, ./config/sup2api-4.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-4:/etc/sub2api/tls:ro]
+    container_name: sup2api-1
+    ports:
+      - "127.0.0.1:3130:8080"
+      - "0.0.0.0:7443:7443"
+    extra_hosts:
+      - "sup2api-ccp:64.186.225.70"
+    volumes:
+      - ./certs/sup2api-1:/etc/sub2api/tls:ro
+      - ./config/sup2api-1.json:/etc/sub2api/shell.json:ro
+      - sup2api-1-data:/var/lib/sub2api
 
-networks:
-  sup2api:
-    external: true
-    name: sup2api_default
+  releases:
+    logging: *logging
+    image: caddy:2-alpine
+    container_name: releases
+    restart: unless-stopped
+    networks:
+      - sup2api_default
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs/releases:/etc/caddy/tls:ro
+      - ./publish:/var/www:ro
+    command: [caddy, run, --config, /etc/caddy/Caddyfile]
 
 volumes:
-  state-1: {}
-  state-2: {}
-  state-3: {}
-  state-4: {}
+  sup2api-1-data:
+
+networks:
+  sup2api_default:
+    external: true

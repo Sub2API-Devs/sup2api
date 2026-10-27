@@ -1,0 +1,7 @@
+# sup2api 容灾入口：clicodeplus 的 Caddy 在本机节点不可用时转到这里（api.prophey.ai 的备用上游）
+sup2api.15.204.107.38.sslip.io {
+	reverse_proxy 127.0.0.1:3130 {
+		header_up X-Forwarded-For {client_ip}
+		flush_interval -1
+	}
+}
