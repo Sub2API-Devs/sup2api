@@ -218,12 +218,11 @@ func TestUserLifecycle(t *testing.T) {
 	if _, err := s.CreateUser(ctx, root, CreateUserInput{Email: "bad", Password: "x"}); !isCode(err, "invalid_argument") {
 		t.Fatalf("invalid input: %v", err)
 	}
-	mc := 3
-	u, err := s.CreateUser(ctx, root, CreateUserInput{Email: "Alice@Example.com", DisplayName: "Alice", Password: "password-1", MaxConcurrency: &mc})
+	u, err := s.CreateUser(ctx, root, CreateUserInput{Email: "Alice@Example.com", DisplayName: "Alice", Password: "password-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Email != "alice@example.com" || u.MaxConcurrency != 3 || len(u.Roles) != 1 || u.Roles[0] != authz.RoleUser || u.Status != StatusActive {
+	if u.Email != "alice@example.com" || len(u.Roles) != 1 || u.Roles[0] != authz.RoleUser || u.Status != StatusActive {
 		t.Fatalf("created: %+v", u)
 	}
 	if ok, _ := e.authz.Can(ctx, u.ID, "gateway:use"); !ok {

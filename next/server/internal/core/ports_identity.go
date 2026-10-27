@@ -82,9 +82,8 @@ type GroupInfo struct {
 
 // APIKeyPrincipal is the result of gateway authentication.
 type APIKeyPrincipal struct {
-	KeyID              int64
-	UserID             int64
-	UserMaxConcurrency int
+	KeyID  int64
+	UserID int64
 	// KeyLimits and KeyQuota are the caps the key's owner set on it.
 	KeyLimits KeyLimits
 	KeyQuota  KeyQuota

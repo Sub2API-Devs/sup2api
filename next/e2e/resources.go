@@ -17,11 +17,10 @@ import (
 
 // UserSpec describes a user to create.
 type UserSpec struct {
-	Email          string
-	Password       string
-	DisplayName    string
-	Roles          []string
-	MaxConcurrency int
+	Email       string
+	Password    string
+	DisplayName string
+	Roles       []string
 }
 
 // CreateUser creates a user with POST /users and logs in as that user.
@@ -39,13 +38,10 @@ func (e *Env) CreateUser(admin *Session, u UserSpec) *Session {
 	if u.Roles == nil {
 		u.Roles = []string{"user"}
 	}
-	if u.MaxConcurrency == 0 {
-		u.MaxConcurrency = 10
-	}
 	// Assigning a non-default role at creation needs role:manage.
 	d := admin.OK(e.T, http.MethodPost, "/users", map[string]any{
 		"email": u.Email, "display_name": u.DisplayName, "password": u.Password,
-		"role_keys": u.Roles, "max_concurrency": u.MaxConcurrency,
+		"role_keys": u.Roles,
 	})
 	id := d.Get("id").Int()
 	if id == 0 {

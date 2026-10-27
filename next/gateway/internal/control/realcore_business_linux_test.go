@@ -153,7 +153,7 @@ func newVideoTenant(t *testing.T, admin *apiClient, mockURL, suffix string) vide
 		"credentials": map[string]any{"api_key": tn.accountKey, "base_url": mockURL, "video_api_prefix": "/api/v3"},
 	}).id("data.id")
 	email, password := "video-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
-	tn.userID = admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}, "max_concurrency": 10}).id("data.id")
+	tn.userID = admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}}).id("data.id")
 	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", tn.userID), map[string]any{"group_ids": []int64{group}})
 	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", tn.userID), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.user = admin.login(email, password)
@@ -184,7 +184,7 @@ func newStreamTenant(t *testing.T, admin *apiClient, mockURL, suffix string) str
 		"credentials": map[string]any{"api_key": tn.accountKey, "base_url": mockURL},
 	})
 	email, password := "stream-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
-	user := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}, "max_concurrency": 10}).id("data.id")
+	user := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}}).id("data.id")
 	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", user), map[string]any{"group_ids": []int64{group}})
 	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", user), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.apiKey = admin.login(email, password).ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "stream-" + suffix, "group_id": group}).str("data.key")

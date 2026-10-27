@@ -124,7 +124,7 @@ func PublishAccountChanged(ctx context.Context, bus Bus, id int64) error {
 // Slots is the distributed concurrency limiter. Members are prefixed with
 // the boot id so slots of dead nodes can be reclaimed safely.
 type Slots interface {
-	// Acquire takes one slot of kind ("account"|"user") for id if fewer than
+	// Acquire takes one slot of kind ("account"|"apikey"|"ws") for id if fewer than
 	// limit are held (limit <= 0 = unlimited). release is idempotent.
 	Acquire(ctx context.Context, kind string, id int64, limit int, requestID string) (release func(), ok bool, err error)
 	InUse(ctx context.Context, kind string, id int64) (int, error)

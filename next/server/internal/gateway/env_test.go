@@ -875,7 +875,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	}}
 	e.balance = &fakeBalance{broke: map[int64]bool{}}
 	e.auth = &fakeAuth{keys: map[string]*core.APIKeyPrincipal{
-		testKey: {KeyID: 5, UserID: testUser, UserMaxConcurrency: 3,
+		testKey: {KeyID: 5, UserID: testUser,
 			Group: core.GroupInfo{ID: testGroup, Name: "default", Status: "active", RateMultiplier: decimal.RequireFromString("1.5")}},
 	}}
 	for _, o := range opts {

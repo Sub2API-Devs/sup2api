@@ -215,7 +215,7 @@ func TestSkillsHTTPUploadVersionsACLAndIssuer(t *testing.T) {
 			t.Fatalf("read %s=%d %s", path, status, raw)
 		}
 	}
-	e.auth.keys["other"] = &core.APIKeyPrincipal{UserID: testUser + 1, Group: core.GroupInfo{ID: testGroup}, UserMaxConcurrency: 3}
+	e.auth.keys["other"] = &core.APIKeyPrincipal{UserID: testUser + 1, Group: core.GroupInfo{ID: testGroup}}
 	before := tr.calls
 	for _, path := range []string{"/v1/skills/" + id, "/v1/skills/" + id + "/versions/" + version, "/v1/skills/skill_remote_secret"} {
 		status, _ = fileRequest(t, e, "GET", path, "other", "", nil, "")

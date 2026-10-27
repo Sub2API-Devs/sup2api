@@ -100,7 +100,7 @@ type Concurrency struct {
 	// data migrations. Default 8.
 	Background int
 	// Execute: platform Execute, held for the whole upstream exchange. The
-	// account and user slots of the core bound real concurrency; this is
+	// account and API key slots of the core bound real concurrency; this is
 	// only a safety cap. Default 1024.
 	Execute int
 }

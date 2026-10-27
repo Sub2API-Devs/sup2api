@@ -37,7 +37,7 @@ func TestAccountStatsAdmissionPanicReleasesSlots(t *testing.T) {
 		require.Panics(t, func() { e.gw.Middleware()(c) })
 		n, _ := e.slots.InUse(context.Background(), "account", 1)
 		require.Zero(t, n)
-		n, _ = e.slots.InUse(context.Background(), "user", testUser)
+		n, _ = e.slots.InUse(context.Background(), core.KeySlots, 5)
 		require.Zero(t, n)
 	})
 	t.Run("websocket", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestAccountStatsAdmissionPanicReleasesSlots(t *testing.T) {
 		require.Panics(t, func() { _, _ = s.begin(context.Background(), wsMessage{data: raw}) })
 		n, _ := e.slots.InUse(context.Background(), "account", 11)
 		require.Zero(t, n)
-		n, _ = e.slots.InUse(context.Background(), "user", testUser)
+		n, _ = e.slots.InUse(context.Background(), core.KeySlots, 5)
 		require.Zero(t, n)
 	})
 }
@@ -188,7 +188,7 @@ func TestAccountStatsSuccessfulRequestsAndRelease(t *testing.T) {
 				require.NoError(t, err)
 				require.Zero(t, n)
 			}
-			n, _ := e.slots.InUse(context.Background(), "user", testUser)
+			n, _ := e.slots.InUse(context.Background(), core.KeySlots, 5)
 			require.Zero(t, n)
 			require.Empty(t, capture.ch)
 		})

@@ -395,8 +395,8 @@ func TestClientDisconnectCancelsUpstream(t *testing.T) {
 		t.Fatalf("record %+v, calls %v", rec, e.up.keys())
 	}
 	// Slots are released.
-	if n, _ := e.slots.InUse(context.Background(), "user", testUser); n != 0 {
-		t.Fatalf("user slot leaked: %d", n)
+	if n, _ := e.slots.InUse(context.Background(), core.KeySlots, 5); n != 0 {
+		t.Fatalf("key slot leaked: %d", n)
 	}
 	if n, _ := e.slots.InUse(context.Background(), "account", 1); n != 0 {
 		t.Fatalf("account slot leaked: %d", n)
@@ -501,15 +501,6 @@ func TestPriceInputsCaptured(t *testing.T) {
 	}
 }
 
-func TestUserConcurrencyLimit(t *testing.T) {
-	e := newEnv(t)
-	e.slots.inUse["user:"+itoa(testUser)] = 3 // limit is UserMaxConcurrency=3
-	r := e.messages(body(testModel, false))
-	if r.status != 429 || r.json().Get("error.type").String() != "rate_limit_error" {
-		t.Fatalf("user limit: %d %s", r.status, r.body)
-	}
-	e.record()
-}
 
 func TestAccountSlotsBusy(t *testing.T) {
 	e := newEnv(t)

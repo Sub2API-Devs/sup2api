@@ -351,20 +351,11 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	p := cl.principal
-	_, releaseUserSlot, ok, err := core.AcquireSlot(ctx, s.g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, cl.rid)
-	if err != nil {
-		return reject(cl, fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
-	}
-	if !ok {
-		return reject(cl, fromCore(core.ErrRateLimited.WithMessage("too many concurrent requests for this user"), errTypeRateLimited))
-	}
 	// Each turn is one request of the API key (CONTRACTS §60).
 	_, releaseKey, ke := s.g.admitKey(ctx, p, cl.rid)
 	if ke != nil {
-		releaseUserSlot()
 		return reject(cl, ke)
 	}
-	releaseUser := func() { releaseKey(); releaseUserSlot() }
 	var releaseAccount func()
 	handedOff := false
 	defer func() {
@@ -372,7 +363,7 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 			if releaseAccount != nil {
 				releaseAccount()
 			}
-			releaseUser()
+			releaseKey()
 		}
 	}()
 	var e *gwError
@@ -382,16 +373,17 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		releaseAccount, e = s.reuse(ctx, cl)
 	}
 	if e != nil {
-		releaseUser()
+		releaseKey()
 		return reject(cl, e)
 	}
-	t := &wsTurn{cl: cl, lease: cl.slotCtx, release: func() { releaseAccount(); releaseUser() }}
+	t := &wsTurn{cl: cl, lease: cl.slotCtx, release: func() { releaseAccount(); releaseKey() }}
 	if t.lease == nil {
 		t.lease = ctx
 	}
 	t.usage = newUsageAcc(s.rt.usage).WithLog("request_id", cl.rid, "plugin", s.rt.binding.Plugin.Key,
 		"platform", s.rt.platform, "protocol", s.rt.upstream)
 	payload := cl.body
+	var err error
 	if up := s.ref.MapModel(cl.model); up != cl.model {
 		if payload, err = sjson.SetBytes(payload, s.rt.modelPath, up); err != nil {
 			s.finish(ctx, t, wsOutcome{status: http.StatusInternalServerError, errType: errTypeInternal, msg: err.Error()})

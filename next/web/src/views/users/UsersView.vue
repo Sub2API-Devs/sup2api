@@ -71,7 +71,6 @@ const columns = computed<TableColumn[]>(() => {
   ]
   if (showBalance.value) cols.push({ key: 'balance', label: t('users.balance'), align: 'right' })
   cols.push(
-    { key: 'max_concurrency', label: t('users.maxConcurrency'), align: 'right' },
     { key: 'status', label: t('common.status') },
     { key: 'last_login_at', label: t('users.lastLogin') },
     { key: 'created_at', label: t('common.createdAt') },
@@ -122,10 +121,10 @@ function onAction(u: User, key: string) {
 const createOpen = ref(false)
 const creating = ref(false)
 const createErrors = ref<Record<string, string>>({})
-const createForm = reactive({ email: '', display_name: '', password: '', role_keys: [] as string[], max_concurrency: 5 })
+const createForm = reactive({ email: '', display_name: '', password: '', role_keys: [] as string[] })
 
 function openCreate() {
-  Object.assign(createForm, { email: '', display_name: '', password: '', role_keys: ['user'], max_concurrency: 5 })
+  Object.assign(createForm, { email: '', display_name: '', password: '', role_keys: ['user'] })
   createErrors.value = {}
   loadRoles()
   createOpen.value = true
@@ -142,8 +141,7 @@ async function submitCreate() {
       email: createForm.email.trim(),
       display_name: createForm.display_name.trim(),
       password: createForm.password,
-      role_keys: createForm.role_keys,
-      max_concurrency: Number(createForm.max_concurrency) || 0
+      role_keys: createForm.role_keys
     })
     toast(t('common.created'), 'success')
     createOpen.value = false
@@ -167,11 +165,11 @@ const editUser = ref<User | null>(null)
 const editOpen = ref(false)
 const saving = ref(false)
 const editErrors = ref<Record<string, string>>({})
-const editForm = reactive({ display_name: '', status: 'active', max_concurrency: 0 })
+const editForm = reactive({ display_name: '', status: 'active' })
 
 function openEdit(u: User) {
   editUser.value = u
-  Object.assign(editForm, { display_name: u.display_name, status: u.status, max_concurrency: u.max_concurrency })
+  Object.assign(editForm, { display_name: u.display_name, status: u.status })
   editErrors.value = {}
   editOpen.value = true
 }
@@ -183,8 +181,7 @@ async function submitEdit() {
   try {
     await api.patch(`/users/${editUser.value.id}`, {
       display_name: editForm.display_name.trim(),
-      status: editForm.status,
-      max_concurrency: Number(editForm.max_concurrency) || 0
+      status: editForm.status
     })
     toast(t('common.updated'), 'success')
     editOpen.value = false
@@ -340,9 +337,6 @@ function remove(u: User) {
           </div>
           <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
         </SField>
-        <SField :label="t('users.maxConcurrency')" :hint="t('users.maxConcurrencyHint')" :error="createErrors.max_concurrency">
-          <SInput v-model.number="createForm.max_concurrency" type="number" min="0" />
-        </SField>
       </form>
       <template #footer>
         <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
@@ -358,9 +352,6 @@ function remove(u: User) {
         </SField>
         <SField :label="t('common.status')" :error="editErrors.status">
           <SSelect v-model="editForm.status" :options="statusOptions" />
-        </SField>
-        <SField :label="t('users.maxConcurrency')" :hint="t('users.maxConcurrencyHint')" :error="editErrors.max_concurrency">
-          <SInput v-model.number="editForm.max_concurrency" type="number" min="0" />
         </SField>
       </form>
       <template #footer>

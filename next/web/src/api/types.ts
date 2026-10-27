@@ -47,7 +47,6 @@ export interface User {
   email: string
   display_name: string
   status: string
-  max_concurrency: number
   roles?: string[] // assumed
   group_ids?: number[] // assumed
   balance?: Money // assumed

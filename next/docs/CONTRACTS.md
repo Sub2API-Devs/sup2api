@@ -116,7 +116,7 @@
 | 方法 路径 | 权限 |
 |---|---|
 | GET `/users`（`?q=&status=&role=`） | `user:read` |
-| POST `/users` `{email, display_name, password, role_keys[], max_concurrency}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:manage` |
+| POST `/users` `{email, display_name, password, role_keys[]}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:manage` |
 | GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
 | DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
 | PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；授予的 role_keys 必须是操作者持有权限的子集；只有超级管理员能授予/撤销 `super_admin` |
@@ -543,7 +543,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 - `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, prompt_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`ip` 时为调用 IP（没记录到 IP 的请求归入空串）并带该 IP 最近一次请求的时间 `last_at`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。`prompt_tokens` 按各请求保存的 usage semantics 归一化：inclusive 使用原始输入，exclusive 将输入、缓存读和两类缓存写入相加，再汇总；缓存命中率为 `cache_read_tokens / prompt_tokens`。历史记录若有缓存用量但缺少 semantics，所在汇总项的 `prompt_tokens` 返回 `null`，界面显示“—”，不按客户端协议猜测。新免费记录也保存 semantics，但不额外保存定价请求头或参数。
 - `/ledger`、`/me/ledger` 列表项：`{id, user_id, user_email?, user_name?, delta, balance_after, kind, ref_type, ref_id, idempotency_key, operator_id, plugin_key, note, created_at}`（金额为字符串）。
 - `/prices` 列表项：`{id, model, mode, config, expression, expr_version, expr_hash, source, plugin_key, enabled, note, updated_by, updated_at}`；`analysis` 只在详情返回。
-- `/users` 列表项：`{id, email, display_name, status, max_concurrency, roles:[key], group_ids:[id], balance?, last_login_at, created_at, updated_at}`；`balance` 只对有 `balance:all:read` 的调用者返回。
+- `/users` 列表项：`{id, email, display_name, status, roles:[key], group_ids:[id], balance?, last_login_at, created_at, updated_at}`；`balance` 只对有 `balance:all:read` 的调用者返回。2026-10-27 起不再有用户级最大并发：请求与响应都没有 `max_concurrency`（旧客户端发来会被忽略），网关只按 API Key（§60）与账号限制并发；`users.max_concurrency` 列保留但不读写，留给滚动升级期间的旧核心，之后的迁移再删除。
 
 ### 15.3 GET `/nodes`（`node:read`，`plugin/api/ops.go`；状态 JSON 见 `plugin/rollout/types.go`、`plugin/rollout/reconcile.go`）
 
@@ -2287,7 +2287,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **清单。** `Endpoint.Kind` 新增 `websocket`：必须 `GET`、`response.stream` 为 `websocket`、无 `response.nonStream`/`request.stream`/`request.streamPath`/`modelParam`/`modelSource`/`usageSource: plugin`/`task`，模型只从每条消息的 `request.modelPath` 读；`billing: usage` 时需要非空 `usage.sse`，规则按消息 `type` 匹配。新能力 `platform.websocket.v1`（需 `platform.adapter.v1`）表示插件的 `BuildUpstreamRequest` 能为本平台 WebSocket 协议返回 `GET ws(s)://…` 握手；SDK 在清单声明它时上报该能力。内置 openai 平台新增端点 `GET /v1/responses`，协议 `openai.responses_ws`，用量规则读取 `response.completed`/`response.incomplete`/`response.failed`，粘性规则 `openai-prompt-cache-key` 也匹配该协议。openai 插件 0.3.0 声明该能力，握手带 `OpenAI-Beta: responses_websockets=2026-02-06`（客户端自带版本时保留）。
 
-**会话。** 升级前完成鉴权与连接数限制（每个 API Key 集群范围 64 条，Redis 并发位 `ws:<key id>`）；排空中的节点不接受新会话。每条 `response.create` 是一轮：新请求 ID、模型白名单、钩子、价格与余额、用户并发位；首轮按 HTTP 规则调度账号并建立上游连接，握手失败交给插件分类并换号；后续轮次复用同一账号与连接，账号并发位或限额最多等 10 s。只路由到声明了 `platform.websocket.v1` 的插件的原生账号类型，不做协议转换。每轮一条使用记录（`protocol=openai.responses_ws`、`stream=true`）与一次结算，轮次结束即释放用户与账号并发位。带 HTTP 状态的上游 `error` 事件交给插件分类以冷却或禁用账号，连接保持。首条消息超时 30 s（1008）、轮间空闲 300 s（1000）、上游断开（1011）。节点排空时空闲会话立即以 1012 关闭，进行中的一轮最多再等 30 s；核心经 `gateway.Deps.Draining` 观察请求闸门，因为 `http.Server.Shutdown` 不跟踪已升级连接。
+**会话。** 升级前完成鉴权与连接数限制（每个 API Key 集群范围 64 条，Redis 并发位 `ws:<key id>`）；排空中的节点不接受新会话。每条 `response.create` 是一轮：新请求 ID、模型白名单、钩子、价格与余额、API Key 并发位与限速；首轮按 HTTP 规则调度账号并建立上游连接，握手失败交给插件分类并换号；后续轮次复用同一账号与连接，账号并发位或限额最多等 10 s。只路由到声明了 `platform.websocket.v1` 的插件的原生账号类型，不做协议转换。每轮一条使用记录（`protocol=openai.responses_ws`、`stream=true`）与一次结算，轮次结束即释放 API Key 与账号并发位。带 HTTP 状态的上游 `error` 事件交给插件分类以冷却或禁用账号，连接保持。首条消息超时 30 s（1008）、轮间空闲 300 s（1000）、上游断开（1011）。节点排空时空闲会话立即以 1012 关闭，进行中的一轮最多再等 30 s；核心经 `gateway.Deps.Draining` 观察请求闸门，因为 `http.Server.Shutdown` 不跟踪已升级连接。
 
 **不在范围。** ChatGPT OAuth/Codex 账号、上游连接池与预热、断线后 `previous_response_id` 恢复和 HTTP 桥接回退未移植；上游断开时由客户端重连。
 
@@ -2481,7 +2481,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 | Hot | 64 | 网关请求路径：模型解析、预估、钩子、调度、`BuildUpstreamRequest`、`ClassifyError`、用量提取 |
 | Console | 16 | 凭证校验、测试请求、拉取模型、额度查询、插件 HTTP 路由 |
 | Background | 8 | 任务、事件、广播、Poll、监控、对账、数据迁移 |
-| Execute | 1024 | 插件驱动执行（§31）的 `Execute`，整个上游交换期间一直占用；真正的并发由核心的账号与用户槽位限制，这里只是兜底 |
+| Execute | 1024 | 插件驱动执行（§31）的 `Execute`，整个上游交换期间一直占用；真正的并发由核心的账号与 API Key 槽位限制，这里只是兜底 |
 
 满了的调用排队等待，直到拿到槽位或调用方 ctx 到期，到期时返回 `plugin <key>: waiting for a free call slot: context deadline exceeded`。目的：长流式 `Execute` 和后台任务不会占满请求路径需要的调用槽位。
 
@@ -4273,8 +4273,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 60.2 网关
 
-- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在占用户并发槽之后、选账号之前调用 `admitKey`：先占 `apikey` 类并发槽（`core.KeySlots`，与用户、账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
-- 不设上限的 Key 也计数（槽与分钟窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与用户并发、账号限速一致。
+- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在选账号之前调用 `admitKey`：先占 `apikey` 类并发槽（`core.KeySlots`，与账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
+- 不设上限的 Key 也计数（槽与分钟窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与账号限速一致。
 - 超限返回 429（`rate_limited`，消息含 "API key"），并发超限 `Retry-After: 5`，RPM/TPM 超限 `Retry-After` 为到下一分钟的秒数；不会选账号、不会请求上游，用量记录的 `error_type` 为 `rate_limited`。
 - TPM 与账号 TPM（§18）相同：响应结束、知道 token 数后由 `countTokens` 同时计入账号与 Key 的窗口，同一分钟内同时进行的大请求可能超出，超出后本分钟剩余的请求被拒。
 

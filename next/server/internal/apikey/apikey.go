@@ -165,23 +165,22 @@ func cacheKey(hash string) string { return "apikey:" + hash }
 // facts are deliberately not cached: a concurrent revoke must not be undone
 // by a reader refilling a Redis entry after invalidation.
 type cached struct {
-	Found              bool       `json:"found"`
-	KeyID              int64      `json:"key_id,omitempty"`
-	UserID             int64      `json:"user_id,omitempty"`
-	KeyStatus          string     `json:"key_status,omitempty"`
-	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
-	UserActive         bool       `json:"user_active,omitempty"`
-	UserMaxConcurrency int        `json:"user_max_concurrency,omitempty"`
-	GroupID            int64      `json:"group_id,omitempty"`
-	GroupName          string     `json:"group_name,omitempty"`
-	GroupStatus        string     `json:"group_status,omitempty"`
-	RateMultiplier     string     `json:"rate_multiplier,omitempty"`
-	ModelAllowlist     []string   `json:"model_allowlist,omitempty"`
-	ModelFilterMode    string     `json:"model_filter_mode,omitempty"`
-	GroupAvailable     bool       `json:"group_available,omitempty"`
-	AllowedIPs         []string   `json:"allowed_ips"`
-	KeyLimits          core.KeyLimits
-	KeyQuota           core.KeyQuota
+	Found           bool       `json:"found"`
+	KeyID           int64      `json:"key_id,omitempty"`
+	UserID          int64      `json:"user_id,omitempty"`
+	KeyStatus       string     `json:"key_status,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	UserActive      bool       `json:"user_active,omitempty"`
+	GroupID         int64      `json:"group_id,omitempty"`
+	GroupName       string     `json:"group_name,omitempty"`
+	GroupStatus     string     `json:"group_status,omitempty"`
+	RateMultiplier  string     `json:"rate_multiplier,omitempty"`
+	ModelAllowlist  []string   `json:"model_allowlist,omitempty"`
+	ModelFilterMode string     `json:"model_filter_mode,omitempty"`
+	GroupAvailable  bool       `json:"group_available,omitempty"`
+	AllowedIPs      []string   `json:"allowed_ips"`
+	KeyLimits       core.KeyLimits
+	KeyQuota        core.KeyQuota
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -227,11 +226,10 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 	}
 	s.touch(e.KeyID)
 	return &core.APIKeyPrincipal{
-		KeyID:              e.KeyID,
-		UserID:             e.UserID,
-		UserMaxConcurrency: e.UserMaxConcurrency,
-		KeyLimits:          e.KeyLimits,
-		KeyQuota:           e.KeyQuota,
+		KeyID:     e.KeyID,
+		UserID:    e.UserID,
+		KeyLimits: e.KeyLimits,
+		KeyQuota:  e.KeyQuota,
 		Group: core.GroupInfo{
 			ID:              e.GroupID,
 			Name:            e.GroupName,
@@ -247,7 +245,7 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	e := &cached{}
 	var rate string
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
-			(u.status = 'active' AND u.deleted_at IS NULL), u.max_concurrency,
+			(u.status = 'active' AND u.deleted_at IS NULL),
 			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
 			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips,
 			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
@@ -255,7 +253,7 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 		JOIN users u ON u.id = k.user_id
 		JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
-		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive, &e.UserMaxConcurrency,
+		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
 		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs,
 		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used)
 	switch {

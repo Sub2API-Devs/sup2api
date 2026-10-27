@@ -107,7 +107,7 @@ func TestRealCoreResponsesWebSocket(t *testing.T) {
 	}
 	badID, goodID := account("ws-bad-"+suffix, badKey, 1), account("ws-good-"+suffix, goodKey, 5)
 	email, password := "ws-"+suffix+"@real.test", "Real-ws-pass!"
-	userID := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}, "max_concurrency": 10}).id("data.id")
+	userID := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}}).id("data.id")
 	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", userID), map[string]any{"group_ids": []int64{group}})
 	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", userID), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	apiKey := admin.login(email, password).ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "ws-" + suffix, "group_id": group}).str("data.key")

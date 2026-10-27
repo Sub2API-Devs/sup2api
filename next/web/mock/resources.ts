@@ -273,7 +273,6 @@ interface MockUser {
   email: string
   display_name: string
   status: string
-  max_concurrency: number
   roles: string[]
   group_ids: number[]
   balance: string
@@ -283,16 +282,16 @@ interface MockUser {
 }
 
 const users: MockUser[] = [
-  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', max_concurrency: 0, roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
-  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', max_concurrency: 10, roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
-  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', max_concurrency: 5, roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
-  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', max_concurrency: 3, roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
-  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', max_concurrency: 1, roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
-  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', max_concurrency: 5, roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', max_concurrency: 1, roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
+  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
+  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
+  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
+  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
-  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', max_concurrency: 3, roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
+  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
 }
 
 function findUser(req: MockRequest) {
@@ -311,7 +310,7 @@ on('POST', '/users', (req) => {
   if (users.some((u) => u.email === b.email)) return invalid('email', 'email already registered')
   if (!b.password || String(b.password).length < 8) return invalid('password', 'password must be at least 8 characters')
   const roleKeys: string[] = Array.isArray(b.role_keys) && b.role_keys.length ? b.role_keys : ['user']
-  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', max_concurrency: Number(b.max_concurrency) || 0, roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
+  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
   users.unshift(u)
   return u
 })
@@ -319,10 +318,8 @@ on('PATCH', '/users/:id', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
   const b = req.body || {}
-  if (b.max_concurrency !== undefined && !(Number(b.max_concurrency) >= 0)) return invalid('max_concurrency', 'must be >= 0')
   if (b.display_name !== undefined) u.display_name = b.display_name
   if (b.status !== undefined) u.status = b.status
-  if (b.max_concurrency !== undefined) u.max_concurrency = Number(b.max_concurrency)
   u.updated_at = now()
   return u
 })

@@ -26,21 +26,20 @@ const (
 
 // User is the API view of a user.
 type User struct {
-	ID             int64      `json:"id"`
-	Email          string     `json:"email"`
-	DisplayName    string     `json:"display_name"`
-	Status         string     `json:"status"`
-	MaxConcurrency int        `json:"max_concurrency"`
-	Roles          []string   `json:"roles"`
-	GroupIDs       []int64    `json:"group_ids"`
-	Balance        *string    `json:"balance,omitempty"` // only for callers with balance:all:read
-	LastLoginAt    *time.Time `json:"last_login_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID          int64      `json:"id"`
+	Email       string     `json:"email"`
+	DisplayName string     `json:"display_name"`
+	Status      string     `json:"status"`
+	Roles       []string   `json:"roles"`
+	GroupIDs    []int64    `json:"group_ids"`
+	Balance     *string    `json:"balance,omitempty"` // only for callers with balance:all:read
+	LastLoginAt *time.Time `json:"last_login_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 const userSelect = `
-SELECT u.id, u.email, u.display_name, u.status, u.max_concurrency, u.last_login_at, u.created_at, u.updated_at,
+SELECT u.id, u.email, u.display_name, u.status, u.last_login_at, u.created_at, u.updated_at,
     COALESCE((SELECT array_agg(r.key ORDER BY r.key) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id), '{}'),
     COALESCE((SELECT array_agg(ug.group_id ORDER BY ug.group_id) FROM user_groups ug WHERE ug.user_id = u.id), '{}'),
     COALESCE((SELECT b.balance FROM user_balances b WHERE b.user_id = u.id), 0)::numeric(20,8)::text
@@ -49,7 +48,7 @@ FROM users u`
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	var balance string
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Status, &u.MaxConcurrency, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt,
+	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Status, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt,
 		&u.Roles, &u.GroupIDs, &balance)
 	if err != nil {
 		return nil, err
@@ -118,11 +117,10 @@ func (s *Service) ListUsers(ctx context.Context, f ListUsersFilter) ([]*User, in
 
 // CreateUserInput is the body of POST /users.
 type CreateUserInput struct {
-	Email          string   `json:"email"`
-	DisplayName    string   `json:"display_name"`
-	Password       string   `json:"password"`
-	RoleKeys       []string `json:"role_keys"`
-	MaxConcurrency *int     `json:"max_concurrency"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"display_name"`
+	Password    string   `json:"password"`
+	RoleKeys    []string `json:"role_keys"`
 }
 
 // IsDefaultRoles reports whether keys is empty or exactly the default role.
@@ -156,13 +154,6 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if utf8.RuneCountInString(in.DisplayName) > 100 {
 		fields = append(fields, core.FieldError{Field: "display_name", Code: "too_long", Message: "at most 100 characters"})
 	}
-	maxConc := 5
-	if in.MaxConcurrency != nil {
-		maxConc = *in.MaxConcurrency
-		if maxConc < 0 {
-			fields = append(fields, core.FieldError{Field: "max_concurrency", Code: "invalid", Message: "must be >= 0"})
-		}
-	}
 	if len(fields) > 0 {
 		return nil, 0, core.InvalidFields(fields...)
 	}
@@ -187,8 +178,8 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 		return nil, 0, err
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash, max_concurrency) VALUES ($1, $2, $3, $4) RETURNING id`,
-		email, in.DisplayName, string(hash), maxConc).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+		email, in.DisplayName, string(hash)).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		return nil, 0, emailTaken()
 	}
@@ -209,9 +200,8 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 
 	// SEC-M5: audit user creation
 	detail := map[string]any{
-		"email":           email,
-		"roles":           roles,
-		"max_concurrency": maxConc,
+		"email": email,
+		"roles": roles,
 	}
 	if err := audit.Audit(ctx, tx, actorID, "user.create", "user", strconv.FormatInt(id, 10), detail); err != nil {
 		return nil, 0, err
@@ -223,11 +213,10 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 
 // UpdateUserInput is the body of PATCH /users/:id (all fields optional).
 type UpdateUserInput struct {
-	Email          *string `json:"email"`
-	DisplayName    *string `json:"display_name"`
-	Status         *string `json:"status"`
-	MaxConcurrency *int    `json:"max_concurrency"`
-	Password       *string `json:"password"`
+	Email       *string `json:"email"`
+	DisplayName *string `json:"display_name"`
+	Status      *string `json:"status"`
+	Password    *string `json:"password"`
 }
 
 var (
@@ -271,9 +260,6 @@ func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError)
 	}
 	if in.Status != nil && *in.Status != StatusActive && *in.Status != StatusDisabled {
 		fields = append(fields, core.FieldError{Field: "status", Code: "invalid", Message: "must be active or disabled"})
-	}
-	if in.MaxConcurrency != nil && *in.MaxConcurrency < 0 {
-		fields = append(fields, core.FieldError{Field: "max_concurrency", Code: "invalid", Message: "must be >= 0"})
 	}
 	if in.Password != nil {
 		if f := validatePassword("password", *in.Password); f != nil {
@@ -403,10 +389,9 @@ UPDATE users SET
     email = COALESCE($2, email),
     display_name = COALESCE($3, display_name),
     status = COALESCE($4, status),
-    max_concurrency = COALESCE($5, max_concurrency),
-    password_hash = COALESCE($6, password_hash),
+    password_hash = COALESCE($5, password_hash),
     updated_at = now()
-WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency, nilBytes(hash))
+WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 	if store.IsUniqueViolation(err, "") {
 		return 0, nil, emailTaken()
 	}
@@ -436,9 +421,6 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency,
 	}
 	if in.Status != nil {
 		detail["status"] = *in.Status
-	}
-	if in.MaxConcurrency != nil {
-		detail["max_concurrency"] = *in.MaxConcurrency
 	}
 	if in.Password != nil {
 		detail["password_changed"] = true

@@ -233,12 +233,12 @@ func TestFilesHTTPRoundtripOwnershipAndBinding(t *testing.T) {
 			t.Fatalf("read %s: %d %s", path, status, raw)
 		}
 	}
-	e.auth.keys["rotated"] = &core.APIKeyPrincipal{KeyID: 99, UserID: testUser, UserMaxConcurrency: 3, Group: core.GroupInfo{ID: testGroup}}
+	e.auth.keys["rotated"] = &core.APIKeyPrincipal{KeyID: 99, UserID: testUser, Group: core.GroupInfo{ID: testGroup}}
 	status, _ = fileRequest(t, e, "GET", "/v1/files/"+id, "rotated", "", nil, "")
 	if status != 200 {
 		t.Fatal("same-owner rotation lost resource", status)
 	}
-	e.auth.keys["other"] = &core.APIKeyPrincipal{KeyID: 100, UserID: testUser + 1, UserMaxConcurrency: 3, Group: core.GroupInfo{ID: testGroup}}
+	e.auth.keys["other"] = &core.APIKeyPrincipal{KeyID: 100, UserID: testUser + 1, Group: core.GroupInfo{ID: testGroup}}
 	before := tr.calls
 	status, _ = fileRequest(t, e, "GET", "/v1/files/"+id, "other", "", nil, "")
 	if status != 404 || tr.calls != before {
@@ -453,7 +453,7 @@ func (resourceDenyLimiter) TryHit(context.Context, core.AccountRef, string) (boo
 	return false, nil
 }
 func TestFilesHTTPAccountAdmission(t *testing.T) {
-	for _, mode := range []string{"busy_first", "busy_all", "rate_limited", "user_busy"} {
+	for _, mode := range []string{"busy_first", "busy_all", "rate_limited", "key_busy"} {
 		t.Run(mode, func(t *testing.T) {
 			e, s, tr := resourceTestEnv(t)
 			switch mode {
@@ -465,8 +465,9 @@ func TestFilesHTTPAccountAdmission(t *testing.T) {
 				}
 			case "rate_limited":
 				e.gw.d.Limiter = resourceDenyLimiter{}
-			case "user_busy":
-				e.slots.inUse["user:"+itoa(testUser)] = 3
+			case "key_busy":
+				e.slots.limits[core.KeySlots+":5"] = 1
+				e.slots.inUse[core.KeySlots+":5"] = 1
 			}
 			body, ctype := fileMultipart(t, "abc")
 			status, _ := fileRequest(t, e, "POST", "/v1/files", testKey, "", body, ctype)

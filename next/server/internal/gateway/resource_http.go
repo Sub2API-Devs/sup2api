@@ -71,17 +71,7 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 		return true
 	}
 	x.owner = core.ResourceOwner{UserID: p.UserID, GroupID: p.Group.ID}
-	ctx, release, admitted, err := core.AcquireSlot(c.Request.Context(), g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, x.rid)
-	if err != nil {
-		x.fail(core.ErrUnavailable)
-		return true
-	}
-	if !admitted {
-		x.fail(core.ErrRateLimited)
-		return true
-	}
-	defer release()
-	ctx, releaseKey, e := g.admitKey(ctx, p, x.rid)
+	ctx, releaseKey, e := g.admitKey(c.Request.Context(), p, x.rid)
 	if e != nil {
 		writeError(c, "anthropic", e)
 		return true

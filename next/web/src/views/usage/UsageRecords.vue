@@ -39,8 +39,20 @@ const { items, loading, page, pageSize, total, filters, reload: reloadList } = u
   client_request_id: ''
 })
 
-const showTrend = ref(false)
-const showIPs = ref(true)
+// Which panels are open survives a reload, per browser and per page (like the sidebar).
+const panelsKey = `s2a.${props.admin ? 'usage-log' : 'my-usage-log'}.panels`
+const savedPanels = readPanels()
+const showTrend = ref(savedPanels.trend ?? false)
+const showIPs = ref(savedPanels.ips ?? true)
+watch([showTrend, showIPs], ([trend, ips]) => localStorage.setItem(panelsKey, JSON.stringify({ trend, ips })))
+function readPanels(): { trend?: boolean; ips?: boolean } {
+  try {
+    const v = JSON.parse(localStorage.getItem(panelsKey) || '{}')
+    return { trend: typeof v?.trend === 'boolean' ? v.trend : undefined, ips: typeof v?.ips === 'boolean' ? v.ips : undefined }
+  } catch {
+    return {}
+  }
+}
 const days = useUsageSummary(props.summaryPath, filters, 'day')
 const ips = useUsageSummary(props.summaryPath, filters, 'ip', showIPs)
 const chartOption = computed(() => dailyChartOption(days.rows.value, { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }))

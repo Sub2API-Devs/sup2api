@@ -14,8 +14,6 @@ export default {
   rolesUnavailable: '无法加载角色（需要 role:read 权限）。',
   superuser: '超级管理员',
   balance: '余额',
-  maxConcurrency: '最大并发',
-  maxConcurrencyHint: '该用户允许的网关并发请求数，0 表示不限。',
   lastLogin: '最近登录',
   assignRoles: '分配角色',
   assignRolesTitle: '{name} 的角色',

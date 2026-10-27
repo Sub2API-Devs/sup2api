@@ -245,18 +245,7 @@ func (c *call) run(ctx context.Context) {
 		return
 	}
 
-	// 5. User concurrency slot.
-	ctx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, c.rid)
-	if err != nil {
-		c.fail(fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
-		return
-	}
-	if !ok {
-		c.fail(fromCore(core.ErrRateLimited.WithMessage("too many concurrent requests for this user"), errTypeRateLimited))
-		return
-	}
-	defer release()
-	// 5b. The caps of the API key.
+	// 5. The caps of the API key.
 	ctx, releaseKey, e := c.g.admitKey(ctx, p, c.rid)
 	if e != nil {
 		c.fail(e)

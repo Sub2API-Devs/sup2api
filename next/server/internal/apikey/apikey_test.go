@@ -160,7 +160,7 @@ func setup(t *testing.T) *env {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	e := &env{t: t, db: db, mr: mr}
 	e.admin = e.exec1(`INSERT INTO users (email, password_hash) VALUES ('admin@x.com', 'x') RETURNING id`)
-	e.user = e.exec1(`INSERT INTO users (email, password_hash, max_concurrency) VALUES ('u@x.com', 'x', 3) RETURNING id`)
+	e.user = e.exec1(`INSERT INTO users (email, password_hash) VALUES ('u@x.com', 'x') RETURNING id`)
 	e.authz = &fakeAuthz{admin: e.admin, noGateway: map[int64]bool{}}
 	e.svc = New(db, rdb, e.authz, fakeRegistry{gen: testGen()})
 	engine := gin.New()
@@ -487,7 +487,7 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.UserID != e.user || p.UserMaxConcurrency != 3 || p.Group.ID != pub || p.Group.RateMultiplier.String() != "1.5" ||
+	if p.UserID != e.user || p.Group.ID != pub || p.Group.RateMultiplier.String() != "1.5" ||
 		len(p.Group.ModelAllowlist) != 1 {
 		t.Fatalf("principal: %+v", p)
 	}

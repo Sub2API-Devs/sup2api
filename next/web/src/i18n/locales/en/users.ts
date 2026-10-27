@@ -14,8 +14,6 @@ export default {
   rolesUnavailable: 'Roles could not be loaded (requires role:read).',
   superuser: 'Superuser',
   balance: 'Balance',
-  maxConcurrency: 'Max concurrency',
-  maxConcurrencyHint: 'Concurrent gateway requests allowed for this user; 0 = unlimited.',
   lastLogin: 'Last login',
   assignRoles: 'Assign roles',
   assignRolesTitle: 'Roles of {name}',
