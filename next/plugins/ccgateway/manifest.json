@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费；不支持 token 计数和模型发现。"
   },
-  "version": "0.1.106",
+  "version": "0.1.107",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",
@@ -68,9 +68,9 @@
         "auto_disable": {"configurable": true, "default": true},
         "schedulable": {"configurable": true, "default": true}
       },
-      "defaultModels": ["claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"],
+      "defaultModels": ["claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
       "defaultModelsBySubscription": {
-        "pro": ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-sonnet-5-5"]
+        "pro": ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
       },
       "platforms": [
         {
@@ -130,7 +130,7 @@
         "auto_disable": {"configurable": true, "default": true},
         "schedulable": {"configurable": true, "default": true}
       },
-      "defaultModels": ["claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"],
+      "defaultModels": ["claude-fable-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
       "platforms": [
         {
           "platform": "anthropic",

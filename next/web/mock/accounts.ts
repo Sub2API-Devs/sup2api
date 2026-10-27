@@ -143,7 +143,7 @@ interface MockAccountType {
 }
 
 // Built-in model list of the Claude Code account types (plugins/ccgateway/manifest.json).
-const CC_MODELS = ['claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5']
+const CC_MODELS = ['claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
 
 // Account types (CONTRACTS §13): identified by (plugin_key, type); each
 // declares the platforms it supports. GET /account-types adds `platforms`
