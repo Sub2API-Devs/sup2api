@@ -183,3 +183,6 @@ issues/
 # Local MCP configs (keep MCP settings out of git)
 .mcp.json
 .mcp-servers/
+
+# Local reverse-engineering artifacts (official binaries, restored sources)
+/artifacts/
