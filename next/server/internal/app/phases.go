@@ -502,9 +502,17 @@ func (b *boot) startHTTP() error {
 	}
 	// Expose non-readiness before closing the listener, so health-based
 	// balancers can remove this node while existing requests are still alive.
+	// A managed core drained by its shell skips both waits: the shell already
+	// stopped sending it traffic, and a model stream rarely ends within the
+	// grace anyway. Canceled requests still finish their deferred usage Submit
+	// before billing stops (shutdownHTTP waits for every handler).
 	b.gate.stop()
-	time.Sleep(cfg.ShutdownDelay)
-	return shutdownHTTP(srv, b.gate, cancelRequests, 30*time.Second)
+	delay, grace := cfg.ShutdownDelay, 30*time.Second
+	if b.managed != nil && b.managed.draining() {
+		delay, grace = 0, 0
+	}
+	time.Sleep(delay)
+	return shutdownHTTP(srv, b.gate, cancelRequests, grace)
 }
 
 // publishManaged hands the control endpoints the live objects they poll. Only

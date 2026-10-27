@@ -81,6 +81,8 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	addr := port.Addr().String()
 	port.Close()
 	cfg := &config.Config{HTTPAddr: addr, NodeID: "managed-runtime-test", DatabaseURL: db.Pool.Config().ConnString(), RedisURL: "redis://" + mr.Addr(), MasterKey: bytes.Repeat([]byte{1}, 32), JWTSecret: bytes.Repeat([]byte{2}, 32), BootstrapAdminEmail: "must-not-bootstrap@example.com", BootstrapAdminPassword: "must-not-bootstrap-password",
+		// A drained core must not wait this out (the shell already moved its traffic).
+		ShutdownDelay: 5 * time.Second,
 		Managed: config.ManagedConfig{Enabled: true, Socket: filepath.Join(dir, "control.sock"), Token: strings.Repeat("t", 32), ReleaseDigest: "release", BootID: "boot"},
 		Plugins: config.PluginConfig{DataDir: filepath.Join(dir, "plugins"), BuiltinDir: dir, DevMode: true, AllowUnsigned: true}}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -201,9 +203,13 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	revoked := time.Now()
 	s = waitStatus("drained")
 	if !s.DrainComplete || s.Ready {
 		t.Fatalf("bad drained status: %+v", s)
+	}
+	if took := time.Since(revoked); took > 3*time.Second {
+		t.Fatalf("drain took %s: a drained core must skip the shutdown delay and grace", took)
 	}
 	if code, b, err := call("POST", runtimecontract.ShutdownPath, nil); err != nil || code != 200 {
 		t.Fatalf("shutdown: %d %s %v", code, b, err)

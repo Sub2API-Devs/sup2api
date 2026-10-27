@@ -261,6 +261,14 @@ func (m *managedCore) drain() {
 	m.drainLocked()
 }
 
+// draining reports whether the shell asked this core to drain (as opposed to
+// a signal or a failure ending it).
+func (m *managedCore) draining() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mode == "draining"
+}
+
 func (m *managedCore) drainLocked() {
 	if m.mode == "drained" || m.mode == "draining" {
 		return
