@@ -509,8 +509,9 @@ func (s *serveSet) buildRuntime(ctx context.Context, peerManager *peer.Manager, 
 	go s.pollPeers(ctx)
 	var rt *control.LocalRuntime
 	// LocalReady is asked on every public request; the core status behind it
-	// reads PostgreSQL, so the answer is cached briefly (proxy.ReadyCache).
-	localReady := proxy.NewReadyCache(func() bool {
+	// reads PostgreSQL, so the core is taken as ready until a request fails to
+	// reach it, then asked at most every 30 s (proxy.LazyReady).
+	localReady := proxy.NewLazyReady(func() bool {
 		if rt == nil {
 			return false
 		}
@@ -518,7 +519,7 @@ func (s *serveSet) buildRuntime(ctx context.Context, peerManager *peer.Manager, 
 		defer cancel()
 		st, _, err := rt.Status(statusCtx)
 		return err == nil && st.Ready
-	}, time.Second)
+	}, 30*time.Second)
 	router = proxy.New(proxy.Config{NodeID: c.NodeID, PeerTLS: s.clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
 		for _, n := range s.peerCache.Load().([]control.Node) {
 			if n.Enabled && n.PeerURL == route.PeerURL && n.CoreBootID == route.CoreBootID && n.RouteRevision == route.PeerRevision && n.ServingLocal(time.Now()) {
@@ -526,7 +527,7 @@ func (s *serveSet) buildRuntime(ctx context.Context, peerManager *peer.Manager, 
 			}
 		}
 		return false
-	}, LocalReady: localReady.Ready})
+	}, LocalReady: localReady.Ready, LocalSucceeded: localReady.Succeeded, LocalFailed: localReady.Failed})
 	s.router = router
 	rt = &control.LocalRuntime{Releases: s.releases, Supervisor: s.supervisor, Router: router, NodeID: c.NodeID, PrimaryNode: c.PrimaryNode, CoreSocket: c.CoreSocket, ManagementSocket: c.ManagementSocket, ManagementTokenFile: c.ManagementTokenFile, CoreURL: c.CoreURL, Root: c.Root, Args: c.CoreArgs, Env: c.coreEnvironment(), InheritEnv: c.CoreEnvInherit}
 	s.rt = rt

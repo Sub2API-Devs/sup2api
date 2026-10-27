@@ -5,54 +5,68 @@ import (
 	"time"
 )
 
-// ReadyCache answers the router's per-request local readiness question
-// without asking the core every time. The core's status check reads the
-// approved plugins from PostgreSQL, a dozen round trips; asked per request it
-// cost 0.36 s on a node 30 ms away from the database (the core itself answers
-// in 1 ms). A result younger than ttl is reused. An older "ready" is still
-// returned while one background check refreshes it, so no request waits; an
-// older or missing "not ready" is checked at once, so a core that became
-// ready takes traffic without waiting for the next refresh.
-type ReadyCache struct {
-	check func() bool
-	ttl   time.Duration
-	now   func() time.Time
+// LazyReady answers the router's local readiness question without asking
+// the core on every request: the core's status check reads the approved
+// plugins from PostgreSQL, a dozen round trips (0.36 s per request on a node
+// 30 ms from the database). The local core is taken as ready by default and
+// as long as requests reach it. Once a request fails to reach it (Failed),
+// readiness is asked at most once per interval until the core answers ready
+// or a request gets through again (Succeeded). Core exits and upgrades do not
+// depend on this: the supervisor and the route mode handle them.
+type LazyReady struct {
+	check    func() bool
+	interval time.Duration
+	now      func() time.Time
 
-	mu         sync.Mutex
-	value      bool
-	at         time.Time
-	refreshing bool
+	mu        sync.Mutex
+	suspect   bool
+	checkedAt time.Time
+	last      bool
+	checking  bool
 }
 
-// NewReadyCache wraps check (the core status call) with a ttl cache.
-func NewReadyCache(check func() bool, ttl time.Duration) *ReadyCache {
-	return &ReadyCache{check: check, ttl: ttl, now: time.Now}
+// NewLazyReady wraps check (the core status call).
+func NewLazyReady(check func() bool, interval time.Duration) *LazyReady {
+	return &LazyReady{check: check, interval: interval, now: time.Now}
 }
 
-// Ready reports the cached readiness, refreshing it as described above.
-func (c *ReadyCache) Ready() bool {
-	c.mu.Lock()
-	if !c.at.IsZero() && c.now().Sub(c.at) < c.ttl {
-		v := c.value
-		c.mu.Unlock()
-		return v
-	}
-	if !c.at.IsZero() && c.value {
-		if !c.refreshing {
-			c.refreshing = true
-			go c.refresh()
-		}
-		c.mu.Unlock()
+// Ready reports whether to send requests to the local core.
+func (l *LazyReady) Ready() bool {
+	l.mu.Lock()
+	if !l.suspect {
+		l.mu.Unlock()
 		return true
 	}
-	c.mu.Unlock()
-	return c.refresh()
+	if l.checking || (!l.checkedAt.IsZero() && l.now().Sub(l.checkedAt) < l.interval) {
+		v := l.last
+		l.mu.Unlock()
+		return v
+	}
+	l.checking = true
+	l.mu.Unlock()
+	v := l.check()
+	l.mu.Lock()
+	l.checking, l.checkedAt, l.last = false, l.now(), v
+	if v {
+		l.suspect = false
+	}
+	l.mu.Unlock()
+	return v
 }
 
-func (c *ReadyCache) refresh() bool {
-	v := c.check()
-	c.mu.Lock()
-	c.value, c.at, c.refreshing = v, c.now(), false
-	c.mu.Unlock()
-	return v
+// Failed records a request that could not reach the local core: the next
+// Ready asks the core at once, later ones at most once per interval.
+func (l *LazyReady) Failed() {
+	l.mu.Lock()
+	if !l.suspect {
+		l.suspect, l.checkedAt, l.last = true, time.Time{}, false
+	}
+	l.mu.Unlock()
+}
+
+// Succeeded records a response from the local core: it is ready again.
+func (l *LazyReady) Succeeded() {
+	l.mu.Lock()
+	l.suspect = false
+	l.mu.Unlock()
 }

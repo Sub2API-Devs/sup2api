@@ -34,10 +34,14 @@ type Route struct {
 	CoreBootID   string
 }
 type Config struct {
-	NodeID         string
-	PeerTLS        *tls.Config
-	PeerTransport  http.RoundTripper
-	LocalReady     func() bool
+	NodeID        string
+	PeerTLS       *tls.Config
+	PeerTransport http.RoundTripper
+	LocalReady    func() bool
+	// LocalSucceeded and LocalFailed report whether a request reached the
+	// local core (a response, or a transport error); see LazyReady.
+	LocalSucceeded func()
+	LocalFailed    func()
 	PeerReady      func(Route) bool
 	TrustedProxies []*net.IPNet
 }
@@ -278,6 +282,9 @@ func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, re
 		// remove GetBody, so no future transport can silently rewind this body.
 		p.Out.GetBody = nil
 	}, ModifyResponse: func(res *http.Response) error {
+		if !remote && r.config.LocalSucceeded != nil {
+			r.config.LocalSucceeded()
+		}
 		internalFailure := remote && res.Header.Get(peer.ErrorHeader) != ""
 		peer.ScrubResponse(res.Header)
 		// Only the public ingress knows which gateway the browser contacted.
@@ -294,7 +301,12 @@ func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, re
 			res.Header.Set("Retry-After", "1")
 		}
 		return nil
-	}, ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+	}, ErrorHandler: func(w http.ResponseWriter, out *http.Request, err error) {
+		// The local core could not be reached. A client that went away is
+		// not a core failure.
+		if !remote && r.config.LocalFailed != nil && out.Context().Err() == nil {
+			r.config.LocalFailed()
+		}
 		if errors.Is(err, peer.ErrForbidden) || errors.Is(err, peer.ErrUnauthorized) || errors.Is(err, peer.ErrUnavailable) || errors.Is(err, peer.ErrConflict) {
 			unavailable(w)
 			return
