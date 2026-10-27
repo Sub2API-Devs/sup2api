@@ -25,7 +25,7 @@ export default {
   onceWarning: '请复制保存此密钥，之后也可以在列表中点击复制按钮获取。',
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
-  usage: { title: '用量', today: '今日', total: '累计', requests: '{n} 次' },
+  usage: { title: '用量', today: '今日', last30d: '近 30 天', requests: '{n} 次' },
   limits: {
     title: '限速',
     rpm: '每分钟请求（RPM）',

@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
+import { createPinia } from 'pinia'
 import { i18n } from '@/i18n'
 import UsageFilters from './UsageFilters.vue'
 import UsageView from './UsageView.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
 
 const get = vi.hoisted(() => vi.fn(async () => []))
-vi.mock('@sub2api/host', () => ({ api: { get } }))
+const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
+vi.mock('@sub2api/host', () => ({ api: { get, list: async () => ({ items: [], page: {} }) } }))
+vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (permission: string) => permission === 'usage:all:read' }) }))
 vi.mock('@/composables/useList', () => ({ useList: (_path: string, filters: Record<string, unknown>) => ({ items: ref([]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(0), filters: reactive(filters), reload: vi.fn() }) }))
 
@@ -15,18 +18,20 @@ enableAutoUnmount(afterEach)
 const global = { plugins: [i18n] }
 
 describe('shared usage search', () => {
-  it('uses the same search criteria for the overview statistics', async () => {
-    const w = mount(UsageView, { global: { ...global, stubs: { UsageTable: true, SChart: true } } })
+  it('uses the same search criteria for the totals and every chart', async () => {
+    const w = mount(UsageView, { global: { plugins: [i18n, createPinia()], stubs: { UsageTable: true, SChart: true } } })
     await flushPromises()
     w.getComponent(UsageFilters).vm.$emit('update:modelValue', { client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true' })
     await flushPromises()
-    for (const group_by of ['day', 'ip']) {
+    // default range today: hourly buckets; an operator's second breakdown is by group
+    for (const group_by of ['none', 'model', 'group', 'hour']) {
       expect(get).toHaveBeenCalledWith('/usage/summary', expect.objectContaining({ client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true', group_by }))
     }
   })
 
-  it('shows client IP statistics on entry and filters records when an address is selected', async () => {
-    const w = mount(UsageView, { global: { ...global, stubs: { UsageTable: true, SChart: true } } })
+  it('shows client IP statistics on their tab and filters records when an address is selected', async () => {
+    route.query = { tab: 'ips' }
+    const w = mount(UsageView, { global: { plugins: [i18n, createPinia()], stubs: { UsageTable: true, SChart: true } } })
     await flushPromises()
     expect(w.get('[data-testid="usage-ip-panel"]').isVisible()).toBe(true)
     w.getComponent(UsageIPPanel).vm.$emit('filter', '192.0.2.7')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Statistic card: label, value (skeleton while `loading`), trend (▲/▼ %),
-// `sub` line, default slot. `compact` is a smaller variant (dense KPI rows).
+// `sub` and `sub2` lines, default slot. `compact` is a smaller variant (dense KPI rows).
 // With a `click` listener or `selectable` it renders as a <button>
 // (filter tiles); `selected` highlights it and sets aria-pressed. `to`
 // renders a <RouterLink>, `href` an <a> (a tile that opens a page).
@@ -13,8 +13,9 @@ const props = withDefaults(
     label: string
     value: string | number
     sub?: string
+    sub2?: string
     icon?: string
-    tone?: 'primary' | 'success' | 'warning' | 'danger'
+    tone?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'accent'
     trend?: number | null
     loading?: boolean
     selected?: boolean
@@ -26,7 +27,7 @@ const props = withDefaults(
   { tone: 'primary', selected: undefined }
 )
 // Literal class names so Tailwind keeps them.
-const TONE = { primary: 'stat-icon-primary', success: 'stat-icon-success', warning: 'stat-icon-warning', danger: 'stat-icon-danger' }
+const TONE = { primary: 'stat-icon-primary', success: 'stat-icon-success', warning: 'stat-icon-warning', danger: 'stat-icon-danger', info: 'stat-icon-info', accent: 'stat-icon-accent' }
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 const inst = getCurrentInstance()
 const button = computed(() => props.selectable || props.selected !== undefined || !!inst?.vnode.props?.onClick)
@@ -65,6 +66,7 @@ const target = computed(() => {
         {{ trend >= 0 ? '▲' : '▼' }} {{ Math.abs(trend).toFixed(1) }}%
       </p>
       <p v-if="sub" class="mt-1 truncate text-xs text-gray-500 dark:text-dark-400">{{ sub }}</p>
+      <p v-if="sub2" class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">{{ sub2 }}</p>
       <slot />
     </div>
   </component>

@@ -1099,18 +1099,46 @@ function usageDetail(u: any, self = false) {
   }
 }
 
+/** Calendar parts of an instant in an IANA zone (the summary's tz=). */
+function zoned(iso: string, tz: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso))
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]))
+  return { day: `${p.year}-${p.month}-${p.day}`, hour: `${p.year}-${p.month}-${p.day} ${p.hour}:00` }
+}
+
 function usageSummary(rows: any[], query: Record<string, string>) {
   const q = { ...query }
   if (!q.from && !q.to) q.from = new Date(Date.now() - 30 * 86400000).toISOString()
   const by = q.group_by || 'day'
+  const tz = q.tz || 'UTC'
+  const keyOf = (u: any): string => {
+    switch (by) {
+      case 'model': return u.model
+      case 'user': return String(u.user_id)
+      case 'ip': return u.client_ip
+      case 'api_key': return String(u.api_key_id)
+      case 'group': return u.group_name
+      case 'endpoint': return u.endpoint
+      case 'platform': return u.platform
+      case 'none': return ''
+      case 'hour': return zoned(u.created_at, tz).hour
+      default: return zoned(u.created_at, tz).day
+    }
+  }
   const map = new Map<string, any>()
+  if (by === 'none') map.set('', null)
   for (const u of usageFilter(rows, q)) {
-    const key = by === 'model' ? u.model : by === 'user' ? String(u.user_id) : by === 'ip' ? u.client_ip : by === 'api_key' ? String(u.api_key_id) : u.created_at.slice(0, 10)
-    const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0 }
+    const key = keyOf(u)
+    const s = map.get(key) || { key, requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0, standard_cost: 0, _lat: 0, _ft: 0, _n: 0 }
     if (by === 'user') s.user_email = u.user_email
     if (by === 'ip' && (!s.last_at || u.created_at > s.last_at)) s.last_at = u.created_at
     s.requests++
-    if (u.success) s.success++
+    if (u.success) {
+      s.success++
+      s._n++
+      s._lat += u.latency_ms || 0
+      s._ft += u.first_token_ms || 0
+    }
     s.input_tokens += u.input_tokens
     s.output_tokens += u.output_tokens
     s.cache_read_tokens += u.cache_read_tokens
@@ -1118,16 +1146,48 @@ function usageSummary(rows: any[], query: Record<string, string>) {
     // The mock generator's input_tokens are the exclusive pricing variable p.
     s.prompt_tokens += u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
     s.total_cost += Number(u.total_cost)
+    s.standard_cost += Number(u.rate_multiplier) > 0 ? Number(u.total_cost) / Number(u.rate_multiplier) : 0
     map.set(key, s)
   }
-  const out = [...map.values()].map((s) => ({ ...s, total_cost: money(s.total_cost) }))
+  const empty = { key: '', requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0, standard_cost: 0, _lat: 0, _ft: 0, _n: 0 }
+  const out = [...map.values()].map((x) => {
+    const { _lat, _ft, _n, ...s } = x || empty
+    return {
+      ...s,
+      total_tokens: s.input_tokens + s.output_tokens + s.cache_read_tokens + s.cache_creation_tokens,
+      latency_ms_avg: _n ? Math.round(_lat / _n) : 0,
+      first_token_ms_avg: _n ? Math.round(_ft / _n) : 0,
+      total_cost: money(s.total_cost),
+      standard_cost: money(s.standard_cost)
+    }
+  })
   return by === 'ip' ? out.sort((a, b) => b.requests - a.requests || a.key.localeCompare(b.key)).slice(0, 100) : out.sort((a, b) => a.key.localeCompare(b.key))
 }
 
 on('GET', '/usage/summary', (req) => usageSummary(usageRows, req.query))
 on('GET', '/me/usage/summary', (req) =>
-  req.query.group_by === 'user' ? fail(400, 'invalid_argument', 'group_by must be day, model or ip') : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
+  req.query.group_by === 'user' ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip') : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
+// GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
+on('GET', '/me/usage/overview', (req) => {
+  const tz = req.query.tz || 'UTC'
+  const mine = usageRows.filter((u) => u.user_id === 1)
+  const today = zoned(new Date().toISOString(), tz).day
+  const yesterday = zoned(new Date(Date.now() - 86400000).toISOString(), tz).day
+  const totals = (rows: any[]) => {
+    const { key: _k, total_tokens: _t, ...s } = usageSummary(rows, { group_by: 'none', from: '1970-01-01T00:00:00Z' })[0]
+    return s
+  }
+  const recent = mine.filter((u) => Date.now() - Date.parse(u.created_at) < 5 * 60000)
+  return {
+    tz,
+    today: totals(mine.filter((u) => zoned(u.created_at, tz).day === today)),
+    yesterday: totals(mine.filter((u) => zoned(u.created_at, tz).day === yesterday)),
+    last_30d: totals(mine),
+    last_5m: { requests: recent.length, tokens: recent.reduce((a, u) => a + u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_creation_tokens, 0) },
+    api_keys: { total: 2, active: 2 }
+  }
+})
 on('GET', '/usage', (req) => paginate(usageFilter(usageRows, req.query).map((u) => publicUsage(u)), req.query))
 on('GET', '/usage/:id', (req) => {
   const u = usageRows.find((x) => x.id === Number(req.params.id))

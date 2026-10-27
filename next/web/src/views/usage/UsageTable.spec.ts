@@ -6,7 +6,6 @@ import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
-import UsageStatsBar from './UsageStatsBar.vue'
 import type { UsageRow } from './usage'
 
 enableAutoUnmount(afterEach)
@@ -100,17 +99,5 @@ describe('usage records layout', () => {
     const w = mount(UsageError, { props: { row }, global })
     expect(w.text()).not.toContain('model_not_allowed')
     expect(w.get('p').attributes('title')).toContain('model not allowed for this group')
-  })
-  it('uses normalized prompt totals for cache hit and preserves unknown historical usage', async () => {
-    const w = mount(UsageStatsBar, {
-      props: { rows: [
-        { key: 'exclusive', requests: 1, input_tokens: 0, cache_read_tokens: 100, cache_creation_tokens: 900, prompt_tokens: 1000, total_cost: '0' },
-        { key: 'inclusive', requests: 1, input_tokens: 1000, cache_read_tokens: 100, cache_creation_tokens: 900, prompt_tokens: 1000, total_cost: '0' }
-      ] },
-      global
-    })
-    expect(w.get('[data-testid="usage-stat-cache"]').text()).toContain('10.0%')
-    await w.setProps({ rows: [...w.props('rows'), { key: 'legacy', requests: 1, cache_read_tokens: 100, prompt_tokens: null, total_cost: '0' }] })
-    expect(w.get('[data-testid="usage-stat-cache"]').text()).toContain('—')
   })
 })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { SIcon, SSkeleton } from '@sub2api/ui'
@@ -28,6 +29,15 @@ function active(i: NavItem): boolean {
 function iconContext(i: NavItem): string {
   return i.pluginKey ? `plugin "${i.pluginKey}" menu "${i.id}"` : `menu "${i.id}"`
 }
+
+// A user without any operator section gets one flat list, as in sub2api:
+// Dashboard / API keys / Usage records without the "My account" header.
+// Plugin sections keep theirs.
+const OPERATOR_SECTIONS = ['gateway', 'finance', 'system']
+const flat = computed(() => !app.menus.some((s) => OPERATOR_SECTIONS.includes(s.key)))
+function showHeader(s: NavSection): boolean {
+  return !app.sidebarCollapsed && s.key !== 'overview' && !(flat.value && s.key === 'me')
+}
 </script>
 
 <template>
@@ -49,9 +59,9 @@ function iconContext(i: NavItem): string {
       <div v-if="!app.menusLoaded" class="space-y-2 px-2">
         <SSkeleton v-for="i in 8" :key="i" height="2rem" />
       </div>
-      <div v-for="s in app.menus" :key="s.key" class="mb-3">
+      <div v-for="s in app.menus" :key="s.key" :class="flat && s.key === 'overview' ? 'mb-0.5' : 'mb-3'">
         <div
-          v-if="!app.sidebarCollapsed && s.key !== 'overview'"
+          v-if="showHeader(s)"
           class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle"
         >
           {{ sectionLabel(s) }}

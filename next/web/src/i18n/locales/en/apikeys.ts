@@ -8,7 +8,7 @@ export default {
   create: 'New API key',
   edit: 'Edit API key',
   actions: { use: 'Use' },
-  usage: { title: 'Usage', today: 'Today', total: 'Total', requests: '{n} req' },
+  usage: { title: 'Usage', today: 'Today', last30d: 'Last 30 days', requests: '{n} req' },
   limits: {
     title: 'Limits',
     rpm: 'Requests / min (RPM)',

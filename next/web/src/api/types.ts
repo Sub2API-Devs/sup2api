@@ -865,6 +865,45 @@ export interface UsageSummaryRow {
   total_cost: Money
   /** group_by=ip: the newest request from the address. */
   last_at?: string
+  /** group_by=user: the user's email. */
+  user_email?: string
+  /** Rows carrying an observability marker (CONTRACTS §25.4). */
+  anomalies?: number
+  /** Rows billed at a plugin's estimate, and what they contribute to total_cost. */
+  estimated?: number
+  estimated_cost?: Money
+  /** input + output + cache read + cache write (CONTRACTS §66). */
+  total_tokens?: number
+  /** Cost before the group multiplier. */
+  standard_cost?: Money
+  /** Averages over the successful requests that report a time. */
+  latency_ms_avg?: number
+  first_token_ms_avg?: number
+}
+
+/** One window of GET /me/usage/overview (CONTRACTS §66). */
+export interface UsageTotals {
+  requests: number
+  success: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_creation_tokens: number
+  prompt_tokens: number | null
+  total_cost: Money
+  standard_cost: Money
+  latency_ms_avg: number
+  first_token_ms_avg: number
+}
+
+/** GET /me/usage/overview: the dashboard's figures in one answer. */
+export interface UsageOverview {
+  tz: string
+  today: UsageTotals
+  yesterday: UsageTotals
+  last_30d: UsageTotals
+  last_5m: { requests: number; tokens: number }
+  api_keys: { total: number; active: number }
 }
 
 export interface BillingSettings {

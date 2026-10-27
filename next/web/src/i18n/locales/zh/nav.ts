@@ -4,11 +4,11 @@ export default {
     gateway: '网关',
     finance: '财务',
     system: '系统',
-    me: '我的',
+    me: '我的账户',
     plugins: '插件'
   },
   items: {
-    dashboard: '概览',
+    dashboard: '仪表盘',
     groups: '分组',
     accounts: '账号',
     proxies: '代理',
@@ -23,9 +23,8 @@ export default {
     publishers: '发布者',
     nodes: '集群节点',
     settings: '设置',
-    myApiKeys: 'API Key',
-    myUsage: '使用记录',
-    myStats: '使用统计'
+    myApiKeys: 'API 密钥',
+    myUsage: '使用记录'
   },
   balance: '余额',
   changePassword: '修改密码',

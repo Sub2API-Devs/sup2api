@@ -5,7 +5,7 @@ import SInput from './SInput.vue'
 import SSelect from './SSelect.vue'
 import SSegmented from './SSegmented.vue'
 import SField from './SField.vue'
-import { fromLocalInput, rangeBounds, toLocalInput, type RangeKey } from './timeRange'
+import { RANGE_LABELS, fromLocalInput, rangeBounds, toLocalInput, type RangeKey } from './timeRange'
 
 // Time range filter: preset select (or a segmented control with
 // variant="segmented") + custom from/to (datetime-local). from/to are
@@ -22,18 +22,7 @@ const emit = defineEmits<{
 }>()
 const t = useUiT()
 
-const labels: Record<RangeKey, string> = {
-  all: 'ui.all',
-  '1h': 'ui.lastHour',
-  '24h': 'ui.last24h',
-  today: 'ui.today',
-  '7d': 'ui.last7d',
-  '30d': 'ui.last30d',
-  month: 'ui.thisMonth',
-  custom: 'ui.custom'
-}
-
-const options = computed(() => props.keys.map((k) => ({ value: k, label: t(labels[k]) })))
+const options = computed(() => props.keys.map((k) => ({ value: k, label: t(RANGE_LABELS[k]) })))
 
 // SInput (datetime-local, lazy) emits the local string; convert to RFC 3339.
 function local(v: unknown): string {

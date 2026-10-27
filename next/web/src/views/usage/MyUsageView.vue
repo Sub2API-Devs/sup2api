@@ -1,35 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, STabs, type TabItem } from '@sub2api/ui'
+import { SButton, SPageHeader, type TabItem } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
 import UsageRecords from './UsageRecords.vue'
 
-// Mine > Usage records: the caller's request log and, on a second tab, their
-// balance and its changes. ?tab=ledger opens the latter. Charts by model
-// live in Mine > Usage statistics (MyStatsView).
+// Mine > Usage records: the caller's statistics, request log, failed
+// requests and client IPs (UsageRecords), plus their balance changes on the
+// "ledger" tab (?tab=ledger). The old Usage statistics page redirects here.
 const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
 const auth = useAuthStore()
 
-type TabKey = 'requests' | 'ledger'
-const tabs = computed<TabItem[]>(() => {
-  const list: TabItem[] = [{ key: 'requests', label: t('usage.tabs.requests') }]
-  if (auth.has('balance:self:read')) list.push({ key: 'ledger', label: t('usage.tabs.ledger') })
-  return list
-})
-const tab = ref<TabKey>(route.query.tab === 'ledger' && auth.has('balance:self:read') ? 'ledger' : 'requests')
-watch(tab, (v) => {
-  if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
-})
+const extraTabs = computed<TabItem[]>(() => (auth.has('balance:self:read') ? [{ key: 'ledger', label: t('stats.tabs.ledger') }] : []))
+const tab = ref('records')
 
-// The page owns the header; the open tab follows its own `revision` and
-// reports its loading state, so no ref reaches into a child's methods. Each tab
-// has its own revision and loading: the hidden request list is never reloaded
-// by a refresh on the balance tab, and its loading never drives the button.
+// The page owns the header; the records and the ledger tab each follow their
+// own `revision` and report their loading state, so no ref reaches into a
+// child's methods. A refresh on the ledger tab reloads only the ledger.
 const recordsRevision = ref(0)
 const ledgerRevision = ref(0)
 const recordsLoading = ref(false)
@@ -50,10 +38,18 @@ function refresh() {
       </template>
     </SPageHeader>
 
-    <STabs v-model="tab" :tabs="tabs">
-      <!-- v-show: the search survives a visit to the ledger tab -->
-      <UsageRecords v-show="tab === 'requests'" v-model:loading="recordsLoading" :revision="recordsRevision" list-path="/me/usage" summary-path="/me/usage/summary" default-range="7d" />
-      <MyLedgerTab v-if="tab === 'ledger'" v-model:loading="ledgerLoading" :revision="ledgerRevision" />
-    </STabs>
+    <UsageRecords
+      v-model:loading="recordsLoading"
+      :revision="recordsRevision"
+      list-path="/me/usage"
+      summary-path="/me/usage/summary"
+      default-range="7d"
+      :extra-tabs="extraTabs"
+      @update:tab="tab = $event"
+    >
+      <template #tab-ledger>
+        <MyLedgerTab v-model:loading="ledgerLoading" :revision="ledgerRevision" />
+      </template>
+    </UsageRecords>
   </div>
 </template>

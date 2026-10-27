@@ -4445,3 +4445,42 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 兼容：旧核心的 PUT `{"enabled":bool}` 与 `{"level":…}` 转发给 Worker、改其本地级别；新核心不再转发级别，因此**升级核心前 Worker 必须已是带 `request_log_policy_v1` 的版本**（发布顺序先插件后核心），否则旧 Worker 继续按升级前的本地级别记录，界面设置对它不生效。默认 `full`（2026-10-27）不需要新表或迁移；回退到旧核心时，旧核心把存储里的默认 `full` 当 `summary`（旧 `DefaultRequestLog` 只认 `off`），但旧核心保存配置时若原样带回 `full` 会 400，需先改回 `off`/`summary`。
 
+
+## 66. 统计接口：时区、小时粒度、合计行与概览（2026-10-27，用户要求参照 sub2api 重做统计界面）
+
+设计：[USAGE-STATS-AND-USER-CONSOLE-DESIGN.md](USAGE-STATS-AND-USER-CONSOLE-DESIGN.md)（P1）。实现：`usage/api.go`（summarize）、`usage/stats.go`。统计一律现查 `usage_logs`，不写任何日志、不建汇总表。
+
+### 66.1 `GET /usage/summary`、`GET /me/usage/summary` 的扩展
+
+- `tz=<IANA 名称>`，缺省 `UTC`（与此前相同）。先用 Go 时区库与保守的名称格式校验，非法（含 `Local`）400；同一个名称交给 PostgreSQL `AT TIME ZONE`。
+- `group_by` 新增：
+  - `hour`：`YYYY-MM-DD HH:00`，按 `tz` 的整点分桶；范围（`from` 缺省 30 天前，`to` 缺省现在）超过 31 天 400。
+  - `none`：只返回一行合计，`key` 为 `""`；没有匹配的行时也返回这一行（全 0）。
+  - `group`（键为分组名，分组已删时为 id）、`endpoint`、`platform`。
+  - `day` 改为按 `tz` 的日历日（缺省 UTC，旧调用不变）。
+- 每行新增字段：`total_tokens`（输入 + 输出 + 缓存读 + 缓存写，含 1 小时写）、`standard_cost`（`total_cost / rate_multiplier` 之和，倍率为 0 的行计 0）、`latency_ms_avg` 与 `first_token_ms_avg`（只算成功且该时间大于 0 的请求，四舍五入为整数毫秒，没有时为 0）。
+- 自助接口仍拒绝 `group_by=user`；其余维度都不涉及上游信息。
+
+### 66.2 `GET /me/usage/overview?tz=`（`usage:self:read`）
+
+仪表盘一次取齐的数据：
+
+```json
+{"tz":"Asia/Shanghai",
+ "today":{…},"yesterday":{…},"last_30d":{…},
+ "last_5m":{"requests":60,"tokens":241000},
+ "api_keys":{"total":3,"active":2}}
+```
+
+- `today`/`yesterday`/`last_30d` 是同一形状：`requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens（含 1 小时写）, prompt_tokens（语义未知的历史行在内时为 null）, total_cost, standard_cost, latency_ms_avg, first_token_ms_avg`，口径同 66.1。
+- 窗口：今天、昨天是 `tz` 的日历日；`last_30d` 是今天加前 29 个日历日（与控制台的「近 30 天」一致）；`last_5m` 是最近 5 分钟，界面除以 5 得 RPM / TPM。一次扫描调用者近 30 天的行。
+- `api_keys`：未删除的 Key 数；`active` 另要求 `status='active'` 且未过期。
+- 不含余额：控制台从 `GET /me/balance` 取（顶栏已在取）。
+
+### 66.3 超时
+
+统计查询（summary、overview）在只读事务里执行，`SET LOCAL statement_timeout = '5s'`。超时回 503 `unavailable`（「statistics query timed out; narrow the time range or filters」），界面显示错误与重试，不显示成 0。
+
+### 66.4 菜单（`authz/menus.go`）
+
+概览项改名「仪表盘 / Dashboard」；「我的」分组改名「我的账户 / My account」，其中「API Key」改为「API 密钥」；删除「使用统计」（`/me/stats`），控制台把它重定向到 `/me/usage`。没有网关、财务、系统任何一个分组的用户，控制台把侧边栏画成不带分组标题的平铺列表（纯前端规则，接口不变）。

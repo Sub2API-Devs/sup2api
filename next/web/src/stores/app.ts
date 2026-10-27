@@ -62,8 +62,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
     key: 'me',
     items: [
       { id: 'my-api-keys', labelKey: 'nav.items.myApiKeys', icon: 'key', path: '/me/api-keys', perm: 'apikey:self:manage' },
-      { id: 'my-usage', labelKey: 'nav.items.myUsage', icon: 'usage', path: '/me/usage', perm: 'usage:self:read' },
-      { id: 'my-stats', labelKey: 'nav.items.myStats', icon: 'chart', path: '/me/stats', perm: 'usage:self:read' }
+      { id: 'my-usage', labelKey: 'nav.items.myUsage', icon: 'usage', path: '/me/usage', perm: 'usage:self:read' }
     ]
   }
 ]

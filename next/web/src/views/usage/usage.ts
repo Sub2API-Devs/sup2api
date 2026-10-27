@@ -1,4 +1,4 @@
-import type { UsageLog, UsageSummaryRow } from '@/api/types'
+import type { UsageLog } from '@/api/types'
 
 /** Usage row/detail with the extra fields the billing module returns. */
 export type UsageRow = UsageLog & {
@@ -105,21 +105,3 @@ export function blockingHook(u: UsageRow) {
   return (u.hook_decisions || []).find((h) => BLOCK_DECISIONS.includes(h.decision)) || null
 }
 
-/** Chart option over per-day summary rows: requests (bars) + cost (line). */
-export function dailyChartOption(rows: UsageSummaryRow[], labels: { requests: string; cost: string }) {
-  const points = [...rows].sort((a, b) => a.key.localeCompare(b.key)).map((r) => ({ key: r.key, requests: Number(r.requests) || 0, cost: Number(r.total_cost) || 0 }))
-  return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: [labels.requests, labels.cost], top: 0 },
-    grid: { left: 48, right: 56, top: 32, bottom: 28 },
-    xAxis: { type: 'category', data: points.map((p) => p.key.slice(5)) },
-    yAxis: [
-      { type: 'value', minInterval: 1 },
-      { type: 'value', axisLabel: { formatter: (v: number) => '$' + v }, splitLine: { show: false } }
-    ],
-    series: [
-      { name: labels.requests, type: 'bar', data: points.map((p) => p.requests), barMaxWidth: 24 },
-      { name: labels.cost, type: 'line', yAxisIndex: 1, smooth: true, data: points.map((p) => Number(p.cost.toFixed(6))) }
-    ]
-  }
-}

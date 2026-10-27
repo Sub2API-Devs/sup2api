@@ -4,11 +4,11 @@ export default {
     gateway: 'Gateway',
     finance: 'Finance',
     system: 'System',
-    me: 'Mine',
+    me: 'My account',
     plugins: 'Plugins'
   },
   items: {
-    dashboard: 'Overview',
+    dashboard: 'Dashboard',
     groups: 'Groups',
     accounts: 'Accounts',
     proxies: 'Proxies',
@@ -24,8 +24,7 @@ export default {
     nodes: 'Cluster nodes',
     settings: 'Settings',
     myApiKeys: 'API keys',
-    myUsage: 'Usage records',
-    myStats: 'Usage statistics'
+    myUsage: 'Usage records'
   },
   balance: 'Balance',
   changePassword: 'Change password',

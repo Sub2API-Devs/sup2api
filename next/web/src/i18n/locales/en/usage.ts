@@ -2,7 +2,7 @@ export default {
   title: 'Usage logs',
   description: 'Every gateway request with its billing trace.',
   myTitle: 'Usage records',
-  myDescription: 'Each of your requests and your balance changes.',
+  myDescription: 'Your usage statistics, each of your requests and your balance changes.',
   statsTitle: 'Usage statistics',
   statsDescription: 'Your requests, tokens and cost over a period.',
   stats: {

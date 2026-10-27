@@ -4,8 +4,16 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 // ECharts wrapper. echarts is loaded lazily so pages without charts don't
 // pay for it. The option is applied as-is; colors, text, axis lines and the
 // tooltip adapt to dark mode. The option is watched by reference: pass a new
-// object (a computed) to redraw, do not mutate it in place.
-const props = withDefaults(defineProps<{ option: Record<string, any>; height?: string; loading?: boolean }>(), {
+// object (a computed) to redraw, do not mutate it in place. Charts sharing a
+// `group` move their tooltip and crosshair together (echarts connect).
+// The default colors are the validated categorical palette (8 slots, its own
+// steps on the dark surface); red is the last slot, so a chart of a few
+// series does not look like an error.
+const PALETTE = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+}
+const props = withDefaults(defineProps<{ option: Record<string, any>; height?: string; loading?: boolean; group?: string }>(), {
   height: '280px'
 })
 
@@ -43,7 +51,7 @@ function themed(opt: Record<string, any>) {
   const text = dark.value ? '#cbd5e1' : '#475569'
   const line = dark.value ? '#334155' : '#e2e8f0'
   return {
-    color: ['#14b8a6', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#84cc16'],
+    color: dark.value ? PALETTE.dark : PALETTE.light,
     backgroundColor: 'transparent',
     textStyle: { color: text },
     grid: { left: 48, right: 16, top: 32, bottom: 32, containLabel: false },
@@ -76,7 +84,13 @@ async function render() {
   if (!el.value) return
   const ec = await loadEcharts()
   if (!el.value) return
-  if (!chart.value) chart.value = ec.init(el.value, undefined, { renderer: 'canvas' })
+  if (!chart.value) {
+    chart.value = ec.init(el.value, undefined, { renderer: 'canvas' })
+    if (props.group) {
+      chart.value.group = props.group
+      ec.connect(props.group)
+    }
+  }
   chart.value.setOption(themed(props.option), true)
   if (props.loading) chart.value.showLoading('default', { maskColor: 'transparent', text: '' })
   else chart.value.hideLoading()

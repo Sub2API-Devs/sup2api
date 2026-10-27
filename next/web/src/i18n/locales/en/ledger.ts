@@ -2,7 +2,6 @@ export default {
   title: 'Balance ledger',
   description: 'Every balance change of every user.',
   balance: 'Balance',
-  updatedAt: 'Updated {time}',
   negativeHint: 'Your balance is negative; new requests are rejected until it is topped up.',
   operator: 'by admin #{id}',
   cols: {

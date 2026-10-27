@@ -43,7 +43,7 @@ type coreMenuSection struct {
 // coreMenus follows ARCHITECTURE appendix A.1.
 var coreMenus = []coreMenuSection{
 	{"overview", lt("Overview", "概览"), []coreMenuItem{
-		{"dashboard", lt("Overview", "概览"), "dashboard", "/dashboard", nil},
+		{"dashboard", lt("Dashboard", "仪表盘"), "dashboard", "/dashboard", nil},
 	}},
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
 		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
@@ -67,10 +67,11 @@ var coreMenus = []coreMenuSection{
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
 		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
 	}},
-	{"me", lt("Mine", "我的"), []coreMenuItem{
-		{"my-api-keys", lt("API keys", "API Key"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
+	// Usage statistics are part of the usage records page (the old
+	// /me/stats redirects there).
+	{"me", lt("My account", "我的账户"), []coreMenuItem{
+		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
 		{"my-usage", lt("Usage records", "使用记录"), "usage", "/me/usage", []string{"usage:self:read"}},
-		{"my-stats", lt("Usage statistics", "使用统计"), "chart", "/me/stats", []string{"usage:self:read"}},
 	}},
 }
 

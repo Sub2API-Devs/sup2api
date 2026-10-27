@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统计界面与普通用户界面重做 · 示意图</title>
+<!-- 示意图：配合 next/docs/USAGE-STATS-AND-USER-CONSOLE-DESIGN.md。数据为虚构。
+     样式仿 next/web（teal 主色、rounded-2xl 卡片、slate 深色），图表配色见设计文档 §5.1。 -->
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f8fafc;--surface:#ffffff;--surface-2:#f8fafc;--line:#e2e8f0;--line-soft:#f1f5f9;
+  --fg:#0f172a;--fg-muted:#64748b;--fg-subtle:#94a3b8;
+  --primary:#14b8a6;--primary-600:#0d9488;--primary-50:#f0fdfa;--primary-700:#0f766e;
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--s8:#e34948;--other:#94a3b8;
+  --ok:#059669;--bad:#dc2626;--warn:#d97706;
+  --tint-primary:#ccfbf1;--tint-info:#e0f2fe;--tint-success:#d1fae5;--tint-warning:#fef3c7;--tint-danger:#fee2e2;--tint-accent:#ede9fe;
+  --ink-primary:#0d9488;--ink-info:#0284c7;--ink-success:#059669;--ink-warning:#d97706;--ink-danger:#dc2626;--ink-accent:#7c3aed;
+  --shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.06);
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#020617;--surface:#0f172a;--surface-2:#111c33;--line:#1e293b;--line-soft:#172036;
+  --fg:#e2e8f0;--fg-muted:#94a3b8;--fg-subtle:#64748b;
+  --primary:#2dd4bf;--primary-600:#14b8a6;--primary-50:rgba(20,184,166,.12);--primary-700:#5eead4;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;--other:#64748b;
+  --ok:#34d399;--bad:#f87171;--warn:#fbbf24;
+  --tint-primary:rgba(20,184,166,.15);--tint-info:rgba(14,165,233,.15);--tint-success:rgba(16,185,129,.15);--tint-warning:rgba(245,158,11,.15);--tint-danger:rgba(239,68,68,.15);--tint-accent:rgba(139,92,246,.15);
+  --ink-primary:#2dd4bf;--ink-info:#38bdf8;--ink-success:#34d399;--ink-warning:#fbbf24;--ink-danger:#f87171;--ink-accent:#a78bfa;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button{font:inherit;color:inherit}
+.mockbar{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:#0f172a;color:#e2e8f0;font-size:13px}
+.mockbar b{margin-right:8px}
+.mockbar button{border:1px solid #334155;background:#1e293b;border-radius:8px;padding:4px 10px;cursor:pointer}
+.mockbar button.on{background:#14b8a6;border-color:#14b8a6;color:#042f2e}
+.mockbar .sp{flex:1}
+.mockbar .note{color:#94a3b8}
+.app{display:flex;min-height:calc(100vh - 44px)}
+.side{width:240px;flex:none;background:var(--surface);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 8px 16px}
+.logo i{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#14b8a6,#0891b2);display:grid;place-items:center;color:#fff;font-style:normal;font-weight:700;box-shadow:0 0 18px rgba(20,184,166,.35)}
+.logo span{font-weight:700}.logo small{font-size:11px;color:var(--fg-subtle);border:1px solid var(--line);border-radius:6px;padding:0 5px}
+.sect{font-size:11px;color:var(--fg-subtle);padding:12px 12px 4px;letter-spacing:.04em}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;color:var(--fg-muted);font-weight:500;cursor:default}
+.nav:hover{background:var(--surface-2)}
+.nav.on{background:var(--primary-50);color:var(--primary-700)}
+.nav svg{width:18px;height:18px;flex:none}
+.nav .tag{margin-left:auto;font-size:10px;border:1px dashed var(--fg-subtle);border-radius:6px;padding:0 4px;color:var(--fg-subtle)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{height:56px;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 24px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(12px)}
+.pill{border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:13px;color:var(--fg-muted);background:var(--surface)}
+.pill b{color:var(--fg)}
+.avatar{width:30px;height:30px;border-radius:50%;background:#6366f1;color:#fff;display:grid;place-items:center;font-weight:600;font-size:13px}
+.content{padding:24px 32px 48px;max-width:1600px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.ph{display:flex;align-items:flex-end;gap:12px}
+.ph h1{margin:0;font-size:22px}.ph p{margin:2px 0 0;color:var(--fg-muted);font-size:13px}
+.ph .acts{margin-left:auto;display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:7px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.btn svg{width:16px;height:16px}
+.btn.pri{background:linear-gradient(135deg,#14b8a6,#0d9488);border-color:transparent;color:#fff}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.card.pad{padding:16px}
+.ch{display:flex;align-items:center;gap:8px;padding:14px 16px 0}
+.ch h3{margin:0;font-size:14px;font-weight:600}.ch .sub{color:var(--fg-subtle);font-size:12px}
+.ch .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g32{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.stat{display:flex;gap:12px;align-items:center;padding:16px}
+.stat .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none}
+.stat .ic svg{width:22px;height:22px}
+.t-primary{background:var(--tint-primary);color:var(--ink-primary)}.t-info{background:var(--tint-info);color:var(--ink-info)}
+.t-success{background:var(--tint-success);color:var(--ink-success)}.t-warning{background:var(--tint-warning);color:var(--ink-warning)}
+.t-danger{background:var(--tint-danger);color:var(--ink-danger)}.t-accent{background:var(--tint-accent);color:var(--ink-accent)}
+.stat .lb{font-size:12px;color:var(--fg-muted)}
+.stat .v{font-size:22px;font-weight:700;line-height:1.25;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;font-weight:500;color:var(--fg-subtle)}
+.stat .s{font-size:12px;color:var(--fg-subtle)}
+.stat .s b{font-weight:500;color:var(--fg-muted)}
+.up{color:var(--ok)}.down{color:var(--bad)}
+.strike{text-decoration:line-through}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px}
+.fld{display:flex;flex-direction:column;gap:2px}
+.fld label{font-size:11px;color:var(--fg-subtle)}
+.sel{border:1px solid var(--line);border-radius:10px;padding:6px 10px;min-width:120px;background:var(--surface);display:flex;align-items:center;gap:6px;font-size:13px}
+.sel svg{width:14px;height:14px;color:var(--fg-subtle)}
+.sel::after{content:"▾";margin-left:auto;color:var(--fg-subtle);font-size:11px}
+.seg{display:inline-flex;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:2px}
+.seg button{border:0;background:transparent;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--fg-muted)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.popover{position:absolute;top:56px;left:0;z-index:20;width:440px;display:grid;grid-template-columns:150px 1fr;gap:12px;padding:12px}
+.popover .pre{display:flex;flex-direction:column;gap:2px}
+.popover .pre span{padding:5px 10px;border-radius:8px;font-size:13px;color:var(--fg-muted)}
+.popover .pre span.on{background:var(--primary-50);color:var(--primary-700);font-weight:600}
+.cal{font-size:12px;color:var(--fg-muted)}
+.cal .days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;margin-top:6px}
+.cal .days span{padding:3px 0;border-radius:6px}
+.cal .days .in{background:var(--primary-50);color:var(--primary-700)}
+.cal .days .edge{background:var(--primary);color:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 16px 0;font-size:12px;color:var(--fg-muted)}
+.legend button{border:0;background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:0;color:var(--fg-muted)}
+.legend button.off{opacity:.4;text-decoration:line-through}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.chart{position:relative;padding:4px 8px 8px}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:8px 10px;font-size:12px;min-width:160px;display:none;z-index:5}
+.tip .h{font-weight:600;margin-bottom:4px}
+.tip .r{display:flex;align-items:center;gap:6px;color:var(--fg-muted)}
+.tip .r b{margin-left:auto;color:var(--fg);font-weight:500;font-variant-numeric:tabular-nums}
+.tip .t{border-top:1px solid var(--line);margin-top:4px;padding-top:4px}
+.axis text{fill:var(--fg-subtle);font-size:10px}
+.gridl{stroke:var(--line-soft)}
+.dist{display:grid;grid-template-columns:168px 1fr;gap:12px;align-items:center;padding:8px 16px 16px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-weight:500;color:var(--fg-subtle);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--line-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.num{text-align:right}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.muted{color:var(--fg-subtle)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 16px}
+.tabs span{padding:10px 12px;font-size:13px;color:var(--fg-muted);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:6px;align-items:center}
+.tabs svg,.dh svg{width:16px;height:16px;flex:none}
+.tabs span.on{color:var(--primary-700);border-color:var(--primary);font-weight:600}
+.tabs .cnt{font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:0 6px;color:var(--fg-muted)}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;background:var(--surface-2)}
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:500}
+.b-ok{background:var(--tint-success);color:var(--ink-success)}.b-bad{background:var(--tint-danger);color:var(--ink-danger)}
+.b-info{background:var(--tint-info);color:var(--ink-info)}.b-gray{background:var(--surface-2);color:var(--fg-muted);border:1px solid var(--line)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.rec{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
+.rec .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+.rec .ic svg{width:18px;height:18px}
+.rec .r{margin-left:auto;text-align:right}
+.qa{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--surface-2)}
+.qa .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center}
+.qa .ic svg{width:20px;height:20px}
+.qa .chev{margin-left:auto;color:var(--fg-subtle)}
+.qa small{display:block;color:var(--fg-subtle);font-size:12px}
+.list{display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px}
+.hb{display:grid;grid-template-columns:22px 150px 1fr 76px;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}
+.hb .bar{height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
+.hb .bar.o{background:var(--other)}
+.rank{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--fg-muted)}
+.r1{background:#fde68a;color:#92400e}.r2{background:#e2e8f0;color:#334155}.r3{background:#fed7aa;color:#9a3412}
+.lat{display:flex;gap:6px;align-items:stretch}
+.lat i{width:3px;border-radius:2px;background:linear-gradient(var(--ok) 45%,var(--warn) 55%)}
+.lat div{font-size:11.5px;line-height:1.35}
+.ann{border:1px dashed var(--primary);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--primary-700);background:var(--primary-50)}
+.ann b{font-weight:600}
+.drawer{position:fixed;right:0;top:44px;bottom:0;width:520px;background:var(--surface);border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(0,0,0,.12);z-index:30;display:flex;flex-direction:column}
+.drawer .dh{display:flex;align-items:center;gap:8px;padding:16px;border-bottom:1px solid var(--line)}
+.drawer .db{padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.scrim{position:fixed;inset:44px 0 0 0;background:rgba(15,23,42,.35);z-index:25}
+.prog{height:6px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;background:var(--primary)}
+.hide{display:none}
+@media (max-width:1100px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g32,.g2,.g3{grid-template-columns:1fr}.side{display:none}}
+</style>
+</head>
+<body>
+<div class="mockbar">
+  <b>示意图</b>
+  <button data-s="u-dash" class="on">① 用户 · 仪表盘</button>
+  <button data-s="u-usage">② 用户 · 使用记录</button>
+  <button data-s="u-keys">③ 用户 · API 密钥用量</button>
+  <button data-s="a-dash">④ 管理员 · 仪表盘</button>
+  <button data-s="a-usage">⑤ 管理员 · 使用记录</button>
+  <span class="sp"></span>
+  <span class="note">数据为虚构 · 悬停图表看提示 · 点图例隐藏系列</span>
+  <button id="theme">深色</button>
+</div>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="top" id="top"></header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+<div id="overlay"></div>
+
+<script>
+// ---------- icons (heroicons outline style) ----------
+const P={
+ home:'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10',
+ key:'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.7 5.8L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.6a1 1 0 01.3-.7l6-6A6 6 0 1121 9z',
+ list:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+ chart:'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+ user:'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+ users:'M17 20h5v-2a3 3 0 00-5.4-1.8M17 20H7m10 0v-2c0-.7-.1-1.3-.4-1.8M7 20H2v-2a3 3 0 015.4-1.8M7 20v-2c0-.7.1-1.3.4-1.8m0 0a5 5 0 019.2 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+ gift:'M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7',
+ wallet:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
+ bolt:'M13 10V3L4 14h7v7l9-11h-7z',
+ clock:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+ cube:'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+ server:'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
+ cog:'M10.3 4.3a1.7 1.7 0 013.4 0 1.7 1.7 0 002.6 1.1 1.7 1.7 0 012.4 2.4 1.7 1.7 0 001 2.5 1.7 1.7 0 010 3.4 1.7 1.7 0 00-1 2.6 1.7 1.7 0 01-2.4 2.4 1.7 1.7 0 00-2.6 1 1.7 1.7 0 01-3.4 0 1.7 1.7 0 00-2.5-1 1.7 1.7 0 01-2.4-2.4 1.7 1.7 0 00-1.1-2.6 1.7 1.7 0 010-3.4 1.7 1.7 0 001.1-2.5 1.7 1.7 0 012.4-2.4 1.7 1.7 0 002.5-1.1zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+ puzzle:'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z',
+ tag:'M7 7h.01M7 3h5c.5 0 1 .2 1.4.6l7 7a2 2 0 010 2.8l-7 7a2 2 0 01-2.8 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z',
+ group:'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
+ refresh:'M4 4v5h.6m15.4 2A8 8 0 004.6 9m0 0H9m11 11v-5h-.6m0 0a8 8 0 01-15.4-2m15.4 2H15',
+ download:'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+ cal:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+ beaker:'M19.4 15.4a2 2 0 00-1-.5l-2.4-.5a6 6 0 00-3.9.5l-.3.2a6 6 0 01-3.9.5l-1.9-.4a2 2 0 00-1.8.6M8 4h8l-1 1v5.2a2 2 0 00.6 1.4l5 5c1.3 1.3.4 3.4-1.4 3.4H4.8c-1.8 0-2.7-2.1-1.4-3.4l5-5A2 2 0 009 10.2V5L8 4z',
+ percent:'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z',
+ check:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+ x:'M6 18L18 6M6 6l12 12',
+ shield:'M9 12l2 2 4-4m5.6-4A12 12 0 0112 3a12 12 0 01-8.6 3A12 12 0 003 9c0 5.6 3.8 10.3 9 11.6 5.2-1.3 9-6 9-11.6 0-1-.1-2-.4-3z',
+ plus:'M12 4v16m8-8H4'
+};
+const ic=(n,c='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="${c}"><path d="${P[n]}"/></svg>`;
+
+// ---------- formatters ----------
+const fmtN=n=>n.toLocaleString('en-US');
+const fmtK=n=>n>=1e9?(n/1e9).toFixed(2)+'B':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n));
+const fmt$=(n,d)=>'$'+(d!=null?n.toFixed(d):n>=100?n.toFixed(2):n>=1?n.toFixed(2):n.toFixed(4));
+const pct=n=>(n*100).toFixed(1)+'%';
+
+// ---------- fake data (deterministic) ----------
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const days7=['10-21','10-22','10-23','10-24','10-25','10-26','10-27'];
+const hours24=Array.from({length:24},(_,h)=>String(h).padStart(2,'0')+':00');
+function series(n,base,spread){return Array.from({length:n},(_,i)=>Math.round(base*(1+spread*(rnd()-.5))*(i===n-1?.7:1)))}
+const T7={input:series(7,310e3,.6),output:series(7,96e3,.6),cread:series(7,2.05e6,.5),cwrite:series(7,160e3,.7)};
+const req7=series(7,1180,.5),fail7=req7.map(r=>Math.round(r*(.006+.02*rnd())));
+const cost7=req7.map((r,i)=>+(T7.input[i]*3e-6+T7.output[i]*15e-6+T7.cread[i]*.3e-6+T7.cwrite[i]*3.75e-6).toFixed(2));
+const hit7=T7.cread.map((c,i)=>c/(c+T7.input[i]+T7.cwrite[i]));
+const MODELS=[
+ {k:'claude-sonnet-4-5',c:'--s1',tok:9.82e6,cost:31.4,req:3820},
+ {k:'claude-opus-4-1',c:'--s2',tok:3.41e6,cost:44.9,req:612},
+ {k:'claude-haiku-4-5',c:'--s3',tok:2.10e6,cost:2.31,req:2210},
+ {k:'gpt-5-codex',c:'--s4',tok:1.32e6,cost:6.12,req:534},
+ {k:'gemini-2.5-pro',c:'--s5',tok:.61e6,cost:2.88,req:198},
+ {k:'其他（3）',c:'--other',tok:.22e6,cost:.71,req:87}
+];
+const MODELS_A=MODELS.map(m=>({...m,tok:m.tok*20,cost:m.cost*14,req:m.req*18}));
+const KEYS=[
+ {k:'claude-code-laptop',c:'--s1',tok:11.2e6,cost:58.1,req:4410},
+ {k:'cursor',c:'--s2',tok:4.30e6,cost:21.6,req:2280},
+ {k:'ci-bot',c:'--s3',tok:1.98e6,cost:8.63,req:771}
+];
+const GROUPS=[
+ {k:'claude-max',c:'--s1',tok:41.2e6,cost:812.4,req:48120},
+ {k:'codex-plus',c:'--s2',tok:12.9e6,cost:233.1,req:15330},
+ {k:'gemini',c:'--s3',tok:3.1e6,cost:41.7,req:5210},
+ {k:'default',c:'--s4',tok:1.2e6,cost:18.2,req:2390}
+];
+
+// ---------- chart engine (SVG, one y-axis per chart) ----------
+const groups={};
+function nice(m){if(m<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(m)));const f=m/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p}
+function xy(el,o){
+ const W=o.w||640,H=o.h||220,L=46,R=10,T=10,B=24,iw=W-L-R,ih=H-T-B,n=o.labels.length;
+ const st={hidden:new Set(),hover:-1};
+ const box=document.getElementById(el);
+ const legend=o.series.length>1?`<div class="legend">${o.series.map((s,i)=>`<button data-i="${i}"><span class="sw" style="background:var(${s.c})"></span>${s.name}</button>`).join('')}</div>`:'';
+ box.innerHTML=legend+`<div class="chart"><svg viewBox="0 0 ${W} ${H}"></svg><div class="tip"></div></div>`;
+ const svg=box.querySelector('svg'),tip=box.querySelector('.tip');
+ const band=iw/n,xc=i=>o.kind==='area'||o.kind==='line'?L+(n===1?iw/2:i*iw/(n-1)):L+band*i+band/2;
+ function draw(){
+  const vis=o.series.filter((s,i)=>!st.hidden.has(i));
+  const stacked=o.kind==='area'||o.kind==='sbar';
+  const tot=o.labels.map((_,i)=>stacked?vis.reduce((a,s)=>a+s.v[i],0):Math.max(0,...vis.map(s=>s.v[i])));
+  const ymax=o.max||nice(Math.max(...tot)*1.08);
+  const y=v=>T+ih-(v/ymax)*ih;
+  let g='';
+  for(let k=0;k<=4;k++){const v=ymax*k/4,yy=y(v);g+=`<line class="gridl" x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}"/><text x="${L-6}" y="${yy+3}" text-anchor="end">${(o.yf||fmtK)(v)}</text>`}
+  const every=Math.ceil(n/(o.w&&o.w<400?4:8));
+  o.labels.forEach((l,i)=>{if((i%every===0&&n-1-i>=every/2)||i===n-1)g+=`<text x="${xc(i)}" y="${H-6}" text-anchor="middle">${l}</text>`});
+  let m='';
+  if(o.kind==='area'){
+   const base=o.labels.map(()=>0);
+   vis.forEach(s=>{const top=s.v.map((v,i)=>base[i]+v);
+    const d='M'+top.map((v,i)=>`${xc(i)},${y(v)}`).join('L')+'L'+base.map((v,i)=>`${xc(i)},${y(v)}`).reverse().join('L')+'Z';
+    m+=`<path d="${d}" style="fill:var(${s.c});fill-opacity:.88;stroke:var(--surface);stroke-width:1.5"/>`;
+    top.forEach((v,i)=>base[i]=v)});
+  }else if(o.kind==='line'){
+   vis.forEach(s=>{m+=`<polyline points="${s.v.map((v,i)=>`${xc(i)},${y(v)}`).join(' ')}" style="fill:none;stroke:var(${s.c});stroke-width:2;stroke-linejoin:round"/>`});
+  }else{
+   const bw=Math.min(28,band*.62);
+   o.labels.forEach((_,i)=>{let acc=0;vis.forEach((s,j)=>{const v=s.v[i];if(!v)return;const y1=y(acc+v),y0=y(acc),h=Math.max(1,y0-y1-(j>0?2:0));const top=j===vis.length-1;
+     const x=xc(i)-bw/2,r=top?Math.min(4,h):0;
+     m+=`<path d="M${x},${y0}V${y0-h+r}q0,-${r} ${r},-${r}H${x+bw-r}q${r},0 ${r},${r}V${y0}Z" style="fill:var(${s.c})"/>`;acc+=v})});
+  }
+  const hx=st.hover>=0?xc(st.hover):-99;
+  let cross=`<line x1="${hx}" x2="${hx}" y1="${T}" y2="${T+ih}" style="stroke:var(--fg-subtle);stroke-dasharray:3 3;${st.hover<0?'display:none':''}"/>`;
+  if(st.hover>=0&&(o.kind==='area'||o.kind==='line')){let acc=0;vis.forEach(s=>{acc=(o.kind==='area'?acc:0)+s.v[st.hover];cross+=`<circle cx="${hx}" cy="${y(acc)}" r="4" style="fill:var(${s.c});stroke:var(--surface);stroke-width:2"/>`})}
+  svg.innerHTML=`<g class="axis">${g}</g>${m}${cross}<rect x="${L}" y="${T}" width="${iw}" height="${ih}" fill="transparent"/>`;
+ }
+ function idx(e){const r=svg.getBoundingClientRect();const mx=(e.clientX-r.left)*W/r.width-L;
+  return Math.max(0,Math.min(n-1,o.kind==='area'||o.kind==='line'?Math.round(mx/(iw/(Math.max(1,n-1)))):Math.floor(mx/band)))}
+ const api={set(i,show,e){st.hover=i;draw();
+   if(!show||i<0){tip.style.display='none';return}
+   const vis=o.series.filter((s,k)=>!st.hidden.has(k));
+   const rows=vis.map(s=>`<div class="r"><span class="sw" style="background:var(${s.c})"></span>${s.name}<b>${(o.tf||o.yf||fmtK)(s.v[i])}</b></div>`).join('');
+   const extra=o.foot?o.foot(i,vis):'';
+   tip.innerHTML=`<div class="h">${(o.th||(l=>l))(o.labels[i])}</div>${rows}${extra}`;
+   tip.style.display='block';
+   const cr=box.querySelector('.chart').getBoundingClientRect(),r=svg.getBoundingClientRect();
+   let left=(xc(i)*r.width/W)+(r.left-cr.left)+14;if(left+tip.offsetWidth>cr.width)left-=tip.offsetWidth+28;
+   tip.style.left=left+'px';tip.style.top='18px';}};
+ svg.addEventListener('mousemove',e=>{const i=idx(e);(groups[o.group]||[api]).forEach(c=>c.set(i,c===api))});
+ svg.addEventListener('mouseleave',()=>{(groups[o.group]||[api]).forEach(c=>c.set(-1,false))});
+ box.querySelectorAll('.legend button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;st.hidden.has(i)?st.hidden.delete(i):st.hidden.add(i);if(st.hidden.size===o.series.length)st.hidden.delete(i);b.classList.toggle('off',st.hidden.has(i));draw()});
+ if(o.group)(groups[o.group]=groups[o.group]||[]).push(api);
+ draw();return api;
+}
+function donut(el,items,metric){
+ const tot=items.reduce((a,x)=>a+x[metric],0);let a0=-Math.PI/2;const R=70,r=46,cx=84,cy=84;let s='';
+ items.forEach(x=>{const a1=a0+2*Math.PI*x[metric]/tot;const big=a1-a0>Math.PI?1:0;
+  const p=(a,rr)=>`${cx+rr*Math.cos(a)},${cy+rr*Math.sin(a)}`;
+  s+=`<path d="M${p(a0,R)}A${R},${R} 0 ${big} 1 ${p(a1,R)}L${p(a1,r)}A${r},${r} 0 ${big} 0 ${p(a0,r)}Z" style="fill:var(${x.c});stroke:var(--surface);stroke-width:2"><title>${x.k}：${metric==='cost'?fmt$(x.cost):fmtK(x.tok)+' tokens'}（${pct(x[metric]/tot)}）</title></path>`;a0=a1});
+ const center=metric==='cost'?fmt$(tot):fmtK(tot);
+ document.getElementById(el).innerHTML=`<svg viewBox="0 0 168 168" style="width:168px">${s}<text x="84" y="80" text-anchor="middle" style="fill:var(--fg-subtle);font-size:10px">${metric==='cost'?'费用':'Token'}</text><text x="84" y="98" text-anchor="middle" style="fill:var(--fg);font-size:15px;font-weight:700">${center}</text></svg>`;
+}
+function distTable(items,metric,firstCol){
+ const tot=items.reduce((a,x)=>a+x[metric],0);
+ return `<table><thead><tr><th>${firstCol}</th><th class="num">请求</th><th class="num">${metric==='cost'?'费用':'Token'}</th><th class="num">占比</th></tr></thead><tbody>${items.map(x=>`<tr><td><span class="sw" style="background:var(${x.c});margin-right:6px"></span>${x.k}</td><td class="num">${fmtN(x.req)}</td><td class="num">${metric==='cost'?fmt$(x.cost):fmtK(x.tok)}</td><td class="num muted">${pct(x[metric]/tot)}</td></tr>`).join('')}</tbody></table>`;
+}
+function distCard(id,title,items,firstCol,extraToggle=''){
+ return `<div class="card"><div class="ch"><h3>${title}</h3><div class="r">${extraToggle}<div class="seg" data-dist="${id}"><button class="on" data-m="tok">Token</button><button data-m="cost">费用</button></div></div></div>
+ <div class="dist"><div id="${id}"></div><div id="${id}-t" style="max-height:200px;overflow:auto">${distTable(items,'tok',firstCol)}</div></div></div>`;
+}
+function wireDist(id,items,firstCol){
+ donut(id,items,'tok');
+ document.querySelectorAll(`[data-dist="${id}"] button`).forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));donut(id,items,b.dataset.m);document.getElementById(id+'-t').innerHTML=distTable(items,b.dataset.m,firstCol)});
+}
+
+// ---------- shared blocks ----------
+const stat=(tone,icon,label,value,sub,sub2='')=>`<div class="card stat"><div class="ic t-${tone}">${ic(icon)}</div><div style="min-width:0"><div class="lb">${label}</div><div class="v">${value}</div><div class="s">${sub}</div>${sub2?`<div class="s">${sub2}</div>`:''}</div></div>`;
+const rangeBar=(extra='',open=false)=>`<div class="card filters" style="position:relative">
+ <div class="fld"><label>时间范围</label><div class="sel" data-range style="cursor:pointer">${ic('cal')}近 7 天 · 10-21 ~ 10-27</div></div>
+ <div class="fld"><label>粒度</label><div class="seg"><button class="on">按天</button><button>按小时</button></div></div>
+ ${extra}
+ <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><span class="muted" style="font-size:12px">时区 Asia/Shanghai</span><button class="btn">${ic('refresh')}刷新</button></div>
+ ${`<div class="card popover hide"><div class="pre">${['今天','昨天','近 24 小时','近 7 天','近 14 天','近 30 天','本月','上月','自定义'].map(x=>`<span class="${x==='近 7 天'?'on':''}">${x}</span>`).join('')}</div>
+   <div class="cal"><div style="display:flex;justify-content:space-between"><b style="color:var(--fg)">2026 年 10 月</b><span>‹ ›</span></div>
+   <div class="days">${['一','二','三','四','五','六','日'].map(d=>`<span class="muted">${d}</span>`).join('')}${Array.from({length:3},()=>'<span></span>').join('')}${Array.from({length:31},(_,i)=>{const d=i+1;return `<span class="${d===21||d===27?'edge':d>21&&d<27?'in':''}">${d}</span>`}).join('')}</div>
+   <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><span class="sel" style="min-width:0">10-21</span>→<span class="sel" style="min-width:0">10-27</span><button class="btn pri" style="margin-left:auto">应用</button></div>
+   <div class="muted" style="margin-top:6px">跨度 ≤ 1 天自动按小时</div></div></div>`}
+</div>`;
+const trendCard=(id,title='Token 使用趋势')=>`<div class="card"><div class="ch"><h3>${title}</h3><span class="sub">堆叠 · 点图例可隐藏缓存读取</span></div><div id="${id}"></div></div>`;
+const strip=()=>`<div class="grid g3">
+ <div class="card"><div class="ch"><h3>请求数</h3><span class="sub">成功 / 失败</span></div><div id="m-req"></div></div>
+ <div class="card"><div class="ch"><h3>费用</h3><span class="sub">USD</span></div><div id="m-cost"></div></div>
+ <div class="card"><div class="ch"><h3>缓存命中率</h3><span class="sub">缓存读取 ÷ 输入总量</span></div><div id="m-hit"></div></div></div>`;
+function wireTrend(id,labels,T,group,w){
+ xy(id,{kind:'area',labels,group,w:w||640,h:w?260:230,series:[{name:'输入',c:'--s1',v:T.input},{name:'输出',c:'--s2',v:T.output},{name:'缓存读取',c:'--s3',v:T.cread},{name:'缓存写入',c:'--s4',v:T.cwrite}],
+  th:l=>'2026-'+l,foot:(i,vis)=>`<div class="r t">合计<b>${fmtK(vis.reduce((a,s)=>a+s.v[i],0))}</b></div><div class="r">费用<b>${fmt$(cost7[i])}</b></div>`});
+}
+function wireStrip(labels,group,req,fail,cost,hit){
+ xy('m-req',{kind:'sbar',labels,group,w:360,h:150,series:[{name:'成功',c:'--ok',v:req.map((r,i)=>r-fail[i])},{name:'失败',c:'--bad',v:fail}],yf:fmtK,tf:fmtN,th:l=>'2026-'+l});
+ xy('m-cost',{kind:'bar',labels,group,w:360,h:150,series:[{name:'费用',c:'--s7',v:cost}],yf:v=>'$'+Math.round(v),tf:v=>fmt$(v),th:l=>'2026-'+l});
+ xy('m-hit',{kind:'line',labels,group,w:360,h:150,max:1,series:[{name:'命中率',c:'--s3',v:hit}],yf:v=>Math.round(v*100)+'%',tf:pct,th:l=>'2026-'+l});
+}
+
+// ---------- sidebars ----------
+const navU=(on)=>`<div class="logo"><i>S</i><span>sub2api</span><small>v0.1.208</small></div>
+ ${[['home','仪表盘','u-dash'],['key','API 密钥','u-keys'],['list','使用记录','u-usage']].map(([i,t,s])=>`<div class="nav ${s===on?'on':''}">${ic(i)}${t}</div>`).join('')}
+ <div class="sect">插件</div><div class="nav">${ic('gift')}兑换码</div>
+ <div class="nav">${ic('user')}个人资料<span class="tag">P3</span></div>
+ <div style="margin-top:auto" class="ann"><b>普通用户</b>：平铺无分组标题，顺序同 sub2api；「使用统计」并入「使用记录」</div>`;
+const navA=(on)=>`<div class="logo"><i>S</i><span>sub2api</span><small>v0.1.208</small></div>
+ <div class="nav ${on==='a-dash'?'on':''}">${ic('home')}仪表盘</div>
+ <div class="sect">网关</div>${[['server','账号'],['cube','平台'],['group','分组'],['tag','价格'],['shield','代理']].map(([i,t])=>`<div class="nav">${ic(i)}${t}</div>`).join('')}
+ <div class="sect">系统</div>${[['users','用户'],['list','使用记录'],['cog','设置'],['puzzle','插件']].map(([i,t])=>`<div class="nav ${t==='使用记录'&&on==='a-usage'?'on':''}">${ic(i)}${t}</div>`).join('')}
+ <div class="sect">我的账户</div>${[['key','API 密钥'],['list','使用记录']].map(([i,t])=>`<div class="nav">${ic(i)}${t}</div>`).join('')}`;
+const topbar=(user)=>`${user?`<span class="pill">余额 <b>$128.40</b></span>`:''}<span class="pill">中 / EN</span><span class="pill">☾</span><span class="avatar">${user?'A':'R'}</span><span style="font-size:13px">${user?'alice@example.com':'root'}</span>`;
+
+// ---------- screens ----------
+const S={};
+S['u-dash']=()=>{
+ return {side:navU('u-dash'),top:topbar(1),html:`
+ <div class="ph"><div><h1>仪表盘</h1><p>欢迎回来，alice</p></div></div>
+ <div class="grid g4">
+  ${stat('success','wallet','余额','$128.40','可用 · <a style="color:var(--primary-700)">充值 →</a>')}
+  ${stat('info','key','API 密钥','3','<b class="up">2</b> 启用')}
+  ${stat('primary','chart','今日请求','1,284 <small class="up">▲ 8.2%</small>','近 30 天 <b>38,902</b>')}
+  ${stat('accent','percent','今日消费','$3.86','原价 <span class="strike">$4.83</span> · 近 30 天 <b>$96.12</b>')}
+  ${stat('warning','cube','今日 Token','2.41M','输入 <b>312K</b> · 输出 <b>96K</b> · 缓存 <b>2.0M</b>')}
+  ${stat('success','check','缓存命中率','87.2%','今日 · 缓存读取 ÷ 输入总量')}
+  ${stat('accent','bolt','性能','12 <small>RPM</small>','<b>48.2K</b> TPM · 近 5 分钟')}
+  ${stat('danger','clock','平均响应','1.8s <small>首 token</small>','总耗时 <b>12.4s</b>')}
+ </div>
+ ${rangeBar()}
+ <div class="grid g2">${trendCard('trend')}${distCard('d-model','模型分布',MODELS,'模型')}</div>
+ ${strip()}
+ <div class="grid g32">
+  <div class="card"><div class="ch"><h3>最近使用</h3><span class="badge b-gray">近 7 天</span><div class="r"><a style="color:var(--primary-700);font-size:13px">查看全部 →</a></div></div>
+   <div class="list">${[['claude-sonnet-4-5','10-27 14:02:11',0.0421,38210,1],['claude-opus-4-1','10-27 13:58:40',0.3127,22104,1],['claude-haiku-4-5','10-27 13:57:02',0.0019,4120,1],['claude-sonnet-4-5','10-27 13:41:19',0,0,0],['gpt-5-codex','10-27 12:15:33',0.0188,9932,1]].map(([m,t,c,tk,ok])=>`
+    <div class="rec"><div class="ic t-primary">${ic('beaker')}</div><div><div style="font-weight:600">${m}</div><div class="muted" style="font-size:12px">${t} ${ok?'':'· <span class="badge b-bad">失败 529</span>'}</div></div>
+    <div class="r"><div style="font-weight:600">${ok?fmt$(c):'免费'}</div><div class="muted" style="font-size:12px">${fmtN(tk)} tokens</div></div></div>`).join('')}</div></div>
+  <div class="card"><div class="ch"><h3>快捷操作</h3></div><div class="list">
+   ${[['primary','plus','创建 API 密钥','生成新的 API 密钥'],['success','list','查看使用记录','明细、错误请求与余额变动'],['info','wallet','余额变动','充值、扣费与退款'],['warning','gift','兑换码','插件提供 · 使用兑换码充值']].map(([t,i,a,b])=>`<div class="qa"><div class="ic t-${t}">${ic(i)}</div><div><b>${a}</b><small>${b}</small></div><span class="chev">›</span></div>`).join('')}
+  </div></div>
+ </div>
+ <div class="ann">数据：第一、二行卡片一次来自 <b>GET /me/usage/overview?tz=</b>；图表跟随上方时间范围，来自 <b>/me/usage/summary?group_by=day|hour|model&amp;tz=</b>。没有双 Y 轴：主图看 Token 构成，三张小图横轴对齐、悬停联动。</div>`,
+ after(){wireTrend('trend',days7,T7,'u');wireStrip(days7,'u',req7,fail7,cost7,hit7);wireDist('d-model',MODELS,'模型')}};
+};
+const usageRows=[
+ ['10-27 14:02:11','claude-code-laptop','claude-sonnet-4-5','/v1/messages','流式',[1204,882,36120,0],0.0421,[1.6,9.8],1,''],
+ ['10-27 13:58:40','cursor','claude-opus-4-1','/v1/messages','流式',[3310,2120,15800,874],0.3127,[2.9,31.2],1,''],
+ ['10-27 13:57:02','ci-bot','claude-haiku-4-5','/v1/messages','同步',[2988,1132,0,0],0.0019,[0,2.1],1,''],
+ ['10-27 13:41:19','claude-code-laptop','claude-sonnet-4-5','/v1/messages','流式',[0,0,0,0],0,[0,61.0],0,'529 上游过载'],
+ ['10-27 12:15:33','cursor','gpt-5-codex','/v1/responses','流式',[4120,1402,4410,0],0.0188,[3.2,14.7],1,''],
+ ['10-27 11:50:02','claude-code-laptop','claude-sonnet-4-5','/v1/messages','流式',[812,3091,51200,2210],0.0866,[1.2,22.4],1,'']
+];
+function usageTable(admin){
+ return `<table><thead><tr><th>时间</th>${admin?'<th>用户</th>':''}<th>API 密钥</th><th>模型</th><th>端点</th><th>类型</th><th>Token</th><th class="num">费用</th><th>计时</th></tr></thead><tbody>
+ ${usageRows.map((r,i)=>`<tr><td><div>${r[0]}</div>${r[8]?'<span class="badge b-ok"><span class="dot" style="background:var(--ok)"></span>成功</span>':`<span class="badge b-bad">✕ ${r[9]}</span>`}</td>
+ ${admin?`<td>${['alice@example.com','bob@corp.io','ci@corp.io','alice@example.com','dave@x.dev','alice@example.com'][i]}<div class="muted mono">#${[12,7,31,12,44,12][i]}</div></td>`:''}
+ <td><span class="chip">${r[1]}</span></td><td><span class="sw" style="background:var(${r[2].includes('opus')?'--s2':r[2].includes('haiku')?'--s3':r[2].includes('gpt')?'--s4':'--s1'});margin-right:6px"></span>${r[2]}</td>
+ <td class="mono muted">${r[3]}</td><td><span class="badge ${r[4]==='流式'?'b-info':'b-gray'}">${r[4]}</span></td>
+ <td><div>↓ ${fmtN(r[5][0])} &nbsp;↑ ${fmtN(r[5][1])}</div><div class="muted" style="font-size:11.5px">缓存 读 ${fmtK(r[5][2])} · 写 ${fmtK(r[5][3])}</div></td>
+ <td class="num"><b>${r[8]?fmt$(r[6],4):'免费'}</b><div class="muted" style="font-size:11.5px">${r[8]?'×0.8 · 已结算':'—'}</div></td>
+ <td><div class="lat"><i></i><div>首 token ${r[7][0]?r[7][0]+'s':'—'}<br>总耗时 ${r[7][1]}s</div></div></td></tr>`).join('')}</tbody></table>`;
+}
+S['u-usage']=()=>({side:navU('u-usage'),top:topbar(1),html:`
+ <div class="ph"><div><h1>使用记录</h1><p>你的每一次请求、统计与余额变动。</p></div><div class="acts"><button class="btn">${ic('refresh')}刷新</button><button class="btn pri">${ic('download')}导出 CSV</button></div></div>
+ ${rangeBar(`<div class="fld"><label>API 密钥</label><div class="sel">全部密钥</div></div><div class="fld"><label>模型</label><div class="sel">全部模型</div></div><div class="fld"><label>分组</label><div class="sel">全部分组</div></div><div class="fld"><label>状态</label><div class="sel">全部</div></div><div class="fld"><label>&nbsp;</label><button class="btn">更多筛选 <span class="badge b-gray">0</span></button></div>`)}
+ <div class="grid g4">
+  ${stat('info','list','总请求数','7,461','成功率 <b>99.1%</b>')}
+  ${stat('warning','cube','总 Token','17.48M','输入 <b>2.18M</b> · 输出 <b>0.67M</b> · 缓存 <b>14.6M</b> ⓘ')}
+  ${stat('success','wallet','总消费','$88.31','原价 <span class="strike">$110.39</span> · 倍率 ×0.8')}
+  ${stat('accent','clock','平均耗时','14.2s','首 token <b>1.9s</b>')}
+ </div>
+ <div class="card"><div class="ch"><h3>图表</h3><span class="sub">跟随上方时间范围与筛选</span><div class="r"><button class="btn">收起 ▴</button></div></div>
+  <div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:16px">
+   <div class="grid g2">${distCard('d-model','模型分布',MODELS,'模型')}${distCard('d-key','API 密钥分布',KEYS,'API 密钥')}</div>
+   ${trendCard('trend')}
+   ${strip()}
+  </div></div>
+ <div class="card"><div class="tabs"><span class="on">${ic('list')}用量明细 <span class="cnt">7,461</span></span><span>✕ 错误请求 <span class="cnt">68</span></span><span>${ic('wallet')}余额变动</span><span>调用 IP <span class="cnt">4</span></span></div>
+  <div style="padding:8px 8px 0;overflow:auto">${usageTable(false)}</div>
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:12px" class="muted">显示 1 至 20 共 7,461 条 <span style="margin-left:auto" class="sel">每页 20</span><span class="pill">‹ 1 2 3 … 374 ›</span></div></div>
+ <div class="ann">与现在相比：独立的「使用统计」页并入此页顶部；去掉工具栏的「趋势」「调用 IP」开关和 5 个小统计块；「调用 IP」「余额变动」变成页签；新增「错误请求」页签（同一张表固定 success=false）与服务端流式「导出 CSV」。用户页不出现账号、上游模型维度。</div>`,
+ after(){wireDist('d-model',MODELS,'模型');wireDist('d-key',KEYS,'API 密钥');wireTrend('trend',days7,T7,'uu',1180);wireStrip(days7,'uu',req7.map(x=>x*1.05|0),fail7,cost7,hit7)}});
+S['u-keys']=()=>{
+ const daily30=Array.from({length:30},(_,i)=>+(1.2+2.6*rnd()+(i%7>4?-.9:0)).toFixed(2));
+ const lab30=Array.from({length:30},(_,i)=>{const d=new Date(2026,8,28+i);return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')});
+ return {side:navU('u-keys'),top:topbar(1),html:`
+ <div class="ph"><div><h1>API 密钥</h1><p>只有你自己能看到和管理这些密钥。</p></div><div class="acts"><button class="btn pri">${ic('plus')}新建 API 密钥</button></div></div>
+ <div class="card" style="overflow:auto"><table><thead><tr><th>名称</th><th>密钥</th><th>分组</th><th>用量</th><th>限速</th><th>额度</th><th>状态</th><th>最近使用</th></tr></thead><tbody>
+ ${[['claude-code-laptop','sk-…a91f','claude-max ×0.8',['$3.12',902],['$58.10',4410],'12/60 RPM',[42,100]],['cursor','sk-…77c0','claude-max ×0.8',['$0.61',301],['$21.60',2280],'3/30 RPM',[21.6,50]],['ci-bot','sk-…0b2e','default ×1',['$0.13',81],['$8.63',771],'—',null]].map((k,i)=>`<tr>
+ <td><b>${k[0]}</b></td><td class="mono">${k[1]}</td><td><span class="chip">${k[2]}</span></td>
+ <td style="${i===0?'outline:2px solid var(--primary);outline-offset:-2px;border-radius:8px':''}"><div>今日 <b>${k[3][0]}</b> · ${k[3][1]} 次</div><div class="muted">近 30 天 <b>${k[4][0]}</b> · ${fmtN(k[4][1])} 次</div></td>
+ <td class="muted">${k[5]}</td><td>${k[6]?`<div>$${k[6][0]} / $${k[6][1]}</div><div class="prog" style="width:110px"><i style="width:${k[6][0]/k[6][1]*100}%"></i></div>`:'<span class="muted">不限</span>'}</td>
+ <td><span class="badge b-ok">启用</span></td><td class="muted">${['2 分钟前','1 小时前','昨天'][i]}</td></tr>`).join('')}
+ </tbody></table></div>
+ <div class="ann">「用量」列照 sub2api：今日 + 近 30 天（原来是「累计」，要从 1970 年扫全表）。点用量单元格打开右侧抽屉。</div>
+ <div class="scrim"></div>
+ <div class="drawer"><div class="dh"><div><b>claude-code-laptop</b><div class="muted" style="font-size:12px">用量 · Asia/Shanghai</div></div><div style="margin-left:auto" class="seg"><button>7 天</button><button class="on">30 天</button><button>90 天</button></div><span style="margin-left:8px">${ic('x','')}</span></div>
+  <div class="db">
+   <div class="grid g3" style="gap:10px">${stat('info','list','请求','4,410','成功率 <b>99.4%</b>')}${stat('success','wallet','费用','$58.10','原价 <span class="strike">$72.63</span>')}${stat('warning','cube','Token','11.2M','缓存命中 <b>88%</b>')}</div>
+   <div class="card"><div class="ch"><h3>每日费用</h3></div><div id="k-daily"></div></div>
+   <div class="card"><div class="ch"><h3>按模型</h3></div><div style="padding:4px 8px 8px">${distTable(MODELS.slice(0,3),'cost','模型')}</div></div>
+   <div class="muted" style="font-size:12px">数据：GET /me/usage/summary?api_key_id=…&amp;group_by=day|model&amp;tz=（已有接口加 tz）</div>
+  </div></div>`,
+ after(){xy('k-daily',{kind:'bar',labels:lab30,w:460,h:170,series:[{name:'费用',c:'--s1',v:daily30}],yf:v=>'$'+v.toFixed(0),tf:v=>fmt$(v)})}};
+};
+S['a-dash']=()=>({side:navA('a-dash'),top:topbar(0),html:`
+ <div class="ph"><div><h1>仪表盘</h1><p>全站今日运行情况</p></div></div>
+ <div class="grid g4">
+  ${stat('primary','chart','今日请求','71,050 <small class="up">▲ 4.1%</small>','成功率 <b>98.7%</b> · 近 30 天 <b>1.92M</b>')}
+  ${stat('success','wallet','今日收入','$1,105.40','原价 <b>$1,318.22</b> · 近 30 天 <b>$29,880</b>')}
+  ${stat('info','users','活跃用户','186','今日新增 <b class="up">+7</b> · 共 1,042')}
+  ${stat('warning','server','可用账号','38 / 41','<b class="down">2</b> 异常 · 1 停用')}
+  ${stat('warning','cube','今日 Token','58.4M','输入 <b>7.1M</b> · 输出 <b>2.3M</b> · 缓存 <b>49.0M</b>')}
+  ${stat('success','check','缓存命中率','86.9%','今日')}
+  ${stat('accent','bolt','性能','612 <small>RPM</small>','<b>2.31M</b> TPM · 近 5 分钟')}
+  ${stat('danger','clock','平均响应','2.1s <small>首 token</small>','总耗时 <b>15.8s</b>')}
+ </div>
+ <div class="card pad muted" style="border-style:dashed;text-align:center;font-size:12px">PluginSlot · dashboard.widgets（插件挂件，如「今日拦截」）</div>
+ ${rangeBar()}
+ <div class="grid g2">${trendCard('trend')}${distCard('d-model','模型分布',MODELS_A,'模型')}</div>
+ ${strip()}
+ <div class="grid g2">
+  <div class="card"><div class="ch"><h3>用户消费榜</h3><span class="sub">近 7 天 · Top 10，按费用</span><div class="r"><div class="seg"><button class="on">费用</button><button>请求</button><button>Token</button></div></div></div>
+   <div class="list">${[['alice@example.com',812.4],['bob@corp.io',611.2],['carol@lab.ai',402.9],['dave@x.dev',388.1],['erin@y.io',251.3],['frank@z.co',201.8],['grace@q.me',150.2],['heidi@w.org',121.7],['ivan@e.ru',98.3],['judy@r.jp',77.0],['其他 176 人',642.6]].map(([u,c],i)=>`<div class="hb"><span class="rank ${i<3?'r'+(i+1):''}">${i<10?i+1:''}</span><span style="overflow:hidden;text-overflow:ellipsis">${u}</span><span><span class="bar ${i===10?'o':''}" style="display:block;width:${c/812.4*100}%"></span></span><span class="num">${fmt$(c)}</span></div>`).join('')}</div></div>
+  <div class="card"><div class="ch"><h3>分组分布</h3><span class="sub">按费用</span></div>
+   <div class="list">${GROUPS.map(g=>`<div class="hb" style="grid-template-columns:120px 1fr 76px"><span><span class="sw" style="background:var(${g.c});margin-right:6px"></span>${g.k}</span><span><span class="bar" style="display:block;width:${g.cost/812.4*100}%;background:var(${g.c})"></span></span><span class="num">${fmt$(g.cost)}</span></div>`).join('')}
+   <div class="muted" style="font-size:12px;margin-top:6px">点用户或分组 → 跳到 /usage 并带上筛选和时间范围</div></div></div>
+ </div>
+ <div class="ann">KPI 来自 <b>GET /usage/overview?tz=</b>（Valkey 缓存 30 秒；账号用 COUNT，不再只数前 200 个；users/accounts 按权限给）。用户消费榜用条形图 + 「其他」，代替 sub2api 叠在一起的 Top 12 折线。</div>`,
+ after(){wireTrend('trend',days7,{input:T7.input.map(x=>x*22),output:T7.output.map(x=>x*22),cread:T7.cread.map(x=>x*22),cwrite:T7.cwrite.map(x=>x*22)},'a');wireStrip(days7,'a',req7.map(x=>x*55),fail7.map(x=>x*70),cost7.map(x=>x*12),hit7);wireDist('d-model',MODELS_A,'模型')}});
+S['a-usage']=()=>({side:navA('a-usage'),top:topbar(0),html:`
+ <div class="ph"><div><h1>使用记录</h1><p>网关的每一次请求及其计费过程。</p></div><div class="acts"><button class="btn">${ic('refresh')}刷新</button><button class="btn pri">${ic('download')}导出 CSV</button></div></div>
+ ${rangeBar(`<div class="fld"><label>用户</label><div class="sel">按邮箱搜索…</div></div><div class="fld"><label>模型</label><div class="sel">全部模型</div></div><div class="fld"><label>账号</label><div class="sel">全部账号</div></div><div class="fld"><label>分组</label><div class="sel">全部分组</div></div><div class="fld"><label>&nbsp;</label><button class="btn">更多筛选 <span class="badge b-gray">0</span></button></div>`)}
+ <div class="grid g4">
+  ${stat('info','list','总请求数','452,118','成功率 <b>98.6%</b>')}
+  ${stat('warning','cube','总 Token','391.2M','输入 <b>47.9M</b> · 输出 <b>15.1M</b> · 缓存 <b>328M</b> ⓘ')}
+  ${stat('success','wallet','总消费','$7,412.08','原价 <b>$8,860.31</b>')}
+  ${stat('accent','clock','平均耗时','15.1s','首 token <b>2.0s</b>')}
+ </div>
+ <div class="card"><div class="ch"><h3>图表</h3><span class="sub">跟随上方时间范围与筛选</span><div class="r"><button class="btn">收起 ▴</button></div></div>
+  <div style="padding:12px 16px 16px" class="grid g2">${distCard('d-model','模型分布',MODELS,'模型','<div class="seg"><button class="on">请求模型</button><button>上游模型</button></div>')}${distCard('d-group','分组分布',GROUPS,'分组')}</div></div>
+ <div class="card"><div class="tabs"><span>${ic('list')}用量明细 <span class="cnt">452,118</span></span><span>✕ 错误请求 <span class="cnt">6,330</span></span><span class="on">${ic('chart')}用户排行</span><span>调用 IP</span>
+   <span style="margin-left:auto;border:0" class="muted">Top <span class="seg" style="margin-left:6px"><button>20</button><button class="on">50</button><button>100</button><button>200</button></span></span></div>
+  <div style="padding:8px;overflow:auto"><table><thead><tr><th>#</th><th>用户</th><th class="num">请求数 ⇅</th><th class="num">输入 Token ⇅</th><th class="num">输出 Token ⇅</th><th class="num">缓存 Token ⇅</th><th class="num">总 Token ⇅</th><th class="num">费用 ▼</th></tr></thead><tbody>
+  ${[['alice@example.com',12,41210,5.1e6,1.6e6,38.2e6,812.4],['bob@corp.io',7,30988,4.2e6,1.2e6,29.9e6,611.2],['carol@lab.ai',21,19020,2.6e6,.8e6,21.4e6,402.9],['dave@x.dev',44,22410,2.9e6,.7e6,18.8e6,388.1],['erin@y.io',58,9921,1.4e6,.5e6,12.1e6,251.3],['frank@z.co',63,8810,1.1e6,.4e6,9.9e6,201.8]].map((u,i)=>`<tr><td><span class="rank ${i<3?'r'+(i+1):''}">${i+1}</span></td><td>${u[0]} <span class="muted mono">#${u[1]}</span></td><td class="num">${fmtN(u[2])}</td><td class="num">${fmtK(u[3])}</td><td class="num">${fmtK(u[4])}</td><td class="num">${fmtK(u[5])}</td><td class="num">${fmtK(u[3]+u[4]+u[5])}</td><td class="num"><b>${fmt$(u[6])}</b></td></tr>`).join('')}
+  </tbody></table></div></div>
+ <div class="ann">管理员多出：模型来源切换（请求 / 上游）、分组分布、「用户排行」页签（点一行即按该用户筛选）。按用户聚合，不做按 API Key 的排行（管理员看不到别人的 Key）。sub2api 的「账号成本」next 无对应数据，不做。</div>`,
+ after(){wireDist('d-model',MODELS,'模型');wireDist('d-group',GROUPS,'分组')}});
+
+// ---------- router ----------
+function show(k){
+ for(const g in groups)delete groups[g];
+ seed=7;const s=S[k]();
+ document.getElementById('side').innerHTML=s.side;document.getElementById('top').innerHTML=s.top;document.getElementById('content').innerHTML=s.html;
+ document.querySelectorAll('.mockbar [data-s]').forEach(b=>b.classList.toggle('on',b.dataset.s===k));
+ document.querySelectorAll('[data-range]').forEach(r=>r.onclick=()=>r.closest('.filters').querySelector('.popover').classList.toggle('hide'));
+ s.after&&s.after();location.hash=k;window.scrollTo(0,0);
+}
+document.querySelectorAll('.mockbar [data-s]').forEach(b=>b.onclick=()=>show(b.dataset.s));
+document.getElementById('theme').onclick=e=>{const d=document.documentElement;const dark=d.dataset.theme!=='dark';d.dataset.theme=dark?'dark':'light';e.target.textContent=dark?'浅色':'深色'};
+show(S[location.hash.slice(1)]?location.hash.slice(1):'u-dash');
+</script>
+</body>
+</html>

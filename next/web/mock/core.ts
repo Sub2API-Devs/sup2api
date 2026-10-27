@@ -236,6 +236,8 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/publishers': 'publisher:read',
   '/nodes': 'node:read',
   '/settings': ['settings:read', 'sticky:read'],
+  '/system/upgrades': 'system:update:read',
+  '/system/audit': 'audit:read',
   '/me/api-keys': 'apikey:self:manage',
   '/me/usage': 'usage:self:read',
   '/me/balance': 'balance:self:read',
@@ -249,7 +251,7 @@ on('GET', '/me/menus', (req) => {
 })
 
 const MENUS = [
-  { section: 'overview', items: [{ id: 'dashboard', label: { en: 'Overview', zh: '概览' }, icon: 'dashboard', path: '/dashboard' }] },
+  { section: 'overview', items: [{ id: 'dashboard', label: { en: 'Dashboard', zh: '仪表盘' }, icon: 'dashboard', path: '/dashboard' }] },
   {
     section: 'gateway',
     items: [
@@ -279,9 +281,8 @@ const MENUS = [
   {
     section: 'me',
     items: [
-      { id: 'my-api-keys', label: { en: 'API keys', zh: 'API Key' }, icon: 'key', path: '/me/api-keys' },
-      { id: 'my-usage', label: { en: 'My usage', zh: '我的用量' }, icon: 'chart', path: '/me/usage' },
-      { id: 'my-balance', label: { en: 'My balance', zh: '我的余额' }, icon: 'balance', path: '/me/balance' }
+      { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
+      { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' }
     ]
   },
   {

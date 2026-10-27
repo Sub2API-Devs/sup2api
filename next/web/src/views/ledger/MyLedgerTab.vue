@@ -6,7 +6,7 @@ import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange, ran
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
-import { formatDateTime, formatMoney } from '@/utils/format'
+import { formatMoney } from '@/utils/format'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_RANGES, useKindOptions } from './kinds'
 
@@ -19,15 +19,13 @@ const { t } = useI18n()
 const auth = useAuthStore()
 
 const balance = ref<string | null>(null)
-const updatedAt = ref<string | null>(null)
 const balanceLoading = ref(false)
 
 async function loadBalance() {
   balanceLoading.value = true
   try {
-    const r = await api.get<{ balance: string; updated_at?: string }>('/me/balance')
+    const r = await api.get<{ balance: string }>('/me/balance')
     balance.value = r?.balance ?? null
-    updatedAt.value = r?.updated_at ?? null
   } catch {
     balance.value = null
   } finally {
@@ -69,7 +67,6 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
       <SStatCard
         :label="t('ledger.balance')"
         :value="formatMoney(balance)"
-        :sub="updatedAt ? t('ledger.updatedAt', { time: formatDateTime(updatedAt) }) : undefined"
         icon="balance"
         :tone="negative ? 'danger' : 'primary'"
         :loading="balanceLoading"

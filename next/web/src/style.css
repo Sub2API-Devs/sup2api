@@ -261,6 +261,12 @@
   .stat-icon-danger {
     @apply bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400;
   }
+  .stat-icon-info {
+    @apply bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400;
+  }
+  .stat-icon-accent {
+    @apply bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400;
+  }
   .stat-value {
     @apply truncate text-2xl font-bold text-gray-900 dark:text-white;
   }

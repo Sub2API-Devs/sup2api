@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -106,6 +107,7 @@ type Detail struct {
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/usage", "usage:self:read", s.myUsage)
 	r.Perm("GET", "/me/usage/summary", "usage:self:read", s.mySummary)
+	r.Perm("GET", "/me/usage/overview", "usage:self:read", s.myOverview)
 	r.Perm("GET", "/me/usage/:id", "usage:self:read", s.myUsageDetail)
 	r.Perm("GET", "/usage", "usage:all:read", s.allUsage)
 	r.Perm("GET", "/usage/summary", "usage:all:read", s.summary)
@@ -454,15 +456,26 @@ type SummaryRow struct {
 	// PromptTokens includes cached input exactly once. Older free records may
 	// lack semantics; a group containing such cached usage returns null.
 	PromptTokens *int64 `json:"prompt_tokens"`
+	// TotalTokens is input + output + cache read + cache write.
+	TotalTokens int64 `json:"total_tokens"`
+	// StandardCost is the cost before the group multiplier (total_cost /
+	// rate_multiplier; a free group reports 0).
+	StandardCost decimal.Decimal `json:"standard_cost"`
+	// The averages are over the successful requests that report a time.
+	LatencyMsAvg    int64 `json:"latency_ms_avg"`
+	FirstTokenMsAvg int64 `json:"first_token_ms_avg"`
 }
 
 // maxIPGroups caps group_by=ip: a key leaked to the internet can call from
 // thousands of addresses, and the console only lists the busiest ones.
 const maxIPGroups = 100
 
-// GET /usage/summary?from=&to=&group_by=day|model|user|ip|api_key (default:
-// day, last 30 days). Days are UTC dates "YYYY-MM-DD"; users and API keys are
-// keyed by id; client IPs come busiest first, at most maxIPGroups of them.
+// GET /usage/summary?from=&to=&tz=&group_by=day|hour|none|model|user|ip|
+// api_key|group|endpoint|platform (default: day, last 30 days). Days
+// ("YYYY-MM-DD") and hours ("YYYY-MM-DD HH:00") are calendar buckets in tz
+// (default UTC), hours over at most 31 days; none is a single row with key
+// ""; users and API keys are keyed by id, groups by name; client IPs come
+// busiest first, at most maxIPGroups of them.
 func (s *Service) summary(c *gin.Context) { s.summarize(c, nil) }
 
 // GET /me/usage/summary: the same for the caller (group_by=user refused).
@@ -478,32 +491,58 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
+	tz, _, err := parseTZ(c)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	if c.Query("from") == "" {
 		f.And("u.created_at >= ?", time.Now().AddDate(0, 0, -30))
 	}
+	// The estimate markers, the usage_extract value and (for day and hour)
+	// the time zone are appended after the filter's own arguments, and their
+	// text uses a placeholder more than once, so the numbers come from Len.
+	base := f.Len()
+	tzArg := fmt.Sprintf("$%d", base+4)
+	useTZ := false
 	var key, join, extra string
-	order, lastAt := ` ORDER BY k`, `NULL::timestamptz`
+	order, lastAt, groupBy := ` ORDER BY k`, `NULL::timestamptz`, ` GROUP BY k`
 	switch c.DefaultQuery("group_by", "day") {
 	case "day":
-		key = `to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
+		key, useTZ = `to_char(u.created_at AT TIME ZONE `+tzArg+`::text, 'YYYY-MM-DD')`, true
+	case "hour":
+		if span, ok := summarySpan(c); !ok || span > maxHourSpan {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by=hour covers at most 31 days"))
+			return
+		}
+		key, useTZ = `to_char(date_trunc('hour', u.created_at AT TIME ZONE `+tzArg+`::text), 'YYYY-MM-DD HH24:00')`, true
+	case "none":
+		key, groupBy = `''`, ``
 	case "model":
 		key = `u.model`
 	case "api_key":
 		key = `u.api_key_id::text`
+	case "group":
+		key = `COALESCE(gg.name, u.group_id::text)`
+		join = ` LEFT JOIN groups gg ON gg.id = u.group_id`
+	case "endpoint":
+		key = `u.endpoint`
+	case "platform":
+		key = `u.platform`
 	case "ip":
 		key = `u.client_ip`
 		lastAt = `max(u.created_at)`
 		order = ` ORDER BY count(*) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
 	case "user":
 		if self != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, ip or api_key"))
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip"))
 			return
 		}
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
 		extra = `, COALESCE(max(us.email), '')`
 	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, model, user, ip or api_key"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, user, api_key, group, endpoint, platform or ip"))
 		return
 	}
 	if extra == "" {
@@ -512,9 +551,6 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	// The estimate markers are matched by value, not by key: 'reconcile' also
 	// takes "retrying" (the row is reserved again, not final) and "refunded"
 	// (the row is free), neither of which is an estimate in the revenue.
-	// They are appended after the filter's own arguments, and their text uses
-	// a placeholder more than once, so the numbers are computed from Len.
-	base := f.Len()
 	est := fmt.Sprintf(`u.anomalies->>'%s' IN ($%d, $%d)`, core.AnomalyReconcile, base+1, base+2)
 	// One value in the column is a fact, not an anomaly: usage_extract
 	// "plugin" says the plugin answered, which on a plugin-metered platform is
@@ -524,44 +560,65 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
 		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, base+3)
 	args := append(f.Args(), core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
-	// Match expr.Normalize's inclusive/exclusive input convention, including
-	// both cache-write buckets. Do not guess missing historical semantics from
-	// the client protocol: the gateway may have converted it.
-	promptTokens := `CASE
-		WHEN u.cache_read_tokens + u.cache_creation_tokens + u.cache_creation_1h_tokens = 0 THEN u.input_tokens
-		WHEN u.billing_detail->'inputs'->>'semantics' = 'inclusive' THEN u.input_tokens
-		WHEN u.billing_detail->'inputs'->>'semantics' IN ('exclusive', '') THEN
-			u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + u.cache_creation_1h_tokens
-		END`
-	rows, err := s.db.Pool.Query(ctx, `
-		SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
-		       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
-		       COALESCE(sum(u.cache_read_tokens), 0),
-		       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
-		       COALESCE(sum(u.total_cost), 0),
-		       count(*) FILTER (WHERE `+anomalous+`),
-		       count(*) FILTER (WHERE `+est+`),
-		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
-		       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END
-		FROM usage_logs u`+join+f.Cond()+` GROUP BY k`+order, args...)
+	if useTZ {
+		args = append(args, tz)
+	}
+	out := []SummaryRow{}
+	err = s.statsTx(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
+			       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
+			       COALESCE(sum(u.cache_read_tokens), 0),
+			       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
+			       COALESCE(sum(u.total_cost), 0),
+			       count(*) FILTER (WHERE `+anomalous+`),
+			       count(*) FILTER (WHERE `+est+`),
+			       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
+			       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END,
+			       COALESCE(sum(`+standardCost+`), 0),
+			       COALESCE(round(avg(u.latency_ms) FILTER (WHERE u.success AND u.latency_ms > 0)), 0)::bigint,
+			       COALESCE(round(avg(u.first_token_ms) FILTER (WHERE u.success AND u.first_token_ms > 0)), 0)::bigint
+			FROM usage_logs u`+join+f.Cond()+groupBy+order, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r SummaryRow
+			if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
+				&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens,
+				&r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg); err != nil {
+				return err
+			}
+			r.TotalTokens = r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheCreationTokens
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	defer rows.Close()
-	out := []SummaryRow{}
-	for rows.Next() {
-		var r SummaryRow
-		if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		out = append(out, r)
-	}
-	if err := rows.Err(); err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
 	httpapi.OK(c, out)
+}
+
+// summarySpan is the length of the summary's range: from (default 30 days
+// ago) to to (default now). ok is false when either bound is unreadable;
+// parseFilter has already refused that, so it does not happen in practice.
+func summarySpan(c *gin.Context) (time.Duration, bool) {
+	now := time.Now()
+	from, to := now.AddDate(0, 0, -30), now
+	for _, x := range []struct {
+		q string
+		t *time.Time
+	}{{"from", &from}, {"to", &to}} {
+		if v := c.Query(x.q); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				return 0, false
+			}
+			*x.t = t
+		}
+	}
+	return to.Sub(from), true
 }

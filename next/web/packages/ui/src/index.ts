@@ -50,6 +50,7 @@ export { default as STabs } from './STabs.vue'
 export { default as STagInput } from './STagInput.vue'
 export { default as STextarea } from './STextarea.vue'
 export { default as STimeRange } from './STimeRange.vue'
+export { default as SDateRange } from './SDateRange.vue'
 export { default as STooltip } from './STooltip.vue'
 export { default as SGrid } from './SGrid.vue'
 export { default as SStack } from './SStack.vue'
@@ -65,7 +66,7 @@ export { toast, confirm, toastState, confirmState, dismissToast, settleConfirm, 
 export { copyToClipboard } from './clipboard'
 export { createItemId } from './itemId'
 export { default as uiMessages } from './messages'
-export { rangeBounds, toLocalInput, fromLocalInput, dayKey } from './timeRange'
+export { rangeBounds, rangeSpanMs, toLocalInput, fromLocalInput, dayKey, RANGE_LABELS } from './timeRange'
 export type { RangeKey } from './timeRange'
 export type {
   TableColumn,

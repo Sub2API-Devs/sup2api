@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { rangeBounds } from '@sub2api/ui'
 import { i18n } from '@/i18n'
+import { startOfToday } from '@/utils/format'
 import MyApiKeysView from './MyApiKeysView.vue'
 import KeyEditor from './KeyEditor.vue'
 import KeyGroupSwitch from './KeyGroupSwitch.vue'
@@ -27,7 +29,7 @@ describe('API key list', () => {
     vi.clearAllMocks()
     items.value = [row()]
     // Today's and all-time usage per key (group_by=api_key).
-    get.mockImplementation(async (_path: string, q: { from: string }) => [{ key: '7', requests: q.from.startsWith('1970') ? 12 : 3, total_cost: q.from.startsWith('1970') ? '1.5' : '0.25' }])
+    get.mockImplementation(async (_path: string, q: { from: string }) => [{ key: '7', requests: q.from === startOfToday().toISOString() ? 3 : 12, total_cost: q.from === startOfToday().toISOString() ? '0.25' : '1.5' }])
   })
   it('marks an IP-restricted key and deletes from the row', async () => {
     const w = render()
@@ -35,10 +37,10 @@ describe('API key list', () => {
     await w.get('[data-testid="delete-key"]').trigger('click')
     expect(deleteWithConfirm).toHaveBeenCalledWith('/me/api-keys/7', expect.stringContaining('laptop'), reload)
   })
-  it('shows the usage of each key today and in total', async () => {
+  it('shows the usage of each key today and in the last 30 days', async () => {
     const w = render()
     await flushPromises()
-    expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ group_by: 'api_key', from: new Date(0).toISOString() }))
+    expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ group_by: 'api_key', from: rangeBounds('30d').from }))
     const usage = w.get('[data-testid="key-usage"]').text()
     expect(usage).toContain('$0.25')
     expect(usage).toContain('3 次')

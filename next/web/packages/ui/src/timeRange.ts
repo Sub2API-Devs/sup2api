@@ -1,4 +1,19 @@
-export type RangeKey = 'all' | '1h' | '24h' | 'today' | '7d' | '30d' | 'month' | 'custom'
+export type RangeKey = 'all' | '1h' | '24h' | 'today' | 'yesterday' | '7d' | '14d' | '30d' | 'month' | 'lastMonth' | 'custom'
+
+/** UI message key of each preset's label. */
+export const RANGE_LABELS: Record<RangeKey, string> = {
+  all: 'ui.all',
+  '1h': 'ui.lastHour',
+  '24h': 'ui.last24h',
+  today: 'ui.today',
+  yesterday: 'ui.yesterday',
+  '7d': 'ui.last7d',
+  '14d': 'ui.last14d',
+  '30d': 'ui.last30d',
+  month: 'ui.thisMonth',
+  lastMonth: 'ui.lastMonth',
+  custom: 'ui.custom'
+}
 
 function startOfToday(): Date {
   const d = new Date()
@@ -12,9 +27,14 @@ function daysAgo(n: number): Date {
   return d
 }
 
-/** RFC 3339 bounds for a preset range ('' = open). 1h / 24h count back from now, the others from local midnight. */
+/**
+ * RFC 3339 bounds for a preset range ('' = open). 1h / 24h count back from now,
+ * the others from local midnight; yesterday and lastMonth end at the next
+ * local midnight (to is exclusive), the others are open-ended.
+ */
 export function rangeBounds(key: RangeKey): { from: string; to: string } {
   let from: Date | null = null
+  let to: Date | null = null
   switch (key) {
     case '1h':
       from = new Date(Date.now() - 3600_000)
@@ -25,8 +45,15 @@ export function rangeBounds(key: RangeKey): { from: string; to: string } {
     case 'today':
       from = startOfToday()
       break
+    case 'yesterday':
+      from = daysAgo(1)
+      to = startOfToday()
+      break
     case '7d':
       from = daysAgo(6)
+      break
+    case '14d':
+      from = daysAgo(13)
       break
     case '30d':
       from = daysAgo(29)
@@ -37,8 +64,16 @@ export function rangeBounds(key: RangeKey): { from: string; to: string } {
       from = d
       break
     }
+    case 'lastMonth': {
+      const d = startOfToday()
+      d.setDate(1)
+      to = new Date(d)
+      d.setMonth(d.getMonth() - 1)
+      from = d
+      break
+    }
   }
-  return { from: from ? from.toISOString() : '', to: '' }
+  return { from: from ? from.toISOString() : '', to: to ? to.toISOString() : '' }
 }
 
 /** RFC 3339 -> value of <input type="datetime-local"> (local time). */
@@ -62,4 +97,12 @@ export function dayKey(v: string | Date): string {
   const d = v instanceof Date ? v : new Date(v)
   const p = (x: number) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/** Length in ms of [from, to) (RFC 3339; to '' = now). Infinity when from is open or unreadable. */
+export function rangeSpanMs(from: string, to: string): number {
+  const f = from ? new Date(from).getTime() : NaN
+  if (Number.isNaN(f)) return Infinity
+  const t = to ? new Date(to).getTime() : Date.now()
+  return Number.isNaN(t) ? Infinity : t - f
 }
