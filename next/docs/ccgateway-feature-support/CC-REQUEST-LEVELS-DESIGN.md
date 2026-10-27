@@ -2,7 +2,7 @@
 
 2026-10-22 讨论，2026-10-23 用户决定并实施（第 7 节）：**只有计费头是必须的，其余每一层都由前端配置决定**。第 1–6 节保留讨论时的分析与现状测试。第 7 节的配置模型同日被 [注入等级设计](CC-INJECTION-LEVELS-DESIGN.md) 取代，现行规则以那份为准。
 
-AST 工具和做法同 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY](../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md)：`artifacts/claude-2.1.304/prompt-ast/`（`q.cjs show|callers|find`）。索引用的是 v17 解包出的 bundle；v18 只改了请求上下文的 mods，下面这些原生函数没有变。函数名是 Bun 重新打包后的名字（带数字后缀的就是这样）。
+AST 工具和做法同 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY](../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md)：`prompt-ast` 脚本（`q.cjs show|callers|find`；不在仓库，已于 2026-10-27 清理）。索引用的是 v17 解包出的 bundle；v18 只改了请求上下文的 mods，下面这些原生函数没有变。函数名是 Bun 重新打包后的名字（带数字后缀的就是这样）。
 
 ## 1. 用户的模型
 
@@ -86,7 +86,7 @@ direct 只拼接原始 JSON（`direct-billing.js`），现在做第 1、2 层。
 
 ### 5.1 docker（ovh 一次性 `--network none` 容器，镜像 `ccgateway-app:0.1.77` 自带的 Worker 和 CLI，假上游）
 
-脚本在 `artifacts/claude-2.1.304/e2e/matrix/`（`matrix.cjs`、`run-matrix.sh`、`run-real.sh`、`real-summary.cjs`）。构造的请求带上核心那样的 `X-CCGateway-Request-Policy`，逐个检查发出的请求。
+当时的脚本（`matrix.cjs`、`run-matrix.sh`、`run-real.sh`、`real-summary.cjs`）不在仓库，已于 2026-10-27 清理；现行同类回归见 [离线端到端套件](../../plugins/ccgateway/companions/cli-mods/test/e2e/README.md)。构造的请求带上核心那样的 `X-CCGateway-Request-Policy`，逐个检查发出的请求。
 
 - OAuth 118/118、API Key 118/118 通过：
   - 身份行：6 个入口加 `claude-desktop-3p`、未知入口，每个可选句加“不补”，build 和 direct 都按配置。

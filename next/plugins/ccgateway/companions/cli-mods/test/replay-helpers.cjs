@@ -152,7 +152,8 @@ function nativeHeaderBlock(block, { cc_version, cc_entrypoint }) {
 // ---- Native generation defaults ------------------------------------------
 // What the native builder adds when the client leaves a control out, as the
 // assembly runs observed for claude-sonnet-4-6 (thinking disabled with
-// temperature 1, effort high; artifacts/claude-2.1.304/assembly-repair-report.json):
+// temperature 1, effort high; the 2026-10-20 assembly-repair-report.json was
+// deleted in the 2026-10-27 artifacts cleanup, assembly-replay reproduces it):
 // request-build.js gives the builder a mechanical disabled thinking when the
 // client sent none or one it cannot carry (thinkingConfigFor).
 function nativeDefaultPermitted(key, before, wire) {

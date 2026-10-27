@@ -1,5 +1,7 @@
 # 2026-10-24 优雅度审核：cli-mods（定制 Claude Code CLI，v25）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 范围：`next/plugins/ccgateway/companions/cli-mods/`（当前 HEAD `5eb390030`，含 v24 `beta-path` 与 v25 `beta-order` 两个未合并进发布线的改动），以及它们改写的原生模块。原生基线是 `artifacts/claude-2.1.304/linux-restored/`（压缩 JS），补丁产物是 `artifacts/claude-2.1.304/patched-v25/`。设计文档：`next/plugins/ccgateway/docs/REQUEST-MODES.md`、`BUILD-REQUEST-COMPONENTS-DESIGN.md`、`cli-mods/README.md`。
 
 判据是用户给的一条：**出口与官方客户端一致，凡是原生能决定的都交给原生调用，补丁只做最小接入，自己写的逻辑越少越好。** 因此下文把「调用了原生函数」和「自己复刻了原生函数的语义」分开评价；后者即使当前输出正确，也算不优雅。路径除特别注明外都相对 `cli-mods/`；原生符号用「文件 + 函数名」定位（压缩名是打包产物，不算问题）。

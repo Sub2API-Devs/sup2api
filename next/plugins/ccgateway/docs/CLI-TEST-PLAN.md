@@ -46,7 +46,7 @@ npm install --ignore-scripts      # devDependencies：@babel/parser、espree、e
 npm test                          # = node test/run.mjs
 ```
 
-**布局**。`test/run.mjs` 跑 `test/*.test.mjs`（版本无关）加 `test/native/<版本>/*.test.mjs`（该版本的原生对账），版本取 `CCG_CLI_VERSION`，否则取 `profiles/` 里最新的 profile（现为 2.1.310）；开头打印一行 `CCG_CLI_TEST_VERSION <版本>: <N> test files`，其余参数传给 `node --test`。`test/artifacts.mjs` 的 `pinned(version)` 给出该版本的 profile、还原源码路径 `artifacts/claude-<版本>/linux-restored`、夹具 `fixtures/<名>-<版本>.json`、跳过规则与按该版 profile 换好原生名的环境代码（`environmentSource()`）；`test/native/<版本>/` 里的测试各自 `pinned('<版本>')`。2026-10-27：两个版本都是 28 个文件、184 项全过，`CCG_REQUIRE_ARTIFACTS=1` 下 0 跳过。
+**布局**。`test/run.mjs` 跑 `test/*.test.mjs`（版本无关）加 `test/native/<版本>/*.test.mjs`（该版本的原生对账），版本取 `CCG_CLI_VERSION`，否则取 `profiles/` 里最新的 profile（现为 2.1.310）；开头打印一行 `CCG_CLI_TEST_VERSION <版本>: <N> test files`，其余参数传给 `node --test`。`test/artifacts.mjs` 的 `pinned(version)` 给出该版本的 profile、还原源码路径 `artifacts/claude-<版本>/linux-restored`、夹具 `fixtures/<名>-<版本>.json`、跳过规则与按该版 profile 换好原生名的环境代码（`environmentSource()`）；`test/native/<版本>/` 里的测试各自 `pinned('<版本>')`。2026-10-27：两个版本都是 30 个文件、188 项全过（含 Bun 版本检查与环境模板测试），`CCG_REQUIRE_ARTIFACTS=1` 下 0 跳过。
 
 支持模块与对应单元测试（规则细节见第 3 节组件目录）：
 
@@ -155,7 +155,7 @@ Go：`cd next/plugins/ccgateway/companions && go test ./engine/ ./contracts/...`
 1. **身份**：账号容器 Worker 的 `/healthz` 报告的 `claude_version`、`cli_patch`、`cli_sha256`、`capabilities` 与发布的 manifest/profile 一致（核心在发送前也会核对，不一致时核心回 503 `configuration_error`）；容器内 `/opt/ccgateway/cli/active-runtime.json` 指向新版本。
 2. **账号测试**：管理接口 `POST /api/v1/accounts/:id/test`（选一个模型），走 Worker `/v1/ccgateway/probe`，固定 build、原生主线程；结果带 `test_mode: native_build`。它只证明账号可用，不代表业务请求的形状。
 3. **真实客户端**：用真实 Claude Code 指向网关跑几轮（含工具、子代理），然后在该账号容器的 `/work/data/request-logs/<uuid>/` 看 `metadata.json`（`mode`、`log_level`、`log_level_source`、`upstream_captured`、`body_changed`）、`request-headers.json` 与 `upstream-request.json`：先看客户端发来的是什么，再看上游收到的是什么。线上直连上游时原生会给 ≥ 4096 字符的正文加随机空白再压缩，比较用 `content_sha256`。
-4. **日志策略**：按 `artifacts/claude-2.1.304/e2e/release-0202/verify-logpolicy.py` 的做法（不在仓库，只是示例）：分别把一个测试账号设成 off/full/follow，各跑一次账号测试，看新日志目录的有无与级别来源，最后恢复 follow。
+4. **日志策略**：按 ovh `~/sup2api-managed/stage/0.1.206/verify-logpolicy.py` 的做法（不在仓库，写死账号与容器名，只是示例）：分别把一个测试账号设成 off/full/follow，各跑一次账号测试，看新日志目录的有无与级别来源，最后恢复 follow。
 5. 上游 429 时先看是不是该账号被限速（换另一个可用的测试账号），再判断是不是请求形状问题。
 
 ---
@@ -363,7 +363,7 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 - **还原**：`linux-restored/reconstruction.json` 的 `binarySha256` 为 `b7367643…7df56`（等于 `official-manifest.json` 的 linux-x64 checksum），2801 个模块、2551 个 JS，`unresolved` 为空，入口 `cli.js`。
 - **equiv**（`equiv-304-310.json`，一对一配对修正之后的结果）：旧 94222 个单元、新 97364 个，配对 90456（same 88265、changed 2191），冲突 962（`old-reached-twice` 889、`new-claimed-twice` 73）；110 个种子里 changed 12 项（`Ve`→`Ye`、`FH`→`rH`、`qmn`→`rSn`、`jA`→`UC`、`HTe`→`hRe`、`sF`→`m$`（核心与传输模块各一项）、`dN`→`M$`、`Mn`→`Ln`、`mle`→`ece`、`cy`→`My`、`m4t`→`F9t`），unmapped 2 项（`uXn`，新版是主查询里的局部函数 `Ceo`；`Ure`，即 `crypto.randomUUID`，新版 `uie`），其余 same。`unitdiff` 输出在 `diffs/`。
 - **四组审查 + REA**（`review/`）：`rev-query.md`（`qmn`/`uXn`：10 个锚点都有语义等价、唯一、无遮蔽的新文本，模拟替换后可解析；beta 推入顺序与头不变）、`rev-core.md`（核心其余补丁点与环境代码的名字：锚点在新函数里都恰好出现一次）、`rev-transport.md`（传输、认证、请求头：逻辑等价，`sF` 的两处锚点因参数解构移进函数体而改写；出口差异只有版本号）、`rev-entry.md`（入口、会话、容器资源、计费头、身份、工具池：锚点在函数内与全文件内都唯一）；`rea-check.md`：12 个 changed 种子 REA 全部确认有变化、配对也对，抽样的 same 依赖指纹全同，703 个唯一指纹配对与 equiv 0 冲突、1 处 equiv 错配（`38xgev2z:Da`）；它发现的 equiv 问题（多对一配对、低相似度的对齐传播）促成了上面的一对一冲突与 `similarity`/`how`。各报告末尾的“未确认事项”（如 Worker 下 `firstParty` 的假设只做了静态推断、Bun 修订号对 TLS 指纹的影响未抓包）未在报告里关闭。
-- **单元与原生对账**：2026-10-27 `CCG_CLI_VERSION=2.1.304` 与 `2.1.310` 各跑 `CCG_REQUIRE_ARTIFACTS=1 npm test`：各 28 个文件、184 项全过、0 跳过。新版的原生夹具 `native-vocabulary-2.1.310.json`、`native-layers-2.1.310.json` 与官方抓包 `official-request-2.1.310.json`（计费头 `cc_version=2.1.310.661`）已提交。
+- **单元与原生对账**：2026-10-27 `CCG_CLI_VERSION=2.1.304` 与 `2.1.310` 各跑 `CCG_REQUIRE_ARTIFACTS=1 npm test`：各 28 个文件、184 项全过、0 跳过（之后加了 Bun 版本检查与环境模板测试，现为 30 个文件、188 项）。新版的原生夹具 `native-vocabulary-2.1.310.json`、`native-layers-2.1.310.json` 与官方抓包 `official-request-2.1.310.json`（计费头 `cc_version=2.1.310.661`）已提交。
 - **官方请求对比（D0）**：`official-diff.cjs artifacts/claude-2.1.310/captures/official-request-2.1.304-recapture.json test/fixtures/official-request-2.1.310.json` 输出 2 处差异：`messages[0].content[2]`（延迟工具列表多 `Monitor`）与 `tool Bash description`（多一句 Monitor 的说明）；其余组件规范化后相同。注意要用同一脚本重抓的 2.1.304（该文件只在 `artifacts/`），拿仓库里条件不同的 `official-request-2.1.304.json` 比会出现大量无关差异。
 
 被改写函数与定位点在两版的名字（来自 review 报告与 profile）：
@@ -392,6 +392,19 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 | L10 静态 | `node tools/upgrade/{restore-bun,seeds,equiv,lookup,unitdiff,inspect,carry-profile,anchor-hazards,tokcmp,supcmp}.cjs …`（第 4.1 节） | 任意装了 cli-mods devDependencies 的 node；`equiv` 需 `--max-old-space-size=14000`，首次约 8 分钟 |
 | L10 官方抓包 | `sh test/e2e/capture-official.sh <out.json>`（`IMG`、`OFFICIAL_CLI`）；`node test/e2e/official-diff.cjs <a> <b>` | 前者 Linux + Docker，`--network none`；后者任意 node |
 | L11 | 管理接口、账号容器内 `docker exec` 读日志 | 生产，按运维规则 |
+
+### 5.1 不进 Git 的材料现存位置（2026-10-27 清理后）
+
+旧文档（审计报告、2.1.296/302/304 分析、部署记录等）里引用的其他 `artifacts/` 子目录、ovh 上的 `~/sup2api/checks/*`、旧 `release-*` 与 `~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本都已删除，那些路径只作出处。现存的只有：
+
+| 位置 | 内容 |
+|---|---|
+| 本机 `artifacts/claude-2.1.304/` | 官方 ELF `claude-linux-x64`、`official-manifest.json`、还原源码 `linux-restored/`、下载样板 `acquire.py`、组装分析结果 `assembly-audit/`、`hardware-privacy-{inventory,evidence}.json` |
+| 本机 `artifacts/claude-2.1.310/` | 官方 ELF、`official-manifest.json`、`linux-restored/`、补丁源码 `patched-v33/`、审查报告 `review/`、官方重抓 `captures/`、规范化 diff `diffs/`、REA 交叉验证草稿 `scratch-rea/`、`equiv-304-310.json`、`equiv.out`、`config-matrix-policies-2.1.310.json`、`client-combination-unit-report.json` |
+| ovh `~/sup2api/` | 源码工作区 `src`；干净构建工作区 `release-0.1.206`、`release-0.1.207`、`release-ccgateway-0.1.105`、`release-ccgateway-0.1.106`；官方未改的 CLI `checks/ccg-304-v12/claude-official-304`、`checks/ccg-310/claude-official-310` |
+| ovh `~/sup2api-managed/stage/` | `0.1.206`、`0.1.207`（核心构建模板 `0.1.207/build.sh`；日志策略核对 `0.1.206/verify-logpolicy.py`）、`ccgateway-0.1.105`（生产日志核对 `verify-v33.py`）、`ccgateway-0.1.106`（插件构建/发布模板 `build.sh`、`rollout.py`） |
+| ovh `~/sup2api-managed/{backups,publish,ccgateway-images}/` | 只有核心 0.1.206/0.1.207 与插件 0.1.105/0.1.106 两版 |
+| 仓库 | 离线回归套件、官方抓包与 TLS 指纹工具：`cli-mods/test/e2e/`；跨版本分析工具：`cli-mods/tools/upgrade/`（锚点推导样板 `tools/upgrade/examples/derive-anchors-2.1.310.cjs`） |
 
 ## 6. 报告字段怎么读
 
@@ -504,7 +517,7 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 
 ## 9. 现有测试 README 中已过时的结论（现状）
 
-三个 README（`test/official-client-replay.README.md`、`assembly-replay.README.md`、`worker-policy-matrix.README.md`）写于 2026-10-20（CLI 2.1.304 第一版补丁时期），`artifacts/claude-2.1.304/` 里对应的报告也都是 10-20 的。2026-10-27 脚本本身已按现行规则与 2.4 节的共同约定改过（头注释写明“Expectations follow the current request rules”），README 与报告还没有跟上，也没有找到改后重跑的结果。README 里以下结论已不成立：
+三个 README（`test/official-client-replay.README.md`、`assembly-replay.README.md`、`worker-policy-matrix.README.md`）写于 2026-10-20（CLI 2.1.304 第一版补丁时期），当时对应的报告（也是 10-20 的）已在 2026-10-27 清理 `artifacts/` 时删除。2026-10-27 脚本本身已按现行规则与 2.4 节的共同约定改过（头注释写明“Expectations follow the current request rules”），README 还没有跟上（改后重跑的结果见第 10 节第 1 条）。README 里以下结论已不成立：
 
 | README 里的结论 | 现状 | 依据 |
 |---|---|---|
@@ -526,7 +539,7 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 4. **e2e 场景缺口**：假上游支持 `bg`（后台子代理）、`fork`，`run.sh` 没有场景；没有 WebSearch/服务端工具、图片与文档、thinking 签名回传、`tool_choice`、`count_tokens`（应 404）、超时与中断、上游 5xx/429、超大正文（32 MiB）、并发槽满（429）的端到端场景；`all` 不含 `values`/`conc`/`classify`，容易漏跑。e2e 各变量的缺省值仍是 2.1.304 时期的，跑 2.1.310 要显式设 `CC_VERSION`/`CLIENT_CC_VERSION`/`OFFICIAL_CLI`。
 5. **A/B 白名单没有自动化**：`compare.cjs` 只列差异，允许表靠人工对照；应把允许表写成规则并让脚本给出通过/失败。
 6. **跨版本静态检查的剩余缺口**：“每个种子必须有归类记录”没有检查；`equiv` 对低 `similarity` 的对齐配对只报告不拦截；REA 交叉验证的脚本（`artifacts/claude-2.1.310/scratch-rea/`）是一次性草稿，不在仓库。
-7. **生产冒烟没有脚本**：账号测试、日志级别、真实客户端核对都靠手工（`verify-logpolicy.py` 不在仓库且写死账号与容器名）。
+7. **生产冒烟没有脚本**：账号测试、日志级别、真实客户端核对都靠手工（ovh `stage/0.1.206/verify-logpolicy.py` 不在仓库且写死账号与容器名）。
 8. **传输层（2026-10-27 已测）**：`test/e2e/tls-fingerprint.sh` 在一次性断网容器里把 `api.anthropic.com` 指向本机的 `tls-probe.cjs`（记录原始 ClientHello 与 HTTP/1.1 请求头原文），`tls-compare.cjs` 按客户端比较。结果：官方 2.1.304 与 2.1.310 的 Messages 连接 JA4 `t13d1713h1_5b57614c22b0_7f527383e249`；我们用 Bun 1.4.3 编译的 v31/v32 是 `…_6a3d802a7139`，JA3 相同，唯一差别是签名算法少了 `0807`（Ed25519）与 `0603`（ECDSA P-521）；同一份补丁源码用 Bun 1.4.4 编译后与官方**完全相同**。只走 HTTP/1.1、请求头名的大小写与顺序与官方一致（差的 `anthropic-beta`、`x-claude-code-prompt-id` 只取决于请求本身是否带 beta 与 CC 计费头）。官方另有 `/api/claude_code/settings`、`policy_limits` 两类连接用另一套 TLS 栈（`t13d1810/1811…`），`claude request` 不发这两类请求。结论：要对齐指纹，编译用的 Bun 版本要等于官方内嵌版本（现为 1.4.4）。
 9. **`cch`**：非 CC 请求发 `00000`，上游接受与否只是观察，没有监测。
 10. **核心与控制器隧道**：e2e 用代理模拟核心，只覆盖策略头与 credit 跟踪头；核心的能力预检、响应头白名单、credit 扣留在真实核心上的端到端组合只有 Go 单元测试。

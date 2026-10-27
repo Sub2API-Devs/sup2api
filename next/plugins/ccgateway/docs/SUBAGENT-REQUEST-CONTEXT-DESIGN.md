@@ -112,7 +112,7 @@ direct 的 body 原样转发，客户端的 `metadata.session_id`、`cc_prompt_i
 
 ## 10. 端到端：真实客户端 → 网关 → 出口（2026-10-22，离线）
 
-ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：官方 Claude Code 2.1.304 客户端用 `ANTHROPIC_BASE_URL` 指向本地 Worker（当前源码构建 + v18 CLI），假装已登录；Worker 的账号是假的 OAuth 凭证，出口走 unix socket 上的假上游，记录每个请求并让对话跑出主线程 → 子代理 → 嵌套子代理。同一对话另由客户端直连假上游作为对照（Anthropic 从真实客户端收到的样子）。没有任何请求出网。脚本在 `artifacts/claude-2.1.304/e2e/`。
+ovh 上一次性容器（`ccgateway-app:0.1.74` 镜像，`--network none`）：官方 Claude Code 2.1.304 客户端用 `ANTHROPIC_BASE_URL` 指向本地 Worker（当前源码构建 + v18 CLI），假装已登录；Worker 的账号是假的 OAuth 凭证，出口走 unix socket 上的假上游，记录每个请求并让对话跑出主线程 → 子代理 → 嵌套子代理。同一对话另由客户端直连假上游作为对照（Anthropic 从真实客户端收到的样子）。没有任何请求出网。当时的脚本不在仓库，已于 2026-10-27 清理；现行的同类套件是仓库里的 `companions/cli-mods/test/e2e/`。
 
 **客户端指向自定义地址时，客户端自己就少发很多东西**（对照 Worker 收到的请求）：CC 只在官方地址时写 `cch`、`cc_prompt_id`、`cc_turn_*`、`cc_prev_req`，发 request-class / agent-type / prompt-id / prev-tool-durations 请求头、`diagnostics`，system 分块和 `scope: global` 缓存也按官方地址才有。于是出口的 agent-type 只能是 custom、没有 prompt-id、计费头只有两个字段、system 3 块而不是 4 块。agent-id、parent-agent-id、session-id 头不受影响。
 

@@ -612,13 +612,13 @@ HTML 设计稿仅用于交互对照，正式界面沿用现有 Vue 和 `@sub2api
 | 环境识别和替换 | [build_attachments.go](../../plugins/ccgateway/companions/engine/build_attachments.go)、[environment_attachments.go](../../plugins/ccgateway/companions/engine/environment_attachments.go) |
 | 位置引用提取 | [request_components.go](../../plugins/ccgateway/companions/engine/request_components.go)，`extractSystemComponents` |
 | CLI 输入还原 | [request-input.js](../../plugins/ccgateway/companions/cli-mods/request-input.js)，`prepareBuildInput` |
-| CLI 构建与最终 system 选择 | [request-build.js](../../plugins/ccgateway/companions/cli-mods/request-build.js)、[patch-cli-2.1.302.cjs](../../plugins/ccgateway/companions/cli-mods/patch-cli-2.1.302.cjs) |
-| 环境 schema、采集、完整与增量生成 | [原生核心](../../../artifacts/claude-2.1.302/linux-restored/chunk-8242685m.js)，第 38–40 行 `aNe/lNe/Ryt/pZn/xyt/Oyt`；第 3448 行 `LIn` |
+| CLI 构建与最终 system 选择 | [request-build.js](../../plugins/ccgateway/companions/cli-mods/request-build.js)、`patch-cli-2.1.302.cjs`（已删除，现行补丁器为 [patch-cli.cjs](../../plugins/ccgateway/companions/cli-mods/patch-cli.cjs) + `patches/<版本>.cjs`） |
+| 环境 schema、采集、完整与增量生成 | 2.1.302 还原源码 `chunk-8242685m.js`（2.1.302 的还原源码与下面的合成样本已于 2026-10-27 清理，这几行只作出处），第 38–40 行 `aNe/lNe/Ryt/pZn/xyt/Oyt`；第 3448 行 `LIn` |
 | 原生配对及媒体规整 | 同上，`gRn/DRn/Uks` |
-| 原生计费归属 | [归属模块](../../../artifacts/claude-2.1.302/linux-restored/chunk-dy1pvfkh.js)，`GPo` |
-| 原生版本指纹 | [指纹模块](../../../artifacts/claude-2.1.302/linux-restored/chunk-fgk2rzb0.js)，`sj/Qm/VAs` |
-| 动态排除参数和上下文迁移 | [参数声明](../../../artifacts/claude-2.1.302/linux-restored/chunk-hjb4qtaj.js)，第 28 行；[上下文组装](../../../artifacts/claude-2.1.302/linux-restored/chunk-3tbxnwq4.js)，`iar` |
-| 官方合成首轮 HTTP 样本 | [request-1.json](../../../artifacts/attachment-probe-BMPwq4/request-1.json) |
+| 原生计费归属 | 2.1.302 归属模块 `chunk-dy1pvfkh.js`，`GPo` |
+| 原生版本指纹 | 2.1.302 指纹模块 `chunk-fgk2rzb0.js`，`sj/Qm/VAs` |
+| 动态排除参数和上下文迁移 | 2.1.302 参数声明 `chunk-hjb4qtaj.js`，第 28 行；上下文组装 `chunk-3tbxnwq4.js`，`iar` |
+| 官方合成首轮 HTTP 样本 | 2.1.302 合成首轮抓包 `request-1.json`（已清理）；现行官方抓包夹具见 [`official-request-2.1.310.json`](../../plugins/ccgateway/companions/cli-mods/test/fixtures/official-request-2.1.310.json) |
 | 更广附件调查 | [BUILD-ATTACHMENT-TRANSFORM-DESIGN.md](../../plugins/ccgateway/docs/BUILD-ATTACHMENT-TRANSFORM-DESIGN.md) |
 | 配置读写和管理路由 | [config.go](../../server/internal/ccgateway/config.go)、[http.go](../../server/internal/ccgateway/http.go) |
 | API Key 分组与 transport 调用 | [dispatch.go](../../server/internal/gateway/dispatch.go)，`c.principal.Group.ID` 与 `ModelClientFor` |

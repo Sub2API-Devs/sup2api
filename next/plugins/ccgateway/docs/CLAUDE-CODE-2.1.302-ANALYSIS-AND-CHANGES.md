@@ -1,5 +1,7 @@
 # Claude Code 2.1.302 分析与改动记录
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+
 > 2026-10-24：本文是 2.1.302 时期（v7–v11）的历史记录。其中的 native 模式、Mod 与原生工具相关内容已随 native 运行时从 Worker 删除（CONTRACTS §53.21），生产 CLI 是 2.1.304（见 [cli-mods README](../companions/cli-mods/README.md)），现行请求链路见 [请求模式](REQUEST-MODES.md) 第 1 节。
 
 > 2026-10-19 最新上线：Core **0.1.168**、ccgateway/Controller/Worker **0.1.66**、CLI **2.1.302 / ccgateway-v10-raw-http-errors**。上游 HTTP 错误状态/正文原样透传，非 JSON、空正文和超长正文不再重新封装；仅本地转发失败生成错误。21/30/31/32 号均已固定新原生 ELF，公网 400 正文与 Worker 哈希一致，日志记录实际错误消息。详见第 15 节。

@@ -85,6 +85,9 @@ if (require.main === module) {
   const root = path.resolve(__dirname, '../../../../../../..');
   const version = process.env.CC_VERSION || '2.1.304';
   const manifestFile = path.resolve(process.argv[2] || path.join(__dirname, `../fixtures/assembly-cases-${version}.json`));
+  // Default report location: write the assembly-replay report there (PROBE_REPORT=...)
+  // or pass it as argv[3]. The 2026-10-20 report that used to sit there was deleted
+  // in the 2026-10-27 artifacts cleanup; a missing report yields "Runtime report missing".
   const reportFile = path.resolve(process.argv[3] || path.join(root, `artifacts/claude-${version}/assembly-repair-report.json`));
   const output = path.resolve(process.argv[4] || path.join(root, `artifacts/claude-${version}/assembly-audit/repair-coverage.json`));
   const manifestBytes = fs.readFileSync(manifestFile);

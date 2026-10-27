@@ -1,5 +1,7 @@
 # CCGateway 审核 · 三方交叉核验后的最终结果（2026-10-21）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 ## 来源与方法
 
 - **M**：主控审核，即 [00-SUMMARY](00-SUMMARY.md) 与分报告 01–07。

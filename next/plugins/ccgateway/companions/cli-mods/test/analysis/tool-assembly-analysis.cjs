@@ -11,6 +11,11 @@
  * VM cases execute extracted native functions/expressions with the explicitly
  * reported collaborators stubbed. They are NOT whole-CLI or network tests.
  * A reproduced known defect remains a failed contract, never an expected pass.
+ *
+ * 2026-10-27 cleanup: the 2.1.304 pre-fix snapshot
+ * artifacts/claude-2.1.304/linux-patched-v12-config-audit/ was deleted; without
+ * --patched-root the run stops with an explicit error. The original evidence
+ * artifacts/claude-2.1.304/assembly-audit/tools.json is kept.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -176,6 +181,7 @@ async function runToolAssemblyAnalysis(options = {}) {
   const patchedRoot = path.resolve(options.patchedRoot ?? path.join(repo, `artifacts/claude-${version}/${snapshot.patched}`));
   const output = path.resolve(options.output ?? path.join(repo, `artifacts/claude-${version}/assembly-audit/tools-pre-fix-replay.json`));
   const originalEvidence = path.resolve(repo, `artifacts/claude-${version}/assembly-audit/tools.json`);
+  if (!options.patchedRoot && !fs.existsSync(patchedRoot)) throw Error(`${path.relative(repo, patchedRoot)} is missing: the pre-fix ${snapshot.patched} snapshot was deleted in the 2026-10-27 artifacts cleanup; pass --patched-root <dir> with the same manifest SHA (${snapshot.manifestSHA}) to rerun`);
   assert.ok(output !== originalEvidence || !fs.existsSync(originalEvidence), 'Preserve the original pre-fix tools.json evidence; choose a different --out path');
   const cache = new Map();
   const load = (root, file) => {

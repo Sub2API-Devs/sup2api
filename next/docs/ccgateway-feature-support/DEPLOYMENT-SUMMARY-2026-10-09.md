@@ -1,5 +1,7 @@
 # CCGateway 功能扩展 - 部署总结
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 **日期**：2026-10-09
 **版本**：v0.1.79
 **分支**：feat/next-platform

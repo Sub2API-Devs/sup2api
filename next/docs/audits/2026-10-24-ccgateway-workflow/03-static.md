@@ -1,5 +1,7 @@
 # CCGateway 请求工作流静态核对（拆分 → 组装 → 出口）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 2026-10-24。审核对象：`feat/next-platform` HEAD `c949810e2`（线上核心 0.1.186 / 插件 0.1.87 / CLI v23，CLI profile `ccgateway-v23-bound-imports`，固定 2.1.304）。只读核对，不改代码。CodeGraph/Serena/WarpGrep 不可用，全部用 Read/Grep/git 与 `artifacts/` 里的历史抓包；§7 已并入 `01-offline.md`（17:23）与 `02-prod31.md`（17:37）的实测结果。
 
 本文回答一个问题：一次客户端请求经过「核心 → 插件 → Worker → CLI 补丁 → 上游」之后，**出口（发给 Anthropic 的请求）里每个请求头与 body 字段的值是从哪来的**，以及**哪里会与官方 Claude Code 客户端不一致**。

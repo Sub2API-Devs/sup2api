@@ -7,13 +7,13 @@
 - **定向断言**：`verify.cjs`、`values-verify.cjs`、`beta-check.cjs` 检查 A/B 比较看不出的不变式；`capcheck.cjs`、`respmatch.cjs` 核对 Worker 请求日志。
 - **跨版本**：换 CLI 版本时的动态对照（见 [CLI-TEST-PLAN](../../../../docs/CLI-TEST-PLAN.md) 第 4 节）。
 
-来源：`artifacts/claude-2.1.304/e2e/release-0195/kit`（r3 套件，2026-10-25 起用于 0.1.94–0.1.103 的每次发布），合并了 `release-0201/capcheck.cjs`、`release-0203/respcheck.cjs`、`release-0203/respmatch.cjs` 与 `release-0203/kit/proxy.cjs`（记录 Worker 答复正文的版本）。artifacts 里的原文件保留未动。收进仓库时的改动见文末。
+来源：r3 套件 `release-0195/kit`（2026-10-25 起用于 0.1.94–0.1.103 的每次发布），合并了 `release-0201/capcheck.cjs`、`release-0203/respcheck.cjs`、`release-0203/respmatch.cjs` 与 `release-0203/kit/proxy.cjs`（记录 Worker 答复正文的版本）。这些原文件（在本机 artifacts 工作区的 2.1.304 e2e 目录下）已于 2026-10-27 清理，仓库里这一份是现存唯一副本。收进仓库时的改动见文末。
 
 ## 前提
 
 - **Linux x86-64 主机 + Docker**（ovh）。本机 Windows 没有 Docker，跑不了。容器 `--network none`，不连任何外部地址。
 - **被测镜像** `ccgateway-app:<版本>`：里面有 `/usr/local/bin/worker`、`/opt/ccgateway/cli/manifest.json` 与 `<CC 版本>/claude`，以及 `node`、`openssl`、`curl`（Worker 镜像基于 `node:22-bookworm-slim`）。
-- **官方未改的 CLI**（Linux x64 ELF），作为客户端。2.1.304 的在 ovh `~/sup2api/checks/ccg-304-v12/claude-official-304`（SHA-256 `ea0f1357…27912`）；2.1.310 的 linux-x64 官方校验和是 `b7367643…7df56`（`artifacts/claude-2.1.310/official-manifest.json`）。
+- **官方未改的 CLI**（Linux x64 ELF），作为客户端。2.1.304 的在 ovh `~/sup2api/checks/ccg-304-v12/claude-official-304`（SHA-256 `ea0f1357…27912`）；2.1.310 的在 ovh `~/sup2api/checks/ccg-310/claude-official-310`（SHA-256 `b7367643…7df56`，等于 `artifacts/claude-2.1.310/official-manifest.json` 的 linux-x64 校验和）。
 - 宿主机的 `node`（只有 `docker.sh` 读 manifest 时用）；没有时可以在命令前加 `docker run --rm --entrypoint node $IMG` 的方式运行各核对脚本（见下）。
 - 所有凭据都是假值：`sk-ant-oat01-ccgaudit-fake`、`sk-ant-ort01-ccgaudit-fake`、`sk-ant-oat01-client`、`ccg-audit-gateway-key`、`ccg-audit-admin-key`、`ccg-audit-upstream-key`，邮箱 `*@example.invalid`，UUID 为 `00000000-…`/`11111111-…`/`22222222-…` 形式。假上游用 `openssl` 现场生成的自签证书冒充 `api.anthropic.com`，经 unix socket 接入。
 
@@ -67,7 +67,7 @@
 |---|---|---|---|
 | `B` | docker.sh | `/tmp/ccg-audit-0195` | 宿主机工作根目录：`work-<标签>/`、日志、manifest 副本、候选制品 |
 | `IMG` | docker.sh | `ccgateway-app:0.1.94` | 被测镜像 |
-| `OFFICIAL_CLI` | docker.sh | `~/sup2api/checks/ccg-304-v12/claude-official-304` | 官方客户端 ELF，复制成工作目录的 `bin/claude-official` |
+| `OFFICIAL_CLI` | docker.sh | `~/sup2api/checks/ccg-304-v12/claude-official-304` | 官方客户端 ELF，复制成工作目录的 `bin/claude-official`（2.1.310 用 `~/sup2api/checks/ccg-310/claude-official-310`） |
 | `EXPECT_OFFICIAL_SHA` | docker.sh | 不查 | 设了就核对官方客户端 SHA-256 |
 | `CC_VERSION` | docker.sh、run.sh | `2.1.304` | 网关 CLI 的版本：manifest 里取哪一项、策略头的 `cli_version`、shim 的目标路径 |
 | `CLIENT_CC_VERSION` | run.sh、noncc2/3 | `2.1.304` | 套件**自己编造**的 CC 形状请求里的版本（`s4` 与 `noncc-context2`/`noncc-classify` 的计费头 `cc_version`、CC 形状 UA）。比较两次运行时两边必须相同 |
@@ -99,7 +99,7 @@
 
 ## 场景清单（`all`，69 个场景，122 个上游请求）
 
-请求数是 2026-10-25 起各次运行里 B 侧上游收到的个数（`release-0196/results/regress-0195-vs-new.txt`：“0 of 69 cases differ; 122 requests compared”）。“A/B”表示同一场景官方客户端直连与经网关各跑一次；“B”表示只经网关。策略缩写：微 = `POLICY_MICRO`（build、无注入），低 = `POLICY_LOW`（build、平台/系统版本取服务端、注入四种首轮附件），高 = `POLICY_HIGH`（低 + 内置提示词 + Bash/Read/Edit/Write 四个工具），direct = `POLICY_NONE`，另有 `ERASE`（十个环境字段全擦除）、`ATTACH`（平台/系统/shell/主目录取服务端，附加目录与 git 擦除）、`BILLING`（`cc_version`、`cc_entrypoint` 取服务端）、`ENTRY`（服务端入口 `sdk-cli`）。
+请求数是 2026-10-25 起各次运行里 B 侧上游收到的个数（当时的 `release-0196/results/regress-0195-vs-new.txt`：“0 of 69 cases differ; 122 requests compared”；原始结果已于 2026-10-27 清理）。“A/B”表示同一场景官方客户端直连与经网关各跑一次；“B”表示只经网关。策略缩写：微 = `POLICY_MICRO`（build、无注入），低 = `POLICY_LOW`（build、平台/系统版本取服务端、注入四种首轮附件），高 = `POLICY_HIGH`（低 + 内置提示词 + Bash/Read/Edit/Write 四个工具），direct = `POLICY_NONE`，另有 `ERASE`（十个环境字段全擦除）、`ATTACH`（平台/系统/shell/主目录取服务端，附加目录与 git 擦除）、`BILLING`（`cc_version`、`cc_entrypoint` 取服务端）、`ENTRY`（服务端入口 `sdk-cli`）。
 
 ### 1. CC 客户端（官方 CLI，第 1 阶段，A/B，24 个）
 
@@ -279,7 +279,7 @@
 
 ### A/B（`compare.cjs`）里允许的差异
 
-2026-10-25 r3 全量（`artifacts/claude-2.1.304/e2e/wf-r3-2026-10-25/results/results-compare.txt`）里出现的全部差异类别，及其原因：
+2026-10-25 r3 全量（当时的 `wf-r3-2026-10-25/results/results-compare.txt`，原始结果已于 2026-10-27 清理）里出现的全部差异类别，及其原因：
 
 | 差异 | 原因 | 怎么确认 |
 |---|---|---|

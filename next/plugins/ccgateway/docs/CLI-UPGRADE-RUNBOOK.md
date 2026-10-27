@@ -10,7 +10,7 @@
 - 测试的门槛与用例在 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)（另行编写）；本手册只列必须过的关口。
 - Worker 怎样调用 CLI、哪些能力被检查，见 [WORKER-ENGINE](WORKER-ENGINE.md) 第 2、6 节。
 
-下文路径：`artifacts/` 是仓库根目录下不进 Git 的工作区；`cli-mods/` 指 `next/plugins/ccgateway/companions/cli-mods/`。
+下文路径：`artifacts/` 是仓库根目录下不进 Git 的工作区（2026-10-27 清理后只留 `claude-2.1.304/`、`claude-2.1.310/` 两个目录，现存内容见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md) 第 5.1 节）；`cli-mods/` 指 `next/plugins/ccgateway/companions/cli-mods/`。
 
 ## 硬性规则：编译用的 Bun 必须与官方一致
 
@@ -240,8 +240,8 @@ bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-pat
 
 **发布**（ovh 发布记录的固定顺序，[ovh README](../../../deploy/gateway/ovh/README.md) 顶部几条；先插件后核心）：
 
-1. 升插件 `manifest.json` 版本（镜像与插件版本一起变），构建镜像与插件包；ovh 已关插件验签，插件包用一次性密钥签名（脚本样板在 ovh 的 `~/sup2api-managed/stage/ccgateway-<版本>/{build.sh,rollout.py}`）。
-2. 数据库备份到 `~/sup2api-managed/backups/ccgateway-<版本>/`。
+1. 升插件 `manifest.json` 版本（镜像与插件版本一起变），构建镜像与插件包；ovh 已关插件验签，插件包用一次性密钥签名（脚本样板现为 ovh 的 `~/sup2api-managed/stage/ccgateway-0.1.106/{build.sh,rollout.py}`，复制到新版本的 `stage/ccgateway-<版本>/` 再改版本号）。
+2. 数据库备份到 `~/sup2api-managed/backups/ccgateway-<版本>/`（每次发布新建；现存的是 `ccgateway-0.1.105`、`ccgateway-0.1.106`）。
 3. 插件上传、升级（权限不变时同意沿用）。
 4. `POST /system/ccgateway/runtime/bundled {"roles":["controller","egress"]}`。
 5. `POST /system/ccgateway/runtime/workers {"components":["worker","cli"],"cli_version":"<版本>","image":"ccgateway-app:<插件版本>"}`：控制器对每个运行中的账号容器做**配对原地更新**——暂停准入、确认空闲、备份、放入新的不可变 release 目录、写 `active-runtime.json`、重启 Worker 进程、健康检查通过后恢复准入，失败则回到原来的指针与 Worker（`controller/runtime_updates.py`，CONTRACTS §53.7）。**不重建账号容器**，CC 登录令牌与数据卷不动；容器里残留的其他进程会让它一直 busy，要先清掉。

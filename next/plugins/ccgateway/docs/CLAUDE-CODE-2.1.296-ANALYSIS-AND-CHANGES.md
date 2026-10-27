@@ -1,5 +1,7 @@
 # Claude Code 2.1.296 分析与改动记录
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+
 > 2026-10-24：本文是 2.1.296 时期（v3–v6）的历史记录。Worker 已不使用 mods 工具分发与 native 运行时（CONTRACTS §53.21），生产 CLI 是 2.1.304（见 [cli-mods README](../companions/cli-mods/README.md)），现行请求链路见 [请求模式](REQUEST-MODES.md) 第 1 节。
 
 记录日期：2026-10-18。本文作为本项目对 Claude Code **2.1.296** 的分析、补丁和验证状态总入口。版本已由用户确认，并与原版源码头、补丁 manifest、已测试产物一致。

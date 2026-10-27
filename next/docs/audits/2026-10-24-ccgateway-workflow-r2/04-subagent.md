@@ -1,5 +1,7 @@
 # 子代理与嵌套子代理：实现审核 + 离线/生产实测（2026-10-25）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 审核对象：线上核心 0.1.186（四节点，管理 API `http://127.0.0.1:3130/api/v1`）、ccgateway 插件 0.1.90、镜像 `ccgateway-app:0.1.90`、CLI 2.1.304 补丁 `ccgateway-v26-native-assembly`（ELF sha `0d6149e0…`）。分支 `feat/next-platform` HEAD。
 
 问题（用户原话）：「关于子代理、子代理的子代理，我们的处理方式现在——我们的定制版 CC 和原生 CC 发送是一样的了吗？是如何实现的？」

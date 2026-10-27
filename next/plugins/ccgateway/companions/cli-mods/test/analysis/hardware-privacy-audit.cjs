@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 // Inert AST inventory for the recovered 2.1.304 application. No target execution.
 // Inventory hits and lexical references are candidates, not proof of transmission.
+// 2026-10-27 cleanup: `report` read the patched tree linux-patched-v12-assembly-fix/
+// and the ELF claude-linux-assembly-fix under artifacts/claude-2.1.304/; both were
+// deleted, so `report` now stops with an explicit error instead of regenerating
+// hardware-privacy-evidence.json. inventory/symbol/refs/links/at still run on
+// artifacts/claude-2.1.304/linux-restored and hardware-privacy-inventory.json.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -56,6 +61,9 @@ function bindingName(node) {
 }
 const [mode = 'inventory', selectedFile, selectedName] = process.argv.slice(2);
 if (mode === 'report') {
+  for (const input of ['artifacts/claude-2.1.304/linux-patched-v12-assembly-fix', 'artifacts/claude-2.1.304/claude-linux-assembly-fix']) {
+    if (!fs.existsSync(path.join(root, input))) throw Error(`${input} is missing: it was deleted in the 2026-10-27 artifacts cleanup, so the report mode cannot be reproduced; the last generated artifacts/claude-2.1.304/hardware-privacy-evidence.json is kept as is`);
+  }
   const selection = {
     'chunk-7p6jp6kj.js': ['ZM', 'I_t', 'i1', 'd1', 'GUr', 'RT', 'I1', 'ZBt', 'OW', 'oze', 'transformLogsToEvents', 'sendBatchWithRetry'],
     'chunk-t61vswm2.js': ['yBe'],

@@ -78,7 +78,7 @@ flowchart LR
 | A 改为拒绝，再恢复到 C | 拒绝和恢复均生效，B 不受影响 |
 | 全过程进程身份 | PID、StartedAt 不变 |
 
-原始结果：[隔离测试记录](ccgateway-migration/evidence/xray-egress-poc-20261015.json)。本地试验脚本位于仓库根 `artifacts/xray-egress-poc/`，该目录不是正式发布产物；进入实现阶段时，应将整理后的可重复夹具纳入组件测试目录，避免依赖本机 artifacts。
+原始结果：[隔离测试记录](ccgateway-migration/evidence/xray-egress-poc-20261015.json)。本地试验脚本（原在仓库根的本机 artifacts 工作区，不是正式发布产物）已于 2026-10-27 清理；进入实现阶段时，应编写可重复夹具纳入组件测试目录，不依赖本机材料。
 
 证据限制：此次测试是固定版本上的模拟 HTTPS/SSE，不是实际 CC 模型请求；不覆盖代理认证、HTTPS 上游代理、DNS 分流、UDP、高并发、进程崩溃恢复、整机重启及旧连接的长期资源回收。删除旧出站不切断这次连接，不等于所有出站类型和所有版本均有同样语义。
 

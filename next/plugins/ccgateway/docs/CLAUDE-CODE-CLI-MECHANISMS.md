@@ -1,5 +1,7 @@
 # Claude Code CLI 机制与改造指南
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+
 > 2026-10-24：本文的 CLI 机制分析（2.1.296）仍可作参考，但其中"CCGateway 经 mods 拦截工具、驱动 CLI 会话"的改造方向已不使用：native 运行时已从 Worker 删除（CONTRACTS §53.21），现在的改造是补丁加进去的 `claude request` 命令，见 [cli-mods README](../companions/cli-mods/README.md)。
 
 本文说明 Claude Code 的发行结构、SDK 与 VS Code 接入方式、mods 事件机制、工具定义与执行路径，以及 CCGateway 后续扩展 CLI 时需要修改和验证的位置。

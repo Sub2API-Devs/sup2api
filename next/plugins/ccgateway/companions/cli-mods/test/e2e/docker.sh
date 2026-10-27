@@ -20,6 +20,7 @@ CLIENT_CC_VERSION=${CLIENT_CC_VERSION:-2.1.304}  # version inside the kit's synt
 IMG=${IMG:-ccgateway-app:0.1.94}
 B=${B:-/tmp/ccg-audit-0195}
 KIT=${KIT:-$(cd "$(dirname "$0")" && pwd)}
+# 2.1.310's official client on ovh: $HOME/sup2api/checks/ccg-310/claude-official-310
 OFFICIAL_CLI=${OFFICIAL_CLI:-$HOME/sup2api/checks/ccg-304-v12/claude-official-304}
 WORKER_NEW=${WORKER_NEW:-$B/worker-new}
 CLI_NEW=${CLI_NEW:-$B/cli-new}

@@ -1,5 +1,7 @@
 # CC 特性分层配置：讨论总结
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 正式实现规范已整理为 [CC 特性分层配置与请求内容转换设计](CC-FEATURE-LAYERS-DESIGN.md)。本页保留讨论与调查过程；其中历史“待定”“暂定”和早期实现范围以正式设计为准。
 
 2026-10-20。本文汇总 CCGateway「CC 特性」分层配置的需求讨论、已定决策、附件提取的调查结果和待定问题，供后续分析与实现使用。UI 设计稿：[cc-feature-layers-mockup.html](cc-feature-layers-mockup.html)（v8.2，6 个交互场景，浏览器直接打开；操作只保存在页面内存，不连接后端）。

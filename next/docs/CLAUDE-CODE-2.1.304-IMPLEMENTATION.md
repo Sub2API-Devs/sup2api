@@ -1,5 +1,7 @@
 # Claude CLI 2.1.304 分层特性改造说明
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 日期：2026-10-20。本文记录本次实现使用的 **Linux x64/glibc CLI 2.1.304** 基线及项目改造位置。[正式设计](ccgateway-feature-support/CC-FEATURE-LAYERS-DESIGN.md) 已切换到 304 目标，文中的 302 源码调查保留为历史证据；实际支持范围由 304 profile、补丁、测试和运行时能力共同决定。
 
 本文区分源码实现、自动测试和完整出站验收。源码接通或单测通过不代表已经部署，也不代表已完成真实 CLI 的端到端抓包验证。

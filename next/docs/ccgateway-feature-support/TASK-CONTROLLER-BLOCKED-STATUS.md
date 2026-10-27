@@ -1,5 +1,7 @@
 # 任务：控制器对已阻断的运行环境如实报 `blocked`，核心据此不再重复阻断
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 > 交给执行这项任务的 AI。请先通读全文，尤其是第 7 节的"操作约束"，有几条违反了会造成线上事故。
 > 仓库：`D:\projects\golang\sup2api`（Windows，Git Bash），分支 `feat/next-platform`。始终用中文回复用户。
 

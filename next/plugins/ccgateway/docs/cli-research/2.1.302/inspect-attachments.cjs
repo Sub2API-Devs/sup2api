@@ -1,6 +1,7 @@
 // Static inventory of the verified 2.1.302 renderer; never executes CLI code.
 // Run from any cwd: node inspect-attachments.cjs [restored-source-directory]
 // stdout is generated evidence JSON, suitable for redirecting to a file.
+// 2026-10-27 cleanup: the default artifacts/claude-2.1.302/linux-restored was deleted; pass a restored 2.1.302 tree to rerun.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');

@@ -1,5 +1,7 @@
 # CLI 2.1.304 原生组装链路测试方案
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 本方案针对“客户端请求拆分 → 按配置修改计费／环境 → 原生 build → 实际出站”的完整链路。验收对象是 **CLI 2.1.304 + ccgateway v12**。用例按原生组装阶段分组；配置组合数量、HTTP 200 和静态分支清单都不能代替请求内容正确性。
 
 **最新修复后的既定合同验收已通过：75/75，见第 8 节。** 第 3–7 节保留修复前的 AST／REA 分析、72 项运行结果与缺口，旧失败报告不改写；“全部合同通过”不等于原生 CLI 全分支覆盖。

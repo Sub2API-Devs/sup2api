@@ -1,5 +1,7 @@
 # 核心失败处理设计与实现
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 日期：2026-10-15。状态：核心 0.1.154 已部署到生产四节点，UI 合约 3.0.0，只保留增强 STabs 公共组件；STabLayout 无导出、别名或实现。线上 moderation 0.1.11 已完成迁移，管理员既存策略（revision=1）保持原值。
 
 ## 增强 STabs 主入口

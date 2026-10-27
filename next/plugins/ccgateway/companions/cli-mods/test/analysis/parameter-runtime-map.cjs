@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 // Human-reviewed semantic crosswalk. Explicit case IDs are inspected against
 // concrete inputs, contracts, entry points and gates; names never imply coverage.
+// 2026-10-27 cleanup: the runtime report artifacts/claude-2.1.304/assembly-replay-report.json
+// (2026-10-20) was deleted and the single fixtures/assembly-cases.json has since been
+// split into per-version assembly-cases-<version>.json. The script stops with an
+// explicit error when an input is missing; it does not substitute other data.
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const root = path.resolve(__dirname, '../../../../../../..');
 const auditFile = path.join(root, 'artifacts/claude-2.1.304/assembly-audit/parameters.json');
 const manifestFile = path.join(root, 'next/plugins/ccgateway/companions/cli-mods/test/fixtures/assembly-cases.json');
 const runnerFile = path.join(root, 'next/plugins/ccgateway/companions/cli-mods/test/assembly-replay.cjs');
 const runtimeReportFile = path.join(root, 'artifacts/claude-2.1.304/assembly-replay-report.json');
+for (const input of [auditFile, manifestFile, runtimeReportFile]) {
+  if (!fs.existsSync(input)) throw Error(`${path.relative(root, input)} is missing: this one-off crosswalk was bound to the 2026-10-20 inputs; the runtime report was deleted in the 2026-10-27 artifacts cleanup and the manifest is now per-version (fixtures/assembly-cases-<version>.json)`);
+}
 const { definitionHash } = require('../replay-helpers.cjs');
 const auditRaw = fs.readFileSync(auditFile), manifestRaw = fs.readFileSync(manifestFile);
 const audit = JSON.parse(auditRaw), manifest = JSON.parse(manifestRaw);

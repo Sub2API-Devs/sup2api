@@ -1,5 +1,7 @@
 # Claude Code 2.1.304 内置 system 提示词的组装
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+
 2026-10-22。分析对象是 30 号容器当前使用的 CLI：v17（`ccgateway-v17-identity-line`，sha256 `000a5382…`），与本地 `artifacts/claude-2.1.304/claude-linux-v17-identity-line` 逐字节相同。做法是用 `restore-bun.cjs` 解包，再用 `@babel/parser` 给 53 MB 的 bundle 建顶层声明索引，沿调用链读源码（脚本在 `artifacts/claude-2.1.304/prompt-ast/`，`q.cjs find|show|callers`）。下文函数名是 Bun 重新打包后的名字，所以带数字后缀；与 `linux-restored` 里的同名函数对应。v17 只改了请求命令和内容策略，没有改提示词组装。
 
 为核对，在 30 号容器里用官方 2.1.304 ELF（sha256 `ea0f1357…`）跑 `claude -p`，连接走 unix socket 上的假上游，占位令牌，没有请求到达真实上游。假上游让主代理调用一次 Agent（general-purpose），这样也抓到了子代理的请求。v17 自己跑不出子代理，因为它的工具调用都交给 mods（返回 `No tool.call mod handler answered Agent`）。用的模型是 `claude-opus-4-8` 和 `claude-sonnet-4-6`。临时文件已删除。

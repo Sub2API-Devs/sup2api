@@ -3,6 +3,10 @@
 // original adapter. Do not overwrite the historical report after implementation
 // repairs. A changed adapter requires a separately reviewed analysis.
 // Uses Babel AST ranges; no CLI execution, network or production edits.
+// 2026-10-27 cleanup: the default pre-fix snapshot
+// artifacts/claude-2.1.304/linux-patched-v12-config-audit/ was deleted. Without
+// --patched the script now stops with an explicit error rather than overwriting
+// the historical assembly-audit/parameters.json with an evidence-free report.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -14,6 +18,7 @@ const args = process.argv.slice(2);
 function arg(name, fallback) { const i = args.indexOf(name); return i < 0 ? fallback : path.resolve(args[i + 1]); }
 const restored = arg('--restored', path.join(root, 'artifacts/claude-2.1.304/linux-restored'));
 const patched = arg('--patched', path.join(root, 'artifacts/claude-2.1.304/linux-patched-v12-config-audit'));
+if (!args.includes('--patched') && !fs.existsSync(patched)) throw Error(`${path.relative(root, patched)} is missing: the pre-fix config-audit snapshot was deleted in the 2026-10-27 artifacts cleanup; pass --patched <dir> with an equivalent snapshot to rerun`);
 const output = arg('--output', path.join(root, 'artifacts/claude-2.1.304/assembly-audit/parameters.json'));
 const profile = JSON.parse(fs.readFileSync(path.join(mods, 'profiles/linux-x64-2.1.304.json'), 'utf8'));
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');

@@ -121,6 +121,6 @@ Controller 新建容器默认 build。迁移已存在的 Agent 容器时，使�
 - 真实公网 Messages 请求：`claude-opus-5-5` HTTP 200，4.38 秒，回答 `BUILD_21_OK`。用量日志确认 account_id=21、plugin_version=0.1.60。
 - 本地官方 Windows CC **2.1.302** 经同一公网入口调用 `claude-opus-5-5`，9 秒完成一次 Read、两轮模型请求，正确读出本次插件版本 0.1.60 / grpc 并回答 `BUILD_TOOL_OK`。工具错误为 0，Git 状态和源码 diff 未变化；两次模型调用均由 21 号成功处理。
 - 验证：控制台 ccgateway 198 项测试及类型检查、Controller 135 项、Core ccgateway/account、Linux Engine/Worker 全包回归通过。旧 native 模式的测试预期及模拟 CLI 已改为 build/request；定制 CLI 二进制未在本次重新修改。
-- 私有备份：`~/sup2api-managed/backups/ccgateway-build-default-0.1.160/`，包括数据库 dump、21 号数据卷 tar、Controller 环境及容器基线；数据库恢复列表和卷归档可读取性已验证。构建记录位于 `~/sup2api-managed/stage/0.1.160/`。未对生产孤立资源执行清理。
+- 私有备份：包括数据库 dump、21 号数据卷 tar、Controller 环境及容器基线；数据库恢复列表和卷归档可读取性已验证。该备份与构建记录已于 2026-10-27 从 ovh 清理。未对生产孤立资源执行清理。
 
 脱敏证据见 [build 默认模式发布验证](build-default-deployment-0.1.160.json)。

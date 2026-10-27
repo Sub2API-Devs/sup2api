@@ -81,7 +81,7 @@
 
 同一请求顶层 system 另有一个 `# Environment` 标题，内容是模型和产品说明，并非 OS/cwd。仅匹配标题会误改。环境识别至少要同时匹配 `You have been invoked in the following environment:` 与相应字段。
 
-本地合成证据：`artifacts/attachment-probe-BMPwq4/{request-1.json,summary.json}`；探测脚本 `artifacts/probe-build-attachments.cjs`。此样本只验证首轮常见载体；不能据此宣称 131 类、多轮环境变化和所有 beta 均已动态验收。
+本地合成证据（一次请求样本、摘要与探测脚本，均不在仓库）已于 2026-10-27 清理。此样本只验证首轮常见载体；不能据此宣称 131 类、多轮环境变化和所有 beta 均已动态验收。
 
 ## 3. 环境与 Git 的数据边界
 

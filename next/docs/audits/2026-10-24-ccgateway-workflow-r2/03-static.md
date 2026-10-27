@@ -1,5 +1,7 @@
 # CCGateway 工作流静态审核（第二轮）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 2026-10-25。审核对象：`feat/next-platform` HEAD `f12c5fb7e`（线上核心 0.1.186 / ccgateway 0.1.90 / CLI 2.1.304 `ccgateway-v26-native-assembly`）。只读源码，不改代码。CodeGraph/Serena/WarpGrep 本轮不可用（ECONNREFUSED），全部用 git/grep/sed 与 `artifacts/claude-2.1.304/linux-restored`（基线源码）、`artifacts/claude-2.1.304/patched-v26`（补丁产物）交叉核对。
 
 本轮回答两个问题：0.1.87（上一轮审核基线）之后的 0.1.88–0.1.90 是否正确、有无回归；以及当前代码下这条链路是否仍然「与官方客户端一致」。

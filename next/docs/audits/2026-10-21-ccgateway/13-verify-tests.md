@@ -1,5 +1,7 @@
 # 13 · 交叉核验：测试覆盖、CI 门禁、代码规范
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 - 核验日期：2026-10-21；分支 `feat/next-platform`，HEAD `43d576838`；核验员 verify-tests（只读）
 - 被核验材料：M＝`00-SUMMARY.md` §5–6 与 `06-quality.md`；A＝`Downloads/1 - 副本.txt` 第五、六节；B＝`Downloads/1.txt`、`artifacts/ccgateway-audit-20261021/审核报告.txt`、`validation-summary.json` 及同目录日志
 - 环境：Windows 11、Go 1.27、Node 24.20；没有 Docker，没有 Linux。需要 PG 的 `next/server` 测试按约定没跑，采信 M/B 的日志

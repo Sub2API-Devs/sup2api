@@ -73,6 +73,6 @@ Controller 端每个列表上限 20,000 项，此接口 body/response 上限 8 M
 - 21 号通过正式接口原地更新 Worker 程序到 0.1.59，容器 ID、挂载及授权数据保留；Docker 原创建镜像标签仍为 `ccgateway-app:0.1.58`，不能用该标签判断容器内程序版本。Worker SHA-256 为 `c0db81dff78a67c3587c9b7380192192b7f4891c7fbc2c84b189eeb84e285afc`，features 显示新源码 revision、`modified:false`。未来新容器默认 app/egress/Controller 镜像均为 0.1.59。
 - 批量 Worker 更新时，20 号及已删除的 23 号没有容器，结果为 `not_found`；其余停止的历史账号返回 `not_running`，未启动或重建。共享出口身份和启动时间未变。
 - 使用用户提供的公网入口 `http://15.204.107.38:3130/v1/messages` 和 Key 调用 `claude-opus-5-5`：HTTP 200，约 6 秒，响应 `CCGATEWAY_21_OK`，57 input tokens / 15 output tokens。用量日志确认 account_id=21、plugin_version=0.1.59、upstream_model=claude-opus-5-5、success=true；request_id 为 `8f60a4502793eebab84f397a`。不保存 Key。
-- 私有恢复材料：`~/sup2api-managed/backups/ccgateway-lifecycle-0.1.159/`，包含 PostgreSQL dump（恢复列表验证通过）、容器基线、Controller 配置/环境、Worker 更新报告。全量 Controller tar 可读取，但打包时目录存在并发变化，因此另存原子配置文件快照，不把该 tar 宣称为停机一致性快照。构建日志在 `~/sup2api-managed/stage/0.1.159/`。
+- 私有恢复材料（已于 2026-10-27 从 ovh 清理）：包含 PostgreSQL dump（恢复列表验证通过）、容器基线、Controller 配置/环境、Worker 更新报告。全量 Controller tar 可读取，但打包时目录存在并发变化，因此另存原子配置文件快照，不把该 tar 宣称为停机一致性快照。构建日志同样已清理。
 
 脱敏机器记录见 [正式发布验证](lifecycle-deployment-0.1.159.json)。

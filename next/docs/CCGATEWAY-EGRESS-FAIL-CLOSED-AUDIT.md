@@ -1,5 +1,7 @@
 # CCGateway 出口故障与兜底检查
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 日期：2026-10-15。修复源码 `d0a25545c`，核心 `0.1.142`，控制器 `shared-xray.d0a25545c`。
 
 ## 结论

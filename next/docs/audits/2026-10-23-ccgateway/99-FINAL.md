@@ -1,5 +1,7 @@
 # CCGateway 审核 · 汇总（2026-10-23，HEAD f546fa31a，core 0.1.181 / ccgateway 0.1.82 / CLI v21）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 > 五人审核团队：A 核心侧+插件进程（01）、B 控制器（02）、C Worker+engine（03）、D 定制版 CLI（04）、核验员对 12 组关键发现做对抗式复核（10）。全部只读；本目录是唯一产物。级别以 10-verify 裁定为准。
 
 ## 0. 对用户三个问题的回答

@@ -1,5 +1,7 @@
 # CCGateway 环境与操作指南
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 > 2026-10-24：下文的状态块停在 2026-10-20，其中关于 native 模式、Mod、原生工具目录、历史缓存与 `CCG_NATIVE_TOOLS` 的描述已失效——native 运行时已从 Worker 删除（CONTRACTS §53.21），现行请求链路见 [请求模式](../../plugins/ccgateway/docs/REQUEST-MODES.md) 第 1 节，部署状态以 `next/deploy/gateway/ovh/README.md` 为准。
 
 > **2026-10-20：Core 0.1.173 已上线，分组 CC 配置改为可选。** 未配置或未启用的分组继承全局，账号自定义可直接覆盖全局；只有已启用分组的 `allow_account_override=false` 才限制账号覆盖。UI 默认隐藏未启用的覆盖字段，浏览分组不创建配置，新建分组配置默认允许账号覆盖。四节点版本、账号预览及不落库检查通过；前端 66 项测试和类型检查、后端三个相关包的 Feature／CCGateway 专项通过。源码 `83107b8eeead030672a88ebbce6106d3d74edfc4`，升级计划 `4b940e7f10acd40708d3dff04a95c9a8` completed/27。数据库契约不变，插件与 Worker 仍为 0.1.70；账号容器 ID、启停时间及配置不变，21 保持停用。
@@ -364,13 +366,13 @@ ssh -G cc-max | Select-String '^(hostname|user|port|identityfile) '
 
 ## 2. OVH：Core、插件和独立测试数据库
 
-- Git 主仓库 `/home/debian/sup2api/src`；精确 `.78` clean detached 构建树 `/home/debian/sup2api/release-0.1.78`。
+- Git 主仓库 `/home/debian/sup2api/src`；每次发布用精确 SHA 的 clean detached 构建树 `/home/debian/sup2api/release-<版本>`（见第 6 节；2026-10-27 清理后只留 `release-0.1.206`、`release-0.1.207`、`release-ccgateway-0.1.105`、`release-ccgateway-0.1.106`）。
 - 正式运行目录 `/home/debian/sup2api-managed`（0700），`compose.yml`、私有 `.env`（0600）、`config/sup2api-{1..4}.json`、`certs/`、`keys/`、`stage/`、`publish/` 在这里。
 - 容器 `sup2api-1`、`sup2api-2`、`sup2api-3`、`sup2api-4`；宿主端口依次 `3130/3131/3132/3133 → 8080`，主节点为 1。容器内 `/etc/sub2api/shell.json` 挂对应节点配置，`/var/lib/sub2api` 是各节点独立持久卷。
 - 公共平台入口 `http://15.204.107.38:3130/`；API 模型路径 `/v1/messages`，管理前缀 `/api/v1`。管理凭据优先经 SSH 回环使用。`https://ccgateway.internal` 是 Core 内部特殊 transport 标识，不是公网 URL。
 - PostgreSQL `sup2api-pg-1`、Redis `sup2api-redis-1`、插件市场 `market` 和制品服务 `releases` 属于现有服务；不要拿生产 PG 跑 fixture、清理其他服务或启动 `deploy/single`。
 - 隔离 Compose 在 `/home/debian/sub2api-next-test/testdb/docker-compose.yml`，项目 `sub2api-next-testdb`；PG `sub2api-next-testdb-pg-1`，`127.0.0.1:45432 → 5432`；Redis `sub2api-next-testdb-redis-1`，`127.0.0.1:36379 → 6379`。目录没有 `.env`，PG 密码由 Compose 的 `POSTGRES_PASSWORD` 配置；值须只在受控进程内读取。
-- `.78` 发布日志 `/home/debian/sup2api-managed/upgrade-20261008T195114.log`；备份 `/home/debian/sup2api-managed/backups/core-0.1.78-20261008T194528Z`。数据库 dump、完整 inspect 和配置备份是私有恢复材料，不提交 Git。
+- 发布日志在 `/home/debian/sup2api-managed/upgrade-<时间>.log`（如 `.78` 的 `upgrade-20261008T195114.log`）；备份在 `/home/debian/sup2api-managed/backups/`，2026-10-27 清理后只留 `core-0.1.206`、`core-0.1.207`、`ccgateway-0.1.105`、`ccgateway-0.1.106`。数据库 dump、完整 inspect 和配置备份是私有恢复材料，不提交 Git。
 
 SSH 登录后运行以下只读检查；生产 API 未认证 `401` 是正常保护，不代表模型能力已验收：
 

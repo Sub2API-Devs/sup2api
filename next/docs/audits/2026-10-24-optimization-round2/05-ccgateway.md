@@ -1,5 +1,7 @@
 # CCGateway 栈优化计划（第二轮：抽象、复用、解耦、低嵌套、简洁）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 范围：`next/plugins/ccgateway`（插件 Go）、`companions/engine`、`companions/worker`、`companions/contracts`、`companions/controller`（Python）、`companions/cli-mods`（JS）、`next/server/internal/ccgateway`（核心）。
 
 上一轮（`2026-10-24-code-quality`，审 `f546fa31a..839d1c22e`）只看新增/重写的代码；这一轮看老代码。数据来源：`/d/tmp/gometrics/all.tsv`（非测试函数，按行数/嵌套排序）、`deadcode`、`staticcheck -checks U1000,S1000,S1002,S1023,ST1005`，以及人工阅读。

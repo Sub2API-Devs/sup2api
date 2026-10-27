@@ -3,8 +3,9 @@
 2026-10-23 用户提出并确认，取代 [CC-REQUEST-LEVELS-DESIGN](CC-REQUEST-LEVELS-DESIGN.md) 第 7 节的「非 CC 请求补充」。第 8 节是用户的决定。
 
 依据：
-- 2.1.304 bundle 的 AST 分析（工具同 `artifacts/claude-2.1.304/prompt-ast/`）；
+- 2.1.304 bundle 的 AST 分析（工具同 [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY](../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) 所用的 `prompt-ast` 脚本）；
 - 官方 2.1.304 的实抓请求（`prompt-ast/cap-official`、`cap-sonnet`）；
+- 以上脚本与抓包不在仓库，已于 2026-10-27 清理；现行官方抓包夹具在 `cli-mods/test/fixtures/official-request-<版本>.json`；
 - 现有配置链路的梳理（第 9 节）。
 
 ## 1. 用户的模型
@@ -198,7 +199,7 @@ direct（`direct-billing.js`）只处理开头的计费头：
   - cli-mods：167 项全过。
   - 前端：66 个文件、653 项，`vue-tsc` 0 错误。
   - 两份跨层夹具已重新生成，新增注入等级用例。
-- **docker 离线测试**（ovh 一次性断网容器：新 Worker + v20 CLI，假上游）：`artifacts/claude-2.1.304/e2e/levels/`，OAuth 和 API Key 各 15/15（含身份行自适应：cli、claude-desktop，以及高注入下 sdk-cli 用追加那句，旧的身份行配置被忽略）。
+- **docker 离线测试**（ovh 一次性断网容器：新 Worker + v20 CLI，假上游；脚本与结果不在仓库，已于 2026-10-27 清理，现行同类回归是 [离线端到端套件](../../plugins/ccgateway/companions/cli-mods/test/e2e/README.md) 的微/低/高等级场景）：OAuth 和 API Key 各 15/15（含身份行自适应：cli、claude-desktop，以及高注入下 sdk-cli 用追加那句，旧的身份行配置被忽略）。
 
 | 场景 | 发出的内容 |
 |---|---|

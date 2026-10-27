@@ -391,4 +391,4 @@ Worker 在 `/healthz` 声明它能用的能力（`requestCapabilities`）；核�
 
 - 十项字段在同一请求内混合来源的端到端抓包（现有覆盖为组合矩阵，不是真实客户端全量）。
 - 契约夹具在 CLI 侧不运行原生构造器（`jOt`、`aBe` 需编译后的 CLI），这部分仍靠 Linux 编译产物的回环验证。
-- 生产不记录 Worker 发往上游的报文；出口形状靠离线容器与 31 号容器内回放取得。v26 的抓包与比较结果留在 `artifacts/claude-2.1.304/e2e/wf-r2-2026-10-24/`、`prod31-r2-2026-10-25/`、`subagent-2026-10-25/`（不进 git），结论见 `next/docs/audits/2026-10-24-ccgateway-workflow-r2/`。
+- 生产不记录 Worker 发往上游的报文；出口形状靠离线容器与 31 号容器内回放取得。v26 的原始抓包与比较结果（不进 git）已于 2026-10-27 清理，结论见 `next/docs/audits/2026-10-24-ccgateway-workflow-r2/`；复现用仓库里的离线回归套件 `companions/cli-mods/test/e2e/`。

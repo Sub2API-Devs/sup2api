@@ -1,5 +1,7 @@
 # 2026-10-24 代码质量审核：汇总
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 审的是 `f546fa31a..839d1c22e`（20 个提交，2026-10-23 审核的修复、Worker 只运行请求命令、CLI v23、删账号可选保留运行资源），按当前代码审，重点是这段新写或重写的部分；按审核做的修改在 03580970d..bd4e19fa2。准则是复用、解耦、简洁、低嵌套，以及顺带发现的真问题。五份分报告各有"处理结果"一节，逐条写了做法和审核不准的地方。
 
 ## 五个范围

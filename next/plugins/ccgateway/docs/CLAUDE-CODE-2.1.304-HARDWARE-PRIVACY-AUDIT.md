@@ -1,5 +1,7 @@
 # Claude Code 2.1.304：硬件信息采集与上报 AST 审计
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+
 ## 结论
 
 在恢复出的 Linux x64/glibc 2.1.304 JavaScript 源码中，确认了环境与资源信息的发送路径，但没有确认“读取 CPU 型号、MAC、主板序列号并组合成硬件指纹上传”的链路。

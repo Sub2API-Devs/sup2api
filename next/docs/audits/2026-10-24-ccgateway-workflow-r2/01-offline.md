@@ -1,5 +1,7 @@
 # CCGateway 离线对拍（第二轮）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 2026-10-25。对象：`feat/next-platform` HEAD `f12c5fb7e`（线上核心 0.1.186 / ccgateway 0.1.90 / CLI 2.1.304 `ccgateway-v26-native-assembly`），镜像 `ccgateway-app:0.1.90`。本文件只记录实测；静态结论见同目录 `03-static.md`。
 
 **本轮官方基线（A 侧）已导出到** `artifacts/claude-2.1.304/e2e/wf-r2-2026-10-24/baseline/`（9 个文件、16 个请求、约 824 KiB；artifacts 不进 git，令牌已打码为 `Bearer REDACTED`）。格式与上一轮相同：每个文件一个场景，

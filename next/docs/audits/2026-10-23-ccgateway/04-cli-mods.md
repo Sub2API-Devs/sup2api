@@ -1,5 +1,7 @@
 # 04 定制版 Claude Code CLI（cli-mods）审核
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 审核日期：2026-10-23；分支 `feat/next-platform`，HEAD `f546fa31a`；补丁标签 `ccgateway-v21-native-layers`（插件 0.1.80）。只读审核，除本文件外没有改仓库任何文件；临时脚本在 `%TEMP%\ccg-audit-d\`（`strict21.cjs`、`inout21.cjs`）。
 
 ## 1 范围与方法

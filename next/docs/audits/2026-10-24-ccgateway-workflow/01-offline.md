@@ -1,5 +1,7 @@
 # 离线对拍：官方客户端直连 vs 客户端 → 核心 → Worker → CLI → 上游
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 2026-10-24。执行环境：ovh 一次性 `docker run --rm --network none --user 1000:1000` 容器，镜像 `ccgateway-app:0.1.87`（Worker `/usr/local/bin/worker` sha256 `2f742076…8c2a`，CLI `/opt/ccgateway/cli/2.1.304/claude` sha256 `558d7b31…5b5c`，patch `ccgateway-v23-bound-imports`）。官方客户端：`~/sup2api/checks/ccg-304-v12/claude-official-304`（sha256 `ea0f1357…27912`），复制进容器。
 
 - **基线 A**：官方客户端 → 假上游（TLS over unix socket，`ANTHROPIC_UNIX_SOCKET` + `NODE_TLS_REJECT_UNAUTHORIZED=0`）。这就是官方发给 Anthropic 的请求形状。

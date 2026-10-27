@@ -1,5 +1,7 @@
 # CCGateway 单轮映射与增量输出
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 ## 2026-10-16：账号 #21 已更新并完成真实客户端验证
 
 此前测试后恢复旧程序的阶段已经结束。按用户“更新上去，然后启动 CC 客户端测试 21 账号”的要求，已提交并推送实现，在服务器从精确提交构建，并通过 Controller `POST /accounts/21/worker` 正式原地更新 #21。新程序保持运行，没有在验收后回滚。

@@ -1,5 +1,7 @@
 # 2026-10-24 代码质量审核 04：cli-mods（注入 Claude Code 2.1.304 的 JS 补丁，CLI v23）
 
+> 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
+
 范围：`f546fa31a..HEAD` 中 `next/plugins/ccgateway/companions/cli-mods`。重点是这次新写或重写的部分：
 - 补丁器 `patch-cli.cjs`、`patch-cli-2.1.304.cjs`，以及 profile；
 - `request-*.js`、`shared.js`、`request-entry.inc.js`；

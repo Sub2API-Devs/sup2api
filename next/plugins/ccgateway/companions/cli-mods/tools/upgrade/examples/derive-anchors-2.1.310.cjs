@@ -2,7 +2,7 @@
 // local names in its replacement, as the reviews established them
 // (artifacts/claude-2.1.310/review/rev-*.md). Each replacement must match
 // exactly the expected number of times, so a stale assumption fails here.
-//   node derive-anchors-310.cjs <cli-mods dir>
+//   node tools/upgrade/examples/derive-anchors-2.1.310.cjs <cli-mods dir>
 const fs = require('fs'), path = require('path');
 const dir = process.argv[2];
 let t = fs.readFileSync(path.join(dir, 'patches/2.1.304.cjs'), 'utf8');
