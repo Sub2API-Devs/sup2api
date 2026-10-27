@@ -84,6 +84,24 @@ request before restoring the original state. Previously disabled accounts
 must remain disabled. This migration is separate from saving defaults and
 has not been performed by this change.
 
+## CLI telemetry environment
+
+Since `e186f56be`, new account business containers receive the eight fixed
+environment values in `manager.py`'s `TELEMETRY_ENV`. They are merged after
+`cli_env`, so CLI profile values cannot override them. The Worker also applies
+the same values when starting request and authentication CLI processes,
+including login, refresh and logout.
+
+Updating the controller does not retrofit an existing container's environment.
+Activating the updated Worker and restarting its process applies the subprocess
+defaults to subsequent CLI launches without requiring a container rebuild.
+The broader `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` is added by
+`Runner.baseEnv()`, not by `TELEMETRY_ENV` or the authentication environment
+helper. `skipWebFetchPreflight` remains unset.
+
+See the [telemetry environment and activation scope](../../docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md#遥测环境变量与生效范围)
+for all eight values, parsing rules, regression coverage and deployment limits.
+
 ## Networking
 
 The business container has only an internal interface. A short-lived Docker

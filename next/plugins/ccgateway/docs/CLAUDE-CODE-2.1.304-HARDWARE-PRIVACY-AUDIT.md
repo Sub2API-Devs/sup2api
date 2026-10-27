@@ -12,13 +12,15 @@
 - MAC／BIOS 的明确读取位于 Google 云环境识别依赖中，返回分类布尔值；没有在这条链路中找到原始 MAC／BIOS 上传。
 - OpenTelemetry 依赖包含真实系统 machine-id 的读取器，但本次确认的 CC 指标资源组装没有挂接 `hostDetector`。不能把依赖存在视为当前已上报。
 
-当前三个运行中的生产账号 Worker 均继承
+本次 v12 审计时抽查的三个生产账号 Worker 均继承
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`，没有配置
 `CLAUDE_CODE_ENABLE_TELEMETRY` 或任何 `OTEL_*` 环境变量。
 按已追踪的分支，第一方事件、内部指标、Datadog 日志／错误和远程设备桥被阻断；
 普通 Messages 请求里的设备 ID、SDK 请求头、明确选用的服务端环境附件不受该开关统一清除。
 
 上述“阻断”是源码条件与已核对运行环境的结合判断。本轮没有抓取生产全部出站流量，也没有触发真实模型请求。
+
+后续提交 `e186f56be` 补充了账号容器创建和 Worker 子进程两层环境配置，包括登录／刷新／登出路径。完整开关及生效条件见[遥测环境变量与生效范围](#遥测环境变量与生效范围)；上述现场快照不代表该提交已部署。
 
 ## 基线与方法
 
@@ -265,7 +267,7 @@ Controller 当前本地创建默认值为 `mem_limit='1g'` 和 `nano_cpus=200000
 
 Worker 只在已加载 CLI 声明该能力时传入可信开关；health 的 request capabilities 只有在 Worker 与 CLI 均接通时才包含该能力。旧 CLI 和维护模式不启用；上线须配对更新 Worker 与 CLI。
 
-`Runner.baseEnv()` 现在强制设置：
+v13 阶段已在 `Runner.baseEnv()` 强制设置下列开关；后续扩展后的完整配置见[遥测环境变量与生效范围](#遥测环境变量与生效范围)：
 
 ```text
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
@@ -304,6 +306,61 @@ CLI:    5f396918038bcbe3dc64ad4a1c24412a9758610581f8a6a6815844217ee23c4d
 
 [当前资源配额方案的 Linux 验证报告](../../../../artifacts/claude-2.1.304/container-resources-v13-smoke.json)。
 测试使用假凭据和回环模型，没有进行真实上游账号验收。没有更新生产 Worker、CLI、账号卷或容器配置。
+
+## 遥测环境变量与生效范围
+
+提交 `e186f56be`（`feat(ccgateway): close account telemetry through environment switches`）同时配置账号容器环境和 Worker 启动的 CLI 子进程环境。它使用 Claude Code 2.1.304 已有的环境开关，不依赖修改官方遥测模块。
+
+### 两层共用的八项配置
+
+| 环境变量 | 值 | 用途 |
+|---|---|---|
+| `DISABLE_AUTOUPDATER` | `1` | 禁止 CLI 自动更新，保留受控版本 |
+| `DISABLE_TELEMETRY` | `1` | 关闭 CLI 用量遥测 |
+| `DO_NOT_TRACK` | `1` | 同时设置 CLI 支持的拒绝跟踪开关 |
+| `DISABLE_ERROR_REPORTING` | `1` | 关闭错误上报 |
+| `DISABLE_GROWTHBOOK` | `1` | 关闭 GrowthBook 特性配置获取 |
+| `CLAUDE_CODE_ENABLE_TELEMETRY` | `0` | 显式关闭可选的第三方 OpenTelemetry 导出 |
+| `DISABLE_FEEDBACK_COMMAND` | `1` | 禁用 `/feedback` 命令 |
+| `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY` | `1` | 禁用会话质量问卷 |
+
+Controller 在 [`manager.py`](../companions/controller/manager.py) 的 `TELEMETRY_ENV` 中定义这八项，并以 `env = {**cli_env, **TELEMETRY_ENV}` 组装创建账号业务容器的环境。后合并的遥测值优先，CLI profile 不能覆盖它们。
+
+Worker 在 [`runner.go`](../companions/engine/runner.go) 的 `telemetryDefaults()` 中保留同样的八项：
+
+- `Runner.baseEnv()` 在继承环境和账号环境设置之后覆盖这些值，供 direct/build 请求及复用该入口的 CLI 路径使用。
+- [`auth.go`](../companions/engine/auth.go) 的 `authManager.environment()` 同样覆盖这些值，适用于登录、刷新和登出进程。
+- 两份常量需要同步维护。容器配置提供启动时的默认值，Worker 配置覆盖已有容器中的空值或错误值。
+
+`Runner.baseEnv()` 另外设置 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`。它比上述用途范围更广，还影响更新、release notes 和可用性检查等行为，因此不加入容器的八项配置，也不由认证入口主动追加。认证入口没有删除继承环境中的同名变量；外部若已配置它，认证进程仍会继承。
+
+### 生效条件
+
+| 运行状态 | 生效范围 |
+|---|---|
+| 已更新 Controller，随后新建或重建账号容器 | 新容器取得全部八项环境变量 |
+| 只更新或重启 Controller，已有账号容器未重建 | 不会追补已有容器的环境变量；配置 revision 未变化时，部分同步路径还会直接返回 |
+| 已激活包含该提交的 Worker，并重启 Worker 进程 | 随后经 `baseEnv()` 或认证入口启动的 CLI 子进程取得强制配置，无需为此重建账号容器 |
+| 仅重启旧 Worker 二进制 | 不会获得该提交新增的配置 |
+
+Worker 原地更新不会改写 Docker 保存的容器环境。因此，容器环境检查与 CLI 子进程实际环境是两层不同的验证；不能只凭源码提交、Controller 重启或 `docker inspect` 的旧值判断全部路径是否生效。本节记录代码实现，不声明生产已经部署或所有出站流量已经抓包验证。
+
+### 行为边界与开关取值
+
+这些配置同时关闭自动更新、特性配置获取和反馈功能，不能描述为“完全没有行为影响”。遥测环境集合不包含 `CLAUDE_CODE_DISABLE_WEB_FETCH`、`CLAUDE_CODE_DISABLE_ARTIFACT`、`ENABLE_CLAUDEAI_MCP_SERVERS` 或 `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`；不通过这些开关额外禁用工具、连接器或插件市场安装。
+
+`skipWebFetchPreflight` 保持未设置。WebFetch 域名安全检查独立于遥测开关，在实际执行相应工具路径时仍可能发送 hostname。仅声明 WebFetch 工具不等于 Worker 执行它。该版本的 `domainChecks` 缓存初始化包含 `ttl: 300000`，与五分钟缓存说明一致。
+
+官方开关的解析方式不同：`DISABLE_TELEMETRY`、`DISABLE_ERROR_REPORTING` 和 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` 按非空字符串判断，写成 `"0"` 或 `"false"` 仍启用关闭行为，空串则不启用；`DO_NOT_TRACK` 和 `CLAUDE_CODE_ENABLE_TELEMETRY` 使用布尔解析。以上固定值避免依赖这些差异。普通模型请求里的 metadata、SDK 请求头及按内容策略选用的环境文本不由遥测开关自动擦除。
+
+官方控制说明：[数据使用](https://code.claude.com/docs/en/data-usage)、[OpenTelemetry 监控](https://code.claude.com/docs/en/monitoring-usage)。
+
+### 回归覆盖
+
+- [`telemetry_env_test.go`](../companions/engine/telemetry_env_test.go)：检查八项固定值、请求和认证入口覆盖继承值、未加入上述功能开关，以及认证入口不主动追加广义非必要流量开关。
+- [`test_manager.py`](../companions/controller/test_manager.py) 的 `test_new_account_container_carries_the_telemetry_switches`：检查容器创建参数携带八项配置，并且不含上述功能开关。
+
+这些用例验证环境构造，不等同于真实 CLI 的全部出站流量验证。该提交准备时 Go 定向测试已通过；Controller 测试当时因 Windows 缺少 Unix `fcntl` 未实跑，仅完成语法和常量检查。本次文档补充未重新运行这些测试或核查生产部署。
 
 ## 后续磁盘硬配额实现（未部署）
 
