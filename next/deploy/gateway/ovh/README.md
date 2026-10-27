@@ -2,7 +2,18 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
-2026-10-28 最新：账号模型手动补 `claude-haiku-5-5`。自动模型模式的账号在 0.1.107 发布时已经有了，这次补的是停用的 31（手动模型）、20、21（测试账号）。只改了 `models`，状态和模式都没变。20 号保存时插件按默认列表补全，所以多了它原来没有的 `claude-opus-4-8`；明确提交原列表也会被补回，就没再改。脚本在 `stage/haiku-5-5-manual/{survey.py,add.py,set20.py}`。原列表从 `backups/ccgateway-0.1.107` 核对（dump 要用 `postgres:18-alpine` 的 pg_restore）。
+2026-10-28 最新发布：Core 两节点 **0.1.209**（源码 `9506f63ba`，manifest `44bd036b…6589`，计划 `19987d42a0331888479ccb5dcb450344` completed/13，约 116 秒，核心 SHA `d33df6f5…c401`）。schema 契约不变（`2adf9bfc…`）；CCGateway 仍 0.1.107、CLI 仍 v33。
+- 内容：[设计](../../../docs/USAGE-STATS-AND-USER-CONSOLE-DESIGN.md) P2、CONTRACTS §66.5–66.6。
+  - 接口：`GET /usage/overview`（带用户、账号两块，缓存 30 秒），summary 的 `order`/`limit` 排行与 `__other__` 合并，管理员 `group_by=upstream_model`，两个 CSV 导出接口。
+  - 界面：管理员仪表盘重做，使用记录页加「用户排行」页签、请求模型/上游模型切换和导出按钮，API 密钥用量抽屉。
+- 备份 `backups/core-0.1.209`（用 `postgres:18-alpine` 的 pg_dump）。脚本 `stage/0.1.209/{build.sh,verify-p2.py}`。
+- 核对（两个节点：sup2api-1 直连，sup2api-ccp 经 api.prophey.ai）：
+  - 版本 0.1.209，readyz 200，前端都是 `index-SWrgcfQJ.js`，CSS 含排行条的类。
+  - `/usage/overview` 200，带 users、accounts，没有 api_keys。第二次命中缓存：ovh 1 ms，clicodeplus 71 ms。
+  - 排行、上游模型 200。自助 upstream_model、`order=bad`、`limit=0` 都是 400。
+  - 两个导出都是 200，文件以 BOM 开头，中/英表头正确，自助导出没有用户、账号、上游模型列。
+
+2026-10-28 历史：账号模型手动补 `claude-haiku-5-5`。自动模型模式的账号在 0.1.107 发布时已经有了，这次补的是停用的 31（手动模型）、20、21（测试账号）。只改了 `models`，状态和模式都没变。20 号保存时插件按默认列表补全，所以多了它原来没有的 `claude-opus-4-8`；明确提交原列表也会被补回，就没再改。脚本在 `stage/haiku-5-5-manual/{survey.py,add.py,set20.py}`。原列表从 `backups/ccgateway-0.1.107` 核对（dump 要用 `postgres:18-alpine` 的 pg_restore）。
 
 2026-10-27 历史发布：CCGateway/Controller/Worker **0.1.107**（`fc0414f0a`，包 SHA `3839bcfc…8006d`，rollout 192），CLI 不变（v33）；核心仍 0.1.208。内容：Pro 和 Max 的默认模型列表加入 `claude-haiku-5-5`（`models.go`、`manifest.json` 三处）。
 - 顺序：备份 `backups/ccgateway-0.1.107` → 上传、升级 → bundled controller、egress → `runtime/workers` 配对原地更新 → bundled app。23 号显示 failed，因为它已被删除。
