@@ -58,6 +58,7 @@
 | `respmatch.cjs` | 响应组装核对，按规范化 JSON **内容**配对：Worker 日志的 `response.json` 要能在代理记录的客户端答复（SSE 组装后）里找到相同的一份 |
 | `capture-official.sh` | 换 Claude Code 版本时用：一次性断网容器里让未改的官方 CLI（全新 HOME、全新非 Git 项目、合成 API key）向 `fake-upstream.cjs` 发一个请求，写出 `test/fixtures/official-request-<版本>.json`（`TOOLS_OUT=` 另写 official-tools 夹具） |
 | `official-diff.cjs` | 两份 Messages 请求体按组件比较（顶层键、system 各块、首轮各 reminder、其余消息、每个工具的描述/schema/其他字段、生成参数），版本号、cc_version 指纹、cch、日期先规范化；新旧官方抓包之间的差异就是官方自己的变化清单 |
+| `tls-fingerprint.sh` + `tls-probe.cjs` + `tls-compare.cjs` | 传输层指纹：一次性断网容器里把 `api.anthropic.com` 指向本机探针，记录官方 CLI 与定制 CLI（`request --direct/--build`）每条连接的原始 ClientHello（JA3/JA4、扩展、ALPN、签名算法等）与 HTTP/1.1 请求头原文，并按客户端比较。用法见 `tls-fingerprint.sh` 头注释 |
 | `crossversion.cjs` | 两次运行（如基线 v31 + 旧官方客户端 vs 候选 + 新官方客户端）逐请求按组件比较 B 侧上游请求，并把每处差异归因：A 侧（官方客户端直连）也有的来自客户端，只在 B 侧出现的来自网关 |
 
 ## 环境变量

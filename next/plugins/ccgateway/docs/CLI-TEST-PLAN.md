@@ -524,6 +524,6 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 5. **A/B 白名单没有自动化**：`compare.cjs` 只列差异，允许表靠人工对照；应把允许表写成规则并让脚本给出通过/失败。
 6. **跨版本静态检查的剩余缺口**：“每个种子必须有归类记录”没有检查；`equiv` 对低 `similarity` 的对齐配对只报告不拦截；REA 交叉验证的脚本（`artifacts/claude-2.1.310/scratch-rea/`）是一次性草稿，不在仓库。
 7. **生产冒烟没有脚本**：账号测试、日志级别、真实客户端核对都靠手工（`verify-logpolicy.py` 不在仓库且写死账号与容器名）。
-8. **传输层**：TLS ClientHello、HTTP 版本、头序列化与官方不同（Bun 1.4.3 重编，官方内嵌 1.4.4），没有测试，也不在 e2e 范围内；2.1.310 审查（`rev-transport.md`）列为未确认。
+8. **传输层（2026-10-27 已测）**：`test/e2e/tls-fingerprint.sh` 在一次性断网容器里把 `api.anthropic.com` 指向本机的 `tls-probe.cjs`（记录原始 ClientHello 与 HTTP/1.1 请求头原文），`tls-compare.cjs` 按客户端比较。结果：官方 2.1.304 与 2.1.310 的 Messages 连接 JA4 `t13d1713h1_5b57614c22b0_7f527383e249`；我们用 Bun 1.4.3 编译的 v31/v32 是 `…_6a3d802a7139`，JA3 相同，唯一差别是签名算法少了 `0807`（Ed25519）与 `0603`（ECDSA P-521）；同一份补丁源码用 Bun 1.4.4 编译后与官方**完全相同**。只走 HTTP/1.1、请求头名的大小写与顺序与官方一致（差的 `anthropic-beta`、`x-claude-code-prompt-id` 只取决于请求本身是否带 beta 与 CC 计费头）。官方另有 `/api/claude_code/settings`、`policy_limits` 两类连接用另一套 TLS 栈（`t13d1810/1811…`），`claude request` 不发这两类请求。结论：要对齐指纹，编译用的 Bun 版本要等于官方内嵌版本（现为 1.4.4）。
 9. **`cch`**：非 CC 请求发 `00000`，上游接受与否只是观察，没有监测。
 10. **核心与控制器隧道**：e2e 用代理模拟核心，只覆盖策略头与 credit 跟踪头；核心的能力预检、响应头白名单、credit 扣留在真实核心上的端到端组合只有 Go 单元测试。

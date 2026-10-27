@@ -64,6 +64,7 @@
 | Worker 策略矩阵（核心 `ResolveFeaturePolicy` 导出的 67 组策略 + 32 组补充：历史块与更新、工具结果不扫描、缺块、CRLF、围栏、计费歧义、相邻切换） | `worker-policy-matrix.cjs`，0.1.104 Worker | 99/99，上游 98 | 99/99，上游 98 |
 | 来源组合单元套件 | `analysis/client-combination-unit.mjs`，3^10 × 2^2 种来源组合 | 236196/236196 | 236196/236196 |
 | Go / 前端 | 核心 `internal/ccgateway`、engine、contracts（本机）；控制台 ccgateway 页面 368 项 | — | 全过 |
+| 传输层指纹（发布后补测） | `test/e2e/tls-fingerprint.sh`：官方 CLI 与定制 CLI 连到本机探针，比较 ClientHello 与请求头 | Bun 1.4.3 编译：JA3 与官方相同，JA4 不同（签名算法少 Ed25519、ECDSA P-521） | 同左；同一源码用 Bun 1.4.4 编译后与官方 2.1.310 完全相同。请求头名、大小写、顺序与官方一致 |
 | 生产（发布后） | 账号测试；35 号开完整日志 1 小时测一次再恢复跟随默认 | — | 21、35、36 Haiku 200（34 号上游 429 速率限制，与发布无关）；35 号日志 `upstream-request.json`：`/v1/messages?beta=true`、UA `claude-cli/2.1.310 (external, sdk-cli)`、计费头 `cc_version=2.1.310.e58`、无 `cc_project`、授权头 `[REDACTED]`，`response.json` 已组装 |
 
 ## 5. 发布
