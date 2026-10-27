@@ -8,7 +8,7 @@ CCGateway 把 Claude Code 账号作为平台的 Anthropic Messages 上游：每�
 
 以 [ovh 发布记录](../../deploy/gateway/ovh/README.md) 最上面一条为准（2026-10-26）：
 
-- 插件、控制器、Worker、出口 **0.1.105**（`manifest.json` 的 `version`，镜像与插件版本一起变）；插件要求核心 `>=0.1.172 <0.2.0`，线上核心 0.1.207。
+- 插件、控制器、Worker、出口 **0.1.106**（`manifest.json` 的 `version`，镜像与插件版本一起变）；插件要求核心 `>=0.1.172 <0.2.0`，线上核心 0.1.207。
 - CLI **Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`**（ELF SHA-256 `720f4645…2463`，Bun 1.4.4 编译为字节码，与官方内嵌版本相同；上一版 2.1.304 / v31 的 profile 与锚点仍在）。版本记录在 [cli-mods README](companions/cli-mods/README.md)，迁移到 2.1.310 的记录在 [CLAUDE-CODE-2.1.310-MIGRATION](docs/CLAUDE-CODE-2.1.310-MIGRATION.md)。
 
 ## 目录

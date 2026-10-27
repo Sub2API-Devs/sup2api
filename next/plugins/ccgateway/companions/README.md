@@ -2,7 +2,7 @@
 
 账号容器里运行的部分。平台插件在 `..`（[插件 README](../README.md)），核心的账号、配置与连接管理在 `../../../server/internal/ccgateway`，控制台页面在 `../../../web/src/views/ccgateway`。这些组件不随插件包安装到核心：Worker、控制器、出口各自打成镜像，随插件版本发布（`next/deploy/docker/build-ccgateway-images.sh`）。2026-10-23 以前的 README（早期内建版与已删除的 native 运行时）归档在 [docs/archive](../docs/archive/COMPANIONS-README-2026-10.md)。
 
-当前版本（2026-10-27，以 `next/deploy/gateway/ovh/README.md` 顶部为准）：Worker/控制器/出口 0.1.105，CLI Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`（迁移记录 [CLAUDE-CODE-2.1.310-MIGRATION](../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)）。
+当前版本（2026-10-27，以 `next/deploy/gateway/ovh/README.md` 顶部为准）：Worker/控制器/出口 0.1.106，CLI Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`（迁移记录 [CLAUDE-CODE-2.1.310-MIGRATION](../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)）。
 
 ## 请求链路
 
