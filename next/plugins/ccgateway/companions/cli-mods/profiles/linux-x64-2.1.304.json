@@ -2,6 +2,7 @@
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
   "extension": "ccgateway-v31-request-capture",
+  "bunVersion": "1.4.3",
   "capabilities": [
     "request_direct",
     "request_build",

@@ -14,7 +14,7 @@
 | 换版本的操作手册 | [CLI-UPGRADE-RUNBOOK](CLI-UPGRADE-RUNBOOK.md) |
 | 离线端到端套件 | [`cli-mods/test/e2e/README.md`](../companions/cli-mods/test/e2e/README.md) |
 
-当前版本是 Claude Code 2.1.310 / CLI v32（`ccgateway-v32-cc-2-1-310`）；2.1.304（v31）的 profile 与锚点仍在仓库里，测试照常覆盖。补丁器版本无关：`patch-cli.cjs` + 每版一份 `patches/<版本>.cjs`（锚点）与 `profiles/linux-x64-<版本>.json`（原生名字表），环境代码 `native-environment.inc.js` 各版共用，支持模块只从生成的 `native-<组>.js` 按逻辑名导入原生（见 cli-mods README“版本无关的结构”）。文中源码位置写到“文件 + 函数名”，不写行号；第 3 节的原生符号写 2.1.304 的名字（审查与分析都以它为基准），2.1.310 的对应名见第 4.5 节与 `profiles/linux-x64-2.1.310.json`。
+当前版本是 Claude Code 2.1.310 / CLI v33（`ccgateway-v33-bun-1-4-4`，与 v32 同一份补丁、改用官方内嵌的 Bun 1.4.4 编译）；2.1.304（v31）的 profile 与锚点仍在仓库里，测试照常覆盖。补丁器版本无关：`patch-cli.cjs` + 每版一份 `patches/<版本>.cjs`（锚点）与 `profiles/linux-x64-<版本>.json`（原生名字表、`bunVersion`），环境代码 `native-environment.inc.js` 各版共用，支持模块只从生成的 `native-<组>.js` 按逻辑名导入原生（见 cli-mods README“版本无关的结构”）。文中源码位置写到“文件 + 函数名”，不写行号；第 3 节的原生符号写 2.1.304 的名字（审查与分析都以它为基准），2.1.310 的对应名见第 4.5 节与 `profiles/linux-x64-2.1.310.json`。
 
 ---
 

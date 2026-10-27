@@ -319,7 +319,7 @@
 
 - `respcheck.cjs` 按 request-id 配对，在本套件里配不上：代理记录的 `request-id` 是假上游给的（`req_ccgaudit<序号>`，每个场景从 1 重新计数），与 Worker 日志的请求 ID 不是同一个。用 `respmatch.cjs`。
 - `capcheck.cjs` 只认工作目录 `cap/*/b` 下的请求，以及 `data-*/request-logs/*/upstream-request.json`；本套件经 unix socket 发上游，原生不会在正文末尾加随机空白、也不压缩，所以 `body_sha256` 可以直接与假上游收到的字节比；线上直连时原生对 ≥ 4096 字符的一方请求会加空白再压缩，那里要看 `content_sha256`（CLI v31 起记录，见 `cli-mods/README.md` v31）。
-- 本套件不覆盖：真实上游的接受与否、TLS/HTTP 层指纹（CLI 由 Bun 1.4.3 重编，官方内嵌 Bun 1.4.4）、核心本身（代理只模拟策略头与 credit 跟踪头）、控制器隧道。
+- 本套件不覆盖：真实上游的接受与否、TLS/HTTP 层指纹（另用 `tls-fingerprint.sh` 测）、核心本身（代理只模拟策略头与 credit 跟踪头）、控制器隧道。
 
 ## 收进仓库时的改动（相对 `release-0203/kit`）
 

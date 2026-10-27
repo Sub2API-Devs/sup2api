@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**Claude Code 2.1.310 / `ccgateway-v32-cc-2-1-310`**（2026-10-27，随插件 0.1.104 发布；ELF SHA-256 `7fa09728311a115da978a34064c836f9644ea3dbe0e0a08ccc3e6c14a0ff4486`）。上一版 2.1.304 / `ccgateway-v31-request-capture`（插件 0.1.101–0.1.103，ELF `b7a1df0e…3393d`）的 profile 与锚点仍在仓库里，测试照常覆盖（`CCG_CLI_VERSION=2.1.304 npm test`）。用 Bun 1.4.3 编译（官方 2.1.304、2.1.310 都内嵌 Bun 1.4.4，边界见 [REQUEST-HEADERS](../../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。
+**Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`**（2026-10-27，随插件 0.1.105 发布；ELF SHA-256 `720f46453a85ffed6dafb8a4513f68534b97314943bef11a40a54caaf4e32463`，Bun 1.4.4 编译）。v32（`ccgateway-v32-cc-2-1-310`，插件 0.1.104，ELF `7fa09728…4486`）是同一份补丁用 Bun 1.4.3 编译的。上一版 2.1.304 / `ccgateway-v31-request-capture`（插件 0.1.101–0.1.103，ELF `b7a1df0e…3393d`）的 profile 与锚点仍在仓库里，测试照常覆盖（`CCG_CLI_VERSION=2.1.304 npm test`）。编译用的 Bun 等于官方内嵌版本（profile `bunVersion`，`package-release.cjs` 核对），TLS 指纹因此与官方相同（[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 缺口第 8 条）。
 
 - 2.1.304 → 2.1.310 的分析、迁移与验证：[CLAUDE-CODE-2.1.310-MIGRATION](../../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)
 - 以后每次换版本的操作手册：[CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md)
@@ -77,7 +77,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
    ```
 
    复用已有 Babel 时可设 `CCG_BABEL_PACKAGE` 为该安装的 `package.json` 绝对路径。
-4. **编译**（Bun 1.4.3，Linux x64/glibc；ovh 上用 `oven/bun:1.4.3` 容器，Windows 传过去的副本先去 CR）：`sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`。两个入口（`cli.js` 与 hooks worker）都必须给。
+4. **编译**（用 profile `bunVersion` 指定的 Bun，Linux x64/glibc；ovh 上用 `oven/bun:<bunVersion>` 容器，Windows 传过去的副本先去 CR）：`sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`。两个入口（`cli.js` 与 hooks worker）都必须给。
 5. **打包**：`node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release`（脚本旁要有 `profiles/`）。产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`。
 6. **放进 Worker 构建上下文**：用新目录替换 `cli-mods/release/`（不进 Git）。`companions/worker/Dockerfile` 按 `ARG CLAUDE_VERSION` 安装到 `/opt/ccgateway/cli/` 并核对 SHA 与补丁标签；控制器创建或配对更新账号容器时再按 manifest 校验，Worker 启动时校验固定版本、补丁标签与哈希。
 7. **测试**：`npm test`（默认最新 profile 的版本；`CCG_CLI_VERSION=<版本>` 指定）。原生对账测试在 `artifacts/claude-<版本>/linux-restored` 存在时必须真跑，缺失时跳过并打印 `CCG_NATIVE_TEST_SKIPPED`，`CCG_REQUIRE_ARTIFACTS=1` 时改为失败。原生夹具变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成并逐项审查。离线端到端回归、组装对账等在 ovh 一次性容器里跑，见 [CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 与 `test/e2e/README.md`。
@@ -86,7 +86,8 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
 | 版本 | 插件 | 内容 | 现状 |
 |---|---|---|---|
-| v32 `cc-2.1.310` | 插件 0.1.104 | 移植到 Claude Code 2.1.310（2026-10-23 构建，commit `0d2056ec`），逻辑与 v31 相同：13 个被改写函数按新版重写锚点（入口 `Ye`、会话 `Fr`、资源 `nki`/`X`、核心 `rH`/`rSn`/`tSn`/`UC`/`Tkr`/`yao`、客户端 `m$`/`ml`、计费 `EFs`），原生名字表见 profile。同时把补丁器改成版本无关（上节）；v31 用新补丁器重新生成的产物与线上 v31 逐 token 等价。官方自己的变化（出口可见）：延迟工具列表多 `Monitor`、Bash 工具描述多一句 Monitor 说明、计费头 `cc_version` 为 2.1.310 及其指纹、UA `claude-cli/2.1.310`。分析、审查与验证记录见 [CLAUDE-CODE-2.1.310-MIGRATION](../../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)。ELF `7fa09728…4486` | 现行 |
+| v33 `bun-1-4-4` | 插件 0.1.105 | 与 v32 同一份补丁，改用 Bun 1.4.4（官方 2.1.310 内嵌版本）编译：ClientHello 与官方完全相同（v32 的 Bun 1.4.3 少两个签名算法）。profile 新增 `bunVersion`，`package-release.cjs` 拒绝其他 Bun 编出的 ELF。补丁产物与 v32 只差补丁标签。ELF `720f4645…2463` | 现行 |
+| v32 `cc-2.1.310` | 插件 0.1.104 | 移植到 Claude Code 2.1.310（2026-10-23 构建，commit `0d2056ec`），逻辑与 v31 相同：13 个被改写函数按新版重写锚点（入口 `Ye`、会话 `Fr`、资源 `nki`/`X`、核心 `rH`/`rSn`/`tSn`/`UC`/`Tkr`/`yao`、客户端 `m$`/`ml`、计费 `EFs`），原生名字表见 profile。同时把补丁器改成版本无关（上节）；v31 用新补丁器重新生成的产物与线上 v31 逐 token 等价。官方自己的变化（出口可见）：延迟工具列表多 `Monitor`、Bash 工具描述多一句 Monitor 说明、计费头 `cc_version` 为 2.1.310 及其指纹、UA `claude-cli/2.1.310`。分析、审查与验证记录见 [CLAUDE-CODE-2.1.310-MIGRATION](../../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)。ELF `7fa09728…4486` | 已替换（同源，编译器换 1.4.4 即 v33） |
 
 ## 版本记录（2.1.304）
 

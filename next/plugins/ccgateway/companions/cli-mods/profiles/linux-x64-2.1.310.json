@@ -1,7 +1,8 @@
 {
   "binarySHA256": "b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56",
   "version": "2.1.310",
-  "extension": "ccgateway-v32-cc-2-1-310",
+  "extension": "ccgateway-v33-bun-1-4-4",
+  "bunVersion": "1.4.4",
   "capabilities": [
     "request_direct",
     "request_build",

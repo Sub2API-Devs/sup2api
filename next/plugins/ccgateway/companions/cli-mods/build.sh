@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
-# Run with Bun 1.4.3 on Linux x64/glibc. The worker MUST be an explicit entry.
+# Run with the Bun the profile names (bunVersion: the one the official ELF
+# embeds, so the TLS stack is the same) on Linux x64/glibc;
+# package-release.cjs refuses an ELF built by another. The worker MUST be an
+# explicit entry.
 # Every module is compiled to bytecode as the official build is (ESM: the
 # restored modules are ESM, and --bytecode alone defaults to CJS): without it
 # each process parses the whole bundle, about 0.8 s per CLI start.

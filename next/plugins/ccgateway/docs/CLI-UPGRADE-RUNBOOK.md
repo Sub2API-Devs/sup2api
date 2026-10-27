@@ -196,15 +196,15 @@ equiv 的配对靠规范形式与传播，可能把形状相同而语义不同�
 
 ## 6. 编译与打包
 
-**Bun 版本**：官方 2.1.304 内嵌 Bun 1.4.4，我们用 Bun 1.4.3（`oven/bun:1.4.3`）重编。Bun 版本影响 TLS/HTTP 层的行为，所以出口指纹不能声称与官方一致（[REQUEST-HEADERS](../../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)「已知边界」）。换版本时先确认新版官方内嵌的 Bun 版本，再决定用哪个版本编译，并把选择与理由写进新版的分析文档。
+**Bun 版本**：编译用的 Bun 必须等于官方 ELF 内嵌的版本（ELF 里的 `Bun v<版本> (<修订>)` 字样；2.1.304、2.1.310 都是 1.4.4）。Bun 的 TLS 栈就是上游看到的指纹：2026-10-27 实测（`test/e2e/tls-fingerprint.sh`），Bun 1.4.3 编译的 CLI 与官方 JA3 相同、JA4 不同（签名算法少 Ed25519 与 ECDSA P-521），同一源码用 Bun 1.4.4 编译后 ClientHello 与官方完全相同（v33 起）。版本写在 profile 的 `bunVersion`，`package-release.cjs` 拒绝不是这个 Bun 编出的 ELF。换 Claude Code 版本时先查新 ELF 的内嵌版本，`docker pull oven/bun:<版本>`，改 `bunVersion`，发布前跑一遍 TLS 指纹对比。
 
 **为什么 `--compile --bytecode --format=esm`**（`build.sh`，v30 起，CONTRACTS §63.5）：官方构建的每个模块都是字节码，没有字节码时每个 CLI 进程都要解析整个包，而 Worker 每个请求启动一次 CLI。v30 只改了编译参数：`--version` 0.80 → 0.04 秒，请求命令启动到读输入 0.91 → 0.10 秒，常驻内存 135 → 139 MiB，ELF 157 → 293 MB（官方 288 MB）。还原出的模块是 ESM，单用 `--bytecode` 默认按 CJS 编译会失败。两个入口都必须给：`cli.js` 与 `src/plugins/functionHooks/hooks-worker/hooks-worker.js`，只编 `cli.js` 会漏掉 hooks worker。
 
-**编译**（发布记录里的做法：本地补丁 → tar 传到 ovh → `oven/bun:1.4.3` 容器里编译）。0.1.101 的发布记录写着"仓库里的 build.sh 是 CRLF，临时副本先去 CR"；2026-10-27 核对时仓库与工作树里都是 LF（`git ls-files --eol` 为 `i/lf w/lf`，`.gitattributes` 对 `*.sh` 设 `eol=lf`），但从 Windows 传过去的副本仍可能带 CR，统一先去 CR 最稳妥：
+**编译**（发布记录里的做法：本地补丁 → tar 传到 ovh → `oven/bun:<bunVersion>` 容器里编译）。0.1.101 的发布记录写着"仓库里的 build.sh 是 CRLF，临时副本先去 CR"；2026-10-27 核对时仓库与工作树里都是 LF（`git ls-files --eol` 为 `i/lf w/lf`，`.gitattributes` 对 `*.sh` 设 `eol=lf`），但从 Windows 传过去的副本仍可能带 CR，统一先去 CR 最稳妥：
 
 ```sh
 sed 's/\r$//' cli-mods/build.sh > /tmp/build.sh
-sh /tmp/build.sh /abs/patched-v<NN> /abs/claude-linux-v<NN>     # 在 oven/bun:1.4.3 容器里
+sh /tmp/build.sh /abs/patched-v<NN> /abs/claude-linux-v<NN>     # 在 oven/bun:<bunVersion> 容器里
 ```
 
 非 Linux 主机交叉编译用同样两个入口加 `--target=bun-linux-x64`（cli-mods README 第 4 步）。Bun 编译不能逐字节复现（同源两次编译差约 16 KB），发布一律按产物哈希固定。

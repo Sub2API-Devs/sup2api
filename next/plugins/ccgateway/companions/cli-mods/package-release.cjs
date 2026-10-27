@@ -10,6 +10,9 @@ const profileFile=/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version??'')&&path.join(__dirn
 const profile=profileFile&&fs.existsSync(profileFile)?JSON.parse(fs.readFileSync(profileFile,'utf8')):null;
 if(!profile||profile.version!==version||!profile.extension||profile.extension!==patch.extension)throw Error('Unsupported patch release: '+patch.extension+' is not the current patch of '+version);
 const bytes=fs.readFileSync(binary);if(bytes.subarray(0,4).toString('hex')!=='7f454c46')throw Error('Expected native Linux ELF');
+// The compiler is part of what the release is: Bun's TLS stack is what
+// upstream sees, so the ELF must come from the Bun the profile names.
+if(profile.bunVersion&&!bytes.includes(Buffer.from('Bun v'+profile.bunVersion+' (')))throw Error('The ELF was not built by Bun '+profile.bunVersion+' (profile bunVersion)');
 const sha256=crypto.createHash('sha256').update(bytes).digest('hex');
 fs.mkdirSync(path.join(output,version),{recursive:true});
 fs.writeFileSync(path.join(output,version,'claude'),bytes,{mode:0o755});

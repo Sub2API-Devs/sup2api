@@ -5,10 +5,10 @@
 | 项 | 2.1.304 / v31 | 2.1.310 / v32 |
 |---|---|---|
 | 官方 linux-x64 ELF SHA-256 | `ea0f1357…f27912` | `b7367643…7df56`（291638640 字节，与官方 manifest 一致） |
-| 内嵌 Bun | 1.4.4 | 1.4.4（我们仍用 1.4.3 编译） |
+| 内嵌 Bun | 1.4.4 | 1.4.4（v32 用 1.4.3 编译；v33 起用 1.4.4） |
 | 还原 | 2710 模块 / 2461 JS | 2801 模块 / 2551 JS，`unresolved` 为空 |
-| 补丁标签 | `ccgateway-v31-request-capture` | `ccgateway-v32-cc-2-1-310` |
-| 定制 ELF SHA-256 | `b7a1df0e…3393d` | `7fa09728311a115da978a34064c836f9644ea3dbe0e0a08ccc3e6c14a0ff4486` |
+| 补丁标签 | `ccgateway-v31-request-capture` | `ccgateway-v32-cc-2-1-310`（v33：`ccgateway-v33-bun-1-4-4`） |
+| 定制 ELF SHA-256 | `b7a1df0e…3393d` | v32 `7fa09728311a115da978a34064c836f9644ea3dbe0e0a08ccc3e6c14a0ff4486`；v33 `720f46453a85ffed6dafb8a4513f68534b97314943bef11a40a54caaf4e32463` |
 | 能力 | 18 项 | 相同 18 项 |
 
 分析中间产物在 `artifacts/claude-2.1.310/`（不进 Git）：`equiv-304-310.json`（配对）、`diffs/`（规范化 diff）、`review/`（五份审查报告）、`captures/`（官方抓包）。
@@ -65,6 +65,7 @@
 | 来源组合单元套件 | `analysis/client-combination-unit.mjs`，3^10 × 2^2 种来源组合 | 236196/236196 | 236196/236196 |
 | Go / 前端 | 核心 `internal/ccgateway`、engine、contracts（本机）；控制台 ccgateway 页面 368 项 | — | 全过 |
 | 传输层指纹（发布后补测） | `test/e2e/tls-fingerprint.sh`：官方 CLI 与定制 CLI 连到本机探针，比较 ClientHello 与请求头 | Bun 1.4.3 编译：JA3 与官方相同，JA4 不同（签名算法少 Ed25519、ECDSA P-521） | 同左；同一源码用 Bun 1.4.4 编译后与官方 2.1.310 完全相同。请求头名、大小写、顺序与官方一致 |
+| CLI v33（Bun 1.4.4 编译，插件 0.1.105） | 同一套：组装 76、来源 14、实时转发 10、官方回放、组件组合 216、策略矩阵 99；离线回归基线为 0.1.104 线上镜像（v32） | — | 全过；离线回归 71 场景 137 请求与 v32 **0 差异**（不需任何规则），`verify` 1595/1595，值保真 12/12；TLS：v33 的 JA4 `t13d1713h1_5b57614c22b0_7f527383e249` 与官方 2.1.310 相同（v32 为 `…_6a3d802a7139`）；`package-release.cjs` 拒绝 Bun 1.4.3 编出的 v32 ELF |
 | 生产（发布后） | 账号测试；35 号开完整日志 1 小时测一次再恢复跟随默认 | — | 21、35、36 Haiku 200（34 号上游 429 速率限制，与发布无关）；35 号日志 `upstream-request.json`：`/v1/messages?beta=true`、UA `claude-cli/2.1.310 (external, sdk-cli)`、计费头 `cc_version=2.1.310.e58`、无 `cc_project`、授权头 `[REDACTED]`，`response.json` 已组装 |
 
 ## 5. 发布
