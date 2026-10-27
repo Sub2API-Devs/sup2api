@@ -597,6 +597,18 @@ func TestSettingService_UpdateSettings_APIKeyACLTrustForwardedIPRefreshesConfig(
 	require.Equal(t, []string{"X-Cdn-Ip", "True-Client-Ip"}, cfg.ForwardedClientIPSettings().Headers)
 }
 
+func TestSettingService_UpdateSettings_TrustedProxyPolicyOverridesLegacyMode(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	cfg := &config.Config{Server: config.ServerConfig{TrustedProxiesConfigured: true}}
+	svc := NewSettingService(repo, cfg)
+	settings := &SystemSettings{APIKeyACLTrustForwardedIP: true}
+
+	require.NoError(t, svc.UpdateSettings(context.Background(), settings))
+	require.False(t, settings.APIKeyACLTrustForwardedIP)
+	require.Equal(t, "false", repo.updates[SettingKeyAPIKeyACLTrustForwardedIP])
+	require.False(t, cfg.ForwardedClientIPSettings().TrustForwardedIP)
+}
+
 func TestSettingService_UpdateSettings_RejectsInvalidForwardedClientIPHeadersWithoutRefreshing(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	cfg := &config.Config{}
@@ -696,10 +708,9 @@ func TestSettingService_LoadForwardedClientIPSettingsMigration(t *testing.T) {
 			wantMigrationMarkerSet: true,
 		},
 		{
-			name:                   "legacy false without proxy config migrates to compatibility",
+			name:                   "legacy false without proxy config stays secure",
 			values:                 map[string]string{SettingKeyAPIKeyACLTrustForwardedIP: "false"},
-			wantEnabled:            true,
-			wantForwardedIPUpdate:  "true",
+			wantEnabled:            false,
 			wantMigrationMarkerSet: true,
 		},
 		{
@@ -707,6 +718,14 @@ func TestSettingService_LoadForwardedClientIPSettingsMigration(t *testing.T) {
 			values:                 map[string]string{SettingKeyAPIKeyACLTrustForwardedIP: "false"},
 			trustedProxiesSet:      true,
 			wantEnabled:            false,
+			wantMigrationMarkerSet: true,
+		},
+		{
+			name:                   "stored compatibility mode cannot override explicit proxy config",
+			values:                 map[string]string{SettingKeyAPIKeyACLTrustForwardedIP: "true"},
+			trustedProxiesSet:      true,
+			wantEnabled:            false,
+			wantForwardedIPUpdate:  "false",
 			wantMigrationMarkerSet: true,
 		},
 		{
@@ -808,7 +827,7 @@ func TestSettingService_LoadForwardedClientIPSettingsWriteFailureUsesComputedMod
 		trustedProxiesSet bool
 		wantEnabled       bool
 	}{
-		{name: "compatibility migration remains effective", wantEnabled: true},
+		{name: "secure migration remains effective", wantEnabled: false},
 		{name: "explicit proxy policy remains secure", trustedProxiesSet: true, wantEnabled: false},
 	}
 

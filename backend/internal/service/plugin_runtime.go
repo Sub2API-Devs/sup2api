@@ -3,20 +3,20 @@ package service
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pluginsandbox"
 	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
 	hclog "github.com/hashicorp/go-hclog"
 	hcplugin "github.com/hashicorp/go-plugin"
@@ -33,25 +33,40 @@ type pluginRuntime struct {
 	draining     atomic.Bool
 	done         chan struct{}
 	doneOnce     sync.Once
+	processGroup int
 }
 
-func startPluginRuntime(ctx context.Context, installation *PluginInstallation, startTimeout time.Duration, socketDir string, hostServices pluginv1.HostServiceServer) (*pluginRuntime, error) {
+func startPluginRuntime(ctx context.Context, installation *PluginInstallation, startTimeout time.Duration, socketDir string, hostServices pluginv1.HostServiceServer, sandboxConfig config.PluginConfig) (*pluginRuntime, error) {
 	if installation == nil {
 		return nil, errors.New("插件安装记录为空")
 	}
-	checksum, err := hex.DecodeString(installation.BinarySHA256)
-	if err != nil || len(checksum) != sha256.Size {
-		return nil, errors.New("插件二进制哈希无效")
+	cmd, executableChecksum, err := pluginsandbox.Command(pluginsandbox.LaunchSpec{
+		Enabled:          sandboxConfig.SandboxEnabled,
+		BinaryPath:       installation.BinaryPath,
+		BinarySHA256:     installation.BinarySHA256,
+		WorkDir:          installation.InstallPath,
+		RunDir:           socketDir,
+		LandlockEnabled:  sandboxConfig.LandlockEnabled,
+		LandlockRequired: sandboxConfig.LandlockRequired,
+		SeccompEnabled:   sandboxConfig.SeccompEnabled,
+		MaxOpenFiles:     sandboxConfig.MaxOpenFiles,
+		Nice:             sandboxConfig.Nice,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("构造插件沙箱: %w", err)
 	}
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), installation.BinaryPath)
 	client := hcplugin.NewClient(&hcplugin.ClientConfig{
 		HandshakeConfig:  pluginv1.HandshakeConfig,
 		Plugins:          pluginv1.ClientPluginMap(),
 		Cmd:              cmd,
 		AllowedProtocols: []hcplugin.Protocol{hcplugin.ProtocolGRPC},
-		StartTimeout:     startTimeout,
+		// Keep reverse HostService RPCs on the already-established private
+		// Unix-socket connection. Without broker multiplexing go-plugin opens a
+		// loopback TCP listener that another process in the container could scan.
+		GRPCBrokerMultiplex: true,
+		StartTimeout:        startTimeout,
 		SecureConfig: &hcplugin.SecureConfig{
-			Checksum: checksum,
+			Checksum: executableChecksum,
 			Hash:     sha256.New(),
 		},
 		Logger:           hclog.NewNullLogger(),
@@ -60,19 +75,27 @@ func startPluginRuntime(ctx context.Context, installation *PluginInstallation, s
 		UnixSocketConfig: &hcplugin.UnixSocketConfig{TempDir: socketDir},
 		SkipHostEnv:      true,
 	})
+	killClient := func() {
+		processGroup := 0
+		if cmd.Process != nil {
+			processGroup = cmd.Process.Pid
+		}
+		client.Kill()
+		pluginsandbox.KillProcessGroup(processGroup)
+	}
 	rpcClient, err := client.Client()
 	if err != nil {
-		client.Kill()
+		killClient()
 		return nil, fmt.Errorf("启动插件进程: %w", err)
 	}
 	dispensed, err := rpcClient.Dispense(pluginv1.TransportPluginName)
 	if err != nil {
-		client.Kill()
+		killClient()
 		return nil, fmt.Errorf("获取插件传输能力: %w", err)
 	}
 	transportClient, ok := dispensed.(*pluginv1.TransportClient)
 	if !ok || transportClient.TransportPluginClient == nil {
-		client.Kill()
+		killClient()
 		return nil, errors.New("插件未实现传输 gRPC 客户端")
 	}
 	api := transportClient.TransportPluginClient
@@ -81,6 +104,9 @@ func startPluginRuntime(ctx context.Context, installation *PluginInstallation, s
 		client:       client,
 		api:          api,
 		done:         make(chan struct{}),
+	}
+	if cmd.Process != nil {
+		runtime.processGroup = cmd.Process.Pid
 	}
 	infoCtx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
@@ -268,6 +294,7 @@ func (r *pluginRuntime) drain(timeout time.Duration) {
 func (r *pluginRuntime) kill() {
 	if r != nil && r.client != nil {
 		r.client.Kill()
+		pluginsandbox.KillProcessGroup(r.processGroup)
 	}
 }
 

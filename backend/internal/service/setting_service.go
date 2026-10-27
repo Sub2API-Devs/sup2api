@@ -339,6 +339,12 @@ func (s *SettingService) LoadForwardedClientIPSettings(ctx context.Context) erro
 	}
 
 	updates := make(map[string]string)
+	// An explicit trusted-proxy allowlist is authoritative. It must not be
+	// bypassed by an old database value that enabled raw forwarded headers.
+	if s.cfg.Server.TrustedProxiesConfigured && enabled {
+		enabled = false
+		updates[SettingKeyAPIKeyACLTrustForwardedIP] = "false"
+	}
 	if _, hasStoredHeaders := values[SettingKeyForwardedClientIPHeaders]; !hasStoredHeaders {
 		headersJSON, marshalErr := json.Marshal(headers)
 		if marshalErr != nil {
@@ -350,12 +356,6 @@ func (s *SettingService) LoadForwardedClientIPSettings(ctx context.Context) erro
 	}
 	if values[settingKeyForwardedClientIPModeV2] != "true" {
 		updates[settingKeyForwardedClientIPModeV2] = "true"
-		// Before this migration, new installations persisted false by default.
-		// Restore compatibility only when no trusted-proxy policy was configured.
-		if headersErr == nil && hasStoredValue && !enabled && !s.cfg.Server.TrustedProxiesConfigured {
-			enabled = true
-			updates[SettingKeyAPIKeyACLTrustForwardedIP] = "true"
-		}
 	}
 	if len(updates) > 0 {
 		if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {

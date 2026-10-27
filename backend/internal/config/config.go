@@ -124,6 +124,12 @@ type PluginConfig struct {
 	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
 	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
 	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
+	SandboxEnabled       bool              `mapstructure:"sandbox_enabled"`
+	LandlockEnabled      bool              `mapstructure:"landlock_enabled"`
+	LandlockRequired     bool              `mapstructure:"landlock_required"`
+	SeccompEnabled       bool              `mapstructure:"seccomp_enabled"`
+	MaxOpenFiles         int               `mapstructure:"max_open_files"`
+	Nice                 int               `mapstructure:"nice"`
 }
 
 type LogConfig struct {
@@ -780,14 +786,15 @@ func (c *Config) ForwardedClientIPSettings() ForwardedClientIPSettings {
 	live := c.Security.forwardedClientIPSettingsLive
 	if live != nil {
 		if snapshot := live.Load(); snapshot != nil {
+			trustForwarded := snapshot.TrustForwardedIP && !c.Server.TrustedProxiesConfigured
 			return ForwardedClientIPSettings{
-				TrustForwardedIP: snapshot.TrustForwardedIP,
+				TrustForwardedIP: trustForwarded,
 				Headers:          cloneForwardedClientIPHeaders(snapshot.Headers),
 			}
 		}
 	}
 	return ForwardedClientIPSettings{
-		TrustForwardedIP: c.Security.TrustForwardedIPForAPIKeyACL,
+		TrustForwardedIP: c.Security.TrustForwardedIPForAPIKeyACL && !c.Server.TrustedProxiesConfigured,
 		Headers:          cloneForwardedClientIPHeaders(c.Security.ForwardedClientIPHeaders),
 	}
 }
@@ -807,6 +814,9 @@ func (c *Config) SetForwardedClientIPSettings(enabled bool, headers []string) {
 		return
 	}
 	headers = cloneForwardedClientIPHeaders(headers)
+	if c.Server.TrustedProxiesConfigured {
+		enabled = false
+	}
 	if c.Security.forwardedClientIPSettingsLive == nil {
 		c.Security.forwardedClientIPSettingsLive = &atomic.Pointer[ForwardedClientIPSettings]{}
 	}
@@ -2080,7 +2090,9 @@ func setDefaults() {
 	viper.SetDefault("security.csp.enabled", true)
 	viper.SetDefault("security.csp.policy", DefaultCSPPolicy)
 	viper.SetDefault("security.proxy_probe.insecure_skip_verify", false)
-	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", true)
+	// Forwarded headers are security-sensitive. By default they are accepted
+	// only through Gin's explicit server.trusted_proxies chain.
+	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", false)
 
 	// Security - disable direct fallback on proxy error
 	viper.SetDefault("security.proxy_fallback.allow_direct_on_error", false)
@@ -2315,6 +2327,12 @@ func setDefaults() {
 	viper.SetDefault("plugins.max_upload_bytes", int64(128*1024*1024))
 	viper.SetDefault("plugins.max_uncompressed_bytes", int64(256*1024*1024))
 	viper.SetDefault("plugins.start_timeout_seconds", 15)
+	viper.SetDefault("plugins.sandbox_enabled", true)
+	viper.SetDefault("plugins.landlock_enabled", true)
+	viper.SetDefault("plugins.landlock_required", true)
+	viper.SetDefault("plugins.seccomp_enabled", true)
+	viper.SetDefault("plugins.max_open_files", 1024)
+	viper.SetDefault("plugins.nice", 10)
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
@@ -2681,6 +2699,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Plugins.StartTimeoutSeconds < 1 || c.Plugins.StartTimeoutSeconds > 120 {
 		return fmt.Errorf("plugins.start_timeout_seconds must be between 1 and 120")
+	}
+	if c.Plugins.MaxOpenFiles < 64 || c.Plugins.MaxOpenFiles > 1_048_576 {
+		return fmt.Errorf("plugins.max_open_files must be between 64 and 1048576")
+	}
+	if c.Plugins.Nice < 0 || c.Plugins.Nice > 19 {
+		return fmt.Errorf("plugins.nice must be between 0 and 19")
+	}
+	if c.Plugins.LandlockRequired && (!c.Plugins.SandboxEnabled || !c.Plugins.LandlockEnabled) {
+		return fmt.Errorf("plugins.landlock_required requires sandbox_enabled and landlock_enabled")
 	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")

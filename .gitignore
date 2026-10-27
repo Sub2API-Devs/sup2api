@@ -134,7 +134,8 @@ CLAUDE.md
 .code-review-state
 #openspec/
 code-reviews/
-AGENTS.md
+# Allow agent instructions in the repository root and subdirectories.
+!AGENTS.md
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/

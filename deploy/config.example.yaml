@@ -1063,6 +1063,20 @@ plugins:
   max_upload_bytes: 134217728
   max_uncompressed_bytes: 268435456
   start_timeout_seconds: 15
+  # Linux runs plugins through the Sub2API sandbox wrapper. The wrapper verifies
+  # the plugin hash again, strips the core environment, disables privilege gain
+  # and core dumps, applies resource limits, and installs seccomp/Landlock.
+  # Linux 使用沙箱包装器启动插件：二次校验哈希、清理核心环境、禁止提权和 core dump，
+  # 并应用资源限制、seccomp 与 Landlock 文件系统白名单。
+  sandbox_enabled: true
+  landlock_enabled: true
+  # Set true to refuse plugin startup when the host kernel/container profile
+  # cannot enforce Landlock. Keep false only for compatibility with old kernels.
+  # 设为 true 后，内核或容器无法启用 Landlock 时插件将拒绝启动。
+  landlock_required: true
+  seccomp_enabled: true
+  max_open_files: 1024
+  nice: 10
 
 # =============================================================================
 # Pricing Data Source (Optional)
