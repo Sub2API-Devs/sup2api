@@ -12,6 +12,22 @@
 
 下文路径：`artifacts/` 是仓库根目录下不进 Git 的工作区；`cli-mods/` 指 `next/plugins/ccgateway/companions/cli-mods/`。
 
+## 硬性规则：编译用的 Bun 必须与官方一致
+
+**定制 CLI 必须用官方 ELF 内嵌的那个 Bun 版本编译。** Bun 的 TLS 栈就是上游看到的传输层指纹：2026-10-27 实测，Bun 1.4.3 编出的 CLI 与官方 JA3 相同、JA4 不同（签名算法少 Ed25519、ECDSA P-521），同一份补丁用官方内嵌的 Bun 1.4.4 编译后 ClientHello 与官方完全相同（v33）。所以 Bun 版本不是“随手选一个能编的”，而是由官方 ELF 决定，并且**不需要人记得去核对**——下面每一步都会自动检查，版本不一致就直接失败：
+
+| 步骤 | 自动检查 | 不一致时 |
+|---|---|---|
+| 还原 `tools/upgrade/restore-bun.cjs` | 从官方 ELF 读出 `Bun v<版本> (<修订>)`，写进 `reconstruction.json` 的 `bunVersion`/`bunRevision` | ELF 里找不到 Bun 版本即失败 |
+| 补丁 `patch-cli.cjs` | profile 的 `bunVersion` 必须等于 `reconstruction.json` 的 `bunVersion`（还原树也必须是 profile 的官方 ELF）；写进 `ccgateway-patch.json` | 报错并给出应填的版本与 `oven/bun:<版本>` |
+| 编译 `build.sh` | `bun --version` 必须等于 `ccgateway-patch.json` 的 `bunVersion` | 拒绝编译 |
+| 打包 `package-release.cjs` | 补丁清单与 profile 的 `bunVersion` 一致；ELF 里必须是 `Bun v<bunVersion> (` | 拒绝打包 |
+| Worker 镜像构建 `worker/Dockerfile` | release 里的 ELF 必须是 profile `bunVersion` 编出的 | 镜像构建失败 |
+| 单测 `npm test`（`test/bun-version.test.mjs`） | 每个 profile 都有 `bunVersion`；有还原树时必须等于官方内嵌版本；上面四道关卡都还在 | 测试失败 |
+| 发布前 `test/e2e/tls-fingerprint.sh` | 官方 CLI 与定制 CLI 的 ClientHello 逐项比较（JA3/JA4、扩展、签名算法等） | 结果写进迁移记录，必须是 identical |
+
+换 Claude Code 版本时唯一要手工做的是：按补丁器的报错把新 profile 的 `bunVersion` 填成官方内嵌版本，用 `oven/bun:<该版本>` 镜像编译（ovh 上先 `docker pull oven/bun:<版本>`）。官方修订号（如 2.1.310 的 `2c2ae6246`）与 Docker 镜像的修订号（`38afee6c8`）不同不影响：只核对版本号，TLS 指纹已实测一致。
+
 ## 1. 选择版本，下载并校验
 
 1. **查当前版本号**：发布渠道 `https://downloads.claude.ai/claude-code-releases/latest` 与 `.../stable` 各返回一个版本号文本（Worker 的 `/admin/cli` `check` 动作读的就是它们，`engine/cli_management.go`）。本机访问要走 http 代理 `127.0.0.1:7890`（`HTTPS_PROXY=http://127.0.0.1:7890`）。
@@ -30,6 +46,7 @@ node cli-mods/tools/upgrade/restore-bun.cjs \
 ```
 
 - 第三个参数是版本：还原器核对入口 `cli.js` 里的 `VERSION:"<版本>"`，并写进输出的 `package.json`，补丁器靠这个字段选 profile。
+- 还原器同时从 ELF 读出内嵌的 Bun 版本写进 `reconstruction.json`（`bunVersion`、`bunRevision`），输出里也会打印；这就是新 profile `bunVersion` 应填的值（见上面的硬性规则）。
 - 输出目录必须不存在。
 - 目录名固定为 `artifacts/claude-<版本>/linux-restored`：cli-mods 的原生对账测试按这个路径找还原源码（`test/artifacts.mjs`）。
 
@@ -164,7 +181,7 @@ equiv 的配对靠规范形式与传播，可能把形状相同而语义不同�
 
 ## 4. 移植补丁器
 
-1. **profile**：复制 `profiles/linux-x64-<旧>.json` 为 `linux-x64-<新>.json`，逐项填：`version`、`binarySHA256`（官方 ELF）、`extension`（见下）、`capabilities`、`supportModules`、`core`（新版的主查询模块）、`locate`、`natives`、`coreScope`、`coreImports`、`patchOnly`、`modules`（每个哈希绑定模块的 SHA-256，按还原后的文件文本计算）。
+1. **profile**：复制 `profiles/linux-x64-<旧>.json` 为 `linux-x64-<新>.json`，逐项填：`version`、`binarySHA256`（官方 ELF）、`extension`（见下）、`bunVersion`（**官方 ELF 内嵌的 Bun 版本**，取还原输出的 `bunVersion`；填错补丁器直接报错）、`capabilities`、`supportModules`、`core`（新版的主查询模块）、`locate`、`natives`、`coreScope`、`coreImports`、`patchOnly`、`modules`（每个哈希绑定模块的 SHA-256，按还原后的文件文本计算）。
 2. **锚点**：复制 `patches/<旧>.cjs` 为 `patches/<新>.cjs`，每处 `edit`/`once` 按第 3 节的结论重写。锚点文件拿到 `{files, edit, once, surround, nodes, tree, core, profile, entryStub}`；`edit` 要求函数在该模块里唯一、改后文本有变化，`once` 要求旧文本在函数里恰好出现一次——锚点失效时补丁器直接报错，不会悄悄跳过。入口桩用 `entryStub(<参数名>, <设置名>)`，两个名字取自新版入口函数。
 3. **分派**：不用改 `patch-cli.cjs`。它读还原目录 `package.json` 的版本，找 `profiles/linux-x64-<版本>.json` 与 `patches/<版本>.cjs`，缺一个就报 `Unsupported Claude Code baseline`。
 4. **环境代码**：`native-environment.inc.js` 是各版共用的，只写 `native_<名字>`；补丁器按 profile 把它们换成核心绑定或导入。profile 没映射的名字、映射了却不是核心绑定的名字、映射了环境代码却没用（且不在 `patchOnly`）的名字都会让补丁失败。新版若要换读取方式而不只是换名，才改这个文件（会影响所有版本，旧版 profile 也要跟着验证）。

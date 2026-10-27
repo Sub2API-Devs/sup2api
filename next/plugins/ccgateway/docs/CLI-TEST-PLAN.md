@@ -341,6 +341,9 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 
 ### 4.4 换版本的验证关口
 
+**Bun 版本关口（自动）**：编译用的 Bun 必须等于官方 ELF 内嵌版本，还原、补丁、编译、打包、镜像构建和 `test/bun-version.test.mjs` 都会检查（CLI-UPGRADE-RUNBOOK“硬性规则”）；发布前再用 `test/e2e/tls-fingerprint.sh` 确认 ClientHello 与官方 identical。
+
+
 操作步骤见 RUNBOOK；每一步对应的验证：
 
 1. 新官方 ELF 核对官方 manifest 校验和；`restore-bun.cjs` 还原，`reconstruction.json` 检查通过（4.1 ①）。

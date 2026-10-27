@@ -27,6 +27,14 @@ const profileFile = path.join(__dirname, 'profiles', `linux-x64-${version}.json`
 if (!fs.existsSync(profileFile) || !fs.existsSync(anchorFile)) throw Error(`Unsupported Claude Code baseline: ${version}`);
 const profile = JSON.parse(fs.readFileSync(profileFile, 'utf8')), expected = profile.modules;
 if (profile.version !== version) throw Error(`Profile ${profileFile} is not ${version}`);
+// The patched CLI is compiled by the Bun the official ELF embeds (its TLS
+// stack is what upstream sees): the restored tree records that version
+// (tools/upgrade/restore-bun.cjs) and the profile's bunVersion must be it.
+// build.sh and package-release.cjs check the compiler against the same value.
+const reconstruction = JSON.parse(fs.readFileSync(path.join(source, 'reconstruction.json'), 'utf8'));
+if (reconstruction.binarySha256 !== profile.binarySHA256) throw Error(`The restored tree is not the official ELF ${profile.binarySHA256}`);
+if (!reconstruction.bunVersion) throw Error('The restored tree records no embedded Bun version: restore it again with tools/upgrade/restore-bun.cjs');
+if (profile.bunVersion !== reconstruction.bunVersion) throw Error(`Profile bunVersion ${profile.bunVersion} is not the Bun ${reconstruction.bunVersion} the official ${version} ELF embeds: set bunVersion to ${reconstruction.bunVersion} and compile with oven/bun:${reconstruction.bunVersion}`);
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const files = new Map();
 for (const [file, sha] of Object.entries(expected)) {
@@ -297,7 +305,7 @@ if (!modelEntry) throw Error('Expected the request transport support module');
 modelEntry.text = fillMessagesPath(modelEntry.text, betaMessagesPath());
 checkImports();
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/' + version, extension: profile.extension, capabilities, files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/' + version, extension: profile.extension, bunVersion: profile.bunVersion, capabilities, files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

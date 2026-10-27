@@ -69,6 +69,10 @@ for(const m of modules){
 }
 if(!fs.readFileSync(path.join(out,'cli.js'),'utf8').includes('VERSION:"'+version+'"'))throw Error('The entry does not name version '+version);
 fs.writeFileSync(path.join(out,'package.json'),JSON.stringify({name:'claude-code-local-reconstruction',version,private:true,type:'module'},null,2));
-fs.writeFileSync(path.join(out,'reconstruction.json'),JSON.stringify({input,binarySha256:crypto.createHash('sha256').update(b).digest('hex'),entry:modules[b.readUInt32LE(tail+16)].file,moduleCount:modules.length,jsCount:report.length,unresolved,modules:report},null,2));
-console.log(JSON.stringify({out,modules:modules.length,js:report.length,unresolved}));
+// The Bun the official ELF embeds: the patched CLI must be compiled by the
+// same version (profile bunVersion; patch-cli.cjs refuses a mismatch).
+const bun=/Bun v(\d+\.\d+\.\d+) \(([0-9a-f]+)\)/.exec(b.toString('latin1'));
+if(!bun)throw Error('The ELF names no Bun version');
+fs.writeFileSync(path.join(out,'reconstruction.json'),JSON.stringify({input,bunVersion:bun[1],bunRevision:bun[2],binarySha256:crypto.createHash('sha256').update(b).digest('hex'),entry:modules[b.readUInt32LE(tail+16)].file,moduleCount:modules.length,jsCount:report.length,unresolved,modules:report},null,2));
+console.log(JSON.stringify({out,modules:modules.length,js:report.length,unresolved,bunVersion:bun[1],bunRevision:bun[2]}));
 

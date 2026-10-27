@@ -27,13 +27,17 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 | 模式、策略头、能力门、错误来源 | [REQUEST-MODES](../../docs/REQUEST-MODES.md) |
 | 上游请求记录（`--capture-request`） | [REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN](../../../../docs/ccgateway-feature-support/REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md) |
 
+## 硬性规则：Bun 版本与官方一致
+
+编译用的 Bun 必须等于官方 ELF 内嵌的版本（profile `bunVersion`，现为 1.4.4），否则上游看到的 TLS 指纹与官方 Claude Code 不同。这条规则由工具链自动保证，不靠人记：还原器从官方 ELF 读出版本写进 `reconstruction.json`，`patch-cli.cjs` 要求 profile 的 `bunVersion` 与之相等，`build.sh` 要求编译器版本相等，`package-release.cjs` 与 Worker 镜像构建要求 ELF 是该版本编出的，`npm test` 的 `test/bun-version.test.mjs` 也会检查。任何一步不一致都直接失败并给出应改成的版本。详见 [CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md)“硬性规则”。
+
 ## 版本无关的结构（2026-10-27 起）
 
 补丁分成每版都一样的部分与每版各一份的部分，换 Claude Code 版本时只新增后者：
 
 | 每版一份 | 内容 |
 |---|---|
-| `profiles/linux-x64-<版本>.json` | 官方 ELF 的 SHA-256；补丁标签 `extension`；`capabilities`；`supportModules`；`core`（主查询所在模块）；`locate`（AST 定位：请求构建器与其 beta 列表变量、system 记录工厂、追加提示词拼接函数、beta Messages 端点所在模块）；`natives`（支持模块用到的原生绑定，分组 `entry`/`command`/`natives`/`build`，逻辑名 → `文件:原生名`）；`coreScope`（环境代码用到的核心作用域名，逻辑名 → 原生名）；`coreImports`（补丁新加到核心的导入）；`patchOnly`；`modules`（每个哈希绑定模块的 SHA-256） |
+| `profiles/linux-x64-<版本>.json` | 官方 ELF 的 SHA-256；补丁标签 `extension`；`bunVersion`（官方 ELF 内嵌的 Bun 版本，编译必须用它）；`capabilities`；`supportModules`；`core`（主查询所在模块）；`locate`（AST 定位：请求构建器与其 beta 列表变量、system 记录工厂、追加提示词拼接函数、beta Messages 端点所在模块）；`natives`（支持模块用到的原生绑定，分组 `entry`/`command`/`natives`/`build`，逻辑名 → `文件:原生名`）；`coreScope`（环境代码用到的核心作用域名，逻辑名 → 原生名）；`coreImports`（补丁新加到核心的导入）；`patchOnly`；`modules`（每个哈希绑定模块的 SHA-256） |
 | `patches/<版本>.cjs` | 锚点：在哈希绑定模块的唯一函数里，把恰好出现一次的文本换掉（`edit` + `once`），以及给模块加导入（`surround`） |
 | `test/native/<版本>/` | 该版的原生对账测试（在还原源码上执行原生函数或读原生 AST） |
 | `test/fixtures/*-<版本>.json` | 该版的原生夹具与官方抓包 |
@@ -77,7 +81,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
    ```
 
    复用已有 Babel 时可设 `CCG_BABEL_PACKAGE` 为该安装的 `package.json` 绝对路径。
-4. **编译**（用 profile `bunVersion` 指定的 Bun，Linux x64/glibc；ovh 上用 `oven/bun:<bunVersion>` 容器，Windows 传过去的副本先去 CR）：`sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`。两个入口（`cli.js` 与 hooks worker）都必须给。
+4. **编译**（**必须**用 profile `bunVersion` 指定的 Bun，即官方内嵌版本，`build.sh` 会拒绝其他版本；Linux x64/glibc；ovh 上用 `oven/bun:<bunVersion>` 容器，Windows 传过去的副本先去 CR）：`sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`。两个入口（`cli.js` 与 hooks worker）都必须给。
 5. **打包**：`node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release`（脚本旁要有 `profiles/`）。产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`。
 6. **放进 Worker 构建上下文**：用新目录替换 `cli-mods/release/`（不进 Git）。`companions/worker/Dockerfile` 按 `ARG CLAUDE_VERSION` 安装到 `/opt/ccgateway/cli/` 并核对 SHA 与补丁标签；控制器创建或配对更新账号容器时再按 manifest 校验，Worker 启动时校验固定版本、补丁标签与哈希。
 7. **测试**：`npm test`（默认最新 profile 的版本；`CCG_CLI_VERSION=<版本>` 指定）。原生对账测试在 `artifacts/claude-<版本>/linux-restored` 存在时必须真跑，缺失时跳过并打印 `CCG_NATIVE_TEST_SKIPPED`，`CCG_REQUIRE_ARTIFACTS=1` 时改为失败。原生夹具变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成并逐项审查。离线端到端回归、组装对账等在 ovh 一次性容器里跑，见 [CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 与 `test/e2e/README.md`。

@@ -33,9 +33,10 @@ RUN test -f /opt/ccgateway/cli/${CLAUDE_VERSION}/claude \
     && chmod 755 /opt/ccgateway/cli/${CLAUDE_VERSION}/claude \
     && ln -s /opt/ccgateway/cli/${CLAUDE_VERSION}/claude /usr/local/bin/claude
 # The release directory is not in Git: refuse a CLI whose bytes differ from its
-# manifest, or that a different patch than the current source produced.
+# manifest, that a different patch than the current source produced, or that
+# was not compiled by the Bun the official ELF embeds (profile bunVersion).
 COPY cli-mods/profiles/ /tmp/cli-profiles/
-RUN node -e 'const fs=require("fs"),c=require("crypto"),v=process.argv[1],root="/opt/ccgateway/cli";const item=JSON.parse(fs.readFileSync(root+"/manifest.json","utf8")).versions?.[v];const profile=JSON.parse(fs.readFileSync("/tmp/cli-profiles/linux-x64-"+v+".json","utf8"));if(!item||c.createHash("sha256").update(fs.readFileSync(root+"/"+item.path)).digest("hex")!==item.sha256)throw Error("CLI "+v+" does not match its release manifest");if(item.patch!==profile.extension)throw Error("CLI "+v+" release is "+item.patch+", the source patch is "+profile.extension+": rebuild it with patch-cli and package-release")' "${CLAUDE_VERSION}" \
+RUN node -e 'const fs=require("fs"),c=require("crypto"),v=process.argv[1],root="/opt/ccgateway/cli";const item=JSON.parse(fs.readFileSync(root+"/manifest.json","utf8")).versions?.[v];const profile=JSON.parse(fs.readFileSync("/tmp/cli-profiles/linux-x64-"+v+".json","utf8"));if(!item||c.createHash("sha256").update(fs.readFileSync(root+"/"+item.path)).digest("hex")!==item.sha256)throw Error("CLI "+v+" does not match its release manifest");if(item.patch!==profile.extension)throw Error("CLI "+v+" release is "+item.patch+", the source patch is "+profile.extension+": rebuild it with patch-cli and package-release");if(!profile.bunVersion||!fs.readFileSync(root+"/"+item.path).includes("Bun v"+profile.bunVersion+" ("))throw Error("CLI "+v+" was not compiled by Bun "+profile.bunVersion+", the version the official ELF embeds (profile bunVersion)")' "${CLAUDE_VERSION}" \
     && rm -rf /tmp/cli-profiles
 COPY contracts/environment/locales.json contracts/environment/install-locales.cjs /tmp/container-locales/
 RUN node /tmp/container-locales/install-locales.cjs
