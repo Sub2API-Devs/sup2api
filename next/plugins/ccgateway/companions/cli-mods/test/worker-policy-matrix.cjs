@@ -362,20 +362,26 @@ async function runSupplemental() {
   assert.equal(captured.length, 0, 'health and native capability probes must not issue model requests');
   for (const item of matrix.cases) {
     assert.equal(item.worker_policy.relay_mode, item.expected_mode);
+    // The level decides which layers a request gets (CC-INJECTION-LEVELS-DESIGN):
+    // micro (and none, direct) send no environment sources, so a resolved
+    // environment source takes effect only from low up and the client's
+    // value stays below it.
+    const environmentField = item.field?.startsWith('build_attachment_sources.');
+    const expectedSource = environmentField && ['none', 'micro'].includes(item.expected_level) ? 'client' : item.expected_source;
     if (item.expected_mode === 'direct') {
       // Level none sends the billing entrypoint and sources, never attachment
       // sources (core feature_policy.go workerPolicy); direct applies them.
       assert(!item.worker_policy.build_attachment_sources, 'direct wire policy must not carry attachment sources');
     } else if (item.field?.includes('.')) {
       const [group, field] = item.field.split('.');
-      assert.equal(item.worker_policy[group]?.[field] ?? 'client', item.expected_source, 'wire policy differs from core matrix expectation');
+      assert.equal(item.worker_policy[group]?.[field] ?? 'client', expectedSource, 'wire policy differs from core matrix expectation');
     } else if (item.expected_sources) {
       for (const [field, source] of Object.entries(item.expected_sources)) {
         assert.equal(item.worker_policy[item.field]?.[field] ?? 'client', source);
       }
     }
     await runCase(item.name, structuredClone(baseBody), item.worker_policy, {
-      source: 'actual-Go-ResolveFeaturePolicy', field: item.field, expected_source: item.expected_source,
+      source: 'actual-Go-ResolveFeaturePolicy', field: item.field, expected_source: expectedSource, resolved_source: item.expected_source, expected_level: item.expected_level,
       expected_sources: item.expected_sources, expected_origin: item.expected_origin,
     });
   }

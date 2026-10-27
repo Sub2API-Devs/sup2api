@@ -517,7 +517,7 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 
 ## 10. 仍缺的测试
 
-1. **L4–L7 已按两个版本重跑**（2026-10-27，ovh 一次性 `--network none` 容器，SHA 由调用方固定）：组装对账 76/76、客户端来源 14/14、官方客户端实时转发 10/10、官方抓包回放 verified（14 项）、组件组合 216/216，2.1.304（v31）与 2.1.310（v32）结果相同；命令见 `test/assembly-replay.README.md`。Worker 策略矩阵（L7 的 `worker-policy-matrix.cjs`）依赖核心生成的 `config-matrix-policies.json`，这次没有重新生成、没有跑。
+1. **L4–L7 已按两个版本重跑**（2026-10-27，ovh 一次性 `--network none` 容器，SHA 由调用方固定）：组装对账 76/76、客户端来源 14/14、官方客户端实时转发 10/10、官方抓包回放 verified（14 项）、组件组合 216/216、Worker 策略矩阵 99/99（核心重新导出的 67 组 + 32 组补充），2.1.304（v31）与 2.1.310（v32）结果相同；命令见 `test/assembly-replay.README.md` 与 `test/worker-policy-matrix.README.md`。矩阵原先的环境字段用例在“微”等级下解析（等级引入前写的），核心按等级不下发环境来源，已改为在“低”等级解析，脚本对微/none 期望客户端原值。
 2. **夹具**：`native-environment-2.1.310.json` 已由原生渲染器执行生成（`test/native/<版本>/environment-template.test.mjs`，两版三段文本逐字相同）。仓库里的 `official-request-2.1.304.json` 是 2.1.304 第一版时期的抓包（比 `capture-official.sh` 少 `diagnostics` 等字段），版本无关测试与 2.1.304 组装清单仍读它；跨版本比较官方请求时用同条件重抓的那份（`artifacts/claude-2.1.310/captures/official-request-2.1.304-recapture.json`）。
 3. **`official-diff.cjs`**：两边组件数不同时的 `TypeError` 已修（缺的一侧记为 `(absent)`）。
 4. **e2e 场景缺口**：假上游支持 `bg`（后台子代理）、`fork`，`run.sh` 没有场景；没有 WebSearch/服务端工具、图片与文档、thinking 签名回传、`tool_choice`、`count_tokens`（应 404）、超时与中断、上游 5xx/429、超大正文（32 MiB）、并发槽满（429）的端到端场景；`all` 不含 `values`/`conc`/`classify`，容易漏跑。e2e 各变量的缺省值仍是 2.1.304 时期的，跑 2.1.310 要显式设 `CC_VERSION`/`CLIENT_CC_VERSION`/`OFFICIAL_CLI`。

@@ -300,6 +300,11 @@ func representativeFeatureCases() []matrixRepresentative {
 	for _, field := range matrixFields() {
 		for _, source := range field.sources {
 			p := defaultRequestPolicy()
+			// An environment source is applied from the low level up (levels
+			// design; micro sends none): these cases run at low.
+			if strings.HasPrefix(field.path, "build_attachment_sources.") {
+				p.Level = features.LevelLow
+			}
 			cases = append(cases, matrixRepresentative{
 				Name: strings.ReplaceAll(field.path, ".", "-") + "-" + source, Field: field.path,
 				ExpectedSource: source, ExpectedOrigin: "account", ExpectedMode: "build", GroupID: 7,
@@ -326,6 +331,7 @@ func representativeFeatureCases() []matrixRepresentative {
 		for _, allow := range []bool{false, true} {
 			for _, mode := range []string{"follow", "custom"} {
 				p := matrixGlobal(field, "client")
+				p.Level = features.LevelLow
 				want, origin := "client", "global"
 				if enabled {
 					want, origin = "worker", "group"
@@ -343,6 +349,7 @@ func representativeFeatureCases() []matrixRepresentative {
 	}
 	for _, origin := range []string{"global", "group", "account"} {
 		p := matrixGlobal(field, "worker")
+		p.Level = features.LevelLow
 		cfg := Config{RequestPolicy: &p, CCFeatureGroups: map[string]GroupFeaturePolicy{"7": {Enabled: true, AllowAccountOverride: true}}}
 		ap := AccountFeaturePolicy{Mode: "custom"}
 		if origin == "group" {
@@ -357,6 +364,7 @@ func representativeFeatureCases() []matrixRepresentative {
 	}
 	for _, groupID := range []int64{0, 999} {
 		p := matrixGlobal(field, "client")
+		p.Level = features.LevelLow
 		want, origin := "client", "global"
 		if groupID > 0 {
 			want, origin = "erase", "account"
@@ -461,7 +469,7 @@ func TestFeatureConfigurationRepresentativeExport(t *testing.T) {
 	require.Len(t, evidence, 67)
 	if output := os.Getenv("CCG_POLICY_MATRIX_OUTPUT"); output != "" {
 		require.True(t, filepath.IsAbs(output), "matrix output must be an explicit absolute artifact path")
-		data, err := json.MarshalIndent(map[string]any{"schema_version": 1, "cli_version": "2.1.304", "cases": evidence}, "", "  ")
+		data, err := json.MarshalIndent(map[string]any{"schema_version": 1, "cli_version": PinnedCLIVersion, "cases": evidence}, "", "  ")
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(output, append(data, '\n'), 0600))
 	}

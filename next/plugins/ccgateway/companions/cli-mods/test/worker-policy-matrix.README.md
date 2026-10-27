@@ -24,8 +24,8 @@
 | `PROBE_POLICIES` | Go 核心生成的矩阵 JSON 路径 |
 | `PROBE_REPORT` | 可选报告文件路径；完整报告也输出到 stdout |
 
-`fixtures/native-environment-<版本>.json` 是原生环境渲染器在固定输入下的完整模板，目前只有
-2.1.304；其他版本缺它时脚本直接失败，不用别的版本代替。
+`fixtures/native-environment-<版本>.json` 是原生环境渲染器在固定输入下的完整模板（由
+`test/native/<版本>/environment-template.test.mjs` 执行原生渲染器生成）；缺它时脚本直接失败，不用别的版本代替。
 
 `config-matrix-policies.json` 的 `cases` 条目包含 `name`、`field`、`expected_mode`、
 `expected_source`（或计费组合的 `expected_sources`）及完整 `worker_policy`。脚本直接使用该
@@ -51,3 +51,20 @@ scratchpad；对应服务端来源应删除客户端可选字段，不能保留�
 补充矩阵包含历史完整块与七类更新、工具结果不扫描、缺块/缺字段、CRLF、自定义 system 字符串、
 代码围栏、原先为空的 reminder 和计费歧义。报告区分内容保真与 CLI 既有的 thinking 等生成参数
 规范化，不把后者误报成“整个 build 正文只变化目标字段”。
+
+## 生成策略矩阵
+
+矩阵由核心测试导出（67 组，`cli_version` 为核心的 `PinnedCLIVersion`）：
+
+```sh
+cd next/server
+CCG_POLICY_MATRIX_OUTPUT=/abs/config-matrix-policies.json go test -count=1 -run TestFeatureConfigurationRepresentativeExport ./internal/ccgateway/
+```
+
+环境字段的单字段、门控、来源层与缺分组用例在“低”等级下解析（等级决定发哪些层：微与 none
+不发环境来源，CC-INJECTION-LEVELS-DESIGN）；`level-*` 用例按各自等级，脚本对微/none 的环境字段
+期望客户端原值（报告里 `expected_source` 为实际生效值，`resolved_source` 为核心解析值）。
+验证别的 CLI 版本时，把矩阵里的 `"<版本>"` 换成那个版本即可（只有 `cli_version` 随版本变）。
+
+2026-10-27：2.1.310（v32 `7fa09728…`）与 2.1.304（v31 `b7a1df0e…`）各 99/99（67 组核心策略 + 32 组补充），
+上游 98 次（重复计费头且选 worker 的一项按设计 400、不发上游）；Worker 为 0.1.104 镜像的 `8de364c0…`。
