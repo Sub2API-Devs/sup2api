@@ -25,9 +25,11 @@ func PluginBlobs(store *Store, node, root string, client *http.Client, maxBytes 
 			if err != nil {
 				return nil, err
 			}
-			refs := make([]pluginblob.NodeRef, len(nodes))
-			for i, n := range nodes {
-				refs[i] = pluginblob.NodeRef{ID: n.ID, PeerURL: n.PeerURL}
+			refs := make([]pluginblob.NodeRef, 0, len(nodes))
+			for _, n := range nodes {
+				if n.ID != node { // this node lacks the package: that is why it asks
+					refs = append(refs, pluginblob.NodeRef{ID: n.ID, PeerURL: n.PeerURL})
+				}
 			}
 			return refs, nil
 		},

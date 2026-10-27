@@ -141,7 +141,8 @@ type Service struct {
 	// Primary reports whether this node is the primary and the primary's
 	// HTTPS peer origin.
 	Primary func(context.Context) (self bool, peerURL string, err error)
-	// NodesWithPackage returns enabled nodes that hold the given package digest.
+	// NodesWithPackage returns the other enabled nodes that may hold the
+	// package digest; each is asked in turn and one without it answers 404.
 	NodesWithPackage func(context.Context, string) ([]NodeRef, error)
 	// Client is the authenticated node client; it only reaches the primary.
 	Client *http.Client

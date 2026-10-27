@@ -192,15 +192,17 @@ func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
 	return out, s.RefreshTelemetry(ctx, out)
 }
 
-// NodesWithPackage returns enabled nodes that hold the given plugin package.
-func (s *Store) NodesWithPackage(ctx context.Context, sum string) ([]Node, error) {
+// NodesWithPackage returns the enabled nodes that may hold the given plugin
+// package, most recently seen first. Which node holds which package is not
+// recorded in PG, so these are all enabled nodes: the caller asks each one,
+// and a node without the package answers 404 (pluginblob.Service.fetch).
+func (s *Store) NodesWithPackage(ctx context.Context, _ string) ([]Node, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT n.node_id, n.peer_url, n.shell_boot_id, n.core_boot_id, n.ready, n.last_seen, n.enabled
 		FROM updater.nodes n
-		JOIN updater.node_plugin_packages p ON n.cluster_id = p.cluster_id AND n.node_id = p.node_id
-		WHERE n.cluster_id = $1 AND p.digest = $2 AND n.enabled = true
+		WHERE n.cluster_id = $1 AND n.enabled = true
 		ORDER BY n.last_seen DESC
-	`, s.Cluster, sum)
+	`, s.Cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -1167,7 +1169,7 @@ func (s *Store) SetPrimary(ctx context.Context, node string) error {
 			if active {
 				return errors.New("cannot change primary while an upgrade is active")
 			}
-			baseline, _, _, err := s.ClusterState(ctx)
+			_, baseline, _, err := s.ClusterState(ctx)
 			if err != nil {
 				return err
 			}
@@ -1185,38 +1187,10 @@ func (s *Store) SetPrimary(ctx context.Context, node string) error {
 			if digest != baseline {
 				return fmt.Errorf("node %q is not on baseline %s", node, baseline)
 			}
-			// Verify the node has baseline artifacts available
-			var hasArtifacts bool
-			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_artifacts WHERE cluster_id=$1 AND node_id=$2 AND release_digest=$3)`, s.Cluster, node, baseline).Scan(&hasArtifacts); err != nil {
-				return err
-			}
-			if !hasArtifacts {
-				return fmt.Errorf("node %q lacks baseline artifacts", node)
-			}
-			// Check plugin packages presence
-			rows, err := tx.Query(ctx, `SELECT DISTINCT lower(package_sha256) FROM plugin_versions WHERE is_enabled`)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-			required := []string{}
-			for rows.Next() {
-				var sum string
-				if err = rows.Scan(&sum); err != nil {
-					return err
-				}
-				required = append(required, sum)
-			}
-			rows.Close()
-			for _, sum := range required {
-				var hasPackage bool
-				if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_plugin_packages WHERE cluster_id=$1 AND node_id=$2 AND digest=$3)`, s.Cluster, node, sum).Scan(&hasPackage); err != nil {
-					return err
-				}
-				if !hasPackage {
-					return fmt.Errorf("node %q lacks plugin package %s", node, sum)
-				}
-			}
+			// The node runs the baseline (release_digest above), so it holds that
+			// release. Which node holds which plugin package is not recorded in
+			// PG: a package the new primary lacks is fetched on demand from the
+			// other enabled nodes, the old primary among them (NodesWithPackage).
 			_, err = tx.Exec(ctx, `UPDATE updater.clusters SET primary_node=$1 WHERE cluster_id=$2`, node, s.Cluster)
 			return err
 		}); err != nil {
@@ -1256,14 +1230,9 @@ func (s *Store) RemoveNode(ctx context.Context, node string) error {
 			if node == primary {
 				return fmt.Errorf("node %q is the primary; designate a new primary first", node)
 			}
-			// Delete node and related records; audit events are preserved
+			// Delete the node and its admission. Plan steps, stop
+			// confirmations and events stay as the audit record.
 			if _, err = tx.Exec(ctx, `DELETE FROM updater.node_admissions WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
-				return err
-			}
-			if _, err = tx.Exec(ctx, `DELETE FROM updater.node_artifacts WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
-				return err
-			}
-			if _, err = tx.Exec(ctx, `DELETE FROM updater.node_plugin_packages WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
 				return err
 			}
 			_, err = tx.Exec(ctx, `DELETE FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node)
