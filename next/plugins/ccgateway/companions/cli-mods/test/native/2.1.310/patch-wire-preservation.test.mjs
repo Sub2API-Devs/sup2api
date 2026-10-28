@@ -237,10 +237,9 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  // The 2.1.310 profile names its patch ccgateway-v34-management (v33 was the
-  // same source built by Bun 1.4.4 before the management command; 2.1.304:
-  // ccgateway-v35-management).
-  assert.equal(patchManifest.extension, 'ccgateway-v34-management');
+  // The 2.1.310 profile names its patch ccgateway-v36-content-guard (v34 added
+  // the management command; 2.1.304: ccgateway-v37-content-guard).
+  assert.equal(patchManifest.extension, 'ccgateway-v36-content-guard');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));

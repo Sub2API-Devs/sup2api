@@ -89,11 +89,65 @@ test('incremental directories without a baseline roll back the whole field timel
 });
 
 test('erasing an update requires no baseline, removes empty sections, and keeps unknown content', async () => {
-  const input = request(reminder('# Environment update\n - Additional working directories removed:\n  - /old\n'));
-  const output = await applyContentPolicy(input, policy({ additional_directories: 'erase' }), {});
-  assert.deepEqual(output.messages, []);
+  // The request's only turn cannot go: a request with no messages is not
+  // valid, so the turn keeps the text the client wrote (see the sequence tests
+  // below for the turns that can be removed).
+  const update = request(reminder('# Environment update\n - Additional working directories removed:\n  - /old\n'));
+  const diagnostics = [];
+  assert.deepEqual(await applyContentPolicy(update, policy({ additional_directories: 'erase' }), {}, d => diagnostics.push(d)), update);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['additional_directories', 'retained']]);
   const unknown = request(reminder(environment(['Platform: win32', 'Unknown instruction: remain'])));
   assert.equal(textOf(await applyContentPolicy(unknown, policy({ platform_name: 'erase' }), {})), textOf(unknown).replace(' - Platform: win32\n', ''));
+});
+
+// An emptied turn may only be removed while the messages that remain are a
+// sequence upstream accepts: it opens with the user, does not end with the
+// assistant, and has no system turn right after an assistant turn. Otherwise
+// the turn keeps the client's text and its fields are reported as retained
+// (2026-10-28: the three upstream errors these rules prevent were seen live).
+const erasedTurn = () => reminder(environment(['Platform: win32']));
+
+test('a middle turn emptied by erasure is removed and the sequence stays legal', async () => {
+  const input = request('first');
+  input.messages.push({ role: 'assistant', content: 'reply' }, { role: 'user', content: erasedTurn() }, { role: 'user', content: 'last' });
+  const diagnostics = [], output = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {}, d => diagnostics.push(d));
+  assert.deepEqual(output.messages, [input.messages[0], input.messages[1], input.messages[3]]);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['platform_name', 'erased']]);
+});
+
+test('a first turn emptied by erasure is kept, because the request must open with the user', async () => {
+  const input = { system: [], messages: [{ role: 'user', content: erasedTurn() }, { role: 'assistant', content: 'reply' }, { role: 'user', content: 'last' }] };
+  const diagnostics = [], output = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {}, d => diagnostics.push(d));
+  assert.deepEqual(output, input);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status, d.carrier]), [['platform_name', 'retained', 'user']]);
+});
+
+test('a last turn emptied by erasure is kept, because the request would end with the assistant', async () => {
+  const input = { system: [], messages: [{ role: 'user', content: 'first' }, { role: 'assistant', content: 'reply' }, { role: 'user', content: erasedTurn() }] };
+  const diagnostics = [], output = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {}, d => diagnostics.push(d));
+  assert.deepEqual(output, input);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['platform_name', 'retained']]);
+});
+
+test('a turn emptied by erasure is kept when its removal would put a system turn after the assistant', async () => {
+  const input = { system: [], messages: [{ role: 'user', content: 'first' }, { role: 'assistant', content: 'reply' }, { role: 'user', content: erasedTurn() }, { role: 'system', content: 'context' }, { role: 'user', content: 'last' }] };
+  const diagnostics = [], output = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {}, d => diagnostics.push(d));
+  assert.deepEqual(output, input);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['platform_name', 'retained']]);
+});
+
+test('a turn that keeps another block is edited normally and stays', async () => {
+  const input = { system: [], messages: [{ role: 'user', content: [{ type: 'text', text: erasedTurn() }, { type: 'text', text: 'keep' }] }, { role: 'assistant', content: 'reply' }] };
+  const diagnostics = [], output = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {}, d => diagnostics.push(d));
+  assert.deepEqual(output.messages, [{ role: 'user', content: [{ type: 'text', text: 'keep' }] }, { role: 'assistant', content: 'reply' }]);
+  assert.deepEqual(diagnostics.map(d => [d.field, d.status]), [['platform_name', 'erased']]);
+});
+
+test('a kept turn keeps every block it has and is stable across a second conversion', async () => {
+  const input = { system: [], messages: [{ role: 'user', content: erasedTurn() }, { role: 'assistant', content: 'reply' }] };
+  const first = await applyContentPolicy(input, policy({ platform_name: 'erase' }), {});
+  assert.deepEqual(first, input);
+  assert.deepEqual(await applyContentPolicy(first, policy({ platform_name: 'erase' }), {}), first);
 });
 
 test('missing optional server fields are removed, false is not absence', async () => {

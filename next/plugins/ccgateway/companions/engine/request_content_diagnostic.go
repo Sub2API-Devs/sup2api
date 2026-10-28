@@ -28,7 +28,7 @@ func (p *requestErrorReader) acceptContentDiagnostic(raw []byte) {
 	if !slices.Contains(features.BuildAttachmentFields, frame.Field) && frame.Field != "cc_version" && frame.Field != "cc_entrypoint" {
 		return
 	}
-	if !slices.Contains([]string{"not_found", "unsupported_format", "ambiguous", "unchanged", "replaced", "inserted", "erased", "removed_server_absent", "missing_baseline", "unavailable", "source_unavailable"}, frame.Status) {
+	if !slices.Contains([]string{"not_found", "unsupported_format", "ambiguous", "unchanged", "replaced", "inserted", "erased", "retained", "removed_server_absent", "missing_baseline", "unavailable", "source_unavailable"}, frame.Status) {
 		return
 	}
 	if !slices.Contains([]string{"system", "user", "message_system", "request", ""}, frame.Carrier) {

@@ -253,7 +253,8 @@ function blockedField(state, slot, field, status) {
 async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagnostic) {
   const output = structuredClone(input);
   const state = { sources: policy.build_attachment_sources ?? {}, plans: [], regionsBySlot: new Map(), blocked: new Set(), baseline: new Set(), emitDiagnostic };
-  for (const slot of textSlots(output)) {
+  const slots = textSlots(output);
+  for (const slot of slots) {
     // The user ranges are parsed once and kept on the slot: compactSlot reads
     // the same ranges instead of parsing the same text again.
     slot.ranges = slot.role === 'user' ? recognizedUser(c, slot.text) : [{ text: slot.text, start: 0 }];
@@ -262,19 +263,66 @@ async function applyContentPolicy(c, input, policy = {}, native = {}, emitDiagno
   const { sources, plans, regionsBySlot, blocked } = state;
   const active = plans.filter(plan => !blocked.has(plan.entry.field));
   const server = await readServerFields(c, active, native, emitDiagnostic);
-  const possiblyEmpty = new Set();
-  for (const [slot, edits] of planEdits(active, server, emitDiagnostic)) {
+  // Two phases: every slot's result is computed before anything is applied, so
+  // which messages the conversion would empty is known up front. applyEdits
+  // then decides the removals once, against the whole sequence.
+  const pending = [];
+  for (const [slot, edits] of planEdits(active, server)) {
     const text = splice(slot.text, compactSlot(slot, edits, regionsBySlot.get(slot) ?? []));
-    if (!text.trim() && slot.text.trim()) { slot.remove(); if (slot.owner) possiblyEmpty.add(slot.owner); }
-    else slot.replace(text);
+    pending.push({ slot, edits, text, emptied: !text.trim() && Boolean(slot.text.trim()) });
   }
-  for (const message of possiblyEmpty) {
-    if (!Array.isArray(message.content) || message.content.length) continue;
-    if (message.role !== 'user' || Object.keys(message).some(key => key !== 'role' && key !== 'content')) throw error('Content conversion would remove message lifecycle metadata');
-    output.messages.splice(output.messages.indexOf(message), 1);
-  }
+  applyEdits(output, slots, pending, emitDiagnostic);
   for (const field of fields) if (sources[field] && sources[field] !== 'client' && !plans.some(p => p.entry.field === field) && !blocked.has(field)) diagnostic(emitDiagnostic, field, 'not_found', 'request');
   return output;
+}
+
+// applyEdits applies the planned edits. A message these edits would leave
+// without content is removed only while the remaining sequence is one upstream
+// accepts: it opens with a user turn, does not end with an assistant turn, and
+// has no system turn straight after an assistant turn. Otherwise the message
+// stays exactly as the client wrote it - removing it would make the whole
+// request invalid, and an emptied text block is not sent either - and the
+// fields it carries are reported as retained.
+function applyEdits(output, slots, pending, emitDiagnostic) {
+  const messages = output.messages ?? [];
+  const removed = new Set(), retained = new Set();
+  for (const message of emptiedMessages(slots, pending, messages)) {
+    if (message.role !== 'user' || Object.keys(message).some(key => key !== 'role' && key !== 'content')) throw error('Content conversion would remove message lifecycle metadata');
+    removed.add(message);
+    if (sequenceAccepted(messages, removed)) continue;
+    removed.delete(message); retained.add(message);
+  }
+  for (const { slot, edits, text, emptied: blank } of pending) {
+    const gone = Boolean(slot.owner) && removed.has(slot.owner);
+    const kept = blank && Boolean(slot.owner) && retained.has(slot.owner);
+    for (const edit of edits) diagnostic(emitDiagnostic, edit.field, kept ? 'retained' : edit.status, slot.carrier);
+    if (gone || kept) continue;
+    if (blank) slot.remove(); else slot.replace(text);
+  }
+  for (const message of removed) messages.splice(messages.indexOf(message), 1);
+}
+
+// emptiedMessages is the messages these edits would leave without content:
+// every text block the message has is emptied, and no other block (an image, a
+// tool result, ...) is left to carry it. Blocks that were already blank were
+// not emptied by this conversion, so they keep their message alive.
+function emptiedMessages(slots, pending, messages) {
+  const blank = new Set(pending.filter(entry => entry.emptied).map(entry => entry.slot));
+  return messages.filter(message => {
+    const owned = slots.filter(slot => slot.owner === message);
+    return owned.length > 0 && owned.every(slot => blank.has(slot))
+      && (!Array.isArray(message.content) || !message.content.some(block => block?.type !== 'text'));
+  });
+}
+
+// sequenceAccepted is upstream's rule for the messages after removals: the
+// first turn is the user's, the last is not the assistant's (no prefill unless
+// the request asked for it), and no system turn follows an assistant turn.
+function sequenceAccepted(messages, removed) {
+  const kept = messages.filter(message => !removed.has(message));
+  if (!kept.length || kept[0].role !== 'user') return false;
+  if (kept[kept.length - 1].role === 'assistant') return false;
+  return !kept.some((message, index) => index > 0 && message.role === 'system' && kept[index - 1].role === 'assistant');
 }
 
 // readServerFields reads, from the native environment, the entries the
@@ -303,15 +351,16 @@ async function readServerFields(c, active, native, emitDiagnostic) {
 }
 
 // planEdits turns each planned entry into its edit, by slot: the server's
-// entry in the client's line endings, or nothing.
-function planEdits(active, server, emitDiagnostic) {
+// entry in the client's line endings, or nothing. Each edit carries the field
+// and the status it usually reports; applyEdits reports them, unless the
+// message has to be kept whole.
+function planEdits(active, server) {
   const editsBySlot = new Map();
   for (const plan of active) {
     const replacement = replacementFor(plan, server);
     const status = plan.source === 'erase' ? 'erased' : replacement === plan.entry.raw ? 'unchanged' : replacement ? 'replaced' : plan.redundant ? 'unchanged' : 'removed_server_absent';
-    diagnostic(emitDiagnostic, plan.entry.field, status, plan.slot.carrier);
     if (!editsBySlot.has(plan.slot)) editsBySlot.set(plan.slot, []);
-    editsBySlot.get(plan.slot).push({ start: plan.start, end: plan.end, value: replacement });
+    editsBySlot.get(plan.slot).push({ start: plan.start, end: plan.end, value: replacement, field: plan.entry.field, status });
   }
   return editsBySlot;
 }
