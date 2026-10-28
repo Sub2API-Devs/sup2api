@@ -4,6 +4,7 @@
 
 export { default as SAlert } from './SAlert.vue'
 export { default as SBadge } from './SBadge.vue'
+export { default as SBulkBar } from './SBulkBar.vue'
 export { default as SButton } from './SButton.vue'
 export { default as SCard } from './SCard.vue'
 export { default as SChart } from './SChart.vue'

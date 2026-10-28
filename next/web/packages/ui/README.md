@@ -141,3 +141,28 @@ const columns: TableColumn[] = [
 - 普通表格不需要修改。`row-click`、选择、展开、单元格插槽及右侧固定操作列维持原有接口。
 
 失败处理页的布局、规则语义和保存流程仍由业务页面负责，本次组件改进不接入这些改动。
+
+## 批量选择与批量操作栏（UI SDK 3.2）
+
+```vue
+<SBulkBar
+  :count="selected.length"
+  :total="list.total"
+  :page-selected="pageSelected"
+  :all-selected="allSelected"
+  :selecting-all="loadingAll"
+  @select-page="selectPage"
+  @select-all="selectAllResults"
+  @clear="selected = []"
+>
+  <SButton size="sm" variant="primary" @click="bulkEdit">批量编辑</SButton>
+  <SButton size="sm" variant="danger" @click="bulkDelete">删除</SButton>
+</SBulkBar>
+<STable v-model:selected="selected" :columns="columns" :rows="rows" selectable />
+```
+
+- `selectable` 的表格默认支持拖拽框选：从勾选列或单元格空白处按下拖动，经过的可选行全部选中；起点行已选中时改为取消。拖回时范围外的行恢复原状，靠近视口边缘自动滚动，滚轮继续扩展。`:swipe-select="false"` 关闭。
+- 从单元格文字上按下仍是普通的文字选择；按钮、链接、输入框、开关等控件不受影响。拖动结束的那次点击被吞掉，不会再切换勾选框或触发 `row-click`。
+- Shift + 点击勾选框：把上一次点击的行到当前行设为同一状态（跳过 `rowSelectable` 为假的行）。
+- `SBulkBar` 只负责展示与事件，不保存选择、不请求接口。未选时默认隐藏，`persistent` 时显示提示（`#idle` 插槽可替换）。「选择全部 N 项」由调用方按当前筛选加载全部 key 后写回 `selected`；跨页保留选择时，业务方应在筛选条件变化后清空，避免对看不见的行执行操作。
+- 批量操作的权限检查由服务端逐条执行，界面里按钮只用于提示适用数量。原生插件使用 `SBulkBar` 时声明 `hostUICompat: "^3.2"`。

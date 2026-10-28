@@ -6,7 +6,9 @@
 // - expandable: chevron column + the `expand` slot under an open row;
 // - selectable + v-model:selected (array of row keys, see rowKey): checkbox
 //   column with a select-all header (indeterminate when partly selected);
-//   rowSelectable(row) disables individual rows;
+//   rowSelectable(row) disables individual rows; Shift+click on a checkbox
+//   sets the range from the previous click; swipeSelect (default on) lets a
+//   drag from the selection cell or a cell's padding select a row range;
 // - clickable: rows look clickable, are focusable and emit row-click on
 //   Enter / Space too (row-click is emitted on mouse clicks either way);
 // - rowClass(row, index) / rowAttrs(row, index): extra class / attributes
@@ -26,6 +28,7 @@ import { useTableReorder } from './tableReorder'
 import { useTableColumns, type TableColumnStorage } from './tableColumns'
 import STableColumnSettings from './STableColumnSettings.vue'
 import { useScrollClip } from './scrollClip'
+import { useTableSwipeSelect } from './tableSwipeSelect'
 import SIPAddress from './SIPAddress.vue'
 
 const props = withDefaults(
@@ -42,6 +45,8 @@ const props = withDefaults(
     dense?: boolean
     selectable?: boolean
     selected?: unknown[]
+    /** Drag across rows to select a range (selectable tables only). */
+    swipeSelect?: boolean
     rowSelectable?: (row: T) => boolean
     clickable?: boolean
     rowClass?: (row: T, index: number) => unknown
@@ -54,7 +59,7 @@ const props = withDefaults(
     /** Optional server/custom persistence; defaults to browser localStorage. */
     columnStorage?: TableColumnStorage
   }>(),
-  { rowKey: 'id', selected: () => [], emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined }
+  { rowKey: 'id', selected: () => [], swipeSelect: true, emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined }
 )
 const emit = defineEmits<{
   (e: 'row-click', row: T): void
@@ -119,10 +124,28 @@ function toggleAll(on: boolean) {
   const rest = props.selected.filter(k => !pageKeys.has(k))
   emit('update:selected', on ? [...rest, ...selectableKeys.value] : rest)
 }
-function toggleRow(key: unknown, on: boolean) {
-  const rest = props.selected.filter(x => x !== key)
-  emit('update:selected', on ? [...rest, key] : rest)
+// Shift+click extends from the last clicked row (anchor) to this one.
+let anchor = -1
+let shiftClick = false
+const markShift = (e: MouseEvent) => { shiftClick = e.shiftKey }
+function toggleRow(key: unknown, on: boolean, index: number) {
+  const range = shiftClick && anchor >= 0 && anchor < keyed.value.length && anchor !== index
+  shiftClick = false
+  const lo = range ? Math.min(anchor, index) : index
+  const hi = range ? Math.max(anchor, index) : index
+  anchor = index
+  const keys = keyed.value.slice(lo, hi + 1).filter(r => canSelect(r.row)).map(r => r.key)
+  const touched = new Set(keys)
+  const rest = props.selected.filter(x => !touched.has(x))
+  emit('update:selected', on ? [...rest, ...keys] : rest)
 }
+const swipe = useTableSwipeSelect(table, {
+  enabled: () => !!props.selectable && props.swipeSelect && !props.loading,
+  keys: () => keyed.value.map(r => r.key),
+  canSelect: i => !!keyed.value[i] && canSelect(keyed.value[i].row),
+  selected: () => props.selected,
+  update: keys => emit('update:selected', keys)
+})
 
 const span = computed(
   () => visibleColumns.value.length + Number(props.expandable || false) + Number(props.selectable || false) + Number(props.reorderable || false)
@@ -170,6 +193,8 @@ function onRowKey(e: KeyboardEvent, row: T) {
         class="table"
         :class="{ 'table-dense': dense, 's-table-clipped': clipped }"
         :aria-busy="loading || undefined"
+        @mousedown="selectable && swipe.mouseDown($event)"
+        @click.capture="swipe.clickCapture"
       >
         <thead>
           <tr>
@@ -243,6 +268,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
                 rowClass?.(row, i)
               ]"
               :data-reorder-row="reorderable ? i : undefined"
+              :data-select-row="selectable ? i : undefined"
               :tabindex="clickable ? 0 : undefined"
               @click="emit('row-click', row)"
               @keydown="onRowKey($event, row)"
@@ -271,7 +297,9 @@ function onRowKey(e: KeyboardEvent, row: T) {
               </td>
               <td
                 v-if="selectable"
-                class="w-10 !pr-0"
+                class="s-table-select w-10 !pr-0"
+                data-select-handle
+                @click.capture="markShift"
                 @click.stop
               >
                 <SCheckbox
@@ -279,7 +307,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
                   :model-value="selectedSet.has(key)"
                   :disabled="!canSelect(row)"
                   :aria-label="t('ui.selectRow')"
-                  @update:model-value="toggleRow(key, $event)"
+                  @update:model-value="toggleRow(key, $event, i)"
                 />
               </td>
               <td
@@ -413,6 +441,17 @@ function onRowKey(e: KeyboardEvent, row: T) {
 }
 .s-table-selected > td {
   background: rgb(20 184 166 / 0.06);
+}
+.s-table-select {
+  cursor: pointer;
+}
+:global(.s-table-swipe-band) {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  border: 1.5px solid rgb(var(--primary-500, 20 184 166) / 0.45);
+  border-radius: 4px;
+  background: rgb(var(--primary-500, 20 184 166) / 0.1);
 }
 .s-table-actions {
   position: sticky;

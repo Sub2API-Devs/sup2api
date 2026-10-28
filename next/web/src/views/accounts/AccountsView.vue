@@ -3,14 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
-import { notifyError } from '@/utils/errors'
+import { errorMessage, notifyError } from '@/utils/errors'
 import { formatCompact, formatDateTime, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
@@ -27,6 +27,10 @@ import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
 import { rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
 import { useBatchTest } from './useBatchTest'
+import { useSelection } from '@/composables/useSelection'
+import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
+import AccountBulkEditDialog from './AccountBulkEditDialog.vue'
+import AccountBulkDeleteDialog from './AccountBulkDeleteDialog.vue'
 import { subscriptionLabel } from './subscription'
 import { hasBalance, hasQuota, refreshAccountCredentials, resetAccountStatus, useBalanceRefresh, useQuotaRefresh } from './accountQuota'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
@@ -80,8 +84,6 @@ const typeFilter = computed({
 })
 
 const columns = computed<TableColumn[]>(() => [
-  // Batch test selection (accounts the caller may test).
-  ...(pageTestable.value.length ? [{ key: 'pick', label: '', width: '2rem' }] : []),
   { key: 'name', label: t('accounts.listUi.identity'), width: '320px' },
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
@@ -249,12 +251,84 @@ function onTestUpdated(saved: Account) {
   if (editing.value?.id === saved.id) editing.value = { ...editing.value, models: saved.models, model_mapping: saved.model_mapping }
 }
 
-// ---------------------------------------------------------------- batch test (selected rows, plugin default model each)
+// ---------------------------------------------------------------- selection + bulk actions
+// Rows the caller may act on in some way; each action runs on the selected
+// accounts it applies to (the button shows how many), and the server checks
+// every request as it does for a single row.
 const testable = (a: Account) => canTest(a) && !a.orphaned
-const {
-  picked, batchTesting, batchRunning, batchDone, batchTotal,
-  pageTestable, allPicked, somePicked, pickRow, pickPage, clear, batchTest, stopBatch
-} = useBatchTest({ items: computed(() => list.items.value), testable, tested: onTested })
+const editable = (a: Account) => canUpdate(a) && !a.orphaned
+const toggleable = (a: Account) => editable(a) && accountControl(typeOf(a), 'schedulable').configurable
+const selectable = (a: Account) => testable(a) || editable(a) || canDelete(a)
+const selection = useSelection<Account>({ items: list.items, key: (a) => a.id, selectable, loadAll: loadAllAccounts })
+const selectionKeys = computed({ get: () => selection.keys.value as unknown[], set: (v: unknown[]) => selection.update(v) })
+const anySelectable = computed(() => list.items.value.some(selectable))
+/** Every account matching the current filters (pages of 200). */
+async function loadAllAccounts(): Promise<Account[]> {
+  const out: Account[] = []
+  for (let page = 1; page <= 100; page++) {
+    const res = await api.list<Account>('/accounts', { ...list.filters, page, page_size: 200 })
+    out.push(...res.items)
+    if (res.items.length < 200 || out.length >= (res.page?.total ?? 0)) break
+  }
+  return out
+}
+// A changed filter starts a new selection: rows outside it would be acted on unseen.
+watch(() => ({ ...list.filters }), () => selection.clear(), { deep: true })
+const picked = computed(() => ({
+  test: selection.rows.value.filter(testable),
+  edit: selection.rows.value.filter(editable),
+  toggle: selection.rows.value.filter(toggleable),
+  reset: selection.rows.value.filter(canResetStatus),
+  remove: selection.rows.value.filter(canDelete)
+}))
+
+const { batchTesting, batchRunning, batchDone, batchTotal, batchTest, stopBatch } = useBatchTest({ tested: onTested })
+
+const bulk = useBulkRun(4)
+const bulkBusy = computed(() => batchRunning.value || bulk.running.value)
+async function bulkToggle(enable: boolean) {
+  const rows = picked.value.toggle.filter((a) => (a.status !== 'disabled') !== enable)
+  if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
+  const out = await bulk.run(rows, async (a, signal) => {
+    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal }))
+  })
+  bulkToast(out.ok.length, out.failed)
+}
+async function bulkReset() {
+  const rows = picked.value.reset
+  const ok = await confirm({ title: t('accounts.resetStatusTitle'), message: t('accounts.bulk.resetConfirm', { n: rows.length }), confirmText: t('accounts.resetStatus') })
+  if (!ok) return
+  const out = await bulk.run(rows, async (a) => {
+    patchAccount(a.id, await resetAccountStatus(a.id))
+  })
+  bulkToast(out.ok.length, out.failed)
+  list.reload()
+}
+function bulkToast(ok: number, failed: BulkFailure<Account>[]) {
+  if (!failed.length) return toast(t('accounts.bulk.done', { ok }), 'success')
+  const first = failed[0]
+  toast(t('accounts.bulk.doneWithErrors', { ok, fail: failed.length, name: first.item.name, error: errorMessage(first.error) }), 'warning')
+}
+const bulkEditOpen = ref(false)
+const bulkDeleteOpen = ref(false)
+function onBulkSaved(rows: Account[]) {
+  for (const r of rows) patchAccount(r.id, r)
+  list.reload()
+}
+function onBulkDeleted(ids: number[]) {
+  selection.drop(ids)
+  list.reload()
+}
+const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDays ?? 0
+const moreBulkActions = computed(() => [
+  { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
+  { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
+  { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length }
+])
+function onBulkMore(key: string) {
+  if (key === 'enable' || key === 'disable') void bulkToggle(key === 'enable')
+  else if (key === 'reset') void bulkReset()
+}
 
 // ---------------------------------------------------------------- reveal credentials
 const revealOpen = ref(false)
@@ -497,23 +571,46 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       <SHint v-if="list.error.value" inline size="xs" tone="danger" role="alert">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</SHint>
       <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
       <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
-      <span v-if="pageTestable.length" class="flex flex-wrap items-center gap-2" data-testid="account-batch-bar">
-        <SCheckbox size="xs" :model-value="allPicked" :indeterminate="somePicked" :disabled="batchRunning" data-testid="account-pick-page" @update:model-value="pickPage">{{ t('accounts.batchTest.pickPage') }}</SCheckbox>
-        <template v-if="picked.size || batchRunning">
-          <SButton size="sm" variant="primary" :loading="batchRunning" :disabled="!picked.size" icon="play" data-testid="account-batch-test" @click="batchTest">
-            {{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.size }) }}
-          </SButton>
-          <SButton v-if="batchRunning" size="sm" variant="danger" icon="stop" @click="stopBatch">{{ t('accounts.modelTest.stop') }}</SButton>
-          <SLink v-else as="button" class="text-xs" @click="clear">{{ t('accounts.batchTest.clear') }}</SLink>
-          <SHint inline size="xs">{{ t('accounts.batchTest.hint') }}</SHint>
-        </template>
-      </span>
       <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" class="ml-auto" />
     </div>
-    <STable class="account-table" :columns="columns" :rows="list.items.value" :loading="list.loading.value" :dense="denseRows" :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')">
-      <template #cell-pick="{ row }">
-        <SCheckbox v-if="testable(row)" bare :model-value="picked.has(row.id)" :disabled="batchRunning" :aria-label="row.name" @update:model-value="pickRow(row.id, $event)" />
+    <SBulkBar
+      v-if="anySelectable || selection.keys.value.length"
+      class="mb-3"
+      persistent
+      :count="selection.keys.value.length"
+      :total="list.total.value"
+      :page-selected="selection.pageSelected.value"
+      :all-selected="selection.allSelected.value"
+      :selecting-all="selection.selectingAll.value"
+      :disabled="bulkBusy"
+      data-testid="account-batch-bar"
+      @select-page="selection.selectPage()"
+      @select-all="selection.selectAll().catch(notifyError)"
+      @clear="selection.clear()"
+    >
+      <template v-if="selection.keys.value.length || batchRunning || bulk.running.value">
+        <SHint v-if="bulk.running.value" inline size="xs" aria-live="polite">{{ t('accounts.bulk.progress', { done: bulk.done.value, total: bulk.total.value }) }}</SHint>
+        <SButton size="sm" variant="primary" :disabled="!picked.edit.length || bulkBusy" data-testid="account-bulk-edit" @click="bulkEditOpen = true">{{ t('accounts.bulk.edit', { n: picked.edit.length }) }}</SButton>
+        <SButton size="sm" :loading="batchRunning" :disabled="!picked.test.length || bulk.running.value" icon="play" :title="t('accounts.batchTest.hint')" data-testid="account-batch-test" @click="batchTest(picked.test.map((a) => a.id))">
+          {{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.test.length }) }}
+        </SButton>
+        <SButton v-if="batchRunning" size="sm" variant="danger" icon="stop" @click="stopBatch">{{ t('accounts.modelTest.stop') }}</SButton>
+        <SButton v-if="bulk.running.value" size="sm" variant="danger" icon="stop" @click="bulk.stop()">{{ t('accounts.modelTest.stop') }}</SButton>
+        <SDropdown :actions="moreBulkActions" :label="t('accounts.bulk.more')" :disabled="bulkBusy" width="13rem" data-testid="account-bulk-more" @select="onBulkMore" />
+        <SButton size="sm" variant="danger" :disabled="!picked.remove.length || bulkBusy" data-testid="account-bulk-delete" @click="bulkDeleteOpen = true">{{ t('accounts.bulk.delete', { n: picked.remove.length }) }}</SButton>
       </template>
+    </SBulkBar>
+    <STable
+      v-model:selected="selectionKeys"
+      class="account-table"
+      :columns="columns"
+      :rows="list.items.value"
+      :loading="list.loading.value"
+      :dense="denseRows"
+      :selectable="anySelectable"
+      :row-selectable="selectable"
+      :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')"
+    >
       <template #cell-last_test="{ row }">
         <LastTestCell :last="row.last_test" :testing="batchTesting.has(row.id)" />
       </template>
@@ -599,6 +696,8 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
 
     <!-- test -->
     <AccountModelTest v-model:open="testOpen" :account="testTarget" :account-type="testTargetType" @tested="onTested" @updated="onTestUpdated" />
+    <AccountBulkEditDialog v-model:open="bulkEditOpen" :accounts="picked.edit" :type-of="typeOf" @saved="onBulkSaved" />
+    <AccountBulkDeleteDialog v-model:open="bulkDeleteOpen" :accounts="picked.remove" :retention-of="retentionOf" @deleted="onBulkDeleted" />
     <AccountDeleteDialog v-model:open="deleteOpen" :account="deleteTarget" :retention-days="deleteRetentionDays" @deleted="list.reload" />
 
     <!-- reveal -->
