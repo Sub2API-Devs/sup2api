@@ -2,31 +2,39 @@ package engine
 
 import (
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
 
 // usageEnv points Claude Code's credential storage at a temp dir and returns
-// the credentials path; it also clears proxy variables so the fake upstream is
-// reached directly.
+// the credentials path; it also clears proxy variables so the fake CLI peer is
+// reached without a proxy in its environment.
 func usageEnv(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_SECURESTORAGE_CONFIG_DIR", dir)
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
-	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "CCG_EXTERNAL_EGRESS"} {
+	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "CCG_EXTERNAL_EGRESS"} {
 		t.Setenv(k, "")
 	}
 	return filepath.Join(dir, ".credentials.json")
 }
 
+// usageAuth is an authManager whose CLI is the fake management peer.
+func usageAuth(t *testing.T, values map[string]string) (*authManager, string) {
+	t.Helper()
+	runner, argsLog := managementTestRunner(t, values)
+	return &authManager{key: "admin-key", cli: runner.CLI, work: runner.Work, env: runner.Env, managementHTTP: true}, argsLog
+}
+
 func TestUsageNotLoggedIn(t *testing.T) {
 	path := usageEnv(t)
-	a := &authManager{key: "admin-key", usageURL: "http://127.0.0.1:1/unused"}
+	a, argsLog := usageAuth(t, nil)
 	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeNotLoggedIn)
 	for _, body := range []string{`not json`, `{}`, `{"claudeAiOauth":{"accessToken":"  "}}`} {
 		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
@@ -39,6 +47,10 @@ func TestUsageNotLoggedIn(t *testing.T) {
 		t.Fatalf("wrong key: %d", got)
 	}
 	expectCode(t, authRequest(a, "POST", "/admin/usage", "", "admin-key"), 405, "invalid_request_error")
+	// Not signed in never starts a CLI process.
+	if records := managementRecords(t, argsLog); len(records) != 0 {
+		t.Fatalf("usage started %d CLI processes while signed out", len(records))
+	}
 }
 
 func TestUsagePassesAnthropicAnswerThrough(t *testing.T) {
@@ -47,37 +59,58 @@ func TestUsagePassesAnthropicAnswerThrough(t *testing.T) {
 		t.Fatal(err)
 	}
 	const answer = `{"five_hour":{"utilization":12.5,"resets_at":"2026-10-05T15:00:00Z"},"seven_day_overage_included":{"utilization":3,"resets_at":"2026-10-09T00:00:00Z"}}`
-	var got *http.Request
-	status, body := 200, answer
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(body))
-	}))
-	defer up.Close()
-	a := &authManager{key: "admin-key", usageURL: up.URL + "/api/oauth/usage", version: "2.1.288"}
+	a, argsLog := usageAuth(t, map[string]string{"CCG_TEST_MGMT_BODY": answer})
 
 	w := authRequest(a, "GET", "/admin/usage", "", "admin-key")
 	if w.Code != 200 || w.Body.String() != answer || w.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("got %d %q", w.Code, w.Body.String())
 	}
-	if got.Method != "GET" || got.URL.Path != "/api/oauth/usage" || got.Header.Get("Authorization") != "Bearer sk-ant-oat01-test" ||
-		got.Header.Get("anthropic-beta") != "oauth-2025-04-20" || got.Header.Get("User-Agent") != "claude-code/2.1.288" ||
-		got.Header.Get("Accept") != "application/json, text/plain, */*" {
-		t.Fatalf("upstream request %s %s %v", got.Method, got.URL, got.Header)
+	records := managementRecords(t, argsLog)
+	if len(records) != 1 {
+		t.Fatalf("usage ran %d CLI processes", len(records))
+	}
+	if records[0]["path"] != usagePath || records[0]["method"] != "GET" {
+		t.Fatalf("management call %v", records[0])
+	}
+	headers := fmt.Sprint(records[0]["headers"])
+	for _, want := range []string{"Accept:application/json, text/plain, */*", "Content-Type:application/json"} {
+		if !strings.Contains(headers, want) {
+			t.Fatalf("management headers %q lack %q", headers, want)
+		}
+	}
+	// The official usage read carries no Anthropic-Beta header, and the
+	// credential stays with the CLI: Go must not pass either.
+	if strings.Contains(strings.ToLower(headers), "anthropic-beta") {
+		t.Fatalf("usage passed an Anthropic-Beta header: %q", headers)
+	}
+	if strings.Contains(strings.ToLower(headers), "authorization") || strings.Contains(headers, "sk-ant-oat01-test") {
+		t.Fatalf("usage passed a credential to the CLI: %q", headers)
+	}
+	if got, _ := records[0]["timeout_ms"].(float64); got < float64((usageTimeout-time.Second)/time.Millisecond) || got > float64(usageTimeout/time.Millisecond) {
+		t.Fatalf("management timeout %v, want the official usage timeout", records[0]["timeout_ms"])
+	}
+	if got, _ := records[0]["max_bytes"].(float64); got != float64(usageCLIMaxBytes) {
+		t.Fatalf("management max-bytes %v, want the usage body limit", records[0]["max_bytes"])
 	}
 
-	status, body = 401, `{"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired"}}`
-	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenExpired)
 	for _, c := range []struct {
+		values map[string]string
 		status int
-		body   string
-	}{{403, `{"error":"forbidden é"}`}, {429, ``}, {500, `oops`}, {200, `not json`}, {200, `[1]`}, {200, `null`}} {
-		status, body = c.status, c.body
-		expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 502, codeUpstreamError)
+		want   string
+	}{
+		{map[string]string{"CCG_TEST_MGMT_STATUS": "401", "CCG_TEST_MGMT_BODY": `{"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired"}}`}, 400, codeTokenExpired},
+		{map[string]string{"CCG_TEST_MGMT_STATUS": "403", "CCG_TEST_MGMT_BODY": `{"error":"forbidden é"}`}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_STATUS": "429"}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_STATUS": "500", "CCG_TEST_MGMT_BODY": "oops"}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_BODY": "not json"}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_BODY": "[1]"}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_BODY": "null"}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitTransport)}, 502, codeUpstreamError},
+		{map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitRejected)}, 502, codeUpstreamError},
+	} {
+		other, _ := usageAuth(t, c.values)
+		expectCode(t, authRequest(other, "GET", "/admin/usage", "", "admin-key"), c.status, c.want)
 	}
-	up.Close()
-	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 502, codeUpstreamError)
 }
 
 func TestEnvProxy(t *testing.T) {
@@ -99,15 +132,6 @@ func TestEnvProxy(t *testing.T) {
 // refresh token or one a model request was already refused with is not.
 func TestUsageTellsExpiredFromRevoked(t *testing.T) {
 	path := usageEnv(t)
-	status, body := 401, ""
-	calls := 0
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(body))
-	}))
-	defer up.Close()
-	a := &authManager{key: "admin-key", usageURL: up.URL}
 	write := func(creds string) {
 		t.Helper()
 		if err := os.WriteFile(path, []byte(creds), 0o600); err != nil {
@@ -130,25 +154,74 @@ func TestUsageTellsExpiredFromRevoked(t *testing.T) {
 		{`{"claudeAiOauth":{"accessToken":"a1","refreshToken":" ","expiresAt":1}}`, expiredBody, codeTokenRevoked},
 	} {
 		write(c.creds)
-		body = c.body
+		a, _ := usageAuth(t, map[string]string{"CCG_TEST_MGMT_STATUS": "401", "CCG_TEST_MGMT_BODY": c.body})
 		expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, c.want)
 	}
 
 	// A model request refused with the stored token: the CLI could not renew
 	// it, so it is reported without asking Anthropic again.
 	write(`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`)
-	body = expiredBody
+	a, argsLog := usageAuth(t, map[string]string{"CCG_TEST_MGMT_STATUS": "401", "CCG_TEST_MGMT_BODY": expiredBody})
 	noteAuthenticationRefused(os.Environ())
-	calls = 0
 	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenRevoked)
-	if calls != 0 {
-		t.Fatalf("usage asked Anthropic %d times for a refused token", calls)
+	if records := managementRecords(t, argsLog); len(records) != 0 {
+		t.Fatalf("usage asked the CLI %d times for a refused token", len(records))
 	}
 	// A renewed (or newly authorized) token is judged afresh.
 	write(`{"claudeAiOauth":{"accessToken":"a2","refreshToken":"r2","expiresAt":1}}`)
-	expectCode(t, authRequest(a, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenExpired)
-	status, body = 200, `{"five_hour":{"utilization":1}}`
-	if w := authRequest(a, "GET", "/admin/usage", "", "admin-key"); w.Code != 200 {
+	renewed, _ := usageAuth(t, map[string]string{"CCG_TEST_MGMT_STATUS": "401", "CCG_TEST_MGMT_BODY": expiredBody})
+	expectCode(t, authRequest(renewed, "GET", "/admin/usage", "", "admin-key"), 400, codeTokenExpired)
+	ok, _ := usageAuth(t, map[string]string{"CCG_TEST_MGMT_BODY": `{"five_hour":{"utilization":1}}`})
+	if w := authRequest(ok, "GET", "/admin/usage", "", "admin-key"); w.Code != 200 {
 		t.Fatalf("renewed token: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// An older CLI has no ccgateway-mgmt command: usage says so instead of
+// starting a process that can only fail.
+func TestUsageRequiresManagementCapability(t *testing.T) {
+	path := usageEnv(t)
+	if err := os.WriteFile(path, []byte(`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner, argsLog := managementTestRunner(t, nil)
+	a := &authManager{key: "admin-key", cli: runner.CLI, work: runner.Work, env: runner.Env}
+	w := authRequest(a, "GET", "/admin/usage", "", "admin-key")
+	if w.Code != 502 || !strings.Contains(w.Body.String(), "does not support") {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	if records := managementRecords(t, argsLog); len(records) != 0 {
+		t.Fatalf("an unsupported CLI was still asked %d times", len(records))
+	}
+}
+
+// A missing login the CLI reports maps back to the endpoint's own
+// not_logged_in answer, and an oversized answer says so; neither may collapse
+// into a generic upstream failure.
+func TestUsageLoginAndSizeFailures(t *testing.T) {
+	path := usageEnv(t)
+	if err := os.WriteFile(path, []byte(`{"claudeAiOauth":{"accessToken":"a1","refreshToken":"r","expiresAt":1}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		values  map[string]string
+		status  int
+		code    string
+		message string
+	}{
+		{"login-exit", map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitNotLoggedIn)}, 400, codeNotLoggedIn, "not signed in"},
+		{"login-frame", map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitRejected), "CCG_TEST_MGMT_ERROR_FRAME": "not_logged_in"}, 400, codeNotLoggedIn, "not signed in"},
+		{"size-exit", map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitTooLarge)}, 502, codeUpstreamError, "too large"},
+		{"size-frame", map[string]string{"CCG_TEST_MGMT_EXIT": strconv.Itoa(cliManagementExitRejected), "CCG_TEST_MGMT_ERROR_FRAME": "response_too_large"}, 502, codeUpstreamError, "too large"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _ := usageAuth(t, tc.values)
+			w := authRequest(a, "GET", "/admin/usage", "", "admin-key")
+			expectCode(t, w, tc.status, tc.code)
+			if !strings.Contains(w.Body.String(), tc.message) {
+				t.Fatalf("got %s, want a %q message", w.Body.String(), tc.message)
+			}
+		})
 	}
 }

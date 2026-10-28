@@ -30,6 +30,10 @@ type resourceBroker struct {
 	lease        *resourceLease
 	// verified is the last verified identity (cachedIdentity).
 	verified atomic.Pointer[verifiedResourceIdentity]
+	// failed is the last failed verification of the same credential. A failure
+	// now costs a CLI process and a profile call, so concurrent requests or a
+	// short retry loop must not each start one (identityFailureBackoff).
+	failed atomic.Pointer[identityFailure]
 	// verifying lets one verification run at a time: requests that share the
 	// authority (tracked requests, identity probes) would otherwise start the
 	// verification CLI together on a cold cache, refreshing the login and

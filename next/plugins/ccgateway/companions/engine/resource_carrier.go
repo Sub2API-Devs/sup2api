@@ -2,11 +2,13 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,8 +16,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
-// Resource payloads use an independent, non-model management HTTP transport.
-// Neither a model request nor the model runner participates in resource IO.
+// Resource payloads use an independent, non-model management call. Neither a
+// model request nor the model runner participates in resource IO. The call is
+// performed by the CLI (`claude ccgateway-mgmt`), which owns the credential
+// and the HTTPS fingerprint; Go keeps the allowlist and every response limit.
 type resourceExchange struct {
 	route      resourceRoute
 	input      *resourceSpool
@@ -109,10 +113,12 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 	if err != nil {
 		return nil, err
 	}
-	auth.header.Set("User-Agent", cliUserAgent(runner.Version))
-	client, transport := managementHTTPClient(env)
-	defer transport.CloseIdleConnections()
-	resp, err := resourceManagementHTTP(ctx, env, op, auth, client)
+	// An older CLI has no ccgateway-mgmt command: refuse instead of running a
+	// process that can only fail.
+	if !runner.SupportsManagement {
+		return nil, fmt.Errorf("the installed Claude Code CLI does not support ccgateway management calls")
+	}
+	resp, err := resourceManagementHTTP(ctx, runner, env, op, auth)
 	// Facts only: URLs, tokens, profile bodies, and transport errors can contain
 	// secrets and must never enter resource diagnostics.
 	facts := Object{"request_prepared": true, "response_received": resp != nil, "transport_failed": err != nil}
@@ -125,56 +131,102 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 
 // resourceManagementHTTP has no model endpoint escape hatch: even internal
 // callers must pass the Files/Skills operation allowlist or the identity probe.
-func resourceManagementHTTP(ctx context.Context, env []string, op *resourceExchange, auth *resourceAuthorization, client *http.Client) (*resourceResponse, error) {
+// The CLI performs the call; Go supplies only the operation's own headers, never
+// a credential, and spools the answer under the same limits as before.
+func resourceManagementHTTP(ctx context.Context, runner *Runner, env []string, op *resourceExchange, auth *resourceAuthorization) (*resourceResponse, error) {
 	if err := validateResourceExchange(op); err != nil {
 		return nil, err
 	}
-	target, err := resourceTarget(env, op.route, auth)
+	// The CLI uses this environment to reach the provider. A malformed or
+	// conflicting proxy must never let a configured route silently go direct,
+	// so the same fail-closed check applies before the process starts.
+	if !validManagementProxy(env) {
+		return nil, fmt.Errorf("invalid management HTTPS proxy configuration")
+	}
+	if _, err := resourceTarget(env, op.route, auth); err != nil {
+		return nil, err
+	}
+	upload, err := resourceUploadPath(op)
 	if err != nil {
 		return nil, err
 	}
-	body, err := resourceRequestBody(op)
+	// The CLI resolves the path against the same ANTHROPIC_BASE_URL it already
+	// uses, so Go passes the allowlisted API path, not a composed URL. This is
+	// also the shape the CLI's own allowlist admits.
+	call := cliManagementCall{Method: op.route.method, Path: op.route.path, Header: managementRequestHeaders(op), Body: upload, MaxBytes: op.limit}
+	if op.route.query != "" {
+		call.Path += "?" + op.route.query
+	}
+	if op.identity != nil {
+		// The official profile read timeout and its 1 MiB body limit.
+		call.Timeout = profileTimeout
+		call.MaxBytes = profileCLIMaxBytes
+	}
+	answer, err := cliManagementRequest(ctx, runner, env, call)
 	if err != nil {
-		return nil, err
+		// Exit code 1 covers caller-side refusals (arguments, allowlist,
+		// missing login, output write); 3 is the response size limit; 4 is a
+		// missing login. Only 2 and crashes are provider reachability failures.
+		switch {
+		case errors.Is(err, errCLIManagementNotLoggedIn):
+			return nil, fmt.Errorf("resource management requires a Claude Code login")
+		case errors.Is(err, errCLIManagementTooLarge):
+			return nil, fmt.Errorf("resource response exceeds the configured size limit")
+		case errors.Is(err, errCLIManagementRejected):
+			return nil, fmt.Errorf("resource management call was refused by the CLI")
+		default:
+			return nil, fmt.Errorf("resource management API could not be reached")
+		}
 	}
-	req, err := http.NewRequestWithContext(ctx, op.route.method, target.String(), body)
+	defer answer.Close()
+	// A declared Content-Length must still match the body the CLI wrote: a
+	// truncated download is detected exactly as it was with the Go transport.
+	declared := answer.size
+	if value := answer.header.Get("Content-Length"); value != "" {
+		if n, convErr := strconv.ParseInt(value, 10, 64); convErr == nil && n >= 0 {
+			declared = n
+		}
+	}
+	body, err := os.Open(answer.body)
 	if err != nil {
-		return nil, fmt.Errorf("resource management request could not be built")
+		return nil, fmt.Errorf("resource response unavailable: read, size, or spool budget failure")
 	}
-	req.Header = auth.header.Clone()
-	if op.input != nil {
-		req.ContentLength = op.input.size
+	spool, err := spoolResource(ctx, op.dir, body, declared, op.limit, op.budget)
+	if err != nil {
+		return nil, fmt.Errorf("resource response unavailable: read, size, or spool budget failure")
 	}
+	response := &resourceResponse{status: answer.status, header: resourceResponseHeaders(answer.header), body: spool}
+	op.mu.Lock()
+	op.response = response
+	op.mu.Unlock()
+	return response, nil
+}
+
+// managementRequestHeaders are the headers the resource operation itself
+// defines: its Content-Type, Anthropic-Version and Anthropic-Beta, and explicit
+// identity so the response bytes stay exact. Credential headers (Authorization,
+// X-Api-Key) and the User-Agent are never passed: the CLI sends its own login
+// and its native User-Agent.
+func managementRequestHeaders(op *resourceExchange) http.Header {
+	h := http.Header{}
 	if op.route.contentType != "" {
-		req.Header.Set("Content-Type", op.route.contentType)
+		h.Set("Content-Type", op.route.contentType)
 	}
 	version := op.route.version
 	if version == "" {
 		version = "2023-06-01"
 	}
-	req.Header.Set("Anthropic-Version", version)
-	beta := req.Header.Values("Anthropic-Beta")
-	beta = append(beta, op.route.betas...)
-	if len(beta) > 0 {
-		req.Header.Set("Anthropic-Beta", strings.Join(beta, ","))
+	h.Set("Anthropic-Version", version)
+	if len(op.route.betas) > 0 {
+		h.Set("Anthropic-Beta", strings.Join(op.route.betas, ","))
 	}
-	// Explicit identity avoids Go's automatic gzip decoding. The response body
-	// is spooled verbatim, including multipart/binary and encoded downloads.
-	req.Header.Set("Accept-Encoding", "identity")
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("resource management API could not be reached")
+	// A content download asks for bytes by name, as the official call does;
+	// the CLI otherwise supplies its own endpoint default.
+	if op.route.method == http.MethodGet && strings.HasSuffix(op.route.path, "/content") {
+		h.Set("Accept", "application/binary")
 	}
-	defer res.Body.Close()
-	spool, err := spoolResource(ctx, op.dir, res.Body, res.ContentLength, op.limit, op.budget)
-	if err != nil {
-		return nil, fmt.Errorf("resource response unavailable: read, size, or spool budget failure")
-	}
-	response := &resourceResponse{status: res.StatusCode, header: resourceResponseHeaders(res.Header), body: spool}
-	op.mu.Lock()
-	op.response = response
-	op.mu.Unlock()
-	return response, nil
+	h.Set("Accept-Encoding", "identity")
+	return h
 }
 
 // validateResourceExchange admits the operation: the identity probe has one
@@ -229,13 +281,14 @@ func resourceTarget(env []string, route resourceRoute, auth *resourceAuthorizati
 	return target, nil
 }
 
-// resourceRequestBody spools the upload payload and enforces its size limit.
-func resourceRequestBody(op *resourceExchange) (io.Reader, error) {
+// resourceUploadPath is the spooled upload the CLI reads the request body
+// from, after enforcing its size limit.
+func resourceUploadPath(op *resourceExchange) (string, error) {
 	if op.input == nil {
-		return nil, nil
+		return "", nil
 	}
 	if op.input.size > op.limit || op.input.size > resourceHardLimit {
-		return nil, fmt.Errorf("resource payload exceeds configured size limit")
+		return "", fmt.Errorf("resource payload exceeds configured size limit")
 	}
-	return io.NewSectionReader(op.input.File, 0, op.input.size), nil
+	return op.input.File.Name(), nil
 }

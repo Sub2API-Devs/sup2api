@@ -36,6 +36,18 @@ const (
 	identityKeepWarm   = 30 * time.Minute
 )
 
+// identityFailureBackoff bounds how often a failing verification starts a CLI
+// process for the same credential. The profile call now costs a process, and
+// the core retries a failed identity after 60 s; requests in between answer
+// with the recorded failure instead of each spawning a CLI.
+const identityFailureBackoff = time.Minute
+
+type identityFailure struct {
+	fingerprint string
+	at          time.Time
+	err         error
+}
+
 type verifiedResourceIdentity struct {
 	identity resources.Identity
 	auth     *resourceAuthorization
@@ -100,7 +112,7 @@ func (b *resourceBroker) keepIdentityWarm(ctx context.Context) {
 
 // verifyIdentity is the verified identity: the cached one unless refresh, then
 // one the CLI verifies. A refresh never waits for a running verification.
-func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (resources.Identity, error) {
+func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (id resources.Identity, err error) {
 	bindResourceAuthorization(ctx, nil)
 	env := b.g.Runner.baseEnv()
 	if !resourceBackendSupported(env) {
@@ -130,6 +142,23 @@ func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (reso
 		bindResourceAuthorization(ctx, cached.auth)
 		return cached.identity, nil
 	}
+	// A verification of this very credential failed moments ago: answer with
+	// that failure instead of starting another CLI process for every request.
+	fingerprint := ""
+	if candidate, candidateErr := resourceAuthorizationCandidate(env); candidateErr == nil {
+		fingerprint = candidate.fingerprint
+		if failed := b.failed.Load(); !refresh && fingerprint != "" && failed != nil &&
+			failed.fingerprint == fingerprint && time.Since(failed.at) < identityFailureBackoff {
+			return resources.Identity{}, failed.err
+		}
+	}
+	defer func() {
+		if err != nil {
+			b.failed.Store(&identityFailure{fingerprint: fingerprint, at: time.Now(), err: err})
+			return
+		}
+		b.failed.Store(nil)
+	}()
 	remember := func(id resources.Identity, err error) (resources.Identity, error) {
 		if err == nil {
 			bindResourceAuthorization(ctx, probe.auth)
@@ -160,7 +189,7 @@ func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (reso
 	if err != nil {
 		return resources.Identity{}, fmt.Errorf("invalid authenticated provider profile")
 	}
-	id := resources.Identity{AuthType: "oauth"}
+	id = resources.Identity{AuthType: "oauth"}
 	id.PrincipalID, err = resourceProfilePrincipal(profile)
 	if err != nil {
 		return resources.Identity{}, err

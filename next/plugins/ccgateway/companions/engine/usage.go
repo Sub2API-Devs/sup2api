@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,10 @@ import (
 // endpoint with the access token Claude Code stored in this container. The
 // core cannot see that token nor the rate-limit headers of the CLI's own
 // requests, so it asks the container (§44, CCGateway quota provider).
+//
+// The call itself is made by the CLI (`claude ccgateway-mgmt`), which owns the
+// stored credential and its HTTPS fingerprint; Go neither sends nor reads the
+// token for transport.
 //
 // 200: Anthropic's JSON object, verbatim (five_hour, seven_day,
 // seven_day_sonnet, seven_day_overage_included, ...). The core parses it.
@@ -42,11 +47,23 @@ const (
 	codeTokenRevoked  = "token_revoked"
 	codeUpstreamError = "upstream_error"
 
-	// defaultUsageURL is Anthropic's OAuth usage endpoint (as queried by the
-	// claude-oauth plugin and sub2api).
-	defaultUsageURL     = "https://api.anthropic.com/api/oauth/usage"
-	usageTimeout        = 20 * time.Second
-	usageMaxBody        = 64 << 10
+	// usagePath is Anthropic's OAuth usage endpoint, which the CLI allowlist
+	// must admit (`claude ccgateway-mgmt --path /api/oauth/usage`).
+	usagePath = "/api/oauth/usage"
+	// usageTimeout is the official usage read timeout; profileTimeout the
+	// official profile read timeout. Both are passed to the CLI as
+	// --timeout-ms, so a stalled call fails the way Claude Code's own does.
+	usageTimeout   = 5 * time.Second
+	profileTimeout = 10 * time.Second
+	// profileCLIMaxBytes is the profile read's body limit passed to the CLI.
+	profileCLIMaxBytes = 1 << 20
+	// managementHeaderTimeout bounds the Go management client's non-API
+	// release check (cli_management.go); it is not a provider API call.
+	managementHeaderTimeout = 20 * time.Second
+	usageMaxBody            = 64 << 10
+	// usageCLIMaxBytes bounds what the CLI spools for the usage read; the
+	// parsed answer is still capped at usageMaxBody.
+	usageCLIMaxBytes    = 1 << 20
 	maxCredentialsBytes = 1 << 20
 )
 
@@ -189,6 +206,22 @@ func envProxy(env []string) func(*http.Request) (*url.URL, error) {
 	return http.ProxyURL(u)
 }
 
+// validManagementProxy reports whether the proxy environment a management CLI
+// process will inherit fails closed: no conflicting, malformed or unsupported
+// proxy configuration. The CLI performs the call, so Go validates the
+// environment it hands over rather than building the transport itself.
+func validManagementProxy(env []string) bool {
+	raw, invalid := scanProxyEnv(env)
+	if invalid {
+		return false
+	}
+	if raw == "" {
+		return true
+	}
+	_, ok := parseProxyURL(raw)
+	return ok
+}
+
 // managementHTTPClient is only for non-model endpoints. It never follows a
 // redirect (including same-origin redirects), disables transparent gzip so file
 // bytes remain exact, and uses normal certificate/hostname verification.
@@ -196,7 +229,7 @@ func managementHTTPClient(env []string) (*http.Client, *http.Transport) {
 	tr := &http.Transport{Proxy: envProxy(env), DisableCompression: true,
 		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
 		MaxResponseHeaderBytes: 64 << 10, TLSHandshakeTimeout: 10 * time.Second,
-		ResponseHeaderTimeout: usageTimeout}
+		ResponseHeaderTimeout: managementHeaderTimeout}
 	return &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, tr
 }
 
@@ -218,52 +251,64 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 400, codeTokenRevoked, "A model request was refused with the stored OAuth token and Claude Code could not renew it.")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), usageTimeout)
-	defer cancel()
-	target := a.usageURL
-	if target == "" {
-		target = defaultUsageURL
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		apiError(w, 502, codeUpstreamError, "The usage request could not be built.")
-		return
-	}
-	ua := cliUserAgent(a.version)
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
-	req.Header.Set("User-Agent", ua)
-	client, tr := managementHTTPClient(env)
-	defer tr.CloseIdleConnections()
-	res, err := client.Do(req)
-	if err != nil {
+	// The CLI makes the call with this environment. A malformed or conflicting
+	// proxy must never let the call silently go direct.
+	if !validManagementProxy(env) {
 		apiError(w, 502, codeUpstreamError, "The Anthropic usage API could not be reached.")
 		return
 	}
-	defer res.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(res.Body, usageMaxBody+1))
+	if !a.managementHTTP {
+		apiError(w, 502, codeUpstreamError, "The installed Claude Code CLI does not support Anthropic management calls.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), usageTimeout)
+	defer cancel()
+	runner := &Runner{CLI: a.cli, Work: a.work, SupportsManagement: true}
+	answer, err := cliManagementRequest(ctx, runner, env, cliManagementCall{
+		Method:   http.MethodGet,
+		Path:     usagePath,
+		Timeout:  usageTimeout,
+		MaxBytes: usageCLIMaxBytes,
+		// The official usage read carries no Anthropic-Beta header; the CLI
+		// supplies its own User-Agent and login.
+		Header: http.Header{
+			"Accept":       {"application/json, text/plain, */*"},
+			"Content-Type": {"application/json"},
+		},
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errCLIManagementNotLoggedIn):
+			apiError(w, 400, codeNotLoggedIn, "Claude Code is not signed in with a Claude account.")
+		case errors.Is(err, errCLIManagementTooLarge):
+			apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is too large.")
+		default:
+			apiError(w, 502, codeUpstreamError, "The Anthropic usage API could not be reached.")
+		}
+		return
+	}
+	defer answer.Close()
+	if answer.size > usageMaxBody {
+		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is too large.")
+		return
+	}
+	raw, err := readLimitedFile(answer.body, usageMaxBody)
 	if err != nil {
 		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer could not be read.")
 		return
 	}
-	if len(raw) > usageMaxBody {
-		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is too large.")
-		return
-	}
 	switch {
-	case res.StatusCode == http.StatusUnauthorized:
-		answer := strings.ToLower(string(raw))
-		expired := (stored.expiresAt > 0 && stored.expiresAt <= time.Now().UnixMilli()) || strings.Contains(answer, "expired")
-		if expired && stored.refreshable && !strings.Contains(answer, "revoked") {
+	case answer.status == http.StatusUnauthorized:
+		text := strings.ToLower(string(raw))
+		expired := (stored.expiresAt > 0 && stored.expiresAt <= time.Now().UnixMilli()) || strings.Contains(text, "expired")
+		if expired && stored.refreshable && !strings.Contains(text, "revoked") {
 			apiError(w, 400, codeTokenExpired, "The stored OAuth access token expired; Claude Code renews it on its next model request: "+asciiSnippet(raw))
 			return
 		}
 		apiError(w, 400, codeTokenRevoked, "Anthropic refused the stored OAuth token and it cannot be renewed: "+asciiSnippet(raw))
 		return
-	case res.StatusCode != http.StatusOK:
-		apiError(w, 502, codeUpstreamError, fmt.Sprintf("The Anthropic usage API returned %d: %s", res.StatusCode, asciiSnippet(raw)))
+	case answer.status != http.StatusOK:
+		apiError(w, 502, codeUpstreamError, fmt.Sprintf("The Anthropic usage API returned %d: %s", answer.status, asciiSnippet(raw)))
 		return
 	}
 	var obj map[string]json.RawMessage

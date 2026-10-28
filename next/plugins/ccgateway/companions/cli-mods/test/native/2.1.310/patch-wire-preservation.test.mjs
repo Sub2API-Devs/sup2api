@@ -237,9 +237,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  // The 2.1.310 profile names its patch ccgateway-v33-bun-1-4-4 (v32 was the
-  // same source built by Bun 1.4.3; 2.1.304: ccgateway-v31-request-capture).
-  assert.equal(patchManifest.extension, 'ccgateway-v33-bun-1-4-4');
+  // The 2.1.310 profile names its patch ccgateway-v34-management (v33 was the
+  // same source built by Bun 1.4.4 before the management command; 2.1.304:
+  // ccgateway-v35-management).
+  assert.equal(patchManifest.extension, 'ccgateway-v34-management');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
@@ -260,7 +261,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(cli.includes('if(e[0]==="request"){let{runRequest}=await import("./ccgateway-request-entry.js");process.exit(await runRequest(e.slice(1),s))}'));
   assert.equal(cli.split('./ccgateway-request-entry.js').length, 2);
   assert.doesNotMatch(cli, /ccgPrefix|ccgBilling|ccgDirect|ccgHead/);
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1"]/);
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1","management_http_v1"]/);
   // The command's wiring is its support module: CC's fast-path policy, the
   // native bindings it composes, and the command itself.
   const entry = fs.readFileSync(path.join(output, 'ccgateway-request-entry.js'), 'utf8');

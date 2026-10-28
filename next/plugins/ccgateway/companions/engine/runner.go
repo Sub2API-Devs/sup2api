@@ -16,9 +16,13 @@ type Runner struct {
 	CLI, Version, Work       string
 	WorkingDirectory         string // trusted stable account context; never a request path
 	ReportContainerResources bool   // verified CLI reports allocation rather than host totals
-	Env                      []string
-	Proxy                    *ProxyConfigStore
-	Overrides                *EnvironmentOverrides // account locale/timezone for new CLI processes
+	// SupportsManagement is the CLI's management_http_v1 capability. Without
+	// it there is no ccgateway-mgmt command: a management call must be refused
+	// instead of attempted.
+	SupportsManagement bool
+	Env                []string
+	Proxy              *ProxyConfigStore
+	Overrides          *EnvironmentOverrides // account locale/timezone for new CLI processes
 }
 
 func resolveCLI(path string) (string, error) {

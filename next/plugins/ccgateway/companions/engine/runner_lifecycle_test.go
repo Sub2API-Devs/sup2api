@@ -21,6 +21,10 @@ func lifecycleTestExecutable() (string, error) {
 // Run the test executable as a small CLI peer; no shell or installed Claude is
 // needed to exercise the real OS pipes and process lifecycle.
 func TestMain(m *testing.M) {
+	if os.Getenv("CCG_TEST_MGMT_PEER") != "" {
+		managementPeer()
+		os.Exit(0)
+	}
 	if os.Getenv("CCG_TEST_REQUEST_PEER") != "" {
 		requestCancellationPeer()
 		os.Exit(0)

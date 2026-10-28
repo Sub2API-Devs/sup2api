@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -16,16 +17,25 @@ func TestUsageUsesAccountEnvironment(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(account, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"account-only-token"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	seen := false
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = r.Header.Get("Authorization") == "Bearer account-only-token"
-		_, _ = w.Write([]byte(`{"five_hour":{"utilization":1}}`))
-	}))
-	defer up.Close()
-	a := &authManager{key: "admin", usageURL: up.URL, env: []string{"CLAUDE_SECURESTORAGE_CONFIG_DIR=" + account}}
+	envLog := filepath.Join(t.TempDir(), "env.txt")
+	runner, _ := managementTestRunner(t, map[string]string{
+		"CCG_TEST_MGMT_ENV":  envLog,
+		"CCG_TEST_MGMT_BODY": `{"five_hour":{"utilization":1}}`,
+	})
+	env := envWith(runner.Env, map[string]string{"CLAUDE_SECURESTORAGE_CONFIG_DIR": account})
+	a := &authManager{key: "admin", cli: runner.CLI, work: runner.Work, env: env, managementHTTP: true}
 	out := authRequest(a, "GET", "/admin/usage", "", "admin")
-	if out.Code != 200 || !seen {
-		t.Fatalf("account credential was not used: %d", out.Code)
+	if out.Code != 200 {
+		t.Fatalf("account credential was not used: %d %s", out.Code, out.Body.String())
+	}
+	// The CLI process must see the account's credential storage, not the
+	// Worker's own environment.
+	raw, err := os.ReadFile(envLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+account) {
+		t.Fatalf("usage CLI did not inherit the account environment")
 	}
 }
 

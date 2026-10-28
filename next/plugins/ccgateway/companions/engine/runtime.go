@@ -85,7 +85,7 @@ func NewRuntime(o Options) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := newRuntime(o, &Runner{CLI: cli, Version: version, Work: work, Env: o.Env, WorkingDirectory: o.WorkingDirectory}, cliInfo, root)
+	r, err := newRuntime(o, &Runner{CLI: cli, Version: version, Work: work, Env: o.Env, WorkingDirectory: o.WorkingDirectory, SupportsManagement: cliInfo.supports(managementHTTPCapability)}, cliInfo, root)
 	if err != nil {
 		_ = os.RemoveAll(work)
 		return nil, err
@@ -101,7 +101,7 @@ func newRuntime(o Options, runner *Runner, cliInfo cliRequestInfo, root string) 
 	if err != nil {
 		return nil, err
 	}
-	admin := &authManager{cli: runner.CLI, key: o.AdminKey, work: runner.Work, proxy: runner.Proxy, overrides: runner.Overrides, version: runner.Version, requestLogs: g.RequestLogs, env: o.Env}
+	admin := &authManager{cli: runner.CLI, key: o.AdminKey, work: runner.Work, proxy: runner.Proxy, overrides: runner.Overrides, managementHTTP: runner.SupportsManagement, requestLogs: g.RequestLogs, env: o.Env}
 	resources, err := newResourceBroker(g, admin, root)
 	if err != nil {
 		return nil, err

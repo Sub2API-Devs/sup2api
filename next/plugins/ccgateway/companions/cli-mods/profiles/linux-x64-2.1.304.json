@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v31-request-capture",
+  "extension": "ccgateway-v35-management",
   "bunVersion": "1.4.4",
   "capabilities": [
     "request_direct",
@@ -21,7 +21,8 @@
     "build_injection_v1",
     "request_levels_v1",
     "client_user_agent_v1",
-    "request_capture_v1"
+    "request_capture_v1",
+    "management_http_v1"
   ],
   "supportModules": [
     "shared",
@@ -44,7 +45,14 @@
     "container-resources",
     "request-identity",
     "direct-billing",
-    "request-agent"
+    "request-agent",
+    "management-command",
+    "management-options",
+    "management-route",
+    "management-target",
+    "management-credentials",
+    "management-error",
+    "management-natives"
   ],
   "core": "chunk-rncrmfyt.js",
   "locate": {
@@ -100,6 +108,9 @@
       "ccgatewayMarkTurns": "chunk-rncrmfyt.js:ccgatewayMarkTurns",
       "ccgatewayPermissionContext": "chunk-rncrmfyt.js:ccgatewayPermissionContext",
       "ccgatewaySystemRecord": "chunk-rncrmfyt.js:ccgatewaySystemRecord"
+    },
+    "management": {
+      "userAgent": "chunk-40xvvggb.js:ws"
     }
   },
   "coreScope": {
@@ -170,6 +181,7 @@
     "chunk-3nrrbnwj.js": "b707da333f20f5c82197df9cfcbb9382f506c743d9e9a179b4aa876a01ea38de",
     "chunk-t61vswm2.js": "45e5c4d7e99a65706e1af6911fe3a96e1babfc91300eee844c2799c69b429e86",
     "chunk-6qx5mjec.js": "35fcbb9418156ee3f9476736af59a84b200474ed8bd8924a758aa4d7c93f29c0",
+    "chunk-40xvvggb.js": "d21d51e08489534170a5f049a2aa292c4990f22e8e7af8ac3aa586180d9f4ead",
     "cli.js": "620055f31932361ed30f95d2cafde9906e852191a05e4c1c40d5f7b71fc21aff",
     "chunk-32vra4sg.js": "187368f034078e27ba067765cdf443eaa48b9d86ebcffa67b6be894c6e52a14e",
     "chunk-2gh4h0fv.js": "c2d6555486a87ac42b8826897bb2ddf6f5cf1957f500bb25ab81fa01ee2abac1",

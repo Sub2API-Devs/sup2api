@@ -45,7 +45,7 @@ func resourceTestRunner(t *testing.T, handler http.HandlerFunc) *Runner {
 		}
 	}
 	env := envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), "ANTHROPIC_API_KEY": "dummy-resource-fixture", "ANTHROPIC_BASE_URL": up.URL, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1"})
-	return &Runner{CLI: cli, Version: version, Work: root, Env: env}
+	return &Runner{CLI: cli, Version: version, Work: root, Env: env, SupportsManagement: true}
 }
 
 // x509 fallback roots are process-global and cannot be restored. Run each

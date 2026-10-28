@@ -59,9 +59,9 @@ type authManager struct {
 	env       []string
 	proxy     *ProxyConfigStore
 	overrides *EnvironmentOverrides // account locale/timezone (PUT /admin/environment)
-	// version is the CLI version (usage request user agent); usageURL
-	// overrides the Anthropic usage endpoint in tests.
-	version, usageURL string
+	// managementHTTP is the CLI's management_http_v1 capability: an older CLI
+	// has no ccgateway-mgmt command and must never be asked for one.
+	managementHTTP bool
 	// work is the directory the token refresh process runs in.
 	work string
 }

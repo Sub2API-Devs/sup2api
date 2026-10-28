@@ -551,62 +551,47 @@ func TestResourceManagementBindingRejectsIdentityDrift(t *testing.T) {
 	require.ErrorContains(t, err, "changed")
 }
 
-func resourceManagementTestClient(t *testing.T, server *httptest.Server, env []string) *http.Client {
-	t.Helper()
-	client, tr := managementHTTPClient(env)
-	// Trust exactly the local fixture certificate; production never skips TLS.
-	tr.TLSClientConfig.RootCAs = server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
-	t.Cleanup(tr.CloseIdleConnections)
-	return client
-}
-
 func TestResourceManagementHTTPByteExact(t *testing.T) {
 	for _, path := range []string{"/v1/files", "/v1/skills", "/v1/skills/skill_fixture/versions"} {
 		t.Run(path, func(t *testing.T) {
 			payload := []byte("--fixture\r\nContent-Disposition: form-data; name=\"file\"; filename=\"raw.bin\"\r\n\r\n\x00binary\xff\r\n--fixture--\r\n")
 			download := []byte("\x1f\x8b\x00raw-encoded\xff")
-			var calls atomic.Int32
-			up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls.Add(1)
-				got, err := io.ReadAll(r.Body)
-				assert.NoError(t, err)
-				assert.Equal(t, path, r.URL.Path)
-				assert.Equal(t, "POST", r.Method)
-				assert.Equal(t, payload, got)
-				assert.Equal(t, int64(len(payload)), r.ContentLength)
-				assert.Equal(t, "fixture-secret", r.Header.Get("X-Api-Key"))
-				assert.Empty(t, r.Header.Get("Authorization"))
-				assert.Equal(t, "identity", r.Header.Get("Accept-Encoding"))
-				assert.Equal(t, "fixture-version", r.Header.Get("Anthropic-Version"))
-				assert.Equal(t, "fixture-beta", r.Header.Get("Anthropic-Beta"))
-				w.Header().Set("Content-Type", "application/octet-stream")
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Content-Disposition", "attachment; filename=raw.bin")
-				w.Header().Set("Request-Id", "fixture-request")
-				w.Header().Set("Set-Cookie", "secret-cookie")
-				w.Header().Set("Authorization", "secret-header")
-				w.Write(download)
-			}))
-			defer up.Close()
-			env := append(resourceManagementFixtureEnv(t), "ANTHROPIC_API_KEY=fixture-secret", "ANTHROPIC_BASE_URL="+up.URL)
-			auth, err := resourceAuthorizationCandidate(env)
-			require.NoError(t, err)
+			answerFile := filepath.Join(t.TempDir(), "answer.bin")
+			require.NoError(t, os.WriteFile(answerFile, download, 0600))
+			runner, argsLog := managementTestRunner(t, map[string]string{
+				"CCG_TEST_MGMT_META_HEADERS": `{"Content-Type":"application/octet-stream","Content-Encoding":"gzip","Content-Disposition":"attachment; filename=raw.bin","Request-Id":"fixture-request","Set-Cookie":"secret-cookie","Authorization":"secret-header"}`,
+				"CCG_TEST_MGMT_BODY_FILE":    answerFile,
+			})
+			env := runner.Env
+			auth := &resourceAuthorization{method: "api_key", header: http.Header{"X-Api-Key": {"fixture-secret"}}}
+			var err error
 			op := &resourceExchange{route: resourceRoute{method: "POST", path: path, contentType: "multipart/form-data; boundary=fixture", version: "fixture-version", betas: []string{"fixture-beta"}}, dir: t.TempDir(), limit: 4096, budget: &resourceSpoolBudget{limit: 8192}}
 			op.input, err = spoolResource(context.Background(), op.dir, io.NopCloser(bytes.NewReader(payload)), int64(len(payload)), op.limit, op.budget)
 			require.NoError(t, err)
 			defer op.input.Close()
-			response, err := resourceManagementHTTP(context.Background(), env, op, auth, resourceManagementTestClient(t, up, env))
+			response, err := resourceManagementHTTP(context.Background(), runner, env, op, auth)
 			require.NoError(t, err)
 			got, err := io.ReadAll(response.body)
 			require.NoError(t, err)
 			require.NoError(t, response.body.Close())
 			require.NoError(t, op.input.Close())
 			assert.Equal(t, download, got)
-			assert.EqualValues(t, 1, calls.Load())
 			assert.Equal(t, "gzip", response.header.Get("Content-Encoding"))
 			assert.NotEmpty(t, response.header.Get("Content-Disposition"))
 			assert.Empty(t, response.header.Get("Set-Cookie"))
 			assert.Empty(t, response.header.Get("Authorization"))
+			assert.Equal(t, "fixture-request", response.header.Get("Request-Id"))
+
+			records := managementRecords(t, argsLog)
+			require.Len(t, records, 1)
+			assert.Equal(t, "POST", records[0]["method"])
+			assert.Equal(t, path, records[0]["path"])
+			assert.Equal(t, payload, managementBody(t, records[0]))
+			headers := fmt.Sprint(records[0]["headers"])
+			assert.Contains(t, headers, "Accept-Encoding:identity")
+			assert.Contains(t, headers, "Anthropic-Version:fixture-version")
+			assert.Contains(t, headers, "Anthropic-Beta:fixture-beta")
+			assert.NotContains(t, headers, "X-Api-Key")
 			files, err := os.ReadDir(op.dir)
 			require.NoError(t, err)
 			assert.Zero(t, op.budget.used)
@@ -615,76 +600,67 @@ func TestResourceManagementHTTPByteExact(t *testing.T) {
 	}
 }
 
-func TestResourceManagementHTTPRejectsUnsafeRoutesTLSAndProxy(t *testing.T) {
-	var calls atomic.Int32
-	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.Write([]byte("ok")) }))
-	defer up.Close()
+func TestResourceManagementHTTPRejectsUnsafeRoutesAndProxy(t *testing.T) {
 	for _, tc := range []struct {
 		name, path, base string
 		proxy            []string
-		trust            bool
 	}{
-		{name: "model", path: "/v1/messages", trust: true},
-		{name: "traversal", path: "/v1/files/../messages", trust: true},
-		{name: "encoded", path: "/v1/files/%2e%2e", trust: true},
-		{name: "profile-without-probe", path: "/api/oauth/profile", trust: true},
-		{name: "plaintext", base: "http://127.0.0.1:1", trust: true},
-		{name: "base-path", base: up.URL + "/base/../", trust: true},
-		{name: "userinfo", base: "https://private-secret@localhost", trust: true},
-		{name: "untrusted-tls"},
-		{name: "malformed-proxy", proxy: []string{"HTTPS_PROXY=://private-secret"}, trust: true},
-		{name: "malformed-http-proxy", proxy: []string{"HTTP_PROXY=://private-secret"}, trust: true},
-		{name: "proxy-scheme", proxy: []string{"HTTPS_PROXY=ftp://private-secret:password@localhost"}, trust: true},
-		{name: "proxy-port", proxy: []string{"HTTPS_PROXY=http://localhost:99999"}, trust: true},
-		{name: "proxy-conflict", proxy: []string{"HTTPS_PROXY=http://localhost:1", "https_proxy=http://localhost:2"}, trust: true},
-		{name: "all-proxy", proxy: []string{"ALL_PROXY=http://localhost:1"}, trust: true},
+		{name: "model", path: "/v1/messages"},
+		{name: "traversal", path: "/v1/files/../messages"},
+		{name: "encoded", path: "/v1/files/%2e%2e"},
+		{name: "profile-without-probe", path: "/api/oauth/profile"},
+		{name: "plaintext", base: "http://127.0.0.1:1"},
+		{name: "base-path", base: "https://api.anthropic.com/base/../"},
+		{name: "userinfo", base: "https://private-secret@localhost"},
+		{name: "malformed-proxy", proxy: []string{"HTTPS_PROXY=://private-secret"}},
+		{name: "malformed-http-proxy", proxy: []string{"HTTP_PROXY=://private-secret"}},
+		{name: "proxy-scheme", proxy: []string{"HTTPS_PROXY=ftp://private-secret:password@localhost"}},
+		{name: "proxy-port", proxy: []string{"HTTPS_PROXY=http://localhost:99999"}},
+		{name: "proxy-conflict", proxy: []string{"HTTPS_PROXY=http://localhost:1", "https_proxy=http://localhost:2"}},
+		{name: "all-proxy", proxy: []string{"ALL_PROXY=http://localhost:1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			base, path := tc.base, tc.path
 			if base == "" {
-				base = up.URL
+				base = "https://api.anthropic.com"
 			}
 			if path == "" {
 				path = "/v1/files"
 			}
-			env := append([]string{"ANTHROPIC_BASE_URL=" + base}, tc.proxy...)
-			client, tr := managementHTTPClient(env)
-			defer tr.CloseIdleConnections()
-			if tc.trust {
-				tr.TLSClientConfig.RootCAs = up.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
-			}
+			runner, argsLog := managementTestRunner(t, nil)
+			env := append(envWith(runner.Env, map[string]string{"ANTHROPIC_BASE_URL": base}, "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"), tc.proxy...)
 			op := &resourceExchange{route: resourceRoute{method: "GET", path: path}, dir: t.TempDir(), limit: 1024, budget: &resourceSpoolBudget{limit: 2048}}
 			auth := &resourceAuthorization{method: "api_key", header: http.Header{"X-Api-Key": {"fixture-secret"}}}
-			_, err := resourceManagementHTTP(context.Background(), env, op, auth, client)
+			response, err := resourceManagementHTTP(context.Background(), runner, env, op, auth)
+			if response != nil {
+				_ = response.body.Close()
+			}
 			require.Error(t, err)
 			assert.NotContains(t, err.Error(), "private-secret")
-			assert.Zero(t, calls.Load())
 			assert.Zero(t, op.budget.used)
+			// The CLI must never start for a rejected operation or proxy.
+			assert.Empty(t, managementRecords(t, argsLog))
 		})
 	}
 }
 
-func TestResourceManagementHTTPNoRedirectAndProviderStatus(t *testing.T) {
+func TestResourceManagementHTTPProviderStatus(t *testing.T) {
 	for _, status := range []int{307, 429, 401} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
-			var calls atomic.Int32
-			up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls.Add(1)
-				w.Header().Set("Location", "/v1/messages")
-				w.Header().Set("Retry-After", "3")
-				w.WriteHeader(status)
-				w.Write([]byte("provider-body"))
-			}))
-			defer up.Close()
-			env := []string{"ANTHROPIC_BASE_URL=" + up.URL}
+			answerFile := filepath.Join(t.TempDir(), "answer.bin")
+			require.NoError(t, os.WriteFile(answerFile, []byte("provider-body"), 0600))
+			runner, _ := managementTestRunner(t, map[string]string{
+				"CCG_TEST_MGMT_STATUS":       fmt.Sprint(status),
+				"CCG_TEST_MGMT_META_HEADERS": `{"Location":"/v1/messages","Retry-After":"3"}`,
+				"CCG_TEST_MGMT_BODY_FILE":    answerFile,
+			})
 			op := &resourceExchange{route: resourceRoute{method: "GET", path: "/v1/files"}, dir: t.TempDir(), limit: 1024, budget: &resourceSpoolBudget{limit: 2048}}
 			auth := &resourceAuthorization{method: "api_key", header: http.Header{"X-Api-Key": {"fixture-secret"}}}
-			response, err := resourceManagementHTTP(context.Background(), env, op, auth, resourceManagementTestClient(t, up, env))
+			response, err := resourceManagementHTTP(context.Background(), runner, runner.Env, op, auth)
 			require.NoError(t, err)
 			defer response.body.Close()
 			body, err := io.ReadAll(response.body)
 			require.NoError(t, err)
-			assert.EqualValues(t, 1, calls.Load())
 			assert.Equal(t, status, response.status)
 			assert.Equal(t, "provider-body", string(body))
 			assert.Equal(t, "3", response.header.Get("Retry-After"))
@@ -694,32 +670,43 @@ func TestResourceManagementHTTPNoRedirectAndProviderStatus(t *testing.T) {
 }
 
 func TestResourceManagementHTTPSpoolLimitsAndCancellation(t *testing.T) {
-	for _, mode := range []string{"size", "budget", "cancel"} {
+	for _, mode := range []string{"declared_size", "stream_size", "budget", "truncated", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
-			entered := make(chan struct{})
-			up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(200)
-				w.(http.Flusher).Flush()
-				close(entered)
-				if mode == "cancel" {
-					<-r.Context().Done()
-					return
-				}
-				w.Write(bytes.Repeat([]byte("x"), 2048))
-			}))
-			defer up.Close()
-			env := []string{"ANTHROPIC_BASE_URL=" + up.URL}
+			ready := filepath.Join(t.TempDir(), "ready")
+			values := map[string]string{"CCG_TEST_MGMT_READY": ready}
 			op := &resourceExchange{route: resourceRoute{method: "GET", path: "/v1/files/file_fixture/content"}, dir: t.TempDir(), limit: 1024, budget: &resourceSpoolBudget{limit: 4096}}
-			if mode == "budget" {
+			switch mode {
+			case "declared_size":
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+				values["CCG_TEST_MGMT_META_HEADERS"] = `{"Content-Length":"2048"}`
+			case "stream_size":
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+			case "budget":
 				op.limit, op.budget.limit = 4096, 1024
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+			case "truncated":
+				op.limit = 4096
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "16"
+				values["CCG_TEST_MGMT_META_HEADERS"] = `{"Content-Length":"2048"}`
+			case "cancel":
+				values["CCG_TEST_MGMT_SLEEP_MS"] = "5000"
 			}
+			runner, _ := managementTestRunner(t, values)
 			auth := &resourceAuthorization{method: "api_key", header: http.Header{"X-Api-Key": {"fixture-secret"}}}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if mode == "cancel" {
-				go func() { <-entered; cancel() }()
+				go func() {
+					for {
+						if _, err := os.Stat(ready); err == nil {
+							cancel()
+							return
+						}
+						time.Sleep(5 * time.Millisecond)
+					}
+				}()
 			}
-			_, err := resourceManagementHTTP(ctx, env, op, auth, resourceManagementTestClient(t, up, env))
+			_, err := resourceManagementHTTP(ctx, runner, runner.Env, op, auth)
 			require.Error(t, err)
 			files, err := os.ReadDir(op.dir)
 			require.NoError(t, err)
@@ -898,7 +885,7 @@ func TestResourceManagementOfflineSelectionChild(t *testing.T) {
 	roots := x509.NewCertPool()
 	require.True(t, roots.AppendCertsFromPEM(raw))
 	x509.SetFallbackRoots(roots)
-	runner := &Runner{CLI: os.Getenv("CCG_REAL_CLI"), Env: os.Environ(), Work: os.Getenv("HOME")}
+	runner := &Runner{CLI: os.Getenv("CCG_REAL_CLI"), Env: os.Environ(), Work: os.Getenv("HOME"), SupportsManagement: true}
 	switch os.Getenv("CCG_RESOURCE_TEST_MODE") {
 	case "command-trace":
 		runner.Version = os.Getenv("CCG_RESOURCE_VERIFIED_VERSION")

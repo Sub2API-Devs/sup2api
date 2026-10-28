@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -77,4 +78,33 @@ func TestResourceIdentityAPIKeyWithoutIssuer(t *testing.T) {
 	g.resources.ServeHTTP(response, request)
 	require.Equal(t, http.StatusServiceUnavailable, response.Code)
 	require.Contains(t, response.Body.String(), resources.IdentityUnsupportedErrorType)
+}
+
+// A failure is remembered for the credential it happened with, so a request in
+// the backoff window answers without starting another CLI process; another
+// credential, or the same one after the window, verifies again.
+func TestIdentityFailureBackoff(t *testing.T) {
+	g, _ := identityTestGateway(t)
+	broker := g.resources
+	broker.verified.Store(nil)
+	broker.g.Runner.CLI = "must-not-execute"
+	env := broker.g.Runner.baseEnv()
+	auth, err := resourceAuthorizationCandidate(env)
+	require.NoError(t, err)
+	sentinel := errors.New("fixture verification failure")
+	broker.failed.Store(&identityFailure{fingerprint: auth.fingerprint, at: time.Now(), err: sentinel})
+
+	_, err = broker.identity(context.Background())
+	require.ErrorIs(t, err, sentinel, "the recorded failure answers without a CLI")
+
+	// A different credential is not served from that failure.
+	broker.g.Runner.Env = envWith(broker.g.Runner.Env, map[string]string{"ANTHROPIC_API_KEY": "another-key"})
+	_, err = broker.identity(context.Background())
+	require.NotErrorIs(t, err, sentinel)
+
+	// The same credential after the window verifies again.
+	broker.g.Runner.Env = env
+	broker.failed.Store(&identityFailure{fingerprint: auth.fingerprint, at: time.Now().Add(-2 * identityFailureBackoff), err: sentinel})
+	_, err = broker.identity(context.Background())
+	require.NotErrorIs(t, err, sentinel)
 }

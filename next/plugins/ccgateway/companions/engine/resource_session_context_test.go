@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -75,48 +74,36 @@ func TestRealCLIResourceManagementCancellationReleasesAuthorityAndSpool(t *testi
 	assertResourceSpoolReleased(t, broker.dir, broker.budget)
 }
 
-// Low-level HTTP response spooling needs no CLI process. The real TLS server
-// uses an explicitly trusted fixture CA; no transport or response is stubbed.
+// Response spooling keeps its limits under the CLI transport: the answer body
+// is a file the CLI wrote, and Go still rejects a declared size, a streamed
+// size and a spool budget violation (the fake peer scripts each).
 func TestResourceManagementResponseSpoolRejectsIncompleteOrOversize(t *testing.T) {
 	for _, mode := range []string{"declared_size", "stream_size", "budget", "truncated"} {
 		t.Run(mode, func(t *testing.T) {
-			var calls atomic.Int32
-			up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls.Add(1)
-				assert.Equal(t, "/v1/files/file_fixture/content", r.URL.Path)
-				assert.Equal(t, "spool-fixture-key", r.Header.Get("X-Api-Key"))
-				if mode == "declared_size" || mode == "truncated" {
-					w.Header().Set("Content-Length", "2048")
-				}
-				w.WriteHeader(http.StatusOK)
-				w.(http.Flusher).Flush()
-				size := 2048
-				if mode == "truncated" {
-					size = 16
-				}
-				_, _ = w.Write(bytes.Repeat([]byte("x"), size))
-			}))
-			defer up.Close()
-			root := t.TempDir()
-			env := []string{"HOME=" + root, "USERPROFILE=" + root, "CLAUDE_CONFIG_DIR=" + root, "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + root, "ANTHROPIC_API_KEY=spool-fixture-key", "CCG_RESOURCE_ISSUER_ID=spool-fixture", "CCG_RESOURCE_ISSUER_GENERATION=1", "ANTHROPIC_BASE_URL=" + up.URL}
-			auth, err := resourceAuthorizationCandidate(env)
-			require.NoError(t, err)
-			client, transport := managementHTTPClient(env)
-			transport.TLSClientConfig.RootCAs = up.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
-			defer transport.CloseIdleConnections()
+			values := map[string]string{}
 			op := &resourceExchange{route: resourceRoute{method: "GET", path: "/v1/files/file_fixture/content"}, dir: t.TempDir(), limit: 1024, budget: &resourceSpoolBudget{limit: 4096}}
-			if mode == "budget" {
+			switch mode {
+			case "declared_size":
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+				values["CCG_TEST_MGMT_META_HEADERS"] = `{"Content-Length":"2048"}`
+			case "stream_size":
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+			case "budget":
 				op.limit, op.budget.limit = 4096, 1024
-			}
-			if mode == "truncated" {
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "2048"
+			case "truncated":
 				op.limit = 4096
+				values["CCG_TEST_MGMT_BODY_BYTES"] = "16"
+				values["CCG_TEST_MGMT_META_HEADERS"] = `{"Content-Length":"2048"}`
 			}
+			runner, argsLog := managementTestRunner(t, values)
+			auth := &resourceAuthorization{method: "api_key", header: http.Header{"X-Api-Key": {"spool-fixture-key"}}}
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			response, err := resourceManagementHTTP(ctx, env, op, auth, client)
+			response, err := resourceManagementHTTP(ctx, runner, runner.Env, op, auth)
 			require.ErrorContains(t, err, "resource response unavailable")
 			assert.Nil(t, response)
-			assert.Equal(t, int32(1), calls.Load())
+			assert.Len(t, managementRecords(t, argsLog), 1)
 			assertResourceSpoolReleased(t, op.dir, op.budget)
 		})
 	}
