@@ -160,6 +160,14 @@ func TestModelAvailabilitySnapshots(t *testing.T) {
 			q.UpdatedAtUnix -= 86400
 			q.Error = "refresh failed"
 		}, pluginv1.ModelAvailability_UNAVAILABLE},
+		// When the quota query is permanently refused (token revoked), the
+		// snapshot can never be refreshed. A rejected window whose reset has
+		// already passed must not keep the account blocked indefinitely.
+		{"auth_rejected with expired rejection is not blocked", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Windows[0].Status = "rejected"
+			q.Windows[0].ResetsAtUnix = now.Add(-time.Hour).Unix()
+			q.Error = "auth_rejected: token_revoked: the authorization was refused and cannot be renewed"
+		}, pluginv1.ModelAvailability_UNKNOWN},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			q := healthy()
@@ -240,4 +248,34 @@ func TestModelAvailabilityMixedBatchValidation(t *testing.T) {
 	out, err = p.CheckModelAvailability(context.Background(), nil)
 	require.NoError(t, err)
 	require.Empty(t, out.Results)
+}
+
+func TestAuthRejectedExpiredWindowUnblocks(t *testing.T) {
+	// An account whose quota query is permanently refused (token revoked) can
+	// never refresh its snapshot. A rejected 5-hour window whose resets_at has
+	// already passed must not permanently block the account; a future one must.
+	p, now := quotaTestPlugin()
+	make := func(resetsOffset time.Duration, wantState pluginv1.ModelAvailability_State) {
+		t.Helper()
+		q := &pluginv1.AccountQuotaSnapshot{
+			UpdatedAtUnix: now.Unix(),
+			Error:         "auth_rejected: token_revoked: the authorization was refused and cannot be renewed",
+			Windows: []*pluginv1.QuotaWindow{
+				{Key: "5h", Status: "rejected", ResetsAtUnix: now.Add(resetsOffset).Unix()},
+				{Key: "7d", Status: "allowed", ResetsAtUnix: now.Add(7 * 24 * time.Hour).Unix()},
+			},
+		}
+		in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{
+			{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-opus-5", Quota: q},
+		}}
+		out, err := p.CheckModelAvailability(context.Background(), in)
+		require.NoError(t, err)
+		require.Equal(t, wantState, out.Results[0].State, "resetsOffset=%v reason=%s", resetsOffset, out.Results[0].Reason)
+	}
+	// reset already passed → should not block
+	make(-time.Hour, pluginv1.ModelAvailability_UNKNOWN)
+	// reset exactly at now → treated as expired (<=), should not block
+	make(0, pluginv1.ModelAvailability_UNKNOWN)
+	// reset still in future → must still block
+	make(time.Hour, pluginv1.ModelAvailability_UNAVAILABLE)
 }

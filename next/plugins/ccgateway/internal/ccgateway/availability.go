@@ -71,7 +71,12 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 	if snapshot.GetUpdatedAtUnix() <= 0 || snapshot.GetUpdatedAtUnix() > now {
 		return
 	}
-	windows, invalid, shared, scoped := scanQuotaWindows(snapshot, out.Model)
+	// When the quota query is permanently refused (token revoked / not logged
+	// in), the snapshot can never be refreshed after a window reset. Treat
+	// expired rejected windows as cleared so the account is not blocked for
+	// good by a stale "rejected" label from a previous 5-hour cycle.
+	skipExpired := authRefused
+	windows, invalid, shared, scoped := scanQuotaWindows(snapshot, out.Model, skipExpired, now)
 	if blocked := blockedWindow(shared, scoped); blocked != nil {
 		out.State, out.Reason = pluginv1.ModelAvailability_UNAVAILABLE, "quota_rejected:"+blocked.GetKey()
 		if blocked.GetResetsAtUnix() > now {
@@ -95,7 +100,10 @@ func evaluateQuotaAvailability(snapshot *pluginv1.AccountQuotaSnapshot, now int6
 
 // scanQuotaWindows indexes the cached windows and picks the blocking ones: the
 // shared window with the latest reset, and the scoped window for this model.
-func scanQuotaWindows(snapshot *pluginv1.AccountQuotaSnapshot, model string) (windows map[string]*pluginv1.QuotaWindow, invalid bool, shared, scoped *pluginv1.QuotaWindow) {
+// When skipExpired is set, rejected windows whose reset time has already passed
+// are treated as cleared (used when the quota query is known-rejected and can
+// never confirm the reset, so the stale label must not permanently block).
+func scanQuotaWindows(snapshot *pluginv1.AccountQuotaSnapshot, model string, skipExpired bool, now int64) (windows map[string]*pluginv1.QuotaWindow, invalid bool, shared, scoped *pluginv1.QuotaWindow) {
 	windows = map[string]*pluginv1.QuotaWindow{}
 	invalid = len(snapshot.GetWindows()) > 64 || snapshot.GetRevision() < 0
 	for _, window := range snapshot.GetWindows() {
@@ -110,6 +118,14 @@ func scanQuotaWindows(snapshot *pluginv1.AccountQuotaSnapshot, model string) (wi
 		windows[key] = window
 		if window.GetStatus() != "rejected" {
 			continue
+		}
+		// A window whose reset time has already passed is treated as cleared:
+		// the quota refilled at that moment and the stale "rejected" label no
+		// longer blocks requests while the next active query is pending.
+		if skipExpired {
+			if r := window.GetResetsAtUnix(); r > 0 && r <= now {
+				continue
+			}
 		}
 		switch {
 		case !scopedQuota(key):
