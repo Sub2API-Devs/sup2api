@@ -4522,3 +4522,42 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 按指标降序，相同时按 `key` 升序；只给 `limit` 时按 `cost`，只给 `order` 时上限 200。非法值 400（`order must be cost, requests or tokens` / `limit must be 1-200`）。
 - 超出 `limit` 的行合并成一行 `key="__other__"`，排在最后：各计数与费用求和，`latency_ms_avg`、`first_token_ms_avg` 按成功请求数加权平均。不带这两个参数时结果与此前完全相同（按 `key` 排序、不合并）。
 - 控制台用法：管理员仪表盘的用户消费榜（`group_by=user&order=…&limit=10`）、使用记录页的「用户排行」页签（前 20 / 50 / 100 / 200）。
+
+## §67 账号负载信号（2026-10-29）
+
+### 67.1 目的
+
+`RankAccounts` 允许插件返回每个账号的**负载百分比**（0–100），核心据此在调度时动态削减权重，无需插件直接计算最终权重。负载是独立于权重的叠加维度——插件返回的 `weight` 始终是基线值，核心在此基础上做折减。
+
+### 67.2 协议变更
+
+`RankedAccount` 新增字段 `int32 load = 4`：
+
+- 含义：当前账号的利用率百分比，0 = 空闲（默认），100 = 完全占用。
+- 核心应用公式：`effective_weight = floor(weight × (100 − load) / 100)`
+- 范围 `[0, 100]`；核心将越界值静默截断（负数→0，>100→100），并记 WARN 日志。
+- 未设置时默认 0，与旧插件完全兼容。
+
+### 67.3 调度语义
+
+| load | 效果 |
+|------|------|
+| 0 | weight 不变，默认行为 |
+| 1–99 | weight 成比例缩减；调度仍可选此账号，但概率降低 |
+| 100 | effective_weight = 0，此次请求不选此账号 |
+
+若插件对**所有候选账号**均返回 load=100（有效 weight 全为 0），核心与 `weight=0` 全为零的情形相同：丢弃本次排名结果，回退到账号自身的 priority/weight，保证请求不因插件过激行为而失败。
+
+### 67.4 与 weight 字段的关系
+
+`weight` 和 `load` 均需在 `RankedAccount` 里携带；插件只想传达负载、不改变基线权重时，应将 `weight` 回传为 `RankCandidate.weight`（即原值），再设置 `load`。两者都是最终值而非差量。
+
+### 67.5 记录
+
+`load` 不单独进入 `usage_logs.sched_decisions`；`sched_decisions` 记录的是 effective_weight 之后的最终 weight 值（折减已体现其中）。
+
+### 67.6 实现位置
+
+- Proto：`sdk/proto/sub2api/plugin/v1/scheduler.proto` `RankedAccount.load`
+- 生成：`sdk/gen/pluginv1/scheduler.pb.go`
+- 核心：`server/internal/gateway/rank.go` `rankOverrides()`，常量 `maxRankLoad = 100`

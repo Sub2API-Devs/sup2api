@@ -346,3 +346,82 @@ func TestRankMatchFiltersRequests(t *testing.T) {
 		t.Fatalf("a non matching ranker was called %d times", r.count())
 	}
 }
+
+// load reduces the effective weight: load=100 zeroes it (excludes account).
+func TestRankLoadReducesWeight(t *testing.T) {
+	e := newEnv(t)
+	samePriority(e)
+	// acc-1: load=0   weight 1000 (eligible)
+	// acc-2: load=50  weight 500 (eligible)
+	// acc-3: load=100 weight 0 (excluded — must never reach upstream)
+	e.addRanker("load", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(_ context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{
+				{AccountId: 1, Priority: 10, Weight: 1000, Load: 0},
+				{AccountId: 2, Priority: 10, Weight: 1000, Load: 50},
+				{AccountId: 3, Priority: 10, Weight: 1000, Load: 100},
+			}, nil
+		}})
+	// Make acc-3 always return 500 so that if it is picked we know immediately.
+	e.up.set("acc-3", &upstreamRule{status: 500})
+	for i := 0; i < 20; i++ {
+		r := e.messages(body(testModel, false))
+		e.record()
+		for _, k := range e.up.keys() {
+			if k == "acc-3" {
+				t.Fatalf("iter %d: acc-3 with load=100 was scheduled (status=%d)", i, r.status)
+			}
+		}
+		if r.status != 200 {
+			t.Fatalf("iter %d: status %d %s", i, r.status, r.body)
+		}
+	}
+}
+
+// load=100 on every candidate falls back to the accounts' own values (same
+// safety net as weight=0 on every account).
+func TestRankLoadExcludesAllFallsBack(t *testing.T) {
+	e := newEnv(t)
+	e.addRanker("overload", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(_ context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			accs := make([]*pluginv1.RankedAccount, len(in.GetCandidates()))
+			for i, c := range in.GetCandidates() {
+				accs[i] = &pluginv1.RankedAccount{AccountId: c.AccountId, Priority: c.Priority, Weight: c.Weight, Load: 100}
+			}
+			return accs, nil
+		}})
+	// All accounts have load=100 → fall back to own values → request succeeds.
+	if r := e.messages(body(testModel, false)); r.status != 200 {
+		t.Fatalf("status %d body %s", r.status, r.body)
+	}
+}
+
+// Out-of-range load values are clamped to [0,100].
+func TestRankLoadClamped(t *testing.T) {
+	e := newEnv(t)
+	samePriority(e)
+	// acc-1: load=-10 → clamped to 0 → weight unchanged
+	// acc-2: load=150 → clamped to 100 → excluded; must never reach upstream
+	// acc-3: no load
+	e.addRanker("clamp", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(_ context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{
+				{AccountId: 1, Priority: 10, Weight: 1, Load: -10},
+				{AccountId: 2, Priority: 10, Weight: 1000, Load: 150},
+				{AccountId: 3, Priority: 10, Weight: 1},
+			}, nil
+		}})
+	e.up.set("acc-2", &upstreamRule{status: 500})
+	for i := 0; i < 10; i++ {
+		r := e.messages(body(testModel, false))
+		e.record()
+		for _, k := range e.up.keys() {
+			if k == "acc-2" {
+				t.Fatalf("iter %d: acc-2 with load=150 (clamped→100) was scheduled (status=%d)", i, r.status)
+			}
+		}
+		if r.status != 200 {
+			t.Fatalf("iter %d: status %d %s", i, r.status, r.body)
+		}
+	}
+}

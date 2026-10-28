@@ -56,4 +56,13 @@ message RankedAccount {
   // is not used for this request.
   int32 priority = 2;
   int32 weight = 3;
+  // load is the account's current utilization as a percentage (0–100,
+  // default 0). The host reduces the effective scheduling weight by the load
+  // factor: effective_weight = weight * (100 - load) / 100. A load of 100
+  // therefore removes the account from this request (effective weight 0),
+  // while a load of 0 leaves the weight unchanged. Load is independent of the
+  // weight field: the plugin sets both, and the host applies the reduction
+  // afterwards so the weight value the plugin returns is always the baseline,
+  // not already discounted.
+  int32 load = 4;
 }

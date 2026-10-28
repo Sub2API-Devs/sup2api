@@ -27,6 +27,9 @@ const (
 
 	// maxRankChanges bounds one plugin's entry in usage_logs.sched_decisions.
 	maxRankChanges = 100
+
+	// maxRankLoad is the maximum load percentage a plugin may return (CONTRACTS §63).
+	maxRankLoad = 100
 )
 
 // rankValues is the priority/weight one candidate account has for this
@@ -137,6 +140,14 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 			}
 			p := clampRank(ctx, rb.Plugin.Key, "priority", rc.AccountId, ra.GetPriority(), maxRankPriority)
 			w := clampRank(ctx, rb.Plugin.Key, "weight", rc.AccountId, ra.GetWeight(), maxRankWeight)
+			// Apply load: reduce the effective weight proportionally.
+			// load=0 → no change, load=100 → weight becomes 0 (account excluded).
+			// The plugin's returned weight is the baseline; the host applies
+			// the reduction afterwards (CONTRACTS §63).
+			load := clampRank(ctx, rb.Plugin.Key, "load", rc.AccountId, ra.GetLoad(), maxRankLoad)
+			if load > 0 {
+				w = w * (maxRankLoad - load) / maxRankLoad
+			}
 			if int32(p) == rc.Priority && int32(w) == rc.Weight {
 				continue // nothing moved: not worth a row in sched_decisions
 			}
