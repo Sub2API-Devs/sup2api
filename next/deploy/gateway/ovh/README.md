@@ -4,7 +4,12 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间凌晨）：Core 两节点 **0.1.217** + ccgateway **0.1.113**（源码 `1e7349bbd`）。之前一小时内还发了 Core **0.1.216**（`138b8bf9a`）。
+2026-10-30 最新发布（北京时间 04:35）：Core 两节点 **0.1.218**（源码 `5c282938c`，manifest `7f46bb57…d55e`，计划 `5b214a14267f95fc8ed519684f26ada5` completed/13，45.5 秒，核心 SHA `38ad77a1…66c4`）。
+- 账号状态只有"启用 / 禁用 / 自动禁用"三种：遗留 `error` 与"启用但不可调度"显示和筛选都算自动禁用，冷却是启用状态下的一行"冷却至"；列表不再显示原因（放在悬停），自动禁用只显示"{时间} 自动启用"；管理员首页的账号统计改为 `auto_disabled` / `disabled`。
+- 每分钟会话数 SPM（CONTRACTS §71）：账号与每个模型列表各一层，按粘性会话键（没有时每个请求算一个）计近 60 秒活跃会话，与 RPM/TPM 同一 Lua 准入；列表列为"并发 / RPM / TPM / 会话"。
+- schema 契约 `fde93824…` → `e3d6a10f…`（迁移 0063：`accounts.spm_limit` 遗留值首次清零并加约束，切换时自动执行；执行后 49 个账号 spm_limit 全为 0）。备份 `backups/core-0.1.218`，脚本 `stage/0.1.218`。`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
+
+2026-10-30 发布（北京时间凌晨）：Core 两节点 **0.1.217** + ccgateway **0.1.113**（源码 `1e7349bbd`）。之前一小时内还发了 Core **0.1.216**（`138b8bf9a`）。
 - **Core 0.1.216**（manifest `1b0ebc67…e245`，计划 `10235bc688315da658930d6d85a80908` completed/13）：有故障策略时，插件给出的"禁用到某时刻"照样执行（CONTRACTS §69）。上线后 42、45–49 号在 429 时被自动禁用，`auto_disabled_until` 就是响应头里的重置时刻，到点由核心自动恢复。
 - **Core 0.1.217**（manifest `5cab7ea0…d26c`，计划 `31e62f5e1b786cd5793449d21ed19baa` completed/13）：`GET /accounts/:id/quota` 不带 `force` 时，对不自动刷新的类型不再查询。schema 不变（`fde93824…`）。
 - **ccgateway 0.1.113**（包 SHA `a55d488a…93e3`，验签 valid，授权沿用；paired 9 updated / 7 not_running / 23 号 not_found；`up_to_date: true`）：用量改为从响应头读取（`quota.headers` 5h/7d），后台不再经 CLI 调 `/usage`（去掉 `autoRefresh`），只有手动刷新才查询；429 的观测带真实 utilization（CONTRACTS §70）。
