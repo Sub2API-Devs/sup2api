@@ -9,7 +9,7 @@ export default {
     loadFailedEmpty: '账号列表加载失败，请刷新重试',
     identity: '账号 / 接入类型', filters: '账号筛选', search: '搜索账号名称', advanced: '高级筛选', advancedApplied: '高级筛选条件已生效',
     clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
-    resultCount: '筛选结果 {total} 个账号 · 当前页 {page} 个', loadFailed: '刷新失败，正在显示上次加载的数据',
+    loadFailed: '刷新失败，正在显示上次加载的数据',
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', priorityWeight: '优先级 / 权重'
   },
   editorUi: {

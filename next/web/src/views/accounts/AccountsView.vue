@@ -542,6 +542,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
   <div>
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
       <template #actions>
+        <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
         <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
         <SButton icon="refresh" icon-only :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
         <SButton v-if="canCreate" variant="primary" icon="plus" data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
@@ -567,16 +568,11 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       </div>
       <p v-else-if="hasAdvancedFilters" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
     </section>
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-      <SHint v-if="list.error.value" inline size="xs" tone="danger" role="alert">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</SHint>
-      <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
-      <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
-      <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" class="ml-auto" />
-    </div>
+    <SHint v-if="list.error.value" size="xs" tone="danger" role="alert" class="mb-3">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</SHint>
     <SBulkBar
       v-if="anySelectable || selection.keys.value.length"
       class="mb-3"
-      persistent
+      :persistent="batchRunning || bulk.running.value"
       :count="selection.keys.value.length"
       :total="list.total.value"
       :page-selected="selection.pageSelected.value"

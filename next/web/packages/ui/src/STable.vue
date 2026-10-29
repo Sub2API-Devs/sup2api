@@ -206,6 +206,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
             <th
               v-if="selectable"
               class="w-10 !pr-0"
+              :title="swipeSelect ? t('ui.bulkHint') : undefined"
             >
               <SCheckbox
                 bare

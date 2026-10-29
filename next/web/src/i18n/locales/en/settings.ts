@@ -1,5 +1,4 @@
 export default {
-  title: 'Settings',
   description: 'System-wide billing, gateway and scheduling settings.',
   tabs: {
     billing: 'Billing',

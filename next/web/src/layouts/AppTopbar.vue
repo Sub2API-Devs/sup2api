@@ -47,7 +47,7 @@ async function logout() {
     class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-6"
   >
     <SButton variant="ghost" size="sm" icon="menu" icon-only class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true" />
-    <div class="min-w-0 flex-1 truncate text-sm font-medium text-fg-muted">{{ title }}</div>
+    <h1 class="min-w-0 flex-1 truncate text-base font-semibold text-fg">{{ title }}</h1>
 
     <RouterLink
       v-if="auth.balance !== null"

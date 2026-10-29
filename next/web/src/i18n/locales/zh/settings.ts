@@ -1,5 +1,4 @@
 export default {
-  title: '系统设置',
   description: '全局的计费、网关与调度设置。',
   tabs: {
     billing: '计费',

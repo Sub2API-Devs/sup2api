@@ -134,7 +134,7 @@ function remove(k: ApiKey) {
 
 <template>
   <div>
-    <SPageHeader :title="t('apikeys.myTitle')" :description="t('apikeys.myDescription')">
+    <SPageHeader :title="t('nav.items.myApiKeys')" :description="t('apikeys.myDescription')">
       <template #actions>
         <SButton variant="primary" icon="plus" data-testid="create-key" @click="openEditor(null)">{{ t('apikeys.create') }}</SButton>
       </template>

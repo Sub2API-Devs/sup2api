@@ -9,7 +9,7 @@ export default {
     loadFailedEmpty: 'Accounts could not be loaded. Refresh to retry.',
     identity: 'Account / integration', filters: 'Account filters', search: 'Search account names', advanced: 'More filters', advancedApplied: 'Advanced filters are applied',
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
-    resultCount: '{total} matching accounts · {page} on this page', loadFailed: 'Refresh failed; showing the previous results',
+    loadFailed: 'Refresh failed; showing the previous results',
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', priorityWeight: 'Priority / weight'
   },
   editorUi: {

@@ -3,7 +3,6 @@ export default {
   rotateConfirm: 'Regenerate the key for "{name}"? The old key will stop working immediately. Update clients with the new key.',
   rotated: 'Key regenerated. Copy the new key and update your clients.',
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
-  myTitle: 'API keys',
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   create: 'New API key',
   edit: 'Edit API key',

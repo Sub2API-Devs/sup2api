@@ -31,9 +31,9 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div class="max-w-screen-2xl space-y-5">
     <SPageHeader
-      :title="t('settings.title')"
+      :title="t('nav.items.settings')"
       :description="t('settings.description')"
     />
     <STabs

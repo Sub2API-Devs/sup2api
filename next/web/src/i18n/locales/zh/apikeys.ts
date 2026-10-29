@@ -1,5 +1,4 @@
 export default {
-  myTitle: 'API Key',
   myDescription: '仅显示和管理你自己的密钥，管理员也无法查看其他用户的 Key。每个 Key 绑定一个分组，决定可访问的平台、模型和费率。',
   create: '新建 API Key',
   edit: '编辑 API Key',

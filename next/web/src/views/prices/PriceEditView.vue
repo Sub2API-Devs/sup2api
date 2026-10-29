@@ -278,7 +278,7 @@ const title = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div class="max-w-screen-2xl space-y-5">
     <SPageHeader :title="title">
       <template #before>
         <SButton variant="ghost" size="sm" :title="t('common.back')" :aria-label="t('common.back')" icon-only icon="arrow-left" @click="router.push('/prices')" />
