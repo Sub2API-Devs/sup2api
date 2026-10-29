@@ -2,7 +2,18 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
-2026-10-29 最新发布：Core 两节点 **0.1.211**（源码 `a7a880313`，manifest `7ffa6ea9…e146`，计划 `a72c271390fd8c7bf7dfa9346f51b04e` completed/13，约 116 秒，核心 SHA `0b39eaf5…b4b6`）。schema 契约不变（`2adf9bfc…`）；CCGateway 0.1.110。
+2026-10-29 插件签名校验与 Landlock 打开（两节点）：`SUB2API_PLUGIN_VERIFY_SIGNATURES=true`、`SUB2API_PLUGIN_LANDLOCK=true`；CCGateway **0.1.111**（`d4cf5beed`，代码同 0.1.110，包 SHA `ccd0dcdb…`，rollout 197）。
+- 起因：从 0.1.68 起，插件包都用容器里临时生成的一次性密钥签名，验签只能关着。数据库里 `sub2api-dev` 的公钥也和任何包都对不上；内置包实际是用镜像 `builtin/trust.pub` 那把密钥签的，它的私钥已经丢了。
+- 新的固定签名密钥是 `sup2api-plugins-2026`，私钥在 ovh `~/sup2api-managed/keys/plugin-sign/`（700/600），公钥 `ARIktwp5…wN8=`。它已登记在发布者 sub2api 名下，两节点 `.env` 的 `PLUGIN_TRUST_KEY` 也换成了它。以后插件包都用它签（样板 `stage/ccgateway-0.1.111/build.sh`），不要再 `keygen`。
+- `sub2api-dev` 的公钥已改成 `builtin/trust.pub`（`i0Jwoox2…`），并设 `not_after` 为 2026-10-29（审计 `publisher_key.repair`）。已安装的 anthropic 0.2.6、gemini 0.2.5、openai 0.3.5、moderation 0.1.11、volcengine 0.12.4 加载时仍能验过，但不能再用它上传新包。这几个插件下次重新编译发布、改用新密钥签名后，再吊销 `sub2api-dev`；吊销会停用它签名的版本。
+  - 镜像 `builtin/` 里的 ccgateway 0.1.66 签名本身就是坏的，旧密钥也已过期，所以全新节点装内置插件会失败。现有两节点不受影响，因为内置插件都已就绪，启动时不会重新上传。下次核心发布要用新密钥重签 `builtin/`。
+- 曾尝试只改版本号、不重编译来重签内置包，但不可行：插件二进制内嵌 manifest，`GetInfo` 会报旧版本。moderation 0.1.12 的 rollout 196 在准备阶段失败，版本已标记为 rejected。
+- Landlock：在一次性容器里用线上数据卷（只读）把 6 个插件放进 `plugin-exec --landlock --seccomp --strict-network` 启动，握手全部正常。同样条件下用 busybox 验证：`/etc/passwd`、`/var/lib/sub2api`、`/tmp` 都被拒绝，工作目录可写。
+- 切换：两节点先备份 `.env`、`compose.yml`（`*.bak-2026-10-29`），然后 `docker compose up -d` 重建容器。sup2api-1 9 秒就绪，sup2api-ccp 18 秒就绪。6 个插件都在验签开启的状态下加载，`Seccomp=2`。
+- 核对：42/44 号 haiku 测试经 127.0.0.1:3130 和 api.prophey.ai 都返回 200；21 号 200。34/35/36 号刷新令牌已失效，是原有问题。只有 ccgateway 有启用的账号，其余插件只核对了加载和握手。
+- 备份 `backups/plugin-resign-2026-10-29`，脚本 `stage/plugin-resign-2026-10-29/`、`stage/ccgateway-0.1.111/`。
+
+2026-10-29 发布：Core 两节点 **0.1.211**（源码 `a7a880313`，manifest `7ffa6ea9…e146`，计划 `a72c271390fd8c7bf7dfa9346f51b04e` completed/13，约 116 秒，核心 SHA `0b39eaf5…b4b6`）。schema 契约不变（`2adf9bfc…`）；CCGateway 0.1.110。
 - 内容：插件可在 RankAccounts 里返回账号负载 `load`（0–100），同优先级内有效权重 = 权重 ×(100−load)/100（CONTRACTS §67）；账号页拖选/Shift 多选、全选与批量操作（UI 3.2）。
 - 停机：sup2api-ccp 停 4.1 秒、sup2api-1 停 2.3 秒（0.1.210 的排空即停生效）。
 - 备份 `backups/core-0.1.211`（604 项），脚本 `stage/0.1.211/{build.sh,release.sh}`。

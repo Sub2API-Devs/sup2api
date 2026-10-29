@@ -2566,6 +2566,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
   | CA 证书、`/usr/share/zoneinfo`、`/etc/localtime`、`/etc/resolv.conf`、`/etc/hosts`、`/etc/nsswitch.conf`、`/etc/services`、`/dev/urandom` | 只读，存在时才放行 |
 
 - **默认关闭的原因**：还没有在真实插件上跑过。原稿只放行二进制和工作目录，打开后每个插件都会启动失败（go-plugin 要在 `/tmp` 建文件），也读不到证书和时区。要打开，先在 Linux 上让全部内置插件（含出网和时区相关功能）在开启状态下跑通。
+- **2026-10-29 线上两节点已打开**（同时打开插件签名校验，见 `deploy/gateway/ovh/README.md`）。6 个线上插件在 `plugin-exec --landlock --seccomp --strict-network` 下启动、握手正常；ccgateway 账号请求经两个节点都返回 200。代码默认值仍为 false。
 
 ## 44. 订阅账号套餐额度：被动采样、主动查询与重置状态（2026-10-05，用户要求）
 
