@@ -9,7 +9,7 @@ CCGateway 把 Claude Code 账号作为平台的 Anthropic Messages 上游：每�
 以 [ovh 发布记录](../../deploy/gateway/ovh/README.md) 最上面一条为准（2026-10-26）：
 
 - 插件、控制器、Worker、出口 **0.1.106**（`manifest.json` 的 `version`，镜像与插件版本一起变）；插件要求核心 `>=0.1.172 <0.2.0`，线上核心 0.1.207。
-- CLI **Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`**（ELF SHA-256 `720f4645…2463`，Bun 1.4.4 编译为字节码，与官方内嵌版本相同；上一版 2.1.304 / v31 的 profile 与锚点仍在）。版本记录在 [cli-mods README](companions/cli-mods/README.md)，迁移到 2.1.310 的记录在 [CLAUDE-CODE-2.1.310-MIGRATION](docs/CLAUDE-CODE-2.1.310-MIGRATION.md)。
+- CLI **Claude Code 2.1.310 / `ccgateway-v33-bun-1-4-4`**（ELF SHA-256 `720f4645…2463`，Bun 1.4.4 编译为字节码，与官方内嵌版本相同；上一版 2.1.304 / v31 的 profile 与锚点仍在）。版本记录在 [cli-mods README](companions/cli-mods/README.md)，迁移到 2.1.310 的记录在 [CLAUDE-CODE-2.1.310-MIGRATION](docs/CLAUDE-CODE-2.1.310-MIGRATION.md)。下一版候选 2.1.312 / `ccgateway-v38-cc-2-1-312`（2026-10-30，未发布）见 [CLAUDE-CODE-2.1.312-MIGRATION](docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。
 
 ## 目录
 
@@ -76,6 +76,8 @@ ccgateway/
 | [CLI-UPGRADE-RUNBOOK](docs/CLI-UPGRADE-RUNBOOK.md) | 升级 Claude Code 版本：下载校验、还原、静态分析、移植补丁器、测试、编译打包、发布回滚、常见坑 |
 | [CLI-TEST-PLAN](docs/CLI-TEST-PLAN.md) | CLI 与 Worker 的测试方案、组件目录、跨版本证明方法与发布门槛 |
 | [CLAUDE-CODE-2.1.310-MIGRATION](docs/CLAUDE-CODE-2.1.310-MIGRATION.md) | 2.1.304 → 2.1.310 的分析、补丁迁移与验证记录（CLI v32） |
+| [CLAUDE-CODE-2.1.312-MIGRATION](docs/CLAUDE-CODE-2.1.312-MIGRATION.md) | 2.1.310 → 2.1.312 的分析、补丁迁移、会话记忆与验证记录（CLI v38） |
+| [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](docs/CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) | 计费头由谁写、内置提示词何时注入、`cc_prev_req` 与 turn 字段的会话记忆规则 |
 | [ACCOUNT-RUNTIME-LIFECYCLE](docs/ACCOUNT-RUNTIME-LIFECYCLE.md) | 账号容器的删除、保留与重新授权（2026-10-19，2026-10-24 修订删除保留） |
 | [CLIENT-SETUP](docs/CLIENT-SETUP.md) | 把 Claude Code 客户端指向本平台的推荐配置（按 2.1.304 验证） |
 | [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY](docs/CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) | 2.1.304 主/子代理 system 提示词的组装分析与 AST 工具 |

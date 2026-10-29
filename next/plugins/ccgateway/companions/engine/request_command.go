@@ -58,6 +58,9 @@ type requestPlan struct {
 	// (request_log_upstream.go).
 	capture     string
 	captureBody bool
+	// session: the request's place in the Worker's memory of its session
+	// thread (session_state.go), nil when it has none.
+	session *requestSession
 }
 
 // requestRefusal is the Worker's own answer before the CLI runs.
@@ -106,6 +109,7 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		refuse(429, "rate_limit_error", "Gateway concurrency limit reached").write(w, d)
 		return
 	}
+	defer g.releaseSessionState(plan)
 	if refusal = g.prepareRequest(w, r, d, plan); refusal != nil {
 		refusal.write(w, d)
 		return
@@ -283,10 +287,18 @@ func (g *Gateway) resolveRequestContext(p *requestPlan, body *requestBody, h htt
 		d.trace("request_identity_unreadable", Object{"error": client.err.Error(), "replaced": true})
 		client = clientIdentity{}
 	}
-	if refusal := g.resolveIdentity(p, client, body, agent); refusal != nil || !agent {
+	if refusal := g.resolveIdentity(p, client, body, agent); refusal != nil {
 		return refusal
 	}
-	return g.resolveAgent(p, client, h, d)
+	if agent {
+		if refusal := g.resolveAgent(p, client, h, d); refusal != nil {
+			return refusal
+		}
+	}
+	// What the Worker remembers of the request's session thread
+	// (session_state.go), for a header the CLI writes itself.
+	g.attachSessionState(p, h, body)
+	return nil
 }
 
 // resolveIdentity is the identity context. It is not configurable (2026-10-21
@@ -415,7 +427,9 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	// The request the CLI sent goes into the log after the answer, and before
 	// the temporary directory is removed, even when the answer aborts.
 	defer d.keepUpstreamRequest(p.capture, p.captureBody, run.reachedUpstream)
-	run.writeOutcome(w, d, p.env)
+	if run.writeOutcome(w, d, p.env) {
+		g.rememberSessionState(p, run.output)
+	}
 }
 
 // requestCommand is the CLI's request command for p: its arguments and the
@@ -471,8 +485,9 @@ func (g *Gateway) requestCommand(ctx context.Context, p *requestPlan, meta strin
 }
 
 // writeOutcome answers with what the CLI did: its response, its structured
-// error, or the Worker's own error when it did neither.
-func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env []string) {
+// error, or the Worker's own error when it did neither. It reports whether the
+// CLI's response was answered in full.
+func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env []string) bool {
 	// A caller ending its request is not a Worker deadline or a CLI failure.
 	// Check this before interpreting stdout/stderr: a killed process may leave
 	// a partial frame, or exit successfully while its output pipe is closing.
@@ -503,7 +518,7 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 		c.fail(w, d, frame)
 	case c.output.started:
 		if c.err == nil && frame == nil && c.output.answer() == nil {
-			return
+			return true
 		}
 		if frame == nil {
 			frame = localRequestError(502, "api_error", "cli_stream_interrupted", "CC response stream was interrupted")
@@ -519,9 +534,11 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 	case frame != nil || c.stderr.invalid:
 		c.fail(w, d, localRequestError(502, "api_error", "cli_error_protocol", "CLI returned an invalid error protocol result"))
 	case c.err == nil && c.output.answer() == nil:
+		return true
 	default:
 		c.fail(w, d, localRequestError(502, "api_error", "cli_process_error", "CLI request failed without a valid structured error"))
 	}
+	return false
 }
 
 // answer completes the CLI's successful response: a tracked one with its credit
@@ -549,6 +566,8 @@ type requestCommandOutput struct {
 	meta        string
 	started     bool
 	status      int
+	requestID   string        // the upstream answer's request-id
+	session     *sessionState // the turn the CLI's own header used
 	diagnostic  *requestDiagnostic
 	contentType string
 	// A tracked response keeps a copy for its credit claim (request_credit.go).
@@ -557,37 +576,40 @@ type requestCommandOutput struct {
 	creditOverflow bool
 }
 
-// response is the upstream answer the CLI recorded: its status and headers.
-func (o *requestCommandOutput) response() (int, http.Header, error) {
+// response is the upstream answer the CLI recorded: its status and headers,
+// and the turn the CLI's own billing header used (session, absent otherwise).
+func (o *requestCommandOutput) response() (int, http.Header, *sessionState, error) {
 	raw, err := os.ReadFile(o.meta)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	var meta struct {
 		Status  int               `json:"status"`
 		Headers map[string]string `json:"headers"`
+		Session *sessionState     `json:"session"`
 	}
 	if err = json.Unmarshal(raw, &meta); err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if meta.Status < 200 || meta.Status > 599 {
-		return 0, nil, errors.New("invalid upstream status")
+		return 0, nil, nil, errors.New("invalid upstream status")
 	}
 	h := http.Header{}
 	for key, value := range meta.Headers {
 		h.Set(key, value)
 	}
-	return meta.Status, h, nil
+	return meta.Status, h, meta.Session, nil
 }
 
 func (o *requestCommandOutput) start() error {
 	if o.started {
 		return nil
 	}
-	status, h, err := o.response()
+	status, h, session, err := o.response()
 	if err != nil {
 		return err
 	}
+	o.session = session
 	o.commit(status, h)
 	return nil
 }
@@ -606,6 +628,7 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 	}
 	o.writer.WriteHeader(status)
 	o.status = status
+	o.requestID = h.Get("request-id")
 	o.started = true
 }
 

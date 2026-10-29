@@ -1,7 +1,7 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v37-content-guard",
+  "extension": "ccgateway-v40-session-state",
   "bunVersion": "1.4.4",
   "capabilities": [
     "request_direct",
@@ -22,7 +22,8 @@
     "request_levels_v1",
     "client_user_agent_v1",
     "request_capture_v1",
-    "management_http_v1"
+    "management_http_v1",
+    "build_session_state_v1"
   ],
   "supportModules": [
     "shared",
@@ -44,6 +45,7 @@
     "content-policy",
     "container-resources",
     "request-identity",
+    "request-session",
     "direct-billing",
     "request-agent",
     "management-command",

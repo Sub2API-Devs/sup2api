@@ -22,12 +22,39 @@ function identity() {
       value.session_id !== undefined && !uuid.test(value.session_id) ||
       value.device_id !== undefined && !/^[0-9a-f]{64}$/.test(value.device_id) ||
       value.parent_session_id !== undefined && !uuid.test(value.parent_session_id) ||
-      Object.keys(value).some(key => !['version', 'mode', 'rewrite', 'session_id', 'device_id', 'parent_session_id', 'carrier'].includes(key)) ||
-      value.carrier !== undefined && !['json', 'object', 'flat'].includes(value.carrier)) {
+      Object.keys(value).some(key => !['version', 'mode', 'rewrite', 'session_id', 'device_id', 'parent_session_id', 'carrier', 'previous'].includes(key)) ||
+      value.carrier !== undefined && !['json', 'object', 'flat'].includes(value.carrier) ||
+      value.previous !== undefined && (value.session_id === undefined || !validPrevious(value.previous))) {
     throw Error('Invalid Worker request identity');
   }
   cachedRaw = raw; cachedValue = value;
   return value;
+}
+
+// validPrevious is the Worker's memory of the session thread (engine
+// session_state.go): the thread (main, or a subagent's agent ID), the
+// request-id Claude Code accepts as cc_prev_req (the native header's own
+// test), and on the main thread a turn position the native count writes
+// (promptIndex <= turnIndex <= 1e7) with its prompt's hash.
+const turnBound = 1e7;
+const count = (value, least) => Number.isInteger(value) && value >= least && value <= turnBound;
+function validPrevious(previous) {
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous) ||
+      Object.keys(previous).some(key => !['thread', 'request_id', 'turn_position', 'prompt_hash'].includes(key))) return false;
+  const { thread, request_id: id, turn_position: turn, prompt_hash: hash } = previous;
+  if (typeof thread !== 'string' || !/^[!-~]{1,256}$/.test(thread)) return false;
+  if (id !== undefined && !/^req_[A-Za-z0-9_-]{1,36}$/.test(id)) return false;
+  if ((turn === undefined) !== (hash === undefined)) return false;
+  if (turn === undefined) return true;
+  return thread === 'main' && typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash) && turn !== null && typeof turn === 'object' &&
+    Object.keys(turn).every(key => ['prompt_index', 'turn_index'].includes(key)) &&
+    count(turn.turn_index, 1) && count(turn.prompt_index, 0) && turn.prompt_index <= turn.turn_index;
+}
+
+// previousSession is what the Worker remembers of the request's upstream
+// session (request-session.js), or undefined.
+export function previousSession() {
+  return identity()?.previous;
 }
 
 // requestSessionID is the root session the CLI must use, so the transport

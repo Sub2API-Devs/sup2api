@@ -45,9 +45,17 @@ func requestCancellationPeer() {
 		// The request it sent, as a CLI with request_capture_v1 writes it
 		// (request_log_upstream_test.go).
 		upstreamCapturePeer(raw)
+		// CCG_TEST_REQUEST_ANSWER is the upstream answer's request-id and the
+		// session report a CLI writing its own header gives (session_state.go):
+		// "<request-id> <session JSON>".
+		meta := `{"status":200,"headers":{"content-type":"text/event-stream"}}`
+		if answer := os.Getenv("CCG_TEST_REQUEST_ANSWER"); answer != "" {
+			id, report, _ := strings.Cut(answer, " ")
+			meta = `{"status":200,"headers":{"content-type":"text/event-stream","request-id":"` + id + `"},"session":` + report + `}`
+		}
 		for i, arg := range os.Args {
 			if arg == "--response-meta" && i+1 < len(os.Args) {
-				_ = os.WriteFile(os.Args[i+1], []byte(`{"status":200,"headers":{"content-type":"text/event-stream"}}`), 0600)
+				_ = os.WriteFile(os.Args[i+1], []byte(meta), 0600)
 			}
 		}
 		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n")

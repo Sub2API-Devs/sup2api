@@ -13,6 +13,16 @@ const RequestIdentityCapability = "request_identity_v1"
 // older CLI refuses the unknown arguments, so the Worker asks only this one.
 const RequestCaptureCapability = "request_capture_v1"
 
+// SessionStateCapability: the request identity the Worker gives the CLI
+// (CCG_REQUEST_IDENTITY) may carry previous, what the Worker remembers of the
+// request's upstream session: the request-id of its last successful upstream
+// answer and the turn that answer was for (with the prompt's hash). A billing
+// header the CLI writes names the request as cc_prev_req and keeps the turn
+// from going back, as Claude Code does from its own transcript; the CLI
+// reports the turn it used in its response metadata (session). An older CLI
+// refuses the unknown field, so the Worker sends it only to this one.
+const SessionStateCapability = "build_session_state_v1"
+
 // RequestRuntimeCatalog distinguishes declared Worker code from capabilities
 // observed on the selected CLI. It never promotes model/provider verification.
 func RequestRuntimeCatalog(capabilities []string) Document {

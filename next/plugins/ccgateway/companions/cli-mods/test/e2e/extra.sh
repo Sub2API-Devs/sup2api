@@ -68,6 +68,7 @@ if [ "$PHASE" = calib ]; then
 else
   noncc_run noncc-identity identity
   noncc_run noncc-context context
+  noncc_run noncc-session session
   CARGS='-p "use a subagent to say OK" --model claude-opus-4-8 --output-format json'
   run_case sub1-build-low sub1 "$POLICY_LOW"
   run_case sub1-direct sub1 "$POLICY_NONE"

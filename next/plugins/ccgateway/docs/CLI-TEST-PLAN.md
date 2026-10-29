@@ -14,7 +14,7 @@
 | 换版本的操作手册 | [CLI-UPGRADE-RUNBOOK](CLI-UPGRADE-RUNBOOK.md) |
 | 离线端到端套件 | [`cli-mods/test/e2e/README.md`](../companions/cli-mods/test/e2e/README.md) |
 
-当前版本是 Claude Code 2.1.310 / CLI v33（`ccgateway-v33-bun-1-4-4`，与 v32 同一份补丁、改用官方内嵌的 Bun 1.4.4 编译）；2.1.304（v31）的 profile 与锚点仍在仓库里，测试照常覆盖。补丁器版本无关：`patch-cli.cjs` + 每版一份 `patches/<版本>.cjs`（锚点）与 `profiles/linux-x64-<版本>.json`（原生名字表、`bunVersion`），环境代码 `native-environment.inc.js` 各版共用，支持模块只从生成的 `native-<组>.js` 按逻辑名导入原生（见 cli-mods README“版本无关的结构”）。文中源码位置写到“文件 + 函数名”，不写行号；第 3 节的原生符号写 2.1.304 的名字（审查与分析都以它为基准），2.1.310 的对应名见第 4.5 节与 `profiles/linux-x64-2.1.310.json`。
+当前版本是 Claude Code 2.1.310 / CLI v33（`ccgateway-v33-bun-1-4-4`，与 v32 同一份补丁、改用官方内嵌的 Bun 1.4.4 编译）；下一版候选 2.1.312 / v38（`ccgateway-v38-cc-2-1-312`，2026-10-30，测试结果见 [CLAUDE-CODE-2.1.312-MIGRATION](CLAUDE-CODE-2.1.312-MIGRATION.md) 第 7 节）。2.1.304（v31）的 profile 与锚点仍在仓库里，测试照常覆盖。补丁器版本无关：`patch-cli.cjs` + 每版一份 `patches/<版本>.cjs`（锚点）与 `profiles/linux-x64-<版本>.json`（原生名字表、`bunVersion`），环境代码 `native-environment.inc.js` 各版共用，支持模块只从生成的 `native-<组>.js` 按逻辑名导入原生（见 cli-mods README“版本无关的结构”）。文中源码位置写到“文件 + 函数名”，不写行号；第 3 节的原生符号写 2.1.304 的名字（审查与分析都以它为基准），2.1.310 的对应名见第 4.5 节与 `profiles/linux-x64-2.1.310.json`。
 
 ---
 
@@ -30,7 +30,7 @@
 | L6 官方客户端回放 / 实时转发 | 未改的官方 CLI 真实生成请求，经 Worker + 补丁 CLI | `test/official-client-replay.cjs`、`test/live-official-client.cjs` | 同 L4 | 改出口形状 | 无 `fail`；README 的结论已过时（**第 9 节**） |
 | L7 Worker 策略矩阵 | 核心真实生成的策略逐项发给真实 Worker，看目标字段与非目标字段 | `test/worker-policy-matrix.cjs` | 同 L4 | 改策略或环境来源 | 同上 |
 | L8 单请求探针 | 回环桩上观察一个请求的形状 | `test/request-probe.cjs`、`request-modes-probe.cjs`、`websearch-probe.cjs` | 同 L4 | 排查 | 人工判读 |
-| L9 离线端到端回归 | 官方客户端 → 扮演核心的代理 → Worker → 补丁 CLI → 假上游，69 场景 122 请求；两次运行逐字节比较；A/B 保真；日志核对 | `test/e2e/` | ovh（Linux + Docker），`--network none` | **每次发布 CLI 或 Worker**；换版本 | e2e README“判定通过” |
+| L9 离线端到端回归 | 官方客户端 → 扮演核心的代理 → Worker → 补丁 CLI → 假上游，73 场景（2026-10-30 起，含 `noncc-session`）；两次运行逐字节比较；A/B 保真；日志核对 | `test/e2e/` | ovh（Linux + Docker），`--network none` | **每次发布 CLI 或 Worker**；换版本 | e2e README“判定通过” |
 | L10 跨版本兼容 | 新 CC 版本与旧版本“逻辑一样” | `cli-mods/tools/upgrade/`（静态）+ L2 + `test/e2e/capture-official.sh`、`official-diff.cjs` + L9（动态） | 静态：本机 node；动态：ovh | 换版本 | 第 4 节 |
 | L11 生产冒烟 | 发布后真实账号、真实上游 | 管理接口、账号容器日志 | ovh 生产 | 每次发布后 | 第 2.11 节 |
 

@@ -166,12 +166,14 @@ export function ccgatewayMarkTurns(records, interactive) {
   return last === -1 ? undefined : records[last];
 }
 // ccgatewayPromptTurn is the same for a Messages body (direct): its messages
-// as CC's records, and the last prompt's origin and position.
+// as CC's records, and the last prompt's origin and position, with its content
+// and whether it is the body's last user message (fresh: not a tool result's
+// continuation), for the session's turn (request-session.js).
 export function ccgatewayPromptTurn(messages, interactive) {
   const records = messages.filter(message => message?.role === 'user' || message?.role === 'assistant')
     .map(message => ({ type: message.role, message: { ...message, content: typeof message.content === 'string' || Array.isArray(message.content) ? message.content : [] } }));
   const last = ccgatewayMarkTurns(records, interactive);
-  return last && { turnOrigin: last.turnOrigin, turnPosition: last.turnPosition };
+  return last && { turnOrigin: last.turnOrigin, turnPosition: last.turnPosition, prompt: last.message.content, fresh: records.findLast(record => record.type === 'user') === last };
 }
 
 // ccgatewayLayerVocabulary is how build tells that a request already carries

@@ -3,6 +3,7 @@ import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmen
   getRootSession, setEntrypointOnRequests } from './native-build.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
+import { continueSession, requestThread } from './ccgateway-request-session.js';
 import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
@@ -110,10 +111,12 @@ function limitBreakpoints(body, at) {
 // markPrompt gives the client's prompts what CC's query loop gives a main
 // thread's (ccgatewayMarkTurns: iws, h0n), and the last one the prompt ID, so
 // CC's own header (PAs) writes cc_prompt_id (the prompt ID header's value) and
-// the turn fields as CC does. The terminal entrypoint is a human typing.
+// the turn fields as CC does. The terminal entrypoint is a human typing. It
+// returns the last prompt's record, or undefined.
 function markPrompt(records, promptId, entrypoint) {
   const last = ccgatewayMarkTurns(records, entrypoint === 'cli');
   if (last && promptId !== undefined) last.promptId = promptId;
+  return last;
 }
 
 // placeLayers puts the probe's additions where CC put them, around the
@@ -221,7 +224,11 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   // (hasBilling decides the same): its kind and IDs come from that header.
   const clientBilling = billing.requestBilling(initial.systemBlocks);
   const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content });
-  if (!agent || agent.requestClass === 'main') markPrompt(records, agent?.promptId, entrypoint);
+  const prompt = !agent || agent.requestClass === 'main' ? markPrompt(records, agent?.promptId, entrypoint) : undefined;
+  // A header this build writes continues the upstream session (the Worker's
+  // request-id and turn, request-session.js); the client's own header is the
+  // client's.
+  const continued = clientBilling === null ? continueSession(records, prompt, { human: entrypoint === 'cli', thread: requestThread(agent) }) : undefined;
   const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   const tools = clientTools(initial.customTools);
   const native = {}, controls = generationControls(external.parameters);
@@ -237,7 +244,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   const identity = identityRequest(policy, entrypoint, { clientBilling, appended: layers?.appended === true, system: content.system, apiKey });
   options.recordedCliPrefix = identity.recorded;
   const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(controls), tools, signal, options }, signal, 'CC request builder did not produce a request');
-  return finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity });
+  return { ...finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity }), session: continued };
 }
 
 // convertContent applies the content policy to the system and messages as the

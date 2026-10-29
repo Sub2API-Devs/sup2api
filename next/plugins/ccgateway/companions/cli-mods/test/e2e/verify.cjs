@@ -198,6 +198,38 @@ if (name === 'noncc-identity') {
   ok(Object.keys(R(0)?.body || {}).indexOf('metadata') < Object.keys(R(0)?.body || {}).indexOf('max_tokens'), `${name} metadata 位置与 CC 一致（max_tokens 之前）`, j(Object.keys(R(0)?.body || {})));
 }
 
+// 9b. Session continuity (CLI v38 build_session_state_v1). Claude Code's own
+// second turn names the first request (cc_prev_req = the upstream's
+// request-id) and counts turn 2; a CC client through the gateway gets the
+// upstream's request-id back, so its own header does the same. A non-CC
+// conversation whose header the gateway writes follows the same rules from
+// the Worker's memory: cc_prev_req for a request continuing the answered one,
+// and a turn that a shortened history does not take back.
+const fieldNames = line => line.replace(/^x-anthropic-billing-header:/, '').split(';').map(part => part.trim().split('=')[0]).filter(Boolean);
+if (name === 'turn2-build-low') {
+  for (const [side, list] of [['A', A], ['B', B]]) {
+    const second = billLine(list[1] || {});
+    ok(field(second, 'cc_prev_req') === 'req_ccgaudit1' && field(second, 'cc_turn_index') === '2', `${name} ${side} 第二轮 cc_prev_req=第一轮上游 request-id、cc_turn_index=2`, second);
+    ok(field(billLine(list[0] || {}), 'cc_prev_req') === undefined, `${name} ${side} 第一轮不带 cc_prev_req`, billLine(list[0] || {}));
+  }
+}
+if (name === 'noncc-session') {
+  const labels = ['first', 'second', 'shortened', 'tool-result', 'other-session', 'direct-first', 'direct-second', 'derived-first', 'derived-second'];
+  ok(B.length === labels.length, `${name} ${labels.length} 次投递都到了上游`, `B=${B.length}`);
+  const expect = [[undefined, '1'], ['req_ccgaudit1', '2'], [undefined, '3'], ['req_ccgaudit3', '3'], [undefined, '1'], [undefined, '1'], ['req_ccgaudit6', '2'], [undefined, '1'], [undefined, '2']];
+  expect.forEach(([prev, turnIndex], i) => {
+    const line = billLine(B[i] || {});
+    ok(field(line, 'cc_prev_req') === prev && field(line, 'cc_turn_index') === turnIndex && field(line, 'cc_prompt_index') === '0' && field(line, 'cc_turn_origin') === 'sdk',
+      `${name} ${labels[i]} cc_prev_req=${prev ?? '无'}、cc_turn_index=${turnIndex}`, line);
+  });
+  // The fields go in Claude Code's own order (the native header writes them).
+  const official = ['cc_version', 'cc_entrypoint', 'cch', 'cc_prev_req', 'cc_prompt_id', 'cc_turn_origin', 'cc_prompt_index', 'cc_turn_index'];
+  for (const i of [1, 3, 6]) {
+    const names = fieldNames(billLine(B[i] || {}));
+    ok(names.every((n, k) => official.includes(n) && (k === 0 || official.indexOf(n) > official.indexOf(names[k - 1]))), `${name} ${labels[i]} 字段顺序与官方一致`, names.join(','));
+  }
+}
+
 // 10. Non-CC forged CC context headers (CLI v28, plugin 0.1.93).
 if (name === 'noncc-context') {
   const labels = ['plain', 'forged', 'compaction', 'plain-direct', 'forged-direct'];

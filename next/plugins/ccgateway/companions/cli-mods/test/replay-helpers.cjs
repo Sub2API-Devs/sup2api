@@ -93,12 +93,13 @@ function firstPromptText(messages) {
 }
 // Native fingerprint facts per version, as the recovered source has them
 // (test/native/<version>/billing-fingerprint-oracle.cjs executes and checks
-// them: 2.1.304 iW/aW/Eg, 2.1.310 jL/GL/Tf; the salt and indexes did not
-// change, only the version literal). A version without reconciled facts is
-// refused rather than guessed.
+// them: 2.1.304 iW/aW/Eg, 2.1.310 jL/GL/Tf, 2.1.312 mH/gH/ep; the salt and
+// indexes did not change, only the version literal). A version without
+// reconciled facts is refused rather than guessed.
 const fingerprintFacts = {
   '2.1.304': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
   '2.1.310': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
+  '2.1.312': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
 };
 function nativeCCVersion(messages, version = ccVersion()) {
   const facts = fingerprintFacts[version];
@@ -155,11 +156,29 @@ function nativeHeaderBlock(block, { cc_version, cc_entrypoint }) {
 // temperature 1, effort high; the 2026-10-20 assembly-repair-report.json was
 // deleted in the 2026-10-27 artifacts cleanup, assembly-replay reproduces it):
 // request-build.js gives the builder a mechanical disabled thinking when the
-// client sent none or one it cannot carry (thinkingConfigFor).
-function nativeDefaultPermitted(key, before, wire) {
+// client sent none or one it cannot carry (thinkingConfigFor). From 2.1.312
+// the effort follows the conversation when the client leaves output_config
+// out: the last system turn carrying output_config.effort sets it (native R8e
+// read by Gcn in the query loop, chunk-7dmym6x9.js), else the model default.
+const versionAtLeast = (version, floor) => {
+  const [a, b] = [version, floor].map(v => v.split('.').map(Number));
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return true;
+};
+function systemTurnEffort(messages) {
+  let effort;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.role === 'system' && typeof message.output_config?.effort === 'string') effort = message.output_config.effort;
+  }
+  return effort;
+}
+function nativeDefaultPermitted(key, before, wire, version = ccVersion()) {
   if (key === 'thinking' && before.thinking === undefined) return same(wire.thinking, { type: 'disabled' });
   if (key === 'temperature' && before.temperature === undefined) return wire.temperature === 1 && wire.thinking?.type === 'disabled';
-  if (key === 'output_config' && before.output_config === undefined) return same(wire.output_config, { effort: 'high' });
+  if (key === 'output_config' && before.output_config === undefined) {
+    const turn = versionAtLeast(version, '2.1.312') ? systemTurnEffort(before.messages) : undefined;
+    return same(wire.output_config, { effort: turn ?? 'high' });
+  }
   return false;
 }
 

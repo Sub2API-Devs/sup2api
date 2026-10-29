@@ -77,8 +77,10 @@ test('main-thread prompts get the native turn', { skip: nativeSkip('native turn 
   const messages = [{ role: 'user', content: 'one' }, { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Read', input: {} }] },
     { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'x' }] }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'two' }];
   const turn = (list, interactive) => { const value = context.ccgatewayPromptTurn(list, interactive); return value && JSON.parse(JSON.stringify(value)); };
-  assert.deepEqual(turn(messages, false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 2 } });
-  assert.deepEqual(turn(messages, true), { turnOrigin: 'human', turnPosition: { promptIndex: 2, turnIndex: 2 } });
-  assert.deepEqual(turn(messages.slice(0, 1), false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 1 } });
+  assert.deepEqual(turn(messages, false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 2 }, prompt: 'two', fresh: true });
+  assert.deepEqual(turn(messages, true), { turnOrigin: 'human', turnPosition: { promptIndex: 2, turnIndex: 2 }, prompt: 'two', fresh: true });
+  assert.deepEqual(turn(messages.slice(0, 1), false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 1 }, prompt: 'one', fresh: true });
+  // A tool result's continuation: the last prompt is not the last user message.
+  assert.deepEqual(turn(messages.slice(0, 3), false), { turnOrigin: 'sdk', turnPosition: { promptIndex: 0, turnIndex: 1 }, prompt: 'one', fresh: false });
   assert.equal(turn(messages.slice(1, 4), false), undefined, 'no prompt');
 });

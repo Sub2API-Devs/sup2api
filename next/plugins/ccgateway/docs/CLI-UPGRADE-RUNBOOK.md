@@ -1,6 +1,6 @@
 # 升级 Claude Code CLI 的操作手册
 
-2026-10-27。适用于把账号 Worker 里的定制 CLI 从一个 Claude Code 版本移到另一个版本（2.1.304 / `ccgateway-v31-request-capture` → 2.1.310 / `ccgateway-v32-cc-2-1-310` 就是按本手册做的，过程记录在 [CLAUDE-CODE-2.1.310-MIGRATION](CLAUDE-CODE-2.1.310-MIGRATION.md)），也适用于同版本只改补丁后的重新编译与发布（从第 4 步开始）。
+2026-10-27。适用于把账号 Worker 里的定制 CLI 从一个 Claude Code 版本移到另一个版本（2.1.304 / `ccgateway-v31-request-capture` → 2.1.310 / `ccgateway-v32-cc-2-1-310` 就是按本手册做的，过程记录在 [CLAUDE-CODE-2.1.310-MIGRATION](CLAUDE-CODE-2.1.310-MIGRATION.md)；2026-10-30 的 2.1.310 / v36 → 2.1.312 / v38 记录在 [CLAUDE-CODE-2.1.312-MIGRATION](CLAUDE-CODE-2.1.312-MIGRATION.md)，其第 9 节列出了本手册据此更正的地方），也适用于同版本只改补丁后的重新编译与发布（从第 4 步开始）。
 
 前提与边界：
 
@@ -32,7 +32,7 @@
 
 1. **查当前版本号**：发布渠道 `https://downloads.claude.ai/claude-code-releases/latest` 与 `.../stable` 各返回一个版本号文本（Worker 的 `/admin/cli` `check` 动作读的就是它们，`engine/cli_management.go`）。本机访问要走 http 代理 `127.0.0.1:7890`（`HTTPS_PROXY=http://127.0.0.1:7890`）。
 2. **取清单**：`https://downloads.claude.ai/claude-code-releases/<版本>/manifest.json`，含 `version`、`commit`、`buildDate`、`platforms.<平台>.{checksum, size}`。保存为 `artifacts/claude-<版本>/official-manifest.json`。
-3. **下载**：`https://downloads.claude.ai/claude-code-releases/<版本>/linux-x64/claude` → `artifacts/claude-<版本>/claude-linux-x64`。核对 SHA-256 等于 `platforms.linux-x64.checksum`、字节数等于 `size`。样板：`artifacts/claude-2.1.304/acquire.py`（版本写死在脚本里，复制后改版本；先写 `.part` 再改名，校验不过就失败）。
+3. **下载**：`https://downloads.claude.ai/claude-code-releases/<版本>/linux-x64/claude` → `artifacts/claude-<版本>/claude-linux-x64`。核对 SHA-256 等于 `platforms.linux-x64.checksum`、字节数等于 `size`。样板：`artifacts/claude-2.1.304/acquire.py`（版本写死在脚本里，复制后改版本；先写 `.part` 再改名，校验不过就失败）。在仓库根目录用 `HTTPS_PROXY=http://127.0.0.1:7890 py artifacts/claude-<版本>/acquire.py` 运行；本机的 `py -I` 会因 Python 找不到标准库（`No module named 'encodings'`）直接退出且退出码为 0，不要加 `-I`。
 4. 下载的二进制是不可信数据：放进它自己的新目录，不在那个目录里运行脚本。
 5. 选版本时先看与当前版本的距离：跨度越大，第 3 步的变化面越大。2.1.304 → 2.1.310 的对比结果（`artifacts/claude-2.1.310/equiv.out`）可作参照。
 
@@ -111,7 +111,9 @@ node inspect.cjs <还原目录> <文件> <名字|-> [搜索词…]   # MAX=字�
 node tools/upgrade/carry-profile.cjs equiv.json <旧树的 equiv-index-*.json> <新树的 equiv-index-*.json> profiles/linux-x64-<旧>.json <新核心模块> > carry.json
 ```
 
-按配对把旧 profile 的 `natives`、`coreScope`、`coreImports`、`locate` 换成新版名字：原生导出找新版的导出名，核心作用域名找新核心里绑定到同一单元的本地名（声明或已有 import）；配不上或配到 changed 单元的写进 `problems`，逐个人工确认。新核心模块：旧核心的绝大多数单元在 `map` 里落到的那个模块（2.1.310 是 `chunk-j0tbz6ra.js`）。哪个索引是旧树：含旧核心模块名的那个。`modules` 的哈希按新版还原文本重新算：被改写的模块、natives 用到的模块、核心 import 的来源模块。
+按配对把旧 profile 的 `natives`、`coreScope`、`coreImports`、`locate` 换成新版名字：原生导出找新版的导出名，核心作用域名找新核心里绑定到同一单元的本地名（声明或已有 import）；配不上或配到 changed 单元的写进 `problems`，逐个人工确认。新核心模块：旧核心的绝大多数单元在 `map` 里落到的那个模块（2.1.310 是 `chunk-j0tbz6ra.js`，2.1.312 是 `chunk-7dmym6x9.js`）。哪个索引是旧树：含旧核心模块名的那个。`modules` 的哈希按新版还原文本重新算：被改写的模块、natives 用到的模块、核心 import 的来源模块。
+
+`carry-profile` 不产出 `modules`，`locate.requestBuilder`/`builderBetaList`（主查询里的局部名）也要人工确认。2.1.312 的做法：沿用旧 profile 的模块清单，每个旧模块映射到"新版里装着它大部分配对单元的模块"（`map` 按模块计数），只做再导出、自己没有单元的模块（`setEntrypointOnRequests`、`loadFastPathPolicy` 所在的那两个）按 `natives` 指向的新模块映射，然后按新还原文本重算哈希；补丁器缺一个必需模块会直接报错。
 
 ### 3.3 REA 交叉验证
 
@@ -205,7 +207,7 @@ equiv 的配对靠规范形式与传播，可能把形状相同而语义不同�
 
 1. **cli-mods 单测，原生对账真跑**：`CCG_CLI_VERSION=<新> CCG_REQUIRE_ARTIFACTS=1 npm test`。还原目录存在时原生对账测试必须执行；stderr 出现 `CCG_NATIVE_TEST_SKIPPED` 即不算通过。原生生成的夹具变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成并逐项审查差异。
 2. **Go 全量（Linux）**：engine、worker、contracts 在 Linux 上跑 `go test -count=1 -v`（本机 Windows 跑不了进程级用例，在 ovh 用 `golang:1.27-bookworm` 一次性容器，命令见 [companions README](../companions/README.md)）；改了 engine 再 `GOOS=linux go vet ./...`。不设 `CCG_REAL_CLI` 时 `TestRealCLI*` 显示 SKIP，不能当作已验证。
-3. **真实 CLI 用例**：`TestRealCLIResource*` 用新版**官方** Linux CLI 跑（重建的 CLI 的 `auth status` 不退出）；资源管理断网场景 `TestResourceManagementLinuxOfflineNetNone`（CONTRACTS §53.14 把它定为升级 CLI 时的回归）。
+3. **真实 CLI 用例**：`TestRealCLI*` 与资源管理断网场景 `TestResourceManagementLinuxOfflineNetNone`（CONTRACTS §53.14 把它定为升级 CLI 时的回归）。**注意（2026-10-30 实测）**：v34（0.1.108）起资源管理走定制 CLI 的 `claude ccgateway-mgmt`，官方 CLI 没有这个命令，于是 `TestRealCLIResource*` 四个用例和断网场景里的资源用例用官方 CLI 跑都会以 "resource management call was refused by the CLI" 失败；重建的 CLI 的 `auth status` 又不退出，不能直接换成定制 CLI。在这些用例改造之前，做法是新旧两版官方 CLI 各跑一遍，确认通过与失败的集合完全相同（2.1.310 与 2.1.312 都是 6 过 5 败、断网场景 24 败），差异才算回归。
 4. **官方客户端对拍**：`test/official-client-replay.cjs`（`--network none` 一次性容器，用新版官方二进制生成请求，经 Worker 回放比较出口）。脚本固定了官方与补丁 CLI 的 SHA，换制品要显式更新预期。
 5. **官方请求对比与夹具**：`test/e2e/capture-official.sh` 在一次性断网容器里用未改的官方 CLI（全新 HOME、全新非 Git 项目、合成 API key、假上游）抓一个请求，存为 `test/fixtures/official-request-<版本>.json`；`test/e2e/official-diff.cjs <旧> <新>` 按组件（system 各块、首轮各 reminder、每个工具的描述/schema/其他字段、生成参数）比较，版本号、cc_version 指纹、cch、日期先规范化。新旧官方请求的差异就是这次升级里"官方自己的变化"的完整清单（2.1.310：延迟工具列表多了 `Monitor`、Bash 描述多一句 Monitor 说明，其余相同），出口比较时据此判读。
 6. **离线端到端回归**：`cli-mods/test/e2e/`（`docker.sh`，在 ovh 一次性 `--network none` 容器里跑真实客户端 → Worker → 假上游，`NEW=1` 把候选 Worker 与 CLI release 挂进旧镜像）。同版本改补丁时要求与上一版出口 0 差异（2.1.304 时 69 场景 122 请求）、`capcheck` 上游记录完整、`respmatch` 的 `response.json` 与客户端收到的流一致。换 Claude Code 版本时出口与旧版必然有差异，基线改为新版官方客户端自己的出口，差异逐条解释。
@@ -275,3 +277,6 @@ bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-pat
 - ovh 上用 `pgrep -f`/`pkill -f` 等待远端任务会匹配到自己的 shell，改为等输出文件里的结束标记；`set -e` 下 `diff` 有差异会中断后续命令。
 - 往账号容器放文件用 `tar | docker exec -i -u 1000 tar x`，`docker cp` 遇到 socket 会中断。
 - 离线回归不经过核心，核心与插件之间的问题（如账号设置新键被插件校验拒绝，0.1.96 事故）测不出来：发布后必须在生产做一次账号测试和一次真实请求。
+- **beta 从模型表挪进主查询**：build 把主查询里"模型 beta 表"那一行换成了客户端的 beta，表里的 beta 因此不会加给非 CC 请求；但主查询在那一行之后自己 push 的 beta 会照常加上（advisor、工具搜索等一直如此）。官方若把某个 beta 从表里挪到这些 push 里（2.1.312 的 `thinking-token-count`），equiv 显示 same/changed 都看不出，build 会开始给非 CC 请求加它，而且排不出原生位置。检查办法：列出新旧主查询里 beta 列表变量的全部 `.push(<常量>)`（构建器之外的），逐个与旧版比；离线回归的 `regress-compare` 里 `anthropic-beta` 头的差异也会暴露它。处理：给新出现的 push 加与模型表那一行相同的 build 判断（2.1.312 的锚点）。
+- 在 Git Bash 里跑 `TestResourceManagementLinuxOfflineNetNone` 时，`CCG_LINUX_RESOURCE_CLI`/`_MOUNT` 里的 Linux 路径会被 MSYS 改写成 Windows 路径（`invalid volume specification`），先设 `MSYS_NO_PATHCONV=1 MSYS2_ENV_CONV_EXCL='*'`。
+- 离线回归的候选若改了 Worker（不只是 CLI），要把交叉编译的 Worker 放到 `WORKER_NEW`（`docker.sh` 找不到时会提示 "the image's own Worker runs the candidate CLI" 并用镜像里的旧 Worker）；L4–L7 的脚本同样要换 `PROBE_WORKER`。

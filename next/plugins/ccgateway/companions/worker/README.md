@@ -64,7 +64,7 @@ HTTP 服务器的超时：读请求头 10 秒、读请求 30 秒、空闲连接 
 docker build -f next/plugins/ccgateway/companions/worker/Dockerfile -t ccgateway-worker:dev next/plugins/ccgateway/companions
 ```
 
-- 构建参数：`WORKER_VERSION`、`SOURCE_REVISION`（写进 `/admin/features` 的 build 信息）、`BUILD_MAX_PROCS`（缺省 2）、`CLAUDE_VERSION`（缺省 2.1.310）。
+- 构建参数：`WORKER_VERSION`、`SOURCE_REVISION`（写进 `/admin/features` 的 build 信息）、`BUILD_MAX_PROCS`（缺省 2）、`CLAUDE_VERSION`（缺省 2.1.312）。
 - 镜像只从 `cli-mods/release/` 安装定制 CLI，不在构建时下载官方 CLI；`release/` 不进 Git，要先按 [CLI 升级手册](../../docs/CLI-UPGRADE-RUNBOOK.md) 第 6 节准备。构建时核对该版本 ELF 的 SHA-256 与 release manifest 一致、补丁标签与 `cli-mods/profiles/linux-x64-<版本>.json` 的 `extension` 一致，不一致构建失败。
 - 发布用 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>`，镜像名 `ccgateway-app:<插件版本>`。
 - 本地编译程序：`make build`（`bin/worker`）；`make docker-build` 等价于上面的 docker 命令（上下文 `..`）。

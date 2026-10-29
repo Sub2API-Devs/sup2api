@@ -36,7 +36,7 @@
 | 文件 | 作用 |
 |---|---|
 | `docker.sh` | 宿主机入口：准备工作目录（kit 副本 + 官方 CLI），读出 CLI 固定值，起一次性断网容器跑 `run.sh`，日志写到 `$B/<模式>-<标签>.log` |
-| `run.sh` | 容器内主流程：生成证书与两个账号目录，起 `w1`/`w3` 两个 Worker 与 `p1`/`p3` 两个代理，按 `RUN_MODE` 跑各阶段（第 1–6 阶段即 69 个场景） |
+| `run.sh` | 容器内主流程：生成证书与两个账号目录，起 `w1`/`w3` 两个 Worker 与 `p1`/`p3` 两个代理，按 `RUN_MODE` 跑各阶段（第 1–6 阶段即 73 个场景） |
 | `extra.sh` | `run.sh` 的第 6 阶段（r3 增补）：非 CC 身份与上下文、1–3 层嵌套子代理、credit 流式回执、Worker 自己的 probe |
 | `values.sh` + `values.cjs` + `values-verify.cjs` | `values` 模式：12 个“客户端值保真”请求与断言 |
 | `conc.sh` | `conc` 模式：两个被跟踪的 credit 流同时在途 |
@@ -90,14 +90,14 @@
 
 | 模式 | 跑什么 | 抓包目录 | 日志末行 |
 |---|---|---|---|
-| `all` | 第 1–6 阶段，69 个场景（下表） | `cap/` | `== worker logs` 之后的 Worker 日志尾 |
+| `all` | 第 1–6 阶段，73 个场景（下表） | `cap/` | `== worker logs` 之后的 Worker 日志尾 |
 | `values` | 客户端值保真 12 个请求，并当场执行 `values-verify.cjs` | `cap/values/` | `values done`（前面有 `values N/12 pass`） |
 | `conc` | 两个被跟踪的 credit 流并发 | `cap/credit-concurrent/` | `conc done` |
 | `classify` | 计费头位置归类 3 个请求 | `cap/noncc-classify/` | `classify done` |
 | `smoke` | 冒烟：官方客户端一次、非 CC 一次、credit 一次、资源身份、API Key 账号一次 | `cap/smoke-*` | `smoke done` |
 | `calib1` / `calib2` | 校准（同一批简化场景各跑一遍，看噪声） | `cal1/` / `cal2/` | `calib done (...)` |
 
-## 场景清单（`all`，69 个场景，122 个上游请求）
+## 场景清单（`all`，2026-10-30 起 73 个场景、148 个上游请求；此前 69 个场景、122 个请求）
 
 请求数是 2026-10-25 起各次运行里 B 侧上游收到的个数（当时的 `release-0196/results/regress-0195-vs-new.txt`：“0 of 69 cases differ; 122 requests compared”；原始结果已于 2026-10-27 清理）。“A/B”表示同一场景官方客户端直连与经网关各跑一次；“B”表示只经网关。策略缩写：微 = `POLICY_MICRO`（build、无注入），低 = `POLICY_LOW`（build、平台/系统版本取服务端、注入四种首轮附件），高 = `POLICY_HIGH`（低 + 内置提示词 + Bash/Read/Edit/Write 四个工具），direct = `POLICY_NONE`，另有 `ERASE`（十个环境字段全擦除）、`ATTACH`（平台/系统/shell/主目录取服务端，附加目录与 git 擦除）、`BILLING`（`cc_version`、`cc_entrypoint` 取服务端）、`ENTRY`（服务端入口 `sdk-cli`）。
 
@@ -171,6 +171,7 @@
 |---|---|---|
 | `noncc-identity` | 非 CC、无 `metadata.user_id`：turn1、turn2（同一对话）、other（另一对话）、`user_id:null`、客户端自带身份、direct | 6 |
 | `noncc-context` | 非 CC 伪造 CC 上下文头：plain、forged（子代理头等）、compaction、plain-direct、forged-direct | 5 |
+| `noncc-session` | 非 CC 多轮（CLI v38 会话记忆）：客户端命名会话的 first、second（完整历史）、shortened（只发最后一轮）、tool-result（工具结果续发），other-session，direct-first、direct-second，派生会话的 derived-first、derived-second（不用记忆） | 9 |
 | `sub1-build-low` / `sub1-direct` | 官方客户端，1 层子代理（A/B） | 各 3 |
 | `sub2-build-low` / `sub2-direct` | 2 层 | 各 5 |
 | `sub3-build-low` / `sub3-direct` | 3 层 | 各 7 |
@@ -207,6 +208,7 @@
 | 8 | `err400-*` | 400 透传、正文原样、`x-ccgateway-error-source` 会被核心白名单挡掉 |
 | 9 | `noncc-identity` | 6 次都到上游；补账号身份（device 64 hex + 账号 UUID）、JSON 字符串载体、session = 会话头、turn2 沿用、另一对话不同、`null` 也补、客户端自带的仍映射、direct 不加 metadata、metadata 在 `max_tokens` 之前 |
 | 10 | `noncc-context` | 伪造的子代理/压缩头不进出口、计费头不是子代理；伪造与不伪造掩码后逐字节相同（build 与 direct 各一组） |
+| 9b | `turn2-build-low`、`noncc-session` | 官方客户端第二轮自己带 `cc_prev_req`=第一轮上游 request-id、`cc_turn_index=2`（A/B 两侧）；网关写的头：续接上一次请求时带 `cc_prev_req`，截断历史不带但 turn 不回退（`cc_turn_index` 1→2→3→3），工具结果续发保持本轮，另一会话从 1 开始，direct 同样规则，字段顺序与官方一致；派生会话不用记忆（第二轮无 `cc_prev_req`、turn 按原生计数）。CLI v38 起（旧 CLI 上 `noncc-session` 的断言会失败） |
 | 11 | `sub[123]-*` | 嵌套到对应层数、parent 指向已出现的 agent、每个上下文头出口 = 客户端原值、子代理计费头 `cc_is_subagent=true`、子代理不带 `extended-cache-ttl` |
 | 12 | `credit-stream/json-trailer-build` | 被跟踪、资源身份头、回执在 trailer 且 = sha256(token)、不在响应头；流式的首字节先于结束 ≥ 800 ms、分多块、假上游事件间隔约 1.5 秒 |
 | 13 | `noncc-identity2` | 空串补身份；首条消息相同的两个对话共享会话（设计如此）；后续轮沿用；其他 metadata 键保留 |
