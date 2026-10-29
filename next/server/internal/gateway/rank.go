@@ -28,7 +28,7 @@ const (
 	// maxRankChanges bounds one plugin's entry in usage_logs.sched_decisions.
 	maxRankChanges = 100
 
-	// maxRankLoad is the maximum load percentage a plugin may return (CONTRACTS §63).
+	// maxRankLoad is the maximum load percentage a plugin may return (CONTRACTS §67).
 	maxRankLoad = 100
 )
 
@@ -143,7 +143,7 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 			// Apply load: reduce the effective weight proportionally.
 			// load=0 → no change, load=100 → weight becomes 0 (account excluded).
 			// The plugin's returned weight is the baseline; the host applies
-			// the reduction afterwards (CONTRACTS §63).
+			// the reduction afterwards (CONTRACTS §67).
 			load := clampRank(ctx, rb.Plugin.Key, "load", rc.AccountId, ra.GetLoad(), maxRankLoad)
 			if load > 0 {
 				w = w * (maxRankLoad - load) / maxRankLoad
