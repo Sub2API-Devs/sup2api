@@ -2,7 +2,13 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
-2026-10-29 最新发布：Core 两节点 **0.1.212**（源码 `330d4f2a4`，manifest `deef1567…2810`，计划 `71f219c1cc5b5743a17102931be319e2` completed/13，51.8 秒，核心 SHA `bb7b1db1…fe80`）。schema 契约不变（`2adf9bfc…`）。
+2026-10-29 最新发布：Core 两节点 **0.1.213**（源码 `8a9798cb6`，manifest `5eed0b62…d287`，计划 `884bd64f82f30ebb49da2d9301c52c6d` completed/13，核心 SHA `68841060…315d`）。schema 契约不变（`2adf9bfc…`），`builtin/` 与 `sub2api-plugin` 取自 0.1.212（逐字节相同）。
+- 内容：只改控制台 UI。顶栏保留路由标题（现在是页面 h1），页面标题区标题相同时只显示说明和按钮；内容区去掉 1600px 上限铺满，设置和价格编辑页保持原宽（`max-w-screen-2xl`）；账号页去掉与表格底部重复的“筛选结果”行，“紧凑显示”挪到“自动刷新”旁，批量操作栏只在有选择或批量任务运行时出现，拖选提示移到表头全选框的悬停说明。
+- 用时：计划共 1076 秒，几乎都花在 sup2api-ccp 下载 477 MB 包上。当时 ovh→clicodeplus 只有约 0.7 MB/s，第一次下载撞上 10 分钟超时，第二次成功。真正切换（13:27:03 准备完成到 13:27:38 两节点就绪）约 35 秒。
+- 核对：两节点 `sub2api version` 都是 0.1.213，都记录了 "bundled plugins run the versions of this release"，没有 ERROR/WARN；6 个插件进程 `Seccomp=2`。api.prophey.ai 返回的新 CSS 含 `max-w-screen-2xl`、不含 1600px。42/44 号 haiku 测试 200。
+- 备份 `backups/core-0.1.213`（604 项），脚本 `stage/0.1.213/{build.sh,release.sh}`（UI + 核心一起构建的样板）。
+
+2026-10-29 发布：Core 两节点 **0.1.212**（源码 `330d4f2a4`，manifest `deef1567…2810`，计划 `71f219c1cc5b5743a17102931be319e2` completed/13，51.8 秒，核心 SHA `bb7b1db1…fe80`）。schema 契约不变（`2adf9bfc…`）。
 - 内容：只换 `builtin/`，改成用 `sup2api-plugins-2026` 签名的 anthropic 0.2.7、gemini 0.2.6、openai 0.3.6、moderation 0.1.13、volcengine 0.12.5、ccgateway 0.1.111，与已安装包逐字节一致（构建时按 `plugin_versions.package_sha256` 核对）。`trust.pub`/`trust.keyid` 改为新密钥。核心代码与 0.1.211 相同，只为版本号重新编译，UI 沿用 0.1.211。
 - 全新节点测试：在一次性 PG 18 + Valkey 9 的空库上起新核心，打开验签、seccomp、strict network、Landlock 和数据库角色隔离。6 个内置插件都验签通过并安装，anthropic、gemini、openai、moderation 启用并运行，volcengine、ccgateway 按 install-only 不启用；没有 ERROR 或 WARN。
 - 核对：两节点 `sub2api version` 都是 0.1.212，都记录了 "bundled plugins run the versions of this release"；插件进程 `Seccomp=2`。42/44 号 haiku 测试经两条路都 200，moderation 接口正常。
