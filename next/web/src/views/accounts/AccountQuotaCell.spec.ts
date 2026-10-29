@@ -42,11 +42,13 @@ describe('AccountQuotaCell', () => {
     expect(rows[0].text()).toContain('自定')
     expect(rows[0].text()).toContain('41%')
     expect(rows[0].text()).toContain('3d 4h')
-    expect(rows[1].text()).toContain('插件')
+    // Standard windows use the same code in every language, whatever the plugin calls them.
+    expect(rows[1].text()).toContain('7df')
+    expect(rows[1].text()).not.toContain('插件')
     expect(rows[1].text()).toContain('34%')
     expect(rows[1].text()).toContain('2h 25m')
     expect(rows[2].text()).toContain('62%')
-    expect(rows[3].text()).toContain('7d_sonnet')
+    expect(rows[3].text()).toContain('7ds')
     // full window name for screen readers / tooltip
     expect(rows[0].find('[role="progressbar"]').attributes('aria-label')).toBe('自定义额度')
     expect(rows[0].attributes('title')).toContain('自定义额度 41%')
@@ -75,8 +77,8 @@ describe('AccountQuotaCell', () => {
       win('only_full_label', 5, { label: { zh: '完整标签' } }),
       win('only_short_label', 6, { short_label: { zh: '短标签' } })
     ] }))
-    for (const key of ['7d_fable', '7d_sonnet']) {
-      expect(w.get(`[data-testid="quota-window-${key}"]`).text()).toContain(key)
+    for (const [key, code] of [['7d_fable', '7df'], ['7d_sonnet', '7ds']]) {
+      expect(w.get(`[data-testid="quota-window-${key}"]`).text()).toContain(code)
       expect(w.get(`[data-testid="quota-window-${key}"] [role="progressbar"]`).attributes('aria-label')).toBe(key)
     }
     expect(w.get('[data-testid="quota-window-only_full_label"]').text()).toContain('only_full_label')
@@ -93,15 +95,16 @@ describe('AccountQuotaCell', () => {
     expect(w.get('[role="progressbar"]').attributes('aria-label')).toBe(label)
   })
 
-  it('colours by usage and flags a rejected window', () => {
-    const w = render(snap({ windows: [win('5h', 100, { status: 'rejected', resets_at: inSec(3600) }), win('7d', 81, { status: 'allowed_warning' }), win('7d_sonnet', 92)] }))
+  it('colours by usage and shows a rejected window as a full red bar without extra text', () => {
+    const w = render(snap({ windows: [win('5h', 70, { status: 'rejected', resets_at: inSec(3600) }), win('7d', 81, { status: 'allowed_warning' }), win('7d_sonnet', 92)] }))
     const row = (k: string) => w.get(`[data-testid="quota-window-${k}"]`)
     expect(row('5h').attributes('data-level')).toBe('danger')
-    expect(row('5h').find('[data-testid="quota-rejected"]').text()).toBe('已限流')
-    expect(row('5h').find('.bg-danger-500').exists()).toBe(true)
+    expect(row('5h').text()).not.toContain('已限流')
+    expect(row('5h').get('.bg-danger-500').attributes('style')).toContain('width: 100%')
+    expect(row('5h').get('span').classes()).toContain('bg-danger-100')
+    expect(row('5h').text()).toContain('5h')
     expect(row('7d').attributes('data-level')).toBe('warning')
     expect(row('7d').find('.bg-warning-500').exists()).toBe(true)
-    expect(row('7d').find('[data-testid="quota-rejected"]').exists()).toBe(false)
     expect(row('7d_sonnet').attributes('data-level')).toBe('danger')
   })
 
@@ -113,12 +116,11 @@ describe('AccountQuotaCell', () => {
     expect(row.text()).not.toContain('0%')
     expect(row.attributes('title')).toContain('scoped —')
     expect(row.attributes('title')).toContain(formatDateTime(inSec(3600)))
-    expect(row.get('[data-testid="quota-rejected"]').text()).toBe('已限流')
     expect(row.text()).toContain(expired ? '待核验' : '1h 0m')
     expect(bar.attributes('aria-valuenow')).toBeUndefined()
     expect(bar.attributes('aria-valuetext')).toBe('未知')
-    expect(bar.find('div').exists()).toBe(false)
-    expect(bar.find('[style]').exists()).toBe(false)
+    // Rejected: full red whatever was measured.
+    expect(bar.get('.bg-danger-500').attributes('style')).toContain('width: 100%')
   })
 
   it.each([undefined, false])('keeps real zero usage known for old and explicit DTO flags: %s', (utilization_unknown) => {
@@ -128,10 +130,9 @@ describe('AccountQuotaCell', () => {
     expect(row.text()).toContain('0%')
     expect(row.text()).not.toContain('—')
     expect(row.text()).toContain('待核验')
-    expect(row.get('[data-testid="quota-rejected"]').text()).toBe('已限流')
     expect(bar.attributes('aria-valuenow')).toBe('0')
     expect(bar.attributes('aria-valuetext')).toBeUndefined()
-    expect(bar.get('div').attributes('style')).toContain('width: 0%')
+    expect(bar.get('div').attributes('style')).toContain('width: 100%')
   })
 
   it('does not treat an unknown placeholder as measured usage and localizes the accessible unknown value', () => {
@@ -237,7 +238,7 @@ describe('AccountQuotaCell', () => {
     expect(w.find('[data-testid="quota-observed"]').exists()).toBe(observed)
     if (observed) {
       expect(w.get('[data-testid="quota-window-5h"]').text()).toContain('7%')
-      expect(w.get('[data-testid="quota-rejected"]').text()).toBe('已限流')
+      expect(w.get('[data-testid="quota-window-7d"] .bg-danger-500').attributes('style')).toContain('width: 100%')
     } else {
       expect(w.find('[role="progressbar"]').exists()).toBe(false)
     }
@@ -317,7 +318,7 @@ describe('AccountQuotaCell', () => {
   it('renders English plugin labels and pending verification', () => {
     i18n.global.locale.value = 'en'
     const w = render(snap({ windows: [win('custom', 100, { status: 'rejected', expired: true, label: { zh: '自定义额度', en: 'Custom budget' }, short_label: { zh: '自定', en: 'Custom' } })] }))
-    expect(w.get('[data-testid="quota-rejected"]').text()).toBe('Limited')
+    expect(w.text()).not.toContain('Limited')
     expect(w.get('[role="progressbar"]').attributes('aria-label')).toBe('Custom budget')
     expect(w.get('[data-testid="quota-window-custom"]').text()).toContain('Pending verification')
     expect(w.get('[data-testid="quota-window-custom"]').text()).toContain('Custom')

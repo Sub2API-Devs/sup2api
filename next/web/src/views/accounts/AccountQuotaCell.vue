@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // Plan windows of a subscription account in the accounts list: one bar per
-// window (5h / 7d / 7d Sonnet / 7d Fable / unknown keys verbatim) with the
-// percentage and the time to reset, coloured by usage; a rejected window is
-// flagged. The snapshot comes from the list row — this cell never fetches;
+// window with the percentage and the time to reset, coloured by usage. The
+// standard windows are named by the same short code in every language (5h,
+// 7d, 7ds, 7df, 7do); others by the plugin's short label or their key. A
+// rejected window shows a full red bar and a red name, no extra text. The
+// snapshot comes from the list row — this cell never fetches;
 // clicking the cell emits "refresh"; the page coalesces in-flight requests.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SIcon } from '@sub2api/ui'
+import { SIcon } from '@sub2api/ui'
 import type { QuotaSnapshot } from '@/api/types'
 import { formatDateTime, formatRelative } from '@/utils/format'
 import { lt } from '@/i18n'
@@ -38,6 +40,9 @@ const CHIP: Record<QuotaLevel, string> = {
   danger: 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400'
 }
 
+/** Language-independent codes of the standard windows. */
+const CODE: Record<string, string> = { '5h': '5h', '7d': '7d', '7d_sonnet': '7ds', '7d_fable': '7df', '7d_opus': '7do' }
+
 const rows = computed(() =>
   sortWindows(props.quota.windows).map(w => {
     const utilization = w.utilization_unknown ? Number.NaN : w.utilization
@@ -57,14 +62,14 @@ const rows = computed(() =>
       .join(' · ')
     return {
       key: w.key,
-      short: lt(w.short_label) || w.key,
+      short: CODE[w.key] || lt(w.short_label) || w.key,
       name,
       title,
       percent,
       unknown: !known,
-      width: known ? `${Math.min(100, Math.max(0, utilization))}%` : undefined,
+      // A rejected window is full whatever the last sample said.
+      width: w.status === 'rejected' ? '100%' : known ? `${Math.min(100, Math.max(0, utilization))}%` : undefined,
       now: known ? Math.round(Math.max(0, utilization)) : undefined,
-      rejected: w.status === 'rejected',
       reset,
       level
     }
@@ -134,7 +139,7 @@ const updated = computed(() => {
         :data-testid="`quota-window-${r.key}`"
         :data-level="r.level"
       >
-        <span class="w-14 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
+        <span class="w-9 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
         <div
           class="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700"
           role="progressbar"
@@ -145,16 +150,13 @@ const updated = computed(() => {
           :aria-label="r.name"
         >
           <div
-            v-if="!r.unknown"
+            v-if="r.width"
             class="h-full rounded-full transition-all duration-300"
             :class="BAR[r.level]"
             :style="{ width: r.width }"
           />
         </div>
         <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
-        <SBadge v-if="r.rejected" tone="danger" size="xs" data-testid="quota-rejected">{{
-          t('accounts.quota.rejected')
-        }}</SBadge>
         <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>
       </div>
     </div>
