@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.4",
+  "version": "0.12.5",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
