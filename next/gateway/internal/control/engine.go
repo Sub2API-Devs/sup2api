@@ -15,13 +15,17 @@ import (
 )
 
 type Engine struct {
-	Store        *Store
-	Locks        LockRunner
-	Runtime      Runtime
-	Node         Node
-	StepTimeout  time.Duration
-	PeerMaintain func(context.Context) error
-	PeerCheck    func(context.Context) error
+	Store   *Store
+	Locks   LockRunner
+	Runtime Runtime
+	Node    Node
+	// StepTimeout bounds every node step except a prepare's bundle download,
+	// which release.Manager fails once bytes stop arriving. PrepareTimeout is
+	// only the lock's backstop for that download; neither cuts a live transfer.
+	StepTimeout    time.Duration
+	PrepareTimeout time.Duration
+	PeerMaintain   func(context.Context) error
+	PeerCheck      func(context.Context) error
 	// CPU reports this node's averaged CPU load; ok is false when unmeasured.
 	CPU func() (percent float64, ok bool)
 
@@ -32,11 +36,26 @@ type Engine struct {
 	lastBlockedAt map[string]time.Time
 }
 
+const (
+	DefaultStepTimeout    = 10 * time.Minute
+	DefaultPrepareTimeout = 24 * time.Hour
+)
+
+func (e *Engine) stepTimeout() time.Duration {
+	if e.StepTimeout > 0 {
+		return e.StepTimeout
+	}
+	return DefaultStepTimeout
+}
+
 // Run polls durable state; restart never resumes an in-memory command. Each pass
 // obtains a fresh Redis lock before reading the current plan and local step.
 func (e *Engine) Run(ctx context.Context) error {
 	if e.StepTimeout == 0 {
-		e.StepTimeout = 10 * time.Minute
+		e.StepTimeout = DefaultStepTimeout
+	}
+	if e.PrepareTimeout == 0 {
+		e.PrepareTimeout = DefaultPrepareTimeout
 	}
 	// A long download/drain must not stop the independent liveness report.
 	go func() {
@@ -65,7 +84,7 @@ func (e *Engine) Run(ctx context.Context) error {
 			if err == nil && primary == e.Node.ID {
 				_, _ = e.Locks.WithLock(ctx, "system:upgrade:"+e.Store.Cluster, 30*time.Second, e.Coordinate)
 			}
-			_, _ = e.Locks.WithLock(ctx, "system:upgrade-node:"+e.Store.Cluster+":"+e.Node.ID, e.StepTimeout, e.Work)
+			_, _ = e.Locks.WithLock(ctx, "system:upgrade-node:"+e.Store.Cluster+":"+e.Node.ID, max(e.StepTimeout, e.PrepareTimeout), e.Work)
 			if before == e.progress.Load() {
 				break
 			}
@@ -331,6 +350,11 @@ func (e *Engine) insertNextStep(ctx context.Context, tx pgx.Tx, p Plan, st Step)
 }
 
 func (e *Engine) Work(ctx context.Context) error {
+	// The lock budget leaves room for a slow bundle download; everything else
+	// in a pass, including the bookkeeping around a prepare, keeps StepTimeout.
+	lock := ctx
+	ctx, cancel := context.WithTimeout(lock, e.stepTimeout())
+	defer cancel()
 	if err := e.checkPeer(ctx); err != nil {
 		return err
 	}
@@ -360,10 +384,17 @@ func (e *Engine) Work(ctx context.Context) error {
 	if started.RowsAffected() == 0 {
 		return nil
 	}
-	err = e.Execute(ctx, st)
-	if ctx.Err() != nil {
-		return ctx.Err()
+	run := ctx
+	if st.Action == "prepare" {
+		run = lock
+	}
+	err = e.Execute(run, st)
+	if run.Err() != nil {
+		return run.Err()
 	} // loss of lock never records completion
+	// Record under a fresh bound: a download may have outlived the first one.
+	ctx, cancel = context.WithTimeout(lock, e.stepTimeout())
+	defer cancel()
 	execErr := err
 	status := "done"
 	message := ""

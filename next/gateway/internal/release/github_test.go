@@ -66,7 +66,7 @@ func TestOrdinaryReleaseStillRejectsRedirects(t *testing.T) {
 		res.Header.Set("Location", "https://objects.githubusercontent.com/asset")
 		return res, nil
 	})}}
-	if _, err := m.get(context.Background(), "https://publisher.example/releases/manifest.json"); err == nil {
+	if _, err := m.getUsing(context.Background(), "https://publisher.example/releases/manifest.json", m.Client, nil); err == nil {
 		t.Fatal("ordinary publisher followed redirect")
 	}
 	if calls != 1 {

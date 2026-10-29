@@ -664,7 +664,9 @@ func parseTrustedProxies(cidrs []string) ([]*net.IPNet, error) {
 	return out, nil
 }
 
-// publisherClient trusts system roots plus the cluster CA when configured.
+// publisherClient trusts system roots plus the cluster CA when configured. It has
+// no total Timeout: release.Manager bounds a manifest by deadline and a bundle by
+// download progress, so a slow link can still finish a large bundle.
 func publisherClient(caFile string) (*http.Client, error) {
 	roots, err := x509.SystemCertPool()
 	if err != nil || roots == nil {
@@ -679,7 +681,7 @@ func publisherClient(caFile string) (*http.Client, error) {
 			return nil, errors.New("invalid cluster CA")
 		}
 	}
-	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}, Timeout: 10 * time.Minute}, nil
+	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}}, nil
 }
 func readConfig(path string) (config, error) {
 	var c config

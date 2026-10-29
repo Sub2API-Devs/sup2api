@@ -26,6 +26,14 @@ import (
 
 const MaxManifestBytes = 4 << 20
 
+// Default release transfer bounds. A manifest is small and gets one total
+// deadline; a bundle may take as long as it needs while bytes keep arriving.
+const (
+	DefaultManifestTimeout = time.Minute
+	DefaultHeaderTimeout   = time.Minute
+	DefaultIdleTimeout     = 2 * time.Minute
+)
+
 type Manager struct {
 	Root                 string
 	TrustedKeys          map[string]ed25519.PublicKey
@@ -34,7 +42,12 @@ type Manager struct {
 	GitHubClient         *http.Client
 	// AllowHTTP is intended for explicitly configured development repositories.
 	AllowHTTP bool
-	mu        sync.Mutex
+	// ManifestTimeout bounds a whole manifest request. HeaderTimeout bounds a
+	// bundle request until its response headers arrive; IdleTimeout then fails
+	// the bundle only when no byte arrives for that long. The clients' own
+	// Timeout is ignored for bundles. Zero uses the default.
+	ManifestTimeout, HeaderTimeout, IdleTimeout time.Duration
+	mu                                          sync.Mutex
 }
 type Prepared struct {
 	Digest    string
@@ -99,7 +112,9 @@ func (m *Manager) init() error {
 // select the URL from its configured publisher, never from a business request.
 func (m *Manager) FetchManifest(ctx context.Context, rawURL string) (rc.SignedManifest, error) {
 	var s rc.SignedManifest
-	r, err := m.get(ctx, rawURL)
+	ctx, cancel := context.WithTimeout(ctx, orDefault(m.ManifestTimeout, DefaultManifestTimeout))
+	defer cancel()
+	r, err := m.getUsing(ctx, rawURL, m.Client, m.GitHubClient)
 	if err != nil {
 		return s, err
 	}
@@ -114,18 +129,16 @@ func (m *Manager) FetchManifest(ctx context.Context, rawURL string) (rc.SignedMa
 	err = json.Unmarshal(b, &s)
 	return s, err
 }
-func (m *Manager) get(ctx context.Context, raw string) (*http.Response, error) {
-	return m.getUsing(ctx, raw, m.Client)
-}
-func (m *Manager) getUsing(ctx context.Context, raw string, client *http.Client) (*http.Response, error) {
+func (m *Manager) getUsing(ctx context.Context, raw string, client, github *http.Client) (*http.Response, error) {
 	if IsGitHubAssetURL(raw) {
-		return GitHubGet(ctx, m.GitHubClient, raw)
+		return GitHubGet(ctx, github, raw)
 	}
 	u, e := url.Parse(raw)
 	if e != nil || u.Host == "" || u.User != nil || (u.Scheme != "https" && !(m.AllowHTTP && u.Scheme == "http")) {
 		return nil, errors.New("invalid release source URL")
 	}
-	c := http.Client{Timeout: 10 * time.Minute}
+	// Callers bound the request: FetchManifest by deadline, download by progress.
+	var c http.Client
 	if client != nil {
 		c = *client
 	}
@@ -144,6 +157,81 @@ func (m *Manager) getUsing(ctx context.Context, raw string, client *http.Client)
 		return nil, fmt.Errorf("release source HTTP %d", r.StatusCode)
 	}
 	return r, nil
+}
+
+// errNoResponse and errStalled are the causes a bundle download is cancelled with.
+var (
+	errNoResponse = errors.New("release download got no response")
+	errStalled    = errors.New("release download stalled")
+)
+
+// download opens a bundle without a total deadline: a slow link may take as
+// long as it needs, but the request fails once the response headers or body
+// bytes stop arriving for the configured window.
+func (m *Manager) download(ctx context.Context, raw string, client *http.Client) (io.ReadCloser, error) {
+	github := m.GitHubClient
+	if github == nil {
+		github = GitHubClient()
+	}
+	header, idle := orDefault(m.HeaderTimeout, DefaultHeaderTimeout), orDefault(m.IdleTimeout, DefaultIdleTimeout)
+	ctx, cancel := context.WithCancelCause(ctx)
+	wait := time.AfterFunc(header, func() { cancel(fmt.Errorf("%w within %s", errNoResponse, header)) })
+	r, e := m.getUsing(ctx, raw, untimed(client), untimed(github))
+	wait.Stop()
+	if e != nil {
+		if cause := context.Cause(ctx); errors.Is(cause, errNoResponse) {
+			e = cause
+		}
+		cancel(nil)
+		return nil, e
+	}
+	b := &idleBody{body: r.Body, ctx: ctx, cancel: cancel, idle: idle}
+	b.timer = time.AfterFunc(idle, func() { cancel(fmt.Errorf("%w: no data for %s", errStalled, idle)) })
+	return b, nil
+}
+
+// untimed copies c without its total deadline; download bounds the transfer.
+func untimed(c *http.Client) *http.Client {
+	if c == nil {
+		return &http.Client{}
+	}
+	out := *c
+	out.Timeout = 0
+	return &out
+}
+
+func orDefault(v, d time.Duration) time.Duration {
+	if v > 0 {
+		return v
+	}
+	return d
+}
+
+// idleBody cancels its request once no byte has arrived for idle.
+type idleBody struct {
+	body   io.ReadCloser
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	idle   time.Duration
+	timer  *time.Timer
+}
+
+func (b *idleBody) Read(p []byte) (int, error) {
+	n, e := b.body.Read(p)
+	if n > 0 {
+		b.timer.Reset(b.idle)
+	}
+	if e != nil && e != io.EOF {
+		if cause := context.Cause(b.ctx); errors.Is(cause, errStalled) || errors.Is(cause, errNoResponse) {
+			e = cause
+		}
+	}
+	return n, e
+}
+func (b *idleBody) Close() error {
+	b.timer.Stop()
+	b.cancel(nil)
+	return b.body.Close()
 }
 
 // ValidatePlatform checks the same signed platform contract as Prepare.
@@ -198,14 +286,14 @@ func (m *Manager) prepare(ctx context.Context, s rc.SignedManifest, bundleURL st
 	if e != nil {
 		return out, e
 	}
-	r, e := m.getUsing(ctx, bundleURL, client)
+	r, e := m.download(ctx, bundleURL, client)
 	if e != nil {
 		f.Close()
 		return out, e
 	}
 	h := sha256.New()
-	n, e := io.Copy(io.MultiWriter(f, h), io.LimitReader(r.Body, p.BundleBytes+1))
-	r.Body.Close()
+	n, e := io.Copy(io.MultiWriter(f, h), io.LimitReader(r, p.BundleBytes+1))
+	r.Close()
 	if e == nil {
 		e = f.Sync()
 	}

@@ -59,6 +59,23 @@ type fakeRuntime struct {
 	revision int64
 	stopped  bool
 	options  []rc.PrepareRequest
+	// The first Prepare takes prepareTook (prepareCut counts those cut short);
+	// every DrainStop takes stopTook. Both honour ctx.
+	prepareTook, stopTook time.Duration
+	prepareCut            int
+}
+
+// take waits d unless ctx ends first.
+func take(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 func (r *fakeRuntime) call(action string) error {
@@ -70,7 +87,17 @@ func (r *fakeRuntime) call(action string) error {
 }
 func (r *fakeRuntime) Prepare(ctx context.Context, _ Release, _ string) error {
 	r.mu.Lock()
+	d := r.prepareTook
+	r.mu.Unlock()
+	if err := take(ctx, d); err != nil {
+		r.mu.Lock()
+		r.prepareCut++
+		r.mu.Unlock()
+		return err
+	}
+	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.prepareTook = 0
 	return r.call("prepare")
 }
 func (r *fakeRuntime) Redirect(ctx context.Context, n Node) error {
@@ -83,6 +110,9 @@ func (r *fakeRuntime) Redirect(ctx context.Context, n Node) error {
 	return nil
 }
 func (r *fakeRuntime) DrainStop(ctx context.Context, _ string) error {
+	if err := take(ctx, r.stopTook); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.call("stop"); err != nil {
