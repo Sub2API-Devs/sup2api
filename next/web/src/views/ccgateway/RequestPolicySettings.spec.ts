@@ -92,7 +92,7 @@ describe('CCGateway request levels', () => {
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), level: value }))
     await w.get('form').trigger('submit'); await flushPromises()
     const sent = mocks.put.mock.calls[0]![1].request_policy
-    expect(sent).toMatchObject({ level: value, cli_version: '2.1.310' })
+    expect(sent).toMatchObject({ level: value, cli_version: '2.1.312' })
     expect(sent).not.toHaveProperty('relay_mode')
     w.unmount()
   })
