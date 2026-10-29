@@ -3458,6 +3458,12 @@ CC 账号的 OAuth 令牌在容器凭证文件里（`$CLAUDE_CONFIG_DIR/.credent
 - 其他无法续期的情况 → 400 `token_revoked`：上游说 revoked、未过期却被 401、没有刷新令牌，或本进程中已有模型请求用当前存储的这个访问令牌认证失败（CLI 类别 `authentication_failed` 或观测到上游 401，说明 CLI 续期也失败；令牌一变即失效，此时不再请求上游）；
 - 上游失败 → 502 `upstream_error`。
 
+**2026-10-29 起（ccgateway 0.1.110）由 CLI 自带的 `/usage` 查询**，上面的直连读法与 `token_expired` 作废：
+- 容器运行 `claude -p /usage --output-format json`（不带工具、MCP、钩子、claude.ai 连接器、设置文件，不存会话）。CC 把用量查询算作非必要流量，所以只对这个进程去掉 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`，其余遥测开关不变。
+- CC 按自己的逻辑查询：访问令牌已过期或快过期先续期，遇到 401 续期后重发一次。成功后 CC 把上游 JSON 原样存进全局配置 `.claude.json` 的 `cachedUsageUtilization`（含 `fetchedAtMs`、`accountUuid`）。容器读这份 JSON 原样返回 200；只认当前登录账号的、本次运行开始前 60 秒以内（CC 自己在这个时间内直接用存的结果，不再请求）取得的结果，超过 64 KiB 不收。
+- 没有新结果时：凭证文件里的访问令牌已被 CC 清空（上游拒绝且续期失败时 CC 会清掉登录）→ 400 `token_revoked`；否则 → 502 `upstream_error`（附命令输出或失败原因）。
+- 未登录 → 400 `not_logged_in`、已有模型请求用当前令牌认证失败 → 400 `token_revoked`，这两种照旧不启动 CLI。不再返回 `token_expired`（插件仍认得旧容器返回的这个码）。
+
 **控制器**（`tools/ccgateway/runtime/manager.py`）：透传路由正则增加 `admin/usage`（GET），代理到业务容器 `GET /admin/usage`。
 
 ### 51.2 核心：CCGateway 账号类型支持配额

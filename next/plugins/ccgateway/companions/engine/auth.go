@@ -59,10 +59,7 @@ type authManager struct {
 	env       []string
 	proxy     *ProxyConfigStore
 	overrides *EnvironmentOverrides // account locale/timezone (PUT /admin/environment)
-	// managementHTTP is the CLI's management_http_v1 capability: an older CLI
-	// has no ccgateway-mgmt command and must never be asked for one.
-	managementHTTP bool
-	// work is the directory the token refresh process runs in.
+	// work is the directory the token refresh and usage processes run in.
 	work string
 }
 

@@ -25,6 +25,9 @@ func TestMain(m *testing.M) {
 		managementPeer()
 		os.Exit(0)
 	}
+	if os.Getenv("CCG_TEST_USAGE_PEER") != "" {
+		usagePeer()
+	}
 	if os.Getenv("CCG_TEST_REQUEST_PEER") != "" {
 		requestCancellationPeer()
 		os.Exit(0)

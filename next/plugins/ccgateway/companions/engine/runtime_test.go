@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 	"time"
 )
@@ -17,24 +17,17 @@ func TestUsageUsesAccountEnvironment(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(account, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"account-only-token"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	envLog := filepath.Join(t.TempDir(), "env.txt")
-	runner, _ := managementTestRunner(t, map[string]string{
-		"CCG_TEST_MGMT_ENV":  envLog,
-		"CCG_TEST_MGMT_BODY": `{"five_hour":{"utilization":1}}`,
-	})
-	env := envWith(runner.Env, map[string]string{"CLAUDE_SECURESTORAGE_CONFIG_DIR": account})
-	a := &authManager{key: "admin", cli: runner.CLI, work: runner.Work, env: env, managementHTTP: true}
+	base, log := usageAuth(t, map[string]string{"CCG_TEST_USAGE_STORE": `{"five_hour":{"utilization":1}}`})
+	env := envWith(base.env, map[string]string{"CLAUDE_SECURESTORAGE_CONFIG_DIR": account})
+	a := &authManager{key: "admin", cli: base.cli, work: base.work, env: env}
 	out := authRequest(a, "GET", "/admin/usage", "", "admin")
 	if out.Code != 200 {
 		t.Fatalf("account credential was not used: %d %s", out.Code, out.Body.String())
 	}
 	// The CLI process must see the account's credential storage, not the
 	// Worker's own environment.
-	raw, err := os.ReadFile(envLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "CLAUDE_SECURESTORAGE_CONFIG_DIR="+account) {
+	runs := usageRuns(t, log)
+	if len(runs) != 1 || !slices.Contains(runs[0].Env, "CLAUDE_SECURESTORAGE_CONFIG_DIR="+account) {
 		t.Fatalf("usage CLI did not inherit the account environment")
 	}
 }

@@ -101,7 +101,7 @@ func newRuntime(o Options, runner *Runner, cliInfo cliRequestInfo, root string) 
 	if err != nil {
 		return nil, err
 	}
-	admin := &authManager{cli: runner.CLI, key: o.AdminKey, work: runner.Work, proxy: runner.Proxy, overrides: runner.Overrides, managementHTTP: runner.SupportsManagement, requestLogs: g.RequestLogs, env: o.Env}
+	admin := &authManager{cli: runner.CLI, key: o.AdminKey, work: runner.Work, proxy: runner.Proxy, overrides: runner.Overrides, requestLogs: g.RequestLogs, env: o.Env}
 	resources, err := newResourceBroker(g, admin, root)
 	if err != nil {
 		return nil, err

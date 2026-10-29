@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,41 +21,47 @@ import (
 )
 
 // GET /admin/usage (CONTRACTS §49 container interface): the subscription
-// usage of the signed-in Claude account, read from Anthropic's OAuth usage
-// endpoint with the access token Claude Code stored in this container. The
-// core cannot see that token nor the rate-limit headers of the CLI's own
-// requests, so it asks the container (§44, CCGateway quota provider).
+// usage of the signed-in Claude account. The core cannot see the account's
+// token nor the rate-limit headers of the CLI's own requests, so it asks the
+// container (§44, CCGateway quota provider).
 //
-// The call itself is made by the CLI (`claude ccgateway-mgmt`), which owns the
-// stored credential and its HTTPS fingerprint; Go neither sends nor reads the
+// The read is Claude Code's own /usage command (`claude -p /usage`). Claude
+// Code asks the OAuth usage endpoint the way it does for its users: it renews
+// an access token that expired or is about to, and after a 401 renews it and
+// sends the read once more. It stores the endpoint's answer verbatim in its
+// global config (cachedUsageUtilization, with the time it was fetched); that
+// stored object is what this endpoint returns. Go neither sends nor reads the
 // token for transport.
 //
 // 200: Anthropic's JSON object, verbatim (five_hour, seven_day,
-// seven_day_sonnet, seven_day_overage_included, ...). The core parses it.
+// seven_day_sonnet, limits, ...). The core parses it.
 // 400 not_logged_in: no OAuth token stored (signed out, or an API key runtime).
-// 400 token_expired: Anthropic refused the token because its access token
-// expired and a refresh token is stored. The CLI refreshes it on its next
-// model request; the container does not refresh it itself (a second refresher
-// would race the CLI's refresh-token rotation).
 // 400 token_revoked: the authorization cannot be used without signing in
-// again: Anthropic refused a token that had not expired (or said it was
-// revoked), no refresh token is stored, or a model request was already
-// refused with this very token (the CLI could not renew it).
-// 502 upstream_error: anything else (transport, non-200, not a JSON object).
+// again: a model request was already refused with this very token, or Claude
+// Code dropped the stored login because Anthropic refused it and it could not
+// be renewed.
+// 502 upstream_error: no fresh answer otherwise (transport, non-200, the
+// command failed).
 
 const (
 	codeNotLoggedIn   = "not_logged_in"
-	codeTokenExpired  = "token_expired"
 	codeTokenRevoked  = "token_revoked"
 	codeUpstreamError = "upstream_error"
 
-	// usagePath is Anthropic's OAuth usage endpoint, which the CLI allowlist
-	// must admit (`claude ccgateway-mgmt --path /api/oauth/usage`).
-	usagePath = "/api/oauth/usage"
-	// usageTimeout is the official usage read timeout; profileTimeout the
-	// official profile read timeout. Both are passed to the CLI as
-	// --timeout-ms, so a stalled call fails the way Claude Code's own does.
-	usageTimeout   = 5 * time.Second
+	// usageCommandTimeout bounds the /usage process: start-up, a token renewal
+	// and the read with its one retry (Claude Code's own read timeout is 5 s).
+	// The core gives the whole query 20 s.
+	usageCommandTimeout = 15 * time.Second
+	// usageSnapshotWindow is how long Claude Code answers /usage from its own
+	// stored read without asking the endpoint again: a stored read that recent
+	// is as fresh as the command's own answer.
+	usageSnapshotWindow = time.Minute
+	// usageOutputLimit bounds what is kept of the command's JSON result;
+	// usageConfigLimit the global config read for the stored answer.
+	usageOutputLimit = 256 << 10
+	usageConfigLimit = 16 << 20
+	// profileTimeout is the official profile read timeout, passed to the CLI
+	// as --timeout-ms, so a stalled call fails the way Claude Code's own does.
 	profileTimeout = 10 * time.Second
 	// profileCLIMaxBytes is the profile read's body limit passed to the CLI.
 	profileCLIMaxBytes = 1 << 20
@@ -61,10 +69,7 @@ const (
 	// release check (cli_management.go); it is not a provider API call.
 	managementHeaderTimeout = 20 * time.Second
 	usageMaxBody            = 64 << 10
-	// usageCLIMaxBytes bounds what the CLI spools for the usage read; the
-	// parsed answer is still capped at usageMaxBody.
-	usageCLIMaxBytes    = 1 << 20
-	maxCredentialsBytes = 1 << 20
+	maxCredentialsBytes     = 1 << 20
 )
 
 // oauthCredentials is the part of Claude Code's .credentials.json we read.
@@ -241,8 +246,7 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	env := a.environment()
-	stored := storedOAuthIn(env)
-	token := stored.access
+	token := storedOAuthIn(env).access
 	if token == "" {
 		apiError(w, 400, codeNotLoggedIn, "Claude Code is not signed in with a Claude account.")
 		return
@@ -257,67 +261,107 @@ func (a *authManager) usage(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 502, codeUpstreamError, "The Anthropic usage API could not be reached.")
 		return
 	}
-	if !a.managementHTTP {
-		apiError(w, 502, codeUpstreamError, "The installed Claude Code CLI does not support Anthropic management calls.")
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), usageTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), usageCommandTimeout)
 	defer cancel()
-	runner := &Runner{CLI: a.cli, Work: a.work, SupportsManagement: true}
-	answer, err := cliManagementRequest(ctx, runner, env, cliManagementCall{
-		Method:   http.MethodGet,
-		Path:     usagePath,
-		Timeout:  usageTimeout,
-		MaxBytes: usageCLIMaxBytes,
-		// The official usage read carries no Anthropic-Beta header; the CLI
-		// supplies its own User-Agent and login.
-		Header: http.Header{
-			"Accept":       {"application/json, text/plain, */*"},
-			"Content-Type": {"application/json"},
-		},
-	})
+	started := time.Now()
+	result, err := runUsageCommand(ctx, a.cli, a.work, env)
+	if raw, ok := storedUsage(env, started); ok {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+		return
+	}
+	// Claude Code drops a stored login that Anthropic refused and that it
+	// could not renew.
+	if storedOAuthIn(env).access == "" {
+		apiError(w, 400, codeTokenRevoked, "Anthropic refused the stored OAuth token and Claude Code could not renew it.")
+		return
+	}
 	if err != nil {
-		switch {
-		case errors.Is(err, errCLIManagementNotLoggedIn):
-			apiError(w, 400, codeNotLoggedIn, "Claude Code is not signed in with a Claude account.")
-		case errors.Is(err, errCLIManagementTooLarge):
-			apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is too large.")
-		default:
-			apiError(w, 502, codeUpstreamError, "The Anthropic usage API could not be reached.")
+		apiError(w, 502, codeUpstreamError, "Claude Code's /usage command failed: "+err.Error())
+		return
+	}
+	apiError(w, 502, codeUpstreamError, "The Anthropic usage API could not be read: "+asciiSnippet([]byte(result)))
+}
+
+// usageCommandArgs runs /usage alone: no tools, MCP servers, hooks, claude.ai
+// connectors, settings files or session transcript.
+func usageCommandArgs() []string {
+	return []string{"-p", "/usage", "--output-format", "json", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
+		"--setting-sources", "", "--settings", `{"disableAllHooks":true,"disableClaudeAiConnectors":true}`, "--no-session-persistence", "--no-chrome"}
+}
+
+// runUsageCommand runs Claude Code's /usage and returns the text it printed.
+// Claude Code counts the usage read as nonessential traffic, so this process
+// alone runs without CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; the telemetry
+// switches stay on.
+func runUsageCommand(ctx context.Context, cli, dir string, env []string) (string, error) {
+	cmd := exec.CommandContext(ctx, cli, usageCommandArgs()...)
+	cmd.Env = envWith(env, nil, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+	cmd.Dir, cmd.WaitDelay = dir, time.Second
+	out := &limitedBuffer{limit: usageOutputLimit}
+	cmd.Stdout = out
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return "", errors.New("timed out")
 		}
-		return
+		return "", errors.New("the process failed")
 	}
-	defer answer.Close()
-	if answer.size > usageMaxBody {
-		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is too large.")
-		return
+	var answer struct {
+		IsError bool   `json:"is_error"`
+		Result  string `json:"result"`
 	}
-	raw, err := readLimitedFile(answer.body, usageMaxBody)
+	if json.Unmarshal(out.Bytes(), &answer) != nil {
+		return "", errors.New("the output is not a JSON result")
+	}
+	if answer.IsError {
+		return "", errors.New(asciiSnippet([]byte(answer.Result)))
+	}
+	return answer.Result, nil
+}
+
+// storedUsage returns the usage answer Claude Code stored in its global
+// config, when it belongs to the signed-in account and was fetched by this
+// command (or recently enough that the command answered from it).
+func storedUsage(env []string, started time.Time) ([]byte, bool) {
+	f, err := os.Open(snapshotGlobalConfigPath(env))
 	if err != nil {
-		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer could not be read.")
-		return
+		return nil, false
 	}
-	switch {
-	case answer.status == http.StatusUnauthorized:
-		text := strings.ToLower(string(raw))
-		expired := (stored.expiresAt > 0 && stored.expiresAt <= time.Now().UnixMilli()) || strings.Contains(text, "expired")
-		if expired && stored.refreshable && !strings.Contains(text, "revoked") {
-			apiError(w, 400, codeTokenExpired, "The stored OAuth access token expired; Claude Code renews it on its next model request: "+asciiSnippet(raw))
-			return
-		}
-		apiError(w, 400, codeTokenRevoked, "Anthropic refused the stored OAuth token and it cannot be renewed: "+asciiSnippet(raw))
-		return
-	case answer.status != http.StatusOK:
-		apiError(w, 502, codeUpstreamError, fmt.Sprintf("The Anthropic usage API returned %d: %s", answer.status, asciiSnippet(raw)))
-		return
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, usageConfigLimit+1))
+	if err != nil || len(raw) > usageConfigLimit {
+		return nil, false
+	}
+	var config struct {
+		Account *struct {
+			UUID string `json:"accountUuid"`
+		} `json:"oauthAccount"`
+		Usage *struct {
+			FetchedAtMs int64           `json:"fetchedAtMs"`
+			AccountUUID string          `json:"accountUuid"`
+			Utilization json.RawMessage `json:"utilization"`
+		} `json:"cachedUsageUtilization"`
+	}
+	if json.Unmarshal(raw, &config) != nil || config.Usage == nil {
+		return nil, false
+	}
+	u := config.Usage
+	if u.AccountUUID != "" && (config.Account == nil || config.Account.UUID != u.AccountUUID) {
+		return nil, false
+	}
+	fetched := time.UnixMilli(u.FetchedAtMs)
+	if fetched.Before(started.Add(-usageSnapshotWindow)) || fetched.After(time.Now().Add(time.Minute)) {
+		return nil, false
 	}
 	var obj map[string]json.RawMessage
-	if json.Unmarshal(raw, &obj) != nil || obj == nil {
-		apiError(w, 502, codeUpstreamError, "The Anthropic usage API answer is not a JSON object.")
-		return
+	if json.Unmarshal(u.Utilization, &obj) != nil || obj == nil {
+		return nil, false
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(raw)
+	var compact bytes.Buffer
+	if json.Compact(&compact, u.Utilization) != nil || compact.Len() > usageMaxBody {
+		return nil, false
+	}
+	return compact.Bytes(), true
 }
 
 // asciiSnippet is the start of an upstream body for an English error
