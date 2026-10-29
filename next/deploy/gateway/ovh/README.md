@@ -2,11 +2,17 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-10-29 最新发布：Core 两节点 **0.1.212**（源码 `330d4f2a4`，manifest `deef1567…2810`，计划 `71f219c1cc5b5743a17102931be319e2` completed/13，51.8 秒，核心 SHA `bb7b1db1…fe80`）。schema 契约不变（`2adf9bfc…`）。
+- 内容：只换 `builtin/`，改成用 `sup2api-plugins-2026` 签名的 anthropic 0.2.7、gemini 0.2.6、openai 0.3.6、moderation 0.1.13、volcengine 0.12.5、ccgateway 0.1.111，与已安装包逐字节一致（构建时按 `plugin_versions.package_sha256` 核对）。`trust.pub`/`trust.keyid` 改为新密钥。核心代码与 0.1.211 相同，只为版本号重新编译，UI 沿用 0.1.211。
+- 全新节点测试：在一次性 PG 18 + Valkey 9 的空库上起新核心，打开验签、seccomp、strict network、Landlock 和数据库角色隔离。6 个内置插件都验签通过并安装，anthropic、gemini、openai、moderation 启用并运行，volcengine、ccgateway 按 install-only 不启用；没有 ERROR 或 WARN。
+- 核对：两节点 `sub2api version` 都是 0.1.212，都记录了 "bundled plugins run the versions of this release"；插件进程 `Seccomp=2`。42/44 号 haiku 测试经两条路都 200，moderation 接口正常。
+- 备份 `backups/core-0.1.212`（604 项），脚本 `stage/0.1.212/{build.sh,release.sh}`。以后核心发布从 `stage/0.1.212/payload/builtin` 复制内置包，不要再用 0.1.207/0.1.211 的。
+
 2026-10-29 内置插件重新发布并吊销旧密钥：anthropic **0.2.7**、gemini **0.2.6**、openai **0.3.6**、moderation **0.1.13**、volcengine **0.12.5**（`fcaf9e8fd`，rollout 198–202）。这几个包从源码编译，用 `sup2api-plugins-2026` 签名。
 - 内容：10-24 第二轮 SDK 重构与审核修复（共享 apikey 校验、请求头、模型列表等）。发布前 SDK 和 5 个插件的 `go test` 全过，PG 测试没有跳过；`GOOS=linux go vet` 也通过。
 - 和线上旧包逐文件对比：只有两个插件程序和 manifest 的 version 变了，表单、迁移、权限都没变。moderation 的 UI 源码自 0.1.11 起没改过，构建好的 UI 直接取自线上 0.1.11 包。moderation 跳过 0.1.12（那是被拒绝的重签尝试）。
 - 升级前后权限没有变化，授权自动沿用。两节点都跑新版本（`Seccomp=2`，开着 Landlock），一次性容器里 Landlock 握手也正常。moderation 的 `/p/moderation/{overview,events,blocks}` 经两个节点都正常；42/44 号 haiku 测试 200。
-- `sub2api-dev` 已吊销（`revoked_versions` 179，`disabled_plugins` 为空），之后 sup2api-1 重启 9 秒就绪，没有报错。它签的历史版本都不能再回滚或启用了。镜像 `builtin/` 还是旧包，但内置插件已就绪，启动时不会重新上传。全新节点仍然装不了，下次核心发布用新密钥重签 `builtin/` 后才行。
+- `sub2api-dev` 已吊销（`revoked_versions` 179，`disabled_plugins` 为空），之后 sup2api-1 重启 9 秒就绪，没有报错。它签的历史版本都不能再回滚或启用了。镜像 `builtin/` 还是旧包，但内置插件已就绪，启动时不会重新上传。全新节点的问题已由核心 0.1.212 解决（见上一条）。
 - 脚本 `stage/builtins-2026-10-29/build.sh`，包在同目录 `packages/`。
 
 2026-10-29 插件签名校验与 Landlock 打开（两节点）：`SUB2API_PLUGIN_VERIFY_SIGNATURES=true`、`SUB2API_PLUGIN_LANDLOCK=true`；CCGateway **0.1.111**（`d4cf5beed`，代码同 0.1.110，包 SHA `ccd0dcdb…`，rollout 197）。
