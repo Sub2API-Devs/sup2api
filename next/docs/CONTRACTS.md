@@ -4645,3 +4645,17 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 没有故障策略时（旧路径）：带解除时间的 `automatic_state` 现在也按"禁用到解除时间"执行（以前只当作冷却），没有解除时间的仍是冷却，永久禁用仍只由管理员规则决定（§42）。
 - 实现：`gateway/dispatch.go` 的 `pluginAutoDisable`、`applyPluginAccountState`；`core.AccountDirectory.AutoDisableUntil`（`account/directory.go`，走 `ApplyAccountAutomaticState`）。
 - CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
+
+## 70. CCGateway 用量改为读响应头：请求时懒刷新、手动才主动查询（2026-10-30，用户要求）
+
+用户要求：上游每个响应（包括 429）都带用量头，直接用它刷新用量，并据此设置自动禁用和自动恢复的时间；没有请求时，除非用户手动刷新，不得调用 CLI 查询用量，避免频繁调用。客户端真实调用期间懒刷新，用户手动刷新时主动查询。
+
+- **CCGateway 0.1.113 manifest**：`quota.autoRefresh` 去掉（为 false），新增 `quota.headers`：
+  - `5h` 读 `anthropic-ratelimit-unified-5h-{utilization,reset,status}`；
+  - `7d` 读 `anthropic-ratelimit-unified-7d-{utilization,reset,status}`。
+  - utilization 是比例（1.03 = 103%），reset 是 Unix 秒。`quota.query` 保留，只供手动刷新。
+- **懒刷新**：核心对 2xx、101、429 响应按 `quota.headers` 被动采样（§44，`ObserveQuotaHeaders`）。每个账号每节点最多 30 秒写一次，窗口状态变化（allowed ↔ rejected）立即写，`source = passive`，并清除上次的查询错误。Worker 原样转回这些头。
+- **不再后台查询**：`autoRefresh` 为 false 的类型不进核心的后台查询清扫，新账号也不建自动查询计划。`GET /accounts/:id/quota` 不带 `force=true` 时只返回已存的快照，不调用插件（核心 0.1.217 起对所有不自动刷新的类型生效，claude-oauth 同样适用）。控制台点击用量单元格会带 `force=true`，这时才经 CLI 的 `/usage` 主动查询。
+- **429**：插件 `ClassifyError` 给 429 的配额观测（代表窗口 `rejected`）现在带上该窗口头里的真实 utilization，不再是"未知"；自动禁用到重置时刻、到点自动恢复的规则不变（§69）。
+- 控制台没有任何数据时显示"暂无用量，下次请求后更新，或点击刷新"。
+- 用量窗口不参与调度准入（§44.7「用量窗口不再拦截」），所以只靠响应头更新的快照即使变旧，也不会挡住账号。

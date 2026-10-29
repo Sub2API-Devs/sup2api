@@ -178,7 +178,7 @@ describe('AccountQuotaCell', () => {
 
   it.each([undefined, 'pending'] as const)('shows initial query pending without fabricated usage for status %s', (refresh_status) => {
     const w = render(snap({ source: '', updated_at: null, refresh_status }))
-    expect(w.get('[data-testid="quota-pending"]').text()).toBe('首次额度查询待完成')
+    expect(w.get('[data-testid="quota-pending"]').text()).toBe('暂无用量，下次请求后更新，或点击刷新')
     expect(w.find('[role="progressbar"]').exists()).toBe(false)
     expect(w.text()).not.toContain('0%')
     expect(w.find('[data-testid="quota-observed"]').exists()).toBe(false)
@@ -327,7 +327,7 @@ describe('AccountQuotaCell', () => {
   it('renders English initial query, failure and last observed text without the next check', async () => {
     i18n.global.locale.value = 'en'
     const w = render(snap({ source: '', updated_at: null, refresh_status: 'pending', next_check_at: inSec(60) }))
-    expect(w.get('[data-testid="quota-pending"]').text()).toBe('Initial quota query pending')
+    expect(w.get('[data-testid="quota-pending"]').text()).toBe('No usage yet: updated by the next request, or click to refresh')
     expect(w.find('[data-testid="quota-next-check"]').exists()).toBe(false)
     await w.setProps({ quota: snap({ refresh_status: 'error' }) })
     expect(w.get('[data-testid="quota-error"]').text()).toBe('Quota query failed')

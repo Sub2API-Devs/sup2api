@@ -273,7 +273,14 @@ func TestAccountQuotaAPI(t *testing.T) {
 	if d := out["data"].(map[string]any); code != 200 || d["supported"] != false || up.calls.Load() != 0 {
 		t.Fatalf("unsupported: %d %v", code, out)
 	}
+	// Without automatic refresh a read never asks the upstream; only a
+	// manual refresh does (CONTRACTS §70).
 	e.withQuota(&manifest.AccountQuota{Query: true, Headers: []manifest.QuotaHeader{{Key: "5h", Status: "x-status"}}})
+	code, out = e.do("GET", path, nil)
+	if d := out["data"].(map[string]any); code != 200 || d["supported"] != true || up.calls.Load() != 0 {
+		t.Fatalf("query-only read: %d %v (calls %d)", code, out, up.calls.Load())
+	}
+	e.withQuota(&manifest.AccountQuota{Query: true, AutoRefresh: true, Headers: []manifest.QuotaHeader{{Key: "5h", Status: "x-status"}}})
 
 	// First read queries once; the fresh snapshot is served afterwards.
 	code, out = e.do("GET", path, nil)

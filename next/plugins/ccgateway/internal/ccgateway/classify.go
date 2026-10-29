@@ -210,6 +210,13 @@ func rejectedQuota(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.Q
 		return nil
 	}
 	window := &pluginv1.QuotaWindow{Key: key, Status: "rejected", UtilizationUnknown: true}
+	// The shared windows carry their own utilization (a ratio, 1.03 = 103%)
+	// on every answer; the console shows it instead of an unknown value.
+	if prefix := unifiedWindowHeader[key]; prefix != "" {
+		if ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64); err == nil && validUsage(ratio) {
+			window.Utilization, window.UtilizationUnknown = ratio*100, false
+		}
+	}
 	if raw := h[claimResetHeader]; raw != "" {
 		reset, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || reset <= 0 || reset > 253402300799 || strconv.FormatInt(reset, 10) != raw {
@@ -220,6 +227,11 @@ func rejectedQuota(in *pluginv1.ClassifyErrorRequest, now time.Time) *pluginv1.Q
 	windows := []*pluginv1.QuotaWindow{window}
 	return &pluginv1.QuotaResult{Windows: windows, NextCheckAtUnix: nextQuotaCheck(now, windows)}
 }
+
+// unifiedWindowHeader is the header prefix of a shared window's own values
+// (…-utilization, …-reset, …-status); the manifest's quota.headers read the
+// same headers on every response.
+var unifiedWindowHeader = map[string]string{quota5h: "anthropic-ratelimit-unified-5h", quota7d: "anthropic-ratelimit-unified-7d"}
 
 // quotaClaimKey maps a representative claim to the plugin's quota key.
 func quotaClaimKey(claim string) string {

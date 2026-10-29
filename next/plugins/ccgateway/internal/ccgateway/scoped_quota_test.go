@@ -148,3 +148,20 @@ func TestScopedClaimDoesNotOverrideAuth(t *testing.T) {
 		require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.AccountEffect)
 	}
 }
+
+// A shared window's 429 carries the window's own utilization: the observation
+// records it instead of an unknown value (the console shows 103%).
+func Test429RecordsHeaderUtilization(t *testing.T) {
+	p, now := quotaTestPlugin()
+	in := upstream429("five_hour", now.Add(time.Hour).Unix())
+	in.Headers["anthropic-ratelimit-unified-5h-utilization"] = "1.03"
+	out, err := p.ClassifyError(context.Background(), in)
+	require.NoError(t, err)
+	w := out.GetQuota().GetWindows()[0]
+	require.False(t, w.GetUtilizationUnknown())
+	require.InDelta(t, 103, w.GetUtilization(), 1e-9)
+	in.Headers["anthropic-ratelimit-unified-5h-utilization"] = "x"
+	out, err = p.ClassifyError(context.Background(), in)
+	require.NoError(t, err)
+	require.True(t, out.GetQuota().GetWindows()[0].GetUtilizationUnknown())
+}

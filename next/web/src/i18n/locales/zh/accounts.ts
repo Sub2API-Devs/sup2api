@@ -242,7 +242,7 @@ export default {
     resetNow: '已重置',
     resetPending: '待核验',
     noData: '暂无用量数据',
-    initialPending: '首次额度查询待完成',
+    initialPending: '暂无用量，下次请求后更新，或点击刷新',
     queryPending: '额度查询待完成',
     queryFailed: '额度查询失败',
     queryFailedDetail: '额度查询失败：{error}',

@@ -249,7 +249,7 @@ export default {
     resetNow: 'reset',
     resetPending: 'Pending verification',
     noData: 'No usage data yet',
-    initialPending: 'Initial quota query pending',
+    initialPending: 'No usage yet: updated by the next request, or click to refresh',
     queryPending: 'Quota query pending',
     queryFailed: 'Quota query failed',
     queryFailedDetail: 'Quota query failed: {error}',

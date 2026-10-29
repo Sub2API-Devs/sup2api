@@ -76,8 +76,8 @@ func TestManifestAndUsageContract(t *testing.T) {
 	if !slices.Equal(managed.DefaultModelsBySubscription["pro"], ccgateway.DefaultModelsForSubscription("pro")) {
 		t.Fatal("the Pro UI preset must match the plugin's save policy")
 	}
-	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || !managed.Quota.AutoRefresh || len(managed.Quota.Windows) != 4 {
-		t.Fatal("managed accounts require quota refresh and model availability")
+	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || managed.Quota.AutoRefresh || len(managed.Quota.Headers) != 2 || len(managed.Quota.Windows) != 4 {
+		t.Fatal("managed accounts read quota from response headers, query it only on demand, and check model availability")
 	}
 	for _, window := range managed.Quota.Windows {
 		if window.Label["en"] == "" || window.Label["zh"] == "" || window.ShortLabel["en"] == "" || window.ShortLabel["zh"] == "" {

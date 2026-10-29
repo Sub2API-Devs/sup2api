@@ -215,7 +215,9 @@ func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaS
 	if err != nil {
 		return nil, err
 	}
-	if decl.Query && bt.Client != nil && shouldQueryQuota(snap, force, time.Now()) {
+	// A type that does not auto-refresh (it reads its quota from response
+	// headers, CONTRACTS §70) is queried only when the user asks for it.
+	if decl.Query && bt.Client != nil && (force || decl.AutoRefresh) && shouldQueryQuota(snap, force, time.Now()) {
 		v, err, _ := s.quotaFlight.Do(itoa(a.ID), func() (any, error) {
 			// Not tied to the first caller: the others wait for the same result.
 			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), quotaQueryTimeout+5*time.Second)
