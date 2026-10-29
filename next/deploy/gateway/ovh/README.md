@@ -4,7 +4,15 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-29 最新发布（北京时间 10-30 凌晨）：Core 两节点 **0.1.215** + ccgateway **0.1.112**（源码都是 `37f842d2b`）。
+2026-10-30 最新发布（北京时间凌晨）：Core 两节点 **0.1.217** + ccgateway **0.1.113**（源码 `1e7349bbd`）。之前一小时内还发了 Core **0.1.216**（`138b8bf9a`）。
+- **Core 0.1.216**（manifest `1b0ebc67…e245`，计划 `10235bc688315da658930d6d85a80908` completed/13）：有故障策略时，插件给出的"禁用到某时刻"照样执行（CONTRACTS §69）。上线后 42、45–49 号在 429 时被自动禁用，`auto_disabled_until` 就是响应头里的重置时刻，到点由核心自动恢复。
+- **Core 0.1.217**（manifest `5cab7ea0…d26c`，计划 `31e62f5e1b786cd5793449d21ed19baa` completed/13）：`GET /accounts/:id/quota` 不带 `force` 时，对不自动刷新的类型不再查询。schema 不变（`fde93824…`）。
+- **ccgateway 0.1.113**（包 SHA `a55d488a…93e3`，验签 valid，授权沿用；paired 9 updated / 7 not_running / 23 号 not_found；`up_to_date: true`）：用量改为从响应头读取（`quota.headers` 5h/7d），后台不再经 CLI 调 `/usage`（去掉 `autoRefresh`），只有手动刷新才查询；429 的观测带真实 utilization（CONTRACTS §70）。
+- 核对：两节点都是 0.1.217；插件升级后没有新的主动查询（最后一次是升级过程中 18:54 UTC 的那轮）。
+- **待处理**：44 号刷新令牌失效，需要重新登录。它是当时唯一没被禁用的 CC 账号，请求都打到它，在容器本地返回 502（`OAuth refresh token is no longer valid`）。这是本地错误，不会触发自动禁用。
+- 脚本 `stage/0.1.216`、`stage/0.1.217`、`stage/ccgateway-0.1.113`。
+
+2026-10-29 发布（北京时间 10-30 凌晨）：Core 两节点 **0.1.215** + ccgateway **0.1.112**（源码都是 `37f842d2b`）。
 - **Core 0.1.215**：manifest `d35ba470…cd7e`，计划 `addd243c621f2a9b91df475a24eb7428` completed/13，48.4 秒，核心 SHA `220cb93f…b47a`。schema 契约 `2adf9bfc…` → `fde93824…`（迁移 0062，`accounts.model_limits`，切换时自动执行）。`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
   - 内容：指定模型限速与近 60 秒窗口（CONTRACTS §68）；账号列表的优先级、权重分列，可直接修改；并发 / RPM / TPM 合成一列，悬停看明细；用量窗口改用 `5h`/`7d`/`7ds`/`7df` 短代码，限流用满格红条表示。
   - 核对：两节点 `sub2api version` 都是 0.1.215；`schema_migrations` 有 0062，49 个账号的 `model_limits` 都是 `[]`；两节点 `/readyz` 200，没有 ERROR；`GET /accounts` 返回 `model_limits` 和新的 `rate_usage`。
@@ -12,7 +20,7 @@
 - **ccgateway 0.1.112**：rollout 203，包 SHA `59b59c40…fd20`（`sup2api-plugins-2026` 签名，验签 valid，授权自动沿用）。runtime 镜像 0.1.112 重新构建（companions 自 0.1.111 未变）。
   - 步骤：bundled controller,egress → paired worker+cli（9 updated、7 not_running、23 号 not_found，与 0.1.111 相同）→ bundled app，`up_to_date: true`。21 号 haiku 测试 200。
   - 内容：用量窗口不再拦截调度，托管账号一律 `quota_not_enforced`；只有带未来重置时刻的模型专属窗口仍按模型族拦截。
-  - **注意**：线上发布了故障策略 `failure_policy`。在这种情况下核心不调用插件的 `ClassifyError`，策略里 429 的 `cooldown_seconds` 是 0，所以上游 429 只是换号重试、不给账号冷却。上线后，5 小时用满的 42、48 号仍会被调度：先拿到上游 429，再换号，请求最多试 3 次。44 号刷新令牌失效（本地 502）也不会被冷却或禁用。是否给 429 加冷却，待用户决定。
+  - 上线时发现：有故障策略时核心不调用插件 `ClassifyError`，429 不会禁用账号。已由 0.1.216 修复（见上一条）。
   - 脚本 `stage/ccgateway-0.1.112/{build.sh,rollout.py}`。新 worktree 要从上一版复制被 gitignore 的 `companions/cli-mods/release/`（`manifest.json` 和 `2.1.310/`），否则 app 镜像构建失败。
 
 2026-10-29 发布：Core 两节点 **0.1.214**（源码 `a4cde9813`，manifest `e849feca…f189`，计划 `6983cc510558b5bca0efe8779d09dfe0` completed/13，51.6 秒，核心 SHA `e2dc9ce1…34ac`）。schema 契约不变（`2adf9bfc…`），`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
