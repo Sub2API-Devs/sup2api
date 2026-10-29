@@ -29,7 +29,7 @@ const t = useUiT()
 <template>
   <div
     v-if="count > 0 || persistent"
-    class="s-bulk-bar flex min-h-[3.125rem] flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2 text-xs"
+    class="s-bulk-bar flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-1 text-xs"
     :class="count > 0 ? 'border-primary-200 bg-primary-50/70 dark:border-primary-800 dark:bg-primary-900/20' : 'border-line bg-surface'"
     role="region"
     :aria-label="t('ui.bulkSelected', { n: count })"

@@ -73,6 +73,8 @@ export const useAppStore = defineStore('app', () => {
   const theme = ref<Theme>(initialTheme())
   const sidebarCollapsed = ref(localStorage.getItem('s2a.sidebar') === '1')
   const mobileNavOpen = ref(false)
+  /** Description of the current page, shown beside the top bar title. */
+  const pageDescription = ref('')
   const menus = ref<NavSection[]>([])
   const menusLoaded = ref(false)
 
@@ -115,7 +117,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  return { theme, sidebarCollapsed, mobileNavOpen, menus, menusLoaded, toggleTheme, loadMenus }
+  return { theme, sidebarCollapsed, mobileNavOpen, pageDescription, menus, menusLoaded, toggleTheme, loadMenus }
 })
 
 /**

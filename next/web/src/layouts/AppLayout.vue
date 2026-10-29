@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { provideTitleContext } from '@sub2api/ui'
@@ -13,9 +13,9 @@ const plugins = usePluginStore()
 const route = useRoute()
 const { t } = useI18n()
 
-// The top bar already shows the route title; a page header with the same
-// title only keeps its description and actions.
-provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''))
+// The top bar shows the route title and the page description; a page header
+// with the same title is only its filters and actions.
+provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'))
 
 onMounted(async () => {
   await plugins.refresh()
@@ -28,7 +28,7 @@ onMounted(async () => {
     <AppSidebar />
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar />
-      <main class="w-full min-w-0 flex-1 px-4 py-5 sm:px-6">
+      <main class="w-full min-w-0 flex-1 px-4 py-4 sm:px-5">
         <RouterView v-slot="{ Component, route: view }">
           <component :is="Component" :key="view.path" />
         </RouterView>

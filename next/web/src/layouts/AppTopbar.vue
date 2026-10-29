@@ -44,15 +44,18 @@ async function logout() {
 
 <template>
   <header
-    class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-6"
+    class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-5"
   >
     <SButton variant="ghost" size="sm" icon="menu" icon-only class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true" />
-    <h1 class="min-w-0 flex-1 truncate text-base font-semibold text-fg">{{ title }}</h1>
+    <div class="flex min-w-0 flex-1 items-baseline gap-3">
+      <h1 class="shrink-0 text-base font-semibold text-fg">{{ title }}</h1>
+      <p v-if="app.pageDescription" class="hidden min-w-0 truncate text-xs text-fg-muted md:block" :title="app.pageDescription" data-testid="page-description">{{ app.pageDescription }}</p>
+    </div>
 
     <RouterLink
       v-if="auth.balance !== null"
       :to="{ path: '/me/usage', query: { tab: 'ledger' } }"
-      class="hidden items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 sm:flex"
+      class="hidden items-center gap-1.5 rounded-md bg-primary-50 px-2.5 py-1 text-sm font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 sm:flex"
     >
       <SIcon name="balance" class="h-4 w-4" />
       {{ t('nav.balance') }} {{ formatMoney(auth.balance, 2) }}
@@ -63,8 +66,8 @@ async function logout() {
 
     <SDropdown :actions="userActions" width="14rem" @select="onUserAction">
       <template #trigger="{ toggle, attrs }">
-        <button type="button" class="flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-surface-2" :aria-label="t('nav.userMenu')" v-bind="attrs" @click.stop="toggle">
-          <span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+        <button type="button" class="flex items-center gap-2 rounded-lg px-1.5 py-0.5 hover:bg-surface-2" :aria-label="t('nav.userMenu')" v-bind="attrs" @click.stop="toggle">
+          <span class="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
             {{ initial }}
           </span>
           <span class="hidden max-w-[12rem] truncate text-sm text-fg md:block">{{ auth.me?.email }}</span>

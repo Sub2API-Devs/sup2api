@@ -179,7 +179,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
     </template>
     <div
       v-if="columnSettingsKey || (card && $slots.toolbar)"
-      class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3"
+      class="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2"
     >
       <slot name="toolbar" />
       <STableColumnSettings v-if="columnSettingsKey" :state="columnState" class="ms-auto" />

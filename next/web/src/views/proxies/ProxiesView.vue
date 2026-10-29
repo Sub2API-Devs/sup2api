@@ -250,10 +250,7 @@ function onAction(p: Proxy, key: string) {
       <template #actions>
         <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" icon="plus" @click="openCreate">{{ t('proxies.create') }}</SButton>
       </template>
-    </SPageHeader>
-
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
-      <template #toolbar>
+      <template #filters>
         <SInput
           v-if="showOwner"
           v-model="list.filters.created_by"
@@ -265,6 +262,9 @@ function onAction(p: Proxy, key: string) {
         />
         <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       </template>
+    </SPageHeader>
+
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
         <span class="font-medium text-fg">{{ row.name }}</span>
       </template>

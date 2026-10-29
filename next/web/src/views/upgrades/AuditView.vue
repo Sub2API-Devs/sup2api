@@ -50,15 +50,15 @@ onMounted(load)
       <template #actions>
         <SButton icon="refresh" :loading="loading" @click="load">{{ t('common.refresh') }}</SButton>
       </template>
-    </SPageHeader>
-    <SAlert v-if="error" tone="danger" class="mb-3">{{ error }}</SAlert>
-    <STable card :columns="columns" :rows="rows" :loading="loading" row-key="id" expandable>
-      <template #toolbar>
+      <template #filters>
         <form class="flex items-center gap-2" data-testid="audit-filter" @submit.prevent="search">
           <SInput v-model="action" class="w-64" icon="search" clearable :aria-label="t('observe.filter')" :placeholder="t('observe.filter')" />
           <SButton type="submit">{{ t('observe.search') }}</SButton>
         </form>
       </template>
+    </SPageHeader>
+    <SAlert v-if="error" tone="danger" class="mb-3">{{ error }}</SAlert>
+    <STable card :columns="columns" :rows="rows" :loading="loading" row-key="id" expandable>
       <template #cell-created_at="{ row }"><TimeText :value="row.created_at" :muted="false" /></template>
       <template #cell-user_id="{ row }">{{ row.user_id ?? t('observe.system') }}</template>
       <template #cell-target="{ row }">{{ row.target_type }} · {{ row.target_id }}</template>

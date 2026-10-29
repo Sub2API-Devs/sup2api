@@ -541,6 +541,14 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
 <template>
   <div>
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
+      <template #filters>
+        <SInput v-model="list.filters.q" icon="search" clearable class="w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+        <SSelect v-model="typeFilter" :options="typeOptions" class="w-44" :aria-label="t('accounts.type')" />
+        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-36" :aria-label="t('accounts.groups')" />
+        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-32" :aria-label="t('common.status')" />
+        <SButton :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
+        <SButton v-if="filterCount" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
+      </template>
       <template #actions>
         <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
         <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
@@ -549,25 +557,13 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       </template>
     </SPageHeader>
 
-    <section class="mb-4 rounded-xl border border-line bg-surface p-3" :aria-label="t('accounts.listUi.filters')">
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="min-w-48 flex-1">
-          <SInput v-model="list.filters.q" icon="search" clearable :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
-        </div>
-        <SSelect v-model="typeFilter" :options="typeOptions" class="w-52" :aria-label="t('accounts.type')" />
-        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-40" :aria-label="t('accounts.groups')" />
-        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-36" :aria-label="t('common.status')" />
-        <SButton size="sm" :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
-        <SButton v-if="filterCount" size="sm" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
-      </div>
-      <div v-if="advancedFilters" class="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-        <SInput v-model="list.filters.model" class="w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
-        <SInput v-if="showOwner" v-model="list.filters.created_by" class="w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
-        <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
-        <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
-      </div>
-      <p v-else-if="hasAdvancedFilters" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
+    <section v-if="advancedFilters" class="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2" :aria-label="t('accounts.listUi.filters')">
+      <SInput v-model="list.filters.model" class="w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
+      <SInput v-if="showOwner" v-model="list.filters.created_by" class="w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
+      <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
+      <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
     </section>
+    <p v-else-if="hasAdvancedFilters" class="mb-3 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
     <SHint v-if="list.error.value" size="xs" tone="danger" role="alert" class="mb-3">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</SHint>
     <SBulkBar
       v-if="anySelectable || selection.keys.value.length"
@@ -617,7 +613,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
           <div v-for="fact in accountTypes.pluginFacts(row.plugin_key, row.type, row.settings)" :key="fact.key" class="truncate text-xs text-fg-muted" :title="`${fact.label}: ${fact.value}`" :data-testid="'account-fact-' + fact.key">{{ fact.label }} <span class="text-fg">{{ fact.value }}</span></div>
         </div>
       </template>
-      <template #cell-groups="{ row }"><div class="flex max-w-48 flex-wrap gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
+      <template #cell-groups="{ row }"><div class="flex max-w-56 gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
         <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>

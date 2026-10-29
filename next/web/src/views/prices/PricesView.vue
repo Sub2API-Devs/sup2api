@@ -125,11 +125,7 @@ function remove(p: Price) {
         <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
         <SButton v-if="canManage" variant="primary" icon="plus" @click="router.push('/prices/new')">{{ t('prices.new') }}</SButton>
       </template>
-    </SPageHeader>
-
-    <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
-    <STable card :columns="columns" :rows="rows" :loading="loading">
-      <template #toolbar>
+      <template #filters>
         <SInput v-model="filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.searchPlaceholder')" />
         <SSelect v-model="filters.mode" class="w-40" :options="modeOptions" :aria-label="t('prices.modeCol')" />
         <SSelect v-model="filters.source" class="w-36" :options="sourceOptions" :aria-label="t('common.source')" data-testid="price-source-filter" />
@@ -144,6 +140,10 @@ function remove(p: Price) {
           {{ t('prices.fromSource', { name: filteredSourceName }) }}
         </SChip>
       </template>
+    </SPageHeader>
+
+    <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
+    <STable card :columns="columns" :rows="rows" :loading="loading">
       <template #cell-model="{ row }">
         <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
         <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>

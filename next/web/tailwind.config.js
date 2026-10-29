@@ -73,19 +73,19 @@ export default {
       },
       borderRadius: {
         chip: '0.375rem',
-        control: '0.75rem',
-        card: '1rem',
+        control: '0.5rem',
+        card: '0.75rem',
         panel: '1.25rem'
       },
       height: {
-        'control-sm': '2rem',
-        control: '2.5rem',
-        'control-lg': '3rem'
+        'control-sm': '1.75rem',
+        control: '2rem',
+        'control-lg': '2.5rem'
       },
       minHeight: {
-        'control-sm': '2rem',
-        control: '2.5rem',
-        'control-lg': '3rem'
+        'control-sm': '1.75rem',
+        control: '2rem',
+        'control-lg': '2.5rem'
       },
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',

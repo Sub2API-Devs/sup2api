@@ -46,7 +46,7 @@ function showHeader(s: NavSection): boolean {
     class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-surface transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
     :class="[app.sidebarCollapsed ? 'w-[72px]' : 'w-60', app.mobileNavOpen ? 'translate-x-0' : '-translate-x-full']"
   >
-    <div class="flex min-h-14 shrink-0 items-center gap-2 border-b border-line px-4 py-2" :class="app.sidebarCollapsed ? 'flex-col px-1' : ''">
+    <div class="flex min-h-12 shrink-0 items-center gap-2 border-b border-line px-4 py-2" :class="app.sidebarCollapsed ? 'flex-col px-1' : ''">
       <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
         S
       </div>

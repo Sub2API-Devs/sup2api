@@ -275,14 +275,14 @@ function remove(u: User) {
       <template #actions>
         <SButton v-permission="'user:create'" variant="primary" icon="plus" @click="openCreate">{{ t('users.create') }}</SButton>
       </template>
-    </SPageHeader>
-
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
-      <template #toolbar>
+      <template #filters>
         <SInput v-model="list.filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
         <SSelect v-model="list.filters.status" class="w-40" :options="statusFilterOptions" :aria-label="t('common.status')" />
         <SSelect v-if="roles.length" v-model="list.filters.role" class="w-44" :options="roleOptions" :aria-label="t('users.roles')" />
       </template>
+    </SPageHeader>
+
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-email="{ row }">
         <span class="font-medium text-fg">{{ row.email }}</span>
       </template>
