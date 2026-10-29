@@ -137,7 +137,8 @@ for i=0,n-1 do
   if spm>0 and session~='' and tonumber(redis.call('ZSCORE',KEYS[k+5],session) or cutoff)<=cutoff then
     local active=redis.call('ZCOUNT',KEYS[k+5],'('..cutoff,'+inf')
     if active>=spm then
-      local frees=redis.call('ZRANGEBYSCORE',KEYS[k+5],'('..cutoff,'+inf','WITHSCORES','LIMIT',active-spm,1)
+      local at=redis.call('ZCOUNT',KEYS[k+5],'-inf',cutoff)+active-spm
+      local frees=redis.call('ZRANGE',KEYS[k+5],at,at,'WITHSCORES')
       return {2, tonumber(frees[2])-cutoff}
     end
   end
@@ -189,7 +190,7 @@ func (m *Minute) AdmitAll(ctx context.Context, sets []Limits, session string) (o
 	case len(res) > 0 && res[0] == 1:
 		return true, 0, nil
 	case len(res) == 2 && res[0] == 2:
-		return false, max((time.Duration(res[1]) * time.Millisecond).Round(time.Second), time.Second), nil
+		return false, max((time.Duration(res[1])*time.Millisecond + time.Second - 1).Truncate(time.Second), time.Second), nil
 	case len(res) < 4:
 		return false, time.Until(now.Truncate(time.Minute).Add(time.Minute)), nil
 	}

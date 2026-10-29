@@ -262,8 +262,9 @@ type ModelRateUsage struct {
 // AccountLimiter enforces per-account RPM, TPM and SPM, and those of the
 // model list holding the request's (client) model, over the last 60 seconds
 // shared by every node. model "" checks the account's own limits only.
-// session is the request's sticky session key (CONTRACTS §71); "" is
-// neither checked against SPM nor counted.
+// session is the request's session (CONTRACTS §71: its sticky session key,
+// else the request itself); "" (tasks, downloads) is neither checked
+// against SPM nor counted.
 type AccountLimiter interface {
 	// Exhausted returns the ids among refs that reached a limit for model
 	// and session; an account already holding the session passes its SPM.

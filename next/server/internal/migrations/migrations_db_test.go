@@ -353,5 +353,5 @@ func TestAccountSPMLimitMigration(t *testing.T) {
 	require.NoError(t, exec(`UPDATE accounts SET spm_limit = 3 WHERE name='spm'; `+forget))
 	migrate()
 	require.Equal(t, 3, spm(), "a rerun cleared a cap set after the migration")
-	require.Error(t, exec(`UPDATE accounts SET spm_limit = -1 WHERE name='spm'`))
+	require.Error(t, exec(`UPDATE accounts SET spm_limit = 10000001 WHERE name='spm'`))
 }

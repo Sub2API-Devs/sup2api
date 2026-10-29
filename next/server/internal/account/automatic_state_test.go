@@ -112,6 +112,13 @@ func TestManualEnableRestoresScheduling(t *testing.T) {
 	code, result = e.do("GET", "/accounts?status=auto_disabled", nil)
 	require.Equal(t, 200, code)
 	assert.Empty(t, result["data"])
+
+	// A legacy "error" reads as auto-disabled.
+	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET status='error' WHERE id=$1`, id)
+	require.NoError(t, err)
+	code, result = e.do("GET", "/accounts?status=auto_disabled", nil)
+	require.Equal(t, 200, code)
+	require.Len(t, result["data"].([]any), 1)
 }
 
 func TestAccountAutoDisablePolicy(t *testing.T) {

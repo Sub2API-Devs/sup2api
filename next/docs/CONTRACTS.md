@@ -269,7 +269,7 @@
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
 | `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
 | `rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}` | STRING 账号某个模型列表的分钟窗口计数，TTL 2m（§68） | A |
-| `rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm` | ZSET 账号 / 模型列表近 60 秒活跃的粘性会话（member = 粘性会话键，score = Redis 毫秒时间），每次准入时修剪窗口外成员，TTL 2m（§71） | A |
+| `rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm` | ZSET 账号 / 模型列表近 60 秒活跃的会话（member = 粘性会话键，没有粘性键时为 `req:{请求 ID}`，score = Redis 毫秒时间），每次准入时修剪窗口外成员，TTL 2m（§71） | A |
 | `slot:account-model:{key}:{id}` | ZSET 账号某个模型列表的并发槽位，格式同 `slot:{kind}:{id}`（§68.2） | D |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
@@ -4687,7 +4687,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 71.3 调度
 
-- `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号已经持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
+- `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话在绑定账号上空闲超过 60 秒后不再算持有：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行）。
 
 ### 71.4 插件
