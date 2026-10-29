@@ -17,8 +17,9 @@ import (
 // off each thread's own transcript: the last assistant message's request-id
 // (its billing header's cc_prev_req) and, on the main thread, the last
 // prompt's turn position (cc_prompt_index, cc_turn_index). A request whose
-// header the CLI writes may bring a shortened history or none; the CLI names
-// the request and keeps the turn from going back with these, and reports the
+// header the CLI writes brings the conversation's messages, not CC's
+// transcript; when they continue the answered request, the CLI names that
+// request and keeps the turn from going back with these, and reports the
 // thread and the turn it used in its response metadata.
 type sessionState struct {
 	// Thread is mainThread or the subagent's agent ID.
@@ -62,30 +63,41 @@ func (p *turnPosition) valid() bool {
 }
 
 // sessionThread is the thread a request names: a subagent's request carries
-// its agent ID (the main thread's carries none, as Claude Code sends it).
-func sessionThread(h http.Header) string {
+// its agent ID (the main thread's carries none, as Claude Code sends it). A
+// request of a subagent or workflow class without one names no thread the
+// Worker can tell apart from the others: ok is false.
+func sessionThread(h http.Header) (thread string, ok bool) {
+	var class, agent string
 	for _, field := range features.AgentContextHeaders {
-		if field.Field == "agent_id" {
-			if value := h.Get(field.Header); value != "" && field.Valid(value) {
-				return value
-			}
+		value := h.Get(field.Header)
+		if value == "" || !field.Valid(value) {
+			continue
+		}
+		switch field.Field {
+		case "request_class":
+			class = value
+		case "agent_id":
+			agent = value
 		}
 	}
-	return mainThread
+	if agent != "" {
+		return agent, true
+	}
+	return mainThread, class != "subagent" && class != "workflow"
 }
 
 // sessionStates is the Worker's memory, by upstream session and thread. It is
 // process memory only: a restart or an eviction makes a thread one the Worker
 // has not answered, and its next request counts from its own history, as a
-// new conversation's does. Concurrent requests of the main thread overwrite it
-// in the order they finish; a subagent thread with a request already in
-// flight is not used at all (Claude Code runs one request of a subagent at a
-// time, so which one comes next is unknown). The zero value is ready to use.
+// new conversation's does. A thread with more than one request in flight is
+// not used at all, by any of them (Claude Code runs one request of a thread
+// at a time, so which answer the conversation goes on with is unknown). The
+// zero value is ready to use.
 type sessionStates struct {
 	mu      sync.Mutex
 	order   *list.List // front: most recently answered
 	entries map[string]*list.Element
-	busy    map[string]int // requests in flight per subagent thread
+	busy    map[string]*threadClaim // the threads with a request in flight
 	now     func() time.Time
 }
 
@@ -98,6 +110,13 @@ type sessionEntry struct {
 	at      time.Time
 }
 
+// threadClaim is a thread's requests in flight. shared: another request came
+// while one was in flight, so none of them moves the thread on.
+type threadClaim struct {
+	requests int
+	shared   bool
+}
+
 // historyDigest identifies a request's messages, each in canonical JSON (a
 // client that re-encodes a message keeps its digest): Count of them, and
 // Digest over their digests in order.
@@ -106,27 +125,41 @@ type historyDigest struct {
 	digest [32]byte
 }
 
-// messageDigests are the digests of a body's messages, in order; nil when it
-// has none it can read.
-func messageDigests(body *requestBody) [][32]byte {
+// messageHistory is a request's messages as the memory compares them: their
+// digests in order (nil when the body has none it can read) and the position
+// of the last assistant message (-1: none).
+type messageHistory struct {
+	digests       [][32]byte
+	lastAssistant int
+}
+
+// readMessages is the body's messageHistory.
+func readMessages(body *requestBody) messageHistory {
+	none := messageHistory{lastAssistant: -1}
 	if body == nil || body.top == nil {
-		return nil
+		return none
 	}
 	var messages []json.RawMessage
 	if json.Unmarshal(body.top["messages"], &messages) != nil {
-		return nil
+		return none
 	}
-	out := make([][32]byte, 0, len(messages))
-	for _, message := range messages {
+	out := messageHistory{digests: make([][32]byte, 0, len(messages)), lastAssistant: -1}
+	for i, message := range messages {
 		var value any
 		if json.Unmarshal(message, &value) != nil {
-			return nil
+			return none
+		}
+		if object, _ := value.(map[string]any); object["role"] == "assistant" {
+			out.lastAssistant = i
 		}
 		canonical, _ := json.Marshal(value)
-		out = append(out, sha256.Sum256(canonical))
+		out.digests = append(out.digests, sha256.Sum256(canonical))
 	}
 	return out
 }
+
+// all is the digest of every message.
+func (m messageHistory) all() historyDigest { return prefix(m.digests, len(m.digests)) }
 
 // prefix is the digest of the first n messages.
 func prefix(digests [][32]byte, n int) historyDigest {
@@ -139,11 +172,13 @@ func prefix(digests [][32]byte, n int) historyDigest {
 	return out
 }
 
-// continues says whether a request with these messages continues the
-// answered one: its messages begin with the answered request's and go on past
-// them (at least its answer).
-func (h historyDigest) continues(digests [][32]byte) bool {
-	return h.count > 0 && len(digests) > h.count && prefix(digests, h.count) == h
+// continuedBy says whether a request with these messages continues the
+// answered one so that its last assistant message is that request's answer:
+// its messages begin with the answered request's, the next one is an
+// assistant message, and no assistant message follows that one. Otherwise
+// the remembered request-id would name another answer than the last one.
+func (h historyDigest) continuedBy(m messageHistory) bool {
+	return h.count > 0 && m.lastAssistant == h.count && prefix(m.digests, h.count) == h
 }
 
 func sessionKey(session, thread string) string { return session + "\x00" + thread }
@@ -179,32 +214,48 @@ func (s *sessionStates) latest(key string) (*sessionState, historyDigest) {
 	return &state, entry.history
 }
 
-// answered records a successful answer of the thread: its request-id, the
-// answered request's messages and, on the main thread, the turn the CLI
-// reported. A value Claude Code would not write is not kept (an answer
-// without a request-id leaves the earlier one, as CC's own lookup skips such a
-// message).
+// keptState is what an answer leaves of the thread, whole or not at all: its
+// request-id and, on the main thread, the turn the CLI reported with its
+// prompt's hash. An answer with a value Claude Code would not write leaves
+// the thread as it was.
+func keptState(requestID string, reported sessionState) (sessionState, bool) {
+	if !upstreamRequestID.MatchString(requestID) {
+		return sessionState{}, false
+	}
+	state := sessionState{Thread: reported.Thread, RequestID: requestID}
+	if reported.Thread != mainThread {
+		return state, true
+	}
+	if !reported.Turn.valid() || !promptHashPattern.MatchString(reported.PromptHash) {
+		return sessionState{}, false
+	}
+	turn := *reported.Turn
+	state.Turn, state.PromptHash = &turn, reported.PromptHash
+	return state, true
+}
+
+// answered records a successful answer of the thread with the answered
+// request's messages (keptState), unless another request of the thread was
+// in flight with it.
 func (s *sessionStates) answered(key, requestID string, history historyDigest, reported sessionState) {
+	state, ok := keptState(requestID, reported)
+	if !ok {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if claim := s.busy[key]; claim != nil && claim.shared {
+		return
+	}
 	if s.entries == nil {
 		s.entries, s.order = map[string]*list.Element{}, list.New()
 	}
-	element := s.entries[key]
-	if element == nil {
-		element = s.order.PushFront(&sessionEntry{key: key, state: sessionState{Thread: reported.Thread}})
-		s.entries[key] = element
-	} else {
+	entry := &sessionEntry{key: key, state: state, history: history, at: s.clock()}
+	if element := s.entries[key]; element != nil {
+		element.Value = entry
 		s.order.MoveToFront(element)
-	}
-	entry := element.Value.(*sessionEntry)
-	entry.at = s.clock()
-	if upstreamRequestID.MatchString(requestID) {
-		entry.state.RequestID, entry.history = requestID, history
-	}
-	if reported.Thread == mainThread && reported.Turn.valid() && promptHashPattern.MatchString(reported.PromptHash) {
-		turn := *reported.Turn
-		entry.state.Turn, entry.state.PromptHash = &turn, reported.PromptHash
+	} else {
+		s.entries[key] = s.order.PushFront(entry)
 	}
 	for s.order.Len() > sessionStatesMax {
 		oldest := s.order.Back()
@@ -213,38 +264,42 @@ func (s *sessionStates) answered(key, requestID string, history historyDigest, r
 	}
 }
 
-// enter claims a subagent thread for one request; false when another request
-// of it is in flight. leave gives the claim back.
+// enter claims a thread for one request; false when another request of it is
+// in flight (the thread is then shared until all of them leave). leave gives
+// the claim back.
 func (s *sessionStates) enter(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.busy == nil {
-		s.busy = map[string]int{}
-	}
-	if s.busy[key] > 0 {
-		s.busy[key]++
+	if claim := s.busy[key]; claim != nil {
+		claim.requests++
+		claim.shared = true
 		return false
 	}
-	s.busy[key] = 1
+	if s.busy == nil {
+		s.busy = map[string]*threadClaim{}
+	}
+	s.busy[key] = &threadClaim{requests: 1}
 	return true
 }
 
 func (s *sessionStates) leave(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.busy[key]--; s.busy[key] <= 0 {
+	claim := s.busy[key]
+	if claim == nil {
+		return
+	}
+	if claim.requests--; claim.requests <= 0 {
 		delete(s.busy, key)
 	}
 }
 
-// requestSession is one request's place in the memory: its key and thread,
-// its messages, and whether it claimed a subagent thread (claimed: leave it
-// when done).
+// requestSession is one request's place in the memory: the thread it claimed
+// (releaseSessionState gives it back) and its messages.
 type requestSession struct {
 	key, thread string
-	messages    [][32]byte
-	claimed     bool
-	usable      bool // no other request of a subagent thread was in flight
+	messages    messageHistory
+	usable      bool // no other request of the thread was in flight
 }
 
 // attachSessionState gives the request's identity context what the Worker
@@ -255,35 +310,38 @@ type requestSession struct {
 //     a session the Worker derives from the conversation's first message is
 //     shared by every conversation that opens alike, so a later turn of one
 //     would be given another's request and turn;
-//   - the request-id only when the request's messages continue the answered
-//     request's (a shortened or rewritten history names none).
+//   - never for a request carrying the client's own billing header (the CLI
+//     keeps it): one whose system opens with it is left before its messages
+//     are read;
+//   - only for a thread the Worker can tell apart, with no other request of
+//     it in flight;
+//   - only when the request's messages continue the answered request's
+//     (historyDigest.continuedBy): a shortened or rewritten history is given
+//     nothing, and its turn counts from its own history.
 //
 // Console tests are the gateway's own requests, not a conversation's.
 func (g *Gateway) attachSessionState(p *requestPlan, h http.Header, body *requestBody) {
-	if p.identity == nil || !p.identity.named || p.identity.Session == "" || p.probe || !g.CLIInfo.supports(features.SessionStateCapability) {
+	if p.identity == nil || !p.identity.named || p.identity.Session == "" || p.probe || !g.CLIInfo.supports(features.SessionStateCapability) || body.leadsWithBillingHeader() {
 		return
 	}
-	thread := sessionThread(h)
-	p.session = &requestSession{key: sessionKey(p.identity.Session, thread), thread: thread, messages: messageDigests(body), usable: true}
-	if thread != mainThread {
-		p.session.claimed = true
-		p.session.usable = g.sessionStates.enter(p.session.key)
+	thread, ok := sessionThread(h)
+	if !ok {
+		return
 	}
-	if !p.session.usable || p.session.messages == nil {
+	key := sessionKey(p.identity.Session, thread)
+	p.session = &requestSession{key: key, thread: thread, messages: readMessages(body), usable: g.sessionStates.enter(key)}
+	if p.session.messages.digests == nil {
 		p.session.usable = false
+	}
+	if !p.session.usable {
 		return
 	}
-	state, history := g.sessionStates.latest(p.session.key)
-	if state == nil {
+	state, history := g.sessionStates.latest(key)
+	if state == nil || !history.continuedBy(p.session.messages) {
 		return
 	}
 	state.Thread = thread
-	if !history.continues(p.session.messages) {
-		state.RequestID = ""
-	}
-	if state.RequestID != "" || state.Turn != nil {
-		p.identity.Previous = state
-	}
+	p.identity.Previous = state
 }
 
 // rememberSessionState keeps a request answered in full whose header the CLI
@@ -296,12 +354,12 @@ func (g *Gateway) rememberSessionState(p *requestPlan, o *requestCommandOutput) 
 	if s == nil || !s.usable || o.session == nil || o.session.Thread != s.thread || o.status < 200 || o.status > 299 {
 		return
 	}
-	g.sessionStates.answered(s.key, o.requestID, prefix(s.messages, len(s.messages)), *o.session)
+	g.sessionStates.answered(s.key, o.requestID, s.messages.all(), *o.session)
 }
 
-// releaseSessionState gives back a subagent thread the request claimed.
+// releaseSessionState gives back the thread the request claimed.
 func (g *Gateway) releaseSessionState(p *requestPlan) {
-	if p.session != nil && p.session.claimed {
+	if p.session != nil {
 		g.sessionStates.leave(p.session.key)
 	}
 }

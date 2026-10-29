@@ -305,7 +305,7 @@ Worker 的 direct 能力门见 2.1 节。direct 下 Worker 仍解析 body（必�
 
 `metadata.user_id` 不可配置（2026-10-21 用户决定）：核心不下发 `request_identity_sources`（早先保存的值也不下发）；Worker 以 `features.RequestIdentityDefault`（`replace`）处理。映射只在 CLI 声明 `request_identity_v1` 时启用（`configureRequestIdentity`）；不声明时 Worker 不设 `CCG_REQUEST_IDENTITY`，CLI 的 `applyBuildMetadata` 没有上下文就保留原生构造器生成的 metadata（Worker 里"不支持时按 `client`"的分支因此到不了；在 `request_command.go` `resolveRequestContext`）。界面没有身份卡片，只在请求模式下写一行说明。
 
-- **只经环境变量传递**：Worker 把解析结果写入 `CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?}`），不进 build 信封。
+- **只经环境变量传递**：Worker 把解析结果写入 `CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?, previous?}`），不进 build 信封。`previous`（`{thread, request_id?, turn_position?, prompt_hash?}`，CLI 声明 `build_session_state_v1` 且有 `session_id` 时才可能有）是 Worker 对该会话线程的记忆，只用于我们写的计费头（`cc_prev_req` 与 turn 字段），规则见 [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) 第 5 节。
   - **build**：Worker 启用了身份映射（CLI 声明 `request_identity_v1`）时总设置，CLI 据此决定最终 metadata。
   - **direct**：CLI 声明 `request_agent_context_v1` 且映射已启用时，Worker 以 `client` 模式解析客户端 metadata，**取到会话 ID 才设置**，只为让 CLI 采用客户端的会话（会话头与 body 里原样转发的 metadata 一致）；body 不改。
 - **是否改写只由 Worker 的 `rewrite` 决定**（`applyBuildMetadata`）。客户端没发身份、或身份里没有可映射字段（只有未知字段、已知字段全为空或 null）时 `rewrite=false`，保留客户端原值及其载体（对象 / JSON 字符串 / 扁平字符串）。

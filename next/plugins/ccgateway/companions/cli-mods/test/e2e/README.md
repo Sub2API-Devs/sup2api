@@ -165,7 +165,7 @@
 
 `apikey-account-client`（官方客户端 A/B，低）、`apikey-account-noncc-high`（curl 非 CC，高）。各 1 个请求。
 
-### 6. r3 增补（第 6 阶段，`extra.sh`，14 个）
+### 6. r3 增补（第 6 阶段，`extra.sh`，15 个）
 
 | 场景 | 内容 | B 请求数 |
 |---|---|---|
@@ -208,7 +208,7 @@
 | 8 | `err400-*` | 400 透传、正文原样、`x-ccgateway-error-source` 会被核心白名单挡掉 |
 | 9 | `noncc-identity` | 6 次都到上游；补账号身份（device 64 hex + 账号 UUID）、JSON 字符串载体、session = 会话头、turn2 沿用、另一对话不同、`null` 也补、客户端自带的仍映射、direct 不加 metadata、metadata 在 `max_tokens` 之前 |
 | 10 | `noncc-context` | 伪造的子代理/压缩头不进出口、计费头不是子代理；伪造与不伪造掩码后逐字节相同（build 与 direct 各一组） |
-| 9b | `turn2-build-low`、`noncc-session` | 官方客户端第二轮自己带 `cc_prev_req`=第一轮上游 request-id、`cc_turn_index=2`（A/B 两侧）；网关写的头：续接上一次请求时带 `cc_prev_req`，截断历史不带但 turn 不回退（`cc_turn_index` 1→2→3→3），工具结果续发保持本轮，另一会话从 1 开始，direct 同样规则，字段顺序与官方一致；派生会话不用记忆（第二轮无 `cc_prev_req`、turn 按原生计数）。CLI v38 起（旧 CLI 上 `noncc-session` 的断言会失败） |
+| 9b | `turn2-build-low`、`noncc-session` | 官方客户端第二轮自己带 `cc_prev_req`=第一轮上游 request-id、`cc_turn_index=2`（A/B 两侧）；网关写的头：续接上一次请求（其后第一条是上一次的应答、再无别的 assistant）时带 `cc_prev_req`，截断历史什么都不给、turn 按历史计数（`cc_turn_index` 1→2→1→1），工具结果续发保持本轮，另一会话从 1 开始，direct 同样规则，字段顺序与官方一致；派生会话不用记忆（第二轮无 `cc_prev_req`、turn 按原生计数）。CLI v38 起（旧 CLI 上 `noncc-session` 的断言会失败） |
 | 11 | `sub[123]-*` | 嵌套到对应层数、parent 指向已出现的 agent、每个上下文头出口 = 客户端原值、子代理计费头 `cc_is_subagent=true`、子代理不带 `extended-cache-ttl` |
 | 12 | `credit-stream/json-trailer-build` | 被跟踪、资源身份头、回执在 trailer 且 = sha256(token)、不在响应头；流式的首字节先于结束 ≥ 800 ms、分多块、假上游事件间隔约 1.5 秒 |
 | 13 | `noncc-identity2` | 空串补身份；首条消息相同的两个对话共享会话（设计如此）；后续轮沿用；其他 metadata 键保留 |

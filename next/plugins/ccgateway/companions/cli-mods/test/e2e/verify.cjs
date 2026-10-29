@@ -203,8 +203,9 @@ if (name === 'noncc-identity') {
 // request-id) and counts turn 2; a CC client through the gateway gets the
 // upstream's request-id back, so its own header does the same. A non-CC
 // conversation whose header the gateway writes follows the same rules from
-// the Worker's memory: cc_prev_req for a request continuing the answered one,
-// and a turn that a shortened history does not take back.
+// the Worker's memory: cc_prev_req for a request continuing the answered one
+// (its next message is that answer, and no later assistant message), and
+// nothing for a shortened history, whose turn counts from its own messages.
 const fieldNames = line => line.replace(/^x-anthropic-billing-header:/, '').split(';').map(part => part.trim().split('=')[0]).filter(Boolean);
 if (name === 'turn2-build-low') {
   for (const [side, list] of [['A', A], ['B', B]]) {
@@ -216,7 +217,7 @@ if (name === 'turn2-build-low') {
 if (name === 'noncc-session') {
   const labels = ['first', 'second', 'shortened', 'tool-result', 'other-session', 'direct-first', 'direct-second', 'derived-first', 'derived-second'];
   ok(B.length === labels.length, `${name} ${labels.length} 次投递都到了上游`, `B=${B.length}`);
-  const expect = [[undefined, '1'], ['req_ccgaudit1', '2'], [undefined, '3'], ['req_ccgaudit3', '3'], [undefined, '1'], [undefined, '1'], ['req_ccgaudit6', '2'], [undefined, '1'], [undefined, '2']];
+  const expect = [[undefined, '1'], ['req_ccgaudit1', '2'], [undefined, '1'], ['req_ccgaudit3', '1'], [undefined, '1'], [undefined, '1'], ['req_ccgaudit6', '2'], [undefined, '1'], [undefined, '2']];
   expect.forEach(([prev, turnIndex], i) => {
     const line = billLine(B[i] || {});
     ok(field(line, 'cc_prev_req') === prev && field(line, 'cc_turn_index') === turnIndex && field(line, 'cc_prompt_index') === '0' && field(line, 'cc_turn_origin') === 'sdk',

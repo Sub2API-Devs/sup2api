@@ -15,6 +15,9 @@ import (
 
 const cancellationFirstEvent = "event: message_start\ndata: {}\n\n"
 
+// cancellationErrorFrame is a structured CLI error (request_error.go).
+const cancellationErrorFrame = requestErrorPrefix + `{"protocol":"ccgateway.request.error.v1","source":"transport","status":502,"error":{"type":"api_error","code":"fixture_error","message":"fixture"}}` + "\n"
+
 // Invoked by TestMain as a real subprocess on Windows and Linux. Waiting modes
 // only finish on cancellation; capture mode records one request and exits.
 func requestCancellationPeer() {
@@ -45,18 +48,28 @@ func requestCancellationPeer() {
 		// The request it sent, as a CLI with request_capture_v1 writes it
 		// (request_log_upstream_test.go).
 		upstreamCapturePeer(raw)
-		// CCG_TEST_REQUEST_ANSWER is the upstream answer's request-id and the
-		// session report a CLI writing its own header gives (session_state.go):
-		// "<request-id> <session JSON>".
-		meta := `{"status":200,"headers":{"content-type":"text/event-stream"}}`
-		if answer := os.Getenv("CCG_TEST_REQUEST_ANSWER"); answer != "" {
-			id, report, _ := strings.Cut(answer, " ")
-			meta = `{"status":200,"headers":{"content-type":"text/event-stream","request-id":"` + id + `"},"session":` + report + `}`
+		// CCG_TEST_REQUEST_ANSWER_ID and CCG_TEST_REQUEST_ANSWER_SESSION are the
+		// upstream answer's request-id and the session report (JSON) a CLI
+		// writing its own header gives (session_state.go). With
+		// CCG_TEST_REQUEST_FRAME=1 the answer fails after its first event.
+		headers := map[string]string{"content-type": "text/event-stream"}
+		if id := os.Getenv("CCG_TEST_REQUEST_ANSWER_ID"); id != "" {
+			headers["request-id"] = id
 		}
+		meta, _ := json.Marshal(struct {
+			Status  int               `json:"status"`
+			Headers map[string]string `json:"headers"`
+			Session json.RawMessage   `json:"session,omitempty"`
+		}{200, headers, json.RawMessage(os.Getenv("CCG_TEST_REQUEST_ANSWER_SESSION"))})
 		for i, arg := range os.Args {
 			if arg == "--response-meta" && i+1 < len(os.Args) {
-				_ = os.WriteFile(os.Args[i+1], []byte(meta), 0600)
+				_ = os.WriteFile(os.Args[i+1], meta, 0600)
 			}
+		}
+		if os.Getenv("CCG_TEST_REQUEST_FRAME") == "1" {
+			_, _ = io.WriteString(os.Stdout, cancellationFirstEvent)
+			_, _ = io.WriteString(os.Stderr, cancellationErrorFrame)
+			os.Exit(1)
 		}
 		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n")
 		return
@@ -73,7 +86,7 @@ func requestCancellationPeer() {
 		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent)
 	}
 	if os.Getenv("CCG_TEST_REQUEST_FRAME") == "1" {
-		_, _ = io.WriteString(os.Stderr, requestErrorPrefix+`{"protocol":"ccgateway.request.error.v1","source":"transport","status":502,"error":{"type":"api_error","code":"fixture_error","message":"fixture"}}`+"\n")
+		_, _ = io.WriteString(os.Stderr, cancellationErrorFrame)
 	}
 	if err := os.WriteFile(os.Getenv("CCG_TEST_REQUEST_READY"), []byte("ready"), 0600); err != nil {
 		panic(err)

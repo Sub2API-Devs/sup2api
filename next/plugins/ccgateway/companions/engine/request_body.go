@@ -81,6 +81,30 @@ func (body *requestBody) model() (string, error) {
 	return model, nil
 }
 
+// billingHeaderPrefix opens Claude Code's billing header line (native
+// billingHeaderPrefix; protocol-codec isAnthropicBillingHeaderText).
+const billingHeaderPrefix = "x-anthropic-billing-header:"
+
+// leadsWithBillingHeader says whether the system's first text opens with a
+// billing header, where Claude Code puts its own: a cheap test of the first
+// block only (the CLI decides by the whole system).
+func (body *requestBody) leadsWithBillingHeader() bool {
+	raw := body.top["system"]
+	var text string
+	if json.Unmarshal(raw, &text) != nil {
+		var blocks []json.RawMessage
+		var first struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(raw, &blocks) != nil || len(blocks) == 0 || json.Unmarshal(blocks[0], &first) != nil || first.Type != "text" {
+			return false
+		}
+		text = first.Text
+	}
+	return strings.HasPrefix(text, billingHeaderPrefix)
+}
+
 // summaryInput is the part of the body the request log describes. It is taken
 // before the build envelope reads the members: the fields are computed later,
 // off the request goroutine (request_log_diagnostic.go).

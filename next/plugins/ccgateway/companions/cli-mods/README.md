@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**候选：Claude Code 2.1.312 / `ccgateway-v38-cc-2-1-312`**（2026-10-30，未发布；ELF SHA-256 `c66a1f056a79c55226b026de197534c97995d543b5b6b08d8d22f7a1648e9ddb`，Bun 1.4.4 编译，TLS 指纹与官方 2.1.312 相同）。逻辑与线上 v36 相同，另加会话记忆（我们写的计费头带 `cc_prev_req`、turn 字段不回退，能力 `build_session_state_v1`）。迁移记录见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。
+**候选：Claude Code 2.1.312 / `ccgateway-v38-cc-2-1-312`**（2026-10-30，未发布；ELF SHA-256 `c66a1f056a79c55226b026de197534c97995d543b5b6b08d8d22f7a1648e9ddb`，Bun 1.4.4 编译，TLS 指纹与官方 2.1.312 相同）。逻辑与线上 v36 相同，另加会话记忆（我们写的计费头带 `cc_prev_req`、续接时 turn 字段不回退，能力 `build_session_state_v1`；何时给记忆由 Worker 判定）。迁移记录见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。
 
 **线上：Claude Code 2.1.310 / `ccgateway-v36-content-guard`**（插件 0.1.109–0.1.113，ELF `06d428b6…19fe`）。仓库里 2.1.310 与 2.1.304 的 profile 与锚点仍在，测试照常覆盖（`CCG_CLI_VERSION=2.1.310|2.1.304 npm test`）；它们的标签随支持模块的变化升为 `ccgateway-v39-session-state`（2.1.310）与 `ccgateway-v40-session-state`（2.1.304），这两个版本不再单独发布。v33（`ccgateway-v33-bun-1-4-4`，插件 0.1.105，ELF `720f4645…2463`）起编译用的 Bun 等于官方内嵌版本（profile `bunVersion`，`package-release.cjs` 核对），TLS 指纹因此与官方相同（[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 缺口第 8 条）。
 
@@ -94,7 +94,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
 | 版本 | 插件 | 内容 | 现状 |
 |---|---|---|---|
-| v38 `cc-2-1-312` | 待定（发布时定） | 移到 Claude Code 2.1.312（2026-10-27 构建，commit `f375cd85`），逻辑与 v36 相同：13 个被改写函数按新版重写锚点（入口 `Ke`、会话 `Rt`、资源 `YOi`/`V`、核心 `YH`/`Qmn`/`Kmn`/`Kk`/`Xmr`/`boo`、客户端 `K$`/`Ml`、计费 `d2s`），另加一处：主查询里新出现的 thinking-token-count push 加 build 判断（2.1.312 把它从模型表挪了出来，否则非 CC 请求会多这个 beta）。新增会话记忆（`request-session.js`、能力 `build_session_state_v1`，Worker `engine/session_state.go`）：我们写的计费头带 `cc_prev_req`（上一次成功上游响应的 request-id，仅当消息续接上一次请求时），客户端命名的会话的 turn 字段不因截断历史回退。官方自己的变化：环境段 Shell 按 PATH 上的 shell 写（`unknown` → `bash`）、Bash 工具描述改写、客户端缺省 `output_config` 时 effort 跟随历史里的 system 轮。分析与验证见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。ELF `c66a1f05…9ddb` | 候选 |
+| v38 `cc-2-1-312` | 待定（发布时定） | 移到 Claude Code 2.1.312（2026-10-27 构建，commit `f375cd85`），逻辑与 v36 相同：13 个被改写函数按新版重写锚点（入口 `Ke`、会话 `Rt`、资源 `YOi`/`V`、核心 `YH`/`Qmn`/`Kmn`/`Kk`/`Xmr`/`boo`、客户端 `K$`/`Ml`、计费 `d2s`），另加一处：主查询里新出现的 thinking-token-count push 加 build 判断（2.1.312 把它从模型表挪了出来，否则非 CC 请求会多这个 beta）。新增会话记忆（`request-session.js`、能力 `build_session_state_v1`，Worker `engine/session_state.go`）：我们写的计费头带 `cc_prev_req`（上一次成功上游响应的 request-id，仅当消息续接上一次请求、最后一条 assistant 正是那次应答时），续接时客户端命名的会话的 turn 字段不回退；截断历史不给记忆（插件 0.1.114 起，Worker 侧判定，CLI 不变）。官方自己的变化：环境段 Shell 按 PATH 上的 shell 写（`unknown` → `bash`）、Bash 工具描述改写、客户端缺省 `output_config` 时 effort 跟随历史里的 system 轮。分析与验证见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。ELF `c66a1f05…9ddb` | 候选 |
 
 2.1.310 与 2.1.304 的 profile 随支持模块的变化升为 v39 / v40（`session-state`），不单独发布。
 

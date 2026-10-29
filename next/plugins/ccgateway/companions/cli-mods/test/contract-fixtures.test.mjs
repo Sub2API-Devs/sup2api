@@ -13,7 +13,7 @@ import { validateBuildParameters } from '../request-parameters.js';
 import { prepareBuildInput } from '../request-input.js';
 import { createContentPolicy } from '../content-policy.js';
 import { vocabulary } from './vocabulary.mjs';
-import { applyBuildMetadata } from '../request-identity.js';
+import { applyBuildMetadata, previousSession, requestSessionID } from '../request-identity.js';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../contracts/testdata/worker-cli-requests.json', import.meta.url), 'utf8'));
 const environment = fields => '# Environment\nYou have been invoked in the following environment: \n' + fields.map(line => ' - ' + line).join('\n') + '\n';
@@ -38,6 +38,8 @@ test('the fixture covers both modes and every identity decision', () => {
   const identities = fixture.cases.map(c => c.identity && JSON.parse(c.identity)).filter(Boolean);
   for (const mode of ['client', 'worker', 'replace']) assert.ok(identities.some(i => i.mode === mode), mode);
   assert.ok(identities.some(i => i.rewrite) && identities.some(i => !i.rewrite));
+  // The Worker's memory of the session thread (engine session_state.go).
+  assert.ok(identities.some(i => i.previous?.request_id && i.previous.turn_position));
 });
 
 for (const c of fixture.cases) {
@@ -92,6 +94,10 @@ for (const c of fixture.cases) {
       const client = external.parameters?.metadata;
       const built = applyBuildMetadata({ metadata: { user_id: nativeIdentity().user_id } }, client, nativeIdentity);
       const identity = JSON.parse(c.identity);
+      // The CLI accepts the identity context as the Worker writes it: the
+      // session it must use and what the Worker remembers of its thread.
+      assert.equal(requestSessionID(), identity.session_id);
+      assert.deepEqual(previousSession(), identity.previous);
       if (!client?.user_id) {
         // No client identity: the account's own when the Worker generated one
         // (2026-10-25), in Claude Code's JSON string with the Worker's session;

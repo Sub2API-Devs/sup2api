@@ -58,6 +58,8 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.304.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"build-injection", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"environment":true,"date":true,"model":false},"tools":{"Bash":true,"Read":true,"Edit":true,"Write":true,"NotebookEdit":true,"WebSearch":false}}}`,
 			`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`, ""},
+		{"build-session-previous", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
+			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`, ""},
 		{"build-no-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"},{"role":"user","content":"again"}]}`, ""},
 		{"build-unusable-identity", "build", `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.304"}`,
@@ -70,6 +72,14 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			`{"model":"fixture","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.300.abc; cc_entrypoint=cli;"},{"type":"text","text":"plain system"}],"messages":[{"role":"user","content":"hello"}]}`, ""},
 		{"direct-passthrough", "direct", `{"schema_version":1,"relay_mode":"direct","cli_version":"2.1.304"}`,
 			`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`, ""},
+	}
+	// priors are requests the Worker answered before in a scenario's session,
+	// with the upstream request-id and the CLI's session report: its CLI keeps
+	// session state (features.SessionStateCapability), so the scenario's
+	// request is given what the Worker remembers of them.
+	priors := map[string]struct{ body, id, report string }{
+		"build-session-previous": {`{"model":"fixture","messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"{\"device_id\":\"` + strings.Repeat("c", 64) + `\",\"session_id\":\"` + session + `\"}"}}`,
+			"req_fixture01", `{"thread":"main","turn_position":{"prompt_index":0,"turn_index":1},"prompt_hash":"` + strings.Repeat("a", 64) + `"}`},
 	}
 	var cases []workerCLICase
 	for _, sc := range scenarios {
@@ -87,9 +97,15 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 				account["ANTHROPIC_API_KEY"] = "fixture"
 			}
 			envCapture := filepath.Join(root, "identity-env.json")
+			capabilities := []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
+				features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability}
+			prior, remembers := priors[sc.name]
+			if remembers {
+				capabilities = append(capabilities, features.SessionStateCapability)
+				account["CCG_TEST_REQUEST_ANSWER_ID"], account["CCG_TEST_REQUEST_ANSWER_SESSION"] = prior.id, prior.report
+			}
 			g := &Gateway{RequestMode: sc.mode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
-				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
-					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability}},
+				CLIInfo: cliRequestInfo{Version: "2.1.304", Capabilities: capabilities},
 				Runner: &Runner{CLI: exe, Version: "2.1.304", Work: root, WorkingDirectory: root, Env: envWith(envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 					"HOME": config, "CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config,
@@ -97,11 +113,19 @@ func TestWorkerCLIRequestsMatchTheContractFixture(t *testing.T) {
 			require.NoError(t, g.configureRequestIdentity(root))
 			// A fixed account secret keeps the mapped identity reproducible.
 			g.requestIdentitySecret = bytes.Repeat([]byte{7}, 32)
-			req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(sc.body))
-			req.Header.Set("x-api-key", "fixture")
-			req.Header.Set(features.PolicyHeader, sc.policy)
-			out := httptest.NewRecorder()
-			g.ServeHTTP(out, req)
+			serve := func(body string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
+				req.Header.Set("x-api-key", "fixture")
+				req.Header.Set(features.PolicyHeader, sc.policy)
+				out := httptest.NewRecorder()
+				g.ServeHTTP(out, req)
+				return out
+			}
+			if remembers {
+				require.Equal(t, 200, serve(prior.body).Code)
+				require.NoError(t, os.Remove(filepath.Join(root, "input.jsonl")))
+			}
+			out := serve(sc.body)
 			require.Equal(t, 200, out.Code, out.Body.String())
 			stdin, err := os.ReadFile(filepath.Join(root, "input.jsonl"))
 			require.NoError(t, err)

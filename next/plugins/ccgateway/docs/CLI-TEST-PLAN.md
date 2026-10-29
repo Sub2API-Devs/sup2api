@@ -58,7 +58,8 @@ npm test                          # = node test/run.mjs
 | `request-policy.js` | `validateRequestPolicy`（`contract_version: 2`、键白名单）、`validateDirectPolicy`、`runtimeContext`（启动目录一致）、`identityLineFor`、`injectionChoices`、`contentDiagnostic` 白名单 | `request-policy.test.mjs`、`cli-prefix.test.mjs`、`request-injection.test.mjs` |
 | `content-policy.js` | 环境段识别（围栏、标题、引导语、十个字段、update 段、基线）、`erase` 与清理、计费头识别与合并、请求入口 | `content-policy.test.mjs`（含 150、1620、6 项三个矩阵） |
 | `direct-billing.js` + `raw-json.js` | direct 只改计费头，在原始 JSON 上拼接 | `direct-billing.test.mjs` |
-| `request-identity.js` | `CCG_REQUEST_IDENTITY` 校验、`applyBuildMetadata`（三种载体、`rewrite`、无身份补账号身份）、`requestSessionID` | `request-identity.test.mjs`、`contract-fixtures.test.mjs` |
+| `request-identity.js` | `CCG_REQUEST_IDENTITY` 校验（含 `previous`）、`applyBuildMetadata`（三种载体、`rewrite`、无身份补账号身份）、`requestSessionID`、`previousSession` | `request-identity.test.mjs`、`contract-fixtures.test.mjs` |
+| `request-session.js` | 会话记忆（`build_session_state_v1`）：`requestThread`、`sessionTurn`（turn 修正）、`continueSession`（build：request-id 放到最后一条 assistant 记录、turn 写回 prompt 记录）、`continueDirectSession`（direct：交给原生计费头）、响应 meta 的 `session` 报告；子代理分支目前不可达（无计费头的请求一律主线程） | `request-session.test.mjs`、`contract-fixtures.test.mjs`；Worker 侧 `engine/session_state_test.go` |
 | `request-agent.js` | `CCG_REQUEST_AGENT` 校验、`resolveAgentContext`（只对 CC 请求读客户端上下文、HMAC 映射、loop 头原值）、`setClientUserAgent` | `request-agent.test.mjs`、`request-command-agent.test.mjs` |
 | `request-headers.js` + `request-betas.js` | `normalizeBetas`、`finalBetas`（客户端顺序 + 新增按原生顺序插入）、OAuth/API Key 头策略、`betaOrder`（`S8n` + `uXn` 的 push 顺序） | `request-options.test.mjs`（“the login and cache betas go where Claude Code writes them”等） |
 | `request-build.js` | 注入层（探针构建、已有层不重复）、身份行放置、缓存断点上限、计费合并、beta 两组、stream 位置 | `request-injection.test.mjs`、`cli-prefix.test.mjs` |
@@ -218,7 +219,7 @@ Go：`cd next/plugins/ccgateway/companions && go test ./engine/ ./contracts/...`
 
 **C14 请求类别与 agent 上下文头**。Worker 把客户端的 5 个上下文头、loop 头、CC 形状 UA 放进 `CCG_REQUEST_AGENT`（`{version:1, map, key?, client}`，字段逐个正则校验）。只有 system 带计费头的 CC 请求采用：类别取 request-class 头，否则计费头 `cc_is_subagent=true` → 子代理，否则主线程；prompt ID 映射（`map` 时 HMAC 派生 UUIDv4）；agent-id 用客户端原值（父线程的消息里引用它），没有才派生；`custom` agent 类型不发。非 CC 请求一律主线程、客户端上下文头全不用（v28）。loop 头（prev-tool-durations、4 个压缩头）原值放回。头本身由原生 `sF` 按 `querySource`/`requestClass`/`agentContext`/`promptId` 写出。
 
-**C15 身份与会话**。`CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?}`）只经环境变量。`applyBuildMetadata`：没有上下文时原生 metadata 不动；`rewrite` 且客户端有 `user_id` → 换成原生身份（`yBe`）叠加映射字段，载体沿用客户端的（JSON 字符串/对象/扁平 `user_<device>_account_<uuid>_session_<sid>`）；`rewrite` 且 `replace` 但客户端没有 → 补账号自己的身份（JSON 字符串），其他 metadata 键保留；否则客户端原值（没有就删掉 metadata）。会话头：补丁 `Yi` 让根会话 = `requestSessionID()`，与 metadata 一致。direct 原样转发 body。
+**C15 身份与会话**。`CCG_REQUEST_IDENTITY`（`{version:2, mode, rewrite, session_id?, device_id?, parent_session_id?, carrier?, previous?}`）只经环境变量；`previous`（`{thread, request_id?, turn_position?, prompt_hash?}`）是 Worker 的会话记忆（`engine/session_state.go`），只在有 `session_id` 时允许，CLI 经 `previousSession()` 读、`request-session.js` 用于我们写的计费头。`applyBuildMetadata`：没有上下文时原生 metadata 不动；`rewrite` 且客户端有 `user_id` → 换成原生身份（`yBe`）叠加映射字段，载体沿用客户端的（JSON 字符串/对象/扁平 `user_<device>_account_<uuid>_session_<sid>`）；`rewrite` 且 `replace` 但客户端没有 → 补账号自己的身份（JSON 字符串），其他 metadata 键保留；否则客户端原值（没有就删掉 metadata）。会话头：补丁 `Yi` 让根会话 = `requestSessionID()`，与 metadata 一致。direct 原样转发 body。
 
 **C16 数字保真**。build 解析前把 `JSON.stringify(Number(x)) !== x` 的数字换成 `"ccgnum_<本次随机 nonce>_<序号>"`，组装全程带着；fetch 边界（`captureErrorResponse` 的 `fetchOverride`）把最终 body 文本里的占位换回原文；占位被拷进别的文本、还原后仍有残留就报错不发。direct 发原始字节。
 

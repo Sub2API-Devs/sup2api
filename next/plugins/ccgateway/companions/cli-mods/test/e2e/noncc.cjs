@@ -49,8 +49,9 @@ const CONTEXT = [
 // session: a conversation of the client's own session (metadata.user_id
 // names it) whose header the gateway writes: the Worker remembers the last
 // answered request and its turn (CLI v38 build_session_state_v1), so a turn
-// names the request before it (cc_prev_req) and a shortened history keeps
-// counting. Then another session, and a direct conversation.
+// continuing it names the request before it (cc_prev_req); a shortened
+// history is given nothing and counts from its own messages. Then another
+// session, and a direct conversation.
 const named = id => ({ metadata: { user_id: JSON.stringify({ device_id: 'client-device', session_id: id }) } });
 const S1 = named('6a7b8c9d-0e1f-4a2b-8c3d-4e5f60718293'), S2 = named('7b8c9d0e-1f2a-4b3c-8d4e-5f6071829304'), S3 = named('8c9d0e1f-2a3b-4c4d-8e5f-607182930415');
 const tools = [{ name: 'lookup', description: 'Look a key up.', input_schema: { type: 'object', properties: { key: { type: 'string' } } } }];

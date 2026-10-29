@@ -10,7 +10,7 @@
 - **我们只在客户端没带计费头时自己写头。** 客户端带了的，原样保留，一个字段都不加（`cch`、`cc_prev_req`、turn 字段从来不是"补"的对象）。
 - **内置提示词注入（high 等级）只在"请求没有计费头"时生效。** 已决定保持以计费头为准（第 4.1 节）。
 - **我们写的头是"连官方地址"的形状**：Worker 连的就是官方 API，`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` 让 CLI 按真实 CC 直连官方地址的形状写头，这是对的；与真实 CC 唯一的差别是 `cch` 的值（第 4.4 节）。
-- **2.1.312 / v38 起，我们写的头也带 `cc_prev_req`，turn 字段不再因客户端截断历史而回退**（Worker 进程内存按会话线程记忆，第 5 节）。
+- **2.1.312 / v38 起，我们写的头也带 `cc_prev_req`，续接上一次应答时 turn 字段不回退**（Worker 进程内存按会话线程记忆，第 5 节；0.1.114 起截断历史什么都不给，turn 按历史计数）。
 
 ## 1. 客户端：自定义 URL 与官方地址的差异
 
@@ -171,16 +171,16 @@ Worker 连的是官方 API，应当对齐"真实 CC 直连官方地址"的形状
 
 | 项 | 规则 |
 |---|---|
-| 作用范围 | 只对客户端没带计费头、由我们写头的请求（build 与 direct 都是）；客户端自带头的请求（含真实 CC 的子代理）不读也不写记忆 |
+| 作用范围 | 只对客户端没带计费头、由我们写头的请求（build 与 direct 都是）；客户端自带头的请求（含真实 CC 的子代理）不读也不写记忆。Worker 先做一道便宜的闸门：system 首块以 `x-anthropic-billing-header:` 开头的请求在算消息摘要之前就跳过；头在别处的由 CLI 判定（它保留客户端的头、不报告 `session`，Worker 不存） |
 | 存什么 | 每个（上游会话 U，线程）一条：最后一次**成功**上游响应的 `request-id`、该请求的消息摘要（逐条规范 JSON 的 sha256），主线程另存 CLI 报告的 turn 位置与 prompt 哈希 |
 | 会话键 U | Worker 交给 CLI 的上游会话（`CCG_REQUEST_IDENTITY.session_id`），且只用于客户端自己命名的会话（metadata 带 `session_id`，映射后作为 U）。选 U 而不是客户端会话 S：U 是上游看到的会话，S 经账号密钥映射成 U，一一对应 |
-| 线程 | 主线程，或子代理的 agent ID（请求头 `X-Claude-Code-Agent-Id`）。CLI 只在 Worker 查的线程与它实际构建的线程一致时才用，并在响应元数据里报告线程；不一致则不用、不存 |
-| `cc_prev_req` | CLI 把记住的 request-id 放到最后一条 assistant 记录的 `requestId`（direct 传给原生 `d2s` 的 `previousRequestId`）。只有本次请求的消息以被记住请求的消息开头且更长（即接着它往下说）时，Worker 才交出 request-id；首轮、换对话、截断历史都不带 |
-| turn 字段 | 仍先按历史由原生计数（`ccgatewayMarkTurns`）。有记忆时修正：最后一条用户消息是新输入（不是 tool_result 续发，且 prompt 哈希不同）→ `turnIndex = max(历史值, 记忆+1)`，`promptIndex = max(历史值, 记忆 + (cli 入口 ? 1 : 0))`；tool_result 续发或同一输入重试 → 取 `max(历史值, 记忆值)`；超出原生上限（1e7）或不合 `$3` 校验则用历史值。结果写回 prompt 记录的 `turnPosition`，由原生写字段 |
+| 线程 | 主线程，或子代理的 agent ID（请求头 `X-Claude-Code-Agent-Id`）。`X-Claude-Code-Request-Class` 是 `subagent`/`workflow` 却没有 agent ID 的请求分不出线程，Worker 不用记忆。CLI 只在 Worker 查的线程与它实际构建的线程一致时才用，并在响应元数据里报告线程；不一致则不用、不存 |
+| `cc_prev_req` | CLI 把记住的 request-id 放到最后一条 assistant 记录的 `requestId`（direct 传给原生 `d2s` 的 `previousRequestId`）。只有本次请求的最后一条 assistant 正是被记住请求的应答时，Worker 才交出记忆：消息以被记住请求的消息开头，其后第一条是 assistant（那次的应答），再往后没有别的 assistant。否则整条记忆都不交（不带 `cc_prev_req`，turn 也按历史计数）；首轮、换对话、截断历史、客户端插入或多出 assistant 都是这样 |
+| turn 字段 | 仍先按历史由原生计数（`ccgatewayMarkTurns`）。拿到记忆时（上一行的续接成立）修正：最后一条用户消息是新输入（不是 tool_result 续发，且 prompt 哈希不同）→ `turnIndex = max(历史值, 记忆+1)`，`promptIndex = max(历史值, 记忆 + (cli 入口 ? 1 : 0))`；tool_result 续发或同一输入重试 → 取 `max(历史值, 记忆值)`；超出原生上限（1e7）或不合 `$3` 校验则用历史值。结果写回 prompt 记录的 `turnPosition`，由原生写字段 |
 | 派生会话 | 客户端没命名会话时，Worker 按对话首条消息派生会话；首条消息相同的不同对话共享它（离线回归 `noncc-identity2`：对话 A 的后续轮会拿到对话 B 的 request-id），所以派生会话**完全不用记忆**，`cc_prev_req` 不带、turn 按历史计数（派生会话的历史必然从首条消息开始，原生计数本身就对） |
-| 子代理线程 | 只存 request-id，不存也不写 turn（官方子代理的头没有 turn 字段）；同一子代理线程已有请求在途时，本请求不使用记忆 |
-| 并发 | 主线程按完成顺序覆盖；子代理线程见上 |
-| 失败 | 只有完整成功（2xx 且流完整）的请求才更新记忆；失败不推进 |
+| 子代理线程 | 只存 request-id，不存也不写 turn（官方子代理的头没有 turn 字段） |
+| 并发 | 主线程与子代理线程同一机制：同一（会话，线程）已有请求在途时，后来的请求不读记忆；这些重叠的请求（包括先到的那个）都不写记忆，因为不知道对话接着哪一次应答往下走 |
+| 失败 | 只有完整成功（2xx 且流完整）的请求才更新记忆；失败、开始输出后中断或被取消都不推进。整条记住或不记：request-id 不合法、主线程的 turn 或 prompt 哈希不合法时记忆保持原样，没有可记的也不新建条目 |
 | 容量与过期 | 每个 Worker 最多 4096 条，按最近应答淘汰；闲置 24 小时过期。理由：一个 Worker 只服务一个账号、同时只有几个请求，一天内活跃的会话线程远少于 4096；24 小时覆盖当天续聊，更久的续聊回到按历史计数。只在进程内存，不落盘：Worker 重启或淘汰后视为新会话 |
 | 能力 | `build_session_state_v1`：Worker 只对声明了它的 CLI 发 `previous`（旧 CLI 会拒绝未知字段） |
 
@@ -189,15 +189,15 @@ Worker 连的是官方 API，应当对齐"真实 CC 直连官方地址"的形状
 | 情形 | 是否使用记忆 | 原因 |
 |---|---|---|
 | 非 CC 请求（无计费头），客户端命名会话，主线程，带完整历史 | 是：`cc_prev_req` 有；turn 原生计数本就正确 | 我们写头 |
-| 同上，只发最后一轮 / 压缩过的历史 | turn 修正；`cc_prev_req` 不带（消息不接着被记住的请求） | 不能证明是同一段历史时宁可不带 |
+| 同上，只发最后一轮 / 压缩过的历史 | 否：`cc_prev_req` 不带，turn 按历史计数（0.1.114 起；此前 turn 会按记忆修正） | 不能证明是同一段历史时宁可不带 |
 | 同上，tool_result 续发 | 是：`cc_prev_req` 与本轮 turn | 消息接着上一次请求 |
 | 非 CC 请求，派生会话（metadata 不带会话） | 否：不带 `cc_prev_req`，turn 按历史 | 首条消息相同的对话共享派生会话，无法区分 |
 | 客户端自带计费头（真实 CC，含主线程与子代理） | 否 | 客户端自己的头原样保留；真实 CC 自己写的 `cc_prev_req` 已与上游一致（2.1 节） |
 | 带子代理头但没有计费头的请求 | 否 | v28 起这类请求一律按主线程构建，Worker 查的是子代理线程，线程不一致，CLI 不用、Worker 不存 |
-| 子代理请求没有 agent ID、同一子代理并发、fork/compact | 否 | 无法确定是哪个线程的哪一次请求 |
+| 子代理请求没有 agent ID（`X-Claude-Code-Request-Class: subagent`/`workflow`，Worker 的 `sessionThread` 判定）、同一线程（主线程或子代理）并发、fork/compact | 否 | 无法确定是哪个线程的哪一次请求 |
 | 控制台账号测试（probe） | 否 | 网关自己的请求，不属于对话 |
 
-所以在当前规则下，子代理线程的记忆实际不会被写入：没有计费头的请求总是主线程。键与线程校验仍按（会话，线程）实现并有单测覆盖。
+所以在当前规则下，子代理线程的记忆实际不会被写入：没有计费头的请求总是主线程。键与线程校验仍按（会话，线程）实现并有单测覆盖。CLI `request-session.js` 里 `continueSession`/`continueDirectSession` 的子代理分支因此不可达；这段代码在 CLI（ELF）里，不为删它重编，测试照旧。
 
 ## 6. 复现方法
 

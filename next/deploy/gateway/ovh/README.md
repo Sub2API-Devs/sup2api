@@ -26,7 +26,7 @@
   - 步骤：bundled controller,egress → paired worker+cli（9 updated、7 not_running、23 号 not_found，与 0.1.111 相同）→ bundled app，`up_to_date: true`。21 号 haiku 测试 200。
   - 内容：用量窗口不再拦截调度，托管账号一律 `quota_not_enforced`；只有带未来重置时刻的模型专属窗口仍按模型族拦截。
   - 上线时发现：有故障策略时核心不调用插件 `ClassifyError`，429 不会禁用账号。已由 0.1.216 修复（见上一条）。
-  - 脚本 `stage/ccgateway-0.1.112/{build.sh,rollout.py}`。新 worktree 要从上一版复制被 gitignore 的 `companions/cli-mods/release/`（`manifest.json` 和 `2.1.310/`），否则 app 镜像构建失败。
+  - 脚本 `stage/ccgateway-0.1.112/{build.sh,rollout.py}`。新 worktree 要复制被 gitignore 的 `companions/cli-mods/release/`，否则 app 镜像构建失败。0.1.114 起要放两项：2.1.312（v38，ovh `/tmp/ccg312/build/release-v38`，ELF `c66a1f05…9ddb`）与 2.1.310（v36，从 `release-ccgateway-0.1.113` 拷，不用新源码重编），两份 `manifest.json` 手工合并成一份。
 
 2026-10-29 发布：Core 两节点 **0.1.214**（源码 `a4cde9813`，manifest `e849feca…f189`，计划 `6983cc510558b5bca0efe8779d09dfe0` completed/13，51.6 秒，核心 SHA `e2dc9ce1…34ac`）。schema 契约不变（`2adf9bfc…`），`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
 - 内容：控制台紧凑化，只改 UI。控件高度 40→32px（小号 32→28px），圆角 12→8px，按钮去掉渐变和阴影，表格、卡片、批量栏内边距收紧，顶栏 56→48px。`SPageHeader` 标题与顶栏相同时，说明移到顶栏（单行，悬停看全文），筛选和按钮合成一行工具栏；用户、代理、模型价格、审计日志的表格卡片筛选挪进工具栏；账号页去掉筛选卡片。账号页表格起点从 281px 提到 109px（1920 宽）。

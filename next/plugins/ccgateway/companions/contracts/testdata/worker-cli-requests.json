@@ -31,6 +31,12 @@
       "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"a0ab309b-08a7-4534-84f8-a36b4eea9f4a\",\"carrier\":\"json\"}"
     },
     {
+      "name": "build-session-previous",
+      "mode": "build",
+      "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"hi\"},{\"role\":\"user\",\"content\":\"again\"}],\"model\":\"fixture\",\"parameters\":{\"metadata\":{\"user_id\":\"{\\\"device_id\\\":\\\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\\\",\\\"session_id\\\":\\\"12345678-1234-4123-8123-123456789012\\\"}\"}},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",
+      "identity": "{\"version\":2,\"mode\":\"replace\",\"rewrite\":true,\"session_id\":\"9c1c2cbe-7392-42f9-a262-bfc1f4115e14\",\"device_id\":\"b864f8530fa81965e318cd80b90addd91043fe4536677fd86222d68198f72548\",\"carrier\":\"json\",\"previous\":{\"thread\":\"main\",\"request_id\":\"req_fixture01\",\"turn_position\":{\"prompt_index\":0,\"turn_index\":1},\"prompt_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
+    },
+    {
       "name": "build-no-identity",
       "mode": "build",
       "stdin": "{\"attachments\":[],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"hi\"},{\"role\":\"user\",\"content\":\"again\"}],\"model\":\"fixture\",\"parameters\":{},\"requestPolicy\":{\"contract_version\":2},\"runtimeContext\":{\"additionalWorkingDirectories\":[],\"workingDirectory\":\"{{cwd}}\"}}",

@@ -6,7 +6,7 @@
 |---|---|---|
 | 官方 manifest | 2026-10-23 构建，commit `0d2056ec` | 2026-10-27T17:16:03Z 构建，commit `f375cd85d4f70920de17ce3a4ad646e18834e833` |
 | 官方 linux-x64 ELF SHA-256 | `b7367643…7df56`（291638640 字节） | `4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d`（293592432 字节，与官方 manifest 一致） |
-| 内嵌 Bun | 1.4.4（修订 `2c2ae6246`） | 1.4.4（修订 `0ae49f8b6`） |
+| 内嵌 Bun | 1.4.4（修订 `2c2ae6246`） | 1.4.4（官方修订 `0ae49f8b6`；编译用的 `oven/bun:1.4.4` 是 `38afee6c8`，无法对齐，以第 7 节 TLS 实测 identical 为准） |
 | 还原 | 2801 模块 / 2551 JS | 2813 模块 / 2581 JS，`unresolved` 为空，入口 `cli.js` |
 | 补丁标签 | `ccgateway-v36-content-guard` | `ccgateway-v38-cc-2-1-312`（v37 已被 2.1.304 的 `ccgateway-v37-content-guard` 占用；支持模块变了，2.1.310 / 2.1.304 的 profile 也升为 `ccgateway-v39-session-state` / `ccgateway-v40-session-state`） |
 | 定制 ELF SHA-256 | `06d428b6…19fe`（线上 0.1.113） | `c66a1f056a79c55226b026de197534c97995d543b5b6b08d8d22f7a1648e9ddb`（oven/bun:1.4.4 编译，见第 6 节） |
@@ -66,7 +66,7 @@
 
 - profile `profiles/linux-x64-2.1.312.json`：`natives`/`coreScope`/`coreImports`/`locate` 取自 `carry-profile` 输出（`locate.requestBuilder` `x9n`、`builderBetaList` `Hr` 人工确认）；`modules` 沿用 2.1.310 的 24 个模块按配对映射到新模块名（`chunk-k19pbtc6`→`chunk-c2txqh1z`、`chunk-r2a214y7`→`chunk-44429y21` 是只做再导出的模块，按 natives 的去向映射），哈希按新还原文本重算。
 - 锚点 `patches/2.1.312.cjs` 由 `tools/upgrade/examples/derive-anchors-2.1.312.cjs` 从 2.1.310 的锚点逐条替换生成（每条替换必须恰好命中预期次数，最后检查没有旧名字残留）。13 个被改写函数：入口 `cli.js:Ke`、会话 `chunk-zpsbh0wk.js:Rt`、容器资源 `chunk-7cks3gqr.js:YOi` 与 `chunk-rjc7jjmb.js:V`、核心 `chunk-7dmym6x9.js` 的 `YH`/`Qmn`（构建器 `x9n`）/`Kmn`/`Kk`/`Xmr`/`boo`、客户端 `chunk-yagw4eem.js:K$`/`Ml`、计费 `chunk-pd06as9s.js:d2s`。与 2.1.310 相比只有名字不同，外加 `Qmn` 里一处新锚点（见 3.1）。
-- 补丁器、支持模块、`native-environment.inc.js` 都没有改；`anchor-hazards`：26 处替换文本全部逐字出现在产物里、无 `$` 模式。
+- 补丁器、支持模块、`native-environment.inc.js` 为版本迁移都没有改（会话记忆另算，第 5 节）；`anchor-hazards`：26 处替换文本全部逐字出现在产物里、无 `$` 模式。
 
 ### 3.1 新增的一处锚点：thinking-token-count
 
@@ -107,15 +107,19 @@ D0：`capture-official.sh` 用 `ccgateway-app:0.1.113` 镜像分别抓官方 2.1
 | 层 | 改动 |
 |---|---|
 | 契约 | 新能力 `build_session_state_v1`（`contracts/features/request_modes.go`）；`CCG_REQUEST_IDENTITY` 新增可选 `previous: {thread, request_id?, turn_position?, prompt_hash?}`；CLI 在 `--response-meta` 里写 `session: {thread, turn_position?, prompt_hash?}` |
-| Worker | `engine/session_state.go`：进程内存 LRU（4096 条、闲置 24 小时），键 = 上游会话 + 线程（主线程或 `X-Claude-Code-Agent-Id`）；`attachSessionState` 只对客户端命名的会话使用记忆（派生会话被首条消息相同的对话共享，完全不用）、只在请求消息续接被记住请求的消息时交出 request-id、同一子代理线程并发时不交；`rememberSessionState` 只在 2xx 且 CLI 报告了同一线程时记住（request-id 取上游响应头 `request-id`）。`request_command.go`：接入点（`resolveRequestContext`、`runCLI`、`writeOutcome` 返回是否完整应答、meta 里读 `session`） |
+| Worker | `engine/session_state.go`：进程内存 LRU（4096 条、闲置 24 小时），键 = 上游会话 + 线程（主线程或 `X-Claude-Code-Agent-Id`；`X-Claude-Code-Request-Class: subagent`/`workflow` 却没有 agent ID 的请求分不出线程，不用记忆）；`attachSessionState` 只对客户端命名的会话使用记忆（派生会话被首条消息相同的对话共享，完全不用），system 首块以 `x-anthropic-billing-header:` 开头的请求（客户端自带头）在算消息摘要之前就跳过；只在请求消息续接被记住请求、且最后一条 assistant 正是那次应答（前缀之后第一条是 assistant、其后再无 assistant）时交出记忆，否则什么都不交（不带 `cc_prev_req`，turn 按历史计数）；同一（会话，线程）有请求在途时（主线程与子代理线程同一机制），这些并发请求既不读也不写记忆；`rememberSessionState` 只在 2xx、流完整且 CLI 报告了同一线程时记住（request-id 取上游响应头 `request-id`），整条记住或不记（request-id 不合法、主线程 turn 不合法时都不动，也不新建条目）。`request_command.go`：接入点（`resolveRequestContext`、`runCLI`、`writeOutcome` 返回是否完整应答、meta 里读 `session`）。以上判定都在 Worker 侧，0.1.114 修订时 CLI 二进制未变 |
 | CLI | 新支持模块 `request-session.js`：`continueSession`（build：request-id 放到最后一条 assistant 记录的 `requestId`，turn 写回 prompt 记录的 `turnPosition`，原生 `mmr`/`f3o` 写字段）、`continueDirectSession`（direct：交给 `d2s` 的 `previousRequestId` 与 `turnPosition`）、`sessionTurn`（修正规则）。`request-identity.js` 校验 `previous`；`request-build.js`、`request-command.js` 只在客户端没带计费头时调用；`request-natives.js` 把 `previousRequestId` 交给原生；`native-environment.inc.js` 的 `ccgatewayPromptTurn` 另报 prompt 内容与是否为最后一条用户消息 |
 | profile | 三个版本都加能力与支持模块；2.1.310、2.1.304 的标签随之升为 v39、v40（支持模块变了，旧标签的产物会与新源码不一致） |
 
-测试：`test/request-session.test.mjs`（校验、完整历史、多轮工具循环、截断历史、同一输入重试、子代理线程、线程不符、direct）；`engine/session_state_test.go`（容量与过期、线程分开、子代理并发、失败不推进、续接判断、派生会话不用记忆、经 Worker 的完整流程、旧 CLI 不发字段）；离线回归新场景 `noncc-session`（首轮、第二轮、截断、tool_result 续发、另一会话、direct 两轮、派生会话两轮）与 `turn2-build-low` 的官方对照，断言在 `verify.cjs` 9b。
+测试：`test/request-session.test.mjs`（校验、完整历史、多轮工具循环、截断历史、同一输入重试、子代理线程、线程不符、direct）；`test/contract-fixtures.test.mjs`（Worker 夹具 `build-session-previous`：声明 `build_session_state_v1` 的 CLI 先应答一次，下一请求的身份上下文带 `previous`，CLI 侧 `previousSession()`/`requestSessionID()` 原样读出）；`engine/session_state_test.go`（容量与过期、线程分开、主线程与子代理并发、整条记住、失败不推进、开始输出后失败不推进、续接判断、计费头闸门、子代理无 agent ID、派生会话不用记忆、经 Worker 的完整流程、旧 CLI 不发字段）；离线回归新场景 `noncc-session`（首轮、第二轮、截断、tool_result 续发、另一会话、direct 两轮、派生会话两轮）与 `turn2-build-low` 的官方对照，断言在 `verify.cjs` 9b。
+
+`continueDirectSession`（以及 build 的 `continueSession`）里的子代理分支目前不可达：没有计费头的请求在 `request-agent.js` 里一律按主线程构建，`requestThread` 只会得到 `main`。这段代码在 CLI（ELF）里，不为删它重编，测试照旧覆盖。
 
 ## 6. 编译与打包
 
 本地补丁 → tar 传到 ovh `/tmp/ccg312/` → `oven/bun:1.4.4` 一次性容器里 `build.sh`（去 CR 后的副本，两个入口，`--compile --bytecode --format=esm`）→ `node:22-bookworm-slim` 容器里 `package-release.cjs`。产物 `release-v38/`：`manifest.json`（`2.1.312` → `2.1.312/claude`，SHA-256 `c66a1f05…9ddb`，补丁 `ccgateway-v38-cc-2-1-312`，modes build/direct）、`2.1.312/claude`（ELF 里两处 `Bun v1.4.4 (`）、`2.1.312/ccgateway-patch.json`。`--ccgateway-info` 报 2.1.312、v38 与 20 项能力；`--version` 为 `2.1.312 (Claude Code)`。本机副本在 `artifacts/claude-2.1.312/release-v38/`，并已放进 worktree 的 `cli-mods/release/`（不进 Git，`UPSTREAM_LICENSE.md` 保留）。
+
+发布（插件 0.1.114 起）：`cli-mods/release/` 要同时有 2.1.312（v38，即上面的 `release-v38`，ovh `/tmp/ccg312/build/release-v38`）与 2.1.310 两项。**2.1.310 兼容包从现网 v36 拷**（ovh `~/sup2api/release-ccgateway-0.1.113/…/cli-mods/release/` 的 `2.1.310/`，ELF `06d428b6…19fe`），**不用新源码重编**：新源码里 2.1.310 的 profile 已是 `ccgateway-v39-session-state`，重编出来的不是现网 v36。两份 `manifest.json` 手工合并成一份（各自的版本条目原样保留）。
 
 ## 7. 验证
 
@@ -141,7 +145,7 @@ D0：`capture-official.sh` 用 `ccgateway-app:0.1.113` 镜像分别抓官方 2.1
 | 离线回归 D1 | 同一个官方 2.1.310 客户端，基线 v36，候选 v38；规则：版本号两条 + Shell 一条（第 4 节） | 剩 3 个场景的差异，全部可解释：`plain-build-high`、`apikey-account-noncc-high`（高注入等级注入的 Bash 工具描述，官方改写）与 `noncc-session`（新场景，v38 写 `cc_prev_req` 与不回退的 turn，基线没有这个功能）；被规则隐藏的次数：UA 83、`cc_version` 80、Shell 46 |
 | 离线回归 D2 | 官方 2.1.312 客户端经 v38；`crossversion` 对照基线 | 网关独有的差异只有：原生环境段 Shell（46 个请求）、注入的 Bash 描述（3 个）、`noncc-session` 的计费头（4 个），与 D1 一致；A 侧官方客户端自己的差异（Bash 描述、skill 列表、Shell）两边都有 |
 | 定向断言 | `verify.cjs` | 候选：官方 2.1.310 客户端 1658/1658、官方 2.1.312 客户端 1662/1662；基线 v36 1654/1658，失败的 4 条正是 `noncc-session` 的会话记忆断言（v36 没有这个功能，预期如此） |
-| 会话记忆 | `turn2-build-low` 与 `noncc-session` | 官方客户端（A）与经网关（B）的第二轮都带 `cc_prev_req=req_ccgaudit1`、`cc_turn_index=2`；网关写的头：second `cc_prev_req=req_ccgaudit1`/turn 2，shortened 无 `cc_prev_req`/turn 3（不回退），tool-result `cc_prev_req=req_ccgaudit3`/turn 3，另一会话 turn 1，direct 第二轮 `cc_prev_req=req_ccgaudit6`/turn 2，派生会话不用记忆；字段顺序与官方一致 |
+| 会话记忆 | `turn2-build-low` 与 `noncc-session` | 官方客户端（A）与经网关（B）的第二轮都带 `cc_prev_req=req_ccgaudit1`、`cc_turn_index=2`；网关写的头：second `cc_prev_req=req_ccgaudit1`/turn 2，shortened 无 `cc_prev_req`/turn 3（不回退），tool-result `cc_prev_req=req_ccgaudit3`/turn 3，另一会话 turn 1，direct 第二轮 `cc_prev_req=req_ccgaudit6`/turn 2，派生会话不用记忆；字段顺序与官方一致。0.1.114 起截断历史什么都不交（审核意见：宁可少带），`verify.cjs` 9b 的期望随之改为 shortened 无 `cc_prev_req`/turn 1、tool-result `cc_prev_req=req_ccgaudit3`/turn 1；离线回归尚未用 0.1.114 的 Worker 重跑 |
 | 其他 | `values`、`classify`、`conc`、`beta-check`、`capcheck`、`respmatch` | values 12/12；classify、conc 完成；beta-check 只有已知的 1 条（`apikey-account-client` 的登录 beta）；capcheck 148/149 条全部记录、正文一致、无泄漏；respmatch 全部配上 |
 
 e2e 套件本身的两处修正（不影响基线可比性，基线用同一套件重跑）：假上游的非流式 JSON 回答原先不带 `request-id` 头（真实上游总带），已补上；新增 `noncc-session` 场景与 `verify.cjs` 9b。
@@ -172,4 +176,4 @@ e2e 套件本身的两处修正（不影响基线可比性，基线用同一套�
 | RUNBOOK "常见坑" | 在 Git Bash 里跑 `TestResourceManagementLinuxOfflineNetNone` 时，`CCG_LINUX_RESOURCE_*` 里的 Linux 路径会被改写成 Windows 路径（`invalid volume specification`），要设 `MSYS_NO_PATHCONV=1 MSYS2_ENV_CONV_EXCL='*'` | 手册补上 |
 | 任务要求"新标签用 `ccgateway-v37-...`" | v37 已被 2.1.304 的 `ccgateway-v37-content-guard`（提交 3dcaddfd0）占用，序号跨版本连续，所以用 v38 | 用 v38 |
 | 任务要求"从主仓库复制 `cli-mods/release/`（manifest.json + 2.1.310/）" | 主仓库的 `cli-mods/release/` 实际是 10-20 的旧产物（2.1.302 + 2.1.304，manifest 只有这两版），没有 2.1.310；线上 v36 的 release 在 ovh `~/sup2api/release-ccgateway-0.1.113/…/cli-mods/release/`。镜像构建要的是 `CLAUDE_VERSION` 对应版本的 release，本次放的是新的 2.1.312 / v38 | worktree 的 `release/` 放 v38 |
-| CLI-TEST-PLAN §2.9 / e2e README | 场景数写的是 69 / 122，现行套件是 72 个场景、139 个上游请求（本次加 `noncc-session` 后 73 / 146） | e2e README 更新 |
+| CLI-TEST-PLAN §2.9 / e2e README | 场景数写的是 69 / 122，现行套件是 72 个场景、139 个上游请求（本次加 `noncc-session` 后 73 / 148） | e2e README 更新 |
