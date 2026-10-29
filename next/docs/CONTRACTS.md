@@ -268,6 +268,8 @@
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
 | `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
+| `rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}` | STRING 账号某个模型列表的分钟窗口计数，TTL 2m（§68） | A |
+| `slot:account-model:{key}:{id}` | ZSET 账号某个模型列表的并发槽位，格式同 `slot:{kind}:{id}`（§68.2） | D |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
 
@@ -835,7 +837,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `rate_usage` | 只读：`{rpm, tpm}` | 当前窗口的计数（列表与详情都有；Redis 不可用时都为 0） |
 
 - token 数口径：`input + output + cache_read + cache_creation`（与使用记录一致），在上游响应结束、解析出用量后累加；因此限流是"窗口内已用量达到上限就不再调度"，不预扣，单个大请求可能让窗口略超上限。
-- 窗口是固定分钟窗口，按 Redis 时间 `floor(unix/60)`。
+- 计数仍存在按 Redis 时间 `floor(unix/60)` 划分的分钟窗口里；2026-10-30 起判断和展示都按"近 60 秒"估算（§68.3）。
 - 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。TPM/TPD 检查已记录用量，仍不做 token 预留。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
 - 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429。
@@ -859,7 +861,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 - 新建账号第 1 步按线框图 A.3 做成紧凑卡片网格（每个账号类型一张卡：插件头像、类型名、插件名与版本、信任标记、支持的平台徽章、一行描述；端点列表折叠，默认不展开），不再按插件分区块，也不再一张卡占半屏。
 - 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
-- 账号列表：优先级与权重在同一列，允许有账号编辑权限的用户直接修改；并发、TPM、RPM 在同一列显示当前值 / 上限，不限额显示 `∞`；详情页展示模型列表、映射及当前限流用量。TPD 和 SPM 已移除，历史数据库列保留供版本回退，不再参与配置、计数或准入。
+- 账号列表：2026-10-30 起改为 §68.6 的样式（优先级、权重分两列直接修改；并发 / RPM / TPM 一列）；详情页展示模型列表、映射及当前限流用量。TPD 和 SPM 已移除，历史数据库列保留供版本回退，不再参与配置、计数或准入。
 
 ## 19. 从上游拉取模型列表（2026-09-25，用户要求）
 
@@ -4568,3 +4570,59 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - Proto：`sdk/proto/sub2api/plugin/v1/scheduler.proto` `RankedAccount.load`
 - 生成：`sdk/gen/pluginv1/scheduler.pb.go`
 - 核心：`server/internal/gateway/rank.go` `rankOverrides()`，常量 `maxRankLoad = 100`
+
+## 68. 指定模型限速与近 60 秒窗口（2026-10-30，用户要求参照 new-api 渠道限速）
+
+用户要求：并发、RPM、TPM、优先级、权重，以及"指定模型列表单独限制并发 / RPM / TPM"都是**核心通用功能**，由核心调度；插件可以直接设置这些字段。参照 new-api 的渠道速率限制（`relaykit/dto/channel_settings.go` 的 `ModelRateLimit`、`model/channel_rate_limit.go`），但不照搬它的预占估算：TPM 仍在响应结束后按实际用量累加（§18.1）。new-api 没有按模型列表的并发，这里新增。
+
+### 68.1 账号字段 `model_limits`
+
+| 字段 | 类型 / 校验 | 说明 |
+|---|---|---|
+| `model_limits` | `[{models, max_concurrency, rpm_limit, tpm_limit}]`，最多 50 组；默认 `[]`（迁移 0062，列 `accounts.model_limits jsonb`） | 每组是一个模型列表和它的上限，0 = 不限；范围同账号自身的 `max_concurrency` / `rpm_limit` / `tpm_limit` |
+
+- `models` 是完整模型 ID（§16），按**映射前的客户端模型**匹配，和 `models` 筛选、计费一致。同一列表内的重复项、空字符串、没有模型的列表会被静默去掉；**一个模型只能出现在一个列表里**，否则报 `model_limits[i].models[j]: duplicate`。其他错误：`model_limits[i].models[j]: invalid`、`model_limits[i].models: too_many`（每组最多 500 个）、`model_limits[i].<字段>: invalid`、`model_limits: too_many`。
+- 列表里的模型**共用一组计数器**，不同列表各自计数。计数器的标识是排序后模型列表的哈希（`core.ModelLimit.Key`，fnv64a），所以只改上限不会清零，改了模型就重新计数。
+- 指定模型的请求**同时**受账号自身上限和所在列表上限约束，并同时计入两者。没在任何列表里的模型只受账号自身上限约束。
+- POST / PATCH `/accounts` 可带 `model_limits`（PATCH 整体替换）；`GET /accounts`、`GET /accounts/:id` 返回 `model_limits`（从不为 null）。
+
+### 68.2 调度
+
+- **并发**：先占账号自身的槽位（`slot:account:{id}`），请求模型在某个列表里时再占列表的槽位（Slots kind `account-model:{key}`，id 为账号 id）。任何一个满了，这个账号本次就算忙，换下一个账号；两个槽位一起释放。列表上限为 0 时也占槽位，用来统计使用中的数量。
+- **RPM / TPM**：`AccountLimiter` 的参数从 session 改为请求模型。`Exhausted(ctx, refs, model)` 预检查，`TryHit(ctx, ref, model)` 在一个 Lua 脚本里同时检查账号和列表的上限，都没到才同时 +1，任何一个到了就都不计。`AddTokens(ctx, id, list, n)` 把 token 加到账号上，`list` 不为空时也加到该列表（网关记下最后一次准入的账号和列表）。托管任务轮询和资源下载不带模型，只计账号自身。
+- 被列表上限挡住和被账号上限挡住的效果一样（§18.1）：从候选中跳过，不改状态、不发事件；都不可用时返回 429 `rate_limited`。
+- Redis key：`rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}`（TTL 2 分钟），与账号自身的 `rl:account:{id}:rpm:{minute}` 并列。
+
+### 68.3 近 60 秒窗口（账号和 API Key 都适用）
+
+原来按固定分钟窗口判断：每到整分钟清零，表格里的 RPM 跟着跳回 0，分钟交界处最多能放过两倍的请求。现在仍按分钟存计数，但判断和展示都用"近 60 秒"的估算值：
+
+`用量 = 本分钟计数 + 上一分钟计数 × (60 秒 − 本分钟已过时间) / 60 秒`
+
+- 假设上一分钟的请求在这一分钟内均匀分布（Cloudflare 的滑动窗口估算）。不需要为每个请求单独记一条，Redis 开销和原来一样：每个窗口多读一个 key。
+- 准入条件是 `用量 < 上限`。被拒时，`retry`（API Key 的 `Retry-After`）按估算值回落到上限以下所需的时间计算，最少 1 秒。
+- `rate_usage` 的 `rpm` / `tpm` 是这个估算值四舍五入后的结果。
+
+### 68.4 用量 `rate_usage.models`
+
+`rate_usage` 新增 `models: [{models, in_use, rpm, tpm}]`，顺序和 `model_limits` 一致（没有列表时省略）。账号自身的并发仍是顶层的 `in_use`。`core.AccountLimiter.Usage` 的参数从 id 列表改为 `[]AccountRef`（要带上 `ModelLimits`）。
+
+### 68.5 插件设置这些字段
+
+- **运行时**：`before_create` / `before_update` 的 `AccountPatch` 新增 `optional int32 priority = 4`、`optional int32 weight = 5`、`optional int32 max_concurrency = 6`、`optional int32 rpm_limit = 7`、`optional int64 tpm_limit = 8`、`ModelLimitList model_limits = 9`（`items` 为空表示清空）。没给的字段不变；给了的按管理员输入的规则校验，不合法时整次保存失败（`plugin_unavailable`，details 带字段错误），和 `models` 补丁一致。改了哪些字段记在审计的 `plugin_changed` 里。运行时事实触发的 `before_update`（§59 `FactsObserved`）只采纳模型列表和映射，不改调度字段。
+- 插件看到的 `AccountProperties` 新增 `repeated ModelLimit model_limits = 13`。
+- **预设**：manifest `accountTypes[].defaultLimits`：`{priority, weight, maxConcurrency, rpmLimit, tpmLimit, modelLimits: [{models, maxConcurrency, rpmLimit, tpmLimit}]}`，字段都可选。和 `defaultModels` 一样只是建议：控制台新建账号时预填，`GET /account-types` 以 `default_limits`（字段名同账号）返回；核心不会自己套用到账号上。`sdk/manifest/check` 按账号字段的范围校验（`accountTypes[i].defaultLimits.<字段>`）。
+
+### 68.6 控制台
+
+- 账号列表：
+  - 优先级、权重分成两列，有编辑权限时显示为输入框，在表格里直接修改：回车或移出输入框时保存（`PATCH /accounts/:id` 只带这一个字段），Esc 恢复，超出范围不提交。
+  - "并发 / RPM / TPM"合成一列，三个数字依次排列。设了上限的显示 `已用/上限`，并按占用比例着色（80% 起警告，到达上限为红色）；没设上限的只显示用量，不再显示 `∞`。数字都是账号总量。
+  - 账号有模型列表时，后面标出"N 组模型"。悬停或键盘聚焦这一列，会弹出明细卡片，列出"全部模型"和每个列表的并发 / RPM / TPM。
+- 账号详情：用同一张明细表。
+- 编辑表单"调度与限流"一节：
+  - 新增"指定模型限速"，交互参照 new-api。每张卡片是一组上限，可以包含多个模型列表（"添加列表"）；同一列表的模型共用计数器。
+  - 保存时每个列表展开成一条 `model_limits`，读取时把相邻、上限相同的条目合回一张卡片。
+  - 同一模型出现在两个列表里时，不允许保存。
+  - 新建账号时，按账号类型的 `default_limits` 预填。
+- 批量编辑里 RPM 排到 TPM 前面。

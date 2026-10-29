@@ -3,7 +3,10 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"hash/fnv"
 	"net/http"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -154,6 +157,48 @@ type AccountRef struct {
 	// Rate limits; 0 = unlimited (CONTRACTS §18).
 	RPMLimit int
 	TPMLimit int64
+	// ModelLimits cap lists of (client) models on top of the account's own
+	// limits (CONTRACTS §68); a model is in at most one list.
+	ModelLimits []ModelLimit
+}
+
+// ModelLimit caps the requests of a list of models on one account. The
+// models of a list share one set of counters; 0 = unlimited.
+type ModelLimit struct {
+	Models         []string `json:"models"`
+	MaxConcurrency int      `json:"max_concurrency"`
+	RPMLimit       int      `json:"rpm_limit"`
+	TPMLimit       int64    `json:"tpm_limit"`
+}
+
+// Key identifies the counters of the list: a hash of its sorted models, so
+// changing the limits keeps the counts and changing the models starts anew.
+func (l *ModelLimit) Key() string {
+	models := slices.Clone(l.Models)
+	slices.Sort(models)
+	h := fnv.New64a()
+	for _, m := range models {
+		h.Write([]byte(m))
+		h.Write([]byte{0})
+	}
+	return strconv.FormatUint(h.Sum64(), 36)
+}
+
+// ModelLimitSlots is the Slots kind of the requests in flight of one model
+// list of an account (the id is the account's).
+func ModelLimitSlots(key string) string { return "account-model:" + key }
+
+// ModelLimitFor returns the list holding the (client) model, or nil.
+func (a *AccountRef) ModelLimitFor(model string) *ModelLimit {
+	if model == "" {
+		return nil
+	}
+	for i := range a.ModelLimits {
+		if slices.Contains(a.ModelLimits[i].Models, model) {
+			return &a.ModelLimits[i]
+		}
+	}
+	return nil
 }
 
 // ServesModel reports whether the account may serve the (client) model.
@@ -177,31 +222,53 @@ func (a *AccountRef) MapModel(model string) string {
 	return model
 }
 
-// Limited reports whether the account has any rate limit.
+// Limited reports whether the account has any rate limit, its own or one of
+// a model list.
 func (a *AccountRef) Limited() bool {
-	return a.RPMLimit > 0 || a.TPMLimit > 0
+	if a.RPMLimit > 0 || a.TPMLimit > 0 {
+		return true
+	}
+	for _, l := range a.ModelLimits {
+		if l.RPMLimit > 0 || l.TPMLimit > 0 {
+			return true
+		}
+	}
+	return false
 }
 
-// RateUsage is the current-window usage of an account's rate limits.
+// RateUsage is the usage of the last 60 seconds of a subject's rate limits.
+// Models (accounts only) holds the usage of each model list, in the order of
+// the account's model_limits.
 type RateUsage struct {
-	RPM int64 `json:"rpm"`
-	TPM int64 `json:"tpm"`
+	RPM    int64            `json:"rpm"`
+	TPM    int64            `json:"tpm"`
+	Models []ModelRateUsage `json:"models,omitempty"`
 }
 
-// AccountLimiter enforces per-account RPM and TPM in shared minute windows.
+// ModelRateUsage is the usage of one model list of an account.
+type ModelRateUsage struct {
+	Models []string `json:"models"`
+	InUse  int      `json:"in_use"`
+	RPM    int64    `json:"rpm"`
+	TPM    int64    `json:"tpm"`
+}
+
+// AccountLimiter enforces per-account RPM and TPM, and those of the model
+// list holding the request's (client) model, over the last 60 seconds
+// shared by every node. model "" checks the account's own limits only.
 type AccountLimiter interface {
-	// Exhausted returns the ids among refs whose current window reached a
-	// limit. Accounts without limits are never listed.
-	Exhausted(ctx context.Context, refs []AccountRef, session string) (map[int64]bool, error)
-	// TryHit atomically checks current limits and counts an admitted request.
-	// RPM admission is exact; tokens are counted after responses finish.
-	TryHit(ctx context.Context, ref AccountRef, session string) (bool, error)
-	// Hit counts one request of session on the account (once per upstream attempt).
-	Hit(ctx context.Context, id int64, session string)
-	// AddTokens adds tokens of a finished response to the minute window.
-	AddTokens(ctx context.Context, id int64, n int64)
-	// Usage returns the current-window counters of the accounts.
-	Usage(ctx context.Context, ids []int64) (map[int64]RateUsage, error)
+	// Exhausted returns the ids among refs that reached a limit for model.
+	// Accounts without limits are never listed.
+	Exhausted(ctx context.Context, refs []AccountRef, model string) (map[int64]bool, error)
+	// TryHit atomically checks the limits for model and counts an admitted
+	// request. RPM admission is exact; tokens are counted after responses
+	// finish.
+	TryHit(ctx context.Context, ref AccountRef, model string) (bool, error)
+	// AddTokens adds the tokens of a finished response to the account and,
+	// when list is not "", to the model list of that key (ModelLimit.Key).
+	AddTokens(ctx context.Context, id int64, list string, n int64)
+	// Usage returns the counters of the accounts and of their model lists.
+	Usage(ctx context.Context, refs []AccountRef) (map[int64]RateUsage, error)
 }
 
 // Account adds decrypted credentials and settings.
@@ -219,7 +286,20 @@ func (a *Account) PluginAccount(platform string) *pluginv1.Account {
 		Status: a.Status, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable,
 		Priority: int32(a.Priority), Weight: int32(a.Weight), MaxConcurrency: int32(a.MaxConcurrency),
 		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, ModelMapping: a.ModelMapping,
+		ModelLimits: PluginModelLimits(a.ModelLimits),
 	}}
+}
+
+// PluginModelLimits converts model limits for the plugin protocol.
+func PluginModelLimits(in []ModelLimit) []*pluginv1.ModelLimit {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*pluginv1.ModelLimit, len(in))
+	for i, l := range in {
+		out[i] = &pluginv1.ModelLimit{Models: l.Models, MaxConcurrency: int32(l.MaxConcurrency), RpmLimit: int32(l.RPMLimit), TpmLimit: l.TPMLimit}
+	}
+	return out
 }
 
 // AccountDirectory is the gateway's view of accounts. Candidates are served

@@ -34,6 +34,8 @@ import AccountEditorNav from './AccountEditorNav.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
+import ModelLimitsEditor from './ModelLimitsEditor.vue'
+import { toCards, type ModelLimitCard } from './modelLimits'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
 import { useContainerEnvironment } from './useContainerEnvironment'
@@ -72,6 +74,8 @@ const basic = reactive({
   rpm_limit: 0,
   tpm_limit: 0,
 })
+/** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
+const modelLimitCards = ref<ModelLimitCard[]>([])
 const credentials = ref<Record<string, unknown>>({})
 const schema = ref<Record<string, any> | null>(null)
 const uiSchema = ref<Record<string, any> | null>(null)
@@ -143,8 +147,10 @@ const editorModels = useModelEdit(
 )
 const {
   models, mapping, prefilled, defaultModels, modelsTextMode,
-  modelsError, mappingError, syncModelsText, clearPrefill
+  modelsError, mappingError, syncModelsText, clearPrefill, modelOptions
 } = editorModels
+/** Models a model list can hold: those the account serves, or every known model when it serves all. */
+const modelLimitOptions = computed(() => (models.value.length ? models.value : [...new Set([...defaultModels.value, ...modelOptions.value])]))
 function mergeModels(ids: string[]) {
   if (automaticModels.value) {
     toast(t('accounts.editorUi.autoModelsHint'), 'info')
@@ -172,7 +178,7 @@ const editorSections = computed(() => [
       ...(mappingCount.value ? [t('accounts.editorUi.mappingSummary', { n: mappingCount.value })] : [])
     ].join(' · ')
   },
-  { key: 'scheduling' as const, icon: 'bolt', label: t('accounts.editorUi.scheduling'), summary: t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }) },
+  { key: 'scheduling' as const, icon: 'bolt', label: t('accounts.editorUi.scheduling'), summary: [t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }), ...(modelLimitCards.value.length ? [t('accounts.modelLimits.summary', { n: modelLimitCards.value.length })] : [])].join(' · ') },
   ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
 const limitFields = computed(() => [
@@ -407,9 +413,21 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
   basic.rpm_limit = a?.rpm_limit ?? 0
   basic.tpm_limit = a?.tpm_limit ?? 0
+  modelLimitCards.value = toCards(a?.model_limits)
+  if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
   if (a) editorModels.setSaved(a.models, a.model_mapping)
   if (!a || (at?.plugin_key === 'ccgateway' ? autoModels.value : shouldPrefillOnEdit(a, at))) editorModels.applyDefaults(at)
+}
+
+/** A new account starts from the scheduling and limits its plugin suggests (CONTRACTS §68.5). */
+function applyDefaultLimits(at: AccountType | null) {
+  const d = at?.default_limits
+  if (!d) return
+  for (const field of ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit'] as const) {
+    if (d[field] !== undefined) basic[field] = d[field]!
+  }
+  if (d.model_limits) modelLimitCards.value = toCards(d.model_limits)
 }
 
 /** Switching the auth method of a new account: untouched defaults and common controls follow the type. */
@@ -488,6 +506,7 @@ const { save } = useAccountSave({
   accountType: computed(() => props.accountType),
   editing,
   basic,
+  modelLimits: modelLimitCards,
   errors,
   credErrors,
   saving,
@@ -684,6 +703,12 @@ const { save } = useAccountSave({
             <SSettingRow v-for="f in limitFields" :key="f.key" :label="f.label" :description="t('accounts.zeroUnlimited')" :error="errors[f.key]">
               <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" />
             </SSettingRow>
+          </SSettingsGroup>
+
+          <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">
+            <div class="p-4">
+              <ModelLimitsEditor v-model="modelLimitCards" :options="modelLimitOptions" :errors="errors" :disabled="saving" />
+            </div>
           </SSettingsGroup>
         </div>
       </div>

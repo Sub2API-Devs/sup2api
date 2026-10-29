@@ -8,6 +8,7 @@ import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
+import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import { SSwitch } from '@sub2api/ui'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }) }))
@@ -27,6 +28,7 @@ function render(account?: Account, realSelect = false, type: AccountType = accou
     AccountModelsCard: false,
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
     SSettingRow: { template: '<div><slot /></div>' },
+    SSettingsGroup: { template: '<div><slot /></div>' },
     SField: { props: ['error'], template: '<div><slot /><p v-if="error">{{ error }}</p><slot v-else name="hint" /></div>' },
     SHint: { template: '<p><slot /></p>' },
     SSegmented: false,
@@ -381,5 +383,45 @@ describe('automatic Claude Code models', () => {
     await flushPromises()
     expect(tags(w).props('modelValue')).toEqual(proModels)
     expect(tags(w).props('readonly')).toBe(true)
+  })
+})
+
+describe('account model limits', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    mocks.patch.mockResolvedValue(savedAccount())
+  })
+
+  it('edits the saved lists as cards and submits one entry per list', async () => {
+    const limits = [{ models: ['m-a'], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }, { models: ['m-b'], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }]
+    const w = render({ ...savedAccount(), model_limits: limits } as Account)
+    await flushPromises()
+    const editor = w.getComponent(ModelLimitsEditor)
+    expect(editor.props('modelValue')).toEqual([{ lists: [['m-a'], ['m-b']], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }])
+    editor.vm.$emit('update:modelValue', [{ lists: [['m-a', 'm-c'], []], max_concurrency: 0, rpm_limit: 9, tpm_limit: 0 }])
+    await flushPromises()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ model_limits: [{ models: ['m-a', 'm-c'], max_concurrency: 0, rpm_limit: 9, tpm_limit: 0 }] }))
+  })
+
+  it('refuses to save a model listed twice', async () => {
+    const w = render(savedAccount())
+    await flushPromises()
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], ['m-a']], max_concurrency: 0, rpm_limit: 1, tpm_limit: 0 }])
+    await flushPromises()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).not.toHaveBeenCalled()
+    expect(w.getComponent(ModelLimitsEditor).props('errors')).toEqual({ model_limits: 'm-a 已在另一个列表中' })
+  })
+
+  it('starts a new account from the limits its plugin suggests', async () => {
+    const type = { ...accountType, default_limits: { priority: 3, model_limits: [{ models: ['m-a'], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0 }] } } as AccountType
+    const w = render(undefined, false, type)
+    await flushPromises()
+    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0 }])
   })
 })

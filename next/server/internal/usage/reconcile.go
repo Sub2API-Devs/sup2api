@@ -451,7 +451,7 @@ func (s *Service) askPoll(ctx context.Context, e *settleEntry, row *reservedRowS
 	result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: call.entry, Account: call.acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
 		return s.fetchExecutionHTTP(ctx, in, call.proxyID, func(ctx context.Context) error {
 			if r.Limiter != nil {
-				ok, err := r.Limiter.TryHit(ctx, e.account, "poll:"+row.p.RequestID)
+				ok, err := r.Limiter.TryHit(ctx, e.account, "")
 				if err != nil || !ok {
 					deferred.Store(true)
 					return errTaskDeferred
@@ -478,7 +478,7 @@ func (s *Service) buildAndAsk(ctx context.Context, e *settleEntry, row *reserved
 		return nil, errors.New("BuildReconcileRequest returned nothing")
 	}
 	if e.task != nil && r.Limiter != nil {
-		ok, err := r.Limiter.TryHit(ctx, e.account, e.task.id)
+		ok, err := r.Limiter.TryHit(ctx, e.account, "")
 		if err != nil || !ok {
 			return nil, errTaskDeferred
 		}

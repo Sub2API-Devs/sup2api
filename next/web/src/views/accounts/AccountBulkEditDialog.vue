@@ -43,8 +43,8 @@ const numberFields = computed(() => [
   { key: 'priority' as const, label: t('accounts.priority'), hint: t('accounts.priorityHint') },
   { key: 'weight' as const, label: t('accounts.weight'), hint: t('accounts.bulk.weightHint') },
   { key: 'max_concurrency' as const, label: t('accounts.concurrency'), hint: t('accounts.bulk.zeroUnlimited') },
-  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
-  { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), hint: t('accounts.bulk.zeroUnlimited') }
+  { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
+  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), hint: t('accounts.bulk.zeroUnlimited') }
 ])
 const invalid = computed(() => numberFields.value.filter((f) => {
   if (!on[f.key]) return false

@@ -11,14 +11,16 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { errorMessage, notifyError } from '@/utils/errors'
-import { formatCompact, formatDateTime, formatRelative, formatTime } from '@/utils/format'
+import { formatDateTime, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
-import AccountSchedulingCell from './AccountSchedulingCell.vue'
+import AccountNumberCell from './AccountNumberCell.vue'
+import AccountLimitsCell from './AccountLimitsCell.vue'
+import AccountLimitsTable from './AccountLimitsTable.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
 import AccountBalanceCell from './AccountBalanceCell.vue'
@@ -88,10 +90,9 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status') },
-  { key: 'scheduling', label: t('accounts.listUi.priorityWeight') },
-  { key: 'concurrency', label: t('accounts.concurrency'), width: '90px' },
-  { key: 'tpm', label: 'TPM', width: '100px' },
-  { key: 'rpm', label: 'RPM', width: '90px' },
+  { key: 'priority', label: t('accounts.priority'), width: '84px' },
+  { key: 'weight', label: t('accounts.weight'), width: '84px' },
+  { key: 'limits', label: t('accounts.listUi.limitsColumn') },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
   // Only when a row of this page has balance (balance-enabled account types).
@@ -99,21 +100,6 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'last_test', label: t('accounts.lastTest.column') },
   { key: 'actions', label: t('common.actions'), align: 'right', width: '210px' }
 ])
-
-type LimitCell = { key: string; label: string; text: string; hit: boolean }
-/** Configured limits of an account with the current window usage (CONTRACTS §18.4). */
-function limitsOf(a: Account): LimitCell[] {
-  const out: LimitCell[] = []
-  const pairs = [
-    ['tpm', a.tpm_limit],
-    ['rpm', a.rpm_limit]
-  ] as const
-  for (const [key, limit] of pairs) {
-    const used = a.rate_usage?.[key] ?? 0
-    out.push({ key, label: key.toUpperCase(), text: `${formatCompact(used)}/${limit ? formatCompact(limit) : '∞'}`, hit: !!limit && used >= limit })
-  }
-  return out
-}
 
 function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
   return refs?.find((g) => g.id === id)?.name || groups.value.find((g) => g.id === id)?.name || `#${id}`
@@ -630,14 +616,11 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
           <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
         </SLink>
       </template>
-      <template #cell-scheduling="{ row }">
-        <AccountSchedulingCell :account="row" :editable="canUpdate(row) && !row.orphaned" @saved="Object.assign(row, $event)" />
+      <template v-for="field in (['priority', 'weight'] as const)" :key="field" #[`cell-${field}`]="{ row }">
+        <AccountNumberCell :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
       </template>
-      <template #cell-concurrency="{ row }">
-        <span class="whitespace-nowrap text-xs tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-warning-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span>
-      </template>
-      <template v-for="key in ['tpm', 'rpm']" :key="key" #[`cell-${key}`]="{ row }">
-        <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-warning-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
+      <template #cell-limits="{ row }">
+        <AccountLimitsCell :account="row" />
       </template>
       <template #cell-quota="{ row }">
         <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
@@ -730,15 +713,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
               <SDescItem :label="t('accounts.groups')">{{ groupNames(detail.group_ids, detail.groups) }}</SDescItem>
               <SDescItem :label="t('accounts.priority')">{{ detail.priority }}</SDescItem>
               <SDescItem :label="t('accounts.weight')">{{ detail.weight ?? 1 }}</SDescItem>
-              <SDescItem :label="t('accounts.concurrency')">{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</SDescItem>
-              <SDescItem :label="t('accounts.limits')">
-                <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-                  <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-warning-600' : ''">
-                    <SHint inline>{{ l.label }}</SHint> {{ l.text }}
-                  </span>
-                </span>
-                <SHint v-else inline>—</SHint>
-              </SDescItem>
+              <SDescItem :label="t('accounts.listUi.limitsColumn')"><AccountLimitsTable :account="detail" class="max-w-xl" /></SDescItem>
               <SDescItem v-if="detail.refresh" :label="t('accounts.credRefresh.label')" data-testid="account-cred-refresh">
                   <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
                   <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>

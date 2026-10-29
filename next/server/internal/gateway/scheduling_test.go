@@ -14,21 +14,22 @@ import (
 // fakeLimiter records hits and token counts and marks the given accounts as
 // exhausted.
 type fakeLimiter struct {
-	mu        sync.Mutex
-	exhausted map[int64]bool
-	hits      []string // "<id>:<session>"
-	tokens    map[int64]int64
-	sessions  []string
+	mu         sync.Mutex
+	exhausted  map[int64]bool
+	hits       []string // "<id>:<model>"
+	tokens     map[int64]int64
+	listTokens map[string]int64 // "<id>:<list key>"
+	models     []string         // model of each Exhausted call
 }
 
 func newFakeLimiter() *fakeLimiter {
-	return &fakeLimiter{exhausted: map[int64]bool{}, tokens: map[int64]int64{}}
+	return &fakeLimiter{exhausted: map[int64]bool{}, tokens: map[int64]int64{}, listTokens: map[string]int64{}}
 }
 
-func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, session string) (map[int64]bool, error) {
+func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, model string) (map[int64]bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.sessions = append(l.sessions, session)
+	l.models = append(l.models, model)
 	out := map[int64]bool{}
 	for _, r := range refs {
 		if l.exhausted[r.ID] {
@@ -38,24 +39,23 @@ func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, sessi
 	return out, nil
 }
 
-func (l *fakeLimiter) Hit(_ context.Context, id int64, session string) {
+func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.hits = append(l.hits, itoa(id)+":"+session)
-}
-
-func (l *fakeLimiter) TryHit(ctx context.Context, ref core.AccountRef, session string) (bool, error) {
-	l.Hit(ctx, ref.ID, session)
+	l.hits = append(l.hits, itoa(ref.ID)+":"+model)
 	return true, nil
 }
 
-func (l *fakeLimiter) AddTokens(_ context.Context, id int64, n int64) {
+func (l *fakeLimiter) AddTokens(_ context.Context, id int64, list string, n int64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.tokens[id] += n
+	if list != "" {
+		l.listTokens[itoa(id)+":"+list] += n
+	}
 }
 
-func (l *fakeLimiter) Usage(context.Context, []int64) (map[int64]core.RateUsage, error) {
+func (l *fakeLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.RateUsage, error) {
 	return map[int64]core.RateUsage{}, nil
 }
 
@@ -129,15 +129,15 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 		t.Fatalf("upstream order %v, want acc-2 (acc-1 exhausted)", k)
 	}
 	rec := e.record()
-	if len(lim.hits) != 1 || !strings.HasPrefix(lim.hits[0], "2:req:"+rec.RequestID) {
+	if len(lim.hits) != 1 || lim.hits[0] != "2:"+testModel {
 		t.Fatalf("hits %v", lim.hits)
 	}
 	if lim.tokens[2] != rec.Tokens.Total() || rec.Tokens.Total() == 0 {
 		t.Fatalf("tokens counted %d, record %d", lim.tokens[2], rec.Tokens.Total())
 	}
 	// Account 3 has no limits, so it was not asked about.
-	if len(lim.sessions) != 1 {
-		t.Fatalf("exhausted calls %v", lim.sessions)
+	if len(lim.models) != 1 || lim.models[0] != testModel {
+		t.Fatalf("exhausted calls %v", lim.models)
 	}
 
 	// Every candidate exhausted: 429 rate_limited.
@@ -152,18 +152,39 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	}
 }
 
-func TestStickySessionIdentityReachesLimiter(t *testing.T) {
+// A model list of an account (CONTRACTS §68) takes its own concurrency slot,
+// and the response's tokens are counted in the list as well as the account.
+func TestModelLimitsSlotsAndTokens(t *testing.T) {
 	lim := newFakeLimiter()
 	e := newEnv(t)
 	e.gw.d.Limiter = lim
-	e.enableSticky(onFailureFailover)
-	e.accounts.set(1, func(acc *core.Account) { acc.RPMLimit = 5 })
-	e.messages(withSession(body(testModel, false), "sess-A"))
+	list := core.ModelLimit{Models: []string{"other-model", testModel}, MaxConcurrency: 1}
+	e.accounts.set(1, func(acc *core.Account) { acc.ModelLimits = []core.ModelLimit{list} })
+	kind := core.ModelLimitSlots(list.Key())
+
+	// The list is full: account 1 is busy for this model, account 2 serves it.
+	e.slots.inUse[kind+":1"] = 1
+	r := e.messages(body(testModel, false))
+	if r.status != 200 || strings.Join(e.up.keys(), ",") != "acc-2" {
+		t.Fatalf("status %d upstream %v", r.status, e.up.keys())
+	}
 	e.record()
-	e.messages(withSession(body(testModel, false), "sess-A"))
-	e.record()
-	if len(lim.hits) != 2 || lim.hits[0] != lim.hits[1] || strings.HasPrefix(lim.hits[0], "1:req:") {
-		t.Fatalf("hits %v: the sticky key must identify the session", lim.hits)
+
+	// A free list slot: account 1 serves, both slots are released after.
+	e.slots.inUse[kind+":1"] = 0
+	r = e.messages(body(testModel, false))
+	if r.status != 200 {
+		t.Fatalf("status %d %s", r.status, r.body)
+	}
+	rec := e.record()
+	if n, _ := e.slots.InUse(context.Background(), kind, 1); n != 0 {
+		t.Fatal("model list slot not released", n)
+	}
+	if lim.listTokens["1:"+list.Key()] != rec.Tokens.Total() || lim.tokens[1] != rec.Tokens.Total() {
+		t.Fatalf("tokens account %d list %v, record %d", lim.tokens[1], lim.listTokens, rec.Tokens.Total())
+	}
+	if lim.hits[len(lim.hits)-1] != "1:"+testModel {
+		t.Fatalf("hits %v", lim.hits)
 	}
 }
 

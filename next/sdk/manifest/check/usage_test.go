@@ -429,3 +429,43 @@ func TestAccountTypeDefaultModelsBySubscription(t *testing.T) {
 		t.Fatalf("codes = %v", got)
 	}
 }
+
+func TestAccountTypeDefaultLimits(t *testing.T) {
+	m := minimal()
+	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}}
+	m.HostPermissions = []manifest.HostPermission{
+		{ID: "gateway.endpoint"}, {ID: "platform.register"},
+		{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
+	}
+	m.Platforms = []manifest.Platform{validPlatform()}
+	prio, weight, rpm := 5, 20, 60
+	m.AccountTypes = []manifest.AccountType{{
+		ID: "apikey", Label: manifest.LocalizedText{"en": "Key"},
+		Form:      manifest.Form{Mode: "schema", Schema: "forms/k.json"},
+		Platforms: []manifest.AccountPlatform{{Platform: "video"}},
+		DefaultLimits: &manifest.AccountDefaultLimits{Priority: &prio, Weight: &weight, RPMLimit: &rpm,
+			ModelLimits: []manifest.DefaultModelLimit{{Models: []string{"video-2", "video-3"}, MaxConcurrency: 2}}},
+	}}
+	files := map[string][]byte{"forms/k.json": []byte(`{}`)}
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("valid default limits rejected: %v", codes(err))
+	}
+	zero := 0
+	m.AccountTypes[0].DefaultLimits.Weight = &zero
+	m.AccountTypes[0].DefaultLimits.ModelLimits = append(m.AccountTypes[0].DefaultLimits.ModelLimits,
+		manifest.DefaultModelLimit{Models: []string{"video-*", "video-3"}, RPMLimit: -1}, manifest.DefaultModelLimit{})
+	got := codes(Validate(m, files, ValidateOptions{Tooling: true}))
+	f := "accountTypes[0].defaultLimits."
+	want := map[string]string{
+		f + "weight":                   "invalid",
+		f + "modelLimits[1].models[0]": "invalid",
+		f + "modelLimits[1].models[1]": "duplicate",
+		f + "modelLimits[1].rpmLimit":  "invalid",
+		f + "modelLimits[2].models":    "required",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q (all: %v)", k, got[k], v, got)
+		}
+	}
+}

@@ -10,7 +10,19 @@ export default {
     identity: 'Account / integration', filters: 'Account filters', search: 'Search account names', advanced: 'More filters', advancedApplied: 'Advanced filters are applied',
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
     loadFailed: 'Refresh failed; showing the previous results',
-    emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', priorityWeight: 'Priority / weight'
+    emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM',
+    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved'
+  },
+  limitsUi: {
+    title: 'Concurrency / RPM / TPM details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists',
+    windowHint: 'RPM and TPM are the usage of the last 60 seconds; tokens are counted when a response finishes. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
+  },
+  modelLimits: {
+    title: 'Model limits',
+    hint: 'Limit concurrency, RPM and TPM of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',
+    add: 'Add model limit', addList: 'Add list', removeList: 'Remove list', removeCard: 'Remove these limits',
+    empty: 'None: every model only counts against the account limits.', placeholder: 'Pick or type models, Enter to add',
+    duplicate: '{model} is already in another list', summary: '{n} model limits'
   },
   editorUi: {
     visualEdit: 'Visual', formatJson: 'Format', fillTemplate: 'Fill template', clickToCopy: 'Click to copy the model id', copiedModel: 'Copied {model}', removeModel: 'Remove {model}',
@@ -34,7 +46,7 @@ export default {
     autoModels: 'Configure models automatically', autoModelsHint: 'When on, the built-in model list is used and adjusted to the Max / Pro subscription, applied on save. Turn it off to edit the list by hand.',
     copyModels: 'Copy', copied: '{n} models copied', clearModels: 'Clear', unrestricted: 'Unrestricted: the account serves every request model', mappedTo: 'Mapped to {model}',
     mappingEmpty: 'No mapping: request models go upstream unchanged', mappingAdd: 'Add mapping', mappingRowNotInModels: 'Not in the model list: the account is never scheduled for this model', mappingNotInModels: '{n} request models are not in the model list, so the account is never scheduled for them: {models}', mappingAddToModels: 'Add to model list',
-    schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Scheduling policy → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'Once any limit is reached the account is skipped for the rest of the window; 0 means unlimited',
+    schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Scheduling policy → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'Counted over the last 60 seconds: once any limit is reached the account is skipped until its usage falls back; 0 means unlimited',
     commonControlFixed: 'The plugin makes this control read-only. Existing accounts keep their current setting.',
     autoDisableGlobalOff: 'Automatic disabling is globally off. This switch has no effect and cannot be changed; the account preference is preserved.', autoDisableUnavailable: 'Unable to load the global automatic disabling setting. This switch cannot be changed for now; the account preference is preserved.',
     unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
@@ -226,7 +238,6 @@ export default {
     /** Windows sorted as KNOWN_QUOTA_WINDOWS, unknown keys last (stable). */
     windows: { '5h': '5 hours', '7d': '7 days', '7d_sonnet': '7 days Sonnet', '7d_fable': '7 days Fable' },
     windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
-    rejected: 'Limited',
     rejectedHint: 'The upstream rejects requests in this window until it resets',
     warningHint: 'The upstream warns that this window is almost used up',
     resetsAt: 'resets {time}',

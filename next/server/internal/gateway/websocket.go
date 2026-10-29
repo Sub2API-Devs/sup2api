@@ -461,8 +461,8 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			break
 		}
 		pendingRelease = release
-		if lim := s.g.d.Limiter; lim != nil {
-			admitted, err := lim.TryHit(cl.slotCtx, *ref, cl.session)
+		if s.g.d.Limiter != nil {
+			admitted, err := cl.admitRate(ref)
 			if err != nil || !admitted {
 				release()
 				excluded[ref.ID] = true
@@ -679,8 +679,8 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 		release, ok := cl.acquireAccount(ctx, s.ref)
 		if ok {
 			pendingRelease = release
-			if lim := s.g.d.Limiter; lim != nil {
-				admitted, err := lim.TryHit(cl.slotCtx, *s.ref, cl.session)
+			if s.g.d.Limiter != nil {
+				admitted, err := cl.admitRate(s.ref)
 				if err != nil || !admitted {
 					release()
 					ok = false

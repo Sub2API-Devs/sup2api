@@ -300,12 +300,17 @@ type AccountType struct {
 	DefaultModels []string `json:"defaultModels,omitempty"`
 	// Optional UI presets by runtime-reported subscription type. Business
 	// enforcement still belongs to the plugin's account lifecycle hooks.
-	DefaultModelsBySubscription map[string][]string             `json:"defaultModelsBySubscription,omitempty"`
-	DefaultModelMapping         map[string]string               `json:"defaultModelMapping,omitempty"`
-	CommonControls              map[string]AccountCommonControl `json:"commonControls,omitempty"`
-	ExtensionsSchema            json.RawMessage                 `json:"extensionsSchema,omitempty"`
-	Lifecycle                   *AccountLifecycle               `json:"lifecycle,omitempty"`
-	ModelAvailability           bool                            `json:"modelAvailability,omitempty"`
+	DefaultModelsBySubscription map[string][]string `json:"defaultModelsBySubscription,omitempty"`
+	DefaultModelMapping         map[string]string   `json:"defaultModelMapping,omitempty"`
+	// DefaultLimits prefill the scheduling and limit fields of a new account
+	// of this type in the console (CONTRACTS §68.5), like DefaultModels:
+	// suggestions only. To set them on the account itself the plugin answers
+	// before_create / before_update with an account_patch.
+	DefaultLimits     *AccountDefaultLimits           `json:"defaultLimits,omitempty"`
+	CommonControls    map[string]AccountCommonControl `json:"commonControls,omitempty"`
+	ExtensionsSchema  json.RawMessage                 `json:"extensionsSchema,omitempty"`
+	Lifecycle         *AccountLifecycle               `json:"lifecycle,omitempty"`
+	ModelAvailability bool                            `json:"modelAvailability,omitempty"`
 	// Quota declares that accounts of this type have subscription quota
 	// windows (5-hour / weekly limits and the like) the host can track
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
@@ -445,6 +450,31 @@ const (
 func (q *AccountQuota) Supported() bool {
 	return q != nil && (len(q.Headers) > 0 || q.Query)
 }
+
+// AccountDefaultLimits are the suggested scheduling and limits of a new
+// account; an absent field keeps the console's own default. The ranges are
+// those of the account fields (CONTRACTS §18, §68).
+type AccountDefaultLimits struct {
+	Priority       *int                `json:"priority,omitempty"`
+	Weight         *int                `json:"weight,omitempty"`
+	MaxConcurrency *int                `json:"maxConcurrency,omitempty"`
+	RPMLimit       *int                `json:"rpmLimit,omitempty"`
+	TPMLimit       *int64              `json:"tpmLimit,omitempty"`
+	ModelLimits    []DefaultModelLimit `json:"modelLimits,omitempty"`
+}
+
+// DefaultModelLimit is a suggested limit of a list of models; the models of
+// a list share one set of counters. 0 = unlimited.
+type DefaultModelLimit struct {
+	Models         []string `json:"models"`
+	MaxConcurrency int      `json:"maxConcurrency,omitempty"`
+	RPMLimit       int      `json:"rpmLimit,omitempty"`
+	TPMLimit       int64    `json:"tpmLimit,omitempty"`
+}
+
+// MaxDefaultModelLimits bounds AccountDefaultLimits.ModelLimits; it equals
+// the per-account limit of model lists.
+const MaxDefaultModelLimits = 50
 
 // MaxDefaultModels bounds AccountType.DefaultModels and DefaultModelMapping;
 // it equals the per-account limit of models and model_mapping (CONTRACTS §18).

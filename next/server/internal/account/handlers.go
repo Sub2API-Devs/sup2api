@@ -46,6 +46,7 @@ type row struct {
 	ModelMapping      []byte
 	RPMLimit          int
 	TPMLimit          int64
+	ModelLimits       []byte
 	LastUsedAt        *time.Time
 	CreatedBy         *int64
 	CreatedByEmail    *string
@@ -69,7 +70,7 @@ type row struct {
 // statement built on it must qualify account columns with "a.".
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
-	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.last_used_at,
+	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.model_limits, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
 	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.auto_models
@@ -79,7 +80,7 @@ func scanRow(r pgx.Row) (*row, error) {
 	var a row
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
-		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.LastUsedAt,
+		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.ModelLimits, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
 		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.AutoModels)
@@ -121,6 +122,8 @@ func (a *row) mapping() map[string]string {
 	}
 	return m
 }
+
+func (a *row) modelLimits() []core.ModelLimit { return parseModelLimits(a.ModelLimits) }
 
 func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "account not found", "账号不存在"))
@@ -184,6 +187,7 @@ type View struct {
 	ModelMapping   map[string]string `json:"model_mapping"`
 	RPMLimit       int               `json:"rpm_limit"`
 	TPMLimit       int64             `json:"tpm_limit"`
+	ModelLimits    []core.ModelLimit `json:"model_limits"`
 	RateUsage      core.RateUsage    `json:"rate_usage"`
 	InUse          int               `json:"in_use"`
 	CooldownUntil  *time.Time        `json:"cooldown_until"`
@@ -243,7 +247,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
-			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit,
+			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, ModelLimits: a.modelLimits(),
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -306,7 +310,11 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	if s.d.Limiter != nil {
-		usage, err := s.d.Limiter.Usage(ctx, ids)
+		refs := make([]core.AccountRef, len(out))
+		for i, v := range out {
+			refs[i] = core.AccountRef{ID: v.ID, ModelLimits: v.ModelLimits}
+		}
+		usage, err := s.d.Limiter.Usage(ctx, refs)
 		if err != nil {
 			slog.WarnContext(ctx, "account: read rate usage", "err", err)
 		}
@@ -314,6 +322,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			v.RateUsage = usage[v.ID]
 		}
 	}
+	s.fillModelInUse(ctx, out)
 	s.fillQuota(ctx, rows, out)
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
@@ -528,6 +537,7 @@ type input struct {
 	ModelMapping   *map[string]string `json:"model_mapping"`
 	RPMLimit       *int               `json:"rpm_limit"`
 	TPMLimit       *int64             `json:"tpm_limit"`
+	ModelLimits    *[]core.ModelLimit `json:"model_limits"`
 	Credentials    json.RawMessage    `json:"credentials"`
 	Settings       json.RawMessage    `json:"settings"`
 	PreparationKey *string            `json:"preparation_key"`
@@ -567,6 +577,7 @@ func (in *input) changedFields() []string {
 	set("model_mapping", in.ModelMapping != nil)
 	set("rpm_limit", in.RPMLimit != nil)
 	set("tpm_limit", in.TPMLimit != nil)
+	set("model_limits", in.ModelLimits != nil)
 	set("credentials", in.hasCredentials())
 	set("settings", len(in.Settings) > 0)
 	set("cc_feature_policy", in.CCFeaturePolicy != nil)
@@ -627,21 +638,7 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	if create && (in.PluginKey == "" || in.Type == "") {
 		add("type", "required", "plugin_key and type are required", "账号类型（plugin_key 和 type）必填")
 	}
-	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > maxPriority) {
-		add("priority", "invalid", "priority must be 0-1000000", "优先级必须为 0-1000000")
-	}
-	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > maxWeight) {
-		add("weight", "invalid", "weight must be 1-1000", "权重必须为 1-1000")
-	}
-	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 0 || *in.MaxConcurrency > maxConcurrency) {
-		add("max_concurrency", "invalid", "max concurrency must be 0-100000 (0 = unlimited)", "最大并发必须为 0-100000（0 表示不限）")
-	}
-	if in.RPMLimit != nil && (*in.RPMLimit < 0 || *in.RPMLimit > maxRPMLimit) {
-		add("rpm_limit", "invalid", "rpm limit must be 0-10000000 (0 = unlimited)", "每分钟请求数上限必须为 0-10000000（0 表示不限）")
-	}
-	if in.TPMLimit != nil && (*in.TPMLimit < 0 || *in.TPMLimit > maxTokenLimit) {
-		add("tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
-	}
+	fe = append(fe, in.validateScheduling(ctx)...)
 	if in.Models != nil {
 		models, errs := normalizeModels(ctx, *in.Models)
 		fe = append(fe, errs...)
@@ -695,6 +692,36 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 		default:
 			in.CCGatewayRuntime = &k
 		}
+	}
+	return fe
+}
+
+// validateScheduling checks the scheduling and limit fields present in the
+// input, also those a plugin sets through account_patch (CONTRACTS §68).
+func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
+	var fe []core.FieldError
+	add := func(field, code, en, zh string) {
+		fe = append(fe, core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)})
+	}
+	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > maxPriority) {
+		add("priority", "invalid", "priority must be 0-1000000", "优先级必须为 0-1000000")
+	}
+	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > maxWeight) {
+		add("weight", "invalid", "weight must be 1-1000", "权重必须为 1-1000")
+	}
+	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 0 || *in.MaxConcurrency > maxConcurrency) {
+		add("max_concurrency", "invalid", "max concurrency must be 0-100000 (0 = unlimited)", "最大并发必须为 0-100000（0 表示不限）")
+	}
+	if in.RPMLimit != nil && (*in.RPMLimit < 0 || *in.RPMLimit > maxRPMLimit) {
+		add("rpm_limit", "invalid", "rpm limit must be 0-10000000 (0 = unlimited)", "每分钟请求数上限必须为 0-10000000（0 表示不限）")
+	}
+	if in.TPMLimit != nil && (*in.TPMLimit < 0 || *in.TPMLimit > maxTokenLimit) {
+		add("tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
+	}
+	if in.ModelLimits != nil {
+		limits, errs := normalizeModelLimits(ctx, *in.ModelLimits)
+		fe = append(fe, errs...)
+		in.ModelLimits = &limits
 	}
 	return fe
 }
@@ -966,11 +993,13 @@ func (s *Service) create(c *gin.Context) {
 	mapping := valueOr(in.ModelMapping, map[string]string{})
 	rpm := valueOr(in.RPMLimit, 0)
 	tpm := valueOr(in.TPMLimit, int64(0))
+	modelLimits := valueOr(in.ModelLimits, []core.ModelLimit{})
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
 			Status: status, Schedulable: sched, AutoDisable: autoDisable, Priority: int32(prio), Weight: int32(weight), MaxConcurrency: int32(maxc),
 			RpmLimit: int32(rpm), TpmLimit: tpm, ProxyId: proxyID, Models: models, AutoModels: in.AutoModels, ModelMapping: mapping,
+			ModelLimits: core.PluginModelLimits(modelLimits),
 		},
 	}})
 	if err != nil {
@@ -979,7 +1008,8 @@ func (s *Service) create(c *gin.Context) {
 	}
 	// The plugin may adjust the account before it is saved (CONTRACTS §59),
 	// and set its read-only extensions from the observed facts.
-	patched, err := applyAccountPatch(ctx, before, &models, &mapping)
+	patched, err := applyAccountPatch(ctx, before, patchTarget{Models: &models, Mapping: &mapping,
+		Priority: &prio, Weight: &weight, MaxConcurrency: &maxc, RPMLimit: &rpm, TPMLimit: &tpm, ModelLimits: &modelLimits})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1004,12 +1034,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits)).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1164,8 +1194,11 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	models, modelMapping := snapshot.GetProperties().GetModels(), snapshot.GetProperties().GetModelMapping()
-	patched, err := applyAccountPatch(ctx, before, &models, &modelMapping)
+	props := snapshot.GetProperties()
+	target := patchTarget{Models: new(props.GetModels()), Mapping: new(props.GetModelMapping()),
+		Priority: new(int(props.GetPriority())), Weight: new(int(props.GetWeight())), MaxConcurrency: new(int(props.GetMaxConcurrency())),
+		RPMLimit: new(int(props.GetRpmLimit())), TPMLimit: new(props.GetTpmLimit()), ModelLimits: new(valueOr(in.ModelLimits, cur.modelLimits()))}
+	patched, err := applyAccountPatch(ctx, before, target)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1173,9 +1206,21 @@ func (s *Service) update(c *gin.Context) {
 	for _, field := range patched {
 		switch field {
 		case "models":
-			in.Models = &models
+			in.Models = target.Models
 		case "model_mapping":
-			in.ModelMapping = &modelMapping
+			in.ModelMapping = target.Mapping
+		case "priority":
+			in.Priority = target.Priority
+		case "weight":
+			in.Weight = target.Weight
+		case "max_concurrency":
+			in.MaxConcurrency = target.MaxConcurrency
+		case "rpm_limit":
+			in.RPMLimit = target.RPMLimit
+		case "tpm_limit":
+			in.TPMLimit = target.TPMLimit
+		case "model_limits":
+			in.ModelLimits = target.ModelLimits
 		}
 	}
 	saving := cur.Settings
@@ -1231,10 +1276,14 @@ func (s *Service) update(c *gin.Context) {
 			}
 			reason = &r
 		}
-		var mapping *string
+		var mapping, limits *string
 		if in.ModelMapping != nil {
 			m := mappingJSON(*in.ModelMapping)
 			mapping = &m
+		}
+		if in.ModelLimits != nil {
+			l := modelLimitsJSON(*in.ModelLimits)
+			limits = &l
 		}
 		if _, err := tx.Exec(ctx, `UPDATE accounts a SET
 			name = COALESCE($2, name),
@@ -1254,10 +1303,11 @@ func (s *Service) update(c *gin.Context) {
 			tpm_limit = COALESCE($16, tpm_limit),
 			auto_disable = COALESCE($18, auto_disable),
 			auto_models = COALESCE($19, auto_models),
+			model_limits = COALESCE($20::jsonb, model_limits),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
-			in.AutoDisable, in.AutoModels); err != nil {
+			in.AutoDisable, in.AutoModels, limits); err != nil {
 			return err
 		}
 		if in.GroupIDs != nil {

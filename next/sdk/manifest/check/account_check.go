@@ -103,6 +103,7 @@ func (v *validator) accountTypes() {
 		v.guardedSettings(f, at)
 		v.accountLifecycle(f, at)
 		v.defaultModels(f, at)
+		v.defaultLimits(f+".defaultLimits", at.DefaultLimits)
 		for _, name := range sortedKeys(at.CommonControls) {
 			if name != "auto_disable" && name != "schedulable" {
 				v.add(f+".commonControls."+name, "unsupported", "unknown common account control %q", name)
@@ -209,6 +210,60 @@ func (v *validator) guardedSettings(f string, at manifest.AccountType) {
 				v.add(fmt.Sprintf("%s.allowed[%d]", gf, j), "invalid_url", "%q is not an absolute http(s) URL", raw)
 			}
 		}
+	}
+}
+
+// defaultLimits validates accountTypes[].defaultLimits (CONTRACTS §68.5)
+// with the ranges of the account fields they prefill.
+func (v *validator) defaultLimits(f string, d *manifest.AccountDefaultLimits) {
+	if d == nil {
+		return
+	}
+	bad := func(field string, value, lo, hi int64) {
+		if value < lo || value > hi {
+			v.add(f+"."+field, "invalid", "%s must be %d-%d", field, lo, hi)
+		}
+	}
+	if d.Priority != nil {
+		bad("priority", int64(*d.Priority), 0, 1_000_000)
+	}
+	if d.Weight != nil {
+		bad("weight", int64(*d.Weight), 1, 1000)
+	}
+	if d.MaxConcurrency != nil {
+		bad("maxConcurrency", int64(*d.MaxConcurrency), 0, 100_000)
+	}
+	if d.RPMLimit != nil {
+		bad("rpmLimit", int64(*d.RPMLimit), 0, 10_000_000)
+	}
+	if d.TPMLimit != nil {
+		bad("tpmLimit", *d.TPMLimit, 0, 1_000_000_000_000)
+	}
+	if len(d.ModelLimits) > manifest.MaxDefaultModelLimits {
+		v.add(f+".modelLimits", "too_many", "at most %d model lists", manifest.MaxDefaultModelLimits)
+	}
+	owner := map[string]bool{}
+	for i, l := range d.ModelLimits {
+		lf := fmt.Sprintf("%s.modelLimits[%d]", f, i)
+		if len(l.Models) == 0 {
+			v.add(lf+".models", "required", "a model list needs at least one model")
+		}
+		if len(l.Models) > manifest.MaxDefaultModels {
+			v.add(lf+".models", "too_many", "at most %d models per list", manifest.MaxDefaultModels)
+		}
+		for j, m := range l.Models {
+			mf := fmt.Sprintf("%s.models[%d]", lf, j)
+			switch {
+			case !manifest.ValidModelID(m):
+				v.add(mf, "invalid", "%q is not a complete model id", m)
+			case owner[m]:
+				v.add(mf, "duplicate", "model %q is in more than one list", m)
+			}
+			owner[m] = true
+		}
+		bad(fmt.Sprintf("modelLimits[%d].maxConcurrency", i), int64(l.MaxConcurrency), 0, 100_000)
+		bad(fmt.Sprintf("modelLimits[%d].rpmLimit", i), int64(l.RPMLimit), 0, 10_000_000)
+		bad(fmt.Sprintf("modelLimits[%d].tpmLimit", i), l.TPMLimit, 0, 1_000_000_000_000)
 	}
 }
 

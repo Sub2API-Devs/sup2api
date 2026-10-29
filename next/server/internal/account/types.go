@@ -35,16 +35,41 @@ type AccountTypeView struct {
 	GuardedSettings []manifest.GuardedSetting `json:"guarded_settings"`
 	// DefaultModels / DefaultModelMapping are the plugin's suggestions the
 	// console prefills into a new account (CONTRACTS §41); never null.
-	DefaultModels               []string                                 `json:"default_models"`
-	DefaultModelsBySubscription map[string][]string                      `json:"default_models_by_subscription,omitempty"`
-	DefaultModelMapping         map[string]string                        `json:"default_model_mapping"`
-	CommonControls              map[string]manifest.AccountCommonControl `json:"common_controls,omitempty"`
-	ExtensionsSchema            json.RawMessage                          `json:"extensions_schema,omitempty"`
-	Lifecycle                   *manifest.AccountLifecycle               `json:"lifecycle,omitempty"`
+	DefaultModels               []string            `json:"default_models"`
+	DefaultModelsBySubscription map[string][]string `json:"default_models_by_subscription,omitempty"`
+	DefaultModelMapping         map[string]string   `json:"default_model_mapping"`
+	// DefaultLimits are the plugin's suggested scheduling and limits of a new
+	// account (CONTRACTS §68.5); absent when the type declares none.
+	DefaultLimits    *DefaultLimitsView                       `json:"default_limits,omitempty"`
+	CommonControls   map[string]manifest.AccountCommonControl `json:"common_controls,omitempty"`
+	ExtensionsSchema json.RawMessage                          `json:"extensions_schema,omitempty"`
+	Lifecycle        *manifest.AccountLifecycle               `json:"lifecycle,omitempty"`
 	// Platforms the account type declares, in declaration order.
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
 	Endpoints []EndpointView `json:"endpoints"`
+}
+
+// DefaultLimitsView is manifest.AccountDefaultLimits with the names of the
+// account fields; absent fields keep the console's defaults.
+type DefaultLimitsView struct {
+	Priority       *int              `json:"priority,omitempty"`
+	Weight         *int              `json:"weight,omitempty"`
+	MaxConcurrency *int              `json:"max_concurrency,omitempty"`
+	RPMLimit       *int              `json:"rpm_limit,omitempty"`
+	TPMLimit       *int64            `json:"tpm_limit,omitempty"`
+	ModelLimits    []core.ModelLimit `json:"model_limits,omitempty"`
+}
+
+func defaultLimitsView(d *manifest.AccountDefaultLimits) *DefaultLimitsView {
+	if d == nil {
+		return nil
+	}
+	v := &DefaultLimitsView{Priority: d.Priority, Weight: d.Weight, MaxConcurrency: d.MaxConcurrency, RPMLimit: d.RPMLimit, TPMLimit: d.TPMLimit}
+	for _, l := range d.ModelLimits {
+		v.ModelLimits = append(v.ModelLimits, core.ModelLimit{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit})
+	}
+	return v
 }
 
 // TypePlatformView is a platform declared by an account type. Available is
@@ -93,6 +118,7 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		DefaultModels:               b.Type.DefaultModels,
 		DefaultModelsBySubscription: b.Type.DefaultModelsBySubscription,
 		DefaultModelMapping:         b.Type.DefaultModelMapping,
+		DefaultLimits:               defaultLimitsView(b.Type.DefaultLimits),
 		CommonControls:              b.Type.CommonControls,
 		ExtensionsSchema:            b.Type.ExtensionsSchema,
 		Lifecycle:                   b.Type.Lifecycle,

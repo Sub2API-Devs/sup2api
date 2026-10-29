@@ -31,12 +31,14 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if n, err := rdb.Get(ctx, "rl:account:7:rpm:"+strconv.FormatInt(stamp.Unix()/60, 10)).Int(); err != nil || n != 1 {
 		t.Fatal("RPM key used local time", n, err)
 	}
-	a.Hit(ctx, 8, "session")
-	a.AddTokens(ctx, 8, 17)
+	if ok, err := a.TryHit(ctx, core.AccountRef{ID: 8}, ""); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	a.AddTokens(ctx, 8, "", 17)
 	if n, err := rdb.Get(ctx, ratelimit.Key("account", 8, "tpm", stamp)).Int(); err != nil || n != 17 {
 		t.Fatal("TPM key used local time", n, err)
 	}
-	u, err := b.Usage(ctx, []int64{8})
+	u, err := b.Usage(ctx, []core.AccountRef{{ID: 8}})
 	if err != nil || u[8].RPM != 1 || u[8].TPM != 17 {
 		t.Fatal(u, err)
 	}
@@ -44,13 +46,13 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if err != nil || !ex[7] {
 		t.Fatal(ex, err)
 	}
-	mr.SetTime(stamp.Add(20 * time.Second))
-	u, err = b.Usage(ctx, []int64{8})
+	mr.SetTime(stamp.Add(70 * time.Second))
+	u, err = b.Usage(ctx, []core.AccountRef{{ID: 8}})
 	if err != nil || u[8].RPM != 0 || u[8].TPM != 0 {
 		t.Fatal("window rollover did not use shared time", u, err)
 	}
 	mr.SetError("ERR shared time unavailable")
-	if _, err = b.Usage(ctx, []int64{8}); err == nil {
+	if _, err = b.Usage(ctx, []core.AccountRef{{ID: 8}}); err == nil {
 		t.Fatal("usage fell back to local time")
 	}
 	if _, err = b.Exhausted(ctx, []core.AccountRef{ref}, "other"); err == nil {

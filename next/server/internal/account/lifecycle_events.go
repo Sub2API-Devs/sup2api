@@ -182,6 +182,9 @@ func (in *input) lifecycleSnapshot(current *row, settings *string) *pluginv1.Acc
 		properties.AutoModels = in.AutoModels
 	}
 	properties.ModelMapping = valueOr(in.ModelMapping, properties.ModelMapping)
+	if in.ModelLimits != nil {
+		properties.ModelLimits = core.PluginModelLimits(*in.ModelLimits)
+	}
 	if in.ProxyID.Set {
 		properties.ProxyId = nil
 		if in.ProxyID.Valid {
@@ -202,5 +205,6 @@ func (a *row) lifecycleSnapshot() *pluginv1.Account {
 	return &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type, SettingsJson: string(a.Settings), Properties: &pluginv1.AccountProperties{
 		Status: a.Status, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: int32(a.Priority), Weight: int32(a.Weight), MaxConcurrency: int32(a.MaxConcurrency),
 		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
+		ModelLimits: core.PluginModelLimits(a.modelLimits()),
 	}}
 }

@@ -23,34 +23,91 @@ func factsJSON(f core.AccountPreparationFacts) string {
 	return string(raw)
 }
 
+// patchTarget holds the account fields about to be saved that a plugin's
+// account_patch may change. A nil field is not offered to the plugin: its
+// change is ignored.
+type patchTarget struct {
+	Models         *[]string
+	Mapping        *map[string]string
+	Priority       *int
+	Weight         *int
+	MaxConcurrency *int
+	RPMLimit       *int
+	TPMLimit       *int64
+	ModelLimits    *[]core.ModelLimit
+}
+
 // applyAccountPatch applies the account_patch of a before_create/update answer to
-// the models and mapping about to be saved, validated like the caller's own
-// input. It returns the names of the fields the plugin changed.
-func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleResponse, models *[]string, mapping *map[string]string) ([]string, error) {
+// the fields about to be saved, validated like the caller's own input
+// (CONTRACTS §59, §68). It returns the names of the fields the plugin changed.
+func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleResponse, to patchTarget) ([]string, error) {
 	patch := out.GetAccountPatch()
 	if patch == nil {
 		return nil, nil
 	}
 	var changed []string
-	if list := patch.GetModels(); list != nil {
+	if list := patch.GetModels(); list != nil && to.Models != nil {
 		next, fe := normalizeModels(ctx, list.GetIds())
 		if len(fe) > 0 {
 			return nil, invalidPatch(fe)
 		}
-		if !slices.Equal(next, *models) {
-			*models = next
+		if !slices.Equal(next, *to.Models) {
+			*to.Models = next
 			changed = append(changed, "models")
 		}
 	}
-	if m := patch.GetModelMapping(); m != nil {
+	if m := patch.GetModelMapping(); m != nil && to.Mapping != nil {
 		next, fe := normalizeMapping(ctx, m.GetEntries())
 		if len(fe) > 0 {
 			return nil, invalidPatch(fe)
 		}
-		if !maps.Equal(next, *mapping) {
-			*mapping = next
+		if !maps.Equal(next, *to.Mapping) {
+			*to.Mapping = next
 			changed = append(changed, "model_mapping")
 		}
+	}
+	// Scheduling and limits are checked with the caller's own rules.
+	var probe input
+	if patch.Priority != nil && to.Priority != nil {
+		probe.Priority = new(int(patch.GetPriority()))
+	}
+	if patch.Weight != nil && to.Weight != nil {
+		probe.Weight = new(int(patch.GetWeight()))
+	}
+	if patch.MaxConcurrency != nil && to.MaxConcurrency != nil {
+		probe.MaxConcurrency = new(int(patch.GetMaxConcurrency()))
+	}
+	if patch.RpmLimit != nil && to.RPMLimit != nil {
+		probe.RPMLimit = new(int(patch.GetRpmLimit()))
+	}
+	if patch.TpmLimit != nil && to.TPMLimit != nil {
+		probe.TPMLimit = new(patch.GetTpmLimit())
+	}
+	if list := patch.GetModelLimits(); list != nil && to.ModelLimits != nil {
+		probe.ModelLimits = new(coreModelLimits(list.GetItems()))
+	}
+	if fe := probe.validateScheduling(ctx); len(fe) > 0 {
+		return nil, invalidPatch(fe)
+	}
+	for _, f := range []struct {
+		name     string
+		from, to *int
+	}{
+		{"priority", probe.Priority, to.Priority}, {"weight", probe.Weight, to.Weight},
+		{"max_concurrency", probe.MaxConcurrency, to.MaxConcurrency}, {"rpm_limit", probe.RPMLimit, to.RPMLimit},
+	} {
+		if f.from != nil && *f.from != *f.to {
+			*f.to = *f.from
+			changed = append(changed, f.name)
+		}
+	}
+	if probe.TPMLimit != nil && *probe.TPMLimit != *to.TPMLimit {
+		*to.TPMLimit = *probe.TPMLimit
+		changed = append(changed, "tpm_limit")
+	}
+	if probe.ModelLimits != nil && !slices.EqualFunc(*probe.ModelLimits, *to.ModelLimits, sameModelLimit) {
+		*to.ModelLimits = *probe.ModelLimits
+		changed = append(changed, "model_limits")
 	}
 	return changed, nil
 }
@@ -105,7 +162,9 @@ func (s *Service) refreshFromFacts(ctx context.Context, id int64, observed core.
 	models, modelMapping := snapshot.GetProperties().GetModels(), snapshot.GetProperties().GetModelMapping()
 	var patched []string
 	if automatic {
-		if patched, err = applyAccountPatch(ctx, before, &models, &modelMapping); err != nil {
+		// Only the models follow the observed facts here; scheduling stays
+		// what the account was saved with.
+		if patched, err = applyAccountPatch(ctx, before, patchTarget{Models: &models, Mapping: &modelMapping}); err != nil {
 			return err
 		}
 	}

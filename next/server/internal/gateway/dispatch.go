@@ -107,8 +107,8 @@ func (c *call) dispatch(ctx context.Context) {
 			break
 		}
 		defer release()
-		if lim := c.g.d.Limiter; lim != nil {
-			admitted, err := lim.TryHit(c.slotCtx, *ref, c.session)
+		if c.g.d.Limiter != nil {
+			admitted, err := c.admitRate(ref)
 			if err != nil {
 				release()
 				c.fail(fromCore(core.ErrUnavailable.WithMessage("account limits unavailable").WithCause(err), errTypeInternal))
@@ -307,7 +307,7 @@ func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded 
 	if len(limited) == 0 {
 		return nil
 	}
-	out, err := lim.Exhausted(ctx, limited, c.session)
+	out, err := lim.Exhausted(ctx, limited, c.model)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: read rate limits", "err", err)
 		return nil
@@ -341,6 +341,9 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 	}
 }
 
+// acquireAccount takes a concurrency slot of the account and, when the
+// request's model is in one of the account's model lists, one of that list
+// (CONTRACTS §68); either being full makes the account busy.
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
 	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
 	if err != nil {
@@ -350,8 +353,33 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 	if !ok {
 		return nil, false
 	}
+	if l := ref.ModelLimitFor(c.model); l != nil {
+		listCtx, releaseList, ok, err := core.AcquireSlot(leaseCtx, c.g.d.Slots, core.ModelLimitSlots(l.Key()), ref.ID, l.MaxConcurrency, c.rid)
+		if err != nil {
+			slog.WarnContext(ctx, "gateway: acquire model list slot", "account", ref.ID, "err", err)
+		}
+		if err != nil || !ok {
+			release()
+			return nil, false
+		}
+		releaseAccount := release
+		leaseCtx, release = listCtx, func() { releaseList(); releaseAccount() }
+	}
 	c.slotCtx = leaseCtx
 	return release, true
+}
+
+// admitRate asks the limiter to admit one request of the call's model on ref
+// and remembers the model list its tokens are counted in.
+func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
+	ok, err := c.g.d.Limiter.TryHit(c.slotCtx, *ref, c.model)
+	if ok && err == nil {
+		c.rateList.id, c.rateList.key = ref.ID, ""
+		if l := ref.ModelLimitFor(c.model); l != nil {
+			c.rateList.key = l.Key()
+		}
+	}
+	return ok, err
 }
 
 // attempt runs one upstream attempt on account ref.

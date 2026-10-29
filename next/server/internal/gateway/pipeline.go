@@ -122,7 +122,14 @@ type call struct {
 	// after the handler returned.
 	usage *pendingExtract
 	// Context of the currently selected account's concurrency lease.
-	slotCtx                  context.Context
+	slotCtx context.Context
+	// rateList is the account last admitted by the limiter and the key of
+	// its model list holding the request's model ("" = none): its tokens are
+	// counted there too (CONTRACTS §68).
+	rateList struct {
+		id  int64
+		key string
+	}
 	task                     *core.TaskSnapshot
 	taskPublicID             string
 	taskPersisted            bool
@@ -843,7 +850,11 @@ func (c *call) countTokens(ctx context.Context, accountID int64) {
 	}
 	ctx = context.WithoutCancel(ctx)
 	if lim := c.g.d.Limiter; lim != nil && accountID != 0 {
-		lim.AddTokens(ctx, accountID, n)
+		list := ""
+		if c.rateList.id == accountID {
+			list = c.rateList.key
+		}
+		lim.AddTokens(ctx, accountID, list, n)
 	}
 	if w := c.g.d.KeyWindows; w != nil && c.principal != nil {
 		w.AddTokens(ctx, c.principal.KeyID, n)

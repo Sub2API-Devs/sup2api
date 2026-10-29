@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -362,5 +363,47 @@ func TestBeforeCreateFactsAndAccountPatch(t *testing.T) {
 	}
 	if after := e.exec1(`SELECT count(*) FROM accounts`); after != before {
 		t.Fatalf("account saved after an invalid patch: %d -> %d", before, after)
+	}
+}
+
+// A plugin may set the scheduling and limits of an account it creates or
+// updates (CONTRACTS §68.5); they are validated like the caller's input.
+func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
+	e, resource, proxy, plugin := preparationPluginFixture(t)
+	resource.ready = true
+	plugin.patch = func(in *pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch {
+		if in.GetPhase() == "before_update" {
+			if got := in.GetAccount().GetProperties().GetModelLimits(); len(got) != 1 || got[0].GetRpmLimit() != 3 {
+				t.Errorf("before_update model limits %v", got)
+			}
+			return &pluginv1.AccountPatch{RpmLimit: new(int32(9))}
+		}
+		return &pluginv1.AccountPatch{Priority: new(int32(3)), Weight: new(int32(7)), MaxConcurrency: new(int32(2)), TpmLimit: new(int64(5000)),
+			ModelLimits: &pluginv1.ModelLimitList{Items: []*pluginv1.ModelLimit{{Models: []string{"claude-opus-5"}, RpmLimit: 3, MaxConcurrency: 1}}}}
+	}
+	code, out := e.do("POST", "/account-types/fixture/managed/preparations", map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}})
+	if code != 201 {
+		t.Fatalf("prepare: %d %v", code, out)
+	}
+	code, out = e.do("POST", "/accounts", map[string]any{"name": "limited", "plugin_key": "fixture", "type": "managed", "proxy_id": proxy,
+		"credentials": map[string]any{}, "settings": map[string]string{"region": "jp"}, "preparation_key": data(out)["key"]})
+	if code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	acc := data(out)
+	limits, _ := acc["model_limits"].([]any)
+	if acc["priority"] != 3.0 || acc["weight"] != 7.0 || acc["max_concurrency"] != 2.0 || acc["tpm_limit"] != 5000.0 || len(limits) != 1 {
+		t.Fatalf("patched account %v", acc)
+	}
+	id := int64(acc["id"].(float64))
+	if code, out = e.do("PATCH", "/accounts/"+strconv.FormatInt(id, 10), map[string]any{"name": "limited-2"}); code != 200 || data(out)["rpm_limit"] != 9.0 {
+		t.Fatalf("update: %d %v", code, out)
+	}
+	// An out-of-range value is refused; nothing changes.
+	plugin.patch = func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch {
+		return &pluginv1.AccountPatch{Weight: new(int32(0))}
+	}
+	if code, out = e.do("PATCH", "/accounts/"+strconv.FormatInt(id, 10), map[string]any{"name": "limited-3"}); code < 400 {
+		t.Fatalf("invalid patch accepted: %d %v", code, out)
 	}
 }

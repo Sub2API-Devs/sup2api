@@ -290,6 +290,7 @@ export interface AccountType {
   default_models?: string[]
   default_models_by_subscription?: Record<string, string[]>
   default_model_mapping?: Record<string, string>
+  default_limits?: AccountDefaultLimits
   common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
   lifecycle?: AccountLifecycle
@@ -317,6 +318,32 @@ export interface AccountLifecycleAction {
 /** manifest.AccountDeletion: runtime resources may be kept 1..30 days after the account is deleted. */
 export interface AccountDeletion {
   retentionDays: number
+}
+
+/** Caps of a list of client models on one account; its models share one set of counters, 0 = unlimited (CONTRACTS §68). */
+export interface ModelLimit {
+  models: string[]
+  max_concurrency: number
+  rpm_limit: number
+  tpm_limit: number
+}
+
+/** Usage of one model list, in the order of the account's model_limits. */
+export interface ModelRateUsage {
+  models: string[]
+  in_use: number
+  rpm: number
+  tpm: number
+}
+
+/** Scheduling and limits a plugin suggests for a new account (CONTRACTS §68.5); absent fields keep the console defaults. */
+export interface AccountDefaultLimits {
+  priority?: number
+  weight?: number
+  max_concurrency?: number
+  rpm_limit?: number
+  tpm_limit?: number
+  model_limits?: ModelLimit[]
 }
 
 export interface Account {
@@ -347,10 +374,10 @@ export interface Account {
   /** 0 = unlimited. */
   rpm_limit: number
   tpm_limit: number
-  /** Tokens per UTC day. */
-  /** Sessions per minute (rolling 60s window). */
-  /** Read-only counters of the current windows (0 when Redis is unavailable). */
-  rate_usage?: { rpm: number; tpm: number }
+  /** Limits of lists of client models on top of the account's own (CONTRACTS §68). */
+  model_limits?: ModelLimit[]
+  /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
+  rate_usage?: { rpm: number; tpm: number; models?: ModelRateUsage[] }
   status: string
   status_reason?: string
   auto_disabled_until?: string | null

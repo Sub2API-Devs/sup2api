@@ -16,6 +16,7 @@ import { accountControl } from './accountTypeChoices'
 import { sectionOfErrors, splitFieldErrors, type EditorSection } from './editorErrors'
 import { subscriptionLabel } from './subscription'
 import type { useModelEdit } from './useModelEdit'
+import { fromCards, repeatedModel, type ModelLimitCard } from './modelLimits'
 
 /** Editable basics of an account (AccountEditor's `basic`). */
 export interface AccountBasics {
@@ -62,6 +63,8 @@ export interface AccountSaveDeps {
   accountType: ComputedRef<AccountType | null>
   editing: ComputedRef<boolean>
   basic: AccountBasics
+  /** 指定模型限速 cards (CONTRACTS §68). */
+  modelLimits: Ref<ModelLimitCard[]>
   errors: Ref<Record<string, string>>
   credErrors: Ref<Record<string, string>>
   saving: Ref<boolean>
@@ -107,6 +110,11 @@ export function useAccountSave(deps: AccountSaveDeps) {
       return 'connection'
     }
     if (ccg.saveBlocked.value) return 'ccg'
+    const repeated = repeatedModel(deps.modelLimits.value)
+    if (repeated) {
+      errors.value = { model_limits: t('accounts.modelLimits.duplicate', { model: repeated }) }
+      return 'scheduling'
+    }
     // Pending text-mode / draft edits are committed (and validated) before saving.
     return models.commitPending() ? null : 'models'
   }
@@ -121,7 +129,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       max_concurrency: Number(basic.max_concurrency),
       ...models.payload(),
       rpm_limit: Number(basic.rpm_limit) || 0,
-      tpm_limit: Number(basic.tpm_limit) || 0
+      tpm_limit: Number(basic.tpm_limit) || 0,
+      model_limits: fromCards(deps.modelLimits.value)
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable
     if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable

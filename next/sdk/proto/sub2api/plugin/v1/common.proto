@@ -53,6 +53,23 @@ message AccountProperties {
   map<string, string> model_mapping = 11;
   // Explicit automatic/manual model configuration; absent uses the plugin default.
   optional bool auto_models = 12;
+  // Limits of lists of client models on top of the account's own
+  // (CONTRACTS §68); a model is in at most one list.
+  repeated ModelLimit model_limits = 13;
+}
+
+// ModelLimit caps the requests of a list of models on one account; the models
+// of the list share one set of counters. 0 = unlimited.
+message ModelLimit {
+  repeated string models = 1;
+  int32 max_concurrency = 2;
+  int32 rpm_limit = 3;
+  int64 tpm_limit = 4;
+}
+
+// ModelLimitList is the whole model_limits of an account; empty removes them.
+message ModelLimitList {
+  repeated ModelLimit items = 1;
 }
 
 message AccountLifecycleRequest {
@@ -88,6 +105,14 @@ message AccountPatch {
   // facts about the account, which the admin cannot edit. Only the keys given
   // change; a null value removes one. "" leaves them unchanged.
   string extensions_json = 3;
+  // Scheduling and limits of the account (CONTRACTS §18, §68), validated
+  // like the caller's own input; absent fields are left unchanged.
+  optional int32 priority = 4;
+  optional int32 weight = 5;
+  optional int32 max_concurrency = 6;
+  optional int32 rpm_limit = 7;
+  optional int64 tpm_limit = 8;
+  ModelLimitList model_limits = 9;
 }
 
 // ModelList is a model id list; empty means every model.

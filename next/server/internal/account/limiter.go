@@ -10,8 +10,9 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 )
 
-// Limiter enforces the accounts' RPM and TPM in the shared minute windows of
-// scope "account". With no Redis client, limiting is disabled.
+// Limiter enforces the accounts' RPM and TPM, and those of their model lists
+// (CONTRACTS §68), in the shared windows of scope "account". With no Redis
+// client, limiting is disabled.
 type Limiter struct{ w *ratelimit.Minute }
 
 var _ core.AccountLimiter = (*Limiter)(nil)
@@ -20,29 +21,63 @@ func NewLimiter(rdb redis.UniversalClient) *Limiter {
 	return &Limiter{w: ratelimit.NewMinute(rdb, "account")}
 }
 
-func limitsOf(ref core.AccountRef) ratelimit.Limits {
-	return ratelimit.Limits{ID: ref.ID, RPM: ref.RPMLimit, TPM: ref.TPMLimit}
+// listSub names the counters of a model list within the account's.
+func listSub(key string) string { return "m:" + key }
+
+// limitsOf returns the sets of caps a request for model is checked against:
+// the account's own, then the model list holding model.
+func limitsOf(ref core.AccountRef, model string) []ratelimit.Limits {
+	out := []ratelimit.Limits{{ID: ref.ID, RPM: ref.RPMLimit, TPM: ref.TPMLimit}}
+	if l := ref.ModelLimitFor(model); l != nil {
+		out = append(out, ratelimit.Limits{ID: ref.ID, Sub: listSub(l.Key()), RPM: l.RPMLimit, TPM: l.TPMLimit})
+	}
+	return out
 }
 
-func (l *Limiter) Exhausted(ctx context.Context, refs []core.AccountRef, _ string) (map[int64]bool, error) {
-	limits := make([]ratelimit.Limits, len(refs))
-	for i, r := range refs {
-		limits[i] = limitsOf(r)
+func (l *Limiter) Exhausted(ctx context.Context, refs []core.AccountRef, model string) (map[int64]bool, error) {
+	limits := make([]ratelimit.Limits, 0, len(refs))
+	for _, r := range refs {
+		limits = append(limits, limitsOf(r, model)...)
 	}
 	return l.w.Reached(ctx, limits)
 }
 
-func (l *Limiter) Hit(ctx context.Context, id int64, _ string) { l.w.Count(ctx, id) }
-
-func (l *Limiter) TryHit(ctx context.Context, ref core.AccountRef, _ string) (bool, error) {
-	ok, _, err := l.w.Admit(ctx, ref.ID, ref.RPMLimit, ref.TPMLimit)
+func (l *Limiter) TryHit(ctx context.Context, ref core.AccountRef, model string) (bool, error) {
+	ok, _, err := l.w.AdmitAll(ctx, limitsOf(ref, model))
 	return ok, err
 }
 
-func (l *Limiter) AddTokens(ctx context.Context, id, n int64) { l.w.AddTokens(ctx, id, n) }
+func (l *Limiter) AddTokens(ctx context.Context, id int64, list string, n int64) {
+	l.w.AddTokens(ctx, id, n)
+	if list != "" {
+		l.w.AddSubTokens(ctx, id, listSub(list), n)
+	}
+}
 
-func (l *Limiter) Usage(ctx context.Context, ids []int64) (map[int64]core.RateUsage, error) {
-	return l.w.Usage(ctx, ids)
+func (l *Limiter) Usage(ctx context.Context, refs []core.AccountRef) (map[int64]core.RateUsage, error) {
+	var sets []ratelimit.Limits
+	for _, r := range refs {
+		sets = append(sets, ratelimit.Limits{ID: r.ID})
+		for i := range r.ModelLimits {
+			sets = append(sets, ratelimit.Limits{ID: r.ID, Sub: listSub(r.ModelLimits[i].Key())})
+		}
+	}
+	used, err := l.w.UsageOf(ctx, sets)
+	out := make(map[int64]core.RateUsage, len(refs))
+	if used == nil {
+		return out, err
+	}
+	i := 0
+	for _, r := range refs {
+		u := used[i]
+		i++
+		for _, ml := range r.ModelLimits {
+			u.Models = append(u.Models, core.ModelRateUsage{Models: ml.Models, RPM: used[i].RPM, TPM: used[i].TPM})
+			i++
+		}
+		out[r.ID] = u
+	}
+	return out, err
 }
 
 func mappingJSON(m map[string]string) string {

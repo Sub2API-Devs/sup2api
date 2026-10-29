@@ -80,7 +80,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.Acco
 	}
 	v, err, _ := s.sf.Do("g:"+itoa(groupID), func() (any, error) {
 		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.priority, a.weight,
-				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit
+				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.model_limits
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
 			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.status = 'active' AND a.schedulable
 			ORDER BY a.priority, a.id`, groupID)
@@ -89,12 +89,13 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.Acco
 		}
 		refs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (core.AccountRef, error) {
 			var a core.AccountRef
-			var mapping []byte
+			var mapping, limits []byte
 			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.Priority, &a.Weight, &a.MaxConcurrency, &a.ProxyID,
-				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit)
+				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &limits)
 			if err == nil && len(mapping) > 0 {
 				_ = json.Unmarshal(mapping, &a.ModelMapping)
 			}
+			a.ModelLimits = parseModelLimits(limits)
 			return a, err
 		})
 		if err != nil {
@@ -139,7 +140,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 	acc := core.Account{
 		AccountRef: core.AccountRef{ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type,
 			Priority: a.Priority, Weight: a.Weight, MaxConcurrency: a.MaxConcurrency, ProxyID: a.ProxyID,
-			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit},
+			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, ModelLimits: a.modelLimits()},
 		Status:      a.Status,
 		Schedulable: a.Schedulable,
 		AutoDisable: a.AutoDisable,

@@ -4,13 +4,15 @@
 // placed `placement` (top) and flipped when there is no room; shown after
 // `delay` ms (300); Escape hides it. The trigger gets aria-describedby
 // pointing at the tooltip while it is shown. `disabled` (or no content)
-// renders only the slot.
+// renders only the slot. `variant="card"` draws it as a light card, for
+// richer #content (a small table of figures).
 import { nextTick, onBeforeUnmount, ref, useId, useSlots, computed } from 'vue'
 import { useFloating, type Placement } from './floating'
 
-const props = withDefaults(defineProps<{ content?: string; placement?: Placement; delay?: number; disabled?: boolean; maxWidth?: string }>(), {
+const props = withDefaults(defineProps<{ content?: string; placement?: Placement; delay?: number; disabled?: boolean; maxWidth?: string; variant?: 'dark' | 'card' }>(), {
   placement: 'top',
   delay: 300,
+  variant: 'dark',
   maxWidth: '20rem'
 })
 const slots = useSlots()
@@ -65,7 +67,8 @@ onBeforeUnmount(hide)
         :id="id"
         ref="tip"
         role="tooltip"
-        class="pointer-events-none fixed z-popover whitespace-pre-line break-words rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-popover dark:bg-dark-600"
+        class="pointer-events-none fixed z-popover whitespace-pre-line break-words rounded-lg text-xs leading-5 shadow-popover"
+        :class="variant === 'card' ? 'border border-line bg-surface p-3 text-fg' : 'bg-gray-900 px-2.5 py-1.5 text-white dark:bg-dark-600'"
         :style="{ ...floating.style.value, maxWidth }"
       >
         <slot name="content">{{ content }}</slot>
