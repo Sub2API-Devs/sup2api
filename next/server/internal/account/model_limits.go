@@ -35,13 +35,13 @@ func modelLimitsJSON(in []core.ModelLimit) string {
 func coreModelLimits(in []*pluginv1.ModelLimit) []core.ModelLimit {
 	out := make([]core.ModelLimit, 0, len(in))
 	for _, l := range in {
-		out = append(out, core.ModelLimit{Models: l.GetModels(), MaxConcurrency: int(l.GetMaxConcurrency()), RPMLimit: int(l.GetRpmLimit()), TPMLimit: l.GetTpmLimit()})
+		out = append(out, core.ModelLimit{Models: l.GetModels(), MaxConcurrency: int(l.GetMaxConcurrency()), RPMLimit: int(l.GetRpmLimit()), TPMLimit: l.GetTpmLimit(), SPMLimit: int(l.GetSpmLimit())})
 	}
 	return out
 }
 
 func sameModelLimit(a, b core.ModelLimit) bool {
-	return slices.Equal(a.Models, b.Models) && a.MaxConcurrency == b.MaxConcurrency && a.RPMLimit == b.RPMLimit && a.TPMLimit == b.TPMLimit
+	return slices.Equal(a.Models, b.Models) && a.MaxConcurrency == b.MaxConcurrency && a.RPMLimit == b.RPMLimit && a.TPMLimit == b.TPMLimit && a.SPMLimit == b.SPMLimit
 }
 
 // normalizeModelLimits trims the model lists, drops repeated models within a
@@ -85,6 +85,9 @@ func normalizeModelLimits(ctx context.Context, in []core.ModelLimit) ([]core.Mod
 		}
 		if l.TPMLimit < 0 || l.TPMLimit > maxTokenLimit {
 			add(field+".tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
+		}
+		if l.SPMLimit < 0 || l.SPMLimit > maxRPMLimit {
+			add(field+".spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
 		}
 		if len(models) == 0 {
 			continue

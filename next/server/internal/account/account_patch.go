@@ -34,6 +34,7 @@ type patchTarget struct {
 	MaxConcurrency *int
 	RPMLimit       *int
 	TPMLimit       *int64
+	SPMLimit       *int
 	ModelLimits    *[]core.ModelLimit
 }
 
@@ -83,6 +84,9 @@ func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleRespon
 	if patch.TpmLimit != nil && to.TPMLimit != nil {
 		probe.TPMLimit = new(patch.GetTpmLimit())
 	}
+	if patch.SpmLimit != nil && to.SPMLimit != nil {
+		probe.SPMLimit = new(int(patch.GetSpmLimit()))
+	}
 	if list := patch.GetModelLimits(); list != nil && to.ModelLimits != nil {
 		probe.ModelLimits = new(coreModelLimits(list.GetItems()))
 	}
@@ -95,6 +99,7 @@ func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleRespon
 	}{
 		{"priority", probe.Priority, to.Priority}, {"weight", probe.Weight, to.Weight},
 		{"max_concurrency", probe.MaxConcurrency, to.MaxConcurrency}, {"rpm_limit", probe.RPMLimit, to.RPMLimit},
+		{"spm_limit", probe.SPMLimit, to.SPMLimit},
 	} {
 		if f.from != nil && *f.from != *f.to {
 			*f.to = *f.from

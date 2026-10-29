@@ -438,29 +438,32 @@ func TestAccountTypeDefaultLimits(t *testing.T) {
 		{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
 	}
 	m.Platforms = []manifest.Platform{validPlatform()}
-	prio, weight, rpm := 5, 20, 60
+	prio, weight, rpm, spm := 5, 20, 60, 3
 	m.AccountTypes = []manifest.AccountType{{
 		ID: "apikey", Label: manifest.LocalizedText{"en": "Key"},
 		Form:      manifest.Form{Mode: "schema", Schema: "forms/k.json"},
 		Platforms: []manifest.AccountPlatform{{Platform: "video"}},
-		DefaultLimits: &manifest.AccountDefaultLimits{Priority: &prio, Weight: &weight, RPMLimit: &rpm,
-			ModelLimits: []manifest.DefaultModelLimit{{Models: []string{"video-2", "video-3"}, MaxConcurrency: 2}}},
+		DefaultLimits: &manifest.AccountDefaultLimits{Priority: &prio, Weight: &weight, RPMLimit: &rpm, SPMLimit: &spm,
+			ModelLimits: []manifest.DefaultModelLimit{{Models: []string{"video-2", "video-3"}, MaxConcurrency: 2, SPMLimit: 1}}},
 	}}
 	files := map[string][]byte{"forms/k.json": []byte(`{}`)}
 	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
 		t.Fatalf("valid default limits rejected: %v", codes(err))
 	}
-	zero := 0
+	zero, negative := 0, -1
 	m.AccountTypes[0].DefaultLimits.Weight = &zero
+	m.AccountTypes[0].DefaultLimits.SPMLimit = &negative
 	m.AccountTypes[0].DefaultLimits.ModelLimits = append(m.AccountTypes[0].DefaultLimits.ModelLimits,
-		manifest.DefaultModelLimit{Models: []string{"video-*", "video-3"}, RPMLimit: -1}, manifest.DefaultModelLimit{})
+		manifest.DefaultModelLimit{Models: []string{"video-*", "video-3"}, RPMLimit: -1, SPMLimit: 10_000_001}, manifest.DefaultModelLimit{})
 	got := codes(Validate(m, files, ValidateOptions{Tooling: true}))
 	f := "accountTypes[0].defaultLimits."
 	want := map[string]string{
 		f + "weight":                   "invalid",
+		f + "spmLimit":                 "invalid",
 		f + "modelLimits[1].models[0]": "invalid",
 		f + "modelLimits[1].models[1]": "duplicate",
 		f + "modelLimits[1].rpmLimit":  "invalid",
+		f + "modelLimits[1].spmLimit":  "invalid",
 		f + "modelLimits[2].models":    "required",
 	}
 	for k, v := range want {

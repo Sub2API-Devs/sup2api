@@ -56,6 +56,9 @@ message AccountProperties {
   // Limits of lists of client models on top of the account's own
   // (CONTRACTS §68); a model is in at most one list.
   repeated ModelLimit model_limits = 13;
+  // Sessions per minute: sticky sessions active in the last 60 seconds
+  // (CONTRACTS §71); 0 = unlimited.
+  int32 spm_limit = 14;
 }
 
 // ModelLimit caps the requests of a list of models on one account; the models
@@ -65,6 +68,8 @@ message ModelLimit {
   int32 max_concurrency = 2;
   int32 rpm_limit = 3;
   int64 tpm_limit = 4;
+  // Sessions per minute of the list (CONTRACTS §71).
+  int32 spm_limit = 5;
 }
 
 // ModelLimitList is the whole model_limits of an account; empty removes them.
@@ -105,14 +110,15 @@ message AccountPatch {
   // facts about the account, which the admin cannot edit. Only the keys given
   // change; a null value removes one. "" leaves them unchanged.
   string extensions_json = 3;
-  // Scheduling and limits of the account (CONTRACTS §18, §68), validated
-  // like the caller's own input; absent fields are left unchanged.
+  // Scheduling and limits of the account (CONTRACTS §18, §68, §71),
+  // validated like the caller's own input; absent fields are left unchanged.
   optional int32 priority = 4;
   optional int32 weight = 5;
   optional int32 max_concurrency = 6;
   optional int32 rpm_limit = 7;
   optional int64 tpm_limit = 8;
   ModelLimitList model_limits = 9;
+  optional int32 spm_limit = 10;
 }
 
 // ModelList is a model id list; empty means every model.

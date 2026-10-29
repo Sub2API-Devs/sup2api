@@ -449,7 +449,7 @@ func TestFilesHTTPDeleteFailureKeepsProviderFacts(t *testing.T) {
 
 type resourceDenyLimiter struct{ core.AccountLimiter }
 
-func (resourceDenyLimiter) TryHit(context.Context, core.AccountRef, string) (bool, error) {
+func (resourceDenyLimiter) TryHit(context.Context, core.AccountRef, string, string) (bool, error) {
 	return false, nil
 }
 func TestFilesHTTPAccountAdmission(t *testing.T) {

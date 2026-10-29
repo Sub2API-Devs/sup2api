@@ -2,13 +2,15 @@
 // API keys) in minute windows shared by every node through Redis. A cap is
 // checked against the last 60 seconds, estimated from the current and the
 // previous minute window: the previous one counts with the share of it still
-// inside the last 60 seconds (CONTRACTS §68.3). Windows are taken from Redis
+// inside the last 60 seconds (CONTRACTS §68.3). Sessions are counted exactly
+// over the last 60 seconds (CONTRACTS §71). Windows are taken from Redis
 // TIME so nodes with skewed clocks agree on them. Without a Redis client
 // nothing is counted and everything is admitted.
 package ratelimit
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"math"
 	"strconv"
@@ -20,7 +22,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
-const keyTTL = 2 * time.Minute
+const (
+	keyTTL = 2 * time.Minute
+	// sessionWindow is the window of the sessions-per-minute caps.
+	sessionWindow = time.Minute
+)
 
 var _ core.RateWindows = (*Minute)(nil)
 
@@ -34,12 +40,13 @@ type Minute struct {
 
 // Limits are a subject's per-minute caps; 0 = unlimited. Sub names a
 // separate set of counters of the subject ("" = its own; accounts use one per
-// model list).
+// model list). SPM caps the distinct sessions of the last 60 seconds.
 type Limits struct {
 	ID  int64
 	Sub string
 	RPM int
 	TPM int64
+	SPM int
 }
 
 func NewMinute(rdb redis.UniversalClient, scope string) *Minute {
@@ -57,6 +64,15 @@ func SubKey(scope string, id int64, sub, kind string, at time.Time) string {
 		kind = sub + ":" + kind
 	}
 	return "rl:" + scope + ":" + x.Itoa64(id) + ":" + kind + ":" + strconv.FormatInt(at.Unix()/60, 10)
+}
+
+// SessionKey is the Redis key of the sessions of the counters sub of the
+// subject: a sorted set of session → Redis time in milliseconds.
+func SessionKey(scope string, id int64, sub string) string {
+	if sub != "" {
+		sub += ":"
+	}
+	return "rl:" + scope + ":" + x.Itoa64(id) + ":" + sub + "spm"
 }
 
 func (m *Minute) now(ctx context.Context) (time.Time, error) {
@@ -78,29 +94,63 @@ func (m *Minute) windowKeys(id int64, sub, kind string, now time.Time) (cur, pre
 	return SubKey(m.scope, id, sub, kind, now), SubKey(m.scope, id, sub, kind, now.Add(-time.Minute))
 }
 
+// counterKeys appends the window keys of a set: rpm current, rpm previous,
+// tpm current, tpm previous.
+func (m *Minute) counterKeys(keys []string, l Limits, now time.Time) []string {
+	rc, rp := m.windowKeys(l.ID, l.Sub, "rpm", now)
+	tc, tp := m.windowKeys(l.ID, l.Sub, "tpm", now)
+	return append(keys, rc, rp, tc, tp)
+}
+
+// sessionCutoff is the newest score that is no longer inside the session
+// window at now.
+func sessionCutoff(now time.Time) int64 { return now.Add(-sessionWindow).UnixMilli() }
+
 // admit checks every set of caps and counts one request in each of them when
-// all are under their caps. KEYS: per set its rpm current, rpm previous, tpm
-// current, tpm previous window. ARGV: share of the previous window, ttl ms,
-// then per set rpm and tpm. A refusal returns {0, current, previous, cap}.
+// all are under their caps. KEYS: per set its counterKeys, then its
+// SessionKey. ARGV: share of the
+// previous window, ttl ms, session ("" = none), now ms, session cutoff ms,
+// then per set rpm, tpm and spm. A session already active in a set's window
+// passes its spm and is refreshed; a new one passes while the set has fewer
+// active sessions than spm. Without a session spm is not checked and nothing
+// is added to the sessions. A refusal returns {0, current, previous, cap}
+// for a window, or {2, ms until a session slot frees}.
 var admit = redis.NewScript(`
 local share=tonumber(ARGV[1])
-local function used(cur, prev)
-  return tonumber(redis.call('GET',cur) or '0')+share*tonumber(redis.call('GET',prev) or '0')
-end
-local n=#KEYS/4
+local session=ARGV[3]
+local now=tonumber(ARGV[4])
+local cutoff=tonumber(ARGV[5])
+local function get(k) return tonumber(redis.call('GET',k) or '0') end
+local function used(cur, prev) return get(cur)+share*get(prev) end
+local n=#KEYS/5
 for i=0,n-1 do
-  local rpm=tonumber(ARGV[3+2*i])
-  local tpm=tonumber(ARGV[4+2*i])
-  if rpm>0 and used(KEYS[4*i+1],KEYS[4*i+2])>=rpm then
-    return {0, tonumber(redis.call('GET',KEYS[4*i+1]) or '0'), tonumber(redis.call('GET',KEYS[4*i+2]) or '0'), rpm}
+  local k=5*i
+  local rpm=tonumber(ARGV[6+3*i])
+  local tpm=tonumber(ARGV[7+3*i])
+  local spm=tonumber(ARGV[8+3*i])
+  if rpm>0 and used(KEYS[k+1],KEYS[k+2])>=rpm then
+    return {0, get(KEYS[k+1]), get(KEYS[k+2]), rpm}
   end
-  if tpm>0 and used(KEYS[4*i+3],KEYS[4*i+4])>=tpm then
-    return {0, tonumber(redis.call('GET',KEYS[4*i+3]) or '0'), tonumber(redis.call('GET',KEYS[4*i+4]) or '0'), tpm}
+  if tpm>0 and used(KEYS[k+3],KEYS[k+4])>=tpm then
+    return {0, get(KEYS[k+3]), get(KEYS[k+4]), tpm}
+  end
+  if spm>0 and session~='' and tonumber(redis.call('ZSCORE',KEYS[k+5],session) or cutoff)<=cutoff then
+    local active=redis.call('ZCOUNT',KEYS[k+5],'('..cutoff,'+inf')
+    if active>=spm then
+      local frees=redis.call('ZRANGEBYSCORE',KEYS[k+5],'('..cutoff,'+inf','WITHSCORES','LIMIT',active-spm,1)
+      return {2, tonumber(frees[2])-cutoff}
+    end
   end
 end
 for i=0,n-1 do
-  redis.call('INCR',KEYS[4*i+1])
-  redis.call('PEXPIRE',KEYS[4*i+1],ARGV[2])
+  local k=5*i
+  redis.call('INCR',KEYS[k+1])
+  redis.call('PEXPIRE',KEYS[k+1],ARGV[2])
+  if session~='' then
+    redis.call('ZREMRANGEBYSCORE',KEYS[k+5],'-inf',cutoff)
+    redis.call('ZADD',KEYS[k+5],now,session)
+    redis.call('PEXPIRE',KEYS[k+5],ARGV[2])
+  end
 end
 return {1}`)
 
@@ -109,12 +159,14 @@ return {1}`)
 // tokens are counted when responses finish (AddTokens), so a burst can pass
 // TPM. A refused request gets the time until it would be admitted.
 func (m *Minute) Admit(ctx context.Context, id int64, rpm int, tpm int64) (ok bool, retry time.Duration, err error) {
-	return m.AdmitAll(ctx, []Limits{{ID: id, RPM: rpm, TPM: tpm}})
+	return m.AdmitAll(ctx, []Limits{{ID: id, RPM: rpm, TPM: tpm}}, "")
 }
 
 // AdmitAll is Admit for several sets of caps at once: one request is counted
-// in every set, or in none when one of them is at its cap.
-func (m *Minute) AdmitAll(ctx context.Context, sets []Limits) (ok bool, retry time.Duration, err error) {
+// in every set, or in none when one of them is at its cap. A non-empty
+// session is also checked against each set's SPM on its own and, when
+// admitted, counted as active in every set (CONTRACTS §71).
+func (m *Minute) AdmitAll(ctx context.Context, sets []Limits, session string) (ok bool, retry time.Duration, err error) {
 	if m.rdb == nil || len(sets) == 0 {
 		return true, 0, nil
 	}
@@ -122,23 +174,23 @@ func (m *Minute) AdmitAll(ctx context.Context, sets []Limits) (ok bool, retry ti
 	if err != nil {
 		return false, 0, err
 	}
-	keys := make([]string, 0, 4*len(sets))
-	args := make([]any, 0, 2+2*len(sets))
-	args = append(args, previousShare(now), keyTTL.Milliseconds())
+	keys := make([]string, 0, 5*len(sets))
+	args := make([]any, 0, 5+3*len(sets))
+	args = append(args, previousShare(now), keyTTL.Milliseconds(), session, now.UnixMilli(), sessionCutoff(now))
 	for _, l := range sets {
-		rc, rp := m.windowKeys(l.ID, l.Sub, "rpm", now)
-		tc, tp := m.windowKeys(l.ID, l.Sub, "tpm", now)
-		keys = append(keys, rc, rp, tc, tp)
-		args = append(args, l.RPM, l.TPM)
+		keys = append(m.counterKeys(keys, l, now), SessionKey(m.scope, l.ID, l.Sub))
+		args = append(args, l.RPM, l.TPM, l.SPM)
 	}
 	res, err := admit.Run(ctx, m.rdb, keys, args...).Int64Slice()
 	if err != nil {
 		return false, 0, err
 	}
-	if len(res) > 0 && res[0] == 1 {
+	switch {
+	case len(res) > 0 && res[0] == 1:
 		return true, 0, nil
-	}
-	if len(res) < 4 {
+	case len(res) == 2 && res[0] == 2:
+		return false, max((time.Duration(res[1]) * time.Millisecond).Round(time.Second), time.Second), nil
+	case len(res) < 4:
 		return false, time.Until(now.Truncate(time.Minute).Add(time.Minute)), nil
 	}
 	return false, retryAfter(now, res[1], res[2], res[3]), nil
@@ -207,57 +259,88 @@ func (m *Minute) UsageOf(ctx context.Context, sets []Limits) ([]core.RateUsage, 
 	if m.rdb == nil || len(sets) == 0 {
 		return make([]core.RateUsage, len(sets)), nil
 	}
-	vals, share, err := m.read(ctx, sets)
+	wins, share, err := m.read(ctx, sets, "")
 	if err != nil {
 		return nil, err
 	}
 	out := make([]core.RateUsage, len(sets))
-	for i := range sets {
-		out[i] = core.RateUsage{RPM: estimate(vals[4*i:], share), TPM: estimate(vals[4*i+2:], share)}
+	for i, w := range wins {
+		out[i] = core.RateUsage{RPM: estimate(w.counters, share), TPM: estimate(w.counters[2:], share), Sessions: w.sessions}
 	}
 	return out, nil
 }
 
-// Reached returns the ids of which a set reached one of its caps. Sets
-// without caps are never read.
-func (m *Minute) Reached(ctx context.Context, limits []Limits) (map[int64]bool, error) {
+// Reached returns the ids of which a set reached one of its caps for the
+// session ("" = none): a set at its SPM refuses a session it does not hold.
+// Sets without caps are never read.
+func (m *Minute) Reached(ctx context.Context, limits []Limits, session string) (map[int64]bool, error) {
 	out := map[int64]bool{}
 	var capped []Limits
 	for _, l := range limits {
-		if l.RPM > 0 || l.TPM > 0 {
+		if l.RPM > 0 || l.TPM > 0 || (session != "" && l.SPM > 0) {
 			capped = append(capped, l)
 		}
 	}
 	if m.rdb == nil || len(capped) == 0 {
 		return out, nil
 	}
-	vals, share, err := m.read(ctx, capped)
+	wins, share, err := m.read(ctx, capped, session)
 	if err != nil {
 		return out, err
 	}
 	for i, l := range capped {
-		if (l.RPM > 0 && used(vals[4*i:], share) >= float64(l.RPM)) || (l.TPM > 0 && used(vals[4*i+2:], share) >= float64(l.TPM)) {
+		w := wins[i]
+		if (l.RPM > 0 && used(w.counters, share) >= float64(l.RPM)) || (l.TPM > 0 && used(w.counters[2:], share) >= float64(l.TPM)) ||
+			(session != "" && l.SPM > 0 && !w.holds && w.sessions >= int64(l.SPM)) {
 			out[l.ID] = true
 		}
 	}
 	return out, nil
 }
 
-// read MGETs, for each set, the rpm current, rpm previous, tpm current and
-// tpm previous windows.
-func (m *Minute) read(ctx context.Context, sets []Limits) ([]any, float64, error) {
+// window is what read found for one set.
+type window struct {
+	counters []any // rpm current, rpm previous, tpm current, tpm previous
+	sessions int64 // sessions active in the last 60 seconds
+	holds    bool  // the session read along is one of them
+}
+
+// read fetches in one round trip, for each set, the rpm and tpm windows and
+// its active sessions, and whether session ("" = none) is one of them.
+func (m *Minute) read(ctx context.Context, sets []Limits, session string) ([]window, float64, error) {
 	now, err := m.now(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 	keys := make([]string, 0, len(sets)*4)
 	for _, l := range sets {
-		rc, rp := m.windowKeys(l.ID, l.Sub, "rpm", now)
-		tc, tp := m.windowKeys(l.ID, l.Sub, "tpm", now)
-		keys = append(keys, rc, rp, tc, tp)
+		keys = m.counterKeys(keys, l, now)
 	}
-	vals, err := m.rdb.MGet(ctx, keys...).Result()
-	return vals, previousShare(now), err
+	cutoff := sessionCutoff(now)
+	pipe := m.rdb.Pipeline()
+	counters := pipe.MGet(ctx, keys...)
+	counts := make([]*redis.IntCmd, len(sets))
+	scores := make([]*redis.FloatCmd, len(sets))
+	for i, l := range sets {
+		k := SessionKey(m.scope, l.ID, l.Sub)
+		counts[i] = pipe.ZCount(ctx, k, "("+strconv.FormatInt(cutoff, 10), "+inf")
+		if session != "" {
+			scores[i] = pipe.ZScore(ctx, k, session)
+		}
+	}
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return nil, 0, err
+	}
+	vals := counters.Val()
+	out := make([]window, len(sets))
+	for i := range sets {
+		out[i] = window{counters: vals[4*i : 4*i+4], sessions: counts[i].Val()}
+		if scores[i] != nil {
+			at, err := scores[i].Result()
+			out[i].holds = err == nil && int64(at) > cutoff
+		}
+	}
+	return out, previousShare(now), nil
 }
 
 // used is the last-60-seconds estimate of a (current, previous) pair.

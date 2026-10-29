@@ -135,37 +135,42 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	}
 
 	// Model lists (CONTRACTS §68): trimmed, repeats and empty lists dropped,
-	// a model in one list only.
-	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"model_limits": []map[string]any{
-		{"models": []string{" m-a ", "m-a", "m-b"}, "rpm_limit": 3, "max_concurrency": 2}, {"models": []string{}}}})
+	// a model in one list only. Sessions per minute (§71) on both levels.
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": 5, "model_limits": []map[string]any{
+		{"models": []string{" m-a ", "m-a", "m-b"}, "rpm_limit": 3, "max_concurrency": 2, "spm_limit": 4}, {"models": []string{}}}})
 	if code != 200 {
 		t.Fatalf("patch model limits: %d %v", code, out)
 	}
 	limits := out["data"].(map[string]any)["model_limits"].([]any)
-	if len(limits) != 1 || fmt.Sprint(limits[0].(map[string]any)["models"]) != "[m-a m-b]" || limits[0].(map[string]any)["rpm_limit"] != 3.0 {
-		t.Fatalf("model limits saved as %v", limits)
+	if len(limits) != 1 || fmt.Sprint(limits[0].(map[string]any)["models"]) != "[m-a m-b]" || limits[0].(map[string]any)["rpm_limit"] != 3.0 ||
+		limits[0].(map[string]any)["spm_limit"] != 4.0 || out["data"].(map[string]any)["spm_limit"] != 5.0 {
+		t.Fatalf("model limits saved as %v", out["data"])
 	}
-	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"model_limits": []map[string]any{
-		{"models": []string{"m-a"}}, {"models": []string{"m-c", "m-a"}, "tpm_limit": -1}}}); code != 400 ||
-		fields(out) != "[model_limits[1].models[1]:duplicate model_limits[1].tpm_limit:invalid]" {
+	if a, _ := e.svc.Load(ctx, id2); a == nil || a.SPMLimit != 5 || a.ModelLimits[0].SPMLimit != 4 {
+		t.Fatalf("load: %+v", a)
+	}
+	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": -1, "model_limits": []map[string]any{
+		{"models": []string{"m-a"}}, {"models": []string{"m-c", "m-a"}, "tpm_limit": -1, "spm_limit": 10_000_001}}}); code != 400 ||
+		fields(out) != "[model_limits[1].models[1]:duplicate model_limits[1].spm_limit:invalid model_limits[1].tpm_limit:invalid spm_limit:invalid]" {
 		t.Fatalf("patch invalid model limits: %d %v", code, fields(out))
 	}
 
 	// Rate usage is read from the limiter, with one entry per model list.
-	if ok, err := e.svc.d.Limiter.TryHit(ctx, core.AccountRef{ID: id2}, ""); err != nil || !ok {
+	if ok, err := e.svc.d.Limiter.TryHit(ctx, core.AccountRef{ID: id2}, "", "session-1"); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	e.svc.d.Limiter.AddTokens(ctx, id2, "", 1234)
 	_, out = e.do("GET", fmt.Sprintf("/accounts/%d", id2), nil)
 	raw, _ := json.Marshal(out)
-	if gjson.GetBytes(raw, "data.rate_usage.rpm").Int() != 1 || gjson.GetBytes(raw, "data.rate_usage.tpm").Int() != 1234 {
+	if gjson.GetBytes(raw, "data.rate_usage.rpm").Int() != 1 || gjson.GetBytes(raw, "data.rate_usage.tpm").Int() != 1234 ||
+		gjson.GetBytes(raw, "data.rate_usage.sessions").Int() != 1 {
 		t.Fatalf("rate usage: %s", gjson.GetBytes(raw, "data.rate_usage").Raw)
 	}
-	if m := gjson.GetBytes(raw, "data.rate_usage.models"); len(m.Array()) != 1 || m.Get("0.models.1").String() != "m-b" || !m.Get("0.in_use").Exists() {
+	if m := gjson.GetBytes(raw, "data.rate_usage.models"); len(m.Array()) != 1 || m.Get("0.models.1").String() != "m-b" || !m.Get("0.in_use").Exists() ||
+		!m.Get("0.sessions").Exists() {
 		t.Fatalf("model list usage: %s", m.Raw)
 	}
-	if gjson.GetBytes(raw, "data.tpd_limit").Exists() || gjson.GetBytes(raw, "data.spm_limit").Exists() ||
-		gjson.GetBytes(raw, "data.rate_usage.tpd").Exists() || gjson.GetBytes(raw, "data.rate_usage.spm").Exists() {
+	if gjson.GetBytes(raw, "data.tpd_limit").Exists() || gjson.GetBytes(raw, "data.rate_usage.tpd").Exists() {
 		t.Fatal("removed rate limits remain exposed", string(raw))
 	}
 

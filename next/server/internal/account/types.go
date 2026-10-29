@@ -58,6 +58,7 @@ type DefaultLimitsView struct {
 	MaxConcurrency *int              `json:"max_concurrency,omitempty"`
 	RPMLimit       *int              `json:"rpm_limit,omitempty"`
 	TPMLimit       *int64            `json:"tpm_limit,omitempty"`
+	SPMLimit       *int              `json:"spm_limit,omitempty"`
 	ModelLimits    []core.ModelLimit `json:"model_limits,omitempty"`
 }
 
@@ -65,9 +66,9 @@ func defaultLimitsView(d *manifest.AccountDefaultLimits) *DefaultLimitsView {
 	if d == nil {
 		return nil
 	}
-	v := &DefaultLimitsView{Priority: d.Priority, Weight: d.Weight, MaxConcurrency: d.MaxConcurrency, RPMLimit: d.RPMLimit, TPMLimit: d.TPMLimit}
+	v := &DefaultLimitsView{Priority: d.Priority, Weight: d.Weight, MaxConcurrency: d.MaxConcurrency, RPMLimit: d.RPMLimit, TPMLimit: d.TPMLimit, SPMLimit: d.SPMLimit}
 	for _, l := range d.ModelLimits {
-		v.ModelLimits = append(v.ModelLimits, core.ModelLimit{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit})
+		v.ModelLimits = append(v.ModelLimits, core.ModelLimit{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit, SPMLimit: l.SPMLimit})
 	}
 	return v
 }

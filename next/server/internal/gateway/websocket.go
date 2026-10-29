@@ -437,10 +437,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	if cl.failureState.stickyErr != nil {
 		return nil, fromCore(core.ErrUnavailable.WithMessage("sticky store unavailable"), errTypeInternal)
 	}
-	cl.session = "ws:" + s.id
-	if cl.sticky != nil && cl.sticky.key != "" {
-		cl.session = cl.sticky.key
-	}
+	cl.session = cl.sessionIdentity()
 	excluded := map[int64]bool{}
 	var last *gwError
 	var pendingRelease func()

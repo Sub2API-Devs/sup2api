@@ -154,9 +154,11 @@ type AccountRef struct {
 	Models []string
 	// ModelMapping rewrites the client model to the upstream model.
 	ModelMapping map[string]string
-	// Rate limits; 0 = unlimited (CONTRACTS §18).
+	// Rate limits; 0 = unlimited (CONTRACTS §18). SPMLimit caps the sticky
+	// sessions active in the last 60 seconds (CONTRACTS §71).
 	RPMLimit int
 	TPMLimit int64
+	SPMLimit int
 	// ModelLimits cap lists of (client) models on top of the account's own
 	// limits (CONTRACTS §68); a model is in at most one list.
 	ModelLimits []ModelLimit
@@ -169,6 +171,7 @@ type ModelLimit struct {
 	MaxConcurrency int      `json:"max_concurrency"`
 	RPMLimit       int      `json:"rpm_limit"`
 	TPMLimit       int64    `json:"tpm_limit"`
+	SPMLimit       int      `json:"spm_limit"`
 }
 
 // Key identifies the counters of the list: a hash of its sorted models, so
@@ -225,11 +228,11 @@ func (a *AccountRef) MapModel(model string) string {
 // Limited reports whether the account has any rate limit, its own or one of
 // a model list.
 func (a *AccountRef) Limited() bool {
-	if a.RPMLimit > 0 || a.TPMLimit > 0 {
+	if a.RPMLimit > 0 || a.TPMLimit > 0 || a.SPMLimit > 0 {
 		return true
 	}
 	for _, l := range a.ModelLimits {
-		if l.RPMLimit > 0 || l.TPMLimit > 0 {
+		if l.RPMLimit > 0 || l.TPMLimit > 0 || l.SPMLimit > 0 {
 			return true
 		}
 	}
@@ -237,33 +240,39 @@ func (a *AccountRef) Limited() bool {
 }
 
 // RateUsage is the usage of the last 60 seconds of a subject's rate limits.
-// Models (accounts only) holds the usage of each model list, in the order of
-// the account's model_limits.
+// Sessions (accounts only) counts the distinct sticky sessions; Models
+// (accounts only) holds the usage of each model list, in the order of the
+// account's model_limits.
 type RateUsage struct {
-	RPM    int64            `json:"rpm"`
-	TPM    int64            `json:"tpm"`
-	Models []ModelRateUsage `json:"models,omitempty"`
+	RPM      int64            `json:"rpm"`
+	TPM      int64            `json:"tpm"`
+	Sessions int64            `json:"sessions"`
+	Models   []ModelRateUsage `json:"models,omitempty"`
 }
 
 // ModelRateUsage is the usage of one model list of an account.
 type ModelRateUsage struct {
-	Models []string `json:"models"`
-	InUse  int      `json:"in_use"`
-	RPM    int64    `json:"rpm"`
-	TPM    int64    `json:"tpm"`
+	Models   []string `json:"models"`
+	InUse    int      `json:"in_use"`
+	RPM      int64    `json:"rpm"`
+	TPM      int64    `json:"tpm"`
+	Sessions int64    `json:"sessions"`
 }
 
-// AccountLimiter enforces per-account RPM and TPM, and those of the model
-// list holding the request's (client) model, over the last 60 seconds
+// AccountLimiter enforces per-account RPM, TPM and SPM, and those of the
+// model list holding the request's (client) model, over the last 60 seconds
 // shared by every node. model "" checks the account's own limits only.
+// session is the request's sticky session key (CONTRACTS §71); "" is
+// neither checked against SPM nor counted.
 type AccountLimiter interface {
-	// Exhausted returns the ids among refs that reached a limit for model.
+	// Exhausted returns the ids among refs that reached a limit for model
+	// and session; an account already holding the session passes its SPM.
 	// Accounts without limits are never listed.
-	Exhausted(ctx context.Context, refs []AccountRef, model string) (map[int64]bool, error)
-	// TryHit atomically checks the limits for model and counts an admitted
-	// request. RPM admission is exact; tokens are counted after responses
-	// finish.
-	TryHit(ctx context.Context, ref AccountRef, model string) (bool, error)
+	Exhausted(ctx context.Context, refs []AccountRef, model, session string) (map[int64]bool, error)
+	// TryHit atomically checks the limits for model and session and counts an
+	// admitted request (and the session). RPM and SPM admission is exact;
+	// tokens are counted after responses finish.
+	TryHit(ctx context.Context, ref AccountRef, model, session string) (bool, error)
 	// AddTokens adds the tokens of a finished response to the account and,
 	// when list is not "", to the model list of that key (ModelLimit.Key).
 	AddTokens(ctx context.Context, id int64, list string, n int64)
@@ -285,7 +294,7 @@ func (a *Account) PluginAccount(platform string) *pluginv1.Account {
 	return &pluginv1.Account{Id: a.ID, Name: a.Name, Platform: platform, Type: a.Type, CredentialsJson: string(a.Credentials), SettingsJson: string(a.Settings), Properties: &pluginv1.AccountProperties{
 		Status: a.Status, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable,
 		Priority: int32(a.Priority), Weight: int32(a.Weight), MaxConcurrency: int32(a.MaxConcurrency),
-		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, ModelMapping: a.ModelMapping,
+		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, SpmLimit: int32(a.SPMLimit), ProxyId: a.ProxyID, Models: a.Models, ModelMapping: a.ModelMapping,
 		ModelLimits: PluginModelLimits(a.ModelLimits),
 	}}
 }
@@ -297,7 +306,7 @@ func PluginModelLimits(in []ModelLimit) []*pluginv1.ModelLimit {
 	}
 	out := make([]*pluginv1.ModelLimit, len(in))
 	for i, l := range in {
-		out[i] = &pluginv1.ModelLimit{Models: l.Models, MaxConcurrency: int32(l.MaxConcurrency), RpmLimit: int32(l.RPMLimit), TpmLimit: l.TPMLimit}
+		out[i] = &pluginv1.ModelLimit{Models: l.Models, MaxConcurrency: int32(l.MaxConcurrency), RpmLimit: int32(l.RPMLimit), TpmLimit: l.TPMLimit, SpmLimit: int32(l.SPMLimit)}
 	}
 	return out
 }
