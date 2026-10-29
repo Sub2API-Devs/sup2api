@@ -58,7 +58,7 @@ export default {
   allGroups: '全部分组',
   allStatus: '全部状态',
   status: {
-    active: '正常',
+    active: '启用',
     disabled: '禁用',
     auto_disabled: '自动禁用',
     error: '异常',
@@ -199,7 +199,7 @@ export default {
   batchTest: { pickPage: '选择本页', run: '批量测试（{n}）', progress: '测试中 {done}/{total}', clear: '清除选择', hint: '每个账号用插件默认模型测一次，最多同时 3 个', done: '批量测试完成：成功 {ok}，失败 {fail}' },
   bulk: {
     edit: '批量编辑（{n}）', more: '更多批量操作', delete: '删除（{n}）',
-    enable: '启用（{n}）', disable: '停用（{n}）', reset: '重置状态（{n}）',
+    enable: '启用（{n}）', disable: '禁用（{n}）', reset: '重置状态（{n}）',
     progress: '处理中 {done}/{total}', nothingToChange: '所选账号已是该状态',
     done: '已完成 {ok} 个账号', doneWithErrors: '成功 {ok} 个，失败 {fail} 个；{name}：{error}',
     resetConfirm: '清除所选 {n} 个账号的冷却、错误与自动禁用状态？',
@@ -258,7 +258,7 @@ export default {
       runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试'
     }
   },
-  autoReleaseAt: '{time} 自动解除禁用',
+  autoReleaseAt: '{time} 自动启用',
   schedulingSwitchHint: '控制是否参与调度；禁用或异常请使用“重置状态”恢复',
   resetStatus: '重置状态',
   resetStatusHint: '清除禁用、错误原因与冷却，恢复正常状态；不改变允许调度开关',

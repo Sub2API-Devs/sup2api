@@ -58,9 +58,9 @@ export default {
   allGroups: 'All groups',
   allStatus: 'All status',
   status: {
-    active: 'Active',
+    active: 'Enabled',
     disabled: 'Disabled',
-    auto_disabled: 'Automatically disabled',
+    auto_disabled: 'Auto-disabled',
     error: 'Error',
     cooldown: 'Cooling down',
     orphaned: 'Orphaned',
@@ -265,7 +265,7 @@ export default {
       runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.'
     }
   },
-  autoReleaseAt: 'Automatically re-enable at {time}',
+  autoReleaseAt: 'Auto-enables at {time}',
   schedulingSwitchHint: 'Controls scheduling eligibility; use Reset status to recover disabled or error accounts',
   resetStatus: 'Reset status',
   resetStatusHint: 'Clear disabled status, errors and cooldown; the scheduling switch stays unchanged',

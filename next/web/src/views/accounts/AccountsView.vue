@@ -120,18 +120,19 @@ function coolingDown(a: Account) {
   return !!a.cooldown_until && new Date(a.cooldown_until).getTime() > Date.now()
 }
 
-type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string }
+/** detail: full explanation (list badge tooltip, detail drawer); note: short recovery time shown under the list badge. */
+type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string; note?: string }
 function statusOf(a: Account): StatusView {
   if (a.orphaned) return { tone: 'gray', label: t('accounts.status.orphaned'), detail: t('accounts.orphanedHint', { plugin: a.plugin_key }) }
   if (a.status === 'disabled') return { tone: 'danger', label: t('accounts.status.disabled'), detail: a.status_reason }
-  if (a.status === 'auto_disabled' || (a.status === 'active' && !a.schedulable)) return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason }
+  if (a.status === 'auto_disabled' || (a.status === 'active' && !a.schedulable)) {
+    const until = a.status === 'auto_disabled' && a.auto_disabled_until
+    return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason, note: until ? t('accounts.autoReleaseAt', { time: formatDateTime(until) }) : undefined }
+  }
   if (a.status === 'error') return { tone: 'danger', label: t('accounts.status.error'), detail: a.status_reason }
   if (coolingDown(a)) {
-    return {
-      tone: 'warning',
-      label: t('accounts.status.cooldown'),
-      detail: t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) }) + (a.cooldown_reason ? `（${a.cooldown_reason}）` : '')
-    }
+    const until = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
+    return { tone: 'warning', label: t('accounts.status.cooldown'), detail: until + (a.cooldown_reason ? `（${a.cooldown_reason}）` : ''), note: until }
   }
   return { tone: 'success', label: t('accounts.status.active') }
 }
@@ -606,12 +607,9 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
+        <SBadge :tone="statusOf(row).tone" dot :title="statusOf(row).detail" data-testid="account-status">{{ statusOf(row).label }}</SBadge>
         <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
-        <SHint v-if="statusOf(row).detail" size="xs" class="mt-0.5 block max-w-48 truncate" :title="statusOf(row).detail">
-          {{ statusOf(row).detail }}
-        </SHint>
-        <SHint v-if="row.status === 'auto_disabled' && row.auto_disabled_until" size="xs" class="mt-0.5 block" data-testid="account-auto-release">{{ t('accounts.autoReleaseAt', { time: formatDateTime(row.auto_disabled_until) }) }}</SHint>
+        <SHint v-if="statusOf(row).note" size="xs" class="mt-0.5 block" data-testid="account-status-note">{{ statusOf(row).note }}</SHint>
         <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
           <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
         </SLink>

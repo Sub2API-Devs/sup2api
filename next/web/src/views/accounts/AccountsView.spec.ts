@@ -225,13 +225,23 @@ describe('account status recovery', () => {
     expect(orphaned.find('[data-testid="account-reset-status"]').exists()).toBe(false)
   })
 
-  it('distinguishes automatic disable and displays its release time', () => {
-    list.items.value[0].status = 'auto_disabled'
-    list.items.value[0].auto_disabled_until = '2026-10-12T08:00:00Z'
+  it('distinguishes automatic disable and shows only its enable time, keeping the reason in the badge tooltip', () => {
+    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'rate limited until 2026-10-12T08:00:00Z', auto_disabled_until: '2026-10-12T08:00:00Z' })
     const w = render()
-    expect(w.text()).toContain('自动禁用')
-    expect(w.get('[data-testid="account-auto-release"]').text()).toContain('自动解除禁用')
+    const badge = w.get('[data-testid="account-status"]')
+    expect(badge.text()).toBe('自动禁用')
+    expect(badge.attributes('title')).toBe('rate limited until 2026-10-12T08:00:00Z')
+    expect(w.get('[data-testid="account-status-note"]').text()).toMatch(/自动启用$/)
+    expect(w.text()).not.toContain('rate limited until')
     expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
+  })
+
+  it('shows a manual disable as a plain badge without the reason or a note', () => {
+    const w = render()
+    expect(w.get('[data-testid="account-status"]').text()).toBe('禁用')
+    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('credentials rejected')
+    expect(w.text()).not.toContain('credentials rejected')
+    expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
   })
 
   it.each([
