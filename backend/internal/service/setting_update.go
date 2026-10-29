@@ -115,12 +115,6 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, infraerrors.BadRequest("INVALID_FORWARDED_CLIENT_IP_HEADERS", err.Error())
 	}
 	settings.ForwardedClientIPHeaders = normalizedForwardedClientIPHeaders
-	if s.cfg != nil && s.cfg.Server.TrustedProxiesConfigured {
-		// server.trusted_proxies is the stronger policy. Persist the normalized
-		// value so the admin response and future restarts cannot re-enable the
-		// raw-header compatibility path behind an operator allowlist.
-		settings.APIKeyACLTrustForwardedIP = false
-	}
 	alipaySource, err := normalizeVisibleMethodSettingSource("alipay", settings.PaymentVisibleMethodAlipaySource, settings.PaymentVisibleMethodAlipayEnabled)
 	if err != nil {
 		return nil, err

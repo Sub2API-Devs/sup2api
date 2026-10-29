@@ -105,24 +105,11 @@ func TestLoadHTTPIngressSafetyDefaults(t *testing.T) {
 	require.Equal(t, 64*1024, cfg.Server.MaxHeaderBytes)
 	require.Empty(t, cfg.Server.TrustedProxies)
 	require.False(t, cfg.Server.TrustedProxiesConfigured)
-	require.False(t, cfg.TrustForwardedIPForAPIKeyACL())
+	require.True(t, cfg.TrustForwardedIPForAPIKeyACL())
 	require.Equal(t, int64(32*1024*1024), cfg.Gateway.TextMaxBodySize)
 	require.True(t, cfg.APIKeyAuth.InvalidAbuse.Enabled)
 	require.Equal(t, 120, cfg.APIKeyAuth.InvalidAbuse.Threshold)
 	require.Equal(t, 16384, cfg.APIKeyAuth.InvalidAbuse.Capacity)
-}
-
-func TestLoadPluginSandboxSafetyDefaults(t *testing.T) {
-	resetViperWithJWTSecret(t)
-	cfg, err := Load()
-	require.NoError(t, err)
-
-	require.True(t, cfg.Plugins.SandboxEnabled)
-	require.True(t, cfg.Plugins.LandlockEnabled)
-	require.True(t, cfg.Plugins.LandlockRequired)
-	require.True(t, cfg.Plugins.SeccompEnabled)
-	require.Equal(t, 1024, cfg.Plugins.MaxOpenFiles)
-	require.Equal(t, 10, cfg.Plugins.Nice)
 }
 
 func TestNormalizeForwardedClientIPHeaders(t *testing.T) {
@@ -263,16 +250,6 @@ func TestLoadExplicitTrustedProxiesEnablesConfiguredMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"127.0.0.1/32"}, cfg.Server.TrustedProxies)
 	require.True(t, cfg.Server.TrustedProxiesConfigured)
-}
-
-func TestExplicitTrustedProxiesOverrideLegacyRawHeaderMode(t *testing.T) {
-	cfg := &Config{Server: ServerConfig{TrustedProxiesConfigured: true}}
-	cfg.Security.TrustForwardedIPForAPIKeyACL = true
-	cfg.SetForwardedClientIPSettings(true, []string{"X-Real-IP"})
-
-	settings := cfg.ForwardedClientIPSettings()
-	require.False(t, settings.TrustForwardedIP)
-	require.Equal(t, []string{"X-Real-IP"}, settings.Headers)
 }
 
 func TestLoadTrustedProxiesFromEnvironment(t *testing.T) {

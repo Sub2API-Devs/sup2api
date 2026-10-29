@@ -49,11 +49,6 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=${SERVER_MODE:-release}
-      # Comma-separated IP/CIDR values for reverse proxies that connect directly
-      # to Sub2API. Empty means forwarded headers are ignored.
-      - SERVER_TRUSTED_PROXIES=${SERVER_TRUSTED_PROXIES:-}
-      # Unsafe legacy compatibility mode; keep false in production.
-      - SECURITY_TRUST_FORWARDED_IP_FOR_API_KEY_ACL=${SECURITY_TRUST_FORWARDED_IP_FOR_API_KEY_ACL:-false}
       - ENABLE_SERVER_TIMING=${ENABLE_SERVER_TIMING:-false}
       - RUN_MODE=${RUN_MODE:-standard}
       - SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS=${SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS:-}
@@ -154,14 +149,6 @@ services:
       - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-true}
       # Upstream hosts whitelist (comma-separated, only used when enabled=true)
       - SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS=${SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS:-}
-
-      # Native plugin process sandbox (Linux)
-      - PLUGINS_SANDBOX_ENABLED=${PLUGINS_SANDBOX_ENABLED:-true}
-      - PLUGINS_LANDLOCK_ENABLED=${PLUGINS_LANDLOCK_ENABLED:-true}
-      - PLUGINS_LANDLOCK_REQUIRED=${PLUGINS_LANDLOCK_REQUIRED:-true}
-      - PLUGINS_SECCOMP_ENABLED=${PLUGINS_SECCOMP_ENABLED:-true}
-      - PLUGINS_MAX_OPEN_FILES=${PLUGINS_MAX_OPEN_FILES:-1024}
-      - PLUGINS_NICE=${PLUGINS_NICE:-10}
 
       # =======================================================================
       # Update Configuration (在线更新配置)

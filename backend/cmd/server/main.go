@@ -19,7 +19,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pluginsandbox"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
@@ -54,10 +53,6 @@ func init() {
 // initLogger configures the default slog handler based on gin.Mode().
 // In non-release mode, Debug level logs are enabled.
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == pluginsandbox.SubcommandName {
-		os.Exit(pluginsandbox.RunExec(os.Args[2:]))
-	}
-
 	logger.InitBootstrap()
 	defer logger.Sync()
 

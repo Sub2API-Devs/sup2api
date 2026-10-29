@@ -1039,15 +1039,12 @@ func (m *PluginManager) publishRuntimeLocked(installation *PluginInstallation, r
 }
 
 func (m *PluginManager) newRuntime(ctx context.Context, installation *PluginInstallation) (*pluginRuntime, error) {
-	// Each plugin gets a private writable runtime tree. The installation tree is
-	// read-only to the Landlock policy, so sockets/temp files cannot be used to
-	// modify the verified package or another plugin's runtime state.
-	socketDir := filepath.Join(m.installer.RootDir(), "runtime", fmt.Sprintf("%d", installation.ID))
+	socketDir := filepath.Join(m.installer.RootDir(), "runtime")
 	if err := os.MkdirAll(socketDir, 0o700); err != nil {
 		return nil, err
 	}
 	timeout := time.Duration(m.cfg.Plugins.StartTimeoutSeconds) * time.Second
-	return startPluginRuntime(ctx, installation, timeout, socketDir, m.buildHostServices(installation), m.cfg.Plugins)
+	return startPluginRuntime(ctx, installation, timeout, socketDir, m.buildHostServices(installation))
 }
 
 // SetAccountDirectory 注入账号目录实现（敏感能力）。仅在启动装配阶段调用一次，
