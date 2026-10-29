@@ -735,8 +735,21 @@ const (
 func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Account,
 	status int, header http.Header, body []byte, transportErr string) attemptResult {
 	if c.failurePolicy != nil {
-		return c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
+		res := c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
+		if status > 0 {
+			// The policy decides retries and the reply; the plugin still
+			// tells what the answer means for the account (CONTRACTS §69).
+			c.applyPluginAccountState(ctx, acct.GetId(), c.classifyWithPlugin(ctx, rt, acct, status, header, body, transportErr))
+		}
+		return res
 	}
+	return c.applyClassification(ctx, rt, acct, status, body, transportErr, c.classifyWithPlugin(ctx, rt, acct, status, header, body, transportErr))
+}
+
+// classifyWithPlugin asks the account type's plugin what an upstream failure
+// means; defaults when the call fails.
+func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *pluginv1.Account,
+	status int, header http.Header, body []byte, transportErr string) *pluginv1.ClassifyErrorResponse {
 	headers := map[string]string{}
 	for k, v := range header {
 		if len(v) > 0 {
@@ -756,13 +769,16 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 		slog.WarnContext(ctx, "gateway: classify error failed, using defaults", "plugin", rt.binding.Plugin.Key, "err", err)
 		cls = defaultClassification(status)
 	}
-
-	return c.applyClassification(ctx, rt, acct, status, body, transportErr, cls)
+	return cls
 }
 
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
 	if c.failurePolicy != nil {
-		return c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
+		res := c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
+		if status > 0 {
+			c.applyPluginAccountState(ctx, acct.GetId(), cls)
+		}
+		return res
 	}
 	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
 	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
@@ -818,6 +834,11 @@ func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, s
 	}
 	if automatic != nil {
 		effect, reason = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, automatic.GetReason()
+		// A disable with a release time is applied as such; without one, or
+		// when the account may not be disabled, it stays a cooldown.
+		if c.pluginAutoDisable(ctx, acct.GetId(), automatic) {
+			effect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED
+		}
 	}
 	if effect == pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE {
 		effect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN
@@ -836,6 +857,69 @@ func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, s
 		}
 	}
 	return reason, failover
+}
+
+// pluginAutoDisable applies a plugin's temporary disable (automatic_state
+// DISABLE with a release time, e.g. CCGateway's 429 until the quota resets):
+// the account is auto_disabled until then, so neither another attempt of this
+// request nor a sticky session picks it, and the core's sweep makes it active
+// again at the release time (CONTRACTS §69). A disable without a release time
+// or with one already past is not applied here. It reports whether the
+// account is disabled now.
+func (c *call) pluginAutoDisable(ctx context.Context, id int64, st *pluginv1.AccountAutomaticState) bool {
+	if st == nil || st.GetAction() != pluginv1.AccountAutomaticState_ACTION_DISABLE {
+		return false
+	}
+	now := c.g.now()
+	var release time.Time
+	switch r := st.GetRelease().(type) {
+	case *pluginv1.AccountAutomaticState_UntilUnix:
+		release = time.Unix(r.UntilUnix, 0)
+	case *pluginv1.AccountAutomaticState_DurationSeconds:
+		release = now.Add(time.Duration(r.DurationSeconds) * time.Second)
+	}
+	if !release.After(now) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	reason := st.GetReason()
+	if reason == "" {
+		reason = "disabled by the account plugin until " + release.UTC().Format(time.RFC3339)
+	}
+	disabled, err := c.g.d.Accounts.AutoDisableUntil(ctx, id, reason, release)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: disable account until release", "account", id, "err", err)
+		return false
+	}
+	if s := c.sticky; disabled && s != nil && s.bound == id {
+		if c.failurePolicy != nil {
+			if !s.keep {
+				c.failureState.stickyErr = c.writePolicyBinding(ctx, s, 0)
+			}
+		} else {
+			c.dropBinding(ctx, s)
+		}
+	}
+	return disabled
+}
+
+// applyPluginAccountState is the part of a plugin's classification a
+// published failure policy still takes (CONTRACTS §69): the quota the answer
+// names and a temporary disable. Retries, cooldowns and the client reply stay
+// the policy's.
+func (c *call) applyPluginAccountState(ctx context.Context, id int64, cls *pluginv1.ClassifyErrorResponse) {
+	c.applyQuotaObservation(ctx, id, cls.GetQuota())
+	s := &c.failureState
+	if s.blocked {
+		return
+	}
+	if c.pluginAutoDisable(ctx, id, cls.GetAutomaticState()) {
+		s.blocked, s.accountResult = true, "disabled_by_plugin"
+		if n := len(s.events); n > 0 && s.events[n-1].AccountID == id {
+			s.events[n-1].AccountResult = s.accountResult
+		}
+	}
 }
 
 // autoDisableAccount disables the account when both the global switch and

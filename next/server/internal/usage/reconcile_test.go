@@ -172,6 +172,9 @@ func (a recAccounts) AutoDisable(context.Context, int64, string) (bool, error)  
 func (a recAccounts) AutoDisableByPolicy(context.Context, int64, string) (bool, error) {
 	return true, nil
 }
+func (a recAccounts) AutoDisableUntil(context.Context, int64, string, time.Time) (bool, error) {
+	return true, nil
+}
 func (a recAccounts) TouchLastUsed(context.Context, int64) {}
 
 type recProxies struct{}

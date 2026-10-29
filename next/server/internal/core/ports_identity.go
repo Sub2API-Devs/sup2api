@@ -324,6 +324,12 @@ type AccountDirectory interface {
 	// request policy snapshot. It still checks the account's own opt-out, but
 	// does not reread the global switch from a newer policy revision.
 	AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error)
+	// AutoDisableUntil sets status=auto_disabled until release, when the
+	// core's sweep makes the account active again: a temporary disable a
+	// plugin's ClassifyError asked for (automatic_state with a release time,
+	// CONTRACTS §69). The account's opt-out and the global switch still
+	// apply. It reports whether the account is disabled.
+	AutoDisableUntil(ctx context.Context, id int64, reason string, release time.Time) (bool, error)
 	TouchLastUsed(ctx context.Context, id int64)
 }
 

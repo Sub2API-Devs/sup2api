@@ -503,6 +503,8 @@ type fakeAccounts struct {
 	touched       map[int64]int
 	cooldowns     []int64
 	lastTypes     []core.AccountTypeKey
+	// releases holds the release time of temporary disables (CONTRACTS §69).
+	releases map[int64]time.Time
 }
 
 func newFakeAccounts() *fakeAccounts {
@@ -588,6 +590,16 @@ func (a *fakeAccounts) SetCooldown(_ context.Context, id int64, until time.Time,
 }
 
 func (a *fakeAccounts) AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error) {
+	return a.AutoDisable(ctx, id, reason)
+}
+
+func (a *fakeAccounts) AutoDisableUntil(ctx context.Context, id int64, reason string, release time.Time) (bool, error) {
+	a.mu.Lock()
+	if a.releases == nil {
+		a.releases = map[int64]time.Time{}
+	}
+	a.releases[id] = release
+	a.mu.Unlock()
 	return a.AutoDisable(ctx, id, reason)
 }
 

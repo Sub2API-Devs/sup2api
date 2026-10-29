@@ -12,8 +12,9 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// CONTRACTS §42: only administrator rules can disable an account;
-// the global switch and the account's auto_disable still decide.
+// CONTRACTS §42: only administrator rules can disable an account for good;
+// a plugin may disable it until a release time (§69). The global switch and
+// the account's auto_disable still decide.
 
 type automaticStateAccounts struct {
 	*fakeAccounts
@@ -34,7 +35,7 @@ func (a *automaticStateAccounts) ApplyPluginAccountAutomaticState(ctx context.Co
 	return a.ApplyAccountAutomaticState(ctx, id, state)
 }
 
-func TestPluginDisableRequiresAdministratorRule(t *testing.T) {
+func TestPluginDisableIsTemporaryOrNeedsAdministratorRule(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		status int
@@ -56,8 +57,15 @@ func TestPluginDisableRequiresAdministratorRule(t *testing.T) {
 				cls.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota exhausted", Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: time.Now().Add(time.Hour).Unix()}}
 			}
 			c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, tc.status, nil, "", cls)
-			assert.Empty(t, e.accounts.disabled)
 			assert.Nil(t, accounts.received)
+			if tc.timed {
+				// Disabled until the plugin's release time, not cooled down.
+				assert.Equal(t, "quota exhausted", e.accounts.disabled[1])
+				assert.WithinDuration(t, time.Now().Add(time.Hour), e.accounts.releases[1], 2*time.Second)
+				assert.Empty(t, e.accounts.cooldowns)
+				return
+			}
+			assert.Empty(t, e.accounts.disabled)
 			assert.Equal(t, []int64{1}, e.accounts.cooldowns)
 		})
 	}

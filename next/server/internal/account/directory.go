@@ -218,6 +218,18 @@ func (s *Service) AutoDisable(ctx context.Context, id int64, reason string) (boo
 	return out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled", nil
 }
 
+// AutoDisableUntil disables the account until release (CONTRACTS §69).
+func (s *Service) AutoDisableUntil(ctx context.Context, id int64, reason string, release time.Time) (bool, error) {
+	out, err := s.ApplyAccountAutomaticState(ctx, id, &pluginv1.AccountAutomaticState{
+		Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: reason,
+		Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: release.Unix()},
+	})
+	if err != nil {
+		return false, err
+	}
+	return out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled", nil
+}
+
 // AutoDisableByPolicy executes the core's frozen decision, retaining account opt-out.
 func (s *Service) AutoDisableByPolicy(ctx context.Context, id int64, reason string) (bool, error) {
 	out, err := s.applyAutomaticState(ctx, "", id, &pluginv1.AccountAutomaticState{

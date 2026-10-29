@@ -103,8 +103,12 @@ func TestFailurePolicyCoreControlsRetries(t *testing.T) {
 			p.RetryEnabled, p.MaxRetries = tc.enabled, tc.max
 			p.RetryRules[0].Action, p.RetryRules[0].SameAccountRetries, p.RetryRules[0].ExhaustedAction = tc.action, 1, failureReset
 			e.setFailurePolicy(p)
-			e.plat.classifyHook = func(*pluginv1.ClassifyErrorRequest, *pluginv1.ClassifyErrorResponse) {
-				t.Error("core policy called plugin classifier")
+			// The plugin's retry and cooldown suggestions are not the policy's
+			// to follow; only a temporary disable is taken (CONTRACTS §69).
+			e.plat.classifyHook = func(_ *pluginv1.ClassifyErrorRequest, out *pluginv1.ClassifyErrorResponse) {
+				out.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+				out.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN
+				out.CooldownUntilUnix = time.Now().Add(time.Hour).Unix()
 			}
 			e.up.set("acc-1", &upstreamRule{status: 503})
 			r := e.messages(body(testModel, false))
@@ -115,8 +119,44 @@ func TestFailurePolicyCoreControlsRetries(t *testing.T) {
 			}
 			require.Equal(t, want, r.status)
 			require.NotEmpty(t, e.record().FailurePolicy)
+			require.Empty(t, e.accounts.cooldowns, "plugin cooldown applied under a core policy")
 		})
 	}
+}
+
+// With a published failure policy the plugin still decides what an answer
+// means for the account: a 429 it disables until the quota reset makes the
+// account auto_disabled at once, so the policy's retry and the sticky session
+// move to another account (CONTRACTS §69).
+func TestFailurePolicyTakesPluginTemporaryDisable(t *testing.T) {
+	e := newEnv(t)
+	p := testFailurePolicy()
+	p.RetryRules[0].Action, p.RetryRules[0].SameAccountRetries, p.RetryRules[0].ExhaustedAction = failureRetry, 2, failureReset
+	p.RetryRules[0].Match.StatusCodes = "429"
+	p.MaxRetries = 3
+	e.enableSticky(onFailureFailover) // replaces the settings: before the policy
+	e.setFailurePolicy(p)
+	reset := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	e.plat.classifyHook = func(in *pluginv1.ClassifyErrorRequest, out *pluginv1.ClassifyErrorResponse) {
+		if in.GetStatus() == 429 {
+			out.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
+				Reason: "rate limited until reset", Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: reset.Unix()}}
+		}
+	}
+	e.up.set("acc-1", &upstreamRule{status: 429})
+	r := e.messages(withSession(body(testModel, false), "sess-A"))
+	require.Equal(t, 200, r.status, string(r.body))
+	// The same-account retry is skipped: the account is disabled already.
+	require.Equal(t, []string{"acc-1", "acc-2"}, e.up.keys())
+	require.Equal(t, "rate limited until reset", e.accounts.disabled[1])
+	require.Equal(t, reset.Unix(), e.accounts.releases[1].Unix())
+	rec := e.record()
+	require.Contains(t, rec.FailurePolicy, "disabled_by_plugin", "%+v", rec)
+	// The session stays on the account it moved to.
+	e.up.set("acc-1", nil)
+	e.messages(withSession(body(testModel, false), "sess-A"))
+	require.Equal(t, []string{"acc-1", "acc-2", "acc-2"}, e.up.keys())
+	e.record()
 }
 
 func TestFailurePolicyDisableIsIndependent(t *testing.T) {

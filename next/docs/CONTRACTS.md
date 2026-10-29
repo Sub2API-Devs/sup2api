@@ -2671,7 +2671,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - `QuotaResult.next_check_at_unix` 由插件建议，核心限定调用频率并维护持久化检查计划。查询完成必须校验租约、身份代次和快照版本，旧任务不能覆盖重新授权后的身份或新收到的限额事实。没有首次成功快照时插件可返回 `UNKNOWN`，不得伪造 0% 或默认为已确认可用。例外（2026-10-14）：快照错误为 `transient: token_expired: …`（CCGateway 容器报访问令牌过期且存有刷新令牌）时 CCGateway 插件返回 `AVAILABLE`（原因 `quota_auth_refresh_on_request`）——容器内 Claude Code 只在模型请求时刷新令牌，按 UNKNOWN 拦截会让空闲超过令牌有效期的账号永远不可调度；已知耗尽窗口仍拦截、无效快照仍为 `UNKNOWN`。真的未登录（`auth_rejected: not_logged_in: …`）与令牌被拒且无法续期（`auth_rejected: token_revoked: …`）返回 `UNKNOWN`（原因 `authorization_required`），重新授权后恢复。（CCGateway 部分为历史，0.1.112 起见本节「用量窗口不再拦截」一条。）
 - `BuildQuotaRequestResponse.runtime_operation` 与普通 HTTP URL 目标区分。运行时请求通过已注册的 `AccountQuotaRuntime`、当前账号与受限只读操作执行；不接受插件指定任意运行时 URL，也不向插件暴露 Worker 管理密钥或容器 OAuth token。配额解析仍统一由插件的 `ParseQuotaResponse` 完成。
 - CCGateway 的托管账号声明运行时 `usage` 查询。插件解析共享窗口与模型专属窗口，用映射后模型的 `claude-fable-` 前缀识别 Fable；共享耗尽优先限制全部模型，Fable 专属耗尽只影响 Fable。缺失窗口、失败查询和仅仅到达 reset 时间都不能清除已知耗尽事实。（准入部分为历史，0.1.112 起见下面「用量窗口不再拦截」一条；窗口解析与界面展示不变。）
-- **CCGateway 0.1.112 起（2026-10-30，用户要求）：用量窗口不再拦截调度。** 托管账号的快照无论什么状态——共享窗口（`5h`/`7d`）`rejected`、从未观测、快照过期、查询失败、`utilization_unknown`、无效快照、`auth_rejected: not_logged_in|token_revoked`——`CheckModelAvailability` 一律返回 `AVAILABLE`（原因 `quota_not_enforced`），不再有 `quota_unobserved`、`quota_stale`、`quota_refresh_failed`、`quota_unknown:*`、`invalid_quota_snapshot`、`authorization_required`、`quota_auth_refresh_on_request` 这些结果，65 分钟快照有效期也随之取消。原因：窗口只有在下一次 `/usage` 查询成功后才解除，查询一直失败账号就永远挂住（核心回 503/429）。真正的额度耗尽交给请求本身：上游 429 由插件 `ClassifyError` 设冷却并自动停用到重置时刻（`cooldown_until_unix` 与 `automatic_state.release`，时刻与释放都由插件决定，核心照做，到点自动恢复）；令牌被吊销时上游回 401，由系统设置的自动禁用规则（默认 `401`）停用账号。核心自身只执行系统设置的自动禁用。唯一例外是模型专属窗口（`7d_fable`/`7d_sonnet`）：它的 429 只换号、不冷却整个账号（其他模型照常可用），所以窗口为 `rejected` 且 `resets_at` 在未来时只对该模型族返回 `UNAVAILABLE`（原因 `quota_rejected:<key>`，`retry_at_unix` 为重置时刻），到 `resets_at` 自动放行，不等查询确认；没有重置时刻（或已过）的专属窗口不拦截，对应的 429 按普通 429 处理（冷却并自动停用整个账号，到 `retry-after` 或其他限额头给出的重置时刻，都没有时 60 秒）。`invalid_candidate`、`duplicate_candidate`、`unsupported_account_type` 与 API Key 账号（`subscription_not_required`）不变。已知局限：容器内未登录时若 CLI 在本地失败而不发到上游，请求得到的是网关本地错误，只短暂冷却、不触发自动禁用；发布了故障策略（`gateway.failure_policy`）时核心不调用插件 `ClassifyError`，429 只按策略冷却。
+- **CCGateway 0.1.112 起（2026-10-30，用户要求）：用量窗口不再拦截调度。** 托管账号的快照无论什么状态——共享窗口（`5h`/`7d`）`rejected`、从未观测、快照过期、查询失败、`utilization_unknown`、无效快照、`auth_rejected: not_logged_in|token_revoked`——`CheckModelAvailability` 一律返回 `AVAILABLE`（原因 `quota_not_enforced`），不再有 `quota_unobserved`、`quota_stale`、`quota_refresh_failed`、`quota_unknown:*`、`invalid_quota_snapshot`、`authorization_required`、`quota_auth_refresh_on_request` 这些结果，65 分钟快照有效期也随之取消。原因：窗口只有在下一次 `/usage` 查询成功后才解除，查询一直失败账号就永远挂住（核心回 503/429）。真正的额度耗尽交给请求本身：上游 429 由插件 `ClassifyError` 设冷却并自动停用到重置时刻（`cooldown_until_unix` 与 `automatic_state.release`，时刻与释放都由插件决定，核心照做，到点自动恢复）；令牌被吊销时上游回 401，由系统设置的自动禁用规则（默认 `401`）停用账号。核心自身只执行系统设置的自动禁用。唯一例外是模型专属窗口（`7d_fable`/`7d_sonnet`）：它的 429 只换号、不冷却整个账号（其他模型照常可用），所以窗口为 `rejected` 且 `resets_at` 在未来时只对该模型族返回 `UNAVAILABLE`（原因 `quota_rejected:<key>`，`retry_at_unix` 为重置时刻），到 `resets_at` 自动放行，不等查询确认；没有重置时刻（或已过）的专属窗口不拦截，对应的 429 按普通 429 处理（冷却并自动停用整个账号，到 `retry-after` 或其他限额头给出的重置时刻，都没有时 60 秒）。`invalid_candidate`、`duplicate_candidate`、`unsupported_account_type` 与 API Key 账号（`subscription_not_required`）不变。已知局限：容器内未登录时若 CLI 在本地失败而不发到上游，请求得到的是网关本地错误，只短暂冷却、不触发自动禁用。（原先还有一条"发布了故障策略时核心不调用插件 `ClassifyError`、429 只按策略冷却"，已由 §69 解决。）
 - CCGateway 0.1.69 的快照有效期同步为 30 分钟；本轮核心查询周期变更需配合该插件版本发布，不能留下旧插件 3 分钟的过期判断。插件仍可报告窗口重置后的提前核验建议，核心按上述 30 分钟下限调度；手动强制查询不受影响。（历史，2026-10-21 起见下一条。）
 - 2026-10-21 起：快照（最近一次成功查询）有效期为 65 分钟，大于两个查询周期；有效期内查询失败（`transient: …`）不再判 `UNKNOWN`，仍按上次成功的窗口判断，过期后为 `quota_refresh_failed`。未耗尽窗口到达 reset 时间直接视为可用（只会多出额度），不再判 `quota_reset_unconfirmed`；已知耗尽窗口仍按上条规则等重置后的查询确认，核心按插件建议在重置后约 1 分钟内复查。核心与插件需一起发布：只升级插件时，旧核心的 30 分钟下限仍会推迟这次复查。（准入部分为历史，CCGateway 0.1.112 起快照有效期不再影响准入，见上面「用量窗口不再拦截」一条；查询周期与复查计划不变。）
 - `ClassifyErrorResponse.quota` 承载插件确认的配额观测，核心只校验及存储。观测保存使用准入时由核心捕获的 `AccountQuotaSnapshot.generation`，不得信任插件指定的身份代次；重新授权前的迟到拒绝或恢复不能覆盖新身份。revision 已变化的旧查询不能延后更新的复查计划或覆盖失败计数。
@@ -4216,7 +4216,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ## 58. 核心通用失败处理
 
 - 核心提供 `/api/v1/settings/failure-policy` GET/PUT、`/preview` POST、`/history` GET，使用 `settings:read/manage`。PUT 携带 `expected_revision`，并发修改返回 409；最近 10 份历史与新配置原子保存。首次发布前保留旧行为；发布后旧重试/禁用写接口拒绝覆盖新策略。
-- 新策略直接匹配核心错误事实，不使用插件 `ClassifyError` 的重试、冷却、禁用建议，不新增插件接口。每次请求固定策略版本，配置读取/校验失败拒绝业务请求。
+- 新策略直接匹配核心错误事实，不使用插件 `ClassifyError` 的重试、冷却、禁用建议，不新增插件接口。每次请求固定策略版本，配置读取/校验失败拒绝业务请求。（2026-10-30 起例外：插件给出的带解除时间的自动禁用和配额观测照样执行，见 §69。）
 - 重试规则表和账号处理表独立首条命中。HTTP 状态码支持 400–599 和区间；关键词可空，此时仅按状态码。都填写时显式 AND/OR；传输错误没有 HTTP 状态码。只匹配前 4 KiB 错误文本。
 - 请求动作：返回、同账号重试、换号保留绑定、换号重置绑定。额外重试上限 0–9，所有动作共享预算；同账号重试耗尽后的动作必须明确配置。账号处理：不改变、定时冷却、自动禁用。自动禁用还需账号允许；禁用关闭或失败不隐式转成冷却，也不强制换号。
 - 重置仅改变路由绑定，使用带代数的原子比较更新；成功后才绑定新账号。旧请求不能覆盖新绑定或复活过期绑定。软粘性失败动作由新策略接管，账号资源归属不可绕过。
@@ -4627,3 +4627,21 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 同一模型出现在两个列表里时，不允许保存。
   - 新建账号时，按账号类型的 `default_limits` 预填。
 - 批量编辑里 RPM 排到 TPM 前面。
+
+## 69. 故障策略下仍执行插件的临时自动禁用（2026-10-30，用户要求）
+
+用户要求：CC 账号遇到 429 时，插件给出重置时刻，核心据此自动禁用账号，到点自动恢复；打开自动重试后，核心重试时已经选不到这个账号，粘性会话也一样。
+
+问题：线上发布了故障策略（§ 自动重试与禁用的 `failure_policy`）。原先有策略时核心完全不调用插件 `ClassifyError`，CCGateway 给 429 设的"禁用到重置时刻"根本没执行；策略里 429 的冷却为 0，额度用满的账号每个请求都会被先试一次（CCGateway 0.1.112 去掉用量窗口拦截后尤其明显）。
+
+规则：
+- 上游返回 HTTP 错误（`status > 0`，不含传输错误）时，即使发布了故障策略，核心也调用插件 `ClassifyError`（`platform.execute` 插件则用 Execute 返回的分类），并执行其中两项：
+  1. `quota`：配额观测照常保存（§44）。
+  2. `automatic_state` 为 `DISABLE` 且带解除时间（`until_unix` 在未来，或 `duration_seconds` > 0，最长 366 天）：账号立即设为 `auto_disabled`，`auto_disabled_until` = 解除时间，原因用插件给的 `reason`。核心每 5 秒的清扫在解除时间把账号恢复为 `active`。
+- 其余仍由策略决定：是否重试、同账号重试次数、换号、冷却、返回给客户端的内容。插件的 `action`、`account_effect`、`cooldown_until_unix` 不采用。
+- 临时禁用仍受全局自动禁用开关（策略的 `account_enabled`）和账号自己的 `auto_disable` 约束，管理员手动停用的账号不受影响。策略里的禁用规则已经停用了账号时，不再重复处理。
+- 禁用后本次请求的 `failureState.blocked` 置位，策略的"同账号重试"直接跳到换号；`policyCandidates` 每次尝试前重新读取候选账号，被禁用的账号不在其中。粘性会话：除非粘性设置开了"账号停用时保留绑定"（`KeepOnAccountDisabled`），立即解除到该账号的绑定，本次和后续请求改绑到新账号。
+- 使用记录 `failure_policy` 事件里该次尝试的 `account_result` 为 `disabled_by_plugin`。
+- 没有故障策略时（旧路径）：带解除时间的 `automatic_state` 现在也按"禁用到解除时间"执行（以前只当作冷却），没有解除时间的仍是冷却，永久禁用仍只由管理员规则决定（§42）。
+- 实现：`gateway/dispatch.go` 的 `pluginAutoDisable`、`applyPluginAccountState`；`core.AccountDirectory.AutoDisableUntil`（`account/directory.go`，走 `ApplyAccountAutomaticState`）。
+- CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
