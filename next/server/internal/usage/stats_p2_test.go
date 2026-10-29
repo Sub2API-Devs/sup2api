@@ -62,7 +62,7 @@ func TestAllOverview(t *testing.T) {
 	accounts := ov["accounts"].(map[string]any)
 	require.Equal(t, float64(2), accounts["total"])
 	require.Equal(t, float64(1), accounts["available"])
-	require.Equal(t, float64(1), accounts["error"])
+	require.Equal(t, float64(1), accounts["auto_disabled"]) // a legacy "error" reads as auto-disabled
 
 	self := f.get(f.user, "/me/usage/overview?tz=UTC", 200)["data"].(map[string]any)
 	require.Equal(t, float64(1), self["last_5m"].(map[string]any)["requests"])

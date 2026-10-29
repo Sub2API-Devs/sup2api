@@ -177,14 +177,19 @@ describe('account status recovery', () => {
     expect(mocks.patch).not.toHaveBeenCalled()
   })
 
-  it.each(['disabled', 'auto_disabled', 'error'])('offers a direct reset for %s without a cooldown', (status) => {
+  it.each(['auto_disabled', 'error'])('offers a direct reset for %s without a cooldown', (status) => {
     list.items.value[0].status = status
     const w = render()
     expect(w.get('[data-testid="account-reset-status"]').text()).toBe('重置状态')
   })
 
+  it('leaves a manual disable to the switch', () => {
+    Object.assign(list.items.value[0], { status: 'disabled', schedulable: false })
+    expect(render().find('[data-testid="account-reset-status"]').exists()).toBe(false)
+  })
+
   it('applies the confirmed server state immediately without changing manual scheduling', async () => {
-    list.items.value[0].schedulable = false
+    Object.assign(list.items.value[0], { status: 'auto_disabled', schedulable: false })
     mocks.post.mockResolvedValue({ ...list.items.value[0], status: 'active', status_reason: '', cooldown_until: null })
     const w = render()
     await w.get('[data-testid="account-reset-status"]').trigger('click')
@@ -197,17 +202,19 @@ describe('account status recovery', () => {
   })
 
   it('keeps the disabled state and does not report success if reset fails', async () => {
+    list.items.value[0].status = 'auto_disabled'
     const error = new Error('reset failed')
     mocks.post.mockRejectedValue(error)
     const w = render()
     await w.get('[data-testid="account-reset-status"]').trigger('click')
     await flushPromises()
-    expect(list.items.value[0].status).toBe('disabled')
+    expect(list.items.value[0].status).toBe('auto_disabled')
     expect(mocks.notifyError).toHaveBeenCalledWith(error)
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   it('does not reset when confirmation is canceled', async () => {
+    list.items.value[0].status = 'auto_disabled'
     mocks.confirm.mockResolvedValue(false)
     const w = render()
     await w.get('[data-testid="account-reset-status"]').trigger('click')
@@ -216,6 +223,7 @@ describe('account status recovery', () => {
   })
 
   it('does not show recovery for readers or orphaned accounts', () => {
+    list.items.value[0].status = 'auto_disabled'
     mocks.canUpdate = false
     const reader = render()
     expect(reader.find('[data-testid="account-reset-status"]').exists()).toBe(false)

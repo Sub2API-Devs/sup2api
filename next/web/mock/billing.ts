@@ -1250,7 +1250,7 @@ on('GET', '/usage/overview', (req) => {
   const o = overviewOf(usageRows, tz)
   const today = zoned(new Date().toISOString(), tz).day
   const active = new Set(usageRows.filter((u) => zoned(u.created_at, tz).day === today).map((u) => u.user_id)).size
-  return { ...o, users: { total: 4, new_today: 1, active_today: active }, accounts: { total: 6, available: 4, error: 1, disabled: 1 } }
+  return { ...o, users: { total: 4, new_today: 1, active_today: active }, accounts: { total: 6, available: 4, auto_disabled: 1, disabled: 1 } }
 })
 on('GET', '/usage/export', (req) => usageCSV(usageRows, req.query, false))
 on('GET', '/me/usage/export', (req) => usageCSV(usageRows.filter((u) => u.user_id === 1), req.query, true))

@@ -15,7 +15,7 @@ export default {
   },
   limitsUi: {
     title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话',
-    windowHint: 'RPM、TPM、会话为近 60 秒的用量，token 在响应结束后计入；会话是近 60 秒内活跃的粘性会话数。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
+    windowHint: 'RPM、TPM、会话为近 60 秒的用量，token 在响应结束后计入；会话是近 60 秒内活跃的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
   },
   modelLimits: {
     title: '指定模型限速',
@@ -99,7 +99,7 @@ export default {
   tpdLimit: '每天 token 数（TPD）',
   spmLimit: '每分钟会话数（SPM）',
   tpdHint: '0 表示不限；按 UTC 自然日',
-  spmHint: '近 60 秒内活跃的粘性会话数上限。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求不计数也不受限。',
+  spmHint: '近 60 秒内活跃的会话数上限，按粘性会话键区分会话。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求每个都算一个新会话。0 表示不限',
   models: '模型',
   modelsHint: '留空表示所有模型；输入完整模型 ID，回车或逗号添加',
   modelsPlaceholder: '模型 ID，回车添加',
@@ -255,7 +255,6 @@ export default {
     }
   },
   autoReleaseAt: '{time} 自动启用',
-  schedulingSwitchHint: '控制是否参与调度；自动禁用请使用“重置状态”恢复',
   resetStatus: '重置状态',
   resetStatusHint: '清除禁用、错误原因与冷却，恢复为启用状态；不改变允许调度开关',
   resetStatusTitle: '重置账号状态',

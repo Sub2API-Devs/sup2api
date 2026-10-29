@@ -76,7 +76,7 @@ const cards = computed(() => {
 const accountsTone = computed<'primary' | 'warning' | 'danger'>(() => {
   const a = cards.value.accounts
   if (!a) return 'primary'
-  return a.available === 0 && a.total ? 'danger' : a.error ? 'warning' : 'primary'
+  return a.available === 0 && a.total ? 'danger' : a.auto_disabled ? 'warning' : 'primary'
 })
 const first = computed(() => loadingOverview.value && !overview.value)
 
@@ -152,7 +152,7 @@ watch(() => loadingOverview.value || users.loading.value || groups.loading.value
         v-if="cards.accounts"
         :label="t('stats.admin.accounts')"
         :value="`${formatNumber(cards.accounts.available)}/${formatNumber(cards.accounts.total)}`"
-        :sub="t('stats.admin.accountsSub', { error: formatNumber(cards.accounts.error), disabled: formatNumber(cards.accounts.disabled) })"
+        :sub="t('stats.admin.accountsSub', { auto: formatNumber(cards.accounts.auto_disabled), disabled: formatNumber(cards.accounts.disabled) })"
         icon="account"
         :tone="accountsTone"
         :to="auth.has([...ACCOUNT_KEYS.read]) ? '/accounts' : undefined"

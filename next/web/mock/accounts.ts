@@ -474,6 +474,10 @@ const withGroups = (a: any) => ({
   groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
 })
 
+// The console's three statuses, as the core filters them (GET /accounts ?status=).
+const statusKey = (a: { status: string; schedulable: boolean }) =>
+  a.status === 'disabled' ? 'disabled' : a.status === 'active' && a.schedulable ? 'active' : 'auto_disabled'
+
 /** The stored mock account (for other fixtures, e.g. the CCGateway containers); undefined when missing. */
 export function mockAccount(id: number): { status: string; proxy_id: number | null; plugin_key: string; type: string } | undefined {
   return accounts.find((a) => a.id === id)
@@ -669,7 +673,7 @@ on('GET', '/accounts', (req) => {
   if (q.plugin_key) list = list.filter((a) => a.plugin_key === q.plugin_key)
   if (q.type) list = list.filter((a) => a.type === q.type)
   if (q.group_id) list = list.filter((a) => a.group_ids.includes(Number(q.group_id)))
-  if (q.status) list = list.filter((a) => a.status === q.status)
+  if (q.status) list = list.filter((a) => statusKey(a) === q.status)
   // ?model=: accounts that can serve it (empty `models` = all models, §18.3).
   if (q.model) list = list.filter((a) => !(a.models || []).length || (a.models || []).includes(q.model))
   if (q.q) list = list.filter((a) => a.name.includes(q.q))

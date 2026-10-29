@@ -122,16 +122,14 @@ function coolingDown(a: Account) {
 }
 
 /** detail: full explanation (list badge tooltip, detail drawer); note: short recovery time shown under the list badge. */
-type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string; note?: string }
+type StatusView = { tone: ReturnType<typeof accountStatusTone>; label: string; detail?: string; note?: string }
 function statusOf(a: Account): StatusView {
   const key = accountStatusKey(a)
-  const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: a.status_reason || undefined }
-  if (a.orphaned) view.detail = t('accounts.orphanedHint', { plugin: a.plugin_key })
+  const cooling = key === 'active' && coolingDown(a)
+  const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || a.status_reason
+  const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
   if (key === 'auto_disabled' && a.auto_disabled_until) view.note = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })
-  if (key === 'active' && coolingDown(a)) {
-    view.note = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
-    view.detail = a.cooldown_reason || view.detail
-  }
+  if (cooling) view.note = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
   return view
 }
 
@@ -378,7 +376,8 @@ const balanceRefresh = useBalanceRefresh({
   onError: (_id, e) => notifyError(e)
 })
 
-const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned
+// A manual disable is undone with the switch; Reset status clears what the gateway set.
+const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned && a.status !== 'disabled'
 
 async function resetStatus(a: Account) {
   const ok = await confirm({ title: t('accounts.resetStatusTitle'), message: t('accounts.resetStatusConfirm', { name: a.name }), confirmText: t('accounts.resetStatus') })
@@ -702,6 +701,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
               </SDescItem>
               <SDescItem :label="t('common.status')">
                 <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
+                <SHint v-if="statusOf(detail).note" inline size="xs" class="ml-2">{{ statusOf(detail).note }}</SHint>
                 <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
                 <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
               </SDescItem>

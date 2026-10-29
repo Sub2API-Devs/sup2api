@@ -42,7 +42,7 @@ describe('operator dashboard', () => {
     expect(w.find('[data-testid="card-users"]').exists()).toBe(false)
     expect(w.find('[data-testid="card-accounts"]').exists()).toBe(false)
 
-    get.mockResolvedValue({ ...overview, users: { total: 40, new_today: 2, active_today: 9 }, accounts: { total: 6, available: 4, error: 1, disabled: 1 } })
+    get.mockResolvedValue({ ...overview, users: { total: 40, new_today: 2, active_today: 9 }, accounts: { total: 6, available: 4, auto_disabled: 1, disabled: 1 } })
     const full = render()
     await flushPromises()
     expect(full.get('[data-testid="card-users"]').text()).toContain('9')

@@ -64,7 +64,7 @@ export default {
     activeUsers: '活跃用户',
     usersSub: '今日新增 {n} · 共 {total}',
     accounts: '可用账号',
-    accountsSub: '异常 {error} · 停用 {disabled}'
+    accountsSub: '自动禁用 {auto} · 禁用 {disabled}'
   },
   key: {
     usage: '用量',

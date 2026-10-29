@@ -125,10 +125,10 @@ type Overview struct {
 		ActiveToday int64 `json:"active_today"`
 	} `json:"users,omitempty"`
 	Accounts *struct {
-		Total     int64 `json:"total"`
-		Available int64 `json:"available"`
-		Error     int64 `json:"error"`
-		Disabled  int64 `json:"disabled"`
+		Total        int64 `json:"total"`
+		Available    int64 `json:"available"`
+		AutoDisabled int64 `json:"auto_disabled"`
+		Disabled     int64 `json:"disabled"`
 	} `json:"accounts,omitempty"`
 }
 
@@ -225,14 +225,16 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 		}
 		if accounts {
 			out.Accounts = &struct {
-				Total     int64 `json:"total"`
-				Available int64 `json:"available"`
-				Error     int64 `json:"error"`
-				Disabled  int64 `json:"disabled"`
+				Total        int64 `json:"total"`
+				Available    int64 `json:"available"`
+				AutoDisabled int64 `json:"auto_disabled"`
+				Disabled     int64 `json:"disabled"`
 			}{}
+			// The console's three statuses: a legacy "error" and an active account out of scheduling read as auto-disabled.
 			if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status = 'active' AND schedulable),
-				count(*) FILTER (WHERE status = 'error'), count(*) FILTER (WHERE status = 'disabled')
-				FROM accounts WHERE deleted_at IS NULL`).Scan(&out.Accounts.Total, &out.Accounts.Available, &out.Accounts.Error, &out.Accounts.Disabled); err != nil {
+				count(*) FILTER (WHERE status IN ('auto_disabled', 'error') OR (status = 'active' AND NOT schedulable)),
+				count(*) FILTER (WHERE status = 'disabled')
+				FROM accounts WHERE deleted_at IS NULL`).Scan(&out.Accounts.Total, &out.Accounts.Available, &out.Accounts.AutoDisabled, &out.Accounts.Disabled); err != nil {
 				return err
 			}
 		}

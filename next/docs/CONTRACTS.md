@@ -4519,11 +4519,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ```json
 {"users":{"total":120,"new_today":3,"active_today":41},
- "accounts":{"total":38,"available":30,"error":2,"disabled":4}}
+ "accounts":{"total":38,"available":30,"auto_disabled":2,"disabled":4}}
 ```
 
 - `users`（`user:read`）：未删除的用户数；`new_today` 是 `tz` 今天注册的；`active_today` 是今天有使用记录的不同用户数。
-- `accounts`（`account:read`）：未删除的账号数；`available` 是 `status='active'` 且可调度；`error`、`disabled` 按状态计数。全部是 COUNT，不受列表分页影响。
+- `accounts`（`account:read`）：未删除的账号数；`available` 是 `status='active'` 且可调度；`auto_disabled` 是控制台的"自动禁用"（`auto_disabled`、遗留的 `error`、启用但不可调度），`disabled` 是手动禁用（2026-10-30 起，原 `error` 字段改名）。全部是 COUNT，不受列表分页影响。
 - 进程内按「时区 + 两个权限」缓存 30 秒（它扫描全部用户近 30 天的行）。
 
 **`group_by=upstream_model`**：管理员的 `/usage/summary` 可按上游实际模型分组；自助接口返回 400，与 `user` 相同。
@@ -4669,8 +4669,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 | 字段 | 类型 / 校验 | 说明 |
 |---|---|---|
-| `spm_limit` | 0–10000000，默认 0（迁移 0063，列 `accounts.spm_limit`） | 账号近 60 秒内活跃的粘性会话数上限，0 = 不限 |
-| `model_limits[].spm_limit` | 同上；旧数据缺省为 0 | 该模型列表近 60 秒内活跃的粘性会话数上限 |
+| `spm_limit` | 0–10000000，默认 0（迁移 0063，列 `accounts.spm_limit`） | 账号近 60 秒内活跃的会话数上限（会话见 71.2），0 = 不限 |
+| `model_limits[].spm_limit` | 同上；旧数据缺省为 0 | 该模型列表近 60 秒内活跃的会话数上限 |
 | `rate_usage.sessions`、`rate_usage.models[].sessions` | 只读 | 近 60 秒内活跃的会话数（精确值，不是估算） |
 
 - POST / PATCH `/accounts` 可带 `spm_limit`；字段错误 `spm_limit: invalid`、`model_limits[i].spm_limit: invalid`。

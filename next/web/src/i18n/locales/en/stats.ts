@@ -64,7 +64,7 @@ export default {
     activeUsers: 'Active users',
     usersSub: '{n} new today · {total} in total',
     accounts: 'Available accounts',
-    accountsSub: '{error} failing · {disabled} disabled'
+    accountsSub: '{auto} auto-disabled · {disabled} disabled'
   },
   key: {
     usage: 'Usage',

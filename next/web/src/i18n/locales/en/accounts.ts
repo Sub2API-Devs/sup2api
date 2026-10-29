@@ -15,7 +15,7 @@ export default {
   },
   limitsUi: {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
-    windowHint: 'RPM, TPM and sessions are the usage of the last 60 seconds; tokens are counted when a response finishes, sessions are the sticky sessions active in that time. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
+    windowHint: 'RPM, TPM and sessions are the usage of the last 60 seconds; tokens are counted when a response finishes, sessions are the sessions active in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
   },
   modelLimits: {
     title: 'Model limits',
@@ -99,7 +99,7 @@ export default {
   tpdLimit: 'Tokens per day (TPD)',
   spmLimit: 'Sessions per minute (SPM)',
   tpdHint: '0 = unlimited; per UTC day',
-  spmHint: 'Cap of the sticky sessions active in the last 60 seconds. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. Requests matching no sticky rule are neither counted nor limited.',
+  spmHint: 'Cap of the sessions active in the last 60 seconds, told apart by sticky session key. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',
   models: 'Models',
   modelsHint: 'Empty = all models. Enter complete model ids; Enter or comma adds one.',
   modelsPlaceholder: 'Model id, press Enter',
@@ -262,7 +262,6 @@ export default {
     }
   },
   autoReleaseAt: 'Auto-enables at {time}',
-  schedulingSwitchHint: 'Controls scheduling eligibility; use Reset status to recover auto-disabled accounts',
   resetStatus: 'Reset status',
   resetStatusHint: 'Clear the disable, error reason and cooldown and restore enabled; the scheduling switch stays unchanged',
   resetStatusTitle: 'Reset account status',

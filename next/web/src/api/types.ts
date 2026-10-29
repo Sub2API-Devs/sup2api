@@ -326,7 +326,7 @@ export interface ModelLimit {
   max_concurrency: number
   rpm_limit: number
   tpm_limit: number
-  /** Sticky sessions active in the last 60 seconds. */
+  /** Sessions active in the last 60 seconds (CONTRACTS §71). */
   spm_limit: number
 }
 
@@ -378,7 +378,7 @@ export interface Account {
   /** 0 = unlimited. */
   rpm_limit: number
   tpm_limit: number
-  /** Sessions per minute: sticky sessions active in the last 60 seconds, 0 = unlimited (CONTRACTS §71). */
+  /** Sessions per minute: sessions active in the last 60 seconds by sticky session key, 0 = unlimited (CONTRACTS §71). */
   spm_limit: number
   /** Limits of lists of client models on top of the account's own (CONTRACTS §68). */
   model_limits?: ModelLimit[]
@@ -941,7 +941,7 @@ export interface UsageOverview {
   /** Operator view with user:read. */
   users?: { total: number; new_today: number; active_today: number }
   /** Operator view with account:read. */
-  accounts?: { total: number; available: number; error: number; disabled: number }
+  accounts?: { total: number; available: number; auto_disabled: number; disabled: number }
 }
 
 export interface BillingSettings {
