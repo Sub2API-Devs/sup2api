@@ -54,9 +54,11 @@ func TestScoped429Classification(t *testing.T) {
 	}
 }
 
+// A scoped 429 holds the family back until its reset; a query showing the
+// window cleared lets it through sooner.
 func TestScoped429ActiveZeroRefresh(t *testing.T) {
 	p, now := quotaTestPlugin()
-	observed, err := p.ClassifyError(context.Background(), upstream429("seven_day_overage_included", 0))
+	observed, err := p.ClassifyError(context.Background(), upstream429("seven_day_overage_included", now.Add(time.Hour).Unix()))
 	require.NoError(t, err)
 	require.Len(t, observed.GetQuota().GetWindows(), 1)
 	q := &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: append([]*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed"}}, observed.Quota.Windows...)}
@@ -70,6 +72,28 @@ func TestScoped429ActiveZeroRefresh(t *testing.T) {
 	after, err := p.CheckModelAvailability(context.Background(), in)
 	require.NoError(t, err)
 	require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, after.Results[0].State)
+}
+
+// A scoped 429 without a future reset cannot hold the family back by itself
+// (model availability would admit it again at once): it disables the whole
+// account like any other 429, until retry-after.
+func TestScoped429WithoutResetDisablesAccount(t *testing.T) {
+	p, now := quotaTestPlugin()
+	for _, reset := range []int64{0, now.Unix(), now.Add(-time.Hour).Unix()} {
+		out, err := p.ClassifyError(context.Background(), upstream429("seven_day_overage_included", reset))
+		require.NoError(t, err)
+		require.Len(t, out.GetQuota().GetWindows(), 1)
+		require.Equal(t, "7d_fable", out.Quota.Windows[0].Key)
+		require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.Action)
+		require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.AccountEffect)
+		require.Equal(t, now.Add(time.Hour).Unix(), out.CooldownUntilUnix)
+		require.Equal(t, now.Add(time.Hour).Unix(), out.GetAutomaticState().GetUntilUnix())
+		q := &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: out.Quota.Windows}
+		in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-fable-5", Quota: q}}}
+		admitted, err := p.CheckModelAvailability(context.Background(), in)
+		require.NoError(t, err)
+		require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, admitted.Results[0].State)
+	}
 }
 
 // Only a managed account's upstream answer names a limit; anything else is

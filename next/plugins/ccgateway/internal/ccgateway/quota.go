@@ -20,11 +20,6 @@ const (
 	// quotaRefresh is the core's regular query interval.
 	quotaRefresh = 30 * time.Minute
 	quotaRetry   = quotaRefresh
-	// quotaValid is how long the last successful query decides model
-	// admission: longer than two intervals, so one late or failed query (the
-	// core retries it within minutes) does not hold the account back. At one
-	// interval every query that came a little late blocked it (2026-10-21).
-	quotaValid   = 2*quotaRefresh + 5*time.Minute
 	maxQuotaBody = 64 << 10
 )
 
@@ -154,7 +149,7 @@ func usageFailure(now time.Time, code int32, raw []byte) *pluginv1.QuotaResult {
 	case "token_expired":
 		// Not a rejection: the container's Claude Code renews the token on its
 		// next model request (model availability admits it, availability.go).
-		return quotaFailure(now, false, tokenExpiredQuotaError+": the access token expired; Claude Code renews it on its next request")
+		return quotaFailure(now, false, "token_expired: the access token expired; Claude Code renews it on its next request")
 	case "api_key_account":
 		return quotaFailure(now, false, "API key accounts have no subscription usage")
 	}

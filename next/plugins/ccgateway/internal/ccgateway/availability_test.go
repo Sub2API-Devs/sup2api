@@ -11,38 +11,48 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestModelAvailabilityMappedScopeAndSharedOverride(t *testing.T) {
+func checkManaged(t *testing.T, p *Plugin, now time.Time, model string, q *pluginv1.AccountQuotaSnapshot) *pluginv1.ModelAvailability {
+	t.Helper()
+	in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{{AccountId: 1, AccountType: AccountTypeManaged, Model: model, Quota: q}}}
+	before := proto.Clone(in)
+	out, err := p.CheckModelAvailability(context.Background(), in)
+	require.NoError(t, err)
+	require.Len(t, out.Results, 1)
+	require.True(t, proto.Equal(before, in))
+	return out.Results[0]
+}
+
+// Only a model family's own exhausted window holds that family back, and only
+// until its reset; shared windows never do (CONTRACTS §44.7).
+func TestModelAvailabilityScopedWindows(t *testing.T) {
 	p, now := quotaTestPlugin()
+	reset := now.Add(time.Hour).Unix()
 	for _, shared := range []string{"", "5h", "7d"} {
 		for _, tc := range []struct {
-			model, client string
-			blocked       bool
+			model   string
+			blocked string
 		}{
-			{"claude-fable-5", "alias", true}, {"claude-fable-5-1", "claude-opus-5", true},
-			{"claude-sonnet-5", "claude-fable-5", true}, {"claude-opus-5", "claude-fable-5", false},
-			{"claude-haiku-4-5-20251001", "alias", false}, {"prefix-claude-fable-5", "", false},
-			{"claude-fable", "", false}, {"claude-fableish-5", "", false}, {"Claude-fable-5", "", false},
+			{"claude-fable-5", "7d_fable"}, {"claude-fable-5-1", "7d_fable"}, {"claude-sonnet-5", "7d_sonnet"},
+			{"claude-opus-5", ""}, {"claude-haiku-4-5-20251001", ""}, {"prefix-claude-fable-5", ""},
+			{"claude-fable", ""}, {"claude-fableish-5", ""}, {"Claude-fable-5", ""},
 		} {
 			t.Run(shared+"/"+tc.model, func(t *testing.T) {
-				windows := []*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed"}, {Key: "7d", Status: "allowed"}, {Key: "7d_fable", Status: "rejected", ResetsAtUnix: now.Add(time.Hour).Unix()}, {Key: "7d_sonnet", Status: "rejected", ResetsAtUnix: now.Add(time.Hour).Unix()}}
-				if shared != "" {
-					for _, window := range windows {
-						if window.Key == shared {
-							window.Status = "rejected"
-						}
+				windows := []*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed"}, {Key: "7d", Status: "allowed"}, {Key: "7d_fable", Status: "rejected", ResetsAtUnix: reset}, {Key: "7d_sonnet", Status: "rejected", ResetsAtUnix: reset}}
+				for _, window := range windows {
+					if window.Key == shared {
+						window.Status = "rejected"
 					}
 				}
-				out, err := p.CheckModelAvailability(context.Background(), &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{{AccountId: 1, AccountType: AccountTypeManaged, Model: tc.model, ClientModel: tc.client, Quota: &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Revision: 2, Windows: windows}}}})
-				require.NoError(t, err)
-				require.Len(t, out.Results, 1)
-				want := pluginv1.ModelAvailability_AVAILABLE
-				if tc.blocked || shared != "" {
-					want = pluginv1.ModelAvailability_UNAVAILABLE
+				result := checkManaged(t, p, now, tc.model, &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Revision: 2, Windows: windows})
+				if tc.blocked == "" {
+					require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, result.State, result.Reason)
+					require.Equal(t, "quota_not_enforced", result.Reason)
+					require.Zero(t, result.RetryAtUnix)
+					return
 				}
-				require.Equal(t, want, out.Results[0].State, out.Results[0].Reason)
-				if shared != "" {
-					require.Equal(t, "quota_rejected:"+shared, out.Results[0].Reason)
-				}
+				require.Equal(t, pluginv1.ModelAvailability_UNAVAILABLE, result.State, result.Reason)
+				require.Equal(t, "quota_rejected:"+tc.blocked, result.Reason)
+				require.Equal(t, reset, result.RetryAtUnix)
 			})
 		}
 	}
@@ -51,165 +61,144 @@ func TestModelAvailabilityMappedScopeAndSharedOverride(t *testing.T) {
 // What the core stores for the plugin's expired-token usage error.
 const expiredTokenError = "transient: token_expired: the access token expired; Claude Code renews it on its next request"
 
-func TestModelAvailabilitySnapshots(t *testing.T) {
+// No quota state holds a managed account back: an exhausted window answers
+// with an upstream 429 that cools the account down until its reset, a refused
+// authorization with a 401 the core's automatic disable rule acts on.
+func TestModelAvailabilityQuotaNotEnforced(t *testing.T) {
 	p, now := quotaTestPlugin()
 	healthy := func() *pluginv1.AccountQuotaSnapshot {
-		return &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: []*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed", Utilization: 0}}}
+		return &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: []*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed"}}}
+	}
+	rejected := func(q *pluginv1.AccountQuotaSnapshot) {
+		q.Windows[0].Status = "rejected"
+		q.Windows[0].ResetsAtUnix = now.Add(time.Hour).Unix()
 	}
 	for _, tc := range []struct {
 		name   string
 		mutate func(*pluginv1.AccountQuotaSnapshot)
-		want   pluginv1.ModelAvailability_State
 	}{
-		{"fresh true zero", func(*pluginv1.AccountQuotaSnapshot) {}, pluginv1.ModelAvailability_AVAILABLE},
-		{"unknown allowed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].UtilizationUnknown = true }, pluginv1.ModelAvailability_UNKNOWN},
-		{"unknown warning", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].UtilizationUnknown = true
-			q.Windows[0].Status = "allowed_warning"
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"unknown rejected", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].UtilizationUnknown = true
+		{"fresh", func(*pluginv1.AccountQuotaSnapshot) {}},
+		{"rejected 5h", rejected},
+		{"rejected 7d", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Windows = append(q.Windows, &pluginv1.QuotaWindow{Key: "7d", Status: "rejected", ResetsAtUnix: now.Add(72 * time.Hour).Unix()})
+		}},
+		{"rejection past its reset", func(q *pluginv1.AccountQuotaSnapshot) {
 			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		{"unknown contradicts utilization", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Windows[0].ResetsAtUnix = now.Add(-time.Minute).Unix()
+		}},
+		{"rejected without utilization", func(q *pluginv1.AccountQuotaSnapshot) {
+			rejected(q)
 			q.Windows[0].UtilizationUnknown = true
-			q.Windows[0].Utilization = 100
-			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"unknown contradicts used", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].UtilizationUnknown = true
-			q.Windows[0].Used = 1
-			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"unknown contradicts limit", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].UtilizationUnknown = true
-			q.Windows[0].Limit = 1
-			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"no observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix = 0 }, pluginv1.ModelAvailability_UNKNOWN},
-		{"future observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix++ }, pluginv1.ModelAvailability_UNKNOWN},
-		{"empty windows", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows = nil }, pluginv1.ModelAvailability_UNKNOWN},
-		// A failed query leaves the last successful windows in charge.
-		{"failed refresh keeps a valid snapshot", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "transient" }, pluginv1.ModelAvailability_AVAILABLE},
-		{"failed refresh past validity", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "transient"
-			q.UpdatedAtUnix -= int64(quotaValid.Seconds())
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"failed refresh keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "transient"
-			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		// The container refreshes an expired OAuth token only on a model request.
-		{"expired token lets the request refresh it", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = expiredTokenError
+		}},
+		{"unobserved", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix = 0; q.Windows = nil }},
+		{"future observation", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix++ }},
+		{"empty windows", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows = nil }},
+		{"stale", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= 86400 }},
+		{"stale rejection", func(q *pluginv1.AccountQuotaSnapshot) { rejected(q); q.UpdatedAtUnix -= 86400 }},
+		{"refresh failed", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "transient: usage runtime returned 502"
 			q.UpdatedAtUnix -= 86400
-		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"expired token before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = expiredTokenError
+		}},
+		{"refresh failed keeps a rejection", func(q *pluginv1.AccountQuotaSnapshot) {
+			rejected(q)
+			q.Error = "transient: usage runtime returned 502"
+			q.UpdatedAtUnix -= 86400
+		}},
+		{"refresh failed before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Error = "transient: usage runtime returned 502"
 			q.UpdatedAtUnix = 0
 			q.Windows = nil
-		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"expired token keeps a known exhaustion", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = expiredTokenError
-			q.Windows[0].Status = "rejected"
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		{"expired token keeps an invalid snapshot unknown", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = expiredTokenError
-			q.Windows[0].Utilization = math.NaN()
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		// Signed out or refused for good: held back until authorized again.
+		}},
+		{"expired token", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = expiredTokenError; q.UpdatedAtUnix -= 86400 }},
+		{"expired token with a rejection", func(q *pluginv1.AccountQuotaSnapshot) { rejected(q); q.Error = expiredTokenError }},
 		{"signed out", func(q *pluginv1.AccountQuotaSnapshot) {
 			q.Error = "auth_rejected: not_logged_in: Claude Code is not signed in"
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"revoked", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: token_revoked: refused" }, pluginv1.ModelAvailability_UNKNOWN},
+		}},
+		{"revoked", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: token_revoked: refused" }},
+		{"revoked with a rejection", func(q *pluginv1.AccountQuotaSnapshot) {
+			rejected(q)
+			q.Error = "auth_rejected: token_revoked: refused"
+		}},
 		{"revoked before any observation", func(q *pluginv1.AccountQuotaSnapshot) {
 			q.Error = "auth_rejected: token_revoked: refused"
 			q.UpdatedAtUnix = 0
 			q.Windows = nil
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"core without the reason", func(q *pluginv1.AccountQuotaSnapshot) { q.Error = "auth_rejected: quota query failed" }, pluginv1.ModelAvailability_UNKNOWN},
-		{"other transient failure", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Error = "transient: usage runtime returned 502"
-			q.UpdatedAtUnix -= int64((40 * time.Minute).Seconds())
-		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"available past a late periodic query", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.UpdatedAtUnix -= int64((quotaValid - time.Second).Seconds())
-		}, pluginv1.ModelAvailability_AVAILABLE},
-		{"stale after two missed queries", func(q *pluginv1.AccountQuotaSnapshot) { q.UpdatedAtUnix -= int64(quotaValid.Seconds()) }, pluginv1.ModelAvailability_UNKNOWN},
-		// Usage only drops at a reset.
-		{"allowed reset elapsed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = now.Unix() }, pluginv1.ModelAvailability_AVAILABLE},
-		// A known exhaustion waits for a query after its reset (CONTRACTS §44.7).
-		{"rejection past its reset", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].Status = "rejected"
-			q.Windows[0].ResetsAtUnix = now.Add(-time.Minute).Unix()
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		{"unknown status", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = "" }, pluginv1.ModelAvailability_UNKNOWN},
-		{"old utilization alone", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = ""; q.Windows[0].Utilization = 100 }, pluginv1.ModelAvailability_UNKNOWN},
-		{"extra usage allowed", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Utilization = 125 }, pluginv1.ModelAvailability_AVAILABLE},
-		{"nan", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Utilization = math.NaN() }, pluginv1.ModelAvailability_UNKNOWN},
-		{"negative reset", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].ResetsAtUnix = -1 }, pluginv1.ModelAvailability_UNKNOWN},
-		{"duplicate healthy windows", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows = append(q.Windows, &pluginv1.QuotaWindow{Key: "5h", Status: "allowed"})
-		}, pluginv1.ModelAvailability_UNKNOWN},
-		{"duplicate cannot erase rejection", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows = append([]*pluginv1.QuotaWindow{{Key: "5h", Status: "rejected"}}, q.Windows...)
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		{"expired rejection retained", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].Status = "rejected"
-			q.Windows[0].ResetsAtUnix = now.Add(-time.Hour).Unix()
-			q.UpdatedAtUnix -= 86400
-			q.Error = "refresh failed"
-		}, pluginv1.ModelAvailability_UNAVAILABLE},
-		// When the quota query is permanently refused (token revoked), the
-		// snapshot can never be refreshed. A rejected window whose reset has
-		// already passed must not keep the account blocked indefinitely.
-		{"auth_rejected with expired rejection is not blocked", func(q *pluginv1.AccountQuotaSnapshot) {
-			q.Windows[0].Status = "rejected"
-			q.Windows[0].ResetsAtUnix = now.Add(-time.Hour).Unix()
-			q.Error = "auth_rejected: token_revoked: the authorization was refused and cannot be renewed"
-		}, pluginv1.ModelAvailability_UNKNOWN},
+		}},
+		{"unknown status", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Status = "" }},
+		{"unknown utilization", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].UtilizationUnknown = true }},
+		{"nan", func(q *pluginv1.AccountQuotaSnapshot) { q.Windows[0].Utilization = math.NaN() }},
+		{"duplicate windows", func(q *pluginv1.AccountQuotaSnapshot) {
+			q.Windows = append(q.Windows, &pluginv1.QuotaWindow{Key: "5h", Status: "rejected"})
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			q := healthy()
 			tc.mutate(q)
-			in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-fable-5", Quota: q}}}
-			before := proto.Clone(in)
-			out, err := p.CheckModelAvailability(context.Background(), in)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, out.Results[0].State, out.Results[0].Reason)
-			require.Zero(t, out.Results[0].RetryAtUnix)
-			require.True(t, proto.Equal(before, in))
+			for _, model := range []string{"claude-fable-5", "claude-opus-5"} {
+				result := checkManaged(t, p, now, model, q)
+				require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, result.State, result.Reason)
+				require.Equal(t, "quota_not_enforced", result.Reason)
+				require.Zero(t, result.RetryAtUnix)
+			}
 		})
 	}
+	result := checkManaged(t, p, now, "claude-fable-5", nil)
+	require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, result.State, result.Reason)
 }
 
-func TestModelAvailabilityUnknownUtilizationBatch(t *testing.T) {
+// A scoped rejection holds its family back until the reset, whatever else the
+// snapshot says, and not past it; one the plugin cannot trust holds nothing.
+func TestModelAvailabilityScopedRejectionUntilReset(t *testing.T) {
 	p, now := quotaTestPlugin()
-	q := &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: []*pluginv1.QuotaWindow{
-		{Key: "5h", Status: "allowed"}, {Key: "7d_fable", Status: "allowed", UtilizationUnknown: true},
-	}}
-	in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{
-		{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-fable-5", ClientModel: "alias", Quota: q},
-		{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-opus-5", ClientModel: "claude-fable-5", Quota: q},
-		{AccountId: 2, AccountType: AccountTypeAPIKey, Model: "claude-fable-5", Quota: q},
-	}}
-	for _, state := range []string{"allowed", "allowed_warning", "rejected"} {
-		q.Windows[1].Status = state
-		out, err := p.CheckModelAvailability(context.Background(), in)
-		require.NoError(t, err)
-		require.Len(t, out.Results, len(in.Candidates))
-		want := pluginv1.ModelAvailability_UNKNOWN
-		if state == "rejected" {
-			want = pluginv1.ModelAvailability_UNAVAILABLE
+	reset := now.Add(time.Hour).Unix()
+	fable := func(mutate func(*pluginv1.QuotaWindow)) *pluginv1.AccountQuotaSnapshot {
+		window := &pluginv1.QuotaWindow{Key: "7d_fable", Status: "rejected", ResetsAtUnix: reset, UtilizationUnknown: true}
+		if mutate != nil {
+			mutate(window)
 		}
-		require.Equal(t, want, out.Results[0].State)
-		require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, out.Results[1].State)
-		require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, out.Results[2].State)
-		for i, candidate := range in.Candidates {
-			require.Equal(t, candidate.AccountId, out.Results[i].AccountId)
-			require.Equal(t, candidate.Model, out.Results[i].Model)
-		}
+		return &pluginv1.AccountQuotaSnapshot{UpdatedAtUnix: now.Unix(), Windows: []*pluginv1.QuotaWindow{{Key: "5h", Status: "allowed"}, window}}
 	}
+	for _, tc := range []struct {
+		name    string
+		q       *pluginv1.AccountQuotaSnapshot
+		blocked bool
+	}{
+		{"future reset", fable(nil), true},
+		{"stale snapshot", func() *pluginv1.AccountQuotaSnapshot { q := fable(nil); q.UpdatedAtUnix -= 86400; return q }(), true},
+		{"refresh failed", func() *pluginv1.AccountQuotaSnapshot {
+			q := fable(nil)
+			q.Error = "transient: usage runtime returned 502"
+			return q
+		}(), true},
+		{"revoked", func() *pluginv1.AccountQuotaSnapshot {
+			q := fable(nil)
+			q.Error = "auth_rejected: token_revoked: refused"
+			return q
+		}(), true},
+		{"reset now", fable(func(w *pluginv1.QuotaWindow) { w.ResetsAtUnix = now.Unix() }), false},
+		{"reset passed", fable(func(w *pluginv1.QuotaWindow) { w.ResetsAtUnix = now.Add(-time.Hour).Unix() }), false},
+		{"no reset time", fable(func(w *pluginv1.QuotaWindow) { w.ResetsAtUnix = 0 }), false},
+		{"invalid window", fable(func(w *pluginv1.QuotaWindow) { w.Utilization = 100 }), false},
+		{"allowed", fable(func(w *pluginv1.QuotaWindow) { w.Status = "allowed" }), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := checkManaged(t, p, now, "claude-fable-5", tc.q)
+			if !tc.blocked {
+				require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, result.State, result.Reason)
+				require.Zero(t, result.RetryAtUnix)
+				return
+			}
+			require.Equal(t, pluginv1.ModelAvailability_UNAVAILABLE, result.State, result.Reason)
+			require.Equal(t, "quota_rejected:7d_fable", result.Reason)
+			require.Equal(t, reset, result.RetryAtUnix)
+			other := checkManaged(t, p, now, "claude-opus-5", tc.q)
+			require.Equal(t, pluginv1.ModelAvailability_AVAILABLE, other.State, other.Reason)
+		})
+	}
+	// Two rejections of the family: the later reset decides.
+	q := fable(nil)
+	q.Windows = append(q.Windows, &pluginv1.QuotaWindow{Key: "7d_fable", Status: "rejected", ResetsAtUnix: reset + 60})
+	require.Equal(t, reset+60, checkManaged(t, p, now, "claude-fable-5", q).RetryAtUnix)
 }
 
 func TestModelAvailabilityMixedBatchValidation(t *testing.T) {
@@ -231,51 +220,26 @@ func TestModelAvailabilityMixedBatchValidation(t *testing.T) {
 		require.Equal(t, candidate.GetAccountId(), out.Results[i].AccountId)
 		require.Equal(t, candidate.GetModel(), out.Results[i].Model)
 		want := pluginv1.ModelAvailability_UNKNOWN
-		if i == 2 {
+		if i == 1 || i == 2 {
 			want = pluginv1.ModelAvailability_AVAILABLE
 		}
 		require.Equal(t, want, out.Results[i].State)
 		require.NotEmpty(t, out.Results[i].Reason)
 	}
+	require.Equal(t, "quota_not_enforced", out.Results[1].Reason)
+	require.Equal(t, "subscription_not_required", out.Results[2].Reason)
+	require.Equal(t, "unsupported_account_type", out.Results[3].Reason)
 	require.Equal(t, "duplicate_candidate", out.Results[4].Reason)
 	require.Equal(t, "duplicate_candidate", out.Results[5].Reason)
+	require.Equal(t, "invalid_candidate", out.Results[6].Reason)
 	in.NowUnix = 0
 	out, err = p.CheckModelAvailability(context.Background(), in)
 	require.NoError(t, err)
 	for _, result := range out.Results {
 		require.Equal(t, pluginv1.ModelAvailability_UNKNOWN, result.State)
+		require.Equal(t, "invalid_candidate", result.Reason)
 	}
 	out, err = p.CheckModelAvailability(context.Background(), nil)
 	require.NoError(t, err)
 	require.Empty(t, out.Results)
-}
-
-func TestAuthRejectedExpiredWindowUnblocks(t *testing.T) {
-	// An account whose quota query is permanently refused (token revoked) can
-	// never refresh its snapshot. A rejected 5-hour window whose resets_at has
-	// already passed must not permanently block the account; a future one must.
-	p, now := quotaTestPlugin()
-	make := func(resetsOffset time.Duration, wantState pluginv1.ModelAvailability_State) {
-		t.Helper()
-		q := &pluginv1.AccountQuotaSnapshot{
-			UpdatedAtUnix: now.Unix(),
-			Error:         "auth_rejected: token_revoked: the authorization was refused and cannot be renewed",
-			Windows: []*pluginv1.QuotaWindow{
-				{Key: "5h", Status: "rejected", ResetsAtUnix: now.Add(resetsOffset).Unix()},
-				{Key: "7d", Status: "allowed", ResetsAtUnix: now.Add(7 * 24 * time.Hour).Unix()},
-			},
-		}
-		in := &pluginv1.CheckModelAvailabilityRequest{NowUnix: now.Unix(), Candidates: []*pluginv1.ModelAvailabilityCandidate{
-			{AccountId: 1, AccountType: AccountTypeManaged, Model: "claude-opus-5", Quota: q},
-		}}
-		out, err := p.CheckModelAvailability(context.Background(), in)
-		require.NoError(t, err)
-		require.Equal(t, wantState, out.Results[0].State, "resetsOffset=%v reason=%s", resetsOffset, out.Results[0].Reason)
-	}
-	// reset already passed → should not block
-	make(-time.Hour, pluginv1.ModelAvailability_UNKNOWN)
-	// reset exactly at now → treated as expired (<=), should not block
-	make(0, pluginv1.ModelAvailability_UNKNOWN)
-	// reset still in future → must still block
-	make(time.Hour, pluginv1.ModelAvailability_UNAVAILABLE)
 }

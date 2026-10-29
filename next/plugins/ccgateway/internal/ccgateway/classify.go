@@ -159,8 +159,10 @@ func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]stri
 
 // classifyRateLimit handles an upstream 429. A managed account's answer names
 // the limit it hit the way Claude Code reads it (the representative claim): a
-// model-scoped weekly limit only moves the request to another account, the
-// account stays usable for other models; any other limit disables the
+// model-scoped weekly limit with a future reset only moves the request to
+// another account, the account stays usable for other models (model
+// availability holds that family back until the reset, availability.go); any
+// other limit, a scoped one without a reset time included, disables the
 // account until it resets.
 //
 // Only an upstream HTTP answer names a limit: the Worker marks it
@@ -170,7 +172,7 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 	if source == requestfailure.SourceHTTP {
 		resp.Quota = rejectedQuota(in, now)
 	}
-	if window := resp.GetQuota().GetWindows(); len(window) == 1 && scopedQuota(window[0].GetKey()) {
+	if window := resp.GetQuota().GetWindows(); len(window) == 1 && scopedQuota(window[0].GetKey()) && window[0].GetResetsAtUnix() > now.Unix() {
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
 		resp.Reason = "scoped quota rejected: " + window[0].GetKey()
 		return
