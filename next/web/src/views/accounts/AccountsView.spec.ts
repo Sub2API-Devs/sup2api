@@ -245,6 +245,23 @@ describe('account status recovery', () => {
   })
 
   it.each([
+    [{ status: 'error' }, '自动禁用'],
+    [{ status: 'active', schedulable: false }, '自动禁用'],
+    [{ status: 'active', schedulable: true, orphaned: true }, '启用']
+  ])('shows only the three statuses (%o)', (row, label) => {
+    Object.assign(list.items.value[0], row)
+    expect(render().get('[data-testid="account-status"]').text()).toBe(label)
+  })
+
+  it('keeps a cooling account enabled and notes the cooldown end', () => {
+    Object.assign(list.items.value[0], { status: 'active', schedulable: true, status_reason: '', cooldown_until: new Date(Date.now() + 60_000).toISOString(), cooldown_reason: 'upstream 529' })
+    const w = render()
+    expect(w.get('[data-testid="account-status"]').text()).toBe('启用')
+    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('upstream 529')
+    expect(w.get('[data-testid="account-status-note"]').text()).toMatch(/^冷却至 /)
+  })
+
+  it.each([
     { status: 0, error_code: 'proxy_unavailable', error_source: 'gateway' },
     { status: 401, error_code: 'token_revoked', error_source: 'response' },
     { status: 502, error_code: 'ECONNRESET', error_source: 'transport', message: '{"error":{"code":"ECONNRESET","message":"read ECONNRESET"}}' },

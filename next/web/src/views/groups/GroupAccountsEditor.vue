@@ -8,6 +8,7 @@ import { lt } from '@/i18n'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { fetchAllPages } from '@/composables/lookups'
 import { typeKey, useAccountTypes } from '@/views/accounts/accountTypes'
+import { accountStatusKey, accountStatusTone } from '@/views/accounts/accountStatus'
 
 // Accounts of a group, of any account type (ARCHITECTURE §6.6: a group can
 // mix types). Membership lives on the account (group_ids), so save() patches
@@ -137,12 +138,6 @@ async function save(gid: number): Promise<string[]> {
   return failed
 }
 
-function statusTone(a: Account) {
-  if (a.orphaned) return 'gray'
-  if (a.status === 'active') return a.schedulable ? 'success' : 'gray'
-  return 'danger'
-}
-
 defineExpose({ save, dirty })
 </script>
 
@@ -174,7 +169,7 @@ defineExpose({ save, dirty })
           <span class="block truncate text-xs">{{ accountTypes.typeLabel(a.plugin_key, a.type, a.type_label) }}</span>
           <SHint inline size="xs" class="block truncate">{{ accountTypes.pluginName(a.plugin_key) }}</SHint>
         </span>
-        <SBadge :tone="statusTone(a)" dot class="shrink-0">{{ a.orphaned ? t('accounts.status.orphaned') : t(`accounts.status.${a.status}`) }}</SBadge>
+        <SBadge :tone="accountStatusTone(a)" dot class="shrink-0" :title="a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : undefined">{{ t(`accounts.status.${accountStatusKey(a)}`) }}</SBadge>
       </label>
     </div>
     <SHint size="xs" class="mt-1">

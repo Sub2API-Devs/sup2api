@@ -60,15 +60,11 @@ export default {
   status: {
     active: '启用',
     disabled: '禁用',
-    auto_disabled: '自动禁用',
-    error: '异常',
-    cooldown: '冷却中',
-    orphaned: '孤立',
-    unschedulable: '不参与调度'
+    auto_disabled: '自动禁用'
   },
   showOrphaned: '显示已禁用插件的账号',
   orphanedHint: '插件"{plugin}"未安装，账号保留但不会被使用。',
-  cooldownUntil: '至 {time}',
+  cooldownUntil: '冷却至 {time}',
   type: '类型',
   subscription: '订阅',
   subscriptionHint: '账号授权后上游报告的订阅类型',
@@ -259,11 +255,11 @@ export default {
     }
   },
   autoReleaseAt: '{time} 自动启用',
-  schedulingSwitchHint: '控制是否参与调度；禁用或异常请使用“重置状态”恢复',
+  schedulingSwitchHint: '控制是否参与调度；自动禁用请使用“重置状态”恢复',
   resetStatus: '重置状态',
-  resetStatusHint: '清除禁用、错误原因与冷却，恢复正常状态；不改变允许调度开关',
+  resetStatusHint: '清除禁用、错误原因与冷却，恢复为启用状态；不改变允许调度开关',
   resetStatusTitle: '重置账号状态',
-  resetStatusConfirm: '确定清除账号「{name}」的禁用、错误原因与冷却并恢复正常状态？允许调度开关保持不变；若上游凭证仍失效或限流，账号可能再次自动禁用或冷却。',
+  resetStatusConfirm: '确定清除账号「{name}」的禁用、错误原因与冷却并恢复为启用状态？允许调度开关保持不变；若上游凭证仍失效或限流，账号可能再次自动禁用或冷却。',
   resetStatusDone: '账号状态已重置',
   pluginActions: {
     running: '正在执行「{name}」…',

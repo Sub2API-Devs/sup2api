@@ -28,6 +28,7 @@ import AccountModelTest from './AccountModelTest.vue'
 import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
 import { rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
+import { accountStatusKey, accountStatusKeys, accountStatusTone } from './accountStatus'
 import { useBatchTest } from './useBatchTest'
 import { useSelection } from '@/composables/useSelection'
 import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
@@ -123,18 +124,15 @@ function coolingDown(a: Account) {
 /** detail: full explanation (list badge tooltip, detail drawer); note: short recovery time shown under the list badge. */
 type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string; note?: string }
 function statusOf(a: Account): StatusView {
-  if (a.orphaned) return { tone: 'gray', label: t('accounts.status.orphaned'), detail: t('accounts.orphanedHint', { plugin: a.plugin_key }) }
-  if (a.status === 'disabled') return { tone: 'danger', label: t('accounts.status.disabled'), detail: a.status_reason }
-  if (a.status === 'auto_disabled' || (a.status === 'active' && !a.schedulable)) {
-    const until = a.status === 'auto_disabled' && a.auto_disabled_until
-    return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason, note: until ? t('accounts.autoReleaseAt', { time: formatDateTime(until) }) : undefined }
+  const key = accountStatusKey(a)
+  const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: a.status_reason || undefined }
+  if (a.orphaned) view.detail = t('accounts.orphanedHint', { plugin: a.plugin_key })
+  if (key === 'auto_disabled' && a.auto_disabled_until) view.note = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })
+  if (key === 'active' && coolingDown(a)) {
+    view.note = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
+    view.detail = a.cooldown_reason || view.detail
   }
-  if (a.status === 'error') return { tone: 'danger', label: t('accounts.status.error'), detail: a.status_reason }
-  if (coolingDown(a)) {
-    const until = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
-    return { tone: 'warning', label: t('accounts.status.cooldown'), detail: until + (a.cooldown_reason ? `（${a.cooldown_reason}）` : ''), note: until }
-  }
-  return { tone: 'success', label: t('accounts.status.active') }
+  return view
 }
 
 // ---------------------------------------------------------------- auto refresh (in_use / cooldown)
@@ -503,10 +501,9 @@ function onAction(a: Account, key: string) {
   void runRowAction(a, key, rowActionDeps)
 }
 
-const statusOptions = ['active', 'auto_disabled', 'disabled', 'error']
 const statusSelectOptions = computed<SelectOption[]>(() => [
   { value: '', label: t('accounts.allStatus') },
-  ...statusOptions.map((s) => ({ value: s, label: t(`accounts.status.${s}`) }))
+  ...accountStatusKeys.map((s) => ({ value: s, label: t(`accounts.status.${s}`) }))
 ])
 // Account types grouped per plugin (<optgroup>), "all types" first.
 const typeOptions = computed<SelectOption[]>(() => [

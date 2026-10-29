@@ -60,15 +60,11 @@ export default {
   status: {
     active: 'Enabled',
     disabled: 'Disabled',
-    auto_disabled: 'Auto-disabled',
-    error: 'Error',
-    cooldown: 'Cooling down',
-    orphaned: 'Orphaned',
-    unschedulable: 'Not scheduled'
+    auto_disabled: 'Auto-disabled'
   },
   showOrphaned: 'Show accounts of disabled plugins',
   orphanedHint: 'Plugin "{plugin}" is not installed; the account is kept but not used.',
-  cooldownUntil: 'until {time}',
+  cooldownUntil: 'Cooling down until {time}',
   type: 'Type',
   subscription: 'Subscription',
   subscriptionHint: 'Subscription type the upstream reported after authorization',
@@ -266,11 +262,11 @@ export default {
     }
   },
   autoReleaseAt: 'Auto-enables at {time}',
-  schedulingSwitchHint: 'Controls scheduling eligibility; use Reset status to recover disabled or error accounts',
+  schedulingSwitchHint: 'Controls scheduling eligibility; use Reset status to recover auto-disabled accounts',
   resetStatus: 'Reset status',
-  resetStatusHint: 'Clear disabled status, errors and cooldown; the scheduling switch stays unchanged',
+  resetStatusHint: 'Clear the disable, error reason and cooldown and restore enabled; the scheduling switch stays unchanged',
   resetStatusTitle: 'Reset account status',
-  resetStatusConfirm: 'Restore "{name}" to active and clear its error reason and cooldown? The scheduling switch stays unchanged. If credentials are still invalid or upstream limits remain, the account may be automatically disabled or cooled down again.',
+  resetStatusConfirm: 'Restore "{name}" to enabled and clear its error reason and cooldown? The scheduling switch stays unchanged. If credentials are still invalid or upstream limits remain, the account may be automatically disabled or cooled down again.',
   resetStatusDone: 'Account status reset',
   pluginActions: {
     running: 'Running "{name}"…',
