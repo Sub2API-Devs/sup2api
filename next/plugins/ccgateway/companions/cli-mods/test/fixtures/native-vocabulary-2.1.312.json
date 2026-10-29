@@ -1,0 +1,67 @@
+{
+  "heading": "# Environment",
+  "intro": "You have been invoked in the following environment: ",
+  "updateHeading": "# Environment update",
+  "labels": {
+    "primary_directory": "Primary working directory: ",
+    "git_repository": "Is a git repository: ",
+    "additional_directories": "Additional working directories:",
+    "platform_name": "Platform: ",
+    "shell": "Shell: ",
+    "os_version": "OS Version: "
+  },
+  "was": [
+    " (was ",
+    ")"
+  ],
+  "additionalChanged": [
+    "Additional working directories added:",
+    "Additional working directories removed:"
+  ],
+  "worktree": "This is a git worktree — an isolated copy of the repository. Run all commands from this directory. Do NOT `cd` to the original repository root.",
+  "stash": "The git stash stack is shared with the main checkout and all other worktrees, and other Claude sessions may push or pop it concurrently. Never use bare `git stash` / `git stash pop` — you could pop another session's changes. Prefer a temporary WIP commit to set work aside; if you must stash, use `git stash push -u -m \"<unique-tag>\"`, immediately capture your entry's SHA via `git stash list --format='%H %gs'`, restore with `git stash apply <sha>` (not pop), and afterwards drop the entry, re-finding its current `stash@{n}` by tag first.",
+  "withdrawal": {
+    "primary_directory": "The primary working directory announced earlier no longer applies.",
+    "worktree": "The primary working directory is no longer a git worktree.",
+    "scratchpad_directory": "The scratchpad directory announced earlier is no longer available; use it no further.",
+    "github_cli": "The built-in `gh api` announced earlier is not active in this run; check `command -v gh`.",
+    "agent_proxy": "The agent proxy announced earlier is not active now."
+  },
+  "scratchpad": [
+    "Scratchpad directory: ",
+    " — always use it for temporary files (intermediate results, scripts, outputs that don't belong in the project) instead of `/tmp` or other system temp directories; it is session-specific, isolated from the project, and can generally be used without permission prompts. Only use `/tmp` if the user explicitly asks. Whenever you name a file in it to the user, write the file's complete absolute path in one piece, not a bare filename, a path that starts at the scratchpad folder, or the directory followed by filenames: a shortened path is read against the working directory and leads nowhere."
+  ],
+  "github": [
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com through this session's GitHub proxy, which supplies the credential for the repositories this session can reach (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form).",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, through that proxy, which supplies the credential for the repositories this session can reach (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form).",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com, or against the GitHub Enterprise host of this checkout's remote (or `--hostname <host>`), through this session's GitHub proxy, which supplies the credential for the hosts and repositories this session is connected to (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form).",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, or against the GitHub Enterprise host of this checkout's remote (or `--hostname <host>`), through this session's GitHub proxy, which supplies the credential for the hosts and repositories this session is connected to (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form).",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com through this session's GitHub proxy, which supplies the credential for the repositories this session can reach (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, through that proxy, which supplies the credential for the repositories this session can reach (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com, or against the GitHub Enterprise host of this checkout's remote (or `--hostname <host>`), through this session's GitHub proxy, which supplies the credential for the hosts and repositories this session is connected to (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, or against the GitHub Enterprise host of this checkout's remote (or `--hostname <host>`), through this session's GitHub proxy, which supplies the credential for the hosts and repositories this session is connected to (run `gh api --help` for its flags). This holds even if an earlier instruction in this prompt says you have no `gh` CLI or GitHub API access; where the prompt tells you to prefer GitHub MCP tools, keep preferring them. A 403 from the proxy says what this session lacks; retrying does not fix it. Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com, already authenticated through this session's GitHub proxy (run `gh api --help` for its flags). Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). Do not install a GitHub CLI to get other gh commands: one installed during the session is not routed through this proxy and has no GitHub credentials unless the runner's operator provides them.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, already authenticated through this session's GitHub proxy (run `gh api --help` for its flags). Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). Do not install a GitHub CLI to get other gh commands: one installed during the session is not routed through this proxy and has no GitHub credentials unless the runner's operator provides them.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com, already authenticated through this session's GitHub proxy (run `gh api --help` for its flags). Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed. Do not install a GitHub CLI to get other gh commands: one installed during the session is not routed through this proxy and has no GitHub credentials unless the runner's operator provides them.",
+    "`gh` here is Claude Code's built-in GitHub client, not the GitHub CLI (none was found on this machine when the session started). `gh api <REST endpoint>` works against github.com and, with `--hostname <host>`, the GitHub Enterprise Server hosts this session's GitHub proxy serves, already authenticated through this session's GitHub proxy (run `gh api --help` for its flags). Other gh commands are not available: use `gh api` (the error from a common one, such as `gh pr view` or `gh run list`, names its `gh api` form). `--jq` is unavailable because jq is not installed: run without it and pipe the output to a JSON tool that is installed. Do not install a GitHub CLI to get other gh commands: one installed during the session is not routed through this proxy and has no GitHub credentials unless the runner's operator provides them."
+  ],
+  "githubReplaces": " This replaces what this session was told of `gh` earlier.",
+  "proxy": {
+    "start": "Outbound HTTPS goes through a pre-configured agent proxy (CA bundle: ",
+    "middle": "). If a tool fails TLS verification, gets 403/405/407 from the proxy, or a transfer is cut off (connection reset, unexpected disconnect, RPC failed), ",
+    "end": "run curl -sS \"$HTTPS_PROXY/__agentproxy/status\" for per-tool fixes and proxy state; never disable TLS verification or unset HTTPS_PROXY.",
+    "readme": [
+      "see ",
+      " and "
+    ],
+    "clis": [
+      " Installed CLIs preconfigured for the proxy: ",
+      " — prefer a skill/MCP tool, then these, over raw curl."
+    ]
+  },
+  "billingHeader": "x-anthropic-billing-header:",
+  "reminder": [
+    "<system-reminder>",
+    "</system-reminder>"
+  ]
+}

@@ -193,6 +193,12 @@ type requestIdentity struct {
 	Parent  string `json:"parent_session_id,omitempty"`
 	// Carrier is the shape the client used, so the rewritten value keeps it.
 	Carrier string `json:"carrier,omitempty"`
+	// Previous is what the Worker remembers of the upstream session's last
+	// answered request (session_state.go), for the CLI's own header.
+	Previous *sessionState `json:"previous,omitempty"`
+	// named: the session is the client's own (its metadata.user_id named
+	// one), not one the Worker derived from the conversation's first message.
+	named bool
 }
 
 // identityProperty reads one property of a JSON object, preserving the
@@ -390,7 +396,7 @@ func mapRequestIdentity(key []byte, client clientIdentity, mode string) (request
 		// when the CLI can adopt it (audit C6): otherwise the CLI keeps its
 		// native random session and the metadata still goes as sent.
 		if cliSessionPattern.MatchString(session) {
-			result.Session = session
+			result.Session, result.named = session, true
 		}
 	case "worker":
 		// The CLI's own identity replaces the client's value.
@@ -403,7 +409,7 @@ func mapRequestIdentity(key []byte, client clientIdentity, mode string) (request
 			result.Device = hex.EncodeToString(sum[:])
 		}
 		if session != "" {
-			result.Session = digestUUID(identityDigest(key, "session", session))
+			result.Session, result.named = digestUUID(identityDigest(key, "session", session)), true
 		}
 		if parent != "" {
 			result.Parent = digestUUID(identityDigest(key, "session", parent))

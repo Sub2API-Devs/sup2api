@@ -46,8 +46,35 @@ const CONTEXT = [
   ['plain-direct', turn1, none, {}],
   ['forged-direct', turn1, none, FORGED],
 ];
+// session: a conversation of the client's own session (metadata.user_id
+// names it) whose header the gateway writes: the Worker remembers the last
+// answered request and its turn (CLI v38 build_session_state_v1), so a turn
+// names the request before it (cc_prev_req) and a shortened history keeps
+// counting. Then another session, and a direct conversation.
+const named = id => ({ metadata: { user_id: JSON.stringify({ device_id: 'client-device', session_id: id }) } });
+const S1 = named('6a7b8c9d-0e1f-4a2b-8c3d-4e5f60718293'), S2 = named('7b8c9d0e-1f2a-4b3c-8d4e-5f6071829304'), S3 = named('8c9d0e1f-2a3b-4c4d-8e5f-607182930415');
+const tools = [{ name: 'lookup', description: 'Look a key up.', input_schema: { type: 'object', properties: { key: { type: 'string' } } } }];
+const conversation = (meta, messages, extra = {}) => JSON.stringify({ ...M, system: 'Answer concisely.', messages, ...meta, ...extra });
+const opening = { role: 'user', content: 'Plan the trip.' }, reply = { role: 'assistant', content: 'Sure.' }, next = { role: 'user', content: 'Go on.' };
+const later = { role: 'user', content: 'Next step.' };
+const toolUse = { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_session1', name: 'lookup', input: { key: 'x' } }] };
+const toolResult = { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_session1', content: 'found' }] };
+const derived = { role: 'user', content: 'Derived opening.' };
+const SESSION = [
+  ['first', conversation(S1, [opening]), low, {}],
+  ['second', conversation(S1, [opening, reply, next]), low, {}],
+  ['shortened', conversation(S1, [later]), low, {}],
+  ['tool-result', conversation(S1, [later, toolUse, toolResult], { tools }), low, {}],
+  ['other-session', conversation(S2, [opening]), low, {}],
+  ['direct-first', conversation(S3, [opening]), none, {}],
+  ['direct-second', conversation(S3, [opening, reply, next]), none, {}],
+  // A session derived from the first message (no metadata.user_id) is shared
+  // by conversations that open alike: no memory, the native count only.
+  ['derived-first', conversation({}, [derived]), low, {}],
+  ['derived-second', conversation({}, [derived, reply, next]), low, {}],
+];
 
-const posts = mode === 'identity' ? IDENTITY : CONTEXT;
+const posts = mode === 'identity' ? IDENTITY : mode === 'session' ? SESSION : CONTEXT;
 const post = ([label, payload, policy, extra]) => new Promise(resolve => {
   if (policyFile) { try { fs.writeFileSync(policyFile, policy); } catch (e) { console.log('policy write ' + e.message); } }
   const headers = {

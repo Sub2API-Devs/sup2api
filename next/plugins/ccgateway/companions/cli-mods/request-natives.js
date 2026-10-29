@@ -22,12 +22,13 @@ export const identityBuild = (built, clientMetadata) => applyBuildMetadata(built
 
 // directBuild fills direct's billing header (direct-billing.js) with the
 // native header CC generates for this request (PAs), over the client's first
-// prompt as CC's attribution fingerprint reads it (RIs).
+// prompt as CC's attribution fingerprint reads it (RIs), with the session's
+// previous request when the Worker remembers one (request-session.js).
 export const directBuild = (raw, body, options) => applyDirectBilling(raw, body, {
   ...options, billingHeader,
   nativeBilling: () => attributionHeader([], void 0, {
     fingerprint: attributionFingerprint(fingerprintMessages(Array.isArray(body.messages) ? body.messages : [], reminderOpen)),
-    agentContext: options.agentContext ?? mainAgentContext(), promptId: options.promptId,
+    agentContext: options.agentContext ?? mainAgentContext(), previousRequestId: options.previousRequestId, promptId: options.promptId,
     turnOrigin: options.turnOrigin, turnPosition: options.turnPosition,
   })[0] ?? '',
 });

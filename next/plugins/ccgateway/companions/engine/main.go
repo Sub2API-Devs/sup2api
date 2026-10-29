@@ -23,6 +23,9 @@ type Gateway struct {
 	RequestLogs            *requestLogStore
 	requestIdentityEnabled bool
 	requestIdentitySecret  []byte
+	// sessionStates is what the Worker remembers of each upstream session's
+	// last answered request (session_state.go).
+	sessionStates sessionStates
 }
 
 // apiError is the Worker's own error answer: an Anthropic error body marked

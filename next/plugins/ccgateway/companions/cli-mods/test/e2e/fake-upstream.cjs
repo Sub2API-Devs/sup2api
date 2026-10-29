@@ -116,12 +116,12 @@ const server = https.createServer({ key: fs.readFileSync(path.join(certDir, 'key
       fs.writeFileSync(path.join(dir, `resp-${String(id).padStart(2, '0')}.json`), JSON.stringify(response, null, 1));
       const delay = scenario === 'credit-slow' ? Number(process.env.CREDIT_DELAY_MS || 1500) : 0;
       if (b.stream) return sse(res, b.model, blocks, 'refusal', stopDetails, delay, dir, id);
-      if (delay) return setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(response)); }, delay);
-      res.writeHead(200, { 'content-type': 'application/json' });
+      if (delay) return setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json', 'request-id': 'req_ccgaudit' + id }); res.end(JSON.stringify(response)); }, delay);
+      res.writeHead(200, { 'content-type': 'application/json', 'request-id': 'req_ccgaudit' + id });
       return res.end(JSON.stringify(response));
     }
     if (b.stream) return sse(res, b.model, blocks, blocks[0].type === 'tool_use' ? 'tool_use' : 'end_turn');
-    res.writeHead(200, { 'content-type': 'application/json' });
+    res.writeHead(200, { 'content-type': 'application/json', 'request-id': 'req_ccgaudit' + id });
     res.end(JSON.stringify({ id: 'msg_ccg_audit_' + id, type: 'message', role: 'assistant', model: b.model, content: blocks, stop_reason: blocks[0].type === 'tool_use' ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }));
   });
 });

@@ -8,6 +8,7 @@ import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
 import { betaOrder } from './ccgateway-request-betas.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
 import { readRequestAgent, resolveAgentContext, setClientUserAgent } from './ccgateway-request-agent.js';
+import { continueDirectSession, requestThread } from './ccgateway-request-session.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
 const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
@@ -71,7 +72,9 @@ export async function runRequestCommand(args, natives = {}) {
       return 2;
     }
     ctx.state.phase = 'output';
-    if (ctx.options.meta) await fs.writeFile(ctx.options.meta, JSON.stringify({ status: ctx.run.response.status, statusText: ctx.run.response.statusText, headers: ctx.run.response.headers, request: { mode: ctx.options.mode, ...ctx.run.response.request } }, null, 2) + '\n');
+    // session is the turn this request's own header used (request-session.js),
+    // which the Worker keeps for the session's next request once it is answered.
+    if (ctx.options.meta) await fs.writeFile(ctx.options.meta, JSON.stringify({ status: ctx.run.response.status, statusText: ctx.run.response.statusText, headers: ctx.run.response.headers, request: { mode: ctx.options.mode, ...ctx.run.response.request }, ...ctx.session && { session: ctx.session } }, null, 2) + '\n');
     await streamResponse(ctx, ctx.run.response);
     return 0;
   } catch (error) {
@@ -221,7 +224,16 @@ async function prepareDirect(ctx, outgoing, agent) {
   const main = !agent || agent.requestClass === 'main';
   const entrypoint = agentNative.entrypoint(body.system, policy);
   setEntrypointOnRequests(entrypoint);
-  const turn = main ? agentNative.turn(messagesOf(body), entrypoint === 'cli') : undefined;
+  const human = entrypoint === 'cli';
+  const prompt = main ? agentNative.turn(messagesOf(body), human) : undefined;
+  let turn = prompt && { turnOrigin: prompt.turnOrigin, turnPosition: prompt.turnPosition };
+  // A header direct writes (the client sent none) continues the upstream
+  // session (request-session.js); the client's own header is the client's.
+  if (main && agentNative.requestBilling(body.system) === null) {
+    const { session, ...continued } = continueDirectSession(messagesOf(body), prompt, { human, thread: requestThread(agent) });
+    turn = { ...turn, ...continued };
+    ctx.session = session;
+  }
   const sent = await directBuild(rawBody, body, { policy, agentContext: agent?.agentContext, promptId: agent?.promptId, ...turn });
   return sent === rawBody ? outgoing : { ...outgoing, body: parseRequestJSON(sent, 'direct'), rawBody: sent };
 }
@@ -233,7 +245,8 @@ async function prepareDirect(ctx, outgoing, agent) {
 async function prepareBuild(ctx, body, resolveAgent) {
   ctx.state.phase = 'build';
   const { buildRequest } = await import('./ccgateway-request-build.js');
-  const { identityLine: _line, agent, clientBetas, addedBetas, ...built } = await buildRequest(body, ctx.options.headers, ctx.signal, resolveAgent, { apiKey: Boolean(ctx.apiKey) });
+  const { identityLine: _line, agent, clientBetas, addedBetas, session, ...built } = await buildRequest(body, ctx.options.headers, ctx.signal, resolveAgent, { apiKey: Boolean(ctx.apiKey) });
+  ctx.session = session;
   const outgoing = { ...built, timeoutMs: ctx.options.timeoutMs ?? defaultTimeout };
   // Build always invents metadata; the identity source decides what the
   // upstream request really carries, and a client that sent none gets none.
