@@ -394,23 +394,38 @@ describe('account model limits', () => {
     mocks.patch.mockResolvedValue(savedAccount())
   })
 
+  const caps = { max_concurrency: 0, rpm_limit: 0, tpm_limit: 0, spm_limit: 0 }
+
   it('edits the saved lists as cards and submits one entry per list', async () => {
-    const limits = [{ models: ['m-a'], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }, { models: ['m-b'], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }]
+    const limits = [{ models: ['m-a'], ...caps, max_concurrency: 1, spm_limit: 2 }, { models: ['m-b'], ...caps, max_concurrency: 1, spm_limit: 2 }]
     const w = render({ ...savedAccount(), model_limits: limits } as Account)
     await flushPromises()
     const editor = w.getComponent(ModelLimitsEditor)
-    expect(editor.props('modelValue')).toEqual([{ lists: [['m-a'], ['m-b']], max_concurrency: 1, rpm_limit: 0, tpm_limit: 0 }])
-    editor.vm.$emit('update:modelValue', [{ lists: [['m-a', 'm-c'], []], max_concurrency: 0, rpm_limit: 9, tpm_limit: 0 }])
+    expect(editor.props('modelValue')).toEqual([{ lists: [['m-a'], ['m-b']], ...caps, max_concurrency: 1, spm_limit: 2 }])
+    editor.vm.$emit('update:modelValue', [{ lists: [['m-a', 'm-c'], []], ...caps, rpm_limit: 9, spm_limit: 3 }])
     await flushPromises()
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ model_limits: [{ models: ['m-a', 'm-c'], max_concurrency: 0, rpm_limit: 9, tpm_limit: 0 }] }))
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ model_limits: [{ models: ['m-a', 'm-c'], ...caps, rpm_limit: 9, spm_limit: 3 }] }))
+  })
+
+  it('edits the sessions per minute of the account and of a model list', async () => {
+    const w = render({ ...savedAccount(), spm_limit: 5 } as Account)
+    await flushPromises()
+    const input = w.get('input[data-testid="account-spm_limit"]')
+    expect((input.element as HTMLInputElement).value).toBe('5')
+    await input.setValue('7')
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a']], ...caps, spm_limit: 2 }])
+    await flushPromises()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ spm_limit: 7, model_limits: [{ models: ['m-a'], ...caps, spm_limit: 2 }] }))
   })
 
   it('refuses to save a model listed twice', async () => {
     const w = render(savedAccount())
     await flushPromises()
-    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], ['m-a']], max_concurrency: 0, rpm_limit: 1, tpm_limit: 0 }])
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], ['m-a']], ...caps, rpm_limit: 1 }])
     await flushPromises()
     await w.get('form').trigger('submit')
     await flushPromises()
@@ -419,9 +434,10 @@ describe('account model limits', () => {
   })
 
   it('starts a new account from the limits its plugin suggests', async () => {
-    const type = { ...accountType, default_limits: { priority: 3, model_limits: [{ models: ['m-a'], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0 }] } } as AccountType
+    const type = { ...accountType, default_limits: { priority: 3, spm_limit: 6, model_limits: [{ models: ['m-a'], ...caps, max_concurrency: 2 }] } } as AccountType
     const w = render(undefined, false, type)
     await flushPromises()
-    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0 }])
+    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], ...caps, max_concurrency: 2 }])
+    expect((w.get('input[data-testid="account-spm_limit"]').element as HTMLInputElement).value).toBe('6')
   })
 })

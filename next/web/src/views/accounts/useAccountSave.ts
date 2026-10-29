@@ -30,6 +30,7 @@ export interface AccountBasics {
   auto_disable: boolean
   rpm_limit: number
   tpm_limit: number
+  spm_limit: number
 }
 
 /** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
@@ -130,6 +131,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
       ...models.payload(),
       rpm_limit: Number(basic.rpm_limit) || 0,
       tpm_limit: Number(basic.tpm_limit) || 0,
+      spm_limit: Number(basic.spm_limit) || 0,
       model_limits: fromCards(deps.modelLimits.value)
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable

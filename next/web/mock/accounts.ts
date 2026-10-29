@@ -327,7 +327,7 @@ function applyCommonControls(pluginKey: string, type: string, body: Record<strin
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 export const accounts: any[] = [
-  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, spm_limit: 8, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0, spm_limit: 2 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
   { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', created_by: 6, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
@@ -446,14 +446,15 @@ function refreshOf(a: any) {
   }
 }
 
-/** Last-60-seconds counters (CONTRACTS §18.1, §68); mocked as a fraction of the limit, or from in_use without one. */
+/** Last-60-seconds counters (CONTRACTS §18.1, §68, §71); mocked as a fraction of the limit, or from in_use without one. */
 function rateUsage(a: any) {
   const used = (limit: number, ratio: number, busy: number) => (limit ? Math.min(limit, Math.round(limit * ratio)) : busy)
   const inUse = a.in_use || 0
   return {
     rpm: used(a.rpm_limit, 0.2, inUse * 4),
     tpm: used(a.tpm_limit, 0.032, inUse * 2100),
-    models: (a.model_limits || []).map((l: any, i: number) => ({ models: l.models, in_use: i === 0 ? Math.min(inUse, l.max_concurrency || inUse) : 0, rpm: used(l.rpm_limit, 0.9, 2), tpm: used(l.tpm_limit, 0.85, 1800) }))
+    sessions: used(a.spm_limit, 0.5, inUse),
+    models: (a.model_limits || []).map((l: any, i: number) => ({ models: l.models, in_use: i === 0 ? Math.min(inUse, l.max_concurrency || inUse) : 0, rpm: used(l.rpm_limit, 0.9, 2), tpm: used(l.tpm_limit, 0.85, 1800), sessions: used(l.spm_limit, 0.5, i === 0 ? 1 : 0) }))
   }
 }
 
@@ -461,7 +462,8 @@ const withGroups = (a: any) => ({
   ...a,
   models: a.models || [],
   model_mapping: a.model_mapping || {},
-  model_limits: a.model_limits || [],
+  model_limits: (a.model_limits || []).map((l: any) => ({ spm_limit: 0, ...l })),
+  spm_limit: a.spm_limit ?? 0,
   weight: a.weight ?? 1,
   created_by: a.created_by ?? null,
   created_by_email: userEmail(a.created_by),
@@ -633,6 +635,7 @@ function validateScheduling(b: Record<string, any>) {
     ['weight', 1, 1000],
     ['rpm_limit', 0, 10000000],
     ['tpm_limit', 0, 1e12],
+    ['spm_limit', 0, 10000000],
   ]
   for (const [k, min, max] of range) {
     if (b[k] === undefined) continue
@@ -732,6 +735,7 @@ on('POST', '/accounts', (req) => {
     model_mapping: {},
     rpm_limit: 0,
     tpm_limit: 0,
+    spm_limit: 0,
     ...fields,
     proxy_id: proxy.proxy_id ?? null,
     created_by: who.id,

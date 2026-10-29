@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Concurrency, RPM and TPM of an account in one list cell (like the RPM / TPM
-// column of new-api's channel table): each figure is "used/cap", or only the
-// usage when there is no cap, with the used share as the pill's fill. The
-// totals are the account's own; hovering (or focusing) the cell shows the
-// breakdown by model list (CONTRACTS §68).
+// Concurrency, RPM, TPM and sessions of an account in one list cell (like the
+// RPM / TPM / SPM column of new-api's channel table): each figure is
+// "used/cap", or only the usage when there is no cap, with the used share as
+// the pill's fill. The totals are the account's own; hovering (or focusing)
+// the cell shows the breakdown by model list (CONTRACTS §68, §71).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { STooltip } from '@sub2api/ui'

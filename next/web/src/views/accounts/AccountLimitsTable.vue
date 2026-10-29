@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Concurrency, RPM and TPM of an account and of each of its model lists
-// (CONTRACTS §68): "used/cap", or only the usage without a cap. Shown in the
-// list cell's hover card and in the account detail.
+// Concurrency, RPM, TPM and sessions of an account and of each of its model
+// lists (CONTRACTS §68, §71): "used/cap", or only the usage without a cap.
+// Shown in the list cell's hover card and in the account detail.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/api/types'
@@ -24,7 +24,8 @@ const scopeLabel = (models: string[]) => (models.length > 2 ? `${models.slice(0,
           <th class="pb-1 pr-3 text-left font-normal">{{ t('accounts.limitsUi.scope') }}</th>
           <th class="pb-1 pr-3 text-right font-normal">{{ t('accounts.concurrency') }}</th>
           <th class="pb-1 pr-3 text-right font-normal">RPM</th>
-          <th class="pb-1 text-right font-normal">TPM</th>
+          <th class="pb-1 pr-3 text-right font-normal">TPM</th>
+          <th class="pb-1 text-right font-normal">{{ t('accounts.limitsUi.sessions') }}</th>
         </tr>
       </thead>
       <tbody>

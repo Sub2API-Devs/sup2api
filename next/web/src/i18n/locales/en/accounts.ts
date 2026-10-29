@@ -10,16 +10,16 @@ export default {
     identity: 'Account / integration', filters: 'Account filters', search: 'Search account names', advanced: 'More filters', advancedApplied: 'Advanced filters are applied',
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
     loadFailed: 'Refresh failed; showing the previous results',
-    emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM',
+    emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
     numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved'
   },
   limitsUi: {
-    title: 'Concurrency / RPM / TPM details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists',
-    windowHint: 'RPM and TPM are the usage of the last 60 seconds; tokens are counted when a response finishes. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
+    title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
+    windowHint: 'RPM, TPM and sessions are the usage of the last 60 seconds; tokens are counted when a response finishes, sessions are the sticky sessions active in that time. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
   },
   modelLimits: {
     title: 'Model limits',
-    hint: 'Limit concurrency, RPM and TPM of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',
+    hint: 'Limit concurrency, RPM, TPM and sessions per minute of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',
     add: 'Add model limit', addList: 'Add list', removeList: 'Remove list', removeCard: 'Remove these limits',
     empty: 'None: every model only counts against the account limits.', placeholder: 'Pick or type models, Enter to add',
     duplicate: '{model} is already in another list', summary: '{n} model limits'
@@ -103,7 +103,7 @@ export default {
   tpdLimit: 'Tokens per day (TPD)',
   spmLimit: 'Sessions per minute (SPM)',
   tpdHint: '0 = unlimited; per UTC day',
-  spmHint: 'A session is the sticky-session key; without a matching sticky rule every request counts as one session. An account that hit any limit is skipped for the rest of the window.',
+  spmHint: 'Cap of the sticky sessions active in the last 60 seconds. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. Requests matching no sticky rule are neither counted nor limited.',
   models: 'Models',
   modelsHint: 'Empty = all models. Enter complete model ids; Enter or comma adds one.',
   modelsPlaceholder: 'Model id, press Enter',

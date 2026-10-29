@@ -73,6 +73,7 @@ const basic = reactive({
   auto_disable: true,
   rpm_limit: 0,
   tpm_limit: 0,
+  spm_limit: 0,
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -182,8 +183,9 @@ const editorSections = computed(() => [
   ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
 const limitFields = computed(() => [
-  { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), unit: t('accounts.editorUi.unitRpm') },
-  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), unit: t('accounts.editorUi.unitTpm') }
+  { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), unit: t('accounts.editorUi.unitRpm'), hint: t('accounts.zeroUnlimited') },
+  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), unit: t('accounts.editorUi.unitTpm'), hint: t('accounts.zeroUnlimited') },
+  { key: 'spm_limit' as const, label: t('accounts.spmLimit'), unit: t('accounts.editorUi.unitSpm'), hint: t('accounts.spmHint') }
 ])
 /** Server field errors of the model list / mapping, shown under the editor. */
 const serverModelsError = computed(() => modelsErrorText(errors.value))
@@ -413,6 +415,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
   basic.rpm_limit = a?.rpm_limit ?? 0
   basic.tpm_limit = a?.tpm_limit ?? 0
+  basic.spm_limit = a?.spm_limit ?? 0
   modelLimitCards.value = toCards(a?.model_limits)
   if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
@@ -424,7 +427,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
 function applyDefaultLimits(at: AccountType | null) {
   const d = at?.default_limits
   if (!d) return
-  for (const field of ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit'] as const) {
+  for (const field of ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit'] as const) {
     if (d[field] !== undefined) basic[field] = d[field]!
   }
   if (d.model_limits) modelLimitCards.value = toCards(d.model_limits)
@@ -700,8 +703,8 @@ const { save } = useAccountSave({
           </SSettingsGroup>
 
           <SSettingsGroup :title="t('accounts.limits')" :description="t('accounts.editorUi.limitsHint')" data-testid="account-limits">
-            <SSettingRow v-for="f in limitFields" :key="f.key" :label="f.label" :description="t('accounts.zeroUnlimited')" :error="errors[f.key]">
-              <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" />
+            <SSettingRow v-for="f in limitFields" :key="f.key" :label="f.label" :description="f.hint" :error="errors[f.key]">
+              <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" :data-testid="`account-${f.key}`" />
             </SSettingRow>
           </SSettingsGroup>
 

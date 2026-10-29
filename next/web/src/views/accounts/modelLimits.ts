@@ -9,18 +9,26 @@ export interface ModelLimitCard {
   max_concurrency: number
   rpm_limit: number
   tpm_limit: number
+  spm_limit: number
 }
 
-const sameLimits = (a: Omit<ModelLimitCard, 'lists'>, b: Omit<ModelLimitCard, 'lists'>) =>
-  a.max_concurrency === b.max_concurrency && a.rpm_limit === b.rpm_limit && a.tpm_limit === b.tpm_limit
+type Caps = Omit<ModelLimitCard, 'lists'>
+const CAPS = ['max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit'] as const
+
+/** The caps of a saved entry or a card, as numbers (absent = 0). */
+const capsOf = (l: Partial<Caps>): Caps => Object.fromEntries(CAPS.map((k) => [k, Number(l[k]) || 0])) as Caps
+const sameCaps = (a: Caps, b: Caps) => CAPS.every((k) => a[k] === b[k])
+
+/** An empty card. */
+export const newCard = (): ModelLimitCard => ({ lists: [[]], ...capsOf({}) })
 
 /** Cards of saved model limits: consecutive lists with the same limits form one card. */
 export function toCards(limits: ModelLimit[] | null | undefined): ModelLimitCard[] {
   const cards: ModelLimitCard[] = []
   for (const l of limits || []) {
-    const v = { max_concurrency: l.max_concurrency || 0, rpm_limit: l.rpm_limit || 0, tpm_limit: l.tpm_limit || 0 }
+    const v = capsOf(l)
     const last = cards[cards.length - 1]
-    if (last && sameLimits(last, v)) last.lists.push([...l.models])
+    if (last && sameCaps(last, v)) last.lists.push([...l.models])
     else cards.push({ ...v, lists: [[...l.models]] })
   }
   return cards
@@ -31,8 +39,7 @@ export function fromCards(cards: ModelLimitCard[]): ModelLimit[] {
   const out: ModelLimit[] = []
   for (const c of cards) {
     for (const models of c.lists) {
-      if (!models.length) continue
-      out.push({ models: [...models], max_concurrency: Number(c.max_concurrency) || 0, rpm_limit: Number(c.rpm_limit) || 0, tpm_limit: Number(c.tpm_limit) || 0 })
+      if (models.length) out.push({ models: [...models], ...capsOf(c) })
     }
   }
   return out
