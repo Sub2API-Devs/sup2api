@@ -2,6 +2,8 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
+
 2026-10-29 最新发布：Core 两节点 **0.1.214**（源码 `a4cde9813`，manifest `e849feca…f189`，计划 `6983cc510558b5bca0efe8779d09dfe0` completed/13，51.6 秒，核心 SHA `e2dc9ce1…34ac`）。schema 契约不变（`2adf9bfc…`），`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
 - 内容：控制台紧凑化，只改 UI。控件高度 40→32px（小号 32→28px），圆角 12→8px，按钮去掉渐变和阴影，表格、卡片、批量栏内边距收紧，顶栏 56→48px。`SPageHeader` 标题与顶栏相同时，说明移到顶栏（单行，悬停看全文），筛选和按钮合成一行工具栏；用户、代理、模型价格、审计日志的表格卡片筛选挪进工具栏；账号页去掉筛选卡片。账号页表格起点从 281px 提到 109px（1920 宽）。
 - 核对：两节点 `sub2api version` 都是 0.1.214，都记录了 "bundled plugins run the versions of this release"，没有 ERROR/WARN；插件进程 `Seccomp=2`。api.prophey.ai 的新 JS 含 `page-description`。44 号 haiku 测试 200。42 号返回 429，原因是 5 小时窗口已用满（15:50 UTC 重置），线上已有真实流量，与本次发布无关。

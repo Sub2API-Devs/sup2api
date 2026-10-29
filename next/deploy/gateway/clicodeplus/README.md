@@ -94,6 +94,21 @@
 **上线顺序**：同 0.1.126。先更新 ovh 的 sup2api-1。clicodeplus 先把本机上游从 Caddy 摘掉，重建容器，`/readyz` 返回 200 后再恢复 Caddy。
 
 
+## 网关 0.1.128：发布包下载不再有 10 分钟总时限（2026-10-29）
+
+源码 `43bd72fff`（compose 默认镜像 `98495051a`），镜像 `sup2api-gateway:0.1.128`（ID `b1951457…`），在 ovh 干净 worktree `~/sup2api/release-gateway-0.1.128` 构建，经本机复制到 clicodeplus（gzip 44 MB，SHA `ae86cd8e…`）。两边 `.env` 的 `GATEWAY_IMAGE` 都已改成这个版本，备份为 `.env.bak-gw128`。
+
+**起因**：核心 0.1.213 发布时，clicodeplus 下载 477 MB 发布包只有约 0.7 MB/s。第一次下载到 10 分钟被取消，staging 清空后从头重下，整个计划用了 1076 秒。如果链路一直这么慢，节点会永远下载不完。
+
+**修法**
+- `release.Manager` 下载发布包时不设总时限：等响应头最多 1 分钟，之后只有连续 2 分钟收不到任何字节才失败（`HeaderTimeout`/`IdleTimeout`）。清单请求仍是 1 分钟总时限（`ManifestTimeout`）。`publisherClient` 去掉了 10 分钟 `Timeout`。
+- 真正的元凶是 `control.Engine.StepTimeout`：它就是节点锁 `WithLock` 的工作时限，到 10 分钟会取消整个 Work。现在锁的时限是 `max(StepTimeout, PrepareTimeout)`，`PrepareTimeout` 默认 24 小时，只作兜底。只有 prepare 步骤在这个上下文里执行，其他步骤和 prepare 前后的记账仍受 `StepTimeout` 限制。锁本身是 30 秒租约、持续续期，进程挂掉后 30 秒内就会释放，不会把升级锁住 24 小时。
+- 新增单元测试：慢速但不断有数据的下载，超过原来的总时限也能完成；中途停住会按空闲时限失败；清单请求仍有短时限。
+
+**上线顺序**：同 0.1.126。14:50 先更新 ovh 的 sup2api-1，9 秒就绪。然后从 Caddy 摘下 clicodeplus 的 3140（`Caddyfile.bak-gw128`；单文件 bind mount，要用 `cat > Caddyfile` 保持 inode），14:51:34 重建 sup2api-ccp，14:51:54 `/readyz` 返回 200，再恢复 Caddy。
+
+**核对**：两节点镜像都是 0.1.128，核心仍是 0.1.214，没有 ERROR/WARN；`updater.nodes` 两节点 ready；插件进程 `Seccomp=2`；api.prophey.ai `/readyz` 0.025–0.03 秒。44 号 haiku 200；42 号 429 是 5 小时额度已用满。慢链路下载要等下一次核心发布才能实际验证。
+
 ## 已知问题
 
 - **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB，磁盘剩 27 GB。
