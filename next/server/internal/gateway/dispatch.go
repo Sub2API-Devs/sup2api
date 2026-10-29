@@ -191,13 +191,14 @@ func (c *call) dispatch(ctx context.Context) {
 	c.finishSticky(ctx, 0, false)
 }
 
-// sessionIdentity is the request's session for the limiter: the sticky
-// session key when a rule matched, else a per-request identity.
+// sessionIdentity is the request's session for the limiter's
+// sessions-per-minute caps (CONTRACTS §71): the sticky session key when a
+// rule matched, else "" (neither limited nor counted).
 func (c *call) sessionIdentity() string {
-	if c.sticky != nil && c.sticky.key != "" {
+	if c.sticky != nil {
 		return c.sticky.key
 	}
-	return "req:" + c.rid
+	return ""
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
@@ -307,7 +308,7 @@ func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded 
 	if len(limited) == 0 {
 		return nil
 	}
-	out, err := lim.Exhausted(ctx, limited, c.model)
+	out, err := lim.Exhausted(ctx, limited, c.model, c.session)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: read rate limits", "err", err)
 		return nil
@@ -369,10 +370,10 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 	return release, true
 }
 
-// admitRate asks the limiter to admit one request of the call's model on ref
-// and remembers the model list its tokens are counted in.
+// admitRate asks the limiter to admit one request of the call's model and
+// session on ref and remembers the model list its tokens are counted in.
 func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
-	ok, err := c.g.d.Limiter.TryHit(c.slotCtx, *ref, c.model)
+	ok, err := c.g.d.Limiter.TryHit(c.slotCtx, *ref, c.model, c.session)
 	if ok && err == nil {
 		c.rateList.id, c.rateList.key = ref.ID, ""
 		if l := ref.ModelLimitFor(c.model); l != nil {

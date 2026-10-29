@@ -8,6 +8,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -20,16 +21,18 @@ type fakeLimiter struct {
 	tokens     map[int64]int64
 	listTokens map[string]int64 // "<id>:<list key>"
 	models     []string         // model of each Exhausted call
+	sessions   []string         // session of each Exhausted and TryHit call
 }
 
 func newFakeLimiter() *fakeLimiter {
 	return &fakeLimiter{exhausted: map[int64]bool{}, tokens: map[int64]int64{}, listTokens: map[string]int64{}}
 }
 
-func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, model string) (map[int64]bool, error) {
+func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, model, session string) (map[int64]bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.models = append(l.models, model)
+	l.sessions = append(l.sessions, session)
 	out := map[int64]bool{}
 	for _, r := range refs {
 		if l.exhausted[r.ID] {
@@ -39,10 +42,11 @@ func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, model
 	return out, nil
 }
 
-func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model string) (bool, error) {
+func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model, session string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.hits = append(l.hits, itoa(ref.ID)+":"+model)
+	l.sessions = append(l.sessions, session)
 	return true, nil
 }
 
@@ -138,6 +142,10 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	// Account 3 has no limits, so it was not asked about.
 	if len(lim.models) != 1 || lim.models[0] != testModel {
 		t.Fatalf("exhausted calls %v", lim.models)
+	}
+	// Without a sticky session the limiter gets no session (CONTRACTS §71).
+	if strings.Join(lim.sessions, ",") != "," {
+		t.Fatalf("sessions %q", lim.sessions)
 	}
 
 	// Every candidate exhausted: 429 rate_limited.
@@ -238,5 +246,44 @@ func TestWeightedOrder(t *testing.T) {
 	}
 	if p := float64(first[1]) / float64(n); p < 0.07 || p > 0.13 {
 		t.Fatalf("account 1 first %.3f, want ~0.1 (%v)", p, first)
+	}
+}
+
+// Sessions per minute (CONTRACTS §71) count sticky sessions: an account at
+// its cap keeps serving the sessions it holds, new sessions go to other
+// accounts, and requests without a session are not limited.
+func TestSessionsPerMinuteFollowStickySessions(t *testing.T) {
+	e := newEnv(t)
+	e.gw.d.Limiter = account.NewLimiter(e.rdb)
+	e.enableSticky(onFailureFailover)
+	for id := int64(1); id <= 3; id++ {
+		e.accounts.set(id, func(acc *core.Account) { acc.SPMLimit = 1 })
+	}
+	send := func(session string) (int, string) {
+		t.Helper()
+		b := body(testModel, false)
+		if session != "" {
+			b = withSession(b, "user_abc_account__session_"+session)
+		}
+		r := e.messages(b)
+		e.record()
+		if r.status != 200 {
+			return r.status, string(r.body)
+		}
+		return r.status, e.up.last().key
+	}
+	for _, step := range []struct{ session, want string }{
+		{"1", "acc-1"}, {"1", "acc-1"}, {"2", "acc-2"}, {"3", "acc-3"}, {"1", "acc-1"}, {"", "acc-1"},
+	} {
+		if code, got := send(step.session); code != 200 || got != step.want {
+			t.Fatalf("session %q: %d %s, want %s", step.session, code, got, step.want)
+		}
+	}
+	if code, got := send("4"); code != 429 || !strings.Contains(got, "rate limited") {
+		t.Fatalf("new session over every cap: %d %s", code, got)
+	}
+	u, err := e.gw.d.Limiter.Usage(context.Background(), []core.AccountRef{{ID: 1}, {ID: 2}, {ID: 4}})
+	if err != nil || u[1].Sessions != 1 || u[2].Sessions != 1 || u[1].RPM != 4 {
+		t.Fatal(u, err)
 	}
 }

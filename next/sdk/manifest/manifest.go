@@ -453,13 +453,14 @@ func (q *AccountQuota) Supported() bool {
 
 // AccountDefaultLimits are the suggested scheduling and limits of a new
 // account; an absent field keeps the console's own default. The ranges are
-// those of the account fields (CONTRACTS §18, §68).
+// those of the account fields (CONTRACTS §18, §68, §71).
 type AccountDefaultLimits struct {
 	Priority       *int                `json:"priority,omitempty"`
 	Weight         *int                `json:"weight,omitempty"`
 	MaxConcurrency *int                `json:"maxConcurrency,omitempty"`
 	RPMLimit       *int                `json:"rpmLimit,omitempty"`
 	TPMLimit       *int64              `json:"tpmLimit,omitempty"`
+	SPMLimit       *int                `json:"spmLimit,omitempty"`
 	ModelLimits    []DefaultModelLimit `json:"modelLimits,omitempty"`
 }
 
@@ -470,6 +471,7 @@ type DefaultModelLimit struct {
 	MaxConcurrency int      `json:"maxConcurrency,omitempty"`
 	RPMLimit       int      `json:"rpmLimit,omitempty"`
 	TPMLimit       int64    `json:"tpmLimit,omitempty"`
+	SPMLimit       int      `json:"spmLimit,omitempty"`
 }
 
 // MaxDefaultModelLimits bounds AccountDefaultLimits.ModelLimits; it equals

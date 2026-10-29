@@ -170,7 +170,7 @@ func (x *resourceCall) lease(ref core.AccountRef) (context.Context, func(), erro
 		return nil, nil, core.ErrRateLimited
 	}
 	if lim := x.g.d.Limiter; lim != nil {
-		ok, err = lim.TryHit(ctx, ref, "")
+		ok, err = lim.TryHit(ctx, ref, "", "")
 		if err != nil || !ok {
 			release()
 			return nil, nil, core.ErrRateLimited

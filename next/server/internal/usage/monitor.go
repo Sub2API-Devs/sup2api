@@ -77,7 +77,7 @@ func (s *Service) askMonitor(ctx context.Context, e *settleEntry, row *reservedR
 	execute := func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
 		return s.fetchExecutionHTTP(ctx, in, call.proxyID, func(ctx context.Context) error {
 			if s.rec.Limiter != nil {
-				ok, err := s.rec.Limiter.TryHit(ctx, e.account, "")
+				ok, err := s.rec.Limiter.TryHit(ctx, e.account, "", "")
 				if err != nil || !ok {
 					deferred.Store(true)
 					return errTaskDeferred

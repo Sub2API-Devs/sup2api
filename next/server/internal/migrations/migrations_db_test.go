@@ -320,3 +320,38 @@ func TestAPIKeyQuotaMigrationAndTrigger(t *testing.T) {
 	migrate()
 	require.Equal(t, "0.00000000", used(), "a rerun keeps the reset")
 }
+
+// 0063 brings back accounts.spm_limit (CONTRACTS §71): values left from the
+// SPM removed in 2026-10 are cleared once, values set afterwards survive a
+// re-run, and the column keeps its range.
+func TestAccountSPMLimitMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) error {
+		_, err := db.Pool.Exec(ctx, sql)
+		return err
+	}
+	spm := func() (v int) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT spm_limit FROM accounts WHERE name='spm'`).Scan(&v))
+		return v
+	}
+	migrate := func() []string {
+		t.Helper()
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		return done
+	}
+	const forget = `DELETE FROM schema_migrations WHERE id='0063_account_spm_limit.sql'`
+	require.NoError(t, exec(`ALTER TABLE accounts DROP CONSTRAINT accounts_spm_limit_chk;
+		COMMENT ON COLUMN accounts.spm_limit IS NULL;
+		INSERT INTO accounts(name,plugin_key,type,credentials_enc,spm_limit) VALUES('spm','fixture','apikey','',7);
+		`+forget))
+	require.Equal(t, []string{"0063_account_spm_limit.sql"}, migrate())
+	require.Equal(t, 0, spm(), "a cap from the removed SPM came back")
+
+	require.NoError(t, exec(`UPDATE accounts SET spm_limit = 3 WHERE name='spm'; `+forget))
+	migrate()
+	require.Equal(t, 3, spm(), "a rerun cleared a cap set after the migration")
+	require.Error(t, exec(`UPDATE accounts SET spm_limit = -1 WHERE name='spm'`))
+}

@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// 指定模型限速 of the account editor (CONTRACTS §68, like new-api's channel
-// form): each card is one set of concurrency / RPM / TPM caps with one or more
-// model lists; the models of a list share one counter, every list counts on
-// its own. A model may be in one list only. Server errors of the saved
-// entries (model_limits[i]...) are shown under the card holding entry i.
+// 指定模型限速 of the account editor (CONTRACTS §68, §71, like new-api's
+// channel form): each card is one set of concurrency / RPM / TPM / sessions
+// caps with one or more model lists; the models of a list share one counter,
+// every list counts on its own. A model may be in one list only. Server
+// errors of the saved entries (model_limits[i]...) are shown under the card
+// holding entry i.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SField, SHint, SInput, SLink, SIcon, toast } from '@sub2api/ui'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
-import { entryPositions, repeatedModel, type ModelLimitCard } from './modelLimits'
+import { entryPositions, newCard, repeatedModel, type ModelLimitCard } from './modelLimits'
 
 const props = defineProps<{ options: string[]; errors: Record<string, string>; disabled?: boolean }>()
 const cards = defineModel<ModelLimitCard[]>({ required: true })
@@ -17,7 +18,8 @@ const { t } = useI18n()
 const FIELDS = [
   { key: 'max_concurrency', label: () => t('accounts.concurrency'), max: 100_000 },
   { key: 'rpm_limit', label: () => 'RPM', max: 10_000_000 },
-  { key: 'tpm_limit', label: () => 'TPM', max: 1_000_000_000_000 }
+  { key: 'tpm_limit', label: () => 'TPM', max: 1_000_000_000_000 },
+  { key: 'spm_limit', label: () => t('accounts.limitsUi.sessions'), max: 10_000_000 }
 ] as const
 
 /** Messages of the server's model_limits[i]... errors, by card. */
@@ -41,7 +43,7 @@ function setList(card: ModelLimitCard, i: number, models: string[]) {
   if (now && now !== before) toast(t('accounts.modelLimits.duplicate', { model: now }), 'warning')
 }
 function addCard() {
-  cards.value.push({ lists: [[]], max_concurrency: 0, rpm_limit: 0, tpm_limit: 0 })
+  cards.value.push(newCard())
 }
 function removeList(card: ModelLimitCard, i: number) {
   card.lists.splice(i, 1)

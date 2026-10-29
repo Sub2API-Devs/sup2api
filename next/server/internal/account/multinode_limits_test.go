@@ -27,7 +27,7 @@ func TestAtomicAccountAdmissionAndCooldown(t *testing.T) {
 				if i%2 == 0 {
 					l = b
 				}
-				ok, err := l.TryHit(ctx, ref, fmt.Sprint(i))
+				ok, err := l.TryHit(ctx, ref, fmt.Sprint(i), "")
 				if err != nil {
 					t.Error(err)
 				}

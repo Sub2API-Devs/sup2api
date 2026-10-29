@@ -21,15 +21,15 @@ const props = defineProps<{ open: boolean; accounts: Account[]; typeOf: (a: Acco
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved', rows: Account[]): void }>()
 const { t } = useI18n()
 
-const on = reactive({ priority: false, weight: false, max_concurrency: false, tpm_limit: false, rpm_limit: false, groups: false, proxy: false, auto_disable: false })
-const values = reactive<BulkFields>({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
+const on = reactive({ priority: false, weight: false, max_concurrency: false, tpm_limit: false, rpm_limit: false, spm_limit: false, groups: false, proxy: false, auto_disable: false })
+const values = reactive<BulkFields>({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
 const failures = ref<BulkFailure<Account>[]>([])
 const bulk = useBulkRun(4)
 
 watch(() => props.open, (open) => {
   if (!open) return
   Object.keys(on).forEach((k) => (on[k as keyof typeof on] = false))
-  Object.assign(values, { priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
+  Object.assign(values, { priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
   failures.value = []
 })
 
@@ -44,7 +44,8 @@ const numberFields = computed(() => [
   { key: 'weight' as const, label: t('accounts.weight'), hint: t('accounts.bulk.weightHint') },
   { key: 'max_concurrency' as const, label: t('accounts.concurrency'), hint: t('accounts.bulk.zeroUnlimited') },
   { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
-  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), hint: t('accounts.bulk.zeroUnlimited') }
+  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
+  { key: 'spm_limit' as const, label: t('accounts.spmLimit'), hint: t('accounts.bulk.zeroUnlimited') }
 ])
 const invalid = computed(() => numberFields.value.filter((f) => {
   if (!on[f.key]) return false

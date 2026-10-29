@@ -98,7 +98,8 @@ type call struct {
 	// failover attempts reuse the same result. nil = the accounts' own values.
 	ranked   map[int64]rankValues
 	rankDone bool
-	// session identifies the request for the limiter (sessionIdentity).
+	// session is the request's sticky session for the limiter's SPM caps
+	// (sessionIdentity); "" when none.
 	session string
 	rec     *core.UsageRecord
 

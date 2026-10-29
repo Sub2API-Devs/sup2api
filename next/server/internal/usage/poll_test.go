@@ -96,7 +96,7 @@ type pollLimiter struct {
 	account int64
 }
 
-func (l *pollLimiter) TryHit(_ context.Context, a core.AccountRef, _ string) (bool, error) {
+func (l *pollLimiter) TryHit(_ context.Context, a core.AccountRef, _, _ string) (bool, error) {
 	l.calls++
 	l.account = a.ID
 	return l.allow, nil

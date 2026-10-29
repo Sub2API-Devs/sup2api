@@ -44,7 +44,7 @@ func (v *validator) accountLifecycle(field string, at manifest.AccountType) {
 		v.add(field+".extensionsSchema.properties", "invalid", "at most 64 extension fields are allowed")
 		return
 	}
-	reserved := []string{"id", "name", "plugin_key", "type", "status", "schedulable", "auto_disable", "priority", "weight", "max_concurrency", "rpm_limit", "tpm_limit", "proxy_id", "proxy_url", "models", "model_mapping", "credentials", "created_by", "group_ids", "status_reason", "auto_disabled_until", "created_at", "updated_at", "preparation_key", "lifecycle_sync"}
+	reserved := []string{"id", "name", "plugin_key", "type", "status", "schedulable", "auto_disable", "priority", "weight", "max_concurrency", "rpm_limit", "tpm_limit", "spm_limit", "proxy_id", "proxy_url", "models", "model_mapping", "credentials", "created_by", "group_ids", "status_reason", "auto_disabled_until", "created_at", "updated_at", "preparation_key", "lifecycle_sync"}
 	for name := range properties {
 		if slices.Contains(reserved, name) || slices.Contains(at.SensitiveFields, name) || slices.Contains(at.SettingsFields, name) {
 			v.add(field+".extensionsSchema.properties."+name, "conflict", "extensions cannot duplicate core, credential or existing settings fields")
@@ -239,6 +239,9 @@ func (v *validator) defaultLimits(f string, d *manifest.AccountDefaultLimits) {
 	if d.TPMLimit != nil {
 		bad("tpmLimit", *d.TPMLimit, 0, 1_000_000_000_000)
 	}
+	if d.SPMLimit != nil {
+		bad("spmLimit", int64(*d.SPMLimit), 0, 10_000_000)
+	}
 	if len(d.ModelLimits) > manifest.MaxDefaultModelLimits {
 		v.add(f+".modelLimits", "too_many", "at most %d model lists", manifest.MaxDefaultModelLimits)
 	}
@@ -264,6 +267,7 @@ func (v *validator) defaultLimits(f string, d *manifest.AccountDefaultLimits) {
 		bad(fmt.Sprintf("modelLimits[%d].maxConcurrency", i), int64(l.MaxConcurrency), 0, 100_000)
 		bad(fmt.Sprintf("modelLimits[%d].rpmLimit", i), int64(l.RPMLimit), 0, 10_000_000)
 		bad(fmt.Sprintf("modelLimits[%d].tpmLimit", i), l.TPMLimit, 0, 1_000_000_000_000)
+		bad(fmt.Sprintf("modelLimits[%d].spmLimit", i), int64(l.SPMLimit), 0, 10_000_000)
 	}
 }
 

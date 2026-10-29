@@ -10,16 +10,16 @@ export default {
     identity: '账号 / 接入类型', filters: '账号筛选', search: '搜索账号名称', advanced: '高级筛选', advancedApplied: '高级筛选条件已生效',
     clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
     loadFailed: '刷新失败，正在显示上次加载的数据',
-    emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM',
+    emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
     numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存'
   },
   limitsUi: {
-    title: '并发 / RPM / TPM 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型',
-    windowHint: 'RPM、TPM 为近 60 秒的用量，token 在响应结束后计入；没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
+    title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话',
+    windowHint: 'RPM、TPM、会话为近 60 秒的用量，token 在响应结束后计入；会话是近 60 秒内活跃的粘性会话数。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
   },
   modelLimits: {
     title: '指定模型限速',
-    hint: '为指定模型单独限制并发、RPM、TPM。一张卡片一组限额，卡片内可建多个列表：同一列表的模型共用一个计数器，不同列表各自计数。与账号总限额同时生效，任一达到上限就不再调度该账号；0 表示不限。',
+    hint: '为指定模型单独限制并发、RPM、TPM、每分钟会话数。一张卡片一组限额，卡片内可建多个列表：同一列表的模型共用一个计数器，不同列表各自计数。与账号总限额同时生效，任一达到上限就不再调度该账号；0 表示不限。',
     add: '添加模型限制', addList: '添加列表', removeList: '移除列表', removeCard: '删除这组限制',
     empty: '未设置，所有模型只受账号总限额约束。', placeholder: '选择或输入模型，回车添加',
     duplicate: '{model} 已在另一个列表中', summary: '{n} 组模型限速'
@@ -99,7 +99,7 @@ export default {
   tpdLimit: '每天 token 数（TPD）',
   spmLimit: '每分钟会话数（SPM）',
   tpdHint: '0 表示不限；按 UTC 自然日',
-  spmHint: '会话按粘性会话计；没有命中粘性规则时每个请求算一个会话。到达任一上限的账号在本窗口内不再参与调度。',
+  spmHint: '近 60 秒内活跃的粘性会话数上限。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求不计数也不受限。',
   models: '模型',
   modelsHint: '留空表示所有模型；输入完整模型 ID，回车或逗号添加',
   modelsPlaceholder: '模型 ID，回车添加',

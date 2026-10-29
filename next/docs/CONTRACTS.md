@@ -269,6 +269,7 @@
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
 | `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
 | `rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}` | STRING 账号某个模型列表的分钟窗口计数，TTL 2m（§68） | A |
+| `rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm` | ZSET 账号 / 模型列表近 60 秒活跃的粘性会话（member = 粘性会话键，score = Redis 毫秒时间），每次准入时修剪窗口外成员，TTL 2m（§71） | A |
 | `slot:account-model:{key}:{id}` | ZSET 账号某个模型列表的并发槽位，格式同 `slot:{kind}:{id}`（§68.2） | D |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
@@ -861,7 +862,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 - 新建账号第 1 步按线框图 A.3 做成紧凑卡片网格（每个账号类型一张卡：插件头像、类型名、插件名与版本、信任标记、支持的平台徽章、一行描述；端点列表折叠，默认不展开），不再按插件分区块，也不再一张卡占半屏。
 - 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
-- 账号列表：2026-10-30 起改为 §68.6 的样式（优先级、权重分两列直接修改；并发 / RPM / TPM 一列）；详情页展示模型列表、映射及当前限流用量。TPD 和 SPM 已移除，历史数据库列保留供版本回退，不再参与配置、计数或准入。
+- 账号列表：2026-10-30 起改为 §68.6 的样式（优先级、权重分两列直接修改；并发 / RPM / TPM 一列）；详情页展示模型列表、映射及当前限流用量。TPD 和 SPM 已移除，历史数据库列保留供版本回退，不再参与配置、计数或准入（SPM 已于 2026-10-30 按 §71 以粘性会话为口径重新加入）。
 
 ## 19. 从上游拉取模型列表（2026-09-25，用户要求）
 
@@ -4659,3 +4660,43 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **429**：插件 `ClassifyError` 给 429 的配额观测（代表窗口 `rejected`）现在带上该窗口头里的真实 utilization，不再是"未知"；自动禁用到重置时刻、到点自动恢复的规则不变（§69）。
 - 控制台没有任何数据时显示"暂无用量，下次请求后更新，或点击刷新"。
 - 用量窗口不参与调度准入（§44.7「用量窗口不再拦截」），所以只靠响应头更新的快照即使变旧，也不会挡住账号。
+
+## 71. 每分钟会话数 SPM（2026-10-30，用户要求参照 new-api）
+
+用户要求：把 new-api 的 SPM（每分钟会话限制）加上，与并发、RPM、TPM 并列；会话按粘性会话键判断是否是新会话。参照 new-api `model/channel_rate_limit.go`（`spm`、`tryOccupy`、`filterSPMBlockedChannels`）。本节取代 §18 早期版本里已移除的 `spm_limit`（2026-10-05 移除，列一直保留未用）。
+
+### 71.1 字段
+
+| 字段 | 类型 / 校验 | 说明 |
+|---|---|---|
+| `spm_limit` | 0–10000000，默认 0（迁移 0063，列 `accounts.spm_limit`） | 账号近 60 秒内活跃的粘性会话数上限，0 = 不限 |
+| `model_limits[].spm_limit` | 同上；旧数据缺省为 0 | 该模型列表近 60 秒内活跃的粘性会话数上限 |
+| `rate_usage.sessions`、`rate_usage.models[].sessions` | 只读 | 近 60 秒内活跃的会话数（精确值，不是估算） |
+
+- POST / PATCH `/accounts` 可带 `spm_limit`；字段错误 `spm_limit: invalid`、`model_limits[i].spm_limit: invalid`。
+- 迁移 0063：列在 0009 就存在（早期 SPM 的残留），首次执行时清零旧值，避免它们突然变成生效的上限；之后用列注释 `CONTRACTS §71` 标记已执行，重跑不会清掉管理员新设的值。加约束 `accounts_spm_limit_chk`（0–10000000，先 DROP IF EXISTS 再 ADD）。旧核心忽略该列。
+
+### 71.2 会话与准入
+
+- **会话身份 = 请求命中的粘性规则算出的粘性会话键**（`sticky:{rule}:{group}:{model}:{sha256(value)}`，§ 粘性会话）。粘性会话关闭、没有规则命中或没有会话值时，请求**没有会话**：不受任何 SPM 限制，也不计入会话数。
+- 每层（账号自身、请求模型所在的模型列表）各有一个 ZSET，**各层独立判定**：持有某层的会话槽不豁免其他层。
+- 某层设了上限时：该会话在该层近 60 秒内已出现过 → 总是放行；否则该层近 60 秒内的会话数 < 上限才放行。
+- 准入和 RPM / TPM 在**同一个 Lua 脚本**里完成（`ratelimit.Minute.AdmitAll`，`core.AccountLimiter.TryHit(ctx, ref, model, session)`）：任何一层的 RPM、TPM、SPM 到了，整次都不计；都没到时每层 RPM +1，且（有会话时）每层把会话写入 ZSET（score 为 Redis 时间，同一会话再次请求只刷新时间），并修剪 60 秒外的成员。会话数在每一层都计，不论该层是否设了上限，用于展示。
+- 被 SPM 挡住和被 RPM / TPM 挡住效果一样（§18.1、§68.2）：本次跳过该账号，不改状态、不发事件；都不可用时 429 `rate_limited`（`all accounts are busy or rate limited, please retry later`）。`ratelimit` 给出的 retry 为最早一个会话离开窗口的时间（最少 1 秒）；账号路径与 RPM / TPM 一样不向客户端返回 `Retry-After`。
+- 托管任务轮询、资源下载不带会话（与不带模型一样），不受 SPM 限制。
+
+### 71.3 调度
+
+- `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号已经持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
+- Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行）。
+
+### 71.4 插件
+
+- `AccountProperties.spm_limit = 14`、`ModelLimit.spm_limit = 5`、`AccountPatch.optional int32 spm_limit = 10`；规则同 §68.5（按管理员输入校验，`plugin_changed` 记入审计；`FactsObserved` 触发的 `before_update` 不采纳）。
+- manifest `accountTypes[].defaultLimits.spmLimit`、`defaultLimits.modelLimits[].spmLimit`，`GET /account-types` 以 `default_limits.spm_limit` 返回；`sdk/manifest/check` 校验 0–10000000。`spm_limit` 也加入扩展字段的保留名。
+
+### 71.5 控制台
+
+- 账号列表的限额列改为"并发 / RPM / TPM / 会话"，第四个数字是会话：设了上限显示 `已用/上限` 并按比例着色，没设只显示用量。悬停明细表加"会话"列（账号与各模型列表）。
+- 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。
+- Redis key：`rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm`（§7）。

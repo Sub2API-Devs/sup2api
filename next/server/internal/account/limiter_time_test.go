@@ -21,17 +21,17 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	mr.SetTime(stamp)
 	a, b := NewLimiter(rdb), NewLimiter(rdb)
 	ref := core.AccountRef{ID: 7, RPMLimit: 1}
-	if ok, err := a.TryHit(ctx, ref, "first"); err != nil || !ok {
+	if ok, err := a.TryHit(ctx, ref, "first", ""); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	if ok, err := b.TryHit(ctx, ref, "second"); err != nil || ok {
+	if ok, err := b.TryHit(ctx, ref, "second", ""); err != nil || ok {
 		t.Fatal("second node bypassed shared limit", ok, err)
 	}
 	// The keys are those of the releases before the shared ratelimit package.
 	if n, err := rdb.Get(ctx, "rl:account:7:rpm:"+strconv.FormatInt(stamp.Unix()/60, 10)).Int(); err != nil || n != 1 {
 		t.Fatal("RPM key used local time", n, err)
 	}
-	if ok, err := a.TryHit(ctx, core.AccountRef{ID: 8}, ""); err != nil || !ok {
+	if ok, err := a.TryHit(ctx, core.AccountRef{ID: 8}, "", ""); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	a.AddTokens(ctx, 8, "", 17)
@@ -42,7 +42,7 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if err != nil || u[8].RPM != 1 || u[8].TPM != 17 {
 		t.Fatal(u, err)
 	}
-	ex, err := b.Exhausted(ctx, []core.AccountRef{ref}, "second")
+	ex, err := b.Exhausted(ctx, []core.AccountRef{ref}, "second", "")
 	if err != nil || !ex[7] {
 		t.Fatal(ex, err)
 	}
@@ -55,10 +55,10 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if _, err = b.Usage(ctx, []core.AccountRef{{ID: 8}}); err == nil {
 		t.Fatal("usage fell back to local time")
 	}
-	if _, err = b.Exhausted(ctx, []core.AccountRef{ref}, "other"); err == nil {
+	if _, err = b.Exhausted(ctx, []core.AccountRef{ref}, "other", ""); err == nil {
 		t.Fatal("exhausted fell back to local time")
 	}
-	if ok, err := b.TryHit(ctx, ref, "other"); err == nil || ok {
+	if ok, err := b.TryHit(ctx, ref, "other", ""); err == nil || ok {
 		t.Fatal("admission fell back to local time")
 	}
 }

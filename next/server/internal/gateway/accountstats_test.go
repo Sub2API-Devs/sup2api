@@ -21,7 +21,7 @@ import (
 
 type panicStatsLimiter struct{ core.AccountLimiter }
 
-func (panicStatsLimiter) TryHit(context.Context, core.AccountRef, string) (bool, error) {
+func (panicStatsLimiter) TryHit(context.Context, core.AccountRef, string, string) (bool, error) {
 	panic("admission panic")
 }
 
