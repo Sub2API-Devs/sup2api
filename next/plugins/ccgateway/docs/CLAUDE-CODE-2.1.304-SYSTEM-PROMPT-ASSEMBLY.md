@@ -1,6 +1,8 @@
 # Claude Code 2.1.304 内置 system 提示词的组装
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)。
+>
+> 2.1.312 的复核（函数名对照、实抓数字、版本差异）见第 12 节。
 
 2026-10-22。分析对象是 30 号容器当前使用的 CLI：v17（`ccgateway-v17-identity-line`，sha256 `000a5382…`），与本地 `artifacts/claude-2.1.304/claude-linux-v17-identity-line` 逐字节相同。做法是用 `restore-bun.cjs` 解包，再用 `@babel/parser` 给 53 MB 的 bundle 建顶层声明索引，沿调用链读源码（脚本在 `artifacts/claude-2.1.304/prompt-ast/`，`q.cjs find|show|callers`）。下文函数名是 Bun 重新打包后的名字，所以带数字后缀；与 `linux-restored` 里的同名函数对应。v17 只改了请求命令和内容策略，没有改提示词组装。
 
@@ -184,3 +186,66 @@ build 实测（30 号线上 Worker + v17，官方主代理/子代理请求，重
 | metadata | 身份映射，按设计 | 同左 |
 
 结论：子代理的提示词不需要 build 另外补，客户端已经带着，build 也没有加默认段。缺的是第二类：把 `querySource`、子代理 `agentContext`（派生的 agent ID）和 `promptId` 交给原生构建与请求命令，请求头和 beta 就由原生代码按子代理生成。
+
+## 12. 2.1.312 复核（2026-10-30）
+
+用官方 2.1.312（sha256 `4f4178ce…`，与官方 manifest 一致）实抓，不登录：ovh 一次性容器 `node:22-bookworm-slim`，CLI 全部流量走容器内的假上游（`http://127.0.0.1:8080`，`ANTHROPIC_BASE_URL` 允许回环 http），`CLAUDE_CODE_OAUTH_TOKEN` 放占位令牌。脚本在 `artifacts/claude-2.1.312/container-test/`，抓回的 body 在 `artifacts/claude-2.1.312/captures-fp/`；bundle 源码用 `artifacts/claude-2.1.312/linux-restored/` 逐函数核对。
+
+**必须设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`**。同一个容器不设它跑 `claude -p hi`，system 只有 3 块、计费头退化成 74 字、没有 `cch`/`cc_prompt_id`/`cc_turn_*`；设了才和客户端直连官方地址一致。测其它客户端形状时同样适用（见 [CLI-TEST-PLAN](CLI-TEST-PLAN.md)）。
+
+### 12.1 函数名对照
+
+2.1.312 重新打包后名字全变了，职责与本文第 2–3 节一一对应：
+
+| 2.1.304 | 2.1.312 | 作用 |
+|---|---|---|
+| `YV2` / `Zsr` | `Hir`（外层 `XY`） | buildEffectiveSystemPrompt：override > 协调者 > 主线程 agent > `customSystemPrompt` > 默认 |
+| `Xkt` | `sI` → `bon`/`mXe`（特征）、`osr`/`Ron`（段与决定）、`rsr`（段表） | 段引擎 |
+| `nin2`、各 `# ` 段 | `rsr` + `Drr`/`Nrr`/`Frr`/`$rr`/`jrr`/`Krr`；lean 为 `pon` | 静态提示词 |
+| `r1e` | `L2e` | 按 `shared`/`session` 插段 |
+| `PAs` | `d2s` | `[计费头, 身份行, ...调用方 system].filter(Boolean)` |
+| `n1n` | `b6n` | 身份行选择（`ie` 终端 / `Ue` SDK+append / `Pe` SDK） |
+| `kLo` | `f3o` | 计费头 |
+| `Jfr2`/`Fbo` | `b8n`（`sI` 末尾 `b8n(s, A6()?uN:null)`） | 按分界符切块 |
+
+### 12.2 实抓结果（`claude -p hi`，设了 first-party 假设）
+
+| 模型 | system 块 | 长度 | 缓存标记 |
+|---|---|---|---|
+| Opus 4.8（lean） | 计费头 / 身份行 / 静态 / 动态 | 192 / 62 / **1171** / **4388** | — / — / `ephemeral 1h scope:global` / `ephemeral 1h` |
+| Sonnet 4.6 | 计费头 / 身份行 / 静态 / 动态 | 192 / 62 / **10695** / **16269** | 同上 |
+
+静态块长度与第 6 节 2.1.304 的 1171 / 10695 完全一致。工具 12 个（Agent、Bash、Edit、ListAgents、Read、ReportFindings、ScheduleWakeup、Skill、ToolSearch、Workflow、DeferredToolPlaceholder、Write），`max_tokens` 64000（Opus）/ 32000（Sonnet），`stream: true`，`/v1/messages?beta=true`。计费头两次抓到的 `cch` 不同（`081e5`、`db5d7`），确认第 7 节的运行时计算在 2.1.312 上仍然如此。
+
+### 12.3 与 2.1.304 的差异
+
+- **分界符是开关控制的**。2.1.312 的 `sI` 末尾是 `b8n(s, A6()?uN:null)`：`A6()` 为假时（本次不设 first-party 假设就是这样）不插 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`，静态段和动态段合成一块，system 只有 3 块。为真时才是本文第 2 节的 4 块。
+- **动态段的形态取决于 `leanRewrite`**。`cfe(model)` 为真时每段包成 XML 标签（`<communication>`、`<environment>`…，`esr` 改名表 + `gXe`），否则仍是 `# 标题`。本次 Opus 4.8 实抓是后者。
+- **环境附件的载体仍随模型**：Opus 4.8 走 `role:"system"` 消息，Sonnet 4.6 塞进首条 user 的 system-reminder（与第 5 节一致）。
+- **`--append-system-prompt`**：实测拼在提示词块的**最末尾**（`…<total_tokens>…</total_tokens>\n\n<追加文本>`），同时身份行从 `Pe` 变 `Ue`；不设 first-party 假设的那一对是 5560 → 5574 字。
+
+### 12.4 lean 静态块全文（Opus 4.8，1171 字）
+
+```
+You are an agent working with the user toward their goals, using your own judgment along the way.
+
+IMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, exploit development) require clear authorization context: pentesting engagements, CTF competitions, security research, or defensive use cases.
+
+# Harness
+ - Text you output outside of tool use is displayed to the user as Github-flavored markdown in a terminal.
+ - Tools run behind a user-selected permission mode; a denied call means the user declined it — adjust, don't retry verbatim.
+ - `<system-reminder>` tags in messages and tool results are injected by the harness, not the user. Hooks may intercept tool calls; treat hook output as user feedback.
+ - Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.
+ - Reference code as `file_path:line_number` — it's clickable.
+```
+
+非 lean 的静态块仍是第 3.2 节那六段（`# System`、`# Doing tasks`、`# Executing actions with care`、`# Using your tools`、`# Tone and style`，Sonnet 4.6 另有 `# Text output (does not apply to tool calls)` 等由动态段承载）。
+
+### 12.5 动态块段序（Opus 4.8 实抓，按出现顺序）
+
+communication（无标题，`Write code that reads like the surrounding code…`）、pronouns、action_caution、`# Session-specific guidance`、`# Memory`、`# Environment`、`# Context management`、act_dont_rederive、`<total_tokens>…</total_tokens>`。Sonnet 4.6 在此之上还有 `# Text output (does not apply to tool calls)`、`# auto memory`、`<types>/<type>`。`rsr` 的完整段表（含按模型、开关、工具、技能打开才出现的段）见第 3.2 节的表，2.1.312 只是条目顺序和命名有调整。
+
+### 12.6 与 ccgateway 的补充
+
+请求等级 `low`（默认）只注入环境附件、不注入这段提示词，所以客户端自己没有 system 时，build 出来的请求 system 就只有计费头 + 身份行两块——不是丢段。`high` 才会把上面这份（lean 或全量）注入进去（`next/plugins/ccgateway/companions/contracts/features/levels.go` 的 `LevelInjection`）。
+
