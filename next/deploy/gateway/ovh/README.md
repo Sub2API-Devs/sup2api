@@ -2,7 +2,19 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
-2026-10-28 最新发布：Core 两节点 **0.1.210**（源码 `f480828a5`，manifest `3bad4c42…4bb6`，计划 `fdf4e5fa596f8974e79ae0f6cc377672` completed/13，**58.8 秒**，核心 SHA `02fa90af…33fe`）。schema 契约不变（`2adf9bfc…`）；CCGateway 仍 0.1.107。
+2026-10-29 最新发布：Core 两节点 **0.1.211**（源码 `a7a880313`，manifest `7ffa6ea9…e146`，计划 `a72c271390fd8c7bf7dfa9346f51b04e` completed/13，约 116 秒，核心 SHA `0b39eaf5…b4b6`）。schema 契约不变（`2adf9bfc…`）；CCGateway 0.1.110。
+- 内容：插件可在 RankAccounts 里返回账号负载 `load`（0–100），同优先级内有效权重 = 权重 ×(100−load)/100（CONTRACTS §67）；账号页拖选/Shift 多选、全选与批量操作（UI 3.2）。
+- 停机：sup2api-ccp 停 4.1 秒、sup2api-1 停 2.3 秒（0.1.210 的排空即停生效）。
+- 备份 `backups/core-0.1.211`（604 项），脚本 `stage/0.1.211/{build.sh,release.sh}`。
+- 核对：两个节点版本 0.1.211、readyz 200，前端都是 `index-CJShwuuc.js`（含批量操作）；42/44/21 号 haiku 测试 200。
+
+2026-10-29 发布：CCGateway/Controller/Worker **0.1.110**（`f559d69bc`，包 SHA `18076627…9862`，rollout 195），CLI **v36** `ccgateway-v36-content-guard`（ELF `06d428b6…19fe`，Bun 1.4.4）；核心仍 0.1.210。
+- 内容：容器 `/admin/usage` 改为运行 CC 自带的 `claude -p /usage`，由 CC 自己续期过期令牌、401 后续期重试，读 `.claude.json` 的 `cachedUsageUtilization`（CONTRACTS §51.1）；一并编译发布 0.1.109 起源码里就有、但当时没编进 CLI 的内容转换修复（v36）。
+- CLI：本机 `patch-cli.cjs` → ovh `~/sup2api/checks/cli-v36/build-cli-v36.sh`（oven/bun:1.4.4 编译、打包、TLS 对比：与官方 2.1.310 TLS 相同，请求头差异与 v34 一致）→ e2e `docker.sh smoke` 通过。
+- 顺序：上传、升级 → bundled controller/egress/app（Worker 原地更新）→ `runtime/workers` 配对原地更新，运行中容器全部 `ccgateway-v36-content-guard` / `06d428b6`（23 号容器已不存在）。
+- 核对：42、44 号配额强制刷新正常（44 号 5 小时窗口由「已限流」恢复）；42/44/21 haiku 200。43、36–41 号授权已失效（CC 续期失败清掉了登录），需重新授权。
+
+2026-10-28 历史发布：Core 两节点 **0.1.210**（源码 `f480828a5`，manifest `3bad4c42…4bb6`，计划 `fdf4e5fa596f8974e79ae0f6cc377672` completed/13，**58.8 秒**，核心 SHA `02fa90af…33fe`）。schema 契约不变（`2adf9bfc…`）；CCGateway 仍 0.1.107。
 - 内容：受管核心被外壳排空时立即停止，不等 3 秒的 `SHUTDOWN_DELAY`，也不留 30 秒宽限，进行中的请求直接取消，用量和账照常写完（CONTRACTS 中「收到 SIGTERM 后」那一段）。
   - 起因：0.1.209 升级用了 116 秒，两个节点的停止各等了 37 秒和 36 秒，都是被一个长流式请求撑满 30 秒宽限后强制断开的。
 - 这次停的还是旧的 0.1.209 核心，停止用了 6.7 秒（ccp）和 5.4 秒（sup2api-1），因为刚好没有长请求在跑。从下一次升级起，新核心会再省掉这 3 秒，长请求也不会再拖 30 秒。整站同时停服约 12.6 秒。
