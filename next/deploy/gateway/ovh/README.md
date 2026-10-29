@@ -2,10 +2,17 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-10-29 内置插件重新发布并吊销旧密钥：anthropic **0.2.7**、gemini **0.2.6**、openai **0.3.6**、moderation **0.1.13**、volcengine **0.12.5**（`fcaf9e8fd`，rollout 198–202）。这几个包从源码编译，用 `sup2api-plugins-2026` 签名。
+- 内容：10-24 第二轮 SDK 重构与审核修复（共享 apikey 校验、请求头、模型列表等）。发布前 SDK 和 5 个插件的 `go test` 全过，PG 测试没有跳过；`GOOS=linux go vet` 也通过。
+- 和线上旧包逐文件对比：只有两个插件程序和 manifest 的 version 变了，表单、迁移、权限都没变。moderation 的 UI 源码自 0.1.11 起没改过，构建好的 UI 直接取自线上 0.1.11 包。moderation 跳过 0.1.12（那是被拒绝的重签尝试）。
+- 升级前后权限没有变化，授权自动沿用。两节点都跑新版本（`Seccomp=2`，开着 Landlock），一次性容器里 Landlock 握手也正常。moderation 的 `/p/moderation/{overview,events,blocks}` 经两个节点都正常；42/44 号 haiku 测试 200。
+- `sub2api-dev` 已吊销（`revoked_versions` 179，`disabled_plugins` 为空），之后 sup2api-1 重启 9 秒就绪，没有报错。它签的历史版本都不能再回滚或启用了。镜像 `builtin/` 还是旧包，但内置插件已就绪，启动时不会重新上传。全新节点仍然装不了，下次核心发布用新密钥重签 `builtin/` 后才行。
+- 脚本 `stage/builtins-2026-10-29/build.sh`，包在同目录 `packages/`。
+
 2026-10-29 插件签名校验与 Landlock 打开（两节点）：`SUB2API_PLUGIN_VERIFY_SIGNATURES=true`、`SUB2API_PLUGIN_LANDLOCK=true`；CCGateway **0.1.111**（`d4cf5beed`，代码同 0.1.110，包 SHA `ccd0dcdb…`，rollout 197）。
 - 起因：从 0.1.68 起，插件包都用容器里临时生成的一次性密钥签名，验签只能关着。数据库里 `sub2api-dev` 的公钥也和任何包都对不上；内置包实际是用镜像 `builtin/trust.pub` 那把密钥签的，它的私钥已经丢了。
 - 新的固定签名密钥是 `sup2api-plugins-2026`，私钥在 ovh `~/sup2api-managed/keys/plugin-sign/`（700/600），公钥 `ARIktwp5…wN8=`。它已登记在发布者 sub2api 名下，两节点 `.env` 的 `PLUGIN_TRUST_KEY` 也换成了它。以后插件包都用它签（样板 `stage/ccgateway-0.1.111/build.sh`），不要再 `keygen`。
-- `sub2api-dev` 的公钥已改成 `builtin/trust.pub`（`i0Jwoox2…`），并设 `not_after` 为 2026-10-29（审计 `publisher_key.repair`）。已安装的 anthropic 0.2.6、gemini 0.2.5、openai 0.3.5、moderation 0.1.11、volcengine 0.12.4 加载时仍能验过，但不能再用它上传新包。这几个插件下次重新编译发布、改用新密钥签名后，再吊销 `sub2api-dev`；吊销会停用它签名的版本。
+- `sub2api-dev` 的公钥已改成 `builtin/trust.pub`（`i0Jwoox2…`），并设 `not_after` 为 2026-10-29（审计 `publisher_key.repair`）。已安装的 anthropic 0.2.6、gemini 0.2.5、openai 0.3.5、moderation 0.1.11、volcengine 0.12.4 加载时仍能验过，但不能再用它上传新包。（同日已重新发布这五个插件并吊销 `sub2api-dev`，见上一条。）
   - 镜像 `builtin/` 里的 ccgateway 0.1.66 签名本身就是坏的，旧密钥也已过期，所以全新节点装内置插件会失败。现有两节点不受影响，因为内置插件都已就绪，启动时不会重新上传。下次核心发布要用新密钥重签 `builtin/`。
 - 曾尝试只改版本号、不重编译来重签内置包，但不可行：插件二进制内嵌 manifest，`GetInfo` 会报旧版本。moderation 0.1.12 的 rollout 196 在准备阶段失败，版本已标记为 rejected。
 - Landlock：在一次性容器里用线上数据卷（只读）把 6 个插件放进 `plugin-exec --landlock --seccomp --strict-network` 启动，握手全部正常。同样条件下用 busybox 验证：`/etc/passwd`、`/var/lib/sub2api`、`/tmp` 都被拒绝，工作目录可写。
