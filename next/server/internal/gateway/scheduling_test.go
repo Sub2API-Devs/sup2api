@@ -143,9 +143,11 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	if len(lim.models) != 1 || lim.models[0] != testModel {
 		t.Fatalf("exhausted calls %v", lim.models)
 	}
-	// Without a sticky session the limiter gets no session (CONTRACTS §71).
-	if strings.Join(lim.sessions, ",") != "," {
-		t.Fatalf("sessions %q", lim.sessions)
+	// Without a sticky session each request is a session of its own (CONTRACTS §71).
+	for _, s := range lim.sessions {
+		if !strings.HasPrefix(s, "req:") {
+			t.Fatalf("sessions %q", lim.sessions)
+		}
 	}
 
 	// Every candidate exhausted: 429 rate_limited.
@@ -251,7 +253,7 @@ func TestWeightedOrder(t *testing.T) {
 
 // Sessions per minute (CONTRACTS §71) count sticky sessions: an account at
 // its cap keeps serving the sessions it holds, new sessions go to other
-// accounts, and requests without a session are not limited.
+// accounts, and a request without a session is a new session.
 func TestSessionsPerMinuteFollowStickySessions(t *testing.T) {
 	e := newEnv(t)
 	e.gw.d.Limiter = account.NewLimiter(e.rdb)
@@ -273,17 +275,19 @@ func TestSessionsPerMinuteFollowStickySessions(t *testing.T) {
 		return r.status, e.up.last().key
 	}
 	for _, step := range []struct{ session, want string }{
-		{"1", "acc-1"}, {"1", "acc-1"}, {"2", "acc-2"}, {"3", "acc-3"}, {"1", "acc-1"}, {"", "acc-1"},
+		{"1", "acc-1"}, {"1", "acc-1"}, {"2", "acc-2"}, {"3", "acc-3"}, {"1", "acc-1"},
 	} {
 		if code, got := send(step.session); code != 200 || got != step.want {
 			t.Fatalf("session %q: %d %s, want %s", step.session, code, got, step.want)
 		}
 	}
-	if code, got := send("4"); code != 429 || !strings.Contains(got, "rate limited") {
-		t.Fatalf("new session over every cap: %d %s", code, got)
+	for _, session := range []string{"4", ""} {
+		if code, got := send(session); code != 429 || !strings.Contains(got, "rate limited") {
+			t.Fatalf("new session %q over every cap: %d %s", session, code, got)
+		}
 	}
 	u, err := e.gw.d.Limiter.Usage(context.Background(), []core.AccountRef{{ID: 1}, {ID: 2}, {ID: 4}})
-	if err != nil || u[1].Sessions != 1 || u[2].Sessions != 1 || u[1].RPM != 4 {
+	if err != nil || u[1].Sessions != 1 || u[2].Sessions != 1 || u[1].RPM != 3 {
 		t.Fatal(u, err)
 	}
 }

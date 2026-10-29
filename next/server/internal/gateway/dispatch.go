@@ -193,12 +193,12 @@ func (c *call) dispatch(ctx context.Context) {
 
 // sessionIdentity is the request's session for the limiter's
 // sessions-per-minute caps (CONTRACTS §71): the sticky session key when a
-// rule matched, else "" (neither limited nor counted).
+// rule matched, else the request itself is a new session (as new-api does).
 func (c *call) sessionIdentity() string {
 	if c.sticky != nil {
 		return c.sticky.key
 	}
-	return ""
+	return "req:" + c.rid
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
