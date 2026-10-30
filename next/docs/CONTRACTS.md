@@ -883,6 +883,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ## 20. 提示词审核插件 moderation（2026-09-25，用户要求）
 
+> 2026-10-30：0.2 按 §72 重做（参照 new-api，设计稿未实现）。与 §72 冲突的地方以 §72 为准，实现时同步修改本节。
+
 内置插件 `moderation`（提示词审核 / Prompt Moderation，0.1.0，`plugins/moderation`）。它用网关钩子取出请求里最新一条用户消息的文本，交给管理员配置的上游 **OpenAI 兼容 LLM**（`POST {base}/v1/chat/completions`）审核。LLM 拿到一个工具 `submit_verdict`，必须调用它把审核结论写回来；没调用或参数不合法时，插件把错误作为工具结果或追加提示回给 LLM 再来一轮（小型 agent 循环，最多 `max_turns` 轮）。参考了旧 sub2api 的"内容审计"和"提示词审计"（同步拦截 / 异步观察两种模式、违规计数自动封禁、审核记录），但判定方式换成 LLM + 工具调用。
 
 ### 20.1 核心改动
@@ -4700,3 +4702,324 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 账号列表的限额列改为"并发 / RPM / TPM / 会话"，第四个数字是会话：设了上限显示 `已用/上限` 并按比例着色，没设只显示用量。悬停明细表加"会话"列（账号与各模型列表）。
 - 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。
 - Redis key：`rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm`（§7）。
+
+## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求，设计稿，未实现）
+
+用户要求把 new-api 的内容审核（`D:\projects\golang\new-api`，分支 `feat/content-moderation`，cp.270；代码在 `service/moderation/`、`model/moderation*.go`、`controller/content_moderation.go`）迁移过来。sup2api 已有内置插件 `moderation`（§20，0.1.13），所以做法是**把 new-api 的设计并入这个插件，升到 0.2.0**，不新建插件。本节确定后，§20 中与本节冲突的条目以本节为准，实现时同步改 §20。
+
+用户已确认的取舍：
+- 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
+- 现有的单模型审核保留，作为审核器类型 `llm_verdict`，老配置自动转换、继续可用。
+- 显示用户名要靠核心的 `users.read`，放到 P3；P1、P2 只显示 user_id。
+- 按 P1 → P2 → P3 分期。本节详写 P1，P2、P3 写到能拆任务的程度。
+
+### 72.1 与 new-api、§20 的对照
+
+| 方面 | §20（0.1.x） | new-api | 0.2 做法 |
+|---|---|---|---|
+| 审什么 | 最新一条 user 消息，只有文字；剥掉 `<system-reminder>` | 只审最后一条是 user 的请求；取结尾连续的 user 消息（Anthropic 的 tool_result 不算文字），文字加图片，保留 `<system-reminder>`，压缩空白后截到 12000 字 | 照 new-api（72.4） |
+| 怎么判 | 一个 LLM + `submit_verdict` | 审核器：OpenAI `/v1/moderations` 按类别分数比阈值；TypeSafe Jev 按问题打分 | 三种审核器：`openai_moderation`、`typesafe`、`llm_verdict`（72.6） |
+| 组合 | 一次调用 | 多级流程：同级审核器并发，组合方式 any/all/at_least；某一级判通过就整体通过 | 照 new-api（72.7） |
+| 配置粒度 | 全局 | 分组绑定流程，流程可发布、有版本、可回滚 | 分组绑定流程；`group_id=0` 是默认流程，没有单独绑定的分组都走它 |
+| 何时拦截 | 全局 `observe` 或 `enforce` | 默认后台异步审核；只有名单上拦截级的用户同步审核，命中就拒绝 | `mode`：`off`、`observe`（new-api 行为）、`enforce`（所有人同步审核）（72.5） |
+| 用户处置 | 窗口内违规达到阈值自动封禁（`blocks`） | 观察名单：observe / block 两级、有效期、违规计数、AI 分析可自动升降级 | 观察名单两级 `observe` / `enforce`；原来的封禁保留，作为名单之上的第三级"封禁"（72.8） |
+| 人工审核 | 只能删记录 | 标误报或确认；最终结论 = 人工结论优先，否则取 AI 结论 | 照 new-api（72.9） |
+| AI 分析 | 无 | 带 5 个工具的 agent，结论自动调整名单 | P2（72.13） |
+| 统计、成本、通知 | 概览只有聚合 | 小时统计、延迟分桶、成本、异常率告警 | P3（72.14）。成本不搬：审核渠道指回本网关时，费用自然记在专用 Key 名下 |
+
+**名词。** 为避免和已有的 `blocks` 表（封禁）混淆，new-api 名单的 `block` 级在这里叫 **`enforce` 级**。本节说的"拦截"只指拒绝某一次请求；"封禁"指这个用户的所有请求都拒绝。
+
+### 72.2 核心改动（P1 需要，随一次核心发布）
+
+1. **gjson 修饰符 `@tail:N`**：返回数组最后 N 个元素（N 取 1–64；超出范围或不是数组时原样返回）。核心在启动时用 `gjson.AddModifier` 注册；`sdk/manifest/check` 的 needs 校验要认识它。插件据此用 `messages|@tail:16` 拿到结尾的 16 条消息，在插件里算出结尾连续的 user 消息，不必把整段历史传过去。
+2. **宿主调用 `SecretSeal` / `SecretOpen`**：用核心现有的凭证密钥做 AES-GCM，AAD = 插件 key；插件 A 封存的数据插件 B 解不开。新增宿主权限 `secrets`，风险等级 low。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。
+3. **钩子请求的消息大小**：带图片的请求会超过 gRPC 默认 4 MiB 的接收上限。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize`，moderation 设成 64 MiB；同时确认核心调用钩子那一侧的发送上限。超过上限时调用报错，钩子按 `failure: open` 放行。核心的熔断按连续失败计数，偶发的超大请求不会触发熔断，但这里要写一个测试。
+4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本；**发布顺序是先核心、后插件**。
+5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
+
+### 72.3 manifest 变化
+
+- 版本 0.2.0；能力不变（`gateway.hook.v1`、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`），宿主权限加 `secrets`。
+- 钩子 `needs` 改为：`model`、`messages|@tail:16`、`input|@tail:16`、`[input]|#(%"*")`、`contents|@tail:16`。`scope.fields` 照抄。
+- 权限：保留 `moderation:read`、`moderation:manage`，和 new-api 的 read / write 一一对应。read 能看全部页面，包括原文；manage 负责所有修改和要花钱的调用（试跑、测试、手动分析）。
+- 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13）。
+
+### 72.4 抽取
+
+- **结尾连续的 user 消息**：在 `@tail:16` 的结果里，只有最后一条的 role 是 `user` 才审；从最后一条往前取，遇到其他 role 就停。
+  - OpenAI chat：role 照原样。
+  - Anthropic：tool_result 所在消息的 role 也是 user，算进这一段，但 tool_result 块的内容不审。
+  - Responses：`type` 不为空且不是 `message` 的项一律算工具轮次。
+  - Gemini：role 为空按 user 处理；`functionResponse` 不审；`systemInstruction` 不审。
+  - 字符串形式的 `input` 整段审。
+- 16 条都是 user 时，就只审这 16 条，并在记录 trace 里标 `truncated_run`。
+- **文字**：各段用换行拼接，空白压缩成单个空格，截到 `input_max_chars`（默认改为 12000，范围不变）。**不再剥掉 `<system-reminder>`**（new-api b4ec03326a；这样 Claude Code 注入的内容也会被审）。
+- **图片**：
+  - 来源：Anthropic `image` 块（base64 或 url）、OpenAI `image_url`、Responses `input_image`、Gemini 的 image 类 `inlineData` / `fileData`。按原始数据去重。
+  - 每个审核器自己决定发哪些图（72.6）。URL 图片一律不下载。
+- **输入哈希** = sha256(文字 ‖ 每张图的 sha256)，用于抽样和放行缓存。
+- `min_chars` 保留：文字短于它、且没有图片时不审。
+- 自身请求识别（§20.4 第 5 步）保留，只用于 `llm` 渠道。
+
+### 72.5 钩子流程（取代 §20.4）
+
+1. `mode=off` → 放行。用户在 `exempt_user_ids` 里 → 放行。
+2. 用户被封禁且未过期 → 拒绝 403 `moderation_user_blocked`（行为同 §20.4 第 2 步）。
+3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有就用 `group_id=0`。没找到流程或流程已停用 → 放行。
+   - 原来的 `group_ids`、`model_patterns` 两个设置删除，转换方法见 72.12。
+4. 流程的 `model_filter`（all / only / exclude，glob，按客户端模型匹配）不匹配 → 放行。
+5. 抽取（72.4）。结果为空 → 放行。是自身请求 → 放行，note `moderation: self`。
+6. 定时机（timing）：
+   - `mode=enforce`，或用户在名单上且是 `enforce` 级 → **pre**（同步）。
+   - 其他情况 → **post**（异步）。
+7. 只有 post 抽样：按输入哈希取模，同一输入结果稳定；比例由流程的 `sample_rate` 决定。
+8. **放行缓存**：键为（flow_id, flow_version, 输入哈希），**只缓存整体通过的结论**。命中就放行，记为 `cache_skipped`（只计数，不写记录）。
+   - 以下结论不进缓存：带 URL 图片的输入、有审核器被跳过、出过错。
+   - 存储沿用 §20 的内存 LRU + KV，条数由 `cache_entries` 决定，TTL 由 `cache_ttl_seconds` 决定。
+9. **post**：入队（满了就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。
+10. **pre**：在钩子内同步执行流程，同一输入并发时只执行一次（singleflight，沿用 §20）。
+    - 结果为 Hit → 拒绝，状态码 `block_status`，code `moderation_blocked`，message 为 `block_message`。
+    - 结果为通过或出错 → 放行。审核出错一律放行，原来的 `on_error` 设置删除：new-api 就是一律放行，否则审核服务一挂所有拦截级用户都用不了。
+    - 客户端断开时：结果不是 Hit 就不写记录；Hit 照样写，免得用户靠断开连接躲过名单。
+11. note（≤1 KiB）形如 `moderation: hit flow=3 v5 [sexual,custom/jailbreak] 0.97`。拒绝时核心照常写 `blocked_by_hook`。
+
+钩子超时仍是 30000 ms。流程的总超时最大 120 秒，但 pre 实际可用的时间是 min(流程总超时, 29 秒)，超时按出错放行。
+
+### 72.6 渠道与审核器
+
+**渠道**（表 `channels`）
+
+| 字段 | 说明 |
+|---|---|
+| `type` | `openai_moderation` \| `typesafe` \| `llm` |
+| `protocol` | 只有 `llm` 有：P1 只支持 `openai_chat`；P2 加 `anthropic`、`openai_responses` |
+| `base_url` | 必填 |
+| `api_key_enc`、`proxy_enc` | 用 `SecretSeal` 加密后保存；返回给前端时 key 只显示后 4 位 |
+| `model` | 默认值：`omni-moderation-latest` / `jev-latest` / 必填 |
+| `timeout_ms` | 500–60000；默认值：openai 3000、typesafe 8000、llm 15000 |
+| `enabled` | |
+| `deleted_at` | 软删除，id 不复用 |
+
+- 改 `base_url` 的 scheme 或 host、或者改了代理时，必须重新填 key（new-api `channel.go:147-159`）。
+- 代理怎么走：插件出网都经过 SDK 隧道（`net` 权限），实现时确认隧道能否支持每个渠道各自的代理。不支持的话，P1 先不做代理。
+
+**审核器**（表 `auditors`）有名称、类型、`channel_id`（只能绑同类型的渠道）、`config` jsonb、软删除。
+
+- **`openai_moderation`**：`POST {base}/v1/moderations`。
+  - 13 个类别的默认阈值照抄 new-api `engine.go:26-31`，`config.thresholds` 可以逐类覆盖（范围大于 0 且不超过 1）。
+  - 图片每次随机发一张；裸 base64 先嗅探 MIME 类型。带图请求返回 400 时，去掉图片重试一次。
+- **`typesafe`**：`POST {base}/v1/systemone`，请求体 `{model, state, questions}`。
+  - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用内置题集，题目原文照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题）。
+  - `config.review_images` 默认开。只发内联的 PNG/JPEG，只读文件头检查尺寸（每边 280–1568 px、单张 ≤16 MiB），图片打包上限 24k token 或 24 MiB，带请求头 `TypeSafe-Danger-Zone-Images: true`。上游返回 413 或 `max_tokens_exceeded` 时，只保留第一张图重试一次。
+- **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。
+  - 判定：结论为 `block` 算命中；结论为 `flag` 时，`config.flag_as_hit` 为真才算命中（默认否）。
+  - 分数：block = 1.0，flag = 0.5，pass = 0。
+  - 只审文字，不发图片。
+- **通用规则**：
+  - 任何类别缺分数，或分数不在 [0,1] 内，都算出错（`bad_response`）。
+  - 审核器没有可审的内容时（例如只有图片，而它不收图片），记为**跳过**，不计入组合规则的分母。
+
+### 72.7 流程
+
+**spec**（字段与 new-api `spec.go` 相同，未知字段直接拒绝）：
+
+```json
+{"enabled":true,
+ "model_filter":{"type":"all|only|exclude","models":["claude-*"]},
+ "sample_rate":100,
+ "total_timeout_ms":0,
+ "stages":[{"auditors":[1,2],"combine":"any|all|at_least","n":2}]}
+```
+
+**执行**（照 new-api `flow.go`）：
+- 同一级的审核器并发执行，结论一旦确定就取消该级剩下的调用。
+- 某一级判通过 → 整体通过；如果之前有级判过命中，结果记为 `overturned`（被推翻）。
+- 每一级都命中 → `hit`；如果是 pre 并且拒绝了这次请求，记为 `block`。
+- 第一级的审核器全部被跳过 → 以跳过的方式通过；后面某级全部被跳过 → 沿用前一级的结论。
+- 某一级出错或超时 → 该级无结论，按通过处理，并标 `errored`，记录结果为 `error`。
+- 严重度取判定那一级的最高命中分数：≥0.9 为 high，≥0.7 为 medium，其余为 low。
+
+**超时**：`total_timeout_ms` 为 0 时，发布时自动填成"每级最大渠道超时之和"，封顶 120000。
+
+**发布与版本**：
+- 草稿和已发布版本分开存；发布时带 `expected_version`（乐观锁）。
+- 每个发布过的版本都写进 `flow_versions`。P1 只做发布；回滚和版本历史放到 P2。
+
+**绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。
+
+**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 30 秒检查一次版本号兜底。
+
+### 72.8 观察名单与封禁
+
+**表**：
+- `watchlist`：一个用户一行，字段有 `user_id PK`、`level` observe|enforce、`source` auto|manual|analysis、`since_at`、`expires_at`、`hit_count`、`violation_count`、`violation_epoch`、`last_hit_at`、`note`。P2 再加 `analysis_claim_until` 和 `latest_*` 几列。
+- `watch_events`：只追加的历史，字段有 `user_id`、`action`、`from_level`、`to_level`、`reason`、`operator_id`、`analysis_id`、`created_at`。
+
+**进入名单**：记录写入后，结果为 `hit` 或 `block` 且用户不在豁免名单里时，在一个事务里依次处理：
+- `auto_watch`（默认开）时，首次可疑自动以 observe 级加入，有效期 `watch_days`（默认 30 天）。
+- 已过期但还没清理的条目，先按过期移出再重新加入。
+- observe 级每命中一次，有效期往后延长。
+- 同一个 request_id 只计一次违规，只有 observe 级才计数。
+- 计数达到 `analysis_every_violations` 时，计数清零，并把分析排进队列（P2；P1 只计数）。
+
+**管理员**：插件现在识别不了管理员，P3 有了 `users.read` 再补。在那之前，需要把管理员的 user_id 加进 `exempt_user_ids`，页面上提示这一点。
+
+**手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。
+
+**封禁**（`blocks`、`unblocks`、`block_subjects` 不变）：
+- `ban_threshold` 等设置保留，默认关。
+- 违规计数改为统计结果是 `hit` 或 `block` 的记录，按 request_id 去重。
+- 封禁优先于名单：钩子第 2 步就拒绝。
+
+**误报**：管理员把记录标为误报时，只扣当前计数窗口（`violation_epoch`）里确实被计过数的记录，每条最多扣一次。
+
+**多节点同步**：名单变化广播 `watch.changed`；钩子读的是内存里的名单快照，另外每 5 秒按版本号检查一次兜底（和 §20 的封禁表一样）。
+
+### 72.9 记录（`events` 表加列，不新建表）
+
+新增的列：
+
+| 列 | 说明 |
+|---|---|
+| `result` | block / hit / overturned / error / pass |
+| `timing` | pre / post |
+| `flow_id`、`flow_version` | |
+| `highest_category`、`highest_score` | |
+| `hit_categories` | text[] |
+| `trace` | jsonb：每级、每个审核器的分数、是否命中、是否跳过、出错原因、耗时 |
+| `input_format` | anthropic / openai_chat / … |
+| `input_message`、`input_message_size` | 第一级命中时保存原样的那几条 user 消息 JSON；受 `store_text` 控制 |
+| `image_count` | |
+| `review_status`、`reviewed_by`、`reviewed_at` | review_status 为 pending / false_positive / confirmed |
+| `violation_epoch`、`counted` | |
+| `keep_until` | |
+| `queue_ms` | |
+
+- P2 再加 6 个 `ai_*` 列。
+- 老列 `verdict`、`action`、`text` 等保留只读，迁移时回填 `result`：block 且 deny → block；block 且 allow → hit；flag → hit；error → error；pass → pass。
+- 写哪些记录：可疑（hit、block）总是写；`record_overturned`（默认开）、`record_errors`（默认开）、`record_pass`（默认关，沿用原设置）控制其余几类。
+- **最终结论只在前端计算**：有人工结论用人工结论；否则用 AI 结论，AI 判 unsure 时显示"待复核"；同时标注来源是人工还是 AI。
+
+### 72.10 设置（`forms/settings.schema.json` 改动）
+
+- **保留**：`mode`、`exempt_user_ids`、`input_max_chars`（默认改为 12000）、`min_chars`、`cache_ttl_seconds`、`block_status`（限定为 400、403、451）、`block_message`、`record_pass`、`store_text`、`max_concurrency`、`queue_size`、`ban_*`。
+- **新增**：
+
+| 设置 | 默认值 / 范围 |
+|---|---|
+| `auto_watch` | true |
+| `watch_days` | 30（1–365） |
+| `analysis_every_violations` | 30（0–1000，P2 才生效） |
+| `record_overturned` | true |
+| `record_errors` | true |
+| `cache_entries` | 100000 |
+| `hit_retention_days` | 180 |
+| `overturned_retention_days` | 30 |
+| `error_retention_days` | 7 |
+| `pass_retention_days` | 3（上限 3） |
+| `jev_default_set` | null，是 Jev 审核器的默认题集 |
+
+- `retention_days` 改成上面按结果类别的几项。转换时 `hit_retention_days` 取 `max(旧值, 180)`，其余几项取默认值。
+- **转走的**：`base_url`、`api_key`、`model`、`system_prompt`、`categories`、`tool_choice`、`max_turns`、`temperature`、`max_tokens`、`timeout_ms`、`on_error`、`sample_rate`、`group_ids`、`model_patterns`。
+  - 这些字段 0.2 的 schema 里仍然保留，放在"旧版配置（已转换）"分组里、只读，只用于 72.12 的一次性转换；0.3 再删除。
+  - 实现时先确认：核心升级插件时，会不会拿新 schema 去校验已存的配置。如果会，就必须保留这些字段。
+- `cleanup` 任务：
+  - 按 `keep_until` 删除记录，`keep_until` 在写入时由结果类别算出。
+  - 删除已过期的名单条目（写 `watch_events` 的 expire）和已过期的封禁。
+  - 缩短留存期时不重算已有行；新的留存期从下次写入开始生效。
+
+### 72.11 接口（`/api/v1/p/moderation/*`，新增或修改的部分）
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| GET/POST `/channels`，GET/PUT/DELETE `/channels/:id`，POST `/channels/:id/test` | read / manage | 不返回 key 和代理明文，只返回 `api_key_tail` 和 `has_proxy` |
+| GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try` | read / manage | try 的请求体是 `{text, images?}`，返回分数和是否命中；不写记录 |
+| GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
+| GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
+| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree` |
+| GET `/events/:id/input` | read | 原文，按需加载 |
+| POST `/events/review` | manage | 请求体 `{ids, status}`；改为误报或从误报改回时，按 72.8 调整违规计数 |
+| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events` | read / manage | |
+| POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认 |
+| POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
+
+所有修改接口都广播相应的变更事件。插件目前没有操作审计：名单的操作记在 `watch_events` 里；渠道、审核器和流程改动的审计放到 P3，届时看核心有没有可供插件写入的审计接口。
+
+### 72.12 老配置转换与导入
+
+**插件首次以 0.2 启动**时（`channels` 表为空、且旧 `base_url` 和 `model` 都已配置），在一个事务里完成：
+1. 新建 `llm` 渠道（协议 `openai_chat`，key 用 `SecretSeal` 加密）。
+2. 新建 `llm_verdict` 审核器，带上旧的提示词、分类等参数。
+3. 新建一个流程：一级、`any`；`sample_rate` 和 `model_patterns` 也转进去（model_patterns 转成 only）。
+4. 绑定分组：旧 `group_ids` 为空时绑 `group_id=0`，否则逐个绑定这些分组。
+5. 发布这个流程。
+
+旧 `mode` 原样保留；旧 `on_error=block` 不再生效，在转换日志里提示。转换加了分布式锁，只执行一次，并在插件日志里记一条转换结果。
+
+**从 new-api 导入**：
+- 格式：`{channels:[{type, protocol, name, base_url, model, timeout_ms}], auditors:[{name, type, channel_ref, thresholds|questions}], jev_default_set, analysis_guidelines}`。
+- key 不导入，导入后需要逐个重新填写。
+- new-api 那边还没有导出接口：直接查它的库生成这份 JSON，或者给 new-api 加一个只读导出接口，实现时再定。
+- 流程和分组绑定不导入，因为两边的分组不对应。
+
+### 72.13 P2：AI 分析与流程版本
+
+- `llm` 渠道支持 `anthropic` 和 `openai_responses` 两种协议，全部流式调用，`tool_choice` 用 auto。
+- **分析 agent** 照 new-api `analysis.go` 和 `analysis_tools.go`：
+  - 5 个工具：`get_user_summary`、`list_suspicious_records`、`get_record`（原文分段读）、`get_flow`、`submit_analysis`。
+  - 用户 id 由服务端注入，模型不能指定。
+  - 上下文预算超出时，把最早的工具结果替换成占位文字。
+  - 模型只回文字不调工具时最多提醒 2 次；`submit_analysis` 参数不合法时最多重发 2 次。
+  - 遇到 429、5xx 或网络错误，单步重试 1 次。
+  - 结论里引用的证据必须是记录原文（NFKC 规范化后）的子串，否则丢掉这条证据。
+  - 逐条结论写进记录的 `ai_*` 列，不覆盖人工结论。
+- 分析的系统提示词 = 分析准则（内置准则照抄 new-api `category_dict.go:351+`）+ 流程 + 类别字典。
+- **自动调整名单**：照 new-api `escalate.go:20-73`，三个开关 `analysis_allow_upgrade` / `downgrade` / `remove`。分析期间名单被改过，结论记为 `stale`，不生效。
+- **分析队列**：
+  - 名单表的 `analysis_claim_until` 列用作认领：一个用户同一时间只有一个分析在跑。
+  - `analysis` 任务每分钟扫一次，在本节点按 `analysis_concurrency` 并发执行。
+  - 管理员可以手动触发分析。
+- 新表 `user_analyses`，保存分析过程轨迹（≤32KB），每个用户保留 `analysis_keep_per_user` 条。
+- 新增设置：`analysis_channel_id`、`analysis_guidelines`、`analysis_timeout_ms`、`analysis_concurrency`、`analysis_context_kb`、`analysis_keep_per_user`，以及上面三个开关。
+- 流程版本历史、回滚（返回缺失的审核器列表）、`simulate`（用一条记录的原文按另一个流程版本重放）。
+- 界面：名单详情（可疑记录时间线、名单历史、分析卡片和过程轨迹）、记录详情里的 AI 结论、"待复核"和"人与 AI 意见相反"两个过滤。
+
+### 72.14 P3：统计、告警、用户信息
+
+- 小时统计表：维度为小时、分组、流程、级、审核器、渠道、时机；累加审核数、命中、推翻、错误、缓存跳过、调用数、延迟分桶、token。概览页加漏斗、审核器健康度和延迟分位数。
+- 异常率告警：近 1 小时异常率超过 `error_rate_alert_percent` 时，照 `guard` 插件的写法发 webhook，只在越过阈值的那一刻发一次。
+- 核心实现 `users.read`：按 id 批量取用户名、邮箱、角色。用户名显示和搜索、管理员自动豁免都依赖它。
+- 可选：核心把粘性会话指纹加进 `RequestMeta`，记录可以按会话关联。
+
+### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
+
+标签页：**概览**（沿用，改为按 result 统计）、**记录**、**观察名单**、**封禁**、**流程**、**审核器**、**渠道**、**测试**。设置仍然放在插件详情页的 schema 表单里。
+
+- **流程编辑**不做 new-api 的画布，改成按级排列的表单：每级选审核器和组合方式，加模型过滤、抽样、超时、绑定分组。保存草稿和发布是两个按钮。
+- **记录详情抽屉**：完整原文（含图片缩略图）、每级的分数表、流程版本、同一 request_id 的其他记录、人工处理按钮。
+- **审核器编辑**：OpenAI 显示阈值表；Jev 显示题集表格，可以"从默认题集复制"；LLM 显示原 §20 的参数；都带试跑面板。
+- **名单**：列表和手动操作；P2 加详情页。
+- 页面上提示：要把管理员的 user_id 加进豁免名单（P3 之前）。
+
+### 72.16 测试与发布
+
+- **单元测试**：把 new-api `service/moderation/moderation_test.go`、`model/moderation_test.go` 里的场景改写到插件里，至少覆盖：
+  - 结尾连续 user 消息的各种协议形态；
+  - 三种组合规则、推翻、跳过、出错放行；
+  - 名单首次加入、延期、按 request_id 去重、误报只扣当前窗口；
+  - 放行缓存不收哪些结论；
+  - 老配置转换；
+  - pre 下客户端断开时的记录规则。
+- **核心测试**：`@tail` 修饰符、`SecretSeal` / `SecretOpen`、超大钩子请求放行且不触发熔断。
+- **mock-upstream** 新增 `/v1/moderations` 和 `/v1/systemone` 两个模拟端点：文本含 `MOD-HIT-<类别>` 时，该类别给高分。§20.9 原有的 LLM 模拟保留。不连真实的审核服务。
+- **e2e**：
+  - observe：所有人放行，命中后异步出记录，并自动加入名单；
+  - 把用户改成 enforce 级后同步拦截；
+  - mode=enforce；
+  - 封禁；
+  - 老配置升级后行为不变；
+  - 带图请求。
+- **发布**：
+  - 先发核心（72.2），再发插件 0.2.0（用 `sup2api-plugins-2026` 签名）。
+  - 内置插件随核心的 builtin 目录重签，两个节点都要更新。
+  - 迁移脚本在插件的 `migrations/`（`0003_*` 起），必须幂等，只加有默认值的列。
