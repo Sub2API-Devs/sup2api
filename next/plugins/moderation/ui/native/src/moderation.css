@@ -15,9 +15,6 @@
   height: 1rem;
   flex-shrink: 0;
 }
-.mod-tabs {
-  margin-bottom: 1rem;
-}
 .mod-section {
   margin-top: 1.25rem;
 }
@@ -97,9 +94,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mod-rank-link {
-  text-align: left;
-}
 .mod-rank-count {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -107,9 +101,6 @@
 .mod-rank-bar {
   margin-top: 0.25rem;
   padding-left: 1.75rem;
-}
-.mod-queue {
-  margin-top: 0.75rem;
 }
 
 /* chips */
@@ -122,9 +113,6 @@
 .mod-chips-wrap {
   flex-wrap: wrap;
   max-width: none;
-}
-.mod-cached {
-  margin-left: 0.375rem;
 }
 
 /* records */
@@ -230,14 +218,6 @@
   align-items: center;
   gap: 0.5rem;
 }
-.mod-chat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .mod-msg {
   border: 1px solid rgb(var(--line));
   border-radius: 0.75rem;
@@ -261,32 +241,6 @@
   font-size: 0.8125rem;
   line-height: 1.55;
 }
-.mod-tool {
-  margin-top: 0.5rem;
-}
-.mod-tool-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  margin-bottom: 0.25rem;
-  font-size: 0.75rem;
-  color: rgb(var(--fg-muted));
-}
-.mod-tool-args {
-  margin: 0;
-  max-height: 16rem;
-  overflow: auto;
-}
-
-.mod-settings-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-}
 
 /* 0.2: editors, stages, trace, history (CONTRACTS §72.15) */
 .mod-ml {
@@ -306,12 +260,6 @@
 .mod-form-row > * {
   min-width: 9rem;
 }
-.mod-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-}
-.mod-stage,
 .mod-question {
   display: flex;
   flex-direction: column;
@@ -319,11 +267,6 @@
   padding: 0.75rem;
   border: 1px solid rgb(var(--line));
   border-radius: 0.5rem;
-}
-.mod-stage-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 .mod-threshold-grid {
   display: grid;
@@ -1103,14 +1046,34 @@ p.mod-text-danger {
 .mod-filter-check {
   align-self: center;
 }
-.mod-sources li {
-  display: flex;
+.mod-source {
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  margin: 0 -0.375rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.mod-sources .mod-sub {
+.mod-source:hover {
+  background: rgb(var(--surface-2));
+}
+.mod-source .mod-sub {
   margin: 0;
+}
+.mod-timeline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.mod-timeline-row .mod-timeline-item {
+  min-width: 0;
 }
 .mod-version-auditor {
   display: inline-flex;

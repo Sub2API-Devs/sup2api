@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
+import { dt } from './format'
+import { applyFieldErrors, clearErrors, type FieldErrors } from './forms'
+import { useAsync } from './useAsync'
 import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
@@ -10,23 +12,9 @@ const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 
-const rows = ref<Block[]>([])
-const loading = ref(false)
-const error = ref('')
+const { data, loading, error, reload } = useAsync(fetchBlocks, () => t('blocks.loadFailed'))
+const rows = computed(() => data.value || [])
 const busy = ref<number | null>(null)
-
-async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    rows.value = await fetchBlocks()
-  } catch (e) {
-    error.value = errorMessage(e, t('blocks.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
 onMounted(reload)
 defineExpose({ reload })
 
@@ -50,7 +38,7 @@ async function unblock(b: Block) {
   try {
     await deleteBlock(b.user_id)
     host.toast(t('blocks.unblocked', { id: b.user_id }), 'success')
-    rows.value = rows.value.filter((r) => r.user_id !== b.user_id)
+    data.value = rows.value.filter((r) => r.user_id !== b.user_id)
   } catch (e) {
     host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
@@ -60,12 +48,12 @@ async function unblock(b: Block) {
 
 // Manual block form.
 const form = reactive<{ user_id: string; reason: string; duration_hours: number | null }>({ user_id: '', reason: '', duration_hours: 24 })
-const formErr = reactive({ user_id: '', duration_hours: '' })
+const FIELDS = ['user_id', 'duration_hours']
+const formErr = reactive<FieldErrors>({})
 const saving = ref(false)
 
 async function submit() {
-  formErr.user_id = ''
-  formErr.duration_hours = ''
+  clearErrors(formErr)
   const uid = Number(form.user_id.trim())
   if (!/^\d+$/.test(form.user_id.trim()) || !Number.isSafeInteger(uid) || uid <= 0) formErr.user_id = t('blocks.invalidUser')
   // SInput type=number hands back a number (null when empty)
@@ -83,10 +71,7 @@ async function submit() {
     form.reason = ''
     await reload()
   } catch (e) {
-    const fields = isApiError(e) ? e.fields : {}
-    if (fields.user_id) formErr.user_id = fields.user_id
-    if (fields.duration_hours) formErr.duration_hours = fields.duration_hours
-    if (!fields.user_id && !fields.duration_hours) host.toast(errorMessage(e, t('actionFailed')), 'error')
+    if (!applyFieldErrors(formErr, e, FIELDS)) host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     saving.value = false
   }
@@ -122,9 +107,9 @@ async function submit() {
         <template #cell-source="{ row }">
           <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>
-        <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
+        <template #cell-created_at="{ row }">{{ dt(row.created_at) }}</template>
         <template #cell-expires_at="{ row }">
-          <template v-if="row.expires_at">{{ host.i18n.formatDateTime(row.expires_at) }}</template>
+          <template v-if="row.expires_at">{{ dt(row.expires_at) }}</template>
           <SBadge v-else tone="danger">{{ t('blocks.forever') }}</SBadge>
         </template>
         <template #cell-actions="{ row }">

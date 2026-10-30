@@ -7,22 +7,8 @@ import FlowConfigCard from './FlowConfigCard.vue'
 import FlowPublishDialog from './FlowPublishDialog.vue'
 import FlowSimulate from './FlowSimulate.vue'
 import FlowVersions from './FlowVersions.vue'
-import {
-  canManage,
-  errorMessage,
-  fetchAuditors,
-  fetchChannels,
-  fetchFlow,
-  hasDraftChanges,
-  publishFlow,
-  saveFlow,
-  setFlowEnabled,
-  useModHost,
-  type Auditor,
-  type Channel,
-  type Flow,
-  type Spec
-} from './host'
+import { useCatalog } from './catalog'
+import { canManage, errorMessage, fetchFlow, hasDraftChanges, publishFlow, saveFlow, setFlowEnabled, useModHost, type Flow, type Spec } from './host'
 import { applyTemplate, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
@@ -45,8 +31,6 @@ const manage = computed(() => canManage())
 const loading = ref(true)
 const loadError = ref('')
 const saved = ref<Flow | null>(null)
-const auditorRows = ref<Auditor[]>([])
-const channels = ref<Channel[]>([])
 const name = ref('')
 const draft = ref<Spec>(newSpec())
 const enabled = ref(true)
@@ -55,7 +39,9 @@ const publishOpen = ref(false)
 const versionsOpen = ref(false)
 const simulateOpen = ref(false)
 
-const auditors = computed(() => canvasAuditors(auditorRows.value, channels.value))
+// Auditors and channels of the library come from the shared catalog.
+const catalog = useCatalog()
+const auditors = computed(() => canvasAuditors(catalog.state.auditors, catalog.state.channels))
 const byId = computed(() => new Map(auditors.value.map((a) => [a.id, a])))
 const typeOf = (id: number) => byId.value.get(id)?.type
 
@@ -71,9 +57,7 @@ async function load() {
   loadError.value = ''
   try {
     const id = saved.value?.id ?? props.flowId
-    const [f, list, chans] = await Promise.all([id ? fetchFlow(id) : Promise.resolve(null), fetchAuditors(), fetchChannels().catch(() => [] as Channel[])])
-    auditorRows.value = list || []
-    channels.value = chans || []
+    const [f] = await Promise.all([id ? fetchFlow(id) : Promise.resolve(null), catalog.state.loaded ? null : catalog.refresh()])
     if (f) resetFrom(f)
     else {
       // A new flow starts from the recommended "first → behavior" template.
@@ -121,21 +105,33 @@ function fail(e: unknown) {
   host.toast(fields.length ? fields.join('；') : errorMessage(e, t('actionFailed')), 'error')
 }
 
-/** Saves name + draft (creates a new flow); returns the saved flow. */
+/**
+ * Saves name + draft (creates a new flow); returns the saved flow. A new
+ * flow counts as saved right after the POST, so a failed enable afterwards
+ * never makes the next save create it again.
+ */
 async function persist(): Promise<Flow> {
   const body = { name: name.value.trim(), draft: canonicalSpec(draft.value) }
   const creating = !saved.value
-  let f = await saveFlow(saved.value?.id ?? null, body)
-  f = { ...f, draft: f.draft ?? body.draft }
-  if (creating && f.enabled !== enabled.value) {
-    await setFlowEnabled(f.id, enabled.value)
-    f = { ...f, enabled: enabled.value }
-  }
-  saved.value = f
+  const f = await saveFlow(saved.value?.id ?? null, body)
+  saved.value = { ...f, draft: f.draft ?? body.draft }
   name.value = f.name
   if (creating) emit('created', f.id)
   emit('changed')
-  return f
+  if (creating && f.enabled !== enabled.value) await applyInitialEnabled(f)
+  return saved.value
+}
+
+/** The enabled switch chosen before the first save, applied to the new flow. */
+async function applyInitialEnabled(f: Flow) {
+  try {
+    await setFlowEnabled(f.id, enabled.value)
+    saved.value = { ...saved.value!, enabled: enabled.value }
+    emit('changed')
+  } catch (e) {
+    enabled.value = f.enabled
+    fail(e)
+  }
 }
 
 async function saveDraft() {

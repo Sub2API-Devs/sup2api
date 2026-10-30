@@ -90,6 +90,7 @@ export default {
     },
     level: { observe: '观察', enforce: '拦截' },
     severity: { high: '高', medium: '中', low: '低', none: '无', critical: '严重' },
+    userStatus: { active: '正常', disabled: '已禁用' },
     source: { auto: '自动', manual: '手动' },
     watchSource: { auto: '自动加入', manual: '手动', analysis: 'AI 分析' },
     watchAction: {
@@ -279,6 +280,9 @@ export default {
       userPlaceholder: '用户名或 ID',
       groupId: '分组 ID',
       userSearchDenied: '没有读取用户的权限，只能按用户 ID 筛选',
+      apiKey: 'API 密钥 ID',
+      apiKeyPlaceholder: '密钥 ID',
+      openUser: '查看用户详情',
     },
     detail: {
       title: '审核详情',
@@ -405,6 +409,7 @@ export default {
       mainProblems: '主要问题',
       verdictCounts: '逐条结论',
       counts: '违规 {v} · 误报 {fp} · 拿不准 {u}',
+      severityCounts: '高 {high} · 中 {medium} · 低 {low}',
       model: '模型',
       steps: '{n} 步',
       tokens: '输入 {in} / 输出 {out} Token',
@@ -828,6 +833,7 @@ export default {
       text: '全文',
       raw: '原始 JSON',
       image: '图片',
+      loadImage: '加载远程图片',
     },
     snapshot: {
       title: '运行时的流程版本',
@@ -865,6 +871,8 @@ export default {
       review: '处理状态',
       ai: 'AI 结论',
       sources: '近 30 天来源',
+      pickSource: '只看这个来源的可疑记录',
+      allSources: '全部来源',
     },
     watchList: {
       notAnalyzed: '未分析',
@@ -956,7 +964,7 @@ export default {
       stopped: '已停止',
       flows: '{n} 个流程启用',
       flowsOff: '{n} 个停用',
-      bound: '{n} 个分组已绑定',
+      bound: '{n} 个分组在审核',
       unbound: '{n} 个分组不审核：{groups}',
       channelsDown: '{n} 个渠道停用',
       channelsOk: '渠道正常',
@@ -1107,6 +1115,7 @@ export default {
     },
     level: { observe: 'Observe', enforce: 'Enforce' },
     severity: { high: 'High', medium: 'Medium', low: 'Low', none: 'None', critical: 'Critical' },
+    userStatus: { active: 'Active', disabled: 'Disabled' },
     source: { auto: 'Automatic', manual: 'Manual' },
     watchSource: { auto: 'Automatic', manual: 'Manual', analysis: 'AI analysis' },
     watchAction: {
@@ -1282,6 +1291,9 @@ export default {
       userPlaceholder: 'Username or ID',
       groupId: 'Group ID',
       userSearchDenied: 'No permission to read users; filter by user ID',
+      apiKey: 'API key ID',
+      apiKeyPlaceholder: 'Key ID',
+      openUser: 'Open user details',
     },
     detail: {
       title: 'Record',
@@ -1398,6 +1410,7 @@ export default {
       mainProblems: 'Main problems',
       verdictCounts: 'Record verdicts',
       counts: '{v} violations · {fp} false positives · {u} unsure',
+      severityCounts: 'high {high} · medium {medium} · low {low}',
       model: 'Model',
       steps: '{n} steps',
       tokens: '{in} in / {out} out tokens',
@@ -1811,6 +1824,7 @@ export default {
       text: 'Full text',
       raw: 'Raw JSON',
       image: 'Image',
+      loadImage: 'Load remote image',
     },
     snapshot: {
       title: 'Flow version it ran with',
@@ -1848,6 +1862,8 @@ export default {
       review: 'Handling',
       ai: 'AI verdicts',
       sources: 'Sources, last 30 days',
+      pickSource: 'Show only the suspicious records from this source',
+      allSources: 'All sources',
     },
     watchList: {
       notAnalyzed: 'Not analyzed',
@@ -1939,7 +1955,7 @@ export default {
       stopped: 'Stopped',
       flows: '{n} flows enabled',
       flowsOff: '{n} disabled',
-      bound: '{n} groups bound',
+      bound: '{n} groups moderated',
       unbound: '{n} groups unmoderated: {groups}',
       channelsDown: '{n} channels disabled',
       channelsOk: 'Channels OK',

@@ -7,14 +7,11 @@ import {
   errorMessage,
   fetchAnalysisPrompt,
   fetchAnalysisTools,
-  fetchFlows,
-  fetchGroups,
   useModHost,
   type AnalysisPrompt,
-  type AnalysisTool,
-  type Flow,
-  type Group
+  type AnalysisTool
 } from './host'
+import { useCatalog } from './catalog'
 
 // Preview of the system prompt an AI analysis sends (GET /analysis/prompt,
 // by group or by flow) and the tool table (GET /analysis/tools).
@@ -26,8 +23,8 @@ const t = host.t
 const by = ref<'group' | 'flow'>('group')
 const groupId = ref<number>(0)
 const flowId = ref<number>(0)
-const groups = ref<Group[]>([])
-const flows = ref<Flow[]>([])
+const catalog = useCatalog()
+const flows = computed(() => catalog.state.flows.filter((x) => x.version > 0))
 const tools = ref<AnalysisTool[]>([])
 const data = ref<AnalysisPrompt | null>(null)
 const loading = ref(false)
@@ -37,9 +34,7 @@ let loaded = false
 async function init() {
   if (loaded) return
   loaded = true
-  const [g, f, tl] = await Promise.all([fetchGroups(), fetchFlows().catch(() => [] as Flow[]), fetchAnalysisTools().catch(() => [] as AnalysisTool[])])
-  groups.value = g
-  flows.value = f.filter((x) => x.version > 0)
+  const [tl] = await Promise.all([fetchAnalysisTools().catch(() => [] as AnalysisTool[]), catalog.state.loaded ? null : catalog.refresh()])
   tools.value = tl
   if (!flowId.value && flows.value.length) flowId.value = flows.value[0].id
 }
@@ -68,7 +63,7 @@ watch(
 )
 watch([by, groupId, flowId], () => props.open && load())
 
-const groupOptions = computed(() => [{ value: 0, label: t('flows.defaultGroup') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
+const groupOptions = computed(() => [{ value: 0, label: t('flows.defaultGroup') }, ...catalog.state.groups.map((g) => ({ value: g.id, label: g.name }))])
 const flowOptions = computed(() => flows.value.map((f) => ({ value: f.id, label: `${f.name} v${f.version}` })))
 
 const toolColumns = computed<TableColumn[]>(() => [

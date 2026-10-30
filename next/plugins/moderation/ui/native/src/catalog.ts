@@ -1,23 +1,56 @@
 import { reactive } from 'vue'
 import { fetchAuditors, fetchChannels, fetchFlows, fetchGroups, useModHost, type Auditor, type Channel, type Flow, type Group } from './host'
 
-// Flows, auditors, channels and groups shared by the views for names and
-// filters. Loaded once on first use; refresh() reloads them (header refresh
-// and the overview's auto refresh). A list that fails to load stays empty and
-// the views fall back to #id.
+// Flows, auditors, channels and groups, shared by every tab: the CRUD tabs
+// list them and call refresh() after a change, the other views take names
+// and filters from them. Loaded on first use; the header refresh and the
+// overview's auto refresh reload them. A list that fails to load keeps its
+// previous rows and records the error (errors.<list>) for its tab.
 
-const state = reactive({ flows: [] as Flow[], auditors: [] as Auditor[], channels: [] as Channel[], groups: [] as Group[], loaded: false })
+type ListKey = 'flows' | 'auditors' | 'channels' | 'groups'
+
+const state = reactive({
+  flows: [] as Flow[],
+  auditors: [] as Auditor[],
+  channels: [] as Channel[],
+  groups: [] as Group[],
+  errors: { flows: null, auditors: null, channels: null, groups: null } as Record<ListKey, unknown>,
+  loaded: false,
+  loading: false
+})
 let loading: Promise<void> | null = null
-
-const settled = <T>(r: PromiseSettledResult<T[]>) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : [])
+let again = false
 
 async function load() {
-  const [flows, auditors, channels, groups] = await Promise.allSettled([fetchFlows(), fetchAuditors(), fetchChannels(), fetchGroups()])
-  Object.assign(state, { flows: settled(flows), auditors: settled(auditors), channels: settled(channels), groups: settled(groups), loaded: true })
+  const keys: ListKey[] = ['flows', 'auditors', 'channels', 'groups']
+  const results = await Promise.allSettled([fetchFlows(), fetchAuditors(), fetchChannels(), fetchGroups()])
+  keys.forEach((k, i) => {
+    const r = results[i]
+    state.errors[k] = r.status === 'rejected' ? r.reason : null
+    if (r.status === 'fulfilled') Object.assign(state, { [k]: Array.isArray(r.value) ? r.value : [] })
+  })
+  state.loaded = true
 }
 
+/**
+ * Reloads the lists. Calls during a load merge into one more load after it,
+ * so the state always ends with a load started after the latest call.
+ */
 function refresh(): Promise<void> {
-  loading = load().finally(() => (loading = null))
+  if (loading) {
+    again = true
+    return loading
+  }
+  state.loading = true
+  loading = (async () => {
+    do {
+      again = false
+      await load()
+    } while (again)
+  })().finally(() => {
+    loading = null
+    state.loading = false
+  })
   return loading
 }
 

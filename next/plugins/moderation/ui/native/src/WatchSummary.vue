@@ -5,13 +5,15 @@ import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import { useCatalog } from './catalog'
 import { num } from './format'
-import { useModHost, type AIVerdictCounts, type UserDetail, type WatchItem } from './host'
+import { useModHost, type AIVerdictCounts, type SourceFilter, type UserDetail, type WatchItem } from './host'
 
 // Summary of a user (new-api user-detail-summary and context bar): all
 // suspicious records by severity, handling status and AI verdict, the group
 // and flow now, and the group → flow@version sources of the last 30 days.
-// Main categories come from the watch list row when there is one.
+// Main categories come from the watch list row when there is one. A source
+// picks the timeline filter (pick-source).
 const props = defineProps<{ detail: UserDetail; item?: WatchItem | null }>()
+const emit = defineEmits<{ (e: 'pick-source', s: SourceFilter): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 
@@ -61,11 +63,18 @@ const fields = computed<DescItem[]>(() => {
     <template #item-sources>
       <ul class="mod-sources">
         <li v-for="src in detail.context.sources" :key="`${src.group_id}-${src.flow_id}-${src.version}`">
-          <span>{{ catalog.groupName(src.group_id) }}</span>
-          <span class="mod-sub">→</span>
-          <FlowRef :flow-id="src.flow_id" :version="src.version" :name="src.flow_name" />
-          <span class="mod-num">×{{ num(src.count) }}</span>
-          <SBadge v-if="src.current" tone="info" size="xs">{{ t('flows.current') }}</SBadge>
+          <button
+            type="button"
+            class="mod-source"
+            :title="t('watchSummary.pickSource')"
+            @click="emit('pick-source', { group_id: src.group_id, flow_id: src.flow_id, flow_version: src.version })"
+          >
+            <span>{{ catalog.groupName(src.group_id) }}</span>
+            <span class="mod-sub">→</span>
+            <FlowRef :flow-id="src.flow_id" :version="src.version" :name="src.flow_name" />
+            <span class="mod-num">×{{ num(src.count) }}</span>
+            <SBadge v-if="src.current" tone="info" size="xs">{{ t('flows.current') }}</SBadge>
+          </button>
         </li>
       </ul>
     </template>

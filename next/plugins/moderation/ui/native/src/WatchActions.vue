@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SButton, SSegmented } from '@sub2api/ui'
 import { createWatch, deleteWatch, errorMessage, updateWatch, useModHost, type Watch, type WatchLevel } from './host'
@@ -13,7 +13,7 @@ const t = host.t
 const busy = ref(false)
 
 const levels: WatchLevel[] = ['observe', 'enforce']
-const levelOptions = levels.map((v) => ({ value: v, label: t(`level.${v}`) }))
+const levelOptions = computed(() => levels.map((v) => ({ value: v, label: t(`level.${v}`) })))
 
 /** Field errors of the watch API (staff, exempt) as their message. */
 function failText(e: unknown): string {

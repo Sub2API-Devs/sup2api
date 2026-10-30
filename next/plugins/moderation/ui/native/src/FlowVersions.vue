@@ -3,7 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDrawer, SEmpty, SHint, SSpinner } from '@sub2api/ui'
 import FlowStages from './FlowStages.vue'
-import { specText } from './format'
+import { dt, specText } from './format'
+import { useAsync } from './useAsync'
 import {
   canManage,
   errorMessage,
@@ -12,8 +13,7 @@ import {
   rollbackFlow,
   useModHost,
   type Flow,
-  type FlowVersionDetail,
-  type FlowVersionItem
+  type FlowVersionDetail
 } from './host'
 
 // Version history of a flow (§72.13.5): every published version, its stages
@@ -24,37 +24,20 @@ const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 
-const items = ref<FlowVersionItem[]>([])
-const current = ref(0)
-const loading = ref(false)
-const error = ref('')
+const { data, loading, error, reload: load } = useAsync(() => fetchFlowVersions(props.flow!.id), () => t('flows.loadFailed'))
+const items = computed(() => data.value?.items || [])
 const details = ref<Record<number, FlowVersionDetail>>({})
 const expanded = ref<number | null>(null)
 const viewLoading = ref<number | null>(null)
 
-async function load() {
-  const f = props.flow
-  if (!f) return
-  loading.value = true
-  error.value = ''
-  try {
-    const r = await fetchFlowVersions(f.id)
-    items.value = r.items || []
-    current.value = r.current_version
-  } catch (e) {
-    error.value = errorMessage(e, t('flows.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
 watch(
   () => [props.open, props.flow?.id] as const,
-  ([open]) => {
-    if (!open) return
+  ([open, id]) => {
+    if (!open || !id) return
+    data.value = null
     details.value = {}
     expanded.value = null
-    load()
+    void load()
   },
   { immediate: true }
 )
@@ -87,7 +70,7 @@ async function rollback(v: number) {
   if (!ok) return
   rolling.value = v
   try {
-    const nf = await rollbackFlow(f.id, v, current.value || f.version)
+    const nf = await rollbackFlow(f.id, v, data.value?.current_version || f.version)
     host.toast(t('flows.rolledBack', { v: nf?.version ?? '' }), 'success')
     emit('rolled-back', nf)
     await load()
@@ -97,13 +80,12 @@ async function rollback(v: number) {
       host.toast(t('flows.missingAuditors', { ids }), 'error')
     } else if (isApiError(e) && e.code === 'version_conflict') {
       host.toast(t('flows.versionConflict'), 'warning')
-      load()
+      void load()
     } else host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     rolling.value = null
   }
 }
-
 </script>
 
 <template>
@@ -116,7 +98,7 @@ async function rollback(v: number) {
         <div class="mod-history-head">
           <strong class="mod-num">v{{ it.version }}</strong>
           <SBadge v-if="it.current" tone="info">{{ t('flows.current') }}</SBadge>
-          <SHint inline size="xs">{{ host.i18n.formatDateTime(it.published_at) }}<template v-if="it.published_by"> · {{ t('flows.publishedBy', { id: it.published_by }) }}</template></SHint>
+          <SHint inline size="xs">{{ dt(it.published_at) }}<template v-if="it.published_by"> · {{ t('flows.publishedBy', { id: it.published_by }) }}</template></SHint>
           <span class="mod-ml-auto">
             <SButton size="sm" variant="ghost" :loading="viewLoading === it.version" @click="view(it.version)">{{ t('flows.view') }}</SButton>
             <SButton v-if="manage && !it.current" size="sm" variant="ghost" icon="refresh" :loading="rolling === it.version" @click="rollback(it.version)">{{ t('flows.rollback') }}</SButton>

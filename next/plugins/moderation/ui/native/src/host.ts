@@ -254,7 +254,8 @@ export interface WatchItem extends Watch {
   flow: { flow_id: number; name?: string; version: number } | null
   suspicious_total: number
   by_severity: SeverityCounts
-  top_categories: Array<{ category: string; count: number }>
+  /** label: the Jev question label of a custom category */
+  top_categories: Array<{ category: string; label?: string; count: number }>
   top_other: number
   /** verdict counts of the latest successful analysis */
   ai_counts: VerdictCounts | null
@@ -549,7 +550,8 @@ export interface CategoryStats {
   suspicious_requests: number
   category_hits: number
   truncated: boolean
-  items: Array<{ category: string; count: number }>
+  /** sorted by count; label: the Jev question label of a custom category */
+  items: Array<{ category: string; label?: string; count: number }>
 }
 
 export interface StatsQuery {
@@ -904,21 +906,33 @@ export const markWatchSeen = (userId: number) => api().post(`/watchlist/${userId
 export const fetchWatchEvents = (userId: number) => api().get<WatchEvent[]>(`/watchlist/${userId}/events`)
 
 export const fetchChannels = () => api().get<Channel[]>('/channels')
+/** PUT / POST body of a channel; the key and proxy are kept unless the caller sets them. */
+export function channelBody(c: Pick<Channel, 'type' | 'protocol' | 'name' | 'base_url' | 'model' | 'timeout_ms' | 'enabled'> & { billing_model?: string }): Record<string, unknown> {
+  const body: Record<string, unknown> = { type: c.type, name: c.name, base_url: c.base_url, model: c.model, billing_model: c.billing_model || '', timeout_ms: c.timeout_ms, enabled: c.enabled }
+  if (c.type === 'llm') body.protocol = c.protocol
+  return body
+}
 export const saveChannel = (id: number | null, body: Record<string, unknown>) =>
   id ? api().put<Channel>(`/channels/${id}`, body) : api().post<Channel>('/channels', body)
 export const deleteChannel = (id: number) => api().del(`/channels/${id}`)
 export const testChannel = (id: number) => api().post<ChannelTestResult>(`/channels/${id}/test`, {})
 
 export const fetchAuditors = () => api().get<Auditor[]>('/auditors')
-export const saveAuditor = (id: number | null, body: Record<string, unknown>) =>
-  id ? api().put<Auditor>(`/auditors/${id}`, body) : api().post<Auditor>('/auditors', body)
-export const deleteAuditor = (id: number) => api().del(`/auditors/${id}`)
-/** Unsaved auditor fields tried instead of (or over) the stored ones. */
+/** Auditor fields as saved, or tried unsaved instead of (or over) the stored ones. */
 export interface AuditorDraft {
   name?: string
   type?: AuditorType
   channel_id?: number
   config?: AuditorConfig
+}
+export const saveAuditor = (id: number | null, body: AuditorDraft) =>
+  id ? api().put<Auditor>(`/auditors/${id}`, body) : api().post<Auditor>('/auditors', body)
+export const deleteAuditor = (id: number) => api().del(`/auditors/${id}`)
+/** What the try modal runs: a stored auditor, its unsaved edits, or an unsaved one (id null). */
+export interface AuditorTryTarget {
+  id: number | null
+  name: string
+  draft?: AuditorDraft
 }
 /** Tries a stored auditor (id), optionally with unsaved edits, or an unsaved one (id null + draft). */
 export const tryAuditor = (id: number | null, text: string, images: string[], draft?: AuditorDraft) =>
@@ -951,8 +965,14 @@ export async function fetchAnalysisTools(): Promise<AnalysisTool[]> {
   const r = await api().get<AnalysisTool[] | { tools: AnalysisTool[] } | null>('/analysis/tools')
   return Array.isArray(r) ? r : r?.tools || []
 }
-export const fetchUserEvents = (userId: number, pageSize = 50) =>
-  api().list<ModEvent>('/events', { user_id: userId, result: 'suspicious', page: 1, page_size: pageSize })
+/** A record source of a user: group → flow@version (the drawer timeline filter). */
+export interface SourceFilter {
+  group_id: number
+  flow_id: number
+  flow_version: number
+}
+export const fetchUserEvents = (userId: number, source?: SourceFilter | null, pageSize = 50) =>
+  api().list<ModEvent>('/events', { user_id: userId, result: 'suspicious', ...source, page: 1, page_size: pageSize })
 
 export const fetchFlowVersions = (id: number) => api().get<{ current_version: number; items: FlowVersionItem[] }>(`/flows/${id}/versions`)
 export const fetchFlowVersion = (id: number, version: number) => api().get<FlowVersionDetail>(`/flows/${id}/versions/${version}`)
@@ -993,13 +1013,18 @@ export async function fetchWatchList(query: Query): Promise<ListResult<WatchItem
   }
 }
 
-/** ApiClient for useList on GET /watchlist that also hands the envelope meta to onMeta. */
+/**
+ * ApiClient for useList on GET /watchlist that also hands the envelope meta
+ * to onMeta, for the latest call only (useList drops older responses too).
+ */
 export function watchListClient(onMeta: (m: WatchListMeta) => void): ApiClient {
+  let seq = 0
   return {
     ...api(),
     async list<T>(_path: string, query?: Query): Promise<ListResult<T>> {
+      const my = ++seq
       const r = await fetchWatchList(query ?? {})
-      onMeta(r)
+      if (my === seq) onMeta(r)
       return r as unknown as ListResult<T>
     }
   }
@@ -1012,6 +1037,10 @@ export interface CoreUser {
   id: number
   email?: string
   display_name?: string
+  /** active / disabled ... */
+  status?: string
+  /** core role keys */
+  roles?: string[]
 }
 export const fetchCoreUser = (id: number) => useModHost().api.get<CoreUser>(`/users/${id}`)
 export const searchCoreUsers = (q: string) => useModHost().api.list<CoreUser>('/users', { q, page_size: 50 })
@@ -1029,9 +1058,16 @@ export const savePluginSettings = (values: Record<string, unknown>) => useModHos
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {
+  const PAGE = 200
+  const groups: Group[] = []
   try {
-    return (await useModHost().api.list<Group>('/groups', { page_size: 100 })).items
+    for (let page = 1; ; page++) {
+      const r = await useModHost().api.list<Group>('/groups', { page, page_size: PAGE })
+      groups.push(...r.items)
+      if (r.items.length < PAGE || groups.length >= (r.page.total ?? 0)) return groups
+    }
   } catch {
+    // A partial list would show the missing groups as unbound: none at all instead.
     return []
   }
 }
@@ -1082,10 +1118,6 @@ export function severityTone(s: string | undefined): Tone {
     default:
       return 'gray'
   }
-}
-
-export function reviewTone(s: string | undefined): Tone {
-  return s === 'false_positive' ? 'success' : s === 'confirmed' ? 'danger' : 'gray'
 }
 
 /** Translates an enum value with a fallback to the raw value. */

@@ -14,7 +14,7 @@ const t = useModHost().t
 const stats = useAsync(fetchCategoryStats, () => t('stats.loadFailed'))
 onMounted(stats.reload)
 onOverviewTick(stats.reload)
-const items = computed(() => [...(stats.data.value?.items || [])].sort((a, b) => b.count - a.count))
+const items = computed(() => stats.data.value?.items || [])
 </script>
 
 <template>
@@ -33,7 +33,7 @@ const items = computed(() => [...(stats.data.value?.items || [])].sort((a, b) =>
     <RankList :items="items" :item-key="(c) => c.category" tone="warning" :empty-text="t('categories.empty')" empty-icon="chart">
       <template #name="{ item: c }">
         <span class="mod-rank-name" :title="c.category">
-          {{ categoryLabel(c.category) }}<code v-if="categoryLabel(c.category) !== c.category" class="mod-code">{{ c.category }}</code>
+          {{ categoryLabel(c.category, c.label) }}<code v-if="categoryLabel(c.category, c.label) !== c.category" class="mod-code">{{ c.category }}</code>
         </span>
       </template>
       <template #count="{ item: c }">{{ num(c.count) }}</template>

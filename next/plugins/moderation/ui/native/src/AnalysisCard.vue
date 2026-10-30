@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SDisclosure, SHint, SLink, SSpinner, STable, type TableColumn } from '@sub2api/ui'
+import { dt, ms, num as n } from './format'
 import {
   aiVerdictTone,
   categoryLabel,
@@ -14,17 +15,16 @@ import {
   useModHost,
   type Analysis,
   type AnalysisDetail,
-  type AnalysisStep
+  type AnalysisStep,
+  type RecordVerdict
 } from './host'
 
 // One AI analysis of a watched user (§72.13.4): conclusion, problems, verdict
 // counts and cost; the steps (trace) and per-record verdicts load on demand
-// from GET /analyses/:id.
+// from GET /analyses/:id, violations first by severity (high, medium, low).
 const props = defineProps<{ analysis: Analysis; detail?: AnalysisDetail | null; defaultOpen?: boolean }>()
 const emit = defineEmits<{ (e: 'open-record', id: number): void }>()
-const host = useModHost()
-const t = host.t
-const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
+const t = useModHost().t
 
 const a = computed(() => props.analysis)
 const full = ref<AnalysisDetail | null>(props.detail || null)
@@ -60,6 +60,11 @@ watch(
 const stale = computed(() => a.value.status === 'stale' || a.value.error === 'stale')
 const failed = computed(() => a.value.status === 'failed' && !stale.value)
 const counts = computed(() => a.value.verdict_counts)
+/** " (高 1 · 中 2 · 低 2)" after the violation count, when the backend splits it. */
+const severityText = computed(() => {
+  const c = counts.value
+  return c?.violation && (c.high || c.medium || c.low) ? ` (${t('analysis.severityCounts', { high: n(c.high), medium: n(c.medium), low: n(c.low) })})` : ''
+})
 
 const stepColumns = computed<TableColumn[]>(() => [
   { key: 'step', label: t('analysis.step.step'), nowrap: true, align: 'right' },
@@ -79,7 +84,10 @@ const recColumns = computed<TableColumn[]>(() => [
 ])
 
 const steps = computed(() => full.value?.trace || [])
-const records = computed(() => full.value?.record_verdicts || [])
+/** Sort rank of a record verdict: violations high → medium → low → other, then unsure, then false positives. */
+const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 0, medium: 1, low: 2 }
+const rank = (v: RecordVerdict) => (v.verdict === 'violation' ? (SEVERITY_RANK[v.severity || ''] ?? 3) : v.verdict === 'unsure' ? 4 : 5)
+const records = computed(() => [...(full.value?.record_verdicts || [])].sort((x, y) => rank(x) - rank(y)))
 
 function notes(s: AnalysisStep): string {
   return (s.notes || []).map((x) => enumLabel('noteKind', x.kind) + (x.record_id ? ` #${x.record_id}` : '')).join('；')
@@ -96,7 +104,7 @@ function notes(s: AnalysisStep): string {
       <SBadge v-if="failed" tone="danger" dot>{{ enumLabel('analysisStatus', 'failed') }}</SBadge>
       <SBadge v-if="stale" tone="warning">{{ enumLabel('analysisStatus', 'stale') }}</SBadge>
       <SBadge tone="gray">{{ enumLabel('source', a.source) }}</SBadge>
-      <SHint inline size="xs" class="mod-ml-auto">#{{ a.id }} · {{ host.i18n.formatDateTime(a.created_at) }}</SHint>
+      <SHint inline size="xs" class="mod-ml-auto">#{{ a.id }} · {{ dt(a.created_at) }}</SHint>
     </div>
 
     <SAlert v-if="failed" tone="danger" dense>{{ enumLabel('analysisErr', a.error) }}</SAlert>
@@ -111,14 +119,14 @@ function notes(s: AnalysisStep): string {
     </div>
 
     <div class="mod-analysis-meta mod-num">
-      <span v-if="counts">{{ t('analysis.verdictCounts') }}: {{ t('analysis.counts', { v: n(counts.violation), fp: n(counts.false_positive), u: n(counts.unsure) }) }}</span>
+      <span v-if="counts">{{ t('analysis.verdictCounts') }}: {{ t('analysis.counts', { v: n(counts.violation), fp: n(counts.false_positive), u: n(counts.unsure) }) }}{{ severityText }}</span>
       <span v-if="a.model">{{ a.model }}</span>
       <span>{{ t('analysis.steps', { n: n(a.steps) }) }}</span>
       <span>{{ t('analysis.tokens', { in: n(a.tokens_in), out: n(a.tokens_out) }) }}</span>
       <span>
         {{ t('analysis.cost') }}: {{ a.cost === null || a.cost === undefined || a.cost === '' ? t('cost.notPriced') : money(a.cost) }}<template v-if="a.unpriced_calls && a.cost"> ({{ t('channels.unpricedN', { n: n(a.unpriced_calls) }) }})</template>
       </span>
-      <span>{{ t('analysis.duration') }}: {{ t('ms', { n: n(a.duration_ms) }) }}</span>
+      <span>{{ t('analysis.duration') }}: {{ ms(a.duration_ms) }}</span>
     </div>
     <div v-if="a.flows_seen?.length" class="mod-analysis-meta">
       <span>{{ t('analysis.flowsSeen') }}:</span>
@@ -139,7 +147,7 @@ function notes(s: AnalysisStep): string {
             <div v-if="row.notes?.length" class="mod-sub">{{ notes(row) }}</div>
           </template>
           <template #cell-args="{ row }"><code v-if="row.args" class="mod-code mod-code-plain" :title="row.args">{{ row.args }}</code></template>
-          <template #cell-latency_ms="{ row }"><span class="mod-num">{{ t('ms', { n: n(row.latency_ms) }) }}</span></template>
+          <template #cell-latency_ms="{ row }"><span class="mod-num">{{ ms(row.latency_ms) }}</span></template>
           <template #cell-tokens="{ row }">
             <span v-if="row.tokens_in || row.tokens_out" class="mod-num">{{ n(row.tokens_in) }} / {{ n(row.tokens_out) }}</span>
           </template>

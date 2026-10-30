@@ -1,4 +1,4 @@
-import type { Auditor, AuditorType, Channel, Spec, Stage } from './host'
+import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './host'
 
 // Flow editing operations of the canvas editor (CONTRACTS §72.7), ported from
 // new-api web/shared/src/content-moderation/ops.ts + validate.ts. Every
@@ -14,9 +14,9 @@ import type { Auditor, AuditorType, Channel, Spec, Stage } from './host'
 export type Combine = Stage['combine']
 
 /** Looks up an auditor's type; undefined when the auditor does not exist. */
-export type AuditorTypeOf = (id: number) => string | undefined
+type AuditorTypeOf = (id: number) => string | undefined
 
-export const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict']
+const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict']
 export const MAX_STAGES = 8
 export const MAX_STAGE_AUDITORS = 8
 export const TOTAL_TIMEOUT_MIN_MS = 1000
@@ -97,7 +97,7 @@ export function removeAuditor(spec: Spec, stageIndex: number, auditorIndex: numb
  * A source stage left empty is removed. A target that already has the
  * auditor (or is full) is a no-op.
  */
-export function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { stage: number; index?: number }): Spec {
+function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { stage: number; index?: number }): Spec {
   const auditor = spec.stages[from.stage]?.auditors[from.index]
   if (auditor === undefined) return spec
   if (to.stage < 0 || to.stage > spec.stages.length) return spec
@@ -123,7 +123,7 @@ export function moveAuditor(spec: Spec, from: { stage: number; index: number }, 
  * any / all drop `n`; at_least keeps an integer n ≥ 1 (default 1). An `n`
  * above the auditor count is allowed and counts as the auditor count.
  */
-export function normalizeCombine(stage: Stage): Stage {
+function normalizeCombine(stage: Stage): Stage {
   if (stage.combine !== 'at_least') return { auditors: stage.auditors, combine: stage.combine }
   const n = Math.max(1, Math.floor(Number(stage.n ?? 1)) || 1)
   return { auditors: stage.auditors, combine: 'at_least', n }
@@ -232,9 +232,46 @@ export interface GroupOwner {
   flowName: string
 }
 
+/** How the core's groups are moderated now; group ids, the default group 0 aside. */
+interface GroupCoverage {
+  /** groups with a flow of their own */
+  own: number[]
+  /** groups moderated by a live flow (their own, else the default group's) */
+  moderated: number[]
+  /** groups without a flow of their own while the default group has no live flow */
+  unbound: number[]
+  /** bound groups whose flow is disabled or unpublished (incl. the default group 0): not moderated */
+  inactive: number[]
+  /** bound groups the core does not know (anymore) */
+  stale: number[]
+}
+
+/**
+ * Group coverage (mirrors snapshot.flowFor): a group bound to a flow uses that
+ * flow, and only while it is enabled and published; other groups use the
+ * flow of the default group 0.
+ */
+export function groupCoverage(groupIds: readonly number[], flows: readonly Pick<Flow, 'groups' | 'enabled' | 'version'>[]): GroupCoverage {
+  const owner = new Map<number, Pick<Flow, 'enabled' | 'version'>>()
+  for (const f of flows) for (const g of f.groups) owner.set(g, f)
+  const live = (id: number) => {
+    const f = owner.get(id)
+    return !!f?.enabled && f.version > 0
+  }
+  const known = new Set(groupIds)
+  const defaultLive = live(0)
+  return {
+    own: groupIds.filter((id) => owner.has(id)),
+    moderated: groupIds.filter((id) => (owner.has(id) ? live(id) : defaultLive)),
+    unbound: defaultLive ? [] : groupIds.filter((id) => !owner.has(id)),
+    inactive: [...owner.keys()].filter((id) => (id === 0 || known.has(id)) && !live(id)),
+    stale: [...owner.keys()].filter((id) => id !== 0 && !known.has(id))
+  }
+}
+
 // ---- validation (mirrors ParseSpec + Spec.Validate)
 
-export type SpecIssueCode =
+type SpecIssueCode =
   | 'unknown_field'
   | 'invalid_field'
   | 'invalid_model_filter'
@@ -330,7 +367,7 @@ export type CanvasDrag = { kind: 'library'; auditor: number } | { kind: 'node'; 
 /** Where it is dropped: a stage, the "new stage" zone, or the library (= remove). */
 export type CanvasDropTarget = { kind: 'stage'; stage: number } | { kind: 'new' } | { kind: 'trash' }
 
-export const DRAG_TYPE = 'application/x-content-moderation-flow'
+const DRAG_TYPE = 'application/x-content-moderation-flow'
 
 export function startCanvasDrag(event: DragEvent, drag: CanvasDrag) {
   if (!event.dataTransfer) return

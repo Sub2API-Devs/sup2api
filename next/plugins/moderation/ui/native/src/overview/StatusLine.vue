@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { SAlert, SBadge, SButton, SLink } from '@sub2api/ui'
 import { useCatalog } from '../catalog'
-import { canManage, modeTone, useModHost, type Status } from '../host'
+import { groupCoverage } from '../flowOps'
+import { canManage, canManageSettings, modeTone, useModHost, type Status } from '../host'
 
 // One-line running state (new-api status-line): switch, enabled flows,
 // bound / unmoderated groups, disabled channels, analysis channel; plus the
@@ -19,15 +20,22 @@ const state = computed(() => {
 
 const enabledFlows = computed(() => catalog.state.flows.filter((f) => f.enabled))
 const disabledFlows = computed(() => catalog.state.flows.length - enabledFlows.value.length)
-const bound = computed(() => new Set(enabledFlows.value.flatMap((f) => f.groups)))
-/** groups of the core no enabled flow moderates; [] when groups are not readable */
-const unbound = computed(() => catalog.state.groups.filter((g) => !bound.value.has(g.id)))
+/** moderated / unmoderated groups of the core; null when groups are not readable */
+const coverage = computed(() => {
+  const groups = catalog.state.groups
+  if (!groups.length) return null
+  const c = groupCoverage(groups.map((g) => g.id), catalog.state.flows)
+  const moderated = new Set(c.moderated)
+  return { moderated: moderated.size, unmoderated: groups.filter((g) => !moderated.has(g.id)).map((g) => g.name) }
+})
 const channelsDown = computed(() => catalog.state.channels.filter((c) => !c.enabled).length)
 const analysisConfigured = computed(() => !!props.status.runtime.analysis?.channel_configured)
 
+// Settings links only for plugin managers (core plugin:manage).
+const settingsLink = computed(() => canManageSettings())
 const notice = computed(() => {
-  if (!props.status.runtime.configured) return { tone: 'warning' as const, text: t('overview.notConfigured'), action: 'flows' }
-  if (props.status.mode === 'off') return { tone: 'info' as const, text: t('overview.offHint'), action: 'settings' }
+  if (!props.status.runtime.configured) return { tone: 'warning' as const, text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
+  if (props.status.mode === 'off') return { tone: 'info' as const, text: t('overview.offHint'), action: settingsLink.value ? 'settings' : '' }
   return null
 })
 const act = (action: string) => (action === 'settings' ? emit('go-settings') : emit('go-tab', action))
@@ -40,21 +48,24 @@ const act = (action: string) => (action === 'settings' ? emit('go-settings') : e
     <span>
       {{ t('statusLine.flows', { n: enabledFlows.length }) }}<template v-if="disabledFlows"> · {{ t('statusLine.flowsOff', { n: disabledFlows }) }}</template>
     </span>
-    <span class="mod-sub">·</span>
-    <span>{{ t('statusLine.bound', { n: bound.size }) }}</span>
-    <span v-if="unbound.length" class="mod-text-warning" :title="unbound.map((g) => g.name).join(', ')">
-      {{ t('statusLine.unbound', { n: unbound.length, groups: unbound.slice(0, 5).map((g) => g.name).join(', ') }) }}
-    </span>
+    <template v-if="coverage">
+      <span class="mod-sub">·</span>
+      <span>{{ t('statusLine.bound', { n: coverage.moderated }) }}</span>
+      <span v-if="coverage.unmoderated.length" class="mod-text-warning" :title="coverage.unmoderated.join(', ')">
+        {{ t('statusLine.unbound', { n: coverage.unmoderated.length, groups: coverage.unmoderated.slice(0, 5).join(', ') }) }}
+      </span>
+    </template>
     <span class="mod-sub">·</span>
     <span :class="channelsDown ? 'mod-text-warning' : ''">{{ channelsDown ? t('statusLine.channelsDown', { n: channelsDown }) : t('statusLine.channelsOk') }}</span>
     <span class="mod-sub">·</span>
     <span v-if="analysisConfigured">{{ t('statusLine.analysisOn') }}</span>
-    <SLink v-else as="button" class="mod-text-warning" @click="emit('go-settings')">{{ t('statusLine.analysisOff') }}</SLink>
+    <SLink v-else-if="settingsLink" as="button" class="mod-text-warning" @click="emit('go-settings')">{{ t('statusLine.analysisOff') }}</SLink>
+    <span v-else class="mod-text-warning">{{ t('statusLine.analysisOff') }}</span>
   </div>
 
   <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
     {{ notice.text }}
-    <template v-if="canManage()" #actions>
+    <template v-if="notice.action" #actions>
       <SButton :variant="notice.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="act(notice.action)">
         {{ notice.action === 'flows' ? t('tabs.flows') : t('settings') }}
       </SButton>

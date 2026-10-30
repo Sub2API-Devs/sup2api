@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { SChip, SHint } from '@sub2api/ui'
-import { categoryLabel, useModHost } from './host'
+import { categoryLabel, score, useModHost } from './host'
 
 // Hit categories of a record (codes), of a trace (with Jev labels and
 // scores) or of a user (with counts; `other` = count outside the shown ones).
@@ -11,7 +11,7 @@ const code = (c: Item) => (typeof c === 'string' ? c : c.category)
 const label = (c: Item) => (typeof c === 'string' ? categoryLabel(c) : categoryLabel(c.category, c.label))
 function suffix(c: Item): string {
   if (typeof c === 'string') return ''
-  if (c.score !== undefined) return ' ' + c.score.toFixed(2)
+  if (c.score !== undefined) return ' ' + score(c.score)
   return c.count !== undefined ? ' ' + c.count : ''
 }
 </script>

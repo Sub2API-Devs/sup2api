@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type SelectOption, type TableColumn } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
+import ReviewActions from './ReviewActions.vue'
+import WatchDetail from './WatchDetail.vue'
 import ScoreChips from './ScoreChips.vue'
 import StagePath from './StagePath.vue'
 import EventDetail from './EventDetail.vue'
@@ -10,20 +12,23 @@ import FlowRef from './FlowRef.vue'
 import UserRef from './UserRef.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
-import { ms, num } from './format'
-import { canManage, enumLabel, errorMessage, reviewEvents, useModHost, type ModEvent, type ReviewStatus } from './host'
-import { resolveUserIds, userQuery } from './users'
+import { applyFilters } from './forms'
+import { dt, ms, num } from './format'
+import { canManage, enumLabel, errorMessage, useModHost, type ModEvent, type ReviewStatus } from './host'
+import { useBulkReview } from './useBulkReview'
+import { useUserFilter } from './users'
 
 // Records (new-api records): filters + paginated table (useList); the user
 // filter takes a username (resolved to ids through the core) or an id. A row
-// opens the detail modal; selected rows can be reviewed in bulk.
+// opens the detail modal (?record=<id> opens one directly); a user opens the
+// user detail drawer; selected rows can be reviewed in bulk.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 
-const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '' as number | '', group_id: '' as number | '', user: '', request_id: '', q: '' })
+const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '' as number | '', group_id: '' as number | '', api_key_id: '', user: '', request_id: '', q: '' })
 const form = reactive(emptyForm())
 if (props.preset) form.user = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
@@ -31,16 +36,8 @@ const from = ref('')
 const to = ref('')
 const rangeKeys: RangeKey[] = ['all', 'today', '7d', '30d', 'custom']
 
-/** The user filter resolved to user_id / user_ids; userError when a name cannot be searched. */
-const users = ref<{ user_id?: number; user_ids?: string }>(userQuery(props.preset ? [props.preset.user_id] : null))
-const userError = ref('')
-async function resolveUser() {
-  userError.value = ''
-  const v = form.user.trim()
-  const ids = v ? await resolveUserIds(v) : []
-  if (ids === null) userError.value = t('events.userSearchDenied')
-  users.value = userQuery(ids)
-}
+/** The user filter resolved to user_id / user_ids. */
+const users = useUserFilter(props.preset ? [props.preset.user_id] : null)
 
 function query() {
   return {
@@ -53,8 +50,9 @@ function query() {
     watch_level: form.watch_level,
     flow_id: form.flow_id,
     group_id: form.group_id,
-    user_id: users.value.user_id ?? '',
-    user_ids: users.value.user_ids ?? '',
+    api_key_id: form.api_key_id.trim(),
+    user_id: users.query.value.user_id ?? '',
+    user_ids: users.query.value.user_ids ?? '',
     request_id: form.request_id.trim(),
     q: form.q.trim(),
     from: from.value,
@@ -65,16 +63,10 @@ function query() {
 const list = useList<ModEvent>(host.pluginApi, '/events', query())
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 
-function apply(): boolean {
-  const next = query()
-  if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) return false
-  Object.assign(list.filters, next)
-  return true
-}
+const apply = () => applyFilters(list.filters, query())
 
 async function search() {
-  await resolveUser()
-  if (!apply()) list.reload()
+  if ((await users.resolve(form.user)) && !apply()) list.reload()
 }
 
 function reset(user = '') {
@@ -118,12 +110,20 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'latency_ms', label: t('events.col.latency'), align: 'right', nowrap: true }
 ])
 
+// The open record follows ?record=<id>, so a record can be linked to.
 const selected = ref<number | null>(null)
 const detailOpen = ref(false)
-function open(row: ModEvent) {
-  selected.value = row.id
+function open(id: number) {
+  selected.value = id
   detailOpen.value = true
 }
+const deepLink = Number(host.router.currentRoute.value.query.record)
+if (Number.isSafeInteger(deepLink) && deepLink > 0) open(deepLink)
+watch([detailOpen, selected], ([isOpen, id]) => {
+  const route = host.router.currentRoute.value
+  const record = isOpen && id ? String(id) : undefined
+  if (route.query.record !== record) host.router.replace({ query: { ...route.query, record } })
+})
 
 function onDeleted(id: number) {
   list.items.value = list.items.value.filter((r) => r.id !== id)
@@ -136,29 +136,21 @@ function onReviewed(ids: number[], status: ReviewStatus) {
 }
 
 function filterUser(id: number) {
+  userOpen.value = false
   form.user = String(id)
   search()
 }
 
-// Bulk review of the selected rows.
-const checked = ref<number[]>([])
-const reviewing = ref(false)
-watch(() => list.items.value, () => (checked.value = []))
-async function review(status: ReviewStatus) {
-  const ids = [...checked.value]
-  if (!ids.length) return
-  reviewing.value = true
-  try {
-    await reviewEvents(ids, status)
-    onReviewed(ids, status)
-    checked.value = []
-    host.toast(t('review.done', { n: ids.length }), 'success')
-  } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
-  } finally {
-    reviewing.value = false
-  }
+// User detail drawer (GET /users/:user_id), for any user of a record.
+const userOpen = ref(false)
+const userId = ref<number | null>(null)
+function openUser(id: number) {
+  userId.value = id
+  userOpen.value = true
 }
+
+const { checked, reviewing, review } = useBulkReview(onReviewed)
+watch(() => list.items.value, () => (checked.value = []))
 </script>
 
 <template>
@@ -186,7 +178,7 @@ async function review(status: ReviewStatus) {
         <SField class="mod-filter" :label="t('events.watch')">
           <SSelect v-model="form.watch_level" :options="watchOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('events.user')" :error="userError">
+        <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
           <SInput v-model="form.user" type="search" :placeholder="t('events.userPlaceholder')" />
         </SField>
         <SField class="mod-filter" :label="t('events.col.flow')">
@@ -195,6 +187,9 @@ async function review(status: ReviewStatus) {
         <SField class="mod-filter" :label="t('stats.group')">
           <SSelect v-if="groupOptions.length > 1" v-model="form.group_id" :options="groupOptions" searchable />
           <SInput v-else v-model="form.group_id" inputmode="numeric" :placeholder="t('events.groupId')" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.apiKey')">
+          <SInput v-model="form.api_key_id" inputmode="numeric" :placeholder="t('events.apiKeyPlaceholder')" />
         </SField>
         <SField class="mod-filter" :label="t('events.requestId')">
           <SInput v-model="form.request_id" />
@@ -214,9 +209,7 @@ async function review(status: ReviewStatus) {
 
     <SBulkBar v-if="manage" :count="checked.length" :total="list.total.value" :page-selected="checked.length === list.items.value.length" class="mod-section" @select-page="checked = list.items.value.map((r) => r.id)" @clear="checked = []">
       <template #idle>{{ t('review.hint') }}</template>
-      <SButton size="sm" :loading="reviewing" @click="review('false_positive')">{{ t('review.falsePositive') }}</SButton>
-      <SButton size="sm" variant="danger" :loading="reviewing" @click="review('confirmed')">{{ t('review.confirmed') }}</SButton>
-      <SButton size="sm" variant="ghost" :loading="reviewing" @click="review('pending')">{{ t('review.reset') }}</SButton>
+      <ReviewActions :loading="reviewing" @review="review" />
     </SBulkBar>
 
     <SCard :padded="false" class="mod-section">
@@ -229,9 +222,9 @@ async function review(status: ReviewStatus) {
         :selectable="manage"
         dense
         clickable
-        @row-click="open"
+        @row-click="open($event.id)"
       >
-        <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
+        <template #cell-created_at="{ row }">{{ dt(row.created_at) }}</template>
         <template #cell-result="{ row }">
           <ResultBadge :result="row.result" />
           <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
@@ -243,7 +236,10 @@ async function review(status: ReviewStatus) {
           <span :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
           <SBadge v-if="row.image_count" size="xs" tone="gray" class="mod-ml">{{ t('events.images', { n: row.image_count }) }}</SBadge>
         </template>
-        <template #cell-user_id="{ row }"><UserRef :user-id="row.user_id" link :title="t('events.filterUser')" @click="filterUser" /></template>
+        <template #cell-user_id="{ row }">
+          <UserRef :user-id="row.user_id" link :title="t('events.openUser')" @click="openUser" />
+          <SButton size="xs" variant="ghost" icon="filter" icon-only :aria-label="t('events.filterUser')" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)" />
+        </template>
         <template #cell-flow="{ row }"><FlowRef :flow-id="row.flow_id" :version="row.flow_version" /></template>
         <template #cell-latency_ms="{ row }">
           <span class="mod-num">{{ ms(row.latency_ms) }}</span>
@@ -255,6 +251,7 @@ async function review(status: ReviewStatus) {
       </div>
     </SCard>
 
-    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" @show-user="filterUser" />
+    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" @show-user="filterUser" @open-user="openUser" />
+    <WatchDetail v-model:open="userOpen" :user-id="userId" @show-user="filterUser" />
   </div>
 </template>

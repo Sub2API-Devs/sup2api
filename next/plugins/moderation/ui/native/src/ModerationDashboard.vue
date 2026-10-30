@@ -38,10 +38,12 @@ const tabs = computed(() => {
   return list
 })
 
+/** ?tab=, else the records tab for a ?record= link, else the overview. */
 function initialTab(): TabKey {
-  const q = host.router.currentRoute.value.query.tab
+  const { tab: q, record } = host.router.currentRoute.value.query
   const v = typeof q === 'string' ? q : ''
-  return (tabs.value.some((x) => x.key === v) ? v : 'overview') as TabKey
+  if (tabs.value.some((x) => x.key === v)) return v as TabKey
+  return record ? 'events' : 'overview'
 }
 
 const tab = ref<TabKey>(initialTab())
@@ -54,10 +56,18 @@ watch(tab, (v) => {
 })
 
 // Mode badge and the error-rate alert threshold; the overview reports its own loads.
+// The latest status wins: a status the overview reports outdates a load in flight.
 const status = ref<Status | null>(null)
 const runtime = computed(() => status.value?.runtime ?? null)
-const loadStatus = async () => {
-  status.value = (await fetchStatus().catch(() => null)) ?? status.value
+let statusSeq = 0
+async function loadStatus() {
+  const my = ++statusSeq
+  const s = await fetchStatus().catch(() => null)
+  if (s && my === statusSeq) status.value = s
+}
+function onStatus(s: Status) {
+  statusSeq++
+  status.value = s
 }
 onMounted(() => tab.value !== 'overview' && loadStatus())
 
@@ -119,7 +129,7 @@ function openWatch(userId: number) {
         v-show="tab === 'overview'"
         :ref="setRef('overview')"
         :active="tab === 'overview'"
-        @status="status = $event"
+        @status="onStatus"
         @open-watch="openWatch"
         @go-tab="goTab"
         @go-settings="goSettings"

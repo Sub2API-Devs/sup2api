@@ -3,7 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SCard, SChart, SEmpty, SGrid, SHint, SSegmented, STable, type TableColumn } from '@sub2api/ui'
 import { num as n } from './format'
 import { onOverviewTick } from './overview/tick'
-import { enumLabel, errorMessage, fetchCosts, money, useModHost, type Costs } from './host'
+import { enumLabel, fetchCosts, money, useModHost } from './host'
+import { useAsync } from './useAsync'
 
 // Cost over a range (§72.13.3): GET /costs?range=, totals, by source, by
 // channel, trend; unpriced calls are counted but not in the amount.
@@ -12,21 +13,7 @@ const t = host.t
 const range = ref<'24h' | '7d' | '30d'>('7d')
 const rangeOptions = computed(() => (['24h', '7d', '30d'] as const).map((v) => ({ value: v, label: t(`cost.range.${v}`) })))
 
-const data = ref<Costs | null>(null)
-const loading = ref(false)
-const error = ref('')
-
-async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    data.value = await fetchCosts(range.value)
-  } catch (e) {
-    error.value = errorMessage(e, t('cost.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
+const { data, loading, error, reload } = useAsync(() => fetchCosts(range.value), () => t('cost.loadFailed'))
 watch(range, reload, { immediate: true })
 onOverviewTick(reload)
 

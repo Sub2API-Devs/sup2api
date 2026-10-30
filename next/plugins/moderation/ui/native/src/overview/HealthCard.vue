@@ -43,7 +43,7 @@ const channelColumns = computed<TableColumn[]>(() => [
     <div class="mod-stack">
       <STable :columns="auditorColumns" :rows="auditors" row-key="id" dense :empty-text="t('health.noAuditors')">
         <template #cell-name="{ row }">
-          {{ row.auditor?.name || `#${row.id}` }}
+          {{ catalog.auditorName(row.id) }}
           <span v-if="row.auditor" class="mod-sub">{{ enumLabel('auditorType', row.auditor.type) }}</span>
         </template>
         <template #cell-channel="{ row }">
@@ -63,7 +63,7 @@ const channelColumns = computed<TableColumn[]>(() => [
 
       <STable :columns="channelColumns" :rows="channels" row-key="id" dense :empty-text="t('health.noChannels')">
         <template #cell-name="{ row }">
-          {{ row.channel?.name || `#${row.id}` }}
+          {{ catalog.channelName(row.id) }}
           <template v-if="row.channel">
             <span class="mod-sub">{{ enumLabel('channelType', row.channel.type) }}</span>
             <SBadge v-if="row.channel.analysis" tone="purple" size="xs" class="mod-ml">{{ t('channels.analysis') }}</SBadge>

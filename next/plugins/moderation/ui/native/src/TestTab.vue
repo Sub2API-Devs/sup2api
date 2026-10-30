@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SField, SGrid, SHint, SSelect, STextarea } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import CostBadge from './CostBadge.vue'
-import { enumLabel, errorMessage, fetchFlows, runTest, severityTone, useModHost, type Flow, type TestResult } from './host'
+import { useCatalog } from './catalog'
+import { enumLabel, errorMessage, runTest, severityTone, useModHost, type TestResult } from './host'
 
 const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
 
@@ -18,18 +19,15 @@ const t = host.t
 const text = ref('')
 const images = ref('')
 const flowId = ref<number>(0)
-const flows = ref<Flow[]>([])
 const running = ref(false)
 const result = ref<TestResult | null>(null)
 const failure = ref('')
 const notConfigured = ref(false)
 
-onMounted(async () => {
-  flows.value = await fetchFlows().catch(() => [])
-})
+const catalog = useCatalog()
 const flowOptions = computed(() => [
   { value: 0, label: t('test.defaultFlow') },
-  ...flows.value.filter((f) => f.version > 0 && f.enabled).map((f) => ({ value: f.id, label: `${f.name} v${f.version}` }))
+  ...catalog.state.flows.filter((f) => f.version > 0 && f.enabled).map((f) => ({ value: f.id, label: `${f.name} v${f.version}` }))
 ])
 
 const samples = ['normal', 'suspicious', 'jailbreak'] as const

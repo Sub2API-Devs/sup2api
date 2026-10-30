@@ -39,7 +39,7 @@ const lines = computed(() =>
 
 <template>
   <SModal :open="open" :title="t('flows.publishTitle', { name, v: nextVersion })" width="lg" @update:open="emit('update:open', $event)">
-    <div class="mod-form mod-publish">
+    <div class="mod-form">
       <div class="mod-config-inline">
         {{ t('flows.pubStatus') }}
         <SBadge :tone="enabled ? 'success' : 'gray'">{{ enabled ? t('enabled') : t('disabled') }}</SBadge>

@@ -6,54 +6,29 @@ import FlowEditor from './FlowEditor.vue'
 import FlowGroupsCell from './FlowGroupsCell.vue'
 import FlowVersions from './FlowVersions.vue'
 import FlowSimulate from './FlowSimulate.vue'
-import {
-  canManage,
-  deleteFlow,
-  enumLabel,
-  errorMessage,
-  fetchAuditors,
-  fetchFlows,
-  fetchGroups,
-  hasDraftChanges,
-  setFlowEnabled,
-  useModHost,
-  type Auditor,
-  type Flow,
-  type Group,
-  type Spec
-} from './host'
-import type { GroupOwner } from './flowOps'
+import { useCatalog } from './catalog'
+import { dt, ms, num, pct } from './format'
+import { groupCoverage, type GroupOwner } from './flowOps'
+import { canManage, deleteFlow, enumLabel, errorMessage, hasDraftChanges, setFlowEnabled, useModHost, type Flow, type Group, type Spec } from './host'
 
 // Flows (CONTRACTS §72.7): the list (groups edited in place, 24 h stats) and
-// the full-width canvas editor of one flow (?flow=<id> or ?flow=new).
+// the full-width canvas editor of one flow (?flow=<id> or ?flow=new). Flows,
+// auditors and groups come from the shared catalog, refreshed after changes.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
 
-const rows = ref<Flow[]>([])
-const auditors = ref<Auditor[]>([])
-const groups = ref<Group[]>([])
-const loading = ref(false)
-const error = ref('')
-
-async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    ;[rows.value, auditors.value] = await Promise.all([fetchFlows(), fetchAuditors()])
-    if (!groups.value.length) groups.value = await fetchGroups()
-  } catch (e) {
-    error.value = errorMessage(e, t('flows.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
+const catalog = useCatalog()
+const rows = computed(() => catalog.state.flows)
+const groups = computed(() => catalog.state.groups)
+const loading = computed(() => catalog.state.loading)
+const error = computed(() => (catalog.state.errors.flows ? errorMessage(catalog.state.errors.flows, t('flows.loadFailed')) : ''))
+const reload = () => catalog.refresh()
 onMounted(reload)
 defineExpose({ reload })
 
-const auditorName = (id: number) => auditors.value.find((a) => a.id === id)?.name || `#${id}`
-const groupLabel = (id: number) => (id === 0 ? t('flows.defaultGroup') : groups.value.find((g) => g.id === id)?.name || `#${id}`)
+const groupLabel = (id: number) => (id === 0 ? t('flows.defaultGroup') : catalog.groupName(id))
 
 /** Every group incl. the default; [] when the group list is not readable. */
 const allGroups = computed<Group[]>(() => (groups.value.length ? [{ id: 0, name: t('flows.defaultGroup') }, ...groups.value] : []))
@@ -65,7 +40,7 @@ const owners = computed(() => {
 
 function stagesSummary(s: Spec | null): string {
   if (!s?.stages?.length) return '—'
-  return s.stages.map((st) => `${st.auditors.map(auditorName).join(' ∥ ')}${st.auditors.length > 1 ? ` (${enumLabel('combine', st.combine || 'any')}${st.combine === 'at_least' ? ' ' + st.n : ''})` : ''}`).join(' → ')
+  return s.stages.map((st) => `${st.auditors.map(catalog.auditorName).join(' ∥ ')}${st.auditors.length > 1 ? ` (${enumLabel('combine', st.combine || 'any')}${st.combine === 'at_least' ? ' ' + st.n : ''})` : ''}`).join(' → ')
 }
 
 // ---- filters
@@ -102,18 +77,10 @@ const columns = computed<TableColumn[]>(() => {
 // group coverage under the table (new-api flows-table.tsx)
 const coverage = computed(() => {
   if (!groups.value.length) return null
-  const real = groups.value.map((g) => g.id)
-  const own = real.filter((id) => owners.value.has(id))
-  const enabledOf = (id: number) => rows.value.find((f) => f.id === owners.value.get(id)?.flowId)?.enabled
-  // without an enabled default flow, groups without their own flow are not moderated
-  const unbound = enabledOf(0) ? [] : real.filter((id) => !owners.value.has(id))
-  const disabled = rows.value.filter((f) => !f.enabled).flatMap((f) => f.groups)
-  const stale = [...owners.value.keys()].filter((id) => id !== 0 && !real.includes(id))
+  const c = groupCoverage(groups.value.map((g) => g.id), rows.value)
   const names = (ids: number[]) => ids.map(groupLabel).join('、')
-  return { total: real.length, bound: own.length, unbound: names(unbound), disabled: names(disabled), stale: names(stale) }
+  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), stale: names(c.stale) }
 })
-
-const fmt = (n: number | undefined, digits?: number) => (n === undefined || n === null ? '—' : host.i18n.formatNumber(n, digits))
 
 // ---- versions drawer, simulation
 const versionsOpen = ref(false)
@@ -131,7 +98,7 @@ function openSimulate(f: Flow) {
 async function toggle(f: Flow, on: boolean) {
   try {
     await setFlowEnabled(f.id, on)
-    f.enabled = on
+    await reload()
   } catch (e) {
     host.toast(errorMessage(e, t('actionFailed')), 'error')
   }
@@ -198,7 +165,15 @@ function onCreated(id: number) {
       <div class="mod-toolbar mod-flows-toolbar">
         <SInput v-model="nameQuery" type="search" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
         <SSelect :model-value="groupFilter" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
-        <SButton v-if="manage" variant="primary" icon="plus" class="mod-ml-auto" :disabled="!auditors.length" :title="auditors.length ? '' : t('flows.needAuditor')" @click="openEditor(null)">{{ t('flows.add') }}</SButton>
+        <SButton
+          v-if="manage"
+          variant="primary"
+          icon="plus"
+          class="mod-ml-auto"
+          :disabled="!catalog.state.auditors.length"
+          :title="catalog.state.auditors.length ? '' : t('flows.needAuditor')"
+          @click="openEditor(null)"
+        >{{ t('flows.add') }}</SButton>
       </div>
       <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
@@ -219,14 +194,14 @@ function onCreated(id: number) {
             <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="reload" />
           </template>
           <template #cell-stages="{ row }"><span :title="stagesSummary(row.draft)">{{ stagesSummary(row.published || row.draft) }}</span></template>
-          <template #cell-audited="{ row }"><span class="mod-num">{{ fmt(row.stats_24h?.audited) }}</span></template>
+          <template #cell-audited="{ row }"><span class="mod-num">{{ row.stats_24h ? num(row.stats_24h.audited) : '—' }}</span></template>
           <template #cell-rate="{ row }">
-            <span class="mod-num">{{ row.stats_24h && row.stats_24h.audited ? `${fmt(row.stats_24h.suspicious_rate * 100, 1)}%` : '—' }}</span>
+            <span class="mod-num">{{ row.stats_24h?.audited ? pct(row.stats_24h.suspicious_rate) : '—' }}</span>
           </template>
           <template #cell-pre="{ row }">
-            <span class="mod-num">{{ row.stats_24h && row.stats_24h.pre_avg_ms ? `${fmt(Math.round(row.stats_24h.pre_avg_ms))} ms` : '—' }}</span>
+            <span class="mod-num">{{ row.stats_24h?.pre_avg_ms ? ms(Math.round(row.stats_24h.pre_avg_ms)) : '—' }}</span>
           </template>
-          <template #cell-published_at="{ row }">{{ row.published_at ? host.i18n.formatDateTime(row.published_at) : '—' }}</template>
+          <template #cell-published_at="{ row }">{{ dt(row.published_at) }}</template>
           <template #cell-actions="{ row }">
             <SButton size="sm" variant="ghost" @click="openEditor(row.id)">{{ manage ? t('edit') : t('flows.view') }}</SButton>
             <SButton v-if="manage" size="sm" variant="ghost" @click="openSimulate(row)">{{ t('flows.simulate') }}</SButton>

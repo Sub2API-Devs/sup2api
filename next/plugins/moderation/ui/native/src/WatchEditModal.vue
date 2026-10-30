@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { isApiError } from '@sub2api/host'
 import { SButton, SField, SInput, SModal, SSegmented, fromLocalInput, toLocalInput } from '@sub2api/ui'
+import { applyFieldErrors, clearErrors, type FieldErrors } from './forms'
 import { createWatch, errorMessage, updateWatch, useModHost, type Watch, type WatchChange, type WatchLevel } from './host'
 import { resolveUserIds } from './users'
 
@@ -15,7 +15,7 @@ const t = host.t
 
 const DEFAULT_DAYS = 30
 const form = reactive({ user: '', level: 'observe' as WatchLevel, expiry: 'at' as 'never' | 'at', expiresAt: '', note: '', reason: '' })
-const errs = reactive<Record<string, string>>({})
+const errs = reactive<FieldErrors>({})
 const saving = ref(false)
 
 const inDays = (days: number) => new Date(Date.now() + days * 86400_000).toISOString()
@@ -25,7 +25,7 @@ watch(
   (open) => {
     if (!open) return
     const w = props.entry
-    for (const k of Object.keys(errs)) delete errs[k]
+    clearErrors(errs)
     Object.assign(form, {
       user: w ? String(w.user_id) : '',
       level: w?.level ?? 'observe',
@@ -61,7 +61,7 @@ async function userId(): Promise<number | null> {
 }
 
 async function save() {
-  for (const k of Object.keys(errs)) delete errs[k]
+  clearErrors(errs)
   if (form.expiry === 'at' && !body().expires_at) {
     errs.expires_at = t('watchEdit.expiryRequired')
     return
@@ -78,9 +78,7 @@ async function save() {
     emit('update:open', false)
     emit('saved')
   } catch (e) {
-    const fields = isApiError(e) ? e.fields : {}
-    Object.assign(errs, fields)
-    if (!Object.keys(fields).length) host.toast(errorMessage(e, t('actionFailed')), 'error')
+    if (!applyFieldErrors(errs, e)) host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     saving.value = false
   }

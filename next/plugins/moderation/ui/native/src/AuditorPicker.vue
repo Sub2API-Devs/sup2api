@@ -17,5 +17,5 @@ function pick(v: unknown) {
 </script>
 
 <template>
-  <SSelect :model-value="null" :options="options" :placeholder="placeholder" :aria-label="placeholder" size="sm" class="mod-picker" @update:model-value="pick" />
+  <SSelect :model-value="null" :options="options" :placeholder="placeholder" :aria-label="placeholder" size="sm" @update:model-value="pick" />
 </template>

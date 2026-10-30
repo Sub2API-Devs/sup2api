@@ -299,7 +299,7 @@ function filterEvents(q: Record<string, string>) {
     if (q.result === 'suspicious' && !['hit', 'block'].includes(e.result)) return false
     if (q.result && q.result !== 'suspicious' && e.result !== q.result) return false
     for (const k of ['timing', 'review_status', 'severity']) if (q[k] && e[k] !== q[k]) return false
-    for (const k of ['user_id', 'flow_id', 'group_id']) if (q[k] && String(e[k]) !== q[k]) return false
+    for (const k of ['user_id', 'api_key_id', 'flow_id', 'flow_version', 'group_id']) if (q[k] && String(e[k]) !== q[k]) return false
     if (q.user_ids && !q.user_ids.split(',').includes(String(e.user_id))) return false
     if (q.request_id && e.request_id !== q.request_id) return false
     if (q.q && !(e.request_id + e.text).includes(q.q)) return false
@@ -669,7 +669,8 @@ on('PATCH', '/p/moderation/watchlist/:id', (req) => {
 })
 on('DELETE', '/p/moderation/watchlist/:id', (req) => {
   const i = watch.findIndex((x) => x.user_id === Number(req.params.id))
-  if (i >= 0) logWatch(watch[i].user_id, 'remove', watch[i].level, '', req.body)
+  // reason / analysis_id come as a query (DELETE has no body)
+  if (i >= 0) logWatch(watch[i].user_id, 'remove', watch[i].level, '', { reason: req.query.reason, analysis_id: Number(req.query.analysis_id) || null })
   if (i >= 0) watch.splice(i, 1)
   return { user_id: Number(req.params.id), removed: true }
 })

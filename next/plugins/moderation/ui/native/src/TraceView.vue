@@ -3,13 +3,13 @@ import { computed } from 'vue'
 import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
+import { ms } from './format'
 import { categoryLabel, enumLabel, score, useModHost, type Outcome, type Trace } from './host'
 import { outcomeState, type OutcomeState } from './trace'
 
 // Per-stage trace of a run: one row per auditor call.
 const props = defineProps<{ trace: Trace }>()
-const host = useModHost()
-const t = host.t
+const t = useModHost().t
 const catalog = useCatalog()
 
 interface Row extends Outcome {
@@ -44,7 +44,7 @@ const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warnin
       <SBadge v-if="trace.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
       <SBadge v-if="trace.truncated_run" tone="gray">{{ t('trace.truncated') }}</SBadge>
       <SBadge v-if="trace.input_message_dropped" tone="warning" :title="trace.input_message_dropped">{{ t('trace.inputDropped') }}</SBadge>
-      <SHint inline size="xs">{{ t('ms', { n: host.i18n.formatNumber(trace.latency_ms) }) }}</SHint>
+      <SHint inline size="xs">{{ ms(trace.latency_ms) }}</SHint>
     </div>
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
       <template #cell-stage="{ row }">
@@ -67,7 +67,7 @@ const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warnin
         <div v-if="row.sent_images || row.skipped_images" class="mod-sub">{{ t('trace.images', { sent: row.sent_images || 0, skipped: row.skipped_images || 0 }) }}</div>
       </template>
       <template #cell-model="{ row }">{{ row.model || '—' }}</template>
-      <template #cell-latency_ms="{ row }"><span class="mod-num">{{ t('ms', { n: host.i18n.formatNumber(row.latency_ms) }) }}</span></template>
+      <template #cell-latency_ms="{ row }"><span class="mod-num">{{ ms(row.latency_ms) }}</span></template>
     </STable>
   </div>
 </template>

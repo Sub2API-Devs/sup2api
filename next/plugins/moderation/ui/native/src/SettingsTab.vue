@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { isApiError } from '@sub2api/host'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { SAlert, SButton, SCard, SCode, SField, SHint, SInput, SLink, SSegmented, SSelect, SSpinner } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { useCatalog } from './catalog'
+import { applyFieldErrors, clearErrors, type FieldErrors } from './forms'
+import { useAsync } from './useAsync'
 import {
   SETTINGS_MASK,
   errorMessage,
@@ -14,7 +15,6 @@ import {
   savePluginSettings,
   settingsPath,
   useModHost,
-  type Defaults,
   type JevQuestions
 } from './host'
 
@@ -39,37 +39,36 @@ const DEFAULTS = {
 }
 type Key = keyof typeof DEFAULTS
 const KEYS = Object.keys(DEFAULTS) as Key[]
+/** Keys with an input here; errors on other keys are toasted. */
+const SHOWN = [...KEYS, 'jev_default_set']
+/** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */
+const settingsKey = (path: string) =>
+  path
+    .replace(/^values(?=[./]|$)/, '')
+    .replace(/^[./]/, '')
+    .replace(/\//g, '.')
+    .split(/[.[]/)[0]
 
 const stored = ref<Record<string, unknown>>({})
 const form = reactive({ ...DEFAULTS })
 /** secret keys with a stored value, kept while their input stays empty */
 const kept = reactive<Partial<Record<Key, boolean>>>({})
 const jev = ref<JevQuestions | null>(null)
-const defaults = ref<Defaults | null>(null)
-const errs = reactive<Record<string, string>>({})
-const loading = ref(false)
+const errs = reactive<FieldErrors>({})
 const saving = ref(false)
-const error = ref('')
 
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
 
-async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    const [s, d] = await Promise.all([fetchPluginSettings(), fetchDefaults()])
-    stored.value = s.values || {}
-    defaults.value = d
-    for (const k of KEYS) kept[k] = stored.value[k] === SETTINGS_MASK
-    Object.assign(form, Object.fromEntries(KEYS.map((k) => [k, kept[k] ? '' : (stored.value[k] ?? DEFAULTS[k])])))
-    const set = stored.value.jev_default_set as JevQuestions | null | undefined
-    jev.value = set ? copyQuestions(set) : null
-  } catch (e) {
-    error.value = errorMessage(e, t('settingsTab.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
+const { data, loading, error, reload } = useAsync(() => Promise.all([fetchPluginSettings(), fetchDefaults()]), () => t('settingsTab.loadFailed'))
+const defaults = computed(() => data.value?.[1] ?? null)
+watch(data, (v) => {
+  if (!v) return
+  stored.value = v[0].values || {}
+  for (const k of KEYS) kept[k] = stored.value[k] === SETTINGS_MASK
+  Object.assign(form, Object.fromEntries(KEYS.map((k) => [k, kept[k] ? '' : (stored.value[k] ?? DEFAULTS[k])])))
+  const set = stored.value.jev_default_set as JevQuestions | null | undefined
+  jev.value = set ? copyQuestions(set) : null
+})
 onMounted(reload)
 defineExpose({ reload })
 
@@ -77,7 +76,7 @@ defineExpose({ reload })
 const secretValue = (k: Key) => (form[k] !== '' ? form[k] : kept[k] ? SETTINGS_MASK : '')
 
 async function save() {
-  for (const k of Object.keys(errs)) delete errs[k]
+  clearErrors(errs)
   saving.value = true
   try {
     await savePluginSettings({
@@ -94,9 +93,8 @@ async function save() {
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
-    // Field errors name "values.<key>[.<path>]"; the first one of a key is shown.
-    for (const [path, msg] of Object.entries(isApiError(e) ? e.fields : {})) errs[path.replace(/^values\./, '').split(/[.[]/)[0]] ||= msg
-    if (!Object.keys(errs).length) host.toast(errorMessage(e, t('actionFailed')), 'error')
+    // The first error of a key is shown at its input; others are toasted.
+    if (!applyFieldErrors(errs, e, SHOWN, settingsKey)) host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
     saving.value = false
   }

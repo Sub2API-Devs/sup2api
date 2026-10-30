@@ -13,6 +13,7 @@ import UserRef from './UserRef.vue'
 import UserStateSection from './UserStateSection.vue'
 import { useCatalog } from './catalog'
 import { dt, idText, ms, num } from './format'
+import { useAsync } from './useAsync'
 import {
   aiVerdictTone,
   canManage,
@@ -40,14 +41,12 @@ const emit = defineEmits<{
   (e: 'deleted', id: number): void
   (e: 'reviewed', ids: number[], status: ReviewStatus): void
   (e: 'show-user', userId: number): void
+  (e: 'open-user', userId: number): void
 }>()
 const host = useModHost()
 const t = host.t
 const catalog = useCatalog()
 
-const ev = ref<ModEventDetail | null>(null)
-const loading = ref(false)
-const error = ref('')
 const busy = ref(false)
 const manage = computed(() => canManage())
 
@@ -58,22 +57,13 @@ watch(
   ([id]) => (currentId.value = id)
 )
 
+const { data: ev, loading, error, reload } = useAsync<ModEventDetail>(() => fetchEvent(currentId.value!), () => t('detail.loadFailed'))
 watch(
   () => [props.open, currentId.value] as const,
-  async ([open, id]) => {
-    if (!open || id === null) return
-    if (ev.value?.id === id) return
+  ([open, id]) => {
+    if (!open || id === null || ev.value?.id === id) return
     ev.value = null
-    loading.value = true
-    error.value = ''
-    try {
-      const r = await fetchEvent(id)
-      if (currentId.value === id) ev.value = r
-    } catch (e) {
-      error.value = errorMessage(e, t('detail.loadFailed'))
-    } finally {
-      loading.value = false
-    }
+    reload()
   },
   { immediate: true }
 )
@@ -123,6 +113,10 @@ function onWatchChanged(w: Watch | null) {
 function showUser(id: number) {
   close()
   emit('show-user', id)
+}
+function openUser(id: number) {
+  close()
+  emit('open-user', id)
 }
 
 // AI verdict of the record (§72.13.4) and the analysis that wrote it.
@@ -184,7 +178,7 @@ const fields = computed<DescItem[]>(() => {
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" @watch-changed="onWatchChanged" @show-user="showUser" />
+      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" openable @watch-changed="onWatchChanged" @show-user="showUser" @open-user="openUser" />
 
       <div v-if="hasAI">
         <SSectionTitle tag="p">
@@ -240,7 +234,7 @@ const fields = computed<DescItem[]>(() => {
 
       <SDescriptions :items="fields" :columns="2" dense>
         <template #item-categories><CategoryChips :categories="ev.hit_categories" wrap /></template>
-        <template #item-user><UserRef :user-id="ev.user_id" /></template>
+        <template #item-user><UserRef :user-id="ev.user_id" link :title="t('events.openUser')" @click="openUser" /></template>
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
       </SDescriptions>
     </div>

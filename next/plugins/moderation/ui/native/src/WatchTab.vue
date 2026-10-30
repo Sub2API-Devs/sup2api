@@ -10,6 +10,7 @@ import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import UserRef from './UserRef.vue'
 import { useCatalog } from './catalog'
+import { applyFilters } from './forms'
 import { dt, num } from './format'
 import {
   analysisState,
@@ -24,7 +25,7 @@ import {
   type WatchItem,
   type WatchListMeta
 } from './host'
-import { resolveUserIds, userQuery } from './users'
+import { useUserFilter } from './users'
 
 // Watch list (new-api watchlist): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
@@ -38,22 +39,16 @@ const catalog = useCatalog()
 
 const meta = ref<WatchListMeta | null>(null)
 const filter = reactive({ level: '', new_only: false, trend: '', category: '', sort: 'new', user: '' })
-const users = ref<{ user_id?: number; user_ids?: string }>({})
-const userError = ref('')
-const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category.trim(), sort: filter.sort, user_id: users.value.user_id ?? '', user_ids: users.value.user_ids ?? '' })
+const users = useUserFilter()
+const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category.trim(), sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
 
 const list = useList<WatchItem>(watchListClient((m) => (meta.value = m)), '/watchlist', query())
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('watch.loadFailed')) : ''))
-const apply = () => Object.assign(list.filters, query())
+const apply = () => applyFilters(list.filters, query())
 watch(() => [filter.level, filter.new_only, filter.trend, filter.sort], apply)
 
 async function search() {
-  userError.value = ''
-  const ids = filter.user.trim() ? await resolveUserIds(filter.user) : []
-  if (ids === null) userError.value = t('events.userSearchDenied')
-  users.value = userQuery(ids)
-  apply()
-  list.reload()
+  if ((await users.resolve(filter.user)) && !apply()) list.reload()
 }
 defineExpose({ reload: list.reload })
 
@@ -128,7 +123,7 @@ const promptOpen = ref(false)
         <SField class="mod-filter" :label="t('watchList.category')">
           <SInput v-model="filter.category" :placeholder="t('watchList.categoryPlaceholder')" />
         </SField>
-        <SField class="mod-filter" :label="t('events.user')" :error="userError">
+        <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
           <SInput v-model="filter.user" type="search" :placeholder="t('events.userPlaceholder')" />
         </SField>
         <SField class="mod-filter" :label="t('watchList.sortBy')">

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { SField, SHint, SInput, SRadio } from '@sub2api/ui'
-import { useModHost } from './host'
 import { TOTAL_TIMEOUT_MAX_MS, TOTAL_TIMEOUT_MIN_MS } from './flowOps'
+import { ms } from './format'
+import { useModHost } from './host'
 
 // Total flow timeout (new-api flow-timeout-field.tsx): automatic (0, the sum
 // of each stage's slowest channel timeout, filled at publish) or a manual
@@ -10,14 +11,13 @@ import { TOTAL_TIMEOUT_MAX_MS, TOTAL_TIMEOUT_MIN_MS } from './flowOps'
 // stage off.
 const props = defineProps<{ modelValue: number; autoMs: number; disabled: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: number): void }>()
-const host = useModHost()
-const t = host.t
+const t = useModHost().t
 
 // Text being typed; null = show the stored value. An empty entry stays here
 // instead of being stored as 0 (which means automatic).
 const typing = ref<string | null>(null)
 const manual = computed(() => props.modelValue > 0)
-const autoText = computed(() => `${host.i18n.formatNumber(props.autoMs)} ms`)
+const autoText = computed(() => ms(props.autoMs))
 
 function setMode(mode: unknown) {
   typing.value = null
