@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -321,6 +322,9 @@ type Event struct {
 type EventListItem struct {
 	Event
 	TextExcerpt string `json:"text_excerpt"`
+	// Trace feeds the stage path and score chips of the list (null on 0.1
+	// records).
+	Trace json.RawMessage `json:"trace"`
 }
 
 // EventDetail is GET /events/:id: text is null when store_text was off,
@@ -578,14 +582,18 @@ func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	}
 	n := len(args)
 	args = append(args, size, (page-1)*size)
-	rows, err := db.Query(ctx, `SELECT `+eventColumns+`, left(coalesce(text, ''), 120) FROM events WHERE `+where+
+	rows, err := db.Query(ctx, `SELECT `+eventColumns+`, left(coalesce(text, ''), 120), trace FROM events WHERE `+where+
 		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, n+1, n+2), args...)
 	if err != nil {
 		return nil, err
 	}
 	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (EventListItem, error) {
 		var it EventListItem
-		err := r.Scan(append(it.scanTargets(), &it.TextExcerpt)...)
+		var trace []byte
+		err := r.Scan(append(it.scanTargets(), &it.TextExcerpt, &trace)...)
+		if len(trace) > 0 {
+			it.Trace = trace
+		}
 		it.normalize()
 		return it, err
 	})
