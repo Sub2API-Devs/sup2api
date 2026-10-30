@@ -12,6 +12,8 @@
 //	POST /v1/responses              OpenAI Responses (usage in response.completed)
 //	GET  /v1/responses              Responses WebSocket mode (ws.go)
 //	POST /v1/embeddings             OpenAI embeddings (usage.prompt_tokens)
+//	POST /v1/moderations            OpenAI moderation scores; MOD-HIT-<category> scores 0.99 (moderation_api.go)
+//	POST /v1/systemone              TypeSafe System One noul answers, same MOD-HIT rule (moderation_api.go)
 //	POST /v1beta/models/{m}:generateContent        Gemini, usageMetadata incl. thoughtsTokenCount
 //	POST /v1beta/models/{m}:streamGenerateContent  ?alt=sse -> SSE, otherwise a JSON array
 //	POST /v1beta/models/{m}:countTokens            {"totalTokens": N}
@@ -144,6 +146,8 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /v1/responses", s.responses)
 	mux.HandleFunc("GET /v1/responses", s.responsesWebSocket)
 	mux.HandleFunc("POST /v1/embeddings", s.embeddings)
+	mux.HandleFunc("POST /v1/moderations", s.moderations)
+	mux.HandleFunc("POST /v1/systemone", s.systemOne)
 	mux.HandleFunc("POST /v1beta/models/{spec}", s.gemini)
 	mux.HandleFunc("GET /v1/models", s.listModels)
 	mux.HandleFunc("GET /v1beta/models", s.listGeminiModels)

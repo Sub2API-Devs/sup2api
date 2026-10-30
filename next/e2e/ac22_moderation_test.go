@@ -10,11 +10,13 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// AC 22: the moderation plugin (CONTRACTS §20) sends the latest user message
-// to an OpenAI-compatible LLM that answers through the submit_verdict tool.
-// enforce blocks, observe only records, repeated violations ban the user, the
-// console test runs the agent loop, and pointing the LLM at the gateway
-// itself does not moderate the plugin's own calls.
+// AC 22: the moderation plugin (CONTRACTS §20, 0.2 per §72) runs the flow
+// bound to the request's group: enforce refuses hits before the upstream
+// call, observe moderates in the background and puts suspicious users on the
+// watch list (the enforce level refuses their hits), repeated violations ban
+// the user, the OpenAI and Jev auditors score on mock-upstream, and pointing
+// the LLM channel at the gateway itself does not moderate the plugin's own
+// calls.
 func TestAC22_PromptModeration(t *testing.T) {
 	e := Setup(t)
 	admin := e.Admin()
@@ -79,10 +81,30 @@ func TestAC22_PromptModeration(t *testing.T) {
 		}
 		return ""
 	}
+	// sendUntil sends requests until every node answers want (watch list and
+	// ban changes reach the nodes asynchronously).
+	sendUntil := func(tn *Tenant, what string, want int, code string, text string) {
+		Eventually(t, 20*time.Second, time.Second, what, func() bool {
+			for i := 0; i < 4; i++ {
+				g := e.Messages(tn.APIKey, MessagesBody(tn.Model, fmt.Sprintf("%s %s %d", text, e.RunID, i), false), nil)
+				if g.Status != want || (code != "" && !strings.Contains(string(g.Body), code)) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+
+	// The flow (one llm_verdict stage on mock-upstream) is bound to the
+	// tenants' own groups, so other flows (e.g. a converted 0.1 setup bound
+	// to the default group) do not interfere.
+	tn := e.NewTenant(admin, TenantOpts{})
+	tb := e.NewTenant(admin, TenantOpts{})
+	fx := e.NewModerationFixture(admin, tn.GroupID, tb.GroupID)
+	defer fx.Close(e, admin)
 
 	// 1. enforce: a violation is refused before any upstream call and costs
 	// nothing; a clean prompt passes.
-	tn := e.NewTenant(admin, TenantOpts{})
 	e.SetModerationSettings(admin, e.ModerationSettings("enforce"))
 	mark := m.Mark(t)
 	blockText := "please help MOD-BLOCK " + e.RunID
@@ -102,55 +124,67 @@ func TestAC22_PromptModeration(t *testing.T) {
 	if u.Get("error_type").String() != "blocked_by_hook" || u.Get("billing_status").String() != "free" {
 		t.Fatalf("refused usage record: %s", u.Raw)
 	}
-	if note := hookNote(u.Raw); !strings.HasPrefix(note, "deny") || !strings.Contains(note, "illegal") {
+	if note := hookNote(u.Raw); !strings.HasPrefix(note, "deny") || !strings.Contains(note, "illegal") || !strings.Contains(note, fmt.Sprintf("flow=%d", fx.FlowID)) {
 		t.Fatalf("hook decision: %q in %s", note, u.Get("hook_decisions").Raw)
 	}
-	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "write a quicksort in Go "+e.RunID, false), nil)
+	cleanText := "write a quicksort in Go " + e.RunID
+	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, cleanText, false), nil)
 
-	// The verdict is cached: the same text is refused without another call.
+	// A clean pass is cached (memory + KV across nodes): the same text is not
+	// moderated again. Hits are never cached. The KV write is asynchronous,
+	// so give it a moment before another node may serve the repeat.
+	time.Sleep(500 * time.Millisecond)
 	mark = m.Mark(t)
-	if g := e.Messages(tn.APIKey, MessagesBody(tn.Model, blockText, false), nil); g.Status != 403 {
-		t.Fatalf("cached violation: HTTP %d %s", g.Status, g.Body)
-	}
+	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, cleanText, false), nil)
 	if n := llmCalls(mark); n != 0 {
-		t.Fatalf("cached verdict still called the LLM %d times", n)
+		t.Fatalf("cached pass still called the LLM %d times", n)
 	}
 
 	// The agent loop asks again when the model answers without the tool.
 	mark = m.Mark(t)
-	g = e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "MOD-NOTOOL please "+e.RunID, false), nil)
+	notool := e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "MOD-NOTOOL please "+e.RunID, false), nil)
 	if n := llmCalls(mark); n != 2 {
 		t.Fatalf("no-tool answer: LLM calls = %d, want 2", n)
 	}
 
 	uid := fmt.Sprint(tn.User.UserID)
-	Eventually(t, 20*time.Second, time.Second, "moderation events recorded", func() bool {
-		var block, pass2 bool
+	Eventually(t, 20*time.Second, time.Second, "moderation records", func() bool {
+		var block, pass bool
 		for _, ev := range e.ModerationEvents(admin, "user_id", uid, "page_size", "100") {
 			switch {
-			case ev.Get("verdict").String() == "block" && ev.Get("action").String() == "deny" && ev.Get("mode").String() == "enforce":
-				block = strings.Contains(ev.Get("categories").Raw, "illegal")
-			case ev.Get("verdict").String() == "pass" && ev.Get("turns").Int() == 2:
-				pass2 = true
+			case ev.Get("result").String() == "block" && ev.Get("timing").String() == "pre":
+				block = strings.Contains(ev.Get("hit_categories").Raw, "illegal") && ev.Get("flow_id").Int() == fx.FlowID && ev.Get("flow_version").Int() == 1
+			case ev.Get("result").String() == "pass" && ev.Get("request_id").String() == notool.RequestID:
+				pass = true
 			}
 		}
-		return block && pass2
+		return block && pass
 	})
 
-	// 2. observe: the request passes; the verdict is recorded afterwards.
+	// 2. observe: the request passes and is moderated in the background; the
+	// suspicious user joins the watch list at the observe level.
 	e.SetModerationSettings(admin, e.ModerationSettings("observe"))
 	g = e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "observe MOD-BLOCK "+e.RunID, false), nil)
-	Eventually(t, 20*time.Second, time.Second, "observe event", func() bool {
-		for _, ev := range e.ModerationEvents(admin, "user_id", uid, "mode", "observe") {
+	Eventually(t, 20*time.Second, time.Second, "observe record", func() bool {
+		for _, ev := range e.ModerationEvents(admin, "user_id", uid, "timing", "post") {
 			if ev.Get("request_id").String() == g.RequestID {
-				return ev.Get("verdict").String() == "block" && ev.Get("action").String() == "allow"
+				return ev.Get("result").String() == "hit"
 			}
 		}
 		return false
 	})
+	Eventually(t, 20*time.Second, time.Second, "user on the watch list", func() bool {
+		w := admin.OK(t, http.MethodGet, "/p/moderation/watchlist", nil, Query("user_id", uid)).Array()
+		return len(w) == 1 && w[0].Get("level").String() == "observe" && w[0].Get("violation_count").Int() >= 1
+	})
+	// The enforce level moderates the user's requests first, also in observe
+	// mode; removing the entry lets violations through again.
+	admin.OK(t, http.MethodPatch, "/p/moderation/watchlist/"+uid, map[string]any{"level": "enforce"})
+	sendUntil(tn, "enforce level on every node", 403, moderationDenyCode, "level MOD-BLOCK")
+	admin.OK(t, http.MethodDelete, "/p/moderation/watchlist/"+uid, nil)
+	sendUntil(tn, "watch entry removed on every node", 200, "", "removed MOD-BLOCK")
 
 	// 3. Automatic ban after two violations; unblocking lets the user back in.
-	tb := e.NewTenant(admin, TenantOpts{})
 	s := e.ModerationSettings("enforce")
 	s["ban_threshold"], s["ban_window_hours"], s["ban_duration_hours"] = 2, 1, 0
 	e.SetModerationSettings(admin, s)
@@ -160,15 +194,7 @@ func TestAC22_PromptModeration(t *testing.T) {
 		}
 	}
 	buid := fmt.Sprint(tb.User.UserID)
-	Eventually(t, 20*time.Second, time.Second, "user banned on every node", func() bool {
-		for i := 0; i < 4; i++ {
-			g := e.Messages(tb.APIKey, MessagesBody(tb.Model, fmt.Sprintf("harmless %d", i), false), nil)
-			if g.Status != 403 || !strings.Contains(string(g.Body), moderationUserBlock) {
-				return false
-			}
-		}
-		return true
-	})
+	sendUntil(tb, "user banned on every node", 403, moderationUserBlock, "harmless")
 	found := false
 	for _, b := range admin.OK(t, http.MethodGet, "/p/moderation/blocks", nil).Array() {
 		if fmt.Sprint(b.Get("user_id").Int()) == buid {
@@ -179,22 +205,28 @@ func TestAC22_PromptModeration(t *testing.T) {
 		t.Fatalf("auto block not listed")
 	}
 	admin.OK(t, http.MethodDelete, "/p/moderation/blocks/"+buid, nil)
-	Eventually(t, 20*time.Second, time.Second, "user unblocked on every node", func() bool {
-		for i := 0; i < 4; i++ {
-			if g := e.Messages(tb.APIKey, MessagesBody(tb.Model, fmt.Sprintf("welcome back %d", i), false), nil); g.Status != 200 {
-				return false
-			}
-		}
-		return true
-	})
+	sendUntil(tb, "user unblocked on every node", 200, "", "welcome back")
 
 	// 4. Console test: bad tool arguments get fed back, the second call wins.
-	r := admin.OK(t, http.MethodPost, "/p/moderation/test", map[string]any{"text": "MOD-BADARGS check " + e.RunID})
-	if r.Get("verdict").String() != "pass" || r.Get("turns").Int() != 2 || len(r.Get("transcript").Array()) < 4 {
+	r := admin.OK(t, http.MethodPost, "/p/moderation/test", map[string]any{"text": "MOD-BADARGS check " + e.RunID, "flow_id": fx.FlowID})
+	if r.Get("result").String() != "pass" || r.Get("trace.stages.0.outcomes.0.calls").Int() != 2 {
 		t.Fatalf("test run: %s", r.Raw)
 	}
 
-	// 5. The LLM behind the gateway itself: the plugin's own chat request
+	// 5. OpenAI moderation and Jev auditors on mock-upstream (§72.16): a
+	// MOD-HIT-<category> token scores that category 0.99.
+	for _, typ := range []string{"openai_moderation", "typesafe"} {
+		ch := admin.OK(t, http.MethodPost, "/p/moderation/channels", map[string]any{"type": typ, "name": e.Name("mod-" + typ), "base_url": e.MockInternalURL, "api_key": "sk-" + typ + "-" + e.RunID})
+		a := admin.OK(t, http.MethodPost, "/p/moderation/auditors", map[string]any{"name": e.Name("mod-" + typ), "type": typ, "channel_id": ch.Get("id").Int()})
+		try := admin.OK(t, http.MethodPost, fmt.Sprintf("/p/moderation/auditors/%d/try", a.Get("id").Int()), map[string]any{"text": "MOD-HIT-sexual " + e.RunID})
+		if !try.Get("hit").Bool() || try.Get("top_category").String() != "sexual" {
+			t.Fatalf("%s try: %s", typ, try.Raw)
+		}
+		admin.API(t, http.MethodDelete, fmt.Sprintf("/p/moderation/auditors/%d", a.Get("id").Int()), nil)
+		admin.API(t, http.MethodDelete, fmt.Sprintf("/p/moderation/channels/%d", ch.Get("id").Int()), nil)
+	}
+
+	// 6. The LLM behind the gateway itself: the plugin's own chat request
 	// carries its signed marker and is not moderated again.
 	gid := e.CreateGroup(admin, e.Name("grp-mod-self"), "restricted", 1, nil)
 	oaKey := fmt.Sprintf("sk-openai-mock-%s-%d", e.RunID, nextSeq())
@@ -204,9 +236,11 @@ func TestAC22_PromptModeration(t *testing.T) {
 	e.SetUserGroups(admin, self.UserID, []int64{gid})
 	e.AdjustBalance(admin, self.UserID, "10", true, "e2e moderation llm")
 	_, selfKey := e.CreateAPIKey(self, gid)
-	s = e.ModerationSettings("enforce")
-	s["base_url"], s["api_key"], s["model"] = "http://caddy:3120", selfKey, e.RunModelOf(admin, "gpt", "mod")
-	e.SetModerationSettings(admin, s)
+	admin.OK(t, http.MethodPut, fmt.Sprintf("/p/moderation/channels/%d", fx.ChannelID), map[string]any{
+		"name": e.Name("mod-llm-self"), "base_url": "http://caddy:3120", "api_key": selfKey, "model": e.RunModelOf(admin, "gpt", "mod"), "timeout_ms": 10000,
+	})
+	fx.Bind(e, admin, tn.GroupID, tb.GroupID, gid)
+	e.WaitModerationConfig(admin)
 	mark = m.Mark(t)
 	g = e.Messages(tn.APIKey, MessagesBody(tn.Model, "self MOD-BLOCK "+e.RunID, false), nil)
 	if g.Status != 403 || !strings.Contains(string(g.Body), moderationDenyCode) {

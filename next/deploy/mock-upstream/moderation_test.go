@@ -89,3 +89,20 @@ func TestModerationSimulation(t *testing.T) {
 		t.Fatalf("plain chat %v", m)
 	}
 }
+
+func TestModerationAPISimulation(t *testing.T) {
+	_, srv := newTestServer(t)
+	auth := map[string]string{"Authorization": "Bearer sk-mod-1"}
+	m := decode(t, post(t, srv, "/v1/moderations", auth, `{"model":"omni-moderation-latest","input":"x MOD-HIT-sexual/minors y"}`))
+	scores := get(m, "results").([]any)[0].(map[string]any)["category_scores"].(map[string]any)
+	if len(scores) != 13 || scores["sexual/minors"] != 0.99 || scores["sexual"] != 0.01 {
+		t.Fatalf("scores %v", scores)
+	}
+	j := decode(t, post(t, srv, "/v1/systemone", auth, `{"model":"jev-latest","state":"MOD-HIT-custom/jailbreak","questions":{"custom/jailbreak":{},"illicit":{}}}`))
+	if get(j, "answers", "custom/jailbreak", "noul") != 0.99 || get(j, "answers", "illicit", "noul") != 0.01 || get(j, "answers", "illicit", "type") != "noul" {
+		t.Fatalf("answers %v", j)
+	}
+	if resp := post(t, srv, "/v1/moderations", auth, `{"model":"m","input":"MOD-500"}`); resp.StatusCode != 500 {
+		t.Fatalf("MOD-500 status %d", resp.StatusCode)
+	}
+}
