@@ -4,7 +4,13 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间 04:35）：Core 两节点 **0.1.218**（源码 `5c282938c`，manifest `7f46bb57…d55e`，计划 `5b214a14267f95fc8ed519684f26ada5` completed/13，45.5 秒，核心 SHA `38ad77a1…66c4`）。
+2026-10-30 最新发布（北京时间 08:20–08:33）：ccgateway **0.1.114** + Core 两节点 **0.1.219**（源码都是 `7b26bcc3a`）。
+- **ccgateway 0.1.114**（包 SHA `a46b781d…33ca`，验签 valid，授权沿用，rollout 205）：定制 CLI 换到 Claude Code **2.1.312 / `ccgateway-v38-cc-2-1-312`**（ELF `c66a1f05…9ddb`，Bun 1.4.4，TLS 指纹与官方 identical）；镜像同时保留 2.1.310 / v36（`06d428b6…`，从 `release-ccgateway-0.1.113` 拷）作回退。Worker 按（会话, 线程）在进程内存记住上一次成功应答的 `request-id` 与 turn，我们构造的计费头补出 `cc_prev_req`（只在请求最后一条 assistant 正是那次应答、且无并发时；`cch` 保持占位，用户决定）。顺序：upload → upgrade → bundled controller,egress → `rollout.py switch`（配对原地更新后立即 PUT `cli_version=2.1.312`，窗口 80 秒）→ bundled app（`up_to_date: true`）。配对结果：20/21/42/44/45/46/48/49 updated，47 忙、空闲后补更新，23 not_found，其余 not_running。控制台测试 21、48 Haiku 200（42 号额度满 429）。切换窗口内 47/48 有零星 502/503。
+- **Core 0.1.219**（manifest `a0071467…c532`，计划 `293fd04b3f4c9c0a4da1b5fb09bc1a4d` completed/13，核心 SHA `f7a36c7b…dc5d`）：`PinnedCLIVersion` 与控制台默认 `cli_version` 改为 2.1.312。schema 不变（`e3d6a10f…`）。
+- 发布前离线 e2e（v36 基线 vs v38 + 新 Worker，73 场景 148 请求）：噪声 0，verify 1658/1658（官方 2.1.310 客户端）与 1662/1662（2.1.312），只差官方 Bash 描述与会话场景。
+- 脚本 `stage/ccgateway-0.1.114`、`stage/0.1.219`；新 worktree 的 `cli-mods/release/` 要放 2.1.312（ovh `/tmp/ccg312/build/release-v38`）和 2.1.310 两项，manifest 合并。
+
+2026-10-30 发布（北京时间 04:35）：Core 两节点 **0.1.218**（源码 `5c282938c`，manifest `7f46bb57…d55e`，计划 `5b214a14267f95fc8ed519684f26ada5` completed/13，45.5 秒，核心 SHA `38ad77a1…66c4`）。
 - 账号状态只有"启用 / 禁用 / 自动禁用"三种：遗留 `error` 与"启用但不可调度"显示和筛选都算自动禁用，冷却是启用状态下的一行"冷却至"；列表不再显示原因（放在悬停），自动禁用只显示"{时间} 自动启用"；管理员首页的账号统计改为 `auto_disabled` / `disabled`。
 - 每分钟会话数 SPM（CONTRACTS §71）：账号与每个模型列表各一层，按粘性会话键（没有时每个请求算一个）计近 60 秒活跃会话，与 RPM/TPM 同一 Lua 准入；列表列为"并发 / RPM / TPM / 会话"。
 - schema 契约 `fde93824…` → `e3d6a10f…`（迁移 0063：`accounts.spm_limit` 遗留值首次清零并加约束，切换时自动执行；执行后 49 个账号 spm_limit 全为 0）。备份 `backups/core-0.1.218`，脚本 `stage/0.1.218`。`builtin/` 与 `sub2api-plugin` 取自 0.1.212。
