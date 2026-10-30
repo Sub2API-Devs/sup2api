@@ -4,7 +4,12 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间 12:00）：ccgateway **0.1.115**（源码 `1cc3a01a6`，包 SHA `914e7a93…7997`，验签 valid，授权沿用）：与 0.1.114 相同，只是 app 镜像不再带 2.1.310 作回退，只有 2.1.312 / v38（用户决定）。upload → upgrade → bundled controller,egress → 配对更新（`cli_version` 不变 2.1.312）→ bundled app（`up_to_date: true`）。21 号测试 200。42–49 号已于 03:40 UTC 由用户批量删除，当前未删除的 CC 账号只有 20、21（都已停用）。脚本 `stage/ccgateway-0.1.115`。
+2026-10-30 最新发布（北京时间 21:55–22:00）：Core 两节点 **0.1.220** + moderation **0.2.0**（源码都是 `0a45d13e6`，CONTRACTS §72 P1；本机代理连不上 GitHub，代码经 git bundle 进服务器仓库 `refs/bundles/mod02`，GitHub 待补推）。
+- **Core 0.1.220**（manifest `8aca222f…aab5`，计划 `9ff11e79611bed0a4e42e9677197c069` completed/13，核心 SHA `83b59643…5332`）：新增宿主调用 `SecretSeal` / `SecretOpen`（权限 `secrets`，low）。schema 不变（`e3d6a10f…`）。`builtin/` 仍是 0.1.212 的包（moderation 0.1.13）；内置插件只升不降，下次核心发布时把 0.2.0 包放进 `builtin/`。备份 `backups/core-0.1.220`。
+- **moderation 0.2.0**（包 SHA `cc0af21b…8d18`，验签 valid，rollout 207 两节点）：分组绑定的多级审核流程、观察名单、渠道 key 加密保存。授权：新增 `secrets`；`gateway.hook` 字段改为末尾 16 条消息（按新版本申请的范围授予）；`net` 沿用。迁移 0003 已执行；0.1 设置已自动转换为渠道 1（llm，cdn.api.codingplus.ai / claude-sonnet-5，key 可解开）、审核器 1、流程 1（v1，绑定默认分组 0）。模式仍为 off，不审核任何请求。界面 dist 不入库，本机按同一提交构建后在 build.sh 里核对 sha256。
+- 脚本 `stage/0.1.220`、`stage/moderation-0.2.0/{build.sh,rollout.py}`。
+
+2026-10-30 发布（北京时间 12:00）：ccgateway **0.1.115**（源码 `1cc3a01a6`，包 SHA `914e7a93…7997`，验签 valid，授权沿用）：与 0.1.114 相同，只是 app 镜像不再带 2.1.310 作回退，只有 2.1.312 / v38（用户决定）。upload → upgrade → bundled controller,egress → 配对更新（`cli_version` 不变 2.1.312）→ bundled app（`up_to_date: true`）。21 号测试 200。42–49 号已于 03:40 UTC 由用户批量删除，当前未删除的 CC 账号只有 20、21（都已停用）。脚本 `stage/ccgateway-0.1.115`。
 
 2026-10-30 发布（北京时间 08:20–08:33）：ccgateway **0.1.114** + Core 两节点 **0.1.219**（源码都是 `7b26bcc3a`）。
 - **ccgateway 0.1.114**（包 SHA `a46b781d…33ca`，验签 valid，授权沿用，rollout 205）：定制 CLI 换到 Claude Code **2.1.312 / `ccgateway-v38-cc-2-1-312`**（ELF `c66a1f05…9ddb`，Bun 1.4.4，TLS 指纹与官方 identical）；镜像当时还带着 2.1.310 / v36 作回退，0.1.115 起去掉（用户决定）。Worker 按（会话, 线程）在进程内存记住上一次成功应答的 `request-id` 与 turn，我们构造的计费头补出 `cc_prev_req`（只在请求最后一条 assistant 正是那次应答、且无并发时；`cch` 保持占位，用户决定）。顺序：upload → upgrade → bundled controller,egress → `rollout.py switch`（配对原地更新后立即 PUT `cli_version=2.1.312`，窗口 80 秒）→ bundled app（`up_to_date: true`）。配对结果：20/21/42/44/45/46/48/49 updated，47 忙、空闲后补更新，23 not_found，其余 not_running。控制台测试 21、48 Haiku 200（42 号额度满 429）。切换窗口内 47/48 有零星 502/503。
