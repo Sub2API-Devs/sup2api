@@ -4,7 +4,7 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间 21:55–22:00）：Core 两节点 **0.1.220** + moderation **0.2.0**（源码都是 `0a45d13e6`，CONTRACTS §72 P1；本机代理连不上 GitHub，代码经 git bundle 进服务器仓库 `refs/bundles/mod02`，GitHub 待补推）。
+2026-10-30 最新发布（北京时间 21:55–22:00）：Core 两节点 **0.1.220** + moderation **0.2.0**（源码都是 `0a45d13e6`，CONTRACTS §72 P1；发布时本机代理连不上 GitHub，代码经 git bundle 进服务器仓库 `refs/bundles/mod02`，之后已推送 GitHub）。
 - **Core 0.1.220**（manifest `8aca222f…aab5`，计划 `9ff11e79611bed0a4e42e9677197c069` completed/13，核心 SHA `83b59643…5332`）：新增宿主调用 `SecretSeal` / `SecretOpen`（权限 `secrets`，low）。schema 不变（`e3d6a10f…`）。`builtin/` 仍是 0.1.212 的包（moderation 0.1.13）；内置插件只升不降，下次核心发布时把 0.2.0 包放进 `builtin/`。备份 `backups/core-0.1.220`。
 - **moderation 0.2.0**（包 SHA `cc0af21b…8d18`，验签 valid，rollout 207 两节点）：分组绑定的多级审核流程、观察名单、渠道 key 加密保存。授权：新增 `secrets`；`gateway.hook` 字段改为末尾 16 条消息（按新版本申请的范围授予）；`net` 沿用。迁移 0003 已执行；0.1 设置已自动转换为渠道 1（llm，cdn.api.codingplus.ai / claude-sonnet-5，key 可解开）、审核器 1、流程 1（v1，绑定默认分组 0）。模式仍为 off，不审核任何请求。界面 dist 不入库，本机按同一提交构建后在 build.sh 里核对 sha256。
 - 脚本 `stage/0.1.220`、`stage/moderation-0.2.0/{build.sh,rollout.py}`。
