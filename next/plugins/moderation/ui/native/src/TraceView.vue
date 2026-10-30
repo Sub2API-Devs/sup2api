@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
-import { categoryLabel, enumLabel, fetchAuditors, score, useModHost, type Outcome, type Trace } from './host'
+import { useCatalog } from './catalog'
+import { categoryLabel, enumLabel, score, useModHost, type Outcome, type Trace } from './host'
+import { outcomeState, type OutcomeState } from './trace'
 
 // Per-stage trace of a run: one row per auditor call.
 const props = defineProps<{ trace: Trace }>()
 const host = useModHost()
 const t = host.t
-
-// Auditor names, loaded once per page.
-let namesP: Promise<Map<number, string>> | null = null
-const names = ref<Map<number, string>>(new Map())
-onMounted(async () => {
-  namesP ??= fetchAuditors()
-    .then((list) => new Map(list.map((a) => [a.id, a.name])))
-    .catch(() => new Map())
-  names.value = await namesP
-})
+const catalog = useCatalog()
 
 interface Row extends Outcome {
   key: string
@@ -40,11 +33,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'latency_ms', label: t('trace.latency'), align: 'right', nowrap: true }
 ])
 
-function verdict(o: Outcome): { tone: 'danger' | 'success' | 'gray' | 'warning'; key: string } {
-  if (o.err) return { tone: 'warning', key: 'error' }
-  if (o.skipped) return { tone: 'gray', key: 'skipped' }
-  return o.hit ? { tone: 'danger', key: 'hit' } : { tone: 'success', key: 'pass' }
-}
+const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
 </script>
 
 <template>
@@ -54,6 +43,7 @@ function verdict(o: Outcome): { tone: 'danger' | 'success' | 'gray' | 'warning';
       <SBadge v-if="trace.errored" tone="warning">{{ t('trace.errored') }}</SBadge>
       <SBadge v-if="trace.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
       <SBadge v-if="trace.truncated_run" tone="gray">{{ t('trace.truncated') }}</SBadge>
+      <SBadge v-if="trace.input_message_dropped" tone="warning" :title="trace.input_message_dropped">{{ t('trace.inputDropped') }}</SBadge>
       <SHint inline size="xs">{{ t('ms', { n: host.i18n.formatNumber(trace.latency_ms) }) }}</SHint>
     </div>
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
@@ -62,11 +52,11 @@ function verdict(o: Outcome): { tone: 'danger' | 'success' | 'gray' | 'warning';
         <div class="mod-sub">{{ enumLabel('stageResult', row.stageResult) }}</div>
       </template>
       <template #cell-auditor="{ row }">
-        {{ names.get(row.auditor_id) || `#${row.auditor_id}` }}
+        {{ catalog.auditorName(row.auditor_id) }}
         <div v-if="row.rules_version" class="mod-sub">{{ row.rules_version }}</div>
       </template>
       <template #cell-verdict="{ row }">
-        <SBadge :tone="verdict(row).tone">{{ t(`trace.${verdict(row).key}`) }}</SBadge>
+        <SBadge :tone="VERDICT_TONE[outcomeState(row)]">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
         <div v-if="row.err" class="mod-sub">{{ enumLabel('err', row.err) }}<template v-if="row.status"> {{ row.status }}</template></div>
       </template>
       <template #cell-top="{ row }">

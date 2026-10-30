@@ -1,27 +1,46 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
-import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SLink, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type SelectOption, type TableColumn } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
-import CategoryChips from './CategoryChips.vue'
+import ScoreChips from './ScoreChips.vue'
+import StagePath from './StagePath.vue'
 import EventDetail from './EventDetail.vue'
+import FlowRef from './FlowRef.vue'
+import UserRef from './UserRef.vue'
 import VerdictBadge from './VerdictBadge.vue'
-import { canManage, enumLabel, errorMessage, reviewEvents, score, useModHost, type ModEvent, type ReviewStatus } from './host'
+import { useCatalog } from './catalog'
+import { ms, num } from './format'
+import { canManage, enumLabel, errorMessage, reviewEvents, useModHost, type ModEvent, type ReviewStatus } from './host'
+import { resolveUserIds, userQuery } from './users'
 
-// Records: filters + paginated table (useList); a row opens the detail modal,
-// selected rows can be reviewed in bulk.
+// Records (new-api records): filters + paginated table (useList); the user
+// filter takes a username (resolved to ids through the core) or an id. A row
+// opens the detail modal; selected rows can be reviewed in bulk.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
+const catalog = useCatalog()
 
-const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '', user_id: '', request_id: '', q: '' })
+const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '' as number | '', group_id: '' as number | '', user: '', request_id: '', q: '' })
 const form = reactive(emptyForm())
-if (props.preset) form.user_id = String(props.preset.user_id)
+if (props.preset) form.user = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
 const from = ref('')
 const to = ref('')
 const rangeKeys: RangeKey[] = ['all', 'today', '7d', '30d', 'custom']
+
+/** The user filter resolved to user_id / user_ids; userError when a name cannot be searched. */
+const users = ref<{ user_id?: number; user_ids?: string }>(userQuery(props.preset ? [props.preset.user_id] : null))
+const userError = ref('')
+async function resolveUser() {
+  userError.value = ''
+  const v = form.user.trim()
+  const ids = v ? await resolveUserIds(v) : []
+  if (ids === null) userError.value = t('events.userSearchDenied')
+  users.value = userQuery(ids)
+}
 
 function query() {
   return {
@@ -32,8 +51,10 @@ function query() {
     verdict: form.verdict,
     severity: form.severity,
     watch_level: form.watch_level,
-    flow_id: form.flow_id.trim(),
-    user_id: form.user_id.trim(),
+    flow_id: form.flow_id,
+    group_id: form.group_id,
+    user_id: users.value.user_id ?? '',
+    user_ids: users.value.user_ids ?? '',
     request_id: form.request_id.trim(),
     q: form.q.trim(),
     from: from.value,
@@ -51,19 +72,20 @@ function apply(): boolean {
   return true
 }
 
-function search() {
+async function search() {
+  await resolveUser()
   if (!apply()) list.reload()
 }
 
-function reset(userId = '') {
-  Object.assign(form, emptyForm(), { user_id: userId })
+function reset(user = '') {
+  Object.assign(form, emptyForm(), { user })
   range.value = 'all'
   from.value = ''
   to.value = ''
   search()
 }
 
-const withAll = (opts: Array<{ value: string; label: string }>) => [{ value: '', label: t('events.all') }, ...opts]
+const withAll = (opts: SelectOption[]): SelectOption[] => [{ value: '', label: t('events.all') }, ...opts]
 const opts = (group: string, values: string[]) => values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
 const resultOptions = computed(() => withAll([{ value: 'suspicious', label: t('events.suspicious') }, ...opts('result', ['block', 'hit', 'overturned', 'error', 'pass'])]))
 const timingOptions = computed(() => withAll(opts('timing', ['pre', 'post'])))
@@ -72,8 +94,10 @@ const severityOptions = computed(() => withAll(opts('severity', ['high', 'medium
 const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...opts('level', ['observe', 'enforce'])]))
 const aiVerdictOptions = computed(() => withAll(opts('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])))
 const verdictOptions = computed(() => withAll([{ value: 'needs_review', label: t('events.needsReview') }, { value: 'disagree', label: t('events.disagree') }]))
+const flowOptions = computed(() => withAll(catalog.state.flows.map((f) => ({ value: f.id, label: f.name }))))
+const groupOptions = computed(() => withAll(catalog.groupOptions()))
 
-watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, from.value, to.value], apply)
+watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.flow_id, form.group_id, from.value, to.value], apply)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
@@ -84,10 +108,10 @@ defineExpose({ reload: list.reload })
 const columns = computed<TableColumn[]>(() => [
   { key: 'created_at', label: t('events.col.time'), width: '10.5rem', nowrap: true },
   { key: 'result', label: t('events.col.result'), nowrap: true },
-  { key: 'hit_categories', label: t('events.col.categories') },
-  { key: 'highest_score', label: t('events.col.score'), align: 'right', nowrap: true },
+  { key: 'scores', label: t('events.col.scores') },
+  { key: 'stages', label: t('events.col.stages'), nowrap: true },
   { key: 'verdict', label: t('events.col.verdict'), nowrap: true },
-  { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '22rem' },
+  { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '20rem' },
   { key: 'user_id', label: t('events.col.user') },
   { key: 'model', label: t('events.col.model'), ellipsis: '10rem' },
   { key: 'flow', label: t('events.col.flow'), nowrap: true },
@@ -111,9 +135,8 @@ function onReviewed(ids: number[], status: ReviewStatus) {
   for (const r of list.items.value) if (ids.includes(r.id)) r.review_status = status
 }
 
-function filterUser(id: number | null | undefined) {
-  if (!id) return
-  form.user_id = String(id)
+function filterUser(id: number) {
+  form.user = String(id)
   search()
 }
 
@@ -163,11 +186,15 @@ async function review(status: ReviewStatus) {
         <SField class="mod-filter" :label="t('events.watch')">
           <SSelect v-model="form.watch_level" :options="watchOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('events.userId')">
-          <SInput v-model="form.user_id" inputmode="numeric" />
+        <SField class="mod-filter" :label="t('events.user')" :error="userError">
+          <SInput v-model="form.user" type="search" :placeholder="t('events.userPlaceholder')" />
         </SField>
-        <SField class="mod-filter" :label="t('events.flowId')">
-          <SInput v-model="form.flow_id" inputmode="numeric" />
+        <SField class="mod-filter" :label="t('events.col.flow')">
+          <SSelect v-model="form.flow_id" :options="flowOptions" searchable />
+        </SField>
+        <SField class="mod-filter" :label="t('stats.group')">
+          <SSelect v-if="groupOptions.length > 1" v-model="form.group_id" :options="groupOptions" searchable />
+          <SInput v-else v-model="form.group_id" inputmode="numeric" :placeholder="t('events.groupId')" />
         </SField>
         <SField class="mod-filter" :label="t('events.requestId')">
           <SInput v-model="form.request_id" />
@@ -209,26 +236,18 @@ async function review(status: ReviewStatus) {
           <ResultBadge :result="row.result" />
           <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
         </template>
-        <template #cell-hit_categories="{ row }"><CategoryChips :categories="row.hit_categories" /></template>
-        <template #cell-highest_score="{ row }">
-          <span class="mod-num">{{ row.highest_category ? score(row.highest_score) : '—' }}</span>
-          <div v-if="row.severity" class="mod-sub">{{ enumLabel('severity', row.severity) }}</div>
-        </template>
+        <template #cell-scores="{ row }"><ScoreChips :trace="row.trace" /></template>
+        <template #cell-stages="{ row }"><StagePath :trace="row.trace" /></template>
         <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>
         <template #cell-text_excerpt="{ row }">
           <span :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
           <SBadge v-if="row.image_count" size="xs" tone="gray" class="mod-ml">{{ t('events.images', { n: row.image_count }) }}</SBadge>
         </template>
-        <template #cell-user_id="{ row }">
-          <SLink v-if="row.user_id" as="button" class="mod-num" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)">#{{ row.user_id }}</SLink>
-          <SHint v-else inline>—</SHint>
-        </template>
-        <template #cell-flow="{ row }">
-          <span v-if="row.flow_id" class="mod-num">#{{ row.flow_id }} v{{ row.flow_version }}</span>
-          <SHint v-else inline>{{ t('events.legacy') }}</SHint>
-        </template>
+        <template #cell-user_id="{ row }"><UserRef :user-id="row.user_id" link :title="t('events.filterUser')" @click="filterUser" /></template>
+        <template #cell-flow="{ row }"><FlowRef :flow-id="row.flow_id" :version="row.flow_version" /></template>
         <template #cell-latency_ms="{ row }">
-          <span class="mod-num">{{ t('ms', { n: host.i18n.formatNumber(row.latency_ms) }) }}</span>
+          <span class="mod-num">{{ ms(row.latency_ms) }}</span>
+          <div v-if="row.queue_ms" class="mod-sub mod-num">{{ t('detail.queued', { n: num(row.queue_ms) }) }}</div>
         </template>
       </STable>
       <div class="mod-pager">
@@ -236,6 +255,6 @@ async function review(status: ReviewStatus) {
       </div>
     </SCard>
 
-    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" />
+    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" @show-user="filterUser" />
   </div>
 </template>

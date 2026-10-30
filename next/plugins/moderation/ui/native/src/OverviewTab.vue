@@ -1,190 +1,92 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { SAlert, SButton, SCard, SChart, SDescriptions, SEmpty, SGrid, SLink, SProgress, SStatCard, STimeRange, type DescItem, type RangeKey } from '@sub2api/ui'
-import RankList from './RankList.vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { SAlert, SGrid, SSpinner, SStatCard } from '@sub2api/ui'
+import StatusLine from './overview/StatusLine.vue'
+import AttentionUsers from './overview/AttentionUsers.vue'
+import AiReviewCard from './overview/AiReviewCard.vue'
+import TodayCostCard from './overview/TodayCostCard.vue'
+import PerformanceCard from './overview/PerformanceCard.vue'
+import CategoriesCard from './overview/CategoriesCard.vue'
+import FunnelCard from './overview/FunnelCard.vue'
+import TrendCard from './overview/TrendCard.vue'
+import HealthCard from './overview/HealthCard.vue'
+import QueueCard from './overview/QueueCard.vue'
 import CostCard from './CostCard.vue'
-import { canManage, categoryLabel, errorMessage, fetchOverview, useModHost, type Overview, type Runtime } from './host'
+import { provideOverviewTick } from './overview/tick'
+import { useCatalog } from './catalog'
+import { num } from './format'
+import { fetchStatus, useModHost, type Status } from './host'
+import { useAsync } from './useAsync'
 
+// Overview (new-api content-moderation overview): running state, today's
+// KPIs, the users most in need of attention, AI review, cost, performance,
+// categories, funnel, trend, health and queues. GET /status feeds the page;
+// cards with their own query reload on the shared tick. Refreshes every
+// minute while the tab is shown.
+const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{
-  (e: 'runtime', r: Runtime): void
-  (e: 'show-user', userId: number): void
+  (e: 'status', s: Status): void
+  (e: 'open-watch', userId: number): void
   (e: 'go-tab', tab: string): void
   (e: 'go-settings'): void
 }>()
-const host = useModHost()
-const t = host.t
-const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
-const manage = canManage()
-
-const rangeKeys: RangeKey[] = ['24h', '7d', '30d']
-const range = ref<RangeKey>('24h')
-const data = ref<Overview | null>(null)
-const loading = ref(false)
-const error = ref('')
-
-const costCard = ref<{ reload: () => unknown } | null>(null)
+const t = useModHost().t
+const catalog = useCatalog()
+const status = useAsync(fetchStatus, () => t('overview.loadFailed'))
+const bump = provideOverviewTick()
 
 async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    data.value = await fetchOverview(range.value)
-    if (data.value?.runtime) emit('runtime', data.value.runtime)
-  } catch (e) {
-    error.value = errorMessage(e, t('overview.loadFailed'))
-  } finally {
-    loading.value = false
-  }
+  bump()
+  await Promise.all([status.reload(), catalog.refresh()])
 }
+defineExpose({ reload })
+onMounted(status.reload)
+watch(status.data, (s) => s && emit('status', s))
 
-watch(range, reload)
-onMounted(reload)
-// The header refresh reloads both; a range change reaches the cost card through its prop.
-defineExpose({ reload: () => Promise.all([reload(), costCard.value?.reload()]) })
+const REFRESH_MS = 60_000
+const timer = setInterval(() => props.active && document.visibilityState === 'visible' && reload(), REFRESH_MS)
+onBeforeUnmount(() => clearInterval(timer))
 
-const totals = computed(() => data.value?.totals)
-const runtime = computed(() => data.value?.runtime)
-const first = computed(() => loading.value && !data.value)
-
-/** Setup hint above the cards: no flow bound, or moderation off. */
-const notice = computed(() => {
-  const r = runtime.value
-  if (r && !r.configured) return { tone: 'warning' as const, text: t('overview.notConfigured'), action: 'flows' }
-  if (r?.mode === 'off') return { tone: 'info' as const, text: t('overview.offHint'), action: 'settings' }
-  return null
-})
-
-function act(action: string) {
-  if (action === 'settings') emit('go-settings')
-  else emit('go-tab', action)
-}
-
-const cards = computed(() => [
-  { key: 'total', icon: 'eyeglass', tone: 'primary' as const, value: totals.value?.total },
-  { key: 'hit', icon: 'warning', tone: 'warning' as const, value: totals.value?.hit },
-  { key: 'block', icon: 'shield', tone: 'danger' as const, value: totals.value?.block },
-  { key: 'overturned', icon: 'refresh', tone: 'info' as const, value: totals.value?.overturned },
-  { key: 'error', icon: 'x', tone: 'warning' as const, value: totals.value?.error },
-  { key: 'pass', icon: 'check', tone: 'success' as const, value: totals.value?.pass }
-])
-
-// Buckets are UTC hour/day starts. Hours are shown in local time; days keep
-// their UTC date so a bucket is never split across two labels.
-function bucketLabel(ts: string) {
-  const d = new Date(ts)
-  if (isNaN(d.getTime())) return ts
-  const p = (x: number) => String(x).padStart(2, '0')
-  if (range.value === '24h') return `${p(d.getHours())}:00`
-  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
-}
-
-// Series colours (ECharts takes colours, not tones).
-const colors = { pass: '#22c55e', hit: '#f59e0b', block: '#ef4444', overturned: '#3b82f6', error: '#94a3b8' }
-const seriesKeys = ['pass', 'hit', 'block', 'overturned', 'error'] as const
-
-const chart = computed(() => {
-  const trend = data.value?.trend || []
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: seriesKeys.map((k) => t('result.' + k)), top: 0 },
-    grid: { left: 48, right: 16, top: 36, bottom: 32 },
-    xAxis: { type: 'category', data: trend.map((p) => bucketLabel(p.bucket)) },
-    yAxis: { type: 'value', minInterval: 1 },
-    series: seriesKeys.map((k) => ({
-      name: t('result.' + k),
-      type: 'bar',
-      stack: 'result',
-      barMaxWidth: 28,
-      color: colors[k],
-      emphasis: { focus: 'series' },
-      data: trend.map((p) => p[k] || 0)
-    }))
-  }
-})
-
-const runtimeRows = computed<DescItem[]>(() => {
-  const r = runtime.value
-  if (!r) return []
+const kpis = computed(() => {
+  const s = status.data.value
+  if (!s) return []
   return [
-    { key: 'mode', label: t('runtime.mode'), value: t(`mode.${r.mode || 'off'}`) },
-    { key: 'flows', label: t('runtime.flows'), value: `${n(r.flows)} / ${n(r.auditors)}` },
-    { key: 'queue', label: t('runtime.queue'), value: `${n(r.queue_len)} / ${n(r.queue_cap)}` },
-    { key: 'dropped', label: t('runtime.dropped'), value: n(r.dropped) },
-    { key: 'inflight', label: t('runtime.inflight'), value: n(r.inflight) },
-    { key: 'calls', label: t('runtime.calls'), value: n(r.calls) },
-    { key: 'errors', label: t('runtime.errors'), value: n(r.errors) },
-    { key: 'cacheHits', label: t('runtime.cacheHits'), value: `${n(r.cache_hits)} (${n(r.cache_entries)})` },
-    { key: 'avgLatency', label: t('runtime.avgLatency'), value: t('ms', { n: host.i18n.formatNumber(Math.round(r.avg_latency_ms || 0)) }) },
-    { key: 'watched', label: t('runtime.watchedUsers'), value: n(r.watched_users) },
-    { key: 'blockedUsers', label: t('runtime.blockedUsers'), value: n(r.blocked_users) },
-    ...(r.analysis
-      ? [
-          {
-            key: 'analysis',
-            label: t('runtime.analysis'),
-            value: r.analysis.channel_configured ? t('runtime.analysisValue', { pending: n(r.analysis.pending), running: n(r.analysis.running) }) : t('runtime.analysisOff')
-          }
-        ]
-      : [])
+    { key: 'audited', icon: 'eyeglass', tone: 'primary' as const, value: s.today.audited, sub: t('kpi.auditedSub') },
+    { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: t('kpi.suspiciousSub') },
+    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(s.watch.watching_with_new) }) },
+    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: t('kpi.blockingSub') },
+    { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })
+const goTab = (tab: string) => emit('go-tab', tab)
 </script>
 
 <template>
   <div>
-    <div class="mod-toolbar">
-      <STimeRange v-model:range="range" from="" to="" :keys="rangeKeys" variant="segmented" size="sm" :label="false" />
-    </div>
+    <SAlert v-if="status.error.value" tone="danger" class="mod-block">{{ status.error.value }}</SAlert>
+    <SSpinner v-if="!status.data.value && status.loading.value" block />
+    <template v-if="status.data.value">
+      <StatusLine :status="status.data.value" @go-tab="goTab" @go-settings="emit('go-settings')" />
+      <SGrid template="repeat(auto-fit, minmax(170px, 1fr))">
+        <SStatCard v-for="k in kpis" :key="k.key" :label="t(`kpi.${k.key}`)" :value="num(k.value)" :sub="k.sub" :icon="k.icon" :tone="k.tone" />
+      </SGrid>
+    </template>
 
-    <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
-
-    <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
-      {{ notice.text }}
-      <template v-if="manage" #actions>
-        <SButton :variant="notice.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="act(notice.action)">
-          {{ notice.action === 'flows' ? t('tabs.flows') : t('settings') }}
-        </SButton>
-      </template>
-    </SAlert>
-
-    <SGrid template="repeat(auto-fit, minmax(170px, 1fr))">
-      <SStatCard v-for="c in cards" :key="c.key" :label="t(`overview.${c.key}`)" :value="n(c.value)" :icon="c.icon" :tone="c.tone" :loading="first" />
+    <SGrid template="repeat(auto-fit, minmax(360px, 1fr))" class="mod-section">
+      <AttentionUsers @open-watch="emit('open-watch', $event)" @go-tab="goTab" />
+      <AiReviewCard :review="status.data.value?.ai_review" :today="status.data.value?.today" @go-tab="goTab" />
     </SGrid>
-
-    <SCard :title="t('overview.trend')" :subtitle="range === '24h' ? undefined : t('overview.trendHint')" class="mod-section">
-      <SChart :option="chart" :loading="loading" height="280px" />
-    </SCard>
-
-    <CostCard ref="costCard" :range="range" class="mod-section" />
-
-    <SGrid template="repeat(auto-fit, minmax(300px, 1fr))" class="mod-section">
-      <SCard :title="t('overview.topCategories')">
-        <RankList :items="data?.top_categories" :item-key="(c) => c.category" tone="warning" :empty-text="t('overview.noCategories')" empty-icon="chart">
-          <template #name="{ item: c }">
-            <span class="mod-rank-name" :title="c.category">
-              {{ categoryLabel(c.category) }}<code v-if="categoryLabel(c.category) !== c.category" class="mod-code">{{ c.category }}</code>
-            </span>
-          </template>
-          <template #count="{ item: c }">{{ n(c.count) }}</template>
-        </RankList>
-      </SCard>
-
-      <SCard :title="t('overview.topUsers')" :subtitle="t('overview.topUsersHint')">
-        <RankList :items="data?.top_users" :item-key="(u) => u.user_id" tone="danger" :empty-text="t('overview.noUsers')" empty-icon="user">
-          <template #name="{ item: u }">
-            <SLink as="button" class="mod-rank-name mod-rank-link" @click="emit('show-user', u.user_id)">{{ t('overview.user', { id: u.user_id }) }}</SLink>
-          </template>
-          <template #count="{ item: u }">{{ t('overview.times', { n: n(u.count) }) }}</template>
-        </RankList>
-      </SCard>
-
-      <SCard :title="t('overview.runtime')">
-        <SEmpty v-if="!runtime" icon="cpu" />
-        <template v-else>
-          <SDescriptions :items="runtimeRows" label-width="9rem" dense class="mod-num" />
-          <SProgress :value="runtime.queue_len" :max="runtime.queue_cap || 1" :label="t('runtime.queue')" tone="info" show-value class="mod-queue" />
-        </template>
-      </SCard>
+    <TodayCostCard v-if="status.data.value" :costs="status.data.value.costs" class="mod-section" />
+    <PerformanceCard class="mod-section" />
+    <SGrid template="repeat(auto-fit, minmax(360px, 1fr))" class="mod-section">
+      <CategoriesCard />
+      <FunnelCard :funnels="status.data.value?.funnels || []" @go-tab="goTab" />
     </SGrid>
+    <TrendCard :alert-percent="status.data.value?.error_rate_alert_percent ?? 5" class="mod-section" />
+    <template v-if="status.data.value">
+      <HealthCard :status="status.data.value" class="mod-section" @go-tab="goTab" />
+      <QueueCard :queue="status.data.value.queue" :runtime="status.data.value.runtime" class="mod-section" />
+    </template>
+    <CostCard class="mod-section" />
   </div>
 </template>

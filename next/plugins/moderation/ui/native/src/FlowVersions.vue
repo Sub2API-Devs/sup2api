@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDrawer, SEmpty, SHint, SSpinner } from '@sub2api/ui'
+import FlowStages from './FlowStages.vue'
+import { specText } from './format'
 import {
   canManage,
-  enumLabel,
   errorMessage,
   fetchFlowVersion,
   fetchFlowVersions,
@@ -103,13 +104,6 @@ async function rollback(v: number) {
   }
 }
 
-function filterText(d: FlowVersionDetail): string {
-  const s = d.spec
-  if (!s) return ''
-  const mf = s.model_filter
-  const models = mf?.type && mf.type !== 'all' ? `${enumLabel('modelFilter', mf.type)}: ${(mf.models || []).join(', ')}` : enumLabel('modelFilter', 'all')
-  return `${models} · ${t('flows.sampleRate')} ${s.sample_rate} · ${t('flows.totalTimeout')} ${s.total_timeout_ms}`
-}
 </script>
 
 <template>
@@ -129,16 +123,8 @@ function filterText(d: FlowVersionDetail): string {
           </span>
         </div>
         <div v-if="expanded === it.version && details[it.version]" class="mod-version-body">
-          <div class="mod-sub">{{ filterText(details[it.version]) }}</div>
-          <div v-for="s in details[it.version].stages || []" :key="s.stage" class="mod-version-stage">
-            <strong>{{ t('trace.stageN', { n: s.stage }) }}</strong>
-            <span class="mod-sub">{{ enumLabel('combine', s.combine) }}<template v-if="s.combine === 'at_least'"> {{ s.n }}</template></span>
-            <span v-for="a in s.auditors" :key="a.auditor_id" class="mod-version-auditor">
-              <SBadge :tone="a.deleted ? 'danger' : 'gray'">
-                {{ a.name || `#${a.auditor_id}` }}<template v-if="a.deleted"> · {{ t('flows.deletedAuditor') }}</template>
-              </SBadge>
-            </span>
-          </div>
+          <div class="mod-sub">{{ specText(details[it.version].spec) }}</div>
+          <FlowStages :stages="details[it.version].stages || []" />
         </div>
       </li>
     </ol>

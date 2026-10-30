@@ -6,11 +6,14 @@ import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import TraceView from './TraceView.vue'
-import { enumLabel, errorMessage, fetchFlowVersions, severityTone, simulateFlow, useModHost, type Flow, type SimulateBody, type TestResult } from './host'
+import { enumLabel, errorMessage, fetchFlowVersions, severityTone, simulateFlow, useModHost, type Flow, type SimUserState, type SimulateBody, type TestResult } from './host'
 
 // Flow simulation (§72.13.5): runs the draft, the published version or an
 // older version with the current auditors on a text or a stored record.
-// Nothing is recorded, counted or cached; the cost goes to source "simulate".
+// The user state picks the timing as a live request would run: unmarked and
+// observe-level users after the upstream call, enforce-level users before it
+// (a hit is refused). Nothing is recorded, counted or cached; the cost goes
+// to source "simulate".
 const props = defineProps<{ open: boolean; flow: Flow | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const host = useModHost()
@@ -19,6 +22,7 @@ const t = host.t
 const source = ref<SimulateBody['source']>('draft')
 const version = ref<number>(0)
 const versions = ref<number[]>([])
+const userState = ref<SimUserState>('none')
 const input = ref<'text' | 'event'>('text')
 const text = ref('')
 const images = ref('')
@@ -52,6 +56,7 @@ const sourceOptions = computed(() => [
   { value: 'version', label: t('flows.simSourceVersion'), disabled: !versions.value.length }
 ])
 const versionOptions = computed(() => versions.value.map((v) => ({ value: v, label: `v${v}` })))
+const userStateOptions = computed(() => (['none', 'observe', 'enforce'] as const).map((v) => ({ value: v, label: t(`flows.simUser.${v}`) })))
 const inputOptions = computed(() => [
   { value: 'text', label: t('flows.simInputText') },
   { value: 'event', label: t('flows.simInputEvent') }
@@ -60,7 +65,7 @@ const inputOptions = computed(() => [
 async function run() {
   const f = props.flow
   if (!f) return
-  const body: SimulateBody = { source: source.value }
+  const body: SimulateBody = { source: source.value, user_state: userState.value }
   if (source.value === 'version') body.version = Number(version.value)
   if (input.value === 'event') {
     const id = Number(eventId.value.trim())
@@ -102,6 +107,9 @@ async function run() {
         <SField v-if="source === 'version'" :label="t('flows.versionNo')" size="sm">
           <SSelect v-model="version" :options="versionOptions" size="sm" />
         </SField>
+        <SField :label="t('flows.simUserState')" :hint="t(`flows.simUserHint.${userState}`)" size="sm">
+          <SSegmented v-model="userState" size="sm" :options="userStateOptions" />
+        </SField>
         <SField :label="t('flows.simInput')" size="sm">
           <SSegmented v-model="input" size="sm" :options="inputOptions" />
         </SField>
@@ -120,6 +128,8 @@ async function run() {
       <template v-if="result">
         <div class="mod-verdict-head">
           <ResultBadge :result="result.result" />
+          <SBadge v-if="result.timing" tone="gray">{{ enumLabel('timing', result.timing) }}</SBadge>
+          <SBadge v-if="result.refused" tone="danger">{{ t('flows.simRefused') }}</SBadge>
           <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
           <SHint inline size="xs">#{{ result.flow_id }} {{ result.flow_version ? `v${result.flow_version}` : t('flows.simSourceDraft') }}</SHint>
           <CostBadge :cost="result.cost" class="mod-ml-auto" />

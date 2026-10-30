@@ -6,6 +6,13 @@ import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import AnalysisModal from './AnalysisModal.vue'
+import FlowRef from './FlowRef.vue'
+import FlowSnapshotCard from './FlowSnapshotCard.vue'
+import InputMessage from './InputMessage.vue'
+import UserRef from './UserRef.vue'
+import UserStateSection from './UserStateSection.vue'
+import { useCatalog } from './catalog'
+import { dt, idText, ms, num } from './format'
 import {
   aiVerdictTone,
   canManage,
@@ -14,34 +21,35 @@ import {
   enumLabel,
   errorMessage,
   fetchEvent,
-  fetchEventInput,
   modeTone,
   reviewEvents,
   severityTone,
   useModHost,
   type ModEventDetail,
-  type ReviewStatus
+  type ReviewStatus,
+  type Watch
 } from './host'
 
-// Record detail (GET /events/:id): result, per-stage trace, text, the raw
-// user messages on demand; manage users review or delete it.
+// Record detail (GET /events/:id, new-api record-detail-drawer): result, the
+// user's state with inline watch actions, AI review, per-stage trace, the
+// flow version it ran with, other records of the same request, text and the
+// structured input message; manage users review or delete it.
 const props = defineProps<{ open: boolean; eventId: number | null }>()
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
   (e: 'deleted', id: number): void
   (e: 'reviewed', ids: number[], status: ReviewStatus): void
+  (e: 'show-user', userId: number): void
 }>()
 const host = useModHost()
 const t = host.t
-const n = (v: number | undefined | null) => (v === undefined || v === null ? '—' : host.i18n.formatNumber(v))
+const catalog = useCatalog()
 
 const ev = ref<ModEventDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 const busy = ref(false)
 const manage = computed(() => canManage())
-const input = ref<string | null>(null)
-const inputLoading = ref(false)
 
 // The shown record: the prop, or a record opened from the AI analysis.
 const currentId = ref<number | null>(props.eventId)
@@ -56,7 +64,6 @@ watch(
     if (!open || id === null) return
     if (ev.value?.id === id) return
     ev.value = null
-    input.value = null
     loading.value = true
     error.value = ''
     try {
@@ -73,20 +80,6 @@ watch(
 
 function close() {
   emit('update:open', false)
-}
-
-async function loadInput() {
-  const e = ev.value
-  if (!e) return
-  inputLoading.value = true
-  try {
-    const r = await fetchEventInput(e.id)
-    input.value = r.messages ? JSON.stringify(r.messages, null, 2) : ''
-  } catch (err) {
-    host.toast(errorMessage(err, t('actionFailed')), 'error')
-  } finally {
-    inputLoading.value = false
-  }
 }
 
 async function review(status: ReviewStatus) {
@@ -124,7 +117,13 @@ async function remove() {
   }
 }
 
-const idOrDash = (v: number | null | undefined) => (v ? `#${v}` : '—')
+function onWatchChanged(w: Watch | null) {
+  if (ev.value?.user_state) ev.value.user_state.watch = w
+}
+function showUser(id: number) {
+  close()
+  emit('show-user', id)
+}
 
 // AI verdict of the record (§72.13.4) and the analysis that wrote it.
 const hasAI = computed(() => !!ev.value?.ai_verdict)
@@ -136,6 +135,7 @@ const aiFields = computed<DescItem[]>(() => {
   if (e.ai_category) items.push({ key: 'category', label: t('detail.f.aiCategory'), value: categoryLabel(e.ai_category) })
   if (e.ai_evidence) items.push({ key: 'evidence', label: t('detail.f.aiEvidence'), full: true })
   if (e.ai_reason) items.push({ key: 'reason', label: t('detail.f.aiReason'), value: e.ai_reason, full: true })
+  if (e.ai_analyzed_at) items.push({ key: 'analyzed', label: t('detail.f.aiAnalyzedAt'), value: dt(e.ai_analyzed_at) })
   return items
 })
 const analysisOpen = ref(false)
@@ -151,17 +151,17 @@ const fields = computed<DescItem[]>(() => {
     { key: 'id', label: t('detail.f.id'), value: String(e.id) },
     { key: 'request', label: t('detail.f.request'), value: e.request_id || '', mono: true, copyable: true },
     { key: 'categories', label: t('detail.f.categories'), full: true },
-    { key: 'user', label: t('detail.f.user'), value: idOrDash(e.user_id) },
-    { key: 'key', label: t('detail.f.key'), value: idOrDash(e.api_key_id) },
-    { key: 'group', label: t('detail.f.group'), value: idOrDash(e.group_id) },
-    { key: 'flow', label: t('detail.f.flow'), value: e.flow_id ? `#${e.flow_id} v${e.flow_version}` : t('events.legacy') },
+    { key: 'user', label: t('detail.f.user') },
+    { key: 'key', label: t('detail.f.key'), value: idText(e.api_key_id) },
+    { key: 'group', label: t('detail.f.group'), value: catalog.groupName(e.group_id) },
+    { key: 'flow', label: t('detail.f.flow') },
     { key: 'model', label: t('detail.f.model'), value: e.model || '' },
     { key: 'protocol', label: t('detail.f.protocol'), value: e.protocol || '' },
-    { key: 'latency', label: t('detail.f.latency'), value: t('ms', { n: n(e.latency_ms) }) + (e.queue_ms ? ` (${t('detail.queued', { n: n(e.queue_ms) })})` : '') },
+    { key: 'latency', label: t('detail.f.latency'), value: ms(e.latency_ms) + (e.queue_ms ? ` (${t('detail.queued', { n: num(e.queue_ms) })})` : '') },
     { key: 'counted', label: t('detail.f.counted'), value: e.counted ? t('yes') : t('no') },
-    { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? host.i18n.formatDateTime(e.keep_until) : '' }
+    { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? dt(e.keep_until) : '' }
   ]
-  if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${host.i18n.formatDateTime(e.reviewed_at)} ${idOrDash(e.reviewed_by)}` })
+  if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${dt(e.reviewed_at)} ${idText(e.reviewed_by)}` })
   if (e.llm_model) items.push({ key: 'llm', label: t('detail.f.llmModel'), value: e.llm_model })
   return items
 })
@@ -178,11 +178,13 @@ const fields = computed<DescItem[]>(() => {
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
         <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
         <SBadge v-if="ev.severity" :tone="severityTone(ev.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', ev.severity) }}</SBadge>
-        <SHint inline size="xs" class="mod-detail-time">{{ host.i18n.formatDateTime(ev.created_at) }}</SHint>
+        <SHint inline size="xs" class="mod-detail-time">{{ dt(ev.created_at) }}</SHint>
       </div>
 
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
+
+      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" @watch-changed="onWatchChanged" @show-user="showUser" />
 
       <div v-if="hasAI">
         <SSectionTitle tag="p">
@@ -203,10 +205,28 @@ const fields = computed<DescItem[]>(() => {
         <TraceView :trace="ev.trace" />
       </div>
 
+      <FlowSnapshotCard v-if="ev.flow_snapshot" :snapshot="ev.flow_snapshot" :name="ev.flow_name" :current="ev.flow_current_version" />
+
+      <div v-if="ev.related?.length">
+        <SSectionTitle tag="p">{{ t('detail.related') }}</SSectionTitle>
+        <ul class="mod-related">
+          <li v-for="r in ev.related" :key="r.id">
+            <button type="button" class="mod-timeline-item" @click="currentId = r.id">
+              <span class="mod-history-head">
+                <ResultBadge :result="r.result" />
+                <SBadge v-if="r.timing" size="xs">{{ enumLabel('timing', r.timing) }}</SBadge>
+                <FlowRef :flow-id="r.flow_id" :version="r.flow_version" />
+                <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </div>
+
       <div>
         <SSectionTitle tag="p">
           {{ t('detail.text') }}
-          <SHint v-if="ev.text_chars" inline size="xs" class="mod-chars">{{ t('detail.chars', { n: host.i18n.formatNumber(ev.text_chars) }) }}</SHint>
+          <SHint v-if="ev.text_chars" inline size="xs" class="mod-chars">{{ t('detail.chars', { n: num(ev.text_chars) }) }}</SHint>
           <SHint v-if="ev.image_count" inline size="xs" class="mod-chars">{{ t('events.images', { n: ev.image_count }) }}</SHint>
           <template #actions>
             <SCopyButton v-if="ev.text" :text="ev.text" />
@@ -216,20 +236,12 @@ const fields = computed<DescItem[]>(() => {
         <SHint v-else size="xs">{{ t('detail.textNotStored') }}</SHint>
       </div>
 
-      <div v-if="ev.input_message_size">
-        <SSectionTitle tag="p">
-          {{ t('detail.input') }}
-          <SHint inline size="xs" class="mod-chars">{{ t('detail.bytes', { n: host.i18n.formatNumber(ev.input_message_size) }) }}</SHint>
-          <template #actions>
-            <SButton v-if="input === null" size="sm" :loading="inputLoading" @click="loadInput">{{ t('detail.loadInput') }}</SButton>
-            <SCopyButton v-else-if="input" :text="input" />
-          </template>
-        </SSectionTitle>
-        <SCode v-if="input" :text="input" class="mod-text-block" />
-      </div>
+      <InputMessage v-if="ev.input_message_size" :event-id="ev.id" :size="ev.input_message_size" :input-text="ev.input_text" />
 
       <SDescriptions :items="fields" :columns="2" dense>
         <template #item-categories><CategoryChips :categories="ev.hit_categories" wrap /></template>
+        <template #item-user><UserRef :user-id="ev.user_id" /></template>
+        <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
       </SDescriptions>
     </div>
     <template #footer>

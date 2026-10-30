@@ -2,10 +2,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SModal, SSelect, SSwitch, STable, type TableColumn } from '@sub2api/ui'
+import EnabledBadge from './EnabledBadge.vue'
+import RateCell from './RateCell.vue'
+import { num } from './format'
 import { callCostText, canManage, deleteChannel, enumLabel, errorMessage, fetchChannels, money, saveChannel, testChannel, useModHost, type Channel, type ChannelType, type Protocol } from './host'
 
-// Channels (CONTRACTS §72.6): the upstreams auditors call. Keys are sealed
-// with the host key and never shown again; only the last 4 characters.
+// Channels (CONTRACTS §72.6, new-api channels): the upstreams auditors call,
+// with the auditors using each one, last-hour health and today's cost. Keys
+// and proxies are sealed with the host key; only the key's last 4 characters
+// and the proxy without its password are shown.
+defineProps<{ alertPercent: number }>()
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
@@ -34,13 +40,23 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'type', label: t('channels.col.type'), nowrap: true },
     { key: 'base_url', label: t('channels.col.baseUrl'), ellipsis: '13rem' },
     { key: 'model', label: t('channels.col.model'), ellipsis: '10rem' },
+    { key: 'used_by', label: t('channels.col.usedBy') },
+    { key: 'hour', label: t('channels.col.hour'), align: 'right', nowrap: true },
+    { key: 'today', label: t('channels.col.today'), align: 'right', nowrap: true },
     { key: 'price', label: t('channels.col.price') },
-    { key: 'cost_30d', label: t('channels.col.cost30d'), align: 'right', nowrap: true },
     { key: 'enabled', label: t('channels.col.enabled'), nowrap: true }
   ]
   if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
   return c
 })
+
+/** Today's cost by source as "审核 $0.01 · AI 分析 $0.02" (sources with calls only). */
+function todaySources(c: Channel): string {
+  return Object.entries(c.stats?.cost_today_sources || {})
+    .filter(([, s]) => s.calls > 0)
+    .map(([k, s]) => `${enumLabel('costSource', k)} ${money(s.cost)}`)
+    .join(' · ')
+}
 
 const typeOptions = computed(() => (['openai_moderation', 'typesafe', 'llm'] as ChannelType[]).map((v) => ({ value: v, label: t(`channelType.${v}`) })))
 const protocols: Protocol[] = ['openai_chat', 'openai_responses', 'anthropic']
@@ -69,7 +85,8 @@ const form = reactive({
   model: '',
   billing_model: '',
   timeout_ms: 3000 as number | null,
-  enabled: true
+  enabled: true,
+  proxy: ''
 })
 const formErr = reactive<Record<string, string>>({})
 const saving = ref(false)
@@ -87,9 +104,10 @@ function openEdit(c: Channel | null) {
       model: c.model,
       billing_model: c.billing_model || '',
       timeout_ms: c.timeout_ms,
-      enabled: c.enabled
+      enabled: c.enabled,
+      proxy: c.proxy || ''
     })
-  else Object.assign(form, { type: 'openai_moderation', protocol: 'openai_chat', name: '', base_url: '', api_key: '', model: '', billing_model: '', timeout_ms: null, enabled: true })
+  else Object.assign(form, { type: 'openai_moderation', protocol: 'openai_chat', name: '', base_url: '', api_key: '', model: '', billing_model: '', timeout_ms: null, enabled: true, proxy: '' })
   editOpen.value = true
 }
 
@@ -97,17 +115,10 @@ async function save() {
   for (const k of Object.keys(formErr)) delete formErr[k]
   saving.value = true
   try {
-    const body: Record<string, unknown> = {
-      type: form.type,
-      name: form.name,
-      base_url: form.base_url,
-      model: form.model,
-      billing_model: form.billing_model.trim(),
-      timeout_ms: form.timeout_ms ? Number(form.timeout_ms) : 0,
-      enabled: form.enabled
-    }
-    if (form.type === 'llm') body.protocol = form.protocol
+    const body = channelBody({ ...form, timeout_ms: form.timeout_ms ? Number(form.timeout_ms) : 0, billing_model: form.billing_model.trim() })
     if (form.api_key.trim()) body.api_key = form.api_key.trim()
+    // proxy: sent only when changed ('' removes it); the shown value has its password redacted.
+    if (form.proxy.trim() !== (editing.value?.proxy || '')) body.proxy = form.proxy.trim()
     await saveChannel(editing.value?.id ?? null, body)
     host.toast(t('saved'), 'success')
     editOpen.value = false
@@ -121,6 +132,38 @@ async function save() {
   }
 }
 
+/** PUT / POST body of a channel; the key and proxy are kept unless set by the caller. */
+function channelBody(c: Pick<Channel, 'type' | 'protocol' | 'name' | 'base_url' | 'model' | 'timeout_ms' | 'enabled'> & { billing_model?: string }): Record<string, unknown> {
+  const body: Record<string, unknown> = { type: c.type, name: c.name, base_url: c.base_url, model: c.model, billing_model: c.billing_model || '', timeout_ms: c.timeout_ms, enabled: c.enabled }
+  if (c.type === 'llm') body.protocol = c.protocol
+  return body
+}
+
+// Inline enable / disable (new-api channel-row-actions), confirmed first.
+const toggling = ref<number | null>(null)
+async function setEnabled(c: Channel, enabled: boolean) {
+  const ok = await host.confirm({ message: t(enabled ? 'channels.enableConfirm' : 'channels.disableConfirm', { name: c.name }), danger: !enabled })
+  if (!ok) return
+  toggling.value = c.id
+  try {
+    await saveChannel(c.id, channelBody({ ...c, enabled }))
+    c.enabled = enabled
+    host.toast(t('saved'), 'success')
+  } catch (e) {
+    host.toast(errorMessage(e, t('actionFailed')), 'error')
+  } finally {
+    toggling.value = null
+  }
+}
+
+/** Why a channel cannot be deleted: the analysis channel, or the auditors using it. */
+function deleteError(e: unknown): string {
+  if (!isApiError(e) || e.status !== 409) return errorMessage(e, t('actionFailed'))
+  if (e.code === 'analysis_channel') return t('channels.isAnalysis')
+  const names = ((e.details?.auditors || []) as Array<{ id: number; name: string }>).map((a) => a.name || `#${a.id}`)
+  return names.length ? t('channels.inUse', { names: names.join('、') }) : errorMessage(e, t('actionFailed'))
+}
+
 async function remove(c: Channel) {
   const ok = await host.confirm({ message: t('channels.deleteConfirm', { name: c.name }), danger: true, confirmText: t('delete') })
   if (!ok) return
@@ -129,7 +172,7 @@ async function remove(c: Channel) {
     host.toast(t('deleted'), 'success')
     reload()
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    host.toast(deleteError(e), 'error')
   }
 }
 
@@ -138,11 +181,12 @@ async function test(c: Channel) {
   testing.value = c.id
   try {
     const r = await testChannel(c.id)
+    const url = r.url ? ` · ${r.url}` : ''
     if (r.ok) {
       const msg = t('channels.testOk', { ms: r.latency_ms, model: r.model || c.model })
-      host.toast(r.cost !== undefined ? t('channels.testCost', { msg, cost: callCostText(r.cost).text }) : msg, 'success')
+      host.toast((r.cost !== undefined ? t('channels.testCost', { msg, cost: callCostText(r.cost).text }) : msg) + url, 'success')
       if (r.cost?.mode === 'priced') reload()
-    } else host.toast(t('channels.testFailed', { err: [enumLabel('err', r.error), r.status, r.message].filter(Boolean).join(' ') }), 'error')
+    } else host.toast(t('channels.testFailed', { err: [enumLabel('err', r.error), r.status, r.message].filter(Boolean).join(' ') }) + url, 'error')
   } catch (e) {
     host.toast(errorMessage(e, t('actionFailed')), 'error')
   } finally {
@@ -163,6 +207,7 @@ async function test(c: Channel) {
       <STable :columns="columns" :rows="rows" :loading="loading" :empty-text="t('channels.empty')" dense>
         <template #cell-name="{ row }">
           {{ row.name }} <span class="mod-sub mod-num">#{{ row.id }}</span>
+          <SBadge v-if="row.analysis" tone="purple" size="xs" class="mod-ml">{{ t('channels.analysis') }}</SBadge>
           <div class="mod-sub">
             <template v-if="row.has_key">{{ t('channels.col.key') }} <code class="mod-code mod-code-plain">…{{ row.api_key_tail || '****' }}</code></template>
             <SBadge v-else size="xs" tone="warning">{{ t('channels.noKey') }}</SBadge>
@@ -174,7 +219,30 @@ async function test(c: Channel) {
         </template>
         <template #cell-base_url="{ row }">
           <code class="mod-code mod-code-plain" :title="row.base_url">{{ row.base_url }}</code>
-          <div class="mod-sub mod-num">{{ t('channels.col.timeout') }} {{ t('ms', { n: host.i18n.formatNumber(row.timeout_ms) }) }}</div>
+          <div class="mod-sub mod-num">
+            {{ t('channels.col.timeout') }} {{ t('ms', { n: num(row.timeout_ms) }) }}<template v-if="row.has_proxy"> · {{ t('channels.viaProxy') }}</template>
+          </div>
+        </template>
+        <template #cell-used_by="{ row }">
+          <span v-if="row.used_by?.length" class="mod-chips mod-chips-wrap">
+            <SBadge v-for="a in row.used_by" :key="a.id" size="xs">{{ a.name || `#${a.id}` }}</SBadge>
+          </span>
+          <SHint v-else inline>{{ row.analysis ? '—' : t('channels.unused') }}</SHint>
+        </template>
+        <template #cell-hour="{ row }">
+          <template v-if="row.stats">
+            <span class="mod-num">{{ t('channels.callsN', { n: num(row.stats.calls_1h) }) }}</span>
+            <div class="mod-sub">{{ t('stats.errorRate') }} <RateCell :rate="row.stats.error_rate_1h" :alert-percent="alertPercent" /></div>
+          </template>
+          <SHint v-else inline>—</SHint>
+        </template>
+        <template #cell-today="{ row }">
+          <template v-if="row.stats">
+            <span class="mod-num" :title="todaySources(row)">{{ money(row.stats.cost_today.cost) }}</span>
+            <div class="mod-sub mod-num">{{ t('channels.tokensN', { n: num(row.stats.tokens_today) }) }}</div>
+            <div v-if="todaySources(row)" class="mod-sub">{{ todaySources(row) }}</div>
+          </template>
+          <SHint v-else inline>—</SHint>
         </template>
         <template #cell-model="{ row }">
           <span :title="row.model">{{ row.model || '—' }}</span>
@@ -187,17 +255,9 @@ async function test(c: Channel) {
           </template>
           <SHint v-else inline>—</SHint>
         </template>
-        <template #cell-cost_30d="{ row }">
-          <template v-if="row.cost_30d">
-            <span class="mod-num">{{ money(row.cost_30d.cost) }}</span>
-            <div class="mod-sub mod-num">
-              {{ t('channels.callsN', { n: host.i18n.formatNumber(row.cost_30d.calls) }) }}<template v-if="row.cost_30d.unpriced_calls"> · {{ t('channels.unpricedN', { n: host.i18n.formatNumber(row.cost_30d.unpriced_calls) }) }}</template>
-            </div>
-          </template>
-          <SHint v-else inline>—</SHint>
-        </template>
         <template #cell-enabled="{ row }">
-          <SBadge :tone="row.enabled ? 'success' : 'gray'" dot>{{ row.enabled ? t('enabled') : t('disabled') }}</SBadge>
+          <SSwitch v-if="manage" :model-value="row.enabled" :disabled="toggling === row.id" :aria-label="t('channels.col.enabled')" @update:model-value="setEnabled(row, $event)" />
+          <EnabledBadge v-else :enabled="row.enabled" />
         </template>
         <template #cell-actions="{ row }">
           <SButton size="sm" variant="ghost" :loading="testing === row.id" @click="test(row)">{{ t('channels.test') }}</SButton>
@@ -232,6 +292,9 @@ async function test(c: Channel) {
         </SField>
         <SField :label="t('channels.col.timeout')" :error="formErr.timeout_ms" :hint="t('channels.timeoutHint', { n: defaultTimeout[form.type] })">
           <SInput v-model="form.timeout_ms" type="number" min="500" max="60000" step="100" :placeholder="String(defaultTimeout[form.type])" />
+        </SField>
+        <SField :label="t('channels.proxy')" :error="formErr.proxy" :hint="editing?.has_key ? t('channels.proxyKeyHint') : t('channels.proxyHint')">
+          <SInput v-model="form.proxy" autocomplete="off" placeholder="socks5://user:pass@host:1080" />
         </SField>
         <SField :label="t('channels.col.enabled')">
           <SSwitch v-model="form.enabled" />

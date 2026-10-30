@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SAlert, SBadge, SCard, SChart, SEmpty, SGrid, SHint, STable, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SCard, SChart, SEmpty, SGrid, SHint, SSegmented, STable, type TableColumn } from '@sub2api/ui'
+import { num as n } from './format'
+import { onOverviewTick } from './overview/tick'
 import { enumLabel, errorMessage, fetchCosts, money, useModHost, type Costs } from './host'
 
-// "审核费用" card of the overview (§72.13.3): GET /costs?range=, totals, by
-// source, by channel, trend; unpriced calls are counted but not in the amount.
-const props = defineProps<{ range: string }>()
+// Cost over a range (§72.13.3): GET /costs?range=, totals, by source, by
+// channel, trend; unpriced calls are counted but not in the amount.
 const host = useModHost()
 const t = host.t
-const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
+const range = ref<'24h' | '7d' | '30d'>('7d')
+const rangeOptions = computed(() => (['24h', '7d', '30d'] as const).map((v) => ({ value: v, label: t(`cost.range.${v}`) })))
 
 const data = ref<Costs | null>(null)
 const loading = ref(false)
@@ -18,15 +20,15 @@ async function reload() {
   loading.value = true
   error.value = ''
   try {
-    data.value = await fetchCosts(props.range)
+    data.value = await fetchCosts(range.value)
   } catch (e) {
     error.value = errorMessage(e, t('cost.loadFailed'))
   } finally {
     loading.value = false
   }
 }
-watch(() => props.range, reload, { immediate: true })
-defineExpose({ reload })
+watch(range, reload, { immediate: true })
+onOverviewTick(reload)
 
 const totals = computed(() => data.value?.totals)
 const sources = computed(() => (data.value?.by_source || []).filter((s) => s.summary.calls > 0))
@@ -42,7 +44,7 @@ function bucketLabel(ts: string) {
   const d = new Date(ts)
   if (isNaN(d.getTime())) return ts
   const p = (x: number) => String(x).padStart(2, '0')
-  if (props.range === '24h') return `${p(d.getHours())}:00`
+  if (range.value === '24h') return `${p(d.getHours())}:00`
   return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
 }
 
@@ -61,6 +63,7 @@ const hasTrend = computed(() => (data.value?.trend || []).some((p) => Number(p.c
 
 <template>
   <SCard :title="t('cost.title')" :subtitle="t('cost.hint')">
+    <template #actions><SSegmented v-model="range" :options="rangeOptions" size="sm" /></template>
     <SAlert v-if="error" tone="danger">{{ error }}</SAlert>
     <template v-else>
       <SAlert v-if="totals?.unpriced_calls" tone="warning" class="mod-block">
