@@ -185,7 +185,7 @@ func TestLLMProtocols(t *testing.T) {
 				temp := 0.0
 				got, err := protocolOf(ch).call(context.Background(), ch, llmRequest{System: "sys", Messages: []any{llmUserMessage("hi")},
 					Tools: []LLMTool{{Name: "get_record", Description: "d", Schema: map[string]any{"type": "object"}}}, ToolChoice: ChoiceRequired,
-					Temperature: &temp, Stream: stream, HeaderTimeout: time.Second})
+					Temperature: &temp, Stream: stream})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -363,5 +363,46 @@ func TestConversationFit(t *testing.T) {
 	c.fit(100)
 	if !c.budgetSpent || c.turns[2].results[0].Content != big {
 		t.Fatal("the latest results must stay; the budget is spent")
+	}
+}
+
+// TestFirstByteTimeout: a JSON call must get its headers and a stream its
+// first model output within ttft_timeout_ms; later slowness is not a TTFT error.
+func TestFirstByteTimeout(t *testing.T) {
+	slowHeaders := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		_, _ = io.WriteString(w, `{"results":[]}`)
+	}))
+	t.Cleanup(slowHeaders.Close)
+	stream := func(firstAfter time.Duration) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+			w.(http.Flusher).Flush()
+			time.Sleep(firstAfter)
+			_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
+			w.(http.Flusher).Flush()
+			time.Sleep(300 * time.Millisecond) // slow after the first output: fine
+			_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	ttft := func() time.Duration { return 100 * time.Millisecond }
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := &liveChannel{Type: ChannelOpenAI, BaseURL: slowHeaders.URL, ttft: ttft}
+	if err := callJSON(ctx, ch, pathModerations, nil, map[string]any{}, &map[string]any{}); ErrType(err) != ErrTypeTTFTTimeout {
+		t.Fatalf("slow headers = %v", err)
+	}
+	req := llmRequest{Messages: []any{llmUserMessage("ping")}, Stream: true}
+	ch = &liveChannel{Type: ChannelLLM, Protocol: ProtocolOpenAIChat, BaseURL: stream(300 * time.Millisecond).URL, ttft: ttft}
+	if _, err := protocolOf(ch).call(ctx, ch, req); ErrType(err) != ErrTypeTTFTTimeout {
+		t.Fatalf("late first output = %v", err)
+	}
+	ch.BaseURL = stream(0).URL
+	if turn, err := protocolOf(ch).call(ctx, ch, req); err != nil || turn.Text != "ok" {
+		t.Fatalf("slow after first output = %+v %v", turn, err)
 	}
 }

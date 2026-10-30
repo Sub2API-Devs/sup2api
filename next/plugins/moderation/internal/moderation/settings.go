@@ -61,6 +61,7 @@ type Settings struct {
 	CacheEntries    int `json:"cache_entries"`
 	MaxConcurrency  int `json:"max_concurrency"`
 	QueueSize       int `json:"queue_size"`
+	TTFTTimeoutMs   int `json:"ttft_timeout_ms"`
 
 	BlockStatus  int    `json:"block_status"`
 	BlockMessage string `json:"block_message"`
@@ -133,7 +134,7 @@ func DefaultSettings() Settings {
 		Mode:          ModeOff,
 		InputMaxChars: 12000, MinChars: 2,
 		CacheTTLSeconds: 3600, CacheEntries: 100000,
-		MaxConcurrency: 16, QueueSize: 1000,
+		MaxConcurrency: 16, QueueSize: 1000, TTFTTimeoutMs: 10000,
 		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
 		RecordOverturned: true, RecordErrors: true, StoreText: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
@@ -260,6 +261,7 @@ func (d decoder) general(s *Settings) {
 	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
 	d.integer("cache_entries", &s.CacheEntries, 1000, 1000000)
 	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
+	d.integer("ttft_timeout_ms", &s.TTFTTimeoutMs, 1000, 60000)
 	d.integer("queue_size", &s.QueueSize, 1, 100000)
 	d.integer("block_status", &s.BlockStatus, 400, 599)
 	d.str("block_message", &s.BlockMessage)
@@ -402,6 +404,7 @@ type config struct {
 	settingsHash    string
 	exempt          map[int64]bool
 	cacheTTL        time.Duration
+	ttft            time.Duration
 	banWindow       time.Duration
 	banDuration     time.Duration // 0 = until unblocked
 	watchFor        time.Duration
@@ -422,6 +425,7 @@ func compile(s Settings) *config {
 		}
 	}
 	c.cacheTTL = time.Duration(s.CacheTTLSeconds) * time.Second
+	c.ttft = time.Duration(s.TTFTTimeoutMs) * time.Millisecond
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
 	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour

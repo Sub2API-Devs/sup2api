@@ -346,6 +346,12 @@
       "permission": "moderation:read"
     },
     {
+      "method": "GET",
+      "path": "/users/:user_id",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
       "method": "POST",
       "path": "/watchlist/:user_id/seen",
       "scope": "admin",

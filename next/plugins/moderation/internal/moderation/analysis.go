@@ -290,7 +290,7 @@ func (p *Plugin) runAgent(ctx context.Context, ch *liveChannel, system string, t
 			return errSwitchedOff
 		}
 		final := conv.budgetSpent
-		req := llmRequest{System: system, Messages: conv.messages(), Tools: tools, Stream: true, HeaderTimeout: ch.Timeout}
+		req := llmRequest{System: system, Messages: conv.messages(), Tools: tools, Stream: true}
 		if final {
 			req.ForceTool = submitAnalysisTool
 		}

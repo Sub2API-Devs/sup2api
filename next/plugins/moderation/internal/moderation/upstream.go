@@ -39,8 +39,10 @@ type liveChannel struct {
 	// BillingModel is the model the calls are priced on ("" = Model).
 	BillingModel string
 	Timeout      time.Duration
-	markerKey    []byte // llm only: self-request marker key
-	client       *http.Client
+	// ttft is the first-byte timeout (ttft_timeout_ms); nil or 0 = none.
+	ttft      func() time.Duration
+	markerKey []byte // llm only: self-request marker key
+	client    *http.Client
 }
 
 const (
@@ -73,6 +75,7 @@ var (
 	errAuditorMissing   = errors.New("auditor referenced by the flow no longer exists")
 	errAuditorPanic     = errors.New("auditor panicked")
 	errTimeout          = errors.New("timeout")
+	errTTFTTimeout      = errors.New("no first byte within ttft_timeout_ms")
 	errEmptyResult      = errors.New("upstream returned no result")
 	errBadScores        = errors.New("upstream result is incomplete or out of range")
 	errResponseTooLarge = errors.New("upstream response too large")
@@ -81,6 +84,7 @@ var (
 // Error type codes written to traces.
 const (
 	ErrTypeTimeout        = "timeout"
+	ErrTypeTTFTTimeout    = "ttft_timeout"
 	ErrTypeUpstreamError  = "upstream_error"
 	ErrTypeNetwork        = "network"
 	ErrTypeBadResponse    = "bad_response"
@@ -95,6 +99,8 @@ func ErrType(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, errTTFTTimeout):
+		return ErrTypeTTFTTimeout
 	case errors.Is(err, errTimeout), errors.Is(err, context.DeadlineExceeded):
 		return ErrTypeTimeout
 	case errors.Is(err, context.Canceled):
@@ -125,6 +131,23 @@ func upstreamStatus(err error) int {
 	return 0
 }
 
+// Engine endpoints.
+const (
+	pathModerations = "/v1/moderations"
+	pathSystemOne   = "/v1/systemone"
+)
+
+// endpoint is the URL the calls of ch go to.
+func (ch *liveChannel) endpoint() string {
+	switch ch.Type {
+	case ChannelOpenAI:
+		return joinURL(ch.BaseURL, pathModerations)
+	case ChannelTypeSafe:
+		return joinURL(ch.BaseURL, pathSystemOne)
+	}
+	return joinURL(ch.BaseURL, protocolOf(ch).path)
+}
+
 // joinURL appends path ("/v1/...") to base, dropping a duplicated /v1.
 func joinURL(base, path string) string {
 	base = strings.TrimRight(strings.TrimSpace(base), "/")
@@ -134,6 +157,34 @@ func joinURL(base, path string) string {
 	return base + path
 }
 
+// firstByte is the time-to-first-byte timer of one upstream call (new-api
+// upstream.go): when it fires the call is canceled with errTTFTTimeout. A
+// JSON call arrives with the response headers, a streaming call with the
+// first model output event.
+type firstByte struct{ timer *time.Timer }
+
+// withFirstByte derives the call context of ch; release stops the timer
+// and the context.
+func withFirstByte(ctx context.Context, ch *liveChannel) (_ context.Context, _ *firstByte, release func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	fb := &firstByte{}
+	if ch.ttft != nil {
+		if d := ch.ttft(); d > 0 {
+			fb.timer = time.AfterFunc(d, func() { cancel(errTTFTTimeout) })
+		}
+	}
+	return ctx, fb, func() { fb.arrived(); cancel(nil) }
+}
+
+// ttftTimeout is the current ttft_timeout_ms (channels read it per call).
+func (p *Plugin) ttftTimeout() time.Duration { return p.cfg.Load().ttft }
+
+func (f *firstByte) arrived() {
+	if f != nil && f.timer != nil {
+		f.timer.Stop()
+	}
+}
+
 // callJSON posts body to {base}{path} and decodes a 2xx JSON answer (at most
 // 4 MiB) into out. ctx carries the call timeout.
 func callJSON(ctx context.Context, ch *liveChannel, path string, header map[string]string, body, out any) error {
@@ -141,6 +192,8 @@ func callJSON(ctx context.Context, ch *liveChannel, path string, header map[stri
 	if err != nil {
 		return err
 	}
+	ctx, fb, release := withFirstByte(ctx, ch)
+	defer release()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, joinURL(ch.BaseURL, path), bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -161,6 +214,7 @@ func callJSON(ctx context.Context, ch *liveChannel, path string, header map[stri
 	if err != nil {
 		return ctxErr(ctx, &networkError{err})
 	}
+	fb.arrived()
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		head, _ := io.ReadAll(io.LimitReader(resp.Body, drainLimit))
@@ -185,6 +239,8 @@ func ctxErr(ctx context.Context, err error) error {
 	switch {
 	case ctx.Err() == nil:
 		return err
+	case errors.Is(context.Cause(ctx), errTTFTTimeout):
+		return errTTFTTimeout
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return errTimeout
 	}

@@ -164,7 +164,10 @@ func passKey(s *snapshot, f *liveFlow, h [32]byte) string {
 func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
 	start := p.now()
 	resp := p.moderatePre(ctx, m)
-	p.countRequest(m.rec.GroupID, p.now().Sub(start).Milliseconds(), resp.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY)
+	denied := resp.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY
+	if denied || ctx.Err() == nil { // a client that left without a hit added no latency (new-api gate.go)
+		p.countRequest(m.rec.GroupID, p.now().Sub(start).Milliseconds(), denied)
+	}
 	return resp
 }
 
@@ -204,8 +207,12 @@ func (p *Plugin) moderatePre(ctx context.Context, m *moderation) *pluginv1.Gatew
 	return allow(traceNote(m, tr))
 }
 
-// runPost moderates one queued request (worker).
+// runPost moderates one queued request (worker). Jobs still queued when
+// moderation is switched off are dropped without calling upstream.
 func (p *Plugin) runPost(m *moderation) {
+	if !p.cfg.Load().enabled {
+		return
+	}
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
 	if p.passCached(m.key, true) {
 		p.stats.cacheHits.Add(1)
@@ -235,20 +242,24 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 		return p.audit(ctx, a, m.in, m.timing == TimingPre, src)
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
-	if m.source == "" {
+	if m.source == "" && p.bg.Err() == nil { // runs cut short by Shutdown are not errors
 		p.countRun(m, tr)
 	}
 	return tr
 }
 
-// finish caches a clean pass and records the run.
+// finish caches a clean or overturned pass (new-api gate.go), counts the
+// request on the user's day and records the run.
 func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
-	if tr.Final == Pass && !tr.Errored && !tr.Skipped && !tr.Overturned && !tr.anySkipped() && !m.in.HasURLImage {
+	if tr.Final == Pass && !tr.Errored && !tr.Skipped && !tr.anySkipped() && !m.in.HasURLImage {
 		p.passPut(m.cfg, m.key)
 	}
 	rec := m.rec
 	rec.LatencyMs = int(tr.LatencyMs)
 	rec.fillFromTrace(tr, refused)
+	if m.source == "" {
+		p.countUser(rec.UserID, rec.GroupID, rec.Result, rec.Severity)
+	}
 	if tr.firstStageHit() && m.cfg.StoreText {
 		s := string(m.in.Messages)
 		rec.InputMessage, rec.InputMessageSize = &s, len(s)

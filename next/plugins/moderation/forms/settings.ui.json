@@ -33,6 +33,7 @@
     "stats_retention_days",
     "max_concurrency",
     "queue_size",
+    "ttft_timeout_ms",
     "cache_ttl_seconds",
     "cache_entries",
     "input_max_chars",
@@ -346,6 +347,20 @@
     "ui:details": {
       "en": "When the queue is full, new requests are not moderated and are counted as dropped.",
       "zh": "队列满了之后新请求不再审核，并计入丢弃数。"
+    }
+  },
+  "ttft_timeout_ms": {
+    "ui:title": {
+      "en": "First byte timeout (ms)",
+      "zh": "首字超时（毫秒）"
+    },
+    "ui:help": {
+      "en": "An upstream call that has not answered (headers, or the first model output of a stream) in this time fails with ttft_timeout.",
+      "zh": "上游调用在这段时间内没有响应（收到响应头，流式调用为第一个模型输出）就按 ttft_timeout 失败。"
+    },
+    "ui:details": {
+      "en": "Applies to every auditor call and every AI analysis step, together with the channel's total timeout; whichever fires first ends the call.",
+      "zh": "对所有审核器调用和 AI 分析的每一步生效，与渠道的总超时同时计时，先到者结束调用。"
     }
   },
   "cache_ttl_seconds": {

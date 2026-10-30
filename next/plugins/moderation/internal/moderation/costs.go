@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -187,16 +188,53 @@ func (p *Plugin) priceState(ctx context.Context, typ, model string) PriceState {
 
 // ---------------------------------------------------------------- GET /costs
 
-// CostSummary adds up metered calls. Cost is USD with 8 places.
+// CostSummary adds up metered calls. The cost is kept in 1e-8 USD units and
+// rendered as "cost": USD with 8 places, so the zero value is valid. Calls
+// counts metered calls (priced + unpriced + free).
 type CostSummary struct {
-	Cost           string `json:"cost"`
-	Calls          int64  `json:"calls"`
-	PricedCalls    int64  `json:"priced_calls"`
-	UnpricedCalls  int64  `json:"unpriced_calls"`
-	UnpricedTokens int64  `json:"unpriced_tokens"`
-	FreeCalls      int64  `json:"free_calls"`
-	TokensIn       int64  `json:"tokens_in"`
-	TokensOut      int64  `json:"tokens_out"`
+	units          int64
+	Calls          int64 `json:"calls"`
+	PricedCalls    int64 `json:"priced_calls"`
+	UnpricedCalls  int64 `json:"unpriced_calls"`
+	UnpricedTokens int64 `json:"unpriced_tokens"`
+	FreeCalls      int64 `json:"free_calls"`
+	TokensIn       int64 `json:"tokens_in"`
+	TokensOut      int64 `json:"tokens_out"`
+}
+
+type costSummaryJSON struct {
+	Cost string `json:"cost"`
+	costSummaryFields
+}
+
+type costSummaryFields CostSummary
+
+// Cost is the USD amount with 8 places.
+func (s CostSummary) Cost() string { return formatCost(s.units) }
+
+func (s CostSummary) MarshalJSON() ([]byte, error) {
+	return json.Marshal(costSummaryJSON{Cost: s.Cost(), costSummaryFields: costSummaryFields(s)})
+}
+
+func (s *CostSummary) UnmarshalJSON(b []byte) error {
+	var v costSummaryJSON
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*s = CostSummary(v.costSummaryFields)
+	s.units, _ = parseCost(v.Cost)
+	return nil
+}
+
+func (s *CostSummary) add(o CostSummary) {
+	s.units += o.units
+	s.Calls += o.Calls
+	s.PricedCalls += o.PricedCalls
+	s.UnpricedCalls += o.UnpricedCalls
+	s.UnpricedTokens += o.UnpricedTokens
+	s.FreeCalls += o.FreeCalls
+	s.TokensIn += o.TokensIn
+	s.TokensOut += o.TokensOut
 }
 
 // ChannelCost is one row of by_channel.
@@ -234,19 +272,13 @@ type CostReport struct {
 	Trend     []CostPoint   `json:"trend"`
 }
 
-const costSums = `coalesce(sum(cost), 0)::text, coalesce(sum(calls), 0), coalesce(sum(priced_calls), 0), coalesce(sum(unpriced_calls), 0),
-	coalesce(sum(unpriced_tokens), 0), coalesce(sum(free_calls), 0), coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0)`
+// costSums selects a CostSummary (targets) from costs rows.
+const costSums = `coalesce(round(sum(cost) * 100000000), 0)::bigint, coalesce(sum(priced_calls + unpriced_calls + free_calls), 0),
+	coalesce(sum(priced_calls), 0), coalesce(sum(unpriced_calls), 0), coalesce(sum(unpriced_tokens), 0), coalesce(sum(free_calls), 0),
+	coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0)`
 
 func (s *CostSummary) targets() []any {
-	return []any{&s.Cost, &s.Calls, &s.PricedCalls, &s.UnpricedCalls, &s.UnpricedTokens, &s.FreeCalls, &s.TokensIn, &s.TokensOut}
-}
-
-func (s *CostSummary) normalize() {
-	if u, ok := parseCost(s.Cost); ok {
-		s.Cost = formatCost(u)
-	} else {
-		s.Cost = formatCost(0)
-	}
+	return []any{&s.units, &s.Calls, &s.PricedCalls, &s.UnpricedCalls, &s.UnpricedTokens, &s.FreeCalls, &s.TokensIn, &s.TokensOut}
 }
 
 func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -272,7 +304,6 @@ func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
 		return nil, err
 	}
-	r.Totals.normalize()
 	if err := queryCostRows(ctx, db, &r); err != nil {
 		return nil, err
 	}
@@ -290,7 +321,6 @@ func queryCostRows(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
 	r.ByChannel, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (ChannelCost, error) {
 		var c ChannelCost
 		err := row.Scan(append([]any{&c.ChannelID, &c.Name, &c.Type, &c.Model, &c.BillingModel, &c.Deleted}, c.Summary.targets()...)...)
-		c.Summary.normalize()
 		return c, err
 	})
 	if err != nil {
@@ -303,7 +333,6 @@ func queryCostRows(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
 	r.BySource, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (SourceCost, error) {
 		var s SourceCost
 		err := row.Scan(append([]any{&s.Source}, s.Summary.targets()...)...)
-		s.Summary.normalize()
 		return s, err
 	})
 	if err != nil {
@@ -354,7 +383,6 @@ func channelCosts30d(ctx context.Context, db *pgxpool.Pool, since time.Time) (ma
 	var id int64
 	var s CostSummary
 	_, err = pgx.ForEachRow(rows, append([]any{&id}, s.targets()...), func() error {
-		s.normalize()
 		out[id] = s
 		return nil
 	})

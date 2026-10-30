@@ -107,6 +107,7 @@ func (p *Plugin) listFlows(ctx context.Context, _ *pluginv1.HTTPRequest) (*plugi
 	if err != nil {
 		return nil, err
 	}
+	p.flushStats(ctx)
 	stats, err := p.flowStats24h(ctx, db)
 	if err != nil {
 		return nil, err

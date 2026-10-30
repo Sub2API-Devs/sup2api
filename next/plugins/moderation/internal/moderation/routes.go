@@ -34,6 +34,7 @@ func (p *Plugin) routes() {
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
 	p.Handle("GET", "/watchlist/:user_id", p.getWatch)
+	p.Handle("GET", "/users/:user_id", p.getUserDetail)
 	p.Handle("POST", "/watchlist/:user_id/seen", p.markWatchSeen)
 	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
 	p.Handle("GET", "/watchlist/:user_id/analyses", p.listAnalyses)
@@ -111,6 +112,7 @@ type TrendPoint struct {
 // CategoryCount is one row of the category ranking.
 type CategoryCount struct {
 	Category string `json:"category"`
+	Label    string `json:"label,omitempty"`
 	Count    int64  `json:"count"`
 }
 
@@ -385,21 +387,9 @@ func (e *Event) normalize() {
 	}
 }
 
-// eventQuery accumulates the WHERE fragment of GET /events.
-type eventQuery struct {
-	conds []string
-	args  []any
-	errs  pluginsdk.FieldErrors
-}
-
-func (f *eventQuery) arg(v any) string {
-	f.args = append(f.args, v)
-	return "$" + strconv.Itoa(len(f.args))
-}
-
 // eventFilter builds the WHERE clause of GET /events.
 func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs pluginsdk.FieldErrors) {
-	f := &eventQuery{conds: []string{"TRUE"}}
+	f := &sqlFilter{conds: []string{"TRUE"}}
 	if v := pluginsdk.Query(req, "result"); v == "suspicious" {
 		f.conds = append(f.conds, "result IN ('hit', 'block')")
 	} else {
@@ -449,10 +439,10 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	if !from.IsZero() && !to.IsZero() && !from.Before(to) {
 		f.errs = f.errs.Add("from", "range", "from must be before to / from 必须早于 to")
 	}
-	return strings.Join(f.conds, " AND "), f.args, f.errs
+	return f.where(), f.args, f.errs
 }
 
-func (f *eventQuery) enum(req *pluginv1.HTTPRequest, name string, allowed ...string) {
+func (f *sqlFilter) enum(req *pluginv1.HTTPRequest, name string, allowed ...string) {
 	v := pluginsdk.Query(req, name)
 	if v == "" {
 		return
@@ -466,35 +456,14 @@ func (f *eventQuery) enum(req *pluginv1.HTTPRequest, name string, allowed ...str
 	f.errs = f.errs.Add(name, "enum", fmt.Sprintf("%s must be one of %s / %s 取值为 %s", name, strings.Join(allowed, ", "), name, strings.Join(allowed, "、")))
 }
 
-func (f *eventQuery) ids(req *pluginv1.HTTPRequest) {
+func (f *sqlFilter) ids(req *pluginv1.HTTPRequest) {
 	for _, name := range []string{"user_id", "api_key_id", "group_id", "flow_id"} {
-		v := pluginsdk.Query(req, name)
-		if v == "" {
-			continue
-		}
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil || id < 0 {
-			f.errs = f.errs.Add(name, "invalid", name+" must be a non-negative integer / "+name+" 必须是非负整数")
-			continue
-		}
-		f.conds = append(f.conds, name+" = "+f.arg(id))
+		f.id(req, name, name)
 	}
-	// user_ids: the console's username search resolved through the core.
-	if v := pluginsdk.Query(req, "user_ids"); v != "" {
-		var ids []int64
-		for _, part := range strings.Split(v, ",") {
-			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
-			if err != nil || id <= 0 || len(ids) >= 500 {
-				f.errs = f.errs.Add("user_ids", "invalid", "user_ids is a comma list of up to 500 user ids / user_ids 为逗号分隔的用户 id，最多 500 个")
-				return
-			}
-			ids = append(ids, id)
-		}
-		f.conds = append(f.conds, "user_id = ANY("+f.arg(ids)+")")
-	}
+	f.idList(req, "user_ids", "user_id")
 }
 
-func (f *eventQuery) text(req *pluginv1.HTTPRequest, name, cond string) {
+func (f *sqlFilter) text(req *pluginv1.HTTPRequest, name, cond string) {
 	v := strings.TrimSpace(pluginsdk.Query(req, name))
 	if v == "" {
 		return
@@ -507,7 +476,7 @@ func (f *eventQuery) text(req *pluginv1.HTTPRequest, name, cond string) {
 }
 
 // search matches the term against request id, reason and text.
-func (f *eventQuery) search(req *pluginv1.HTTPRequest) {
+func (f *sqlFilter) search(req *pluginv1.HTTPRequest) {
 	v := strings.TrimSpace(pluginsdk.Query(req, "q"))
 	if v == "" {
 		return
@@ -521,7 +490,7 @@ func (f *eventQuery) search(req *pluginv1.HTTPRequest) {
 	f.conds = append(f.conds, "(request_id ILIKE "+a+" OR reason ILIKE "+a+" OR text ILIKE "+a+")")
 }
 
-func (f *eventQuery) times(req *pluginv1.HTTPRequest) (from, to time.Time) {
+func (f *sqlFilter) times(req *pluginv1.HTTPRequest) (from, to time.Time) {
 	for _, name := range []string{"from", "to"} {
 		v := pluginsdk.Query(req, name)
 		if v == "" {

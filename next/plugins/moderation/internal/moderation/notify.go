@@ -105,9 +105,10 @@ func postNotice(ctx context.Context, client *http.Client, url, secret string, n 
 // notifyWatchChange tells administrators about a watch list change the AI
 // analysis made (auto_upgrade, auto_downgrade, auto_remove).
 func (p *Plugin) notifyWatchChange(uid int64, action, from, to, trend, suggestion string, analysisID int64) {
-	levelName := map[string]string{LevelObserve: "观察", LevelEnforce: "拦截", "": "移出名单"}
-	title := fmt.Sprintf("提示词审核：AI 分析自动调整了用户 #%d 的观察级别", uid)
-	text := fmt.Sprintf("用户 #%d：%s → %s（趋势 %s，建议 %s）。详情见提示词审核 → 观察名单。", uid, levelName[from], levelName[to], trend, suggestion)
+	levelName := map[string]string{LevelObserve: "观察 observe", LevelEnforce: "拦截 enforce", "": "移出名单 removed"}
+	title := fmt.Sprintf("提示词审核：AI 分析自动调整了用户 #%d 的观察级别 / Moderation: AI analysis changed the watch level of user #%d", uid, uid)
+	text := fmt.Sprintf("用户 #%d：%s → %s（趋势 %s，建议 %s）。详情见提示词审核 → 观察名单。\nUser #%d: %s → %s (trend %s, suggestion %s). See Moderation → Watch list.",
+		uid, levelName[from], levelName[to], trend, suggestion, uid, levelName[from], levelName[to], trend, suggestion)
 	p.notify(NoticeWatchChanged, title, text, map[string]any{
 		"user_id": uid, "action": action, "from_level": from, "to_level": to, "trend": trend, "suggestion": suggestion,
 		"analysis_id": analysisID, "path": "/p/moderation/dashboard?tab=watch&user_id=" + strconv.FormatInt(uid, 10),
@@ -132,6 +133,7 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	now := p.now().UTC()
+	p.flushStats(ctx)
 	rows, err := p.loadStats(ctx, db, statFilter{from: now.Truncate(time.Hour).Add(-time.Hour), to: now.Add(time.Hour)})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "alerts: %v", err)
@@ -142,7 +144,10 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 			mergeInto(flows, rows[i].flow, &rows[i].counters)
 		}
 	}
-	names := p.flowNames(ctx, db)
+	names, err := p.flowNames(ctx, db)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "alerts: %v", err)
+	}
 	sent := 0
 	for id, fc := range flows {
 		over := flagged(fc.errors, fc.audited, c.ErrorRateAlertPercent)
@@ -154,7 +159,7 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 			p.notifyFlowAlert(id, names[id], fc.errors, fc.audited, c.ErrorRateAlertPercent)
 			sent++
 		}
-		if over != was {
+		if over || was { // refreshed while over: one notice per episode
 			p.setAlerted(ctx, id, over)
 		}
 	}
@@ -169,8 +174,9 @@ func (p *Plugin) alerted(ctx context.Context, flow int64) (bool, error) {
 	return found, err
 }
 
-// setAlerted stores the state for two hours: a flow without traffic for that
-// long starts from "not alerted" again, like new-api drops idle flows.
+// setAlerted stores the state for two hours, refreshed every tick while the
+// flow stays over: a flow without traffic for that long starts from "not
+// alerted" again, like new-api drops idle flows.
 func (p *Plugin) setAlerted(ctx context.Context, flow int64, over bool) {
 	var err error
 	if over {
@@ -188,16 +194,12 @@ func (p *Plugin) notifyFlowAlert(id int64, name string, errors, audited int64, p
 		name = "#" + strconv.FormatInt(id, 10)
 	}
 	rate := float64(errors) * 100 / float64(audited)
-	title := fmt.Sprintf("提示词审核：流程「%s」异常率 %.1f%% 超过阈值 %d%%", name, rate, percent)
-	text := fmt.Sprintf("流程「%s」（#%d）近 1 小时异常 %d / %d 次，异常率 %.1f%%，阈值 %d%%。审核异常时请求会直接放行，请检查审核器和渠道。",
-		name, id, errors, audited, rate, percent)
+	title := fmt.Sprintf("提示词审核：流程「%s」异常率 %.1f%% 超过阈值 %d%% / Moderation: flow %q error rate %.1f%% is above %d%%",
+		name, rate, percent, name, rate, percent)
+	text := fmt.Sprintf("流程「%s」（#%d）近 1 小时异常 %d / %d 次，异常率 %.1f%%，阈值 %d%%。审核异常时请求会直接放行，请检查审核器和渠道。\n"+
+		"Flow %q (#%d) failed %d of %d runs in the last hour (%.1f%%, threshold %d%%). Failed moderation lets requests through; check the auditors and channels.",
+		name, id, errors, audited, rate, percent, name, id, errors, audited, rate, percent)
 	p.notify(NoticeFlowErrorRate, title, text, map[string]any{
 		"flow_id": id, "flow_name": name, "errors": errors, "audited": audited, "error_rate": rate / 100, "threshold_percent": percent,
 	})
-}
-
-// watchNoticeOf reports whether an applied escalation is notified (only
-// real level changes are).
-func watchNoticeOf(action string) bool {
-	return action == ActionAutoUpgrade || action == ActionAutoDowngrade || action == ActionAutoRemove
 }

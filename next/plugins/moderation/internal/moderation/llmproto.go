@@ -72,9 +72,6 @@ type llmRequest struct {
 	MaxTokens   int
 	Temperature *float64
 	Stream      bool
-	// HeaderTimeout (streaming only) cancels the call when the response
-	// headers have not arrived in time; the rest is bounded by ctx only.
-	HeaderTimeout time.Duration
 }
 
 type llmToolCall struct {
@@ -178,32 +175,20 @@ func (p *llmProtocol) call(ctx context.Context, ch *liveChannel, req llmRequest)
 	if client == nil {
 		client = http.DefaultClient
 	}
-	if req.Stream && req.HeaderTimeout > 0 {
-		hctx, cancel := context.WithCancelCause(ctx)
-		defer cancel(nil)
-		timer := time.AfterFunc(req.HeaderTimeout, func() { cancel(errTimeout) })
-		hreq = hreq.WithContext(hctx)
-		ctx = hctx
-		defer timer.Stop()
-		resp, err := client.Do(hreq)
-		timer.Stop()
-		if err != nil {
-			if errors.Is(context.Cause(hctx), errTimeout) {
-				return llmTurn{}, errTimeout
-			}
-			return llmTurn{}, ctxErr(ctx, &networkError{err})
-		}
-		return p.read(ctx, ch, req, resp)
-	}
-	resp, err := client.Do(hreq)
+	ctx, fb, release := withFirstByte(ctx, ch)
+	defer release()
+	resp, err := client.Do(hreq.WithContext(ctx))
 	if err != nil {
 		return llmTurn{}, ctxErr(ctx, &networkError{err})
 	}
-	return p.read(ctx, ch, req, resp)
+	if !req.Stream {
+		fb.arrived()
+	}
+	return p.read(ctx, ch, req, resp, fb)
 }
 
-// read consumes a response of call.
-func (p *llmProtocol) read(ctx context.Context, ch *liveChannel, req llmRequest, resp *http.Response) (llmTurn, error) {
+// read consumes a response of call; a stream stops fb at its first output.
+func (p *llmProtocol) read(ctx context.Context, ch *liveChannel, req llmRequest, resp *http.Response, fb *firstByte) (llmTurn, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		head, _ := io.ReadAll(io.LimitReader(resp.Body, drainLimit))
@@ -224,7 +209,7 @@ func (p *llmProtocol) read(ctx context.Context, ch *liveChannel, req llmRequest,
 		}
 		return t, nil
 	}
-	st := &llmStream{calls: map[int]*toolCallBuf{}}
+	st := &llmStream{calls: map[int]*toolCallBuf{}, fb: fb}
 	err := sseRead(resp.Body, p, st)
 	if err != nil {
 		err = ctxErr(ctx, err)
@@ -352,7 +337,11 @@ type llmStream struct {
 	usage llmUsage
 	model string
 	done  bool
+	fb    *firstByte
 }
+
+// output marks the first model output (text, reasoning or a tool call).
+func (s *llmStream) output() { s.fb.arrived() }
 
 type toolCallBuf struct {
 	id, name string
@@ -455,6 +444,7 @@ func anthropicMessageStart(s *llmStream, data []byte) error {
 }
 
 func anthropicBlockStart(s *llmStream, data []byte) error {
+	s.output()
 	block := gjson.GetBytes(data, "content_block")
 	switch block.Get("type").String() {
 	case "tool_use":
@@ -467,6 +457,7 @@ func anthropicBlockStart(s *llmStream, data []byte) error {
 }
 
 func anthropicBlockDelta(s *llmStream, data []byte) error {
+	s.output()
 	delta := gjson.GetBytes(data, "delta")
 	switch delta.Get("type").String() {
 	case "input_json_delta":
@@ -594,8 +585,12 @@ func chatChunk(s *llmStream, data []byte) error {
 		s.done = true
 	}
 	delta := chunk.Get("choices.0.delta")
+	calls := delta.Get("tool_calls").Array()
+	if delta.Get("content").String() != "" || delta.Get("reasoning_content").String() != "" || delta.Get("reasoning").String() != "" || len(calls) > 0 {
+		s.output()
+	}
 	s.text.WriteString(delta.Get("content").String())
-	for _, c := range delta.Get("tool_calls").Array() {
+	for _, c := range calls {
 		b := s.call(int(c.Get("index").Int()))
 		if id := c.Get("id").String(); id != "" {
 			b.id = id
@@ -708,6 +703,7 @@ func responsesUsage(u gjson.Result) llmUsage {
 }
 
 func responsesItemAdded(s *llmStream, data []byte) error {
+	s.output()
 	item := gjson.GetBytes(data, "item")
 	if item.Get("type").String() == "function_call" {
 		b := s.call(int(gjson.GetBytes(data, "output_index").Int()))
@@ -718,11 +714,13 @@ func responsesItemAdded(s *llmStream, data []byte) error {
 }
 
 func responsesTextDelta(s *llmStream, data []byte) error {
+	s.output()
 	s.text.WriteString(gjson.GetBytes(data, "delta").String())
 	return nil
 }
 
 func responsesArgsDelta(s *llmStream, data []byte) error {
+	s.output()
 	s.call(int(gjson.GetBytes(data, "output_index").Int())).args.WriteString(gjson.GetBytes(data, "delta").String())
 	return nil
 }

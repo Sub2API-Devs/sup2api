@@ -193,6 +193,9 @@ type Trace struct {
 	Skipped      bool         `json:"skipped,omitempty"`
 	TruncatedRun bool         `json:"truncated_run,omitempty"`
 	LatencyMs    int64        `json:"latency_ms"`
+	// InputMessageDropped says why the record has no input message although
+	// the first stage hit: save_failed (the batch was written again without).
+	InputMessageDropped string `json:"input_message_dropped,omitempty"`
 }
 
 // auditFunc runs one auditor of the flow.

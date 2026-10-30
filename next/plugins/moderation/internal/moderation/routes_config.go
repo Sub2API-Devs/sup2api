@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -158,6 +159,7 @@ func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest
 	if err != nil {
 		return err
 	}
+	p.flushStats(ctx)
 	stats, err := p.channelStats(ctx, db, p.clockOf(req))
 	if err != nil {
 		return err
@@ -191,11 +193,7 @@ func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest
 	for i := range list {
 		c := &list[i]
 		p.decorateChannel(ctx, c, costs)
-		st, ok := stats[c.ID]
-		if !ok {
-			st = ChannelStat{Cost1h: zeroCost(), CostToday: zeroCost(), CostTodaySources: map[string]CostSummary{}}
-		}
-		c.Stats = &st
+		c.Stats = cmp.Or(stats[c.ID], newChannelStat())
 		c.UsedBy, c.Analysis = users[c.ID], c.ID == analysis
 	}
 	return nil
@@ -209,10 +207,7 @@ func (p *Plugin) decorateChannel(ctx context.Context, c *ChannelView, costs map[
 	}
 	st := p.priceState(ctx, c.Type, model)
 	c.PriceState = &st
-	sum, ok := costs[c.ID]
-	if !ok {
-		sum = CostSummary{Cost: formatCost(0)}
-	}
+	sum := costs[c.ID]
 	c.Cost30d = &sum
 }
 
@@ -429,6 +424,7 @@ type ChannelTestResult struct {
 	Error     string    `json:"error,omitempty"`
 	Message   string    `json:"message,omitempty"` // upstream error text (key removed)
 	Model     string    `json:"model,omitempty"`
+	URL       string    `json:"url"` // the endpoint called
 	LatencyMs int64     `json:"latency_ms"`
 	Cost      *CallCost `json:"cost,omitempty"`
 }
@@ -448,7 +444,7 @@ func (p *Plugin) testChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	cctx, cancel := context.WithTimeout(ctx, ch.Timeout)
 	defer cancel()
 	start := p.now()
-	var out ChannelTestResult
+	out := ChannelTestResult{URL: ch.endpoint()}
 	var usage EngineUsage
 	switch ch.Type {
 	case ChannelOpenAI:
@@ -488,7 +484,7 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 	if err != nil {
 		return nil, err
 	}
-	ch := &liveChannel{ID: id, client: p.httpClient}
+	ch := &liveChannel{ID: id, client: p.httpClient, ttft: p.ttftTimeout}
 	var keyEnc, proxyEnc []byte
 	var timeout int
 	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
@@ -619,15 +615,13 @@ func (p *Plugin) listAuditors(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	p.flushStats(ctx)
 	today, err := p.auditorsToday(ctx, db, p.clockOf(req))
 	if err != nil {
 		return nil, err
 	}
 	for i := range list {
-		t, ok := today[list[i].ID]
-		if !ok {
-			t.Cost = zeroCost()
-		}
+		t := today[list[i].ID]
 		list[i].Today = &t
 	}
 	return pluginsdk.DataResponse(list), nil

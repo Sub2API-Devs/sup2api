@@ -1,8 +1,11 @@
 package moderation
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,7 +86,7 @@ func (l Latency) Percentile(q float64) float64 {
 type counters struct {
 	audited, hit, blocked, overturned, errors, cacheSkipped, calls, tokensIn, tokensOut, latSum int64
 	lat                                                                                         Latency
-	units                                                                                       int64 // cost in 1e-8 USD (auditor rows)
+	callPrices                                                                                  // auditor rows
 }
 
 func (c *counters) observe(ms int64) {
@@ -103,7 +106,7 @@ func (c *counters) merge(o *counters) {
 	c.tokensOut += o.tokensOut
 	c.latSum += o.latSum
 	c.lat.Add(o.lat)
-	c.units += o.units
+	c.callPrices.merge(o.callPrices)
 }
 
 // statKey is the primary key of stats_hourly. Kinds: request (flow 0),
@@ -124,27 +127,52 @@ type costKey struct {
 	source  string
 }
 
+// callPrices adds up the price modes and the cost of metered calls.
+type callPrices struct {
+	priced, unpriced, unpricedTokens, free int64
+	units                                  int64 // cost in 1e-8 USD
+}
+
+func (p *callPrices) add(c CallCost, calls int64) {
+	switch c.Mode {
+	case PricePriced:
+		p.priced += calls
+		p.units += c.units
+	case PriceFree:
+		p.free += calls
+	default:
+		p.unpriced += calls
+		p.unpricedTokens += c.TokensIn + c.TokensOut
+	}
+}
+
+func (p *callPrices) merge(o callPrices) {
+	p.priced += o.priced
+	p.unpriced += o.unpriced
+	p.unpricedTokens += o.unpricedTokens
+	p.free += o.free
+	p.units += o.units
+}
+
+// summary is the CostSummary of the calls with their tokens.
+func (p callPrices) summary(in, out int64) CostSummary {
+	return CostSummary{units: p.units, Calls: p.priced + p.unpriced + p.free, PricedCalls: p.priced, UnpricedCalls: p.unpriced,
+		UnpricedTokens: p.unpricedTokens, FreeCalls: p.free, TokensIn: in, TokensOut: out}
+}
+
 // channelRow is one costs row being added up: health when calls are made,
 // cost when they are priced.
 type channelRow struct {
-	calls, errors, latSum                                  int64
-	lat                                                    Latency
-	priced, unpriced, unpricedTokens, free, in, out, units int64
+	calls, errors, latSum int64
+	lat                   Latency
+	callPrices
+	in, out int64
 }
 
 func (r *channelRow) addCost(c CallCost, calls int64) {
 	r.in += c.TokensIn
 	r.out += c.TokensOut
-	switch c.Mode {
-	case PricePriced:
-		r.priced += calls
-		r.units += c.units
-	case PriceFree:
-		r.free += calls
-	default:
-		r.unpriced += calls
-		r.unpricedTokens += c.TokensIn + c.TokensOut
-	}
+	r.callPrices.add(c, calls)
 }
 
 func (r *channelRow) merge(o *channelRow) {
@@ -152,13 +180,9 @@ func (r *channelRow) merge(o *channelRow) {
 	r.errors += o.errors
 	r.latSum += o.latSum
 	r.lat.Add(o.lat)
-	r.priced += o.priced
-	r.unpriced += o.unpriced
-	r.unpricedTokens += o.unpricedTokens
-	r.free += o.free
+	r.callPrices.merge(o.callPrices)
 	r.in += o.in
 	r.out += o.out
-	r.units += o.units
 }
 
 type userKey struct {
@@ -195,6 +219,10 @@ type priceItem struct {
 
 // statsAcc holds the counters of this node until the next flush.
 type statsAcc struct {
+	// flushMu serialises flushes: concurrent upserts of the same keys in
+	// separate transactions could deadlock or, on an ambiguous commit,
+	// count twice.
+	flushMu  sync.Mutex
 	mu       sync.Mutex
 	rows     map[statKey]*counters
 	channels map[costKey]*channelRow
@@ -309,13 +337,14 @@ func (p *Plugin) addCost(it priceItem, c CallCost) {
 	defer p.hourly.mu.Unlock()
 	p.hourly.channel(it.key).addCost(c, it.calls)
 	if !it.auditor.hour.IsZero() {
-		p.hourly.row(it.auditor).units += c.units
+		p.hourly.row(it.auditor).callPrices.add(c, it.calls)
 	}
 }
 
 // countRun counts one hook run: the flow row, each executed stage and each
-// auditor that returned, the user's day, and queues the pricing of the
-// metered calls (CONTRACTS §72.14).
+// auditor that returned, and queues the pricing of the metered calls
+// (CONTRACTS §72.14). Requests sharing a run are counted per user by
+// countUser.
 func (p *Plugin) countRun(m *moderation, tr Trace) {
 	refused := tr.Final == Hit && m.timing == TimingPre
 	var rec eventRec
@@ -356,7 +385,9 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 			ac.calls += int64(o.Calls)
 			ac.tokensIn += o.Usage.InputTokens
 			ac.tokensOut += o.Usage.OutputTokens
-			ac.observe(o.LatencyMs)
+			if o.Calls > 0 { // skipped or never run: no latency sample
+				ac.observe(o.LatencyMs)
+			}
 			switch {
 			case o.Skipped:
 				ac.cacheSkipped++ // nothing to send: neither a hit nor an error
@@ -371,11 +402,18 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 			}
 		}
 	}
-	p.countUserLocked(m.rec.UserID, m.rec.GroupID, rec.Result, rec.Severity)
 	p.hourly.mu.Unlock()
 	for _, it := range items {
 		p.priceLater(it)
 	}
+}
+
+// countUser counts one moderated request on the user's day (each request
+// sharing a pre run counts for its own user).
+func (p *Plugin) countUser(uid, group int64, result, severity string) {
+	p.hourly.mu.Lock()
+	defer p.hourly.mu.Unlock()
+	p.countUserLocked(uid, group, result, severity)
 }
 
 func (p *Plugin) countUserLocked(uid, group int64, result, severity string) {
@@ -433,16 +471,32 @@ func (p *Plugin) statsLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			p.drainPricing(context.WithoutCancel(ctx), 3*time.Second)
 			return
 		case it := <-p.hourly.queue:
-			qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			c := p.quote(qctx, it.ch, it.usage)
-			cancel()
-			p.addCost(it, c)
+			p.price(ctx, it)
 		case <-t.C:
-			fctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			p.flushStats(fctx)
-			cancel()
+			p.flushStats(ctx)
+		}
+	}
+}
+
+func (p *Plugin) price(ctx context.Context, it priceItem) {
+	qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	p.addCost(it, p.quote(qctx, it.ch, it.usage))
+}
+
+// drainPricing prices what is still queued at shutdown, for at most d.
+func (p *Plugin) drainPricing(ctx context.Context, d time.Duration) {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+	for ctx.Err() == nil {
+		select {
+		case it := <-p.hourly.queue:
+			p.price(ctx, it)
+		default:
+			return
 		}
 	}
 }
@@ -450,17 +504,27 @@ func (p *Plugin) statsLoop(ctx context.Context) {
 // flushStats upserts the counters; on failure they are kept for the next
 // round. Users who are moderators (moderation:read) are left out of
 // user_daily like new-api leaves out administrators.
+//
+// Flushes are serialised and run detached from the caller's context (a
+// reader that goes away must not leave an ambiguous commit behind).
 func (p *Plugin) flushStats(ctx context.Context) {
+	p.hourly.flushMu.Lock()
+	defer p.hourly.flushMu.Unlock()
 	rows, chans, users := p.hourly.take()
 	if len(rows)+len(chans)+len(users) == 0 {
 		return
 	}
+	base := context.WithoutCancel(ctx)
+	sctx, cancel := context.WithTimeout(base, 5*time.Second)
 	for k := range users {
-		if p.isStaff(ctx, k.user) {
+		if p.isStaff(sctx, k.user) {
 			delete(users, k)
 		}
 	}
-	if err := p.writeStats(ctx, rows, chans, users); err != nil {
+	cancel()
+	wctx, cancel := context.WithTimeout(base, 10*time.Second)
+	defer cancel()
+	if err := p.writeStats(wctx, rows, chans, users); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			p.log.Warn("moderation: stats write failed; retrying with the next flush", "error", err.Error())
 		}
@@ -478,22 +542,28 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 	if err != nil {
 		return err
 	}
+	// Keys in a fixed order: concurrent writers (other nodes) then take row
+	// locks in the same order and cannot deadlock.
 	b := &pgx.Batch{}
-	for k, c := range rows {
+	for _, k := range sortedKeys(rows, compareStatKey) {
+		c := rows[k]
 		b.Queue(`INSERT INTO stats_hourly (hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors,
-				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::numeric)
+				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost, priced_calls, unpriced_calls, unpriced_tokens, free_calls)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::numeric,$19,$20,$21,$22)
 			ON CONFLICT (hour, group_id, flow_id, stage, auditor_id, timing) DO UPDATE SET
 				audited = stats_hourly.audited + EXCLUDED.audited, hit = stats_hourly.hit + EXCLUDED.hit,
 				blocked = stats_hourly.blocked + EXCLUDED.blocked, overturned = stats_hourly.overturned + EXCLUDED.overturned,
 				errors = stats_hourly.errors + EXCLUDED.errors, cache_skipped = stats_hourly.cache_skipped + EXCLUDED.cache_skipped,
 				calls = stats_hourly.calls + EXCLUDED.calls, tokens_in = stats_hourly.tokens_in + EXCLUDED.tokens_in,
 				tokens_out = stats_hourly.tokens_out + EXCLUDED.tokens_out, latency_ms_sum = stats_hourly.latency_ms_sum + EXCLUDED.latency_ms_sum,
-				lat = `+latAdd("stats_hourly")+`, cost = stats_hourly.cost + EXCLUDED.cost`,
+				lat = `+latAdd("stats_hourly")+`, cost = stats_hourly.cost + EXCLUDED.cost,
+				priced_calls = stats_hourly.priced_calls + EXCLUDED.priced_calls, unpriced_calls = stats_hourly.unpriced_calls + EXCLUDED.unpriced_calls,
+				unpriced_tokens = stats_hourly.unpriced_tokens + EXCLUDED.unpriced_tokens, free_calls = stats_hourly.free_calls + EXCLUDED.free_calls`,
 			k.hour, k.group, k.flow, k.stage, k.auditor, k.timing, c.audited, c.hit, c.blocked, c.overturned, c.errors,
-			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units))
+			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units), c.priced, c.unpriced, c.unpricedTokens, c.free)
 	}
-	for k, r := range chans {
+	for _, k := range sortedKeys(chans, compareCostKey) {
+		r := chans[k]
 		b.Queue(`INSERT INTO costs (hour, channel_id, source, calls, errors, latency_ms_sum, lat, priced_calls, unpriced_calls, unpriced_tokens,
 				free_calls, tokens_in, tokens_out, cost)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric)
@@ -505,7 +575,8 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 				tokens_in = costs.tokens_in + EXCLUDED.tokens_in, tokens_out = costs.tokens_out + EXCLUDED.tokens_out, cost = costs.cost + EXCLUDED.cost`,
 			k.hour, k.channel, k.source, r.calls, r.errors, r.latSum, r.lat[:], r.priced, r.unpriced, r.unpricedTokens, r.free, r.in, r.out, formatCost(r.units))
 	}
-	for k, u := range users {
+	for _, k := range sortedKeys(users, compareUserKey) {
+		u := users[k]
 		var last *time.Time
 		if !u.lastHit.IsZero() {
 			last = &u.lastHit
@@ -519,4 +590,21 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		return tx.SendBatch(ctx, b).Close()
 	})
+}
+
+func sortedKeys[K comparable, V any](m map[K]V, cmpFn func(a, b K) int) []K {
+	return slices.SortedFunc(maps.Keys(m), cmpFn)
+}
+
+func compareStatKey(a, b statKey) int {
+	return cmp.Or(a.hour.Compare(b.hour), cmp.Compare(a.group, b.group), cmp.Compare(a.flow, b.flow), cmp.Compare(a.stage, b.stage),
+		cmp.Compare(a.auditor, b.auditor), cmp.Compare(a.timing, b.timing))
+}
+
+func compareCostKey(a, b costKey) int {
+	return cmp.Or(a.hour.Compare(b.hour), cmp.Compare(a.channel, b.channel), cmp.Compare(a.source, b.source))
+}
+
+func compareUserKey(a, b userKey) int {
+	return cmp.Or(a.day.Compare(b.day), cmp.Compare(a.user, b.user))
 }

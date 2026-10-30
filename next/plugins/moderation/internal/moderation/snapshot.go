@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -64,6 +66,20 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
+
+// categoryLabels maps the categories of the live auditors to their labels
+// (custom Jev codes carry one; the lowest auditor id wins).
+func (s *snapshot) categoryLabels() map[string]string {
+	out := map[string]string{}
+	for _, id := range slices.Sorted(maps.Keys(s.auditors)) {
+		for c, l := range s.auditors[id].labels {
+			if _, ok := out[c]; !ok && l != "" {
+				out[c] = l
+			}
+		}
+	}
+	return out
+}
 
 // sendsImages reports whether any auditor of the flow sends images; when
 // none does, the request images are not kept while the request waits.
@@ -141,7 +157,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	for _, r := range chRows {
 		ch := &liveChannel{ID: r.id, Name: r.name, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model, BillingModel: r.billing,
-			Timeout: time.Duration(r.timeout) * time.Millisecond, client: p.httpClient}
+			Timeout: time.Duration(r.timeout) * time.Millisecond, client: p.httpClient, ttft: p.ttftTimeout}
 		if len(r.keyEnc) > 0 {
 			key, err := p.host.OpenSecret(ctx, secretContext(r.id, "key"), r.keyEnc)
 			if err != nil {

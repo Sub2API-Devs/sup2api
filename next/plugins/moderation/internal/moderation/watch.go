@@ -301,7 +301,8 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			source = CASE WHEN $5 THEN 'manual' ELSE source END,
 			since_at = CASE WHEN $5 THEN $6 ELSE since_at END,
 			violation_count = CASE WHEN $5 THEN 0 ELSE violation_count END,
-			violation_epoch = CASE WHEN $5 THEN $7 ELSE violation_epoch END
+			violation_epoch = CASE WHEN $5 THEN $7 ELSE violation_epoch END,
+			hits_since_seen = CASE WHEN $5 THEN 0 ELSE hits_since_seen END
 			WHERE user_id = $1`, uid, w.Level, w.ExpiresAt, w.Note, changed, now, w.ViolationEpoch); err != nil {
 			return w, err
 		}

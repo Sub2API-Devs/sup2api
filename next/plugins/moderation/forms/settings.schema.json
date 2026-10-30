@@ -89,13 +89,15 @@
       "title": "Notification webhook",
       "maxLength": 1000,
       "default": "",
-      "pattern": "^$|^https?://\\S+$"
+      "pattern": "^$|^https?://\\S+$",
+      "x-sensitive": true
     },
     "notify_webhook_secret": {
       "type": "string",
       "title": "Webhook secret",
       "maxLength": 200,
-      "default": ""
+      "default": "",
+      "writeOnly": true
     },
     "analysis_channel_id": {
       "type": "integer",
@@ -221,6 +223,13 @@
       "minimum": 1,
       "maximum": 100000,
       "default": 1000
+    },
+    "ttft_timeout_ms": {
+      "type": "integer",
+      "title": "First byte timeout (ms)",
+      "minimum": 1000,
+      "maximum": 60000,
+      "default": 10000
     },
     "cache_ttl_seconds": {
       "type": "integer",

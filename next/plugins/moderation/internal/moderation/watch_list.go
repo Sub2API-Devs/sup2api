@@ -46,7 +46,7 @@ type WatchItem struct {
 
 // watchFilter builds the WHERE clause over watchlist w.
 func watchFilter(req *pluginv1.HTTPRequest, now time.Time) (string, []any, pluginsdk.FieldErrors) {
-	f := &eventQuery{conds: []string{"(w.expires_at IS NULL OR w.expires_at > $1)"}, args: []any{now}}
+	f := &sqlFilter{conds: []string{"(w.expires_at IS NULL OR w.expires_at > $1)"}, args: []any{now}}
 	if v := pluginsdk.Query(req, "level"); v != "" {
 		if v != LevelObserve && v != LevelEnforce {
 			f.errs = f.errs.Add("level", "enum", "level must be observe or enforce / level 取值为 observe、enforce")
@@ -77,32 +77,11 @@ func watchFilter(req *pluginv1.HTTPRequest, now time.Time) (string, []any, plugi
 			f.conds = append(f.conds, "EXISTS (SELECT 1 FROM events e WHERE e.user_id = w.user_id AND e.result IN ('hit', 'block') AND "+f.arg(v)+" = ANY(e.hit_categories))")
 		}
 	}
-	var ids []int64
-	if v := pluginsdk.Query(req, "user_id"); v != "" {
-		ids = append(ids, 0)
-		if id, err := strconv.ParseInt(v, 10, 64); err == nil && id > 0 {
-			ids[0] = id
-		} else {
-			f.errs = f.errs.Add("user_id", "invalid", "user_id must be a positive integer / user_id 必须是正整数")
-		}
+	if id, ok := f.queryID(req, "user_id"); ok {
+		f.conds = append(f.conds, "w.user_id = "+f.arg(id))
 	}
-	if v := pluginsdk.Query(req, "user_ids"); v != "" {
-		for _, part := range strings.Split(v, ",") {
-			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
-			if err != nil || id <= 0 || len(ids) >= 500 {
-				f.errs = f.errs.Add("user_ids", "invalid", "user_ids is a comma list of up to 500 user ids / user_ids 为逗号分隔的用户 id，最多 500 个")
-				break
-			}
-			ids = append(ids, id)
-		}
-		if len(ids) == 0 {
-			ids = []int64{0} // no user matched the search
-		}
-	}
-	if ids != nil {
-		f.conds = append(f.conds, "w.user_id = ANY("+f.arg(ids)+")")
-	}
-	return strings.Join(f.conds, " AND "), f.args, f.errs
+	f.idList(req, "user_ids", "w.user_id")
+	return f.where(), f.args, f.errs
 }
 
 func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -203,12 +182,13 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	if err != nil {
 		return nil, err
 	}
+	labels := p.snap.Load().categoryLabels()
 	var cat string
 	var cnt int64
 	if _, err := pgx.ForEachRow(rows, []any{&uid, &cat, &cnt}, func() error {
 		it := byID[uid]
 		if len(it.TopCategories) < 3 {
-			it.TopCategories = append(it.TopCategories, CategoryCount{Category: cat, Count: cnt})
+			it.TopCategories = append(it.TopCategories, CategoryCount{Category: cat, Label: labels[cat], Count: cnt})
 		} else {
 			it.TopOther += cnt
 		}
@@ -265,7 +245,7 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	return items, nil
 }
 
-// markWatchSeen resets hits_since_seen (new-api "mark as seen").
+// markWatchSeen resets hits_since_seen of an active entry (new-api "mark as seen").
 func (p *Plugin) markWatchSeen(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	uid, bad := parseID(req, "user_id")
 	if bad != nil {
@@ -275,7 +255,7 @@ func (p *Plugin) markWatchSeen(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	tag, err := db.Exec(ctx, `UPDATE watchlist SET hits_since_seen = 0 WHERE user_id = $1`, uid)
+	tag, err := db.Exec(ctx, `UPDATE watchlist SET hits_since_seen = 0 WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, p.now().UTC())
 	if err != nil {
 		return nil, err
 	}

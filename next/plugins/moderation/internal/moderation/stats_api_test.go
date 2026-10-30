@@ -130,6 +130,17 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if evs[0].Action != "set_level" || evs[0].Reason != "manual check" {
 		t.Fatalf("history = %+v", evs[0])
 	}
+	// The detail drawer answers for any user; a level change resets the new hits.
+	d := decodeData[UserDetail](t, h.Do("GET", "/users/11", nil, nil))
+	if d.Watch == nil || d.Watch.Level != LevelEnforce || d.Watch.HitsSinceSeen != 0 || d.Summary.Total != 1 || d.Summary.Pending != 1 ||
+		d.Summary.AIVerdicts.None != 1 || d.Context.GroupID == nil || *d.Context.GroupID != 9 || d.Context.Flow == nil ||
+		len(d.Context.Sources) != 1 || !d.Context.Sources[0].Current || len(d.Daily) != 1 || d.Daily[0].Suspicious != 1 {
+		t.Fatalf("detail = %+v", d)
+	}
+	if d := decodeData[UserDetail](t, h.Do("GET", "/users/55", nil, nil)); d.Watch != nil || d.Summary.Total != 0 || d.Context.GroupID != nil ||
+		d.Daily == nil || d.Context.Sources == nil {
+		t.Fatalf("unknown user detail = %+v", d)
+	}
 	// Moderators are not put on the watch list by hand.
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
 	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); resp.GetStatus() != 400 {

@@ -80,12 +80,15 @@ func TestManifest(t *testing.T) {
 		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
 		"POST /watchlist/:user_id/analyze": "moderation:manage", "GET /analyses/:id": "moderation:read", "GET /costs": "moderation:read",
 		"POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage", "GET /analysis/prompt": "moderation:read",
+		"GET /status": "moderation:read", "GET /stats/trend": "moderation:read", "GET /stats/performance": "moderation:read",
+		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
+		"GET /users/:user_id": "moderation:read",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 55 {
+	if len(routes) != 56 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -190,10 +193,13 @@ func TestSettingsForms(t *testing.T) {
 			t.Errorf("field %s has no ui:title", k)
 		}
 	}
-	for _, k := range []string{"api_key"} {
+	for _, k := range []string{"api_key", "notify_webhook_secret"} {
 		if schema.Properties[k]["writeOnly"] != true {
 			t.Errorf("%s must be writeOnly", k)
 		}
+	}
+	if schema.Properties["notify_webhook_url"]["x-sensitive"] != true {
+		t.Error("notify_webhook_url must be x-sensitive (chat webhooks embed a token)")
 	}
 	raw, _ := json.Marshal(defaults)
 	got, err := moderation.DecodeSettings(raw)

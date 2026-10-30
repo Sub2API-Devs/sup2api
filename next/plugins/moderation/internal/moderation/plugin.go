@@ -138,6 +138,11 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.log = h.Logger()
 	p.eventWriter = batch.New(p.bg, 4096, func(ctx context.Context, evs []eventRec) error {
 		ids, err := p.writeEvents(ctx, evs)
+		if err != nil && ctx.Err() == nil && dropInputMessages(evs, "save_failed") {
+			// The messages are the largest and least checked part of a
+			// record: keep the records without them (new-api worker.go).
+			ids, err = p.writeEvents(ctx, evs)
+		}
 		if err != nil {
 			p.log.Warn("moderation: write events failed", "error", err.Error(), "events", len(evs))
 			return err

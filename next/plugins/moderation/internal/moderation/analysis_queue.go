@@ -344,7 +344,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 				expires = &t
 			}
 			tag, err := tx.Exec(ctx, `UPDATE watchlist SET level = $3, source = 'analysis', since_at = $4, expires_at = $5,
-				hit_count = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
+				hit_count = 0, hits_since_seen = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
 				job.UserID, w.Level, to, now, expires, newEpoch())
 			if err != nil || tag.RowsAffected() != 1 {
 				return err
@@ -359,8 +359,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		case ActionAutoNotAllowed:
 			reason = denied + ":" + a.Trend
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, analysis_id) VALUES ($1,$2,$3,$4,$5,$6)`,
-			job.UserID, action, w.Level, to, reason, id); err != nil {
+		if err := watchEventFor(ctx, tx, job.UserID, action, w.Level, to, reason, nil, &id); err != nil {
 			return err
 		}
 		if changed {
@@ -369,10 +368,8 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		return nil
 	})
 	if err == nil && changed {
-		p.watchChanged(ctx)
-		if watchNoticeOf(action) {
-			p.notifyWatchChange(job.UserID, action, from, to, a.Trend, a.Suggestion, analysisID)
-		}
+		p.watchChanged(ctx) // only real level changes set changed
+		p.notifyWatchChange(job.UserID, action, from, to, a.Trend, a.Suggestion, analysisID)
 	}
 	return err
 }

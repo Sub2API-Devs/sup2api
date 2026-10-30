@@ -126,7 +126,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	for _, s := range costs.BySource {
 		src[s.Source] = s.Summary
 	}
-	if src[SourceAnalysis].Cost != "0.00126000" || src[SourceAnalysis].PricedCalls != 3 || src[SourceAudit].FreeCalls != 2 || costs.Totals.Cost != "0.00126000" {
+	if src[SourceAnalysis].Cost() != "0.00126000" || src[SourceAnalysis].PricedCalls != 3 || src[SourceAudit].FreeCalls != 2 || costs.Totals.Cost() != "0.00126000" {
 		t.Fatalf("costs = %+v", costs)
 	}
 	// A manual analysis; the mild conclusion removes the user.
@@ -234,7 +234,7 @@ func TestFlowVersionsRollbackSimulate(t *testing.T) {
 		t.Fatalf("events = %d", n)
 	}
 	c := decodeData[CostReport](t, h.Do("GET", "/costs", nil, nil))
-	if len(c.BySource) != 1 || c.BySource[0].Source != SourceSimulate || c.Totals.PricedCalls != 1 || c.Totals.FreeCalls != 1 || c.Totals.Cost != "0.00000042" {
+	if len(c.BySource) != 1 || c.BySource[0].Source != SourceSimulate || c.Totals.PricedCalls != 1 || c.Totals.FreeCalls != 1 || c.Totals.Cost() != "0.00000042" {
 		t.Fatalf("costs = %+v", c)
 	}
 }

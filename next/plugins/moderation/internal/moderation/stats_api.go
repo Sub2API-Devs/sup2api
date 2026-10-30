@@ -26,8 +26,9 @@ import (
 // flagged (new-api stats.go).
 const minAlertSamples = 20
 
+// flagged reports an error rate above alertPercent (0 = alerts off).
 func flagged(errors, samples int64, alertPercent int) bool {
-	return samples >= minAlertSamples && float64(errors)*100 > float64(alertPercent)*float64(samples)
+	return alertPercent > 0 && samples >= minAlertSamples && errors*100 > int64(alertPercent)*samples
 }
 
 func ratio(n, d int64) float64 {
@@ -70,12 +71,15 @@ type statFilter struct {
 	flow     int64
 }
 
-// loadStats reads stats_hourly rows after writing the pending counters, so a
-// fresh run shows up at once.
+// costUnits selects a numeric cost column as 1e-8 USD units.
+func costUnits(col string) string { return `round(` + col + ` * 100000000)::bigint` }
+
+// loadStats reads stats_hourly rows. Readers call flushStats first, so a
+// run of this node shows up at once.
 func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, f statFilter) ([]statRow, error) {
-	p.flushStats(ctx)
 	q := `SELECT hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors, cache_skipped,
-			calls, tokens_in, tokens_out, latency_ms_sum, lat, cost::text FROM stats_hourly WHERE hour >= $1 AND hour < $2`
+			calls, tokens_in, tokens_out, latency_ms_sum, lat, ` + costUnits("cost") + `, priced_calls, unpriced_calls, unpriced_tokens, free_calls
+		FROM stats_hourly WHERE hour >= $1 AND hour < $2`
 	args := []any{f.from, f.to}
 	if f.group != nil {
 		args = append(args, *f.group)
@@ -92,12 +96,11 @@ func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, f statFilter) 
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (statRow, error) {
 		var s statRow
 		var lat []int64
-		var cost string
 		err := r.Scan(&s.hour, &s.group, &s.flow, &s.stage, &s.auditor, &s.timing, &s.audited, &s.hit, &s.blocked, &s.overturned,
-			&s.errors, &s.cacheSkipped, &s.calls, &s.tokensIn, &s.tokensOut, &s.latSum, &lat, &cost)
+			&s.errors, &s.cacheSkipped, &s.calls, &s.tokensIn, &s.tokensOut, &s.latSum, &lat, &s.units, &s.priced, &s.unpriced,
+			&s.unpricedTokens, &s.free)
 		s.hour = s.hour.UTC()
 		copy(s.lat[:], lat)
-		s.units, _ = parseCost(cost)
 		return s, err
 	})
 }
@@ -110,41 +113,30 @@ type channelStat struct {
 	channelRow
 }
 
-func (r *channelStat) summary() CostSummary {
-	return CostSummary{Cost: formatCost(r.units), Calls: r.priced + r.unpriced + r.free, PricedCalls: r.priced, UnpricedCalls: r.unpriced,
-		UnpricedTokens: r.unpricedTokens, FreeCalls: r.free, TokensIn: r.in, TokensOut: r.out}
-}
+func (r *statRow) costSummary() CostSummary { return r.callPrices.summary(r.tokensIn, r.tokensOut) }
 
-func (s *CostSummary) add(o CostSummary) {
-	a, _ := parseCost(s.Cost)
-	b, _ := parseCost(o.Cost)
-	s.Cost = formatCost(a + b)
-	s.Calls += o.Calls
-	s.PricedCalls += o.PricedCalls
-	s.UnpricedCalls += o.UnpricedCalls
-	s.UnpricedTokens += o.UnpricedTokens
-	s.FreeCalls += o.FreeCalls
-	s.TokensIn += o.TokensIn
-	s.TokensOut += o.TokensOut
-}
+func (r *channelStat) costSummary() CostSummary { return r.callPrices.summary(r.in, r.out) }
 
-func zeroCost() CostSummary { return CostSummary{Cost: formatCost(0)} }
+// addCost adds s to the summary of k.
+func addCost[K comparable](m map[K]CostSummary, k K, s CostSummary) {
+	sum := m[k]
+	sum.add(s)
+	m[k] = sum
+}
 
 func (p *Plugin) loadChannelStats(ctx context.Context, db *pgxpool.Pool, from time.Time) ([]channelStat, error) {
 	rows, err := db.Query(ctx, `SELECT hour, channel_id, source, calls, errors, latency_ms_sum, lat, priced_calls, unpriced_calls,
-			unpriced_tokens, free_calls, tokens_in, tokens_out, cost::text FROM costs WHERE hour >= $1`, from)
+			unpriced_tokens, free_calls, tokens_in, tokens_out, `+costUnits("cost")+` FROM costs WHERE hour >= $1`, from)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (channelStat, error) {
 		var s channelStat
 		var lat []int64
-		var cost string
 		err := r.Scan(&s.hour, &s.channel, &s.source, &s.calls, &s.errors, &s.latSum, &lat, &s.priced, &s.unpriced,
-			&s.unpricedTokens, &s.free, &s.in, &s.out, &cost)
+			&s.unpricedTokens, &s.free, &s.in, &s.out, &s.units)
 		s.hour = s.hour.UTC()
 		copy(s.lat[:], lat)
-		s.units, _ = parseCost(cost)
 		return s, err
 	})
 }
@@ -156,10 +148,12 @@ type clock struct {
 }
 
 // clockOf reads tz_offset_minutes (-840..840); invalid values are UTC.
+// Rows are whole UTC hours, so the offset is rounded to the nearest hour
+// (a +5:30 "today" starts at the hour closest to local midnight).
 func (p *Plugin) clockOf(req *pluginv1.HTTPRequest) clock {
 	c := clock{now: p.now().UTC()}
 	if v, err := strconv.Atoi(pluginsdk.Query(req, "tz_offset_minutes")); err == nil && v >= -840 && v <= 840 {
-		c.offset = time.Duration(v) * time.Minute
+		c.offset = (time.Duration(v) * time.Minute).Round(time.Hour)
 	}
 	return c
 }
@@ -308,8 +302,8 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	ck := p.clockOf(req)
-	out, err := p.status(ctx, db, ck)
+	p.flushStats(ctx)
+	out, err := p.status(ctx, db, p.clockOf(req))
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +320,7 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 	}
 	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
 		Auditors: []HealthRow{}, Channels: []HealthRow{}, Funnels: []Funnel{}, Queue: p.queues(), Runtime: p.runtimeState(ctx),
-		Costs: StatusCosts{Total: zeroCost(), Audit: zeroCost(), Analysis: zeroCost(), Manual: zeroCost(), Channels: []CostRef{}, Auditors: []CostRef{}}}
+		Costs: StatusCosts{Channels: []CostRef{}, Auditors: []CostRef{}}}
 	auditors := map[int64]*counters{}
 	funnels := map[int64]map[int]*counters{}
 	flows := map[int64]*counters{}
@@ -359,12 +353,7 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 			out.Today.AuditorCalls += r.calls
 			out.Today.TokensIn += r.tokensIn
 			out.Today.TokensOut += r.tokensOut
-			s := auditorCosts[r.auditor]
-			if s.Cost == "" {
-				s = zeroCost()
-			}
-			s.add(CostSummary{Cost: formatCost(r.units), Calls: r.calls, TokensIn: r.tokensIn, TokensOut: r.tokensOut})
-			auditorCosts[r.auditor] = s
+			addCost(auditorCosts, r.auditor, r.costSummary())
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(auditors)) {
@@ -373,10 +362,11 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 			ErrorRate: ratio(a.errors, a.audited), HitRate: ratio(a.hit, a.audited), Flagged: flagged(a.errors, a.audited, c.ErrorRateAlertPercent),
 			SkippedNoText: a.cacheSkipped})
 	}
-	for _, id := range slices.Sorted(maps.Keys(auditorCosts)) {
-		out.Costs.Auditors = append(out.Costs.Auditors, CostRef{ID: id, Cost: auditorCosts[id]})
+	out.Costs.Auditors = costRefs(auditorCosts)
+	names, err := p.flowNames(ctx, db)
+	if err != nil {
+		return nil, err
 	}
-	names := p.flowNames(ctx, db)
 	for _, id := range slices.Sorted(maps.Keys(flows)) {
 		f := Funnel{FlowID: id, Name: names[id], Suspicious: flows[id].hit, Blocked: flows[id].blocked, Stages: []FunnelStage{}}
 		for _, st := range slices.Sorted(maps.Keys(funnels[id])) {
@@ -395,6 +385,14 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 	return out, err
 }
 
+func costRefs(m map[int64]CostSummary) []CostRef {
+	out := make([]CostRef, 0, len(m))
+	for _, id := range slices.Sorted(maps.Keys(m)) {
+		out = append(out, CostRef{ID: id, Cost: m[id]})
+	}
+	return out
+}
+
 // addChannelStatus adds the last-hour channel health and today's costs.
 func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *Status, from, today, lastHour time.Time, alert int) error {
 	rows, err := p.loadChannelStats(ctx, db, from)
@@ -405,7 +403,7 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 	costs := map[int64]CostSummary{}
 	for i := range rows {
 		r := &rows[i]
-		if !r.hour.Before(lastHour) && (r.source == SourceAudit || r.source == SourceAnalysis) {
+		if !r.hour.Before(lastHour) && r.health() {
 			if health[r.channel] == nil {
 				health[r.channel] = &channelRow{}
 			}
@@ -414,13 +412,8 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 		if r.hour.Before(today) {
 			continue
 		}
-		cost := r.summary()
-		s := costs[r.channel]
-		if s.Cost == "" {
-			s = zeroCost()
-		}
-		s.add(cost)
-		costs[r.channel] = s
+		cost := r.costSummary()
+		addCost(costs, r.channel, cost)
 		out.Costs.Total.add(cost)
 		switch r.source {
 		case SourceAudit:
@@ -436,44 +429,52 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 		out.Channels = append(out.Channels, HealthRow{ID: id, Calls: h.calls, Errors: h.errors, ErrorRate: ratio(h.errors, h.calls),
 			Flagged: flagged(h.errors, h.calls, alert)})
 	}
-	for _, id := range slices.Sorted(maps.Keys(costs)) {
-		out.Costs.Channels = append(out.Costs.Channels, CostRef{ID: id, Cost: costs[id]})
-	}
+	out.Costs.Channels = costRefs(costs)
 	return nil
 }
+
+// health reports whether the row counts in a channel's health: audit and
+// analysis calls (manual calls are left out, CONTRACTS §72.14).
+func (r *channelStat) health() bool { return r.source == SourceAudit || r.source == SourceAnalysis }
 
 // addAnalysisCounts adds today's analyses, their tokens and the AI review
 // counts (verdict_counts of today's successful analyses).
 func addAnalysisCounts(ctx context.Context, db *pgxpool.Pool, out *Status, today time.Time) error {
-	return db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status <> 'ok'), coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0),
+	ai := &out.AIReview
+	err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status <> 'ok'), coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0),
 			coalesce(sum((verdict_counts->>'violation')::bigint) FILTER (WHERE status = 'ok'), 0),
 			coalesce(sum((verdict_counts->>'false_positive')::bigint) FILTER (WHERE status = 'ok'), 0),
 			coalesce(sum((verdict_counts->>'unsure')::bigint) FILTER (WHERE status = 'ok'), 0)
 		FROM user_analyses WHERE created_at >= $1`, today).Scan(&out.Today.Analyses, &out.Today.AnalysesFailed,
-		&out.Today.AnalysisTokensIn, &out.Today.AnalysisTokensOut, &out.AIReview.Violation, &out.AIReview.FalsePositive, &out.AIReview.Unsure)
+		&out.Today.AnalysisTokensIn, &out.Today.AnalysisTokensOut, &ai.Violation, &ai.FalsePositive, &ai.Unsure)
+	ai.Reviewed = ai.Violation + ai.FalsePositive + ai.Unsure
+	return err
 }
 
+// watchCounts: watching and watching_with_new count the observe level,
+// blocking the enforce level (new-api CountModerationWatch).
 func (p *Plugin) watchCounts(ctx context.Context, db *pgxpool.Pool) (WatchCounts, error) {
 	var w WatchCounts
-	err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE hits_since_seen > 0), count(*) FILTER (WHERE level = 'enforce')
+	err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = 'observe'), count(*) FILTER (WHERE level = 'observe' AND hits_since_seen > 0),
+			count(*) FILTER (WHERE level = 'enforce')
 		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking)
 	return w, err
 }
 
 // flowNames maps flow ids (deleted ones too) to their names.
-func (p *Plugin) flowNames(ctx context.Context, db *pgxpool.Pool) map[int64]string {
-	out := map[int64]string{}
+func (p *Plugin) flowNames(ctx context.Context, db *pgxpool.Pool) (map[int64]string, error) {
 	rows, err := db.Query(ctx, `SELECT id, name FROM flows`)
 	if err != nil {
-		return out
+		return nil, err
 	}
+	out := map[int64]string{}
 	var id int64
 	var name string
-	_, _ = pgx.ForEachRow(rows, []any{&id, &name}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&id, &name}, func() error {
 		out[id] = name
 		return nil
 	})
-	return out
+	return out, err
 }
 
 // queues lists this node's queues: the post queue, the pricing queue and the
@@ -563,7 +564,8 @@ func summaryOf(c *counters) LatencySummary {
 		P99Ms: c.lat.Percentile(0.99), Buckets: c.lat}
 }
 
-// FlowPoint is one bucket of a flow's trend.
+// FlowPoint is one bucket of a flow's trend. Audited counts the requests
+// the flow received, cache_skipped included (as in today's counts).
 type FlowPoint struct {
 	Ts             time.Time `json:"ts"`
 	Audited        int64     `json:"audited"`
@@ -623,6 +625,7 @@ func (p *Plugin) getTrend(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
+	p.flushStats(ctx)
 	rows, err := p.loadStats(ctx, db, statFilter{from: q.from, to: q.to, group: q.group, flow: q.flow})
 	if err != nil {
 		return nil, err
@@ -664,13 +667,16 @@ func (p *Plugin) getTrend(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	}
 	out := TrendResult{Granularity: q.granularity, From: q.from, To: q.to, AlertPercent: p.cfg.Load().ErrorRateAlertPercent,
 		Flows: []FlowTrend{}, Auditors: []AuditorTrend{}}
-	names := p.flowNames(ctx, db)
+	names, err := p.flowNames(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 	for _, id := range slices.Sorted(maps.Keys(flows)) {
 		ft := FlowTrend{FlowID: id, Name: names[id], Points: []FlowPoint{}}
 		for _, ts := range slices.SortedFunc(maps.Keys(flows[id]), time.Time.Compare) {
 			a := flows[id][ts]
 			pre, post := summaryOf(&a.pre), summaryOf(&a.post)
-			ft.Points = append(ft.Points, FlowPoint{Ts: ts, Audited: a.all.audited, CacheSkipped: a.all.cacheSkipped, Hit: a.all.hit,
+			ft.Points = append(ft.Points, FlowPoint{Ts: ts, Audited: a.all.audited + a.all.cacheSkipped, CacheSkipped: a.all.cacheSkipped, Hit: a.all.hit,
 				Blocked: a.all.blocked, Overturned: a.all.overturned, Errors: a.all.errors,
 				SuspiciousRate: ratio(a.all.hit, a.all.audited+a.all.cacheSkipped),
 				PreAvgMs:       pre.AvgMs, PreP95Ms: pre.P95Ms, PostAvgMs: post.AvgMs, PostP95Ms: post.P95Ms})
@@ -725,6 +731,7 @@ func (p *Plugin) getPerformance(ctx context.Context, req *pluginv1.HTTPRequest) 
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
+	p.flushStats(ctx)
 	rows, err := p.loadStats(ctx, db, statFilter{from: q.from, to: q.to, group: q.group, flow: q.flow})
 	if err != nil {
 		return nil, err
@@ -770,6 +777,7 @@ const (
 // CategoryStat is one category of today's suspicious requests.
 type CategoryStat struct {
 	Category string `json:"category"`
+	Label    string `json:"label,omitempty"`
 	Count    int    `json:"count"`
 }
 
@@ -782,27 +790,62 @@ type CategoryStats struct {
 	Items              []CategoryStat `json:"items"`
 }
 
+// categoryCache keeps the last result per "today" start for categoryTTL.
 type categoryCache struct {
-	mu   sync.Mutex
-	from time.Time
+	mu      sync.Mutex
+	entries map[time.Time]categoryEntry
+}
+
+type categoryEntry struct {
 	at   time.Time
 	data *CategoryStats
 }
 
+func (c *categoryCache) get(from, now time.Time) *CategoryStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.entries[from]; ok && now.Sub(e.at) < categoryTTL {
+		return e.data
+	}
+	return nil
+}
+
+func (c *categoryCache) put(from, now time.Time, data *CategoryStats) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = map[time.Time]categoryEntry{}
+	}
+	maps.DeleteFunc(c.entries, func(_ time.Time, e categoryEntry) bool { return now.Sub(e.at) >= categoryTTL })
+	c.entries[from] = categoryEntry{at: now, data: data}
+}
+
 // getCategories counts today's suspicious requests by hit category: each
-// request counts once per category, at most 50 000 records, cached 60 s.
+// request counts once per category, at most 50 000 records, cached 60 s
+// (concurrent misses share one query).
 func (p *Plugin) getCategories(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	from := p.clockOf(req).today()
-	cc := &p.categories
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
-	if cc.data != nil && cc.from.Equal(from) && p.now().Sub(cc.at) < categoryTTL {
-		return pluginsdk.DataResponse(cc.data), nil
+	if data := p.categories.get(from, p.now()); data != nil {
+		return pluginsdk.DataResponse(data), nil
 	}
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
+	v, err, _ := p.sf.Do("categories:"+from.Format(time.RFC3339), func() (any, error) {
+		data, err := p.categoryStats(context.WithoutCancel(ctx), db, from)
+		if err == nil {
+			p.categories.put(from, p.now(), data)
+		}
+		return data, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pluginsdk.DataResponse(v), nil
+}
+
+func (p *Plugin) categoryStats(ctx context.Context, db *pgxpool.Pool, from time.Time) (*CategoryStats, error) {
 	rows, err := db.Query(ctx, `SELECT id, request_id, hit_categories FROM events
 		WHERE created_at >= $1 AND result IN ('hit', 'block') ORDER BY created_at DESC LIMIT $2`, from, maxCategoryScan)
 	if err != nil {
@@ -834,14 +877,14 @@ func (p *Plugin) getCategories(ctx context.Context, req *pluginv1.HTTPRequest) (
 			out.CategoryHits++
 		}
 	}
+	labels := p.snap.Load().categoryLabels()
 	for c, k := range counts {
-		out.Items = append(out.Items, CategoryStat{Category: c, Count: k})
+		out.Items = append(out.Items, CategoryStat{Category: c, Label: labels[c], Count: k})
 	}
 	slices.SortFunc(out.Items, func(a, b CategoryStat) int {
 		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Category, b.Category))
 	})
-	cc.from, cc.at, cc.data = from, p.now(), out
-	return pluginsdk.DataResponse(out), nil
+	return out, nil
 }
 
 // ---------------------------------------------------------------- list columns
@@ -882,8 +925,8 @@ func (p *Plugin) flowStats24h(ctx context.Context, db *pgxpool.Pool) (map[int64]
 	return out, nil
 }
 
-// AuditorToday is the auditor list's calls and cost today (hook runs only;
-// try-outs are on the channel rows).
+// AuditorToday is the auditor list's upstream calls and cost today (hook
+// runs only; try-outs are on the channel rows).
 type AuditorToday struct {
 	Calls int64       `json:"calls"`
 	Cost  CostSummary `json:"cost"`
@@ -900,12 +943,9 @@ func (p *Plugin) auditorsToday(ctx context.Context, db *pgxpool.Pool, ck clock) 
 		if r.kind() != kindAuditor {
 			continue
 		}
-		st, ok := out[r.auditor]
-		if !ok {
-			st.Cost = zeroCost()
-		}
+		st := out[r.auditor]
 		st.Calls += r.calls
-		st.Cost.add(CostSummary{Cost: formatCost(r.units), Calls: r.calls, TokensIn: r.tokensIn, TokensOut: r.tokensOut})
+		st.Cost.add(r.costSummary())
 		out[r.auditor] = st
 	}
 	return out, nil
@@ -922,8 +962,9 @@ type ChannelStat struct {
 	CostTodaySources map[string]CostSummary `json:"cost_today_sources"`
 }
 
-func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock) (map[int64]ChannelStat, error) {
-	p.flushStats(ctx)
+func newChannelStat() *ChannelStat { return &ChannelStat{CostTodaySources: map[string]CostSummary{}} }
+
+func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock) (map[int64]*ChannelStat, error) {
 	today, lastHour := ck.today(), ck.lastHour()
 	rows, err := p.loadChannelStats(ctx, db, earliest(today, lastHour))
 	if err != nil {
@@ -934,12 +975,12 @@ func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock) (
 		r := &rows[i]
 		st := out[r.channel]
 		if st == nil {
-			st = &ChannelStat{Cost1h: zeroCost(), CostToday: zeroCost(), CostTodaySources: map[string]CostSummary{}}
+			st = newChannelStat()
 			out[r.channel] = st
 		}
-		cost := r.summary()
+		cost := r.costSummary()
 		if !r.hour.Before(lastHour) {
-			if r.source == SourceAudit || r.source == SourceAnalysis {
+			if r.health() {
 				st.Calls1h += r.calls
 				st.Errors1h += r.errors
 			}
@@ -948,20 +989,13 @@ func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock) (
 		if !r.hour.Before(today) {
 			st.TokensToday += r.in + r.out
 			st.CostToday.add(cost)
-			s, ok := st.CostTodaySources[r.source]
-			if !ok {
-				s = zeroCost()
-			}
-			s.add(cost)
-			st.CostTodaySources[r.source] = s
+			addCost(st.CostTodaySources, r.source, cost)
 		}
 	}
-	res := make(map[int64]ChannelStat, len(out))
-	for id, st := range out {
+	for _, st := range out {
 		st.ErrorRate1h = ratio(st.Errors1h, st.Calls1h)
-		res[id] = *st
 	}
-	return res, nil
+	return out, nil
 }
 
 // ---------------------------------------------------------------- cleanup

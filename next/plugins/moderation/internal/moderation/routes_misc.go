@@ -299,6 +299,12 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	if err := p.cleanupStats(ctx, db, now); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup stats: %v", err)
 	}
+	// analysis_keep_per_user may have been lowered since a user's last analysis.
+	if _, err := db.Exec(ctx, `DELETE FROM user_analyses WHERE id IN (SELECT id FROM (
+			SELECT id, row_number() OVER (PARTITION BY user_id ORDER BY id DESC) AS n FROM user_analyses) t WHERE n > $1)`,
+		p.cfg.Load().AnalysisKeepPerUser); err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup analyses: %v", err)
+	}
 	watch, err := p.expireWatch(ctx, now)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup watch list: %v", err)

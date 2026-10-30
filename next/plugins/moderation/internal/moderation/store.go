@@ -85,6 +85,25 @@ func (r *eventRec) legacyColumns() (verdict, action string) {
 	return VerdictPass, ActionAllow
 }
 
+// dropInputMessages removes the input messages of a batch that failed to
+// write and notes the reason in their traces; false = none had one.
+func dropInputMessages(evs []eventRec, reason string) bool {
+	dropped := false
+	for i := range evs {
+		e := &evs[i]
+		if e.InputMessage == nil {
+			continue
+		}
+		var tr Trace
+		if json.Unmarshal(e.Trace, &tr) == nil {
+			tr.InputMessageDropped = reason
+			e.Trace, _ = json.Marshal(tr)
+		}
+		e.InputMessage, e.InputMessageSize, dropped = nil, 0, true
+	}
+	return dropped
+}
+
 func (r *eventRec) suspicious() bool { return r.Result == ResultHit || r.Result == ResultBlock }
 
 // writeEvents persists a batch, then updates the watch list and the bans of
