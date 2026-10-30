@@ -607,7 +607,7 @@ stateDiagram-v2
 
 | 等级 | 权限 |
 |---|---|
-| 🟢 低 | `kv`、`config`、`log`、`broadcast` |
+| 🟢 低 | `kv`、`config`、`log`、`broadcast`、`secrets`（§72.2） |
 | 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3） |
 | 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.rank`、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |

@@ -58,6 +58,7 @@ type options struct {
 	version     string
 	strict      StrictMode
 	poolSize    int32
+	maxRecv     int
 	logger      hclog.Logger
 }
 
@@ -75,6 +76,12 @@ func WithStrictNetwork(m StrictMode) Option { return func(o *options) { o.strict
 
 // WithDBPoolSize sets the maximum size of the Host.DB pool (default 4).
 func WithDBPoolSize(n int32) Option { return func(o *options) { o.poolSize = n } }
+
+// WithMaxRecvMsgSize raises the largest host call the plugin accepts (gRPC
+// default 4 MiB), e.g. for a gateway hook that receives request images
+// (CONTRACTS §72.2). A larger call fails with RESOURCE_EXHAUSTED, which the
+// host treats like any other failed call (hook failure policy).
+func WithMaxRecvMsgSize(n int) Option { return func(o *options) { o.maxRecv = n } }
 
 // WithLogger sets the go-plugin logger (stderr JSON by default).
 func WithLogger(l hclog.Logger) Option { return func(o *options) { o.logger = l } }
@@ -100,8 +107,13 @@ func Serve(p any, opts ...Option) {
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: protocol.Handshake,
 		Plugins:         protocol.PluginMap(gp),
-		GRPCServer:      NewGRPCServer,
-		Logger:          logger,
+		GRPCServer: func(sopts []grpc.ServerOption) *grpc.Server {
+			if o.maxRecv > 0 {
+				sopts = append(sopts, grpc.MaxRecvMsgSize(o.maxRecv))
+			}
+			return NewGRPCServer(sopts)
+		},
+		Logger: logger,
 	})
 }
 

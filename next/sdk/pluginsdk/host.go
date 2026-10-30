@@ -41,6 +41,13 @@ type Host interface {
 	// KV is a Redis-backed, per-plugin namespaced store (grant "kv").
 	KV() KV
 
+	// SealSecret encrypts plaintext (<= 64 KiB) with the core master key
+	// (grant "secrets"); the ciphertext only opens for this plugin and the
+	// same context (<= 128 bytes, e.g. "channel:3"). Store the ciphertext in
+	// the plugin's own schema and OpenSecret it on use.
+	SealSecret(ctx context.Context, context string, plaintext []byte) ([]byte, error)
+	OpenSecret(ctx context.Context, context string, ciphertext []byte) ([]byte, error)
+
 	// DSN returns the restricted database DSN (grant "db.schema").
 	DSN(ctx context.Context) (*DSNInfo, error)
 	// DB returns a shared pgx pool for the plugin schema, created on first
@@ -291,6 +298,22 @@ func (h *host) LedgerDebit(ctx context.Context, ch LedgerChange) (*LedgerResult,
 
 func (h *host) Publish(ctx context.Context, topic string, payload []byte) error {
 	return publish(ctx, h.client, topic, payload)
+}
+
+func (h *host) SealSecret(ctx context.Context, context string, plaintext []byte) ([]byte, error) {
+	r, err := h.client.SecretSeal(ctx, &pluginv1.SecretSealRequest{Plaintext: plaintext, Context: context})
+	if err != nil {
+		return nil, err
+	}
+	return r.GetCiphertext(), nil
+}
+
+func (h *host) OpenSecret(ctx context.Context, context string, ciphertext []byte) ([]byte, error) {
+	r, err := h.client.SecretOpen(ctx, &pluginv1.SecretOpenRequest{Ciphertext: ciphertext, Context: context})
+	if err != nil {
+		return nil, err
+	}
+	return r.GetPlaintext(), nil
 }
 
 func (h *host) ListAccounts(ctx context.Context, q AccountQuery) ([]AccountSummary, string, error) {

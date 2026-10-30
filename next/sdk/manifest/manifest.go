@@ -814,6 +814,7 @@ const (
 
 var HostPermissionRisk = map[string]string{
 	"kv":                   RiskLow,
+	"secrets":              RiskLow,
 	"config":               RiskLow,
 	"log":                  RiskLow,
 	"broadcast":            RiskLow,

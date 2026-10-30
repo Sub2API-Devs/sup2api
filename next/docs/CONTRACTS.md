@@ -4731,22 +4731,22 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.2 核心改动（P1 需要，随一次核心发布）
 
-1. **gjson 修饰符 `@tail:N`**：返回数组最后 N 个元素（N 取 1–64；超出范围或不是数组时原样返回）。核心在启动时用 `gjson.AddModifier` 注册；`sdk/manifest/check` 的 needs 校验要认识它。插件据此用 `messages|@tail:16` 拿到结尾的 16 条消息，在插件里算出结尾连续的 user 消息，不必把整段历史传过去。
-2. **宿主调用 `SecretSeal` / `SecretOpen`**：用核心现有的凭证密钥做 AES-GCM，AAD = 插件 key；插件 A 封存的数据插件 B 解不开。新增宿主权限 `secrets`，风险等级 low。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。
-3. **钩子请求的消息大小**：带图片的请求会超过 gRPC 默认 4 MiB 的接收上限。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize`，moderation 设成 64 MiB；同时确认核心调用钩子那一侧的发送上限。超过上限时调用报错，钩子按 `failure: open` 放行。核心的熔断按连续失败计数，偶发的超大请求不会触发熔断，但这里要写一个测试。
-4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本；**发布顺序是先核心、后插件**。
+1. **取结尾的消息不改核心**：gjson 自带的多路径写法 `messages|@reverse|[0,1,…,15]` 就能取到倒数 16 条（倒序；数组不足 16 条时缺的位置自动跳过，2026-10-30 用 gjson v1.19.0 实测）。插件把结果倒回正序，再算出结尾连续的 user 消息，不必把整段历史传过去。下文用 `TAIL16` 代指 `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`。
+2. **宿主调用 `SecretSeal` / `SecretOpen`**（HostService，宿主权限 `secrets`，风险 low，即无需管理员额外同意，插件升级时自动授予）：用核心的主密钥做 AES-256-GCM（`secret.Cipher`），AAD = `plugin-secret:{插件 key}:{context}`，context 由插件指定（≤128 字节，例如 `channel:3`），明文 ≤64 KiB。插件 A 封存的数据插件 B 解不开，同一插件换了 context 也解不开；解不开时一律返回 `InvalidArgument "ciphertext does not open"`，不区分原因。SDK：`Host.SealSecret` / `Host.OpenSecret`；`pluginsdktest.FakeHost` 用公开的测试密钥实现同样的绑定。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。旧核心没有这两个调用，返回 Unimplemented。
+3. **钩子请求的消息大小，只改 SDK、不改核心**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设成 64 MiB。核心作为客户端的发送上限是 gRPC 默认值（不限），请求体本身上限 32 MiB（`defaultMaxBodyBytes`，现有端点都没有调大），钩子字段只是请求体的片段，所以 64 MiB 下不会因超大而失败，也就不会因此触发钩子熔断。
+4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
 5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
 
 ### 72.3 manifest 变化
 
 - 版本 0.2.0；能力不变（`gateway.hook.v1`、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`），宿主权限加 `secrets`。
-- 钩子 `needs` 改为：`model`、`messages|@tail:16`、`input|@tail:16`、`[input]|#(%"*")`、`contents|@tail:16`。`scope.fields` 照抄。
+- 钩子 `needs` 改为：`model`、`messagesTAIL16`、`inputTAIL16`、`[input]|#(%"*")`、`contentsTAIL16`（`TAIL16` 见 72.2 第 1 条，manifest 里写展开后的原文）。`scope.fields` 照抄。
 - 权限：保留 `moderation:read`、`moderation:manage`，和 new-api 的 read / write 一一对应。read 能看全部页面，包括原文；manage 负责所有修改和要花钱的调用（试跑、测试、手动分析）。
 - 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13）。
 
 ### 72.4 抽取
 
-- **结尾连续的 user 消息**：在 `@tail:16` 的结果里，只有最后一条的 role 是 `user` 才审；从最后一条往前取，遇到其他 role 就停。
+- **结尾连续的 user 消息**：把 `TAIL16` 的结果倒回正序后，只有最后一条的 role 是 `user` 才审；从最后一条往前取，遇到其他 role 就停。
   - OpenAI chat：role 照原样。
   - Anthropic：tool_result 所在消息的 role 也是 user，算进这一段，但 tool_result 块的内容不审。
   - Responses：`type` 不为空且不是 `message` 的项一律算工具轮次。
@@ -5010,7 +5010,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 放行缓存不收哪些结论；
   - 老配置转换；
   - pre 下客户端断开时的记录规则。
-- **核心测试**：`@tail` 修饰符、`SecretSeal` / `SecretOpen`、超大钩子请求放行且不触发熔断。
+- **核心测试**：`SecretSeal` / `SecretOpen` 的授权与绑定（`grpcruntime/secrets_internal_test.go`）。插件测试：`TAIL16` 字段在各协议请求上的取值（用核心同一个 gjson 版本）。
 - **mock-upstream** 新增 `/v1/moderations` 和 `/v1/systemone` 两个模拟端点：文本含 `MOD-HIT-<类别>` 时，该类别给高分。§20.9 原有的 LLM 模拟保留。不连真实的审核服务。
 - **e2e**：
   - observe：所有人放行，命中后异步出记录，并自动加入名单；

@@ -37,6 +37,14 @@ service HostService {
   rpc KVDelete(KVDeleteRequest) returns (KVDeleteResponse);
   rpc KVList(KVListRequest) returns (KVListResponse);
 
+  // secrets (grant "secrets"): seal / open small values (<= 64 KiB) with the
+  // core master key (AES-256-GCM). The ciphertext is bound to the calling
+  // plugin and to `context`, so another plugin, or another row of the same
+  // plugin, cannot open it. The plugin stores the ciphertext itself, e.g. an
+  // upstream API key in its own schema (CONTRACTS §72.2).
+  rpc SecretSeal(SecretSealRequest) returns (SecretSealResponse);
+  rpc SecretOpen(SecretOpenRequest) returns (SecretOpenResponse);
+
   // db.schema: restricted DSN for the plugin schema. The connection must go
   // through EgressService (the SDK dialer does this automatically).
   rpc GetDSN(GetDSNRequest) returns (GetDSNResponse);
@@ -327,6 +335,25 @@ message LogRequest {
 }
 
 message LogResponse {}
+
+message SecretSealRequest {
+  bytes plaintext = 1;
+  // Free-form binding chosen by the plugin, e.g. "channel:3" (<= 128 bytes).
+  string context = 2;
+}
+
+message SecretSealResponse {
+  bytes ciphertext = 1;
+}
+
+message SecretOpenRequest {
+  bytes ciphertext = 1;
+  string context = 2;
+}
+
+message SecretOpenResponse {
+  bytes plaintext = 1;
+}
 
 message KVGetRequest {
   string namespace = 1;

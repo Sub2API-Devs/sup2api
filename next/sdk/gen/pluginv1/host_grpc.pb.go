@@ -44,6 +44,13 @@ type HostServiceClient interface {
 	KVSet(ctx context.Context, in *KVSetRequest, opts ...grpc.CallOption) (*KVSetResponse, error)
 	KVDelete(ctx context.Context, in *KVDeleteRequest, opts ...grpc.CallOption) (*KVDeleteResponse, error)
 	KVList(ctx context.Context, in *KVListRequest, opts ...grpc.CallOption) (*KVListResponse, error)
+	// secrets (grant "secrets"): seal / open small values (<= 64 KiB) with the
+	// core master key (AES-256-GCM). The ciphertext is bound to the calling
+	// plugin and to `context`, so another plugin, or another row of the same
+	// plugin, cannot open it. The plugin stores the ciphertext itself, e.g. an
+	// upstream API key in its own schema (CONTRACTS §72.2).
+	SecretSeal(ctx context.Context, in *SecretSealRequest, opts ...grpc.CallOption) (*SecretSealResponse, error)
+	SecretOpen(ctx context.Context, in *SecretOpenRequest, opts ...grpc.CallOption) (*SecretOpenResponse, error)
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error)
@@ -237,6 +244,24 @@ func (c *hostServiceClient) KVList(ctx context.Context, in *KVListRequest, opts 
 	return out, nil
 }
 
+func (c *hostServiceClient) SecretSeal(ctx context.Context, in *SecretSealRequest, opts ...grpc.CallOption) (*SecretSealResponse, error) {
+	out := new(SecretSealResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SecretSeal", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) SecretOpen(ctx context.Context, in *SecretOpenRequest, opts ...grpc.CallOption) (*SecretOpenResponse, error) {
+	out := new(SecretOpenResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SecretOpen", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error) {
 	out := new(GetDSNResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetDSN", in, out, opts...)
@@ -362,6 +387,13 @@ type HostServiceServer interface {
 	KVSet(context.Context, *KVSetRequest) (*KVSetResponse, error)
 	KVDelete(context.Context, *KVDeleteRequest) (*KVDeleteResponse, error)
 	KVList(context.Context, *KVListRequest) (*KVListResponse, error)
+	// secrets (grant "secrets"): seal / open small values (<= 64 KiB) with the
+	// core master key (AES-256-GCM). The ciphertext is bound to the calling
+	// plugin and to `context`, so another plugin, or another row of the same
+	// plugin, cannot open it. The plugin stores the ciphertext itself, e.g. an
+	// upstream API key in its own schema (CONTRACTS §72.2).
+	SecretSeal(context.Context, *SecretSealRequest) (*SecretSealResponse, error)
+	SecretOpen(context.Context, *SecretOpenRequest) (*SecretOpenResponse, error)
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error)
@@ -479,6 +511,12 @@ func (UnimplementedHostServiceServer) KVDelete(context.Context, *KVDeleteRequest
 }
 func (UnimplementedHostServiceServer) KVList(context.Context, *KVListRequest) (*KVListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KVList not implemented")
+}
+func (UnimplementedHostServiceServer) SecretSeal(context.Context, *SecretSealRequest) (*SecretSealResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SecretSeal not implemented")
+}
+func (UnimplementedHostServiceServer) SecretOpen(context.Context, *SecretOpenRequest) (*SecretOpenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SecretOpen not implemented")
 }
 func (UnimplementedHostServiceServer) GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDSN not implemented")
@@ -742,6 +780,42 @@ func _HostService_KVList_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_SecretSeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SecretSealRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).SecretSeal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/SecretSeal",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).SecretSeal(ctx, req.(*SecretSealRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_SecretOpen_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SecretOpenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).SecretOpen(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/SecretOpen",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).SecretOpen(ctx, req.(*SecretOpenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HostService_GetDSN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetDSNRequest)
 	if err := dec(in); err != nil {
@@ -994,6 +1068,14 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "KVList",
 			Handler:    _HostService_KVList_Handler,
+		},
+		{
+			MethodName: "SecretSeal",
+			Handler:    _HostService_SecretSeal_Handler,
+		},
+		{
+			MethodName: "SecretOpen",
+			Handler:    _HostService_SecretOpen_Handler,
 		},
 		{
 			MethodName: "GetDSN",
