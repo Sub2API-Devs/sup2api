@@ -444,6 +444,11 @@ export interface Auditor {
   config: AuditorConfig
   rules_version?: string
   usable: boolean
+  /** channel fields joined by the list (optional; the UI falls back to GET /channels) */
+  channel_name?: string
+  channel_enabled?: boolean
+  channel_timeout_ms?: number
+  channel_type?: string
   created_at: string
   updated_at: string
 }
@@ -471,9 +476,29 @@ export interface Flow {
   published_at: string | null
   published_by: number | null
   groups: number[]
+  /** the draft differs from the published spec */
   dirty: boolean
+  /** same meaning as dirty (newer backends); dirty is the fallback */
+  has_draft_changes?: boolean
+  /** automatic total timeout of the draft: Σ of each stage's slowest channel timeout */
+  stage_timeout_sum_ms?: number
+  /** last 24 hours, summed over all nodes */
+  stats_24h?: FlowStats24h | null
   created_at: string
   updated_at: string
+}
+
+export interface FlowStats24h {
+  audited: number
+  suspicious: number
+  /** 0–1 */
+  suspicious_rate: number
+  pre_avg_ms: number
+}
+
+export interface GroupConflict {
+  group_id: number
+  flow_id: number
 }
 
 export interface Defaults {
@@ -566,6 +591,7 @@ export const tryAuditor = (id: number, text: string, images: string[]) => api().
 export const fetchDefaults = () => api().get<Defaults>('/jev/default-questions')
 
 export const fetchFlows = () => api().get<Flow[]>('/flows')
+export const fetchFlow = (id: number) => api().get<Flow>(`/flows/${id}`)
 export const saveFlow = (id: number | null, body: { name: string; draft: Spec }) =>
   id ? api().put<Flow>(`/flows/${id}`, body) : api().post<Flow>('/flows', body)
 export const deleteFlow = (id: number) => api().del(`/flows/${id}`)
@@ -681,10 +707,8 @@ export function errorMessage(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback
 }
 
-/** A blank spec for a new flow. */
-export function emptySpec(): Spec {
-  return { model_filter: { type: 'all', models: [] }, sample_rate: 100, total_timeout_ms: 0, stages: [{ auditors: [], combine: 'any' }] }
-}
+/** Draft differs from the published version (has_draft_changes, else dirty). */
+export const hasDraftChanges = (f: Pick<Flow, 'dirty' | 'has_draft_changes'>) => f.has_draft_changes ?? f.dirty
 
 /** Formats a score as 0.00. */
 export const score = (v: number | undefined | null) => (v === undefined || v === null ? '—' : v.toFixed(2))

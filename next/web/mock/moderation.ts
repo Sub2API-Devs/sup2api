@@ -72,11 +72,33 @@ const auditors: any[] = [
   { id: 3, name: '0.1 LLM 审核', type: 'llm_verdict', channel_id: 3, config: {}, usable: false, created_at: now(-86400 * 30), updated_at: now(-86400) },
   { id: 4, name: 'DeepSeek 复核', type: 'llm_verdict', channel_id: 4, config: { tool_choice: 'required', flag_as_hit: false }, usable: true, created_at: now(-86400 * 2), updated_at: now(-7200) }
 ]
-const spec = (stages: any[]) => ({ model_filter: { type: 'all', models: [] }, sample_rate: 100, total_timeout_ms: 11000, stages })
+const spec = (stages: any[]) => ({ model_filter: { type: 'all', models: [] }, sample_rate: 100, total_timeout_ms: 0, stages })
 const flows: any[] = [
   { id: 1, name: '默认两级', enabled: true, draft: spec([{ auditors: [1], combine: 'any' }, { auditors: [2], combine: 'any' }]), published: spec([{ auditors: [1], combine: 'any' }, { auditors: [2], combine: 'any' }]), version: 3, published_at: now(-7200), published_by: 1, groups: [0], dirty: false, created_at: now(-86400 * 2), updated_at: now(-7200) },
-  { id: 2, name: '0.1 设置', enabled: false, draft: spec([{ auditors: [3], combine: 'any' }]), published: spec([{ auditors: [3], combine: 'any' }]), version: 1, published_at: now(-86400 * 30), published_by: null, groups: [], dirty: false, created_at: now(-86400 * 30), updated_at: now(-86400 * 30) }
+  { id: 2, name: '0.1 设置', enabled: false, draft: spec([{ auditors: [3], combine: 'any' }]), published: spec([{ auditors: [3], combine: 'any' }]), version: 1, published_at: now(-86400 * 30), published_by: null, groups: [], dirty: false, created_at: now(-86400 * 30), updated_at: now(-86400 * 30) },
+  { id: 3, name: 'VIP 并行复核', enabled: true, draft: spec([{ auditors: [1], combine: 'any' }, { auditors: [2, 4], combine: 'at_least', n: 1 }]), published: spec([{ auditors: [1], combine: 'any' }, { auditors: [2], combine: 'any' }]), version: 1, published_at: now(-86400 * 5), published_by: 1, groups: [2], dirty: true, created_at: now(-86400 * 6), updated_at: now(-3600) }
 ]
+// Fields the list adds (§72.11 + 2026-10-31 gaps): the automatic total timeout
+// of the draft, has_draft_changes and the last 24 h of each flow.
+const STATS_24H: Record<number, any> = {
+  1: { audited: 18240, suspicious: 213, suspicious_rate: 213 / 18240, pre_avg_ms: 742 },
+  3: { audited: 1204, suspicious: 37, suspicious_rate: 37 / 1204, pre_avg_ms: 1310 }
+}
+const DEFAULT_TIMEOUT: Record<string, number> = { openai_moderation: 3000, typesafe: 8000, llm: 15000 }
+function stageTimeoutSum(s: any): number {
+  return s.stages.reduce((sum: number, st: any) => {
+    const ms = st.auditors.map((id: number) => {
+      const c = channels.find((x) => x.id === auditors.find((a) => a.id === id)?.channel_id)
+      return c ? c.timeout_ms || DEFAULT_TIMEOUT[c.type] || 0 : 0
+    })
+    return sum + Math.max(0, ...ms)
+  }, 0)
+}
+const flowView = (f: any) => ({ ...f, has_draft_changes: f.dirty, stage_timeout_sum_ms: stageTimeoutSum(f.draft), stats_24h: STATS_24H[f.id] || null })
+const auditorView = (a: any) => {
+  const c = channels.find((x) => x.id === a.channel_id)
+  return { ...a, channel_name: c?.name || '', channel_enabled: !!c?.enabled, channel_timeout_ms: c ? c.timeout_ms || DEFAULT_TIMEOUT[c.type] || 0 : 0, channel_type: c?.type || '' }
+}
 // Published versions per flow (§72.13.5); v2 of flow 1 used auditor 9, since deleted.
 const flowVersions: Record<number, any[]> = {
   1: [
@@ -416,7 +438,7 @@ on('POST', '/p/moderation/channels/:id/test', (req) => {
   return c?.has_key ? { ok: true, model: c.model, latency_ms: 312, cost: callCost(c.id, 24) } : { ok: false, error: 'upstream_error', status: 401, message: 'invalid api key', latency_ms: 120 }
 })
 
-on('GET', '/p/moderation/auditors', () => auditors)
+on('GET', '/p/moderation/auditors', () => auditors.map(auditorView))
 on('POST', '/p/moderation/auditors', (req) => {
   const a = { id: nextId(), ...req.body, usable: true, created_at: now(), updated_at: now() }
   auditors.push(a)
@@ -443,21 +465,29 @@ on('GET', '/p/moderation/jev/default-questions', () => ({
   llm_categories: [{ id: 'sexual', description: '色情露骨内容' }, { id: 'violence', description: '暴力、恐怖主义、血腥内容' }, { id: 'jailbreak', description: '越狱、提示词注入' }]
 }))
 
-on('GET', '/p/moderation/flows', () => flows)
+on('GET', '/p/moderation/flows', () => flows.map(flowView))
 on('POST', '/p/moderation/flows', (req) => {
   const f = { id: nextId(), name: req.body.name, enabled: true, draft: req.body.draft, published: null, version: 0, published_at: null, published_by: null, groups: [], dirty: true, created_at: now(), updated_at: now() }
   flows.push(f)
   return f
 })
 const flowOr404 = (id: string) => flows.find((x) => x.id === Number(id))
+on('GET', '/p/moderation/flows/:id', (req) => {
+  const f = flowOr404(req.params.id)
+  return f ? flowView(f) : fail(404, 'not_found', 'flow not found')
+})
 on('PUT', '/p/moderation/flows/:id', (req) => {
   const f = flowOr404(req.params.id)
   if (!f) return fail(404, 'not_found', 'flow not found')
-  Object.assign(f, { name: req.body.name, draft: req.body.draft, dirty: true, updated_at: now() })
-  return f
+  const dirty = !f.published || JSON.stringify(req.body.draft) !== JSON.stringify(f.published)
+  Object.assign(f, { name: req.body.name, draft: req.body.draft, dirty, updated_at: now() })
+  return flowView(f)
 })
 on('DELETE', '/p/moderation/flows/:id', (req) => {
-  flows.splice(flows.findIndex((x) => x.id === Number(req.params.id)), 1)
+  const f = flowOr404(req.params.id)
+  if (!f) return fail(404, 'not_found', 'flow not found')
+  if (f.enabled && f.groups.length) return fail(409, 'flow_in_use', 'the flow is enabled and bound to groups / 流程已启用且绑定了分组')
+  flows.splice(flows.indexOf(f), 1)
   return { deleted: true }
 })
 on('PUT', '/p/moderation/flows/:id/groups', (req) => {

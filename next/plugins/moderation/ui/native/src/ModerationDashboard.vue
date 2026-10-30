@@ -116,7 +116,7 @@ function showUser(userId: number) {
       <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="userPreset" />
       <WatchTab v-if="visited.has('watch')" v-show="tab === 'watch'" :ref="setRef('watch')" @show-user="showUser" />
       <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" :ref="setRef('blocks')" />
-      <FlowsTab v-if="visited.has('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" />
+      <FlowsTab v-if="visited.has('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" @go-tab="goTab" />
       <AuditorsTab v-if="visited.has('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
       <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" />
       <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-tab="goTab" />

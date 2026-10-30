@@ -514,3 +514,429 @@
   max-width: 7.5rem;
   white-space: normal;
 }
+
+/* flow canvas editor (new-api flows/*, HANDOFF-2026-10-31 §2) */
+.mod-text-danger {
+  color: #dc2626;
+}
+.mod-text-warning {
+  color: #d97706;
+}
+.mod-text-success {
+  color: #16a34a;
+}
+p.mod-text-warning,
+p.mod-text-danger {
+  margin: 0;
+  font-size: 0.75rem;
+}
+.mod-flip {
+  transform: scaleX(-1);
+}
+.mod-inline {
+  display: inline-flex;
+  align-items: center;
+}
+.mod-wrap {
+  flex-wrap: wrap;
+}
+
+/* list */
+.mod-flows-toolbar {
+  justify-content: flex-start;
+  align-items: center;
+}
+.mod-flows-search {
+  width: 16rem;
+  max-width: 100%;
+}
+.mod-flows-group {
+  width: 12rem;
+}
+.mod-flows-coverage {
+  margin-top: 0.75rem;
+  line-height: 1.6;
+}
+.mod-groups-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 18rem;
+}
+.mod-groups-list {
+  display: inline-flex;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+}
+.mod-groups-list > * {
+  flex-shrink: 0;
+}
+.mod-popover {
+  position: fixed;
+  z-index: 60;
+  width: 20rem;
+  max-height: 24rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.75rem;
+  background: rgb(var(--surface));
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.15);
+}
+.mod-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-popover-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.mod-popover-list .mod-sub {
+  margin-top: 0;
+  text-align: right;
+}
+.mod-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.mod-move-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
+/* editor page */
+.mod-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mod-editor-back {
+  align-self: flex-start;
+}
+.mod-editor-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-editor-title h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.mod-editor-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgb(var(--line));
+  background: rgb(var(--bg));
+}
+.mod-editor-footer .mod-sub {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+.mod-issues {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+/* config card */
+.mod-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+}
+.mod-config-wide {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .mod-config-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.mod-config-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-config-models {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.mod-config-filter {
+  width: 14rem;
+}
+.mod-config-num {
+  width: 8rem;
+}
+.mod-timeout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.mod-timeout-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-timeout-manual .mod-sub {
+  margin-top: 0;
+}
+.mod-timeout-input {
+  width: 6.5rem;
+}
+
+/* canvas */
+.mod-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.mod-canvas-templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-canvas-templates .mod-sub {
+  margin-top: 0;
+}
+.mod-canvas-main {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+@media (max-width: 1024px) {
+  .mod-canvas-main {
+    flex-direction: column;
+  }
+}
+.mod-lib {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 0 0 15rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.75rem;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.mod-lib-over {
+  border-color: #dc2626;
+  background: rgb(220 38 38 / 0.06);
+}
+.mod-lib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.mod-lib-drop {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+.mod-lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-lib .mod-sub {
+  margin: 0;
+}
+.mod-node {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.5rem;
+  background: rgb(var(--surface-2));
+  font-size: 0.75rem;
+  outline: none;
+}
+.mod-node:focus-visible {
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.6);
+}
+.mod-node-drag {
+  cursor: grab;
+}
+.mod-node-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-node-body {
+  flex: 1;
+  min-width: 0;
+}
+.mod-node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.mod-node-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(var(--fg-subtle));
+}
+.mod-canvas {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  overflow-x: auto;
+}
+.mod-canvas-io {
+  display: flex;
+  flex: 0 0 5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  background: rgb(var(--surface-2));
+  color: rgb(var(--fg-muted));
+  font-size: 0.75rem;
+  text-align: center;
+}
+.mod-canvas-result {
+  flex-basis: 8rem;
+}
+.mod-canvas-arrow {
+  display: flex;
+  flex: 0 0 5.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--fg-muted));
+  font-size: 0.6875rem;
+  text-align: center;
+}
+.mod-canvas-arrow > span:first-child {
+  font-size: 1.125rem;
+}
+.mod-stage-card {
+  display: flex;
+  flex: 0 0 18rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.75rem;
+  background: rgb(var(--surface));
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mod-drop-over {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.3);
+}
+.mod-stage-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.mod-stage-card-title {
+  min-width: 0;
+  font-size: 0.875rem;
+}
+.mod-stage-card-tools {
+  display: inline-flex;
+  align-items: center;
+}
+.mod-grip {
+  display: inline-flex;
+  color: rgb(var(--fg-subtle));
+  cursor: grab;
+}
+.mod-stage-card .mod-sub,
+.mod-stage-card p {
+  margin: 0;
+}
+.mod-stage-combine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-stage-combine .mod-sub {
+  margin: 0;
+}
+.mod-stage-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+.mod-stage-n > * {
+  width: 4.5rem;
+}
+.mod-stage-out {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(var(--line));
+  font-size: 0.75rem;
+}
+.mod-canvas-new {
+  display: flex;
+  flex: 0 0 14rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px dashed rgb(var(--line-strong));
+  border-radius: 0.75rem;
+  color: rgb(var(--fg-muted));
+  font-size: 0.75rem;
+  text-align: center;
+}
+.mod-canvas-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: #d97706;
+}
+.mod-canvas-wrap > .mod-sub {
+  margin: 0;
+}
+.mod-publish-stages {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
