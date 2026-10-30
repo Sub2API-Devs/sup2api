@@ -71,6 +71,10 @@ type TestResult struct {
 	Categories  []HitCategory `json:"categories"`
 	Trace       Trace         `json:"trace"`
 	Cost        *CallCost     `json:"cost,omitempty"` // all calls of the run
+	// Simulation only: the timing it ran as and whether a request would
+	// have been refused.
+	Timing  string `json:"timing,omitempty"`
+	Refused bool   `json:"refused,omitempty"`
 }
 
 // testModeration runs a published flow on {text, images?, flow_id?}

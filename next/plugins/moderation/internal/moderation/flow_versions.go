@@ -226,9 +226,21 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		EventID int64  `json:"event_id"`
 		Source  string `json:"source"`
 		Version int    `json:"version"`
+		// UserState: none | observe (moderated after the request, post) or
+		// enforce (before it, pre: a hit refuses).
+		UserState string `json:"user_state"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &sel); err != nil {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON"), nil
+	}
+	timing := TimingPost
+	switch sel.UserState {
+	case "", "none", LevelObserve:
+	case LevelEnforce:
+		timing = TimingPre
+	default:
+		return pluginsdk.FieldErrorResponse("invalid simulate / 模拟参数无效",
+			pluginsdk.FieldErrors{}.Add("user_state", "enum", "user_state must be none, observe or enforce / user_state 取值为 none、observe、enforce")), nil
 	}
 	db, err := p.db(ctx)
 	if err != nil {
@@ -292,11 +304,16 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil || len(spec.Stages) == 0 {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_flow", "the flow spec has no stages / 流程没有审核级"), nil
 	}
-	timeout := time.Duration(spec.TotalTimeoutMs) * time.Millisecond
-	if timeout <= 0 {
-		timeout = maxTotalTimeoutMs * time.Millisecond
+	if spec.TotalTimeoutMs <= 0 {
+		timeouts, err := auditorTimeouts(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+		spec.TotalTimeoutMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
 	}
-	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: timeout}
-	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), in: input, timing: TimingPre, source: SourceSimulate}
-	return pluginsdk.DataResponse(p.testResult(ctx, m)), nil
+	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: time.Duration(spec.TotalTimeoutMs) * time.Millisecond}
+	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), in: input, timing: timing, source: SourceSimulate}
+	out := p.testResult(ctx, m)
+	out.Timing, out.Refused = timing, timing == TimingPre && out.Result == ResultHit
+	return pluginsdk.DataResponse(out), nil
 }
