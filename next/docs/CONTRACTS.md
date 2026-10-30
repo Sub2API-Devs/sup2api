@@ -4993,12 +4993,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 计价在后台进行，不占钩子时间：调用结束后把用量放进内存队列，由后台协程调 `PriceUsage`。按（小时, 渠道, 来源）累加，每 10 秒和关闭时写入新表 `costs`，写法是 upsert 相加。
   - 来源：`audit`（钩子的 pre/post）、`analysis`、`test`、`try`、`simulate`。
   - 没有价格的调用不计金额，只计次数和 token（`unpriced_calls` / `unpriced_tokens`），页面提示"有 N 次调用未定价"。
-- 单次费用只出现在以下响应里：渠道测试、审核器试跑、流程模拟、单次分析（`user_analyses.cost`）。审核记录上不保存单次费用。
+- 单次费用只出现在以下响应里：渠道测试、审核器试跑（`cost`）、`/test` 和流程模拟（`cost`，所有调用之和），以及单次分析（`user_analyses.cost`，字符串或 null，另有 `unpriced_calls`）。审核记录上不保存单次费用。
+  - 前四者的 `cost` 是对象 `{mode: priced|unpriced|free, cost?, reason?, billing_model, tokens_in, tokens_out}`。`mode=unpriced` 时 `reason` 取 `no_price`、`video_only`、`eval_error`、`host_too_old`（核心没有 PriceUsage）或 `unavailable`。
 - 接口：
   - `GET /costs?range=24h|7d|30d`（read）→ `{range, from, to, bucket, totals, by_channel:[{channel_id, name, type, model, billing_model, deleted, summary}], by_source:[{source, summary}], trend:[{bucket, cost}]}`。
   - `summary` = `{cost, calls, priced_calls, unpriced_calls, unpriced_tokens, free_calls, tokens_in, tokens_out}`，其中 `cost` 是字符串。
   - 渠道列表和详情加 `price_state:{priced, free, reason, billing_model}`（读接口内部调 `PriceUsage` 试算一次 0 token 的调用，每个模型缓存 60 秒），以及 `cost_30d`（summary）。
-- 页面：概览加"审核费用"卡片（今日 / 7 天 / 30 天，按来源分）；渠道列表加"价格"和"30 天费用"两列；测试、试跑、模拟、分析的结果都显示本次费用。金额显示为美元。
+- 页面：概览加"审核费用"卡片（跟随概览的 24 小时 / 7 天 / 30 天，按来源、按渠道分，带趋势）；渠道列表加"价格"和"30 天费用"两列；测试、试跑、模拟、分析的结果都显示本次费用。金额显示为美元。
 
 **72.13.4 AI 分析**（照 new-api `analysis.go`、`analysis_tools.go`、`escalate.go`、`category_dict.go`）
 
@@ -5015,7 +5016,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 认领时先锁 `block_subjects`（与名单写入同一把锁），认领期 = 2 × `analysis_timeout_ms`。
   - 节点关闭时，正在跑的分析只释放认领、保留排队，留给其他节点；不记为失败。
   - 分析结束，不论成功还是失败，都写一行 `user_analyses`、清掉排队和认领，然后按认领令牌应用结论。
-  - 分析期间名单的级别或 `since_at` 变了、条目被移出或已过期时，结论记为 `stale`：逐条结论照样写进记录，名单不变。
+  - 分析期间名单的级别或 `since_at` 变了、条目被移出或已过期时，结论记为 `stale`（`status=ok`、`error=stale`）：逐条结论照样写进记录，名单不变。
+  - 名单条目对外给 `analysis_requested_at`、`analysis_source`、`analysis_running`（布尔，由认领是否未过期得出；认领列和令牌不对外）、`latest_analysis_id`（0 = 从没分析过）、`latest_analysis_status`、`latest_trend`、`latest_suggestion`、`analyzed_at`。
 - **agent**：
   - 照 new-api 的工具集：`get_user_summary`、`list_suspicious_records`、`get_record`、`get_flow`、`submit_analysis`。工具说明的中文原文照抄；不支持的字段（会话指纹）去掉。
   - `get_record` 的全文来自 `events.text`（`store_text` 打开时保存，≤100000 字），可以分段读；摘录取前 240 字，列表里取 120 字。
@@ -5027,7 +5029,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 由三部分组成：分析准则（`analysis_guidelines`，空时用内置准则，照抄 new-api v7.7）、该用户当前分组绑定的流程（`get_user_summary` 取用户最近一条记录的 `group_id`）、类别字典。
   - 类别字典的来源：OpenAI 的 13 个类别说明、Jev 每道题的原文、`llm_verdict` 审核器的类别描述。
 - **自动调整名单**：照 new-api `escalationOf`，new-api 的 block 级就是我们的 enforce 级。
-  - 动作：`auto_upgrade`（升为 enforce）、`upgrade_skipped`、`auto_downgrade`（降为 observe，有效期重设为 `watch_days`）、`downgrade_skipped`、`auto_remove`，以及不允许时的 `auto_not_allowed`。
+  - 动作：`auto_upgrade`（升为 enforce）、`upgrade_skipped`（建议拦截、趋势偏重，但没有复核为违规的记录，未升级）、`auto_downgrade`（降为 observe，有效期重设为 `watch_days`）、`downgrade_skipped`（建议解除或观察，但仍有违规或趋势偏重，未降级或移出）、`auto_remove`，以及不允许时的 `auto_not_allowed`。
   - 是否允许由三个开关决定：`analysis_allow_upgrade`、`analysis_allow_downgrade`、`analysis_allow_remove`。
   - 自动改级别时 `source=analysis`，同时开新的计数窗口。每个动作都写 `watch_events`（`analysis_id` 指向这次分析，reason 为 `trend:<trend>`；`auto_not_allowed` 的 reason 为 `<被拒的动作>:<trend>`）。
 - **逐条结论**：写进记录新增的 6 个 `ai_*` 列（`ai_verdict` 取 violation / false_positive / unsure，以及 `ai_severity`、`ai_category`、`ai_evidence`、`ai_reason`、`ai_analysis_id`），只改结果为 hit 或 block 的记录，不覆盖人工结论。

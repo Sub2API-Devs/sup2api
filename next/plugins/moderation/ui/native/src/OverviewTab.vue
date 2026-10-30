@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { SAlert, SButton, SCard, SChart, SDescriptions, SEmpty, SGrid, SLink, SProgress, SStatCard, STimeRange, type DescItem, type RangeKey } from '@sub2api/ui'
 import RankList from './RankList.vue'
+import CostCard from './CostCard.vue'
 import { canManage, categoryLabel, errorMessage, fetchOverview, useModHost, type Overview, type Runtime } from './host'
 
 const emit = defineEmits<{
@@ -21,6 +22,8 @@ const data = ref<Overview | null>(null)
 const loading = ref(false)
 const error = ref('')
 
+const costCard = ref<{ reload: () => unknown } | null>(null)
+
 async function reload() {
   loading.value = true
   error.value = ''
@@ -36,7 +39,8 @@ async function reload() {
 
 watch(range, reload)
 onMounted(reload)
-defineExpose({ reload })
+// The header refresh reloads both; a range change reaches the cost card through its prop.
+defineExpose({ reload: () => Promise.all([reload(), costCard.value?.reload()]) })
 
 const totals = computed(() => data.value?.totals)
 const runtime = computed(() => data.value?.runtime)
@@ -112,7 +116,16 @@ const runtimeRows = computed<DescItem[]>(() => {
     { key: 'cacheHits', label: t('runtime.cacheHits'), value: `${n(r.cache_hits)} (${n(r.cache_entries)})` },
     { key: 'avgLatency', label: t('runtime.avgLatency'), value: t('ms', { n: host.i18n.formatNumber(Math.round(r.avg_latency_ms || 0)) }) },
     { key: 'watched', label: t('runtime.watchedUsers'), value: n(r.watched_users) },
-    { key: 'blockedUsers', label: t('runtime.blockedUsers'), value: n(r.blocked_users) }
+    { key: 'blockedUsers', label: t('runtime.blockedUsers'), value: n(r.blocked_users) },
+    ...(r.analysis
+      ? [
+          {
+            key: 'analysis',
+            label: t('runtime.analysis'),
+            value: r.analysis.channel_configured ? t('runtime.analysisValue', { pending: n(r.analysis.pending), running: n(r.analysis.running) }) : t('runtime.analysisOff')
+          }
+        ]
+      : [])
   ]
 })
 </script>
@@ -141,6 +154,8 @@ const runtimeRows = computed<DescItem[]>(() => {
     <SCard :title="t('overview.trend')" :subtitle="range === '24h' ? undefined : t('overview.trendHint')" class="mod-section">
       <SChart :option="chart" :loading="loading" height="280px" />
     </SCard>
+
+    <CostCard ref="costCard" :range="range" class="mod-section" />
 
     <SGrid template="repeat(auto-fit, minmax(300px, 1fr))" class="mod-section">
       <SCard :title="t('overview.topCategories')">

@@ -4,8 +4,12 @@ import { SAlert, SBadge, SButton, SCode, SCopyButton, SDescriptions, SHint, SMod
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
+import VerdictBadge from './VerdictBadge.vue'
+import AnalysisModal from './AnalysisModal.vue'
 import {
+  aiVerdictTone,
   canManage,
+  categoryLabel,
   deleteEvent,
   enumLabel,
   errorMessage,
@@ -13,7 +17,6 @@ import {
   fetchEventInput,
   modeTone,
   reviewEvents,
-  reviewTone,
   severityTone,
   useModHost,
   type ModEventDetail,
@@ -40,8 +43,15 @@ const manage = computed(() => canManage())
 const input = ref<string | null>(null)
 const inputLoading = ref(false)
 
+// The shown record: the prop, or a record opened from the AI analysis.
+const currentId = ref<number | null>(props.eventId)
 watch(
-  () => [props.open, props.eventId] as const,
+  () => [props.eventId, props.open] as const,
+  ([id]) => (currentId.value = id)
+)
+
+watch(
+  () => [props.open, currentId.value] as const,
   async ([open, id]) => {
     if (!open || id === null) return
     if (ev.value?.id === id) return
@@ -51,7 +61,7 @@ watch(
     error.value = ''
     try {
       const r = await fetchEvent(id)
-      if (props.eventId === id) ev.value = r
+      if (currentId.value === id) ev.value = r
     } catch (e) {
       error.value = errorMessage(e, t('detail.loadFailed'))
     } finally {
@@ -116,6 +126,24 @@ async function remove() {
 
 const idOrDash = (v: number | null | undefined) => (v ? `#${v}` : '—')
 
+// AI verdict of the record (§72.13.4) and the analysis that wrote it.
+const hasAI = computed(() => !!ev.value?.ai_verdict)
+const aiFields = computed<DescItem[]>(() => {
+  const e = ev.value
+  if (!e?.ai_verdict) return []
+  const items: DescItem[] = [{ key: 'verdict', label: t('detail.f.aiVerdict') }]
+  if (e.ai_severity) items.push({ key: 'severity', label: t('detail.f.aiSeverity') })
+  if (e.ai_category) items.push({ key: 'category', label: t('detail.f.aiCategory'), value: categoryLabel(e.ai_category) })
+  if (e.ai_evidence) items.push({ key: 'evidence', label: t('detail.f.aiEvidence'), full: true })
+  if (e.ai_reason) items.push({ key: 'reason', label: t('detail.f.aiReason'), value: e.ai_reason, full: true })
+  return items
+})
+const analysisOpen = ref(false)
+function openRecord(id: number) {
+  analysisOpen.value = false
+  currentId.value = id
+}
+
 const fields = computed<DescItem[]>(() => {
   const e = ev.value
   if (!e) return []
@@ -146,15 +174,29 @@ const fields = computed<DescItem[]>(() => {
     <div v-else-if="ev" class="mod-detail">
       <div class="mod-detail-head">
         <ResultBadge :result="ev.result" />
+        <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
         <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
         <SBadge v-if="ev.severity" :tone="severityTone(ev.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', ev.severity) }}</SBadge>
-        <SBadge :tone="reviewTone(ev.review_status)">{{ enumLabel('review', ev.review_status) }}</SBadge>
         <SHint inline size="xs" class="mod-detail-time">{{ host.i18n.formatDateTime(ev.created_at) }}</SHint>
       </div>
 
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
+
+      <div v-if="hasAI">
+        <SSectionTitle tag="p">
+          {{ t('detail.ai') }}
+          <template v-if="ev.ai_analysis_id" #actions>
+            <SButton size="sm" variant="ghost" icon="eyeglass" @click="analysisOpen = true">{{ t('detail.viewAnalysis') }}</SButton>
+          </template>
+        </SSectionTitle>
+        <SDescriptions :items="aiFields" :columns="2" dense>
+          <template #item-verdict><SBadge :tone="aiVerdictTone(ev.ai_verdict)">{{ enumLabel('aiVerdict', ev.ai_verdict) }}</SBadge></template>
+          <template #item-severity><SBadge :tone="severityTone(ev.ai_severity || '')">{{ enumLabel('severity', ev.ai_severity) }}</SBadge></template>
+          <template #item-evidence><q class="mod-evidence mod-prewrap">{{ ev.ai_evidence }}</q></template>
+        </SDescriptions>
+      </div>
 
       <div v-if="ev.trace">
         <SSectionTitle tag="p">{{ t('detail.trace') }}</SSectionTitle>
@@ -200,4 +242,5 @@ const fields = computed<DescItem[]>(() => {
       <SButton @click="close">{{ host.i18n.t('ui.close') }}</SButton>
     </template>
   </SModal>
+  <AnalysisModal v-model:open="analysisOpen" :analysis-id="ev?.ai_analysis_id ?? null" @open-record="openRecord" />
 </template>

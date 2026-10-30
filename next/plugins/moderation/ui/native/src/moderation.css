@@ -357,3 +357,160 @@
   flex-direction: column;
   gap: 0.75rem;
 }
+
+/* 0.3: cost, AI analysis, flow versions (CONTRACTS §72.13) */
+.mod-cost-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.mod-cost-amount {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.mod-cost-label {
+  margin: 0.75rem 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(var(--fg-muted));
+}
+.mod-cost-label-top {
+  margin-top: 0;
+}
+.mod-verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.mod-verdict-badge .mod-sub {
+  margin-top: 0;
+}
+.mod-danger {
+  color: #dc2626;
+}
+.mod-evidence {
+  font-size: 0.8125rem;
+}
+.mod-analysis-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-analysis-state .mod-cost-label,
+.mod-analysis-state .mod-sub {
+  margin: 0;
+}
+.mod-analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.mod-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.5rem;
+}
+.mod-analysis-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+.mod-analysis-summary {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.mod-analysis .mod-cost-label {
+  margin-top: 0.25rem;
+}
+.mod-problems {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.mod-analysis-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.75rem;
+  color: rgb(var(--fg-muted));
+}
+.mod-analysis-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.mod-center {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+.mod-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.mod-timeline-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.5rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mod-timeline-item:hover {
+  background: rgb(var(--surface-2));
+}
+.mod-timeline-item .mod-history-head {
+  margin-bottom: 0;
+}
+.mod-timeline-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mod-version {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgb(var(--line));
+}
+.mod-version .mod-history-head {
+  margin-bottom: 0;
+}
+.mod-version-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+.mod-version-stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+.mod-version-stage .mod-sub {
+  margin-top: 0;
+}
+.mod-price-reason {
+  max-width: 7.5rem;
+  white-space: normal;
+}

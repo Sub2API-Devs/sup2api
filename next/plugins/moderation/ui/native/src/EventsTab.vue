@@ -5,7 +5,8 @@ import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SLink,
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
-import { canManage, enumLabel, errorMessage, reviewEvents, reviewTone, score, useModHost, type ModEvent, type ReviewStatus } from './host'
+import VerdictBadge from './VerdictBadge.vue'
+import { canManage, enumLabel, errorMessage, reviewEvents, score, useModHost, type ModEvent, type ReviewStatus } from './host'
 
 // Records: filters + paginated table (useList); a row opens the detail modal,
 // selected rows can be reviewed in bulk.
@@ -14,7 +15,7 @@ const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 
-const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', severity: '', watch_level: '', flow_id: '', user_id: '', request_id: '', q: '' })
+const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '', user_id: '', request_id: '', q: '' })
 const form = reactive(emptyForm())
 if (props.preset) form.user_id = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
@@ -27,6 +28,8 @@ function query() {
     result: form.result,
     timing: form.timing,
     review_status: form.review_status,
+    ai_verdict: form.ai_verdict,
+    verdict: form.verdict,
     severity: form.severity,
     watch_level: form.watch_level,
     flow_id: form.flow_id.trim(),
@@ -67,8 +70,10 @@ const timingOptions = computed(() => withAll(opts('timing', ['pre', 'post'])))
 const reviewOptions = computed(() => withAll(opts('review', ['pending', 'false_positive', 'confirmed'])))
 const severityOptions = computed(() => withAll(opts('severity', ['high', 'medium', 'low'])))
 const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...opts('level', ['observe', 'enforce'])]))
+const aiVerdictOptions = computed(() => withAll(opts('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])))
+const verdictOptions = computed(() => withAll([{ value: 'needs_review', label: t('events.needsReview') }, { value: 'disagree', label: t('events.disagree') }]))
 
-watch(() => [form.result, form.timing, form.review_status, form.severity, form.watch_level, from.value, to.value], apply)
+watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, from.value, to.value], apply)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
@@ -81,7 +86,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'result', label: t('events.col.result'), nowrap: true },
   { key: 'hit_categories', label: t('events.col.categories') },
   { key: 'highest_score', label: t('events.col.score'), align: 'right', nowrap: true },
-  { key: 'review_status', label: t('events.col.review'), nowrap: true },
+  { key: 'verdict', label: t('events.col.verdict'), nowrap: true },
   { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '22rem' },
   { key: 'user_id', label: t('events.col.user') },
   { key: 'model', label: t('events.col.model'), ellipsis: '10rem' },
@@ -143,6 +148,12 @@ async function review(status: ReviewStatus) {
         <SField class="mod-filter" :label="t('events.review')">
           <SSelect v-model="form.review_status" :options="reviewOptions" />
         </SField>
+        <SField class="mod-filter" :label="t('events.aiVerdict')">
+          <SSelect v-model="form.ai_verdict" :options="aiVerdictOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.verdict')">
+          <SSelect v-model="form.verdict" :options="verdictOptions" />
+        </SField>
         <SField class="mod-filter" :label="t('events.timing')">
           <SSelect v-model="form.timing" :options="timingOptions" />
         </SField>
@@ -203,10 +214,7 @@ async function review(status: ReviewStatus) {
           <span class="mod-num">{{ row.highest_category ? score(row.highest_score) : '—' }}</span>
           <div v-if="row.severity" class="mod-sub">{{ enumLabel('severity', row.severity) }}</div>
         </template>
-        <template #cell-review_status="{ row }">
-          <SBadge v-if="row.review_status !== 'pending'" :tone="reviewTone(row.review_status)">{{ enumLabel('review', row.review_status) }}</SBadge>
-          <SHint v-else inline>{{ enumLabel('review', 'pending') }}</SHint>
-        </template>
+        <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>
         <template #cell-text_excerpt="{ row }">
           <span :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
           <SBadge v-if="row.image_count" size="xs" tone="gray" class="mod-ml">{{ t('events.images', { n: row.image_count }) }}</SBadge>

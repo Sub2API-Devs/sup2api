@@ -5,6 +5,7 @@ import { SAlert, SBadge, SButton, SCard, SEmpty, SField, SGrid, SHint, SSelect, 
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
+import CostBadge from './CostBadge.vue'
 import { enumLabel, errorMessage, fetchFlows, runTest, severityTone, useModHost, type Flow, type TestResult } from './host'
 
 const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
@@ -99,6 +100,7 @@ function onKey(e: KeyboardEvent) {
             <ResultBadge :result="result.result" />
             <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
             <SHint inline size="xs">#{{ result.flow_id }} v{{ result.flow_version }}</SHint>
+            <CostBadge :cost="result.cost" class="mod-ml-auto" />
           </div>
           <CategoryChips :categories="result.categories" wrap />
         </div>

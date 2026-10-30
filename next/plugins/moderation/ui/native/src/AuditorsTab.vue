@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SModal, SSelect, SSwitch, STable, STextarea, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
+import CostBadge from './CostBadge.vue'
 import {
   canManage,
   categoryLabel,
@@ -102,7 +103,12 @@ const formErr = reactive<Record<string, string>>({})
 const saving = ref(false)
 
 const channelOptions = computed(() =>
-  channels.value.filter((c) => c.type === channelTypeOf[form.type]).map((c) => ({ value: c.id, label: `${c.name}${c.enabled ? '' : ` (${t('disabled')})`}` }))
+  channels.value
+    .filter((c) => c.type === channelTypeOf[form.type])
+    .map((c) => ({
+      value: c.id,
+      label: `${c.name}${c.type === 'llm' && c.protocol ? ` · ${enumLabel('protocol', c.protocol)}` : ''}${c.enabled ? '' : ` (${t('disabled')})`}`
+    }))
 )
 
 function openEdit(a: Auditor | null) {
@@ -346,6 +352,7 @@ const tryScores = computed(() =>
             <SBadge v-else-if="tryResult.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
             <SBadge v-else :tone="tryResult.hit ? 'danger' : 'success'">{{ tryResult.hit ? t('trace.hit') : t('trace.pass') }}</SBadge>
             <SHint inline size="xs">{{ t('ms', { n: tryResult.latency_ms }) }} · {{ tryResult.model || '' }}</SHint>
+            <CostBadge :cost="tryResult.cost" class="mod-ml-auto" />
           </div>
           <SAlert v-if="tryResult.error" tone="danger" dense>{{ tryResult.error }}</SAlert>
           <CategoryChips v-if="tryResult.hits?.length" :categories="tryResult.hits" wrap />

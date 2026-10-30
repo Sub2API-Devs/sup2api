@@ -71,6 +71,8 @@ export interface Runtime {
   avg_latency_ms: number
   blocked_users: number
   watched_users: number
+  /** P2 (§72.13.4); absent on 0.2 */
+  analysis?: { channel_configured: boolean; pending: number; running: number }
 }
 
 export interface Overview {
@@ -117,6 +119,13 @@ export interface ModEvent {
   error: string
   llm_model: string
   text_excerpt?: string
+  /** P2 AI verdict (§72.13.4); empty / absent until an analysis reviewed the record */
+  ai_verdict?: AIVerdict | '' | null
+  ai_severity?: string | null
+  ai_category?: string | null
+  ai_evidence?: string | null
+  ai_reason?: string | null
+  ai_analysis_id?: number | null
 }
 
 export interface HitCategory {
@@ -194,6 +203,16 @@ export interface Watch {
   last_hit_at: string | null
   note: string
   updated_at: string
+  /** P2 analysis queue and latest result (§72.13.4) */
+  analysis_requested_at?: string | null
+  analysis_source?: 'auto' | 'manual' | '' | null
+  /** a node holds a live claim on the queued analysis */
+  analysis_running?: boolean
+  latest_analysis_id?: number | null
+  latest_analysis_status?: AnalysisStatus | '' | null
+  latest_trend?: Trend | '' | null
+  latest_suggestion?: Suggestion | '' | null
+  analyzed_at?: string | null
 }
 
 export interface WatchEvent {
@@ -204,7 +223,29 @@ export interface WatchEvent {
   to_level: string
   reason: string
   operator_id: number | null
+  analysis_id?: number | null
   created_at: string
+}
+
+export type Protocol = 'openai_chat' | 'openai_responses' | 'anthropic'
+
+/** Cost summary of a set of calls (§72.13.3); cost is a decimal USD string. */
+export interface CostSummary {
+  cost: string
+  calls: number
+  priced_calls: number
+  unpriced_calls: number
+  unpriced_tokens: number
+  free_calls: number
+  tokens_in: number
+  tokens_out: number
+}
+
+export interface PriceState {
+  priced: boolean
+  free: boolean
+  reason?: string
+  billing_model?: string
 }
 
 export interface Channel {
@@ -217,10 +258,150 @@ export interface Channel {
   has_key: boolean
   has_proxy: boolean
   model: string
+  /** P2: model name used for pricing; empty = model */
+  billing_model?: string
+  price_state?: PriceState | null
+  cost_30d?: CostSummary | null
   timeout_ms: number
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+export type CostSource = 'audit' | 'analysis' | 'test' | 'try' | 'simulate'
+
+export interface Costs {
+  range: string
+  from: string
+  to: string
+  bucket: string
+  totals: CostSummary
+  by_channel: Array<{ channel_id: number; name: string; type: ChannelType; model: string; billing_model?: string; deleted?: boolean; summary: CostSummary }>
+  by_source: Array<{ source: CostSource | string; summary: CostSummary }>
+  trend: Array<{ bucket: string; cost: string }>
+}
+
+// ---- AI analysis (§72.13.4)
+
+export type AIVerdict = 'violation' | 'false_positive' | 'unsure'
+export type Trend = 'occasional' | 'persistent' | 'escalating' | 'likely_false_positive'
+export type Suggestion = 'release' | 'observe' | 'block'
+export type AnalysisStatus = 'ok' | 'failed' | 'stale'
+
+export interface VerdictCounts {
+  violation: number
+  false_positive: number
+  unsure: number
+  high?: number
+  medium?: number
+  low?: number
+}
+
+export interface RecordVerdict {
+  record_id: number
+  verdict: AIVerdict
+  severity?: string
+  category?: string
+  evidence?: string
+  reason?: string
+}
+
+export interface FlowRef {
+  flow_id: number
+  name?: string
+  version: number
+  via?: string
+  historical?: boolean
+  deleted?: boolean
+}
+
+export interface AnalysisStep {
+  step: number
+  tool?: string
+  /** argument digest */
+  args?: string
+  latency_ms: number
+  tokens_in?: number
+  tokens_out?: number
+  result_bytes?: number
+  truncated?: boolean
+  error?: string
+  notes?: Array<{ kind: string; record_id?: number }>
+}
+
+/** Row of GET /watchlist/:user_id/analyses (no trace, no record_verdicts). */
+export interface Analysis {
+  id: number
+  user_id: number
+  source: 'auto' | 'manual' | string
+  status: AnalysisStatus | string
+  error?: string
+  trend?: Trend | ''
+  suggestion?: Suggestion | ''
+  summary?: string
+  main_problems?: string[] | null
+  verdict_counts?: VerdictCounts | null
+  flows_seen?: FlowRef[] | null
+  model?: string
+  steps: number
+  tokens_in: number
+  tokens_out: number
+  /** user_analyses.cost: USD decimal string; null when no call was priced */
+  cost?: string | null
+  unpriced_calls?: number
+  duration_ms: number
+  created_at: string
+}
+
+/** GET /analyses/:id */
+export interface AnalysisDetail extends Analysis {
+  record_verdicts?: RecordVerdict[] | null
+  trace?: AnalysisStep[] | null
+}
+
+export interface CategoryDef {
+  category: string
+  name?: string
+  source?: string
+  stage?: number
+  auditor?: string
+  from?: string
+  definition?: string
+}
+
+export interface AnalysisPrompt {
+  group_id?: number
+  flow: FlowVersionDetail | null
+  dict: CategoryDef[] | null
+  prompt: string
+  bytes?: number
+}
+
+export interface AnalysisTool {
+  name: string
+  purpose?: string
+  args?: string
+  returns?: string
+  kind?: 'read' | 'end' | string
+}
+
+// ---- flow versions (§72.13.5)
+
+export interface FlowVersionItem {
+  version: number
+  published_at: string
+  published_by: number | null
+  current: boolean
+}
+
+export interface FlowVersionDetail {
+  flow_id: number
+  name: string
+  version: number
+  current: boolean
+  published_at?: string
+  spec?: Spec
+  stages?: Array<{ stage: number; combine: string; n?: number; auditors: Array<{ auditor_id: number; name: string; type: AuditorType | string; deleted?: boolean }> }>
 }
 
 export interface Category {
@@ -314,10 +495,13 @@ export interface TestResult {
   severity?: string
   categories: HitCategory[]
   trace: Trace
+  /** P2: price of all calls of this run; absent on 0.2 */
+  cost?: CallCost | null
 }
 
 export interface TryResult extends Outcome {
   error?: string
+  cost?: CallCost | null
 }
 
 export interface ChannelTestResult {
@@ -327,6 +511,18 @@ export interface ChannelTestResult {
   message?: string
   model?: string
   latency_ms: number
+  cost?: CallCost | null
+}
+
+/** Price of one call or of the calls of one run (§72.13.3). */
+export interface CallCost {
+  mode: 'priced' | 'unpriced' | 'free' | string
+  /** USD decimal string; empty when not priced */
+  cost?: string
+  reason?: string
+  billing_model?: string
+  tokens_in: number
+  tokens_out: number
 }
 
 export interface Group {
@@ -379,6 +575,36 @@ export const setFlowEnabled = (id: number, enabled: boolean) => api().put<Flow>(
 
 export const runTest = (text: string, images: string[], flowId?: number) =>
   api().post<TestResult>('/test', { text, images, flow_id: flowId || undefined })
+
+// ---- P2 (§72.13)
+
+export const fetchCosts = (range: string) => api().get<Costs>('/costs', { range })
+
+export const fetchWatch = (userId: number) => api().get<Watch>(`/watchlist/${userId}`)
+export const analyzeWatch = (userId: number) => api().post<Watch>(`/watchlist/${userId}/analyze`, {})
+export const fetchWatchAnalyses = (userId: number, page = 1, pageSize = 10) =>
+  api().list<Analysis>(`/watchlist/${userId}/analyses`, { page, page_size: pageSize })
+export const fetchAnalysis = (id: number) => api().get<AnalysisDetail>(`/analyses/${id}`)
+export const fetchAnalysisPrompt = (q: { group_id?: number; flow_id?: number }) => api().get<AnalysisPrompt>('/analysis/prompt', q)
+export async function fetchAnalysisTools(): Promise<AnalysisTool[]> {
+  const r = await api().get<AnalysisTool[] | { tools: AnalysisTool[] } | null>('/analysis/tools')
+  return Array.isArray(r) ? r : r?.tools || []
+}
+export const fetchUserEvents = (userId: number, pageSize = 50) =>
+  api().list<ModEvent>('/events', { user_id: userId, result: 'suspicious', page: 1, page_size: pageSize })
+
+export const fetchFlowVersions = (id: number) => api().get<{ current_version: number; items: FlowVersionItem[] }>(`/flows/${id}/versions`)
+export const fetchFlowVersion = (id: number, version: number) => api().get<FlowVersionDetail>(`/flows/${id}/versions/${version}`)
+export const rollbackFlow = (id: number, version: number, expected: number) =>
+  api().post<Flow>(`/flows/${id}/rollback`, { version, expected_version: expected })
+export interface SimulateBody {
+  text?: string
+  images?: string[]
+  event_id?: number
+  source: 'draft' | 'published' | 'version'
+  version?: number
+}
+export const simulateFlow = (id: number, body: SimulateBody) => api().post<TestResult>(`/flows/${id}/simulate`, body)
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {
@@ -466,4 +692,98 @@ export const score = (v: number | undefined | null) => (v === undefined || v ===
 /** Path of the plugin's settings page in the console. */
 export function settingsPath(): string {
   return `/plugins/${encodeURIComponent(useModHost().plugin.key)}?tab=settings`
+}
+
+/** USD amount of a decimal string; '—' when empty (not priced). */
+export function money(v: string | number | null | undefined): string {
+  return useModHost().i18n.formatMoney(v)
+}
+
+/**
+ * Display of a call cost: priced → "$…", free → 免费, unpriced → 未定价 with
+ * the reason as hint. A bare string is an amount; null = not priced.
+ */
+export function callCostText(c: CallCost | string | null | undefined): { text: string; tone: Tone; hint: string } {
+  const h = useModHost()
+  if (c === undefined) return { text: '', tone: 'gray', hint: '' }
+  if (typeof c === 'string') return c ? { text: money(c), tone: 'gray', hint: '' } : { text: h.t('cost.notPriced'), tone: 'warning', hint: '' }
+  if (!c || c.mode === 'unpriced' || (c.mode !== 'free' && !c.cost)) {
+    return { text: h.t('cost.notPriced'), tone: 'warning', hint: c?.reason ? enumLabel('priceReason', c.reason) : '' }
+  }
+  if (c.mode === 'free') return { text: h.t('channels.free'), tone: 'gray', hint: '' }
+  return { text: money(c.cost), tone: 'gray', hint: c.billing_model ? h.t('channels.pricedAs', { model: c.billing_model }) : '' }
+}
+
+/**
+ * Final verdict of a record, computed only in the UI (§72.9): the human
+ * review wins, else the AI verdict (unsure = needs review). null = no verdict
+ * and nothing to review (a passing record nobody looked at).
+ */
+export interface FinalVerdict {
+  key: 'violation' | 'false_positive' | 'needs_review' | 'none'
+  by: 'human' | 'ai' | ''
+  tone: Tone
+}
+export function finalVerdict(e: Pick<ModEvent, 'review_status' | 'ai_verdict' | 'result'>): FinalVerdict | null {
+  if (e.review_status === 'confirmed') return { key: 'violation', by: 'human', tone: 'danger' }
+  if (e.review_status === 'false_positive') return { key: 'false_positive', by: 'human', tone: 'success' }
+  switch (e.ai_verdict) {
+    case 'violation':
+      return { key: 'violation', by: 'ai', tone: 'danger' }
+    case 'false_positive':
+      return { key: 'false_positive', by: 'ai', tone: 'success' }
+    case 'unsure':
+      return { key: 'needs_review', by: 'ai', tone: 'warning' }
+  }
+  return e.result === 'hit' || e.result === 'block' ? { key: 'none', by: '', tone: 'gray' } : null
+}
+
+export function aiVerdictTone(v: string | null | undefined): Tone {
+  return v === 'violation' ? 'danger' : v === 'false_positive' ? 'success' : v === 'unsure' ? 'warning' : 'gray'
+}
+
+export function trendTone(v: string | null | undefined): Tone {
+  switch (v) {
+    case 'escalating':
+      return 'danger'
+    case 'persistent':
+      return 'warning'
+    case 'occasional':
+      return 'info'
+    case 'likely_false_positive':
+      return 'success'
+    default:
+      return 'gray'
+  }
+}
+
+export function suggestionTone(v: string | null | undefined): Tone {
+  return v === 'block' ? 'danger' : v === 'observe' ? 'warning' : v === 'release' ? 'success' : 'gray'
+}
+
+/** Queue state of a watch entry: running (claimed), pending (queued) or idle. */
+export function analysisState(w: Watch | null | undefined): 'idle' | 'pending' | 'running' {
+  if (!w) return 'idle'
+  if (w.analysis_running) return 'running'
+  return w.analysis_requested_at ? 'pending' : 'idle'
+}
+
+/**
+ * Watch history reason: system codes are translated ("record:<id>",
+ * "trend:<trend>", "<denied action>:<trend>"); administrator text is kept.
+ */
+export function watchReason(action: string, reason: string): string {
+  if (!reason) return ''
+  const h = useModHost()
+  const i = reason.indexOf(':')
+  if (i <= 0) return reason
+  const head = reason.slice(0, i)
+  const tail = reason.slice(i + 1)
+  if (head === 'record' && /^\d+$/.test(tail)) return h.t('watchReason.record', { id: tail })
+  const known = (group: string, v: string) => enumLabel(group, v) !== v
+  if (head === 'trend' && known('trend', tail)) return h.t('watchReason.trend', { trend: enumLabel('trend', tail) })
+  if (action === 'auto_not_allowed' && known('deniedAction', head)) {
+    return h.t('watchReason.denied', { action: enumLabel('deniedAction', head), trend: enumLabel('trend', tail) })
+  }
+  return reason
 }

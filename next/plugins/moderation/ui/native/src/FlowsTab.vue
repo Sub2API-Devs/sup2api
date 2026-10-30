@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCheckbox, SField, SHint, SInput, SModal, SSegmented, SSelect, SSwitch, STable, STagInput, type TableColumn } from '@sub2api/ui'
+import FlowVersions from './FlowVersions.vue'
+import FlowSimulate from './FlowSimulate.vue'
 import {
   canManage,
   deleteFlow,
@@ -66,8 +68,23 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'published_at', label: t('flows.col.published'), nowrap: true }
   ]
   if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
+  // read-only users still see the version history
+  else c.push({ key: 'versions', label: '', align: 'right' })
   return c
 })
+
+// ---- versions drawer, simulation
+const versionsOpen = ref(false)
+const simulateOpen = ref(false)
+const target = ref<Flow | null>(null)
+function openVersions(f: Flow) {
+  target.value = f
+  versionsOpen.value = true
+}
+function openSimulate(f: Flow) {
+  target.value = f
+  simulateOpen.value = true
+}
 
 // ---- editor
 const editOpen = ref(false)
@@ -206,8 +223,13 @@ async function remove(f: Flow) {
         <template #cell-published_at="{ row }">{{ row.published_at ? host.i18n.formatDateTime(row.published_at) : '—' }}</template>
         <template #cell-actions="{ row }">
           <SButton v-if="row.dirty" size="sm" variant="primary" @click="publish(row)">{{ t('flows.publish') }}</SButton>
+          <SButton size="sm" variant="ghost" @click="openSimulate(row)">{{ t('flows.simulate') }}</SButton>
+          <SButton v-if="row.version" size="sm" variant="ghost" @click="openVersions(row)">{{ t('flows.versions') }}</SButton>
           <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
           <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+        </template>
+        <template #cell-versions="{ row }">
+          <SButton v-if="row.version" size="sm" variant="ghost" @click="openVersions(row)">{{ t('flows.versions') }}</SButton>
         </template>
       </STable>
     </SCard>
@@ -278,5 +300,8 @@ async function remove(f: Flow) {
         <SButton variant="primary" :loading="saving" @click="save(true)">{{ t('flows.saveAndPublish') }}</SButton>
       </template>
     </SModal>
+
+    <FlowVersions v-model:open="versionsOpen" :flow="target" @rolled-back="reload" />
+    <FlowSimulate v-model:open="simulateOpen" :flow="target" />
   </div>
 </template>

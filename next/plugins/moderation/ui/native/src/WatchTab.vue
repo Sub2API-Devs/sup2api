@@ -1,8 +1,24 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { isApiError, useList } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SDrawer, SEmpty, SField, SHint, SInput, SLink, SModal, SPagination, SSegmented, SSelect, STable, type TableColumn } from '@sub2api/ui'
-import { canManage, createWatch, deleteWatch, enumLabel, errorMessage, fetchWatchEvents, levelTone, updateWatch, useModHost, type Watch, type WatchEvent, type WatchLevel } from './host'
+import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SLink, SModal, SPagination, SSegmented, SSelect, STable, type TableColumn } from '@sub2api/ui'
+import WatchDetail from './WatchDetail.vue'
+import AnalysisPromptModal from './AnalysisPromptModal.vue'
+import {
+  analysisState,
+  canManage,
+  createWatch,
+  deleteWatch,
+  enumLabel,
+  errorMessage,
+  levelTone,
+  suggestionTone,
+  trendTone,
+  updateWatch,
+  useModHost,
+  type Watch,
+  type WatchLevel
+} from './host'
 
 // Watch list (CONTRACTS §72.8): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
@@ -36,9 +52,10 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'last_hit_at', label: t('watch.col.lastHit'), nowrap: true },
     { key: 'expires_at', label: t('watch.col.expires'), nowrap: true },
     { key: 'source', label: t('watch.col.source') },
+    { key: 'analysis', label: t('watch.col.analysis'), nowrap: true },
     { key: 'note', label: t('watch.col.note'), ellipsis: '14rem' }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
+  c.push({ key: 'actions', label: '', align: 'right' })
   return c
 })
 
@@ -113,24 +130,25 @@ async function remove(w: Watch) {
   }
 }
 
-// ---- history drawer
-const historyOpen = ref(false)
-const historyUser = ref<number | null>(null)
-const history = ref<WatchEvent[]>([])
-const historyLoading = ref(false)
-async function openHistory(w: Watch) {
-  historyUser.value = w.user_id
-  historyOpen.value = true
-  historyLoading.value = true
-  try {
-    history.value = await fetchWatchEvents(w.user_id)
-  } catch (e) {
-    history.value = []
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
-  } finally {
-    historyLoading.value = false
-  }
+// ---- detail drawer and analysis prompt preview
+const detailOpen = ref(false)
+const detailUser = ref<number | null>(null)
+function openDetail(w: Watch) {
+  detailUser.value = w.user_id
+  detailOpen.value = true
 }
+/** Keeps the row in step with the drawer (analysis state, removal). */
+function onDetailChanged(w: Watch | null) {
+  const i = list.items.value.findIndex((x) => x.user_id === detailUser.value)
+  if (i < 0) return
+  if (w) list.items.value[i] = { ...list.items.value[i], ...w }
+  else list.reload()
+}
+function showUser(id: number) {
+  detailOpen.value = false
+  emit('show-user', id)
+}
+const promptOpen = ref(false)
 </script>
 
 <template>
@@ -148,6 +166,7 @@ async function openHistory(w: Watch) {
         <div class="mod-filter-actions">
           <SButton type="submit" variant="primary" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
           <SButton v-if="manage" icon="plus" @click="openAdd">{{ t('watch.add') }}</SButton>
+          <SButton icon="eyeglass" @click="promptOpen = true">{{ t('watch.promptPreview') }}</SButton>
         </div>
       </form>
     </SCard>
@@ -177,11 +196,24 @@ async function openHistory(w: Watch) {
           <SBadge v-else tone="gray">{{ t('watch.noExpiry') }}</SBadge>
         </template>
         <template #cell-source="{ row }">{{ enumLabel('watchSource', row.source) }}</template>
+        <template #cell-analysis="{ row }">
+          <SBadge v-if="analysisState(row) !== 'idle'" :tone="analysisState(row) === 'running' ? 'info' : 'warning'" dot>{{ enumLabel('analysisState', analysisState(row)) }}</SBadge>
+          <template v-else-if="row.latest_trend || row.latest_suggestion">
+            <SBadge v-if="row.latest_trend" :tone="trendTone(row.latest_trend)">{{ enumLabel('trend', row.latest_trend) }}</SBadge>
+            <div v-if="row.latest_suggestion" class="mod-sub">
+              {{ t('analysis.suggestion') }}: <SBadge size="xs" :tone="suggestionTone(row.latest_suggestion)">{{ enumLabel('suggestion', row.latest_suggestion) }}</SBadge>
+            </div>
+          </template>
+          <SBadge v-else-if="row.latest_analysis_status === 'failed'" tone="danger">{{ enumLabel('analysisStatus', 'failed') }}</SBadge>
+          <SHint v-else inline>—</SHint>
+        </template>
         <template #cell-note="{ row }"><span :title="row.note">{{ row.note || '—' }}</span></template>
         <template #cell-actions="{ row }">
-          <SButton size="sm" variant="ghost" @click="openHistory(row)">{{ t('watch.history') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('watch.remove') }}</SButton>
+          <SButton size="sm" variant="ghost" @click="openDetail(row)">{{ t('watch.detail') }}</SButton>
+          <template v-if="manage">
+            <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('watch.remove') }}</SButton>
+          </template>
         </template>
       </STable>
       <div class="mod-pager">
@@ -210,18 +242,7 @@ async function openHistory(w: Watch) {
       </template>
     </SModal>
 
-    <SDrawer v-model:open="historyOpen" :title="t('watch.historyTitle', { id: historyUser })">
-      <SEmpty v-if="!historyLoading && !history.length" :text="t('watch.noHistory')" />
-      <ol v-else class="mod-history">
-        <li v-for="e in history" :key="e.id">
-          <div class="mod-history-head">
-            <SBadge>{{ enumLabel('watchAction', e.action) }}</SBadge>
-            <span v-if="e.from_level || e.to_level" class="mod-sub">{{ enumLabel('level', e.from_level) }} → {{ enumLabel('level', e.to_level) }}</span>
-            <SHint inline size="xs">{{ host.i18n.formatDateTime(e.created_at) }}<template v-if="e.operator_id"> · #{{ e.operator_id }}</template></SHint>
-          </div>
-          <div v-if="e.reason" class="mod-sub">{{ e.reason }}</div>
-        </li>
-      </ol>
-    </SDrawer>
+    <WatchDetail v-model:open="detailOpen" :user-id="detailUser" @changed="onDetailChanged" @show-user="showUser" />
+    <AnalysisPromptModal v-model:open="promptOpen" />
   </div>
 </template>
