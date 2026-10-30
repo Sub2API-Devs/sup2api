@@ -41,8 +41,10 @@ type snapshot struct {
 	channels map[int64]*liveChannel
 	auditors map[int64]*liveAuditor
 	flows    map[int64]*liveFlow
-	byGroup  map[int64]*liveFlow // group id -> flow; 0 = default
-	markers  [][]byte            // self-request keys of the llm channels
+	// byGroup maps every bound group to its flow; nil = bound to a flow that
+	// is disabled or unpublished (the group is not moderated). 0 = default.
+	byGroup map[int64]*liveFlow
+	markers [][]byte // self-request keys of the llm channels
 }
 
 func emptySnapshot() *snapshot {
@@ -50,12 +52,36 @@ func emptySnapshot() *snapshot {
 		flows: map[int64]*liveFlow{}, byGroup: map[int64]*liveFlow{}}
 }
 
-// flowFor returns the flow of a group, else the default flow.
+// flowFor returns the flow of a group; a group without a binding of its own
+// falls back to the default flow (group 0). nil = not moderated.
 func (s *snapshot) flowFor(group int64) *liveFlow {
 	if f, ok := s.byGroup[group]; ok {
 		return f
 	}
 	return s.byGroup[0]
+}
+
+// sendsImages reports whether any auditor of the flow sends images; when
+// none does, the request images are not kept while the request waits.
+func (s *snapshot) sendsImages(f *liveFlow) bool {
+	for _, st := range f.Spec.Stages {
+		for _, id := range st.Auditors {
+			if a := s.auditors[id]; a != nil && a.images {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// bound reports whether any group runs a flow.
+func (s *snapshot) bound() bool {
+	for _, f := range s.byGroup {
+		if f != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // isSelf reports whether text carries a marker of one of our llm channels.
@@ -187,9 +213,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	var gid int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &fid}, func() error {
-		if f := s.flows[fid]; f != nil {
-			s.byGroup[gid] = f
-		}
+		s.byGroup[gid] = s.flows[fid] // nil when the flow is disabled or unpublished
 		return nil
 	}); err != nil {
 		return nil, err

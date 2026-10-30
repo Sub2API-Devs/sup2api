@@ -4765,7 +4765,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 1. `mode=off` → 放行。用户在 `exempt_user_ids` 里 → 放行。
 2. 用户被封禁且未过期 → 拒绝 403 `moderation_user_blocked`（行为同 §20.4 第 2 步）。
-3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有就用 `group_id=0`。没找到流程或流程已停用 → 放行。
+3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有绑定才用 `group_id=0`。分组绑定的流程已停用或未发布 → 放行（不回落到默认流程）；默认流程也没有 → 放行。
    - 原来的 `group_ids`、`model_patterns` 两个设置删除，转换方法见 72.12。
 4. 流程的 `model_filter`（all / only / exclude，glob，按客户端模型匹配）不匹配 → 放行。
 5. 抽取（72.4）。结果为空 → 放行。是自身请求 → 放行，note `moderation: self`。
@@ -4773,10 +4773,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
    - `mode=enforce`，或用户在名单上且是 `enforce` 级 → **pre**（同步）。
    - 其他情况 → **post**（异步）。
 7. 只有 post 抽样：按输入哈希取模，同一输入结果稳定；比例由流程的 `sample_rate` 决定。
-8. **放行缓存**：键为（flow_id, flow_version, 输入哈希），**只缓存整体通过的结论**。命中就放行，记为 `cache_skipped`（只计数，不写记录）。
+8. **放行缓存**：键为（配置版本 `config_version`, flow_id, flow_version, 输入哈希），改审核器、渠道或默认题集（流程版本不变）也会让旧结论失效；**只缓存整体通过的结论**。命中就放行，记为 `cache_skipped`（只计数，不写记录）。
    - 以下结论不进缓存：带 URL 图片的输入、有审核器被跳过、出过错。
    - 存储沿用 §20 的内存 LRU + KV，条数由 `cache_entries` 决定，TTL 由 `cache_ttl_seconds` 决定。
-9. **post**：入队（满了就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。
+9. **post**：入队（条数满或排队请求占用的字节超过 96 MiB 就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。入队前裁掉流程里没有审核器会用到的图片，`store_text` 关闭时也不保留原始消息。插件内存上限 512 MB。
+   - pre 调用和 post 调用各用一组并发名额（post = `max_concurrency`，pre = max(64, 4 × `max_concurrency`)），后台积压不会让拦截级用户的审核等到超时放行。
 10. **pre**：在钩子内同步执行流程，同一输入并发时只执行一次（singleflight，沿用 §20）。
     - 结果为 Hit → 拒绝，状态码 `block_status`，code `moderation_blocked`，message 为 `block_message`。
     - 结果为通过或出错 → 放行。审核出错一律放行，原来的 `on_error` 设置删除：new-api 就是一律放行，否则审核服务一挂所有拦截级用户都用不了。
@@ -4865,7 +4866,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **管理员**：插件现在识别不了管理员，P3 有了 `users.read` 再补。在那之前，需要把管理员的 user_id 加进 `exempt_user_ids`，页面上提示这一点。
 
-**手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。
+**手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数清零、`since_at` 重设；改回 observe 且没指定天数时，有效期重设为 `watch_days`。
 
 **封禁**（`blocks`、`unblocks`、`block_subjects` 不变）：
 - `ban_threshold` 等设置保留，默认关。
@@ -4888,7 +4889,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `highest_category`、`highest_score` | |
 | `hit_categories` | text[] |
 | `trace` | jsonb：每级、每个审核器的分数、是否命中、是否跳过、出错原因、耗时 |
-| `input_format` | anthropic / openai_chat / … |
+| `input_format` | 客户端协议，如 `anthropic.messages`、`openai.chat` |
 | `input_message`、`input_message_size` | 第一级命中时保存原样的那几条 user 消息 JSON；受 `store_text` 控制 |
 | `image_count` | |
 | `review_status`、`reviewed_by`、`reviewed_at` | review_status 为 pending / false_positive / confirmed |
@@ -4897,13 +4898,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `queue_ms` | |
 
 - P2 再加 6 个 `ai_*` 列。
-- 老列 `verdict`、`action`、`text` 等保留只读，迁移时回填 `result`：block 且 deny → block；block 且 allow → hit；flag → hit；error → error；pass → pass。
+- 老列 `verdict`、`action`、`text` 等保留只读，迁移时回填 `result`：block 且 deny → block；block 且 allow → hit；flag → hit；error → error；pass → pass。回填的 `keep_until`：命中类（block、flag）取创建时间 + 180 天，其余 + 30 天。0.1 的 flag 记录（`flow_id = 0`）不计入封禁次数（0.1 只计 block）。滚动升级时旧节点还在写的行，由 `cleanup` 任务每次先执行同一条回填。
 - 写哪些记录：可疑（hit、block）总是写；`record_overturned`（默认开）、`record_errors`（默认开）、`record_pass`（默认关，沿用原设置）控制其余几类。
 - **最终结论只在前端计算**：有人工结论用人工结论；否则用 AI 结论，AI 判 unsure 时显示"待复核"；同时标注来源是人工还是 AI。
 
 ### 72.10 设置（`forms/settings.schema.json` 改动）
 
-- **保留**：`mode`、`exempt_user_ids`、`input_max_chars`（默认改为 12000）、`min_chars`、`cache_ttl_seconds`、`block_status`（限定为 400、403、451）、`block_message`、`record_pass`、`store_text`、`max_concurrency`、`queue_size`、`ban_*`。
+- **保留**：`mode`、`exempt_user_ids`、`input_max_chars`（默认改为 12000）、`min_chars`、`cache_ttl_seconds`、`block_status`（沿用 400–599，默认 403；没有收窄，免得 0.1 的旧值升级后存不了）、`block_message`、`record_pass`、`store_text`、`max_concurrency`、`queue_size`、`ban_*`。
 - **新增**：
 
 | 设置 | 默认值 / 范围 |

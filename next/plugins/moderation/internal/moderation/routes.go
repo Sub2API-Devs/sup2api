@@ -146,7 +146,7 @@ func (p *Plugin) runtimeState() Runtime {
 		avg = p.stats.latencyMsSum.Load() / calls
 	}
 	return Runtime{
-		Mode: c.Mode, Configured: len(s.byGroup) > 0, SettingsHash: c.settingsHash, ConfigVersion: s.version,
+		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version,
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),

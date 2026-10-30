@@ -182,6 +182,13 @@ func TestRunFlow(t *testing.T) {
 	if rec.Result != ResultBlock || rec.HighestCategory != "c" || rec.Severity != "high" || strings.Join(rec.HitCategories, ",") != "c,b" {
 		t.Fatalf("rec = %+v", rec)
 	}
+	// A later stage that errors after a hit is an error, not an overturn.
+	tr = runFlow(context.Background(), spec(st("any", 0, 1), st("any", 0, 2)), 5*time.Second, scripted(map[int64]Outcome{1: hit("a", 0.8), 2: fail}, nil))
+	rec = eventRec{}
+	rec.fillFromTrace(tr, false)
+	if rec.Result != ResultError {
+		t.Fatalf("errored second stage = %s", rec.Result)
+	}
 	// Timeout: the slow auditor never decides, the run errors and passes.
 	start := time.Now()
 	tr = runFlow(context.Background(), spec(st("any", 0, 1)), 100*time.Millisecond, scripted(map[int64]Outcome{1: hit("a", 1)}, map[int64]time.Duration{1: time.Second}))
@@ -240,7 +247,7 @@ func TestDecodeSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Mode != ModeObserve || s.BlockStatus != 403 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
+	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
 		strings.Join(s.ExemptUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
 		t.Fatalf("settings = %+v", s)
 	}

@@ -74,6 +74,15 @@ type Input struct {
 	TruncatedRun bool
 }
 
+// size is the bytes the input holds (text, images, raw messages).
+func (in *Input) size() int64 {
+	n := int64(len(in.Text) + len(in.Messages))
+	for _, img := range in.Images {
+		n += int64(len(img.Data) + len(img.URL))
+	}
+	return n
+}
+
 // Empty reports whether there is nothing to moderate.
 func (in *Input) Empty() bool { return in == nil || (in.Text == "" && len(in.Images) == 0) }
 

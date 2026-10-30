@@ -97,12 +97,10 @@
       "en": "Block HTTP status",
       "zh": "拦截状态码"
     },
-    "ui:widget": "select",
-    "ui:enumNames": [
-      "400",
-      "403",
-      "451"
-    ]
+    "ui:help": {
+      "en": "403 by default; 400 or 451 are common alternatives.",
+      "zh": "默认 403，也常用 400 或 451。"
+    }
   },
   "block_message": {
     "ui:title": {

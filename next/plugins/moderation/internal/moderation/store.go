@@ -52,10 +52,10 @@ func (r *eventRec) fillFromTrace(tr Trace, refused bool) {
 		r.Result = ResultBlock
 	case tr.Final == Hit:
 		r.Result = ResultHit
-	case tr.Overturned:
-		r.Result = ResultOverturned
 	case tr.Errored:
 		r.Result = ResultError
+	case tr.Overturned:
+		r.Result = ResultOverturned
 	default:
 		r.Result = ResultPass
 	}
@@ -304,7 +304,7 @@ func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
 }
 
 // countViolations counts suspicious requests (one per request id, false
-// positives excluded) of uid since the later of since, the last unblock and
+// positives and 0.1 flag verdicts excluded) of uid since the later of since, the last unblock and
 // the start of the user's last (expired) ban.
 func countViolations(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
@@ -312,6 +312,7 @@ func countViolations(ctx context.Context, q interface {
 	var n int64
 	err := q.QueryRow(ctx, `SELECT count(DISTINCT CASE WHEN request_id = '' THEN id::text ELSE request_id END) FROM events
 		WHERE user_id = $1 AND result IN ('hit', 'block') AND review_status <> 'false_positive' AND created_at >= $2
+		  AND NOT (verdict = 'flag' AND flow_id = 0)
 		  AND created_at > coalesce((SELECT at FROM unblocks WHERE user_id = $1), '-infinity'::timestamptz)
 		  AND created_at > coalesce((SELECT created_at FROM blocks WHERE user_id = $1), '-infinity'::timestamptz)`,
 		uid, since).Scan(&n)

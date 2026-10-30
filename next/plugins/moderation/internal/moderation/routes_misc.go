@@ -19,6 +19,19 @@ import (
 // JobCleanup is the job id declared in manifest.json.
 const JobCleanup = "cleanup"
 
+// BackfillLegacySQL fills result and retention of 0.1 records; the same
+// statement as migrations/0003_flows_watchlist.sql.
+const BackfillLegacySQL = `UPDATE events SET
+    result = CASE
+        WHEN verdict = 'block' AND action = 'deny' THEN 'block'
+        WHEN verdict IN ('block', 'flag') THEN 'hit'
+        WHEN verdict = 'error' THEN 'error'
+        ELSE 'pass' END,
+    timing = CASE WHEN mode = 'enforce' THEN 'pre' ELSE 'post' END,
+    hit_categories = categories,
+    keep_until = coalesce(keep_until, created_at + CASE WHEN verdict IN ('block', 'flag') THEN interval '180 days' ELSE interval '30 days' END)
+WHERE result = ''`
+
 type jsonNumber = json.Number
 
 func jsonRaw(b []byte) json.RawMessage { return json.RawMessage(b) }
@@ -80,7 +93,7 @@ func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) 
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "not_configured",
 			"no published and enabled flow to test (bind one to the default group, or pass flow_id) / 没有可测试的已发布流程（请绑定默认分组或指定 flow_id）"), nil
 	}
-	m := &moderation{cfg: c, flow: flow, snap: snap, in: input}
+	m := &moderation{cfg: c, flow: flow, snap: snap, in: input, timing: TimingPre}
 	tr := p.run(ctx, m)
 	var rec eventRec
 	rec.fillFromTrace(tr, false)
@@ -216,6 +229,11 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	now := p.now().UTC()
+	// Rows 0.1 nodes wrote during a rolling upgrade get their result and
+	// retention like the migration gave the older ones.
+	if _, err := db.Exec(ctx, BackfillLegacySQL); err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup backfill: %v", err)
+	}
 	tag, err := db.Exec(ctx, `DELETE FROM events WHERE keep_until < $1`, now)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup events: %v", err)

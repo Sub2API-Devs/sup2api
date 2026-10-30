@@ -39,10 +39,11 @@ type Plugin struct {
 	cfg        atomic.Pointer[config]
 	httpClient *http.Client
 
-	agent *agent
-	cache atomic.Pointer[lru]
-	sf    singleflight.Group
-	sem   atomic.Pointer[semaphore]
+	agent  *agent
+	cache  atomic.Pointer[lru]
+	sf     singleflight.Group
+	sem    atomic.Pointer[semaphore] // background (post) calls
+	preSem atomic.Pointer[semaphore] // calls a request waits for
 
 	snap   atomic.Pointer[snapshot]
 	snapMu sync.Mutex
@@ -58,8 +59,11 @@ type Plugin struct {
 
 	// Post queue: workers = max_concurrency, capacity = queue_size.
 	poolMu sync.RWMutex
-	pool   *workerPool
-	closed bool
+	// queuedBytes is what the queued requests hold; enqueue refuses beyond
+	// maxQueueBytes so a burst of image requests cannot exhaust memory.
+	queuedBytes atomic.Int64
+	pool        *workerPool
+	closed      bool
 
 	eventWriter *batch.Writer[eventRec]
 
@@ -97,6 +101,7 @@ func New() *Plugin {
 	p.cfg.Store(c)
 	p.cache.Store(newLRU(c.CacheEntries))
 	p.sem.Store(newSemaphore(c.MaxConcurrency))
+	p.preSem.Store(newSemaphore(preSlots(c.MaxConcurrency)))
 	empty := map[int64]time.Time{}
 	p.blocked.Store(&empty)
 	noWatch := map[int64]watchEntry{}
@@ -146,6 +151,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	old := p.cfg.Swap(c)
 	if old == nil || old.MaxConcurrency != c.MaxConcurrency {
 		p.sem.Store(newSemaphore(c.MaxConcurrency))
+		p.preSem.Store(newSemaphore(preSlots(c.MaxConcurrency)))
 	}
 	if old == nil || old.CacheEntries != c.CacheEntries {
 		p.cache.Store(newLRU(c.CacheEntries))
@@ -240,14 +246,23 @@ func (p *Plugin) db(ctx context.Context) (*pgxpool.Pool, error) {
 
 // ---------------------------------------------------------------- concurrency
 
+// maxQueueBytes caps the bytes held by queued requests (per node).
+const maxQueueBytes = 96 << 20
+
+// preSlots is the number of concurrent calls requests may wait for.
+func preSlots(maxConcurrency int) int { return max(64, 4*maxConcurrency) }
+
 // semaphore bounds concurrent upstream calls (max_concurrency).
 type semaphore struct{ ch chan struct{} }
 
 func newSemaphore(n int) *semaphore { return &semaphore{ch: make(chan struct{}, n)} }
 
 // acquire waits for a slot until ctx is done.
-func (p *Plugin) acquire(ctx context.Context) (func(), error) {
+func (p *Plugin) acquire(ctx context.Context, pre bool) (func(), error) {
 	s := p.sem.Load()
+	if pre {
+		s = p.preSem.Load()
+	}
 	select {
 	case s.ch <- struct{}{}:
 		return func() { <-s.ch }, nil
@@ -292,10 +307,15 @@ func (p *Plugin) enqueue(m *moderation) bool {
 	if p.pool == nil || p.closed {
 		return false
 	}
+	if p.queuedBytes.Add(m.size) > maxQueueBytes {
+		p.queuedBytes.Add(-m.size)
+		return false
+	}
 	select {
 	case p.pool.ch <- m:
 		return true
 	default:
+		p.queuedBytes.Add(-m.size)
 		return false
 	}
 }
@@ -312,9 +332,9 @@ func (p *Plugin) queueLen() (length, capacity int) {
 func (p *Plugin) postWorker(pool *workerPool) {
 	defer pool.wg.Done()
 	for m := range pool.ch {
-		if p.bg.Err() != nil {
-			continue // shutting down: drop
+		if p.bg.Err() == nil {
+			p.runPost(m)
 		}
-		p.runPost(m)
+		p.queuedBytes.Add(-m.size)
 	}
 }

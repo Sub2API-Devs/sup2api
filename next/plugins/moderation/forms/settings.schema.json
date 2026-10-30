@@ -27,11 +27,8 @@
     "block_status": {
       "type": "integer",
       "title": "Block status",
-      "enum": [
-        400,
-        403,
-        451
-      ],
+      "minimum": 400,
+      "maximum": 599,
       "default": 403
     },
     "block_message": {

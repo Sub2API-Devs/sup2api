@@ -103,16 +103,19 @@ function toggleGroup(id: number, on: boolean) {
 const combineOptions = computed(() => ['any', 'all', 'at_least'].map((v) => ({ value: v, label: t(`combine.${v}`) })))
 const filterOptions = computed(() => ['all', 'only', 'exclude'].map((v) => ({ value: v, label: t(`modelFilter.${v}`) })))
 
-/** Binds the groups, asking before moving groups bound to another flow. */
-async function bindGroups(id: number, list: number[]): Promise<void> {
+/** Binds the groups, asking before moving groups bound to another flow; false = the user declined. */
+async function bindGroups(id: number, list: number[]): Promise<boolean> {
   try {
     await setFlowGroups(id, list)
+    return true
   } catch (e) {
     if (!isApiError(e) || e.code !== 'group_conflict') throw e
     const conflicts = (e.details?.conflicts || []) as Array<{ group_id: number; flow_id: number }>
     const names = conflicts.map((c) => `${groupName(c.group_id)} → #${c.flow_id}`).join(', ')
     const ok = await host.confirm({ message: t('flows.moveGroups', { list: names }), confirmText: t('flows.move') })
-    if (ok) await setFlowGroups(id, list, true)
+    if (!ok) return false
+    await setFlowGroups(id, list, true)
+    return true
   }
 }
 
@@ -127,7 +130,12 @@ async function save(publish: boolean) {
   saving.value = true
   try {
     const f = await saveFlow(editing.value?.id ?? null, { name: form.name, draft: spec })
-    await bindGroups(f.id, list)
+    if (!(await bindGroups(f.id, list))) {
+      // The draft is saved; the groups and the publication wait for another try.
+      editing.value = f
+      host.toast(t('flows.groupsKept'), 'warning')
+      return
+    }
     if (publish) await publishFlow(f.id, f.version)
     host.toast(publish ? t('flows.published') : t('flows.draftSaved'), 'success')
     editOpen.value = false

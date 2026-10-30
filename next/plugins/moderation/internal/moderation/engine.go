@@ -196,7 +196,9 @@ type Outcome struct {
 
 // audit calls the engine once through the bound channel and judges the
 // result. Every failure is an errored Outcome; nothing to send is skipped.
-func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input) Outcome {
+// pre calls draw from their own slots, so a busy background queue cannot
+// time out the moderation of requests that wait for it.
+func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool) Outcome {
 	out := Outcome{AuditorID: a.ID, ChannelID: a.ChannelID}
 	ch := a.channel
 	if ch == nil {
@@ -205,7 +207,7 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input) Outcome {
 	}
 	cctx, cancel := context.WithTimeout(ctx, ch.Timeout)
 	defer cancel()
-	release, err := p.acquire(cctx)
+	release, err := p.acquire(cctx, pre)
 	if err != nil {
 		out.Err = errTimeout
 		return out

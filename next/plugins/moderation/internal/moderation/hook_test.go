@@ -76,6 +76,7 @@ func mockLLM(t *testing.T) *fakeLLM {
 type fakeMod struct {
 	srv   *httptest.Server
 	calls sync.Map // path -> *atomic.Int64
+	delay atomic.Int64 // nanoseconds before answering
 }
 
 var hitToken = regexp.MustCompile(`MOD-HIT-([a-z/_-]+)`)
@@ -85,6 +86,9 @@ func newFakeMod(t *testing.T) *fakeMod {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n, _ := f.calls.LoadOrStore(r.URL.Path, new(atomic.Int64))
 		n.(*atomic.Int64).Add(1)
+		if d := time.Duration(f.delay.Load()); d > 0 {
+			time.Sleep(d)
+		}
 		body, _ := io.ReadAll(r.Body)
 		text := string(body)
 		if strings.Contains(text, "MOD-500") {
@@ -219,7 +223,7 @@ func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int
 func TestLegacyConversion(t *testing.T) {
 	llm := mockLLM(t)
 	p, h, fh := startDB(t, llm, map[string]any{"group_ids": []int{9}, "model_patterns": []string{"claude-*"}})
-	waitFor(t, "conversion", func() bool { return len(p.snap.Load().byGroup) > 0 })
+	waitFor(t, "conversion", func() bool { return p.snap.Load().bound() })
 	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
 	if len(chans) != 1 || chans[0].Type != ChannelLLM || chans[0].APIKeyTail != "test" || !chans[0].HasKey {
 		t.Fatalf("channels = %+v", chans)
@@ -254,7 +258,7 @@ func TestLegacyConversion(t *testing.T) {
 	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
 	p2 := New()
 	pluginsdktest.Start(t, p2, pluginsdktest.Options{Host: fh2, SDK: sdkOpts(), Config: settingsMap(llm.srv.URL, ModeEnforce, nil)})
-	waitFor(t, "second node snapshot", func() bool { return len(p2.snap.Load().byGroup) > 0 })
+	waitFor(t, "second node snapshot", func() bool { return p2.snap.Load().bound() })
 	if n := len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))); n != 1 {
 		t.Fatalf("channels after second start = %d", n)
 	}
@@ -291,6 +295,9 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	if r := mustHook(t, h, hookReqAs(3, "", "MOD-HIT-sexual two")); !denied(r) {
 		t.Fatalf("enforce level not refused: %+v", r)
 	}
+	// The refused request is recorded (and its watch update done) before the
+	// level changes again.
+	waitEvents(t, h, map[string]string{"result": "block", "user_id": "3"}, 1)
 	if r := mustHook(t, h, hookReqAs(4, "", "MOD-HIT-sexual two")); denied(r) {
 		t.Fatalf("other user refused: %+v", r)
 	}
@@ -298,21 +305,34 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	if len(evs) != 2 || evs[0].Action != "set_level" || evs[1].Action != "auto_add" {
 		t.Fatalf("watch events = %+v", evs)
 	}
-	// A false positive of the current window takes its violation back.
-	decodeData[Watch](t, h.Do("PATCH", "/watchlist/3", nil, map[string]any{"level": LevelObserve}))
-	counted := waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3", "request_id": "req-a"}, 2)
-	var ids []int64
-	for _, e := range counted {
-		ids = append(ids, e.ID)
+	// Back at observe a new counting window starts: the count restarts and
+	// the entry expires after watch_days again.
+	back := decodeData[Watch](t, h.Do("PATCH", "/watchlist/3", nil, map[string]any{"level": LevelObserve}))
+	if back.ViolationCount != 0 || back.ExpiresAt == nil {
+		t.Fatalf("after level change = %+v", back)
 	}
-	decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": "false_positive"}))
-	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil)); w[0].ViolationCount != 0 {
-		t.Fatalf("after false positive = %+v", w[0])
+	review := func(rid, status string, want int) {
+		t.Helper()
+		var ids []int64
+		for _, e := range waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3", "request_id": rid}, 1) {
+			ids = append(ids, e.ID)
+		}
+		decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": status}))
+		if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil)); w[0].ViolationCount != want {
+			t.Fatalf("%s %s: violations = %d, want %d", rid, status, w[0].ViolationCount, want)
+		}
 	}
-	decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": "confirmed"}))
-	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil)); w[0].ViolationCount != 1 {
-		t.Fatalf("after undo = %+v", w[0])
-	}
+	// A record of the old window does not touch the new count.
+	review("req-a", "false_positive", 0)
+	mustHook(t, h, hookReqAs(3, "req-b", "MOD-HIT-sexual three"))
+	waitFor(t, "violation in the new window", func() bool {
+		w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil))
+		return w[0].ViolationCount == 1
+	})
+	// A false positive of the current window takes its violation back; undoing
+	// it counts it again.
+	review("req-b", "false_positive", 0)
+	review("req-b", "confirmed", 1)
 	if r := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 3}); r.GetStatus() != http.StatusConflict {
 		t.Fatalf("duplicate add = %d", r.GetStatus())
 	}
@@ -423,6 +443,16 @@ func TestConfigValidation(t *testing.T) {
 	if len(moved.Groups) != 1 || moved.Groups[0] != 9 {
 		t.Fatalf("moved = %+v", moved)
 	}
+	// Group 9 is bound to an unpublished flow: not moderated, no fallback to
+	// the default flow; an unbound group still takes the default.
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual bound")); r.GetNote() != "" {
+		t.Fatalf("group of an unpublished flow moderated: %+v", r)
+	}
+	unbound := hookReq("MOD-HIT-sexual unbound")
+	unbound.Meta.GroupId = 10
+	if r := mustHook(t, h, unbound); r.GetNote() != notePrefix+"queued" {
+		t.Fatalf("unbound group not on the default flow: %+v", r)
+	}
 	if r := h.Do("POST", fmt.Sprintf("/flows/%d/publish", flow), nil, map[string]any{"expected_version": 0}); r.GetStatus() != http.StatusConflict {
 		t.Fatalf("stale publish = %d", r.GetStatus())
 	}
@@ -467,9 +497,22 @@ func TestCleanupAndImport(t *testing.T) {
 	if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (5,'observe','auto', now() - interval '1 minute')`); err != nil {
 		t.Fatal(err)
 	}
+	// A row a 0.1 node wrote after the migration: backfilled by the cleanup, a
+	// flag becomes hit but never counts as a violation.
+	if _, err := db.Exec(ctx, `INSERT INTO events (user_id, mode, verdict, action, request_id) VALUES (9,'observe','flag','allow','old-flag'), (9,'enforce','block','deny','old-block')`); err != nil {
+		t.Fatal(err)
+	}
 	out, err := p.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobCleanup})
 	if err != nil || !strings.Contains(out.GetMessage(), "deleted 1 events, 1 expired watch") {
 		t.Fatalf("cleanup = %v %v", out, err)
+	}
+	var res string
+	var keep time.Time
+	if err := db.QueryRow(ctx, `SELECT result, keep_until FROM events WHERE request_id = 'old-flag'`).Scan(&res, &keep); err != nil || res != ResultHit || keep.Before(time.Now().Add(170*24*time.Hour)) {
+		t.Fatalf("backfill = %s %v %v", res, keep, err)
+	}
+	if n, err := countViolations(ctx, db, 9, time.Now().Add(-time.Hour)); err != nil || n != 1 {
+		t.Fatalf("violations = %d %v (0.1 flags must not count)", n, err)
 	}
 	doc := map[string]any{"data": map[string]any{
 		"channels": []any{map[string]any{"type": "openai", "name": "omni", "base_url": "https://api.openai.com"}},
@@ -504,5 +547,30 @@ func BenchmarkHookOff(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		_, _ = p.OnGatewayRequest(ctx, req)
+	}
+}
+
+// A synchronous run whose client leaves keeps going: a hit is still recorded
+// (no escaping the watch list by disconnecting), a pass is not.
+func TestPreCanceledClient(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true, "cache_ttl_seconds": 0})
+	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	mod.delay.Store(int64(500 * time.Millisecond))
+	for _, tc := range []struct{ id, text string }{{"cancel-hit", "MOD-HIT-sexual gone"}, {"cancel-pass", "clean and gone"}} {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		r, err := p.OnGatewayRequest(ctx, hookReqAs(3, tc.id, tc.text))
+		cancel()
+		if err != nil || denied(r) {
+			t.Fatalf("%s: canceled request = %+v %v", tc.id, r, err)
+		}
+	}
+	waitEvents(t, h, map[string]string{"request_id": "cancel-hit", "result": "hit"}, 1)
+	time.Sleep(1500 * time.Millisecond)
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "cancel-pass"}, nil))); n != 0 {
+		t.Fatalf("canceled pass recorded %d times", n)
+	}
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "cancel-hit"}, nil))); n != 1 {
+		t.Fatalf("canceled hit recorded %d times", n)
 	}
 }

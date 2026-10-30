@@ -640,7 +640,7 @@ func (p *Plugin) tryAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if resp != nil || err != nil {
 		return resp, err
 	}
-	o := p.audit(ctx, a, in)
+	o := p.audit(ctx, a, in, true)
 	out := TryResult{Outcome: o}
 	if o.Err != nil {
 		out.ErrType, out.Status, out.Error = ErrType(o.Err), upstreamStatus(o.Err), truncateRunes(o.Err.Error(), 300)

@@ -127,7 +127,11 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS queue_ms           integer     NOT N
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_review_status_chk;
 ALTER TABLE events ADD CONSTRAINT events_review_status_chk CHECK (review_status IN ('pending', 'false_positive', 'confirmed'));
 
--- 0.1 rows: result from verdict/action, retention as 0.1 kept them (30 days).
+-- 0.1 rows (and rows 0.1 nodes still write during a rolling upgrade; the
+-- cleanup job repeats this, BackfillLegacySQL): result from verdict/action.
+-- A 0.1 flag becomes hit but is never counted as a violation (0.1 only
+-- counted block; countViolations skips flow_id = 0 flags). Hits are kept at
+-- least 180 days (§72.10), the rest 30 days as 0.1 kept them.
 UPDATE events SET
     result = CASE
         WHEN verdict = 'block' AND action = 'deny' THEN 'block'
@@ -136,7 +140,7 @@ UPDATE events SET
         ELSE 'pass' END,
     timing = CASE WHEN mode = 'enforce' THEN 'pre' ELSE 'post' END,
     hit_categories = categories,
-    keep_until = coalesce(keep_until, created_at + interval '30 days')
+    keep_until = coalesce(keep_until, created_at + CASE WHEN verdict IN ('block', 'flag') THEN interval '180 days' ELSE interval '30 days' END)
 WHERE result = '';
 
 CREATE INDEX IF NOT EXISTS events_result_created_at_idx ON events (result, created_at);

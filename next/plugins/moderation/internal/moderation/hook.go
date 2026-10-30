@@ -55,6 +55,7 @@ type moderation struct {
 	rec    eventRec
 	timing string
 	key    string // pass cache / singleflight key
+	size   int64  // bytes held while queued
 	queued time.Time
 }
 
@@ -121,7 +122,7 @@ func (p *Plugin) admit(in *pluginv1.GatewayRequestHookRequest) (*moderation, *pl
 	if m.timing == TimingPost && !sampled(input.Hash, flow.Spec.SampleRate) {
 		return nil, allowEmpty
 	}
-	m.key = passKey(flow, input.Hash)
+	m.key = passKey(snap, flow, input.Hash)
 	if p.passCached(m.key, m.timing == TimingPre) {
 		p.stats.cacheHits.Add(1)
 		return nil, allow(notePrefix + "pass (cached)")
@@ -133,20 +134,28 @@ func (p *Plugin) admit(in *pluginv1.GatewayRequestHookRequest) (*moderation, *pl
 	m.rec = eventRec{
 		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: uid, APIKeyID: meta.GetApiKeyId(),
 		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
-		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: input.Format,
+		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
 		TextChars: len([]rune(input.Text)), TextHash: hex.EncodeToString(input.Hash[:]), ImageCount: len(input.Images),
 		WatchLevel: level,
 	}
 	if c.StoreText {
 		t := textutil.TruncateRunes(input.Text, textMaxChars)
 		m.rec.Text = &t
+	} else {
+		input.Messages = nil // only kept for the record
 	}
+	if !snap.sendsImages(flow) {
+		input.Images = nil // the hash and image_count are already taken
+	}
+	m.size = input.size()
 	return m, nil
 }
 
-// passKey is the pass cache key: (flow, version, input hash).
-func passKey(f *liveFlow, h [32]byte) string {
-	return strconv.FormatInt(f.ID, 10) + ":" + strconv.Itoa(f.Version) + ":" + hex.EncodeToString(h[:])
+// passKey is the pass cache key: (config version, flow, flow version, input
+// hash). The config version changes with every auditor, channel or default
+// question set change, which a flow version does not see.
+func passKey(s *snapshot, f *liveFlow, h [32]byte) string {
+	return strconv.FormatInt(s.version, 10) + ":" + strconv.FormatInt(f.ID, 10) + ":" + strconv.Itoa(f.Version) + ":" + hex.EncodeToString(h[:])
 }
 
 // runPre moderates inline; a hit refuses the request.
@@ -209,7 +218,7 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 		if a == nil {
 			return Outcome{AuditorID: id, Err: errAuditorMissing}
 		}
-		return p.audit(ctx, a, m.in)
+		return p.audit(ctx, a, m.in, m.timing == TimingPre)
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
 	return tr

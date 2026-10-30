@@ -249,14 +249,28 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		if in.Level != nil {
 			w.Level = *in.Level
 		}
+		changed := from != w.Level
+		if changed {
+			// A new level opens a new counting window (new-api
+			// moderation_watch.go): violations, epoch and since restart, and
+			// back at observe the entry expires after watch_days again.
+			w.ViolationEpoch, w.ViolationCount, w.SinceAt = newEpoch(), 0, now
+			if w.Level == LevelObserve && in.Days == nil {
+				w.ExpiresAt = expiryOf(nil, c, now)
+			}
+		}
 		if in.Days != nil {
 			w.ExpiresAt = expiryOf(in.Days, c, now)
 		}
 		if in.Note != nil {
 			w.Note = strings.TrimSpace(*in.Note)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE watchlist SET level = $2, expires_at = $3, note = $4, source = CASE WHEN $5 THEN 'manual' ELSE source END, updated_at = $6
-			WHERE user_id = $1`, uid, w.Level, w.ExpiresAt, w.Note, from != w.Level, now); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE watchlist SET level = $2, expires_at = $3, note = $4, updated_at = $6,
+			source = CASE WHEN $5 THEN 'manual' ELSE source END,
+			since_at = CASE WHEN $5 THEN $6 ELSE since_at END,
+			violation_count = CASE WHEN $5 THEN 0 ELSE violation_count END,
+			violation_epoch = CASE WHEN $5 THEN $7 ELSE violation_epoch END
+			WHERE user_id = $1`, uid, w.Level, w.ExpiresAt, w.Note, changed, now, w.ViolationEpoch); err != nil {
 			return w, err
 		}
 		action := "update"

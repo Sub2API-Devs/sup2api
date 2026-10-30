@@ -237,9 +237,6 @@ func (d decoder) general(s *Settings) {
 	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
 	d.integer("queue_size", &s.QueueSize, 1, 100000)
 	d.integer("block_status", &s.BlockStatus, 400, 599)
-	if s.BlockStatus != 400 && s.BlockStatus != 403 && s.BlockStatus != 451 {
-		s.BlockStatus = 403
-	}
 	d.str("block_message", &s.BlockMessage)
 	s.BlockMessage = textutil.TruncateRunes(strings.TrimSpace(s.BlockMessage), 500)
 	if s.BlockMessage == "" {
