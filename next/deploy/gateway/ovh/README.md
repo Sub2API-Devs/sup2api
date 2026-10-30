@@ -4,7 +4,9 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间 08:20–08:33）：ccgateway **0.1.114** + Core 两节点 **0.1.219**（源码都是 `7b26bcc3a`）。
+2026-10-30 最新发布（北京时间 12:00）：ccgateway **0.1.115**（源码 `1cc3a01a6`，包 SHA `914e7a93…7997`，验签 valid，授权沿用）：与 0.1.114 相同，只是 app 镜像不再带 2.1.310 作回退，只有 2.1.312 / v38（用户决定）。upload → upgrade → bundled controller,egress → 配对更新（`cli_version` 不变 2.1.312）→ bundled app（`up_to_date: true`）。21 号测试 200。注意：42–49 号已于 03:40 UTC 被批量删除（不是发布操作），当前未删除的 CC 账号只有 20、21（都已停用）。脚本 `stage/ccgateway-0.1.115`。
+
+2026-10-30 发布（北京时间 08:20–08:33）：ccgateway **0.1.114** + Core 两节点 **0.1.219**（源码都是 `7b26bcc3a`）。
 - **ccgateway 0.1.114**（包 SHA `a46b781d…33ca`，验签 valid，授权沿用，rollout 205）：定制 CLI 换到 Claude Code **2.1.312 / `ccgateway-v38-cc-2-1-312`**（ELF `c66a1f05…9ddb`，Bun 1.4.4，TLS 指纹与官方 identical）；镜像当时还带着 2.1.310 / v36 作回退，0.1.115 起去掉（用户决定）。Worker 按（会话, 线程）在进程内存记住上一次成功应答的 `request-id` 与 turn，我们构造的计费头补出 `cc_prev_req`（只在请求最后一条 assistant 正是那次应答、且无并发时；`cch` 保持占位，用户决定）。顺序：upload → upgrade → bundled controller,egress → `rollout.py switch`（配对原地更新后立即 PUT `cli_version=2.1.312`，窗口 80 秒）→ bundled app（`up_to_date: true`）。配对结果：20/21/42/44/45/46/48/49 updated，47 忙、空闲后补更新，23 not_found，其余 not_running。控制台测试 21、48 Haiku 200（42 号额度满 429）。切换窗口内 47/48 有零星 502/503。
 - **Core 0.1.219**（manifest `a0071467…c532`，计划 `293fd04b3f4c9c0a4da1b5fb09bc1a4d` completed/13，核心 SHA `f7a36c7b…dc5d`）：`PinnedCLIVersion` 与控制台默认 `cli_version` 改为 2.1.312。schema 不变（`e3d6a10f…`）。
 - 发布前离线 e2e（v36 基线 vs v38 + 新 Worker，73 场景 148 请求）：噪声 0，verify 1658/1658（官方 2.1.310 客户端）与 1662/1662（2.1.312），只差官方 Bash 描述与会话场景。
