@@ -4935,13 +4935,14 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | 方法 路径 | 权限 | 说明 |
 |---|---|---|
 | GET/POST `/channels`，GET/PUT/DELETE `/channels/:id`，POST `/channels/:id/test` | read / manage | 不返回 key 和代理明文，只返回 `api_key_tail` 和 `has_proxy` |
-| GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try` | read / manage | try 的请求体是 `{text, images?}`，返回分数和是否命中；不写记录 |
+| GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try`，POST `/auditors/try` | read / manage | try 的请求体是 `{text, images?, draft?}`，返回分数和是否命中，不写记录。`draft` 是 `{name, type, channel_id, config}` 中的任意字段，覆盖已保存的审核器，用来试跑未保存的修改。`/auditors/try` 试跑全新的草稿，此时必须带 `draft`。草稿格式错误、渠道类型不符时返回 400 |
 | GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
 | GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
-| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree` |
+| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version` |
 | GET `/events/:id/input` | read | 原文，按需加载 |
 | POST `/events/review` | manage | 请求体 `{ids, status}`；改为误报或从误报改回时，按 72.8 调整违规计数 |
-| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events` | read / manage | |
+| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 列表支持筛选、排序和行聚合，返回头部计数（72.14）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零 |
+| POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`none` 或 `observe` 按 post 执行，`enforce` 按 pre 执行，返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认 |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 
@@ -5147,13 +5148,16 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
-标签页：**概览**（沿用，改为按 result 统计）、**记录**、**观察名单**、**封禁**、**流程**、**审核器**、**渠道**、**测试**。设置仍然放在插件详情页的 schema 表单里。
+**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页只对核心 `plugin:manage` 可见；它只编辑本插件常用的几项，完整设置仍然在插件详情页的 schema 表单里。
 
-- **流程编辑**不做 new-api 的画布，改成按级排列的表单：每级选审核器和组合方式，加模型过滤、抽样、超时、绑定分组。保存草稿和发布是两个按钮。
-- **记录详情抽屉**：完整原文（含图片缩略图）、每级的分数表、流程版本、同一 request_id 的其他记录、人工处理按钮。
-- **审核器编辑**：OpenAI 显示阈值表；Jev 显示题集表格，可以"从默认题集复制"；LLM 显示原 §20 的参数；都带试跑面板。
-- **名单**：列表和手动操作；P2 加详情页。
-- 页面上提示：要把管理员的 user_id 加进豁免名单（P3 之前）。
+- **概览**：数据来自 `/status` 和 `/stats/*`。内容包括：状态行、KPI、需关注用户、AI 复核、今日费用、性能、分类、漏斗、趋势、健康度、队列。
+- **流程**：拖拽画布，与 new-api 一致。支持模板、发布、版本与回滚、模拟（可选用户状态），分组单元格遇到 409 时可以强制覆盖。
+- **记录**：
+  - 列表：按用户、分组、流程、请求 id 筛选。列有分数标签、级路径、流程@版本。
+  - 详情抽屉：用户状态和名单操作、流程快照、同一请求的其他记录、原始消息查看器。图片 URL 点击后才加载。
+- **用户详情抽屉**：建在 `GET /users/:user_id` 上，任意用户都能打开（从名单或记录进入）。内容包括：汇总、30 天来源和每日计数、分析进度、应用 AI 建议、可疑记录时间线（可批量处理）、名单历史。
+- **审核器**：阈值预设，Jev 题集编辑，试跑未保存的修改，今日调用和费用。
+- **渠道**：代理，使用该渠道的审核器，近 1 小时健康度，今日费用（按来源），测试结果显示调用的 URL。
 
 ### 72.16 测试与发布
 

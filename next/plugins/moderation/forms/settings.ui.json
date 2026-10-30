@@ -102,8 +102,8 @@
       "zh": "免审用户 ID"
     },
     "ui:help": {
-      "en": "Requests of these users are never moderated. Add the administrators here: the plugin cannot tell them apart yet.",
-      "zh": "这些用户的请求不审核。请把管理员加进来：插件目前识别不了管理员。"
+      "en": "Requests of these users are never moderated. Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
+      "zh": "这些用户的请求不审核。持有 moderation:read 的版主会被自动识别，不会进观察名单。"
     }
   },
   "block_status": {

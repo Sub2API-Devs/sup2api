@@ -457,7 +457,7 @@ func (f *sqlFilter) enum(req *pluginv1.HTTPRequest, name string, allowed ...stri
 }
 
 func (f *sqlFilter) ids(req *pluginv1.HTTPRequest) {
-	for _, name := range []string{"user_id", "api_key_id", "group_id", "flow_id"} {
+	for _, name := range []string{"user_id", "api_key_id", "group_id", "flow_id", "flow_version"} {
 		f.id(req, name, name)
 	}
 	f.idList(req, "user_ids", "user_id")
