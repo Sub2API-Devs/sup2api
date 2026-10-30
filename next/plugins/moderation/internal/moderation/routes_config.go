@@ -370,7 +370,7 @@ func (p *Plugin) testChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		usage = engineUsage(t.Usage)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
-	out.Cost = p.meterNow(ctx, SourceTest, ch, EngineResult{Usage: usage, Calls: 1}, err)
+	out.Cost = p.priceNow(ctx, SourceTest, ch, EngineResult{Usage: usage, Calls: 1}, err)
 	out.OK = err == nil
 	if err != nil {
 		out.Error, out.Status = ErrType(err), upstreamStatus(err)

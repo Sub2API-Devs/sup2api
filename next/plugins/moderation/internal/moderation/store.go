@@ -133,7 +133,7 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	c := p.cfg.Load()
 	watchChanged, analyze, banned := false, false, map[int64]bool{}
 	for i, e := range evs {
-		if !e.suspicious() || e.UserID <= 0 || c.exempt[e.UserID] {
+		if !e.suspicious() || e.UserID <= 0 || c.exempt[e.UserID] || p.isStaff(ctx, e.UserID) {
 			continue
 		}
 		changed, queued, err := p.recordWatchHit(ctx, c, e, ids[i])

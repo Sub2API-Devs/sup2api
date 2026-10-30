@@ -7,7 +7,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -150,179 +149,6 @@ func (p *Plugin) quote(ctx context.Context, ch *liveChannel, u EngineUsage) Call
 	return c
 }
 
-// ---------------------------------------------------------------- meter
-
-type costKey struct {
-	hour    time.Time
-	channel int64
-	source  string
-}
-
-// costAgg is one hourly row being added up.
-type costAgg struct {
-	calls, priced, unpriced, unpricedTokens, free, in, out, units int64
-}
-
-func (a *costAgg) add(c CallCost, calls int64) {
-	a.calls += calls
-	a.in += c.TokensIn
-	a.out += c.TokensOut
-	switch c.Mode {
-	case PricePriced:
-		a.priced += calls
-		a.units += c.units
-	case PriceFree:
-		a.free += calls
-	default:
-		a.unpriced += calls
-		a.unpricedTokens += c.TokensIn + c.TokensOut
-	}
-}
-
-type meterItem struct {
-	key   costKey
-	ch    *liveChannel
-	usage EngineUsage
-	calls int64
-}
-
-// meter adds up the cost of the upstream calls; the hook path only queues
-// the usage, pricing happens in the background (CONTRACTS §72.13.3).
-type meter struct {
-	mu      sync.Mutex
-	agg     map[costKey]*costAgg
-	queue   chan meterItem
-	dropped int64
-}
-
-func (m *meter) droppedCount() int64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.dropped
-}
-
-func newMeter() *meter {
-	return &meter{agg: map[costKey]*costAgg{}, queue: make(chan meterItem, 8192)}
-}
-
-func (m *meter) add(k costKey, c CallCost, calls int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	a := m.agg[k]
-	if a == nil {
-		a = &costAgg{}
-		m.agg[k] = a
-	}
-	a.add(c, calls)
-}
-
-func (p *Plugin) costKey(ch *liveChannel, source string) costKey {
-	return costKey{hour: p.now().UTC().Truncate(time.Hour), channel: ch.ID, source: source}
-}
-
-// meterLater queues a call for background pricing (hook path).
-func (p *Plugin) meterLater(source string, ch *liveChannel, res EngineResult, err error) {
-	if ch == nil || !metered(res, err) {
-		return
-	}
-	select {
-	case p.meter.queue <- meterItem{key: p.costKey(ch, source), ch: ch, usage: res.Usage, calls: int64(max(res.Calls, 1))}:
-	default:
-		p.meter.mu.Lock()
-		p.meter.dropped++
-		p.meter.mu.Unlock()
-	}
-}
-
-// meterNow prices a call at once and adds it (console paths that show the
-// cost of the call). nil = not metered.
-func (p *Plugin) meterNow(ctx context.Context, source string, ch *liveChannel, res EngineResult, err error) *CallCost {
-	if ch == nil || !metered(res, err) {
-		return nil
-	}
-	qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	c := p.quote(qctx, ch, res.Usage)
-	p.meter.add(p.costKey(ch, source), c, int64(max(res.Calls, 1)))
-	return &c
-}
-
-// meterLoop prices the queued calls and writes the sums every 10 s.
-func (p *Plugin) meterLoop(ctx context.Context) {
-	defer p.wg.Done()
-	t := time.NewTicker(10 * time.Second)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case it := <-p.meter.queue:
-			qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			c := p.quote(qctx, it.ch, it.usage)
-			cancel()
-			p.meter.add(it.key, c, it.calls)
-		case <-t.C:
-			fctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			p.flushCosts(fctx)
-			cancel()
-		}
-	}
-}
-
-// flushCosts upserts the sums; on failure they are kept for the next try.
-func (p *Plugin) flushCosts(ctx context.Context) {
-	p.meter.mu.Lock()
-	rows := p.meter.agg
-	p.meter.agg = map[costKey]*costAgg{}
-	p.meter.mu.Unlock()
-	if len(rows) == 0 {
-		return
-	}
-	err := p.writeCosts(ctx, rows)
-	if err == nil {
-		return
-	}
-	p.log.Warn("moderation: cost write failed; retrying with the next flush", "error", err.Error())
-	p.meter.mu.Lock()
-	defer p.meter.mu.Unlock()
-	for k, a := range rows {
-		cur := p.meter.agg[k]
-		if cur == nil {
-			p.meter.agg[k] = a
-			continue
-		}
-		cur.calls += a.calls
-		cur.priced += a.priced
-		cur.unpriced += a.unpriced
-		cur.unpricedTokens += a.unpricedTokens
-		cur.free += a.free
-		cur.in += a.in
-		cur.out += a.out
-		cur.units += a.units
-	}
-}
-
-func (p *Plugin) writeCosts(ctx context.Context, rows map[costKey]*costAgg) error {
-	db, err := p.db(ctx)
-	if err != nil {
-		return err
-	}
-	b := &pgx.Batch{}
-	for k, a := range rows {
-		b.Queue(`INSERT INTO costs (hour, channel_id, source, calls, priced_calls, unpriced_calls, unpriced_tokens, free_calls, tokens_in, tokens_out, cost)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::numeric)
-			ON CONFLICT (hour, channel_id, source) DO UPDATE SET
-				calls = costs.calls + EXCLUDED.calls, priced_calls = costs.priced_calls + EXCLUDED.priced_calls,
-				unpriced_calls = costs.unpriced_calls + EXCLUDED.unpriced_calls, unpriced_tokens = costs.unpriced_tokens + EXCLUDED.unpriced_tokens,
-				free_calls = costs.free_calls + EXCLUDED.free_calls, tokens_in = costs.tokens_in + EXCLUDED.tokens_in,
-				tokens_out = costs.tokens_out + EXCLUDED.tokens_out, cost = costs.cost + EXCLUDED.cost`,
-			k.hour, k.channel, k.source, a.calls, a.priced, a.unpriced, a.unpricedTokens, a.free, a.in, a.out, formatCost(a.units))
-	}
-	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		return tx.SendBatch(ctx, b).Close()
-	})
-}
-
 // ---------------------------------------------------------------- price state
 
 // PriceState is the current pricing of a channel's billing model.
@@ -442,7 +268,7 @@ func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	// Sums not yet written are included, so a test shows up at once.
-	p.flushCosts(ctx)
+	p.flushStats(ctx)
 	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
 		return nil, err
 	}

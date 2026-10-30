@@ -67,7 +67,8 @@ type Plugin struct {
 
 	eventWriter *batch.Writer[eventRec]
 
-	meter *meter
+	hourly *statsAcc
+	staff  staffCache
 	// AI analyses running on this node and the dispatcher guard.
 	analysesRunning atomic.Int64
 	dispatching     atomic.Bool
@@ -102,7 +103,7 @@ func New() *Plugin {
 		agent:        newAgent(),
 		refreshEvery: 5 * time.Second,
 		refreshNow:   make(chan struct{}, 1),
-		meter:        newMeter(),
+		hourly:       newStatsAcc(),
 		priceCache:   map[string]priceStateEntry{},
 	}
 	p.bg, p.cancel = context.WithCancel(context.Background())
@@ -142,7 +143,7 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	})
 	p.wg.Add(2)
 	go p.refreshLoop(p.bg)
-	go p.meterLoop(p.bg)
+	go p.statsLoop(p.bg)
 	c := p.cfg.Load()
 	p.resizePool(c.MaxConcurrency, c.QueueSize)
 	p.kickRefresh()
@@ -222,7 +223,7 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
-		p.flushCosts(ctx)
+		p.flushStats(ctx)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

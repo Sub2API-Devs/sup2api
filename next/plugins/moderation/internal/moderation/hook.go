@@ -126,6 +126,7 @@ func (p *Plugin) admit(in *pluginv1.GatewayRequestHookRequest) (*moderation, *pl
 	m.key = passKey(snap, flow, input.Hash)
 	if p.passCached(m.key, m.timing == TimingPre) {
 		p.stats.cacheHits.Add(1)
+		p.countCacheHit(m, uid, meta.GetGroupId())
 		return nil, allow(notePrefix + "pass (cached)")
 	}
 	protocol := meta.GetClientProtocol()
@@ -161,6 +162,13 @@ func passKey(s *snapshot, f *liveFlow, h [32]byte) string {
 
 // runPre moderates inline; a hit refuses the request.
 func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
+	start := p.now()
+	resp := p.moderatePre(ctx, m)
+	p.countRequest(m.rec.GroupID, p.now().Sub(start).Milliseconds(), resp.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY)
+	return resp
+}
+
+func (p *Plugin) moderatePre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
 	budget := min(m.flow.timeout, preBudget)
 	ch := p.sf.DoChan(m.key, func() (any, error) {
 		// The shared run has its own deadline, so a waiter that gives up
@@ -201,6 +209,7 @@ func (p *Plugin) runPost(m *moderation) {
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
 	if p.passCached(m.key, true) {
 		p.stats.cacheHits.Add(1)
+		p.countCacheHit(m, m.rec.UserID, m.rec.GroupID)
 		return
 	}
 	ctx, cancel := context.WithTimeout(p.bg, m.flow.timeout)
@@ -226,6 +235,9 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 		return p.audit(ctx, a, m.in, m.timing == TimingPre, src)
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
+	if m.source == "" {
+		p.countRun(m, tr)
+	}
 	return tr
 }
 

@@ -301,7 +301,8 @@ func (p *Plugin) runAgent(ctx context.Context, ch *liveChannel, system string, t
 			start := p.now()
 			turn, err = proto.call(ctx, ch, req)
 			latency := p.now().Sub(start)
-			cost := p.meterNow(ctx, SourceAnalysis, ch, EngineResult{Usage: engineUsage(turn.Usage), Calls: 1}, err)
+			p.countCall(SourceAnalysis, ch, 1, err, latency.Milliseconds())
+			cost := p.priceNow(ctx, SourceAnalysis, ch, EngineResult{Usage: engineUsage(turn.Usage), Calls: 1}, err)
 			a.Steps = step
 			a.TokensIn += turn.Usage.Input
 			a.TokensOut += turn.Usage.Output

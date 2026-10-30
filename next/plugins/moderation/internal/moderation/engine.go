@@ -237,9 +237,10 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
 	if source == SourceAudit {
-		p.meterLater(source, ch, out.EngineResult, out.Err)
+		// Priced from the trace once the run is counted (countRun).
+		p.countCall(source, ch, out.Calls, out.Err, out.LatencyMs)
 	} else {
-		out.Cost = p.meterNow(ctx, source, ch, out.EngineResult, out.Err)
+		out.Cost = p.priceNow(ctx, source, ch, out.EngineResult, out.Err)
 	}
 	if out.Calls > 0 {
 		p.stats.calls.Add(int64(out.Calls))

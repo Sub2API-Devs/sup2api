@@ -143,6 +143,8 @@ func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...fun
 	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
 	fh := pluginsdktest.NewFakeHost()
 	fh.SetDSN(dsn, schema)
+	// Nobody is a moderator unless a test says so (isStaff).
+	fh.Authz = func(int64, string) bool { return false }
 	p := New()
 	for _, configure := range beforeInit {
 		configure(p)

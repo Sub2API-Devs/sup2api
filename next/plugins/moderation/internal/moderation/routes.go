@@ -164,7 +164,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
-		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.meter.droppedCount(),
+		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
 }
 
