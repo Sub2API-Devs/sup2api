@@ -119,7 +119,7 @@ D0：`capture-official.sh` 用 `ccgateway-app:0.1.113` 镜像分别抓官方 2.1
 
 本地补丁 → tar 传到 ovh `/tmp/ccg312/` → `oven/bun:1.4.4` 一次性容器里 `build.sh`（去 CR 后的副本，两个入口，`--compile --bytecode --format=esm`）→ `node:22-bookworm-slim` 容器里 `package-release.cjs`。产物 `release-v38/`：`manifest.json`（`2.1.312` → `2.1.312/claude`，SHA-256 `c66a1f05…9ddb`，补丁 `ccgateway-v38-cc-2-1-312`，modes build/direct）、`2.1.312/claude`（ELF 里两处 `Bun v1.4.4 (`）、`2.1.312/ccgateway-patch.json`。`--ccgateway-info` 报 2.1.312、v38 与 20 项能力；`--version` 为 `2.1.312 (Claude Code)`。本机副本在 `artifacts/claude-2.1.312/release-v38/`，并已放进 worktree 的 `cli-mods/release/`（不进 Git，`UPSTREAM_LICENSE.md` 保留）。
 
-发布（插件 0.1.114 起）：`cli-mods/release/` 要同时有 2.1.312（v38，即上面的 `release-v38`，ovh `/tmp/ccg312/build/release-v38`）与 2.1.310 两项。**2.1.310 兼容包从现网 v36 拷**（ovh `~/sup2api/release-ccgateway-0.1.113/…/cli-mods/release/` 的 `2.1.310/`，ELF `06d428b6…19fe`），**不用新源码重编**：新源码里 2.1.310 的 profile 已是 `ccgateway-v39-session-state`，重编出来的不是现网 v36。两份 `manifest.json` 手工合并成一份（各自的版本条目原样保留）。
+发布：`cli-mods/release/` 只放 2.1.312（v38，即上面的 `release-v38`，ovh `/tmp/ccg312/build/release-v38`）一项。镜像不再保留旧版本作回退（2026-10-30 用户决定；插件 0.1.114 曾同时带 2.1.310 v36，0.1.115 起去掉）。新源码里 2.1.310 / 2.1.304 的 profile 已是 `v39` / `v40`，只用于测试，不发布。
 
 ## 7. 验证
 
