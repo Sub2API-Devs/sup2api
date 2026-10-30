@@ -157,10 +157,22 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 }
 
 func TestAnalyzeWithoutChannel(t *testing.T) {
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_channel_id": 1})
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5}))
 	if r := h.Do("POST", "/watchlist/5/analyze", nil, nil); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "no_analysis_channel") {
 		t.Fatalf("analyze = %d %s", r.GetStatus(), r.GetBody())
+	}
+	// The channel exists: with moderation off the runtime still says so,
+	// and an analysis is refused because moderation is off.
+	decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "name": "a", "base_url": "http://127.0.0.1:1", "api_key": "k", "model": "m"}))
+	if errs := h.Configure(map[string]any{"mode": ModeOff, "analysis_channel_id": 1}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if o := decodeData[Overview](t, h.Do("GET", "/overview", nil, nil)); !o.Runtime.Analysis.ChannelConfigured {
+		t.Fatalf("runtime = %+v", o.Runtime.Analysis)
+	}
+	if r := h.Do("POST", "/watchlist/5/analyze", nil, nil); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "moderation_off") {
+		t.Fatalf("analyze while off = %d %s", r.GetStatus(), r.GetBody())
 	}
 }
 

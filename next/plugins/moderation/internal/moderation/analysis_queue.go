@@ -38,8 +38,14 @@ type analysisJob struct {
 // analysisReady reports whether analyses can run: moderation on and the
 // analysis channel usable.
 func (p *Plugin) analysisReady() bool {
+	return p.cfg.Load().enabled && p.analysisChannelUsable()
+}
+
+// analysisChannelUsable: analysis_channel_id names an enabled llm channel
+// with a key that opens.
+func (p *Plugin) analysisChannelUsable() bool {
 	c := p.cfg.Load()
-	if !c.enabled || c.AnalysisChannelID == 0 {
+	if c.AnalysisChannelID == 0 {
 		return false
 	}
 	ch := p.snap.Load().channels[c.AnalysisChannelID]
@@ -427,7 +433,7 @@ func (p *Plugin) analyzeWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if !c.enabled {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "moderation_off", "moderation is off / 审核模式为关闭，不能分析"), nil
 	}
-	if !p.analysisReady() {
+	if !p.analysisChannelUsable() {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "no_analysis_channel",
 			"no usable AI analysis channel is configured / 没有设置可用的 AI 分析渠道（需要启用的大模型渠道）"), nil
 	}
@@ -632,7 +638,7 @@ type analysisStats struct {
 }
 
 func (p *Plugin) analysisRuntime(ctx context.Context) analysisStats {
-	st := analysisStats{ChannelConfigured: p.analysisReady()}
+	st := analysisStats{ChannelConfigured: p.analysisChannelUsable()}
 	db, err := p.db(ctx)
 	if err != nil {
 		return st
