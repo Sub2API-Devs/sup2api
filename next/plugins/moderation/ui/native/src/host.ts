@@ -898,7 +898,8 @@ export interface WatchChange {
 }
 export const createWatch = (body: WatchChange & { user_id: number }) => api().post<Watch>('/watchlist', body)
 export const updateWatch = (userId: number, body: WatchChange) => api().patch<Watch>(`/watchlist/${userId}`, body)
-export const deleteWatch = (userId: number) => api().del(`/watchlist/${userId}`)
+/** link: an applied AI "release" suggestion, written to the history. */
+export const deleteWatch = (userId: number, link?: { reason?: string; analysis_id?: number }) => api().del(`/watchlist/${userId}`, link)
 export const markWatchSeen = (userId: number) => api().post(`/watchlist/${userId}/seen`, {})
 export const fetchWatchEvents = (userId: number) => api().get<WatchEvent[]>(`/watchlist/${userId}/events`)
 

@@ -95,10 +95,15 @@ func watchEventFor(ctx context.Context, tx pgx.Tx, uid int64, action, from, to, 
 }
 
 func removeWatch(ctx context.Context, tx pgx.Tx, w Watch, action, reason string, operator *int64) error {
+	return removeWatchFor(ctx, tx, w, action, reason, operator, nil)
+}
+
+// removeWatchFor also links the analysis whose suggestion was applied.
+func removeWatchFor(ctx context.Context, tx pgx.Tx, w Watch, action, reason string, operator, analysis *int64) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM watchlist WHERE user_id = $1`, w.UserID); err != nil {
 		return err
 	}
-	if err := watchEvent(ctx, tx, w.UserID, action, w.Level, "", reason, operator); err != nil {
+	if err := watchEventFor(ctx, tx, w.UserID, action, w.Level, "", reason, operator, analysis); err != nil {
 		return err
 	}
 	return bumpWatch(ctx, tx)
@@ -316,16 +321,27 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	})
 }
 
+// deleteWatch removes an entry; the optional query reason and analysis_id
+// (an applied "release" suggestion) go to the history.
 func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	uid, bad := parseID(req, "user_id")
 	if bad != nil {
 		return bad, nil
 	}
+	f := &sqlFilter{}
+	var analysis *int64
+	if id, ok := f.queryID(req, "analysis_id"); ok && id > 0 {
+		analysis = &id
+	}
+	if len(f.errs) > 0 {
+		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", f.errs), nil
+	}
+	reason := strings.TrimSpace(pluginsdk.Query(req, "reason"))
 	return p.writeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, _ time.Time) (Watch, error) {
 		if !found {
 			return w, errNotFound
 		}
-		return w, removeWatch(ctx, tx, w, "remove", "", callerID(req))
+		return w, removeWatchFor(ctx, tx, w, "remove", reason, callerID(req), analysis)
 	})
 }
 

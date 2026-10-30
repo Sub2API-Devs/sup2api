@@ -210,7 +210,7 @@ async function applySuggestion() {
   applying.value = true
   const link = { analysis_id: s.analysisId, reason: t('watch.applyReason', { id: s.analysisId }) }
   try {
-    if (!s.level) await deleteWatch(id)
+    if (!s.level) await deleteWatch(id, link)
     else if (entry.value) await updateWatch(id, { level: s.level, ...link })
     else await createWatch({ user_id: id, level: s.level, ...link })
     host.toast(t('watch.saved'), 'success')

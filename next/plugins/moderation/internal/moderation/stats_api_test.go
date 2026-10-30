@@ -141,6 +141,14 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 		d.Daily == nil || d.Context.Sources == nil {
 		t.Fatalf("unknown user detail = %+v", d)
 	}
+	// Removing can record the reason and the analysis whose suggestion was applied.
+	if resp := h.Do("DELETE", "/watchlist/12", map[string]string{"reason": "AI suggests release", "analysis_id": "7"}, nil); resp.GetStatus() != 200 {
+		t.Fatalf("delete with reason = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/12/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "AI suggests release" ||
+		evs[0].AnalysisID == nil || *evs[0].AnalysisID != 7 {
+		t.Fatalf("remove history = %+v", evs[0])
+	}
 	// Moderators are not put on the watch list by hand.
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
 	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); resp.GetStatus() != 400 {
