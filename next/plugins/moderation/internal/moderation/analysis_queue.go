@@ -277,8 +277,10 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 	c := p.cfg.Load()
 	now := p.now().UTC()
 	changed := false
+	var action, from, to string
+	var analysisID int64
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed = false
+		changed, action = false, ""
 		if err := lockBlockSubject(ctx, tx, job.UserID); err != nil {
 			return err
 		}
@@ -296,6 +298,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		if err != nil {
 			return err
 		}
+		analysisID = id
 		if _, err := tx.Exec(ctx, `DELETE FROM user_analyses WHERE user_id = $1 AND id IN (
 				SELECT id FROM user_analyses WHERE user_id = $1 ORDER BY id DESC OFFSET $2)`, job.UserID, c.AnalysisKeepPerUser); err != nil {
 			return err
@@ -325,9 +328,10 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		if !ok || stale {
 			return nil
 		}
-		action, denied := decideEscalation(c, w.Level, a.Trend, a.Suggestion, a.VerdictCounts.Violation)
+		var denied string
+		action, denied = decideEscalation(c, w.Level, a.Trend, a.Suggestion, a.VerdictCounts.Violation)
 		reason := "trend:" + a.Trend
-		to := w.Level
+		from, to = w.Level, w.Level
 		switch action {
 		case "":
 			return nil
@@ -366,6 +370,9 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 	})
 	if err == nil && changed {
 		p.watchChanged(ctx)
+		if watchNoticeOf(action) {
+			p.notifyWatchChange(job.UserID, action, from, to, a.Trend, a.Suggestion, analysisID)
+		}
 	}
 	return err
 }

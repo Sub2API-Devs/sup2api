@@ -96,6 +96,12 @@ type Settings struct {
 
 	JevDefaultSet *JevQuestions `json:"jev_default_set"`
 
+	// Statistics, alerts and notifications (CONTRACTS §72.14).
+	ErrorRateAlertPercent int    `json:"error_rate_alert_percent"`
+	StatsRetentionDays    int    `json:"stats_retention_days"`
+	NotifyWebhookURL      string `json:"notify_webhook_url"`
+	NotifyWebhookSecret   string `json:"notify_webhook_secret"`
+
 	// Legacy 0.1 single-model setup.
 	BaseURL       string     `json:"base_url"`
 	APIKey        string     `json:"api_key"`
@@ -135,6 +141,7 @@ func DefaultSettings() Settings {
 		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
 		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: true,
 		BanWindowHours: 24, BanDurationHours: 24,
+		ErrorRateAlertPercent: 5, StatsRetentionDays: 90,
 		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
 		SampleRate: 100, RetentionDays: 30,
 	}
@@ -161,6 +168,7 @@ func DecodeSettings(raw []byte) (Settings, error) {
 	d.general(&s)
 	d.storage(&s)
 	d.watch(&s)
+	d.notify(&s)
 	d.legacy(&s)
 	return s, nil
 }
@@ -306,6 +314,18 @@ func (d decoder) watch(s *Settings) {
 	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
 	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
 	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
+}
+
+func (d decoder) notify(s *Settings) {
+	d.integer("error_rate_alert_percent", &s.ErrorRateAlertPercent, 0, 100)
+	d.integer("stats_retention_days", &s.StatsRetentionDays, 7, 3650)
+	d.str("notify_webhook_url", &s.NotifyWebhookURL)
+	s.NotifyWebhookURL = strings.TrimSpace(s.NotifyWebhookURL)
+	if s.NotifyWebhookURL != "" && (!baseURLRe.MatchString(s.NotifyWebhookURL) || len(s.NotifyWebhookURL) > 1000) {
+		s.NotifyWebhookURL = ""
+	}
+	d.str("notify_webhook_secret", &s.NotifyWebhookSecret)
+	s.NotifyWebhookSecret = textutil.TruncateRunes(strings.TrimSpace(s.NotifyWebhookSecret), 200)
 }
 
 // legacy reads the 0.1 single-model setup (converted once, §72.12).

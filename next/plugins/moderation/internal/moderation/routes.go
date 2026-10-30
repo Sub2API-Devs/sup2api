@@ -33,12 +33,17 @@ func (p *Plugin) routes() {
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
 	p.Handle("GET", "/watchlist/:user_id", p.getWatch)
+	p.Handle("POST", "/watchlist/:user_id/seen", p.markWatchSeen)
 	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
 	p.Handle("GET", "/watchlist/:user_id/analyses", p.listAnalyses)
 	p.Handle("GET", "/analyses/:id", p.getAnalysis)
 	p.Handle("GET", "/analysis/prompt", p.getAnalysisPrompt)
 	p.Handle("GET", "/analysis/tools", p.getAnalysisTools)
 	p.Handle("GET", "/costs", p.getCosts)
+	p.Handle("GET", "/status", p.getStatus)
+	p.Handle("GET", "/stats/trend", p.getTrend)
+	p.Handle("GET", "/stats/performance", p.getPerformance)
+	p.Handle("GET", "/stats/categories", p.getCategories)
 	p.Handle("GET", "/channels", p.listChannels)
 	p.Handle("POST", "/channels", p.createChannel)
 	p.Handle("GET", "/channels/:id", p.getChannel)
@@ -51,6 +56,7 @@ func (p *Plugin) routes() {
 	p.Handle("PUT", "/auditors/:id", p.updateAuditor)
 	p.Handle("DELETE", "/auditors/:id", p.deleteAuditor)
 	p.Handle("POST", "/auditors/:id/try", p.tryAuditor)
+	p.Handle("POST", "/auditors/try", p.tryDraftAuditor)
 	p.Handle("GET", "/jev/default-questions", p.getJevDefaults)
 	p.Handle("GET", "/flows", p.listFlows)
 	p.Handle("POST", "/flows", p.createFlow)
@@ -323,6 +329,36 @@ type EventDetail struct {
 	Event
 	Text  *string `json:"text"`
 	Trace any     `json:"trace"`
+	// Detail context (new-api GetModerationRecord): the other records of the
+	// same request, the flow version that ran, the user's state now and the
+	// full text of the saved input message.
+	FlowName     string        `json:"flow_name"`
+	FlowCurrent  int           `json:"flow_current_version"`
+	FlowSnapshot any           `json:"flow_snapshot"`
+	Related      []RelatedItem `json:"related"`
+	UserState    UserState     `json:"user_state"`
+	InputText    string        `json:"input_text"`
+	AIAnalyzedAt *time.Time    `json:"ai_analyzed_at"`
+}
+
+// RelatedItem is another record of the same request.
+type RelatedItem struct {
+	ID          int64     `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	Timing      string    `json:"timing"`
+	Result      string    `json:"result"`
+	FlowID      int64     `json:"flow_id"`
+	FlowVersion int       `json:"flow_version"`
+	Severity    string    `json:"severity"`
+}
+
+// UserState is the record user's moderation state now.
+type UserState struct {
+	Watch   *Watch     `json:"watch"`
+	Exempt  bool       `json:"exempt"`
+	Staff   bool       `json:"staff"`
+	Blocked bool       `json:"blocked"`
+	Until   *time.Time `json:"blocked_until"`
 }
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, mode, timing, result,
@@ -438,6 +474,19 @@ func (f *eventQuery) ids(req *pluginv1.HTTPRequest) {
 			continue
 		}
 		f.conds = append(f.conds, name+" = "+f.arg(id))
+	}
+	// user_ids: the console's username search resolved through the core.
+	if v := pluginsdk.Query(req, "user_ids"); v != "" {
+		var ids []int64
+		for _, part := range strings.Split(v, ",") {
+			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+			if err != nil || id <= 0 || len(ids) >= 500 {
+				f.errs = f.errs.Add("user_ids", "invalid", "user_ids is a comma list of up to 500 user ids / user_ids 为逗号分隔的用户 id，最多 500 个")
+				return
+			}
+			ids = append(ids, id)
+		}
+		f.conds = append(f.conds, "user_id = ANY("+f.arg(ids)+")")
 	}
 }
 
@@ -571,7 +620,75 @@ func (p *Plugin) getEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if len(trace) > 0 {
 		d.Trace = jsonRaw(trace)
 	}
+	if err := p.eventContext(ctx, db, &d); err != nil {
+		return nil, err
+	}
 	return pluginsdk.DataResponse(d), nil
+}
+
+// eventContext fills the detail context of a record.
+func (p *Plugin) eventContext(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
+	d.Related = []RelatedItem{}
+	if d.RequestID != "" {
+		rows, err := db.Query(ctx, `SELECT id, created_at, timing, result, flow_id, flow_version, severity FROM events
+			WHERE request_id = $1 AND id <> $2 ORDER BY id LIMIT 20`, d.RequestID, d.ID)
+		if err != nil {
+			return err
+		}
+		if d.Related, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (RelatedItem, error) {
+			var it RelatedItem
+			err := r.Scan(&it.ID, &it.CreatedAt, &it.Timing, &it.Result, &it.FlowID, &it.FlowVersion, &it.Severity)
+			it.CreatedAt = it.CreatedAt.UTC()
+			return it, err
+		}); err != nil {
+			return err
+		}
+		if d.Related == nil {
+			d.Related = []RelatedItem{}
+		}
+	}
+	if d.FlowID > 0 {
+		_ = db.QueryRow(ctx, `SELECT name, version FROM flows WHERE id = $1`, d.FlowID).Scan(&d.FlowName, &d.FlowCurrent)
+		if v, err := p.flowVersionView(ctx, d.FlowID, d.FlowVersion, p.snap.Load()); err == nil {
+			d.FlowSnapshot = v
+		} else if !errors.Is(err, errNotFound) {
+			return err
+		}
+	}
+	if d.UserID > 0 {
+		w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`,
+			d.UserID, p.now().UTC()))
+		switch {
+		case err == nil:
+			w.fillRunning(p.now())
+			d.UserState.Watch = &w
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		d.UserState.Exempt = p.cfg.Load().exempt[d.UserID]
+		d.UserState.Staff = p.isStaff(ctx, d.UserID)
+		if until, ok := (*p.blocked.Load())[d.UserID]; ok {
+			d.UserState.Blocked = true
+			if !until.IsZero() {
+				u := until.UTC()
+				d.UserState.Until = &u
+			}
+		}
+	}
+	if d.InputMessageSize > 0 {
+		var msg *string
+		if err := db.QueryRow(ctx, `SELECT input_message FROM events WHERE id = $1`, d.ID).Scan(&msg); err == nil && msg != nil {
+			d.InputText = MessageText(d.InputFormat, *msg)
+		}
+	}
+	if d.AIAnalysisID > 0 {
+		var at time.Time
+		if err := db.QueryRow(ctx, `SELECT created_at FROM user_analyses WHERE id = $1`, d.AIAnalysisID).Scan(&at); err == nil {
+			at = at.UTC()
+			d.AIAnalyzedAt = &at
+		}
+	}
+	return nil
 }
 
 // getEventInput returns the raw moderated messages of a record (stored on a
@@ -594,9 +711,12 @@ func (p *Plugin) getEventInput(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"id": id, "format": format, "messages": nil}
+	out := map[string]any{"id": id, "format": format, "messages": nil, "parts": nil}
 	if msg != nil {
 		out["messages"] = jsonRaw([]byte(*msg))
+		if parts, ok := MessageParts(format, *msg); ok {
+			out["parts"] = parts
+		}
 	}
 	return pluginsdk.DataResponse(out), nil
 }

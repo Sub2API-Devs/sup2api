@@ -9,6 +9,9 @@
     "ban_threshold",
     "ban_window_hours",
     "ban_duration_hours",
+    "error_rate_alert_percent",
+    "notify_webhook_url",
+    "notify_webhook_secret",
     "analysis_channel_id",
     "analysis_every_violations",
     "analysis_allow_upgrade",
@@ -27,6 +30,7 @@
     "overturned_retention_days",
     "error_retention_days",
     "pass_retention_days",
+    "stats_retention_days",
     "max_concurrency",
     "queue_size",
     "cache_ttl_seconds",
@@ -735,6 +739,57 @@
     "ui:help": {
       "en": "Empty uses the built-in guidelines (preview on the Watch list tab).",
       "zh": "留空使用内置准则（可在「观察名单」页预览完整提示词）。"
+    }
+  },
+  "error_rate_alert_percent": {
+    "ui:section": {
+      "title": {
+        "en": "Alerts and notifications",
+        "zh": "告警与通知"
+      },
+      "description": {
+        "en": "Notices go to the webhook as JSON (POST). They never include the moderated text.",
+        "zh": "通知以 JSON（POST）发到 webhook，不含被审核的原文。"
+      }
+    },
+    "ui:title": {
+      "en": "Error rate alert (%)",
+      "zh": "异常率告警阈值（%）"
+    },
+    "ui:help": {
+      "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. Errored checks let the request pass.",
+      "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。审核异常时请求会直接放行。"
+    }
+  },
+  "notify_webhook_url": {
+    "ui:title": {
+      "en": "Notification webhook URL",
+      "zh": "通知 webhook 地址"
+    },
+    "ui:help": {
+      "en": "Receives flow error-rate alerts and automatic watch list changes made by the AI analysis. Empty: no notices.",
+      "zh": "接收流程异常率告警，以及 AI 分析自动调整观察名单的通知。留空则不发送。"
+    }
+  },
+  "notify_webhook_secret": {
+    "ui:widget": "secret",
+    "ui:title": {
+      "en": "Webhook signing secret",
+      "zh": "webhook 签名密钥"
+    },
+    "ui:help": {
+      "en": "When set, each notice carries X-Signature: sha256=HMAC(secret, body).",
+      "zh": "填写后每条通知带 X-Signature: sha256=HMAC(密钥, 请求体)。"
+    }
+  },
+  "stats_retention_days": {
+    "ui:title": {
+      "en": "Statistics retention (days)",
+      "zh": "统计保留天数"
+    },
+    "ui:help": {
+      "en": "Hourly statistics and per-user daily counts older than this are deleted by the daily cleanup.",
+      "zh": "每日清理时删除超过该天数的小时统计和用户每日计数。"
     }
   }
 }

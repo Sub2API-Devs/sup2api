@@ -38,6 +38,7 @@ type Plugin struct {
 	now        func() time.Time
 	cfg        atomic.Pointer[config]
 	httpClient *http.Client
+	proxies    proxyClients
 
 	agent  *agent
 	cache  atomic.Pointer[lru]
@@ -67,8 +68,9 @@ type Plugin struct {
 
 	eventWriter *batch.Writer[eventRec]
 
-	hourly *statsAcc
-	staff  staffCache
+	hourly     *statsAcc
+	categories categoryCache
+	staff      staffCache
 	// AI analyses running on this node and the dispatcher guard.
 	analysesRunning atomic.Int64
 	dispatching     atomic.Bool
@@ -82,9 +84,12 @@ type Plugin struct {
 	refreshEvery   time.Duration
 	refreshNow     chan struct{}
 
+	notices chan notice
+
 	stats struct {
 		calls, errors, cacheHits, dropped, droppedEvents, kvErrors atomic.Int64
 		inflight, latencyMsSum                                     atomic.Int64
+		droppedNotices, noticeErrors                               atomic.Int64
 	}
 
 	bg     context.Context
@@ -104,6 +109,7 @@ func New() *Plugin {
 		refreshEvery: 5 * time.Second,
 		refreshNow:   make(chan struct{}, 1),
 		hourly:       newStatsAcc(),
+		notices:      make(chan notice, 256),
 		priceCache:   map[string]priceStateEntry{},
 	}
 	p.bg, p.cancel = context.WithCancel(context.Background())
@@ -141,9 +147,10 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	}, func(n int) {
 		p.stats.droppedEvents.Add(int64(n))
 	})
-	p.wg.Add(2)
+	p.wg.Add(3)
 	go p.refreshLoop(p.bg)
 	go p.statsLoop(p.bg)
+	go p.noticeSender(p.bg)
 	c := p.cfg.Load()
 	p.resizePool(c.MaxConcurrency, c.QueueSize)
 	p.kickRefresh()

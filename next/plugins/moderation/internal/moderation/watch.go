@@ -27,8 +27,11 @@ type Watch struct {
 	ViolationCount int        `json:"violation_count"`
 	ViolationEpoch int64      `json:"-"`
 	LastHitAt      *time.Time `json:"last_hit_at"`
-	Note           string     `json:"note"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	// HitsSinceSeen counts suspicious records since an administrator last
+	// marked the entry seen (new-api hits_since_mark).
+	HitsSinceSeen int       `json:"hits_since_seen"`
+	Note          string    `json:"note"`
+	UpdatedAt     time.Time `json:"updated_at"`
 	// AI analysis (§72.13.4): queued, running, latest conclusion.
 	AnalysisRequestedAt  *time.Time `json:"analysis_requested_at"`
 	AnalysisSource       string     `json:"analysis_source"`
@@ -42,13 +45,13 @@ type Watch struct {
 	analysisToken        int64
 }
 
-const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, note, updated_at,
+const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, hits_since_seen, note, updated_at,
 	analysis_requested_at, analysis_source, analysis_claim_until, analysis_token, latest_analysis_id, latest_analysis_status,
 	latest_trend, latest_suggestion, analyzed_at`
 
 func scanWatch(r pgx.Row) (Watch, error) {
 	var w Watch
-	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.Note, &w.UpdatedAt,
+	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt,
 		&w.AnalysisRequestedAt, &w.AnalysisSource, &w.claimUntil, &w.analysisToken, &w.LatestAnalysisID, &w.LatestAnalysisStatus,
 		&w.LatestTrend, &w.LatestSuggestion, &w.AnalyzedAt)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
@@ -81,8 +84,13 @@ func loadWatch(ctx context.Context, tx pgx.Tx, uid int64) (Watch, bool, error) {
 }
 
 func watchEvent(ctx context.Context, tx pgx.Tx, uid int64, action, from, to, reason string, operator *int64) error {
-	_, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, operator_id) VALUES ($1,$2,$3,$4,$5,$6)`,
-		uid, action, from, to, truncateRunes(reason, 500), operator)
+	return watchEventFor(ctx, tx, uid, action, from, to, reason, operator, nil)
+}
+
+// watchEventFor also links the analysis whose suggestion was applied.
+func watchEventFor(ctx context.Context, tx pgx.Tx, uid int64, action, from, to, reason string, operator, analysis *int64) error {
+	_, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, operator_id, analysis_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		uid, action, from, to, truncateRunes(reason, 500), operator, analysis)
 	return err
 }
 
@@ -116,65 +124,21 @@ func callerID(req *pluginv1.HTTPRequest) *int64 {
 	return nil
 }
 
-func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	page, size, errs := pagination(req)
-	conds, args := []string{"(expires_at IS NULL OR expires_at > $1)"}, []any{p.now().UTC()}
-	if v := pluginsdk.Query(req, "level"); v != "" {
-		if v != LevelObserve && v != LevelEnforce {
-			errs = errs.Add("level", "enum", "level must be observe or enforce / level 取值为 observe、enforce")
-		} else {
-			args = append(args, v)
-			conds = append(conds, "level = $"+strconv.Itoa(len(args)))
-		}
-	}
-	if v := pluginsdk.Query(req, "user_id"); v != "" {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil || id <= 0 {
-			errs = errs.Add("user_id", "invalid", "user_id must be a positive integer / user_id 必须是正整数")
-		} else {
-			args = append(args, id)
-			conds = append(conds, "user_id = $"+strconv.Itoa(len(args)))
-		}
-	}
-	if len(errs) > 0 {
-		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", errs), nil
-	}
-	db, err := p.db(ctx)
-	if err != nil {
-		return pluginsdk.Unavailable(err.Error()), nil
-	}
-	where := strings.Join(conds, " AND ")
-	var total int64
-	if err := db.QueryRow(ctx, `SELECT count(*) FROM watchlist WHERE `+where, args...).Scan(&total); err != nil {
-		return nil, err
-	}
-	n := len(args)
-	args = append(args, size, (page-1)*size)
-	rows, err := db.Query(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE `+where+
-		` ORDER BY level, last_hit_at DESC NULLS LAST, user_id LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
-	if err != nil {
-		return nil, err
-	}
-	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Watch, error) { return scanWatch(r) })
-	if err != nil {
-		return nil, err
-	}
-	if list == nil {
-		list = []Watch{}
-	}
-	for i := range list {
-		list[i].fillRunning(p.now())
-	}
-	return pluginsdk.ListResponse(list, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
-}
-
 // watchInput is the POST /watchlist and PATCH /watchlist/:user_id body.
-// days 0 = no expiry; absent = keep (PATCH) or watch_days (POST).
+// days 0 = no expiry; absent = keep (PATCH) or watch_days (POST);
+// expires_at sets an absolute expiry instead ("" = none). reason goes to
+// the history; analysis_id links the analysis whose suggestion is applied.
 type watchInput struct {
-	UserID json.Number `json:"user_id"`
-	Level  *string     `json:"level"`
-	Days   *int        `json:"days"`
-	Note   *string     `json:"note"`
+	UserID     json.Number `json:"user_id"`
+	Level      *string     `json:"level"`
+	Days       *int        `json:"days"`
+	ExpiresAt  *string     `json:"expires_at"`
+	Note       *string     `json:"note"`
+	Reason     *string     `json:"reason"`
+	AnalysisID *int64      `json:"analysis_id"`
+
+	expires    *time.Time
+	hasExpires bool
 }
 
 func (in watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk.FieldErrors) {
@@ -196,7 +160,44 @@ func (in watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk
 	if in.Note != nil && utf8.RuneCountInString(*in.Note) > 500 {
 		errs = errs.Add("note", "too_long", "note must be at most 500 characters / 备注最多 500 字")
 	}
+	if in.Reason != nil && utf8.RuneCountInString(*in.Reason) > 500 {
+		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
+	}
+	if in.AnalysisID != nil && *in.AnalysisID <= 0 {
+		errs = errs.Add("analysis_id", "invalid", "analysis_id must be a positive integer / analysis_id 必须是正整数")
+	}
+	if in.ExpiresAt != nil {
+		in.hasExpires = true
+		if v := strings.TrimSpace(*in.ExpiresAt); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				errs = errs.Add("expires_at", "format", "expires_at must be RFC 3339 / expires_at 必须是 RFC 3339 时间")
+			} else {
+				t = t.UTC()
+				in.expires = &t
+			}
+		}
+	}
 	return uid, errs
+}
+
+// expiry applies days or expires_at; ok = one of them was given.
+func (in watchInput) expiry(c *config, now time.Time) (*time.Time, bool) {
+	if in.hasExpires {
+		return in.expires, true
+	}
+	if in.Days != nil {
+		return expiryOf(in.Days, c, now), true
+	}
+	return nil, false
+}
+
+// historyReason is the reason written to the history (reason, else note).
+func (in watchInput) historyReason(note string) string {
+	if in.Reason != nil {
+		return strings.TrimSpace(*in.Reason)
+	}
+	return note
 }
 
 func decodeBody(req *pluginv1.HTTPRequest, v any) *pluginv1.HTTPResponse {
@@ -218,6 +219,10 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
+	if p.isStaff(ctx, uid) {
+		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效",
+			pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not put on the watch list / 审核管理员不进入观察名单")), nil
+	}
 	level := LevelObserve
 	if in.Level != nil {
 		level = *in.Level
@@ -227,7 +232,10 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			return w, errConflict
 		}
 		w = Watch{UserID: uid, Level: level, Source: "manual", SinceAt: now, ViolationEpoch: newEpoch()}
-		w.ExpiresAt = expiryOf(in.Days, c, now)
+		var ok bool
+		if w.ExpiresAt, ok = in.expiry(c, now); !ok {
+			w.ExpiresAt = expiryOf(nil, c, now)
+		}
 		if in.Note != nil {
 			w.Note = strings.TrimSpace(*in.Note)
 		}
@@ -235,7 +243,7 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$4)`, uid, w.Level, w.Source, now, w.ExpiresAt, w.ViolationEpoch, w.Note); err != nil {
 			return w, err
 		}
-		return w, watchEvent(ctx, tx, uid, "add", "", level, w.Note, callerID(req))
+		return w, watchEventFor(ctx, tx, uid, "add", "", level, in.historyReason(w.Note), callerID(req), in.AnalysisID)
 	})
 }
 
@@ -279,12 +287,12 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			// moderation_watch.go): violations, epoch and since restart, and
 			// back at observe the entry expires after watch_days again.
 			w.ViolationEpoch, w.ViolationCount, w.SinceAt = newEpoch(), 0, now
-			if w.Level == LevelObserve && in.Days == nil {
+			if w.Level == LevelObserve {
 				w.ExpiresAt = expiryOf(nil, c, now)
 			}
 		}
-		if in.Days != nil {
-			w.ExpiresAt = expiryOf(in.Days, c, now)
+		if exp, ok := in.expiry(c, now); ok {
+			w.ExpiresAt = exp
 		}
 		if in.Note != nil {
 			w.Note = strings.TrimSpace(*in.Note)
@@ -300,10 +308,10 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		action := "update"
 		if from != w.Level {
 			action = "set_level"
-		} else if in.Note != nil && in.Level == nil && in.Days == nil {
+		} else if in.Note != nil && in.Level == nil && in.Days == nil && !in.hasExpires {
 			action = "note"
 		}
-		return w, watchEvent(ctx, tx, uid, action, from, w.Level, w.Note, callerID(req))
+		return w, watchEventFor(ctx, tx, uid, action, from, w.Level, in.historyReason(w.Note), callerID(req), in.AnalysisID)
 	})
 }
 

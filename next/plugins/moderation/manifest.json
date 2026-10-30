@@ -9,7 +9,7 @@
     "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices.",
     "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。"
   },
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -69,6 +69,11 @@
       "id": "analysis",
       "schedule": "@every 1m",
       "timeoutSec": 60
+    },
+    {
+      "id": "alerts",
+      "schedule": "@every 1m",
+      "timeoutSec": 50
     }
   ],
   "database": {
@@ -257,6 +262,12 @@
       "permission": "moderation:manage"
     },
     {
+      "method": "POST",
+      "path": "/auditors/try",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
       "method": "GET",
       "path": "/jev/default-questions",
       "scope": "admin",
@@ -336,6 +347,12 @@
     },
     {
       "method": "POST",
+      "path": "/watchlist/:user_id/seen",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
+      "method": "POST",
       "path": "/watchlist/:user_id/analyze",
       "scope": "admin",
       "permission": "moderation:manage"
@@ -367,6 +384,30 @@
     {
       "method": "GET",
       "path": "/costs",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/status",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/trend",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/performance",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/categories",
       "scope": "admin",
       "permission": "moderation:read"
     },
@@ -496,8 +537,8 @@
     {
       "id": "jobs",
       "reason": {
-        "en": "Delete expired records, watch entries and bans daily; run queued AI analyses every minute",
-        "zh": "每天清理过期的审核记录、观察名单和封禁；每分钟启动排队中的 AI 分析"
+        "en": "Delete expired records, watch entries, bans and statistics daily; run queued AI analyses and check flow error rates every minute",
+        "zh": "每天清理过期的审核记录、观察名单、封禁和统计；每分钟启动排队中的 AI 分析并检查流程异常率"
       }
     },
     {
@@ -537,8 +578,8 @@
       },
       "optional": true,
       "reason": {
-        "en": "Call the moderation channels (enforced when the egress policy is an allowlist)",
-        "zh": "调用配置的审核渠道（出口策略为白名单时生效）"
+        "en": "Call the moderation channels and post notifications to the configured webhook (enforced when the egress policy is an allowlist)",
+        "zh": "调用配置的审核渠道，并向配置的 webhook 发送通知（出口策略为白名单时生效）"
       }
     }
   ]

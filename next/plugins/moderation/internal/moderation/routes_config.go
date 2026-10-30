@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
@@ -29,6 +30,7 @@ type ChannelView struct {
 	APIKeyTail string `json:"api_key_tail"`
 	HasKey     bool   `json:"has_key"`
 	HasProxy   bool   `json:"has_proxy"`
+	Proxy      string `json:"proxy"` // password redacted
 	Model      string `json:"model"`
 	// BillingModel is the model the calls are priced on ("" = model).
 	BillingModel string    `json:"billing_model"`
@@ -39,6 +41,17 @@ type ChannelView struct {
 	// List and detail only.
 	PriceState *PriceState  `json:"price_state,omitempty"`
 	Cost30d    *CostSummary `json:"cost_30d,omitempty"`
+	Stats      *ChannelStat `json:"stats,omitempty"`
+	// UsedBy lists the auditors on the channel; Analysis = it is the AI
+	// analysis channel.
+	UsedBy   []AuditorRef `json:"used_by,omitempty"`
+	Analysis bool         `json:"analysis"`
+}
+
+// AuditorRef names an auditor.
+type AuditorRef struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 const channelColumns = `id, type, protocol, name, base_url, api_key_tail, api_key_enc IS NOT NULL, proxy_enc IS NOT NULL, model, billing_model, timeout_ms, enabled, created_at, updated_at`
@@ -63,6 +76,8 @@ type channelInput struct {
 	BillingModel string `json:"billing_model"`
 	TimeoutMs    int    `json:"timeout_ms"`
 	Enabled      *bool  `json:"enabled"`
+	// Proxy: absent keeps it, "" removes it.
+	Proxy *string `json:"proxy"`
 }
 
 func (in *channelInput) normalize() pluginsdk.FieldErrors {
@@ -106,10 +121,15 @@ func (in *channelInput) normalize() pluginsdk.FieldErrors {
 	if in.APIKey != nil && len(*in.APIKey) > 4000 {
 		errs = errs.Add("api_key", "too_long", "api_key is too long / api_key 过长")
 	}
+	if in.Proxy != nil {
+		if _, err := parseProxy(*in.Proxy); err != nil {
+			errs = errs.Add("proxy", "invalid", "proxy must be an http, https, socks5 or socks5h URL / 代理必须是 http、https、socks5 或 socks5h 地址")
+		}
+	}
 	return errs
 }
 
-func (p *Plugin) listChannels(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+func (p *Plugin) listChannels(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
@@ -125,14 +145,60 @@ func (p *Plugin) listChannels(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 	if list == nil {
 		list = []ChannelView{}
 	}
-	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
-	if err != nil {
+	if err := p.decorateChannels(ctx, req, db, list); err != nil {
 		return nil, err
 	}
-	for i := range list {
-		p.decorateChannel(ctx, &list[i], costs)
-	}
 	return pluginsdk.DataResponse(list), nil
+}
+
+// decorateChannels adds the price state, the 30-day cost, the health and
+// cost columns and the auditors using each channel.
+func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest, db *pgxpool.Pool, list []ChannelView) error {
+	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
+	if err != nil {
+		return err
+	}
+	stats, err := p.channelStats(ctx, db, p.clockOf(req))
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		if !list[i].HasProxy {
+			continue
+		}
+		var enc []byte
+		if err := db.QueryRow(ctx, `SELECT proxy_enc FROM channels WHERE id = $1`, list[i].ID).Scan(&enc); err != nil {
+			return err
+		}
+		if proxy, err := p.openProxy(ctx, list[i].ID, enc); err == nil {
+			list[i].Proxy = redactProxy(proxy)
+		}
+	}
+	rows, err := db.Query(ctx, `SELECT channel_id, id, name FROM auditors WHERE deleted_at IS NULL ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	users := map[int64][]AuditorRef{}
+	var ch int64
+	var a AuditorRef
+	if _, err := pgx.ForEachRow(rows, []any{&ch, &a.ID, &a.Name}, func() error {
+		users[ch] = append(users[ch], a)
+		return nil
+	}); err != nil {
+		return err
+	}
+	analysis := p.cfg.Load().AnalysisChannelID
+	for i := range list {
+		c := &list[i]
+		p.decorateChannel(ctx, c, costs)
+		st, ok := stats[c.ID]
+		if !ok {
+			st = ChannelStat{Cost1h: zeroCost(), CostToday: zeroCost(), CostTodaySources: map[string]CostSummary{}}
+		}
+		c.Stats = &st
+		c.UsedBy, c.Analysis = users[c.ID], c.ID == analysis
+	}
+	return nil
 }
 
 // decorateChannel adds the price state and the 30-day cost.
@@ -166,12 +232,11 @@ func (p *Plugin) getChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if err != nil {
 		return nil, err
 	}
-	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
-	if err != nil {
+	list := []ChannelView{c}
+	if err := p.decorateChannels(ctx, req, db, list); err != nil {
 		return nil, err
 	}
-	p.decorateChannel(ctx, &c, costs)
-	return pluginsdk.DataResponse(c), nil
+	return pluginsdk.DataResponse(list[0]), nil
 }
 
 func notFound(what string) *pluginv1.HTTPResponse {
@@ -197,6 +262,9 @@ func (p *Plugin) createChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			return err
 		}
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
+			return err
+		}
+		if err := p.storeProxy(ctx, tx, id, in.Proxy); err != nil {
 			return err
 		}
 		var err error
@@ -251,9 +319,19 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			errs = errs.Add("type", "immutable", "type cannot change / 渠道类型不能修改")
 		}
 		newKey := in.APIKey != nil && strings.TrimSpace(*in.APIKey) != ""
-		if !newKey && cur.HasKey && hostChanged(cur.BaseURL, in.BaseURL) {
-			// new-api channel.go: a key must not follow the channel to another host.
-			errs = errs.Add("api_key", "required", "changing the base_url host needs the key again / 修改 base_url 的地址需要重新填写 key")
+		proxyChanged := false
+		if in.Proxy != nil {
+			var enc []byte
+			if err := tx.QueryRow(ctx, `SELECT proxy_enc FROM channels WHERE id = $1`, id).Scan(&enc); err != nil {
+				return err
+			}
+			curProxy, err := p.openProxy(ctx, id, enc)
+			proxyChanged = err != nil || curProxy != strings.TrimSpace(*in.Proxy)
+		}
+		if !newKey && cur.HasKey && (hostChanged(cur.BaseURL, in.BaseURL) || proxyChanged) {
+			// new-api channel.go: a key must not follow the channel to another
+			// host or through another proxy.
+			errs = errs.Add("api_key", "required", "changing the base_url host or the proxy needs the key again / 修改 base_url 地址或代理需要重新填写 key")
 		}
 		if len(errs) > 0 {
 			resp = pluginsdk.FieldErrorResponse("invalid channel / 渠道参数无效", errs)
@@ -268,6 +346,9 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			return err
 		}
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
+			return err
+		}
+		if err := p.storeProxy(ctx, tx, id, in.Proxy); err != nil {
 			return err
 		}
 		out, err = scanChannel(tx.QueryRow(ctx, `SELECT `+channelColumns+` FROM channels WHERE id = $1`, id))
@@ -300,12 +381,29 @@ func (p *Plugin) deleteChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 	}
 	var resp *pluginv1.HTTPResponse
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
-		var used int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM auditors WHERE channel_id = $1 AND deleted_at IS NULL`, id).Scan(&used); err != nil {
+		if id == p.cfg.Load().AnalysisChannelID {
+			resp = pluginsdk.ErrorResponse(http.StatusConflict, "analysis_channel",
+				"the channel is the AI analysis channel; choose another one in the settings first / 该渠道是 AI 分析渠道，请先在设置中改用其他渠道")
+			return errRollback
+		}
+		rows, err := tx.Query(ctx, `SELECT id, name FROM auditors WHERE channel_id = $1 AND deleted_at IS NULL ORDER BY id`, id)
+		if err != nil {
 			return err
 		}
-		if used > 0 {
-			resp = pluginsdk.ErrorResponse(http.StatusConflict, "in_use", "the channel is used by auditors / 该渠道仍被审核器使用")
+		type ref struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}
+		used, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ref, error) {
+			var a ref
+			return a, r.Scan(&a.ID, &a.Name)
+		})
+		if err != nil {
+			return err
+		}
+		if len(used) > 0 {
+			resp = pluginsdk.JSONResponse(http.StatusConflict, map[string]any{"error": map[string]any{
+				"code": "in_use", "message": "the channel is used by auditors / 该渠道仍被审核器使用", "details": map[string]any{"auditors": used}}})
 			return errRollback
 		}
 		tag, err := tx.Exec(ctx, `UPDATE channels SET deleted_at = $2, api_key_enc = NULL, proxy_enc = NULL WHERE id = $1 AND deleted_at IS NULL`, id, p.now().UTC())
@@ -391,10 +489,10 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 		return nil, err
 	}
 	ch := &liveChannel{ID: id, client: p.httpClient}
-	var keyEnc []byte
+	var keyEnc, proxyEnc []byte
 	var timeout int
-	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
-		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &ch.Model, &ch.BillingModel, &timeout)
+	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
+		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &proxyEnc, &ch.Model, &ch.BillingModel, &timeout)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errNotFound
 	}
@@ -408,6 +506,11 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 		}
 		ch.Key = string(k)
 	}
+	proxy, err := p.openProxy(ctx, id, proxyEnc)
+	if err != nil {
+		return nil, err
+	}
+	ch.client = p.clientFor(proxy)
 	ch.Timeout = time.Duration(timeout) * time.Millisecond
 	if ch.Timeout <= 0 {
 		ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
@@ -453,8 +556,14 @@ type AuditorView struct {
 	Config       json.RawMessage `json:"config"`
 	RulesVersion string          `json:"rules_version,omitempty"`
 	Usable       bool            `json:"usable"` // its channel is enabled and has a key
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	// The channel, for the canvas and the list (empty when deleted).
+	ChannelName      string        `json:"channel_name"`
+	ChannelType      string        `json:"channel_type"`
+	ChannelEnabled   bool          `json:"channel_enabled"`
+	ChannelTimeoutMs int           `json:"channel_timeout_ms"`
+	Today            *AuditorToday `json:"today,omitempty"` // list only
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
 }
 
 type auditorInput struct {
@@ -469,13 +578,17 @@ func (p *Plugin) auditorViews(ctx context.Context, where string, args ...any) ([
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT id, name, type, channel_id, config, created_at, updated_at FROM auditors WHERE deleted_at IS NULL `+where+` ORDER BY id`, args...)
+	rows, err := db.Query(ctx, `SELECT a.id, a.name, a.type, a.channel_id, a.config, coalesce(c.name, ''), coalesce(c.type, ''),
+			coalesce(c.enabled, false), coalesce(c.timeout_ms, 0), a.created_at, a.updated_at
+		FROM auditors a LEFT JOIN channels c ON c.id = a.channel_id AND c.deleted_at IS NULL
+		WHERE a.deleted_at IS NULL `+where+` ORDER BY a.id`, args...)
 	if err != nil {
 		return nil, err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (AuditorView, error) {
 		var a AuditorView
-		err := r.Scan(&a.ID, &a.Name, &a.Type, &a.ChannelID, &a.Config, &a.CreatedAt, &a.UpdatedAt)
+		err := r.Scan(&a.ID, &a.Name, &a.Type, &a.ChannelID, &a.Config, &a.ChannelName, &a.ChannelType, &a.ChannelEnabled,
+			&a.ChannelTimeoutMs, &a.CreatedAt, &a.UpdatedAt)
 		a.CreatedAt, a.UpdatedAt = a.CreatedAt.UTC(), a.UpdatedAt.UTC()
 		return a, err
 	})
@@ -497,10 +610,25 @@ func (p *Plugin) auditorViews(ctx context.Context, where string, args ...any) ([
 	return list, nil
 }
 
-func (p *Plugin) listAuditors(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+func (p *Plugin) listAuditors(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	list, err := p.auditorViews(ctx, "")
 	if err != nil {
 		return nil, err
+	}
+	db, err := p.db(ctx)
+	if err != nil {
+		return nil, err
+	}
+	today, err := p.auditorsToday(ctx, db, p.clockOf(req))
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		t, ok := today[list[i].ID]
+		if !ok {
+			t.Cost = zeroCost()
+		}
+		list[i].Today = &t
 	}
 	return pluginsdk.DataResponse(list), nil
 }
@@ -510,7 +638,7 @@ func (p *Plugin) getAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if bad != nil {
 		return bad, nil
 	}
-	list, err := p.auditorViews(ctx, "AND id = $1", id)
+	list, err := p.auditorViews(ctx, "AND a.id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -673,13 +801,68 @@ func (p *Plugin) tryAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if bad != nil {
 		return bad, nil
 	}
+	return p.tryWith(ctx, req, id)
+}
+
+// tryDraftAuditor tries an auditor that is not saved yet (POST /auditors/try).
+func (p *Plugin) tryDraftAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	return p.tryWith(ctx, req, 0)
+}
+
+// tryWith runs one auditor on {text, images?, draft?}. draft {name, type,
+// channel_id, config} overrides the saved auditor id (all of it when id is
+// 0), so unsaved changes can be tried (new-api TryModerationAuditor).
+func (p *Plugin) tryWith(ctx context.Context, req *pluginv1.HTTPRequest, id int64) (*pluginv1.HTTPResponse, error) {
 	in, bad := testInput(req, p.cfg.Load())
 	if bad != nil {
 		return bad, nil
 	}
-	a, resp, err := p.loadAuditor(ctx, id)
-	if resp != nil || err != nil {
-		return resp, err
+	var body struct {
+		Draft *struct {
+			Name      *string        `json:"name"`
+			Type      *string        `json:"type"`
+			ChannelID *int64         `json:"channel_id"`
+			Config    *AuditorConfig `json:"config"`
+		} `json:"draft"`
+	}
+	_ = json.Unmarshal(req.GetBody(), &body)
+	if id == 0 && body.Draft == nil {
+		return pluginsdk.FieldErrorResponse("invalid try / 试跑参数无效", pluginsdk.FieldErrors{}.Add("draft", "required", "draft is required / 请提供审核器草稿")), nil
+	}
+	var a *liveAuditor
+	if body.Draft == nil {
+		var resp *pluginv1.HTTPResponse
+		var err error
+		if a, resp, err = p.loadAuditor(ctx, id); resp != nil || err != nil {
+			return resp, err
+		}
+	} else {
+		src := auditorSource{name: "draft"}
+		if id != 0 {
+			var resp *pluginv1.HTTPResponse
+			var err error
+			if src, resp, err = p.auditorSourceOf(ctx, id); resp != nil || err != nil {
+				return resp, err
+			}
+		}
+		d := body.Draft
+		if d.Name != nil {
+			src.name = *d.Name
+		}
+		if d.Type != nil {
+			src.typ = *d.Type
+		}
+		if d.ChannelID != nil {
+			src.channel = *d.ChannelID
+		}
+		if d.Config != nil {
+			src.cfg = *d.Config
+		}
+		var resp *pluginv1.HTTPResponse
+		var err error
+		if a, resp, err = p.compileSource(ctx, id, src); resp != nil || err != nil {
+			return resp, err
+		}
 	}
 	o := p.audit(ctx, a, in, true, SourceTry)
 	out := TryResult{Outcome: o}
@@ -689,37 +872,65 @@ func (p *Plugin) tryAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	return pluginsdk.DataResponse(out), nil
 }
 
-// loadAuditor compiles one auditor straight from the database (its channel
-// may be disabled: a try still runs).
-func (p *Plugin) loadAuditor(ctx context.Context, id int64) (*liveAuditor, *pluginv1.HTTPResponse, error) {
+// auditorSource is a stored (or draft) auditor before compiling.
+type auditorSource struct {
+	name, typ string
+	channel   int64
+	cfg       AuditorConfig
+}
+
+func (p *Plugin) auditorSourceOf(ctx context.Context, id int64) (auditorSource, *pluginv1.HTTPResponse, error) {
+	var src auditorSource
 	db, err := p.db(ctx)
 	if err != nil {
-		return nil, pluginsdk.Unavailable(err.Error()), nil
+		return src, pluginsdk.Unavailable(err.Error()), nil
 	}
-	var name, typ string
-	var chID int64
 	var raw []byte
-	err = db.QueryRow(ctx, `SELECT name, type, channel_id, config FROM auditors WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&name, &typ, &chID, &raw)
+	err = db.QueryRow(ctx, `SELECT name, type, channel_id, config FROM auditors WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&src.name, &src.typ, &src.channel, &raw)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, notFound("auditor"), nil
+		return src, notFound("auditor"), nil
 	}
 	if err != nil {
-		return nil, nil, err
+		return src, nil, err
 	}
-	var cfg AuditorConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, pluginsdk.ErrorResponse(http.StatusConflict, "invalid_config", "stored auditor config is invalid / 审核器配置无效"), nil
+	if err := json.Unmarshal(raw, &src.cfg); err != nil {
+		return src, pluginsdk.ErrorResponse(http.StatusConflict, "invalid_config", "stored auditor config is invalid / 审核器配置无效"), nil
 	}
-	ch, err := p.loadChannel(ctx, chID)
+	return src, nil, nil
+}
+
+// compileSource compiles an auditor with its channel (which may be
+// disabled: a try still runs).
+func (p *Plugin) compileSource(ctx context.Context, id int64, src auditorSource) (*liveAuditor, *pluginv1.HTTPResponse, error) {
+	ch, err := p.loadChannel(ctx, src.channel)
 	if err != nil && !errors.Is(err, errNotFound) {
 		return nil, nil, err
 	}
+	if ch != nil {
+		if want, ok := channelTypeOf[src.typ]; ok && ch.Type != want {
+			return nil, pluginsdk.FieldErrorResponse("invalid try / 试跑参数无效",
+				pluginsdk.FieldErrors{}.Add("channel_id", "type_mismatch", fmt.Sprintf("the auditor needs a %s channel / 该审核器需要 %s 类型的渠道", want, want))), nil
+		}
+	}
 	def := p.cfg.Load().jevDefault
-	a, err := compileAuditor(id, name, typ, chID, cfg, ch, &def)
+	a, err := compileAuditor(id, src.name, src.typ, src.channel, src.cfg, ch, &def)
 	if err != nil {
-		return nil, pluginsdk.ErrorResponse(http.StatusConflict, "invalid_config", err.Error()), nil
+		return nil, pluginsdk.FieldErrorResponse("invalid try / 试跑参数无效", pluginsdk.FieldErrors{}.Add("config", "invalid", err.Error())), nil
 	}
 	return a, nil, nil
+}
+
+// loadAuditor compiles one stored auditor.
+func (p *Plugin) loadAuditor(ctx context.Context, id int64) (*liveAuditor, *pluginv1.HTTPResponse, error) {
+	src, resp, err := p.auditorSourceOf(ctx, id)
+	if resp != nil || err != nil {
+		return nil, resp, err
+	}
+	a, resp, err := p.compileSource(ctx, id, src)
+	if resp != nil && resp.GetStatus() == http.StatusBadRequest {
+		return nil, pluginsdk.ErrorResponse(http.StatusConflict, "invalid_config", "stored auditor config is invalid / 审核器配置无效"), nil
+	}
+	return a, resp, err
 }
 
 func (p *Plugin) getJevDefaults(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {

@@ -77,6 +77,26 @@
       "maximum": 87600,
       "default": 24
     },
+    "error_rate_alert_percent": {
+      "type": "integer",
+      "title": "Error rate alert (%)",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 5
+    },
+    "notify_webhook_url": {
+      "type": "string",
+      "title": "Notification webhook",
+      "maxLength": 1000,
+      "default": "",
+      "pattern": "^$|^https?://\\S+$"
+    },
+    "notify_webhook_secret": {
+      "type": "string",
+      "title": "Webhook secret",
+      "maxLength": 200,
+      "default": ""
+    },
     "analysis_channel_id": {
       "type": "integer",
       "title": "Analysis channel",
@@ -180,6 +200,13 @@
       "minimum": 1,
       "maximum": 3,
       "default": 3
+    },
+    "stats_retention_days": {
+      "type": "integer",
+      "title": "Statistics retention (days)",
+      "minimum": 7,
+      "maximum": 3650,
+      "default": 90
     },
     "max_concurrency": {
       "type": "integer",

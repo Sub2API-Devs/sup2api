@@ -269,6 +269,8 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	case JobCleanup:
 	case JobAnalysis:
 		return p.runAnalysisJob(ctx)
+	case JobAlerts:
+		return p.runAlertsJob(ctx)
 	default:
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", in.GetJobId())
 	}
@@ -289,6 +291,9 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	events := tag.RowsAffected()
 	if _, err := db.Exec(ctx, `DELETE FROM costs WHERE hour < $1`, now.Add(-400*24*time.Hour)); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup costs: %v", err)
+	}
+	if err := p.cleanupStats(ctx, db, now); err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup stats: %v", err)
 	}
 	watch, err := p.expireWatch(ctx, now)
 	if err != nil {

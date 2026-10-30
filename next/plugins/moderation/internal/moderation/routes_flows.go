@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,17 +28,26 @@ type FlowView struct {
 	PublishedAt *time.Time      `json:"published_at"`
 	PublishedBy *int64          `json:"published_by"`
 	Groups      []int64         `json:"groups"`
-	Dirty       bool            `json:"dirty"` // draft differs from the published spec
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	// Dirty: the draft differs from the published spec (a draft total
+	// timeout of 0 means "computed at publish" and matches any value).
+	Dirty           bool `json:"dirty"`
+	HasDraftChanges bool `json:"has_draft_changes"`
+	// StageTimeoutSumMs is the automatic total timeout of the draft.
+	StageTimeoutSumMs int        `json:"stage_timeout_sum_ms"`
+	Stats24h          *FlowStats `json:"stats_24h,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
-func (p *Plugin) flowViews(ctx context.Context, q interface {
+// querier is a pool or a transaction.
+type querier interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
-}, where string, args ...any) ([]FlowView, error) {
+}
+
+func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ...any) ([]FlowView, error) {
 	rows, err := q.Query(ctx, `SELECT f.id, f.name, f.enabled, f.draft, f.published, f.version, f.published_at, f.published_by,
 			coalesce((SELECT array_agg(group_id ORDER BY group_id) FROM flow_groups g WHERE g.flow_id = f.id), '{}'),
-			f.published IS NULL OR f.draft <> f.published, f.created_at, f.updated_at
+			f.created_at, f.updated_at
 		FROM flows f WHERE f.deleted_at IS NULL `+where+` ORDER BY f.id`, args...)
 	if err != nil {
 		return nil, err
@@ -45,14 +55,47 @@ func (p *Plugin) flowViews(ctx context.Context, q interface {
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (FlowView, error) {
 		var f FlowView
 		err := r.Scan(&f.ID, &f.Name, &f.Enabled, &f.Draft, &f.Published, &f.Version, &f.PublishedAt, &f.PublishedBy,
-			&f.Groups, &f.Dirty, &f.CreatedAt, &f.UpdatedAt)
+			&f.Groups, &f.CreatedAt, &f.UpdatedAt)
 		f.CreatedAt, f.UpdatedAt, f.PublishedAt = f.CreatedAt.UTC(), f.UpdatedAt.UTC(), utcPtr(f.PublishedAt)
+		f.Dirty = draftChanged(f.Draft, f.Published)
+		f.HasDraftChanges = f.Dirty
 		return f, err
 	})
-	if list == nil {
-		list = []FlowView{}
+	if err != nil {
+		return nil, err
 	}
-	return list, err
+	if list == nil {
+		return []FlowView{}, nil
+	}
+	timeouts, err := auditorTimeouts(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if spec, err := ParseSpec(list[i].Draft); err == nil {
+			list[i].StageTimeoutSumMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
+		}
+	}
+	return list, nil
+}
+
+// draftChanged compares a draft with the published spec; a draft total
+// timeout of 0 takes the published value (new-api moderationDraftChanged).
+func draftChanged(draft, published []byte) bool {
+	if len(published) == 0 {
+		return true
+	}
+	d, err1 := ParseSpec(draft)
+	pub, err2 := ParseSpec(published)
+	if err1 != nil || err2 != nil {
+		return !bytes.Equal(draft, published)
+	}
+	if d.TotalTimeoutMs == 0 {
+		d.TotalTimeoutMs = pub.TotalTimeoutMs
+	}
+	a, _ := json.Marshal(d)
+	b, _ := json.Marshal(pub)
+	return !bytes.Equal(a, b)
 }
 
 func (p *Plugin) listFlows(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -63,6 +106,14 @@ func (p *Plugin) listFlows(ctx context.Context, _ *pluginv1.HTTPRequest) (*plugi
 	list, err := p.flowViews(ctx, db, "")
 	if err != nil {
 		return nil, err
+	}
+	stats, err := p.flowStats24h(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		s := stats[list[i].ID]
+		list[i].Stats24h = &s
 	}
 	return pluginsdk.DataResponse(list), nil
 }
@@ -199,6 +250,15 @@ func (p *Plugin) deleteFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	}
 	var resp *pluginv1.HTTPResponse
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
+		var inUse bool
+		if err := tx.QueryRow(ctx, `SELECT f.enabled AND EXISTS(SELECT 1 FROM flow_groups g WHERE g.flow_id = f.id)
+			FROM flows f WHERE f.id = $1 AND f.deleted_at IS NULL FOR UPDATE`, id).Scan(&inUse); err == nil && inUse {
+			resp = pluginsdk.ErrorResponse(http.StatusConflict, "flow_in_use",
+				"an enabled flow bound to groups cannot be deleted; disable it or unbind its groups first / 启用且已绑定分组的流程不能删除，请先停用或解绑分组")
+			return errRollback
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `UPDATE flows SET deleted_at = $2 WHERE id = $1 AND deleted_at IS NULL`, id, p.now().UTC())
 		if err == nil && tag.RowsAffected() == 0 {
 			resp = notFound("flow")
@@ -288,7 +348,8 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 }
 
 // publishFlow publishes the draft: {expected_version}. total_timeout_ms 0
-// is filled from the channel timeouts.
+// is filled from the channel timeouts in the published spec only; the draft
+// keeps 0 ("automatic") so later channel changes are picked up.
 func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -323,6 +384,7 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			resp = pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", pluginsdk.FieldErrors{}.Add("draft", "invalid", err.Error()))
 			return errRollback
 		}
+		draftRaw, _ := json.Marshal(spec)
 		if spec.TotalTimeoutMs == 0 {
 			timeouts, err := auditorTimeouts(ctx, tx)
 			if err != nil {
@@ -333,8 +395,8 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		raw, _ := json.Marshal(spec)
 		now := p.now().UTC()
 		by := callerID(req)
-		if _, err := tx.Exec(ctx, `UPDATE flows SET draft=$2, published=$2, version=$3, published_at=$4, published_by=$5, updated_at=$4 WHERE id=$1`,
-			id, raw, version+1, now, by); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE flows SET draft=$6, published=$2, version=$3, published_at=$4, published_by=$5, updated_at=$4 WHERE id=$1`,
+			id, raw, version+1, now, by, draftRaw); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO flow_versions (flow_id, version, spec, published_at, published_by) VALUES ($1,$2,$3,$4,$5)`, id, version+1, raw, now, by)
@@ -350,8 +412,8 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 }
 
 // auditorTimeouts maps live auditors to their channel timeout.
-func auditorTimeouts(ctx context.Context, tx pgx.Tx) (map[int64]int, error) {
-	rows, err := tx.Query(ctx, `SELECT a.id, c.type, c.timeout_ms FROM auditors a JOIN channels c ON c.id = a.channel_id WHERE a.deleted_at IS NULL`)
+func auditorTimeouts(ctx context.Context, q querier) (map[int64]int, error) {
+	rows, err := q.Query(ctx, `SELECT a.id, c.type, c.timeout_ms FROM auditors a JOIN channels c ON c.id = a.channel_id WHERE a.deleted_at IS NULL`)
 	if err != nil {
 		return nil, err
 	}

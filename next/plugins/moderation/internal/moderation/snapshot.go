@@ -119,7 +119,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	if err := db.QueryRow(ctx, `SELECT config_version FROM config_state WHERE id = 1`).Scan(&s.version); err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels
+	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels
 		WHERE deleted_at IS NULL AND enabled`)
 	if err != nil {
 		return nil, err
@@ -128,12 +128,12 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 		id                         int64
 		typ, protocol, base, model string
 		name, billing              string
-		keyEnc                     []byte
+		keyEnc, proxyEnc           []byte
 		timeout                    int
 	}
 	var chRows []chRow
 	var r chRow
-	if _, err := pgx.ForEachRow(rows, []any{&r.id, &r.typ, &r.protocol, &r.name, &r.base, &r.keyEnc, &r.model, &r.billing, &r.timeout}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&r.id, &r.typ, &r.protocol, &r.name, &r.base, &r.keyEnc, &r.proxyEnc, &r.model, &r.billing, &r.timeout}, func() error {
 		chRows = append(chRows, r)
 		return nil
 	}); err != nil {
@@ -150,6 +150,12 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			}
 			ch.Key = string(key)
 		}
+		proxy, err := p.openProxy(ctx, r.id, r.proxyEnc)
+		if err != nil {
+			p.log.Warn("moderation: channel proxy does not open", "channel_id", r.id, "error", err.Error())
+			continue
+		}
+		ch.client = p.clientFor(proxy)
 		if ch.Timeout <= 0 {
 			ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
 		}

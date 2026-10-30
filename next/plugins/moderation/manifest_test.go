@@ -52,7 +52,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "moderation" || m.Version != "0.3.1" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.4.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -85,7 +85,7 @@ func TestManifest(t *testing.T) {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 49 {
+	if len(routes) != 55 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -124,8 +124,9 @@ func TestManifest(t *testing.T) {
 			t.Errorf("scope.fields[%d] = %v, want %s", i, f, wantNeeds[i])
 		}
 	}
-	if len(m.Jobs) != 2 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
-		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" {
+	if len(m.Jobs) != 3 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
+		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" ||
+		m.Jobs[2].ID != moderation.JobAlerts || m.Jobs[2].Schedule != "@every 1m" {
 		t.Fatalf("jobs = %+v", m.Jobs)
 	}
 	caps := map[string]bool{}
