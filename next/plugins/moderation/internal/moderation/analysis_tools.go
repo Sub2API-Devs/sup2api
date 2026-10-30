@@ -508,12 +508,14 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 		Suspicious int64 `json:"suspicious"`
 		High       int64 `json:"high"`
 	}
+	// Counts come from user_daily (every moderated request, passes included
+	// even when record_pass is off); the pending counters are written first.
+	tc.p.flushStats(ctx)
 	var d, m counts
 	if err := db.QueryRow(ctx, `SELECT
-			count(*) FILTER (WHERE created_at >= $3), count(*) FILTER (WHERE created_at >= $3 AND result IN ('hit','block')),
-			count(*) FILTER (WHERE created_at >= $3 AND result IN ('hit','block') AND severity = 'high'),
-			count(*), count(*) FILTER (WHERE result IN ('hit','block')), count(*) FILTER (WHERE result IN ('hit','block') AND severity = 'high')
-		FROM events WHERE user_id = $1 AND created_at >= $2`, tc.userID, since, today).Scan(&d.Records, &d.Suspicious, &d.High, &m.Records, &m.Suspicious, &m.High); err != nil {
+			coalesce(sum(audited) FILTER (WHERE day >= $3), 0), coalesce(sum(suspicious) FILTER (WHERE day >= $3), 0),
+			coalesce(sum(high) FILTER (WHERE day >= $3), 0), coalesce(sum(audited), 0), coalesce(sum(suspicious), 0), coalesce(sum(high), 0)
+		FROM user_daily WHERE user_id = $1 AND day >= $2`, tc.userID, since.Truncate(24*time.Hour), today).Scan(&d.Records, &d.Suspicious, &d.High, &m.Records, &m.Suspicious, &m.High); err != nil {
 		return nil, err
 	}
 	byCategory := map[string]int64{}
