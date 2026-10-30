@@ -4,7 +4,26 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-2026-10-30 最新发布（北京时间 21:55–22:00）：Core 两节点 **0.1.220** + moderation **0.2.0**（源码都是 `0a45d13e6`，CONTRACTS §72 P1；发布时本机代理连不上 GitHub，代码经 git bundle 进服务器仓库 `refs/bundles/mod02`，之后已推送 GitHub）。
+2026-10-31 最新发布（北京时间 03:10–03:20）：Core 两节点 **0.1.221** + moderation **0.3.1**（CONTRACTS §72.13 P2），并把 new-api 的内容审核配置迁了过来、给审核渠道补了模型价格。
+- **Core 0.1.221**（源码 `3aa066097`，manifest `0b449986…3b46`，计划 `5660c812cb3025782dd24941a69e346f` completed/13）：新增宿主调用 `PriceUsage`（权限 `prices`，low，只读按模型价格试算）。schema 不变（`e3d6a10f…`）。`builtin/` 仍是 0.1.212 的包（moderation 0.1.13）：放进新包会让主节点一启动就升级插件，而另一节点还是旧核心，所以这次没放；内置插件只升不降，下次核心发布时换成 0.3.1 包（`stage/moderation-0.3.1/packages`）。备份 `backups/core-0.1.221`。
+- **moderation 0.3.0 → 0.3.1**：
+  - 0.3.0 源码 `d4d6343d1`，包 `82ae41a4…f91e`，rollout 208；新增授权 `prices`，其余沿用。迁移 0004 已执行。
+  - 0.3.1 源码 `d5ba40fce`，包 `9cfe7ed6…d5d9`，rollout 209；修复 mode 为 off 时概览把分析渠道显示成"未设置"的问题。版本没有新权限、自动批准，所以 rollout.py 的 consent 一步会报 409，直接跑 upgrade 即可。
+  - 两个包都验签 valid，两节点 serving 0.3.1。
+- **模型价格**（管理接口新增，id 324、325）：
+  - `deepseek-v4.1-flash-abliterated`：`tier("base", p * 0.14 + c * 0.5 + cr * 0.035)`，来源 LiteLLM PR 48844 的 refuseless 价格。
+  - `jev-latest`：`tier("base", p * 0.042)`，Jev 输出免费。
+  - `deepseek-flash` 原来已有。
+- **new-api 配置迁移**（`stage/moderation-0.3.0/migrate_newapi.py`，在 ovh 上直接从 newapi-codingplus 库读、经插件接口导入，key 不出服务器）：
+  - 渠道 3 "Jev 官方（new-api）"（key …a74e，与原有渠道 2 的 …3f91 不同，两个都保留）。
+  - 渠道 4 "AI 分析 · deepseek-flash（ARK Messages）（new-api）"，协议 anthropic，计价模型 deepseek-flash。new-api 那边配了代理，这里不支持代理，没迁。
+  - 审核器 2（Jev，new-api 的题集）。
+  - 流程 2 "cc-max · Jev 单审（new-api）"，v1，**未绑定分组**：new-api 的分组 cc-max 在这里没有。
+  - 设置：分析渠道 4、每 1 次违规分析、并发 10、上下文 512 KB、保留 100 次、三个自动调整开关都关、观察期 3 天、Jev 默认题集 13 题、后台并发 32、队列 32768 等。
+  - **mode 仍为 off**，没有审核任何请求，也没有调用任何上游。
+- 脚本 `stage/0.1.221`、`stage/moderation-0.3.{0,1}/{build.sh,rollout.py}`、`stage/moderation-0.3.0/{prices.py,migrate_newapi.py}`。
+
+2026-10-30 发布（北京时间 21:55–22:00）：Core 两节点 **0.1.220** + moderation **0.2.0**（源码都是 `0a45d13e6`，CONTRACTS §72 P1；发布时本机代理连不上 GitHub，代码经 git bundle 进服务器仓库 `refs/bundles/mod02`，之后已推送 GitHub）。
 - **Core 0.1.220**（manifest `8aca222f…aab5`，计划 `9ff11e79611bed0a4e42e9677197c069` completed/13，核心 SHA `83b59643…5332`）：新增宿主调用 `SecretSeal` / `SecretOpen`（权限 `secrets`，low）。schema 不变（`e3d6a10f…`）。`builtin/` 仍是 0.1.212 的包（moderation 0.1.13）；内置插件只升不降，下次核心发布时把 0.2.0 包放进 `builtin/`。备份 `backups/core-0.1.220`。
 - **moderation 0.2.0**（包 SHA `cc0af21b…8d18`，验签 valid，rollout 207 两节点）：分组绑定的多级审核流程、观察名单、渠道 key 加密保存。授权：新增 `secrets`；`gateway.hook` 字段改为末尾 16 条消息（按新版本申请的范围授予）；`net` 沿用。迁移 0003 已执行；0.1 设置已自动转换为渠道 1（llm，cdn.api.codingplus.ai / claude-sonnet-5，key 可解开）、审核器 1、流程 1（v1，绑定默认分组 0）。模式仍为 off，不审核任何请求。界面 dist 不入库，本机按同一提交构建后在 build.sh 里核对 sha256。
 - 脚本 `stage/0.1.220`、`stage/moderation-0.2.0/{build.sh,rollout.py}`。
