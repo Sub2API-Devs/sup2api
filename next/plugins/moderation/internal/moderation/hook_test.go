@@ -4,8 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,41 +21,33 @@ import (
 )
 
 func sdkOpts() []pluginsdk.Option {
-	return []pluginsdk.Option{pluginsdk.WithInfo("moderation", "0.1.1")}
+	return []pluginsdk.Option{pluginsdk.WithInfo("moderation", "0.2.0")}
 }
 
-var reqSeq struct {
-	sync.Mutex
-	n int
-}
+var reqSeq atomic.Int64
 
-// hookReq builds an anthropic.messages hook request for user 3 / group 9.
-func hookReq(text string) *pluginv1.GatewayRequestHookRequest {
-	reqSeq.Lock()
-	reqSeq.n++
-	id := fmt.Sprintf("req-%d", reqSeq.n)
-	reqSeq.Unlock()
-	msg, _ := json.Marshal(map[string]any{"role": "user", "content": text})
+// hookReqAs builds an anthropic.messages hook request (api key 5, group 9).
+func hookReqAs(user int64, id, text string) *pluginv1.GatewayRequestHookRequest {
+	if id == "" {
+		id = fmt.Sprintf("req-%d", reqSeq.Add(1))
+	}
+	msgs, _ := json.Marshal([]any{map[string]any{"role": "user", "content": text}})
 	return &pluginv1.GatewayRequestHookRequest{
 		Meta: &pluginv1.RequestMeta{RequestId: id, Protocol: "anthropic.messages", ClientProtocol: "anthropic.messages",
-			Model: "claude-opus-5", UserId: 3, ApiKeyId: 5, GroupId: 9},
-		Fields: map[string]string{FieldModel: `"claude-opus-5"`, FieldMessages: string(msg)},
+			Model: "claude-opus-5", UserId: user, ApiKeyId: 5, GroupId: 9},
+		Fields: map[string]string{FieldModel: `"claude-opus-5"`, FieldMessages: string(msgs)},
 	}
 }
 
+func hookReq(text string) *pluginv1.GatewayRequestHookRequest { return hookReqAs(3, "", text) }
+
+// settingsMap is a 0.1 single-model setup (converted on first start).
 func settingsMap(base string, mode string, extra map[string]any) map[string]any {
 	m := map[string]any{"mode": mode, "base_url": base, "api_key": "sk-test", "model": "mod-model", "record_pass": true}
 	for k, v := range extra {
 		m[k] = v
 	}
 	return m
-}
-
-func startHook(t *testing.T, cfg any) (*Plugin, *pluginsdktest.Harness) {
-	t.Helper()
-	p := New()
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: sdkOpts(), Config: cfg})
-	return p, h
 }
 
 func mustHook(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
@@ -72,376 +70,439 @@ func mockLLM(t *testing.T) *fakeLLM {
 	})
 }
 
-func TestHookOffAndUnconfigured(t *testing.T) {
-	llm := mockLLM(t)
-	for _, cfg := range []any{
-		nil,
-		settingsMap(llm.srv.URL, ModeOff, nil),
-		settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"model": ""}),
-		settingsMap("", ModeEnforce, nil),
-	} {
-		_, h := startHook(t, cfg)
-		r := mustHook(t, h, hookReq("MOD-BLOCK now"))
-		if denied(r) || r.GetNote() != "" {
-			t.Fatalf("cfg %v: %v", cfg, r)
-		}
-	}
-	if llm.calls.Load() != 0 {
-		t.Fatal("LLM called while off")
-	}
+// fakeMod serves /v1/moderations and /v1/systemone: every category scores
+// 0.01, a "MOD-HIT-<category>" token in the text scores it 0.99, MOD-500
+// answers 500.
+type fakeMod struct {
+	srv   *httptest.Server
+	calls sync.Map // path -> *atomic.Int64
 }
 
-func TestHookEnforce(t *testing.T) {
-	llm := mockLLM(t)
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"block_status": 451, "block_message": "no"}))
-	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "gateway.hook.v1,app.jobs.v1,app.broadcast.v1,http.routes.v1" {
-		t.Fatalf("capabilities = %s", got)
-	}
-	r := mustHook(t, h, hookReq("how to MOD-BLOCK things"))
-	if !denied(r) || r.GetDenyStatus() != 451 || r.GetDenyCode() != DenyBlocked || r.GetDenyMessage() != "no" ||
-		!strings.HasPrefix(r.GetNote(), "moderation: block [illegal] ") {
-		t.Fatalf("block = %v", r)
-	}
-	r = mustHook(t, h, hookReq("MOD-FLAG maybe"))
-	if denied(r) || !strings.HasPrefix(r.GetNote(), "moderation: flag [other]") {
-		t.Fatalf("flag = %v", r)
-	}
-	r = mustHook(t, h, hookReq("write a quicksort in Go"))
-	if denied(r) || !strings.HasPrefix(r.GetNote(), "moderation: pass") {
-		t.Fatalf("pass = %v", r)
-	}
-	if llm.calls.Load() != 3 {
-		t.Fatalf("calls = %d", llm.calls.Load())
-	}
-	// Cached: same text, no new call.
-	r = mustHook(t, h, hookReq("how to MOD-BLOCK things"))
-	if !denied(r) || !strings.Contains(r.GetNote(), "(cached)") || llm.calls.Load() != 3 {
-		t.Fatalf("cached = %v calls %d", r, llm.calls.Load())
-	}
-	// The verdict was also written to the KV for the other nodes.
-	c := p.cfg.Load()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if b, found, _ := p.host.KV().Get(context.Background(), kvNamespace, cacheKey(c.policy, "how to MOD-BLOCK things")); found {
-			var v Verdict
-			if json.Unmarshal(b, &v) != nil || v.Verdict != VerdictBlock {
-				t.Fatalf("kv = %s", b)
+var hitToken = regexp.MustCompile(`MOD-HIT-([a-z/_-]+)`)
+
+func newFakeMod(t *testing.T) *fakeMod {
+	f := &fakeMod{}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n, _ := f.calls.LoadOrStore(r.URL.Path, new(atomic.Int64))
+		n.(*atomic.Int64).Add(1)
+		body, _ := io.ReadAll(r.Body)
+		text := string(body)
+		if strings.Contains(text, "MOD-500") {
+			w.WriteHeader(500)
+			_, _ = io.WriteString(w, `{"error":{"message":"boom"}}`)
+			return
+		}
+		score := func(cat string) float64 {
+			for _, m := range hitToken.FindAllStringSubmatch(text, -1) {
+				if m[1] == cat {
+					return 0.99
+				}
 			}
-			break
+			return 0.01
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("verdict not in KV")
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/moderations":
+			scores := map[string]float64{}
+			for _, c := range OpenAICategories {
+				scores[c] = score(c)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "omni-mock", "results": []any{map[string]any{"category_scores": scores}}})
+		case "/v1/systemone":
+			var req struct {
+				Questions map[string]json.RawMessage `json:"questions"`
+			}
+			_ = json.Unmarshal(body, &req)
+			answers := map[string]any{}
+			for c := range req.Questions {
+				answers[c] = map[string]any{"type": "noul", "noul": score(c)}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
+		default:
+			w.WriteHeader(404)
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	// A second node (same KV) reuses it without calling the LLM.
-	p2 := New()
-	h2 := pluginsdktest.Start(t, p2, pluginsdktest.Options{SDK: sdkOpts(), Host: h.Host, Config: settingsMap(llm.srv.URL, ModeEnforce, nil)})
-	if r := mustHook(t, h2, hookReq("how to MOD-BLOCK things")); !denied(r) || llm.calls.Load() != 3 {
-		t.Fatalf("node 2 = %v calls %d", r, llm.calls.Load())
-	}
-	// Changing the policy (model) invalidates the cache.
-	if errs := h.Configure(settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"model": "other-model"}), nil); len(errs) > 0 {
-		t.Fatal(errs)
-	}
-	mustHook(t, h, hookReq("how to MOD-BLOCK things"))
-	if llm.calls.Load() != 4 {
-		t.Fatalf("policy change must miss the cache: calls %d", llm.calls.Load())
-	}
-	health, err := h.Plugin.Health(context.Background(), &pluginv1.HealthRequest{})
-	m := health.GetMetrics()
-	if err != nil || m["calls"] != 4 || m["cache_hits"] != 1 || m["errors"] != 0 {
-		t.Fatalf("health = %v %v", m, err)
-	}
-}
-
-func TestHookFilters(t *testing.T) {
-	llm := mockLLM(t)
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, map[string]any{
-		"exempt_user_ids": []string{"4"}, "group_ids": []int{9}, "model_patterns": []string{"claude-*"}, "min_chars": 5,
 	}))
-	req := func(mut func(*pluginv1.GatewayRequestHookRequest)) *pluginv1.GatewayRequestHookRequest {
-		r := hookReq("MOD-BLOCK please")
-		mut(r)
-		return r
-	}
-	for name, r := range map[string]*pluginv1.GatewayRequestHookRequest{
-		"exempt user":   req(func(r *pluginv1.GatewayRequestHookRequest) { r.Meta.UserId = 4 }),
-		"other group":   req(func(r *pluginv1.GatewayRequestHookRequest) { r.Meta.GroupId = 10 }),
-		"other model":   req(func(r *pluginv1.GatewayRequestHookRequest) { r.Fields[FieldModel] = `"gpt-4o"` }),
-		"short text":    hookReq("  MOD \n"),
-		"reminder only": hookReq("<system-reminder>MOD-BLOCK</system-reminder>"),
-		"no text":       {Meta: &pluginv1.RequestMeta{UserId: 3, GroupId: 9}, Fields: map[string]string{FieldModel: `"claude-x"`}},
-	} {
-		if resp := mustHook(t, h, r); denied(resp) || resp.GetNote() != "" {
-			t.Fatalf("%s: %v", name, resp)
-		}
-	}
-	if llm.calls.Load() != 0 {
-		t.Fatalf("filtered requests called the LLM %d times", llm.calls.Load())
-	}
-	// A blocked user is refused before any filter but exemption.
-	p.blocked.Store(&map[int64]time.Time{3: {}, 4: {}, 6: time.Now().Add(-time.Minute)})
-	if r := mustHook(t, h, req(func(r *pluginv1.GatewayRequestHookRequest) { r.Meta.GroupId = 10 })); !denied(r) ||
-		r.GetDenyStatus() != 403 || r.GetDenyCode() != DenyUserBlocked || r.GetDenyMessage() != MsgUserBlocked {
-		t.Fatalf("blocked user = %v", r)
-	}
-	if r := mustHook(t, h, req(func(r *pluginv1.GatewayRequestHookRequest) { r.Meta.UserId = 4 })); denied(r) {
-		t.Fatal("exempt user must pass even when blocked")
-	}
-	if r := mustHook(t, h, req(func(r *pluginv1.GatewayRequestHookRequest) { r.Meta.UserId = 6; r.Meta.GroupId = 10 })); denied(r) {
-		t.Fatal("expired ban must not block")
-	}
-	if n := p.blockedCount(); n != 2 {
-		t.Fatalf("blocked count = %d", n)
-	}
+	t.Cleanup(f.srv.Close)
+	return f
 }
 
-func TestHookSelfRequest(t *testing.T) {
-	llm := mockLLM(t)
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, nil))
-	own := wrapUserContent(p.cfg.Load().markerKey, "MOD-BLOCK inside")
-	r := mustHook(t, h, hookReq(own))
-	if denied(r) || r.GetNote() != "moderation: self" || llm.calls.Load() != 0 {
-		t.Fatalf("self = %v calls %d", r, llm.calls.Load())
+func (f *fakeMod) count(path string) int64 {
+	if n, ok := f.calls.Load(path); ok {
+		return n.(*atomic.Int64).Load()
 	}
-	forged := wrapUserContent(markerKey("guess"), "MOD-BLOCK inside")
-	if r := mustHook(t, h, hookReq(forged)); !denied(r) || llm.calls.Load() != 1 {
-		t.Fatalf("forged marker = %v", r)
-	}
+	return 0
 }
 
-func TestHookOnError(t *testing.T) {
-	llm := newFakeLLM(t, func(llmRequest, int) (int, any) { return 502, "bad gateway" })
-	_, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, nil))
-	r := mustHook(t, h, hookReq("anything at all"))
-	if denied(r) || !strings.HasPrefix(r.GetNote(), "moderation: error upstream HTTP 502") {
-		t.Fatalf("on_error allow = %v", r)
+func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...func(*Plugin)) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
+	t.Helper()
+	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
+	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
+	fh := pluginsdktest.NewFakeHost()
+	fh.SetDSN(dsn, schema)
+	p := New()
+	for _, configure := range beforeInit {
+		configure(p)
 	}
-	if errs := h.Configure(settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"on_error": "block"}), nil); len(errs) > 0 {
-		t.Fatal(errs)
+	var cfg any = extra
+	if llm != nil {
+		cfg = settingsMap(llm.srv.URL, ModeEnforce, extra)
 	}
-	r = mustHook(t, h, hookReq("anything at all"))
-	if !denied(r) || r.GetDenyStatus() != 503 || r.GetDenyCode() != DenyUnavailable || r.GetDenyMessage() != MsgUnavailable {
-		t.Fatalf("on_error block = %v", r)
-	}
-	// Errors are not cached: both requests called the LLM.
-	if llm.calls.Load() != 2 {
-		t.Fatalf("calls = %d", llm.calls.Load())
-	}
+	h := pluginsdktest.Start(t, p, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: cfg})
+	return p, h, fh
 }
 
-func TestHookTimeout(t *testing.T) {
-	llm := mockLLM(t)
-	llm.delay = 3 * time.Second
-	_, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"timeout_ms": 1000, "on_error": "block"}))
-	start := time.Now()
-	r := mustHook(t, h, hookReq("slow one"))
-	if el := time.Since(start); el > 2500*time.Millisecond {
-		t.Fatalf("hook took %v", el)
+func decodeData[T any](t *testing.T, resp *pluginv1.HTTPResponse) T {
+	t.Helper()
+	if resp.GetStatus() != 200 {
+		t.Fatalf("HTTP %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	if !denied(r) || r.GetDenyCode() != DenyUnavailable || !strings.Contains(r.GetNote(), "timeout") {
-		t.Fatalf("timeout = %v", r)
-	}
-}
-
-func TestHookConcurrencyAndSingleflight(t *testing.T) {
-	llm := mockLLM(t)
-	llm.delay = 300 * time.Millisecond
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"max_concurrency": 1, "timeout_ms": 1000}))
-	// Same text, concurrently: one upstream run.
-	var wg sync.WaitGroup
-	results := make([]*pluginv1.GatewayRequestHookResponse, 5)
-	for i := range results {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			results[i] = mustHook(t, h, hookReq("same MOD-BLOCK text"))
-		}(i)
-	}
-	wg.Wait()
-	for _, r := range results {
-		if !denied(r) {
-			t.Fatalf("shared verdict = %v", r)
-		}
-	}
-	if llm.calls.Load() != 1 {
-		t.Fatalf("singleflight: calls = %d", llm.calls.Load())
-	}
-	// max_concurrency 1: distinct texts queue for the slot; waiting counts
-	// toward timeout_ms, so the later ones time out (on_error allow).
-	for i := range results {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			results[i] = mustHook(t, h, hookReq(fmt.Sprintf("distinct %d", i)))
-		}(i)
-	}
-	wg.Wait()
-	var timeouts int
-	for _, r := range results {
-		if strings.Contains(r.GetNote(), "timeout") {
-			timeouts++
-		}
-	}
-	if timeouts == 0 || timeouts == len(results) {
-		t.Fatalf("expected some requests to wait out their timeout, got %d of %d", timeouts, len(results))
-	}
-	if p.stats.inflight.Load() != 0 {
-		t.Fatalf("inflight = %d", p.stats.inflight.Load())
-	}
-}
-
-func TestHookObserve(t *testing.T) {
-	llm := mockLLM(t)
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeObserve, nil))
-	r := mustHook(t, h, hookReq("observe MOD-BLOCK"))
-	if denied(r) || r.GetNote() != "moderation: queued" {
-		t.Fatalf("observe = %v", r)
-	}
-	// The worker moderates asynchronously and caches the verdict.
-	deadline := time.Now().Add(5 * time.Second)
-	for llm.calls.Load() == 0 || p.cache.len() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("observe job not processed")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	r = mustHook(t, h, hookReq("observe MOD-BLOCK"))
-	if denied(r) || !strings.HasPrefix(r.GetNote(), "moderation: block [illegal] (cached)") {
-		t.Fatalf("observe cached = %v", r)
-	}
-	// A banned user is refused in observe mode too.
-	p.blocked.Store(&map[int64]time.Time{3: {}})
-	if r := mustHook(t, h, hookReq("hello there")); !denied(r) || r.GetDenyCode() != DenyUserBlocked {
-		t.Fatalf("observe banned = %v", r)
-	}
-}
-
-func TestHookObserveQueueFull(t *testing.T) {
-	llm := mockLLM(t)
-	llm.delay = 500 * time.Millisecond
-	p, h := startHook(t, settingsMap(llm.srv.URL, ModeObserve, map[string]any{"max_concurrency": 1, "queue_size": 1}))
-	var dropped int
-	for i := 0; i < 5; i++ {
-		if r := mustHook(t, h, hookReq(fmt.Sprintf("text number %d", i))); strings.Contains(r.GetNote(), "dropped") {
-			dropped++
-		}
-	}
-	if dropped < 2 || p.stats.dropped.Load() != int64(dropped) {
-		t.Fatalf("dropped = %d (stat %d)", dropped, p.stats.dropped.Load())
-	}
-	_, qcap := p.queueLen()
-	if qcap != 1 {
-		t.Fatalf("queue cap = %d", qcap)
-	}
-	// Resize on Configure.
-	if errs := h.Configure(settingsMap(llm.srv.URL, ModeObserve, map[string]any{"max_concurrency": 4, "queue_size": 50}), nil); len(errs) > 0 {
-		t.Fatal(errs)
-	}
-	if _, qcap := p.queueLen(); qcap != 50 || p.pool.workers != 4 || cap(p.sem.Load().ch) != 4 {
-		t.Fatalf("resized: cap %d workers %d sem %d", qcap, p.pool.workers, cap(p.sem.Load().ch))
-	}
-}
-
-func TestSampleRate(t *testing.T) {
-	llm := mockLLM(t)
-	_, h := startHook(t, settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"sample_rate": 1}))
-	checked := 0
-	for i := 0; i < 50; i++ {
-		if mustHook(t, h, hookReq(fmt.Sprintf("sampled text %d", i))).GetNote() != "" {
-			checked++
-		}
-	}
-	if checked > 10 || int64(checked) != llm.calls.Load() {
-		t.Fatalf("1%% sampling moderated %d of 50 (calls %d)", checked, llm.calls.Load())
-	}
-}
-
-func TestRoutesWithoutDB(t *testing.T) {
-	llm := mockLLM(t)
-	_, h := startHook(t, nil)
-	if r := h.Do("POST", "/test", nil, map[string]any{"text": "hello"}); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "not_configured") {
-		t.Fatalf("unconfigured test = %d %s", r.GetStatus(), r.GetBody())
-	}
-	if errs := h.Configure(settingsMap(llm.srv.URL, ModeOff, nil), nil); len(errs) > 0 {
-		t.Fatal(errs)
-	}
-	if r := h.Do("POST", "/test", nil, map[string]any{"text": "  "}); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "invalid_argument") {
-		t.Fatalf("empty text = %d %s", r.GetStatus(), r.GetBody())
-	}
-	if r := h.Do("POST", "/test", nil, "{"); r.GetStatus() != 400 {
-		t.Fatalf("bad json = %d", r.GetStatus())
-	}
-	// The test works with mode off (only needs the connection settings),
-	// bypasses the cache and returns the transcript.
 	var out struct {
-		Data TestResult `json:"data"`
+		Data T `json:"data"`
 	}
-	for i := 0; i < 2; i++ {
-		r := h.Do("POST", "/test", nil, map[string]any{"text": "MOD-BLOCK test"})
-		if r.GetStatus() != 200 || json.Unmarshal(r.GetBody(), &out) != nil {
-			t.Fatalf("test = %d %s", r.GetStatus(), r.GetBody())
+	if err := json.Unmarshal(resp.GetBody(), &out); err != nil {
+		t.Fatalf("%v: %s", err, resp.GetBody())
+	}
+	return out.Data
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	d := out.Data
-	if d.Verdict != VerdictBlock || strings.Join(d.Categories, ",") != "illegal" || d.Turns != 1 || d.Usage.PromptTokens != 100 ||
-		len(d.Transcript) != 3 || llm.calls.Load() != 2 {
-		t.Fatalf("test result = %+v calls %d", d, llm.calls.Load())
-	}
-	var defaults struct {
-		Data struct {
-			SystemPrompt string     `json:"system_prompt"`
-			Categories   []Category `json:"categories"`
-		} `json:"data"`
-	}
-	r := h.Do("GET", "/defaults", nil, nil)
-	if r.GetStatus() != 200 || json.Unmarshal(r.GetBody(), &defaults) != nil ||
-		!strings.Contains(defaults.Data.SystemPrompt, "{{categories}}") || len(defaults.Data.Categories) != 12 {
-		t.Fatalf("defaults = %s", r.GetBody())
-	}
-	for _, path := range []string{"/overview", "/events", "/blocks"} {
-		if r := h.Do("GET", path, nil, nil); r.GetStatus() != 503 {
-			t.Fatalf("%s without db = %d", path, r.GetStatus())
+}
+
+func waitEvents(t *testing.T, h *pluginsdktest.Harness, q map[string]string, n int) []EventListItem {
+	t.Helper()
+	var items []EventListItem
+	waitFor(t, fmt.Sprintf("%d events %v", n, q), func() bool {
+		items = decodeData[[]EventListItem](t, h.Do("GET", "/events", q, nil))
+		return len(items) >= n
+	})
+	return items
+}
+
+// setupFlow creates channels, auditors and a published flow bound to groups
+// through the API. stages lists auditor types per stage; returns the flow id.
+func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int64, combine string, stages ...[]string) int64 {
+	t.Helper()
+	channels := map[string]int64{}
+	var spec Spec
+	spec.ModelFilter.Type = FilterAll
+	spec.SampleRate = 100
+	for _, st := range stages {
+		var ids []int64
+		for _, typ := range st {
+			chType := channelTypeOf[typ]
+			if channels[chType] == 0 {
+				ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": chType, "name": chType, "base_url": base, "api_key": "key-" + chType}))
+				channels[chType] = ch.ID
+			}
+			a := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": typ, "type": typ, "channel_id": channels[chType]}))
+			ids = append(ids, a.ID)
 		}
+		spec.Stages = append(spec.Stages, Stage{Auditors: ids, Combine: combine})
 	}
-	if r := h.Do("GET", "/overview", map[string]string{"range": "1y"}, nil); r.GetStatus() != 400 {
-		t.Fatalf("bad range = %d", r.GetStatus())
+	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec}))
+	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": groups}))
+	pub := decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", f.ID), nil, map[string]any{"expected_version": 0}))
+	if pub.Version != 1 || pub.Dirty {
+		t.Fatalf("published = %+v", pub)
 	}
-	if r := h.Do("GET", "/events", map[string]string{"verdict": "nope", "page_size": "500", "user_id": "x", "from": "yesterday"}, nil); r.GetStatus() != 400 ||
-		strings.Count(string(r.GetBody()), `"field"`) != 4 {
-		t.Fatalf("bad filters = %d %s", r.GetStatus(), r.GetBody())
+	return f.ID
+}
+
+func TestLegacyConversion(t *testing.T) {
+	llm := mockLLM(t)
+	p, h, fh := startDB(t, llm, map[string]any{"group_ids": []int{9}, "model_patterns": []string{"claude-*"}})
+	waitFor(t, "conversion", func() bool { return len(p.snap.Load().byGroup) > 0 })
+	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	if len(chans) != 1 || chans[0].Type != ChannelLLM || chans[0].APIKeyTail != "test" || !chans[0].HasKey {
+		t.Fatalf("channels = %+v", chans)
 	}
-	if _, err := h.App.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobCleanup}); err == nil {
-		t.Fatal("cleanup without database must fail")
+	db, _ := p.db(context.Background())
+	var enc []byte
+	if err := db.QueryRow(context.Background(), `SELECT api_key_enc FROM channels`).Scan(&enc); err != nil || strings.Contains(string(enc), "sk-test") {
+		t.Fatalf("key stored in clear: %v", err)
 	}
-	if _, err := h.App.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: "nope"}); err == nil {
-		t.Fatal("unknown job must fail")
+	flows := decodeData[[]FlowView](t, h.Do("GET", "/flows", nil, nil))
+	if len(flows) != 1 || flows[0].Version != 1 || len(flows[0].Groups) != 1 || flows[0].Groups[0] != 9 {
+		t.Fatalf("flows = %+v", flows)
 	}
-	if err := h.Deliver(TopicBlocksChanged, nil, "node-2"); err == nil {
-		t.Fatal("reload without database should fail")
+	r := mustHook(t, h, hookReq("please MOD-BLOCK this"))
+	if !denied(r) || r.GetDenyStatus() != 403 || r.GetDenyCode() != DenyBlocked || !strings.Contains(r.GetNote(), "hit flow=") {
+		t.Fatalf("block = %+v", r)
+	}
+	if r := mustHook(t, h, hookReq("quicksort in Go")); denied(r) {
+		t.Fatalf("pass denied: %+v", r)
+	}
+	other := hookReq("MOD-BLOCK other group")
+	other.Meta.GroupId = 10
+	if r := mustHook(t, h, other); denied(r) || r.GetNote() != "" {
+		t.Fatalf("unbound group moderated: %+v", r)
+	}
+	ev := waitEvents(t, h, map[string]string{"result": "block"}, 1)
+	if ev[0].Timing != TimingPre || ev[0].FlowVersion != 1 || ev[0].Verdict != VerdictBlock || ev[0].HighestCategory != "illegal" {
+		t.Fatalf("event = %+v", ev[0])
+	}
+	// A second node on the same database does not convert again.
+	fh2 := pluginsdktest.NewFakeHost()
+	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
+	p2 := New()
+	pluginsdktest.Start(t, p2, pluginsdktest.Options{Host: fh2, SDK: sdkOpts(), Config: settingsMap(llm.srv.URL, ModeEnforce, nil)})
+	waitFor(t, "second node snapshot", func() bool { return len(p2.snap.Load().byGroup) > 0 })
+	if n := len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))); n != 1 {
+		t.Fatalf("channels after second start = %d", n)
+	}
+}
+
+func TestObserveWatchListAndEnforceLevel(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	if r := mustHook(t, h, hookReqAs(3, "req-a", "MOD-HIT-sexual one")); denied(r) || r.GetNote() != notePrefix+"queued" {
+		t.Fatalf("observe = %+v", r)
+	}
+	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 1)
+	var w []Watch
+	waitFor(t, "watch entry", func() bool {
+		w = decodeData[[]Watch](t, h.Do("GET", "/watchlist", nil, nil))
+		return len(w) == 1 && w[0].ViolationCount == 1
+	})
+	if w[0].Level != LevelObserve || w[0].Source != "auto" || w[0].ExpiresAt == nil {
+		t.Fatalf("watch = %+v", w[0])
+	}
+	// The same request again (a retry) adds a record but not a violation.
+	mustHook(t, h, hookReqAs(3, "req-a", "MOD-HIT-sexual one"))
+	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 2)
+	time.Sleep(200 * time.Millisecond)
+	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", nil, nil)); w[0].ViolationCount != 1 || w[0].HitCount != 2 {
+		t.Fatalf("after retry = %+v", w[0])
+	}
+	// enforce level: moderated before the upstream call and refused.
+	decodeData[Watch](t, h.Do("PATCH", "/watchlist/3", nil, map[string]any{"level": LevelEnforce}))
+	if p.watchLevel(3) != LevelEnforce {
+		t.Fatal("watch snapshot not reloaded")
+	}
+	if r := mustHook(t, h, hookReqAs(3, "", "MOD-HIT-sexual two")); !denied(r) {
+		t.Fatalf("enforce level not refused: %+v", r)
+	}
+	if r := mustHook(t, h, hookReqAs(4, "", "MOD-HIT-sexual two")); denied(r) {
+		t.Fatalf("other user refused: %+v", r)
+	}
+	evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/3/events", nil, nil))
+	if len(evs) != 2 || evs[0].Action != "set_level" || evs[1].Action != "auto_add" {
+		t.Fatalf("watch events = %+v", evs)
+	}
+	// A false positive of the current window takes its violation back.
+	decodeData[Watch](t, h.Do("PATCH", "/watchlist/3", nil, map[string]any{"level": LevelObserve}))
+	counted := waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3", "request_id": "req-a"}, 2)
+	var ids []int64
+	for _, e := range counted {
+		ids = append(ids, e.ID)
+	}
+	decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": "false_positive"}))
+	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil)); w[0].ViolationCount != 0 {
+		t.Fatalf("after false positive = %+v", w[0])
+	}
+	decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": "confirmed"}))
+	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "3"}, nil)); w[0].ViolationCount != 1 {
+		t.Fatalf("after undo = %+v", w[0])
+	}
+	if r := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 3}); r.GetStatus() != http.StatusConflict {
+		t.Fatalf("duplicate add = %d", r.GetStatus())
+	}
+	if r := h.Do("DELETE", "/watchlist/3", nil, nil); r.GetStatus() != 200 || p.watchLevel(3) != "" {
+		t.Fatalf("remove = %s", r.GetBody())
+	}
+}
+
+func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
+	// hate is an OpenAI category only: the Jev stage overturns it.
+	if r := mustHook(t, h, hookReq("MOD-HIT-hate words")); denied(r) || !strings.Contains(r.GetNote(), "overturned") {
+		t.Fatalf("overturn = %+v", r)
+	}
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual words")); !denied(r) {
+		t.Fatalf("two-stage hit allowed: %+v", r)
+	}
+	ev := waitEvents(t, h, map[string]string{"result": "overturned"}, 1)
+	if len(ev[0].HitCategories) != 1 || ev[0].HitCategories[0] != "hate" {
+		t.Fatalf("overturned = %+v", ev[0])
+	}
+	d := decodeData[EventDetail](t, h.Do("GET", fmt.Sprintf("/events/%d", ev[0].ID), nil, nil))
+	if d.Trace == nil || d.InputMessageSize == 0 {
+		t.Fatalf("detail = %+v", d)
+	}
+	in := decodeData[map[string]any](t, h.Do("GET", fmt.Sprintf("/events/%d/input", ev[0].ID), nil, nil))
+	if !strings.Contains(fmt.Sprint(in["messages"]), "MOD-HIT-hate") {
+		t.Fatalf("input = %v", in)
+	}
+	// A clean pass is cached: the same text does not call upstream again.
+	before := mod.count("/v1/moderations")
+	mustHook(t, h, hookReq("clean text"))
+	mustHook(t, h, hookReq("clean   text"))
+	if got := mod.count("/v1/moderations") - before; got != 1 {
+		t.Fatalf("moderation calls for a cached pass = %d", got)
+	}
+	// Errors let the request pass and are recorded.
+	if r := mustHook(t, h, hookReq("MOD-500 please")); denied(r) || !strings.Contains(r.GetNote(), "error") {
+		t.Fatalf("error = %+v", r)
+	}
+	waitEvents(t, h, map[string]string{"result": "error"}, 1)
+	o := decodeData[Overview](t, h.Do("GET", "/overview", nil, nil))
+	if o.Totals.Block != 1 || o.Totals.Overturned != 1 || o.Totals.Error != 1 || !o.Runtime.Configured {
+		t.Fatalf("overview = %+v", o.Totals)
+	}
+	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-sexual", "flow_id": flow}))
+	if res.Result != ResultHit || len(res.Categories) == 0 {
+		t.Fatalf("test = %+v", res)
+	}
+}
+
+func TestTestAndTryRoutes(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAll, []string{AuditorOpenAI, AuditorTypeSafe})
+	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-sexual"}))
+	if res.FlowID != flow || res.Result != ResultHit || len(res.Trace.Stages) != 1 || len(res.Trace.Stages[0].Outcomes) != 2 {
+		t.Fatalf("test = %+v", res)
+	}
+	auds := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))
+	if len(auds) != 2 || !auds[0].Usable || auds[1].RulesVersion != RulesVersionZH {
+		t.Fatalf("auditors = %+v", auds)
+	}
+	try := decodeData[TryResult](t, h.Do("POST", fmt.Sprintf("/auditors/%d/try", auds[0].ID), nil, map[string]any{"text": "MOD-HIT-violence"}))
+	if !try.Hit || try.TopCategory != "violence" {
+		t.Fatalf("try = %+v", try)
+	}
+	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	ct := decodeData[ChannelTestResult](t, h.Do("POST", fmt.Sprintf("/channels/%d/test", chans[0].ID), nil, nil))
+	if !ct.OK || ct.Model != "omni-mock" {
+		t.Fatalf("channel test = %+v", ct)
+	}
+	// Nothing was recorded or counted by tests.
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", nil, nil))); n != 0 {
+		t.Fatalf("events = %d", n)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{0, 9}, CombineAny, []string{AuditorOpenAI})
+	if r := h.Do("POST", "/channels", nil, map[string]any{"type": "openai_moderation", "name": "x", "base_url": "ftp://x"}); r.GetStatus() != 400 {
+		t.Fatalf("bad base_url = %d", r.GetStatus())
+	}
+	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	if r := h.Do("POST", "/auditors", nil, map[string]any{"name": "j", "type": AuditorTypeSafe, "channel_id": chans[0].ID}); r.GetStatus() != 400 {
+		t.Fatalf("type mismatch = %d %s", r.GetStatus(), r.GetBody())
+	}
+	if r := h.Do("DELETE", fmt.Sprintf("/channels/%d", chans[0].ID), nil, nil); r.GetStatus() != http.StatusConflict {
+		t.Fatalf("delete used channel = %d", r.GetStatus())
+	}
+	auds := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))
+	if r := h.Do("DELETE", fmt.Sprintf("/auditors/%d", auds[0].ID), nil, nil); r.GetStatus() != http.StatusConflict {
+		t.Fatalf("delete used auditor = %d", r.GetStatus())
+	}
+	if r := h.Do("PUT", fmt.Sprintf("/channels/%d", chans[0].ID), nil, map[string]any{"name": "x", "base_url": "https://elsewhere.example"}); r.GetStatus() != 400 ||
+		!strings.Contains(string(r.GetBody()), "api_key") {
+		t.Fatalf("host change without key = %d %s", r.GetStatus(), r.GetBody())
+	}
+	other := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "g", "draft": map[string]any{"stages": []any{map[string]any{"auditors": []int64{auds[0].ID}}}}}))
+	if r := h.Do("PUT", fmt.Sprintf("/flows/%d/groups", other.ID), nil, map[string]any{"groups": []int64{9}}); r.GetStatus() != http.StatusConflict {
+		t.Fatalf("group conflict = %d", r.GetStatus())
+	}
+	moved := decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", other.ID), nil, map[string]any{"groups": []int64{9}, "force": true}))
+	if len(moved.Groups) != 1 || moved.Groups[0] != 9 {
+		t.Fatalf("moved = %+v", moved)
+	}
+	if r := h.Do("POST", fmt.Sprintf("/flows/%d/publish", flow), nil, map[string]any{"expected_version": 0}); r.GetStatus() != http.StatusConflict {
+		t.Fatalf("stale publish = %d", r.GetStatus())
+	}
+	if r := h.Do("PUT", fmt.Sprintf("/flows/%d", flow), nil, map[string]any{"name": "f", "draft": map[string]any{"stages": []any{map[string]any{"auditors": []int{999}}}}}); r.GetStatus() != 400 {
+		t.Fatalf("missing auditor draft = %d", r.GetStatus())
+	}
+	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/enabled", flow), nil, map[string]any{"enabled": false}))
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual")); r.GetNote() != "" {
+		t.Fatalf("disabled flow moderated: %+v", r)
+	}
+}
+
+func TestBansExemptAndModeOff(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "exempt_user_ids": []string{"8"}})
+	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	mustHook(t, h, hookReq("MOD-HIT-sexual 1"))
+	mustHook(t, h, hookReq("MOD-HIT-sexual 2"))
+	waitFor(t, "auto ban", func() bool { return p.isBlocked(3) })
+	if r := mustHook(t, h, hookReq("hello")); !denied(r) || r.GetDenyCode() != DenyUserBlocked {
+		t.Fatalf("banned user = %+v", r)
+	}
+	if r := mustHook(t, h, hookReqAs(8, "", "MOD-HIT-sexual")); r.GetNote() != "" {
+		t.Fatalf("exempt user moderated: %+v", r)
+	}
+	if errs := h.Configure(map[string]any{"mode": ModeOff}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if r := mustHook(t, h, hookReq("anything")); denied(r) {
+		t.Fatalf("mode off denied: %+v", r)
+	}
+}
+
+func TestCleanupAndImport(t *testing.T) {
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	ctx := context.Background()
+	db, _ := p.db(ctx)
+	if _, err := db.Exec(ctx, `INSERT INTO events (user_id, mode, verdict, action, result, keep_until) VALUES
+		(1,'observe','pass','allow','pass', now() - interval '1 hour'), (1,'observe','flag','allow','hit', now() + interval '1 day')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (5,'observe','auto', now() - interval '1 minute')`); err != nil {
+		t.Fatal(err)
+	}
+	out, err := p.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobCleanup})
+	if err != nil || !strings.Contains(out.GetMessage(), "deleted 1 events, 1 expired watch") {
+		t.Fatalf("cleanup = %v %v", out, err)
+	}
+	doc := map[string]any{"data": map[string]any{
+		"channels": []any{map[string]any{"type": "openai", "name": "omni", "base_url": "https://api.openai.com"}},
+		"auditors": []any{map[string]any{"name": "a", "type": "openai", "channel_ref": 0, "thresholds": map[string]float64{"sexual": 0.5}}},
+	}, "preview": true}
+	prev := decodeData[map[string]any](t, h.Do("POST", "/import", nil, doc))
+	if prev["channels"] != float64(1) || len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))) != 0 {
+		t.Fatalf("preview = %v", prev)
+	}
+	doc["preview"] = false
+	decodeData[map[string]any](t, h.Do("POST", "/import", nil, doc))
+	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	if len(chans) != 1 || chans[0].Enabled || chans[0].HasKey || chans[0].Model != "omni-moderation-latest" {
+		t.Fatalf("imported = %+v", chans)
+	}
+	bad := map[string]any{"data": map[string]any{"auditors": []any{map[string]any{"name": "a", "type": "openai", "channel_ref": 3}}}}
+	if r := h.Do("POST", "/import", nil, bad); r.GetStatus() != 400 {
+		t.Fatalf("bad import = %d", r.GetStatus())
 	}
 }
 
 func TestConfigureRejectsNonObject(t *testing.T) {
-	_, h := startHook(t, nil)
-	if errs := h.Configure(`[1,2]`, nil); len(errs) != 1 || errs[0].GetCode() != "invalid_json" {
-		t.Fatalf("errs = %v", errs)
-	}
-	if errs := h.Configure(`{"mode":"off"}`, nil); len(errs) != 0 {
-		t.Fatalf("errs = %v", errs)
+	h := pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: sdkOpts()})
+	if errs := h.Configure(json.RawMessage(`[1]`), nil); len(errs) == 0 {
+		t.Fatal("array settings accepted")
 	}
 }
 
-// BenchmarkHookOff measures the fast path when moderation is off.
 func BenchmarkHookOff(b *testing.B) {
 	p := New()
-	req := hookReq("some prompt text")
+	req := hookReq("hello")
 	ctx := context.Background()
-	b.ReportAllocs()
-	for b.Loop() {
-		if _, err := p.OnGatewayRequest(ctx, req); err != nil {
-			b.Fatal(err)
-		}
+	for i := 0; i < b.N; i++ {
+		_, _ = p.OnGatewayRequest(ctx, req)
 	}
 }

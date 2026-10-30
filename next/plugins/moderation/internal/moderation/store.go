@@ -2,6 +2,9 @@ package moderation
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,59 +23,227 @@ type eventRec struct {
 	Model            string
 	Protocol         string
 	Mode             string
-	Verdict          string
-	Action           string
-	Categories       []string
+	Timing           string
+	FlowID           int64
+	FlowVersion      int
+	Result           string
 	Severity         string
-	Reason           string
-	Error            string
+	HitCategories    []string
+	HighestCategory  string
+	HighestScore     float64
+	Trace            []byte
+	InputFormat      string
 	Text             *string
 	TextChars        int
 	TextHash         string
-	Cached           bool
-	LLMModel         string
-	Turns            int
+	ImageCount       int
+	InputMessage     *string
+	InputMessageSize int
 	LatencyMs        int
-	PromptTokens     int64
-	CompletionTokens int64
+	QueueMs          int
+	KeepUntil        time.Time
+	WatchLevel       string // level when admitted (not stored)
 }
 
-// eventWriter persists records in batches (1 s or 200 rows), then applies
-// the automatic ban rule to the users with block verdicts in the batch.
+// fillFromTrace derives result, categories and severity.
+func (r *eventRec) fillFromTrace(tr Trace, refused bool) {
+	switch {
+	case tr.Final == Hit && refused:
+		r.Result = ResultBlock
+	case tr.Final == Hit:
+		r.Result = ResultHit
+	case tr.Overturned:
+		r.Result = ResultOverturned
+	case tr.Errored:
+		r.Result = ResultError
+	default:
+		r.Result = ResultPass
+	}
+	r.HitCategories = []string{}
+	for _, h := range tr.HitCategories() {
+		r.HitCategories = append(r.HitCategories, h.Category)
+		if r.HighestCategory == "" {
+			r.HighestCategory, r.HighestScore = h.Category, h.Score
+		}
+	}
+	if tr.Final == Hit {
+		r.Severity = severityOf(r.HighestScore)
+	}
+	r.Trace, _ = json.Marshal(tr)
+}
 
-func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) error {
+// legacyColumns fills events.verdict / action for 0.1 readers.
+func (r *eventRec) legacyColumns() (verdict, action string) {
+	switch r.Result {
+	case ResultBlock:
+		return VerdictBlock, ActionDeny
+	case ResultHit:
+		return VerdictFlag, ActionAllow
+	case ResultError:
+		return VerdictError, ActionAllow
+	}
+	return VerdictPass, ActionAllow
+}
+
+func (r *eventRec) suspicious() bool { return r.Result == ResultHit || r.Result == ResultBlock }
+
+// writeEvents persists a batch, then updates the watch list and the bans of
+// the users with suspicious records.
+func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, error) {
 	db, err := p.db(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	b := &pgx.Batch{}
 	for _, e := range evs {
+		verdict, action := e.legacyColumns()
+		mode := e.Mode
+		if mode != ModeEnforce {
+			mode = ModeObserve
+		}
 		b.Queue(`INSERT INTO events (created_at, request_id, user_id, api_key_id, group_id, model, protocol, mode,
 				verdict, action, categories, severity, reason, error, text, text_chars, text_hash, cached,
-				llm_model, turns, latency_ms, prompt_tokens, completion_tokens)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
-			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, e.Mode,
-			e.Verdict, e.Action, e.Categories, e.Severity, e.Reason, e.Error, e.Text, e.TextChars, e.TextHash, e.Cached,
-			e.LLMModel, e.Turns, e.LatencyMs, e.PromptTokens, e.CompletionTokens)
+				llm_model, turns, latency_ms, prompt_tokens, completion_tokens,
+				result, timing, flow_id, flow_version, highest_category, highest_score, hit_categories, trace,
+				input_format, input_message, input_message_size, image_count, keep_until, queue_ms)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'','',$13,$14,$15,false,'',0,$16,0,0,
+				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING id`,
+			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, mode,
+			verdict, action, e.HitCategories, e.Severity, e.Text, e.TextChars, e.TextHash, e.LatencyMs,
+			e.Result, e.Timing, e.FlowID, e.FlowVersion, e.HighestCategory, e.HighestScore, e.HitCategories, e.Trace,
+			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs)
 	}
-	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error { return tx.SendBatch(ctx, b).Close() })
+	ids := make([]int64, len(evs))
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		br := tx.SendBatch(ctx, b)
+		for i := range evs {
+			if err := br.QueryRow().Scan(&ids[i]); err != nil {
+				_ = br.Close()
+				return err
+			}
+		}
+		return br.Close()
+	})
+	return ids, err
 }
 
-// applyBans bans the users of the batch whose block verdicts since
-// max(now - ban_window, last unblock, start of their last ban) reached
-// ban_threshold (observe and enforce both count).
-func (p *Plugin) applyBans(ctx context.Context, evs []eventRec) {
+// afterWrite applies the watch list (§72.8) and the automatic ban to the
+// suspicious records of a written batch.
+func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
+	c := p.cfg.Load()
+	watchChanged, banned := false, map[int64]bool{}
+	for i, e := range evs {
+		if !e.suspicious() || e.UserID <= 0 || c.exempt[e.UserID] {
+			continue
+		}
+		changed, err := p.recordWatchHit(ctx, c, e, ids[i])
+		if err != nil {
+			p.log.Warn("moderation: watch list update failed", "user_id", e.UserID, "error", err.Error())
+		}
+		watchChanged = watchChanged || changed
+		banned[e.UserID] = true
+	}
+	if watchChanged {
+		p.watchChanged(ctx)
+	}
+	if len(banned) > 0 {
+		p.applyBans(ctx, banned)
+	}
+}
+
+func newEpoch() int64 {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return int64(binary.BigEndian.Uint64(b[:]) >> 1)
+}
+
+// recordWatchHit adds the user to the watch list or counts the violation
+// (one per request id, observe level only). changed = the level set changed.
+func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed bool, err error) {
+	db, err := p.db(ctx)
+	if err != nil {
+		return false, err
+	}
+	now := p.now().UTC()
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		changed = false
+		if err := lockBlockSubject(ctx, tx, e.UserID); err != nil {
+			return err
+		}
+		w, found, err := loadWatch(ctx, tx, e.UserID)
+		if err != nil {
+			return err
+		}
+		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
+			if err := removeWatch(ctx, tx, w, "expire", "expired", nil); err != nil {
+				return err
+			}
+			found, changed = false, true
+		}
+		if !found {
+			if !c.AutoWatch {
+				if changed {
+					return bumpWatch(ctx, tx)
+				}
+				return nil
+			}
+			exp := now.Add(c.watchFor)
+			w = Watch{UserID: e.UserID, Level: LevelObserve, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
+			if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
+				return err
+			}
+			if err := watchEvent(ctx, tx, e.UserID, "auto_add", "", LevelObserve, "首次可疑记录 / first suspicious record", nil); err != nil {
+				return err
+			}
+			changed = true
+		}
+		if w.Level != LevelObserve {
+			_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
+			return err
+		}
+		counted := false
+		if e.RequestID != "" {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE user_id = $1 AND request_id = $2 AND counted AND id <> $3)`,
+				e.UserID, e.RequestID, eventID).Scan(&counted); err != nil {
+				return err
+			}
+		}
+		exp := now.Add(c.watchFor)
+		if w.ExpiresAt == nil {
+			exp = time.Time{}
+		} else if w.ExpiresAt.After(exp) {
+			exp = *w.ExpiresAt
+		}
+		var expArg *time.Time
+		if !exp.IsZero() {
+			expArg = &exp
+		}
+		inc := 0
+		if !counted {
+			inc = 1
+			if _, err := tx.Exec(ctx, `UPDATE events SET counted = true, violation_epoch = $2 WHERE id = $1`, eventID, w.ViolationEpoch); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, violation_count = violation_count + $2,
+			last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg)
+		if err != nil {
+			return err
+		}
+		if changed {
+			return bumpWatch(ctx, tx)
+		}
+		return nil
+	})
+	return changed, err
+}
+
+// applyBans bans the users whose suspicious requests since max(now -
+// ban_window, last unblock, start of their last ban) reached ban_threshold.
+func (p *Plugin) applyBans(ctx context.Context, users map[int64]bool) {
 	c := p.cfg.Load()
 	if c.BanThreshold <= 0 {
-		return
-	}
-	users := map[int64]bool{}
-	for _, e := range evs {
-		if e.Verdict == VerdictBlock && e.UserID > 0 {
-			users[e.UserID] = true
-		}
-	}
-	if len(users) == 0 {
 		return
 	}
 	db, err := p.db(ctx)
@@ -122,9 +293,8 @@ func (p *Plugin) applyBans(ctx context.Context, evs []eventRec) {
 	}
 }
 
-// lockBlockSubject must precede reading the violation baseline or modifying a
-// ban. The parent survives unblocking and cleanup, unlike the blocks row itself.
-// All work for one user is serialized across nodes; other users stay concurrent.
+// lockBlockSubject must precede reading the violation baseline, modifying a
+// ban or a watch entry. The parent survives unblocking and cleanup.
 func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
 	if _, err := tx.Exec(ctx, `INSERT INTO block_subjects (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, uid); err != nil {
 		return err
@@ -133,14 +303,15 @@ func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
 	return err
 }
 
-// countViolations counts block verdicts of uid since the later of since,
-// the last unblock and the start of the user's last (expired) ban.
+// countViolations counts suspicious requests (one per request id, false
+// positives excluded) of uid since the later of since, the last unblock and
+// the start of the user's last (expired) ban.
 func countViolations(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, uid int64, since time.Time) (int64, error) {
 	var n int64
-	err := q.QueryRow(ctx, `SELECT count(*) FROM events
-		WHERE user_id = $1 AND verdict = 'block' AND created_at >= $2
+	err := q.QueryRow(ctx, `SELECT count(DISTINCT CASE WHEN request_id = '' THEN id::text ELSE request_id END) FROM events
+		WHERE user_id = $1 AND result IN ('hit', 'block') AND review_status <> 'false_positive' AND created_at >= $2
 		  AND created_at > coalesce((SELECT at FROM unblocks WHERE user_id = $1), '-infinity'::timestamptz)
 		  AND created_at > coalesce((SELECT created_at FROM blocks WHERE user_id = $1), '-infinity'::timestamptz)`,
 		uid, since).Scan(&n)
@@ -200,8 +371,7 @@ func (p *Plugin) reloadBlocks(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// A broadcast/newer reload may have completed while this SELECT was in
-	// flight. Never put its older snapshot back over the newer generation.
+	// Never put an older snapshot back over a newer reload.
 	p.blockReloadMu.Lock()
 	defer p.blockReloadMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -220,8 +390,8 @@ func (p *Plugin) kickRefresh() {
 	}
 }
 
-// refreshLoop reloads the block list every refreshEvery while moderation is
-// enabled, and at once when kicked.
+// refreshLoop reloads the block list and polls the config / watch versions
+// every refreshEvery while moderation is enabled, and at once when kicked.
 func (p *Plugin) refreshLoop(ctx context.Context) {
 	defer p.wg.Done()
 	t := time.NewTicker(p.refreshEvery)
@@ -236,9 +406,13 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 			}
 		case <-p.refreshNow:
 		}
-		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		p.convertLegacyOnce(rctx)
 		if err := p.reloadBlocks(rctx); err != nil && ctx.Err() == nil {
 			p.log.Debug("moderation: block list reload failed", "error", err.Error())
+		}
+		if err := p.pollVersions(rctx); err != nil && ctx.Err() == nil {
+			p.log.Debug("moderation: config reload failed", "error", err.Error())
 		}
 		cancel()
 	}
@@ -246,22 +420,13 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 
 // blocksChanged reloads this node and tells the others (best effort).
 func (p *Plugin) blocksChanged(ctx context.Context) {
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	if err := p.reloadBlocks(rctx); err != nil {
-		p.log.Warn("moderation: block list reload failed", "error", err.Error())
-	}
-	if p.host == nil {
-		return
-	}
-	if err := p.host.Publish(rctx, TopicBlocksChanged, nil); err != nil {
-		p.log.Warn("moderation: broadcast blocks.changed failed; other nodes reload within the polling period", "error", err.Error())
-	}
+	p.changed(ctx, TopicBlocksChanged, p.reloadBlocks)
 }
 
-// onBlocksChanged handles a blocks.changed broadcast from another node.
-func (p *Plugin) onBlocksChanged(ctx context.Context, _ pluginsdk.Broadcast) error {
-	rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return p.reloadBlocks(rctx)
+func (p *Plugin) onBroadcast(reload func(context.Context) error) func(context.Context, pluginsdk.Broadcast) error {
+	return func(ctx context.Context, _ pluginsdk.Broadcast) error {
+		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return reload(rctx)
+	}
 }

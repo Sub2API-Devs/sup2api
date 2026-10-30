@@ -32,8 +32,8 @@ func TestUnblockCannotBeOvertakenByAnOldAutoBan(t *testing.T) {
 	if _, err := db.Exec(ctx, `INSERT INTO blocks(user_id,source,created_at) VALUES (3,'manual',$1)`, now.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(ctx, `INSERT INTO events(user_id,mode,verdict,action,created_at)
-		VALUES (3,'observe','block','allow',$1),(3,'observe','block','allow',$1)`, now.Add(-time.Minute)); err != nil {
+	if _, err := db.Exec(ctx, `INSERT INTO events(user_id,mode,verdict,action,result,created_at)
+		VALUES (3,'observe','block','allow','hit',$1),(3,'observe','block','allow','hit',$1)`, now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	barrier, err := db.Acquire(ctx)
@@ -67,7 +67,7 @@ func TestUnblockCannotBeOvertakenByAnOldAutoBan(t *testing.T) {
 	autoDone := make(chan struct{})
 	go func() {
 		defer close(autoDone)
-		p.applyBans(ctx, []eventRec{{UserID: 3, Verdict: VerdictBlock}})
+		p.applyBans(ctx, map[int64]bool{3: true})
 	}()
 	var autoPID int
 	for autoPID == 0 {
@@ -124,7 +124,7 @@ func TestUnblockCannotBeOvertakenByAnOldAutoBan(t *testing.T) {
 		t.Fatalf("completed unblock was undone: blocked=%v err=%v", blocked, err)
 	}
 	// A late event batch from another node must also observe the new baseline.
-	p.applyBans(ctx, []eventRec{{UserID: 3, Verdict: VerdictBlock}})
+	p.applyBans(ctx, map[int64]bool{3: true})
 	if err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM blocks WHERE user_id=3)`).Scan(&blocked); err != nil || blocked {
 		t.Fatalf("old events re-banned the user: blocked=%v err=%v", blocked, err)
 	}

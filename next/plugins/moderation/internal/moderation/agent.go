@@ -97,9 +97,9 @@ func rawJSON(v any) json.RawMessage {
 
 // run moderates text (already truncated). keepTranscript records every
 // message exchanged, including the final assistant message.
-func (a *agent) run(ctx context.Context, c *config, text string, keepTranscript bool) (*Result, error) {
+func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool) (*Result, error) {
 	start := time.Now()
-	res := &Result{LLMModel: c.Model}
+	res := &Result{LLMModel: c.model}
 	messages := []json.RawMessage{
 		rawJSON(map[string]any{"role": "system", "content": c.prompt}),
 		rawJSON(map[string]any{"role": "user", "content": wrapUserContent(c.markerKey, text)}),
@@ -111,7 +111,7 @@ func (a *agent) run(ctx context.Context, c *config, text string, keepTranscript 
 		}
 		return res, err
 	}
-	for turn := 1; turn <= c.MaxTurns; turn++ {
+	for turn := 1; turn <= c.maxTurns; turn++ {
 		res.Turns = turn
 		resp, err := a.call(ctx, c, messages)
 		if err != nil {
@@ -177,10 +177,10 @@ func nullableContent(s string) any {
 }
 
 // call sends one chat completion request.
-func (a *agent) call(ctx context.Context, c *config, messages []json.RawMessage) (*chatResponse, error) {
+func (a *agent) call(ctx context.Context, c *llmJudge, messages []json.RawMessage) (*chatResponse, error) {
 	body, err := json.Marshal(chatRequest{
-		Model: c.Model, Messages: messages, Tools: []json.RawMessage{c.toolJSON}, ToolChoice: c.choiceJSON,
-		Temperature: c.Temperature, MaxTokens: c.MaxTokens, Stream: false,
+		Model: c.model, Messages: messages, Tools: []json.RawMessage{c.toolJSON}, ToolChoice: c.choiceJSON,
+		Temperature: c.temperature, MaxTokens: c.maxTokens, Stream: false,
 	})
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func (a *agent) call(ctx context.Context, c *config, messages []json.RawMessage)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	resp, err := a.client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {

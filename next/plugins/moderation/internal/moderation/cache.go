@@ -3,26 +3,19 @@ package moderation
 import (
 	"container/list"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"sync"
 	"time"
 )
 
-// Verdict cache (CONTRACTS §20.3 cache_ttl_seconds): an in-memory LRU of
-// cacheEntries plus the host KV shared by all nodes. Keys include the policy
-// version, so changing model, prompt, categories or tool_choice invalidates
-// old verdicts. KV errors are never fatal.
+// Pass cache (CONTRACTS §72.5 step 8): clean passes of (flow, version, input
+// hash) in an in-memory LRU of cache_entries plus the host KV shared by all
+// nodes. Only clean passes are stored, so a hit, an error or a skipped
+// auditor is always moderated again. KV errors are never fatal.
 
-const (
-	cacheEntries = 10000
-	kvNamespace  = "verdicts"
-)
+const kvNamespace = "pass"
 
 type cacheEntry struct {
 	key     string
-	v       Verdict
 	expires time.Time
 }
 
@@ -37,33 +30,31 @@ func newLRU(max int) *lru {
 	return &lru{max: max, ll: list.New(), items: make(map[string]*list.Element, 256)}
 }
 
-func (c *lru) get(key string, now time.Time) (Verdict, bool) {
+func (c *lru) get(key string, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el, ok := c.items[key]
 	if !ok {
-		return Verdict{}, false
+		return false
 	}
-	e := el.Value.(*cacheEntry)
-	if !now.Before(e.expires) {
+	if !now.Before(el.Value.(*cacheEntry).expires) {
 		c.ll.Remove(el)
 		delete(c.items, key)
-		return Verdict{}, false
+		return false
 	}
 	c.ll.MoveToFront(el)
-	return e.v, true
+	return true
 }
 
-func (c *lru) put(key string, v Verdict, expires time.Time) {
+func (c *lru) put(key string, expires time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if el, ok := c.items[key]; ok {
-		e := el.Value.(*cacheEntry)
-		e.v, e.expires = v, expires
+		el.Value.(*cacheEntry).expires = expires
 		c.ll.MoveToFront(el)
 		return
 	}
-	c.items[key] = c.ll.PushFront(&cacheEntry{key: key, v: v, expires: expires})
+	c.items[key] = c.ll.PushFront(&cacheEntry{key: key, expires: expires})
 	for c.ll.Len() > c.max {
 		last := c.ll.Back()
 		c.ll.Remove(last)
@@ -77,57 +68,43 @@ func (c *lru) len() int {
 	return c.ll.Len()
 }
 
-// cacheKey combines the policy version and the moderated text.
-func cacheKey(policy, text string) string {
-	h := sha256.New()
-	h.Write([]byte(policy))
-	h.Write([]byte{0})
-	h.Write([]byte(text))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-// cacheGet looks in memory, then (useKV) in the host KV.
-func (p *Plugin) cacheGet(ctx context.Context, c *config, key string, useKV bool) (Verdict, bool) {
+// passCached looks in memory, then in the KV (bounded wait).
+func (p *Plugin) passCached(key string, useKV bool) bool {
+	c := p.cfg.Load()
 	if c.cacheTTL <= 0 {
-		return Verdict{}, false
+		return false
 	}
 	now := p.now()
-	if v, ok := p.cache.get(key, now); ok {
-		return v, true
+	cache := p.cache.Load()
+	if cache.get(key, now) {
+		return true
 	}
 	if !useKV || p.host == nil {
-		return Verdict{}, false
+		return false
 	}
-	kctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	kctx, cancel := context.WithTimeout(p.bg, 200*time.Millisecond)
 	defer cancel()
-	b, found, err := p.host.KV().Get(kctx, kvNamespace, key)
+	_, found, err := p.host.KV().Get(kctx, kvNamespace, key)
 	if err != nil || !found {
-		return Verdict{}, false
+		return false
 	}
-	var v Verdict
-	if json.Unmarshal(b, &v) != nil || v.Verdict == "" {
-		return Verdict{}, false
-	}
-	// The KV TTL bounds the entry; keep it locally for at most the TTL.
-	p.cache.put(key, v, now.Add(c.cacheTTL))
-	return v, true
+	cache.put(key, now.Add(c.cacheTTL))
+	return true
 }
 
-// cachePut stores v in memory and, asynchronously, in the KV.
-func (p *Plugin) cachePut(c *config, key string, v Verdict) {
+// passPut stores a clean pass in memory and, asynchronously, in the KV.
+func (p *Plugin) passPut(c *config, key string) {
 	if c.cacheTTL <= 0 {
 		return
 	}
-	p.cache.put(key, v, p.now().Add(c.cacheTTL))
+	p.cache.Load().put(key, p.now().Add(c.cacheTTL))
 	if p.host == nil {
 		return
 	}
-	b, _ := json.Marshal(v)
-	// Fire and forget, bounded by its own timeout.
 	go func() {
 		kctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if err := p.host.KV().Set(kctx, kvNamespace, key, b, c.cacheTTL); err != nil {
+		if err := p.host.KV().Set(kctx, kvNamespace, key, []byte{1}, c.cacheTTL); err != nil {
 			p.stats.kvErrors.Add(1)
 		}
 	}()

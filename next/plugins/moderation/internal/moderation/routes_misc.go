@@ -1,0 +1,296 @@
+package moderation
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+)
+
+// JobCleanup is the job id declared in manifest.json.
+const JobCleanup = "cleanup"
+
+type jsonNumber = json.Number
+
+func jsonRaw(b []byte) json.RawMessage { return json.RawMessage(b) }
+
+// testInput reads {text, images?} (images are data URLs or URLs) into an
+// Input, normalized like a request.
+func testInput(req *pluginv1.HTTPRequest, c *config) (*Input, *pluginv1.HTTPResponse) {
+	var in struct {
+		Text   string   `json:"text"`
+		Images []string `json:"images"`
+	}
+	if err := json.Unmarshal(req.GetBody(), &in); err != nil {
+		return nil, pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON")
+	}
+	var b inputBuilder
+	b.addText(in.Text)
+	content := []any{map[string]any{"type": "text", "text": in.Text}}
+	for _, u := range in.Images {
+		b.addImage(imageFromURL(strings.TrimSpace(u)))
+		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": u}})
+	}
+	msgs, _ := json.Marshal([]any{map[string]any{"role": "user", "content": content}})
+	input := b.build(FormatMessages, msgs, c.InputMaxChars)
+	if input.Empty() {
+		return nil, pluginsdk.FieldErrorResponse("invalid test input / 测试输入无效",
+			pluginsdk.FieldErrors{}.Add("text", "required", "text or images is required / 请输入要审核的文本或图片"))
+	}
+	return input, nil
+}
+
+// TestResult is the POST /test response data.
+type TestResult struct {
+	FlowID      int64         `json:"flow_id"`
+	FlowVersion int           `json:"flow_version"`
+	Result      string        `json:"result"`
+	Severity    string        `json:"severity,omitempty"`
+	Categories  []HitCategory `json:"categories"`
+	Trace       Trace         `json:"trace"`
+}
+
+// testModeration runs a published flow on {text, images?, flow_id?}
+// (default: the group 0 flow). Nothing is cached, recorded or counted.
+func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	c := p.cfg.Load()
+	input, bad := testInput(req, c)
+	if bad != nil {
+		return bad, nil
+	}
+	var sel struct {
+		FlowID int64 `json:"flow_id"`
+	}
+	_ = json.Unmarshal(req.GetBody(), &sel)
+	snap := p.snap.Load()
+	flow := snap.byGroup[0]
+	if sel.FlowID > 0 {
+		flow = snap.flows[sel.FlowID]
+	}
+	if flow == nil {
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "not_configured",
+			"no published and enabled flow to test (bind one to the default group, or pass flow_id) / 没有可测试的已发布流程（请绑定默认分组或指定 flow_id）"), nil
+	}
+	m := &moderation{cfg: c, flow: flow, snap: snap, in: input}
+	tr := p.run(ctx, m)
+	var rec eventRec
+	rec.fillFromTrace(tr, false)
+	out := TestResult{FlowID: flow.ID, FlowVersion: flow.Version, Result: rec.Result, Severity: rec.Severity, Trace: tr, Categories: tr.HitCategories()}
+	if out.Categories == nil {
+		out.Categories = []HitCategory{}
+	}
+	for i := range out.Trace.Stages {
+		for j := range out.Trace.Stages[i].Outcomes {
+			o := &out.Trace.Stages[i].Outcomes[j]
+			if o.Err != nil && o.ErrType == "" {
+				o.ErrType = ErrType(o.Err)
+			}
+		}
+	}
+	return pluginsdk.DataResponse(out), nil
+}
+
+// ---------------------------------------------------------------- import
+
+// importDoc is what POST /import takes (CONTRACTS §72.12): channels without
+// keys, auditors pointing at them by channel_ref (index), the Jev default set.
+type importDoc struct {
+	Channels []struct {
+		Type      string `json:"type"`
+		Protocol  string `json:"protocol"`
+		Name      string `json:"name"`
+		BaseURL   string `json:"base_url"`
+		Model     string `json:"model"`
+		TimeoutMs int    `json:"timeout_ms"`
+	} `json:"channels"`
+	Auditors []struct {
+		Name         string             `json:"name"`
+		Type         string             `json:"type"`
+		ChannelRef   int                `json:"channel_ref"`
+		Thresholds   map[string]float64 `json:"thresholds"`
+		Questions    *JevQuestions      `json:"questions"`
+		ReviewImages *bool              `json:"review_images"`
+	} `json:"auditors"`
+	JevDefaultSet *JevQuestions `json:"jev_default_set"`
+}
+
+// importConfig: {data, preview}. Imported channels are disabled and have no
+// key; the administrator fills the key and enables them. The Jev default
+// set is only returned (it is a setting the administrator saves).
+func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	var in struct {
+		Data    importDoc `json:"data"`
+		Preview bool      `json:"preview"`
+	}
+	if err := json.Unmarshal(req.GetBody(), &in); err != nil {
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON"), nil
+	}
+	var errs pluginsdk.FieldErrors
+	chans := make([]channelInput, len(in.Data.Channels))
+	for i, ch := range in.Data.Channels {
+		typ := ch.Type
+		if typ == "openai" {
+			typ = ChannelOpenAI // new-api name
+		}
+		chans[i] = channelInput{Type: typ, Protocol: ch.Protocol, Name: ch.Name, BaseURL: ch.BaseURL, Model: ch.Model, TimeoutMs: ch.TimeoutMs}
+		if typ == ChannelLLM && chans[i].Protocol != "" && chans[i].Protocol != ProtocolOpenAIChat {
+			chans[i].Protocol = ProtocolOpenAIChat // P1 speaks openai_chat only
+		}
+		for _, fe := range chans[i].normalize() {
+			errs = errs.Add(fmt.Sprintf("channels[%d].%s", i, fe.GetField()), fe.GetCode(), fe.GetMessage())
+		}
+	}
+	auds := make([]auditorInput, len(in.Data.Auditors))
+	def := p.cfg.Load().jevDefault
+	for i, a := range in.Data.Auditors {
+		typ := a.Type
+		if typ == "openai" {
+			typ = AuditorOpenAI
+		}
+		auds[i] = auditorInput{Name: strings.TrimSpace(a.Name), Type: typ,
+			Config: AuditorConfig{Thresholds: a.Thresholds, Questions: a.Questions, ReviewImages: a.ReviewImages}}
+		if a.ChannelRef < 0 || a.ChannelRef >= len(chans) || channelTypeOf[typ] != chans[a.ChannelRef].Type {
+			errs = errs.Add(fmt.Sprintf("auditors[%d].channel_ref", i), "invalid", "channel_ref must name a channel of the same type / channel_ref 必须指向同类型的渠道")
+			continue
+		}
+		if _, err := compileAuditor(0, auds[i].Name, typ, 0, auds[i].Config, nil, &def); err != nil {
+			errs = errs.Add(fmt.Sprintf("auditors[%d].config", i), "invalid", err.Error())
+		}
+	}
+	if in.Data.JevDefaultSet != nil {
+		if err := in.Data.JevDefaultSet.Validate(); err != nil {
+			errs = errs.Add("jev_default_set", "invalid", err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		return pluginsdk.FieldErrorResponse("invalid import / 导入内容无效", errs), nil
+	}
+	out := map[string]any{"channels": len(chans), "auditors": len(auds), "jev_default_set": in.Data.JevDefaultSet, "preview": in.Preview}
+	if in.Preview {
+		return pluginsdk.DataResponse(out), nil
+	}
+	err := p.configTx(ctx, func(tx pgx.Tx) error {
+		now := p.now().UTC()
+		ids := make([]int64, len(chans))
+		for i, ch := range chans {
+			if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, model, timeout_ms, enabled, created_at, updated_at)
+				VALUES ($1,$2,$3,$4,$5,$6,false,$7,$7) RETURNING id`, ch.Type, ch.Protocol, ch.Name, ch.BaseURL, ch.Model, ch.TimeoutMs, now).Scan(&ids[i]); err != nil {
+				return err
+			}
+		}
+		for i, a := range auds {
+			cfg, _ := json.Marshal(a.Config)
+			if _, err := tx.Exec(ctx, `INSERT INTO auditors (name, type, channel_id, config, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)`,
+				a.Name, a.Type, ids[in.Data.Auditors[i].ChannelRef], cfg, now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pluginsdk.DataResponse(out), nil
+}
+
+// ---------------------------------------------------------------- jobs
+
+// RunJob implements pluginsdk.JobRunner. cleanup deletes records past
+// keep_until, expired watch entries and expired blocks; an expired ban counts
+// as an unblock at its expiry, so violations before it are not counted again.
+func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+	if in.GetJobId() != JobCleanup {
+		return nil, status.Errorf(codes.NotFound, "unknown job %q", in.GetJobId())
+	}
+	db, err := p.db(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	now := p.now().UTC()
+	tag, err := db.Exec(ctx, `DELETE FROM events WHERE keep_until < $1`, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup events: %v", err)
+	}
+	events := tag.RowsAffected()
+	watch, err := p.expireWatch(ctx, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup watch list: %v", err)
+	}
+	var blocks int64
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT user_id FROM blocks WHERE expires_at <= $1
+			UNION SELECT user_id FROM unblocks WHERE at < $2 ORDER BY user_id`, now, now.Add(-366*24*time.Hour))
+		if err != nil {
+			return err
+		}
+		users, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
+			return err
+		}
+		for _, uid := range users {
+			if err := lockBlockSubject(ctx, tx, uid); err != nil {
+				return err
+			}
+		}
+		tag, err := tx.Exec(ctx, `WITH expired AS (
+				DELETE FROM blocks WHERE user_id = ANY($2) AND expires_at IS NOT NULL AND expires_at <= $1 RETURNING user_id, expires_at)
+			INSERT INTO unblocks (user_id, at) SELECT user_id, expires_at FROM expired
+			ON CONFLICT (user_id) DO UPDATE SET at = GREATEST(unblocks.at, EXCLUDED.at)`, now, users)
+		if err != nil {
+			return err
+		}
+		blocks = tag.RowsAffected()
+		_, err = tx.Exec(ctx, `DELETE FROM unblocks WHERE user_id = ANY($2) AND at < $1`, now.Add(-366*24*time.Hour), users)
+		return err
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup blocks: %v", err)
+	}
+	if watch > 0 {
+		p.watchChanged(ctx)
+	}
+	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("deleted %d events, %d expired watch entries and %d expired blocks", events, watch, blocks)}, nil
+}
+
+// expireWatch removes the expired watch entries, writing their history.
+func (p *Plugin) expireWatch(ctx context.Context, now time.Time) (int, error) {
+	db, err := p.db(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := db.Query(ctx, `SELECT user_id FROM watchlist WHERE expires_at <= $1 ORDER BY user_id`, now)
+	if err != nil {
+		return 0, err
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, uid := range users {
+		err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+			if err := lockBlockSubject(ctx, tx, uid); err != nil {
+				return err
+			}
+			w, found, err := loadWatch(ctx, tx, uid)
+			if err != nil || !found || w.ExpiresAt == nil || now.Before(*w.ExpiresAt) {
+				return err
+			}
+			n++
+			return removeWatch(ctx, tx, w, "expire", "expired", nil)
+		})
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}

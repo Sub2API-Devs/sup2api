@@ -124,13 +124,14 @@ func verdictFor(text string) string {
 	return `{"verdict":"pass","categories":[],"severity":"none","reason":"正常"}`
 }
 
-func testConfig(base string, mut func(*Settings)) *config {
-	s := DefaultSettings()
-	s.Mode, s.BaseURL, s.APIKey, s.Model = ModeEnforce, base, "sk-test", "mod-model"
+func testConfig(base string, mut func(*AuditorConfig)) *llmJudge {
+	var cfg AuditorConfig
 	if mut != nil {
-		mut(&s)
+		mut(&cfg)
 	}
-	return compile(s)
+	ch := &liveChannel{BaseURL: base, Key: "sk-test", Model: "mod-model"}
+	ch.markerKey = markerKey(ch.Key)
+	return compileJudge(cfg, ch)
 }
 
 func TestAgentToolCall(t *testing.T) {
@@ -255,7 +256,7 @@ func TestAgentJSONContentFallback(t *testing.T) {
 
 func TestAgentNoVerdict(t *testing.T) {
 	llm := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, textResp("hmm") })
-	c := testConfig(llm.srv.URL, func(s *Settings) { s.MaxTurns = 2 })
+	c := testConfig(llm.srv.URL, func(s *AuditorConfig) { s.MaxTurns = 2 })
 	res, err := newAgent().run(context.Background(), c, "x", true)
 	if !errors.Is(err, ErrNoVerdict) || res.Turns != 2 || llm.calls.Load() != 2 || len(res.Transcript) != 6 {
 		t.Fatalf("res = %+v err = %v calls = %d", res, err, llm.calls.Load())
@@ -299,7 +300,7 @@ func TestAgentToolChoiceVariants(t *testing.T) {
 		"required": `"required"`, "auto": `"auto"`, "function": `{"type":"function","function":{"name":"submit_verdict"}}`,
 	} {
 		before := len(llm.reqs())
-		c := testConfig(llm.srv.URL+"/v1", func(s *Settings) { s.ToolChoice = mode; s.Temperature = 0.5; s.MaxTokens = 100 })
+		c := testConfig(llm.srv.URL+"/v1", func(s *AuditorConfig) { s.ToolChoice = mode; s.Temperature = 0.5; s.MaxTokens = 100 })
 		if _, err := newAgent().run(context.Background(), c, "x", false); err != nil {
 			t.Fatal(err)
 		}

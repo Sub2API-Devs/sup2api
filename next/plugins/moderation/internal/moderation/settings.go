@@ -14,14 +14,15 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
-// Modes (settings.mode).
+// Modes (settings.mode, CONTRACTS §72.5).
 const (
 	ModeOff     = "off"
-	ModeObserve = "observe"
-	ModeEnforce = "enforce"
+	ModeObserve = "observe" // pre only for enforce-level users, post for the rest
+	ModeEnforce = "enforce" // everyone pre
 )
 
-// Verdicts and actions stored in events.
+// Verdicts and actions of the 0.1 columns events.verdict / events.action, and
+// the LLM verdicts of submit_verdict.
 const (
 	VerdictPass  = "pass"
 	VerdictFlag  = "flag"
@@ -32,73 +33,93 @@ const (
 	ActionDeny  = "deny"
 )
 
+// Record results (events.result).
+const (
+	ResultBlock      = "block"
+	ResultHit        = "hit"
+	ResultOverturned = "overturned"
+	ResultError      = "error"
+	ResultPass       = "pass"
+)
+
 // Category is one moderation category offered to the LLM.
 type Category struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
 }
 
-// Settings is the plugin configuration (forms/settings.schema.json,
-// CONTRACTS §20.3).
+// Settings is the plugin configuration (forms/settings.schema.json, CONTRACTS
+// §72.10). The legacy block (BaseURL … ModelPatterns) is the 0.1 single-model
+// setup, only read by the one-time conversion (§72.12).
 type Settings struct {
-	Mode             string     `json:"mode"`
-	BaseURL          string     `json:"base_url"`
-	APIKey           string     `json:"api_key"`
-	Model            string     `json:"model"`
-	SystemPrompt     string     `json:"system_prompt"`
-	Categories       []Category `json:"categories"`
-	ToolChoice       string     `json:"tool_choice"`
-	MaxTurns         int        `json:"max_turns"`
-	Temperature      float64    `json:"temperature"`
-	MaxTokens        int        `json:"max_tokens"`
-	TimeoutMs        int        `json:"timeout_ms"`
-	OnError          string     `json:"on_error"`
-	MaxConcurrency   int        `json:"max_concurrency"`
-	QueueSize        int        `json:"queue_size"`
-	InputMaxChars    int        `json:"input_max_chars"`
-	MinChars         int        `json:"min_chars"`
-	SampleRate       int        `json:"sample_rate"`
-	GroupIDs         []int64    `json:"group_ids"`
-	ModelPatterns    []string   `json:"model_patterns"`
-	ExemptUserIDs    []string   `json:"exempt_user_ids"`
-	CacheTTLSeconds  int        `json:"cache_ttl_seconds"`
-	BlockStatus      int        `json:"block_status"`
-	BlockMessage     string     `json:"block_message"`
-	RecordPass       bool       `json:"record_pass"`
-	StoreText        bool       `json:"store_text"`
-	RetentionDays    int        `json:"retention_days"`
-	BanThreshold     int        `json:"ban_threshold"`
-	BanWindowHours   int        `json:"ban_window_hours"`
-	BanDurationHours int        `json:"ban_duration_hours"`
+	Mode          string   `json:"mode"`
+	ExemptUserIDs []string `json:"exempt_user_ids"`
+
+	InputMaxChars   int `json:"input_max_chars"`
+	MinChars        int `json:"min_chars"`
+	CacheTTLSeconds int `json:"cache_ttl_seconds"`
+	CacheEntries    int `json:"cache_entries"`
+	MaxConcurrency  int `json:"max_concurrency"`
+	QueueSize       int `json:"queue_size"`
+
+	BlockStatus  int    `json:"block_status"`
+	BlockMessage string `json:"block_message"`
+
+	RecordPass       bool `json:"record_pass"`
+	RecordOverturned bool `json:"record_overturned"`
+	RecordErrors     bool `json:"record_errors"`
+	StoreText        bool `json:"store_text"`
+
+	HitRetentionDays        int `json:"hit_retention_days"`
+	OverturnedRetentionDays int `json:"overturned_retention_days"`
+	ErrorRetentionDays      int `json:"error_retention_days"`
+	PassRetentionDays       int `json:"pass_retention_days"`
+
+	AutoWatch               bool `json:"auto_watch"`
+	WatchDays               int  `json:"watch_days"`
+	AnalysisEveryViolations int  `json:"analysis_every_violations"`
+
+	BanThreshold     int `json:"ban_threshold"`
+	BanWindowHours   int `json:"ban_window_hours"`
+	BanDurationHours int `json:"ban_duration_hours"`
+
+	JevDefaultSet *JevQuestions `json:"jev_default_set"`
+
+	// Legacy 0.1 single-model setup.
+	BaseURL       string     `json:"base_url"`
+	APIKey        string     `json:"api_key"`
+	Model         string     `json:"model"`
+	SystemPrompt  string     `json:"system_prompt"`
+	Categories    []Category `json:"categories"`
+	ToolChoice    string     `json:"tool_choice"`
+	MaxTurns      int        `json:"max_turns"`
+	Temperature   float64    `json:"temperature"`
+	MaxTokens     int        `json:"max_tokens"`
+	TimeoutMs     int        `json:"timeout_ms"`
+	OnError       string     `json:"on_error"`
+	SampleRate    int        `json:"sample_rate"`
+	GroupIDs      []int64    `json:"group_ids"`
+	ModelPatterns []string   `json:"model_patterns"`
+	RetentionDays int        `json:"retention_days"`
 }
 
-// DefaultBlockMessage is the default deny message of a block verdict.
+// DefaultBlockMessage is the default deny message of a hit.
 const DefaultBlockMessage = "提示词审核未通过，请调整输入后重试"
 
 // DefaultSettings returns the schema defaults.
 func DefaultSettings() Settings {
 	return Settings{
-		Mode:             ModeOff,
-		ToolChoice:       "required",
-		MaxTurns:         3,
-		Temperature:      0,
-		MaxTokens:        512,
-		TimeoutMs:        10000,
-		OnError:          "allow",
-		MaxConcurrency:   16,
-		QueueSize:        1000,
-		InputMaxChars:    8000,
-		MinChars:         2,
-		SampleRate:       100,
-		CacheTTLSeconds:  3600,
-		BlockStatus:      403,
-		BlockMessage:     DefaultBlockMessage,
-		RecordPass:       false,
-		StoreText:        true,
-		RetentionDays:    30,
-		BanThreshold:     0,
-		BanWindowHours:   24,
-		BanDurationHours: 24,
+		Mode:          ModeOff,
+		InputMaxChars: 12000, MinChars: 2,
+		CacheTTLSeconds: 3600, CacheEntries: 100000,
+		MaxConcurrency: 16, QueueSize: 1000,
+		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
+		RecordOverturned: true, RecordErrors: true, StoreText: true,
+		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
+		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
+		BanWindowHours: 24, BanDurationHours: 24,
+		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
+		SampleRate: 100, RetentionDays: 30,
 	}
 }
 
@@ -107,9 +128,8 @@ var (
 	baseURLRe    = regexp.MustCompile(`^https?://\S+$`)
 )
 
-// DecodeSettings is lenient (CONTRACTS §20.3: validation is the schema's
-// job): unknown keys and values of the wrong type are ignored, numbers are
-// clamped into range. Only a non-object document is an error.
+// DecodeSettings is lenient: unknown keys and values of the wrong type are
+// ignored, numbers are clamped into range. Only a non-object is an error.
 func DecodeSettings(raw []byte) (Settings, error) {
 	s := DefaultSettings()
 	raw = []byte(strings.TrimSpace(string(raw)))
@@ -121,22 +141,18 @@ func DecodeSettings(raw []byte) (Settings, error) {
 		return s, err
 	}
 	d := decoder{m: m}
-	d.network(&s)
-	d.limits(&s)
+	d.general(&s)
 	d.storage(&s)
-	d.ban(&s)
+	d.watch(&s)
+	d.legacy(&s)
 	return s, nil
 }
 
-// decoder reads one raw settings document into a Settings. Every field is
-// independent, so the group methods may run in any order; each one only
-// touches its own keys.
+// decoder reads one raw settings document into a Settings.
 type decoder struct {
 	m map[string]json.RawMessage
 }
 
-// str copies a string value, leaving the destination alone when the key is
-// absent or of another type.
 func (d decoder) str(k string, dst *string) {
 	if v, ok := d.m[k]; ok {
 		var x string
@@ -146,7 +162,6 @@ func (d decoder) str(k string, dst *string) {
 	}
 }
 
-// num copies a finite number value and reports whether it found one.
 func (d decoder) num(k string, dst *float64) bool {
 	if v, ok := d.m[k]; ok {
 		var x float64
@@ -158,9 +173,6 @@ func (d decoder) num(k string, dst *float64) bool {
 	return false
 }
 
-// integer reads a number, rounds it away from the float range and clamps it
-// into [lo, hi]. A missing or non-numeric value leaves the destination at its
-// default, clamped once.
 func (d decoder) integer(k string, dst *int, lo, hi int) {
 	var f float64
 	if d.num(k, &f) {
@@ -170,7 +182,6 @@ func (d decoder) integer(k string, dst *int, lo, hi int) {
 	}
 }
 
-// boolean copies a bool value, ignoring other types.
 func (d decoder) boolean(k string, dst *bool) {
 	if v, ok := d.m[k]; ok {
 		var x bool
@@ -180,8 +191,6 @@ func (d decoder) boolean(k string, dst *bool) {
 	}
 }
 
-// strList reads a mixed array: strings are kept, numbers become their literal
-// form, and anything else (null, objects) is dropped.
 func (d decoder) strList(k string) []string {
 	var out []string
 	if v, ok := d.m[k]; ok {
@@ -200,7 +209,6 @@ func (d decoder) strList(k string) []string {
 	return out
 }
 
-// enum keeps a string value only when it (lower-cased, trimmed) is allowed.
 func (d decoder) enum(k string, dst *string, allowed ...string) {
 	var x string
 	d.str(k, &x)
@@ -213,9 +221,66 @@ func (d decoder) enum(k string, dst *string, allowed ...string) {
 	}
 }
 
-// network reads the upstream connection and prompt settings.
-func (d decoder) network(s *Settings) {
+func (d decoder) general(s *Settings) {
 	d.enum("mode", &s.Mode, ModeOff, ModeObserve, ModeEnforce)
+	for _, u := range d.strList("exempt_user_ids") {
+		if u = strings.TrimSpace(u); u != "" {
+			if _, err := strconv.ParseInt(u, 10, 64); err == nil {
+				s.ExemptUserIDs = append(s.ExemptUserIDs, u)
+			}
+		}
+	}
+	d.integer("input_max_chars", &s.InputMaxChars, 256, 100000)
+	d.integer("min_chars", &s.MinChars, 0, 1000)
+	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
+	d.integer("cache_entries", &s.CacheEntries, 1000, 1000000)
+	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
+	d.integer("queue_size", &s.QueueSize, 1, 100000)
+	d.integer("block_status", &s.BlockStatus, 400, 599)
+	if s.BlockStatus != 400 && s.BlockStatus != 403 && s.BlockStatus != 451 {
+		s.BlockStatus = 403
+	}
+	d.str("block_message", &s.BlockMessage)
+	s.BlockMessage = textutil.TruncateRunes(strings.TrimSpace(s.BlockMessage), 500)
+	if s.BlockMessage == "" {
+		s.BlockMessage = DefaultBlockMessage
+	}
+	if v, ok := d.m["jev_default_set"]; ok {
+		var q JevQuestions
+		if json.Unmarshal(v, &q) == nil && q.Validate() == nil {
+			s.JevDefaultSet = &q
+		}
+	}
+}
+
+func (d decoder) storage(s *Settings) {
+	d.boolean("record_pass", &s.RecordPass)
+	d.boolean("record_overturned", &s.RecordOverturned)
+	d.boolean("record_errors", &s.RecordErrors)
+	d.boolean("store_text", &s.StoreText)
+	// 0.1 kept every record retention_days; the hit retention never drops
+	// below it (§72.10).
+	d.integer("retention_days", &s.RetentionDays, 1, 3650)
+	if _, ok := d.m["hit_retention_days"]; !ok && s.RetentionDays > s.HitRetentionDays {
+		s.HitRetentionDays = s.RetentionDays
+	}
+	d.integer("hit_retention_days", &s.HitRetentionDays, 1, 3650)
+	d.integer("overturned_retention_days", &s.OverturnedRetentionDays, 1, 3650)
+	d.integer("error_retention_days", &s.ErrorRetentionDays, 1, 3650)
+	d.integer("pass_retention_days", &s.PassRetentionDays, 1, 3)
+}
+
+func (d decoder) watch(s *Settings) {
+	d.boolean("auto_watch", &s.AutoWatch)
+	d.integer("watch_days", &s.WatchDays, 1, 365)
+	d.integer("analysis_every_violations", &s.AnalysisEveryViolations, 0, 1000)
+	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
+	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
+	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
+}
+
+// legacy reads the 0.1 single-model setup (converted once, §72.12).
+func (d decoder) legacy(s *Settings) {
 	d.str("base_url", &s.BaseURL)
 	s.BaseURL = strings.TrimSpace(s.BaseURL)
 	if s.BaseURL != "" && !baseURLRe.MatchString(s.BaseURL) {
@@ -250,10 +315,6 @@ func (d decoder) network(s *Settings) {
 		}
 	}
 	d.enum("tool_choice", &s.ToolChoice, "required", "function", "auto")
-}
-
-// limits reads the per-request budget and the scope selectors.
-func (d decoder) limits(s *Settings) {
 	d.integer("max_turns", &s.MaxTurns, 1, 5)
 	if d.num("temperature", &s.Temperature) {
 		s.Temperature = math.Max(0, math.Min(2, s.Temperature))
@@ -261,10 +322,6 @@ func (d decoder) limits(s *Settings) {
 	d.integer("max_tokens", &s.MaxTokens, 64, 4096)
 	d.integer("timeout_ms", &s.TimeoutMs, 1000, 25000)
 	d.enum("on_error", &s.OnError, "allow", "block")
-	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
-	d.integer("queue_size", &s.QueueSize, 1, 100000)
-	d.integer("input_max_chars", &s.InputMaxChars, 256, 100000)
-	d.integer("min_chars", &s.MinChars, 0, 1000)
 	d.integer("sample_rate", &s.SampleRate, 1, 100)
 	for _, g := range d.strList("group_ids") {
 		if id, err := strconv.ParseInt(strings.TrimSpace(g), 10, 64); err == nil && id > 0 {
@@ -276,34 +333,6 @@ func (d decoder) limits(s *Settings) {
 			s.ModelPatterns = append(s.ModelPatterns, p)
 		}
 	}
-	for _, u := range d.strList("exempt_user_ids") {
-		if u = strings.TrimSpace(u); u != "" {
-			if _, err := strconv.ParseInt(u, 10, 64); err == nil {
-				s.ExemptUserIDs = append(s.ExemptUserIDs, u)
-			}
-		}
-	}
-}
-
-// storage reads the cache, block response and retention settings.
-func (d decoder) storage(s *Settings) {
-	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
-	d.integer("block_status", &s.BlockStatus, 400, 599)
-	d.str("block_message", &s.BlockMessage)
-	s.BlockMessage = textutil.TruncateRunes(strings.TrimSpace(s.BlockMessage), 500)
-	if s.BlockMessage == "" {
-		s.BlockMessage = DefaultBlockMessage
-	}
-	d.boolean("record_pass", &s.RecordPass)
-	d.boolean("store_text", &s.StoreText)
-	d.integer("retention_days", &s.RetentionDays, 1, 3650)
-}
-
-// ban reads the automatic ban rule.
-func (d decoder) ban(s *Settings) {
-	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
-	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
-	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
 }
 
 func clampInt(v, lo, hi int) int {
@@ -320,97 +349,48 @@ func clampInt(v, lo, hi int) int {
 type config struct {
 	Settings
 
-	configured bool // base_url, api_key and model set
-	enabled    bool // configured and mode != off
-
-	endpoint     string
-	prompt       string // expanded system prompt
-	categories   []Category
-	categorySet  map[string]bool
-	policy       string // policy version (hex)
-	settingsHash string // sha256 of the raw settings JSON (12 hex): tells nodes apart while a change propagates
-	toolJSON     json.RawMessage
-	choiceJSON   json.RawMessage
-	markerKey    []byte
+	enabled      bool // mode != off
+	settingsHash string
 	exempt       map[int64]bool
-	groups       map[int64]bool
-	timeout      time.Duration
 	cacheTTL     time.Duration
 	banWindow    time.Duration
 	banDuration  time.Duration // 0 = until unblocked
-	retention    time.Duration
-	blockMessage string
+	watchFor     time.Duration
+	retention    map[string]time.Duration // by result
+	legacyReady  bool                     // the 0.1 setup is complete enough to convert
+	jevDefault   JevQuestions
 }
 
 // compile derives the runtime config from settings.
 func compile(s Settings) *config {
 	c := &config{Settings: s}
-	c.configured = s.BaseURL != "" && s.APIKey != "" && s.Model != ""
-	c.enabled = c.configured && s.Mode != ModeOff
-	c.endpoint = chatEndpoint(s.BaseURL)
-	c.categories = s.Categories
-	if len(c.categories) == 0 {
-		c.categories = DefaultCategories()
-	}
-	c.categorySet = make(map[string]bool, len(c.categories))
-	for _, cat := range c.categories {
-		c.categorySet[cat.ID] = true
-	}
-	c.prompt = expandPrompt(s.SystemPrompt, c.categories)
-	c.toolJSON = toolDefinition(c.categories)
-	c.choiceJSON = toolChoice(s.ToolChoice)
-	h := sha256.New()
-	cats, _ := json.Marshal(c.categories)
-	for _, part := range [][]byte{[]byte(s.Model), []byte(c.prompt), cats, []byte(s.ToolChoice)} {
-		h.Write(part)
-		h.Write([]byte{0})
-	}
-	c.policy = hex.EncodeToString(h.Sum(nil))[:32]
-	c.markerKey = markerKey(s.APIKey)
+	c.enabled = s.Mode != ModeOff
 	c.exempt = map[int64]bool{}
 	for _, u := range s.ExemptUserIDs {
 		if id, err := strconv.ParseInt(u, 10, 64); err == nil {
 			c.exempt[id] = true
 		}
 	}
-	c.groups = map[int64]bool{}
-	for _, g := range s.GroupIDs {
-		c.groups[g] = true
-	}
-	c.timeout = time.Duration(s.TimeoutMs) * time.Millisecond
 	c.cacheTTL = time.Duration(s.CacheTTLSeconds) * time.Second
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
-	c.retention = time.Duration(s.RetentionDays) * 24 * time.Hour
-	c.blockMessage = s.BlockMessage
+	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour
+	day := 24 * time.Hour
+	c.retention = map[string]time.Duration{
+		ResultBlock: time.Duration(s.HitRetentionDays) * day, ResultHit: time.Duration(s.HitRetentionDays) * day,
+		ResultOverturned: time.Duration(s.OverturnedRetentionDays) * day,
+		ResultError:      time.Duration(s.ErrorRetentionDays) * day, ResultPass: time.Duration(s.PassRetentionDays) * day,
+	}
+	c.legacyReady = s.BaseURL != "" && s.Model != ""
+	c.jevDefault, _ = DefaultQuestions(s.JevDefaultSet)
 	return c
 }
 
-// chatEndpoint builds the chat completions URL (CONTRACTS §20.3 base_url).
-func chatEndpoint(base string) string {
-	base = strings.TrimRight(strings.TrimSpace(base), "/")
-	if base == "" {
-		return ""
-	}
-	if strings.HasSuffix(base, "/v1") {
-		return base + "/chat/completions"
-	}
-	return base + "/v1/chat/completions"
-}
-
-// modelMatches reports whether model matches any glob (* and ?,
-// case-insensitive); no patterns match everything.
-func (c *config) modelMatches(model string) bool {
-	if len(c.ModelPatterns) == 0 {
-		return true
-	}
-	model = strings.ToLower(model)
-	for _, p := range c.ModelPatterns {
-		if globMatch(strings.ToLower(p), model) {
-			return true
-		}
-	}
-	return false
+// settingsDigest is a short sha256 of the raw settings JSON (tells nodes
+// apart while a change propagates).
+func settingsDigest(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:6])
 }
 
 // globMatch matches s against pattern with * (any run) and ? (one rune).
@@ -447,7 +427,3 @@ func globMatch(pattern, s string) bool {
 	}
 	return true
 }
-
-// Text cutting uses the SDK's textutil helpers (TruncateRunes /
-// TruncateBytes); this plugin only keeps truncateText, whose middle ellipsis
-// is specific to prompt moderation.

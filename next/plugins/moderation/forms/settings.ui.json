@@ -1,6 +1,30 @@
 {
   "ui:order": [
     "mode",
+    "exempt_user_ids",
+    "block_status",
+    "block_message",
+    "auto_watch",
+    "watch_days",
+    "analysis_every_violations",
+    "ban_threshold",
+    "ban_window_hours",
+    "ban_duration_hours",
+    "record_pass",
+    "record_overturned",
+    "record_errors",
+    "store_text",
+    "hit_retention_days",
+    "overturned_retention_days",
+    "error_retention_days",
+    "pass_retention_days",
+    "max_concurrency",
+    "queue_size",
+    "cache_ttl_seconds",
+    "cache_entries",
+    "input_max_chars",
+    "min_chars",
+    "jev_default_set",
     "base_url",
     "api_key",
     "model",
@@ -12,50 +36,366 @@
     "max_tokens",
     "timeout_ms",
     "on_error",
-    "max_concurrency",
-    "queue_size",
-    "cache_ttl_seconds",
     "sample_rate",
-    "min_chars",
-    "input_max_chars",
     "group_ids",
     "model_patterns",
-    "exempt_user_ids",
-    "record_pass",
-    "store_text",
-    "retention_days",
-    "block_status",
-    "block_message",
-    "ban_threshold",
-    "ban_window_hours",
-    "ban_duration_hours"
+    "retention_days"
   ],
   "mode": {
     "ui:section": {
-      "title": { "en": "Connection", "zh": "连接" },
+      "title": {
+        "en": "General",
+        "zh": "通用"
+      },
       "description": {
-        "en": "The OpenAI-compatible model that reviews prompts. With base URL, API key or model empty the plugin behaves as off.",
-        "zh": "审核提示词所用的 OpenAI 兼容模型。接口地址、API Key、模型任一为空时视同关闭。"
+        "en": "Channels, auditors and flows are configured on the Prompt Moderation page; a flow bound to a group (or the default group 0) decides what is moderated.",
+        "zh": "渠道、审核器和流程在“提示词审核”页面配置；绑定到分组（或默认分组 0）的流程决定审核哪些请求。"
       }
     },
     "ui:widget": "segmented",
     "ui:enumNames": [
-      { "en": "Off", "zh": "关闭" },
-      { "en": "Observe", "zh": "观察" },
-      { "en": "Enforce", "zh": "拦截" }
+      {
+        "en": "Off",
+        "zh": "关闭"
+      },
+      {
+        "en": "Observe",
+        "zh": "观察"
+      },
+      {
+        "en": "Enforce",
+        "zh": "拦截"
+      }
     ],
-    "ui:title": { "en": "Mode", "zh": "模式" },
+    "ui:title": {
+      "en": "Mode",
+      "zh": "模式"
+    },
     "ui:help": {
-      "en": "Observe records verdicts without blocking; enforce refuses requests judged as block.",
-      "zh": "观察只记录结论、不拦截；拦截模式下判为 block 的请求会被拒绝。"
+      "en": "Observe: requests pass at once and are moderated in the background; users on the watch list at the enforce level are moderated first. Enforce: every request waits for the flow.",
+      "zh": "观察：请求直接放行、后台审核；观察名单中“拦截级”的用户先审后发。拦截：所有请求都等审核结果。"
     },
     "ui:details": {
-      "en": "Off: nothing is checked. Observe: requests pass and are moderated in the background, results are recorded. Enforce: each request waits for the verdict and a block verdict refuses it.",
-      "zh": "关闭：不审核。观察：请求直接放行，后台异步审核并记录结果。拦截：每个请求等待审核结论，判为 block 时拒绝。"
+      "en": "A hit refuses the request only when it was moderated before the upstream call. Moderation errors always let the request pass.",
+      "zh": "只有先审后发的请求命中时才会被拒绝。审核出错一律放行。"
+    }
+  },
+  "exempt_user_ids": {
+    "ui:widget": "tags",
+    "ui:placeholder": "42",
+    "ui:title": {
+      "en": "Exempt user IDs",
+      "zh": "免审用户 ID"
+    },
+    "ui:help": {
+      "en": "Requests of these users are never moderated. Add the administrators here: the plugin cannot tell them apart yet.",
+      "zh": "这些用户的请求不审核。请把管理员加进来：插件目前识别不了管理员。"
+    }
+  },
+  "block_status": {
+    "ui:title": {
+      "en": "Block HTTP status",
+      "zh": "拦截状态码"
+    },
+    "ui:widget": "select",
+    "ui:enumNames": [
+      "400",
+      "403",
+      "451"
+    ]
+  },
+  "block_message": {
+    "ui:title": {
+      "en": "Block message",
+      "zh": "拦截提示"
+    },
+    "ui:help": {
+      "en": "Returned to the client when a request is refused (code moderation_blocked).",
+      "zh": "请求被拒绝时返回给客户端的错误信息（错误码 moderation_blocked）。"
+    }
+  },
+  "auto_watch": {
+    "ui:section": {
+      "title": {
+        "en": "Watch list and bans",
+        "zh": "观察名单与封禁"
+      }
+    },
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Add suspicious users automatically",
+      "zh": "自动加入观察名单"
+    },
+    "ui:help": {
+      "en": "The first suspicious record adds the user at the observe level.",
+      "zh": "首次出现可疑记录时，以观察级加入名单。"
+    }
+  },
+  "watch_days": {
+    "ui:title": {
+      "en": "Watch period",
+      "zh": "观察期"
+    },
+    "ui:help": {
+      "en": "Each new violation at the observe level extends it.",
+      "zh": "观察级每次违规都会顺延。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "analysis_every_violations": {
+    "ui:title": {
+      "en": "AI analysis every",
+      "zh": "每多少次违规做一次 AI 分析"
+    },
+    "ui:help": {
+      "en": "Counted now; the analysis itself comes in a later version. 0 = never.",
+      "zh": "目前只计数，AI 分析在后续版本提供。0 表示从不。"
+    }
+  },
+  "ban_threshold": {
+    "ui:title": {
+      "en": "Ban threshold",
+      "zh": "自动封禁阈值"
+    },
+    "ui:help": {
+      "en": "Suspicious requests within the window that ban a user (false positives excluded). 0 disables automatic bans.",
+      "zh": "窗口内达到该次数的可疑请求即自动封禁用户（不含误报）。0 表示不自动封禁。"
+    }
+  },
+  "ban_window_hours": {
+    "ui:title": {
+      "en": "Ban window",
+      "zh": "计数窗口"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "hours",
+        "zh": "小时"
+      }
+    }
+  },
+  "ban_duration_hours": {
+    "ui:title": {
+      "en": "Ban duration",
+      "zh": "封禁时长"
+    },
+    "ui:help": {
+      "en": "0 bans until an administrator unblocks the user.",
+      "zh": "0 表示直到管理员手动解封。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "hours",
+        "zh": "小时"
+      }
+    }
+  },
+  "record_pass": {
+    "ui:section": {
+      "title": {
+        "en": "Records",
+        "zh": "记录"
+      }
+    },
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Record passed checks",
+      "zh": "记录通过的审核"
+    },
+    "ui:help": {
+      "en": "Hits are always recorded.",
+      "zh": "命中始终记录。"
+    }
+  },
+  "record_overturned": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Record overturned hits",
+      "zh": "记录被推翻的命中"
+    }
+  },
+  "record_errors": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Record errors",
+      "zh": "记录审核出错"
+    }
+  },
+  "store_text": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Store moderated text",
+      "zh": "保存审核文本"
+    },
+    "ui:help": {
+      "en": "Keep the moderated text, and the raw user messages of first-stage hits. They may contain user data.",
+      "zh": "保存被审核的文本，以及第一级命中时用户原样发来的消息，可能包含用户数据。"
+    }
+  },
+  "hit_retention_days": {
+    "ui:title": {
+      "en": "Keep hits",
+      "zh": "命中保留"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "overturned_retention_days": {
+    "ui:title": {
+      "en": "Keep overturned",
+      "zh": "被推翻保留"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "error_retention_days": {
+    "ui:title": {
+      "en": "Keep errors",
+      "zh": "出错保留"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "pass_retention_days": {
+    "ui:title": {
+      "en": "Keep passes",
+      "zh": "通过保留"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "max_concurrency": {
+    "ui:title": {
+      "en": "Max concurrency",
+      "zh": "最大并发"
+    },
+    "ui:help": {
+      "en": "Concurrent auditor calls on each node; also the number of background workers.",
+      "zh": "每个节点同时进行的审核调用数，也是后台审核的工作协程数。"
+    },
+    "ui:section": {
+      "title": {
+        "en": "Performance",
+        "zh": "性能"
+      }
+    }
+  },
+  "queue_size": {
+    "ui:title": {
+      "en": "Queue size",
+      "zh": "队列长度"
+    },
+    "ui:help": {
+      "en": "Requests waiting for background moderation on each node.",
+      "zh": "每个节点等待后台审核的请求数上限。"
+    },
+    "ui:details": {
+      "en": "When the queue is full, new requests are not moderated and are counted as dropped.",
+      "zh": "队列满了之后新请求不再审核，并计入丢弃数。"
+    }
+  },
+  "cache_ttl_seconds": {
+    "ui:title": {
+      "en": "Pass cache",
+      "zh": "通过缓存时长"
+    },
+    "ui:help": {
+      "en": "A clean pass of the same input under the same flow version is reused this long. 0 disables the cache.",
+      "zh": "同一流程版本下相同输入的干净通过结论复用多久。0 表示不缓存。"
+    },
+    "ui:details": {
+      "en": "Hits, errors, skipped auditors and URL images are never cached.",
+      "zh": "命中、出错、有审核器被跳过、带 URL 图片的输入都不缓存。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "s",
+        "zh": "秒"
+      }
+    }
+  },
+  "cache_entries": {
+    "ui:title": {
+      "en": "Pass cache entries",
+      "zh": "通过缓存条数"
+    }
+  },
+  "input_max_chars": {
+    "ui:title": {
+      "en": "Max length",
+      "zh": "最大审核字数"
+    },
+    "ui:help": {
+      "en": "Whitespace is collapsed, then the text is cut to this length.",
+      "zh": "压缩空白后截到这个长度。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "chars",
+        "zh": "字"
+      }
+    }
+  },
+  "min_chars": {
+    "ui:title": {
+      "en": "Min length",
+      "zh": "最少字数"
+    },
+    "ui:help": {
+      "en": "Text shorter than this (ignoring whitespace) and without images is not moderated.",
+      "zh": "去掉空白后短于该字数且没有图片的输入不审核。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "chars",
+        "zh": "字"
+      }
+    }
+  },
+  "jev_default_set": {
+    "ui:section": {
+      "title": {
+        "en": "Jev default question set",
+        "zh": "Jev 默认题集"
+      },
+      "collapsed": true
+    },
+    "ui:widget": "json",
+    "ui:title": {
+      "en": "Default question set",
+      "zh": "默认题集"
+    },
+    "ui:help": {
+      "en": "Used by Jev auditors without their own table. Empty = the built-in Chinese set.",
+      "zh": "没有自己题集的 Jev 审核器使用它。留空使用内置中文题集。"
     }
   },
   "base_url": {
-    "ui:title": { "en": "Base URL", "zh": "接口地址" },
+    "ui:title": {
+      "en": "Base URL",
+      "zh": "接口地址"
+    },
     "ui:placeholder": "https://api.openai.com",
     "ui:help": {
       "en": "OpenAI-compatible endpoint.",
@@ -65,32 +405,55 @@
       "en": "Ending in /v1, /chat/completions is appended; otherwise /v1/chat/completions.",
       "zh": "以 /v1 结尾时拼接 /chat/completions，否则拼接 /v1/chat/completions。"
     },
-    "ui:options": { "mono": true }
+    "ui:options": {
+      "mono": true
+    },
+    "ui:section": {
+      "title": {
+        "en": "0.1 settings (converted)",
+        "zh": "0.1 旧版配置（已转换）"
+      },
+      "description": {
+        "en": "Read only. On the first start of 0.2 they were turned into a channel, an LLM auditor and a flow.",
+        "zh": "只读。0.2 首次启动时已转换成渠道、LLM 审核器和流程。"
+      },
+      "collapsed": true
+    }
   },
   "api_key": {
     "ui:widget": "secret",
-    "ui:title": { "en": "API key", "zh": "API Key" },
+    "ui:title": {
+      "en": "API key",
+      "zh": "API Key"
+    },
     "ui:help": {
       "en": "Sent as Authorization: Bearer. Leave empty to keep the stored key.",
       "zh": "以 Authorization: Bearer 方式发送。留空时保留已存储的密钥。"
     }
   },
   "model": {
-    "ui:title": { "en": "Model", "zh": "模型" },
+    "ui:title": {
+      "en": "Model",
+      "zh": "模型"
+    },
     "ui:placeholder": "gpt-4o-mini",
     "ui:help": {
       "en": "Must support tool calling (function calling).",
       "zh": "需要支持工具调用（function calling）。"
     },
-    "ui:options": { "mono": true }
+    "ui:options": {
+      "mono": true
+    }
   },
   "system_prompt": {
-    "ui:section": {
-      "title": { "en": "Prompt and categories", "zh": "提示词与分类" }
-    },
     "ui:widget": "textarea",
-    "ui:options": { "rows": 8 },
-    "ui:title": { "en": "System prompt", "zh": "系统提示词" },
+    "ui:options": {
+      "rows": 8
+    },
+    "ui:title": {
+      "en": "System prompt",
+      "zh": "系统提示词"
+    },
     "ui:help": {
       "en": "Leave empty to use the built-in prompt.",
       "zh": "留空使用内置提示词。"
@@ -101,131 +464,142 @@
     }
   },
   "categories": {
-    "ui:title": { "en": "Categories", "zh": "审核分类" },
+    "ui:title": {
+      "en": "Categories",
+      "zh": "审核分类"
+    },
     "ui:help": {
       "en": "Leave empty to use the 12 built-in categories. The model can only choose from these ids.",
       "zh": "留空使用内置的 12 个分类。模型只能从这些分类 id 中选择。"
     },
-    "ui:options": { "itemTitle": { "en": "Category {n}", "zh": "分类 {n}" } },
+    "ui:options": {
+      "itemTitle": {
+        "en": "Category {n}",
+        "zh": "分类 {n}"
+      }
+    },
     "items": {
-      "ui:order": ["id", "description"],
+      "ui:order": [
+        "id",
+        "description"
+      ],
       "id": {
-        "ui:title": { "en": "Category ID", "zh": "分类 ID" },
+        "ui:title": {
+          "en": "Category ID",
+          "zh": "分类 ID"
+        },
         "ui:placeholder": "illegal",
-        "ui:help": { "en": "Lowercase letters, digits and _ (at most 32).", "zh": "小写字母、数字和下划线，最多 32 个字符。" },
-        "ui:options": { "mono": true }
+        "ui:help": {
+          "en": "Lowercase letters, digits and _ (at most 32).",
+          "zh": "小写字母、数字和下划线，最多 32 个字符。"
+        },
+        "ui:options": {
+          "mono": true
+        }
       },
       "description": {
-        "ui:title": { "en": "Description", "zh": "说明" },
-        "ui:placeholder": { "en": "Illegal activity: drugs, weapons, fraud…", "zh": "违法犯罪：毒品、武器、诈骗等" }
+        "ui:title": {
+          "en": "Description",
+          "zh": "说明"
+        },
+        "ui:placeholder": {
+          "en": "Illegal activity: drugs, weapons, fraud…",
+          "zh": "违法犯罪：毒品、武器、诈骗等"
+        }
       }
     }
   },
   "tool_choice": {
-    "ui:section": {
-      "title": { "en": "Model calls", "zh": "调用参数" }
-    },
     "ui:widget": "select",
     "ui:enumNames": [
-      { "en": "required (must call the tool)", "zh": "required（必须调用工具）" },
-      { "en": "function (name the tool)", "zh": "function（指定工具）" },
-      { "en": "auto (model decides)", "zh": "auto（由模型决定）" }
+      {
+        "en": "required (must call the tool)",
+        "zh": "required（必须调用工具）"
+      },
+      {
+        "en": "function (name the tool)",
+        "zh": "function（指定工具）"
+      },
+      {
+        "en": "auto (model decides)",
+        "zh": "auto（由模型决定）"
+      }
     ],
-    "ui:title": { "en": "Tool choice", "zh": "工具调用方式" }
+    "ui:title": {
+      "en": "Tool choice",
+      "zh": "工具调用方式"
+    }
   },
   "max_turns": {
-    "ui:title": { "en": "Max turns", "zh": "最大轮数" }
+    "ui:title": {
+      "en": "Max turns",
+      "zh": "最大轮数"
+    }
   },
   "temperature": {
-    "ui:title": { "en": "Temperature", "zh": "温度" }
+    "ui:title": {
+      "en": "Temperature",
+      "zh": "温度"
+    }
   },
   "max_tokens": {
-    "ui:title": { "en": "Max output tokens", "zh": "最大输出 Token" }
+    "ui:title": {
+      "en": "Max output tokens",
+      "zh": "最大输出 Token"
+    }
   },
   "timeout_ms": {
-    "ui:title": { "en": "Timeout", "zh": "超时" },
-    "ui:options": { "unit": { "en": "ms", "zh": "毫秒" } }
+    "ui:title": {
+      "en": "Timeout",
+      "zh": "超时"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "ms",
+        "zh": "毫秒"
+      }
+    }
   },
   "on_error": {
     "ui:widget": "segmented",
     "ui:enumNames": [
-      { "en": "Allow", "zh": "放行" },
-      { "en": "Refuse", "zh": "拒绝" }
+      {
+        "en": "Allow",
+        "zh": "放行"
+      },
+      {
+        "en": "Refuse",
+        "zh": "拒绝"
+      }
     ],
-    "ui:title": { "en": "On error", "zh": "审核失败时" },
-    "ui:help": {
-      "en": "Enforce mode: what happens when moderation fails.",
-      "zh": "拦截模式下审核失败时如何处理请求。"
+    "ui:title": {
+      "en": "On error",
+      "zh": "审核失败时"
     },
-    "ui:details": {
-      "en": "Failures are timeouts, upstream errors and models that never give a verdict. Refusing returns 503 moderation_unavailable.",
-      "zh": "失败指超时、上游错误或模型始终不给结论。拒绝时返回 503 moderation_unavailable。"
+    "ui:help": {
+      "en": "No longer used: moderation errors always let the request pass.",
+      "zh": "已不再生效：审核出错一律放行。"
     }
-  },
-  "max_concurrency": {
-    "ui:title": { "en": "Max concurrency", "zh": "最大并发" },
-    "ui:help": {
-      "en": "Concurrent LLM calls on each node; also the number of observe workers.",
-      "zh": "每个节点同时进行的审核调用数，也是观察模式的工作协程数。"
-    }
-  },
-  "queue_size": {
-    "ui:title": { "en": "Queue size", "zh": "队列长度" },
-    "ui:help": {
-      "en": "Observe mode: requests waiting for moderation on each node.",
-      "zh": "观察模式下每个节点等待审核的请求数上限。"
-    },
-    "ui:details": {
-      "en": "When the queue is full, new requests are not moderated and are counted as dropped.",
-      "zh": "队列满了之后新请求不再审核，并计入丢弃数。"
-    }
-  },
-  "cache_ttl_seconds": {
-    "ui:title": { "en": "Verdict cache", "zh": "结论缓存时长" },
-    "ui:help": {
-      "en": "Verdicts of identical text are reused for this long. 0 disables the cache.",
-      "zh": "相同文本的审核结论复用多久。0 表示不缓存。"
-    },
-    "ui:details": {
-      "en": "The cache is in memory and shared across nodes; changing the model, prompt, categories or tool choice starts over.",
-      "zh": "缓存在内存中并跨节点共享；修改模型、提示词、分类或工具调用方式后自动失效。"
-    },
-    "ui:options": { "unit": { "en": "s", "zh": "秒" } }
   },
   "sample_rate": {
-    "ui:section": {
-      "title": { "en": "Scope", "zh": "范围" },
-      "description": {
-        "en": "Which requests are moderated.",
-        "zh": "哪些请求需要审核。"
-      }
+    "ui:title": {
+      "en": "Sample rate",
+      "zh": "抽样比例"
     },
-    "ui:title": { "en": "Sample rate", "zh": "抽样比例" },
     "ui:help": {
       "en": "Share of requests moderated, chosen deterministically by text.",
       "zh": "按文本确定性抽样的审核比例。"
     },
-    "ui:options": { "unit": "%" }
-  },
-  "min_chars": {
-    "ui:title": { "en": "Min length", "zh": "最少字数" },
-    "ui:help": {
-      "en": "Text shorter than this (ignoring whitespace) is not moderated.",
-      "zh": "去掉空白后短于该字数的文本不审核。"
-    },
-    "ui:options": { "unit": { "en": "chars", "zh": "字" } }
-  },
-  "input_max_chars": {
-    "ui:title": { "en": "Max length", "zh": "最大审核字数" },
-    "ui:help": {
-      "en": "Longer text keeps the first 2/3 and the last 1/3.",
-      "zh": "超过时保留前 2/3 和后 1/3。"
-    },
-    "ui:options": { "unit": { "en": "chars", "zh": "字" } }
+    "ui:options": {
+      "unit": "%"
+    }
   },
   "group_ids": {
     "ui:widget": "group-select",
-    "ui:title": { "en": "Groups", "zh": "分组" },
+    "ui:title": {
+      "en": "Groups",
+      "zh": "分组"
+    },
     "ui:help": {
       "en": "Only moderate requests of these groups; empty means all groups.",
       "zh": "只审核这些分组的请求，留空表示全部分组。"
@@ -234,78 +608,25 @@
   "model_patterns": {
     "ui:widget": "tags",
     "ui:placeholder": "claude-*",
-    "ui:title": { "en": "Model patterns", "zh": "模型匹配" },
+    "ui:title": {
+      "en": "Model patterns",
+      "zh": "模型匹配"
+    },
     "ui:help": {
       "en": "Only moderate requests for matching client models (* and ? wildcards); empty means all.",
       "zh": "只审核匹配的客户端模型（支持 * 和 ? 通配），留空表示全部。"
     }
   },
-  "exempt_user_ids": {
-    "ui:widget": "tags",
-    "ui:placeholder": "42",
-    "ui:title": { "en": "Exempt user IDs", "zh": "免审用户 ID" },
-    "ui:help": {
-      "en": "Requests of these users are never moderated.",
-      "zh": "这些用户的请求不审核。"
-    }
-  },
-  "record_pass": {
-    "ui:section": {
-      "title": { "en": "Records", "zh": "记录" }
-    },
-    "ui:widget": "switch",
-    "ui:title": { "en": "Record passed checks", "zh": "记录通过的审核" },
-    "ui:help": {
-      "en": "Flag, block and errors are always recorded.",
-      "zh": "flag、block 和错误始终记录。"
-    }
-  },
-  "store_text": {
-    "ui:widget": "switch",
-    "ui:title": { "en": "Store moderated text", "zh": "保存审核文本" },
-    "ui:help": {
-      "en": "Keep the (truncated) text in the records. It may contain user data.",
-      "zh": "在审核记录中保存（截断后的）文本，可能包含用户数据。"
-    }
-  },
   "retention_days": {
-    "ui:title": { "en": "Retention", "zh": "记录保留" },
-    "ui:options": { "unit": { "en": "days", "zh": "天" } }
-  },
-  "block_status": {
-    "ui:section": {
-      "title": { "en": "Blocking and bans", "zh": "拦截与封禁" }
+    "ui:title": {
+      "en": "Retention",
+      "zh": "记录保留"
     },
-    "ui:title": { "en": "Block HTTP status", "zh": "拦截状态码" }
-  },
-  "block_message": {
-    "ui:title": { "en": "Block message", "zh": "拦截提示" },
-    "ui:help": {
-      "en": "Returned to the client when a request is refused (code moderation_blocked).",
-      "zh": "请求被拒绝时返回给客户端的错误信息（错误码 moderation_blocked）。"
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
     }
-  },
-  "ban_threshold": {
-    "ui:title": { "en": "Ban threshold", "zh": "自动封禁阈值" },
-    "ui:help": {
-      "en": "Block verdicts within the window that ban a user. 0 disables automatic bans.",
-      "zh": "窗口内达到该次数的 block 结论即自动封禁用户。0 表示不自动封禁。"
-    },
-    "ui:details": {
-      "en": "Observe mode counts too, so users can be banned before enforce is switched on.",
-      "zh": "观察模式也计数，因此开启拦截前用户也可能被封禁。"
-    }
-  },
-  "ban_window_hours": {
-    "ui:title": { "en": "Ban window", "zh": "计数窗口" },
-    "ui:options": { "unit": { "en": "hours", "zh": "小时" } }
-  },
-  "ban_duration_hours": {
-    "ui:title": { "en": "Ban duration", "zh": "封禁时长" },
-    "ui:help": {
-      "en": "0 bans until an administrator unblocks the user.",
-      "zh": "0 表示直到管理员手动解封。"
-    },
-    "ui:options": { "unit": { "en": "hours", "zh": "小时" } }
   }
 }

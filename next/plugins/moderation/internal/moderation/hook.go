@@ -3,27 +3,31 @@ package moderation
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
-// Deny codes and messages (CONTRACTS §20.4).
+// Deny codes and messages.
 const (
-	DenyBlocked      = "moderation_blocked"
-	DenyUserBlocked  = "moderation_user_blocked"
-	DenyUnavailable  = "moderation_unavailable"
-	MsgUserBlocked   = "该用户因多次违规已被暂停使用，请联系管理员"
-	MsgUnavailable   = "提示词审核服务暂不可用，请稍后重试"
-	maxNoteBytes     = 1024
-	notePrefix       = "moderation: "
-	eventTextMaxChar = 100000
+	DenyBlocked     = "moderation_blocked"
+	DenyUserBlocked = "moderation_user_blocked"
+	MsgUserBlocked  = "该用户因多次违规已被暂停使用，请联系管理员"
+	maxNoteBytes    = 1024
+	notePrefix      = "moderation: "
+	textMaxChars    = 100000
+
+	// Timings (events.timing).
+	TimingPre  = "pre"
+	TimingPost = "post"
+
+	// preBudget caps a synchronous run below the 30 s hook timeout.
+	preBudget = 29 * time.Second
 )
 
 var (
@@ -42,275 +46,224 @@ func deny(status int, code, msg, note string) *pluginv1.GatewayRequestHookRespon
 	}
 }
 
-// verdictNote renders "moderation: block [a,b] reason".
-func verdictNote(v Verdict, cached bool) string {
-	var b strings.Builder
-	b.WriteString(notePrefix)
-	b.WriteString(v.Verdict)
-	if len(v.Categories) > 0 {
-		b.WriteString(" [")
-		b.WriteString(strings.Join(v.Categories, ","))
-		b.WriteByte(']')
-	}
-	if cached {
-		b.WriteString(" (cached)")
-	}
-	if v.Reason != "" {
-		b.WriteByte(' ')
-		b.WriteString(v.Reason)
-	}
-	return b.String()
+// moderation is one request being moderated.
+type moderation struct {
+	cfg    *config
+	flow   *liveFlow
+	snap   *snapshot
+	in     *Input
+	rec    eventRec
+	timing string
+	key    string // pass cache / singleflight key
+	queued time.Time
 }
 
-// OnGatewayRequest implements pluginsdk.Hook (CONTRACTS §20.4).
+// OnGatewayRequest implements pluginsdk.Hook (CONTRACTS §72.5).
 func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
+	m, early := p.admit(in)
+	if early != nil {
+		return early, nil
+	}
+	if m.timing == TimingPost {
+		m.queued = p.now()
+		if !p.enqueue(m) {
+			p.stats.dropped.Add(1)
+			return allow(notePrefix + "dropped (queue full)"), nil
+		}
+		return allow(notePrefix + "queued"), nil
+	}
+	return p.runPre(ctx, m), nil
+}
+
+// admit applies every precondition (steps 1–8). A non-nil response ends the
+// hook; otherwise m is ready to run.
+func (p *Plugin) admit(in *pluginv1.GatewayRequestHookRequest) (*moderation, *pluginv1.GatewayRequestHookResponse) {
 	c := p.cfg.Load()
 	if !c.enabled {
-		return allowEmpty, nil
+		return nil, allowEmpty
 	}
 	meta := in.GetMeta()
-	gate := p.gate(c, meta, in.GetFields())
-	if gate.early != nil {
-		return gate.early, nil
+	uid := meta.GetUserId()
+	if c.exempt[uid] {
+		return nil, allowEmpty
+	}
+	if p.isBlocked(uid) {
+		return nil, deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked")
+	}
+	snap := p.snap.Load()
+	flow := snap.flowFor(meta.GetGroupId())
+	if flow == nil {
+		return nil, allowEmpty
+	}
+	fields := in.GetFields()
+	model := fieldString(fields[FieldModel])
+	if model == "" {
+		model = meta.GetModel()
+	}
+	if !flow.Spec.ModelFilter.Allows(model) {
+		return nil, allowEmpty
+	}
+	input := extractInput(fields, c.InputMaxChars)
+	if input.Empty() {
+		return nil, allowEmpty
+	}
+	if snap.isSelf(input.Text) {
+		return nil, allowSelf
+	}
+	if len(input.Images) == 0 && visibleChars(input.Text) < c.MinChars {
+		return nil, allowEmpty
+	}
+	level := p.watchLevel(uid)
+	m := &moderation{cfg: c, flow: flow, snap: snap, in: input, timing: TimingPost}
+	if c.Mode == ModeEnforce || level == LevelEnforce {
+		m.timing = TimingPre
+	}
+	if m.timing == TimingPost && !sampled(input.Hash, flow.Spec.SampleRate) {
+		return nil, allowEmpty
+	}
+	m.key = passKey(flow, input.Hash)
+	if p.passCached(m.key, m.timing == TimingPre) {
+		p.stats.cacheHits.Add(1)
+		return nil, allow(notePrefix + "pass (cached)")
 	}
 	protocol := meta.GetClientProtocol()
 	if protocol == "" {
 		protocol = meta.GetProtocol()
 	}
-	rec := eventRec{
-		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: meta.GetUserId(), APIKeyID: meta.GetApiKeyId(),
-		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(gate.model, 200), Protocol: protocol, Mode: c.Mode,
-		TextChars: utf8.RuneCountInString(gate.text), TextHash: hex.EncodeToString(gate.hash[:]), LLMModel: c.Model,
+	m.rec = eventRec{
+		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: uid, APIKeyID: meta.GetApiKeyId(),
+		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
+		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: input.Format,
+		TextChars: len([]rune(input.Text)), TextHash: hex.EncodeToString(input.Hash[:]), ImageCount: len(input.Images),
+		WatchLevel: level,
 	}
 	if c.StoreText {
-		t := textutil.TruncateRunes(gate.text, eventTextMaxChar)
-		rec.Text = &t
+		t := textutil.TruncateRunes(input.Text, textMaxChars)
+		m.rec.Text = &t
 	}
-	key := cacheKey(c.policy, gate.text)
-	if c.Mode == ModeObserve {
-		return p.observeDecision(ctx, c, rec, gate.text, key), nil
-	}
-	return p.enforceInline(ctx, c, rec, gate.text, key), nil
+	return m, nil
 }
 
-// gateResult is what gate decided: the model and truncated text to judge (empty
-// when out of scope), their hash, or a non-nil early response that
-// OnGatewayRequest returns as is.
-type gateResult struct {
-	model string
-	text  string
-	hash  [32]byte
-	early *pluginv1.GatewayRequestHookResponse
+// passKey is the pass cache key: (flow, version, input hash).
+func passKey(f *liveFlow, h [32]byte) string {
+	return strconv.FormatInt(f.ID, 10) + ":" + strconv.Itoa(f.Version) + ":" + hex.EncodeToString(h[:])
 }
 
-func outOfScope(early *pluginv1.GatewayRequestHookResponse) gateResult {
-	return gateResult{early: early}
+// runPre moderates inline; a hit refuses the request.
+func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
+	budget := min(m.flow.timeout, preBudget)
+	ch := p.sf.DoChan(m.key, func() (any, error) {
+		// The shared run has its own deadline, so a waiter that gives up
+		// does not cancel it for the others.
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
+		defer cancel()
+		tr := p.run(rctx, m)
+		return &tr, nil
+	})
+	var tr Trace
+	select {
+	case r := <-ch:
+		tr = *r.Val.(*Trace)
+	case <-ctx.Done():
+		// The client is gone or the hook timed out: no record unless the
+		// shared run hits (written by finish below once it returns).
+		go func() {
+			r := <-ch
+			if t := *r.Val.(*Trace); t.Final == Hit {
+				p.finish(m, t, false)
+			}
+		}()
+		return allow(notePrefix + "error canceled")
+	}
+	refused := tr.Final == Hit
+	if ctx.Err() != nil && !refused {
+		return allow(traceNote(m, tr))
+	}
+	p.finish(m, tr, refused)
+	if refused {
+		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, tr))
+	}
+	return allow(traceNote(m, tr))
 }
 
-// gate applies the preconditions that decide, without judging anything, that
-// the request is out of scope.
-func (p *Plugin) gate(c *config, meta *pluginv1.RequestMeta, fields map[string]string) gateResult {
-	uid := meta.GetUserId()
-	if c.exempt[uid] {
-		return outOfScope(allowEmpty)
-	}
-	if p.isBlocked(uid) {
-		return outOfScope(deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked"))
-	}
-	if len(c.groups) > 0 && !c.groups[meta.GetGroupId()] {
-		return outOfScope(allowEmpty)
-	}
-	model := fieldString(fields[FieldModel])
-	if model == "" {
-		model = meta.GetModel()
-	}
-	if !c.modelMatches(model) {
-		return outOfScope(allowEmpty)
-	}
-	text := extractText(fields)
-	if text == "" {
-		return outOfScope(allowEmpty)
-	}
-	if isSelfRequest(c.markerKey, text) {
-		return outOfScope(allowSelf)
-	}
-	if visibleChars(text) < c.MinChars {
-		return outOfScope(allowEmpty)
-	}
-	text = truncateText(text, c.InputMaxChars)
-	// Hash once: the sample rate and the event record both need it, and the
-	// text may be up to eventTextMaxChar characters.
-	hash := textHash(text)
-	if !sampled(hash, c.SampleRate) {
-		return outOfScope(allowEmpty)
-	}
-	return gateResult{model: model, text: text, hash: hash}
-}
-
-// observeDecision answers observe mode: a cached verdict, or a queued job,
-// without ever blocking the client on the moderator.
-func (p *Plugin) observeDecision(ctx context.Context, c *config, rec eventRec, text string, key string) *pluginv1.GatewayRequestHookResponse {
-	if v, ok := p.cacheGet(ctx, c, key, false); ok {
+// runPost moderates one queued request (worker).
+func (p *Plugin) runPost(m *moderation) {
+	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
+	if p.passCached(m.key, true) {
 		p.stats.cacheHits.Add(1)
-		rec.Cached = true
-		p.finishRecord(c, rec, v, nil, ActionAllow)
-		return allow(verdictNote(v, true))
-	}
-	if !p.enqueue(observeJob{cfg: c, rec: rec, text: text, key: key}) {
-		p.stats.dropped.Add(1)
-		return allow(notePrefix + "dropped (queue full)")
-	}
-	return allow(notePrefix + "queued")
-}
-
-// enforceInline judges the request inline and turns the verdict into a decision.
-func (p *Plugin) enforceInline(ctx context.Context, c *config, rec eventRec, text string, key string) *pluginv1.GatewayRequestHookResponse {
-	start := time.Now()
-	if v, ok := p.cacheGet(ctx, c, key, true); ok {
-		p.stats.cacheHits.Add(1)
-		rec.Cached = true
-		rec.LatencyMs = int(time.Since(start).Milliseconds())
-		return p.enforceDecision(c, rec, v, nil, true)
-	}
-	res, shared, err := p.judgeShared(ctx, c, key, text)
-	if res != nil {
-		rec.Turns, rec.PromptTokens, rec.CompletionTokens = res.Turns, res.Usage.PromptTokens, res.Usage.CompletionTokens
-		if res.LLMModel != "" {
-			rec.LLMModel = res.LLMModel
-		}
-	}
-	if shared {
-		rec.Cached, rec.Turns, rec.PromptTokens, rec.CompletionTokens = true, 0, 0, 0
-	}
-	rec.LatencyMs = int(time.Since(start).Milliseconds())
-	if err != nil {
-		return p.enforceDecision(c, rec, Verdict{}, err, false)
-	}
-	return p.enforceDecision(c, rec, res.Verdict, nil, rec.Cached)
-}
-
-// enforceDecision records the outcome and builds the hook response.
-func (p *Plugin) enforceDecision(c *config, rec eventRec, v Verdict, err error, cached bool) *pluginv1.GatewayRequestHookResponse {
-	if err != nil {
-		note := notePrefix + "error " + err.Error()
-		if c.OnError == "block" {
-			p.finishRecord(c, rec, Verdict{}, err, ActionDeny)
-			return deny(http.StatusServiceUnavailable, DenyUnavailable, MsgUnavailable, note)
-		}
-		p.finishRecord(c, rec, Verdict{}, err, ActionAllow)
-		return allow(note)
-	}
-	note := verdictNote(v, cached)
-	if v.Verdict == VerdictBlock {
-		p.finishRecord(c, rec, v, nil, ActionDeny)
-		return deny(c.BlockStatus, DenyBlocked, c.blockMessage, note)
-	}
-	p.finishRecord(c, rec, v, nil, ActionAllow)
-	return allow(note)
-}
-
-// finishRecord fills the verdict into rec and queues it for the database
-// (pass verdicts only with record_pass).
-func (p *Plugin) finishRecord(c *config, rec eventRec, v Verdict, err error, action string) {
-	rec.Action = action
-	if err != nil {
-		rec.Verdict = VerdictError
-		rec.Error = textutil.TruncateRunes(err.Error(), 1000)
-		rec.Categories = []string{}
-	} else {
-		rec.Verdict, rec.Categories, rec.Severity, rec.Reason = v.Verdict, v.Categories, v.Severity, v.Reason
-		if rec.Categories == nil {
-			rec.Categories = []string{}
-		}
-	}
-	if rec.Verdict == VerdictPass && !c.RecordPass {
 		return
 	}
+	ctx, cancel := context.WithTimeout(p.bg, m.flow.timeout)
+	defer cancel()
+	tr := p.run(ctx, m)
+	if p.bg.Err() != nil {
+		return
+	}
+	p.finish(m, tr, false)
+}
+
+// run executes the flow of m.
+func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
+	tr := runFlow(ctx, m.flow.Spec, m.flow.timeout, func(ctx context.Context, id int64) Outcome {
+		a := m.snap.auditors[id]
+		if a == nil {
+			return Outcome{AuditorID: id, Err: errAuditorMissing}
+		}
+		return p.audit(ctx, a, m.in)
+	})
+	tr.TruncatedRun = m.in.TruncatedRun
+	return tr
+}
+
+// finish caches a clean pass and records the run.
+func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
+	if tr.Final == Pass && !tr.Errored && !tr.Skipped && !tr.Overturned && !tr.anySkipped() && !m.in.HasURLImage {
+		p.passPut(m.cfg, m.key)
+	}
+	rec := m.rec
+	rec.LatencyMs = int(tr.LatencyMs)
+	rec.fillFromTrace(tr, refused)
+	if tr.firstStageHit() && m.cfg.StoreText {
+		s := string(m.in.Messages)
+		rec.InputMessage, rec.InputMessageSize = &s, len(s)
+	}
+	switch rec.Result {
+	case ResultPass:
+		if !m.cfg.RecordPass {
+			return
+		}
+	case ResultOverturned:
+		if !m.cfg.RecordOverturned {
+			return
+		}
+	case ResultError:
+		if !m.cfg.RecordErrors {
+			return
+		}
+	}
+	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])
 	p.eventWriter.Send(rec)
 }
 
-// judgeShared runs one moderation per distinct text at a time
-// (singleflight). The shared call gets its own deadline (timeout_ms from
-// now), so a waiter giving up does not cancel it for the others.
-// shared=true for callers that reused another caller's run.
-func (p *Plugin) judgeShared(ctx context.Context, c *config, key, text string) (res *Result, shared bool, err error) {
-	deadline := time.Now().Add(c.timeout)
-	leader := false
-	ch := p.sf.DoChan(key, func() (any, error) {
-		leader = true
-		jctx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
-		defer cancel()
-		r, err := p.judge(jctx, c, text, false)
-		if err == nil {
-			p.cachePut(c, key, r.Verdict)
+// traceNote renders "moderation: hit flow=3 v5 [a,b] 0.97".
+func traceNote(m *moderation, tr Trace) string {
+	var b strings.Builder
+	b.WriteString(notePrefix)
+	result := tr.Final
+	switch {
+	case tr.Final == Pass && tr.Errored:
+		result = "error"
+	case tr.Overturned:
+		result = "overturned"
+	}
+	b.WriteString(result)
+	fmt.Fprintf(&b, " flow=%d v%d", m.flow.ID, m.flow.Version)
+	if hits := tr.HitCategories(); len(hits) > 0 {
+		cats := make([]string, 0, len(hits))
+		for _, h := range hits {
+			cats = append(cats, h.Category)
 		}
-		return r, err
-	})
-	wait := time.NewTimer(time.Until(deadline) + 50*time.Millisecond)
-	defer wait.Stop()
-	select {
-	case r := <-ch:
-		res, _ = r.Val.(*Result)
-		return res, !leader, r.Err
-	case <-ctx.Done():
-		return nil, false, fmt.Errorf("timeout: %w", ctx.Err())
-	case <-wait.C:
-		return nil, false, errors.New("timeout: moderation did not finish within timeout_ms")
+		fmt.Fprintf(&b, " [%s] %.2f", strings.Join(cats, ","), hits[0].Score)
 	}
-}
-
-// judge acquires a concurrency slot and runs the agent. ctx carries the
-// deadline (timeout_ms, including the wait for a slot).
-func (p *Plugin) judge(ctx context.Context, c *config, text string, transcript bool) (*Result, error) {
-	release, err := p.acquire(ctx)
-	if err != nil {
-		p.stats.calls.Add(1)
-		p.stats.errors.Add(1)
-		return nil, err
-	}
-	defer release()
-	p.stats.inflight.Add(1)
-	defer p.stats.inflight.Add(-1)
-	res, err := p.agent.run(ctx, c, text, transcript)
-	p.stats.calls.Add(1)
-	if res != nil {
-		p.stats.latencyMsSum.Add(res.Latency.Milliseconds())
-	}
-	if err != nil {
-		p.stats.errors.Add(1)
-	}
-	return res, err
-}
-
-// runObserve moderates one queued request (observe mode) and records it.
-func (p *Plugin) runObserve(j observeJob) {
-	c := j.cfg
-	rec := j.rec
-	start := time.Now()
-	if v, ok := p.cacheGet(p.bg, c, j.key, true); ok {
-		p.stats.cacheHits.Add(1)
-		rec.Cached = true
-		rec.LatencyMs = int(time.Since(start).Milliseconds())
-		p.finishRecord(c, rec, v, nil, ActionAllow)
-		return
-	}
-	ctx, cancel := context.WithTimeout(p.bg, c.timeout)
-	defer cancel()
-	res, err := p.judge(ctx, c, j.text, false)
-	rec.LatencyMs = int(time.Since(start).Milliseconds())
-	if res != nil {
-		rec.Turns, rec.PromptTokens, rec.CompletionTokens = res.Turns, res.Usage.PromptTokens, res.Usage.CompletionTokens
-		if res.LLMModel != "" {
-			rec.LLMModel = res.LLMModel
-		}
-	}
-	if err != nil {
-		if p.bg.Err() != nil {
-			return // shutting down
-		}
-		p.finishRecord(c, rec, Verdict{}, err, ActionAllow)
-		return
-	}
-	p.cachePut(c, j.key, res.Verdict)
-	p.finishRecord(c, rec, res.Verdict, nil, ActionAllow)
+	return b.String()
 }

@@ -4801,7 +4801,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `deleted_at` | 软删除，id 不复用 |
 
 - 改 `base_url` 的 scheme 或 host、或者改了代理时，必须重新填 key（new-api `channel.go:147-159`）。
-- 代理怎么走：插件出网都经过 SDK 隧道（`net` 权限），实现时确认隧道能否支持每个渠道各自的代理。不支持的话，P1 先不做代理。
+- 代理：P1 不做（`proxy_enc` 列已建好但不用），渠道都走插件默认出口（SDK 隧道，`net` 权限）。
 
 **审核器**（表 `auditors`）有名称、类型、`channel_id`（只能绑同类型的渠道）、`config` jsonb、软删除。
 
@@ -4821,15 +4821,16 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.7 流程
 
-**spec**（字段与 new-api `spec.go` 相同，未知字段直接拒绝）：
+**spec**（与 new-api `spec.go` 相同，只是去掉了 `enabled`；未知字段直接拒绝）：
 
 ```json
-{"enabled":true,
- "model_filter":{"type":"all|only|exclude","models":["claude-*"]},
+{"model_filter":{"type":"all|only|exclude","models":["claude-*"]},
  "sample_rate":100,
  "total_timeout_ms":0,
  "stages":[{"auditors":[1,2],"combine":"any|all|at_least","n":2}]}
 ```
+
+- 启用开关是 `flows.enabled` 列（`PUT /flows/:id/enabled`），不进 spec，开关不产生新版本。上限：最多 8 级，每级最多 8 个审核器。
 
 **执行**（照 new-api `flow.go`）：
 - 同一级的审核器并发执行，结论一旦确定就取消该级剩下的调用。
@@ -4954,7 +4955,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 4. 绑定分组：旧 `group_ids` 为空时绑 `group_id=0`，否则逐个绑定这些分组。
 5. 发布这个流程。
 
-旧 `mode` 原样保留；旧 `on_error=block` 不再生效，在转换日志里提示。转换加了分布式锁，只执行一次，并在插件日志里记一条转换结果。
+旧 `mode` 原样保留；旧 `on_error=block` 不再生效，在转换日志里提示。转换出的 `llm_verdict` 审核器 `flag_as_hit=false`：旧版 flag 结论只记录不计数，新版同样不算命中（通过的记录受 `record_pass` 控制）；需要把 flag 当命中的管理员在审核器上打开。转换只在 Configure 收到真实设置之后执行，避免拿默认值把"已转换"标记先写掉。转换加了分布式锁，只执行一次，并在插件日志里记一条转换结果。
 
 **从 new-api 导入**：
 - 格式：`{channels:[{type, protocol, name, base_url, model, timeout_ms}], auditors:[{name, type, channel_ref, thresholds|questions}], jev_default_set, analysis_guidelines}`。

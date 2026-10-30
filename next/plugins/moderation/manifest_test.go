@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/moderation/internal/moderation"
@@ -28,6 +29,18 @@ func TestManifestServes(t *testing.T) {
 	if slices.Contains(caps, manifest.CapAppEvents) {
 		t.Fatalf("app.events.v1 must not be reported: %v", caps)
 	}
+	// Every declared route has a handler (no database here: handlers answer
+	// 503 or 4xx, never "no route").
+	var m manifest.Manifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range m.Routes {
+		path := strings.NewReplacer(":user_id", "1", ":id", "1").Replace(r.Path)
+		if resp := h.Do(r.Method, path, nil, "{}"); strings.Contains(string(resp.GetBody()), "no route for") {
+			t.Errorf("route %s %s has no handler", r.Method, r.Path)
+		}
+	}
 }
 
 // TestManifest checks manifest.json against the SDK types (no unknown
@@ -39,7 +52,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "moderation" || m.Version != "0.1.13" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -61,15 +74,16 @@ func TestManifest(t *testing.T) {
 		routes[r.Method+" "+r.Path] = r.Permission
 	}
 	for route, perm := range map[string]string{
-		"GET /overview": "moderation:read", "GET /events": "moderation:read", "GET /events/:id": "moderation:read",
-		"DELETE /events/:id": "moderation:manage", "GET /blocks": "moderation:read", "POST /blocks": "moderation:manage",
-		"DELETE /blocks/:user_id": "moderation:manage", "POST /test": "moderation:manage", "GET /defaults": "moderation:read",
+		"GET /overview": "moderation:read", "GET /events": "moderation:read", "GET /events/:id/input": "moderation:read",
+		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
+		"POST /auditors/:id/try": "moderation:manage", "POST /flows/:id/publish": "moderation:manage", "POST /import": "moderation:manage",
+		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 9 {
+	if len(routes) != 38 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -82,7 +96,7 @@ func TestManifest(t *testing.T) {
 		}
 		granted[hp.ID] = &m.HostPermissions[i]
 	}
-	for _, need := range []string{"kv", "db.schema", "gateway.hook", "jobs", "broadcast", "routes.admin", "ui.menu", "ui.native", "net"} {
+	for _, need := range []string{"kv", "secrets", "db.schema", "gateway.hook", "jobs", "broadcast", "routes.admin", "ui.menu", "ui.native", "net"} {
 		if granted[need] == nil {
 			t.Errorf("missing host permission %s", need)
 		}
