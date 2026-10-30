@@ -59,8 +59,15 @@ type HitCategory struct {
 
 // EngineUsage is the token usage an upstream reported.
 type EngineUsage struct {
-	InputTokens  int64 `json:"input_tokens"`
-	OutputTokens int64 `json:"output_tokens"`
+	InputTokens   int64  `json:"input_tokens"`
+	OutputTokens  int64  `json:"output_tokens"`
+	CacheRead     int64  `json:"cache_read,omitempty"`
+	CacheCreation int64  `json:"cache_creation,omitempty"`
+	Semantics     string `json:"-"`
+}
+
+func engineUsage(u llmUsage) EngineUsage {
+	return EngineUsage{InputTokens: u.Input, OutputTokens: u.Output, CacheRead: u.CacheRead, CacheCreation: u.CacheCreation, Semantics: u.Semantics}
 }
 
 // EngineResult is what an engine call returns.
@@ -192,13 +199,17 @@ type Outcome struct {
 	Err         error         `json:"-"`
 	ErrType     string        `json:"err,omitempty"`
 	Status      int           `json:"status,omitempty"`
+	Cost        *CallCost     `json:"cost,omitempty"` // console paths only
 }
 
 // audit calls the engine once through the bound channel and judges the
 // result. Every failure is an errored Outcome; nothing to send is skipped.
 // pre calls draw from their own slots, so a busy background queue cannot
 // time out the moderation of requests that wait for it.
-func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool) Outcome {
+//
+// source names the cost source (§72.13.3): the hook (audit) prices the call
+// in the background; the console paths price it at once and return it.
+func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool, source string) Outcome {
 	out := Outcome{AuditorID: a.ID, ChannelID: a.ChannelID}
 	ch := a.channel
 	if ch == nil {
@@ -225,6 +236,11 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool)
 		out.EngineResult, out.Err = p.llmAudit(cctx, a, in)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
+	if source == SourceAudit {
+		p.meterLater(source, ch, out.EngineResult, out.Err)
+	} else {
+		out.Cost = p.meterNow(ctx, source, ch, out.EngineResult, out.Err)
+	}
 	if out.Calls > 0 {
 		p.stats.calls.Add(int64(out.Calls))
 		p.stats.latencyMsSum.Add(out.LatencyMs)

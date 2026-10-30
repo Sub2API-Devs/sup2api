@@ -131,16 +131,17 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 // suspicious records of a written batch.
 func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	c := p.cfg.Load()
-	watchChanged, banned := false, map[int64]bool{}
+	watchChanged, analyze, banned := false, false, map[int64]bool{}
 	for i, e := range evs {
 		if !e.suspicious() || e.UserID <= 0 || c.exempt[e.UserID] {
 			continue
 		}
-		changed, err := p.recordWatchHit(ctx, c, e, ids[i])
+		changed, queued, err := p.recordWatchHit(ctx, c, e, ids[i])
 		if err != nil {
 			p.log.Warn("moderation: watch list update failed", "user_id", e.UserID, "error", err.Error())
 		}
 		watchChanged = watchChanged || changed
+		analyze = analyze || queued
 		banned[e.UserID] = true
 	}
 	if watchChanged {
@@ -148,6 +149,9 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	}
 	if len(banned) > 0 {
 		p.applyBans(ctx, banned)
+	}
+	if analyze {
+		p.kickAnalyses()
 	}
 }
 
@@ -158,15 +162,17 @@ func newEpoch() int64 {
 }
 
 // recordWatchHit adds the user to the watch list or counts the violation
-// (one per request id, observe level only). changed = the level set changed.
-func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed bool, err error) {
+// (one per request id, observe level only). changed = the level set changed;
+// queued = the count reached analysis_every_violations and an analysis was
+// queued (the count restarts in a new window, §72.13.4).
+func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed, queued bool, err error) {
 	db, err := p.db(ctx)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	now := p.now().UTC()
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed = false
+		changed, queued = false, false
 		if err := lockBlockSubject(ctx, tx, e.UserID); err != nil {
 			return err
 		}
@@ -231,12 +237,25 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		if err != nil {
 			return err
 		}
+		if inc == 1 && c.AnalysisEveryViolations > 0 && c.AnalysisChannelID != 0 && w.ViolationCount+1 >= c.AnalysisEveryViolations {
+			// The window closes: the count restarts and this record no
+			// longer belongs to a window a false positive could reduce.
+			if _, err := tx.Exec(ctx, `UPDATE watchlist SET violation_count = 0, violation_epoch = $2,
+				analysis_source = CASE WHEN analysis_requested_at IS NULL THEN $4 ELSE analysis_source END,
+				analysis_requested_at = coalesce(analysis_requested_at, $3) WHERE user_id = $1`, e.UserID, newEpoch(), now, AnalysisSourceAuto); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE events SET violation_epoch = 0 WHERE id = $1`, eventID); err != nil {
+				return err
+			}
+			queued = true
+		}
 		if changed {
 			return bumpWatch(ctx, tx)
 		}
 		return nil
 	})
-	return changed, err
+	return changed, queued, err
 }
 
 // applyBans bans the users whose suspicious requests since max(now -

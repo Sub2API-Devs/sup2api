@@ -6,10 +6,19 @@
     "block_message",
     "auto_watch",
     "watch_days",
-    "analysis_every_violations",
     "ban_threshold",
     "ban_window_hours",
     "ban_duration_hours",
+    "analysis_channel_id",
+    "analysis_every_violations",
+    "analysis_allow_upgrade",
+    "analysis_allow_downgrade",
+    "analysis_allow_remove",
+    "analysis_timeout_ms",
+    "analysis_concurrency",
+    "analysis_context_kb",
+    "analysis_keep_per_user",
+    "analysis_guidelines",
     "record_pass",
     "record_overturned",
     "record_errors",
@@ -147,12 +156,18 @@
   },
   "analysis_every_violations": {
     "ui:title": {
-      "en": "AI analysis every",
-      "zh": "每多少次违规做一次 AI 分析"
+      "en": "Analyse every",
+      "zh": "每多少次违规自动分析一次"
     },
     "ui:help": {
-      "en": "Counted now; the analysis itself comes in a later version. 0 = never.",
-      "zh": "目前只计数，AI 分析在后续版本提供。0 表示从不。"
+      "en": "Violations of an observe-level user (one per request) that queue an AI analysis; the count then restarts. 0 = only manual analyses.",
+      "zh": "观察级用户每累计这么多次违规（同一请求只计一次）就自动排队分析一次，然后重新计数。0 表示只手动分析。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "violations",
+        "zh": "次"
+      }
     }
   },
   "ban_threshold": {
@@ -191,6 +206,22 @@
         "en": "hours",
         "zh": "小时"
       }
+    }
+  },
+  "analysis_channel_id": {
+    "ui:section": {
+      "title": {
+        "en": "AI analysis",
+        "zh": "AI 分析"
+      }
+    },
+    "ui:title": {
+      "en": "Analysis channel ID",
+      "zh": "分析渠道 ID"
+    },
+    "ui:help": {
+      "en": "An llm channel (any protocol) of the Channels tab. 0 = no analysis.",
+      "zh": "在「渠道」页查看大模型渠道的 ID（三种协议都可以）。0 表示不做 AI 分析。"
     }
   },
   "record_pass": {
@@ -625,6 +656,85 @@
         "en": "days",
         "zh": "天"
       }
+    }
+  },
+  "analysis_allow_upgrade": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Let the AI upgrade to enforce",
+      "zh": "允许 AI 升为拦截级"
+    },
+    "ui:help": {
+      "en": "Block + persistent / escalating trend + at least one violation. Off: only written to the history.",
+      "zh": "建议拦截、趋势为持续或越来越重、且至少 1 条复核为违规时。关闭后只记入名单历史，级别不变。"
+    }
+  },
+  "analysis_allow_downgrade": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Let the AI downgrade to observe",
+      "zh": "允许 AI 降为观察级"
+    }
+  },
+  "analysis_allow_remove": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Let the AI remove users",
+      "zh": "允许 AI 移出名单"
+    }
+  },
+  "analysis_timeout_ms": {
+    "ui:title": {
+      "en": "Analysis timeout",
+      "zh": "单次分析超时"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "ms",
+        "zh": "毫秒"
+      }
+    }
+  },
+  "analysis_concurrency": {
+    "ui:title": {
+      "en": "Concurrent analyses per node",
+      "zh": "每个节点同时分析数"
+    }
+  },
+  "analysis_context_kb": {
+    "ui:title": {
+      "en": "Context budget",
+      "zh": "上下文预算"
+    },
+    "ui:help": {
+      "en": "Earlier tool results are dropped above it.",
+      "zh": "超出时丢掉较早的工具结果。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "KB",
+        "zh": "KB"
+      }
+    }
+  },
+  "analysis_keep_per_user": {
+    "ui:title": {
+      "en": "Analyses kept per user",
+      "zh": "每个用户保留的分析数"
+    }
+  },
+  "analysis_guidelines": {
+    "ui:widget": "textarea",
+    "ui:options": {
+      "rows": 8
+    },
+    "ui:title": {
+      "en": "Analysis guidelines",
+      "zh": "分析准则"
+    },
+    "ui:help": {
+      "en": "Empty uses the built-in guidelines (preview on the Watch list tab).",
+      "zh": "留空使用内置准则（可在「观察名单」页预览完整提示词）。"
     }
   }
 }

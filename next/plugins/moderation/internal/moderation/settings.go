@@ -79,6 +79,17 @@ type Settings struct {
 	WatchDays               int  `json:"watch_days"`
 	AnalysisEveryViolations int  `json:"analysis_every_violations"`
 
+	// AI analysis (CONTRACTS §72.13.4).
+	AnalysisChannelID      int64  `json:"analysis_channel_id"`
+	AnalysisGuidelines     string `json:"analysis_guidelines"`
+	AnalysisTimeoutMs      int    `json:"analysis_timeout_ms"`
+	AnalysisConcurrency    int    `json:"analysis_concurrency"`
+	AnalysisContextKB      int    `json:"analysis_context_kb"`
+	AnalysisKeepPerUser    int    `json:"analysis_keep_per_user"`
+	AnalysisAllowUpgrade   bool   `json:"analysis_allow_upgrade"`
+	AnalysisAllowDowngrade bool   `json:"analysis_allow_downgrade"`
+	AnalysisAllowRemove    bool   `json:"analysis_allow_remove"`
+
 	BanThreshold     int `json:"ban_threshold"`
 	BanWindowHours   int `json:"ban_window_hours"`
 	BanDurationHours int `json:"ban_duration_hours"`
@@ -103,6 +114,10 @@ type Settings struct {
 	RetentionDays int        `json:"retention_days"`
 }
 
+// maxAnalysisGuidelines caps analysis_guidelines (bytes); longer text falls
+// back to the built-in guidelines.
+const maxAnalysisGuidelines = 16 << 10
+
 // DefaultBlockMessage is the default deny message of a hit.
 const DefaultBlockMessage = "提示词审核未通过，请调整输入后重试"
 
@@ -117,6 +132,8 @@ func DefaultSettings() Settings {
 		RecordOverturned: true, RecordErrors: true, StoreText: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
 		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
+		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
+		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: true,
 		BanWindowHours: 24, BanDurationHours: 24,
 		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
 		SampleRate: 100, RetentionDays: 30,
@@ -271,6 +288,21 @@ func (d decoder) watch(s *Settings) {
 	d.boolean("auto_watch", &s.AutoWatch)
 	d.integer("watch_days", &s.WatchDays, 1, 365)
 	d.integer("analysis_every_violations", &s.AnalysisEveryViolations, 0, 1000)
+	var ch int
+	d.integer("analysis_channel_id", &ch, 0, math.MaxInt32)
+	s.AnalysisChannelID = int64(ch)
+	d.str("analysis_guidelines", &s.AnalysisGuidelines)
+	s.AnalysisGuidelines = strings.TrimSpace(s.AnalysisGuidelines)
+	if len(s.AnalysisGuidelines) > maxAnalysisGuidelines {
+		s.AnalysisGuidelines = ""
+	}
+	d.integer("analysis_timeout_ms", &s.AnalysisTimeoutMs, 10000, 600000)
+	d.integer("analysis_concurrency", &s.AnalysisConcurrency, 1, 16)
+	d.integer("analysis_context_kb", &s.AnalysisContextKB, 16, 1024)
+	d.integer("analysis_keep_per_user", &s.AnalysisKeepPerUser, 1, 1000)
+	d.boolean("analysis_allow_upgrade", &s.AnalysisAllowUpgrade)
+	d.boolean("analysis_allow_downgrade", &s.AnalysisAllowDowngrade)
+	d.boolean("analysis_allow_remove", &s.AnalysisAllowRemove)
 	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
 	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
 	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
@@ -346,16 +378,17 @@ func clampInt(v, lo, hi int) int {
 type config struct {
 	Settings
 
-	enabled      bool // mode != off
-	settingsHash string
-	exempt       map[int64]bool
-	cacheTTL     time.Duration
-	banWindow    time.Duration
-	banDuration  time.Duration // 0 = until unblocked
-	watchFor     time.Duration
-	retention    map[string]time.Duration // by result
-	legacyReady  bool                     // the 0.1 setup is complete enough to convert
-	jevDefault   JevQuestions
+	enabled         bool // mode != off
+	settingsHash    string
+	exempt          map[int64]bool
+	cacheTTL        time.Duration
+	banWindow       time.Duration
+	banDuration     time.Duration // 0 = until unblocked
+	watchFor        time.Duration
+	analysisTimeout time.Duration
+	retention       map[string]time.Duration // by result
+	legacyReady     bool                     // the 0.1 setup is complete enough to convert
+	jevDefault      JevQuestions
 }
 
 // compile derives the runtime config from settings.
@@ -372,6 +405,7 @@ func compile(s Settings) *config {
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
 	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour
+	c.analysisTimeout = time.Duration(s.AnalysisTimeoutMs) * time.Millisecond
 	day := 24 * time.Hour
 	c.retention = map[string]time.Duration{
 		ResultBlock: time.Duration(s.HitRetentionDays) * day, ResultHit: time.Duration(s.HitRetentionDays) * day,

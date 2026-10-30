@@ -29,15 +29,18 @@ var defaultChannelModel = map[string]string{ChannelOpenAI: "omni-moderation-late
 
 // liveChannel is a usable channel of the snapshot: enabled, key opened.
 type liveChannel struct {
-	ID        int64
-	Type      string
-	Protocol  string
-	BaseURL   string
-	Key       string
-	Model     string
-	Timeout   time.Duration
-	markerKey []byte // llm only: self-request marker key
-	client    *http.Client
+	ID       int64
+	Name     string
+	Type     string
+	Protocol string
+	BaseURL  string
+	Key      string
+	Model    string
+	// BillingModel is the model the calls are priced on ("" = Model).
+	BillingModel string
+	Timeout      time.Duration
+	markerKey    []byte // llm only: self-request marker key
+	client       *http.Client
 }
 
 const (
@@ -49,9 +52,10 @@ const (
 // with the key removed; it may echo user input, so it is only shown by the
 // channel test and never stored.
 type UpstreamError struct {
-	Status   int
-	message  string
-	tooLarge bool
+	Status     int
+	message    string
+	tooLarge   bool
+	retryAfter time.Duration
 }
 
 func (e *UpstreamError) Error() string { return fmt.Sprintf("upstream returned status %d", e.Status) }

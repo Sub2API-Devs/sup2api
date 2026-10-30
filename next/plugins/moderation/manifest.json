@@ -6,10 +6,10 @@
     "zh": "提示词审核"
   },
   "description": {
-    "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; repeated violations can ban them.",
-    "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，多次违规可自动封禁。"
+    "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices.",
+    "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。"
   },
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.220 <0.2.0",
+  "hostCompat": ">=0.1.221 <0.2.0",
   "hostUICompat": "^3.0",
   "capabilities": [
     {
@@ -64,6 +64,11 @@
       "id": "cleanup",
       "schedule": "0 4 * * *",
       "timeoutSec": 600
+    },
+    {
+      "id": "analysis",
+      "schedule": "@every 1m",
+      "timeoutSec": 60
     }
   ],
   "database": {
@@ -322,6 +327,72 @@
       "path": "/defaults",
       "scope": "admin",
       "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/watchlist/:user_id",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "POST",
+      "path": "/watchlist/:user_id/analyze",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
+      "method": "GET",
+      "path": "/watchlist/:user_id/analyses",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/analyses/:id",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/analysis/prompt",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/analysis/tools",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/costs",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/flows/:id/versions",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/flows/:id/versions/:version",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "POST",
+      "path": "/flows/:id/rollback",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
+      "method": "POST",
+      "path": "/flows/:id/simulate",
+      "scope": "admin",
+      "permission": "moderation:manage"
     }
   ],
   "ui": {
@@ -397,6 +468,13 @@
       }
     },
     {
+      "id": "prices",
+      "reason": {
+        "en": "Price the moderation calls with the core model prices (read only)",
+        "zh": "按核心的模型价格计算审核调用的费用（只读）"
+      }
+    },
+    {
       "id": "gateway.hook",
       "scope": {
         "points": [
@@ -418,8 +496,8 @@
     {
       "id": "jobs",
       "reason": {
-        "en": "Delete expired records, watch entries and bans daily",
-        "zh": "每天清理过期的审核记录、观察名单和封禁"
+        "en": "Delete expired records, watch entries and bans daily; run queued AI analyses every minute",
+        "zh": "每天清理过期的审核记录、观察名单和封禁；每分钟启动排队中的 AI 分析"
       }
     },
     {

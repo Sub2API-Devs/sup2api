@@ -32,6 +32,13 @@ func (p *Plugin) routes() {
 	p.Handle("PATCH", "/watchlist/:user_id", p.updateWatch)
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
+	p.Handle("GET", "/watchlist/:user_id", p.getWatch)
+	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
+	p.Handle("GET", "/watchlist/:user_id/analyses", p.listAnalyses)
+	p.Handle("GET", "/analyses/:id", p.getAnalysis)
+	p.Handle("GET", "/analysis/prompt", p.getAnalysisPrompt)
+	p.Handle("GET", "/analysis/tools", p.getAnalysisTools)
+	p.Handle("GET", "/costs", p.getCosts)
 	p.Handle("GET", "/channels", p.listChannels)
 	p.Handle("POST", "/channels", p.createChannel)
 	p.Handle("GET", "/channels/:id", p.getChannel)
@@ -53,6 +60,10 @@ func (p *Plugin) routes() {
 	p.Handle("PUT", "/flows/:id/groups", p.setFlowGroups)
 	p.Handle("POST", "/flows/:id/publish", p.publishFlow)
 	p.Handle("PUT", "/flows/:id/enabled", p.setFlowEnabled)
+	p.Handle("GET", "/flows/:id/versions", p.listFlowVersions)
+	p.Handle("GET", "/flows/:id/versions/:version", p.getFlowVersion)
+	p.Handle("POST", "/flows/:id/rollback", p.rollbackFlow)
+	p.Handle("POST", "/flows/:id/simulate", p.simulateFlow)
 	p.Handle("POST", "/import", p.importConfig)
 	p.Handle("POST", "/test", p.testModeration)
 	p.Handle("GET", "/defaults", p.getJevDefaults)
@@ -104,23 +115,25 @@ type UserCount struct {
 
 // Runtime is this node's live state.
 type Runtime struct {
-	Mode          string `json:"mode"`
-	Configured    bool   `json:"configured"` // a flow is bound
-	SettingsHash  string `json:"settings_hash"`
-	ConfigVersion int64  `json:"config_version"`
-	Flows         int    `json:"flows"`
-	Auditors      int    `json:"auditors"`
-	QueueLen      int    `json:"queue_len"`
-	QueueCap      int    `json:"queue_cap"`
-	Dropped       int64  `json:"dropped"`
-	Inflight      int64  `json:"inflight"`
-	Calls         int64  `json:"calls"`
-	Errors        int64  `json:"errors"`
-	CacheHits     int64  `json:"cache_hits"`
-	CacheEntries  int    `json:"cache_entries"`
-	AvgLatencyMs  int64  `json:"avg_latency_ms"`
-	BlockedUsers  int    `json:"blocked_users"`
-	WatchedUsers  int    `json:"watched_users"`
+	Mode          string        `json:"mode"`
+	Configured    bool          `json:"configured"` // a flow is bound
+	SettingsHash  string        `json:"settings_hash"`
+	ConfigVersion int64         `json:"config_version"`
+	Flows         int           `json:"flows"`
+	Auditors      int           `json:"auditors"`
+	QueueLen      int           `json:"queue_len"`
+	QueueCap      int           `json:"queue_cap"`
+	Dropped       int64         `json:"dropped"`
+	Inflight      int64         `json:"inflight"`
+	Calls         int64         `json:"calls"`
+	Errors        int64         `json:"errors"`
+	CacheHits     int64         `json:"cache_hits"`
+	CacheEntries  int           `json:"cache_entries"`
+	AvgLatencyMs  int64         `json:"avg_latency_ms"`
+	BlockedUsers  int           `json:"blocked_users"`
+	WatchedUsers  int           `json:"watched_users"`
+	Analysis      analysisStats `json:"analysis"`
+	DroppedCosts  int64         `json:"dropped_costs"`
 }
 
 // Overview is the GET /overview response data.
@@ -136,7 +149,7 @@ type Overview struct {
 	Runtime       Runtime         `json:"runtime"`
 }
 
-func (p *Plugin) runtimeState() Runtime {
+func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 	c := p.cfg.Load()
 	s := p.snap.Load()
 	qlen, qcap := p.queueLen()
@@ -151,6 +164,7 @@ func (p *Plugin) runtimeState() Runtime {
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
+		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.meter.droppedCount(),
 	}
 }
 
@@ -169,7 +183,7 @@ func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效",
 			pluginsdk.FieldErrors{}.Add("range", "enum", "range must be 24h, 7d or 30d / range 取值为 24h、7d、30d")), nil
 	}
-	o.Runtime = p.runtimeState()
+	o.Runtime = p.runtimeState(ctx)
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
@@ -283,6 +297,13 @@ type Event struct {
 	LatencyMs        int        `json:"latency_ms"`
 	QueueMs          int        `json:"queue_ms"`
 	KeepUntil        *time.Time `json:"keep_until"`
+	// AI verdict of the latest analysis (§72.13.4); "" = not reviewed by AI.
+	AIVerdict    string `json:"ai_verdict"`
+	AISeverity   string `json:"ai_severity"`
+	AICategory   string `json:"ai_category"`
+	AIEvidence   string `json:"ai_evidence"`
+	AIReason     string `json:"ai_reason"`
+	AIAnalysisID int64  `json:"ai_analysis_id"`
 	// 0.1 records only.
 	Verdict  string `json:"verdict"`
 	Reason   string `json:"reason"`
@@ -306,12 +327,14 @@ type EventDetail struct {
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
-	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, verdict, reason, error, llm_model`
+	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until,
+	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
 		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil,
+		&e.AIVerdict, &e.AISeverity, &e.AICategory, &e.AIEvidence, &e.AIReason, &e.AIAnalysisID,
 		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel}
 }
 
@@ -345,7 +368,21 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	f.enum(req, "severity", "high", "medium", "low")
 	f.enum(req, "review_status", "pending", "false_positive", "confirmed")
 	f.enum(req, "timing", TimingPre, TimingPost)
-	f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
+	switch v := pluginsdk.Query(req, "verdict"); v {
+	case "needs_review":
+		// AI unsure and nobody looked at it yet.
+		f.conds = append(f.conds, "ai_verdict = 'unsure' AND review_status = 'pending'")
+	case "disagree":
+		// Decided by a person against a decided AI verdict.
+		f.conds = append(f.conds, "((review_status = 'confirmed' AND ai_verdict = 'false_positive') OR (review_status = 'false_positive' AND ai_verdict = 'violation'))")
+	default:
+		f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
+	}
+	if v := pluginsdk.Query(req, "ai_verdict"); v == "none" {
+		f.conds = append(f.conds, "ai_verdict = '' AND result IN ('hit', 'block')")
+	} else {
+		f.enum(req, "ai_verdict", AIViolation, AIFalsePositive, AIUnsure)
+	}
 	f.enum(req, "action", ActionAllow, ActionDeny)
 	f.enum(req, "mode", ModeObserve, ModeEnforce)
 	f.ids(req)

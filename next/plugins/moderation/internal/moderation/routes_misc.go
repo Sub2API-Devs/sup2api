@@ -70,6 +70,7 @@ type TestResult struct {
 	Severity    string        `json:"severity,omitempty"`
 	Categories  []HitCategory `json:"categories"`
 	Trace       Trace         `json:"trace"`
+	Cost        *CallCost     `json:"cost,omitempty"` // all calls of the run
 }
 
 // testModeration runs a published flow on {text, images?, flow_id?}
@@ -93,7 +94,13 @@ func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) 
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "not_configured",
 			"no published and enabled flow to test (bind one to the default group, or pass flow_id) / 没有可测试的已发布流程（请绑定默认分组或指定 flow_id）"), nil
 	}
-	m := &moderation{cfg: c, flow: flow, snap: snap, in: input, timing: TimingPre}
+	m := &moderation{cfg: c, flow: flow, snap: snap, in: input, timing: TimingPre, source: SourceTest}
+	return pluginsdk.DataResponse(p.testResult(ctx, m)), nil
+}
+
+// testResult runs m and reports the trace and the summed cost.
+func (p *Plugin) testResult(ctx context.Context, m *moderation) TestResult {
+	flow := m.flow
 	tr := p.run(ctx, m)
 	var rec eventRec
 	rec.fillFromTrace(tr, false)
@@ -107,9 +114,34 @@ func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) 
 			if o.Err != nil && o.ErrType == "" {
 				o.ErrType = ErrType(o.Err)
 			}
+			out.Cost = sumCost(out.Cost, o.Cost)
 		}
 	}
-	return pluginsdk.DataResponse(out), nil
+	return out
+}
+
+// sumCost adds c to total (either may be nil).
+func sumCost(total, c *CallCost) *CallCost {
+	if c == nil {
+		return total
+	}
+	if total == nil {
+		t := CallCost{Mode: c.Mode}
+		total = &t
+	}
+	total.TokensIn += c.TokensIn
+	total.TokensOut += c.TokensOut
+	switch {
+	case c.Mode == PricePriced:
+		total.units += c.units
+		total.Cost = formatCost(total.units)
+		if total.Mode == PriceFree {
+			total.Mode = PricePriced
+		}
+	case c.Mode == PriceUnpriced:
+		total.Mode, total.Reason = PriceUnpriced, c.Reason
+	}
+	return total
 }
 
 // ---------------------------------------------------------------- import
@@ -124,6 +156,9 @@ type importDoc struct {
 		BaseURL   string `json:"base_url"`
 		Model     string `json:"model"`
 		TimeoutMs int    `json:"timeout_ms"`
+		// Optional (§72.13.7): sealed like a key typed in the console.
+		APIKey       *string `json:"api_key"`
+		BillingModel string  `json:"billing_model"`
 	} `json:"channels"`
 	Auditors []struct {
 		Name         string             `json:"name"`
@@ -154,10 +189,8 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		if typ == "openai" {
 			typ = ChannelOpenAI // new-api name
 		}
-		chans[i] = channelInput{Type: typ, Protocol: ch.Protocol, Name: ch.Name, BaseURL: ch.BaseURL, Model: ch.Model, TimeoutMs: ch.TimeoutMs}
-		if typ == ChannelLLM && chans[i].Protocol != "" && chans[i].Protocol != ProtocolOpenAIChat {
-			chans[i].Protocol = ProtocolOpenAIChat // P1 speaks openai_chat only
-		}
+		chans[i] = channelInput{Type: typ, Protocol: ch.Protocol, Name: ch.Name, BaseURL: ch.BaseURL, Model: ch.Model, TimeoutMs: ch.TimeoutMs,
+			APIKey: ch.APIKey, BillingModel: ch.BillingModel}
 		for _, fe := range chans[i].normalize() {
 			errs = errs.Add(fmt.Sprintf("channels[%d].%s", i, fe.GetField()), fe.GetCode(), fe.GetMessage())
 		}
@@ -187,7 +220,13 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid import / 导入内容无效", errs), nil
 	}
-	out := map[string]any{"channels": len(chans), "auditors": len(auds), "jev_default_set": in.Data.JevDefaultSet, "preview": in.Preview}
+	keys := 0
+	for _, ch := range chans {
+		if ch.APIKey != nil && strings.TrimSpace(*ch.APIKey) != "" {
+			keys++
+		}
+	}
+	out := map[string]any{"channels": len(chans), "auditors": len(auds), "keys": keys, "jev_default_set": in.Data.JevDefaultSet, "preview": in.Preview}
 	if in.Preview {
 		return pluginsdk.DataResponse(out), nil
 	}
@@ -195,18 +234,23 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		now := p.now().UTC()
 		ids := make([]int64, len(chans))
 		for i, ch := range chans {
-			if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, model, timeout_ms, enabled, created_at, updated_at)
-				VALUES ($1,$2,$3,$4,$5,$6,false,$7,$7) RETURNING id`, ch.Type, ch.Protocol, ch.Name, ch.BaseURL, ch.Model, ch.TimeoutMs, now).Scan(&ids[i]); err != nil {
+			if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, model, billing_model, timeout_ms, enabled, created_at, updated_at)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$8) RETURNING id`, ch.Type, ch.Protocol, ch.Name, ch.BaseURL, ch.Model, ch.BillingModel, ch.TimeoutMs, now).Scan(&ids[i]); err != nil {
+				return err
+			}
+			if err := p.storeKey(ctx, tx, ids[i], ch.APIKey); err != nil {
 				return err
 			}
 		}
+		aids := make([]int64, len(auds))
 		for i, a := range auds {
 			cfg, _ := json.Marshal(a.Config)
-			if _, err := tx.Exec(ctx, `INSERT INTO auditors (name, type, channel_id, config, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)`,
-				a.Name, a.Type, ids[in.Data.Auditors[i].ChannelRef], cfg, now); err != nil {
+			if err := tx.QueryRow(ctx, `INSERT INTO auditors (name, type, channel_id, config, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5) RETURNING id`,
+				a.Name, a.Type, ids[in.Data.Auditors[i].ChannelRef], cfg, now).Scan(&aids[i]); err != nil {
 				return err
 			}
 		}
+		out["channel_ids"], out["auditor_ids"] = ids, aids
 		return nil
 	})
 	if err != nil {
@@ -221,7 +265,11 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 // keep_until, expired watch entries and expired blocks; an expired ban counts
 // as an unblock at its expiry, so violations before it are not counted again.
 func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
-	if in.GetJobId() != JobCleanup {
+	switch in.GetJobId() {
+	case JobCleanup:
+	case JobAnalysis:
+		return p.runAnalysisJob(ctx)
+	default:
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", in.GetJobId())
 	}
 	db, err := p.db(ctx)
@@ -239,6 +287,9 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 		return nil, status.Errorf(codes.Internal, "cleanup events: %v", err)
 	}
 	events := tag.RowsAffected()
+	if _, err := db.Exec(ctx, `DELETE FROM costs WHERE hour < $1`, now.Add(-400*24*time.Hour)); err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup costs: %v", err)
+	}
 	watch, err := p.expireWatch(ctx, now)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup watch list: %v", err)

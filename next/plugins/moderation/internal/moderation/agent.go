@@ -1,21 +1,15 @@
 package moderation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
-
-// maxResponseBytes caps the upstream response body read (1 MiB).
-const maxResponseBytes = 1 << 20
 
 // Verdict is the submit_verdict tool call payload after normalisation.
 type Verdict struct {
@@ -36,6 +30,7 @@ type Result struct {
 	Verdict
 	Turns      int
 	Usage      Usage
+	Billing    llmUsage // the summed usage in the shape the core prices
 	Latency    time.Duration
 	LLMModel   string
 	Transcript []json.RawMessage // only when requested (/test)
@@ -45,50 +40,12 @@ type Result struct {
 // max_turns.
 var ErrNoVerdict = errors.New("no_verdict: the model did not submit a valid verdict")
 
-// agent runs the submit_verdict tool loop (CONTRACTS §20.5).
-type agent struct {
-	client *http.Client
-}
+// agent runs the submit_verdict tool loop (CONTRACTS §20.5) over the
+// channel protocol (openai_chat, openai_responses or anthropic; §72.13.2),
+// one non-streaming call per turn.
+type agent struct{}
 
-// newAgent uses http.DefaultTransport, which the SDK routes through the
-// egress tunnel in strict network mode.
-func newAgent() *agent { return &agent{client: &http.Client{}} }
-
-type chatRequest struct {
-	Model       string            `json:"model"`
-	Messages    []json.RawMessage `json:"messages"`
-	Tools       []json.RawMessage `json:"tools"`
-	ToolChoice  json.RawMessage   `json:"tool_choice"`
-	Temperature float64           `json:"temperature"`
-	MaxTokens   int               `json:"max_tokens"`
-	Stream      bool              `json:"stream"`
-}
-
-type toolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-	} `json:"function"`
-}
-
-type chatMessage struct {
-	Role      string          `json:"role"`
-	Content   json.RawMessage `json:"content"`
-	ToolCalls []toolCall      `json:"tool_calls"`
-}
-
-type chatResponse struct {
-	Model   string `json:"model"`
-	Choices []struct {
-		Message chatMessage `json:"message"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int64 `json:"prompt_tokens"`
-		CompletionTokens int64 `json:"completion_tokens"`
-	} `json:"usage"`
-}
+func newAgent() *agent { return &agent{} }
 
 func rawJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
@@ -100,124 +57,69 @@ func rawJSON(v any) json.RawMessage {
 func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool) (*Result, error) {
 	start := time.Now()
 	res := &Result{LLMModel: c.model}
-	messages := []json.RawMessage{
-		rawJSON(map[string]any{"role": "system", "content": c.prompt}),
-		rawJSON(map[string]any{"role": "user", "content": wrapUserContent(c.markerKey, text)}),
+	if c.channel == nil || c.proto == nil {
+		return res, errNoChannel
 	}
+	messages := []any{llmUserMessage(wrapUserContent(c.markerKey, text))}
 	finish := func(err error) (*Result, error) {
 		res.Latency = time.Since(start)
 		if keepTranscript {
-			res.Transcript = messages
+			res.Transcript = append([]json.RawMessage{rawJSON(map[string]any{"role": "system", "content": c.prompt})}, rawList(messages)...)
 		}
 		return res, err
 	}
+	temp := c.temperature
 	for turn := 1; turn <= c.maxTurns; turn++ {
 		res.Turns = turn
-		resp, err := a.call(ctx, c, messages)
+		t, err := c.proto.call(ctx, c.channel, llmRequest{
+			System: c.prompt, Messages: messages, Tools: []LLMTool{c.tool}, ToolChoice: c.choice,
+			Temperature: &temp, MaxTokens: c.maxTokens,
+		})
+		res.Billing.add(t.Usage)
+		res.Usage.PromptTokens += t.Usage.Input
+		res.Usage.CompletionTokens += t.Usage.Output
+		if t.Model != "" {
+			res.LLMModel = t.Model
+		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return finish(fmt.Errorf("timeout: %w", ctx.Err()))
+			}
 			return finish(err)
 		}
-		res.Usage.PromptTokens += resp.Usage.PromptTokens
-		res.Usage.CompletionTokens += resp.Usage.CompletionTokens
-		if resp.Model != "" {
-			res.LLMModel = resp.Model
-		}
-		if len(resp.Choices) == 0 {
-			return finish(errors.New("upstream response has no choices"))
-		}
-		msg := resp.Choices[0].Message
-		content := contentString(msg.Content)
-		assistant := map[string]any{"role": "assistant", "content": nullableContent(content)}
-		if len(msg.ToolCalls) > 0 {
-			for i := range msg.ToolCalls {
-				if msg.ToolCalls[i].Type == "" {
-					msg.ToolCalls[i].Type = "function"
-				}
-				if len(msg.ToolCalls[i].Function.Arguments) == 0 {
-					msg.ToolCalls[i].Function.Arguments = json.RawMessage(`""`)
-				}
-			}
-			assistant["tool_calls"] = msg.ToolCalls
-			messages = append(messages, rawJSON(assistant))
-			var feedback []json.RawMessage
-			for _, tc := range msg.ToolCalls {
-				if tc.Function.Name != ToolName {
-					feedback = append(feedback, toolMessage(tc.ID, "未知工具，只能调用 "+ToolName))
+		messages = append(messages, c.proto.assistant(t)...)
+		if len(t.ToolCalls) > 0 {
+			var feedback []toolResult
+			for _, tc := range t.ToolCalls {
+				if tc.Name != ToolName {
+					feedback = append(feedback, toolResult{CallID: tc.ID, Content: "未知工具，只能调用 " + ToolName})
 					continue
 				}
-				v, perr := parseVerdict(toolArguments(tc.Function.Arguments), c.categorySet)
+				v, perr := parseVerdict(toolArguments(tc.Args), c.categorySet)
 				if perr == nil {
 					res.Verdict = v
 					return finish(nil)
 				}
-				feedback = append(feedback, toolMessage(tc.ID, "参数不合法："+perr.Error()+"，请重新调用 "+ToolName))
+				feedback = append(feedback, toolResult{CallID: tc.ID, Content: "参数不合法：" + perr.Error() + "，请重新调用 " + ToolName})
 			}
-			messages = append(messages, feedback...)
+			messages = append(messages, c.proto.toolResults(feedback)...)
 			continue
 		}
-		messages = append(messages, rawJSON(assistant))
-		if v, perr := parseVerdict(jsonFromContent(content), c.categorySet); perr == nil {
+		if v, perr := parseVerdict(jsonFromContent(t.Text), c.categorySet); perr == nil {
 			res.Verdict = v
 			return finish(nil)
 		}
-		messages = append(messages, rawJSON(map[string]any{"role": "user", "content": "请调用 " + ToolName + " 工具提交审核结论。"}))
+		messages = append(messages, llmUserMessage("请调用 "+ToolName+" 工具提交审核结论。"))
 	}
 	return finish(ErrNoVerdict)
 }
 
-func toolMessage(id, content string) json.RawMessage {
-	return rawJSON(map[string]any{"role": "tool", "tool_call_id": id, "content": content})
-}
-
-func nullableContent(s string) any {
-	if s == "" {
-		return nil
+func rawList(xs []any) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(xs))
+	for _, x := range xs {
+		out = append(out, rawJSON(x))
 	}
-	return s
-}
-
-// call sends one chat completion request.
-func (a *agent) call(ctx context.Context, c *llmJudge, messages []json.RawMessage) (*chatResponse, error) {
-	body, err := json.Marshal(chatRequest{
-		Model: c.model, Messages: messages, Tools: []json.RawMessage{c.toolJSON}, ToolChoice: c.choiceJSON,
-		Temperature: c.temperature, MaxTokens: c.maxTokens, Stream: false,
-	})
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	resp, err := a.client.Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("timeout: %w", ctx.Err())
-		}
-		return nil, fmt.Errorf("upstream request failed: %s", scrubURL(err.Error()))
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("timeout: %w", ctx.Err())
-		}
-		return nil, fmt.Errorf("read upstream response: %v", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("upstream HTTP %d: %s", resp.StatusCode, snippet(data, 300))
-	}
-	if len(data) > maxResponseBytes {
-		return nil, errors.New("upstream response exceeds 1 MiB")
-	}
-	var out chatResponse
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("invalid upstream JSON: %s", snippet(data, 200))
-	}
-	return &out, nil
+	return out
 }
 
 // scrubURL keeps error messages free of query strings.

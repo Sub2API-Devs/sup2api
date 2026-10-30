@@ -77,6 +77,62 @@
       "maximum": 87600,
       "default": 24
     },
+    "analysis_channel_id": {
+      "type": "integer",
+      "title": "Analysis channel",
+      "minimum": 0,
+      "maximum": 2147483647,
+      "default": 0
+    },
+    "analysis_guidelines": {
+      "type": "string",
+      "title": "Analysis guidelines",
+      "default": "",
+      "maxLength": 16384
+    },
+    "analysis_timeout_ms": {
+      "type": "integer",
+      "title": "Analysis timeout (ms)",
+      "minimum": 10000,
+      "maximum": 600000,
+      "default": 60000
+    },
+    "analysis_concurrency": {
+      "type": "integer",
+      "title": "Analysis concurrency",
+      "minimum": 1,
+      "maximum": 16,
+      "default": 2
+    },
+    "analysis_context_kb": {
+      "type": "integer",
+      "title": "Analysis context (KB)",
+      "minimum": 16,
+      "maximum": 1024,
+      "default": 64
+    },
+    "analysis_keep_per_user": {
+      "type": "integer",
+      "title": "Analyses kept per user",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 20
+    },
+    "analysis_allow_upgrade": {
+      "type": "boolean",
+      "title": "Allow AI upgrade",
+      "default": true
+    },
+    "analysis_allow_downgrade": {
+      "type": "boolean",
+      "title": "Allow AI downgrade",
+      "default": true
+    },
+    "analysis_allow_remove": {
+      "type": "boolean",
+      "title": "Allow AI removal",
+      "default": true
+    },
     "record_pass": {
       "type": "boolean",
       "title": "Record passed checks",

@@ -20,14 +20,14 @@ type fakeLLM struct {
 	srv *httptest.Server
 
 	mu       sync.Mutex
-	requests []llmRequest
+	requests []fakeReq
 	calls    atomic.Int64
 	// respond returns (status, body) for the n-th call (1-based).
-	respond func(req llmRequest, n int) (int, any)
+	respond func(req fakeReq, n int) (int, any)
 	delay   time.Duration
 }
 
-type llmRequest struct {
+type fakeReq struct {
 	Path       string
 	Auth       string
 	Raw        map[string]json.RawMessage
@@ -36,7 +36,7 @@ type llmRequest struct {
 }
 
 // lastUser returns the content of the last user message.
-func (r llmRequest) lastUser() string {
+func (r fakeReq) lastUser() string {
 	for i := len(r.Messages) - 1; i >= 0; i-- {
 		if r.Messages[i]["role"] == "user" {
 			s, _ := r.Messages[i]["content"].(string)
@@ -46,7 +46,7 @@ func (r llmRequest) lastUser() string {
 	return ""
 }
 
-func (r llmRequest) has(role string) bool {
+func (r fakeReq) has(role string) bool {
 	for _, m := range r.Messages {
 		if m["role"] == role {
 			return true
@@ -55,12 +55,12 @@ func (r llmRequest) has(role string) bool {
 	return false
 }
 
-func newFakeLLM(t *testing.T, respond func(req llmRequest, n int) (int, any)) *fakeLLM {
+func newFakeLLM(t *testing.T, respond func(req fakeReq, n int) (int, any)) *fakeLLM {
 	f := &fakeLLM{t: t, respond: respond}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := int(f.calls.Add(1))
 		body, _ := io.ReadAll(r.Body)
-		req := llmRequest{Path: r.URL.Path, Auth: r.Header.Get("Authorization")}
+		req := fakeReq{Path: r.URL.Path, Auth: r.Header.Get("Authorization")}
 		_ = json.Unmarshal(body, &req.Raw)
 		_ = json.Unmarshal(req.Raw["messages"], &req.Messages)
 		req.ToolChoice = req.Raw["tool_choice"]
@@ -89,10 +89,10 @@ func newFakeLLM(t *testing.T, respond func(req llmRequest, n int) (int, any)) *f
 	return f
 }
 
-func (f *fakeLLM) reqs() []llmRequest {
+func (f *fakeLLM) reqs() []fakeReq {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]llmRequest(nil), f.requests...)
+	return append([]fakeReq(nil), f.requests...)
 }
 
 func toolCallResp(id, name, args string) map[string]any {
@@ -135,7 +135,7 @@ func testConfig(base string, mut func(*AuditorConfig)) *llmJudge {
 }
 
 func TestAgentToolCall(t *testing.T) {
-	llm := newFakeLLM(t, func(req llmRequest, _ int) (int, any) {
+	llm := newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
 		return 200, toolCallResp("c1", ToolName, verdictFor(req.lastUser()))
 	})
 	c := testConfig(llm.srv.URL, nil)
@@ -177,7 +177,7 @@ func TestAgentToolCall(t *testing.T) {
 }
 
 func TestAgentBadArgsThenOK(t *testing.T) {
-	llm := newFakeLLM(t, func(req llmRequest, _ int) (int, any) {
+	llm := newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
 		if !req.has("tool") {
 			return 200, toolCallResp("c1", ToolName, `{"verdict":"maybe"}`)
 		}
@@ -204,7 +204,7 @@ func TestAgentBadArgsThenOK(t *testing.T) {
 }
 
 func TestAgentUnknownToolThenOK(t *testing.T) {
-	llm := newFakeLLM(t, func(req llmRequest, n int) (int, any) {
+	llm := newFakeLLM(t, func(req fakeReq, n int) (int, any) {
 		if n == 1 {
 			return 200, toolCallResp("c1", "web_search", `{}`)
 		}
@@ -220,7 +220,7 @@ func TestAgentUnknownToolThenOK(t *testing.T) {
 }
 
 func TestAgentNoToolThenOK(t *testing.T) {
-	llm := newFakeLLM(t, func(req llmRequest, _ int) (int, any) {
+	llm := newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
 		if !req.has("assistant") {
 			return 200, textResp("我认为这段内容没有问题。")
 		}
@@ -237,7 +237,7 @@ func TestAgentNoToolThenOK(t *testing.T) {
 }
 
 func TestAgentJSONContentFallback(t *testing.T) {
-	llm := newFakeLLM(t, func(llmRequest, int) (int, any) {
+	llm := newFakeLLM(t, func(fakeReq, int) (int, any) {
 		return 200, textResp("```json\n{\"verdict\":\"block\",\"categories\":[\"violence\",\"nope\"],\"reason\":\"暴力\"}\n```")
 	})
 	res, err := newAgent().run(context.Background(), testConfig(llm.srv.URL, nil), "x", false)
@@ -245,7 +245,7 @@ func TestAgentJSONContentFallback(t *testing.T) {
 		t.Fatalf("res = %+v %v", res, err)
 	}
 	// Content given as an array of text parts.
-	llm2 := newFakeLLM(t, func(llmRequest, int) (int, any) {
+	llm2 := newFakeLLM(t, func(fakeReq, int) (int, any) {
 		return 200, map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant",
 			"content": []any{map[string]any{"type": "text", "text": `{"verdict":"pass","categories":[],"reason":"ok"}`}}}}}}
 	})
@@ -255,7 +255,7 @@ func TestAgentJSONContentFallback(t *testing.T) {
 }
 
 func TestAgentNoVerdict(t *testing.T) {
-	llm := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, textResp("hmm") })
+	llm := newFakeLLM(t, func(fakeReq, int) (int, any) { return 200, textResp("hmm") })
 	c := testConfig(llm.srv.URL, func(s *AuditorConfig) { s.MaxTurns = 2 })
 	res, err := newAgent().run(context.Background(), c, "x", true)
 	if !errors.Is(err, ErrNoVerdict) || res.Turns != 2 || llm.calls.Load() != 2 || len(res.Transcript) != 6 {
@@ -264,28 +264,29 @@ func TestAgentNoVerdict(t *testing.T) {
 }
 
 func TestAgentUpstreamErrors(t *testing.T) {
-	llm := newFakeLLM(t, func(llmRequest, int) (int, any) {
+	llm := newFakeLLM(t, func(fakeReq, int) (int, any) {
 		return 500, `{"error":{"message":"boom"}}`
 	})
 	_, err := newAgent().run(context.Background(), testConfig(llm.srv.URL, nil), "x", false)
-	if err == nil || !strings.Contains(err.Error(), "upstream HTTP 500") || !strings.Contains(err.Error(), "boom") || llm.calls.Load() != 1 {
+	var up *UpstreamError
+	if !errors.As(err, &up) || up.Status != 500 || !strings.Contains(up.message, "boom") || llm.calls.Load() != 1 {
 		t.Fatalf("err = %v calls = %d", err, llm.calls.Load())
 	}
-	bad := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, "not json" })
+	bad := newFakeLLM(t, func(fakeReq, int) (int, any) { return 200, "not json" })
 	if _, err := newAgent().run(context.Background(), testConfig(bad.srv.URL, nil), "x", false); err == nil || !strings.Contains(err.Error(), "invalid upstream JSON") {
 		t.Fatalf("err = %v", err)
 	}
-	empty := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, `{"choices":[]}` })
+	empty := newFakeLLM(t, func(fakeReq, int) (int, any) { return 200, `{"choices":[]}` })
 	if _, err := newAgent().run(context.Background(), testConfig(empty.srv.URL, nil), "x", false); err == nil {
 		t.Fatal("no choices must fail")
 	}
-	huge := newFakeLLM(t, func(llmRequest, int) (int, any) {
-		return 200, `{"choices":[],"pad":"` + strings.Repeat("x", maxResponseBytes) + `"}`
+	huge := newFakeLLM(t, func(fakeReq, int) (int, any) {
+		return 200, `{"choices":[],"pad":"` + strings.Repeat("x", maxJSONResponse) + `"}`
 	})
-	if _, err := newAgent().run(context.Background(), testConfig(huge.srv.URL, nil), "x", false); err == nil || !strings.Contains(err.Error(), "1 MiB") {
+	if _, err := newAgent().run(context.Background(), testConfig(huge.srv.URL, nil), "x", false); !errors.Is(err, errResponseTooLarge) {
 		t.Fatalf("huge: %v", err)
 	}
-	slow := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, textResp("late") })
+	slow := newFakeLLM(t, func(fakeReq, int) (int, any) { return 200, textResp("late") })
 	slow.delay = 2 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -295,9 +296,9 @@ func TestAgentUpstreamErrors(t *testing.T) {
 }
 
 func TestAgentToolChoiceVariants(t *testing.T) {
-	llm := newFakeLLM(t, func(llmRequest, int) (int, any) { return 200, toolCallResp("c", ToolName, verdictFor("")) })
+	llm := newFakeLLM(t, func(fakeReq, int) (int, any) { return 200, toolCallResp("c", ToolName, verdictFor("")) })
 	for mode, want := range map[string]string{
-		"required": `"required"`, "auto": `"auto"`, "function": `{"type":"function","function":{"name":"submit_verdict"}}`,
+		"required": `"required"`, "auto": `"auto"`, "function": `{"function":{"name":"submit_verdict"},"type":"function"}`,
 	} {
 		before := len(llm.reqs())
 		c := testConfig(llm.srv.URL+"/v1", func(s *AuditorConfig) { s.ToolChoice = mode; s.Temperature = 0.5; s.MaxTokens = 100 })

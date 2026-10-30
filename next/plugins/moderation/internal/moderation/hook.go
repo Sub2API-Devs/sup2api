@@ -54,6 +54,7 @@ type moderation struct {
 	in     *Input
 	rec    eventRec
 	timing string
+	source string // cost source; "" = audit
 	key    string // pass cache / singleflight key
 	size   int64  // bytes held while queued
 	queued time.Time
@@ -218,7 +219,11 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 		if a == nil {
 			return Outcome{AuditorID: id, Err: errAuditorMissing}
 		}
-		return p.audit(ctx, a, m.in, m.timing == TimingPre)
+		src := m.source
+		if src == "" {
+			src = SourceAudit
+		}
+		return p.audit(ctx, a, m.in, m.timing == TimingPre, src)
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
 	return tr

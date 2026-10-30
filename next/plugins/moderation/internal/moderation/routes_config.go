@@ -21,26 +21,31 @@ import (
 
 // ChannelView is a channel as the API returns it: never the key or proxy.
 type ChannelView struct {
-	ID         int64     `json:"id"`
-	Type       string    `json:"type"`
-	Protocol   string    `json:"protocol"`
-	Name       string    `json:"name"`
-	BaseURL    string    `json:"base_url"`
-	APIKeyTail string    `json:"api_key_tail"`
-	HasKey     bool      `json:"has_key"`
-	HasProxy   bool      `json:"has_proxy"`
-	Model      string    `json:"model"`
-	TimeoutMs  int       `json:"timeout_ms"`
-	Enabled    bool      `json:"enabled"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64  `json:"id"`
+	Type       string `json:"type"`
+	Protocol   string `json:"protocol"`
+	Name       string `json:"name"`
+	BaseURL    string `json:"base_url"`
+	APIKeyTail string `json:"api_key_tail"`
+	HasKey     bool   `json:"has_key"`
+	HasProxy   bool   `json:"has_proxy"`
+	Model      string `json:"model"`
+	// BillingModel is the model the calls are priced on ("" = model).
+	BillingModel string    `json:"billing_model"`
+	TimeoutMs    int       `json:"timeout_ms"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	// List and detail only.
+	PriceState *PriceState  `json:"price_state,omitempty"`
+	Cost30d    *CostSummary `json:"cost_30d,omitempty"`
 }
 
-const channelColumns = `id, type, protocol, name, base_url, api_key_tail, api_key_enc IS NOT NULL, proxy_enc IS NOT NULL, model, timeout_ms, enabled, created_at, updated_at`
+const channelColumns = `id, type, protocol, name, base_url, api_key_tail, api_key_enc IS NOT NULL, proxy_enc IS NOT NULL, model, billing_model, timeout_ms, enabled, created_at, updated_at`
 
 func scanChannel(r pgx.Row) (ChannelView, error) {
 	var c ChannelView
-	err := r.Scan(&c.ID, &c.Type, &c.Protocol, &c.Name, &c.BaseURL, &c.APIKeyTail, &c.HasKey, &c.HasProxy, &c.Model, &c.TimeoutMs, &c.Enabled, &c.CreatedAt, &c.UpdatedAt)
+	err := r.Scan(&c.ID, &c.Type, &c.Protocol, &c.Name, &c.BaseURL, &c.APIKeyTail, &c.HasKey, &c.HasProxy, &c.Model, &c.BillingModel, &c.TimeoutMs, &c.Enabled, &c.CreatedAt, &c.UpdatedAt)
 	c.CreatedAt, c.UpdatedAt = c.CreatedAt.UTC(), c.UpdatedAt.UTC()
 	return c, err
 }
@@ -48,19 +53,22 @@ func scanChannel(r pgx.Row) (ChannelView, error) {
 // channelInput is the POST / PUT body. api_key absent or "" keeps the stored
 // key (PUT); type cannot change.
 type channelInput struct {
-	Type      string  `json:"type"`
-	Protocol  string  `json:"protocol"`
-	Name      string  `json:"name"`
-	BaseURL   string  `json:"base_url"`
-	APIKey    *string `json:"api_key"`
-	Model     string  `json:"model"`
-	TimeoutMs int     `json:"timeout_ms"`
-	Enabled   *bool   `json:"enabled"`
+	Type     string  `json:"type"`
+	Protocol string  `json:"protocol"`
+	Name     string  `json:"name"`
+	BaseURL  string  `json:"base_url"`
+	APIKey   *string `json:"api_key"`
+	Model    string  `json:"model"`
+	// BillingModel: the price row the calls are priced on ("" = model).
+	BillingModel string `json:"billing_model"`
+	TimeoutMs    int    `json:"timeout_ms"`
+	Enabled      *bool  `json:"enabled"`
 }
 
 func (in *channelInput) normalize() pluginsdk.FieldErrors {
 	var errs pluginsdk.FieldErrors
 	in.Name, in.BaseURL, in.Model = strings.TrimSpace(in.Name), strings.TrimSpace(in.BaseURL), strings.TrimSpace(in.Model)
+	in.BillingModel = strings.TrimSpace(in.BillingModel)
 	if _, ok := defaultChannelTimeoutMs[in.Type]; !ok {
 		errs = errs.Add("type", "enum", "type must be openai_moderation, typesafe or llm / type 取值为 openai_moderation、typesafe、llm")
 	}
@@ -68,8 +76,8 @@ func (in *channelInput) normalize() pluginsdk.FieldErrors {
 		if in.Protocol == "" {
 			in.Protocol = ProtocolOpenAIChat
 		}
-		if in.Protocol != ProtocolOpenAIChat {
-			errs = errs.Add("protocol", "enum", "protocol must be openai_chat / 目前只支持 openai_chat")
+		if llmProtocols[in.Protocol] == nil {
+			errs = errs.Add("protocol", "enum", "protocol must be openai_chat, openai_responses or anthropic / 协议取值为 openai_chat、openai_responses、anthropic")
 		}
 	} else {
 		in.Protocol = ""
@@ -85,6 +93,9 @@ func (in *channelInput) normalize() pluginsdk.FieldErrors {
 	}
 	if in.Model == "" || utf8.RuneCountInString(in.Model) > 200 {
 		errs = errs.Add("model", "invalid", "model is required, at most 200 characters / 模型必填，最多 200 字")
+	}
+	if utf8.RuneCountInString(in.BillingModel) > 200 {
+		errs = errs.Add("billing_model", "too_long", "billing_model is at most 200 characters / 计价模型最多 200 字")
 	}
 	if in.TimeoutMs == 0 {
 		in.TimeoutMs = defaultChannelTimeoutMs[in.Type]
@@ -114,7 +125,29 @@ func (p *Plugin) listChannels(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 	if list == nil {
 		list = []ChannelView{}
 	}
+	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		p.decorateChannel(ctx, &list[i], costs)
+	}
 	return pluginsdk.DataResponse(list), nil
+}
+
+// decorateChannel adds the price state and the 30-day cost.
+func (p *Plugin) decorateChannel(ctx context.Context, c *ChannelView, costs map[int64]CostSummary) {
+	model := c.BillingModel
+	if model == "" {
+		model = c.Model
+	}
+	st := p.priceState(ctx, c.Type, model)
+	c.PriceState = &st
+	sum, ok := costs[c.ID]
+	if !ok {
+		sum = CostSummary{Cost: formatCost(0)}
+	}
+	c.Cost30d = &sum
 }
 
 func (p *Plugin) getChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -133,6 +166,11 @@ func (p *Plugin) getChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if err != nil {
 		return nil, err
 	}
+	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	p.decorateChannel(ctx, &c, costs)
 	return pluginsdk.DataResponse(c), nil
 }
 
@@ -154,8 +192,8 @@ func (p *Plugin) createChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
 		now := p.now().UTC()
 		var id int64
-		if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, model, timeout_ms, enabled, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id`, in.Type, in.Protocol, in.Name, in.BaseURL, in.Model, in.TimeoutMs, enabled, now).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, model, billing_model, timeout_ms, enabled, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING id`, in.Type, in.Protocol, in.Name, in.BaseURL, in.Model, in.BillingModel, in.TimeoutMs, enabled, now).Scan(&id); err != nil {
 			return err
 		}
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
@@ -168,7 +206,7 @@ func (p *Plugin) createChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return pluginsdk.DataResponse(out), nil
+	return p.getChannel(ctx, withParam(req, "id", out.ID))
 }
 
 // storeKey seals and stores the key when one is given.
@@ -225,8 +263,8 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 		if in.Enabled != nil {
 			enabled = *in.Enabled
 		}
-		if _, err := tx.Exec(ctx, `UPDATE channels SET protocol=$2, name=$3, base_url=$4, model=$5, timeout_ms=$6, enabled=$7, updated_at=$8 WHERE id=$1`,
-			id, in.Protocol, in.Name, in.BaseURL, in.Model, in.TimeoutMs, enabled, p.now().UTC()); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE channels SET protocol=$2, name=$3, base_url=$4, model=$5, billing_model=$6, timeout_ms=$7, enabled=$8, updated_at=$9 WHERE id=$1`,
+			id, in.Protocol, in.Name, in.BaseURL, in.Model, in.BillingModel, in.TimeoutMs, enabled, p.now().UTC()); err != nil {
 			return err
 		}
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
@@ -241,7 +279,7 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return pluginsdk.DataResponse(out), nil
+	return p.getChannel(ctx, withParam(req, "id", out.ID))
 }
 
 // hostChanged compares scheme and host of two URLs.
@@ -288,12 +326,13 @@ func (p *Plugin) deleteChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 
 // ChannelTestResult is POST /channels/:id/test.
 type ChannelTestResult struct {
-	OK        bool   `json:"ok"`
-	Status    int    `json:"status,omitempty"`
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"` // upstream error text (key removed)
-	Model     string `json:"model,omitempty"`
-	LatencyMs int64  `json:"latency_ms"`
+	OK        bool      `json:"ok"`
+	Status    int       `json:"status,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Message   string    `json:"message,omitempty"` // upstream error text (key removed)
+	Model     string    `json:"model,omitempty"`
+	LatencyMs int64     `json:"latency_ms"`
+	Cost      *CallCost `json:"cost,omitempty"`
 }
 
 func (p *Plugin) testChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -312,6 +351,7 @@ func (p *Plugin) testChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	defer cancel()
 	start := p.now()
 	var out ChannelTestResult
+	var usage EngineUsage
 	switch ch.Type {
 	case ChannelOpenAI:
 		_, out.Model, err = callModerations(cctx, ch, "hello", "")
@@ -322,14 +362,15 @@ func (p *Plugin) testChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		var r systemOneAnswers
 		r, err = callSystemOne(cctx, ch, &qs, "hello", nil)
 		out.Model = r.Model
+		usage = EngineUsage{InputTokens: r.Usage.InputTokens}
 	case ChannelLLM:
-		var r chatResponse
-		err = callJSON(cctx, ch, "/v1/chat/completions", nil, map[string]any{
-			"model": ch.Model, "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": "ping"}},
-		}, &r)
-		out.Model = r.Model
+		var t llmTurn
+		t, err = protocolOf(ch).call(cctx, ch, llmRequest{Messages: []any{llmUserMessage("ping")}, MaxTokens: 16})
+		out.Model = t.Model
+		usage = engineUsage(t.Usage)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
+	out.Cost = p.meterNow(ctx, SourceTest, ch, EngineResult{Usage: usage, Calls: 1}, err)
 	out.OK = err == nil
 	if err != nil {
 		out.Error, out.Status = ErrType(err), upstreamStatus(err)
@@ -352,8 +393,8 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 	ch := &liveChannel{ID: id, client: p.httpClient}
 	var keyEnc []byte
 	var timeout int
-	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
-		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &ch.Model, &timeout)
+	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
+		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &ch.Model, &ch.BillingModel, &timeout)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errNotFound
 	}
@@ -640,7 +681,7 @@ func (p *Plugin) tryAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if resp != nil || err != nil {
 		return resp, err
 	}
-	o := p.audit(ctx, a, in, true)
+	o := p.audit(ctx, a, in, true, SourceTry)
 	out := TryResult{Outcome: o}
 	if o.Err != nil {
 		out.ErrType, out.Status, out.Error = ErrType(o.Err), upstreamStatus(o.Err), truncateRunes(o.Err.Error(), 300)

@@ -1,9 +1,6 @@
 package moderation
 
-import (
-	"encoding/json"
-	"strings"
-)
+import "strings"
 
 // ToolName is the only tool offered to the moderation LLM.
 const ToolName = "submit_verdict"
@@ -69,58 +66,41 @@ func expandPrompt(custom string, cats []Category) string {
 	return strings.ReplaceAll(p, "{{categories}}", categoryLines(cats))
 }
 
-// toolDefinition returns the submit_verdict tool (CONTRACTS §20.5).
-func toolDefinition(cats []Category) json.RawMessage {
+// verdictTool returns the submit_verdict tool (CONTRACTS §20.5).
+func verdictTool(cats []Category) LLMTool {
 	ids := make([]string, 0, len(cats))
 	for _, c := range cats {
 		ids = append(ids, c.ID)
 	}
-	tool := map[string]any{
-		"type": "function",
-		"function": map[string]any{
-			"name":        ToolName,
-			"description": "提交审核结论。审核完成后必须调用一次。",
-			"parameters": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []string{"verdict", "categories", "reason"},
-				"properties": map[string]any{
-					"verdict": map[string]any{
-						"type":        "string",
-						"enum":        []string{VerdictPass, VerdictFlag, VerdictBlock},
-						"description": "pass=正常；flag=可疑但放行并记录；block=明确违规需拦截",
-					},
-					"categories": map[string]any{
-						"type":        "array",
-						"items":       map[string]any{"type": "string", "enum": ids},
-						"description": "命中的分类，pass 时为空数组",
-					},
-					"severity": map[string]any{
-						"type": "string",
-						"enum": severities,
-					},
-					"reason": map[string]any{
-						"type":        "string",
-						"description": "简短理由，不超过 200 字，不要复述违规内容",
-					},
+	return LLMTool{
+		Name:        ToolName,
+		Description: "提交审核结论。审核完成后必须调用一次。",
+		Schema: map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"verdict", "categories", "reason"},
+			"properties": map[string]any{
+				"verdict": map[string]any{
+					"type":        "string",
+					"enum":        []string{VerdictPass, VerdictFlag, VerdictBlock},
+					"description": "pass=正常；flag=可疑但放行并记录；block=明确违规需拦截",
+				},
+				"categories": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string", "enum": ids},
+					"description": "命中的分类，pass 时为空数组",
+				},
+				"severity": map[string]any{
+					"type": "string",
+					"enum": severities,
+				},
+				"reason": map[string]any{
+					"type":        "string",
+					"description": "简短理由，不超过 200 字，不要复述违规内容",
 				},
 			},
 		},
 	}
-	b, _ := json.Marshal(tool)
-	return b
 }
 
 var severities = []string{"none", "low", "medium", "high", "critical"}
-
-// toolChoice returns the tool_choice value for settings.tool_choice.
-func toolChoice(mode string) json.RawMessage {
-	switch mode {
-	case "function":
-		return json.RawMessage(`{"type":"function","function":{"name":"` + ToolName + `"}}`)
-	case "auto":
-		return json.RawMessage(`"auto"`)
-	default:
-		return json.RawMessage(`"required"`)
-	}
-}

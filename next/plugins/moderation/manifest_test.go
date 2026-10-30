@@ -36,7 +36,7 @@ func TestManifestServes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range m.Routes {
-		path := strings.NewReplacer(":user_id", "1", ":id", "1").Replace(r.Path)
+		path := strings.NewReplacer(":user_id", "1", ":id", "1", ":version", "1").Replace(r.Path)
 		if resp := h.Do(r.Method, path, nil, "{}"); strings.Contains(string(resp.GetBody()), "no route for") {
 			t.Errorf("route %s %s has no handler", r.Method, r.Path)
 		}
@@ -52,7 +52,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "moderation" || m.Version != "0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.3.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -78,12 +78,14 @@ func TestManifest(t *testing.T) {
 		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
 		"POST /auditors/:id/try": "moderation:manage", "POST /flows/:id/publish": "moderation:manage", "POST /import": "moderation:manage",
 		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
+		"POST /watchlist/:user_id/analyze": "moderation:manage", "GET /analyses/:id": "moderation:read", "GET /costs": "moderation:read",
+		"POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage", "GET /analysis/prompt": "moderation:read",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 38 {
+	if len(routes) != 49 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -96,7 +98,7 @@ func TestManifest(t *testing.T) {
 		}
 		granted[hp.ID] = &m.HostPermissions[i]
 	}
-	for _, need := range []string{"kv", "secrets", "db.schema", "gateway.hook", "jobs", "broadcast", "routes.admin", "ui.menu", "ui.native", "net"} {
+	for _, need := range []string{"kv", "secrets", "prices", "db.schema", "gateway.hook", "jobs", "broadcast", "routes.admin", "ui.menu", "ui.native", "net"} {
 		if granted[need] == nil {
 			t.Errorf("missing host permission %s", need)
 		}
@@ -122,7 +124,8 @@ func TestManifest(t *testing.T) {
 			t.Errorf("scope.fields[%d] = %v, want %s", i, f, wantNeeds[i])
 		}
 	}
-	if len(m.Jobs) != 1 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" {
+	if len(m.Jobs) != 2 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
+		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" {
 		t.Fatalf("jobs = %+v", m.Jobs)
 	}
 	caps := map[string]bool{}

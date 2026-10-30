@@ -44,12 +44,13 @@ type snapshot struct {
 	// byGroup maps every bound group to its flow; nil = bound to a flow that
 	// is disabled or unpublished (the group is not moderated). 0 = default.
 	byGroup map[int64]*liveFlow
-	markers [][]byte // self-request keys of the llm channels
+	groups  map[int64][]int64 // flow id -> bound groups
+	markers [][]byte          // self-request keys of the llm channels
 }
 
 func emptySnapshot() *snapshot {
 	return &snapshot{version: -1, channels: map[int64]*liveChannel{}, auditors: map[int64]*liveAuditor{},
-		flows: map[int64]*liveFlow{}, byGroup: map[int64]*liveFlow{}}
+		flows: map[int64]*liveFlow{}, byGroup: map[int64]*liveFlow{}, groups: map[int64][]int64{}}
 }
 
 // flowFor returns the flow of a group; a group without a binding of its own
@@ -60,6 +61,9 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 	}
 	return s.byGroup[0]
 }
+
+// groupsOf lists the groups bound to a flow.
+func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
 // sendsImages reports whether any auditor of the flow sends images; when
 // none does, the request images are not kept while the request waits.
@@ -115,7 +119,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	if err := db.QueryRow(ctx, `SELECT config_version FROM config_state WHERE id = 1`).Scan(&s.version); err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT id, type, protocol, base_url, api_key_enc, model, timeout_ms FROM channels
+	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels
 		WHERE deleted_at IS NULL AND enabled`)
 	if err != nil {
 		return nil, err
@@ -123,19 +127,20 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	type chRow struct {
 		id                         int64
 		typ, protocol, base, model string
+		name, billing              string
 		keyEnc                     []byte
 		timeout                    int
 	}
 	var chRows []chRow
 	var r chRow
-	if _, err := pgx.ForEachRow(rows, []any{&r.id, &r.typ, &r.protocol, &r.base, &r.keyEnc, &r.model, &r.timeout}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&r.id, &r.typ, &r.protocol, &r.name, &r.base, &r.keyEnc, &r.model, &r.billing, &r.timeout}, func() error {
 		chRows = append(chRows, r)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 	for _, r := range chRows {
-		ch := &liveChannel{ID: r.id, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model,
+		ch := &liveChannel{ID: r.id, Name: r.name, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model, BillingModel: r.billing,
 			Timeout: time.Duration(r.timeout) * time.Millisecond, client: p.httpClient}
 		if len(r.keyEnc) > 0 {
 			key, err := p.host.OpenSecret(ctx, secretContext(r.id, "key"), r.keyEnc)
@@ -207,13 +212,14 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
-	rows, err = db.Query(ctx, `SELECT group_id, flow_id FROM flow_groups`)
+	rows, err = db.Query(ctx, `SELECT group_id, flow_id FROM flow_groups ORDER BY group_id`)
 	if err != nil {
 		return nil, err
 	}
 	var gid int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &fid}, func() error {
 		s.byGroup[gid] = s.flows[fid] // nil when the flow is disabled or unpublished
+		s.groups[fid] = append(s.groups[fid], gid)
 		return nil
 	}); err != nil {
 		return nil, err

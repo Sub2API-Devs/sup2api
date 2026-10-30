@@ -11,14 +11,14 @@ import (
 
 // llmJudge is the compiled §20 agent of an llm_verdict auditor.
 type llmJudge struct {
-	endpoint    string
-	apiKey      string
+	channel     *liveChannel
+	proto       *llmProtocol
 	model       string
 	prompt      string
 	categories  []Category
 	categorySet map[string]bool
-	toolJSON    []byte
-	choiceJSON  []byte
+	tool        LLMTool
+	choice      string
 	maxTurns    int
 	temperature float64
 	maxTokens   int
@@ -54,15 +54,14 @@ func compileJudge(cfg AuditorConfig, ch *liveChannel) *llmJudge {
 		j.categorySet[c.ID] = true
 	}
 	j.prompt = expandPrompt(textutil.TruncateRunes(cfg.SystemPrompt, 20000), j.categories)
-	j.toolJSON = toolDefinition(j.categories)
-	choice := strings.ToLower(strings.TrimSpace(cfg.ToolChoice))
-	if choice != "function" && choice != "auto" {
-		choice = "required"
+	j.tool = verdictTool(j.categories)
+	j.choice = strings.ToLower(strings.TrimSpace(cfg.ToolChoice))
+	if j.choice != ChoiceFunction && j.choice != ChoiceAuto {
+		j.choice = ChoiceRequired
 	}
-	j.choiceJSON = toolChoice(choice)
 	if ch != nil {
-		j.endpoint = joinURL(ch.BaseURL, "/v1/chat/completions")
-		j.apiKey, j.model, j.markerKey = ch.Key, ch.Model, ch.markerKey
+		j.channel, j.proto = ch, protocolOf(ch)
+		j.model, j.markerKey = ch.Model, ch.markerKey
 	}
 	return j
 }
@@ -76,7 +75,7 @@ func (p *Plugin) llmAudit(ctx context.Context, a *liveAuditor, in *Input) (Engin
 	r, err := p.agent.run(ctx, a.llm, in.Text, false)
 	if r != nil {
 		res.Calls, res.Model = r.Turns, r.LLMModel
-		res.Usage = EngineUsage{InputTokens: r.Usage.PromptTokens, OutputTokens: r.Usage.CompletionTokens}
+		res.Usage = engineUsage(r.Billing)
 	}
 	if err != nil {
 		return res, ctxErr(ctx, err)

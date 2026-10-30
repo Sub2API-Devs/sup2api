@@ -29,16 +29,37 @@ type Watch struct {
 	LastHitAt      *time.Time `json:"last_hit_at"`
 	Note           string     `json:"note"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// AI analysis (§72.13.4): queued, running, latest conclusion.
+	AnalysisRequestedAt  *time.Time `json:"analysis_requested_at"`
+	AnalysisSource       string     `json:"analysis_source"`
+	AnalysisRunning      bool       `json:"analysis_running"`
+	LatestAnalysisID     int64      `json:"latest_analysis_id"`
+	LatestAnalysisStatus string     `json:"latest_analysis_status"`
+	LatestTrend          string     `json:"latest_trend"`
+	LatestSuggestion     string     `json:"latest_suggestion"`
+	AnalyzedAt           *time.Time `json:"analyzed_at"`
+	claimUntil           *time.Time
+	analysisToken        int64
 }
 
-const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, note, updated_at`
+const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, note, updated_at,
+	analysis_requested_at, analysis_source, analysis_claim_until, analysis_token, latest_analysis_id, latest_analysis_status,
+	latest_trend, latest_suggestion, analyzed_at`
 
 func scanWatch(r pgx.Row) (Watch, error) {
 	var w Watch
-	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.Note, &w.UpdatedAt)
+	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.Note, &w.UpdatedAt,
+		&w.AnalysisRequestedAt, &w.AnalysisSource, &w.claimUntil, &w.analysisToken, &w.LatestAnalysisID, &w.LatestAnalysisStatus,
+		&w.LatestTrend, &w.LatestSuggestion, &w.AnalyzedAt)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
 	w.ExpiresAt, w.LastHitAt = utcPtr(w.ExpiresAt), utcPtr(w.LastHitAt)
+	w.AnalysisRequestedAt, w.AnalyzedAt, w.claimUntil = utcPtr(w.AnalysisRequestedAt), utcPtr(w.AnalyzedAt), utcPtr(w.claimUntil)
 	return w, err
+}
+
+// fillRunning sets AnalysisRunning from the claim.
+func (w *Watch) fillRunning(now time.Time) {
+	w.AnalysisRunning = w.claimUntil != nil && now.Before(*w.claimUntil)
 }
 
 func utcPtr(t *time.Time) *time.Time {
@@ -140,6 +161,9 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}
 	if list == nil {
 		list = []Watch{}
+	}
+	for i := range list {
+		list[i].fillRunning(p.now())
 	}
 	return pluginsdk.ListResponse(list, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
 }

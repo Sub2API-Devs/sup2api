@@ -1,0 +1,536 @@
+package moderation
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+)
+
+// Cost sources (costs.source, CONTRACTS §72.13.3).
+const (
+	SourceAudit    = "audit"
+	SourceAnalysis = "analysis"
+	SourceTest     = "test"
+	SourceTry      = "try"
+	SourceSimulate = "simulate"
+)
+
+// Price modes of one call.
+const (
+	PricePriced   = "priced"
+	PriceUnpriced = "unpriced"
+	PriceFree     = "free"
+)
+
+// CallCost is the price of one metered call (or of several summed).
+type CallCost struct {
+	Mode         string `json:"mode"`
+	Cost         string `json:"cost,omitempty"` // USD, 8 places; empty when not priced
+	Reason       string `json:"reason,omitempty"`
+	BillingModel string `json:"billing_model,omitempty"`
+	TokensIn     int64  `json:"tokens_in"`
+	TokensOut    int64  `json:"tokens_out"`
+	units        int64  // cost in 1e-8 USD
+}
+
+// costUnit is 1e-8 USD, the precision the core prices with.
+const costUnit int64 = 100_000_000
+
+// parseCost reads a decimal string ("0.00001230") into 1e-8 USD units.
+func parseCost(s string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	whole, frac, _ := strings.Cut(s, ".")
+	if len(frac) > 8 {
+		frac = frac[:8]
+	}
+	frac += strings.Repeat("0", 8-len(frac))
+	w, err1 := strconv.ParseInt(whole, 10, 64)
+	f, err2 := strconv.ParseInt(frac, 10, 64)
+	if err1 != nil || err2 != nil || w > math.MaxInt64/costUnit-1 {
+		return 0, false
+	}
+	v := w*costUnit + f
+	if neg {
+		v = -v
+	}
+	return v, true
+}
+
+// formatCost renders 1e-8 USD units as a decimal string with 8 places.
+func formatCost(units int64) string {
+	sign := ""
+	if units < 0 {
+		sign, units = "-", -units
+	}
+	return fmt.Sprintf("%s%d.%08d", sign, units/costUnit, units%costUnit)
+}
+
+// metered reports whether a call has a known cost: it succeeded, or failed
+// after the upstream reported usage.
+func metered(res EngineResult, err error) bool {
+	if errors.Is(err, ErrNoInput) || errors.Is(err, errNoChannel) {
+		return false
+	}
+	u := res.Usage
+	return err == nil || u.InputTokens+u.OutputTokens+u.CacheRead+u.CacheCreation > 0
+}
+
+// billingModel is the model a channel's calls are priced on.
+func (ch *liveChannel) billingModel() string {
+	if ch.BillingModel != "" {
+		return ch.BillingModel
+	}
+	return ch.Model
+}
+
+// tokens returns the input (cache included) and output tokens of a usage.
+func tokensOf(u EngineUsage) (in, out int64) {
+	in = u.InputTokens
+	if u.Semantics != SemanticsInclusive {
+		in += u.CacheRead + u.CacheCreation
+	}
+	return in, u.OutputTokens
+}
+
+// quote prices one call of ch with the core prices (PriceUsage). OpenAI
+// moderation is free; TypeSafe bills the input only.
+func (p *Plugin) quote(ctx context.Context, ch *liveChannel, u EngineUsage) CallCost {
+	c := CallCost{BillingModel: ch.billingModel()}
+	c.TokensIn, c.TokensOut = tokensOf(u)
+	switch ch.Type {
+	case ChannelOpenAI:
+		c.Mode = PriceFree
+		return c
+	case ChannelTypeSafe:
+		u = EngineUsage{InputTokens: u.InputTokens, Semantics: SemanticsInclusive}
+	}
+	if p.host == nil {
+		c.Mode, c.Reason = PriceUnpriced, "unavailable"
+		return c
+	}
+	sem := u.Semantics
+	if sem == "" {
+		sem = SemanticsInclusive
+	}
+	q, err := p.host.PriceUsage(ctx, pluginsdk.PriceUsage{Model: c.BillingModel, Semantics: sem,
+		Input: u.InputTokens, Output: u.OutputTokens, CacheRead: u.CacheRead, CacheCreation: u.CacheCreation})
+	switch {
+	case err != nil && status.Code(err) == codes.Unimplemented:
+		c.Mode, c.Reason = PriceUnpriced, "host_too_old"
+	case err != nil:
+		c.Mode, c.Reason = PriceUnpriced, "unavailable"
+	case !q.Priced:
+		c.Mode, c.Reason = PriceUnpriced, q.Reason
+	default:
+		units, ok := parseCost(q.Cost)
+		if !ok || units < 0 {
+			c.Mode, c.Reason = PriceUnpriced, "eval_error"
+			break
+		}
+		c.Mode, c.Cost, c.units = PricePriced, formatCost(units), units
+	}
+	return c
+}
+
+// ---------------------------------------------------------------- meter
+
+type costKey struct {
+	hour    time.Time
+	channel int64
+	source  string
+}
+
+// costAgg is one hourly row being added up.
+type costAgg struct {
+	calls, priced, unpriced, unpricedTokens, free, in, out, units int64
+}
+
+func (a *costAgg) add(c CallCost, calls int64) {
+	a.calls += calls
+	a.in += c.TokensIn
+	a.out += c.TokensOut
+	switch c.Mode {
+	case PricePriced:
+		a.priced += calls
+		a.units += c.units
+	case PriceFree:
+		a.free += calls
+	default:
+		a.unpriced += calls
+		a.unpricedTokens += c.TokensIn + c.TokensOut
+	}
+}
+
+type meterItem struct {
+	key   costKey
+	ch    *liveChannel
+	usage EngineUsage
+	calls int64
+}
+
+// meter adds up the cost of the upstream calls; the hook path only queues
+// the usage, pricing happens in the background (CONTRACTS §72.13.3).
+type meter struct {
+	mu      sync.Mutex
+	agg     map[costKey]*costAgg
+	queue   chan meterItem
+	dropped int64
+}
+
+func (m *meter) droppedCount() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.dropped
+}
+
+func newMeter() *meter {
+	return &meter{agg: map[costKey]*costAgg{}, queue: make(chan meterItem, 8192)}
+}
+
+func (m *meter) add(k costKey, c CallCost, calls int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	a := m.agg[k]
+	if a == nil {
+		a = &costAgg{}
+		m.agg[k] = a
+	}
+	a.add(c, calls)
+}
+
+func (p *Plugin) costKey(ch *liveChannel, source string) costKey {
+	return costKey{hour: p.now().UTC().Truncate(time.Hour), channel: ch.ID, source: source}
+}
+
+// meterLater queues a call for background pricing (hook path).
+func (p *Plugin) meterLater(source string, ch *liveChannel, res EngineResult, err error) {
+	if ch == nil || !metered(res, err) {
+		return
+	}
+	select {
+	case p.meter.queue <- meterItem{key: p.costKey(ch, source), ch: ch, usage: res.Usage, calls: int64(max(res.Calls, 1))}:
+	default:
+		p.meter.mu.Lock()
+		p.meter.dropped++
+		p.meter.mu.Unlock()
+	}
+}
+
+// meterNow prices a call at once and adds it (console paths that show the
+// cost of the call). nil = not metered.
+func (p *Plugin) meterNow(ctx context.Context, source string, ch *liveChannel, res EngineResult, err error) *CallCost {
+	if ch == nil || !metered(res, err) {
+		return nil
+	}
+	qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	c := p.quote(qctx, ch, res.Usage)
+	p.meter.add(p.costKey(ch, source), c, int64(max(res.Calls, 1)))
+	return &c
+}
+
+// meterLoop prices the queued calls and writes the sums every 10 s.
+func (p *Plugin) meterLoop(ctx context.Context) {
+	defer p.wg.Done()
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case it := <-p.meter.queue:
+			qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			c := p.quote(qctx, it.ch, it.usage)
+			cancel()
+			p.meter.add(it.key, c, it.calls)
+		case <-t.C:
+			fctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			p.flushCosts(fctx)
+			cancel()
+		}
+	}
+}
+
+// flushCosts upserts the sums; on failure they are kept for the next try.
+func (p *Plugin) flushCosts(ctx context.Context) {
+	p.meter.mu.Lock()
+	rows := p.meter.agg
+	p.meter.agg = map[costKey]*costAgg{}
+	p.meter.mu.Unlock()
+	if len(rows) == 0 {
+		return
+	}
+	err := p.writeCosts(ctx, rows)
+	if err == nil {
+		return
+	}
+	p.log.Warn("moderation: cost write failed; retrying with the next flush", "error", err.Error())
+	p.meter.mu.Lock()
+	defer p.meter.mu.Unlock()
+	for k, a := range rows {
+		cur := p.meter.agg[k]
+		if cur == nil {
+			p.meter.agg[k] = a
+			continue
+		}
+		cur.calls += a.calls
+		cur.priced += a.priced
+		cur.unpriced += a.unpriced
+		cur.unpricedTokens += a.unpricedTokens
+		cur.free += a.free
+		cur.in += a.in
+		cur.out += a.out
+		cur.units += a.units
+	}
+}
+
+func (p *Plugin) writeCosts(ctx context.Context, rows map[costKey]*costAgg) error {
+	db, err := p.db(ctx)
+	if err != nil {
+		return err
+	}
+	b := &pgx.Batch{}
+	for k, a := range rows {
+		b.Queue(`INSERT INTO costs (hour, channel_id, source, calls, priced_calls, unpriced_calls, unpriced_tokens, free_calls, tokens_in, tokens_out, cost)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::numeric)
+			ON CONFLICT (hour, channel_id, source) DO UPDATE SET
+				calls = costs.calls + EXCLUDED.calls, priced_calls = costs.priced_calls + EXCLUDED.priced_calls,
+				unpriced_calls = costs.unpriced_calls + EXCLUDED.unpriced_calls, unpriced_tokens = costs.unpriced_tokens + EXCLUDED.unpriced_tokens,
+				free_calls = costs.free_calls + EXCLUDED.free_calls, tokens_in = costs.tokens_in + EXCLUDED.tokens_in,
+				tokens_out = costs.tokens_out + EXCLUDED.tokens_out, cost = costs.cost + EXCLUDED.cost`,
+			k.hour, k.channel, k.source, a.calls, a.priced, a.unpriced, a.unpricedTokens, a.free, a.in, a.out, formatCost(a.units))
+	}
+	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		return tx.SendBatch(ctx, b).Close()
+	})
+}
+
+// ---------------------------------------------------------------- price state
+
+// PriceState is the current pricing of a channel's billing model.
+type PriceState struct {
+	Priced       bool   `json:"priced"`
+	Free         bool   `json:"free,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	BillingModel string `json:"billing_model"`
+}
+
+type priceStateEntry struct {
+	state PriceState
+	at    time.Time
+}
+
+// priceState asks the core whether the model has a price (cached 60 s).
+func (p *Plugin) priceState(ctx context.Context, typ, model string) PriceState {
+	if typ == ChannelOpenAI {
+		return PriceState{Free: true, BillingModel: model}
+	}
+	p.priceMu.Lock()
+	e, ok := p.priceCache[model]
+	p.priceMu.Unlock()
+	if ok && p.now().Sub(e.at) < time.Minute {
+		return e.state
+	}
+	c := p.quote(ctx, &liveChannel{Type: typ, Model: model}, EngineUsage{Semantics: SemanticsInclusive})
+	st := PriceState{Priced: c.Mode == PricePriced, Reason: c.Reason, BillingModel: model}
+	if c.Reason != "unavailable" {
+		p.priceMu.Lock()
+		p.priceCache[model] = priceStateEntry{state: st, at: p.now()}
+		p.priceMu.Unlock()
+	}
+	return st
+}
+
+// ---------------------------------------------------------------- GET /costs
+
+// CostSummary adds up metered calls. Cost is USD with 8 places.
+type CostSummary struct {
+	Cost           string `json:"cost"`
+	Calls          int64  `json:"calls"`
+	PricedCalls    int64  `json:"priced_calls"`
+	UnpricedCalls  int64  `json:"unpriced_calls"`
+	UnpricedTokens int64  `json:"unpriced_tokens"`
+	FreeCalls      int64  `json:"free_calls"`
+	TokensIn       int64  `json:"tokens_in"`
+	TokensOut      int64  `json:"tokens_out"`
+}
+
+// ChannelCost is one row of by_channel.
+type ChannelCost struct {
+	ChannelID    int64       `json:"channel_id"`
+	Name         string      `json:"name"`
+	Type         string      `json:"type"`
+	Model        string      `json:"model"`
+	BillingModel string      `json:"billing_model"`
+	Deleted      bool        `json:"deleted"`
+	Summary      CostSummary `json:"summary"`
+}
+
+// SourceCost is one row of by_source.
+type SourceCost struct {
+	Source  string      `json:"source"`
+	Summary CostSummary `json:"summary"`
+}
+
+// CostPoint is one bucket of the trend.
+type CostPoint struct {
+	Bucket time.Time `json:"bucket"`
+	Cost   string    `json:"cost"`
+}
+
+// CostReport is GET /costs.
+type CostReport struct {
+	Range     string        `json:"range"`
+	From      time.Time     `json:"from"`
+	To        time.Time     `json:"to"`
+	Bucket    string        `json:"bucket"`
+	Totals    CostSummary   `json:"totals"`
+	ByChannel []ChannelCost `json:"by_channel"`
+	BySource  []SourceCost  `json:"by_source"`
+	Trend     []CostPoint   `json:"trend"`
+}
+
+const costSums = `coalesce(sum(cost), 0)::text, coalesce(sum(calls), 0), coalesce(sum(priced_calls), 0), coalesce(sum(unpriced_calls), 0),
+	coalesce(sum(unpriced_tokens), 0), coalesce(sum(free_calls), 0), coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0)`
+
+func (s *CostSummary) targets() []any {
+	return []any{&s.Cost, &s.Calls, &s.PricedCalls, &s.UnpricedCalls, &s.UnpricedTokens, &s.FreeCalls, &s.TokensIn, &s.TokensOut}
+}
+
+func (s *CostSummary) normalize() {
+	if u, ok := parseCost(s.Cost); ok {
+		s.Cost = formatCost(u)
+	} else {
+		s.Cost = formatCost(0)
+	}
+}
+
+func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	now := p.now().UTC()
+	r := CostReport{Range: pluginsdk.Query(req, "range"), To: now, Bucket: "day", ByChannel: []ChannelCost{}, BySource: []SourceCost{}, Trend: []CostPoint{}}
+	switch r.Range {
+	case "", "24h":
+		r.Range, r.Bucket, r.From = "24h", "hour", now.Add(-24*time.Hour).Truncate(time.Hour)
+	case "7d":
+		r.From = now.Add(-7 * 24 * time.Hour)
+	case "30d":
+		r.From = now.Add(-30 * 24 * time.Hour)
+	default:
+		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效",
+			pluginsdk.FieldErrors{}.Add("range", "enum", "range must be 24h, 7d or 30d / range 取值为 24h、7d、30d")), nil
+	}
+	db, err := p.db(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	// Sums not yet written are included, so a test shows up at once.
+	p.flushCosts(ctx)
+	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
+		return nil, err
+	}
+	r.Totals.normalize()
+	if err := queryCostRows(ctx, db, &r); err != nil {
+		return nil, err
+	}
+	return pluginsdk.DataResponse(r), nil
+}
+
+func queryCostRows(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
+	rows, err := db.Query(ctx, `SELECT k.channel_id, coalesce(c.name, ''), coalesce(c.type, ''), coalesce(c.model, ''), coalesce(c.billing_model, ''),
+			c.id IS NULL OR c.deleted_at IS NOT NULL, `+costSums+`
+		FROM costs k LEFT JOIN channels c ON c.id = k.channel_id WHERE k.hour >= $1
+		GROUP BY k.channel_id, c.id ORDER BY sum(k.cost) DESC, k.channel_id`, r.From)
+	if err != nil {
+		return err
+	}
+	r.ByChannel, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (ChannelCost, error) {
+		var c ChannelCost
+		err := row.Scan(append([]any{&c.ChannelID, &c.Name, &c.Type, &c.Model, &c.BillingModel, &c.Deleted}, c.Summary.targets()...)...)
+		c.Summary.normalize()
+		return c, err
+	})
+	if err != nil {
+		return err
+	}
+	rows, err = db.Query(ctx, `SELECT source, `+costSums+` FROM costs WHERE hour >= $1 GROUP BY source ORDER BY source`, r.From)
+	if err != nil {
+		return err
+	}
+	r.BySource, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (SourceCost, error) {
+		var s SourceCost
+		err := row.Scan(append([]any{&s.Source}, s.Summary.targets()...)...)
+		s.Summary.normalize()
+		return s, err
+	})
+	if err != nil {
+		return err
+	}
+	rows, err = db.Query(ctx, `SELECT date_trunc($2, hour, 'UTC'), coalesce(sum(cost), 0)::text FROM costs WHERE hour >= $1 GROUP BY 1 ORDER BY 1`, r.From, r.Bucket)
+	if err != nil {
+		return err
+	}
+	byBucket := map[int64]string{}
+	var b time.Time
+	var cost string
+	if _, err := pgx.ForEachRow(rows, []any{&b, &cost}, func() error {
+		u, _ := parseCost(cost)
+		byBucket[b.Unix()] = formatCost(u)
+		return nil
+	}); err != nil {
+		return err
+	}
+	step := 24 * time.Hour
+	b = time.Date(r.From.Year(), r.From.Month(), r.From.Day(), 0, 0, 0, 0, time.UTC)
+	if r.Bucket == "hour" {
+		step, b = time.Hour, r.From.Truncate(time.Hour)
+	}
+	for ; !b.After(r.To); b = b.Add(step) {
+		c, ok := byBucket[b.Unix()]
+		if !ok {
+			c = formatCost(0)
+		}
+		r.Trend = append(r.Trend, CostPoint{Bucket: b, Cost: c})
+	}
+	if r.ByChannel == nil {
+		r.ByChannel = []ChannelCost{}
+	}
+	if r.BySource == nil {
+		r.BySource = []SourceCost{}
+	}
+	return nil
+}
+
+// channelCosts30d sums the last 30 days per channel (channel list).
+func channelCosts30d(ctx context.Context, db *pgxpool.Pool, since time.Time) (map[int64]CostSummary, error) {
+	rows, err := db.Query(ctx, `SELECT channel_id, `+costSums+` FROM costs WHERE hour >= $1 GROUP BY channel_id`, since)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64]CostSummary{}
+	var id int64
+	var s CostSummary
+	_, err = pgx.ForEachRow(rows, append([]any{&id}, s.targets()...), func() error {
+		s.normalize()
+		out[id] = s
+		return nil
+	})
+	return out, err
+}

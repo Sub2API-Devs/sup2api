@@ -65,7 +65,7 @@ func denied(r *pluginv1.GatewayRequestHookResponse) bool {
 
 // mockLLM answers like mock-upstream (CONTRACTS §20.9) through the tool.
 func mockLLM(t *testing.T) *fakeLLM {
-	return newFakeLLM(t, func(req llmRequest, _ int) (int, any) {
+	return newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
 		return 200, toolCallResp("c1", ToolName, verdictFor(req.lastUser()))
 	})
 }
@@ -75,7 +75,7 @@ func mockLLM(t *testing.T) *fakeLLM {
 // answers 500.
 type fakeMod struct {
 	srv   *httptest.Server
-	calls sync.Map // path -> *atomic.Int64
+	calls sync.Map     // path -> *atomic.Int64
 	delay atomic.Int64 // nanoseconds before answering
 }
 

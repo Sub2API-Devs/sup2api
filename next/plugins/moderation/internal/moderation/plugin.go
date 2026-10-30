@@ -67,6 +67,13 @@ type Plugin struct {
 
 	eventWriter *batch.Writer[eventRec]
 
+	meter *meter
+	// AI analyses running on this node and the dispatcher guard.
+	analysesRunning atomic.Int64
+	dispatching     atomic.Bool
+	priceMu         sync.Mutex
+	priceCache      map[string]priceStateEntry
+
 	// blocked maps user id -> expiry (zero = until unblocked).
 	blocked        atomic.Pointer[map[int64]time.Time]
 	blockReloadMu  sync.Mutex
@@ -95,6 +102,8 @@ func New() *Plugin {
 		agent:        newAgent(),
 		refreshEvery: 5 * time.Second,
 		refreshNow:   make(chan struct{}, 1),
+		meter:        newMeter(),
+		priceCache:   map[string]priceStateEntry{},
 	}
 	p.bg, p.cancel = context.WithCancel(context.Background())
 	c := compile(DefaultSettings())
@@ -131,8 +140,9 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	}, func(n int) {
 		p.stats.droppedEvents.Add(int64(n))
 	})
-	p.wg.Add(1)
+	p.wg.Add(2)
 	go p.refreshLoop(p.bg)
+	go p.meterLoop(p.bg)
 	c := p.cfg.Load()
 	p.resizePool(c.MaxConcurrency, c.QueueSize)
 	p.kickRefresh()
@@ -212,6 +222,7 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
+		p.flushCosts(ctx)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
