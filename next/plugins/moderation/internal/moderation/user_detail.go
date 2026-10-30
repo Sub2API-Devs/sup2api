@@ -78,11 +78,8 @@ type AnalysisProgress struct {
 
 // UserDetail is GET /users/:user_id.
 type UserDetail struct {
-	UserID         int64            `json:"user_id"`
-	Watch          *Watch           `json:"watch"`
-	Exempt         bool             `json:"exempt"`
-	Staff          bool             `json:"staff"`
-	Blocked        bool             `json:"blocked"`
+	UserID int64 `json:"user_id"`
+	UserState
 	Summary        UserSummary      `json:"summary"`
 	Context        UserContext      `json:"context"`
 	Daily          []UserDay        `json:"daily"`
@@ -99,18 +96,13 @@ func (p *Plugin) getUserDetail(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	c := p.cfg.Load()
 	now := p.now().UTC()
-	d := &UserDetail{UserID: uid, Exempt: c.exempt[uid], Staff: p.isStaff(ctx, uid), Blocked: p.isBlocked(uid),
-		Analysis: AnalysisProgress{Every: c.AnalysisEveryViolations}}
-	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, now))
-	switch {
-	case err == nil:
-		w.fillRunning(now)
-		d.Watch = &w
-		d.Analysis.Running, d.Analysis.Queued, d.Analysis.ViolationsSinceAnalysis = w.AnalysisRunning, w.AnalysisRequestedAt != nil, w.ViolationCount
-	case !errors.Is(err, pgx.ErrNoRows):
+	d := &UserDetail{UserID: uid, Analysis: AnalysisProgress{Every: p.cfg.Load().AnalysisEveryViolations}}
+	if d.UserState, err = p.userState(ctx, db, uid); err != nil {
 		return nil, err
+	}
+	if w := d.Watch; w != nil {
+		d.Analysis.Running, d.Analysis.Queued, d.Analysis.ViolationsSinceAnalysis = w.AnalysisRunning, w.AnalysisRequestedAt != nil, w.ViolationCount
 	}
 	p.flushStats(ctx) // daily counts of this node
 	for _, load := range []func(context.Context, *pgxpool.Pool, *UserDetail, time.Time) error{
@@ -133,12 +125,10 @@ func (v *AIVerdictCounts) targets() []any {
 
 func loadUserSummary(ctx context.Context, db *pgxpool.Pool, d *UserDetail, _ time.Time) error {
 	s := &d.Summary
-	return db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE review_status = 'pending'),
-			count(*) FILTER (WHERE review_status = 'confirmed'), count(*) FILTER (WHERE review_status = 'false_positive'),
-			count(*) FILTER (WHERE severity = 'high'), count(*) FILTER (WHERE severity = 'medium'), count(*) FILTER (WHERE severity = 'low'),
-			`+aiVerdictSums+`
-		FROM events WHERE user_id = $1 AND result IN ('hit', 'block')`, d.UserID).
-		Scan(append([]any{&s.Total, &s.Pending, &s.Confirmed, &s.FalsePositive, &s.BySeverity.High, &s.BySeverity.Medium, &s.BySeverity.Low},
+	return db.QueryRow(ctx, `SELECT `+severityCounts+`, count(*) FILTER (WHERE review_status = 'pending'),
+			count(*) FILTER (WHERE review_status = 'confirmed'), count(*) FILTER (WHERE review_status = 'false_positive'), `+aiVerdictSums+`
+		FROM events WHERE user_id = $1 AND `+severitySuspicious, d.UserID).
+		Scan(append([]any{&s.Total, &s.BySeverity.High, &s.BySeverity.Medium, &s.BySeverity.Low, &s.Pending, &s.Confirmed, &s.FalsePositive},
 			s.AIVerdicts.targets()...)...)
 }
 
@@ -165,7 +155,7 @@ func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserD
 		return err
 	}
 	rows, err := db.Query(ctx, `SELECT group_id, flow_id, flow_version, count(*), `+aiVerdictSums+`
-		FROM events WHERE user_id = $1 AND created_at >= $2 AND result IN ('hit', 'block')
+		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+severitySuspicious+`
 		GROUP BY group_id, flow_id, flow_version ORDER BY max(created_at) DESC`, d.UserID, now.Add(-recentDays*24*time.Hour))
 	if err != nil {
 		return err

@@ -155,6 +155,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
+	proxies := map[string]bool{}
 	for _, r := range chRows {
 		ch := &liveChannel{ID: r.id, Name: r.name, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model, BillingModel: r.billing,
 			Timeout: time.Duration(r.timeout) * time.Millisecond, client: p.httpClient, ttft: p.ttftTimeout}
@@ -166,12 +167,12 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			}
 			ch.Key = string(key)
 		}
-		proxy, err := p.openProxy(ctx, r.id, r.proxyEnc)
+		client, proxy, err := p.channelClient(ctx, r.id, r.proxyEnc)
 		if err != nil {
-			p.log.Warn("moderation: channel proxy does not open", "channel_id", r.id, "error", err.Error())
+			p.log.Warn("moderation: channel proxy is not usable", "channel_id", r.id, "error", err.Error())
 			continue
 		}
-		ch.client = p.clientFor(proxy)
+		ch.client, proxies[proxy] = client, true
 		if ch.Timeout <= 0 {
 			ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
 		}
@@ -246,6 +247,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
+	p.proxies.retain(proxies)
 	return s, nil
 }
 

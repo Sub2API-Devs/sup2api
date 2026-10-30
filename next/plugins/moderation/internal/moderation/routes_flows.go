@@ -31,7 +31,7 @@ type FlowView struct {
 	// Dirty: the draft differs from the published spec (a draft total
 	// timeout of 0 means "computed at publish" and matches any value).
 	Dirty           bool `json:"dirty"`
-	HasDraftChanges bool `json:"has_draft_changes"`
+	HasDraftChanges bool `json:"has_draft_changes"` // = Dirty, under new-api's name
 	// StageTimeoutSumMs is the automatic total timeout of the draft.
 	StageTimeoutSumMs int        `json:"stage_timeout_sum_ms"`
 	Stats24h          *FlowStats `json:"stats_24h,omitempty"`
@@ -325,8 +325,7 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 			return err
 		}
 		if len(conflicts) > 0 && !in.Force {
-			resp = pluginsdk.JSONResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-				"code": "group_conflict", "message": "groups are bound to other flows / 分组已绑定其他流程", "details": map[string]any{"conflicts": conflicts}}})
+			resp = errorWithDetails(http.StatusConflict, "group_conflict", "groups are bound to other flows / 分组已绑定其他流程", map[string]any{"conflicts": conflicts})
 			return errRollback
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM flow_groups WHERE flow_id = $1 OR group_id = ANY($2)`, id, in.Groups); err != nil {
@@ -386,12 +385,8 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			return errRollback
 		}
 		draftRaw, _ := json.Marshal(spec)
-		if spec.TotalTimeoutMs == 0 {
-			timeouts, err := auditorTimeouts(ctx, tx)
-			if err != nil {
-				return err
-			}
-			spec.TotalTimeoutMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
+		if err := fillAutoTimeout(ctx, tx, spec); err != nil {
+			return err
 		}
 		raw, _ := json.Marshal(spec)
 		now := p.now().UTC()
@@ -410,6 +405,20 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return nil, err
 	}
 	return p.getFlow(ctx, req)
+}
+
+// fillAutoTimeout gives a spec without a total timeout the automatic one
+// (the sum of each stage's slowest channel).
+func fillAutoTimeout(ctx context.Context, q querier, spec *Spec) error {
+	if spec.TotalTimeoutMs > 0 {
+		return nil
+	}
+	timeouts, err := auditorTimeouts(ctx, q)
+	if err != nil {
+		return err
+	}
+	spec.TotalTimeoutMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
+	return nil
 }
 
 // auditorTimeouts maps live auditors to their channel timeout.

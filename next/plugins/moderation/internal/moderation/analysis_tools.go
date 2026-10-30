@@ -509,7 +509,8 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 		High       int64 `json:"high"`
 	}
 	// Counts come from user_daily (every moderated request, passes included
-	// even when record_pass is off); the pending counters are written first.
+	// even when record_pass is off); this node's pending counters are written
+	// first (other nodes flush within 10 s).
 	tc.p.flushStats(ctx)
 	var d, m counts
 	if err := db.QueryRow(ctx, `SELECT

@@ -52,7 +52,7 @@ func MessageParts(format, raw string) ([]MessagePart, bool) {
 		text(root.String())
 		return parts, true
 	}
-	gemini := strings.HasPrefix(format, "gemini") || format == FormatGemini
+	gemini := strings.HasPrefix(format, FormatGemini)
 	for _, item := range root.Array() {
 		role = item.Get("role").String()
 		if gemini {
@@ -138,7 +138,10 @@ func imagePart(src, mime string) MessagePart {
 	default:
 		sniffed := mime
 		for _, sig := range base64Signatures {
-			if sniffed == "" && strings.HasPrefix(src, sig.prefix) {
+			if sniffed != "" {
+				break
+			}
+			if strings.HasPrefix(src, sig.prefix) {
 				sniffed = sig.mime
 			}
 		}

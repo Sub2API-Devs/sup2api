@@ -184,11 +184,22 @@ func earliest(a, b time.Time) time.Time {
 	return b
 }
 
-func mergeInto[K comparable](m map[K]*counters, k K, c *counters) {
-	if m[k] == nil {
-		m[k] = &counters{}
+// entry returns m[k], storing mk() first when it is missing.
+func entry[K comparable, V any](m map[K]V, k K, mk func() V) V {
+	v, ok := m[k]
+	if !ok {
+		v = mk()
+		m[k] = v
 	}
-	m[k].merge(c)
+	return v
+}
+
+func newOf[V any]() *V { return new(V) }
+
+func mapOf[K comparable, V any]() map[K]V { return map[K]V{} }
+
+func mergeInto[K comparable](m map[K]*counters, k K, c *counters) {
+	entry(m, k, newOf[counters]).merge(c)
 }
 
 // ---------------------------------------------------------------- GET /status
@@ -345,10 +356,7 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 			out.Today.Errors += r.errors
 			mergeInto(flows, r.flow, &r.counters)
 		case kindStage:
-			if funnels[r.flow] == nil {
-				funnels[r.flow] = map[int]*counters{}
-			}
-			mergeInto(funnels[r.flow], r.stage, &r.counters)
+			mergeInto(entry(funnels, r.flow, mapOf[int, *counters]), r.stage, &r.counters)
 		case kindAuditor:
 			out.Today.AuditorCalls += r.calls
 			out.Today.TokensIn += r.tokensIn
@@ -404,10 +412,7 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 	for i := range rows {
 		r := &rows[i]
 		if !r.hour.Before(lastHour) && r.health() {
-			if health[r.channel] == nil {
-				health[r.channel] = &channelRow{}
-			}
-			health[r.channel].merge(&r.channelRow)
+			entry(health, r.channel, newOf[channelRow]).merge(&r.channelRow)
 		}
 		if r.hour.Before(today) {
 			continue
@@ -643,14 +648,7 @@ func (p *Plugin) getTrend(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		ts := q.bucket(r.hour, q.granularity)
 		switch r.kind() {
 		case kindFlow:
-			if flows[r.flow] == nil {
-				flows[r.flow] = map[time.Time]*flowAcc{}
-			}
-			acc := flows[r.flow][ts]
-			if acc == nil {
-				acc = &flowAcc{}
-				flows[r.flow][ts] = acc
-			}
+			acc := entry(entry(flows, r.flow, mapOf[time.Time, *flowAcc]), ts, newOf[flowAcc])
 			acc.all.merge(&r.counters)
 			if r.timing == TimingPre {
 				acc.pre.merge(&r.counters)
@@ -658,11 +656,7 @@ func (p *Plugin) getTrend(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 				acc.post.merge(&r.counters)
 			}
 		case kindAuditor:
-			k := auditorKey{r.flow, r.stage, r.auditor}
-			if auditors[k] == nil {
-				auditors[k] = map[time.Time]*counters{}
-			}
-			mergeInto(auditors[k], ts, &r.counters)
+			mergeInto(entry(auditors, auditorKey{r.flow, r.stage, r.auditor}, mapOf[time.Time, *counters]), ts, &r.counters)
 		}
 	}
 	out := TrendResult{Granularity: q.granularity, From: q.from, To: q.to, AlertPercent: p.cfg.Load().ErrorRateAlertPercent,
@@ -973,11 +967,7 @@ func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock) (
 	out := map[int64]*ChannelStat{}
 	for i := range rows {
 		r := &rows[i]
-		st := out[r.channel]
-		if st == nil {
-			st = newChannelStat()
-			out[r.channel] = st
-		}
+		st := entry(out, r.channel, newChannelStat)
 		cost := r.costSummary()
 		if !r.hour.Before(lastHour) {
 			if r.health() {

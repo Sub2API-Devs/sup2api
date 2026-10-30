@@ -4703,7 +4703,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。
 - Redis key：`rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm`（§7）。
 
-## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求；P1 已上线 0.2.0，P2 见 72.13）
+## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求；P1 已上线 0.2.0，P2 见 72.13，P3 在 0.4.0 实现，见 72.14）
 
 用户要求把 new-api 的内容审核（`D:\projects\golang\new-api`，分支 `feat/content-moderation`，cp.270；代码在 `service/moderation/`、`model/moderation*.go`、`controller/content_moderation.go`）迁移过来。sup2api 已有内置插件 `moderation`（§20，0.1.13），所以做法是**把 new-api 的设计并入这个插件，升到 0.2.0**，不新建插件。本节确定后，§20 中与本节冲突的条目以本节为准，实现时同步改 §20。
 
@@ -5093,12 +5093,57 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - new-api 的分组 `cc-max` 在 sup2api 里没有同名分组，所以流程的分组绑定不迁移，迁移后告诉用户。
   - new-api 渠道上的代理不迁移（P1 起就不支持代理）。
 
-### 72.14 P3：统计、告警、用户信息
+### 72.14 P3：统计、告警、用户信息（0.4.0 已实现）
 
-- 小时统计表：维度为小时、分组、流程、级、审核器、渠道、时机；累加审核数、命中、推翻、错误、缓存跳过、调用数、延迟分桶、token。概览页加漏斗、审核器健康度和延迟分位数。
-- 异常率告警：近 1 小时异常率超过 `error_rate_alert_percent` 时，照 `guard` 插件的写法发 webhook，只在越过阈值的那一刻发一次。
-- 核心实现 `users.read`：按 id 批量取用户名、邮箱、角色。用户名显示和搜索、管理员自动豁免都依赖它。
-- 可选：核心把粘性会话指纹加进 `RequestMeta`，记录可以按会话关联。
+**统计表**（迁移 `0005_stats.sql`、`0006_stats_prices.sql`）：
+- `stats_hourly`：主键是（UTC 小时、分组、流程、级、审核器、时机）。行分四种：请求行（flow 0，只有 pre，记录审核给请求加的延迟）、流程行（stage 0）、级行（auditor 0）、审核器行。累加审核数、命中、拦截、推翻、错误、`cache_skipped`、上游调用数、token、9 档延迟分桶和费用；审核器行另有 `priced_calls`、`unpriced_calls`、`unpriced_tokens`、`free_calls`。`cache_skipped` 在流程行表示"放行缓存直接回答"，在审核器行表示"没有可发送的内容"。
+- 渠道健康度不进 `stats_hourly`，记在 `costs` 的同一行（小时、渠道、来源）上：调用数、错误、延迟分桶。手动来源（test、try、simulate）不计入健康度。
+- `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:read` 的用户（版主）不记。
+- 每个节点在内存里累加，每 10 秒写一次。写入串行，按固定键顺序 upsert，避免多节点死锁；失败的部分留到下一轮。读接口先写本节点的待写数据，其他节点最多晚 10 秒。
+- 不计入的情况：Shutdown 打断的运行，以及客户端已离开且没有命中的 pre 请求。
+- 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly` 和 `user_daily`，`costs` 保留 400 天。
+
+**接口**（都要 `moderation:read`）：
+- `GET /status`：今日计数、AI 复核计数、观察名单计数、近 1 小时审核器和渠道健康度、漏斗、队列、今日费用。观察计数与 new-api 一致：`watching` 和 `watching_with_new` 只算 observe 级，`blocking` 算 enforce 级。
+- `GET /stats/trend`、`GET /stats/performance`、`GET /stats/categories`。
+- 流程、审核器、渠道列表上的 24 小时或今日列。
+- "今日"按 `tz_offset_minutes` 计算，四舍五入到整小时，因为数据按整小时存。
+
+**告警与通知**：
+- `alerts` 任务每分钟检查一次：近 1 小时内某个流程至少有 20 次运行，且异常率超过 `error_rate_alert_percent` 时告警。告警状态存在 KV 里，TTL 2 小时；只要仍然超标，每次检查都刷新 TTL，所以一段连续超标只发一次通知。`error_rate_alert_percent` 设为 0 表示关闭告警。
+- AI 分析自动调整名单级别时也会发通知。
+- 核心没有"通知管理员"的接口，所以通知发到 `notify_webhook_url`：JSON POST，中英双语，可以用 `notify_webhook_secret` 做 HMAC 签名（请求头 `X-Signature: sha256=…`）。通知里不带被审核的原文。设置表单里，密钥是 `writeOnly`，URL 是 `x-sensitive`。
+
+**用户信息**：
+- `GET /users/:user_id`：任意用户 id 都能查，不要求在名单上。返回以下内容：
+  - 名单条目或 null；
+  - 豁免、版主、封禁状态；
+  - 可疑记录汇总（按人工复核、严重度、AI 结论统计，含 `none`）；
+  - 上下文栏：最近一条记录的分组、该分组现在绑定的流程，以及 30 天内的来源（分组 → 流程@版本，各带 AI 计数，标出当前来源）；
+  - 30 天的 `user_daily`；
+  - 最近一次分析和分析进度。
+- 用户名、角色、状态由前端调用核心的 `/users/:id` 获取。时间线和名单历史仍走 `GET /events?user_id=` 和 `GET /watchlist/:user_id/events`。
+- 名单的"新命中"（`hits_since_seen`）在以下情况清零：手动标记已读、手动改级别、AI 改级别（与 new-api 的 `hits_since_mark` 一致）。
+
+**其他与 new-api 对齐的点**：
+- `ttft_timeout_ms`（默认 10000，范围 1000–60000）：所有上游调用的首字超时。非流式调用以收到响应头为准，流式调用以第一个模型输出为准。超时的错误类型是 `ttft_timeout`。
+- mode 切到 off 后，post 队列里剩下的任务直接丢弃，不再调用上游。
+- 被推翻的放行也进放行缓存。
+- 记录批量写入失败时，去掉其中的原始消息再写一次，并在 trace 中标 `input_message_dropped: save_failed`。
+- 清理任务按 `analysis_keep_per_user` 删除每个用户多出来的分析。
+
+**与 new-api 不同**（有意为之）：
+- 天按 UTC 划分。
+- 原始消息由 `store_text` 一起控制，没有单独的 `record_input_message`。
+- `worker_count` 和 `post_concurrency` 合并为 `max_concurrency`。
+- 手动分析改为排队，不返回 503。
+
+**仍缺核心支持**：
+- `users.read`：批量取用户名和角色。有了它，通知可以带用户名，手动加入名单时可以校验用户是否存在。
+- 按权限通知管理员：可以支持各管理员自己的订阅、邮件和语言。
+- 插件写审计日志：目前只有名单历史有记录，其他管理操作都不留审计。
+- `RequestMeta` 增加 endpoint 和粘性会话指纹：记录才能按 endpoint、会话筛选。
+- manifest 增加 `ui.settings.permission`：让 `moderation:manage` 的用户也能编辑设置，目前要求核心的 `plugin:manage`。
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 

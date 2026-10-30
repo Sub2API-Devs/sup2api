@@ -82,7 +82,9 @@ func (l Latency) Percentile(q float64) float64 {
 	return float64(latencyBounds[len(latencyBounds)-1])
 }
 
-// counters is one stats_hourly row (or a sum of rows).
+// counters is one stats_hourly row (or a sum of rows). cacheSkipped means
+// "answered by the pass cache" on flow rows and "nothing the engine can
+// send" (ErrNoInput) on auditor rows (HealthRow.skipped_no_text).
 type counters struct {
 	audited, hit, blocked, overturned, errors, cacheSkipped, calls, tokensIn, tokensOut, latSum int64
 	lat                                                                                         Latency

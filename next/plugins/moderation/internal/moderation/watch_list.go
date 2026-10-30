@@ -24,6 +24,14 @@ import (
 // recentDays is the window of a watch row's groups (new-api moderationRecentDays).
 const recentDays = 30
 
+// severityCounts selects total, high, medium and low of suspicious records
+// (with severitySuspicious in the WHERE clause).
+const (
+	severityCounts = `count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high,
+	count(*) FILTER (WHERE severity = 'medium') AS medium, count(*) FILTER (WHERE severity = 'low') AS low`
+	severitySuspicious = `result IN ('hit', 'block')`
+)
+
 // SeverityCounts counts suspicious records by severity.
 type SeverityCounts struct {
 	High   int64 `json:"high"`
@@ -96,9 +104,8 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	case "last_hit":
 		order = "w.last_hit_at DESC NULLS LAST, w.user_id"
 	case "severity", "total":
-		join = ` LEFT JOIN (SELECT user_id, count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high,
-				count(*) FILTER (WHERE severity = 'medium') AS medium
-			FROM events WHERE result IN ('hit', 'block') AND user_id IN (SELECT w.user_id FROM watchlist w WHERE ` + where + `)
+		join = ` LEFT JOIN (SELECT user_id, ` + severityCounts + ` FROM events
+			WHERE ` + severitySuspicious + ` AND user_id IN (SELECT w.user_id FROM watchlist w WHERE ` + where + `)
 			GROUP BY user_id) r ON r.user_id = w.user_id`
 		order = "coalesce(r.high, 0) DESC, coalesce(r.medium, 0) DESC, w.user_id"
 		if pluginsdk.Query(req, "sort") == "total" {
@@ -164,8 +171,7 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 			analyses = append(analyses, w.LatestAnalysisID)
 		}
 	}
-	rows, err := db.Query(ctx, `SELECT user_id, count(*), count(*) FILTER (WHERE severity = 'high'), count(*) FILTER (WHERE severity = 'medium'),
-			count(*) FILTER (WHERE severity = 'low') FROM events WHERE result IN ('hit', 'block') AND user_id = ANY($1) GROUP BY user_id`, ids)
+	rows, err := db.Query(ctx, `SELECT user_id, `+severityCounts+` FROM events WHERE `+severitySuspicious+` AND user_id = ANY($1) GROUP BY user_id`, ids)
 	if err != nil {
 		return nil, err
 	}

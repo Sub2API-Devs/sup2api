@@ -33,7 +33,7 @@ func parseProxy(s string) (*url.URL, error) {
 	return u, nil
 }
 
-// redactProxy hides the password of a proxy URL.
+// redactProxy hides the password of a proxy URL (url.URL.Redacted).
 func redactProxy(s string) string {
 	u, err := url.Parse(s)
 	if err != nil {
@@ -50,17 +50,21 @@ type proxyClients struct {
 }
 
 // clientFor returns the client of a channel: the shared default client, or
-// one going through the proxy.
-func (p *Plugin) clientFor(proxy string) *http.Client {
+// one going through the proxy. A stored proxy that no longer parses is an
+// error: the channel must not silently go direct.
+func (p *Plugin) clientFor(proxy string) (*http.Client, error) {
 	u, err := parseProxy(proxy)
-	if err != nil || u == nil {
-		return p.httpClient
+	if err != nil {
+		return nil, err
+	}
+	if u == nil {
+		return p.httpClient, nil
 	}
 	pc := &p.proxies
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 	if c := pc.m[proxy]; c != nil {
-		return c
+		return c, nil
 	}
 	var t *http.Transport
 	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -74,7 +78,30 @@ func (p *Plugin) clientFor(proxy string) *http.Client {
 		pc.m = map[string]*http.Client{}
 	}
 	pc.m[proxy] = c
-	return c
+	return c, nil
+}
+
+// retain closes the idle connections of the proxies no channel uses any more
+// and forgets them.
+func (pc *proxyClients) retain(used map[string]bool) {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	for proxy, c := range pc.m {
+		if !used[proxy] {
+			c.CloseIdleConnections()
+			delete(pc.m, proxy)
+		}
+	}
+}
+
+// channelClient opens a channel's sealed proxy and returns its client.
+func (p *Plugin) channelClient(ctx context.Context, id int64, enc []byte) (*http.Client, string, error) {
+	proxy, err := p.openProxy(ctx, id, enc)
+	if err != nil {
+		return nil, "", err
+	}
+	c, err := p.clientFor(proxy)
+	return c, proxy, err
 }
 
 // openProxy opens a sealed proxy ("" when none).

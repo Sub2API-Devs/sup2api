@@ -218,6 +218,20 @@ func TestDraftTryAndChannelProxy(t *testing.T) {
 	if _, ok := proxied.Load("/v1/moderations"); !ct.OK || !ok {
 		t.Fatalf("test through proxy = %+v", ct)
 	}
+	if ct.URL != "http://upstream.invalid/v1/moderations" {
+		t.Fatalf("test url = %q", ct.URL)
+	}
+	// Sending back the redacted proxy the console was shown keeps the real one.
+	if resp := h.Do("PUT", fmt.Sprintf("/channels/%d", ch.ID), nil, map[string]any{"name": "o2", "base_url": "http://upstream.invalid", "proxy": ch.Proxy}); resp.GetStatus() != 200 {
+		t.Fatalf("redacted proxy round trip = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	proxied.Clear()
+	if ct := decodeData[ChannelTestResult](t, h.Do("POST", fmt.Sprintf("/channels/%d/test", ch.ID), nil, nil)); !ct.OK {
+		t.Fatalf("test after round trip = %+v", ct)
+	}
+	if _, ok := proxied.Load("/v1/moderations"); !ok {
+		t.Fatal("the proxy was lost by the round trip")
+	}
 	if resp := h.Do("PUT", fmt.Sprintf("/channels/%d", ch.ID), nil, map[string]any{"name": "o", "base_url": "http://upstream.invalid", "proxy": ""}); resp.GetStatus() != 400 ||
 		!strings.Contains(string(resp.GetBody()), "api_key") {
 		t.Fatalf("proxy change without key = %d %s", resp.GetStatus(), resp.GetBody())
@@ -233,6 +247,13 @@ func TestDraftTryAndChannelProxy(t *testing.T) {
 	}
 	if resp := h.Do("POST", "/auditors/try", nil, map[string]any{"text": "x"}); resp.GetStatus() != 400 {
 		t.Fatalf("try without draft = %d", resp.GetStatus())
+	}
+	if resp := h.Do("POST", "/auditors/try", nil, map[string]any{"text": "x", "draft": map[string]any{"config": "nope"}}); resp.GetStatus() != 400 {
+		t.Fatalf("try with a malformed draft = %d", resp.GetStatus())
+	}
+	if resp := h.Do("POST", "/auditors/try", nil, map[string]any{"text": "x", "draft": map[string]any{"type": AuditorTypeSafe, "channel_id": ch.ID}}); resp.GetStatus() != 400 ||
+		!strings.Contains(string(resp.GetBody()), "type_mismatch") {
+		t.Fatalf("try on a channel of another type = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 }
 

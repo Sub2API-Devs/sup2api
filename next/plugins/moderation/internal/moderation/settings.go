@@ -324,7 +324,7 @@ func (d decoder) notify(s *Settings) {
 	d.str("notify_webhook_url", &s.NotifyWebhookURL)
 	s.NotifyWebhookURL = strings.TrimSpace(s.NotifyWebhookURL)
 	if s.NotifyWebhookURL != "" && (!baseURLRe.MatchString(s.NotifyWebhookURL) || len(s.NotifyWebhookURL) > 1000) {
-		s.NotifyWebhookURL = ""
+		s.NotifyWebhookURL = "" // the core rejects it on save (schema pattern); a stored bad value turns notices off
 	}
 	d.str("notify_webhook_secret", &s.NotifyWebhookSecret)
 	s.NotifyWebhookSecret = textutil.TruncateRunes(strings.TrimSpace(s.NotifyWebhookSecret), 200)

@@ -187,9 +187,8 @@ func (p *Plugin) rollbackFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		spec, err := checkDraft(ctx, tx, raw)
 		var missing *MissingAuditorsError
 		if errors.As(err, &missing) {
-			resp = pluginsdk.JSONResponse(http.StatusBadRequest, map[string]any{"error": map[string]any{
-				"code": "missing_auditors", "message": "the version uses deleted auditors / 该版本使用了已删除的审核器",
-				"details": map[string]any{"auditor_ids": missing.IDs}}})
+			resp = errorWithDetails(http.StatusBadRequest, "missing_auditors", "the version uses deleted auditors / 该版本使用了已删除的审核器",
+				map[string]any{"auditor_ids": missing.IDs})
 			return errRollback
 		}
 		if err != nil {
@@ -304,12 +303,8 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil || len(spec.Stages) == 0 {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_flow", "the flow spec has no stages / 流程没有审核级"), nil
 	}
-	if spec.TotalTimeoutMs <= 0 {
-		timeouts, err := auditorTimeouts(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-		spec.TotalTimeoutMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
+	if err := fillAutoTimeout(ctx, db, spec); err != nil {
+		return nil, err
 	}
 	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: time.Duration(spec.TotalTimeoutMs) * time.Millisecond}
 	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), in: input, timing: timing, source: SourceSimulate}

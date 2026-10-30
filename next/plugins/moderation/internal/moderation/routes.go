@@ -605,67 +605,110 @@ func (p *Plugin) getEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 
 // eventContext fills the detail context of a record.
 func (p *Plugin) eventContext(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
+	for _, load := range []func(context.Context, *pgxpool.Pool, *EventDetail) error{
+		relatedEvents, p.flowContext, eventExtras,
+	} {
+		if err := load(ctx, db, d); err != nil {
+			return err
+		}
+	}
+	if d.UserID <= 0 {
+		return nil
+	}
+	var err error
+	d.UserState, err = p.userState(ctx, db, d.UserID)
+	return err
+}
+
+// relatedEvents lists the other records of the same request (pre and post).
+func relatedEvents(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
 	d.Related = []RelatedItem{}
-	if d.RequestID != "" {
-		rows, err := db.Query(ctx, `SELECT id, created_at, timing, result, flow_id, flow_version, severity FROM events
-			WHERE request_id = $1 AND id <> $2 ORDER BY id LIMIT 20`, d.RequestID, d.ID)
-		if err != nil {
-			return err
-		}
-		if d.Related, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (RelatedItem, error) {
-			var it RelatedItem
-			err := r.Scan(&it.ID, &it.CreatedAt, &it.Timing, &it.Result, &it.FlowID, &it.FlowVersion, &it.Severity)
-			it.CreatedAt = it.CreatedAt.UTC()
-			return it, err
-		}); err != nil {
-			return err
-		}
-		if d.Related == nil {
-			d.Related = []RelatedItem{}
-		}
+	if d.RequestID == "" {
+		return nil
 	}
-	if d.FlowID > 0 {
-		_ = db.QueryRow(ctx, `SELECT name, version FROM flows WHERE id = $1`, d.FlowID).Scan(&d.FlowName, &d.FlowCurrent)
-		if v, err := p.flowVersionView(ctx, d.FlowID, d.FlowVersion, p.snap.Load()); err == nil {
-			d.FlowSnapshot = v
-		} else if !errors.Is(err, errNotFound) {
-			return err
-		}
+	rows, err := db.Query(ctx, `SELECT id, created_at, timing, result, flow_id, flow_version, severity FROM events
+		WHERE request_id = $1 AND id <> $2 ORDER BY id LIMIT 20`, d.RequestID, d.ID)
+	if err != nil {
+		return err
 	}
-	if d.UserID > 0 {
-		w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`,
-			d.UserID, p.now().UTC()))
-		switch {
-		case err == nil:
-			w.fillRunning(p.now())
-			d.UserState.Watch = &w
-		case !errors.Is(err, pgx.ErrNoRows):
-			return err
-		}
-		d.UserState.Exempt = p.cfg.Load().exempt[d.UserID]
-		d.UserState.Staff = p.isStaff(ctx, d.UserID)
-		if until, ok := (*p.blocked.Load())[d.UserID]; ok {
-			d.UserState.Blocked = true
-			if !until.IsZero() {
-				u := until.UTC()
-				d.UserState.Until = &u
-			}
-		}
+	related, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (RelatedItem, error) {
+		var it RelatedItem
+		err := r.Scan(&it.ID, &it.CreatedAt, &it.Timing, &it.Result, &it.FlowID, &it.FlowVersion, &it.Severity)
+		it.CreatedAt = it.CreatedAt.UTC()
+		return it, err
+	})
+	if len(related) > 0 {
+		d.Related = related
 	}
+	return err
+}
+
+// flowContext adds the flow's name, its current version and the version
+// that ran.
+func (p *Plugin) flowContext(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
+	if d.FlowID <= 0 {
+		return nil
+	}
+	err := db.QueryRow(ctx, `SELECT name, version FROM flows WHERE id = $1`, d.FlowID).Scan(&d.FlowName, &d.FlowCurrent)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	v, err := p.flowVersionView(ctx, d.FlowID, d.FlowVersion, p.snap.Load())
+	if errors.Is(err, errNotFound) {
+		return nil
+	}
+	d.FlowSnapshot = v
+	return err
+}
+
+// eventExtras adds the readable input text and the time of the analysis
+// that judged the record.
+func eventExtras(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
 	if d.InputMessageSize > 0 {
 		var msg *string
-		if err := db.QueryRow(ctx, `SELECT input_message FROM events WHERE id = $1`, d.ID).Scan(&msg); err == nil && msg != nil {
+		err := db.QueryRow(ctx, `SELECT input_message FROM events WHERE id = $1`, d.ID).Scan(&msg)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if msg != nil {
 			d.InputText = MessageText(d.InputFormat, *msg)
 		}
 	}
 	if d.AIAnalysisID > 0 {
 		var at time.Time
-		if err := db.QueryRow(ctx, `SELECT created_at FROM user_analyses WHERE id = $1`, d.AIAnalysisID).Scan(&at); err == nil {
+		err := db.QueryRow(ctx, `SELECT created_at FROM user_analyses WHERE id = $1`, d.AIAnalysisID).Scan(&at)
+		switch {
+		case err == nil:
 			at = at.UTC()
 			d.AIAnalyzedAt = &at
+		case !errors.Is(err, pgx.ErrNoRows): // pruned analyses leave the time out
+			return err
 		}
 	}
 	return nil
+}
+
+// userState is a user's moderation state now: watch entry, exemption,
+// moderator, block.
+func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (UserState, error) {
+	now := p.now().UTC()
+	st := UserState{Exempt: p.cfg.Load().exempt[uid], Staff: p.isStaff(ctx, uid)}
+	if until, ok := (*p.blocked.Load())[uid]; ok && (until.IsZero() || now.Before(until)) {
+		st.Blocked = true
+		if !until.IsZero() {
+			u := until.UTC()
+			st.Until = &u
+		}
+	}
+	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, now))
+	switch {
+	case err == nil:
+		w.fillRunning(now)
+		st.Watch = &w
+	case !errors.Is(err, pgx.ErrNoRows):
+		return st, err
+	}
+	return st, nil
 }
 
 // getEventInput returns the raw moderated messages of a record (stored on a
