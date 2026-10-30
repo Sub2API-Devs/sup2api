@@ -141,7 +141,7 @@ type watchInput struct {
 	hasExpires bool
 }
 
-func (in watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk.FieldErrors) {
+func (in *watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk.FieldErrors) {
 	if create {
 		var err error
 		uid, err = strconv.ParseInt(in.UserID.String(), 10, 64)

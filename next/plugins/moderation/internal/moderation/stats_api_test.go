@@ -122,7 +122,10 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 		t.Fatalf("new_only after seen = %+v", got)
 	}
 	// Absolute expiry, reason and the analysis link go to the history.
-	decodeData[Watch](t, h.Do("PATCH", "/watchlist/11", nil, map[string]any{"level": "enforce", "expires_at": "2099-01-01T00:00:00Z", "reason": "manual check"}))
+	w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/11", nil, map[string]any{"level": "enforce", "expires_at": "2099-01-01T00:00:00Z", "reason": "manual check"}))
+	if w.ExpiresAt == nil || w.ExpiresAt.Year() != 2099 {
+		t.Fatalf("absolute expiry = %v", w.ExpiresAt)
+	}
 	evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/11/events", nil, nil))
 	if evs[0].Action != "set_level" || evs[0].Reason != "manual check" {
 		t.Fatalf("history = %+v", evs[0])
