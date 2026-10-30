@@ -1,34 +1,37 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
-import { SAlert, SButton, SCard, SChip, SField, SHint, SInput, SLink, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
-import VerdictBadge from './VerdictBadge.vue'
+import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SLink, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
+import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
-import { enumLabel, errorMessage, useModHost, type ModEvent } from './host'
+import { canManage, enumLabel, errorMessage, reviewEvents, reviewTone, score, useModHost, type ModEvent, type ReviewStatus } from './host'
 
-// Records: filters + paginated table (useList); a row opens the detail modal.
+// Records: filters + paginated table (useList); a row opens the detail modal,
+// selected rows can be reviewed in bulk.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
+const manage = computed(() => canManage())
 
-const emptyForm = () => ({ verdict: '', action: '', mode: '', category: '', user_id: '', q: '' })
+const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', severity: '', watch_level: '', flow_id: '', user_id: '', request_id: '', q: '' })
 const form = reactive(emptyForm())
 if (props.preset) form.user_id = String(props.preset.user_id)
-// Time filter: preset range or custom from/to (RFC 3339, '' = open).
 const range = ref<RangeKey>('all')
 const from = ref('')
 const to = ref('')
 const rangeKeys: RangeKey[] = ['all', 'today', '7d', '30d', 'custom']
 
-/** The query the list is loaded with (the form as applied). */
 function query() {
   return {
-    verdict: form.verdict,
-    action: form.action,
-    mode: form.mode,
-    category: form.category.trim(),
+    result: form.result,
+    timing: form.timing,
+    review_status: form.review_status,
+    severity: form.severity,
+    watch_level: form.watch_level,
+    flow_id: form.flow_id.trim(),
     user_id: form.user_id.trim(),
+    request_id: form.request_id.trim(),
     q: form.q.trim(),
     from: from.value,
     to: to.value
@@ -38,7 +41,6 @@ function query() {
 const list = useList<ModEvent>(host.pluginApi, '/events', query())
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 
-/** Applies the form; false when nothing changed. */
 function apply(): boolean {
   const next = query()
   if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) return false
@@ -46,12 +48,10 @@ function apply(): boolean {
   return true
 }
 
-/** Search button / Enter: applies the form, reloading even when nothing changed. */
 function search() {
   if (!apply()) list.reload()
 }
 
-/** Clears the form (keeping `userId` when given) and searches. */
 function reset(userId = '') {
   Object.assign(form, emptyForm(), { user_id: userId })
   range.value = 'all'
@@ -60,16 +60,15 @@ function reset(userId = '') {
   search()
 }
 
-// Static filter choices ('' = all).
 const withAll = (opts: Array<{ value: string; label: string }>) => [{ value: '', label: t('events.all') }, ...opts]
-const verdictOptions = computed(() => withAll(['pass', 'flag', 'block', 'error'].map((v) => ({ value: v, label: t(`verdict.${v}`) }))))
-const actionOptions = computed(() => withAll(['allow', 'deny'].map((v) => ({ value: v, label: t(`action.${v}`) }))))
-const modeOptions = computed(() => withAll(['observe', 'enforce'].map((v) => ({ value: v, label: t(`mode.${v}`) }))))
+const opts = (group: string, values: string[]) => values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
+const resultOptions = computed(() => withAll([{ value: 'suspicious', label: t('events.suspicious') }, ...opts('result', ['block', 'hit', 'overturned', 'error', 'pass'])]))
+const timingOptions = computed(() => withAll(opts('timing', ['pre', 'post'])))
+const reviewOptions = computed(() => withAll(opts('review', ['pending', 'false_positive', 'confirmed'])))
+const severityOptions = computed(() => withAll(opts('severity', ['high', 'medium', 'low'])))
+const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...opts('level', ['observe', 'enforce'])]))
 
-// Selects and the time range apply immediately (after search() / reset() this
-// finds nothing new, so the list loads once); text inputs on Enter / Search.
-watch(() => [form.verdict, form.action, form.mode, from.value, to.value], apply)
-
+watch(() => [form.result, form.timing, form.review_status, form.severity, form.watch_level, from.value, to.value], apply)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
@@ -79,13 +78,14 @@ defineExpose({ reload: list.reload })
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'created_at', label: t('events.col.time'), width: '10.5rem', nowrap: true },
-  { key: 'verdict', label: t('events.col.verdict'), nowrap: true },
-  { key: 'action', label: t('events.col.action'), nowrap: true },
-  { key: 'categories', label: t('events.col.categories') },
-  { key: 'reason', label: t('events.col.reason'), ellipsis: '16rem' },
-  { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '20rem' },
+  { key: 'result', label: t('events.col.result'), nowrap: true },
+  { key: 'hit_categories', label: t('events.col.categories') },
+  { key: 'highest_score', label: t('events.col.score'), align: 'right', nowrap: true },
+  { key: 'review_status', label: t('events.col.review'), nowrap: true },
+  { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '22rem' },
   { key: 'user_id', label: t('events.col.user') },
   { key: 'model', label: t('events.col.model'), ellipsis: '10rem' },
+  { key: 'flow', label: t('events.col.flow'), nowrap: true },
   { key: 'latency_ms', label: t('events.col.latency'), align: 'right', nowrap: true }
 ])
 
@@ -102,10 +102,34 @@ function onDeleted(id: number) {
   if (!list.items.value.length && list.page.value > 1) list.page.value--
 }
 
+function onReviewed(ids: number[], status: ReviewStatus) {
+  for (const r of list.items.value) if (ids.includes(r.id)) r.review_status = status
+}
+
 function filterUser(id: number | null | undefined) {
   if (!id) return
   form.user_id = String(id)
   search()
+}
+
+// Bulk review of the selected rows.
+const checked = ref<number[]>([])
+const reviewing = ref(false)
+watch(() => list.items.value, () => (checked.value = []))
+async function review(status: ReviewStatus) {
+  const ids = [...checked.value]
+  if (!ids.length) return
+  reviewing.value = true
+  try {
+    await reviewEvents(ids, status)
+    onReviewed(ids, status)
+    checked.value = []
+    host.toast(t('review.done', { n: ids.length }), 'success')
+  } catch (e) {
+    host.toast(errorMessage(e, t('actionFailed')), 'error')
+  } finally {
+    reviewing.value = false
+  }
 }
 </script>
 
@@ -113,20 +137,29 @@ function filterUser(id: number | null | undefined) {
   <div>
     <SCard>
       <form class="mod-filters" @submit.prevent="search">
-        <SField class="mod-filter" :label="t('events.verdict')">
-          <SSelect v-model="form.verdict" :options="verdictOptions" />
+        <SField class="mod-filter" :label="t('events.result')">
+          <SSelect v-model="form.result" :options="resultOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('events.action')">
-          <SSelect v-model="form.action" :options="actionOptions" />
+        <SField class="mod-filter" :label="t('events.review')">
+          <SSelect v-model="form.review_status" :options="reviewOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('events.mode')">
-          <SSelect v-model="form.mode" :options="modeOptions" />
+        <SField class="mod-filter" :label="t('events.timing')">
+          <SSelect v-model="form.timing" :options="timingOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('events.category')">
-          <SInput v-model="form.category" placeholder="jailbreak" />
+        <SField class="mod-filter" :label="t('events.severity')">
+          <SSelect v-model="form.severity" :options="severityOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.watch')">
+          <SSelect v-model="form.watch_level" :options="watchOptions" />
         </SField>
         <SField class="mod-filter" :label="t('events.userId')">
           <SInput v-model="form.user_id" inputmode="numeric" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.flowId')">
+          <SInput v-model="form.flow_id" inputmode="numeric" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.requestId')">
+          <SInput v-model="form.request_id" />
         </SField>
         <SField class="mod-filter mod-filter-wide" :label="t('events.q')">
           <SInput v-model="form.q" type="search" />
@@ -141,36 +174,53 @@ function filterUser(id: number | null | undefined) {
 
     <SAlert v-if="error" tone="danger" class="mod-section">{{ error }}</SAlert>
 
+    <SBulkBar v-if="manage" :count="checked.length" :total="list.total.value" :page-selected="checked.length === list.items.value.length" class="mod-section" @select-page="checked = list.items.value.map((r) => r.id)" @clear="checked = []">
+      <template #idle>{{ t('review.hint') }}</template>
+      <SButton size="sm" :loading="reviewing" @click="review('false_positive')">{{ t('review.falsePositive') }}</SButton>
+      <SButton size="sm" variant="danger" :loading="reviewing" @click="review('confirmed')">{{ t('review.confirmed') }}</SButton>
+      <SButton size="sm" variant="ghost" :loading="reviewing" @click="review('pending')">{{ t('review.reset') }}</SButton>
+    </SBulkBar>
+
     <SCard :padded="false" class="mod-section">
       <STable
+        v-model:selected="checked"
         :columns="columns"
         :rows="list.items.value"
         :loading="list.loading.value"
         :empty-text="t('events.empty')"
+        :selectable="manage"
         dense
         clickable
         @row-click="open"
       >
         <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
-        <template #cell-verdict="{ row }">
-          <VerdictBadge :verdict="row.verdict" />
-          <SChip v-if="row.cached" size="xs" class="mod-cached" :title="t('events.cachedHint')">{{ t('events.cached') }}</SChip>
+        <template #cell-result="{ row }">
+          <ResultBadge :result="row.result" />
+          <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
         </template>
-        <template #cell-action="{ row }">
-          <SHint inline :tone="row.action === 'deny' ? 'danger' : 'muted'">{{ enumLabel('action', row.action) }}</SHint>
-          <div v-if="row.mode" class="mod-sub">{{ enumLabel('mode', row.mode) }}</div>
+        <template #cell-hit_categories="{ row }"><CategoryChips :categories="row.hit_categories" /></template>
+        <template #cell-highest_score="{ row }">
+          <span class="mod-num">{{ row.highest_category ? score(row.highest_score) : '—' }}</span>
+          <div v-if="row.severity" class="mod-sub">{{ enumLabel('severity', row.severity) }}</div>
         </template>
-        <template #cell-categories="{ row }"><CategoryChips :categories="row.categories" /></template>
-        <template #cell-reason="{ row }">
-          <SHint v-if="row.error" inline tone="danger" :title="row.error">{{ row.error }}</SHint>
-          <span v-else :title="row.reason">{{ row.reason || '—' }}</span>
+        <template #cell-review_status="{ row }">
+          <SBadge v-if="row.review_status !== 'pending'" :tone="reviewTone(row.review_status)">{{ enumLabel('review', row.review_status) }}</SBadge>
+          <SHint v-else inline>{{ enumLabel('review', 'pending') }}</SHint>
+        </template>
+        <template #cell-text_excerpt="{ row }">
+          <span :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
+          <SBadge v-if="row.image_count" size="xs" tone="gray" class="mod-ml">{{ t('events.images', { n: row.image_count }) }}</SBadge>
         </template>
         <template #cell-user_id="{ row }">
           <SLink v-if="row.user_id" as="button" class="mod-num" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)">#{{ row.user_id }}</SLink>
           <SHint v-else inline>—</SHint>
         </template>
+        <template #cell-flow="{ row }">
+          <span v-if="row.flow_id" class="mod-num">#{{ row.flow_id }} v{{ row.flow_version }}</span>
+          <SHint v-else inline>{{ t('events.legacy') }}</SHint>
+        </template>
         <template #cell-latency_ms="{ row }">
-          <span class="mod-num">{{ row.latency_ms || row.latency_ms === 0 ? t('ms', { n: host.i18n.formatNumber(row.latency_ms) }) : '—' }}</span>
+          <span class="mod-num">{{ t('ms', { n: host.i18n.formatNumber(row.latency_ms) }) }}</span>
         </template>
       </STable>
       <div class="mod-pager">
@@ -178,6 +228,6 @@ function filterUser(id: number | null | undefined) {
       </div>
     </SCard>
 
-    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" />
+    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" />
   </div>
 </template>

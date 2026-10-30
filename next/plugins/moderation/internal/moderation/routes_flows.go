@@ -265,7 +265,7 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 		}
 		if len(conflicts) > 0 && !in.Force {
 			resp = pluginsdk.JSONResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-				"code": "group_conflict", "message": "groups are bound to other flows / 分组已绑定其他流程", "conflicts": conflicts}})
+				"code": "group_conflict", "message": "groups are bound to other flows / 分组已绑定其他流程", "details": map[string]any{"conflicts": conflicts}}})
 			return errRollback
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM flow_groups WHERE flow_id = $1 OR group_id = ANY($2)`, id, in.Groups); err != nil {

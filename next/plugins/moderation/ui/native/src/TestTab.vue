@@ -1,42 +1,44 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SEmpty, SGrid, SHint, SIcon, STextarea, type Tone } from '@sub2api/ui'
+import { computed, onMounted, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import VerdictBadge from './VerdictBadge.vue'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SField, SGrid, SHint, SSelect, STextarea } from '@sub2api/ui'
+import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
-import {
-  canManageSettings,
-  enumLabel,
-  errorMessage,
-  runTest,
-  severityTone,
-  useModHost,
-  type ChatMessage,
-  type ChatToolCall,
-  type TestResult
-} from './host'
+import TraceView from './TraceView.vue'
+import { enumLabel, errorMessage, fetchFlows, runTest, severityTone, useModHost, type Flow, type TestResult } from './host'
 
-const emit = defineEmits<{ (e: 'go-settings'): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
 
-// Playground: POST /test {text} -> verdict + agent transcript.
+// Playground: POST /test {text, images, flow_id} -> result + per-stage trace.
+// Nothing is cached, recorded or counted.
 const host = useModHost()
 const t = host.t
-const num = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
 
 const text = ref('')
+const images = ref('')
+const flowId = ref<number>(0)
+const flows = ref<Flow[]>([])
 const running = ref(false)
 const result = ref<TestResult | null>(null)
 const failure = ref('')
 const notConfigured = ref(false)
 
-const samples = ['normal', 'suspicious', 'jailbreak'] as const
+onMounted(async () => {
+  flows.value = await fetchFlows().catch(() => [])
+})
+const flowOptions = computed(() => [
+  { value: 0, label: t('test.defaultFlow') },
+  ...flows.value.filter((f) => f.version > 0 && f.enabled).map((f) => ({ value: f.id, label: `${f.name} v${f.version}` }))
+])
 
+const samples = ['normal', 'suspicious', 'jailbreak'] as const
 function useSample(k: (typeof samples)[number]) {
   text.value = t(`test.sample.${k}Text`)
 }
 
 async function run() {
-  if (!text.value.trim()) {
+  const imgs = images.value.split('\n').map((s) => s.trim()).filter(Boolean)
+  if (!text.value.trim() && !imgs.length) {
     failure.value = t('test.required')
     return
   }
@@ -45,7 +47,7 @@ async function run() {
   notConfigured.value = false
   result.value = null
   try {
-    result.value = await runTest(text.value)
+    result.value = await runTest(text.value, imgs, flowId.value)
   } catch (e) {
     if (isApiError(e) && e.code === 'not_configured') notConfigured.value = true
     else failure.value = errorMessage(e, t('test.failed'))
@@ -57,37 +59,6 @@ async function run() {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) run()
 }
-
-// ---- transcript rendering
-
-const ROLE_TONE: Record<string, Tone> = { system: 'gray', user: 'accent', assistant: 'primary', tool: 'warning' }
-
-function contentText(m: ChatMessage): string {
-  const c = m.content
-  if (c === null || c === undefined) return ''
-  if (typeof c === 'string') return c
-  if (Array.isArray(c)) {
-    return c
-      .map((p) => (typeof p?.text === 'string' ? p.text : JSON.stringify(p, null, 2)))
-      .filter(Boolean)
-      .join('\n')
-  }
-  return JSON.stringify(c, null, 2)
-}
-
-/** Pretty-prints tool call arguments (a JSON string per the OpenAI format). */
-function prettyArgs(tc: ChatToolCall): string {
-  const a = tc.function?.arguments
-  if (a === undefined || a === null || a === '') return ''
-  if (typeof a !== 'string') return JSON.stringify(a, null, 2)
-  try {
-    return JSON.stringify(JSON.parse(a), null, 2)
-  } catch {
-    return a
-  }
-}
-
-const transcript = computed(() => result.value?.transcript || [])
 </script>
 
 <template>
@@ -96,11 +67,19 @@ const transcript = computed(() => result.value?.transcript || [])
 
     <SGrid template="repeat(auto-fit, minmax(340px, 1fr))" class="mod-test-grid">
       <SCard :title="t('test.title')">
-        <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
+        <div class="mod-form">
+          <SField :label="t('test.flow')">
+            <SSelect v-model="flowId" :options="flowOptions" />
+          </SField>
+          <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
+          <SField :label="t('test.images')" :hint="t('test.imagesHint')">
+            <STextarea v-model="images" :rows="2" />
+          </SField>
+        </div>
         <div class="mod-test-actions">
           <SHint inline size="xs">{{ t('labelColon', { label: t('test.samples') }) }}</SHint>
           <SButton v-for="s in samples" :key="s" variant="ghost" size="sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</SButton>
-          <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim()" @click="run">
+          <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim() && !images.trim()" @click="run">
             {{ running ? t('test.running') : t('test.run') }}
           </SButton>
         </div>
@@ -109,58 +88,25 @@ const transcript = computed(() => result.value?.transcript || [])
       <SCard :title="t('test.result')">
         <SAlert v-if="notConfigured" tone="warning">
           {{ t('test.notConfigured') }}
-          <template v-if="canManageSettings()" #actions>
-            <SButton variant="primary" size="sm" icon="settings" @click="emit('go-settings')">{{ t('tabs.settings') }}</SButton>
+          <template #actions>
+            <SButton variant="primary" size="sm" @click="emit('go-tab', 'flows')">{{ t('tabs.flows') }}</SButton>
           </template>
         </SAlert>
         <SAlert v-else-if="failure" tone="danger">{{ failure }}</SAlert>
         <SEmpty v-else-if="!result" :text="running ? t('test.running') : t('test.empty')" icon="eyeglass" />
         <div v-else class="mod-verdict">
           <div class="mod-verdict-head">
-            <VerdictBadge :verdict="result.verdict" />
-            <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('test.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
+            <ResultBadge :result="result.result" />
+            <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
+            <SHint inline size="xs">#{{ result.flow_id }} v{{ result.flow_version }}</SHint>
           </div>
-          <SDescriptions dense>
-            <SDescItem :label="t('test.categories')"><CategoryChips :categories="result.categories" wrap /></SDescItem>
-            <SDescItem :label="t('test.reason')" :value="result.reason" />
-            <SDescItem v-if="result.error" :label="t('test.error')">
-              <SHint inline tone="danger" class="mod-prewrap">{{ result.error }}</SHint>
-            </SDescItem>
-            <SDescItem :label="t('test.latency')" :value="t('ms', { n: num(result.latency_ms) })" />
-            <SDescItem :label="t('test.turns')" :value="num(result.turns)" />
-            <SDescItem :label="t('test.tokens')" :value="t('test.tokensValue', { p: num(result.usage?.prompt_tokens), c: num(result.usage?.completion_tokens) })" />
-          </SDescriptions>
+          <CategoryChips :categories="result.categories" wrap />
         </div>
       </SCard>
     </SGrid>
 
-    <SCard v-if="result" :title="t('test.transcript')" :subtitle="t('test.transcriptHint')" class="mod-section">
-      <SEmpty v-if="!transcript.length" :text="t('test.noTranscript')" />
-      <ol v-else class="mod-chat">
-        <li v-for="(m, i) in transcript" :key="i" class="mod-msg">
-          <div class="mod-msg-head">
-            <SBadge :tone="ROLE_TONE[m.role] || 'gray'">{{ enumLabel('role', m.role) }}</SBadge>
-            <SHint inline size="xs">#{{ i + 1 }}</SHint>
-            <code v-if="m.tool_call_id" class="mod-code">{{ t('test.toolCallId') }}: {{ m.tool_call_id }}</code>
-          </div>
-          <SDisclosure v-if="m.role === 'system'" :label="t('test.showSystem')">
-            <pre class="mod-msg-body">{{ contentText(m) }}</pre>
-          </SDisclosure>
-          <template v-else>
-            <pre v-if="contentText(m)" class="mod-msg-body">{{ contentText(m) }}</pre>
-            <SHint v-else-if="!m.tool_calls?.length" size="xs">{{ t('test.emptyContent') }}</SHint>
-          </template>
-          <div v-for="(tc, j) in m.tool_calls || []" :key="tc.id || j" class="mod-tool">
-            <div class="mod-tool-head">
-              <SIcon name="code" class="mod-icon" />
-              <span>{{ t('test.toolCall') }}</span>
-              <code class="mod-code mod-code-plain">{{ tc.function?.name || '?' }}</code>
-              <code v-if="tc.id" class="mod-code">{{ tc.id }}</code>
-            </div>
-            <SCode :text="prettyArgs(tc)" class="mod-tool-args" />
-          </div>
-        </li>
-      </ol>
+    <SCard v-if="result" :title="t('detail.trace')" class="mod-section">
+      <TraceView :trace="result.trace" />
     </SCard>
   </div>
 </template>

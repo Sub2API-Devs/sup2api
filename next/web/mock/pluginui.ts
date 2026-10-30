@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join, normalize } from 'node:path'
 import { now, on, paginate } from './router'
+import { moderationAsset, moderationUIPlugin } from './moderation'
 
 // Mock handlers: GET /ui/plugins, plugin-owned routes (/p/<key>/...) and the
 // /plugin-ui/<key>/<hash>/... static files (guard native UI from its dist
@@ -10,6 +11,7 @@ import { now, on, paginate } from './router'
 const GUARD_DIST = fileURLToPath(new URL('../../plugins/guard/ui/native/dist/', import.meta.url))
 
 on('GET', '/ui/plugins', () => [
+  moderationUIPlugin,
   {
     key: 'anthropic',
     version: '0.1.0',
@@ -209,6 +211,7 @@ export function pluginAsset(pathname: string): { type: string; body: string | Bu
   const m = /^\/plugin-ui\/([^/]+)\/[^/]+\/(.+)$/.exec(pathname)
   if (!m) return null
   const [, key, path] = m
+  if (key === 'moderation') return moderationAsset(path)
   if (key === 'guard' && path.startsWith('ui/native/')) {
     const rel = normalize(path.slice('ui/native/'.length))
     if (rel.startsWith('..')) return null
