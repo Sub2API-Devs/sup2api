@@ -56,6 +56,9 @@ type FakeHost struct {
 	RecordUsageFunc        func(context.Context, *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error)
 	ReserveAndWatchFunc    func(context.Context, *pluginv1.ReserveAndWatchRequest) (*pluginv1.ExecutionReceipt, error)
 	ReportTaskProgressFunc func(context.Context, *pluginv1.ReportTaskProgressRequest) (*pluginv1.ExecutionReceipt, error)
+	// PriceUsageFunc answers PriceUsage; nil answers every model as not
+	// priced ("no_price"). Set it before Start.
+	PriceUsageFunc func(context.Context, *pluginv1.PriceUsageRequest) (*pluginv1.PriceUsageResponse, error)
 	// OnPublish, when set, is called (outside the lock) for every accepted
 	// Publish, e.g. to relay it to another Harness with Harness.Deliver and
 	// simulate a second node. PublishErr, when set, fails every Publish.

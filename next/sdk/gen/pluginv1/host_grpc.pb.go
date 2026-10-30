@@ -51,6 +51,10 @@ type HostServiceClient interface {
 	// upstream API key in its own schema (CONTRACTS §72.2).
 	SecretSeal(ctx context.Context, in *SecretSealRequest, opts ...grpc.CallOption) (*SecretSealResponse, error)
 	SecretOpen(ctx context.Context, in *SecretOpenRequest, opts ...grpc.CallOption) (*SecretOpenResponse, error)
+	// prices (grant "prices"): price token usage of a model with the core
+	// model price table, exactly as gateway settlement would before the group
+	// multiplier. Read only: nothing is charged or recorded (CONTRACTS §72.13.1).
+	PriceUsage(ctx context.Context, in *PriceUsageRequest, opts ...grpc.CallOption) (*PriceUsageResponse, error)
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error)
@@ -262,6 +266,15 @@ func (c *hostServiceClient) SecretOpen(ctx context.Context, in *SecretOpenReques
 	return out, nil
 }
 
+func (c *hostServiceClient) PriceUsage(ctx context.Context, in *PriceUsageRequest, opts ...grpc.CallOption) (*PriceUsageResponse, error) {
+	out := new(PriceUsageResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/PriceUsage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error) {
 	out := new(GetDSNResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetDSN", in, out, opts...)
@@ -394,6 +407,10 @@ type HostServiceServer interface {
 	// upstream API key in its own schema (CONTRACTS §72.2).
 	SecretSeal(context.Context, *SecretSealRequest) (*SecretSealResponse, error)
 	SecretOpen(context.Context, *SecretOpenRequest) (*SecretOpenResponse, error)
+	// prices (grant "prices"): price token usage of a model with the core
+	// model price table, exactly as gateway settlement would before the group
+	// multiplier. Read only: nothing is charged or recorded (CONTRACTS §72.13.1).
+	PriceUsage(context.Context, *PriceUsageRequest) (*PriceUsageResponse, error)
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error)
@@ -517,6 +534,9 @@ func (UnimplementedHostServiceServer) SecretSeal(context.Context, *SecretSealReq
 }
 func (UnimplementedHostServiceServer) SecretOpen(context.Context, *SecretOpenRequest) (*SecretOpenResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SecretOpen not implemented")
+}
+func (UnimplementedHostServiceServer) PriceUsage(context.Context, *PriceUsageRequest) (*PriceUsageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PriceUsage not implemented")
 }
 func (UnimplementedHostServiceServer) GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDSN not implemented")
@@ -816,6 +836,24 @@ func _HostService_SecretOpen_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_PriceUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PriceUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).PriceUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/PriceUsage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).PriceUsage(ctx, req.(*PriceUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HostService_GetDSN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetDSNRequest)
 	if err := dec(in); err != nil {
@@ -1076,6 +1114,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SecretOpen",
 			Handler:    _HostService_SecretOpen_Handler,
+		},
+		{
+			MethodName: "PriceUsage",
+			Handler:    _HostService_PriceUsage_Handler,
 		},
 		{
 			MethodName: "GetDSN",

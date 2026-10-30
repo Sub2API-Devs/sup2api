@@ -815,6 +815,7 @@ const (
 var HostPermissionRisk = map[string]string{
 	"kv":                   RiskLow,
 	"secrets":              RiskLow,
+	"prices":               RiskLow, // read-only pricing of token usage (CONTRACTS §72.13.1)
 	"config":               RiskLow,
 	"log":                  RiskLow,
 	"broadcast":            RiskLow,

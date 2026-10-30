@@ -4703,7 +4703,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。
 - Redis key：`rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm`（§7）。
 
-## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求，设计稿，未实现）
+## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求；P1 已上线 0.2.0，P2 见 72.13）
 
 用户要求把 new-api 的内容审核（`D:\projects\golang\new-api`，分支 `feat/content-moderation`，cp.270；代码在 `service/moderation/`、`model/moderation*.go`、`controller/content_moderation.go`）迁移过来。sup2api 已有内置插件 `moderation`（§20，0.1.13），所以做法是**把 new-api 的设计并入这个插件，升到 0.2.0**，不新建插件。本节确定后，§20 中与本节冲突的条目以本节为准，实现时同步改 §20。
 
@@ -4964,27 +4964,132 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - new-api 那边还没有导出接口：直接查它的库生成这份 JSON，或者给 new-api 加一个只读导出接口，实现时再定。
 - 流程和分组绑定不导入，因为两边的分组不对应。
 
-### 72.13 P2：AI 分析与流程版本
+### 72.13 P2：AI 分析、三种 LLM 协议、费用、流程版本（2026-10-31，用户要求，插件 0.3.0 + 核心 0.1.221）
 
-- `llm` 渠道支持 `anthropic` 和 `openai_responses` 两种协议，全部流式调用，`tool_choice` 用 auto。
-- **分析 agent** 照 new-api `analysis.go` 和 `analysis_tools.go`：
-  - 5 个工具：`get_user_summary`、`list_suspicious_records`、`get_record`（原文分段读）、`get_flow`、`submit_analysis`。
-  - 用户 id 由服务端注入，模型不能指定。
-  - 上下文预算超出时，把最早的工具结果替换成占位文字。
-  - 模型只回文字不调工具时最多提醒 2 次；`submit_analysis` 参数不合法时最多重发 2 次。
-  - 遇到 429、5xx 或网络错误，单步重试 1 次。
-  - 结论里引用的证据必须是记录原文（NFKC 规范化后）的子串，否则丢掉这条证据。
-  - 逐条结论写进记录的 `ai_*` 列，不覆盖人工结论。
-- 分析的系统提示词 = 分析准则（内置准则照抄 new-api `category_dict.go:351+`）+ 流程 + 类别字典。
-- **自动调整名单**：照 new-api `escalate.go:20-73`，三个开关 `analysis_allow_upgrade` / `downgrade` / `remove`。分析期间名单被改过，结论记为 `stale`，不生效。
-- **分析队列**：
-  - 名单表的 `analysis_claim_until` 列用作认领：一个用户同一时间只有一个分析在跑。
-  - `analysis` 任务每分钟扫一次，在本节点按 `analysis_concurrency` 并发执行。
-  - 管理员可以手动触发分析。
-- 新表 `user_analyses`，保存分析过程轨迹（≤32KB），每个用户保留 `analysis_keep_per_user` 条。
-- 新增设置：`analysis_channel_id`、`analysis_guidelines`、`analysis_timeout_ms`、`analysis_concurrency`、`analysis_context_kb`、`analysis_keep_per_user`，以及上面三个开关。
-- 流程版本历史、回滚（返回缺失的审核器列表）、`simulate`（用一条记录的原文按另一个流程版本重放）。
-- 界面：名单详情（可疑记录时间线、名单历史、分析卡片和过程轨迹）、记录详情里的 AI 结论、"待复核"和"人与 AI 意见相反"两个过滤。
+用户 2026-10-31 追加的要求：`llm` 渠道支持 OpenAI Chat、OpenAI Responses、Anthropic Messages 三种协议；加上费用（额度）展示，渠道模型缺价格时在核心补上；把 new-api 线上（`newapi-codingplus`，cp.270）的内容审核配置迁过来。原 72.1 表里"成本不搬"作废。
+
+**72.13.1 核心改动（0.1.221，先于插件发布）**
+
+- 宿主调用 `PriceUsage`（权限 `prices`，风险 low，插件升级时自动授予）：请求 `{model, semantics: inclusive|exclusive, input, output, cache_read, cache_creation, cache_creation_1h}`，响应 `{priced, cost, reason}`。
+  - `cost` 是十进制字符串（美元，8 位小数），按核心模型价格表（`model_prices`，只看完整模型名）和网关结算同一套表达式计算，不乘分组倍率。
+  - `reason` 取值：`no_price`（没有启用的价格；与"缺价格时按免费"的全局设置无关）、`video_only`（视频价格不能按 token 计）、`eval_error`。`priced=false` 时 `cost` 为空。
+  - 只读，不扣费、不写用量记录。SDK：`Host.PriceUsage`；`FakeHost` 用可注入的价格表实现。旧核心返回 Unimplemented，插件把它当作未定价。
+- 内置插件目录换成 moderation 0.3.0。
+
+**72.13.2 三种 LLM 协议**
+
+- `channels.protocol`（只对 `llm`）：`openai_chat`（`/v1/chat/completions`，Bearer）、`openai_responses`（`/v1/responses`，Bearer，`store:false`）、`anthropic`（`/v1/messages`，`x-api-key` + `anthropic-version: 2023-06-01`）。照 new-api `llm_client.go` 实现。
+- `llm_verdict` 审核器（§20 的判定 agent）三种协议都能用，非流式调用。`tool_choice` 按协议翻译：required → Chat `required` / Responses `required` / Anthropic `{type:any}`；function → 指名 `submit_verdict`；auto → auto。
+- AI 分析全部流式调用（SSE；单个事件 ≤64 KB，整个响应 ≤1 MB），`tool_choice` 一律 auto；要强制提交时追加一条用户提示，不用强制 tool_choice（思考模型不接受）。
+- 新增渠道列 `billing_model`：按哪个模型名定价，空 = 用 `model`。例如火山方舟的 `ep-…` 接入点要填 `deepseek-flash`。
+
+**72.13.3 费用（额度）**
+
+- 每次真正发到上游、并且成功或带回了用量的调用都计价：
+  - `openai_moderation`：免费，只计次数。
+  - `typesafe`：只计输入 token（Jev 输出免费）。
+  - `llm`：输入、输出和缓存 token 都计。
+  - 计价模型 = 渠道的 `billing_model`，空时用 `model`。上游回显的模型名不参与计价。
+- 计价在后台进行，不占钩子时间：调用结束后把用量放进内存队列，由后台协程调 `PriceUsage`。按（小时, 渠道, 来源）累加，每 10 秒和关闭时写入新表 `costs`，写法是 upsert 相加。
+  - 来源：`audit`（钩子的 pre/post）、`analysis`、`test`、`try`、`simulate`。
+  - 没有价格的调用不计金额，只计次数和 token（`unpriced_calls` / `unpriced_tokens`），页面提示"有 N 次调用未定价"。
+- 单次费用只出现在以下响应里：渠道测试、审核器试跑、流程模拟、单次分析（`user_analyses.cost`）。审核记录上不保存单次费用。
+- 接口：
+  - `GET /costs?range=24h|7d|30d`（read）→ `{range, from, to, bucket, totals, by_channel:[{channel_id, name, type, model, billing_model, deleted, summary}], by_source:[{source, summary}], trend:[{bucket, cost}]}`。
+  - `summary` = `{cost, calls, priced_calls, unpriced_calls, unpriced_tokens, free_calls, tokens_in, tokens_out}`，其中 `cost` 是字符串。
+  - 渠道列表和详情加 `price_state:{priced, free, reason, billing_model}`（读接口内部调 `PriceUsage` 试算一次 0 token 的调用，每个模型缓存 60 秒），以及 `cost_30d`（summary）。
+- 页面：概览加"审核费用"卡片（今日 / 7 天 / 30 天，按来源分）；渠道列表加"价格"和"30 天费用"两列；测试、试跑、模拟、分析的结果都显示本次费用。金额显示为美元。
+
+**72.13.4 AI 分析**（照 new-api `analysis.go`、`analysis_tools.go`、`escalate.go`、`category_dict.go`）
+
+- **触发**：
+  - 自动：observe 级用户的违规计数达到 `analysis_every_violations`（>0，且设置了 `analysis_channel_id`）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。
+  - 手动：`POST /watchlist/:user_id/analyze`（manage）。observe 级、enforce 级都可以。用户不在名单上返回 404；没设分析渠道返回 400 `no_analysis_channel`；已在排队或正在分析返回 409 `analysis_pending`。
+- **队列**：在名单行上实现，新增列：
+  - `analysis_requested_at`、`analysis_source`（auto|manual）：已排队。
+  - `analysis_claim_until`、`analysis_token`：认领。
+  - `latest_analysis_id`、`latest_analysis_status`、`latest_trend`、`latest_suggestion`、`analyzed_at`：最近一次结论。
+- **执行**：
+  - 触发它的节点立即开始调度。另有任务 `analysis`（`@every 1m`，全集群每个触发点只在一个节点执行）兜底，接手认领已过期的排队项，例如节点在分析途中退出的情况。
+  - 每个节点同时最多跑 `analysis_concurrency` 个分析。
+  - 认领时先锁 `block_subjects`（与名单写入同一把锁），认领期 = 2 × `analysis_timeout_ms`。
+  - 节点关闭时，正在跑的分析只释放认领、保留排队，留给其他节点；不记为失败。
+  - 分析结束，不论成功还是失败，都写一行 `user_analyses`、清掉排队和认领，然后按认领令牌应用结论。
+  - 分析期间名单的级别或 `since_at` 变了、条目被移出或已过期时，结论记为 `stale`：逐条结论照样写进记录，名单不变。
+- **agent**：
+  - 照 new-api 的工具集：`get_user_summary`、`list_suspicious_records`、`get_record`、`get_flow`、`submit_analysis`。工具说明的中文原文照抄；不支持的字段（会话指纹）去掉。
+  - `get_record` 的全文来自 `events.text`（`store_text` 打开时保存，≤100000 字），可以分段读；摘录取前 240 字，列表里取 120 字。
+  - 用户 id 由服务端注入，模型不能指定。上下文超出 `analysis_context_kb` 时，把最早的工具结果替换成占位文字；替换完仍然超出，下一步就必须提交。
+  - 只回文字不调工具时最多提醒 2 次；`submit_analysis` 参数不合法时最多重发 2 次。
+  - 遇到 429、5xx、网络错误或流中断，单步重试 1 次，优先按 `Retry-After` 等待。
+  - 证据必须是模型读过的记录原文（NFKC 规范化、空白压缩后）的子串，否则只丢掉证据。
+- **系统提示词**：
+  - 由三部分组成：分析准则（`analysis_guidelines`，空时用内置准则，照抄 new-api v7.7）、该用户当前分组绑定的流程（`get_user_summary` 取用户最近一条记录的 `group_id`）、类别字典。
+  - 类别字典的来源：OpenAI 的 13 个类别说明、Jev 每道题的原文、`llm_verdict` 审核器的类别描述。
+- **自动调整名单**：照 new-api `escalationOf`，new-api 的 block 级就是我们的 enforce 级。
+  - 动作：`auto_upgrade`（升为 enforce）、`upgrade_skipped`、`auto_downgrade`（降为 observe，有效期重设为 `watch_days`）、`downgrade_skipped`、`auto_remove`，以及不允许时的 `auto_not_allowed`。
+  - 是否允许由三个开关决定：`analysis_allow_upgrade`、`analysis_allow_downgrade`、`analysis_allow_remove`。
+  - 自动改级别时 `source=analysis`，同时开新的计数窗口。每个动作都写 `watch_events`（`analysis_id` 指向这次分析，reason 为 `trend:<trend>`；`auto_not_allowed` 的 reason 为 `<被拒的动作>:<trend>`）。
+- **逐条结论**：写进记录新增的 6 个 `ai_*` 列（`ai_verdict` 取 violation / false_positive / unsure，以及 `ai_severity`、`ai_category`、`ai_evidence`、`ai_reason`、`ai_analysis_id`），只改结果为 hit 或 block 的记录，不覆盖人工结论。
+- **新表 `user_analyses`** 的字段：`id`、`user_id`、`source`、`status` ok|failed、`error`、`trend`、`suggestion`、`summary`、`main_problems` jsonb、`record_verdicts` jsonb、`verdict_counts` jsonb、`flows_seen` jsonb、`model`、`steps`、`tokens_in`、`tokens_out`、`cost`、`trace` jsonb（≤32 KB）、`duration_ms`、`created_at`。每个用户保留 `analysis_keep_per_user` 条。
+- **新设置**（默认值照 new-api）：
+
+| 设置 | 默认值 / 范围 |
+|---|---|
+| `analysis_channel_id` | 0 = 不分析 |
+| `analysis_guidelines` | 空 = 内置，≤16 KB |
+| `analysis_timeout_ms` | 60000（10000–600000） |
+| `analysis_concurrency` | 2（1–16） |
+| `analysis_context_kb` | 64（16–1024） |
+| `analysis_keep_per_user` | 20（1–1000） |
+| `analysis_allow_upgrade`、`analysis_allow_downgrade`、`analysis_allow_remove` | 都为 true |
+
+- **接口**：
+  - `GET /watchlist/:user_id`（read）：单个条目，含排队和最近一次分析的字段。
+  - `GET /watchlist/:user_id/analyses`（read，分页，不带 trace 和逐条结论）；`GET /analyses/:id`（read，带全部字段）。
+  - `GET /analysis/prompt?group_id=|flow_id=`（read）：分析会发送的系统提示词，以及流程视图和字典。
+  - `GET /analysis/tools`（read）：工具表。
+- `GET /events` 的扩展：
+  - 返回 6 个 `ai_*` 字段。
+  - 新增过滤 `ai_verdict=violation|false_positive|unsure|none`（none = 可疑记录里还没被 AI 复核的）。
+  - `verdict=needs_review`：AI 判 unsure，且人工还没处理。
+  - `verdict=disagree`：人工确认了，但 AI 判误报；或人工标了误报，但 AI 判违规。
+  - `verdict` 的旧取值（0.1 的 pass/flag/block/error）照旧可用。
+- 概览的 `runtime` 加 `analysis:{channel_configured, pending, running}`。
+
+**72.13.5 流程版本**
+
+- `GET /flows/:id/versions`（read）→ `{current_version, items:[{version, published_at, published_by, current}]}`，按版本倒序。
+- `GET /flows/:id/versions/:version`（read）→ `{flow_id, name, version, current, published_at, spec, stages:[{stage, combine, n, auditors:[{auditor_id, name, type, deleted}]}]}`。审核器名称取当前的；已删除的标 `deleted`。
+- `POST /flows/:id/rollback {version, expected_version}`（manage）：把旧版本的 spec 作为新版本发布，草稿同时换成它。
+  - 引用了已删除审核器时返回 400 `missing_auditors`，`details.auditor_ids` 列出这些 id。
+  - 版本号不对时返回 409 `version_conflict`。
+- `POST /flows/:id/simulate {text?, images?, event_id?, source: draft|published|version, version?}`（manage）：用当前的审核器跑一遍，返回值同 `/test`，另加本次 `cost`。
+  - 不写记录、不计违规、不进缓存，费用记在来源 `simulate` 下。
+  - 带 `event_id` 时取那条记录保存的原文；没保存原文时返回 400 `no_text`。
+
+**72.13.6 界面**
+
+- **记录**：列表和详情显示最终结论，规则是人工优先，其次 AI；AI 判 unsure 时显示"待复核"；同时标明来源是人工还是 AI。详情里显示 AI 的严重度、类别、证据和理由。新增"AI 结论""待复核""人与 AI 意见相反"三个过滤。
+- **观察名单**：详情抽屉包括以下几部分：
+  - 条目信息和"重新分析"按钮；
+  - 分析状态（排队中、分析中、最近一次结论）；
+  - 分析卡片（趋势、建议、总结、主要问题、逐条结论数、费用），可以展开分析过程（trace）；
+  - 可疑记录时间线；
+  - 名单历史。
+  - 页头另有"分析提示词预览"。
+- **流程**：版本历史抽屉，可以查看各版本并回滚；另有模拟面板，可以输入文本或填记录 id，选择草稿、已发布或某个版本来跑。
+- **渠道**：`llm` 渠道可以选三种协议，可以填计价模型，列表显示价格状态和 30 天费用。
+- **概览**：加审核费用卡片。
+
+**72.13.7 从 new-api 迁移配置（2026-10-31 实际执行）**
+
+- `POST /import` 扩展：渠道可以带 `api_key`（加密保存）、`billing_model`、三种 `protocol`；审核器可以带 `questions`。导入后渠道仍是停用状态，由管理员确认后启用。
+- 线上迁移在 ovh 上用脚本执行，key 不经过本机和对话：
+  - 从 new-api 库读出配置，调用 sup2api 管理接口导入。
+  - new-api 的设置项按名称映射到插件设置，`mode` 保持不变。
+  - new-api 的分组 `cc-max` 在 sup2api 里没有同名分组，所以流程的分组绑定不迁移，迁移后告诉用户。
+  - new-api 渠道上的代理不迁移（P1 起就不支持代理）。
 
 ### 72.14 P3：统计、告警、用户信息
 

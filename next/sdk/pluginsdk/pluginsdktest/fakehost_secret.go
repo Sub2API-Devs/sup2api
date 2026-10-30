@@ -57,3 +57,10 @@ func (f *FakeHost) SecretOpen(_ context.Context, in *pluginv1.SecretOpenRequest)
 	}
 	return &pluginv1.SecretOpenResponse{Plaintext: p}, nil
 }
+
+func (f *FakeHost) PriceUsage(ctx context.Context, in *pluginv1.PriceUsageRequest) (*pluginv1.PriceUsageResponse, error) {
+	if f.PriceUsageFunc != nil {
+		return f.PriceUsageFunc(ctx, in)
+	}
+	return &pluginv1.PriceUsageResponse{Reason: "no_price"}, nil
+}

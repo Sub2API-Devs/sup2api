@@ -48,6 +48,10 @@ type Host interface {
 	SealSecret(ctx context.Context, context string, plaintext []byte) ([]byte, error)
 	OpenSecret(ctx context.Context, context string, ciphertext []byte) ([]byte, error)
 
+	// PriceUsage prices token usage of a model with the core model prices
+	// (grant "prices"), before any group multiplier; nothing is charged.
+	PriceUsage(ctx context.Context, u PriceUsage) (*PriceQuote, error)
+
 	// DSN returns the restricted database DSN (grant "db.schema").
 	DSN(ctx context.Context) (*DSNInfo, error)
 	// DB returns a shared pgx pool for the plugin schema, created on first
@@ -113,6 +117,28 @@ type DSNInfo struct {
 	DSN          string
 	Schema       string
 	RoleIsolated bool
+}
+
+// PriceUsage is the token usage PriceUsage prices. Semantics "inclusive"
+// means Input already counts the cached tokens (OpenAI usage); "exclusive"
+// (or empty) means it does not (Anthropic usage).
+type PriceUsage struct {
+	Model           string
+	Semantics       string
+	Input           int64
+	Output          int64
+	CacheRead       int64
+	CacheCreation   int64
+	CacheCreation1h int64
+}
+
+// PriceQuote is the answer of PriceUsage. Cost is a decimal string in USD
+// (8 places), empty when not priced; Reason then says why: "no_price",
+// "video_only" or "eval_error".
+type PriceQuote struct {
+	Priced bool
+	Cost   string
+	Reason string
 }
 
 // LedgerChange is a balance change request. Amount is a positive decimal
@@ -314,6 +340,17 @@ func (h *host) OpenSecret(ctx context.Context, context string, ciphertext []byte
 		return nil, err
 	}
 	return r.GetPlaintext(), nil
+}
+
+func (h *host) PriceUsage(ctx context.Context, u PriceUsage) (*PriceQuote, error) {
+	r, err := h.client.PriceUsage(ctx, &pluginv1.PriceUsageRequest{
+		Model: u.Model, Semantics: u.Semantics, Input: u.Input, Output: u.Output,
+		CacheRead: u.CacheRead, CacheCreation: u.CacheCreation, CacheCreation_1H: u.CacheCreation1h,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &PriceQuote{Priced: r.GetPriced(), Cost: r.GetCost(), Reason: r.GetReason()}, nil
 }
 
 func (h *host) ListAccounts(ctx context.Context, q AccountQuery) ([]AccountSummary, string, error) {

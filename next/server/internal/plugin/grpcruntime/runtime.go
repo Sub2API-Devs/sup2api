@@ -45,7 +45,9 @@ type Options struct {
 	Egress     core.EgressProvider
 	Authorizer core.Authorizer
 	Ledger     core.Ledger
-	Schemas    SchemaDSN
+	// Prices serves HostService.PriceUsage; nil makes it fail with UNAVAILABLE.
+	Prices  UsagePricer
+	Schemas SchemaDSN
 	// Accounts serves HostService.ListAccounts / GetAccountCredentials: the
 	// accounts of the calling plugin's own account types.
 	// Nil makes both calls fail with UNAVAILABLE.

@@ -45,6 +45,11 @@ service HostService {
   rpc SecretSeal(SecretSealRequest) returns (SecretSealResponse);
   rpc SecretOpen(SecretOpenRequest) returns (SecretOpenResponse);
 
+  // prices (grant "prices"): price token usage of a model with the core
+  // model price table, exactly as gateway settlement would before the group
+  // multiplier. Read only: nothing is charged or recorded (CONTRACTS §72.13.1).
+  rpc PriceUsage(PriceUsageRequest) returns (PriceUsageResponse);
+
   // db.schema: restricted DSN for the plugin schema. The connection must go
   // through EgressService (the SDK dialer does this automatically).
   rpc GetDSN(GetDSNRequest) returns (GetDSNResponse);
@@ -353,6 +358,27 @@ message SecretOpenRequest {
 
 message SecretOpenResponse {
   bytes plaintext = 1;
+}
+
+message PriceUsageRequest {
+  // Complete model id of the price row.
+  string model = 1;
+  // "inclusive": input counts the cached tokens too (OpenAI);
+  // "exclusive": input excludes them (Anthropic). Empty = exclusive.
+  string semantics = 2;
+  int64 input = 3;
+  int64 output = 4;
+  int64 cache_read = 5;
+  int64 cache_creation = 6;
+  int64 cache_creation_1h = 7;
+}
+
+message PriceUsageResponse {
+  bool priced = 1;
+  // Decimal string (8 places); empty when not priced.
+  string cost = 2;
+  // When not priced: "no_price" | "video_only" | "eval_error".
+  string reason = 3;
 }
 
 message KVGetRequest {
