@@ -501,7 +501,6 @@ func TestPriceInputsCaptured(t *testing.T) {
 	}
 }
 
-
 func TestAccountSlotsBusy(t *testing.T) {
 	e := newEnv(t)
 	for _, id := range []int64{1, 2, 3} {
