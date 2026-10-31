@@ -89,14 +89,6 @@ func scanRow(r pgx.Row) (*row, error) {
 	return &a, err
 }
 
-// environment is the account layer, never nil in the API view.
-func (a *row) environment() core.EnvironmentValues {
-	if a.Environment == nil {
-		return core.EnvironmentValues{}
-	}
-	return a.Environment
-}
-
 // lastTest is the last_test view of the row; nil when never tested.
 func (a *row) lastTest() *LastTest {
 	if a.LastTestAt == nil {
@@ -260,7 +252,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
-			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.environment(),
+			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.Environment,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -1009,19 +1001,19 @@ func (s *Service) create(c *gin.Context) {
 			return
 		}
 	}
-	status := valueOr(in.Status, "active")
-	sched := valueOr(in.Schedulable, true)
-	autoDisable := valueOr(in.AutoDisable, true)
-	prio := valueOr(in.Priority, 10)
-	maxc := valueOr(in.MaxConcurrency, 10)
-	weight := valueOr(in.Weight, 1)
-	models := valueOr(in.Models, []string{})
-	mapping := valueOr(in.ModelMapping, map[string]string{})
-	rpm := valueOr(in.RPMLimit, 0)
-	tpm := valueOr(in.TPMLimit, int64(0))
-	spm := valueOr(in.SPMLimit, 0)
-	modelLimits := valueOr(in.ModelLimits, []core.ModelLimit{})
-	environment := valueOr(in.Environment, core.EnvironmentValues{})
+	status := core.ValueOr(in.Status, "active")
+	sched := core.ValueOr(in.Schedulable, true)
+	autoDisable := core.ValueOr(in.AutoDisable, true)
+	prio := core.ValueOr(in.Priority, 10)
+	maxc := core.ValueOr(in.MaxConcurrency, 10)
+	weight := core.ValueOr(in.Weight, 1)
+	models := core.ValueOr(in.Models, []string{})
+	mapping := core.ValueOr(in.ModelMapping, map[string]string{})
+	rpm := core.ValueOr(in.RPMLimit, 0)
+	tpm := core.ValueOr(in.TPMLimit, int64(0))
+	spm := core.ValueOr(in.SPMLimit, 0)
+	modelLimits := core.ValueOr(in.ModelLimits, []core.ModelLimit{})
+	environment := core.ValueOr(in.Environment, core.EnvironmentValues{})
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
@@ -1213,7 +1205,7 @@ func (s *Service) update(c *gin.Context) {
 	}
 	actorID, _ := core.UserID(ctx)
 	snapshot := in.lifecycleSnapshot(cur, lifecycleSettings)
-	facts := core.AccountPreparationFacts{SubscriptionType: valueOr(cur.SubscriptionType, "")}
+	facts := core.AccountPreparationFacts{SubscriptionType: core.ValueOr(cur.SubscriptionType, "")}
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{
 		Phase: "before_update", Caller: &pluginv1.Caller{UserId: actorID}, Account: snapshot,
 		ResourceFactsJson: factsJSON(facts), ChangedFields: in.changedFields(),
@@ -1226,7 +1218,7 @@ func (s *Service) update(c *gin.Context) {
 	target := patchTarget{Models: new(props.GetModels()), Mapping: new(props.GetModelMapping()),
 		Priority: new(int(props.GetPriority())), Weight: new(int(props.GetWeight())), MaxConcurrency: new(int(props.GetMaxConcurrency())),
 		RPMLimit: new(int(props.GetRpmLimit())), TPMLimit: new(props.GetTpmLimit()), SPMLimit: new(int(props.GetSpmLimit())),
-		ModelLimits: new(valueOr(in.ModelLimits, cur.modelLimits()))}
+		ModelLimits: new(core.ValueOr(in.ModelLimits, cur.modelLimits()))}
 	patched, err := applyAccountPatch(ctx, before, target)
 	if err != nil {
 		httpapi.Fail(c, err)

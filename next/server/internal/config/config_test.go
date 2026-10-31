@@ -3,6 +3,7 @@ package config_test
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -183,5 +184,24 @@ func TestManagedCoreTrustsItsShell(t *testing.T) {
 	}
 	if got := strings.Join(cfg.TrustedProxies, ","); got != "10.0.0.0/8" {
 		t.Fatalf("unmanaged trusted proxies %s", got)
+	}
+}
+
+// The process layer of the environment variables: set variables are kept,
+// and a value outside the declared range stops the start like any other
+// malformed variable.
+func TestEnvironmentProcessLayer(t *testing.T) {
+	setRequired(t)
+	t.Setenv("SUB2API_RELAY_TIMEOUT_SECONDS", "300")
+	cfg, err := config.Load("linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(cfg.Environment) != "map[relay_timeout_seconds:300]" {
+		t.Fatalf("environment: %v", cfg.Environment)
+	}
+	t.Setenv("SUB2API_MAX_REQUEST_BODY_MB", "4096")
+	if _, err := config.Load("linux"); err == nil || !strings.Contains(err.Error(), "SUB2API_MAX_REQUEST_BODY_MB") {
+		t.Fatalf("out of range: %v", err)
 	}
 }

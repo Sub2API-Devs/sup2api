@@ -67,7 +67,7 @@ func setup(t *testing.T) *env {
 	e.admin = mkUser(t, db, "admin@x.com")
 	e.user = mkUser(t, db, "user@x.com")
 	engine := gin.New()
-	e.svc = New(db, e.bus)
+	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 900, core.EnvStreamingIdleTimeoutSeconds: 45})
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin}))
 	e.h = engine
 	return e
@@ -116,8 +116,8 @@ func TestGlobalLayerRoutes(t *testing.T) {
 	if code, out = e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{"nope": 1}}); code != 400 {
 		t.Fatalf("unknown: %d %v", code, out)
 	}
-	if got := e.svc.GlobalEnvironment(context.Background()); len(got) != 0 {
-		t.Fatalf("cached before put: %v", got)
+	if got := e.svc.GlobalEnvironment(context.Background()); len(got) != 2 || got[core.EnvMaxRequestBodyMB] != 0 {
+		t.Fatalf("cached before put, the process layer alone: %v", got)
 	}
 	code, out = e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{
 		"max_request_body_mb": 64, "relay_timeout_seconds": 0}})
@@ -141,7 +141,7 @@ func TestResolveEnvironment(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	if _, out := e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{
-		"relay_timeout_seconds": 300, "task_poll_max_failures": 9, "max_request_body_mb": 50}}); out["data"] == nil {
+		"relay_timeout_seconds": 300, "max_request_body_mb": 50}}); out["data"] == nil {
 		t.Fatalf("put: %v", out)
 	}
 	var groupID, accountID int64
@@ -165,8 +165,13 @@ func TestResolveEnvironment(t *testing.T) {
 	if err != nil || got[core.EnvRelayTimeoutSeconds] != 120 {
 		t.Fatalf("group alone: %v %v", got, err)
 	}
+	// The global layer wins over the process layer, which fills what it leaves unset.
 	got, err = e.svc.ResolveEnvironment(ctx, 0, 0)
-	if err != nil || got[core.EnvRelayTimeoutSeconds] != 300 {
+	if err != nil || got[core.EnvRelayTimeoutSeconds] != 300 || got[core.EnvStreamingIdleTimeoutSeconds] != 45 {
 		t.Fatalf("global alone: %v %v", got, err)
+	}
+	// The async task variables have no global layer: the reconcile settings are.
+	if code, _ := e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{"task_poll_max_failures": 9}}); code != 400 {
+		t.Fatalf("task variable on the global layer: %d", code)
 	}
 }

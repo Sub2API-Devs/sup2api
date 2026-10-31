@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 // SensitiveEnv are the variables Load reads that carry secrets (database and
@@ -65,6 +67,10 @@ type Config struct {
 	// accepting connections, so load balancers take it out first
 	// (SUB2API_SHUTDOWN_DELAY, default 3s; `sub2api dev` sets 0).
 	ShutdownDelay time.Duration
+
+	// Environment is the process layer of the environment variables
+	// (CONTRACTS §73.3): each declared ProcessEnv that is set.
+	Environment core.EnvironmentValues
 }
 
 type ManagedConfig struct {
@@ -163,6 +169,9 @@ func Load(goos string) (*Config, error) {
 		return nil, err
 	}
 	if c.ShutdownDelay, err = durationEnv("SUB2API_SHUTDOWN_DELAY", 3*time.Second); err != nil {
+		return nil, err
+	}
+	if c.Environment, err = environmentEnv(); err != nil {
 		return nil, err
 	}
 
@@ -272,6 +281,27 @@ func durationEnv(k string, def time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s: %w", k, err)
 	}
 	return d, nil
+}
+
+// environmentEnv reads the process layer of the environment variables.
+func environmentEnv() (core.EnvironmentValues, error) {
+	out := core.EnvironmentValues{}
+	for _, v := range core.EnvironmentVariables {
+		if v.ProcessEnv == "" {
+			continue
+		}
+		x, err := int64Env(v.ProcessEnv, 0)
+		switch {
+		case err != nil:
+			return nil, err
+		case x == 0: // unset
+		case x < v.Min || x > v.Max:
+			return nil, fmt.Errorf("%s must be between %d and %d", v.ProcessEnv, v.Min, v.Max)
+		default:
+			out[v.Key] = x
+		}
+	}
+	return out, nil
 }
 
 func int64Env(k string, def int64) (int64, error) {

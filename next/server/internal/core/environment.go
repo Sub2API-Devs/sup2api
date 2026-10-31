@@ -2,12 +2,9 @@ package core
 
 import (
 	"context"
-	"log/slog"
 	"maps"
-	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
@@ -17,7 +14,9 @@ import (
 // of forwarding that the core declares and an administrator overrides per
 // layer: account, then group, then the global setting, then the process
 // environment variable. 0 (or an absent key) follows the next layer. Plugins
-// read the resolved values and cannot declare their own.
+// read the resolved values and cannot declare their own. The process layer is
+// read by config.Load and folded into the global layer by its owner
+// (EnvironmentResolver.GlobalEnvironment).
 
 // Environment variable keys, shared with plugins through the SDK.
 const (
@@ -49,11 +48,17 @@ type EnvironmentVariable struct {
 	// Layers it can be set on. A variable used before the account is chosen
 	// (the request body limit) has no account layer.
 	Layers []EnvironmentLayer `json:"layers"`
-	// ProcessEnv is the process environment variable of the last layer.
+	// ProcessEnv is the process environment variable the global layer falls
+	// back to; empty without a global layer.
 	ProcessEnv string `json:"process_env"`
 }
 
-var allLayers = []EnvironmentLayer{EnvLayerGlobal, EnvLayerGroup, EnvLayerAccount}
+var (
+	allLayers = []EnvironmentLayer{EnvLayerGlobal, EnvLayerGroup, EnvLayerAccount}
+	// taskLayers: the global layer of the async task variables is the
+	// reconcile settings (CONTRACTS §8), not a second setting of its own.
+	taskLayers = []EnvironmentLayer{EnvLayerGroup, EnvLayerAccount}
+)
 
 // EnvironmentVariables is the declared set, in display order.
 var EnvironmentVariables = []EnvironmentVariable{
@@ -73,11 +78,11 @@ var EnvironmentVariables = []EnvironmentVariable{
 		Name: LocalizedText{"en": "Request body limit", "zh": "请求体上限"},
 		Help: LocalizedText{"en": "Largest client request body. Unset: what the endpoint declares, else 32 MB.",
 			"zh": "客户端请求体的上限。未设置：端点声明的值，否则 32 MB。"}},
-	{Key: EnvTaskTimeoutMinutes, Unit: "minutes", Min: 1, Max: 43200, Layers: allLayers, ProcessEnv: "SUB2API_TASK_TIMEOUT_MINUTES",
+	{Key: EnvTaskTimeoutMinutes, Unit: "minutes", Min: 1, Max: 43200, Layers: taskLayers,
 		Name: LocalizedText{"en": "Async task timeout", "zh": "异步任务超时"},
 		Help: LocalizedText{"en": "How long the core keeps observing an async task (image, video). Unset: the reconcile settings.",
 			"zh": "核心观测一个异步任务（画图、视频）的最长时间。未设置：沿用对账设置。"}},
-	{Key: EnvTaskPollMaxFailures, Unit: "count", Min: 1, Max: 1000, Layers: allLayers, ProcessEnv: "SUB2API_TASK_POLL_MAX_FAILURES",
+	{Key: EnvTaskPollMaxFailures, Unit: "count", Min: 1, Max: 1000, Layers: taskLayers,
 		Name: LocalizedText{"en": "Task query failure limit", "zh": "任务查询失败上限"},
 		Help: LocalizedText{"en": "Consecutive failed queries after which an async task is given up. Unset: the reconcile settings.",
 			"zh": "异步任务连续查询失败多少次后放弃。未设置：沿用对账设置。"}},
@@ -142,9 +147,6 @@ func ResolveEnvironment(global, group, account EnvironmentValues) Environment {
 	}{{EnvLayerAccount, account}, {EnvLayerGroup, group}, {EnvLayerGlobal, global}}
 	out := Environment{}
 	for _, v := range EnvironmentVariables {
-		if x := processEnvironment[v.Key]; x > 0 {
-			out[v.Key] = x
-		}
 		for _, l := range layers {
 			if x := l.values[v.Key]; x >= v.Min && x <= v.Max && v.AllowedOn(l.layer) {
 				out[v.Key] = x
@@ -154,29 +156,6 @@ func ResolveEnvironment(global, group, account EnvironmentValues) Environment {
 	}
 	return out
 }
-
-// processEnvironment holds the process environment variables, read once.
-var processEnvironment = readProcessEnvironment()
-
-func readProcessEnvironment() EnvironmentValues {
-	out := EnvironmentValues{}
-	for _, v := range EnvironmentVariables {
-		raw := strings.TrimSpace(os.Getenv(v.ProcessEnv))
-		if raw == "" {
-			continue
-		}
-		x, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || x < v.Min || x > v.Max {
-			slog.Warn("environment: ignoring an invalid process environment variable", "name", v.ProcessEnv, "value", raw, "range", rangeText(v))
-			continue
-		}
-		out[v.Key] = x
-	}
-	return out
-}
-
-// ProcessEnvironment is the last layer, for display.
-func ProcessEnvironment() EnvironmentValues { return maps.Clone(processEnvironment) }
 
 // Duration reads a seconds or minutes variable; 0 when unset.
 func (e Environment) Duration(key string) time.Duration {
@@ -198,6 +177,6 @@ func (e Environment) Bytes(key string) int64 { return e[key] << 20 }
 // HostService.GetEnvironment. accountID 0 resolves the group alone.
 type EnvironmentResolver interface {
 	ResolveEnvironment(ctx context.Context, groupID, accountID int64) (Environment, error)
-	// GlobalEnvironment is the global layer, cached.
+	// GlobalEnvironment is the global layer over the process layer, cached.
 	GlobalEnvironment(ctx context.Context) EnvironmentValues
 }

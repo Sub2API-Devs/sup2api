@@ -303,10 +303,7 @@ func (s *Service) create(c *gin.Context) {
 	if in.ModelFilterMode != nil {
 		mode = *in.ModelFilterMode
 	}
-	env := core.EnvironmentValues{}
-	if in.Environment != nil {
-		env = *in.Environment
-	}
+	env := core.ValueOr(in.Environment, core.EnvironmentValues{})
 	allowJSON, _ := json.Marshal(allow)
 	var id int64
 	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode, environment)

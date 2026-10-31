@@ -119,14 +119,16 @@ func parseBackoff(spec string) []time.Duration {
 
 // withEnvironment applies the async task timeout and poll failure limit the
 // environment variables set for the task's group and account (CONTRACTS
-// §73.3) over the reconcile settings. A failed lookup keeps the settings.
+// §73.3) over the reconcile settings, their global layer. A task without an
+// account resolves its group alone. A failed lookup keeps the settings.
 func (s *Service) withEnvironment(ctx context.Context, cfg resolved, groupID int64, accountID *int64) resolved {
-	if s.opts.Environment == nil || accountID == nil {
+	if s.opts.Environment == nil {
 		return cfg
 	}
-	env, err := s.opts.Environment.ResolveEnvironment(ctx, groupID, *accountID)
+	account := core.ValueOr(accountID, 0)
+	env, err := s.opts.Environment.ResolveEnvironment(ctx, groupID, account)
 	if err != nil {
-		slog.WarnContext(ctx, "usage: resolve environment", "group", groupID, "account", *accountID, "err", err)
+		slog.WarnContext(ctx, "usage: resolve environment", "group", groupID, "account", account, "err", err)
 		return cfg
 	}
 	if d := env.Duration(core.EnvTaskTimeoutMinutes); d > 0 {

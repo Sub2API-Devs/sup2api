@@ -151,10 +151,10 @@ export interface EnvironmentVariable {
   unit: 'seconds' | 'minutes' | 'mb' | 'count'
   min: number
   max: number
-  name: Record<string, string>
-  help: Record<string, string>
+  name: LText
+  help: LText
   layers: EnvironmentLayer[]
-  /** The process environment variable of the last layer. */
+  /** The process environment variable the global layer falls back to; empty without a global layer. */
   process_env: string
 }
 

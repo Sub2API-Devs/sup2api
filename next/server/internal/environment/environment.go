@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -34,6 +35,9 @@ const (
 type Service struct {
 	db  *store.DB
 	bus core.Bus
+	// process is the process layer (config.Config.Environment), the
+	// fallback of the global one.
+	process core.EnvironmentValues
 
 	unsubscribe func()
 
@@ -45,8 +49,8 @@ type Service struct {
 }
 
 // New wires the service; bus may be nil (single node, tests).
-func New(db *store.DB, bus core.Bus) *Service {
-	s := &Service{db: db, bus: bus}
+func New(db *store.DB, bus core.Bus, process core.EnvironmentValues) *Service {
+	s := &Service{db: db, bus: bus, process: process}
 	if bus != nil {
 		s.unsubscribe = bus.Subscribe(core.ChannelConfigChanged, func(payload []byte) {
 			var msg struct{ Key string }
@@ -80,8 +84,8 @@ func (s *Service) invalidate() {
 	s.mu.Unlock()
 }
 
-// GlobalEnvironment returns the cached global layer. A read error yields an
-// empty layer (the process environment still applies) for errorTTL.
+// GlobalEnvironment returns the cached global layer over the process layer.
+// A read error yields the process layer alone for errorTTL.
 func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues {
 	s.mu.Lock()
 	cached, at, ttl, epoch := s.global, s.globalAt, s.ttl, s.epoch
@@ -89,12 +93,15 @@ func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues 
 	if cached != nil && time.Since(at) < ttl {
 		return cached
 	}
-	values, err := loadGlobal(ctx, s.db.Pool)
+	global, err := loadGlobal(ctx, s.db.Pool)
 	ttl = globalTTL
 	if err != nil {
 		slog.WarnContext(ctx, "environment: read global layer", "err", err)
-		values, ttl = core.EnvironmentValues{}, errorTTL
+		ttl = errorTTL
 	}
+	values := core.EnvironmentValues{}
+	maps.Copy(values, s.process)
+	maps.Copy(values, global)
 	s.mu.Lock()
 	if s.epoch == epoch {
 		s.global, s.globalAt, s.ttl = values, time.Now(), ttl
@@ -140,7 +147,7 @@ type variablesView struct {
 }
 
 func (s *Service) variables(c *gin.Context) {
-	httpapi.OK(c, variablesView{Variables: core.EnvironmentVariables, Process: core.ProcessEnvironment()})
+	httpapi.OK(c, variablesView{Variables: core.EnvironmentVariables, Process: s.process})
 }
 
 func (s *Service) get(c *gin.Context) {
