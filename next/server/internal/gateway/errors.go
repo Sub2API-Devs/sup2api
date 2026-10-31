@@ -102,6 +102,10 @@ type gwError struct {
 	Headers     http.Header
 	// RecordType is the usage_logs.error_type for this failure.
 	RecordType string
+	// LocalFailure: the account is not to blame (ClassifyError's
+	// local_failure, or a response that could not be read locally). Request
+	// observations carry it so health statistics leave it out (§73.1).
+	LocalFailure bool
 }
 
 func fromCore(e *core.Error, recordType string) *gwError {

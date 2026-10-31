@@ -23,9 +23,10 @@ func TestObservationAttemptIdentityComesFromSelection(t *testing.T) {
 		rec: &core.UsageRecord{RequestID: "request", AccountID: &oldID, PluginKey: "old", Attempts: 2}}
 	ref := &core.AccountRef{ID: 2, PluginKey: "next"}
 	c.startObservationAttempt(ref)
-	c.observeAttemptResult(ref, attemptResult{kind: attemptFailover, err: &gwError{Status: 503, RecordType: errTypeNoAccount}})
-	for range 2 {
+	c.observeAttemptResult(ref, attemptResult{kind: attemptFailover, err: &gwError{Status: 503, RecordType: errTypeNoAccount, LocalFailure: true}})
+	for i := range 2 {
 		e := <-capture.events
+		require.Equal(t, i == 1, e.LocalFailure)
 		require.EqualValues(t, 2, e.AccountId)
 		require.Equal(t, "next", e.AccountPluginKey)
 		require.Equal(t, "request:2", e.AttemptId)
@@ -48,6 +49,8 @@ func TestObservationGatewayLifecycleAndFailover(t *testing.T) {
 		event := <-capture.events
 		phases[event.AccountId] = append(phases[event.AccountId], event.Phase)
 		require.Equal(t, rec.RequestID, event.RequestId)
+		require.Equal(t, rec.GroupID, event.GroupId)
+		require.False(t, event.LocalFailure)
 		if event.AccountId == 1 && event.Phase == observation.AttemptFinished {
 			require.False(t, event.Success)
 			require.EqualValues(t, 429, event.StatusCode)

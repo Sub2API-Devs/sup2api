@@ -10,6 +10,10 @@ import (
 )
 
 func (c *call) observeRequest(phase string, rec *core.UsageRecord) {
+	c.publishObservation(phase, rec, false)
+}
+
+func (c *call) publishObservation(phase string, rec *core.UsageRecord, localFailure bool) {
 	if c.g.d.Observations == nil || rec == nil || rec.AccountID == nil || c.ep.TaskSubmit() || c.ep.TaskQuery() {
 		return
 	}
@@ -24,8 +28,11 @@ func (c *call) observeRequest(phase string, rec *core.UsageRecord) {
 	v := &pluginv1.RequestObservation{Id: id, RequestId: rec.RequestID, AttemptId: attempt, Phase: phase, AccountId: *rec.AccountID,
 		AccountPluginKey: rec.PluginKey, Model: truncateUTF8(rec.Model, 256), UpstreamModel: truncateUTF8(rec.UpstreamModel, 256), Protocol: rec.Protocol,
 		Stream: rec.Stream, OccurredAtUnixMs: c.g.now().UnixMilli(), StartedAtUnixMs: c.start.UnixMilli(), Revision: 1,
-		Success: rec.Success && !c.statsCanceled, Canceled: c.statsCanceled, StatusCode: int32(rec.StatusCode), ErrorType: truncateUTF8(rec.ErrorType, 128), NodeId: rec.NodeID,
+		LocalFailure: localFailure, Success: rec.Success && !c.statsCanceled, Canceled: c.statsCanceled, StatusCode: int32(rec.StatusCode), ErrorType: truncateUTF8(rec.ErrorType, 128), NodeId: rec.NodeID,
 		UsagePending: rec.Reservation != nil || rec.ReservationDropped != "" || (phase != observation.UsageFinalized && c.usage != nil)}
+	if c.principal != nil {
+		v.GroupId = c.principal.Group.ID
+	}
 	if !c.statsCompletedAt.IsZero() {
 		v.CompletedAtUnixMs = c.statsCompletedAt.UnixMilli()
 	}
@@ -82,10 +89,12 @@ func (c *call) observeAttemptResult(ref *core.AccountRef, result attemptResult) 
 	}
 	rec := *c.rec
 	rec.AccountID, rec.PluginKey = &ref.ID, ref.PluginKey
+	local := false
 	if result.err != nil {
 		rec.Success, rec.StatusCode, rec.ErrorType = false, result.err.Status, result.err.RecordType
+		local = result.err.LocalFailure
 	}
-	c.observeRequest(observation.AttemptFinished, &rec)
+	c.publishObservation(observation.AttemptFinished, &rec, local)
 }
 
 func addObservationTokens(event *pluginv1.RequestObservation, tokens core.UsageTokens) bool {

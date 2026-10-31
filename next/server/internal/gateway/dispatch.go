@@ -669,7 +669,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			if ctx.Err() != nil {
 				return attemptResult{kind: attemptCanceled, err: canceledErr()}
 			}
-			e := &gwError{Status: http.StatusBadGateway, Code: "upstream_response_incomplete", RecordType: errTypeUpstream, Message: "Could not read the complete upstream error response"}
+			e := &gwError{Status: http.StatusBadGateway, Code: "upstream_response_incomplete", RecordType: errTypeUpstream, Message: "Could not read the complete upstream error response", LocalFailure: true}
 			if execution != nil {
 				execution.localFailure = e
 			}
@@ -776,6 +776,9 @@ func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *plug
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
 	if c.failurePolicy != nil {
 		res := c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
+		if res.err != nil {
+			res.err.LocalFailure = cls.GetLocalFailure()
+		}
 		if status > 0 {
 			c.applyPluginAccountState(ctx, acct.GetId(), cls)
 		}
@@ -791,7 +794,7 @@ func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *plu
 	if clientStatus < 400 || clientStatus > 599 {
 		clientStatus = http.StatusBadGateway
 	}
-	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(),
+	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(), LocalFailure: cls.GetLocalFailure(),
 		RecordType: errTypeUpstream, Code: clientErrorCode(ctx, cls.GetClientErrorCode(), rt.binding.Plugin.Key)}
 	if rt.conv != nil {
 		// The upstream speaks another protocol: its error body and error

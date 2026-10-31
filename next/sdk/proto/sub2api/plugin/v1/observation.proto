@@ -34,6 +34,12 @@ message RequestObservation {
   ObservationTokens tokens = 23;
   int64 response_started_at_unix_ms = 24;
   int64 first_stream_event_at_unix_ms = 25;
+  // API key group the request was scheduled in (CONTRACTS §73.1).
+  int64 group_id = 26;
+  // The attempt failed for a local reason the account is not to blame for:
+  // the platform plugin's ClassifyError said local_failure, or the response
+  // could not be read locally (CONTRACTS §73.1).
+  bool local_failure = 27;
 }
 
 message ObservationTokens {
