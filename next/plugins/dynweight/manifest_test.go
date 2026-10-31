@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/dynweight"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
@@ -57,6 +59,13 @@ func TestManifestShape(t *testing.T) {
 	if !slices.Equal(jobs, []string{dynweight.JobEvaluate, dynweight.JobCleanup}) {
 		t.Fatalf("jobs = %v", jobs)
 	}
+	// The shortest window closes once per evaluate run.
+	if want := fmt.Sprintf("@every %ds", rules.MinWindowSeconds); m.Jobs[0].Schedule != want {
+		t.Errorf("evaluate runs %q, the shortest window wants %q", m.Jobs[0].Schedule, want)
+	}
+	if m.Events == nil || !slices.Equal(m.Events.Subscribe, []string{dynweight.EventAccountStatusChanged}) {
+		t.Errorf("events = %+v", m.Events)
+	}
 	p := dynweight.New()
 	for _, r := range m.Routes {
 		// Without a host every route answers an error, but not "no route".
@@ -70,7 +79,7 @@ func TestManifestShape(t *testing.T) {
 // TestManifestServes starts the plugin with its embedded manifest.
 func TestManifestServes(t *testing.T) {
 	h := pluginsdktest.Start(t, dynweight.New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithManifest(manifestJSON)}})
-	for _, c := range []string{manifest.CapGatewayObserve, manifest.CapSchedulerRank, manifest.CapAppJobs, manifest.CapHTTPRoutes} {
+	for _, c := range []string{manifest.CapGatewayObserve, manifest.CapSchedulerRank, manifest.CapAppJobs, manifest.CapAppEvents, manifest.CapHTTPRoutes} {
 		if !slices.Contains(h.Info.GetCapabilities(), c) {
 			t.Errorf("capability %s missing from %v", c, h.Info.GetCapabilities())
 		}

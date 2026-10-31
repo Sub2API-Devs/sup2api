@@ -19,6 +19,7 @@ const (
 	ReasonBaseMismatch = "base_mismatch" // the account's weight changed
 	ReasonRulesChange  = "rules_change"  // the rules changed: history cleared, weight kept
 	ReasonManual       = "manual"
+	ReasonStatusChange = "status_change" // the account became active again
 )
 
 // Notified reports whether an event kind is a turning point to notify.

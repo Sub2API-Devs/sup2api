@@ -117,6 +117,13 @@ func (f Family) exemptFails(codes []int) int64 {
 	return n
 }
 
+// Judged is the attempts and failures the error rate reads: the failures on
+// exempt status codes are left out of both.
+func (f Family) Judged(exempt []int) (total, fail int64) {
+	ex := f.exemptFails(exempt)
+	return f.Total - ex, f.Fail - ex
+}
+
 // Record counts a sample with the thresholds of the key's configuration.
 func (c *Counts) Record(s Sample, cfg *Resolved) {
 	c.Family.record(s, cfg.Thresholds, cfg.LatencyThresholds)

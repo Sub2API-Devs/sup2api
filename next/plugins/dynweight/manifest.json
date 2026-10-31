@@ -6,7 +6,7 @@
     "en": "Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy. Each (account, group, client model) is counted per window and judged by configurable rules (error rate, first token and whole attempt percentiles, the weight itself) and strategies (degrade, climb, clear sticky sessions). Turning points can be notified through a core notification channel.",
     "zh": "账号在某个分组和模型下出错或变慢时降低其调度权重，恢复健康后再逐步抬回。每个（账号、分组、客户端模型）按窗口计数，由可配置的规则（错误率、首字与整次耗时分位、权重本身）和策略（降权、回升、清理粘性会话）判定。权重拐点可经核心通知渠道发送通知。"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "sub2api",
   "icon": "text:W",
   "runtime": "grpc",
@@ -18,6 +18,7 @@
     { "id": "gateway.observe.v1" },
     { "id": "scheduler.rank.v1" },
     { "id": "app.jobs.v1" },
+    { "id": "app.events.v1" },
     { "id": "app.broadcast.v1" },
     { "id": "http.routes.v1" }
   ],
@@ -25,6 +26,8 @@
   "observations": { "events": ["attempt_finished"] },
 
   "scheduler": { "rank": { "order": 100, "timeoutMs": 50 } },
+
+  "events": { "subscribe": ["account.status_changed"], "batchSize": 100 },
 
   "jobs": [
     { "id": "evaluate", "schedule": "@every 10s", "timeoutSec": 60 },
@@ -49,12 +52,14 @@
   "routes": [
     { "method": "GET", "path": "/config", "scope": "admin", "permission": "dynweight:read" },
     { "method": "PUT", "path": "/config", "scope": "admin", "permission": "dynweight:manage" },
+    { "method": "POST", "path": "/config/validate", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/defaults", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/channels", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read" },
     { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
-    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" }
+    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read" }
   ],
 
   "ui": {
@@ -116,6 +121,14 @@
       "reason": {
         "en": "Store the configuration, the window counters, the states and the events",
         "zh": "保存配置、窗口计数、状态和事件"
+      }
+    },
+    {
+      "id": "events",
+      "scope": { "subscribe": ["account.status_changed"] },
+      "reason": {
+        "en": "Put an account that becomes active again back to its base weights",
+        "zh": "账号恢复为正常状态时，把它的有效权重重置为基准"
       }
     },
     {

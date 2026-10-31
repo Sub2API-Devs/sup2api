@@ -78,7 +78,7 @@ func TestDefaultConfigNormalizes(t *testing.T) {
 
 func TestNormalizeRejects(t *testing.T) {
 	cases := map[string]func(*Config){
-		"window":         func(c *Config) { c.WindowSeconds = 2 },
+		"window":         func(c *Config) { c.WindowSeconds = MinWindowSeconds - 1 },
 		"exempt":         func(c *Config) { c.ExemptStatusCodes = "40x" },
 		"min weight":     func(c *Config) { c.MinWeight = 101 },
 		"rule name":      func(c *Config) { c.Rules[0].Name = " " },
@@ -135,7 +135,7 @@ func TestConditionValueRequired(t *testing.T) {
 }
 
 // A group is laid over the factory layer and adjusts unless it says not to.
-func TestGroupLayerDefaults(t *testing.T) {
+func TestDocumentDefaults(t *testing.T) {
 	var c Config
 	if err := json.Unmarshal([]byte(`{"window_seconds":60,"min_samples":10,"min_weight_mode":"base_percent",
 		"groups":{"7":{"window_seconds":30},"8":{"enabled":false},"9":null}}`), &c); err != nil {
@@ -145,8 +145,12 @@ func TestGroupLayerDefaults(t *testing.T) {
 	if !g.Enabled || g.WindowSeconds != 30 || g.MinSamples != 10 || len(g.Rules) != 5 || c.Groups[8].Enabled || c.Groups[9] != nil {
 		t.Fatalf("groups: %+v %+v", g, c.Groups)
 	}
-	if c.WindowSeconds != 60 || c.Enabled {
+	// log_events is on unless the document turns it off, as in new-api.
+	if c.WindowSeconds != 60 || c.Enabled || !c.LogEvents {
 		t.Fatalf("global: %+v", c.Layer)
+	}
+	if err := json.Unmarshal([]byte(`{"log_events":false}`), &c); err != nil || c.LogEvents {
+		t.Fatalf("log_events off: %v", err)
 	}
 }
 
@@ -379,12 +383,13 @@ func TestAffinityClear(t *testing.T) {
 }
 
 func TestResolveLayers(t *testing.T) {
-	codes, mode, floor, off := "429", ModeFixed, 5, false
+	codes, none, mode, floor, off := "429", "", ModeFixed, 5, false
 	c := compiled(t, func(c *Config) {
 		g := DefaultLayer()
 		g.Enabled, g.WindowSeconds = true, 30
 		c.Groups = map[int64]*Layer{2: &g, 3: nil}
-		c.Accounts = map[int64]AccountOverride{7: {ExemptStatusCodes: &codes, MinWeightMode: &mode, MinWeight: &floor}, 8: {Enabled: &off}}
+		c.Accounts = map[int64]AccountOverride{7: {ExemptStatusCodes: &codes, MinWeightMode: &mode, MinWeight: &floor}, 8: {Enabled: &off},
+			9: {ExemptStatusCodes: &none}}
 	})
 	if r := c.Resolve(1, 2); r.WindowSeconds != 30 || !r.Enabled || c.GroupLayer(2).WindowSeconds != 30 {
 		t.Fatalf("group: %+v", r.Layer)
@@ -395,6 +400,10 @@ func TestResolveLayers(t *testing.T) {
 	}
 	if c.Resolve(8, 1).Enabled {
 		t.Fatal("account switch ignored")
+	}
+	// An empty override exempts nothing, unlike inheriting the layer's 400.
+	if r := c.Resolve(9, 1); len(r.ExemptCodes) != 0 || !reflect.DeepEqual(global.ExemptCodes, []int{400}) {
+		t.Fatalf("no exemptions: %v, inherited %v", r.ExemptCodes, global.ExemptCodes)
 	}
 	if c.RetentionSeconds() != 7*60 {
 		t.Fatalf("retention %d", c.RetentionSeconds())

@@ -33,22 +33,22 @@ type store struct{ db *pgxpool.Pool }
 
 var errVersionConflict = errors.New("the configuration was changed meanwhile")
 
-// loadConfig reads the configuration; version 0 means the default.
-func (s store) loadConfig(ctx context.Context) (rules.Config, int64, error) {
+// loadConfig reads the configuration; version 0 means the default. A
+// stored window below the minimum is raised (rules.RaiseWindows); warnings
+// say so.
+func (s store) loadConfig(ctx context.Context) (c rules.Config, version int64, warnings []string, err error) {
 	var raw []byte
-	var version int64
-	err := s.db.QueryRow(ctx, `SELECT doc, version FROM config WHERE id = 1`).Scan(&raw, &version)
+	err = s.db.QueryRow(ctx, `SELECT doc, version FROM config WHERE id = 1`).Scan(&raw, &version)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return rules.DefaultConfig(), 0, nil
+		return rules.DefaultConfig(), 0, nil, nil
 	}
 	if err != nil {
-		return rules.Config{}, 0, err
+		return rules.Config{}, 0, nil, err
 	}
-	var c rules.Config
 	if err := json.Unmarshal(raw, &c); err != nil {
-		return rules.Config{}, 0, fmt.Errorf("stored configuration: %w", err)
+		return rules.Config{}, 0, nil, fmt.Errorf("stored configuration: %w", err)
 	}
-	return c, version, nil
+	return c, version, c.RaiseWindows(), nil
 }
 
 // saveConfig stores a normalized configuration if version is still the
@@ -103,10 +103,11 @@ func (s store) addObs(ctx context.Context, deltas []obsDelta) error {
 	return s.db.SendBatch(ctx, b).Close()
 }
 
-// loadObs reads the counters of the windows from since on, by key and
-// window start.
-func (s store) loadObs(ctx context.Context, since int64) (map[key]map[int64]rules.Counts, error) {
-	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, window_start, counts FROM obs WHERE window_start >= $1`, since)
+// loadObs reads the counters of the keys matching f in the windows from
+// since on, by key and window start.
+func (s store) loadObs(ctx context.Context, f filter, since int64) (map[key]map[int64]rules.Counts, error) {
+	where, args := f.where(cond{"window_start >= $%d", since})
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, window_start, counts FROM obs`+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -314,24 +315,38 @@ func (s store) listEvents(ctx context.Context, f filter, kind string, limit, off
 		return nil, 0, err
 	}
 	n := len(args)
-	rows, err := s.db.Query(ctx, `SELECT id, created_at, account_id, group_id, model, kind, reason, weight_from, weight_to, rules, detail
+	// The account's name as scheduling last saw it, in any group.
+	rows, err := s.db.Query(ctx, `SELECT id, created_at, account_id, COALESCE((SELECT b.name FROM bases b
+			WHERE b.account_id = events.account_id ORDER BY b.seen_at DESC LIMIT 1), ''),
+		group_id, model, kind, reason, weight_from, weight_to, rules, detail
 		FROM events`+where+fmt.Sprintf(" ORDER BY id DESC LIMIT $%d OFFSET $%d", n+1, n+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
 	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (eventItem, error) {
 		var e eventItem
-		return e, r.Scan(&e.ID, &e.CreatedAt, &e.AccountID, &e.GroupID, &e.Model, &e.Kind, &e.Reason, &e.From, &e.To, &e.Rules, &e.Detail)
+		return e, r.Scan(&e.ID, &e.CreatedAt, &e.AccountID, &e.AccountName, &e.GroupID, &e.Model, &e.Kind, &e.Reason, &e.From, &e.To, &e.Rules, &e.Detail)
 	})
 	return items, total, err
 }
 
-// filter narrows states and events to an account, a group and a model
-// (zero values match everything).
+// filter narrows states and events to accounts, a group and a model (zero
+// values match everything).
 type filter struct {
-	AccountID int64  `json:"account_id"`
-	GroupID   int64  `json:"group_id"`
-	Model     string `json:"model"`
+	AccountID  int64   `json:"account_id"`
+	AccountIDs []int64 `json:"account_ids"` // POST /reset only: AccountID or any of these
+	GroupID    int64   `json:"group_id"`
+	Model      string  `json:"model"`
+}
+
+// accounts lists the accounts f narrows to, none for every account.
+func (f filter) accounts() []int64 {
+	ids := slices.DeleteFunc(slices.Clone(f.AccountIDs), func(id int64) bool { return id <= 0 })
+	if f.AccountID > 0 {
+		ids = append(ids, f.AccountID)
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids)
 }
 
 // cond is an SQL condition with one %d placeholder for its argument.
@@ -343,8 +358,8 @@ type cond struct {
 // where builds the WHERE clause of f and the extra conditions.
 func (f filter) where(extra ...cond) (string, []any) {
 	var conds []cond
-	if f.AccountID > 0 {
-		conds = append(conds, cond{"account_id = $%d", f.AccountID})
+	if ids := f.accounts(); len(ids) > 0 {
+		conds = append(conds, cond{"account_id = ANY($%d)", ids})
 	}
 	if f.GroupID > 0 {
 		conds = append(conds, cond{"group_id = $%d", f.GroupID})

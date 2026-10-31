@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SCard, SField, SHint, SPagination, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
+import { useCatalog } from './catalog'
 import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
@@ -10,6 +11,7 @@ import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTo
 const props = defineProps<{ preset?: Filter | null }>()
 const host = useDwHost()
 const t = host.t
+const catalog = useCatalog()
 
 const filter = reactive(emptyFilter())
 const kind = ref('')
@@ -55,7 +57,7 @@ const isWeightKind = (k: string) => k.startsWith('weight_')
 /** One-line detail: the window counts, the reason, or the strategy's clearing. */
 function detailText(e: WeightEvent): string {
   const d = e.detail ?? {}
-  if (e.reason) return t(`reason.${e.reason}`)
+  if (e.reason) return d.matched === 0 ? `${t(`reason.${e.reason}`)} · ${t('events.nothingReset')}` : t(`reason.${e.reason}`)
   if (e.kind === 'affinity_cleared') {
     const strategy = String(d.strategy ?? '')
     return d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
@@ -82,8 +84,8 @@ function detailText(e: WeightEvent): string {
         <template #cell-created_at="{ row }">{{ host.i18n.formatDateTime(row.created_at) }}</template>
         <template #cell-kind="{ row }"><SBadge :tone="eventTone(row.kind)">{{ t(`kind.${row.kind}`) }}</SBadge></template>
         <template #cell-key="{ row }">
-          <span class="dw-num">#{{ row.account_id }} · #{{ row.group_id }}</span>
-          <div class="dw-sub">{{ row.model }}</div>
+          <span>{{ catalog.accountName(row.account_id, row.account_name) }} · {{ row.group_id ? catalog.groupName(row.group_id) : t('filter.all') }}</span>
+          <div class="dw-sub">{{ row.model || t('events.allModels') }}</div>
         </template>
         <template #cell-weight="{ row }">
           <span v-if="isWeightKind(row.kind)" class="dw-num">{{ weightOf(row.from) }} → {{ weightOf(row.to) }}</span>

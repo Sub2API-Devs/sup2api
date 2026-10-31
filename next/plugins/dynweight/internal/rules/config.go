@@ -10,7 +10,10 @@ import (
 )
 
 const (
-	minWindowSeconds = 3
+	// MinWindowSeconds is the interval of the evaluate job: a shorter window
+	// would close more than once between two runs, and only the newest
+	// closed window is evaluated (new-api evaluates lazily, so it allows 3).
+	MinWindowSeconds = 10
 	maxWindowSeconds = 3600
 	maxMinSamples    = 100000
 	maxRecipients    = 20
@@ -22,7 +25,7 @@ type Layer struct {
 	// Enabled turns the adjustment on. On the global layer it is the master
 	// switch: off, nothing is observed or adjusted.
 	Enabled bool `json:"enabled"`
-	// WindowSeconds is the evaluation window, 3..3600. Windows are not
+	// WindowSeconds is the evaluation window, 10..3600. Windows are not
 	// aligned to the epoch: each account rolls its own phase.
 	WindowSeconds int `json:"window_seconds"`
 	// MinSamples is how many attempts a condition accumulates, looking back
@@ -65,6 +68,9 @@ type Config struct {
 	// Accounts narrow the effective layer for an account (by id).
 	Accounts map[int64]AccountOverride `json:"accounts"`
 	Notify   Notify                    `json:"notify"`
+	// LogEvents also writes every weight event to the plugin log (global
+	// only; on unless a document says false, as in new-api).
+	LogEvents bool `json:"log_events"`
 }
 
 // defaultRules / defaultStrategies: error rate or p95 too slow in 2 of 3
@@ -93,6 +99,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		Groups map[int64]json.RawMessage `json:"groups"`
 	}
 	doc.plain = (*plain)(c)
+	c.LogEvents = true
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return err
 	}
@@ -124,7 +131,7 @@ func DefaultLayer() Layer {
 }
 
 // DefaultConfig is the factory configuration (everything off).
-func DefaultConfig() Config { return Config{Layer: DefaultLayer()} }
+func DefaultConfig() Config { return Config{Layer: DefaultLayer(), LogEvents: true} }
 
 // WeightFloor is the floor of the effective weight for a base weight, an
 // integer in 0..base.
@@ -136,6 +143,27 @@ func (l *Layer) WeightFloor(base int) int {
 		return min(int(math.Floor(float64(base)*float64(l.MinWeight)/100+0.5)), base)
 	}
 	return min(l.MinWeight, base)
+}
+
+// RaiseWindows lifts the windows below MinWindowSeconds of a stored
+// configuration to it (0.1.0 allowed 3): such a document still loads, while
+// saving a new one below the minimum is refused. It says what it raised.
+func (c *Config) RaiseWindows() []string {
+	var raised []string
+	layers := map[string]*Layer{"": &c.Layer}
+	for id, l := range c.Groups {
+		if l != nil {
+			layers[fmt.Sprintf("groups.%d.", id)] = l
+		}
+	}
+	for _, path := range slices.Sorted(maps.Keys(layers)) {
+		if l := layers[path]; l.WindowSeconds < MinWindowSeconds {
+			raised = append(raised, fmt.Sprintf("%swindow_seconds %d is below the minimum and was raised to %d; save the configuration to keep it",
+				path, l.WindowSeconds, MinWindowSeconds))
+			l.WindowSeconds = MinWindowSeconds
+		}
+	}
+	return raised
 }
 
 // Normalize validates the configuration and puts it in canonical form. The
@@ -175,8 +203,8 @@ func (c *Config) Normalize() (warnings []string, err error) {
 
 // normalize validates a layer; path prefixes the messages ("groups.7.").
 func (l *Layer) normalize(path string) ([]string, error) {
-	if l.WindowSeconds < minWindowSeconds || l.WindowSeconds > maxWindowSeconds {
-		return nil, fmt.Errorf("%swindow_seconds must be between %d and %d", path, minWindowSeconds, maxWindowSeconds)
+	if l.WindowSeconds < MinWindowSeconds || l.WindowSeconds > maxWindowSeconds {
+		return nil, fmt.Errorf("%swindow_seconds must be between %d and %d", path, MinWindowSeconds, maxWindowSeconds)
 	}
 	if l.MinSamples < 1 || l.MinSamples > maxMinSamples {
 		return nil, fmt.Errorf("%smin_samples must be between 1 and %d", path, maxMinSamples)
@@ -226,9 +254,13 @@ func normalizeNamed[T any](label string, items []T, normalize func(T, int) (T, e
 	return out, nil
 }
 
+// NoClimb reports whether an enabled strategy degrades but none climbs, so a
+// degraded weight never recovers on its own.
+func (l *Layer) NoClimb() bool { return noClimb(l.Strategies) }
+
 // warnings: a degraded weight that never recovers on its own.
 func (l *Layer) warnings(path string) []string {
-	if noClimb(l.Strategies) {
+	if l.NoClimb() {
 		return []string{path + "strategies: a strategy degrades the weight but no enabled strategy climbs; it never recovers on its own"}
 	}
 	weightRules := map[string]bool{}

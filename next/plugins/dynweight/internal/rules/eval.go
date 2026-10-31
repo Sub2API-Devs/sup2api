@@ -78,19 +78,23 @@ type State struct {
 	ErrCut int64 `json:"err_cut,omitempty"`
 	// Cooldowns holds the window each enabled strategy last took effect in
 	// (changed the weight or ran a side effect), 0 = never.
-	Cooldowns     []int64       `json:"cooldowns,omitempty"`
-	WeightDir     string        `json:"dir,omitempty"`
-	LastTotal     int64         `json:"last_total"`
-	LastFail      int64         `json:"last_fail"`
-	LastLookback  int64         `json:"last_lookback"`
-	LastTN        int64         `json:"last_tn"`
-	LastCounts    map[int]int64 `json:"last_counts,omitempty"`
-	LastRules     string        `json:"last_rules,omitempty"`
-	LastRuleStats []RuleStat    `json:"last_rule_stats,omitempty"`
-	LastVerdict   string        `json:"last_verdict,omitempty"`
-	LastChange    string        `json:"last_change,omitempty"`
-	LastChangeAt  int64         `json:"last_change_at,omitempty"`
-	Recent        RecentAgg     `json:"recent"`
+	Cooldowns    []int64       `json:"cooldowns,omitempty"`
+	WeightDir    string        `json:"dir,omitempty"`
+	LastTotal    int64         `json:"last_total"`
+	LastFail     int64         `json:"last_fail"`
+	LastLookback int64         `json:"last_lookback"`
+	LastTN       int64         `json:"last_tn"`
+	LastLN       int64         `json:"last_ln"`
+	LastCounts   map[int]int64 `json:"last_counts,omitempty"`
+	// LastLatencyCounts are the latency counts of the configured latency
+	// thresholds, as LastCounts are the TTFB ones.
+	LastLatencyCounts map[int]int64 `json:"last_latency_counts,omitempty"`
+	LastRules         string        `json:"last_rules,omitempty"`
+	LastRuleStats     []RuleStat    `json:"last_rule_stats,omitempty"`
+	LastVerdict       string        `json:"last_verdict,omitempty"`
+	LastChange        string        `json:"last_change,omitempty"`
+	LastChangeAt      int64         `json:"last_change_at,omitempty"`
+	Recent            RecentAgg     `json:"recent"`
 }
 
 // Tombstone is the state a reset leaves at the newest closed window.
@@ -713,6 +717,7 @@ func Evaluate(in Input) Output {
 	st.LastEvalWindow = in.Window
 	st.LastTotal, st.LastFail, st.LastLookback = l.winTotal, l.winFail, int64(l.errDepth)
 	st.LastTN, st.LastCounts = l.win.TN, pick(in.Cfg.Thresholds, l.win.Thresholds)
+	st.LastLN, st.LastLatencyCounts = l.win.LN, pick(in.Cfg.LatencyThresholds, l.win.Latency)
 	st.LastRules, st.LastRuleStats = string(ro.lastRules), ro.stats
 	st.LastVerdict, st.Recent = verdict, l.recent
 	return Output{Action: ActionApplied, Verdict: verdict, State: st, WeightFrom: from, WeightTo: st.WeightEff,

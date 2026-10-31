@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SButton, SCard, SDisclosure, SField, SHint, SInput, SSegmented, SSelect, SSwitch, STagInput } from '@sub2api/ui'
+import { SAlert, SButton, SCard, SDisclosure, SField, SHint, SSegmented, SSelect, SSwitch, STagInput } from '@sub2api/ui'
 import AccountOverrideRow from './AccountOverrideRow.vue'
+import IdPicker from './IdPicker.vue'
 import LayerEditor from './LayerEditor.vue'
+import { useCatalog } from './catalog'
 import {
-  canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, saveConfig, useDwHost,
+  canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, saveConfig, useDwHost, validateConfig,
   type AccountOverride, type Channel, type Config, type ConfigBody, type Layer
 } from './host'
 
@@ -15,6 +17,7 @@ import {
 const host = useDwHost()
 const t = host.t
 const manage = computed(() => canManage())
+const catalog = useCatalog()
 
 /** The edited config, with groups and accounts always present. */
 interface Draft extends Config {
@@ -47,7 +50,7 @@ async function reload() {
     setDraft(body)
     defaults.value = d
     channels.value = ch
-    warnings.value = []
+    warnings.value = body.warnings ?? []
   } catch (e) {
     error.value = errorMessage(e, t('config.loadFailed'))
   } finally {
@@ -105,15 +108,44 @@ const languageOptions = computed(() => [
   { value: 'en', label: 'English' }
 ])
 
-// ---- save
+// ---- validate and save
 
 const saving = ref(false)
+
+/** Has the plugin check the draft without saving: its warnings, or null and the error shown. */
+async function validate(c: Draft): Promise<string[] | null> {
+  error.value = ''
+  try {
+    const body = await validateConfig({ config: c, version: version.value })
+    warnings.value = body.warnings ?? []
+    return warnings.value
+  } catch (e) {
+    error.value = errorMessage(e, t('actionFailed'))
+    warnings.value = []
+    return null
+  }
+}
+
+async function check() {
+  if (!draft.value) return
+  saving.value = true
+  try {
+    if ((await validate(draft.value))?.length === 0) host.toast(t('config.valid'), 'success')
+  } finally {
+    saving.value = false
+  }
+}
+
+// Saving validates first: an invalid draft is not sent, and its warnings are
+// confirmed.
 async function save() {
   const c = draft.value
   if (!c) return
   saving.value = true
   try {
-    for (const o of Object.values(c.accounts)) if (o.exempt_status_codes === '') o.exempt_status_codes = undefined
+    const found = await validate(c)
+    if (found === null) return
+    if (found.length && !(await host.confirm({ message: t('config.warningsConfirm', { warnings: found.join('; ') }), confirmText: t('config.save') }))) return
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
     warnings.value = body.warnings ?? []
@@ -143,7 +175,7 @@ async function save() {
 
       <SCard :title="t('config.groups')" :subtitle="t('config.groupsHint')" class="dw-block">
         <div class="dw-list">
-          <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="t('config.group', { id })">
+          <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="catalog.groupName(Number(id))">
             <template v-if="manage" #actions>
               <SButton size="sm" variant="ghost" icon="trash" @click="delete draft.groups[id]">{{ t('remove') }}</SButton>
             </template>
@@ -152,7 +184,7 @@ async function save() {
             </fieldset>
           </SDisclosure>
           <form v-if="manage" class="dw-row" @submit.prevent="addGroup">
-            <SInput v-model="newGroup" class="dw-w-10" inputmode="numeric" :placeholder="t('config.groupId')" />
+            <IdPicker v-model="newGroup" class="dw-w-16" kind="group" :exclude="groupIds" />
             <SButton type="submit" icon="plus" :disabled="!validId(newGroup)">{{ t('config.addGroup') }}</SButton>
           </form>
         </div>
@@ -161,12 +193,24 @@ async function save() {
       <fieldset class="dw-fieldset" :disabled="!manage">
         <SCard :title="t('config.accounts')" :subtitle="t('config.accountsHint')" class="dw-block">
           <div class="dw-list">
-            <AccountOverrideRow v-for="id in accountIds" :id="id" :key="id" v-model="draft.accounts[id]" @remove="delete draft.accounts[id]" />
+            <AccountOverrideRow
+              v-for="id in accountIds"
+              :key="id"
+              v-model="draft.accounts[id]"
+              :label="catalog.accountName(Number(id))"
+              @remove="delete draft.accounts[id]"
+            />
             <form class="dw-row" @submit.prevent="addAccount">
-              <SInput v-model="newAccount" class="dw-w-10" inputmode="numeric" :placeholder="t('config.accountId')" />
+              <IdPicker v-model="newAccount" class="dw-w-16" kind="account" :exclude="accountIds" />
               <SButton type="submit" icon="plus" :disabled="!validId(newAccount)">{{ t('config.addAccount') }}</SButton>
             </form>
           </div>
+        </SCard>
+
+        <SCard :title="t('logEvents.title')" :subtitle="t('logEvents.hint')" class="dw-block">
+          <SField :label="t('enabled')">
+            <SSwitch v-model="draft.log_events" />
+          </SField>
         </SCard>
 
         <SCard :title="t('notify.title')" :subtitle="t('notify.hint')" class="dw-block">
@@ -190,6 +234,7 @@ async function save() {
 
       <div v-if="manage" class="dw-toolbar">
         <SButton :disabled="!dirty" @click="discard">{{ t('config.discard') }}</SButton>
+        <SButton :loading="saving" @click="check">{{ t('config.validate') }}</SButton>
         <SButton variant="primary" icon="check" :loading="saving" @click="save">{{ t('config.save') }}</SButton>
       </div>
     </template>

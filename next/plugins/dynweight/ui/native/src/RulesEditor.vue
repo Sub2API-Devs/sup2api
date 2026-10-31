@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SButton, SField, SInput, SSelect, SSwitch } from '@sub2api/ui'
-import { enumOptions, metrics, opsOf, percentileMetric, useDwHost, type Condition, type Metric, type Rule } from './host'
+import ItemActions from './ItemActions.vue'
+import { duplicateItem, enumOptions, metrics, moveItem, opsOf, percentileMetric, useDwHost, type Condition, type Metric, type Rule } from './host'
 
 // Judgement rules: conditions joined by and / or ("and" binds first), judged
 // per window; a rule fires once it hit in M of the last N windows. A name
-// change is committed on blur and reported so strategies can follow it.
+// change is committed on blur and reported so strategies can follow it. The
+// order is the order of the rule slots (and of the status page).
 const rules = defineModel<Rule[]>({ required: true })
 const emit = defineEmits<{ (e: 'rename', from: string, to: string): void }>()
 const t = useDwHost().t
@@ -33,11 +35,12 @@ function rename(r: Rule, name: string) {
   emit('rename', from, name)
 }
 
+const copyName = (name: string, n: number) => t('item.copyName', { name, n })
+
 function removeCondition(r: Rule, i: number) {
   r.conditions.splice(i, 1)
   if (r.conditions[0]) r.conditions[0].join = undefined
 }
-
 </script>
 
 <template>
@@ -59,7 +62,7 @@ function removeCondition(r: Rule, i: number) {
         <SField :label="t('enabled')">
           <SSwitch :model-value="r.enabled !== false" @update:model-value="r.enabled = $event ? undefined : false" />
         </SField>
-        <SButton class="dw-end" size="sm" variant="ghost" icon="trash" icon-only :aria-label="t('remove')" @click="rules.splice(i, 1)" />
+        <ItemActions :index="i" :count="rules.length" @move="moveItem(rules, i, $event)" @duplicate="duplicateItem(rules, i, copyName)" @remove="rules.splice(i, 1)" />
       </div>
 
       <div v-for="(c, j) in r.conditions" :key="j" class="dw-row dw-cond">

@@ -89,22 +89,34 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
+	started := time.Now()
+	defer func() {
+		took := time.Since(started)
+		p.stats.add(cRuns, 1)
+		p.stats.add(cRunBusyUs, took.Microseconds())
+		p.stats[cLastRunMs].Store(took.Milliseconds())
+		p.stats[cLastRunAt].Store(time.Now().Unix())
+	}()
 	// The counters of this node go in first; the other nodes flush every
 	// second, well within the close grace.
 	p.flush(ctx)
 	e := &evaluation{p: p, s: s, cfg: cfg, now: p.now().Unix()}
 	if err := e.load(ctx); err != nil {
+		p.stats.add(cRunFailures, 1)
 		return nil, status.Errorf(codes.Unavailable, "load: %v", err)
 	}
 	// A key that fails does not stop the others: their states are written
 	// already, so their events and weights must follow.
 	var errs keyErrors
-	for _, k := range e.keys() {
+	for _, k := range keysOf(e.states, e.obs) {
 		errs.add(k, e.evaluate(ctx, k))
 	}
+	p.stats.add(cKeyFailures, int64(errs.n))
+	p.stats.add(cChanged, int64(e.changed))
 	p.record(ctx, s, e.events, e.changed > 0)
 	p.notify(ctx, cfg, e.notices)
 	if errs.n > 0 {
+		p.stats.add(cRunFailures, 1)
 		return nil, status.Errorf(codes.Internal, "%v", errs)
 	}
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("evaluated %d keys, %d changed", e.evaluated, e.changed)}, nil
@@ -115,7 +127,7 @@ func (e *evaluation) load(ctx context.Context) error {
 	if e.states, err = e.s.loadStates(ctx, filter{}); err != nil {
 		return err
 	}
-	if e.obs, err = e.s.loadObs(ctx, obsSince(e.cfg, e.now)); err != nil {
+	if e.obs, err = e.s.loadObs(ctx, filter{}, obsSince(e.cfg, e.now)); err != nil {
 		return err
 	}
 	e.bases, err = e.s.loadBases(ctx)
@@ -138,8 +150,8 @@ func (k *keyErrors) add(key key, err error) {
 
 func (k keyErrors) Error() string { return fmt.Sprintf("%d keys failed, first %v", k.n, k.first) }
 
-// record writes the events of a run and, when weights changed, has every
-// node reload them.
+// record writes the events of a run, mirrors them to the plugin log when
+// log_events is on, and, when weights changed, has every node reload them.
 func (p *Plugin) record(ctx context.Context, s store, events []eventRow, changed bool) {
 	if len(events) > 0 {
 		if err := s.addEvents(ctx, events); err != nil {
@@ -149,16 +161,30 @@ func (p *Plugin) record(ctx context.Context, s store, events []eventRow, changed
 	if changed {
 		p.publish(ctx, TopicWeights, p.reloadWeights)
 	}
+	if !p.cfg.Load().LogEvents || len(events) == 0 {
+		return
+	}
+	granted, dropped := p.logged.take(len(events), p.now().Unix())
+	if dropped > 0 {
+		p.log.Warn("dynweight: weight event log lines dropped over the cap; the events table has them all",
+			"dropped", dropped, "cap", eventLogLimit, "per_seconds", eventLogSeconds)
+	}
+	for _, e := range events[:granted] {
+		p.log.Info("dynweight: weight event", "account_id", e.AccountID, "group_id", e.GroupID, "model", e.Model,
+			"kind", e.Kind, "reason", e.Reason, "from", e.From, "to", e.To, "rules", e.Rules, "detail", e.Detail)
+	}
+	p.stats.add(cEventsLogged, int64(granted))
+	p.stats.add(cEventsLogDropped, int64(len(events)-granted))
 }
 
-// keys are the keys with a state or with counters.
-func (e *evaluation) keys() []key {
-	keys := make([]key, 0, len(e.states)+len(e.obs))
-	for k := range e.states {
+// keysOf lists the keys with a state or with counters.
+func keysOf(states map[key]stateRow, obs map[key]map[int64]rules.Counts) []key {
+	keys := make([]key, 0, len(states)+len(obs))
+	for k := range states {
 		keys = append(keys, k)
 	}
-	for k := range e.obs {
-		if _, ok := e.states[k]; !ok {
+	for k := range obs {
+		if _, ok := states[k]; !ok {
 			keys = append(keys, k)
 		}
 	}
@@ -184,16 +210,28 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	}
 	out := rules.Evaluate(in)
 	next := out.State
+	stats := &e.p.stats
+	stats.add(cEvaluations, 1)
 	switch out.Action {
 	case rules.ActionSkip:
+		stats.add(cSkipped, 1)
 		return nil
 	case rules.ActionReset:
 		next = rules.Tombstone(window)
 	}
 	e.evaluated++
 	written, err := e.s.writeState(ctx, k, next, row.gen)
-	if err != nil || !written {
-		return err // lost to a reset: its tombstone stands
+	if err != nil {
+		return err
+	}
+	if !written {
+		stats.add(cLost, 1)
+		return nil // lost to a reset or an overlapping run: theirs stands
+	}
+	if out.Action == rules.ActionReset {
+		stats.add(cBaseResets, 1)
+	} else {
+		stats.add(cApplied, 1)
 	}
 	if out.Action == rules.ActionReset || out.WeightFrom != out.WeightTo {
 		e.changed++
@@ -243,8 +281,10 @@ func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, wei
 }
 
 // resetKeys puts the keys matching f back to their base: their history is
-// dropped and the samples so far are never evaluated again.
-func (p *Plugin) resetKeys(ctx context.Context, f filter, userID int64) (int, error) {
+// dropped and the samples so far are never evaluated again. reason is the
+// events' (manual, status_change), userID the administrator's (0 = none).
+// It reports how many keys were reset.
+func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID int64) (int, error) {
 	s, err := p.store(ctx)
 	if err != nil {
 		return 0, err
@@ -258,18 +298,38 @@ func (p *Plugin) resetKeys(ctx context.Context, f filter, userID int64) (int, er
 	// recorded and broadcast.
 	var errs keyErrors
 	events := make([]eventRow, 0, len(keys))
+	matched := map[int64]bool{}
 	for _, k := range keys {
+		matched[k.AccountID] = true
 		window := rules.LatestClosedWindow(k.AccountID, now, cfg.GroupLayer(k.GroupID).WindowSeconds)
 		if err := s.tombstone(ctx, k, window); err != nil {
 			errs.add(k, err)
 			continue
 		}
-		events = append(events, eventRow{key: k, Event: rules.Event{Kind: rules.EventReset, Reason: rules.ReasonManual},
-			Detail: map[string]any{"user_id": userID}})
+		events = append(events, resetEvent(k, reason, userID))
 	}
-	p.record(ctx, s, events, len(events) > 0)
+	reset := len(events)
+	// An account with nothing to reset still has the reset on record, as in
+	// new-api, with the group and model it was asked for.
+	for _, id := range f.accounts() {
+		if !matched[id] {
+			ev := resetEvent(key{AccountID: id, GroupID: f.GroupID, Model: f.Model}, reason, userID)
+			ev.Detail["matched"] = 0
+			events = append(events, ev)
+		}
+	}
+	p.stats.add(cResets, int64(reset))
+	p.record(ctx, s, events, reset > 0)
 	if errs.n > 0 {
-		return len(events), errs
+		return reset, errs
 	}
-	return len(events), nil
+	return reset, nil
+}
+
+func resetEvent(k key, reason string, userID int64) eventRow {
+	detail := map[string]any{}
+	if userID > 0 {
+		detail["user_id"] = userID
+	}
+	return eventRow{key: k, Event: rules.Event{Kind: rules.EventReset, Reason: reason}, Detail: detail}
 }

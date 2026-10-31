@@ -1,8 +1,16 @@
 /*
  * Dynweight plugin styles (CONTRACTS §23.4). Controls come from @sub2api/ui;
  * only layout lives in these dw- prefixed classes. Colours are the console's
- * semantic variables, which follow the light/dark theme.
+ * semantic variables, which follow the light/dark theme; the bitmap's hit
+ * colour is --dw-hit below.
  */
+
+:root {
+  --dw-hit: 217 119 6; /* amber-600 */
+}
+html.dark {
+  --dw-hit: 251 191 36; /* amber-400 */
+}
 
 .dw-block {
   margin-bottom: 1rem;
@@ -111,6 +119,62 @@
 }
 .dw-w-12 {
   width: 12rem;
+}
+.dw-w-16 {
+  width: 16rem;
+}
+.dw-item-actions {
+  display: flex;
+  gap: 0.125rem;
+}
+/* chevron-down turned into "move up" */
+.dw-up {
+  transform: rotate(180deg);
+}
+
+/* key detail (status row expansion) */
+.dw-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.8125rem;
+}
+.dw-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+.dw-detail-grid dt {
+  color: rgb(var(--fg-muted));
+}
+.dw-detail-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dw-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+.dw-bits {
+  display: inline-flex;
+  gap: 2px;
+}
+.dw-bits i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px dashed rgb(var(--line-strong));
+  border-radius: 2px;
+}
+.dw-bits i.dw-bit-miss {
+  border-style: solid;
+}
+.dw-bits i.dw-bit-hit {
+  border: 1px solid rgb(var(--dw-hit));
+  background: rgb(var(--dw-hit));
 }
 .dw-when,
 .dw-when-members {

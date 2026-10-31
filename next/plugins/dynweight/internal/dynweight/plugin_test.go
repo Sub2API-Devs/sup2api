@@ -3,6 +3,7 @@ package dynweight
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -198,6 +199,16 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	if len(status.Data) != 1 || status.Data[0].AccountName != "main" || status.Data[0].Effective != 70 || !status.Data[0].Rules[0].Fired {
 		t.Fatalf("status %+v", status.Data)
 	}
+	st := status.Data[0]
+	// The rule fired (2 of 3) and cleared its bitmap; the p95 rule saw both
+	// windows healthy, merged back for want of samples; the revival rule has
+	// a weight condition only.
+	r0, r1 := st.Rules[0], st.Rules[1]
+	if st.State != "degrading" || st.WeightMin != 0 || st.NextEvalAt <= st.EvalWindow || !st.ErrorEvaluable || st.TTFBSamples != 5 ||
+		r0.Bitmap != "" || r0.Periods != 3 || r0.HitPeriods != 2 || r0.Scope != rules.ScopeAll ||
+		r1.Bitmap != "00" || r1.Samples != 10 || !st.Rules[4].NoSamples {
+		t.Fatalf("status detail %+v", st)
+	}
 	var weights struct {
 		Data map[string]accountWeight `json:"data"`
 	}
@@ -206,9 +217,87 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 		t.Fatalf("weights %v", weights.Data)
 	}
 
-	e.decode(e.h.Do("POST", "/reset", nil, map[string]any{"account_id": testAccount}), http.StatusOK, nil)
+	// A batch reset: account 99 has nothing to reset and still gets its event.
+	var reset struct {
+		Data map[string]int `json:"data"`
+	}
+	e.decode(e.h.Do("POST", "/reset", nil, map[string]any{"account_ids": []int64{testAccount, 99}, "model": testModel}), http.StatusOK, &reset)
+	if w := e.rank(100); w != 0 || reset.Data["reset"] != 1 {
+		t.Fatalf("weight after reset %d, %v reset", w, reset.Data)
+	}
+	e.decode(e.h.Do("GET", "/events", map[string]string{"kind": rules.EventReset}, nil), http.StatusOK, &events)
+	if len(events.Data) != 2 || events.Data[0].AccountID != 99 || events.Data[0].Detail["matched"] != float64(0) ||
+		events.Data[1].Reason != rules.ReasonManual || events.Data[1].AccountName != "main" {
+		t.Fatalf("reset events %+v", events.Data)
+	}
+}
+
+// An account that becomes active again starts over from its base; one going
+// into a cooldown keeps its degraded weight.
+func TestStatusChangeResets(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	statusEvent := func(id int64, status string) *pluginv1.Event {
+		return &pluginv1.Event{Id: id, Type: EventAccountStatusChanged,
+			PayloadJson: fmt.Sprintf(`{"account_id":%d,"status":%q,"reason":"x"}`, testAccount, status)}
+	}
+	resp, err := e.p.OnEvents(context.Background(), &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{
+		statusEvent(1, "cooldown"), {Id: 2, Type: "account.updated", PayloadJson: `{"account_id":7}`}}})
+	if err != nil || resp.GetAckedThroughId() != 2 {
+		t.Fatalf("ack %v, %v", resp, err)
+	}
+	if w := e.rank(100); w != 70 {
+		t.Fatalf("weight after a cooldown %d", w)
+	}
+	if _, err := e.p.OnEvents(context.Background(), &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{statusEvent(3, "active")}}); err != nil {
+		t.Fatal(err)
+	}
 	if w := e.rank(100); w != 0 {
-		t.Fatalf("weight after reset %d", w)
+		t.Fatalf("weight after re-activation %d", w)
+	}
+	var events struct {
+		Data []eventItem `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/events", map[string]string{"kind": rules.EventReset}, nil), http.StatusOK, &events)
+	if len(events.Data) != 1 || events.Data[0].Reason != rules.ReasonStatusChange || events.Data[0].Model != testModel {
+		t.Fatalf("events %+v", events.Data)
+	}
+}
+
+// A key with traffic but no evaluation yet is listed with its open window.
+func TestStatusBeforeFirstEvaluation(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	e.rank(100)
+	at := e.clock.Load() * 1000
+	if _, err := e.p.OnObservations(context.Background(), &pluginv1.ObservationBatch{Observations: []*pluginv1.RequestObservation{
+		{Phase: observation.AttemptFinished, AccountId: testAccount, GroupId: testGroup, Model: testModel, Success: true, OccurredAtUnixMs: at},
+		{Phase: observation.AttemptFinished, AccountId: testAccount, GroupId: testGroup, Model: testModel, Stream: true, OccurredAtUnixMs: at, UpstreamStatusCode: 500},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	e.p.flush(context.Background())
+	var status struct {
+		Data []keyStatus `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/status", nil, nil), http.StatusOK, &status)
+	if len(status.Data) != 1 {
+		t.Fatalf("status %+v", status.Data)
+	}
+	st := status.Data[0]
+	if st.EvalWindow != 0 || st.Base != 100 || st.Effective != 100 || st.State != "normal" || len(st.Rules) != 5 ||
+		st.Current.Total != 2 || st.Current.Fail != 1 || st.Current.StreamTotal != 1 || st.Current.StreamFail != 1 {
+		t.Fatalf("status %+v", st)
+	}
+	var stats struct {
+		Data map[string]any `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/stats", nil, nil), http.StatusOK, &stats)
+	if stats.Data["observed_total"] != float64(2) || stats.Data["flushed_samples_total"] != float64(2) || stats.Data["enabled"] != true {
+		t.Fatalf("stats %v", stats.Data)
 	}
 }
 
@@ -250,7 +339,18 @@ func TestConfigRoutes(t *testing.T) {
 	c.Notify.Recipients = []string{"ops@example.com"}
 	c.WindowSeconds = 1
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
+	e.decode(e.h.Do("POST", "/config/validate", nil, configBody{Config: c}), http.StatusBadRequest, nil)
 	c.WindowSeconds = 30
+	// Validating saves nothing and reports the warnings a save would.
+	noClimb := c
+	noClimb.Strategies = c.Strategies[:3]
+	var checked struct {
+		Data configBody `json:"data"`
+	}
+	e.decode(e.h.Do("POST", "/config/validate", nil, configBody{Config: noClimb}), http.StatusOK, &checked)
+	if len(checked.Data.Warnings) != 1 || e.p.cfg.Load().version != 0 {
+		t.Fatalf("validate: %+v", checked.Data.Warnings)
+	}
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusOK, nil)
 	// A second save from the same read is refused.
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusConflict, nil)
@@ -258,6 +358,42 @@ func TestConfigRoutes(t *testing.T) {
 		t.Fatalf("config in force: %d %d", got.version, got.WindowSeconds)
 	}
 	e.decode(e.h.Do("POST", "/reset", nil, map[string]any{}), http.StatusBadRequest, nil)
+}
+
+// A stored window below the minimum (0.1.0 allowed 3) still loads, raised
+// to it with a warning; a new one below it is refused.
+func TestStoredShortWindowLoads(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.p.store(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := rules.DefaultConfig()
+	c.Enabled, c.WindowSeconds = true, 3
+	g := rules.DefaultLayer()
+	g.Enabled, g.WindowSeconds = true, 5
+	c.Groups = map[int64]*rules.Layer{testGroup: &g}
+	raw, _ := json.Marshal(c)
+	if _, err := s.db.Exec(ctx, `INSERT INTO config (id, doc, version) VALUES (1, $1, 1)`, raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.p.reloadConfig(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.p.cfg.Load(); got.version != 1 || !got.Enabled || got.WindowSeconds != rules.MinWindowSeconds || got.GroupLayer(testGroup).WindowSeconds != rules.MinWindowSeconds {
+		t.Fatalf("config in force: v%d enabled %v window %d", got.version, got.Enabled, got.WindowSeconds)
+	}
+	var current struct {
+		Data configBody `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &current)
+	if current.Data.Config.WindowSeconds != rules.MinWindowSeconds || len(current.Data.Warnings) != 2 {
+		t.Fatalf("GET /config: window %d, warnings %v", current.Data.Config.WindowSeconds, current.Data.Warnings)
+	}
+	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c, Version: 1}), http.StatusBadRequest, nil)
+	e.decode(e.h.Do("POST", "/config/validate", nil, configBody{Config: c, Version: 1}), http.StatusBadRequest, nil)
+	e.decode(e.h.Do("PUT", "/config", nil, current.Data), http.StatusOK, nil)
 }
 
 // Without the optional notify.send grant there are no channels to pick and
@@ -328,7 +464,7 @@ func TestResetContinuesPastFailures(t *testing.T) {
 			rules.Sample{TTFBMs: -1, LatencyMs: -1}, e.p.cfg.Load().GroupLayer(testGroup))
 	}
 	e.p.flush(ctx)
-	n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, 1)
+	n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, rules.ReasonManual, 1)
 	if n != 1 || err == nil {
 		t.Fatalf("reset %d, error %v", n, err)
 	}

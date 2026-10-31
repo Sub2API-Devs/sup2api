@@ -34,8 +34,8 @@ const (
 )
 
 // Plugin implements pluginsdk.Observer, pluginsdk.AccountRanker,
-// pluginsdk.JobRunner, pluginsdk.HTTP, pluginsdk.BroadcastHandler and the
-// lifecycle interfaces.
+// pluginsdk.JobRunner, pluginsdk.EventHandler, pluginsdk.HTTP,
+// pluginsdk.BroadcastHandler and the lifecycle interfaces.
 type Plugin struct {
 	*pluginsdk.Router
 	*pluginsdk.BroadcastMux
@@ -48,6 +48,8 @@ type Plugin struct {
 	weights atomic.Pointer[map[key]weight]
 	obs     *aggregator
 	bases   *baseTracker
+	stats   counters
+	logged  eventLog
 	// reload serializes the configuration and weight reloads; flushing
 	// the flushes of the loop and the evaluation job.
 	reload   sync.Mutex
@@ -158,7 +160,14 @@ func (p *Plugin) flush(ctx context.Context) {
 	if deltas := p.obs.take(); len(deltas) > 0 {
 		if err := s.addObs(ctx, deltas); err != nil {
 			p.obs.restore(deltas)
+			p.stats.add(cFlushFailures, 1)
 			p.log.Warn("dynweight: write counters failed, kept for the next flush", "error", err.Error(), "keys", len(deltas))
+		} else {
+			p.stats.add(cFlushes, 1)
+			p.stats.add(cFlushedKeys, int64(len(deltas)))
+			for _, d := range deltas {
+				p.stats.add(cFlushedSamples, d.counts.Total)
+			}
 		}
 	}
 	if changed := p.bases.take(); len(changed) > 0 {
@@ -192,9 +201,12 @@ func (p *Plugin) reloadConfig(ctx context.Context) error {
 	}
 	p.reload.Lock()
 	defer p.reload.Unlock()
-	c, version, err := s.loadConfig(ctx)
+	c, version, warnings, err := s.loadConfig(ctx)
 	if err != nil {
 		return err
+	}
+	for _, w := range warnings {
+		p.log.Warn("dynweight: stored configuration adjusted", "warning", w)
 	}
 	// A stored configuration was normalized when saved; this only fills
 	// what an older version may have left out.

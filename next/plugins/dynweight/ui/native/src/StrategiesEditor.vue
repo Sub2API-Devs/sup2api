@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SButton, SField, SInput, SSelect, SSwitch } from '@sub2api/ui'
+import ItemActions from './ItemActions.vue'
 import WhenEditor from './WhenEditor.vue'
-import { enumOptions, useDwHost, type Action, type ActionType, type Strategy } from './host'
+import { duplicateItem, enumOptions, moveItem, useDwHost, type Action, type ActionType, type Strategy } from './host'
 
 // Strategies: when the referenced rules fire, degrade or climb the weight
-// and / or clear part of the sticky sessions on the account.
+// and / or clear part of the sticky sessions on the account. Order matters:
+// the weight actions of one direction apply in turn, each on the result of
+// the one before.
 const props = defineProps<{ rules: string[] }>()
 const strategies = defineModel<Strategy[]>({ required: true })
 const t = useDwHost().t
@@ -35,6 +38,8 @@ function addAction(s: Strategy) {
   s.actions.push(a)
 }
 
+const copyName = (name: string, n: number) => t('item.copyName', { name, n })
+
 function add() {
   strategies.value.push({
     name: t('strategies.newName', { n: strategies.value.length + 1 }),
@@ -57,7 +62,13 @@ function add() {
         <SField :label="t('enabled')">
           <SSwitch :model-value="s.enabled !== false" @update:model-value="s.enabled = $event ? undefined : false" />
         </SField>
-        <SButton class="dw-end" size="sm" variant="ghost" icon="trash" icon-only :aria-label="t('remove')" @click="strategies.splice(i, 1)" />
+        <ItemActions
+          :index="i"
+          :count="strategies.length"
+          @move="moveItem(strategies, i, $event)"
+          @duplicate="duplicateItem(strategies, i, copyName)"
+          @remove="strategies.splice(i, 1)"
+        />
       </div>
       <SField :label="t('strategies.when')">
         <WhenEditor v-model="s.when" :rules="rules" />

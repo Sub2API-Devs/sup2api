@@ -92,6 +92,7 @@ export interface Config extends Layer {
   groups: Record<string, Layer> | null
   accounts: Record<string, AccountOverride> | null
   notify: Notify
+  log_events: boolean
 }
 
 export interface ConfigBody {
@@ -111,6 +112,8 @@ export interface Channel {
 export const fetchConfig = () => api().get<ConfigBody>('/config')
 export const fetchDefaults = () => api().get<Layer>('/defaults')
 export const saveConfig = (body: { config: Config; version: number }) => api().put<ConfigBody>('/config', body)
+/** Checks a configuration as saving would, without saving: the same error, else its warnings. */
+export const validateConfig = (body: { config: Config; version: number }) => api().post<ConfigBody>('/config/validate', body)
 
 export async function fetchChannels(): Promise<Channel[]> {
   const r = await api().get<Channel[] | null>('/channels')
@@ -139,10 +142,35 @@ export const filterQuery = (f: Filter): Filter => ({ account_id: f.account_id.tr
 
 export interface RuleResult {
   name: string
+  scope: 'all' | 'stream' | 'non_stream'
+  periods: number
+  hit_periods: number
   hit: boolean
   fired: boolean
+  /** Hits of the last windows, '1' = hit, newest last; cleared when the rule fires. */
+  bitmap: string
   samples: number
   lookback: number
+  /** Weight conditions only: no samples to report. */
+  no_samples: boolean
+}
+
+export interface ThresholdCount {
+  ms: number
+  count: number
+}
+
+export interface CurrentWindow {
+  window_start: number
+  elapsed_seconds: number
+  total: number
+  fail: number
+  stream_total: number
+  stream_fail: number
+  ttfb_samples: number
+  latency_samples: number
+  thresholds: ThresholdCount[]
+  latency_thresholds: ThresholdCount[]
 }
 
 /** A (account, group, model) key; 0 / '' widen a reset to every value. */
@@ -156,23 +184,36 @@ export interface KeyStatus extends Key {
   account_name: string
   base: number
   effective: number
+  weight_min: number
+  state: 'normal' | 'degrading' | 'climbing'
   adjusting: boolean
+  group_configured: boolean
+  no_climb_strategy: boolean
   reset: boolean
   verdict: '' | 'bad' | 'good' | 'neutral'
   last_change: string
   changed_at: number
+  next_eval_at: number
+  /** The last evaluated window (0 = none yet), merged back over `lookback` windows. */
   eval_window: number
   total: number
   fail: number
   lookback: number
+  error_evaluable: boolean
+  ttfb_samples: number
+  latency_samples: number
+  thresholds: ThresholdCount[]
+  latency_thresholds: ThresholdCount[]
   recent: { windows: number; total: number; fail: number }
   rules: RuleResult[]
+  current: CurrentWindow
 }
 
 export interface WeightEvent {
   id: number
   created_at: string
   account_id: number
+  account_name: string
   group_id: number
   model: string
   kind: string
@@ -183,8 +224,36 @@ export interface WeightEvent {
   detail: Record<string, unknown> | null
 }
 
-/** Puts the keys of an account and/or group (and model) back to their base. */
-export const resetWeights = ({ account_id, group_id, model }: Key) => api().post<{ reset: number }>('/reset', { account_id, group_id, model })
+/** Puts the keys of accounts and/or a group (and model) back to their base. */
+export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<{ reset: number }>('/reset', k)
+
+/** This node's runtime counters (GET /stats); see CONTRACTS §73.5. */
+export type RuntimeStats = Record<string, number | boolean>
+export const fetchStats = () => api().get<RuntimeStats>('/stats')
+
+// ------------------------------------------------------------------ core catalog
+
+export interface Named {
+  id: number
+  name: string
+}
+
+/** Every item of a core list (host.api, the caller's own permissions), at most
+ * `maxPages` pages; [] when it is not readable. */
+export async function fetchAll(path: string, maxPages = 25): Promise<Named[]> {
+  const PAGE = 200
+  const out: Named[] = []
+  try {
+    for (let page = 1; page <= maxPages; page++) {
+      const r = await useDwHost().api.list<Named>(path, { page, page_size: PAGE })
+      out.push(...r.items.map(({ id, name }) => ({ id, name })))
+      if (r.items.length < PAGE || out.length >= (r.page.total ?? 0)) break
+    }
+    return out
+  } catch {
+    return []
+  }
+}
 
 // ------------------------------------------------------------------ account list slot
 
@@ -266,3 +335,24 @@ export const eventKinds = ['weight_down', 'weight_up_start', 'weight_restored', 
 
 /** Deep copy of a JSON value. */
 export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
+
+/** Moves list[i] by `by` places (order is meaningful for rules and strategies). */
+export function moveItem<T>(list: T[], i: number, by: number) {
+  const j = i + by
+  if (j < 0 || j >= list.length) return
+  list.splice(j, 0, ...list.splice(i, 1))
+}
+
+/** Inserts a copy of a named list[i] after it, under a name not taken yet. */
+export function duplicateItem<T extends { name: string }>(list: T[], i: number, copyName: (name: string, n: number) => string) {
+  const taken = new Set(list.map((x) => x.name))
+  let n = 1
+  while (taken.has(copyName(list[i].name, n))) n++
+  list.splice(i + 1, 0, { ...clone(list[i]), name: copyName(list[i].name, n) })
+}
+
+/** Success rate in percent with one decimal, null without samples. */
+export const successRate = (total: number, fail: number) => (total > 0 ? Math.round(((total - fail) / total) * 1000) / 10 : null)
+
+/** "10s" / "1.5s" / "800ms" for a threshold in ms. */
+export const formatMs = (ms: number) => (ms >= 1000 ? `${Math.round(ms / 100) / 10}s` : `${ms}ms`)

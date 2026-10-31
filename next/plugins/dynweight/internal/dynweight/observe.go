@@ -34,6 +34,7 @@ func (p *Plugin) OnObservations(_ context.Context, in *pluginv1.ObservationBatch
 		layer := cfg.GroupLayer(k.GroupID)
 		window := rules.WindowStart(k.AccountID, o.GetOccurredAtUnixMs()/1000, layer.WindowSeconds)
 		p.obs.add(obsWindow{key: k, window: window}, sample, layer)
+		p.stats.add(cObserved, 1)
 	}
 	return &pluginv1.ObservationResult{}, nil
 }
