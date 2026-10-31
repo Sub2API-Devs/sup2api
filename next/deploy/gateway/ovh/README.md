@@ -14,6 +14,12 @@
 - **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
 - 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
 
+2026-11-01 核心 **0.1.226**（`a4f711c65`，manifest `a41f8457…d8e1`，计划 `a7097a74309551142c32c84b3c43df34` completed/13，51 秒，北京时间 05:28，无迁移、schema 不变）：
+- 控制台出口文案改为"共享出口网关（Xray）"（运行时镜像角色、上传确认、代理切换提示、`egress_not_ready`）。
+- 内置插件里的 ccgateway 从 0.1.111 换成 0.1.118 包（同一签名密钥；两节点已是 0.1.118，只影响新装机器）。payload 附带的 `sub2api-plugin` 是从 0.1.224 复制来的旧版，`verify` 不认识新清单字段 `deletion`；包本身已在构建时用新工具验签。
+- 两节点 `sub2api version` = 0.1.226，readyz 200，两边都提供新文案。升级后 ovh 发起的控制台测试 21、51–59 为 200；clicodeplus 节点同期真实客户端流量 200（插件 0.1.118 下 76 次）。插件发布时控制器自升级的几秒里 52 号有 1 次 503 `runtime not ready`，属控制器重启的正常窗口。
+- 脚本 `stage/0.1.226`，备份 `backups/core-0.1.226`（`9a931f6c…6cc7`）。
+
 2026-11-01 插件 **ccgateway 0.1.118**（`7a72fd342`，包 `7bc2c1fc…d7c`，rollout 214，北京时间 04:53，核心不变）：共享 Xray 成为唯一出口。
 - 每账号 sing-box 出口、迁移/回迁接口和 `migrate_egress.py` 已删除；插件包仍是四个镜像，`egress` 角色换成 Xray 网关镜像（`ccgateway-egress:0.1.118`，Xray 26.3.27，36 MB）。控制器 `7a72fd3424e9`；`CCG_XRAY_IMAGE` 仍固定为现有网关的镜像 `sha256:92305b5b…`，共享网关 `ccg-shared-egress` 没有重建（Up 2 weeks）。
 - 新控制器启动后自动清掉 10 个账号 egress 容器、19 张账号 uplink 网络和账号目录里的 `sing-box.json`/`firewall.nft`；网关自己的 `ccg-d0000000000000000-xray-uplink` 保留。
