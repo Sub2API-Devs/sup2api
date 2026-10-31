@@ -2,10 +2,12 @@ export default {
   sections: {
     overview: 'Overview',
     gateway: 'Gateway',
+    security: 'Security',
     finance: 'Finance',
+    users: 'Users & access',
+    plugins: 'Plugins',
     system: 'System',
-    me: 'My account',
-    plugins: 'Plugins'
+    me: 'My account'
   },
   items: {
     dashboard: 'Dashboard',
@@ -26,6 +28,14 @@ export default {
     myApiKeys: 'API keys',
     myUsage: 'Usage records'
   },
+  crumbs: {
+    pluginDetail: 'Plugin details',
+    pluginRollout: 'Rollout',
+    pluginConsent: 'Review and install',
+    pluginSettings: 'Plugin settings'
+  },
+  breadcrumb: 'Breadcrumb',
+  menuRetry: 'Menu failed to load. Retry',
   balance: 'Balance',
   changePassword: 'Change password',
   logout: 'Sign out',

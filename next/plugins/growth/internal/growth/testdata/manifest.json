@@ -58,9 +58,6 @@
   ],
 
   "ui": {
-    "sections": [
-      { "id": "growth", "label": { "en": "Growth", "zh": "增长" }, "order": 250 }
-    ],
     "menus": [
       {
         "id": "my-referral",
@@ -82,7 +79,7 @@
       },
       {
         "id": "growth-admin",
-        "section": "growth",
+        "section": "finance",
         "label": { "en": "Growth Dashboard", "zh": "增长管理" },
         "icon": "chart",
         "page": "admin",

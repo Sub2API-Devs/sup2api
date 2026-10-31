@@ -1,5 +1,13 @@
 export default {
   description: '全局的计费、网关与调度设置。',
+  navLabel: '设置分类',
+  groups: {
+    gateway: '网关',
+    billing: '计费',
+    notifications: '通知',
+    system: '系统',
+    plugins: '插件设置'
+  },
   tabs: {
     notifications: '通知',
     environment: '环境变量',

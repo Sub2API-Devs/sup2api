@@ -250,6 +250,8 @@ on('GET', '/me/menus', (req) => {
   return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => !MENU_PERMS[i.path] || hasPerm(who, MENU_PERMS[i.path])) })).filter((s) => s.items.length)
 })
 
+// Mirrors server/internal/authz/menus.go (sections and their order) with the
+// bundled plugins' menus placed where their manifests put them.
 const MENUS = [
   { section: 'overview', items: [{ id: 'dashboard', label: { en: 'Dashboard', zh: '仪表盘' }, icon: 'dashboard', path: '/dashboard' }] },
   {
@@ -257,21 +259,36 @@ const MENUS = [
     items: [
       { id: 'groups', label: { en: 'Groups', zh: '分组' }, icon: 'group', path: '/groups' },
       { id: 'accounts', label: { en: 'Accounts', zh: '账号' }, icon: 'account', path: '/accounts' },
+      { id: 'platforms', label: { en: 'Platforms', zh: '平台' }, icon: 'globe', path: '/platforms' },
       { id: 'proxies', label: { en: 'Proxies', zh: '代理' }, icon: 'proxy', path: '/proxies' },
       { id: 'prices', label: { en: 'Model prices', zh: '模型价格' }, icon: 'price', path: '/prices' },
-      { id: 'usage', label: { en: 'Usage logs', zh: '使用记录' }, icon: 'usage', path: '/usage' },
-      { id: 'sticky', label: { en: 'Sticky sessions', zh: '粘性会话' }, icon: 'sticky', path: '/sticky' }
+      { id: 'usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/usage' },
+      { id: 'anthropic:anthropic-models', label: { en: 'Model catalog', zh: '模型目录' }, icon: 'list', path: '/p/anthropic/models', plugin_key: 'anthropic' }
     ]
+  },
+  {
+    section: 'security',
+    items: [{ id: 'guard:guard', label: { en: 'Guard', zh: '请求守卫' }, icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' }]
   },
   { section: 'finance', items: [{ id: 'ledger', label: { en: 'Balance ledger', zh: '余额流水' }, icon: 'ledger', path: '/ledger' }] },
   {
-    section: 'system',
+    section: 'users',
     items: [
       { id: 'users', label: { en: 'Users', zh: '用户' }, icon: 'user', path: '/users' },
-      { id: 'roles', label: { en: 'Roles & permissions', zh: '角色与权限' }, icon: 'role', path: '/roles' },
-      { id: 'plugins', label: { en: 'Plugins', zh: '插件' }, icon: 'plugin', path: '/plugins' },
+      { id: 'roles', label: { en: 'Roles & permissions', zh: '角色与权限' }, icon: 'role', path: '/roles' }
+    ]
+  },
+  {
+    section: 'plugins',
+    items: [
+      { id: 'plugins', label: { en: 'Installed plugins', zh: '已安装插件' }, icon: 'plugin', path: '/plugins' },
       { id: 'market', label: { en: 'Plugin market', zh: '插件市场' }, icon: 'market', path: '/market' },
-      { id: 'publishers', label: { en: 'Publishers', zh: '发布者' }, icon: 'publisher', path: '/publishers' },
+      { id: 'publishers', label: { en: 'Publishers', zh: '发布者' }, icon: 'publisher', path: '/publishers' }
+    ]
+  },
+  {
+    section: 'system',
+    items: [
       { id: 'nodes', label: { en: 'Cluster nodes', zh: '集群节点' }, icon: 'node', path: '/nodes' },
       { id: 'upgrades', label: { en: 'Core updates', zh: '核心升级' }, icon: 'refresh', path: '/system/upgrades' },
       { id: 'audit', label: { en: 'Audit logs', zh: '审计日志' }, icon: 'clock', path: '/system/audit' },
@@ -283,13 +300,6 @@ const MENUS = [
     items: [
       { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
       { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' }
-    ]
-  },
-  {
-    section: 'plugins',
-    items: [
-      { id: 'anthropic.models', label: { en: 'Model catalog', zh: '模型目录' }, icon: 'puzzle', path: '/p/anthropic/models', plugin_key: 'anthropic' },
-      { id: 'guard.guard', label: { en: 'Request guard', zh: '请求守卫' }, icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' }
     ]
   }
 ]

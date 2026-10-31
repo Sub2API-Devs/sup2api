@@ -17,13 +17,15 @@ import SettingsTab from './detail/SettingsTab.vue'
 // what the detail page's settings tab shows: the core settings view of
 // ccgateway, else the plugin's schema form; native settings (§75.5) send the
 // user to the plugin page that edits them.
+// The settings page embeds it with pluginKey (its "Plugin settings" group).
 const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
+const props = defineProps<{ pluginKey?: string }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const plugins = usePluginStore()
-const key = computed(() => String(route.params.key))
+const key = computed(() => props.pluginKey || String(route.params.key))
 const name = computed(() => lt(plugins.plugin(key.value)?.name) || key.value)
 const coreSettings = computed(() => hasCoreSettings(key.value, (p) => auth.has(p)))
 const settings = ref<PluginSettings | null>(null)

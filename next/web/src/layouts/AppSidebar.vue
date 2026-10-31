@@ -31,12 +31,24 @@ function iconContext(i: NavItem): string {
 }
 
 // A user without any operator section gets one flat list, as in sub2api:
-// Dashboard / API keys / Usage records without the "My account" header.
-// Plugin sections keep theirs.
-const OPERATOR_SECTIONS = ['gateway', 'finance', 'system']
+// Dashboard / API keys / Usage records without the "My account" header, my
+// account right after the dashboard (the server orders it last, after the
+// plugin sections an operator scrolls past). Plugin sections keep theirs.
+const OPERATOR_SECTIONS = ['gateway', 'security', 'finance', 'users', 'system']
 const flat = computed(() => !app.menus.some((s) => OPERATOR_SECTIONS.includes(s.key)))
+const sections = computed<NavSection[]>(() => {
+  if (!flat.value) return app.menus
+  const me = app.menus.filter((s) => s.key === 'me')
+  const rest = app.menus.filter((s) => s.key !== 'me')
+  const at = rest.findIndex((s) => s.key === 'overview') + 1
+  return [...rest.slice(0, at), ...me, ...rest.slice(at)]
+})
 function showHeader(s: NavSection): boolean {
   return !app.sidebarCollapsed && s.key !== 'overview' && !(flat.value && s.key === 'me')
+}
+/** Collapsed, the section headers are gone; a rule keeps the groups apart. */
+function showDivider(s: NavSection, index: number): boolean {
+  return app.sidebarCollapsed && index > 0 && !(flat.value && (s.key === 'me' || sections.value[index - 1]?.key === 'overview'))
 }
 </script>
 
@@ -59,7 +71,8 @@ function showHeader(s: NavSection): boolean {
       <div v-if="!app.menusLoaded" class="space-y-2 px-2">
         <SSkeleton v-for="i in 8" :key="i" height="2rem" />
       </div>
-      <div v-for="s in app.menus" :key="s.key" :class="flat && s.key === 'overview' ? 'mb-0.5' : 'mb-3'">
+      <div v-for="(s, index) in sections" :key="s.key" :class="flat && s.key === 'overview' ? 'mb-0.5' : 'mb-3'">
+        <hr v-if="showDivider(s, index)" class="mx-2 mb-3 border-line" aria-hidden="true" />
         <div
           v-if="showHeader(s)"
           class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle"
@@ -83,6 +96,17 @@ function showHeader(s: NavSection): boolean {
           <span v-if="!app.sidebarCollapsed" class="truncate">{{ itemLabel(i) }}</span>
         </RouterLink>
       </div>
+      <button
+        v-if="app.menusError"
+        type="button"
+        class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-danger-600 hover:bg-surface-2"
+        :title="app.sidebarCollapsed ? t('nav.menuRetry') : undefined"
+        data-testid="menu-retry"
+        @click="app.loadMenus()"
+      >
+        <SIcon name="refresh" class="h-5 w-5 shrink-0" />
+        <span v-if="!app.sidebarCollapsed" class="truncate text-left">{{ t('nav.menuRetry') }}</span>
+      </button>
     </nav>
     <button
       type="button"

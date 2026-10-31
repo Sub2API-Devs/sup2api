@@ -108,7 +108,7 @@
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
 | POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；吊销该 refresh token |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
-| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/finance/system/me/plugins` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
+| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
 
 ### 5.2 用户、角色、权限（A）
@@ -691,7 +691,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `name` | `{en, zh}` |
 | `asset_base` | `/plugin-ui/{key}/{version_hash}`，拼接包内相对路径加载资源 |
 | `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
-| `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?}}`；只被无权限菜单引用的页面被去掉 |
+| `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?, search?, create?}}`；只被无权限菜单引用的页面被去掉；`create` 的权限调用者没有时，去掉该链接以及只靠它到达的表单页（§22.1） |
 | `slots` | `[{slot, component, permission?}]`，按权限过滤 |
 | `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串；加载方式与插件可用的共享库见 §23 |
 | `trust` | |
@@ -1128,12 +1128,35 @@ type ProxyResolver interface {
 
 插件菜单原来只能进侧栏最底下的"插件"区。现在 manifest `ui` 支持：
 
-- `ui.sections: [{id, label:{en,zh}, order?}]`：插件声明自己的侧栏区。`id` 用 manifest 的 id 规则，不能是核心区的 id（`overview` `gateway` `finance` `system` `me` `plugins`）；`label` 必填；`order` 决定与核心区的相对位置（核心区固定：overview 100、gateway 200、finance 300、system 400、me 500、plugins 600；不写 `order` 排在 plugins 同级 600）。
+- `ui.sections: [{id, label:{en,zh}, order?}]`：插件声明自己的侧栏区。`id` 用 manifest 的 id 规则，不能是核心区的 id（`overview` `gateway` `security` `finance` `users` `system` `me` `plugins`）；`label` 必填；`order` 决定与核心区的相对位置（核心区固定：overview 100、gateway 200、security 300、finance 400、users 500、plugins 600、system 700、me 800；不写 `order` 排在 650，即"插件"区之后、"系统"之前）。
 - `ui.menus[].section` 可以是：`plugins`（共享的"插件"区，原行为）、核心区 id（菜单项**追加**到该核心区末尾，按 `order` 排）、或 `ui.sections` 里声明的 id。其他值校验失败 `ui.menus[i].section / invalid`。
 
-`GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值（前端回退菜单只在服务端菜单不可用时使用，仍把插件项放"插件"区）。
+`GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值。控制台不再有客户端回退菜单：`GET /me/menus` 失败时侧栏只显示仪表盘和"重试"。
 
-内置 moderation（0.1.1）声明 `sections: [{id:"safety", label:{en:"Safety", zh:"安全"}, order: 350}]`，"提示词审核"菜单放在这个区，显示在"财务"和"系统"之间。e2e AC22 断言该区的位置和内容。
+内置 moderation 0.1.1–0.6.1 声明过 `sections: [{id:"safety", …, order: 350}]`；`safety` 仍是合法的插件区 id，已安装的旧版本照常显示。
+
+### 22.1 菜单分组调整（2026-10-31，用户要求）
+
+原"系统"区有 10 项、"财务"区没有核心项，插件菜单各放各的。调整为：
+
+| 区 | order | 核心项 | 内置插件菜单 |
+| --- | --- | --- | --- |
+| overview 概览 | 100 | 仪表盘 | |
+| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.8）、动态权重 |
+| security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
+| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
+| users 用户与权限 | 500 | 用户、角色与权限 | |
+| plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
+| system 系统 | 700 | 集群节点、核心升级、审计日志、设置 | |
+| me 我的账户 | 800 | API 密钥、使用记录 | 我的邀请、每日签到 |
+
+- 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
+- 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
+- 用到 `security`、`users` 的插件需要核心 0.1.224 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
+
+**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.224。
+
+**控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
 
 ## 23. 原生插件 UI 的共享库：`@sub2api/ui`、`@sub2api/host`、`@sub2api/vite-preset`（2026-09-27，用户要求）
 

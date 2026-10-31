@@ -196,6 +196,77 @@ func TestMenuIconMustBeKnown(t *testing.T) {
 	}
 }
 
+// Menus join any core sidebar section by id; those ids are reserved, so a
+// plugin cannot declare its own section with one. "safety" stays free: the
+// moderation plugin declared it before the core grew "security".
+func TestMenuSections(t *testing.T) {
+	for _, sec := range []string{"plugins", "overview", "gateway", "security", "finance", "users", "system", "me"} {
+		m := uiManifest()
+		m.UI.Menus[0].Section = sec
+		if c := uiCodes(m); len(c) > 0 {
+			t.Fatalf("core section %q must be accepted: %v", sec, c)
+		}
+	}
+	m := uiManifest()
+	m.UI.Menus[0].Section = "nowhere"
+	if c := uiCodes(m); c["ui.menus[0].section"] != "invalid" {
+		t.Fatalf("an undeclared section must be rejected: %v", c)
+	}
+	for _, id := range []string{"security", "users", "plugins"} {
+		m := uiManifest()
+		m.UI.Sections = []manifest.MenuSection{{ID: id, Label: manifest.LocalizedText{"en": "Mine"}}}
+		if c := uiCodes(m); c["ui.sections[0].id"] != "invalid" {
+			t.Fatalf("section id %q is reserved for the core: %v", id, c)
+		}
+	}
+	m = uiManifest()
+	m.UI.Sections = []manifest.MenuSection{{ID: "safety", Label: manifest.LocalizedText{"en": "Safety"}, Order: 350}}
+	m.UI.Menus[0].Section = "safety"
+	if c := uiCodes(m); len(c) > 0 {
+		t.Fatalf("a plugin's own section must stay valid: %v", c)
+	}
+}
+
+// A table page links its create form with a "New" button instead of a
+// sidebar entry; the link must name a form page and a declared permission.
+func TestPageCreateLink(t *testing.T) {
+	withForm := func() *manifest.Manifest {
+		m := uiManifest()
+		m.Routes = append(m.Routes, manifest.Route{Method: "POST", Path: "/assets", Scope: "admin", Permission: "assets:read"})
+		m.UI.Pages["new_asset"] = manifest.Page{Type: "form", Title: manifest.LocalizedText{"en": "New"}, Schema: "forms/new.json", Submit: "POST /assets"}
+		return m
+	}
+	files := map[string][]byte{"forms/new.json": []byte("{}")}
+	check := func(m *manifest.Manifest) map[string]string {
+		return codes(Validate(m, files, ValidateOptions{Tooling: true}))
+	}
+	set := func(m *manifest.Manifest, link *manifest.PageLink) {
+		pg := m.UI.Pages["assets"]
+		pg.Create = link
+		m.UI.Pages["assets"] = pg
+	}
+	m := withForm()
+	if c := check(m); len(c) > 0 {
+		t.Fatalf("fixture with a form page must validate: %v", c)
+	}
+	set(m, &manifest.PageLink{Page: "new_asset", Permission: "assets:read"})
+	if c := check(m); len(c) > 0 {
+		t.Fatalf("a valid create link was rejected: %v", c)
+	}
+	set(m, &manifest.PageLink{Page: "missing"})
+	if c := check(m); c["ui.pages.assets.create.page"] != "unknown" {
+		t.Fatalf("an unknown create page must be rejected: %v", c)
+	}
+	set(m, &manifest.PageLink{Page: "assets"})
+	if c := check(m); c["ui.pages.assets.create.page"] != "invalid" {
+		t.Fatalf("a create link must open a form page: %v", c)
+	}
+	set(m, &manifest.PageLink{Page: "new_asset", Permission: "assets:write"})
+	if c := check(m); c["ui.pages.assets.create.permission"] != "unknown" {
+		t.Fatalf("an undeclared create permission must be rejected: %v", c)
+	}
+}
+
 // A page's source/submit must name a route the manifest declares. Before this
 // rule the console silently rendered an empty table (parseRouteRef returns
 // null and the load is abandoned) or a Save button that did nothing.
